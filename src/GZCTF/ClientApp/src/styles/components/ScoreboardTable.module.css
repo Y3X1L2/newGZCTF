@@ -1,0 +1,71 @@
+.table {
+  table-layout: fixed;
+  width: auto;
+  min-width: 100%;
+
+  & thead tr th,
+  & tbody tr td {
+    text-align: center;
+    padding: 6px 4px;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+}
+
+.thead {
+  z-index: 5;
+}
+
+.left {
+  position: sticky;
+  background-color: light-dark(var(--mantine-color-white), var(--mantine-color-dark-7));
+}
+
+.header {
+  font-weight: bold;
+}
+
+.mono {
+  font-weight: bold;
+  font-family: var(--mantine-font-family-monospace);
+}
+
+.teamCell {
+  max-width: 0;
+  width: auto;
+  overflow: hidden;
+}
+
+.legend {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 12px;
+  padding-left: 0;
+  float: left;
+  z-index: 20;
+}
+
+.text {
+  font-size: 0.9em;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.pointer {
+  &:hover {
+    cursor: pointer;
+  }
+}
+
+.wrapper {
+  width: 100%;
+  height: var(--mantine-line-height-sm);
+}
+
+.input {
+  user-select: none;
+  font-weight: 600;
+  line-height: var(--mantine-line-height-sm);
+  height: var(--mantine-line-height-sm);
+}

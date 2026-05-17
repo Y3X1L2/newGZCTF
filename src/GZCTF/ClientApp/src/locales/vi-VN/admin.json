@@ -1,0 +1,612 @@
+{
+  "button": {
+    "back": "Quay lại",
+    "challenges": {
+      "attachment": {
+        "save_url": "Lưu đường dẫn",
+        "upload": "Tải lên",
+        "uploading": "Đang tải lên..."
+      },
+      "bonus": "Phần thưởng Triple Blood",
+      "delete": "Xóa",
+      "disable": "Vô hiệu hóa",
+      "edit": "Chỉnh sửa Thử thách",
+      "edit_more": "Chỉnh sửa Flags",
+      "enable": "Cho phép",
+      "flag": {
+        "add": {
+          "dynamic": "Tải lên Tệp đính kèm",
+          "normal": "Thêm Flag",
+          "remote": "Thêm Remote"
+        },
+        "delete": "Xóa",
+        "save": "Lưu Bản mẫu"
+      },
+      "flush_scoreboard": "Làm mới bảng điểm",
+      "hint": {
+        "add": "Thêm gợi ý"
+      },
+      "new": "Thử thách mới",
+      "next": "Tiếp theo",
+      "preview": "Xem trước",
+      "previous": "Về trước",
+      "test_container": {
+        "create": "Tạo",
+        "destroy": "Phá hủy"
+      }
+    },
+    "divisions": {
+      "edit": "Chỉnh sửa Bảng",
+      "new": "Bảng mới"
+    },
+    "games": {
+      "challenges": {
+        "attachment": {
+          "batch_add": "Thêm hàng loạt"
+        }
+      },
+      "copy_public_key": "Sao chép Khóa Công khai",
+      "delete": "Xóa",
+      "export": "Xuất Trò chơi",
+      "import": "Nhập Trò chơi",
+      "new": "Trò chơi Mới"
+    },
+    "notices": {
+      "delete": "Xóa",
+      "edit": "Chỉnh sửa Thông báo",
+      "new": "Thông báo Mới"
+    },
+    "save": "Lưu Thay đổi",
+    "teams": {
+      "do_lock": "Khóa",
+      "do_unlock": "Mở khóa",
+      "edit": "Chỉnh sửa Đội"
+    },
+    "users": {
+      "edit": "Chỉnh sửa Người dùng"
+    },
+    "writeups": {
+      "download_all": "Tải Toàn bộ"
+    }
+  },
+  "content": {
+    "games": {
+      "challenges": {
+        "attachment": {
+          "clear": {
+            "description": "Bạn có chắc muốn gỡ bỏ tệp đính kèm của thử thách này?",
+            "title": "Gỡ bỏ Tệp đính kèm"
+          },
+          "instruction": {
+            "amount_double": "Nên tải tệp đính kèm động có số lượng gấp đôi số đội dự kiến tham gia.",
+            "dynamic": {
+              "content": "Tải lên hàng loạt các tệp đính kèm động, các tệp này sẽ được phân phối với cùng một tên tệp.",
+              "format": "Xin hãy dùng flag làm tên tệp cho tệp đính kèm tương ứng."
+            },
+            "remote": {
+              "content": "Thiết lập hàng loạt các tệp đính kèm từ xa cùng với flag tương ứng, mỗi nhóm trên một dòng.",
+              "format": "Xin hãy ngăn giữa flag và URL bằng một dấu cách."
+            }
+          },
+          "link": "Link đính kèm",
+          "title": "Quản lý Tệp đính kèm",
+          "type": "Loại Tệp đính kèm"
+        },
+        "attachment_name": {
+          "description": "Toàn bộ tệp đính kèm động sẽ được tải xuống bằng tên này",
+          "label": "Tên Tệp đính kèm Toàn cục"
+        },
+        "blood_bonus": {
+          "description": "Kích hoạt thưởng blood cho thử thách này",
+          "label": "Thưởng Blood"
+        },
+        "bonus": {
+          "description": "Thưởng Triple Blood là điểm thưởng cộng thêm cho ba đội đầu tiên giải được một thử thách. Lượng điểm cộng thêm cho mỗi đội sẽ được tính dựa trên điểm hiện tại của thử thách đó theo một tỉ lệ phần trăm định trước.",
+          "first_blood": "Thưởng First Blood (%)",
+          "second_blood": "Thưởng Second Blood (%)",
+          "third_blood": "Thưởng Third Blood (%)"
+        },
+        "category": "Danh mục",
+        "container_image": "Container Image",
+        "cpu_limit": {
+          "description": "Bội của 0.1 CPU",
+          "label": "CPU Limit (0.1 CPUs)"
+        },
+        "deadline": {
+          "label": "Hạn chót",
+          "placeholder": "Không có hạn chót"
+        },
+        "delete": "Bạn có chắc chắn muốn xóa thử thách {{name}} không?",
+        "description": "Mô tả",
+        "difficulty": "Độ khó",
+        "disable": "Bạn có chắc chắn muốn vô hiệu hóa thử thách {{name}} không?",
+        "empty": {
+          "description": "Nhấp vào phía trên bên phải để tạo thử thách đầu tiên",
+          "title": "Ouch! Game này chưa có thử thách nào cả."
+        },
+        "enable": "Bạn có chắc chắn muốn kích hoạt thử thách {{name}} không?",
+        "flag": {
+          "create": "Tạo flag. Nhiều flag ngăn cách với nhau bằng dấu xuống dòng, mỗi flag một dòng.<br/> Mỗi thử thách có thể có nhiều flag, miễn là flag đó đã được cấu hình.",
+          "delete": "Bạn có chắc chắn muốn xóa flag này?",
+          "empty": {
+            "description": "Xin hãy thêm flag thông qua góc phía trên bên phải",
+            "title": "Danh sách flag trống"
+          },
+          "instructions": {
+            "both": "Nếu bạn cần sử dụng leet flag kiểu <1>[TEAM_HASH]</1>, hãy thêm tag <2>[LEET]</2> vào <strong> trước </strong> chuỗi flag mẫu. Entropy của chuỗi flag mẫu sẽ không bị kiểm tra nữa.",
+            "complex": "Nếu bạn cần sử dụng các ký tự đặc biệt trong quá trình sinh flag, sử dụng tag <1>[CLEET]</1> thay cho <2>[LEET]</2> ở phần đầu của chuỗi. Việc này có thể tạo ra lỗ hổng xâm nhập.",
+            "description": "Vui lòng nhập chuỗi flag mẫu, hoặc để trống để sinh GUID ngẫu nhiên làm flag",
+            "example": "Ví dụ",
+            "guid": "Chỉ định <1>[GUID]</1> để thay thể chỉ phần placeholder ở đây bằng GUID ngẫu nhiên",
+            "leave_empty": "Để trống",
+            "leet": "Leet sẽ được kích hoạt nếu <1>[TEAM_HASH]</1> không được chỉ định và sẽ thay đổi chuỗi trong dấu ngoặc nhọn dựa trên mẫu. Xin hãy chắc chắn rằng entropy của mẫu flag đủ cao.",
+            "team_hash": "Nếu <1>[TEAM_HASH]</1> đã được chỉ định, nó sẽ tự thay bằng đoạn hash sinh từ token của mỗi đội và thông thi cuộc thi",
+            "will_generate": "sẽ sinh ra"
+          },
+          "template": "Mẫu Flag",
+          "title": "Quản lý Flag"
+        },
+        "hints": "Gợi ý",
+        "memory_limit": {
+          "description": "Giới hạn Ram của các container",
+          "label": "Giới hạn Bộ nhớ (MB)"
+        },
+        "min_score_radio": {
+          "description": "Điểm tối thiểu: {{min_score}} pts",
+          "label": "Tỉ lệ Điểm Tối thiểu"
+        },
+        "network_mode": {
+          "description": "Truy cập mạng công khai",
+          "label": "Chế độ mạng",
+          "modes": {
+            "custom": "Tùy chỉnh",
+            "isolated": "Cách ly",
+            "open": "Mở"
+          }
+        },
+        "score": "Điểm",
+        "service_port": {
+          "description": "Cổng dịch vụ của container.",
+          "label": "Cổng dịch vụ."
+        },
+        "solve_count": "Số bài đã giải",
+        "storage_limit": {
+          "description": "Lưu trữ (bao gồm các image)",
+          "label": "Giới hạn Lưu trữ (MB)"
+        },
+        "submission_limit": {
+          "description": "0 = không giới hạn",
+          "label": "Lần thử tối đa",
+          "placeholder": "Không giới hạn"
+        },
+        "title": "Tiêu đề",
+        "traffic_capture": {
+          "description": "Ghi lại lưu lượng khi đội giải các thử thách. Cần bật proxy nền tảng.",
+          "label": "Bật ghi lại lưu lượng."
+        },
+        "type": {
+          "description": "Không thể thay đổi một khi đã tạo",
+          "label": "Loại"
+        }
+      },
+      "divisions": {
+        "default_permission_label": "Quyền mặc định",
+        "delete_confirm": "Xóa bảng {{name}}?",
+        "empty": {
+          "description": "Nhấn \"Bảng mới\" để tạo bảng đầu tiên",
+          "title": "Chưa có bảng nào"
+        },
+        "form": {
+          "challenge_overrides": {
+            "description": "Chọn thử thách muốn ghi đè quyền",
+            "label": "Ghi đè thử thách",
+            "placeholder": "Tìm thử thách để ghi đè quyền"
+          },
+          "default_permissions": {
+            "description": "Quyền mặc định áp dụng cho các đội trong bảng này",
+            "label": "Quyền mặc định"
+          },
+          "invite_code": {
+            "description": "Ghi đè mã mời ở cấp trò chơi",
+            "label": "Mã mời"
+          },
+          "name": {
+            "description": "Tên của bảng.",
+            "label": "Tên bảng"
+          }
+        },
+        "no_permission": "Không có quyền nào được gán",
+        "override_label": "Ghi đè thử thách",
+        "permissions": {
+          "affect_dynamic_score": {
+            "description": "Ảnh hưởng tính toán điểm động",
+            "label": "Ảnh hưởng điểm động"
+          },
+          "all": "Tất cả quyền",
+          "get_blood": {
+            "description": "Cho phép nhận điểm thưởng blood",
+            "label": "Thưởng Blood"
+          },
+          "get_score": {
+            "description": "Cho phép ghi điểm cho thử thách",
+            "label": "Nhận điểm"
+          },
+          "join_game": {
+            "description": "Cho phép người trong bảng này tham gia trò chơi",
+            "label": "Tham gia trò chơi"
+          },
+          "rank_overall": {
+            "description": "Cho phép hiển thị trên bảng xếp hạng tổng",
+            "label": "Bảng xếp hạng tổng"
+          },
+          "require_review": {
+            "description": "Đăng ký đội yêu cầu phê duyệt thủ công",
+            "label": "Yêu cầu xét duyệt"
+          },
+          "submit_flags": {
+            "description": "Cho phép gửi flag",
+            "label": "Nộp flag"
+          },
+          "view_challenge": {
+            "description": "Cho phép xem mô tả thử thách",
+            "label": "Xem thử thách"
+          }
+        },
+        "unknown_challenge": "Thử thách #{{id}}"
+      },
+      "info": {
+        "accept_without_review": {
+          "description": "Bị ghi đè bởi các bộ phận",
+          "label": "Tự động duyệt đội"
+        },
+        "container_limit": {
+          "description": "Đặt 0 để không giới hạn số container của đội",
+          "label": "Giới hạn container của đội."
+        },
+        "content": "Chi tiết trò chơi.",
+        "delete": "Bạn có chắc muốn xóa trò chơi {{name}}?",
+        "divisions": {
+          "description": "Thêm các bảng để kích hoạt bảng điểm theo bảng, để trống để tắt.",
+          "label": "Danh sách nhóm tham gia."
+        },
+        "end_date": "Ngày kết thúc.",
+        "end_time": "Thời gian kết thúc.",
+        "invite_code": {
+          "description": "Có thể bị ghi đè bởi các bảng",
+          "label": "Mã mời.",
+          "placeholder": "Để trống để tắt"
+        },
+        "member_limit": {
+          "description": "Đặt 0 để không giới hạn số thành viên",
+          "label": "Số thành viên tối đa trong đội."
+        },
+        "poster": "Poster",
+        "practice_mode": {
+          "description": "Xem thử thách sau khi kết thúc",
+          "label": "Chế độ luyện tập."
+        },
+        "start_date": "Ngày bắt đầu.",
+        "start_time": "Thời gian bắt đầu.",
+        "summary": {
+          "description": "Sẽ được hiển thị trong danh sách trò chơi.",
+          "label": "Tóm tắt."
+        },
+        "title": {
+          "description": "Độ dài quá mức có thể ảnh hưởng đến hiển thị.",
+          "label": "Tiêu đề."
+        },
+        "writeup_deadline": {
+          "description": "Số giờ để nộp bài viết sau khi trò chơi kết thúc.",
+          "label": "Hạn nộp Writeup."
+        },
+        "writeup_instruction": "Cấu trúc Writeup.",
+        "writeup_required": {
+          "description": "Bật nộp writeup",
+          "label": "Bắt buộc có Writeup"
+        }
+      },
+      "notices": {
+        "delete": "Bạn có chắc muốn xóa thông báo này?",
+        "empty": {
+          "description": "Nhấn nút ở góc trên bên phải để tạo thông báo mới.",
+          "title": "Chưa có thông báo nào."
+        }
+      },
+      "review": {
+        "edit_division": "Chỉnh sửa nhóm đội.",
+        "empty": {
+          "description": "On the way... Don't worry!",
+          "title": "Ối! Chưa có đội nào tham gia trò chơi này."
+        },
+        "participation": {
+          "joined": "Đã tham gia.",
+          "no_division": "Không có bảng",
+          "not_joined": "Chưa đăng ký.",
+          "stats": "{{count}}/{{total}} đã tham gia.",
+          "update": "Đặt trạng thái của đội này thành: \"{{status}}\"?"
+        }
+      },
+      "stats": "<1>{{current}}</1> trên <1>{{total}}</1> trò chơi được hiển thị.",
+      "writeups": {
+        "empty": {
+          "description": "Các writeups mới sẽ xuất hiện ở đây.",
+          "title": "Ối! Chưa có writeup nào"
+        },
+        "pdf_fallback": "Không thể tải PDF."
+      }
+    },
+    "instances": {
+      "destroy": "Bạn có chắc muốn hủy instance  {{name}}?",
+      "note": "Lưu ý: Thống kê container không bao gồm container thử nghiệm của admin và container đã bị xoá.",
+      "stats": "Tổng cộng <1>{{count}}</1> instances đã được phân phối."
+    },
+    "markdown_inline_support": "Hỗ trợ định dạng Markdown nội tuyến.",
+    "markdown_support": "Hỗ trợ định dạng Markdown.",
+    "nothing_found": "Không tìm thấy gì.",
+    "settings": {
+      "account": {
+        "allow_register": {
+          "description": "Cho phép người dùng đăng ký tài khoản mới.",
+          "label": "Cho phép đăng ký."
+        },
+        "auto_active": {
+          "description": "Có kích hoạt tài khoản người dùng ngay sau khi đăng ký không.",
+          "label": "Tự động kích hoạt."
+        },
+        "email_confirmation_required": {
+          "description": "Yêu cầu email xác minh người dùng.",
+          "label": "Yêu cầu xác minh email."
+        },
+        "email_domain_list": {
+          "description": "Danh sách các miền email được phép đăng ký. Ngăn cách nhiều miền bằng dấu phẩy, để trống để tắt.",
+          "label": "Danh sách trắng miền email."
+        },
+        "title": "Chính sách tài khoản.",
+        "use_captcha": {
+          "description": "Xác minh khi đăng nhập, đăng ký và khôi phục.",
+          "label": "Bật CAPTCHA.\n\n"
+        }
+      },
+      "container": {
+        "auto_destroy": {
+          "description": "Tự động xoá instance cũ khi đạt giới hạn.",
+          "label": "Tự động xoá instance bản cũ."
+        },
+        "default_lifetime": {
+          "description": "Thời gian tồn tại mặc định của container.",
+          "label": "Thời gian mặc định (phút)."
+        },
+        "extension_duration": {
+          "description": "Thời gian gia hạn cho mỗi lần gia hạn container.",
+          "label": "Thời gian gia hạn (phút)."
+        },
+        "renewal_window": {
+          "description": "Khoảng thời gian trước khi container hết hạn để gia hạn.",
+          "label": "Khung thời gian gia hạn (phút)"
+        },
+        "title": "Chính sách container."
+      },
+      "platform": {
+        "api_encryption": {
+          "description": "Mã hóa dữ liệu nhạy cảm một số API",
+          "label": "Bật Mã hóa API",
+          "not_available": "API Web Crypto không khả dụng"
+        },
+        "color": {
+          "description": "Màu sắc tùy chỉnh cho nền tảng.",
+          "label": "Màu nền tảng."
+        },
+        "color_palette": {
+          "description": "Bảng màu được tạo từ màu tùy chỉnh.",
+          "label": "Bảng màu."
+        },
+        "description": {
+          "description": "Mô tả trang web cung cấp cho SEO.",
+          "label": "Mô tả trang web."
+        },
+        "footer": {
+          "description": "Hỗ trợ cú pháp Markdown, <mbr/> sẽ được thay bằng <br/> trên thiết bị di động.",
+          "label": "Chân trang."
+        },
+        "logo": {
+          "description": "Dùng cho favicon và logo trên các trang.",
+          "label": "Logo nền tảng."
+        },
+        "name": {
+          "description": "Tên nền tảng sẽ được hiển thị với ::CTF.",
+          "label": "Tên nền tảng."
+        },
+        "slogan": {
+          "description": "Sẽ được hiển thị ở đầu trang.",
+          "label": "Khẩu hiệu nền tảng."
+        },
+        "title": "Cài đặt nền tảng."
+      }
+    },
+    "show_all": "Hiển thị tất cả.",
+    "teams": {
+      "delete": "Bạn có chắc muốn xóa đội {{name}} không?",
+      "lock": "Bạn có chắc muốn {{action}} đội {{name}} không?",
+      "locked": "Đã khóa.",
+      "stats": "<1>{{current}}</1> trên tổng số <1>{{total}}</1> đội được hiển thị.",
+      "unlocked": "Đã mở khóa."
+    },
+    "users": {
+      "delete": "Bạn có chắc muốn xóa người dùng {{name}} không?",
+      "reset": {
+        "content": "Mật khẩu của người dùng đã được đặt lại, <strong>mật khẩu này chỉ hiển thị một lần</strong>, vui lòng giữ cẩn thận.",
+        "message": "Bạn có chắc muốn đặt lại mật khẩu cho {{name}} không?",
+        "title": "Đặt lại mật khẩu cho {{name}}."
+      },
+      "stats": "<1>{{current}}</1> trên tổng số <1>{{total}}</1> người dùng được hiển thị."
+    }
+  },
+  "label": {
+    "games": {
+      "hide": "Ẩn.",
+      "summary": "Tóm tắt."
+    },
+    "instances": {
+      "container_id": "ID Container.",
+      "entry": "Instance Entry",
+      "life_cycle": "Vòng đời."
+    },
+    "logs": {
+      "message": "Tin nhắn.",
+      "status": "Status"
+    },
+    "teams": {
+      "bio": "Tiểu sử.",
+      "members": "Thành viên."
+    },
+    "users": {
+      "active": "Kích hoạt.",
+      "last_visit": "Lần truy cập cuối.",
+      "role": "Vai trò người dùng."
+    }
+  },
+  "notification": {
+    "games": {
+      "challenges": {
+        "attachment": {
+          "no_selected": "Vui lòng chọn ít nhất một file.",
+          "updated": "Attachment đã được cập nhật."
+        },
+        "created": "Thử thách đã được tạo.",
+        "deleted": "Thử thách đã bị xóa.",
+        "flag": {
+          "copied": "Cờ đã được sao chép vào khay nhớ tạm.",
+          "created": "Cờ đã được tạo.",
+          "deleted": "Cờ đã bị xóa."
+        },
+        "flag_template": {
+          "updated": "Mẫu cờ đã được cập nhật."
+        },
+        "preview": {
+          "attachment_downloaded": "Giả sử rằng tệp đính kèm đã được tải xuống!",
+          "flag_submitted": "Cờ đã được nộp!"
+        },
+        "updated": "Thử thách đã được cập nhật."
+      },
+      "created": "Trò chơi đã được tạo.",
+      "divisions": {
+        "created": "Bảng đã được tạo.",
+        "deleted": "Bảng đã bị xóa.",
+        "invite_copied": "Mã mời đã được sao chép vào bộ nhớ tạm.",
+        "updated": "Bảng đã được cập nhật."
+      },
+      "export": {
+        "exported": "Trò chơi đã được xuất thành công",
+        "exporting": "Đang xuất trò chơi..."
+      },
+      "import": {
+        "imported": "Trò chơi đã được nhập thành công",
+        "importing": "Đang nhập trò chơi..."
+      },
+      "info": {
+        "deleted": "Trò chơi đã bị xóa.",
+        "info_updated": "Trò chơi đã được cập nhật.",
+        "poster": {
+          "upload_failed": "Tải poster lên thất bại.",
+          "uploaded": "Poster đã được tải lên thành công.",
+          "uploading": "Đang tải lên Poster..."
+        },
+        "public_key_copied": "Public key đã được sao chép vào clipboard.",
+        "scoreboard_flushed": "Bộ nhớ đệm bảng điểm đã được làm mới."
+      },
+      "instances": {
+        "created": "Instance đã được tạo.",
+        "deleted": "Instances đã bị xóa."
+      },
+      "no_title_time": "Vui lòng nhập title và time của game.",
+      "notices": {
+        "created": "Thông báo đã được tạo.",
+        "deleted": "Thông báo đã bị xóa.",
+        "updated": "Thông báo đã được cập nhật."
+      },
+      "participation": {
+        "updated": "Đã cập nhật trạng thái của đội"
+      }
+    },
+    "instances": {
+      "destroyed": "Instances đã bị xóa.",
+      "entry_copied": "Instance entry đã được sao chép vào clipboard.",
+      "url_copied": {
+        "message": "Vui lòng sử dụng client để truy cập.",
+        "title": "Proxy URL đã được sao chép vào clipboard."
+      }
+    },
+    "logs": {
+      "connected": "Real-time log đã được kết nối.",
+      "fetch_failed": "Không thể fetch logs."
+    },
+    "teams": {
+      "deleted": "{{name}} đã bị xóa."
+    },
+    "users": {
+      "deleted": "{{name}} đã bị xóa.",
+      "password_copied": "Password đã được sao chép vào clipboard.",
+      "updated": "User profile đã được cập nhật."
+    }
+  },
+  "placeholder": {
+    "empty": "Empty.",
+    "games": {
+      "challenges": {
+        "attachment": {
+          "no_file_selected": {
+            "comment": "File đã chọn sẽ được hiển thị ở đây.",
+            "title": "Bạn chưa chọn bất kỳ file nào."
+          }
+        }
+      },
+      "divisions": "Nhấn Enter để thêm bảng.",
+      "participation": {
+        "bio": "(no bio).",
+        "team": "(no name)."
+      }
+    },
+    "instances": {
+      "challenges": {
+        "not_found": "Không tìm thấy thử thách",
+        "select": "Tất cả thử thách"
+      },
+      "teams": {
+        "not_found": "Không tìm thấy đội",
+        "select": "Tất cả đội"
+      }
+    },
+    "settings": {
+      "email_domain_list": "Không có hạn chế",
+      "footer": "`Kiểm tra` <mbr/> Một cái gì đó...",
+      "logo": {
+        "custom": "Logo tùy chỉnh",
+        "default": "Sử dụng biểu tượng GZCTF"
+      }
+    },
+    "teams": {
+      "search": "Tìm kiếm theo tên"
+    },
+    "users": {
+      "real_name": "Trống",
+      "search": "Tìm kiếm theo ID/tên người dùng/email/mã sinh viên/tên thật",
+      "student_id": "00000000"
+    }
+  },
+  "tab": {
+    "games": {
+      "challenges": "Thử thách",
+      "divisions": "Bảng",
+      "index": "Trò chơi",
+      "info": "Thông tin",
+      "notices": "Thông báo",
+      "review": "Đội",
+      "writeups": "Writeups"
+    },
+    "instances": "Instances",
+    "logs": "Nhật ký",
+    "settings": "Cài đặt",
+    "teams": "Đội",
+    "users": "Người dùng"
+  }
+}

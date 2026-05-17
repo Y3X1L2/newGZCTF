@@ -1,0 +1,14 @@
+.board {
+  justify-content: center;
+  height: 100vh;
+  padding: var(--mantine-spacing-lg);
+  align-items: center;
+}
+
+.board > * {
+  text-align: center;
+}
+
+.board > h1 {
+  color: light-dark(var(--mantine-primary-color-filled), var(--mantine-primary-color-4));
+}

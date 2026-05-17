@@ -1,0 +1,22 @@
+.card {
+  height: 25vh;
+  max-height: 300px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  background-size: cover;
+  background-position: center;
+
+  background-blend-mode: plus-darker;
+  background-image: radial-gradient(circle, rgba(0, 0, 0, 0) 70%, rgba(0, 0, 0, 0.3) 100%), var(--slide-image);
+}
+
+.title {
+  font-weight: bold;
+  line-height: 1.2;
+  font-size: 1.5rem;
+  color: var(--slide-title-color);
+  margin-top: var(--mantine-spacing-xs);
+  text-shadow: var(--mantine-shadow-md);
+}

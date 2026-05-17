@@ -1,0 +1,238 @@
+.root {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  color: #dcecff;
+  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(43, 74, 180, 0.45), transparent 38%),
+    radial-gradient(circle at 20% 70%, rgba(11, 116, 203, 0.16), transparent 28%),
+    radial-gradient(circle at 80% 30%, rgba(18, 92, 189, 0.18), transparent 24%),
+    linear-gradient(180deg, #0a1026 0%, #091028 46%, #09132f 100%);
+}
+
+.backgroundGrid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(77, 128, 214, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(77, 128, 214, 0.08) 1px, transparent 1px),
+    radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.12) 0 1px, transparent 1px),
+    radial-gradient(circle at 70% 62%, rgba(255, 255, 255, 0.09) 0 1px, transparent 1px);
+  background-size:
+    48px 48px,
+    48px 48px,
+    240px 240px,
+    280px 280px;
+  opacity: 0.35;
+}
+
+.header {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 18rem minmax(0, 1fr) 18rem;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 0.75rem 0.4rem;
+}
+
+.headerLeft,
+.headerRight {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.headerRight {
+  align-items: flex-end;
+}
+
+.headerMetaValue {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid rgba(103, 155, 255, 0.32);
+  background: rgba(8, 18, 44, 0.86);
+  box-shadow: inset 0 0 18px rgba(13, 37, 95, 0.55);
+  color: #eef7ff;
+  font-size: 1.15rem;
+  font-weight: 700;
+  width: fit-content;
+}
+
+.headerCountdownLabel {
+  color: #7fa9d5;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+
+.headerCenter {
+  text-align: center;
+}
+
+.headerTitle {
+  color: #eef6ff;
+  font-size: clamp(1.6rem, 2vw, 2.2rem);
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+
+.headerAccent {
+  width: 12rem;
+  max-width: 100%;
+  height: 0.28rem;
+  margin: 0.3rem auto 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, #7cf2ff 25%, #7cf2ff 75%, transparent);
+  box-shadow: 0 0 14px rgba(124, 242, 255, 0.55);
+}
+
+.statsRow {
+  display: flex;
+  gap: 1rem;
+  color: #dcecff;
+  font-size: 0.85rem;
+}
+
+.statsHighlight {
+  color: #7cf2ff;
+  font-weight: 700;
+}
+
+.board {
+  position: relative;
+  z-index: 1;
+  height: calc(100vh - 5rem);
+  padding: 0 0.75rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.logPanel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgba(74, 128, 224, 0.4);
+  background: linear-gradient(180deg, rgba(11, 18, 46, 0.94), rgba(9, 18, 50, 0.78));
+  box-shadow:
+    inset 0 0 28px rgba(16, 46, 111, 0.5),
+    0 0 18px rgba(45, 121, 255, 0.08);
+  overflow: hidden;
+}
+
+.logPanel::before,
+.logPanel::after {
+  content: '';
+  position: absolute;
+  width: 1rem;
+  height: 1rem;
+  border-color: #72e9ff;
+  border-style: solid;
+  pointer-events: none;
+}
+
+.logPanel::before {
+  left: 0;
+  top: 0;
+  border-width: 2px 0 0 2px;
+}
+
+.logPanel::after {
+  right: 0;
+  bottom: 0;
+  border-width: 0 2px 2px 0;
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+  flex-shrink: 0;
+}
+
+.panelTitle {
+  color: #f0f8ff;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.logContainer {
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.logItem {
+  position: relative;
+  padding: 0.75rem 0.8rem 0.75rem 1.1rem;
+  border: 1px solid rgba(76, 128, 221, 0.2);
+  background: rgba(10, 20, 53, 0.64);
+}
+
+.logItem::before {
+  content: '';
+  position: absolute;
+  left: 0.35rem;
+  top: 0.7rem;
+  bottom: 0.7rem;
+  width: 0.18rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #77eaff, #2d8fff);
+}
+
+.logItem[data-tone='success']::before {
+  background: linear-gradient(180deg, #ffe38b, #7cf2ff);
+}
+
+.logItem[data-tone='warning']::before {
+  background: linear-gradient(180deg, #ffb17a, #ff6f8b);
+}
+
+.logHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.logTeam {
+  color: #edf6ff;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.logTime {
+  color: #7fa9d5;
+  font-size: 0.78rem;
+}
+
+.logChallenge {
+  color: #c5ddf7;
+  font-size: 0.85rem;
+}
+
+.logStatus {
+  color: #79f0ff;
+  font-size: 0.82rem;
+}
+
+.emptyPanel {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: #6f8db8;
+  font-size: 0.85rem;
+}

@@ -1,0 +1,119 @@
+{
+  "anchor": {
+    "login": "이미 계정이 있으신가요?",
+    "recovery": "비밀번호를 잊으셨나요?"
+  },
+  "button": {
+    "change_password": "비밀번호 변경",
+    "confirm_email": "이메일 인증",
+    "login": "로그인",
+    "recovery": "비밀번호 재설정 이메일 보내기",
+    "register": "회원가입",
+    "reset": "비밀번호 재설정",
+    "save_profile": "프로필 저장",
+    "update_email": "이메일 변경",
+    "verify_account": "계정 인증"
+  },
+  "content": {
+    "confirm": {
+      "message": "이메일 인증을 위해 아래에 버튼을 클릭해주세요."
+    },
+    "link_check": "인증 링크가 올바른지 확인하고, 다시 시도해주세요.",
+    "link_invalid": "앗! 인증 링크가 잘못되었습니다.",
+    "profile": {
+      "update_email_note": "이메일을 변경한 후에는 더 이상 원래 이메일을 사용하여 로그인할 수 없습니다.<br/>새 이메일 주소로 이메일이 전송됩니다. 이메일에 포함된 링크를 클릭하여 인증을 완료하세요."
+    },
+    "verify": {
+      "message": "계정 인증을 위해 아래에 버튼을 클릭해주세요."
+    },
+    "verify_email": {
+      "message": "거의 다 됐습니다!<br/>다음 이메일 주소로 인증 이메일을 보냈습니다:",
+      "not_received": {
+        "list": "<0>스팸/정크 메일함을 확인해주세요.</0><1>같은 이메일 주소로 다시 등록할 수 있으며, 인증 후 가장 최신 등록 정보가 사용됩니다.</1>",
+        "title": "메일을 받지 못했나요?"
+      },
+      "title": "이메일 인증"
+    },
+    "welcome": "안녕, {{decodeEmail}}👋"
+  },
+  "label": {
+    "bio": "설명",
+    "captcha": "CAPTCHA",
+    "email": "이메일",
+    "email_new": "새 이메일",
+    "password": "비밀번호",
+    "password_old": "기존 비밀번호",
+    "password_retype": "비밀번호 재확인",
+    "phone": "휴대전화",
+    "real_name": "실명",
+    "student_id": "학번",
+    "username": "사용자명",
+    "username_or_email": "사용자명 또는 이메일"
+  },
+  "notification": {
+    "captcha": {
+      "not_valid": "Captcha 인증을 기다리고 있습니다...",
+      "request_sent": {
+        "message": "서버 인증을 기다리고 있습니다.",
+        "title": "요청을 전송했습니다..."
+      }
+    },
+    "confirm": {
+      "failed": "이메일 인증에 실패했습니다.",
+      "success": "이메일이 인증되었습니다."
+    },
+    "login": {
+      "banned": "차단된 사용자입니다.",
+      "invalid": "잘못된 사용자 이름 또는 비밀번호 입니다.",
+      "success": {
+        "message": "로그인 이전 페이지로 되돌아가는 중",
+        "title": "로그인 성공"
+      }
+    },
+    "logout": "로그아웃 완료",
+    "profile": {
+      "password_updated": "비밀번호가 변경되었습니다. 다시 로그인해주세요.",
+      "profile_updated": "프로필이 수정되었습니다."
+    },
+    "register": {
+      "logged_in": "성공적으로 회원가입을 했습니다.",
+      "request_sent": {
+        "message": "관리자의 승인을 기다려주세요.",
+        "title": "회원가입 요청 전송"
+      }
+    },
+    "reset": {
+      "success": {
+        "message": "다시 로그인 해주세요",
+        "title": "비밀번호가 재설정 되었습니다!"
+      }
+    },
+    "verify": {
+      "failed": "계정 인증에 실패하였습니다",
+      "success": "계정이 인증되었습니다. 로그인 해주세요."
+    }
+  },
+  "password": {
+    "empty": "비밀번호를 입력해주세요.",
+    "include_lowercase": "영어 소문자가 반드시 포함되어야 합니다.",
+    "include_number": "숫자가 반드시 포함되어야 합니다.",
+    "include_symbol": "특수문자가 반드시 포함되어야 합니다.",
+    "include_uppercase": "영어 대문자가 반드시 포함되어야 합니다.",
+    "min_length": "반드시 6 글자 이상어야 합니다.",
+    "not_match": "비밀번호가 동일하지 않습니다."
+  },
+  "placeholder": {
+    "bio": "게으른 사람이네요! 아무것도 적혀있지 않습니다.",
+    "computing": "잠시만 기다려주세요..."
+  },
+  "title": {
+    "confirm": "이메일 인증",
+    "login": "로그인",
+    "profile": "프로필",
+    "recovery": "계정 복구",
+    "register": "회원가입",
+    "reset": "비밀번호 재설정",
+    "verify": "계정 인증",
+    "verify_email": "이메일 인증 대기 중"
+  }
+}

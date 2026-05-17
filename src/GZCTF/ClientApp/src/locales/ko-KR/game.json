@@ -1,0 +1,247 @@
+{
+  "button": {
+    "challenges": "문제",
+    "delete": {
+      "all_traffic": "모든 트래픽 삭제"
+    },
+    "download": {
+      "all_traffic": "모든 트래픽 다운로드",
+      "scoreboard": "스코어보드",
+      "submissionsheet": "제출"
+    },
+    "finished": "게임 종료",
+    "hide_solved": "못 푼 문제",
+    "join": "참가",
+    "leave": "게임 나가기",
+    "login_required": "로그인 필요",
+    "scoreboard": "스코어보드",
+    "submit_writeup": "풀이 제출",
+    "writeup": {
+      "upload": "풀이 제출",
+      "uploading": "업로드 중..."
+    }
+  },
+  "content": {
+    "all_solved": {
+      "comment": "아마 더 어려운 문제들이 기다리고 있을 것입니다...",
+      "title": "모든 문제를 해결했습니다!"
+    },
+    "duration": "{{hours}} 시간",
+    "end_at": "종료 시각",
+    "end_time": "종료 시각",
+    "game_ended": "종료됨",
+    "game_lasts_long": "게임이 종료되기까지 많이 남았습니다.",
+    "hide_container_events": {
+      "description": "컨테이너 생성/제거 이벤트 숨기기",
+      "label": "컨테이너 이벤트 숨기기"
+    },
+    "join": {
+      "confirm": "가입 확인",
+      "content": [
+        "정말로 이 게임에 가입하시겠습니까?",
+        "대회 가입 검토를 거친 이후 팀은 잠금 상태가 되며 <strong>더 이상 팀원을 내보낼 수 없습니다.</strong> 대회가 끝난 이후나 참가 신청이 거절 되었을 때 잠금 해제 처리됩니다.",
+        "플레이어 수 제한은 <strong>어떤 팀과 플레이할지 여부와 관계 없이</strong> 특정 팀의 일원으로 참여하기로 결정한 멤버의 수를 의미합니다."
+      ],
+      "division": {
+        "description": "여러 부문이 있으니 부문을 선택해주세요.",
+        "label": "부문 선택"
+      },
+      "invite_code": {
+        "description": "이 게임은 초대 전용입니다. 참가하기 위해서 초대 코드를 입력해주세요.",
+        "label": "초대 코드를 입력해주세요."
+      },
+      "team": {
+        "description": "참여하고 싶은 팀을 선택하십시오. 참여 요청 승인이 된 후에는 변경할 수 없습니다",
+        "label": "팀을 선택하세요"
+      },
+      "title": "가입 정보"
+    },
+    "joined_status": "<strong>{{count}}</strong> 개 팀이 참여했습니다.",
+    "leave": {
+      "confirm": "퇴장 확인",
+      "content": [
+        "정말로 이 게임에서 나가시겠습니까?",
+        "만약 퇴장 후 팀의 맴버가 0 명일시, 팀의 참가 정보는 삭제됩니다."
+      ]
+    },
+    "no_challenge": "어이쿠! 이 게임에는 아직 문제가 없습니다.",
+    "no_cheat": {
+      "comment": "모두 공평하게 게임을 진행했군요!",
+      "title": "부정행위 탐지되지 않음"
+    },
+    "no_notice": "아무것도 없음",
+    "no_traffic": {
+      "comment": "플랫폼과 문제의 트래픽 캡처를 허용해야합니다.",
+      "title": "트래픽 캡처가 활성화된 문제가 없습니다."
+    },
+    "remaining_duration": "{{hours}} 시간 남음",
+    "remaining_time": "남은 시간",
+    "scoreboard_not_ready": {
+      "comment": "아직 준비되지 않았습니다...",
+      "title": "문제를 불러오는 중...."
+    },
+    "scoreboard_note": "정보: 동점인 팀은 제출 시간 순으로 순위가 결정됩니다.",
+    "scoreboard_tip": "팁: 왼쪽 오른쪽 화살표를 통해 문제 리스트를 스크롤하세요!",
+    "start_at": "시작 시간",
+    "start_time": "시작 시간",
+    "team_view": {
+      "description": "팀별 부정행위 정보 표시",
+      "label": "팀 보기"
+    },
+    "total_duration": "총 {{hours}} 시간 지남",
+    "total_time": "진행 시간",
+    "traffic": {
+      "delete_confirm": "해당 트래픽 파일을 삭제하시겠습니까?",
+      "deleted_all_confirm": "리스트에 있는 모든 트래픽을 삭제하시겠습니까?"
+    },
+    "writeup": {
+      "current": "현재 풀이",
+      "deadline_exceeded": "제출 시각이 지났습니다.",
+      "instructions": {
+        "additional": "추가 정보",
+        "deadline": "<1>{{datetime}}</1> 전까지 풀이를 제출해주세요. 제출하지 않거나 제출 시간 이후에 제출할 시 게임을 포기한 것으로 간주됩니다.",
+        "file_format": "해결한 모든 문제들의 풀이를 <1>20MB 보다 작은 PDF 파일</1>로 작성해주세요.",
+        "title": "제출"
+      },
+      "submitted": "제출 완료",
+      "title": "풀이 관리",
+      "unsubmitted": "미제출",
+      "unsubmitted_note": "아직 제출하지 않았습니다."
+    }
+  },
+  "event": {
+    "answer": {
+      "accepted": "플래그 인증 성공",
+      "cheat": "부정행위",
+      "not_found": "알 수 없음",
+      "submitted": "제출 성공",
+      "wrong": "플래그 인증 실패"
+    },
+    "cheat_detected": "{{team}} 이 {{chal}} 문제에서 {{steam}} 의 플래그를 사용해 부정행위로 탐지되었습니다.",
+    "container": {
+      "destroy": "{{chal}}#{{id}} 문제 인스턴스를 삭제했습니다.",
+      "start": "{{chal}}#{{id}} 문제 인스턴스가 생성되었습니다."
+    },
+    "flag_submit": "[{{status}}] {{flag}} [{{chal}}#{{id}}]"
+  },
+  "label": {
+    "cheat_info": {
+      "owned_team": "원 팀",
+      "submit_team": "제출한 팀",
+      "submit_user": "제출한 사용자"
+    },
+    "notice_type": {
+      "all": "모두",
+      "challenge": "문제",
+      "events": "소식",
+      "game": "알림"
+    },
+    "score": "점수",
+    "score_formatter": "{value} 점",
+    "score_table": {
+      "all_teams": "모든 팀",
+      "rank_division": "순위",
+      "rank_total": "전체",
+      "score": "점수",
+      "score_total": "점수",
+      "solved_count": "해결",
+      "team": "팀",
+      "type": "종류"
+    },
+    "traffic": "트래픽"
+  },
+  "notice": {
+    "blood": "{{team}} 팀이 {{chal}} 의 {{blood}}  를 가져갔습니다!",
+    "new_challenge": "새로운 문제 [{{title}}] 가 생성되었습니다.",
+    "new_hint": "[{{title}}] 문제 힌트가 업데이트되었습니다."
+  },
+  "notification": {
+    "connected": {
+      "event": "실시간 이벤트 접속됨",
+      "submission": "실시간 제출 접속됨"
+    },
+    "ended": "게임이 종료되었습니다.",
+    "fetch_failed": {
+      "event": "이벤트 불러오기 실패",
+      "notice": "알림 불러오기 실패",
+      "submission": "제출 불러오기 실패"
+    },
+    "joined": "가입 성공",
+    "left": "취소 성공",
+    "no_division": "부문을 선택해주세요",
+    "no_invite_code": "초대 코드를 작성해주세요",
+    "no_team": "참가할 팀을 선택해주세요",
+    "not_joined": "게임에 아직 참가하지 않았습니다.",
+    "not_started": "게임이 시작되지 않았습니다.",
+    "select_chal_and_part": "문제와 팀을 먼저 선택하세요.",
+    "suspended": "계정이 정지되었습니다.",
+    "traffic": {
+      "deleted": "트래픽 파일이 삭제되었습니다."
+    },
+    "writeup": {
+      "submitted": "풀이가 성공적으로 제출되었습니다."
+    }
+  },
+  "participation": {
+    "actions": {
+      "accepted": "승인됨",
+      "pending": "검토 중",
+      "rejected": "재가입",
+      "suspended": "정지됨",
+      "unsubmitted": "게임 참가"
+    },
+    "alert": {
+      "not_started": {
+        "content": "{{team}} 팀 가입 검토가 통과되었습니다. 게임이 시작될 때까지 기다려주세요.",
+        "mobile": "데스크탑 사이트를 통해 게임의 자세한 정보를 확인하세요.",
+        "title": "게임이 시작되지 않았습니다."
+      },
+      "pending": {
+        "content": "검토 결과를 기다려주세요.",
+        "title": "성공적으로 {{team}} 팀에 가입되었습니다."
+      },
+      "rejected": {
+        "content": "게임에 등록할 자격이 있는지 확인하고 요구 사항을 충족한 후 다시 등록하세요",
+        "title": "참가 요청이 거부되었습니다"
+      },
+      "suspended": {
+        "content": "문의 사항이 있는 경우 관리자에게 연락하세요.",
+        "title": "당신의 {{team}} 팀은 정지되었습니다."
+      },
+      "team_required": {
+        "content": "<1>팀 관리</1> 페이지에서 팀을 생성하거나 가입하세요.",
+        "title": "현재 등록할 수 없습니다."
+      }
+    },
+    "status": {
+      "accepted": "승인됨",
+      "pending": "검토 중",
+      "rejected": "거절됨",
+      "suspended": "정지됨"
+    }
+  },
+  "placeholder": {
+    "no_solved": "저런! 해결한 문제가 없군요...",
+    "search_team": "팀 검색"
+  },
+  "tab": {
+    "challenge": "문제",
+    "monitor": {
+      "cheatinfo": "부정행위",
+      "events": "이벤트",
+      "index": "모니터링",
+      "submissions": "제출",
+      "traffic": "트래픽"
+    },
+    "scoreboard": "스코어보드"
+  },
+  "tag": {
+    "hidden": "숨김",
+    "individual": "개인",
+    "limited": "{{count}} 플레이어",
+    "multiplayer": "팀"
+  },
+  "title": {
+    "index": "게임"
+  }
+}

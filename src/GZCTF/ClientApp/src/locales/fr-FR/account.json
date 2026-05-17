@@ -1,0 +1,119 @@
+{
+  "anchor": {
+    "login": "Vous avez déjà un compte ?",
+    "recovery": "Mot de passe oublié ?"
+  },
+  "button": {
+    "change_password": "Changer le mot de passe",
+    "confirm_email": "Confirmer l'email",
+    "login": "Se connecter",
+    "recovery": "Envoyer l'email de réinitialisation",
+    "register": "S'inscrire",
+    "reset": "Réinitialiser le mot de passe",
+    "save_profile": "Enregistrer le profil",
+    "update_email": "Changer l'email",
+    "verify_account": "Vérifier le compte"
+  },
+  "content": {
+    "confirm": {
+      "message": "Veuillez cliquer sur le bouton ci-dessous pour vérifier votre email."
+    },
+    "link_check": "Veuillez vérifier votre lien d'activation et réessayer",
+    "link_invalid": "Aïe ! Il y a un problème avec votre lien d'activation",
+    "profile": {
+      "update_email_note": "Après avoir changé votre email, vous ne pourrez plus vous connecter avec votre email original.<br/>Un email sera envoyé à votre nouvelle adresse, cliquez sur le lien qu'il contient pour compléter la vérification."
+    },
+    "verify": {
+      "message": "Veuillez cliquer sur le bouton ci-dessous pour vérifier le compte."
+    },
+    "verify_email": {
+      "message": "Vous y êtes presque !<br/>Nous avons envoyé un email à :",
+      "not_received": {
+        "list": "<0>Vérifiez votre dossier spam ou courriers indésirables.</0><1>Vous pouvez vous réinscrire avec la même adresse ; vos informations d'inscription les plus récentes seront utilisées une fois vérifiées.</1>",
+        "title": "Vous n'avez rien reçu ?"
+      },
+      "title": "Vérifier l'email"
+    },
+    "welcome": "Bonjour, {{decodeEmail}}👋"
+  },
+  "label": {
+    "bio": "Description",
+    "captcha": "Captcha",
+    "email": "Email",
+    "email_new": "Nouvel Email",
+    "password": "Mot de passe",
+    "password_old": "Mot de passe original",
+    "password_retype": "Confirmer le mot de passe",
+    "phone": "Numéro de téléphone",
+    "real_name": "Nom réel",
+    "student_id": "Numéro d'étudiant",
+    "username": "Nom d'utilisateur",
+    "username_or_email": "Nom d'utilisateur ou Email"
+  },
+  "notification": {
+    "captcha": {
+      "not_valid": "Veuillez patienter pour le captcha...",
+      "request_sent": {
+        "message": "En attente de la vérification du serveur",
+        "title": "Demande envoyée..."
+      }
+    },
+    "confirm": {
+      "failed": "Échec de la vérification de l'email",
+      "success": "L'email a été vérifié"
+    },
+    "login": {
+      "banned": "L'utilisateur a été banni",
+      "invalid": "Nom d'utilisateur ou mot de passe incorrect",
+      "success": {
+        "message": "Redirection vers la page précédente avant la connexion",
+        "title": "Connexion réussie"
+      }
+    },
+    "logout": "Déconnexion réussie",
+    "profile": {
+      "password_updated": "Le mot de passe a été changé, veuillez vous reconnecter",
+      "profile_updated": "Profil mis à jour"
+    },
+    "register": {
+      "logged_in": "Enregistré avec succès",
+      "request_sent": {
+        "message": "Veuillez attendre l'approbation de l'administrateur pour l'activation~",
+        "title": "Demande d'enregistrement envoyée"
+      }
+    },
+    "reset": {
+      "success": {
+        "message": "Veuillez vous reconnecter",
+        "title": "Le mot de passe a été réinitialisé"
+      }
+    },
+    "verify": {
+      "failed": "Échec de la vérification du compte",
+      "success": "Le compte a été vérifié, veuillez vous connecter"
+    }
+  },
+  "password": {
+    "empty": "Le mot de passe ne peut pas être vide",
+    "include_lowercase": "Inclure des lettres minuscules",
+    "include_number": "Inclure des chiffres",
+    "include_symbol": "Inclure des caractères spéciaux",
+    "include_uppercase": "Inclure des lettres majuscules",
+    "min_length": "Au moins 6 caractères",
+    "not_match": "Le mot de passe répété est incorrect"
+  },
+  "placeholder": {
+    "bio": "Cette personne est paresseuse, rien n'est écrit",
+    "computing": "Calcul, veuillez patienter..."
+  },
+  "title": {
+    "confirm": "Vérification de l'email",
+    "login": "Connexion",
+    "profile": "Profil",
+    "recovery": "Récupérer le compte",
+    "register": "Enregistrer",
+    "reset": "Réinitialiser le mot de passe",
+    "verify": "Vérification de compte",
+    "verify_email": "Vérification d'email en attente"
+  }
+}

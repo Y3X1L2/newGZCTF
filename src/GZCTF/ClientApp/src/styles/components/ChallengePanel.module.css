@@ -1,0 +1,29 @@
+.tabRoot {
+  min-width: 10.5rem;
+  width: 100%;
+}
+
+.tabList {
+  width: 100%;
+}
+
+.tabLabel {
+  width: 100%;
+}
+
+.tab {
+  &:not([data-active='true']) {
+    span[data-position='left'] {
+      color: var(--tabs-color);
+      filter: saturate(0.8);
+    }
+  }
+}
+
+.switch {
+  justify-content: space-between;
+}
+
+.scrollArea {
+  flex-grow: 1;
+}

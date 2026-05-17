@@ -1,0 +1,15 @@
+{
+  "profiles": {
+    "GZCTF": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "applicationUrl": "http://localhost:8080",
+      "externalUrlConfiguration": true,
+      "environmentVariables": {
+        "GZCTF_QUERY_LOGGING": "true",
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_HOSTINGSTARTUPASSEMBLIES": "Microsoft.AspNetCore.SpaProxy"
+      }
+    }
+  }
+}

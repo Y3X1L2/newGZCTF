@@ -1,0 +1,119 @@
+{
+  "anchor": {
+    "login": "準備好登錄？",
+    "recovery": "忘記密碼？"
+  },
+  "button": {
+    "change_password": "更改密碼",
+    "confirm_email": "確認郵箱",
+    "login": "登錄",
+    "recovery": "發送重置郵件",
+    "register": "註冊",
+    "reset": "重置密碼",
+    "save_profile": "保存個人信息",
+    "update_email": "更改郵箱",
+    "verify_account": "驗證帳戶"
+  },
+  "content": {
+    "confirm": {
+      "message": "請點擊下方按鈕確認更改郵箱。"
+    },
+    "link_check": "請檢查連結是否正確後再次訪問",
+    "link_invalid": "Ouch! 你的連結好像有問題",
+    "profile": {
+      "update_email_note": "更改郵箱後，您將不能通過原郵箱登錄。<br/>一封郵件將發送至新郵箱，點擊其中連結完成驗證。"
+    },
+    "verify": {
+      "message": "請點擊下方按鈕驗證帳戶。"
+    },
+    "verify_email": {
+      "message": "快要完成了！<br/>我們已經向以下郵箱發送了一封郵件：",
+      "not_received": {
+        "list": "<0>如果沒有收到郵件，請檢查垃圾郵件資料夾。</0><1>您可以使用相同的郵箱地址重新註冊，驗證通過後將使用最近一次註冊的資訊。</1>",
+        "title": "未收到郵件時應當怎麼辦"
+      },
+      "title": "請驗證您的郵箱"
+    },
+    "welcome": "{{decodeEmail}}, 你好👋"
+  },
+  "label": {
+    "bio": "描述",
+    "captcha": "驗證碼",
+    "email": "郵箱",
+    "email_new": "新郵箱",
+    "password": "密碼",
+    "password_old": "原密碼",
+    "password_retype": "確認密碼",
+    "phone": "手機號",
+    "real_name": "真實姓名",
+    "student_id": "學工號",
+    "username": "用戶名",
+    "username_or_email": "用戶名或郵箱"
+  },
+  "notification": {
+    "captcha": {
+      "not_valid": "請等待驗證碼……",
+      "request_sent": {
+        "message": "等待伺服器驗證",
+        "title": "請求已發送……"
+      }
+    },
+    "confirm": {
+      "failed": "郵箱驗證失敗",
+      "success": "郵箱已驗證"
+    },
+    "login": {
+      "banned": "用戶已被禁用",
+      "invalid": "用戶名或密碼錯誤",
+      "success": {
+        "message": "跳轉回登錄前頁面",
+        "title": "登錄成功"
+      }
+    },
+    "logout": "登出成功",
+    "profile": {
+      "password_updated": "密碼已修改，請重新登錄",
+      "profile_updated": "個人信息已更新"
+    },
+    "register": {
+      "logged_in": "註冊成功",
+      "request_sent": {
+        "message": "請等待管理員審核激活~",
+        "title": "註冊請求已發送"
+      }
+    },
+    "reset": {
+      "success": {
+        "message": "請重新登錄",
+        "title": "密碼已重置"
+      }
+    },
+    "verify": {
+      "failed": "帳戶驗證失敗",
+      "success": "帳戶已驗證，請登錄"
+    }
+  },
+  "password": {
+    "empty": "密碼不能為空",
+    "include_lowercase": "包含小寫字母",
+    "include_number": "包含數字",
+    "include_symbol": "包含特殊字符",
+    "include_uppercase": "包含大寫字母",
+    "min_length": "至少 6 個字符",
+    "not_match": "重複密碼有誤"
+  },
+  "placeholder": {
+    "bio": "這個人很懶，什麼都沒有寫",
+    "computing": "計算中，請稍等..."
+  },
+  "title": {
+    "confirm": "郵箱驗證",
+    "login": "登錄",
+    "profile": "個人資料",
+    "recovery": "找回帳號",
+    "register": "註冊",
+    "reset": "重置密碼",
+    "verify": "帳戶驗證",
+    "verify_email": "等待郵箱驗證"
+  }
+}

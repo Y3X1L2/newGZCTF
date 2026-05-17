@@ -1,0 +1,33 @@
+{
+  "button": {
+    "config": "Paramètres WSRX"
+  },
+  "config": {
+    "allow_lan": "Autoriser l'accès LAN",
+    "api": "URL de l'API"
+  },
+  "error": {
+    "daemon_error": {
+      "message": "Veuillez vérifier le journal WSRX et signaler le problème.",
+      "title": "Erreur du daemon WSRX"
+    },
+    "daemon_offline": {
+      "message": "Le daemon WSRX est hors ligne. Veuillez vous assurer qu'il fonctionne.",
+      "title": "Daemon WSRX hors ligne"
+    },
+    "daemon_unavailable": {
+      "message": "Le daemon WSRX ne fonctionne pas. Si le client de bureau est actif, vérifiez l'adresse de contrôle dans les paramètres de la plateforme.",
+      "title": "Daemon WSRX indisponible"
+    },
+    "unknown": "Une erreur inconnue s'est produite lors de l'accès à l'API WSRX.",
+    "version_mismatch": {
+      "message": "La version WSRX est obsolète. Veuillez mettre à jour avant d'utiliser l'intégration de la plateforme.",
+      "title": "Incompatibilité de version"
+    }
+  },
+  "state": {
+    "invalid": "WSRX déconnecté",
+    "pending": "En attente d'autorisation locale",
+    "usable": "WSRX connecté"
+  }
+}
