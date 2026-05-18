@@ -57,7 +57,7 @@ export const ChallengeEditCard: FC<ChallengeEditCardProps> = ({ challenge, onTog
           onChange={() => onToggle(challenge, setDisabled)}
         />
 
-        <Icon path={data!.icon} color={theme.colors[data?.color ?? theme.primaryColor][5]} size={1.2} />
+        <Icon path={data?.icon ?? mdiPuzzleEditOutline} color={theme.colors[data?.color ?? theme.primaryColor][5]} size={1.2} />
 
         <Stack gap={0} maw={contentWidth} miw={contentWidth}>
           <Text truncate fw="bold">

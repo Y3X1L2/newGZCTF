@@ -73,6 +73,8 @@ export enum ChallengeType {
   StaticContainer = "StaticContainer",
   DynamicAttachment = "DynamicAttachment",
   DynamicContainer = "DynamicContainer",
+  Scenario = "Scenario",
+  IRChallenge = "IRChallenge",
 }
 
 /** Game participant permission */
@@ -113,6 +115,8 @@ export enum ChallengeCategory {
   AI = "AI",
   Pentest = "Pentest",
   OSINT = "OSINT",
+  Scenario = "Scenario",
+  IR = "IR",
 }
 
 export enum ParticipationStatus {

@@ -38,6 +38,8 @@ import {
   mdiRobotLoveOutline,
   mdiSearchWeb,
   mdiSecurityNetwork,
+  mdiShieldHalfFull,
+  mdiTarget,
   mdiWeb,
   mdiWebCancel,
   mdiWebCheck,
@@ -85,6 +87,20 @@ export const useChallengeTypeLabelMap = () => {
       {
         name: t('challenge.type.dynamic_container.label'),
         desrc: t('challenge.type.dynamic_container.desrc'),
+      },
+    ],
+    [
+      ChallengeType.Scenario,
+      {
+        name: '场景',
+        desrc: '多阶段真实攻击链场景挑战',
+      },
+    ],
+    [
+      ChallengeType.IRChallenge,
+      {
+        name: '应急响应',
+        desrc: '应急响应与漏洞加固挑战',
       },
     ],
   ])
@@ -248,6 +264,26 @@ export const useChallengeCategoryLabelMap = () => {
             name: ChallengeCategory.Pentest,
             color: 'grape',
             colors: theme.colors['grape'],
+          },
+        ],
+        [
+          ChallengeCategory.Scenario,
+          {
+            desrc: '场景',
+            icon: mdiTarget,
+            name: ChallengeCategory.Scenario,
+            color: theme.primaryColor,
+            colors: theme.colors[theme.primaryColor],
+          },
+        ],
+        [
+          ChallengeCategory.IR,
+          {
+            desrc: '应急响应',
+            icon: mdiShieldHalfFull,
+            name: ChallengeCategory.IR,
+            color: 'orange',
+            colors: theme.colors['orange'],
           },
         ],
       ]),
