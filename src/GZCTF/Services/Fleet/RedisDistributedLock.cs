@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using GZCTF.Services.Concurrency;
 
 namespace GZCTF.Services.Fleet;
 
@@ -8,7 +9,7 @@ namespace GZCTF.Services.Fleet;
 /// Current implementation uses local SemaphoreSlim via ConcurrentDictionary (compatible stub).
 /// In production with Redis configured, replaces with StackExchange.Redis RedLock.
 /// </summary>
-public class RedisDistributedLock
+public class RedisDistributedLock : IDistributedLockService
 {
     private readonly ILogger<RedisDistributedLock> _logger;
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();

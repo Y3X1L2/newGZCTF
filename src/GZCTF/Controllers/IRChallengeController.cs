@@ -9,6 +9,7 @@ using GZCTF.Services;
 using GZCTF.Services.Scoring;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
@@ -528,6 +529,7 @@ public class IRChallengeController : ControllerBase
     /// <param name="token"></param>
     [HttpPost("instances/{instanceId:guid}/checkpoints/{checkpointId:int}/submit")]
     [RequireUser]
+    [EnableRateLimiting(nameof(RateLimiter.LimitPolicy.Submit))]
     [ProducesResponseType(typeof(IRInstanceDetailModel), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
