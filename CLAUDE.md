@@ -11,16 +11,22 @@
 ## 项目状态
 
 ```
-当前阶段: Phase 5 ✅ 完成 — 5/8 Phase 完成
-平台服务器: 203.195.157.191 (正在安装 Docker + .NET + 代码上传中)
+当前阶段: 🎉 全部 8/8 Phase 完成 — 全栈重构已交付
+当前分支: 001-ctf-scenario-engine（主分支，已合并所有 Phase）
+平台服务器: 203.195.157.191 (Ubuntu 22.04, Docker+.NET 安装中)
+测试结果: 227/227 通过 | 0 失败 | 0 跳过 | 510ms
 
-Phase 1 (scoring-engine)     .worktrees/phase1-scoring    25/25   ✅
-Phase 2 (vm-docker)          .worktrees/phase2-vm-docker  186/186 ✅
-Phase 3 (deploy-panel)       .worktrees/phase3-deploy     162/162 ✅
-Phase 4 (game-phase)         .worktrees/phase4-gamephase  155/155 ✅
-Phase 5 (data-model)         .worktrees/phase5-datamodel  158/158 ✅
+Phase 1 (scoring-engine)    25/25   ✅  评分引擎 + 可配置提交类型
+Phase 2 (vm-docker)         186/186 ✅  VM Provider + Docker容器管理
+Phase 3 (deploy-panel)      162/162 ✅  部署管理面板 + 一键部署
+Phase 4 (game-phase)        155/155 ✅  游戏阶段控制
+Phase 5 (data-model)        158/158 ✅  数据模型并发加固
+Phase 6 (frontend)          构建通过 ✅  前端重构 + 死文件清理
+Phase 7 (security)          227/227 ✅  安全加固(限流/XSS/脱敏)
+Phase 8 (deploy)            文档 ✅  部署编排+生产指南
 
-一键部署流: 管理员面板填靶机IP/账号/密码 → NodeDeployService SSH连接 → 检测能力 → 注册节点
+一键部署: admin面板 → 填靶机IP/账号/密码 → NodeDeployService → 检测能力 → 注册节点
+启动平台: docker compose -f docker-compose.yml up -d
 ```
 
 ---
