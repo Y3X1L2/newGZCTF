@@ -35,4 +35,9 @@ public class KvmSettings
     /// Maximum upload size for VM disk images in GB
     /// </summary>
     public int MaxUploadSizeGb { get; set; } = 50;
+
+    /// <summary>
+    /// Local path to import VM images from (e.g. "D:\wkdb-winserver2012-挖矿病毒模拟")
+    /// </summary>
+    public string? LocalImportPath { get; set; }
 }

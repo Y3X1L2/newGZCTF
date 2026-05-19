@@ -48,6 +48,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<ScenarioInstance> ScenarioInstances { get; set; } = null!;
     public DbSet<IRCheckpoint> IRCheckpoints { get; set; } = null!;
     public DbSet<IRInstance> IRInstances { get; set; } = null!;
+    public DbSet<VmInstance> VmInstances => Set<VmInstance>();
+    public DbSet<DockerImage> DockerImages => Set<DockerImage>();
 
     private static ValueConverter<T?, string> GetJsonConverter<T>() where T : class, new() =>
         new(
@@ -557,6 +559,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .HasConversion<byte>();
 
             entity.HasIndex(e => new { e.ChallengeId, e.UserId });
+        });
+
+        builder.Entity<VmInstance>(entity =>
+        {
+            entity.HasOne(v => v.Challenge).WithMany().HasForeignKey(v => v.ChallengeId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

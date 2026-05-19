@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using GZCTF.Models.Data;
 using GZCTF.Storage;
 using Microsoft.AspNetCore.Authorization;
@@ -101,6 +102,29 @@ public class ImageTemplateController : ControllerBase
     }
 
     /// <summary>
+    /// Import VM image from local filesystem path.
+    /// </summary>
+    [HttpPost("import-local")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ImportFromLocal([FromBody] LocalImportRequest request)
+    {
+        try
+        {
+            var importer = HttpContext.RequestServices.GetRequiredService<Services.Vm.LocalImageImporter>();
+            var template = await importer.ImportFromLocalPathAsync(request.LocalPath, request.DisplayName);
+            return Ok(template);
+        }
+        catch (FileNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    /// <summary>
     /// Delete an image template and its stored file.
     /// </summary>
     [HttpDelete("{id:int}")]
@@ -120,4 +144,11 @@ public class ImageTemplateController : ControllerBase
 
         return NoContent();
     }
+}
+
+public class LocalImportRequest
+{
+    [Required]
+    public string LocalPath { get; set; } = string.Empty;
+    public string? DisplayName { get; set; }
 }
