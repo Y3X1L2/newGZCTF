@@ -80,6 +80,12 @@ public class Submission
     /// </summary>
     public int Score { get; set; }
 
+    /// <summary>
+    /// Concurrency token
+    /// </summary>
+    [Timestamp]
+    public uint ConcurrencyToken { get; set; }
+
     #region Db Relationship
 
     /// <summary>

@@ -45,6 +45,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TimeSlot> TimeSlots { get; set; } = null!;
     public DbSet<ScoringRule> ScoringRules { get; set; } = null!;
     public DbSet<Stage> Stages { get; set; } = null!;
+    public DbSet<StageDependency> StageDependencies => Set<StageDependency>();
     public DbSet<ScenarioInstance> ScenarioInstances { get; set; } = null!;
     public DbSet<IRCheckpoint> IRCheckpoints { get; set; } = null!;
     public DbSet<IRInstance> IRInstances { get; set; } = null!;
@@ -212,42 +213,24 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .HasForeignKey(e => e.FlagId)
                 .OnDelete(DeleteBehavior.SetNull);
 
-            entity.HasOne(e => e.Container)
-                .WithOne(e => e.GameInstance)
-                .HasForeignKey<Container>(e => e.GameInstanceId)
-                .OnDelete(DeleteBehavior.NoAction);
-
-            entity.Navigation(e => e.Container).AutoInclude();
             entity.Navigation(e => e.Challenge).AutoInclude();
         });
 
         builder.Entity<ExerciseInstance>(entity =>
         {
-            entity.HasOne(e => e.Container)
-                .WithOne(e => e.ExerciseInstance)
-                .HasForeignKey<Container>(e => e.ExerciseInstanceId)
-                .OnDelete(DeleteBehavior.NoAction);
-
             entity.HasOne(e => e.FlagContext)
                 .WithMany()
                 .HasForeignKey(e => e.FlagId)
                 .OnDelete(DeleteBehavior.SetNull);
 
-            entity.Navigation(e => e.Container).AutoInclude();
             entity.Navigation(e => e.Exercise).AutoInclude();
         });
 
         builder.Entity<Container>(entity =>
         {
-            entity.HasOne(e => e.GameInstance)
-                .WithOne(e => e.Container)
-                .HasForeignKey<GameInstance>(e => e.ContainerId)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            entity.HasOne(e => e.ExerciseInstance)
-                .WithOne(e => e.Container)
-                .HasForeignKey<ExerciseInstance>(e => e.ContainerId)
-                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(c => c.GameInstance).WithMany().HasForeignKey(c => c.GameInstanceId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(c => c.ExerciseInstance).WithMany().HasForeignKey(c => c.ExerciseInstanceId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(c => c.Status);
         });
 
         builder.Entity<GameChallenge>(entity =>
@@ -354,6 +337,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .HasForeignKey(e => e.ReviewedById)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            entity.HasIndex(e => e.Status);
+
             entity.Navigation(e => e.Team).AutoInclude();
             entity.Navigation(e => e.User).AutoInclude();
             entity.Navigation(e => e.GameChallenge).AutoInclude();
@@ -365,6 +350,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .WithMany()
                 .HasForeignKey(e => e.AttachmentId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(f => f.Challenge)
+                .WithMany()
+                .HasForeignKey(f => f.ChallengeId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             entity.Navigation(e => e.Attachment).AutoInclude();
         });
