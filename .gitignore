@@ -274,3 +274,4 @@ docker-compose.local.yml
 .specify/workflows/
 .specify/integrations/
 .claude/skills/
+.worktrees/
