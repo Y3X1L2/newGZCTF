@@ -3,6 +3,7 @@ using System.Net.Mime;
 using GZCTF.Middlewares;
 using GZCTF.Models.Data;
 using GZCTF.Repositories.Interface;
+using GZCTF.Services.Fleet;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -23,21 +24,20 @@ public class NodesController : ControllerBase
     public NodesController(INodeRepository nodeRepo, AppDbContext context, ILogger<NodesController> logger)
     { _nodeRepo = nodeRepo; _context = context; _logger = logger; }
 
-    /// <summary>Register a new worker node.</summary>
+    /// <summary>One-click deploy a new target server: SSH in, install agent, register node.</summary>
     [HttpPost]
     [RequireAdmin]
-    public async Task<IActionResult> Register([FromBody] NodeRegisterRequest request)
+    public async Task<IActionResult> Register([FromBody] NodeDeployRequest request)
     {
-        var node = new WorkerNode
-        {
-            Name = request.Name, HostAddress = request.HostAddress,
-            AuthToken = Convert.ToBase64String(Guid.NewGuid().ToByteArray()),
-            Capabilities = request.Capabilities, Status = NodeStatus.Online,
-            MaxContainers = request.MaxContainers, MaxVms = request.MaxVms
-        };
-        _context.WorkerNodes.Add(node);
-        await _context.SaveChangesAsync();
-        return Ok(new { node.Id, node.AuthToken });
+        var deployer = HttpContext.RequestServices.GetRequiredService<NodeDeployService>();
+        var result = await deployer.DeployToServerAsync(
+            request.HostAddress, request.Username, request.Password,
+            request.NodeName, HttpContext.RequestAborted);
+
+        if (!result.Success)
+            return BadRequest(new { message = result.Message });
+
+        return Ok(result);
     }
 
     /// <summary>List all nodes with current status.</summary>
@@ -93,6 +93,14 @@ public class NodesController : ControllerBase
         await _context.SaveChangesAsync();
         return Ok();
     }
+}
+
+public class NodeDeployRequest
+{
+    [Required] public string HostAddress { get; set; } = string.Empty;
+    [Required] public string Username { get; set; } = string.Empty;
+    [Required] public string Password { get; set; } = string.Empty;
+    public string? NodeName { get; set; }
 }
 
 public class NodeRegisterRequest

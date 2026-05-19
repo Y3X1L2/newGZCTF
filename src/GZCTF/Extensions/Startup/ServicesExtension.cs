@@ -105,6 +105,7 @@ internal static class ServicesExtension
 
             // Phase 3 fleet services
             builder.Services.AddScoped<INodeRepository, NodeRepository>();
+            builder.Services.AddScoped<NodeDeployService>();
             builder.Services.AddSingleton<WeightedScheduler>();
             builder.Services.AddSingleton<QueueManager>();
             builder.Services.AddSingleton<PortCapacityTracker>();
