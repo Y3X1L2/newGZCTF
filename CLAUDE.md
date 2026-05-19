@@ -11,12 +11,17 @@
 ## 项目状态
 
 ```
-当前阶段: Phase 3 ✅ 完成 → 进入 Phase 4
-当前分支: 001-ctf-scenario-engine（主）/ feature/phase3-deploy-panel（工作区）
-工作区: .worktrees/phase1-scoring / .worktrees/phase2-vm-docker / .worktrees/phase3-deploy
+当前阶段: Phase 3 ✅ 完整完成 → 进入 Phase 4
+当前分支: 001-ctf-scenario-engine（主）
+工作区: 
+  .worktrees/phase1-scoring      (Phase 1: 25/25 ✅)
+  .worktrees/phase2-vm-docker    (Phase 2: 186/186 ✅)
+  .worktrees/phase3-deploy       (Phase 3: 162/162 ✅)
 测试服务器: 203.195.157.191 (Ubuntu 22.04)
-进度: Phase 3/8 完成（159/159 测试通过）
-Phase 3 产出: 11 新建 + 2 修改文件，159 总测试 0 失败
+
+Phase 2 产出（最终）: 18 Create + 8 Modify，186 测试
+Phase 3 产出（最终）: 17 Create + 3 Modify，162 测试
+一键部署: scripts/one-click-deploy.py（Python, 填入IP/账号/密码）
 ```
 
 ---
