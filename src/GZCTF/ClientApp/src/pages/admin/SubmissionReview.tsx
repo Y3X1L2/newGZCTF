@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Table, Button, Modal, Text, Textarea, NumberInput, Group, Badge } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
+import MarkdownRenderer from '../../components/MarkdownRenderer';
 
 interface PendingSubmission {
   id: string;
@@ -89,7 +90,7 @@ export default function SubmissionReview() {
             <div data-testid="submission-content"
               style={{ background: '#f8f9fa', padding: '1rem', borderRadius: '4px', maxHeight: 400, overflow: 'auto' }}>
               {selected.content?.text ? (
-                <div dangerouslySetInnerHTML={{ __html: selected.content.text }} />
+                <MarkdownRenderer content={selected.content.text ?? ''} />
               ) : (
                 <Text c="dimmed">(文件提交)</Text>
               )}

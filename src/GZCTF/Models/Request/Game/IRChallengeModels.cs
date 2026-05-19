@@ -377,11 +377,28 @@ public class IRInstanceDetailModel
             TimeSlotId = instance.TimeSlotId,
             CreatedAt = instance.CreatedAt,
             EndedAt = instance.EndedAt,
-            AccessDetails = instance.AccessDetails,
+            AccessDetails = SanitizeAccessDetails(instance.AccessDetails),
             CompletedCheckpoints = checkpointModels.Count(c => c.IsCompleted),
             TotalCheckpoints = checkpointModels.Count,
             TotalScore = checkpointModels.Where(c => c.IsCompleted).Sum(c => c.Score),
             Checkpoints = checkpointModels
         };
+    }
+
+    private static string? SanitizeAccessDetails(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var filtered = new Dictionary<string, object?>();
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                if (prop.Name is "SshPasswordHash" or "GuacamoleToken") continue;
+                filtered[prop.Name] = prop.Value.ToString();
+            }
+            return JsonSerializer.Serialize(filtered);
+        }
+        catch { return null; }
     }
 }

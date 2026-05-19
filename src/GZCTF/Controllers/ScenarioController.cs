@@ -12,6 +12,7 @@ using GZCTF.Services.Scoring;
 using GZCTF.Utils;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
@@ -498,6 +499,7 @@ public class ScenarioController : ControllerBase
     /// </summary>
     [RequireUser]
     [HttpPost("instances/{instanceId:guid}/stages/{stageId:int}/submit")]
+    [EnableRateLimiting(nameof(RateLimiter.LimitPolicy.Submit))]
     [ProducesResponseType(typeof(StageSubmitResult), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status400BadRequest)]

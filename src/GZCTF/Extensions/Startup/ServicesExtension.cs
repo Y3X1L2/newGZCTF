@@ -7,6 +7,7 @@ using GZCTF.Services;
 using GZCTF.Services.Cache;
 using GZCTF.Services.Config;
 using GZCTF.Services.Scoring;
+using GZCTF.Services.Concurrency;
 using GZCTF.Services.Container;
 using GZCTF.Services.CronJob;
 using GZCTF.Services.Docker;
@@ -125,6 +126,12 @@ internal static class ServicesExtension
             builder.Services.AddSingleton<QueueManager>();
             builder.Services.AddSingleton<PortCapacityTracker>();
             builder.Services.AddHostedService<FleetHealthCheckService>();
+
+            // Phase 7 security: distributed lock
+            if (builder.Configuration.GetValue<string>("RunMode") == "Fleet")
+                builder.Services.AddSingleton<IDistributedLockService, RedisDistributedLock>();
+            else
+                builder.Services.AddSingleton<IDistributedLockService, LocalSemaphoreLock>();
 
             builder.Services.AddHostedService<CacheMaker>();
             builder.Services.AddHostedService<FlagChecker>();
