@@ -50,6 +50,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<IRInstance> IRInstances { get; set; } = null!;
     public DbSet<WorkerNode> WorkerNodes { get; set; } = null!;
     public DbSet<DeploymentTarget> DeploymentTargets { get; set; } = null!;
+    public DbSet<DeploymentQueue> DeploymentQueues { get; set; } = null!;
 
     private static ValueConverter<T?, string> GetJsonConverter<T>() where T : class, new() =>
         new(
