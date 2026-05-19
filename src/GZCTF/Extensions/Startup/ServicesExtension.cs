@@ -8,6 +8,7 @@ using GZCTF.Services.Cache;
 using GZCTF.Services.Config;
 using GZCTF.Services.Container;
 using GZCTF.Services.CronJob;
+using GZCTF.Services.Fleet;
 using GZCTF.Services.Mail;
 using GZCTF.Services.Token;
 using GZCTF.Services.Transfer;
@@ -101,6 +102,13 @@ internal static class ServicesExtension
             builder.Services.AddScoped<SSHAccessService>();
             builder.Services.AddScoped<ScoringService>();
             builder.Services.AddScoped<LeaderboardService>();
+
+            // Phase 3 fleet services
+            builder.Services.AddScoped<INodeRepository, NodeRepository>();
+            builder.Services.AddSingleton<WeightedScheduler>();
+            builder.Services.AddSingleton<QueueManager>();
+            builder.Services.AddSingleton<PortCapacityTracker>();
+            builder.Services.AddHostedService<FleetHealthCheckService>();
 
             builder.Services.AddHostedService<CacheMaker>();
             builder.Services.AddHostedService<FlagChecker>();
