@@ -7,7 +7,7 @@ namespace GZCTF;
 
 public class Server
 {
-    internal const int MetricPort = 3000;
+    internal const int MetricPort = 3001;
     internal const int ServerPort = 8080;
 
     internal static readonly string[] SupportedCultures =
