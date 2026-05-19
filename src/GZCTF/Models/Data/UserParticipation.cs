@@ -10,7 +10,7 @@ public class UserParticipation
     /// <summary>
     /// Participation object
     /// </summary>
-    public Participation Participation = null!;
+    public Participation Participation { get; set; } = null!;
 
     public UserParticipation() { }
 

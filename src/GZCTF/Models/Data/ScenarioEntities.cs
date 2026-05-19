@@ -244,6 +244,12 @@ public class ScenarioInstance
     [Required]
     public int TimeSlotId { get; set; }
 
+    /// <summary>
+    /// Concurrency token
+    /// </summary>
+    [Timestamp]
+    public uint ConcurrencyToken { get; set; }
+
     #region Db Relationship
 
     /// <summary>
