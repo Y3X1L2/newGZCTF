@@ -1,5 +1,6 @@
 using GZCTF.Models.Data;
 using GZCTF.Services.Scoring;
+using Xunit;
 
 namespace GZCTF.Test.UnitTests.Scoring;
 

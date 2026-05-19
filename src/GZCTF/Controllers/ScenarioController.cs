@@ -608,24 +608,20 @@ public class ScenarioController : ControllerBase
             // ★PHASE 1 FIX★ Write Submission record for leaderboard visibility
             try
             {
-                var user = await _userManager.GetUserAsync(User);
-                if (user is not null)
+                var game = await _dbContext.GameChallenges
+                    .FirstOrDefaultAsync(c => c.Id == instance.ScenarioId, token);
+                if (game is not null)
                 {
-                    var game = await _dbContext.GameChallenges
-                        .FirstOrDefaultAsync(c => c.Id == instance.ScenarioId, token);
-                    if (game is not null)
+                    var participation = await _dbContext.Participations
+                        .FirstOrDefaultAsync(p => p.GameId == game.GameId
+                            && p.Team!.Members.Any(m => m.Id == user.Id), token);
+                    if (participation is not null)
                     {
-                        var participation = await _dbContext.Participations
-                            .FirstOrDefaultAsync(p => p.GameId == game.GameId
-                                && p.Team!.Members.Any(m => m.Id == user.Id), token);
-                        if (participation is not null)
-                        {
-                            using var scope = HttpContext.RequestServices.CreateScope();
-                            var engine = scope.ServiceProvider.GetRequiredService<UnifiedScoringEngine>();
-                            await engine.RecordStageCompletionAsync(
-                                instance.ScenarioId, stageId, user.Id, game.GameId,
-                                participation.TeamId, participation.Id, token);
-                        }
+                        using var scope = HttpContext.RequestServices.CreateScope();
+                        var engine = scope.ServiceProvider.GetRequiredService<UnifiedScoringEngine>();
+                        await engine.RecordStageCompletionAsync(
+                            instance.ScenarioId, stageId, user.Id, game.GameId,
+                            participation.TeamId, participation.Id, token);
                     }
                 }
             }

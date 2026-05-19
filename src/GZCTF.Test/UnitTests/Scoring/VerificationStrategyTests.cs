@@ -1,7 +1,10 @@
 using GZCTF.Models.Data;
 using GZCTF.Services.Scoring;
 using GZCTF.Utils;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
+using Xunit;
 
 namespace GZCTF.Test.UnitTests.Scoring;
 
@@ -72,7 +75,7 @@ public class ScriptVerificationTests
     [Fact]
     public async Task Verify_ReturnsAccepted_WhenScriptExitsZero()
     {
-        var strategy = new ScriptVerification(NullLoggerFactory.Instance.CreateLogger<ScriptVerification>());
+        var strategy = new ScriptVerification(null!);
         var rule = new ScoringRule
         {
             VerificationConfig = """{"ScriptPath":"echo","ScriptArgs":"success"}"""

@@ -8,7 +8,7 @@ namespace GZCTF.Services.Scoring;
 
 public class ScriptVerification : IVerificationStrategy
 {
-    private readonly ILogger<ScriptVerification> _logger;
+    private readonly ILogger _logger;
     public VerificationMode HandledMode => VerificationMode.AutoScript;
 
     public ScriptVerification(ILogger<ScriptVerification> logger) => _logger = logger;
