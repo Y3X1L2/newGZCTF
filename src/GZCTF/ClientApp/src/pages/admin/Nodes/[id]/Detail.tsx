@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { Card, Title, Text, Badge, Group, Progress } from '@mantine/core';
 import { useNodes } from '../../../../hooks/useNodes';
 
