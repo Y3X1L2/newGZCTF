@@ -10,6 +10,7 @@ using GZCTF.Services.Scoring;
 using GZCTF.Services.Container;
 using GZCTF.Services.CronJob;
 using GZCTF.Services.Docker;
+using GZCTF.Services.Fleet;
 using GZCTF.Services.Mail;
 using GZCTF.Services.Token;
 using GZCTF.Services.Transfer;
@@ -115,6 +116,14 @@ internal static class ServicesExtension
             builder.Services.AddScoped<IVerificationStrategy, RegexVerification>();
             builder.Services.AddScoped<IVerificationStrategy, ScriptVerification>();
             builder.Services.AddScoped<IVerificationStrategy, ManualReviewVerification>();
+
+            // Phase 3 fleet services
+            builder.Services.AddScoped<INodeRepository, NodeRepository>();
+            builder.Services.AddScoped<NodeDeployService>();
+            builder.Services.AddSingleton<WeightedScheduler>();
+            builder.Services.AddSingleton<QueueManager>();
+            builder.Services.AddSingleton<PortCapacityTracker>();
+            builder.Services.AddHostedService<FleetHealthCheckService>();
 
             builder.Services.AddHostedService<CacheMaker>();
             builder.Services.AddHostedService<FlagChecker>();
