@@ -599,9 +599,6 @@ public class IRChallengeController : ControllerBase
         await _context.SaveChangesAsync(token);
 
         // ★PHASE 1 FIX★ Write Submission record for leaderboard visibility
-        // Get gameId from the challenge
-        var challenge = await _context.GameChallenges
-            .FirstOrDefaultAsync(c => c.Id == instance.ChallengeId, token);
         if (challenge is not null)
         {
             // Get teamId and participationId from the instance's user
