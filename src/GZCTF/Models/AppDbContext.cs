@@ -228,8 +228,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
 
         builder.Entity<Container>(entity =>
         {
-            entity.HasOne(c => c.GameInstance).WithMany().HasForeignKey(c => c.GameInstanceId).OnDelete(DeleteBehavior.SetNull);
-            entity.HasOne(c => c.ExerciseInstance).WithMany().HasForeignKey(c => c.ExerciseInstanceId).OnDelete(DeleteBehavior.SetNull);
             entity.HasIndex(c => c.Status);
         });
 
