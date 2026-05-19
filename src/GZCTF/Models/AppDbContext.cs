@@ -48,6 +48,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<ScenarioInstance> ScenarioInstances { get; set; } = null!;
     public DbSet<IRCheckpoint> IRCheckpoints { get; set; } = null!;
     public DbSet<IRInstance> IRInstances { get; set; } = null!;
+    public DbSet<WorkerNode> WorkerNodes { get; set; } = null!;
+    public DbSet<DeploymentTarget> DeploymentTargets { get; set; } = null!;
 
     private static ValueConverter<T?, string> GetJsonConverter<T>() where T : class, new() =>
         new(
