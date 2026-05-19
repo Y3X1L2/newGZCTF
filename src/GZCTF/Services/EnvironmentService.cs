@@ -12,6 +12,7 @@ public class EnvironmentService
 {
     private readonly VmManager _vmManager;
     private readonly ContainerOrchestrator _containerOrchestrator;
+    private readonly GuacamoleProxy _guacamoleProxy;
     private readonly ImageStorage _imageStorage;
     private readonly AppDbContext _dbContext;
     private readonly ILogger<EnvironmentService> _logger;
@@ -19,12 +20,14 @@ public class EnvironmentService
     public EnvironmentService(
         VmManager vmManager,
         ContainerOrchestrator containerOrchestrator,
+        GuacamoleProxy guacamoleProxy,
         ImageStorage imageStorage,
         AppDbContext dbContext,
         ILogger<EnvironmentService> logger)
     {
         _vmManager = vmManager;
         _containerOrchestrator = containerOrchestrator;
+        _guacamoleProxy = guacamoleProxy;
         _imageStorage = imageStorage;
         _dbContext = dbContext;
         _logger = logger;
@@ -92,14 +95,25 @@ public class EnvironmentService
                             var vncPort = await _vmManager.GetVncPort(vmName);
                             var ipAddress = await _vmManager.GetIpAddress(vmName);
 
+                            // Create Guacamole RDP connection with dynamic credentials
+                            var rdpPort = 3389;
+                            var sessionUser = "player";
+                            var sessionPass = Codec.RandomPassword(16);
+                            var (connectionId, guacToken) = await _guacamoleProxy
+                                .CreateConnectionWithCredentialsAsync(vmName, ipAddress ?? "127.0.0.1",
+                                    rdpPort, sessionUser, sessionPass);
+
                             connectionDetails.Add(new EnvironmentConnection
                             {
                                 Name = template.Name,
                                 Type = "Windows",
                                 VmName = vmName,
                                 Host = ipAddress,
-                                Port = vncPort,
-                                Protocol = "vnc"
+                                Port = rdpPort,
+                                Protocol = "rdp",
+                                GuacamoleConnectionId = connectionId,
+                                GuacamoleToken = guacToken,
+                                GuacamoleUrl = _guacamoleProxy.GetConnectionUrl(connectionId, guacToken)
                             });
                         }
 
@@ -297,4 +311,7 @@ public class EnvironmentConnection
     public string? Host { get; set; }
     public int? Port { get; set; }
     public string Protocol { get; set; } = string.Empty;
+    public string? GuacamoleConnectionId { get; set; }
+    public string? GuacamoleToken { get; set; }
+    public string? GuacamoleUrl { get; set; }
 }

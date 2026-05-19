@@ -103,6 +103,7 @@ internal static class ServicesExtension
             builder.Services.AddScoped<LocalImageImporter>();
             builder.Services.AddScoped<DockerImageBuilder>();
             builder.Services.AddScoped<EnvironmentService>();
+            builder.Services.AddScoped<DockerComposeDeployer>();
             builder.Services.AddScoped<SSHAccessService>();
             builder.Services.AddScoped<ScoringService>();
             builder.Services.AddScoped<LeaderboardService>();
