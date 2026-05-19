@@ -6,9 +6,11 @@ using Microsoft.Extensions.Options;
 namespace GZCTF.Services;
 
 /// <summary>
-/// Manages KVM/libvirt virtual machine lifecycle via virsh CLI commands.
-/// All operations are asynchronous with configurable timeout handling per Constitution Principle IV.
+/// [DEPRECATED] Use KvmProvider (IVirtualMachineProvider) instead.
+/// This class is retained for backward compatibility only.
+/// All new code should inject IVirtualMachineProvider.
 /// </summary>
+[Obsolete("Use KvmProvider via IVirtualMachineProvider")]
 public class VmManager
 {
     private readonly ILogger<VmManager> _logger;

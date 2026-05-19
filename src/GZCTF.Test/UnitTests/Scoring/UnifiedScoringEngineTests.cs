@@ -23,11 +23,14 @@ public class UnifiedScoringEngineTests
     }
 
     [Fact]
-    public async Task ProcessSubmissionAsync_ReturnsNotFound_WhenNoScoringRule()
+    public void Engine_AcceptsStrategies_FromDI()
     {
-        // This test verifies graceful degradation when no rule exists.
-        // In practice, it requires integration test with real DB.
-        // Unit test just verifies interface contract.
-        Assert.True(true); // Placeholder for integration test
+        var strategies = new IVerificationStrategy[]
+        {
+            new FlagHashVerification(),
+            new ManualReviewVerification()
+        };
+        var engine = new UnifiedScoringEngine(null!, null!, strategies);
+        Assert.NotNull(engine);
     }
 }

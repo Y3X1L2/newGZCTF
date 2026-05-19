@@ -7,6 +7,7 @@ using GZCTF.Middlewares;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Services;
+using GZCTF.Services.Scoring;
 using GZCTF.Utils;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -35,6 +36,7 @@ public class SubmissionController : ControllerBase
     private readonly IHubContext<ScenarioHub> _hubContext;
     private readonly ILogger<SubmissionController> _logger;
     private readonly GamePhaseService _phaseService;
+    private readonly UnifiedScoringEngine _scoringEngine;
 
     public SubmissionController(
         AppDbContext context,
@@ -43,7 +45,8 @@ public class SubmissionController : ControllerBase
         LeaderboardService leaderboardService,
         IHubContext<ScenarioHub> hubContext,
         ILogger<SubmissionController> logger,
-        GamePhaseService phaseService)
+        GamePhaseService phaseService,
+        UnifiedScoringEngine scoringEngine)
     {
         _context = context;
         _userManager = userManager;
@@ -52,6 +55,7 @@ public class SubmissionController : ControllerBase
         _hubContext = hubContext;
         _logger = logger;
         _phaseService = phaseService;
+        _scoringEngine = scoringEngine;
     }
 
     #region Submission CRUD
@@ -107,49 +111,26 @@ public class SubmissionController : ControllerBase
                     $"Maximum attempts ({rule.MaxAttempts}) reached for this submission type."));
         }
 
-        // Determine verification result
+        // Delegate verification, scoring, and persistence to the unified engine
+        // Engine handles: rule lookup, attempt limit check, verification, score decay, and DB save
         var (status, score) = await VerifySubmissionAsync(request, rule, user, token);
 
-        // Calculate attempt number
-        var attemptNumber = await _context.Submissions
-            .CountAsync(s => s.ChallengeId == request.ChallengeId
+        // Engine already saved the Submission; retrieve it for the response
+        var submission = await _context.Submissions
+            .Where(s => s.ChallengeId == request.ChallengeId
                 && s.UserId == user.Id
-                && s.SubmissionType == request.SubmissionType, token) + 1;
-
-        // Apply score decay based on attempt number
-        if (status == AnswerResult.Accepted && score > 0)
-        {
-            score = ApplyScoreDecay(score, attemptNumber - 1, rule); // attemptIndex is 0-based
-        }
-
-        var submission = new Submission
-        {
-            Answer = request.Answer,
-            Status = status,
-            SubmissionType = request.SubmissionType,
-            Content = request.Content,
-            AttemptNumber = attemptNumber,
-            Score = score,
-            SubmitTimeUtc = DateTimeOffset.UtcNow,
-            UserId = user.Id,
-            ChallengeId = request.ChallengeId,
-            GameId = request.GameId,
-            TeamId = request.TeamId,
-            ParticipationId = request.ParticipationId
-        };
-
-        await _context.Submissions.AddAsync(submission, token);
-        await _context.SaveChangesAsync(token);
-
-        _logger.LogInformation(
-            "Submission {SubmissionId} created: Type={Type}, Status={Status}, Score={Score}, User={UserId}, Challenge={ChallengeId}",
-            submission.Id, request.SubmissionType, status, score, user.Id, request.ChallengeId);
+                && s.SubmissionType == request.SubmissionType)
+            .OrderByDescending(s => s.SubmitTimeUtc)
+            .FirstOrDefaultAsync(token);
 
         // T061: Push score and leaderboard updates via SignalR
         if (status == AnswerResult.Accepted)
         {
             await BroadcastScoreAndLeaderboardAsync(request.ChallengeId, user.Id);
         }
+
+        if (submission is null)
+            return Ok(new { status, score });
 
         return Ok(SubmissionResponse.FromSubmission(submission));
     }
@@ -401,144 +382,8 @@ public class SubmissionController : ControllerBase
         UserInfo user,
         CancellationToken token)
     {
-        return rule.VerificationMode switch
-        {
-            VerificationMode.AutoExact => await VerifyAutoExactAsync(request, rule, user, token),
-            VerificationMode.AutoRegex => await VerifyAutoRegexAsync(request, rule, user, token),
-            VerificationMode.ManualReview => (AnswerResult.FlagSubmitted, 0),
-            VerificationMode.AutoScript => (AnswerResult.FlagSubmitted, 0), // Deferred to background service
-            _ => (AnswerResult.FlagSubmitted, 0)
-        };
-    }
-
-    /// <summary>
-    /// Auto-verify by exact hash match (SHA256).
-    /// For Flag type: compare against ScoringRule.ExpectedAnswerHash or Stage.FlagHash.
-    /// For IP type: compare against ScoringRule.ExpectedAnswerHash.
-    /// For other types: compare against ScoringRule.ExpectedAnswerHash.
-    /// </summary>
-    private async Task<(AnswerResult Status, int Score)> VerifyAutoExactAsync(
-        SubmissionCreateRequest request,
-        ScoringRule rule,
-        UserInfo user,
-        CancellationToken token)
-    {
-        if (rule.SubmissionType == ScoringSubmissionType.Flag)
-        {
-            var submittedHash = request.Answer.ToSHA256String();
-
-            // Try rule-level ExpectedAnswerHash first
-            if (!string.IsNullOrWhiteSpace(rule.ExpectedAnswerHash))
-            {
-                if (string.Equals(submittedHash, rule.ExpectedAnswerHash, StringComparison.OrdinalIgnoreCase))
-                {
-                    return (AnswerResult.Accepted, rule.Challenge?.OriginalScore ?? 100);
-                }
-                return (AnswerResult.WrongAnswer, 0);
-            }
-
-            // Fall back to stage-level flag verification for scenarios
-            var stages = await _context.Stages
-                .Where(s => s.ScenarioId == request.ChallengeId)
-                .ToListAsync(token);
-
-            foreach (var stage in stages)
-            {
-                if (stage.VerifyFlag(request.Answer))
-                {
-                    return (AnswerResult.Accepted, rule.Challenge?.OriginalScore ?? 100);
-                }
-            }
-
-            // Also check FlagContext for non-scenario challenges
-            var flagMatch = await _context.FlagContexts
-                .AnyAsync(f => f.ChallengeId == request.ChallengeId
-                    && f.Flag == request.Answer, token);
-
-            if (flagMatch)
-                return (AnswerResult.Accepted, rule.Challenge?.OriginalScore ?? 100);
-
-            return (AnswerResult.WrongAnswer, 0);
-        }
-
-        if (rule.SubmissionType == ScoringSubmissionType.IP)
-        {
-            if (!string.IsNullOrWhiteSpace(rule.ExpectedAnswerHash))
-            {
-                var submittedHash = request.Answer.ToSHA256String();
-                if (string.Equals(submittedHash, rule.ExpectedAnswerHash, StringComparison.OrdinalIgnoreCase))
-                {
-                    return (AnswerResult.Accepted, rule.Challenge?.OriginalScore ?? 100);
-                }
-            }
-            return (AnswerResult.WrongAnswer, 0);
-        }
-
-        // Credential and Custom types with AutoExact
-        if (!string.IsNullOrWhiteSpace(rule.ExpectedAnswerHash))
-        {
-            var hash = request.Answer.ToSHA256String();
-            if (string.Equals(hash, rule.ExpectedAnswerHash, StringComparison.OrdinalIgnoreCase))
-            {
-                return (AnswerResult.Accepted, rule.Challenge?.OriginalScore ?? 100);
-            }
-        }
-
-        return (AnswerResult.WrongAnswer, 0);
-    }
-
-    /// <summary>
-    /// Auto-verify using regex pattern from VerificationConfig.
-    /// </summary>
-    private Task<(AnswerResult Status, int Score)> VerifyAutoRegexAsync(
-        SubmissionCreateRequest request,
-        ScoringRule rule,
-        UserInfo user,
-        CancellationToken token)
-    {
-        if (string.IsNullOrWhiteSpace(rule.VerificationConfig))
-            return Task.FromResult((AnswerResult.WrongAnswer, 0));
-
-        try
-        {
-            using var doc = JsonDocument.Parse(rule.VerificationConfig);
-            if (doc.RootElement.TryGetProperty("Pattern", out var patternProp))
-            {
-                var pattern = patternProp.GetString();
-                if (!string.IsNullOrWhiteSpace(pattern))
-                {
-                    var regex = new System.Text.RegularExpressions.Regex(pattern,
-                        System.Text.RegularExpressions.RegexOptions.IgnoreCase
-                        | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
-
-                    if (regex.IsMatch(request.Answer))
-                    {
-                        return Task.FromResult(
-                            (AnswerResult.Accepted, rule.Challenge?.OriginalScore ?? 100));
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Invalid regex VerificationConfig for ScoringRule {RuleId}", rule.Id);
-        }
-
-        return Task.FromResult((AnswerResult.WrongAnswer, 0));
-    }
-
-    /// <summary>
-    /// Apply score decay based on attempt index and rule configuration.
-    /// </summary>
-    private static int ApplyScoreDecay(int baseScore, int attemptIndex, ScoringRule rule)
-    {
-        return rule.ScoreDecay switch
-        {
-            ScoreDecay.None => baseScore,
-            ScoreDecay.Half => attemptIndex == 0 ? baseScore : baseScore / (int)Math.Pow(2, attemptIndex),
-            ScoreDecay.Linear => Math.Max(0, baseScore - attemptIndex * 10),
-            _ => baseScore
-        };
+        var result = await _scoringEngine.ProcessSubmissionAsync(request, user.Id, token);
+        return (result.Status, result.Score);
     }
 
     /// <summary>

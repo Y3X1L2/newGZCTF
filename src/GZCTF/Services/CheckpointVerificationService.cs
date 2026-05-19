@@ -129,6 +129,22 @@ public class CheckpointVerificationService : BackgroundService
 
                 anyCompleted = true;
 
+                // Write Submission for leaderboard
+                var challenge = await context.GameChallenges.FindAsync([instance.ChallengeId], cancellationToken);
+                if (challenge is not null)
+                {
+                    context.Submissions.Add(new Submission
+                    {
+                        Answer = $"auto-cp-{checkpoint.Id}",
+                        Status = AnswerResult.Accepted,
+                        SubmissionType = ScoringSubmissionType.Flag,
+                        AttemptNumber = 1, Score = checkpoint.Score,
+                        SubmitTimeUtc = DateTimeOffset.UtcNow,
+                        UserId = instance.UserId, ChallengeId = instance.ChallengeId,
+                        GameId = challenge.GameId, TeamId = 0, ParticipationId = 0
+                    });
+                }
+
                 _logger.LogInformation(
                     "Checkpoint {CheckpointId} completed for instance {InstanceId} (Score: {Score})",
                     checkpoint.Id, instance.Id, checkpoint.Score);
