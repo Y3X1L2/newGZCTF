@@ -8,6 +8,7 @@ using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Models.Request.Game;
 using GZCTF.Services;
+using GZCTF.Services.Scoring;
 using GZCTF.Utils;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -602,6 +603,31 @@ public class ScenarioController : ControllerBase
                         instanceId = instance.Id,
                         scenarioId = instance.ScenarioId
                     });
+            }
+
+            // ★PHASE 1 FIX★ Write Submission record for leaderboard visibility
+            try
+            {
+                var game = await _dbContext.GameChallenges
+                    .FirstOrDefaultAsync(c => c.Id == instance.ScenarioId, token);
+                if (game is not null)
+                {
+                    var participation = await _dbContext.Participations
+                        .FirstOrDefaultAsync(p => p.GameId == game.GameId
+                            && p.Team!.Members.Any(m => m.Id == user.Id), token);
+                    if (participation is not null)
+                    {
+                        using var scope = HttpContext.RequestServices.CreateScope();
+                        var engine = scope.ServiceProvider.GetRequiredService<UnifiedScoringEngine>();
+                        await engine.RecordStageCompletionAsync(
+                            instance.ScenarioId, stageId, user.Id, game.GameId,
+                            participation.TeamId, participation.Id, token);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to record stage completion submission for instance {InstanceId}", instanceId);
             }
         }
 

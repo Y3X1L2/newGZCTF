@@ -36,7 +36,8 @@ public class ScoringService
         }
 
         var submissions = await _context.Submissions
-            .Where(s => s.ChallengeId == challengeId && s.UserId == userId)
+            .Where(s => s.ChallengeId == challengeId && s.UserId == userId
+                && s.Status == AnswerResult.Accepted)
             .ToListAsync();
 
         var totalScore = 0m;
@@ -44,14 +45,10 @@ public class ScoringService
         {
             var typeSubmissions = submissions
                 .Where(s => s.SubmissionType == rule.SubmissionType)
-                .OrderBy(s => s.SubmitTimeUtc)
+                .OrderByDescending(s => s.Score)  // ★ Best score wins — already decayed
                 .ToList();
 
-            var bestScore = typeSubmissions
-                .Select((s, attempt) => ApplyScoreDecay(s.Score, attempt, rule))
-                .DefaultIfEmpty(0)
-                .Max();
-
+            var bestScore = typeSubmissions.FirstOrDefault()?.Score ?? 0;
             totalScore += bestScore * rule.Weight / 100m;
         }
 
@@ -67,17 +64,4 @@ public class ScoringService
         return Math.Abs(sum - 100m) < 0.01m;
     }
 
-    /// <summary>
-    /// Applies the score decay strategy to a submission based on attempt number.
-    /// </summary>
-    private static int ApplyScoreDecay(int baseScore, int attemptIndex, ScoringRule rule)
-    {
-        return rule.ScoreDecay switch
-        {
-            ScoreDecay.None => baseScore,
-            ScoreDecay.Half => attemptIndex == 0 ? baseScore : baseScore / (int)Math.Pow(2, attemptIndex),
-            ScoreDecay.Linear => Math.Max(0, baseScore - attemptIndex * 10),
-            _ => baseScore
-        };
-    }
 }
