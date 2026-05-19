@@ -415,11 +415,13 @@ public class IRChallengeController : ControllerBase
                 // Wait for VM to be ready
                 await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
 
-                // Get IP and set up Guacamole
+                // Get IP and set up Guacamole RDP with dynamic credentials
                 var vmIp = await _vmManager.GetIpAddress(vmName);
-                var vncPort = await _vmManager.GetVncPort(vmName);
-                var (connectionId, guacToken) = await _guacamoleProxy.CreateConnectionAsync(
-                    vmName, vmIp ?? "127.0.0.1", vncPort ?? 5900);
+                var rdpPort = int.Parse(_config["IRSettings:RdpPort"] ?? "3389");
+                var sessionUser = _config["IRSettings:VmUsername"] ?? "player";
+                var sessionPass = Codec.RandomPassword(16);
+                var (connectionId, guacToken) = await _guacamoleProxy.CreateConnectionWithCredentialsAsync(
+                    vmName, vmIp ?? "127.0.0.1", rdpPort, sessionUser, sessionPass);
 
                 // Store access details
                 var accessDetails = new Dictionary<string, object?>

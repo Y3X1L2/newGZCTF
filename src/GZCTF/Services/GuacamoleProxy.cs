@@ -111,6 +111,71 @@ public class GuacamoleProxy
     }
 
     /// <summary>
+    /// Creates a new RDP connection in Guacamole with dynamic credentials.
+    /// </summary>
+    /// <param name="vmName">Display name for the connection.</param>
+    /// <param name="host">Target host IP address or hostname.</param>
+    /// <param name="port">Target RDP port (usually 3389).</param>
+    /// <param name="username">RDP login username.</param>
+    /// <param name="password">RDP login password.</param>
+    /// <returns>A tuple of (connectionId, token) for constructing the browser URL.</returns>
+    /// <exception cref="GuacamoleApiException">Thrown when the Guacamole API call fails.</exception>
+    public async Task<(string ConnectionId, string Token)> CreateConnectionWithCredentialsAsync(
+        string vmName, string host, int port, string username, string password)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(vmName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(host);
+        ArgumentException.ThrowIfNullOrWhiteSpace(username);
+        ArgumentException.ThrowIfNullOrWhiteSpace(password);
+
+        _logger.LogInformation("Creating Guacamole RDP connection for '{VmName}' at {Host}:{Port} with user '{User}'",
+            vmName, host, port, username);
+
+        var payload = new
+        {
+            parentIdentifier = "ROOT",
+            name = vmName,
+            protocol = "rdp",
+            parameters = new
+            {
+                hostname = host,
+                port,
+                username,
+                password,
+                ignoreCert = "true",
+                security = "any",
+                enableWallpaper = "false",
+                enableTheming = "false",
+                enableFontSmoothing = "true",
+                enableFullWindowDrag = "false",
+                enableDesktopComposition = "false",
+                enableMenuAnimations = "false",
+                disableAudio = "true",
+                serverLayout = "en-us-qwerty"
+            }
+        };
+
+        var client = CreateHttpClient();
+        var request = CreateRequest(HttpMethod.Post, $"{_apiUrl}/connections", payload);
+        var response = await client.SendAsync(request);
+
+        await EnsureSuccessOrThrowAsync(response, "create connection");
+
+        var connection = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var connectionId = connection.GetProperty("identifier").GetString()
+                           ?? throw new GuacamoleApiException("Connection ID not found in Guacamole response.");
+
+        _logger.LogDebug("Guacamole connection '{ConnectionId}' created, generating auth token", connectionId);
+
+        var token = await GenerateTokenAsync(connectionId, client);
+
+        _logger.LogInformation("Guacamole connection '{ConnectionId}' created for '{VmName}'",
+            connectionId, vmName);
+
+        return (connectionId, token);
+    }
+
+    /// <summary>
     /// Deletes a Guacamole connection by its identifier.
     /// </summary>
     /// <param name="connectionId">The Guacamole connection identifier to delete.</param>

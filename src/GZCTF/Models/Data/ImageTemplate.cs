@@ -87,4 +87,15 @@ public class ImageTemplate
     /// </summary>
     [MaxLength(1024)]
     public string? Description { get; set; }
+
+    /// <summary>
+    /// Whether this image contains known malware (for IR challenges)
+    /// </summary>
+    public bool ContainsMalware { get; set; }
+
+    /// <summary>
+    /// SHA256 hash of the image file
+    /// </summary>
+    [MaxLength(64)]
+    public string? ImageHash { get; set; }
 }
