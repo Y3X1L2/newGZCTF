@@ -33,6 +33,7 @@ public class SubmissionController : ControllerBase
     private readonly LeaderboardService _leaderboardService;
     private readonly IHubContext<ScenarioHub> _hubContext;
     private readonly ILogger<SubmissionController> _logger;
+    private readonly GamePhaseService _phaseService;
 
     public SubmissionController(
         AppDbContext context,
@@ -40,7 +41,8 @@ public class SubmissionController : ControllerBase
         ScoringService scoringService,
         LeaderboardService leaderboardService,
         IHubContext<ScenarioHub> hubContext,
-        ILogger<SubmissionController> logger)
+        ILogger<SubmissionController> logger,
+        GamePhaseService phaseService)
     {
         _context = context;
         _userManager = userManager;
@@ -48,6 +50,7 @@ public class SubmissionController : ControllerBase
         _leaderboardService = leaderboardService;
         _hubContext = hubContext;
         _logger = logger;
+        _phaseService = phaseService;
     }
 
     #region Submission CRUD
@@ -75,6 +78,10 @@ public class SubmissionController : ControllerBase
         var user = await _userManager.GetUserAsync(User);
         if (user is null)
             return Unauthorized(new RequestResponse("Login required."));
+
+        var phaseCheck = await _phaseService.CheckAsync(request.GameId, PhaseRequiredType.CTF, token);
+        if (phaseCheck != PhaseCheckResult.Allowed)
+            return Forbid();
 
         // Find the scoring rule for this challenge and submission type
         var rule = await _context.ScoringRules

@@ -101,6 +101,7 @@ internal static class ServicesExtension
             builder.Services.AddScoped<SSHAccessService>();
             builder.Services.AddScoped<ScoringService>();
             builder.Services.AddScoped<LeaderboardService>();
+            builder.Services.AddScoped<GamePhaseService>();
 
             builder.Services.AddHostedService<CacheMaker>();
             builder.Services.AddHostedService<FlagChecker>();
