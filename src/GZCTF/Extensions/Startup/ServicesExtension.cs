@@ -124,9 +124,9 @@ internal static class ServicesExtension
             builder.Services.AddScoped<NodeDeployService>();
             builder.Services.AddScoped<FleetManager>();
             builder.Services.AddScoped<AutoTransferService>();
-            builder.Services.AddSingleton<WeightedScheduler>();
-            builder.Services.AddSingleton<QueueManager>();
-            builder.Services.AddSingleton<PortCapacityTracker>();
+            builder.Services.AddScoped<WeightedScheduler>();
+            builder.Services.AddScoped<QueueManager>();
+            builder.Services.AddScoped<PortCapacityTracker>();
             builder.Services.AddHostedService<FleetHealthCheckService>();
 
             // Phase 7 security: distributed lock
