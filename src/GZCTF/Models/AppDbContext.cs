@@ -53,6 +53,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<WorkerNode> WorkerNodes { get; set; } = null!;
     public DbSet<DeploymentTarget> DeploymentTargets { get; set; } = null!;
     public DbSet<DeploymentQueue> DeploymentQueues { get; set; } = null!;
+    public DbSet<GamePhase> GamePhases => Set<GamePhase>();
 
     private static ValueConverter<T?, string> GetJsonConverter<T>() where T : class, new() =>
         new(

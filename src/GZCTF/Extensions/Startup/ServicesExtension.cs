@@ -109,6 +109,7 @@ internal static class ServicesExtension
             builder.Services.AddScoped<SSHAccessService>();
             builder.Services.AddScoped<ScoringService>();
             builder.Services.AddScoped<LeaderboardService>();
+            builder.Services.AddScoped<GamePhaseService>();
 
             // Phase 1 scoring engine services
             builder.Services.AddScoped<UnifiedScoringEngine>();

@@ -36,6 +36,7 @@ public class IRChallengeController : ControllerBase
     private readonly IHubContext<ScenarioHub> _hubContext;
     private readonly IConfiguration _config;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly GamePhaseService _phaseService;
 
     public IRChallengeController(
         AppDbContext context,
@@ -47,7 +48,8 @@ public class IRChallengeController : ControllerBase
         SSHAccessService sshAccessService,
         IHubContext<ScenarioHub> hubContext,
         IConfiguration config,
-        IServiceScopeFactory scopeFactory)
+        IServiceScopeFactory scopeFactory,
+        GamePhaseService phaseService)
     {
         _context = context;
         _logger = logger;
@@ -59,6 +61,7 @@ public class IRChallengeController : ControllerBase
         _hubContext = hubContext;
         _config = config;
         _scopeFactory = scopeFactory;
+        _phaseService = phaseService;
     }
 
     #region IR Challenge CRUD
@@ -332,6 +335,10 @@ public class IRChallengeController : ControllerBase
         if (challenge is null)
             return NotFound(new RequestResponse("IR challenge not found", StatusCodes.Status404NotFound));
 
+        var phaseCheck = await _phaseService.CheckAsync(challenge.GameId, PhaseRequiredType.IR, token);
+        if (phaseCheck != PhaseCheckResult.Allowed)
+            return Forbid();
+
         if (!challenge.IsEnabled)
             return BadRequest(new RequestResponse("Challenge is not enabled"));
 
@@ -538,6 +545,16 @@ public class IRChallengeController : ControllerBase
 
         if (instance.EnvironmentStatus != EnvironmentStatus.Ready)
             return BadRequest(new RequestResponse("Environment is not ready"));
+
+        var challenge = await _context.GameChallenges
+            .FirstOrDefaultAsync(c => c.Id == instance.ChallengeId, token);
+
+        if (challenge is null)
+            return NotFound(new RequestResponse("IR challenge not found", StatusCodes.Status404NotFound));
+
+        var phaseCheck = await _phaseService.CheckAsync(challenge.GameId, PhaseRequiredType.IR, token);
+        if (phaseCheck != PhaseCheckResult.Allowed)
+            return Forbid();
 
         var checkpoint = await _context.IRCheckpoints
             .FirstOrDefaultAsync(c => c.Id == checkpointId && c.ChallengeId == instance.ChallengeId, token);

@@ -36,6 +36,7 @@ public class ScenarioController : ControllerBase
     private readonly IHubContext<Hubs.ScenarioHub> _scenarioHub;
     private readonly ILogger<ScenarioController> _logger;
     private readonly IStringLocalizer<Program> _localizer;
+    private readonly GamePhaseService _phaseService;
 
     public ScenarioController(
         AppDbContext dbContext,
@@ -43,7 +44,8 @@ public class ScenarioController : ControllerBase
         EnvironmentService environmentService,
         IHubContext<Hubs.ScenarioHub> scenarioHub,
         ILogger<ScenarioController> logger,
-        IStringLocalizer<Program> localizer)
+        IStringLocalizer<Program> localizer,
+        GamePhaseService phaseService)
     {
         _dbContext = dbContext;
         _userManager = userManager;
@@ -51,6 +53,7 @@ public class ScenarioController : ControllerBase
         _scenarioHub = scenarioHub;
         _logger = logger;
         _localizer = localizer;
+        _phaseService = phaseService;
     }
 
     /// <summary>
@@ -336,6 +339,10 @@ public class ScenarioController : ControllerBase
             return NotFound(new RequestResponse(_localizer[nameof(Resources.Program.Challenge_NotFound)],
                 StatusCodes.Status404NotFound));
 
+        var phaseCheck = await _phaseService.CheckAsync(scenario.GameId, PhaseRequiredType.Scenario, token);
+        if (phaseCheck != PhaseCheckResult.Allowed)
+            return Forbid();
+
         var user = await _userManager.GetUserAsync(User);
         if (user is null)
             return Unauthorized(
@@ -519,6 +526,16 @@ public class ScenarioController : ControllerBase
 
         if (instance.Status != ScenarioInstanceStatus.Active)
             return BadRequest(new RequestResponse("This scenario instance is not active."));
+
+        var scenario = await _dbContext.GameChallenges
+            .FirstOrDefaultAsync(c => c.Id == instance.ScenarioId, token);
+
+        if (scenario is null)
+            return NotFound(new RequestResponse("Scenario not found.", StatusCodes.Status404NotFound));
+
+        var phaseCheck = await _phaseService.CheckAsync(scenario.GameId, PhaseRequiredType.Scenario, token);
+        if (phaseCheck != PhaseCheckResult.Allowed)
+            return Forbid();
 
         var stage = await _dbContext.Stages
             .FirstOrDefaultAsync(s => s.Id == stageId && s.ScenarioId == instance.ScenarioId, token);
