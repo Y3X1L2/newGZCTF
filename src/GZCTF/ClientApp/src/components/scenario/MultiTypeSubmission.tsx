@@ -5,9 +5,12 @@ import { notifications } from '@mantine/notifications';
 interface MultiTypeSubmissionProps {
   challengeId: number;
   instanceId: string;
+  gameId: number;
+  teamId: number;
+  participationId: number;
 }
 
-export default function MultiTypeSubmission({ challengeId, instanceId }: MultiTypeSubmissionProps) {
+export default function MultiTypeSubmission({ challengeId, instanceId, gameId, teamId, participationId }: MultiTypeSubmissionProps) {
   const [activeTab, setActiveTab] = useState<string | null>('Flag');
   const [flag, setFlag] = useState('');
   const [ip, setIp] = useState('');
@@ -22,7 +25,7 @@ export default function MultiTypeSubmission({ challengeId, instanceId }: MultiTy
       await fetch('/api/v1/submissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ challengeId, submissionType: 'Flag', content: { value: flag } }),
+        body: JSON.stringify({ answer: flag, submissionType: 'Flag', challengeId, gameId, teamId, participationId }),
       });
       notifications.show({ title: '提交成功', message: 'Flag 已提交', color: 'green' });
       setFlag('');
@@ -38,7 +41,7 @@ export default function MultiTypeSubmission({ challengeId, instanceId }: MultiTy
       await fetch('/api/v1/submissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ challengeId, submissionType: 'IP', content: { value: ip } }),
+        body: JSON.stringify({ answer: ip, submissionType: 'IP', challengeId, gameId, teamId, participationId }),
       });
       notifications.show({ title: '提交成功', message: 'IP 已提交', color: 'green' });
       setIp('');
@@ -55,6 +58,9 @@ export default function MultiTypeSubmission({ challengeId, instanceId }: MultiTy
         const formData = new FormData();
         formData.append('file', writeupFile);
         formData.append('challengeId', challengeId.toString());
+        formData.append('gameId', gameId.toString());
+        formData.append('teamId', teamId.toString());
+        formData.append('participationId', participationId.toString());
         formData.append('submissionType', 'Writeup');
         await fetch('/api/v1/submissions/upload', { method: 'POST', body: formData });
       } else {
@@ -62,8 +68,8 @@ export default function MultiTypeSubmission({ challengeId, instanceId }: MultiTy
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            challengeId, submissionType: 'Writeup',
-            content: { text: writeupText, format: 'markdown' },
+            answer: writeupText, submissionType: 'Writeup',
+            challengeId, gameId, teamId, participationId,
           }),
         });
       }

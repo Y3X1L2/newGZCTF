@@ -41,7 +41,7 @@ export default function SubmissionReview() {
       await fetch(`/api/v1/submissions/${selected.id}/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ score, maxScore: 10, comment }),
+        body: JSON.stringify({ accepted: true, score, comment }),
       });
       notifications.show({ title: '评审完成', message: '评分已提交', color: 'green' });
       setSubmissions(submissions.filter(s => s.id !== selected.id));

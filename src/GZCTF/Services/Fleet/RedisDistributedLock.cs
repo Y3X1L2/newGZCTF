@@ -4,10 +4,9 @@ using GZCTF.Services.Concurrency;
 namespace GZCTF.Services.Fleet;
 
 /// <summary>
-/// Redis-based distributed lock (Phase 3 IDistributedLockService implementation).
-/// Used in Fleet mode for cross-node synchronization.
-/// Current implementation uses local SemaphoreSlim via ConcurrentDictionary (compatible stub).
-/// In production with Redis configured, replaces with StackExchange.Redis RedLock.
+/// NOTE: Current implementation uses local ConcurrentDictionary+SemaphoreSlim.
+/// For true distributed locking, this should be replaced with Redis RedLock via StackExchange.Redis.
+/// This stub is sufficient for single-node deployments.
 /// </summary>
 public class RedisDistributedLock : IDistributedLockService
 {

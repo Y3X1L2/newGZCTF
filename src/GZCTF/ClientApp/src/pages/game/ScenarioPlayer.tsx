@@ -23,7 +23,12 @@ interface InstanceStatus {
   timeSlot: { startTime: string; endTime: string } | null;
 }
 
-export default function ScenarioPlayer({ scenarioId }: { scenarioId: number }) {
+export default function ScenarioPlayer({ scenarioId, gameId, teamId, participationId }: {
+  scenarioId: number;
+  gameId: number;
+  teamId: number;
+  participationId: number;
+}) {
   const [instance, setInstance] = useState<InstanceStatus | null>(null);
   const [flag, setFlag] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -77,13 +82,9 @@ export default function ScenarioPlayer({ scenarioId }: { scenarioId: number }) {
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ flag }) }
       );
       const data = await res.json();
-      if (data.correct) {
+      if (data.isCorrect) {
         setFlagResult('correct');
         setFlag('');
-        if (data.nextStageUnlocked) {
-          setInstance({ ...instance, currentStageId: data.nextStageUnlocked.stageId });
-        }
-        if (data.allCompleted) setShowCompletion(true);
         await loadStatus(instance.instanceId);
       } else {
         setFlagResult('incorrect');
@@ -151,7 +152,8 @@ export default function ScenarioPlayer({ scenarioId }: { scenarioId: number }) {
             </Tabs.Panel>
 
             <Tabs.Panel value="submissions" pt="md">
-              <MultiTypeSubmission challengeId={scenarioId} instanceId={instance.instanceId} />
+              <MultiTypeSubmission challengeId={scenarioId} instanceId={instance.instanceId}
+                gameId={gameId} teamId={teamId} participationId={participationId} />
             </Tabs.Panel>
           </Tabs>
         </Card>

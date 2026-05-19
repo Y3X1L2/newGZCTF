@@ -52,9 +52,8 @@ export default function IRChallengePlayer({ challengeId }: { challengeId: number
   }, [instance, loadStatus]);
 
   const handleReserved = async (slot: { id: number }) => {
-    const res = await fetch(`/api/v1/ir-challenges/${challengeId}/instances`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ timeSlotId: slot.id }),
+    const res = await fetch(`/api/v1/ir-challenges/${challengeId}/instances?timeSlotId=${slot.id}`, {
+      method: 'POST',
     });
     if (res.ok) {
       const data = await res.json();

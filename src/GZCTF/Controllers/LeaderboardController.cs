@@ -10,7 +10,7 @@ namespace GZCTF.Controllers;
 /// Provides ranked standings with per-dimension score breakdown.
 /// </summary>
 [ApiController]
-[Route("api/v1/scenarios")]
+[Route("api/v1/leaderboard")]
 [Produces(MediaTypeNames.Application.Json)]
 [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status401Unauthorized)]
 [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status403Forbidden)]
