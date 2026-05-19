@@ -6,6 +6,7 @@ using GZCTF.Middlewares;
 using GZCTF.Models;
 using GZCTF.Models.Request.Game;
 using GZCTF.Services;
+using GZCTF.Services.Scoring;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -577,6 +578,26 @@ public class IRChallengeController : ControllerBase
 
         instance.CheckpointResults = JsonSerializer.Serialize(results);
         await _context.SaveChangesAsync(token);
+
+        // ★PHASE 1 FIX★ Write Submission record for leaderboard visibility
+        // Get gameId from the challenge
+        var challenge = await _context.GameChallenges
+            .FirstOrDefaultAsync(c => c.Id == instance.ChallengeId, token);
+        if (challenge is not null)
+        {
+            // Get teamId and participationId from the instance's user
+            var participation = await _context.Participations
+                .FirstOrDefaultAsync(p => p.GameId == challenge.GameId
+                    && p.Team!.Members.Any(m => m.Id == instance.UserId), token);
+            if (participation is not null)
+            {
+                using var scope = HttpContext.RequestServices.CreateScope();
+                var engine = scope.ServiceProvider.GetRequiredService<UnifiedScoringEngine>();
+                await engine.RecordIRCheckpointCompletionAsync(
+                    instance.ChallengeId, instance.UserId, challenge.GameId,
+                    participation.TeamId, participation.Id, token);
+            }
+        }
 
         _logger.LogInformation("Checkpoint {CheckpointId} completed by manual answer for instance {InstanceId}",
             checkpointId, instanceId);

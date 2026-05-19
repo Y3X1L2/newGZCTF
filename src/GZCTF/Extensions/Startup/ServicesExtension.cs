@@ -6,6 +6,7 @@ using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Services.Cache;
 using GZCTF.Services.Config;
+using GZCTF.Services.Scoring;
 using GZCTF.Services.Container;
 using GZCTF.Services.CronJob;
 using GZCTF.Services.Mail;
@@ -101,6 +102,13 @@ internal static class ServicesExtension
             builder.Services.AddScoped<SSHAccessService>();
             builder.Services.AddScoped<ScoringService>();
             builder.Services.AddScoped<LeaderboardService>();
+
+            // Phase 1 scoring engine services
+            builder.Services.AddScoped<UnifiedScoringEngine>();
+            builder.Services.AddScoped<IVerificationStrategy, FlagHashVerification>();
+            builder.Services.AddScoped<IVerificationStrategy, RegexVerification>();
+            builder.Services.AddScoped<IVerificationStrategy, ScriptVerification>();
+            builder.Services.AddScoped<IVerificationStrategy, ManualReviewVerification>();
 
             builder.Services.AddHostedService<CacheMaker>();
             builder.Services.AddHostedService<FlagChecker>();

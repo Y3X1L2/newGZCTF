@@ -257,30 +257,53 @@ public class CheckpointVerificationService : BackgroundService
         };
     }
 
-    private Task<bool> VerifyAutoScriptAsync(
+    private async Task<bool> VerifyAutoScriptAsync(
         Dictionary<string, object?> config,
         IRInstance instance,
         CancellationToken cancellationToken)
     {
         var scriptPath = config.GetValueOrDefault("ScriptPath")?.ToString();
+        var scriptArgs = config.GetValueOrDefault("ScriptArgs")?.ToString() ?? "";
 
         if (string.IsNullOrEmpty(scriptPath))
         {
-            _logger.LogWarning("AutoScript checkpoint missing ScriptPath config for instance {InstanceId}", instance.Id);
-            return Task.FromResult(false);
+            _logger.LogWarning("AutoScript checkpoint missing ScriptPath for instance {InstanceId}",
+                instance.Id);
+            return false;
         }
 
-        // AutoScript verification is performed by running a script.
-        // The script is responsible for checking the instance state and returning exit code 0 on success.
-        // Script execution happens on the server itself (not over SSH) since it may use
-        // internal APIs to verify environment state.
-        _logger.LogInformation(
-            "AutoScript verification queued for instance {InstanceId}: script {ScriptPath}",
-            instance.Id, scriptPath);
+        try
+        {
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = scriptPath,
+                    Arguments = $"--instance-id {instance.Id} {scriptArgs}",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
 
-        // AutoScript verification requires scripts to be deployed on the host machine.
-        // Return false by default - scripts should be triggered externally or via a separate runner.
-        return Task.FromResult(false);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(30));
+            process.Start();
+            await process.WaitForExitAsync(cts.Token);
+
+            return process.ExitCode == 0;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("AutoScript timed out for instance {InstanceId}", instance.Id);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AutoScript failed for instance {InstanceId}", instance.Id);
+            return false;
+        }
     }
 
     private static string? GetAccessDetail(IRInstance instance, string key)
