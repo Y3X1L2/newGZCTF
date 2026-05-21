@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GZCTF.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260521163416_SyncChallengeModel")]
+    [Migration("20260521163925_SyncChallengeModel")]
     partial class SyncChallengeModel
     {
         /// <inheritdoc />
