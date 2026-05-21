@@ -1,20 +1,39 @@
 using System;
 using Xunit;
+using GZCTF.Models.Data;
 
 namespace GZCTF.Test.UnitTests.Docker;
 
-public class ImageBuilderTests
+public class ImageTemplateTests
 {
     [Fact]
-    public void DockerImage_BuilderExists_InDockerNamespace()
+    public void ImageTemplate_CanStoreDockerRegistryUrl()
     {
-        var type = Type.GetType("GZCTF.Services.Docker.DockerImageBuilder, GZCTF");
-        Assert.NotNull(type);
+        var template = new ImageTemplate
+        {
+            Name = "test-image",
+            ImageType = ImageType.Docker,
+            RegistryUrl = "docker.io/library/nginx:latest",
+            OSType = OSType.Linux,
+            Status = ImageStatus.Ready,
+        };
+        Assert.Equal(ImageType.Docker, template.ImageType);
+        Assert.Equal("docker.io/library/nginx:latest", template.RegistryUrl);
     }
 
     [Fact]
-    public void DockerImage_Response_FromDockerImage_ReturnsCorrectModel()
+    public void ImageTemplate_CanStoreQcow2Path()
     {
-        Assert.True(true);
+        var template = new ImageTemplate
+        {
+            Name = "windows-server",
+            ImageType = ImageType.Qcow2,
+            LocalFilePath = "./images/abc/disk.qcow2",
+            OriginalArchiveName = "win2012.zip",
+            OSType = OSType.Windows,
+            Status = ImageStatus.Ready,
+        };
+        Assert.Equal(ImageType.Qcow2, template.ImageType);
+        Assert.Equal("./images/abc/disk.qcow2", template.LocalFilePath);
     }
 }

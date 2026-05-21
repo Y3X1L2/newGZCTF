@@ -1,4 +1,5 @@
 using GZCTF.Models.Data;
+using GZCTF.Utils;
 using Xunit;
 
 namespace GZCTF.Test.UnitTests.Models;
@@ -27,17 +28,26 @@ public class DataIntegrityTests
     }
 
     [Fact]
-    public void ScenarioInstance_HasConcurrencyToken()
+    public void FlagContext_HasNewMultiFlagFields()
     {
-        var instance = new ScenarioInstance();
-        Assert.Equal(0u, instance.ConcurrencyToken);
+        var fc = new FlagContext
+        {
+            ChallengeId = 1,
+            Flag = "test",
+            OrderIndex = 0,
+            ScoreMode = FlagScoreMode.InheritDecay,
+            AnswerType = AnswerType.Flag,
+        };
+        Assert.Equal(0, fc.OrderIndex);
+        Assert.Equal(FlagScoreMode.InheritDecay, fc.ScoreMode);
     }
 
     [Fact]
-    public void StageDependency_HasCompositeKey()
+    public void FirstSolve_HasTripleCompositeKey()
     {
-        var dep = new StageDependency { StageId = 1, RequiredStageId = 2 };
-        Assert.Equal(1, dep.StageId);
-        Assert.Equal(2, dep.RequiredStageId);
+        var solve = new FirstSolve { ParticipationId = 1, ChallengeId = 2, FlagId = 3 };
+        Assert.Equal(1, solve.ParticipationId);
+        Assert.Equal(2, solve.ChallengeId);
+        Assert.Equal(3, solve.FlagId);
     }
 }
