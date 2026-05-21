@@ -91,6 +91,8 @@ export interface ChallengeModalProps extends ModalProps {
   onDestroy: () => void
   onSubmitFlag: () => void
   onDownload?: () => void
+  activeFlagId: number | null
+  setActiveFlagId: (id: number) => void
 }
 
 export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
@@ -109,6 +111,8 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
     onDestroy,
     onDownload,
     onSubmitFlag,
+    activeFlagId,
+    setActiveFlagId,
     ...modalProps
   } = props
   const { t } = useTranslation()
@@ -257,6 +261,8 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
   const canSubmitDespiteDeadline = !isDeadlinePassed || (gameEnded && practiceMode)
   const inputDisabled = disabled || solved || isLimitReached || !canSubmitDespiteDeadline
 
+  const hasMultiFlags = (challenge?.flags?.length ?? 0) > 1
+
   const footer = (
     <Stack gap="xs" className={classes.footer}>
       {(withAttachment || withInstance || withDeadline) && (
@@ -268,6 +274,24 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
         </>
       )}
       <Divider label={attemptsInfo} my={attemptsInfo ? '-0.4rem' : undefined} />
+      {hasMultiFlags && (
+        <Group gap="xs" justify="center">
+          {challenge!.flags!.map((_f, i) => {
+            const fid = i + 1
+            const isActive = activeFlagId === fid
+            return (
+              <Button
+                key={fid}
+                variant={isActive ? 'filled' : 'outline'}
+                size="compact-sm"
+                onClick={() => setActiveFlagId(fid)}
+              >
+                {`Flag ${fid}`}
+              </Button>
+            )
+          })}
+        </Group>
+      )}
       <form
         onSubmit={(e) => {
           e.preventDefault()

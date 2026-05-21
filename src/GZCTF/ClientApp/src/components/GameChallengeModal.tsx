@@ -42,10 +42,17 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
   const isDynamic =
     challenge?.type === ChallengeType.StaticContainer || challenge?.type === ChallengeType.DynamicContainer
 
+  useEffect(() => {
+    if ((challenge?.flags?.length ?? 0) > 1 && activeFlagId === null) {
+      setActiveFlagId(1)
+    }
+  }, [challenge?.flags])
+
   const [disabled, setDisabled] = useState(false)
   const [submitId, setSubmitId] = useState(0)
   const [flag, setFlag] = useInputState('')
   const [solvedChallengeId, setSolvedChallengeId] = useState<number | null>(null)
+  const [activeFlagId, setActiveFlagId] = useState<number | null>(null)
 
   const isLimitReached = (challenge?.limit && (challenge.attempts ?? 0) >= challenge.limit) || false
 
@@ -146,6 +153,7 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
     try {
       const res = await api.game.gameSubmit(gameId, challengeId, {
         flag: await encryptApiData(t, flag, config.apiPublicKey),
+        ...((challenge?.flags?.length ?? 0) > 1 && activeFlagId ? { flagId: activeFlagId } : {}),
       })
       setSubmitId(res.data)
       notifications.clean()
@@ -262,6 +270,8 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
       onExtend={onExtend}
       gameEnded={gameEnded}
       practiceMode={practiceMode}
+      activeFlagId={activeFlagId}
+      setActiveFlagId={setActiveFlagId}
     />
   )
 }

@@ -2004,6 +2004,8 @@ export interface ChallengeDetailModel {
   score?: number;
   /** Challenge type */
   type?: ChallengeType;
+  /** Challenge flags (for multi-flag challenges) */
+  flags?: { id?: number; flag?: string; description?: string | null; orderIndex?: number; scoreMode?: string }[] | null;
   /** Flag context */
   context?: ClientFlagContext;
   /**
