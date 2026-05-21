@@ -302,18 +302,6 @@ public enum ChallengeType : byte
     /// Randomly distribute containers, dynamic flag passed in via environment variables
     /// </summary>
     DynamicContainer = 0b11,
-
-    /// <summary>
-    /// Multi-stage attack chain scenario
-    /// A sequence of interconnected challenges forming a complete attack narrative
-    /// </summary>
-    Scenario = 0b100,
-
-    /// <summary>
-    /// Incident response challenge
-    /// Time-boxed incident response exercise with forensic analysis and remediation tasks
-    /// </summary>
-    IRChallenge = 0b1000
 }
 
 public static class ChallengeTypeExtensions
@@ -339,71 +327,68 @@ public static class ChallengeTypeExtensions
         /// Is it a container challenge
         /// </summary>
         public bool IsContainer() => ((byte)type & 0b01) != 0;
-
-        /// <summary>
-        /// Is it a multi-stage attack chain scenario
-        /// </summary>
-        public bool IsScenario() => ((byte)type & 0b100) != 0;
-
-        /// <summary>
-        /// Is it an incident response challenge
-        /// </summary>
-        public bool IsIRChallenge() => ((byte)type & 0b1000) != 0;
     }
 }
 
 /// <summary>
-/// Verification type for IR challenge checkpoints
+/// Environment type for challenge deployment
 /// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter<VerificationType>))]
-public enum VerificationType : byte
+[JsonConverter(typeof(JsonStringEnumConverter<EnvironmentType>))]
+public enum EnvironmentType : byte
 {
     /// <summary>
-    /// Auto-verify by running a script
+    /// No environment required
     /// </summary>
-    AutoScript = 0,
+    None = 0,
 
     /// <summary>
-    /// Auto-verify by executing a command and checking output
+    /// Docker container environment
     /// </summary>
-    AutoCommand = 1,
+    Docker = 1,
 
     /// <summary>
-    /// Verify by comparing player-submitted answer
+    /// Windows virtual machine environment
     /// </summary>
-    ManualAnswer = 2,
-
-    /// <summary>
-    /// Require manual admin review
-    /// </summary>
-    ManualReview = 3
+    WindowsVM = 2,
 }
 
 /// <summary>
-/// Environment status for IR challenge instances
+/// Flag score mode
 /// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter<EnvironmentStatus>))]
-public enum EnvironmentStatus : byte
+[JsonConverter(typeof(JsonStringEnumConverter<FlagScoreMode>))]
+public enum FlagScoreMode : byte
 {
     /// <summary>
-    /// Environment is being created
+    /// Inherit game scoring formula with decay
     /// </summary>
-    Creating = 0,
+    InheritDecay = 0,
 
     /// <summary>
-    /// Environment is ready for use
+    /// Fixed score regardless of solve count
     /// </summary>
-    Ready = 1,
+    FixedScore = 1,
+}
+
+/// <summary>
+/// Answer type for challenge submission
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<AnswerType>))]
+public enum AnswerType : byte
+{
+    /// <summary>
+    /// Standard flag submission
+    /// </summary>
+    Flag = 0,
 
     /// <summary>
-    /// Environment creation failed
+    /// File upload submission
     /// </summary>
-    Error = 2,
+    File = 1,
 
     /// <summary>
-    /// Environment has been destroyed
+    /// Custom verification logic
     /// </summary>
-    Destroyed = 3
+    Custom = 2,
 }
 
 /// <summary>
@@ -429,17 +414,6 @@ public enum ChallengeCategory : byte
 
     // ReSharper disable once InconsistentNaming
     OSINT = 12,
-
-    /// <summary>
-    /// Multi-stage attack chain scenario
-    /// </summary>
-    Scenario = 13,
-
-    /// <summary>
-    /// Incident response challenge
-    /// </summary>
-    // ReSharper disable once InconsistentNaming
-    IR = 14
 }
 
 /// <summary>
