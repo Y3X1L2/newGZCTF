@@ -13,8 +13,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GZCTF.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260521160759_UnifiedChallengeRefactor")]
-    partial class UnifiedChallengeRefactor
+    [Migration("20260521163416_SyncChallengeModel")]
+    partial class SyncChallengeModel
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
