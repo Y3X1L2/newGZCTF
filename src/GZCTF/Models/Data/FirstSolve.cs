@@ -8,7 +8,7 @@ namespace GZCTF.Models.Data;
 /// This table acts as the immutable fact source for scoreboard and scoring related logic.
 /// </summary>
 [Index(nameof(SubmissionId), IsUnique = true)]
-[PrimaryKey(nameof(ParticipationId), nameof(ChallengeId))]
+[PrimaryKey(nameof(ParticipationId), nameof(ChallengeId), nameof(FlagId))]
 public class FirstSolve
 {
     /// <summary>
@@ -28,6 +28,17 @@ public class FirstSolve
     /// </summary>
     [Required]
     public int SubmissionId { get; set; }
+
+    /// <summary>
+    /// Flag ID.
+    /// </summary>
+    [Required]
+    public int FlagId { get; set; }
+
+    /// <summary>
+    /// Flag context.
+    /// </summary>
+    public FlagContext? FlagContext { get; set; }
 
     #region Navigation Properties
 

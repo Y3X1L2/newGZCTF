@@ -86,6 +86,16 @@ public class Submission
     [Timestamp]
     public uint ConcurrencyToken { get; set; }
 
+    /// <summary>
+    /// Flag ID (nullable for backward compatibility)
+    /// </summary>
+    public int? FlagId { get; set; }
+
+    /// <summary>
+    /// Flag context
+    /// </summary>
+    public FlagContext? FlagContext { get; set; }
+
     #region Db Relationship
 
     /// <summary>

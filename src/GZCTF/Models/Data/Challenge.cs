@@ -153,6 +153,11 @@ public class Challenge
         return generator.GenerateTestFlag();
     }
 
+    public EnvironmentType Environment { get; set; } = EnvironmentType.None;
+
+    public int? ImageTemplateId { get; set; }
+    public ImageTemplate? ImageTemplate { get; set; }
+
     #region Db Relationship
 
     /// <summary>
