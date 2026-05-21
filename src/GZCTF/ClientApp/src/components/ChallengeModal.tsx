@@ -91,8 +91,8 @@ export interface ChallengeModalProps extends ModalProps {
   onDestroy: () => void
   onSubmitFlag: () => void
   onDownload?: () => void
-  activeFlagId: number | null
-  setActiveFlagId: (id: number) => void
+  activeFlagId?: number | null
+  setActiveFlagId?: (id: number) => void
 }
 
 export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
@@ -284,7 +284,7 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
                 key={fid}
                 variant={isActive ? 'filled' : 'outline'}
                 size="compact-sm"
-                onClick={() => setActiveFlagId(fid)}
+                onClick={() => setActiveFlagId?.(fid)}
               >
                 {`Flag ${fid}`}
               </Button>

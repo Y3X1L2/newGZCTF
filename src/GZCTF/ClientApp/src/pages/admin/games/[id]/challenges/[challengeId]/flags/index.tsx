@@ -40,11 +40,11 @@ export default function FlagsEdit() {
         body: JSON.stringify([{ flag: newFlag }]),
       })
       if (res.ok) {
-        notifications.show({ title: 'Flag 已添加', color: 'green' })
+        notifications.show({ title: 'Flag 已添加', message: '新 Flag 已成功添加', color: 'green' })
         setNewFlag('')
         load()
       } else {
-        notifications.show({ title: '添加失败', color: 'red' })
+        notifications.show({ title: '添加失败', message: '请检查 Flag 格式', color: 'red' })
       }
     } catch { /* ignore */ }
   }

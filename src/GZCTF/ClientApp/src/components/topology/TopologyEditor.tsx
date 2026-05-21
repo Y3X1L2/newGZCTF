@@ -47,7 +47,7 @@ export default function TopologyEditor({ initialNodes, initialEdges, onChange, s
         nodeType: selectedType,
         status: 'unlocked',
         stageIndex: nodeIdCounter,
-      } as TopologyNodeData,
+      } as unknown as Record<string, unknown>,
     };
     const updated = [...nodes, newNode];
     setNodes(updated);
