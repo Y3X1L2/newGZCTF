@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Serilog;
 
 namespace GZCTF.Extensions.Startup;
@@ -18,6 +19,9 @@ internal static class DatabaseExtension
                     options.UseNpgsql(builder.Configuration.GetConnectionString("Database"),
                         o => o.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
 
+                    options.ConfigureWarnings(w =>
+                        w.Ignore(RelationalEventId.PendingModelChangesWarning));
+
                     if (!builder.Environment.IsDevelopment())
                         return;
 
@@ -31,6 +35,8 @@ internal static class DatabaseExtension
                 builder.Configuration.AddEntityConfiguration(options =>
                 {
                     options.UseNpgsql(builder.Configuration.GetConnectionString("Database"));
+                    options.ConfigureWarnings(w =>
+                        w.Ignore(RelationalEventId.PendingModelChangesWarning));
                 });
             }
             catch (Exception e)
