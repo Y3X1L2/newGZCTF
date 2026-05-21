@@ -15,6 +15,7 @@ interface ChallengeEditData {
   content: string
   category: string
   type: string
+  environment: string | null
   containerImage: string
   memoryLimit: number
   cpuCount: number
@@ -30,7 +31,7 @@ interface ChallengeEditData {
   flagTemplate: string | null
   hints: string[]
   acceptedCount: number
-  flags: { id: number; flag: string }[]
+  flags: { id: number; flag: string; orderIndex?: number; scoreMode?: string }[]
 }
 
 export default function ChallengeEdit() {
@@ -76,6 +77,7 @@ export default function ChallengeEdit() {
           minScoreRate: challenge.minScoreRate,
           difficulty: challenge.difficulty,
           submissionLimit: challenge.submissionLimit,
+          environment: challenge.environment ?? 'None',
           enableTrafficCapture: challenge.enableTrafficCapture,
           disableBloodBonus: challenge.disableBloodBonus,
           flagTemplate: challenge.flagTemplate,
@@ -120,6 +122,21 @@ export default function ChallengeEdit() {
         setChallenge({ ...challenge, isEnabled: enabled })
         notifications.show({ title: enabled ? '已启用' : '已禁用', color: 'green' })
       }
+    } catch { /* ignore */ }
+  }
+
+  const updateFlag = async (index: number, field: string, value: string) => {
+    if (!challenge) return
+    const newFlags = [...challenge.flags]
+    newFlags[index] = { ...newFlags[index], [field]: value }
+    setChallenge({ ...challenge, flags: newFlags })
+    // Persist to backend
+    try {
+      await fetch(`/api/edit/Games/${gameId}/Challenges/${challengeId}/Flags/${newFlags[index].id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      })
     } catch { /* ignore */ }
   }
 
@@ -169,6 +186,21 @@ export default function ChallengeEdit() {
           </Group>
         </Card>
 
+        {/* Environment Config */}
+        <Card shadow="sm" padding="md" mt="md" withBorder>
+          <Text fw={700} mb="sm">环境配置</Text>
+          <Select
+            label="环境类型"
+            data={[
+              { value: 'None', label: '无环境（附件题）' },
+              { value: 'Docker', label: 'Linux Docker 容器' },
+              { value: 'WindowsVM', label: 'Windows 虚拟机 (RDP)' },
+            ]}
+            value={challenge.environment ?? 'None'}
+            onChange={(v) => setChallenge({ ...challenge, environment: v })}
+          />
+        </Card>
+
         {/* Scoring */}
         <Card shadow="sm" padding="md" withBorder>
           <Text fw={700} mb="sm">评分配置</Text>
@@ -201,7 +233,20 @@ export default function ChallengeEdit() {
           </Group>
           {challenge.flags?.map((f, i) => (
             <Alert key={i} color="green" mt="xs" py="xs">
-              <Text size="sm" ff="monospace">{f.flag}</Text>
+              <Group wrap="nowrap" align="flex-start">
+                <Text size="sm" ff="monospace" style={{ flex: 1 }}>{f.flag}</Text>
+                <Select
+                  label="计分模式"
+                  data={[
+                    { value: 'InheritDecay', label: '跟随衰减' },
+                    { value: 'FixedScore', label: '固定分值' },
+                  ]}
+                  value={f.scoreMode ?? 'InheritDecay'}
+                  onChange={(v) => updateFlag(i, 'scoreMode', v!)}
+                  size="xs"
+                  maw={140}
+                />
+              </Group>
             </Alert>
           ))}
         </Card>
