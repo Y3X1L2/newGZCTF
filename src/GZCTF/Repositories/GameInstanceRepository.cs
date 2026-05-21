@@ -285,21 +285,71 @@ public class GameInstanceRepository(
                 .Select(c => new { c.Id, c.Type, c.DisableBloodBonus, c.DeadlineUtc })
                 .SingleAsync(c => c.Id == submission.ChallengeId, token);
 
-            if (instance.FlagContext is null && challenge.Type.IsStatic())
+            // Step 1: Resolve the target flag for this submission
+            // If FlagId is provided, use that specific flag; otherwise find the first flag by OrderIndex
+            FlagContext? targetFlag;
+
+            if (submission.FlagId.HasValue)
             {
-                updateSub.Status = await Context.FlagContexts.AsNoTracking()
-                    .AnyAsync(
-                        f => f.ChallengeId == submission.ChallengeId && f.Flag == submission.Answer,
-                        token)
-                    ? AnswerResult.Accepted
-                    : AnswerResult.WrongAnswer;
+                targetFlag = await Context.FlagContexts
+                    .FirstOrDefaultAsync(f => f.Id == submission.FlagId.Value
+                        && f.ChallengeId == submission.ChallengeId, token);
             }
             else
             {
-                updateSub.Status = instance.FlagContext?.Flag == submission.Answer
-                    ? AnswerResult.Accepted
-                    : AnswerResult.WrongAnswer;
+                // Backward compat: find first flag by OrderIndex for challenges without explicit FlagId
+                targetFlag = await Context.FlagContexts
+                    .Where(f => f.ChallengeId == submission.ChallengeId)
+                    .OrderBy(f => f.OrderIndex)
+                    .FirstOrDefaultAsync(token);
             }
+
+            if (targetFlag is null)
+            {
+                updateSub.Status = AnswerResult.NotFound;
+                await SaveAsync(token);
+                await transaction.CommitAsync(token);
+                return new(SubmissionType.Unaccepted, AnswerResult.NotFound);
+            }
+
+            // Record the FlagId on the submission for tracking
+            updateSub.FlagId = targetFlag.Id;
+
+            // Step 2: Check attempt limit for this specific flag
+            if (targetFlag.MaxAttempts > 0)
+            {
+                var attemptCount = await Context.Submissions
+                    .CountAsync(s => s.ParticipationId == submission.ParticipationId
+                        && s.ChallengeId == submission.ChallengeId
+                        && s.FlagId == targetFlag.Id, token);
+
+                if (attemptCount >= targetFlag.MaxAttempts)
+                {
+                    updateSub.Status = AnswerResult.WrongAnswer;
+                    await SaveAsync(token);
+                    await transaction.CommitAsync(token);
+                    return new(SubmissionType.Unaccepted, AnswerResult.WrongAnswer);
+                }
+            }
+
+            // Step 3: Verify the answer based on AnswerType
+            bool isCorrect;
+            switch (targetFlag.AnswerType)
+            {
+                case AnswerType.File:
+                    var submittedHash = submission.Answer.ToSHA256String();
+                    isCorrect = string.Equals(submittedHash, targetFlag.AttachmentHash,
+                        StringComparison.OrdinalIgnoreCase);
+                    break;
+                case AnswerType.Custom:
+                case AnswerType.Flag:
+                default:
+                    isCorrect = string.Equals(submission.Answer, targetFlag.Flag,
+                        StringComparison.Ordinal);
+                    break;
+            }
+
+            updateSub.Status = isCorrect ? AnswerResult.Accepted : AnswerResult.WrongAnswer;
 
             if (updateSub.Status != AnswerResult.Accepted)
             {
@@ -309,17 +359,20 @@ public class GameInstanceRepository(
             }
 
             // Acquire a PostgresSQL advisory lock to prevent race conditions:
-            // This lock ensures that only one concurrent submission for the same participation/challenge pair
-            // can proceed past this point, preventing duplicate FirstSolve entries if multiple submissions
-            // are processed at the same time. Without this, two submissions could both pass the check and
-            // insert duplicate records.
-            await Context.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock({0}, {1})",
-                [updateSub.ParticipationId, updateSub.ChallengeId],
+            // This lock ensures that only one concurrent submission for the same
+            // participation/challenge/flag triple can proceed past this point,
+            // preventing duplicate FirstSolve entries if multiple submissions
+            // are processed at the same time. Without this, two submissions could
+            // both pass the check and insert duplicate records.
+            var lockKey = (long)HashCode.Combine(updateSub.ParticipationId, updateSub.ChallengeId, targetFlag.Id);
+            await Context.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock({0})",
+                [lockKey],
                 cancellationToken: token);
 
             var alreadySolved = await Context.FirstSolves
                 .AnyAsync(fs => fs.ParticipationId == submission.ParticipationId &&
-                                fs.ChallengeId == submission.ChallengeId, token);
+                                fs.ChallengeId == submission.ChallengeId &&
+                                fs.FlagId == targetFlag.Id, token);
 
             if (alreadySolved)
             {
@@ -371,7 +424,8 @@ public class GameInstanceRepository(
             {
                 ParticipationId = submission.ParticipationId,
                 ChallengeId = submission.ChallengeId,
-                SubmissionId = submission.Id
+                FlagId = targetFlag.Id,
+                SubmissionId = submission.Id,
             });
 
             await SaveAsync(token);
