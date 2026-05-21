@@ -122,6 +122,16 @@ public class ChallengeUpdateModel
     public double? Difficulty { get; set; }
 
     /// <summary>
+    /// Deployment environment type
+    /// </summary>
+    public EnvironmentType Environment { get; set; } = EnvironmentType.None;
+
+    /// <summary>
+    /// Image template ID for VM/container deployment
+    /// </summary>
+    public int? ImageTemplateId { get; set; }
+
+    /// <summary>
     /// Check if hints are updated
     /// </summary>
     /// <param name="originalHash">Original hash</param>

@@ -98,4 +98,10 @@ public class ImageTemplate
     /// </summary>
     [MaxLength(64)]
     public string? ImageHash { get; set; }
+
+    /// <summary>
+    /// Original archive file name from upload
+    /// </summary>
+    [MaxLength(256)]
+    public string? OriginalArchiveName { get; set; }
 }

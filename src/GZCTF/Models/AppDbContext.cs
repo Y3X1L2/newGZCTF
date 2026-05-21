@@ -43,17 +43,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<ApiToken> ApiTokens { get; set; } = null!;
     public DbSet<ImageTemplate> ImageTemplates { get; set; } = null!;
     public DbSet<TimeSlot> TimeSlots { get; set; } = null!;
-    public DbSet<ScoringRule> ScoringRules { get; set; } = null!;
-    public DbSet<Stage> Stages { get; set; } = null!;
-    public DbSet<StageDependency> StageDependencies => Set<StageDependency>();
-    public DbSet<ScenarioInstance> ScenarioInstances { get; set; } = null!;
-    public DbSet<IRCheckpoint> IRCheckpoints { get; set; } = null!;
-    public DbSet<IRInstance> IRInstances { get; set; } = null!;
     public DbSet<VmInstance> VmInstances => Set<VmInstance>();
-    public DbSet<DockerImage> DockerImages => Set<DockerImage>();
     public DbSet<WorkerNode> WorkerNodes { get; set; } = null!;
     public DbSet<DeploymentTarget> DeploymentTargets { get; set; } = null!;
-    public DbSet<DeploymentQueue> DeploymentQueues { get; set; } = null!;
     public DbSet<GamePhase> GamePhases => Set<GamePhase>();
 
     private static ValueConverter<T?, string> GetJsonConverter<T>() where T : class, new() =>
@@ -461,96 +453,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
         {
             entity.HasIndex(e => e.Name);
             entity.HasIndex(e => e.Status);
-        });
-
-        builder.Entity<TimeSlot>(entity =>
-        {
-            entity.HasOne(e => e.Scenario)
-                .WithMany()
-                .HasForeignKey(e => e.ScenarioId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasIndex(e => new { e.ScenarioId, e.StartTime });
-        });
-
-        builder.Entity<ScoringRule>(entity =>
-        {
-            entity.HasOne(e => e.Challenge)
-                .WithMany()
-                .HasForeignKey(e => e.ChallengeId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasIndex(e => e.ChallengeId);
-        });
-
-        builder.Entity<Stage>(entity =>
-        {
-            entity.HasOne(e => e.Scenario)
-                .WithMany()
-                .HasForeignKey(e => e.ScenarioId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasIndex(e => e.ScenarioId);
-            entity.HasIndex(e => new { e.ScenarioId, e.OrderIndex }).IsUnique();
-        });
-
-        builder.Entity<ScenarioInstance>(entity =>
-        {
-            entity.HasOne(e => e.Scenario)
-                .WithMany()
-                .HasForeignKey(e => e.ScenarioId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.User)
-                .WithMany()
-                .HasForeignKey(e => e.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.TimeSlot)
-                .WithMany()
-                .HasForeignKey(e => e.TimeSlotId)
-                .OnDelete(DeleteBehavior.NoAction);
-
-            entity.HasIndex(e => e.ScenarioId);
-            entity.HasIndex(e => e.UserId);
-            entity.HasIndex(e => e.TimeSlotId);
-        });
-
-        builder.Entity<IRCheckpoint>(entity =>
-        {
-            entity.HasOne(e => e.Challenge)
-                .WithMany()
-                .HasForeignKey(e => e.ChallengeId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.Property(e => e.VerificationType)
-                .HasConversion<byte>();
-
-            entity.HasIndex(e => e.ChallengeId);
-            entity.HasIndex(e => new { e.ChallengeId, e.OrderIndex }).IsUnique();
-        });
-
-        builder.Entity<IRInstance>(entity =>
-        {
-            entity.HasOne(e => e.Challenge)
-                .WithMany()
-                .HasForeignKey(e => e.ChallengeId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.User)
-                .WithMany()
-                .HasForeignKey(e => e.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.TimeSlot)
-                .WithMany()
-                .HasForeignKey(e => e.TimeSlotId)
-                .OnDelete(DeleteBehavior.NoAction);
-
-            entity.Property(e => e.EnvironmentStatus)
-                .HasConversion<byte>();
-
-            entity.HasIndex(e => new { e.ChallengeId, e.UserId });
         });
 
         builder.Entity<VmInstance>(entity =>
