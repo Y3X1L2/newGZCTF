@@ -6,6 +6,7 @@ using System.Security.Claims;
 
 using GZCTF.Middlewares;
 using GZCTF.Models;
+using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Models.Request.Admin;
 using GZCTF.Models.Request.Game;
@@ -34,6 +35,7 @@ namespace GZCTF.Controllers;
 public class GameController(
     ILogger<GameController> logger,
     UserManager<UserInfo> userManager,
+    AppDbContext dbContext,
 
     CacheHelper cacheHelper,
     IBlobStorage storage,
@@ -1223,6 +1225,43 @@ public class GameController(
         if (instance is null || !instance.Challenge.IsEnabled)
             return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Challenge_NotFound)],
                 StatusCodes.Status404NotFound));
+
+        // Route to VM if challenge uses Windows VM
+        if (instance.Challenge.Environment == EnvironmentType.WindowsVM)
+        {
+            var vmInstance = new VmInstance
+            {
+                ChallengeId = challengeId,
+                UserId = context.User!.Id,
+                VmName = $"vm_c{challengeId}_u{context.User.Id}",
+                ProviderName = "KVM",
+                OSType = OSType.Windows,
+                Status = VmInstanceStatus.Creating,
+                CreatedAt = DateTimeOffset.UtcNow,
+            };
+            dbContext.VmInstances.Add(vmInstance);
+            await dbContext.SaveChangesAsync(token);
+
+            // Create deployment target for node
+            var target = new DeploymentTarget
+            {
+                TargetNodeId = Guid.Empty,
+                Type = TargetType.Vm,
+                Action = TargetAction.Create,
+                Payload = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    templateId = instance.Challenge.ImageTemplateId,
+                    vmName = vmInstance.VmName,
+                    memory = instance.Challenge.MemoryLimit ?? 2048,
+                    cpu = instance.Challenge.CPUCount ?? 2,
+                }),
+                Status = TargetStatus.Pending,
+            };
+            dbContext.DeploymentTargets.Add(target);
+            await dbContext.SaveChangesAsync(token);
+
+            return Ok(new { status = "Creating", vmInstanceId = vmInstance.Id });
+        }
 
         if (!instance.Challenge.Type.IsContainer())
             return BadRequest(

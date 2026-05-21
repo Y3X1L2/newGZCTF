@@ -104,6 +104,7 @@ internal static class ServicesExtension
             builder.Services.AddSingleton<IVirtualMachineProvider, KvmProvider>();
             builder.Services.AddScoped<GuacamoleProxy>();
             builder.Services.AddScoped<LocalImageImporter>();
+            builder.Services.AddScoped<IArchiveExtractor, ArchiveExtractor>();
             builder.Services.AddScoped<DockerImageBuilder>();
             builder.Services.AddScoped<DockerComposeDeployer>();
             builder.Services.AddScoped<GamePhaseService>();
