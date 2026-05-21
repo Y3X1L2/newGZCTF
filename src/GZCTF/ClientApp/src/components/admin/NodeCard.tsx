@@ -1,5 +1,10 @@
 import { Card, Badge, Text, Group, Progress } from '@mantine/core';
-import type { NodeInfo } from '../../hooks/useNodes';
+
+interface NodeInfo {
+  id: string; name: string; hostAddress: string; status: string;
+  cpuLoad: number; memoryLoad: number; currentContainers: number; maxContainers: number;
+  currentVms: number; maxVms: number; lastHeartbeat: string;
+}
 
 export function NodeCard({ node }: { node: NodeInfo }) {
   const statusColor = node.status === 'Online' ? 'green' : node.status === 'Offline' ? 'red' : 'yellow';

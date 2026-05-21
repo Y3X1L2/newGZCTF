@@ -1,11 +1,17 @@
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import { Card, Title, Text, Badge, Group, Progress } from '@mantine/core';
-import { useNodes } from '../../../../hooks/useNodes';
 
 export default function NodeDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { nodes } = useNodes();
-  const node = nodes?.find(n => n.id === id);
+  const [node, setNode] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/v1/nodes/${id}`).then(r => r.json()).then(setNode).finally(() => setLoading(false));
+  }, [id]);
+
+  if (loading) return <Text>加载中...</Text>;
   if (!node) return <Text>节点不存在</Text>;
   return (
     <Card shadow="sm" padding="lg" withBorder data-testid={`node-detail-${node.id}`}>

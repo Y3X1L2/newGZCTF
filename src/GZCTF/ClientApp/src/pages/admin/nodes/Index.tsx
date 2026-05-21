@@ -1,8 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SimpleGrid, Title, Text, Button, TextInput, Modal, Group } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { NodeCard } from '../../../components/admin/NodeCard';
-import { useNodes } from '../../../hooks/useNodes';
 
 function AddNodeModal({ opened, onClose, onAdded }: { opened: boolean; onClose: () => void; onAdded: () => void }) {
   const [host, setHost] = useState('');
@@ -58,8 +57,20 @@ function AddNodeModal({ opened, onClose, onAdded }: { opened: boolean; onClose: 
 }
 
 export default function NodesPage() {
-  const { nodes, isLoading, mutate } = useNodes();
+  const [nodes, setNodes] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+
+  const loadNodes = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/v1/nodes');
+      if (res.ok) setNodes(await res.json());
+    } finally { setIsLoading(false); }
+  };
+
+  useEffect(() => { loadNodes(); }, []);
+
   if (isLoading) return <Text>Loading...</Text>;
   return (
     <div data-testid="nodes-page">
@@ -70,7 +81,7 @@ export default function NodesPage() {
       <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }}>
         {nodes?.map(node => <NodeCard key={node.id} node={node} />)}
       </SimpleGrid>
-      <AddNodeModal opened={modalOpen} onClose={() => setModalOpen(false)} onAdded={mutate} />
+      <AddNodeModal opened={modalOpen} onClose={() => setModalOpen(false)} onAdded={loadNodes} />
     </div>
   );
 }

@@ -1,4 +1,2 @@
-export type { NodeInfo } from '../hooks/useNodes';
-export type { IRChallengeSummary, CheckpointData, CheckpointInfo, IRInstanceStatus } from './ir';
-export type { ScenarioStageInfo, ScenarioInstanceStatus, StageSubmitResult } from './scenario';
-export type { SubmissionType, SubmissionCreatePayload } from './submission';
+// Types re-exported from various modules
+// Note: IR/Scenario/Submission types removed as those systems were merged into unified challenge model

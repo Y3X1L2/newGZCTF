@@ -1,11 +1,16 @@
-import { Group, Title, SimpleGrid } from '@mantine/core';
+import { useEffect, useState } from 'react';
+import { Group, Title, SimpleGrid, Text } from '@mantine/core';
 import { DeployButton } from '../../../components/admin/DeployButton';
 import { CleanupButton } from '../../../components/admin/CleanupButton';
 import { NodeCard } from '../../../components/admin/NodeCard';
-import { useNodes } from '../../../hooks/useNodes';
 
 export default function DashboardPage() {
-  const { nodes, isLoading } = useNodes();
+  const [nodes, setNodes] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/v1/nodes').then(r => r.json()).then(setNodes).finally(() => setIsLoading(false));
+  }, []);
 
   return (
     <div data-testid="admin-dashboard">
