@@ -948,6 +948,53 @@ public class EditController(
         return Ok(await challengeRepository.RemoveFlag(challenge, fId, token));
     }
 
+    /// <summary>
+    /// Update Game Challenge Flag
+    /// </summary>
+    /// <remarks>
+    /// Updating a game challenge flag requires administrator privileges
+    /// </remarks>
+    /// <param name="id">Game ID</param>
+    /// <param name="cId">Challenge ID</param>
+    /// <param name="fId">Flag ID</param>
+    /// <param name="model">Flag update model</param>
+    /// <param name="token"></param>
+    /// <response code="200">Successfully updated flag</response>
+    /// <response code="404">Challenge or flag not found</response>
+    [HttpPut("Games/{id:int}/Challenges/{cId:int}/Flags/{fId:int}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateFlag(int id, int cId, int fId, [FromBody] FlagCreateModel model,
+        CancellationToken token)
+    {
+        var challenge = await challengeRepository.GetChallenge(id, cId, token);
+
+        if (challenge is null)
+            return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Challenge_NotFound)],
+                StatusCodes.Status404NotFound));
+
+        await challengeRepository.LoadFlags(challenge, token);
+
+        var flag = challenge.Flags?.FirstOrDefault(f => f.Id == fId);
+
+        if (flag is null)
+            return NotFound(new RequestResponse("Flag not found", StatusCodes.Status404NotFound));
+
+        flag.Flag = model.Flag;
+        flag.OrderIndex = model.OrderIndex;
+        flag.Description = model.Description;
+        flag.ScoreMode = model.ScoreMode;
+        flag.FixedScore = model.FixedScore;
+        flag.MaxAttempts = model.MaxAttempts;
+        flag.AttachmentHash = model.AttachmentHash;
+        flag.AnswerType = model.AnswerType;
+        flag.CustomName = model.CustomName;
+
+        await challengeRepository.SaveAsync(token);
+
+        return Ok();
+    }
+
 
     /// <summary>
     /// Export game package
