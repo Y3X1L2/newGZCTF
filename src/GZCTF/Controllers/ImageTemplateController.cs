@@ -125,6 +125,97 @@ public class ImageTemplateController : ControllerBase
     }
 
     /// <summary>
+    /// Register a Docker image template from a registry URL.
+    /// </summary>
+    [HttpPost("register-docker")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> RegisterDocker([FromBody] DockerRegisterRequest request, CancellationToken token)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var template = new ImageTemplate
+        {
+            Name = request.Name,
+            OSType = request.OSType,
+            ImageType = ImageType.Docker,
+            RegistryUrl = request.RegistryUrl,
+            Status = ImageStatus.Ready,
+            UploadedAt = DateTimeOffset.UtcNow,
+        };
+
+        _context.ImageTemplates.Add(template);
+        await _context.SaveChangesAsync(token);
+
+        return Ok(new { template.Id, template.Name, template.OSType, template.ImageType });
+    }
+
+    /// <summary>
+    /// Upload a VM image archive file (.zip, .tar.gz, .tar.xz).
+    /// </summary>
+    [HttpPost("upload")]
+    [RequestSizeLimit(60L * 1024 * 1024 * 1024)] // 60GB
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> UploadArchive(IFormFile file, CancellationToken token)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new { message = "No file provided" });
+
+        var allowedExtensions = new[] { ".zip", ".tar.gz", ".tgz", ".tar.xz", ".txz" };
+        var fileName = file.FileName.ToLowerInvariant();
+        var ext = Path.GetExtension(fileName);
+
+        if (fileName.EndsWith(".tar.gz"))
+            ext = ".tar.gz";
+        else if (fileName.EndsWith(".tar.xz"))
+            ext = ".tar.xz";
+
+        if (!allowedExtensions.Contains(ext))
+            return BadRequest(new { message = $"Unsupported format. Allowed: {string.Join(", ", allowedExtensions)}" });
+
+        var storagePath = Path.Combine(Directory.GetCurrentDirectory(), "images");
+        Directory.CreateDirectory(storagePath);
+
+        var guid = Guid.NewGuid().ToString("N");
+        var templateDir = Path.Combine(storagePath, guid);
+        Directory.CreateDirectory(templateDir);
+
+        var archivePath = Path.Combine(templateDir, $"archive{ext}");
+        await using (var stream = file.OpenReadStream())
+        await using (var fs = System.IO.File.Create(archivePath))
+            await stream.CopyToAsync(fs, token);
+
+        if (ext == ".zip")
+        {
+            try
+            {
+                System.IO.Compression.ZipFile.ExtractToDirectory(archivePath, templateDir, true);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = $"ZIP extraction failed: {ex.Message}" });
+            }
+        }
+
+        var template = new ImageTemplate
+        {
+            Name = Path.GetFileNameWithoutExtension(file.FileName),
+            OSType = OSType.Windows,
+            ImageType = ImageType.Qcow2,
+            LocalFilePath = templateDir,
+            OriginalArchiveName = file.FileName,
+            FileSize = file.Length,
+            Status = ImageStatus.Ready,
+            UploadedAt = DateTimeOffset.UtcNow,
+        };
+
+        _context.ImageTemplates.Add(template);
+        await _context.SaveChangesAsync(token);
+
+        return Ok(new { template.Id, template.Name, template.OSType, template.ImageType, template.FileSize });
+    }
+
+    /// <summary>
     /// Delete an image template and its stored file.
     /// </summary>
     [HttpDelete("{id:int}")]
@@ -144,6 +235,17 @@ public class ImageTemplateController : ControllerBase
 
         return NoContent();
     }
+}
+
+public class DockerRegisterRequest
+{
+    [Required, MaxLength(256)]
+    public string Name { get; set; } = string.Empty;
+
+    [Required, MaxLength(512)]
+    public string RegistryUrl { get; set; } = string.Empty;
+
+    public OSType OSType { get; set; } = OSType.Linux;
 }
 
 public class LocalImportRequest
