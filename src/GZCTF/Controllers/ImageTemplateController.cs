@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using GZCTF.Models.Data;
+using GZCTF.Services.Vm;
 using GZCTF.Storage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,12 +19,14 @@ public class ImageTemplateController : ControllerBase
 {
     private readonly AppDbContext _context;
     private readonly ImageStorage _storage;
+    private readonly IArchiveExtractor _archiveExtractor;
     private readonly ILogger<ImageTemplateController> _logger;
 
-    public ImageTemplateController(AppDbContext context, ImageStorage storage, ILogger<ImageTemplateController> logger)
+    public ImageTemplateController(AppDbContext context, ImageStorage storage, IArchiveExtractor archiveExtractor, ILogger<ImageTemplateController> logger)
     {
         _context = context;
         _storage = storage;
+        _archiveExtractor = archiveExtractor;
         _logger = logger;
     }
 
@@ -173,46 +176,29 @@ public class ImageTemplateController : ControllerBase
         if (!allowedExtensions.Contains(ext))
             return BadRequest(new { message = $"Unsupported format. Allowed: {string.Join(", ", allowedExtensions)}" });
 
-        var storagePath = Path.Combine(Directory.GetCurrentDirectory(), "images");
-        Directory.CreateDirectory(storagePath);
+        // Save to temp path, then delegate to ArchiveExtractor for full pipeline
+        var tempDir = Path.Combine(Path.GetTempPath(), "gzctf_uploads", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var archivePath = Path.Combine(tempDir, $"archive{ext}");
 
-        var guid = Guid.NewGuid().ToString("N");
-        var templateDir = Path.Combine(storagePath, guid);
-        Directory.CreateDirectory(templateDir);
-
-        var archivePath = Path.Combine(templateDir, $"archive{ext}");
-        await using (var stream = file.OpenReadStream())
-        await using (var fs = System.IO.File.Create(archivePath))
-            await stream.CopyToAsync(fs, token);
-
-        if (ext == ".zip")
+        try
         {
-            try
-            {
-                System.IO.Compression.ZipFile.ExtractToDirectory(archivePath, templateDir, true);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = $"ZIP extraction failed: {ex.Message}" });
-            }
+            await using (var stream = file.OpenReadStream())
+            await using (var fs = System.IO.File.Create(archivePath))
+                await stream.CopyToAsync(fs, token);
+
+            var result = await _archiveExtractor.ExtractAndRegisterAsync(archivePath, file.FileName, token);
+
+            if (!result.Success)
+                return BadRequest(new { message = result.Error });
+
+            return Ok(new { result.Template!.Id, result.Template.Name, result.Template.OSType, result.Template.ImageType, result.Template.FileSize });
         }
-
-        var template = new ImageTemplate
+        finally
         {
-            Name = Path.GetFileNameWithoutExtension(file.FileName),
-            OSType = OSType.Windows,
-            ImageType = ImageType.Qcow2,
-            LocalFilePath = templateDir,
-            OriginalArchiveName = file.FileName,
-            FileSize = file.Length,
-            Status = ImageStatus.Ready,
-            UploadedAt = DateTimeOffset.UtcNow,
-        };
-
-        _context.ImageTemplates.Add(template);
-        await _context.SaveChangesAsync(token);
-
-        return Ok(new { template.Id, template.Name, template.OSType, template.ImageType, template.FileSize });
+            // Clean up temp archive
+            try { Directory.Delete(tempDir, true); } catch { /* best effort */ }
+        }
     }
 
     /// <summary>

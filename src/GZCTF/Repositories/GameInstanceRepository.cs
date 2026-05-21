@@ -408,8 +408,8 @@ public class GameInstanceRepository(
             var submissionType = SubmissionType.Normal;
             if (hasBloodPermission)
             {
-                var bloodEligibleCount = await CountBloodEligibleSolves(submission.ChallengeId, time.StartTimeUtc,
-                    time.EndTimeUtc, token);
+                var bloodEligibleCount = await CountBloodEligibleSolves(submission.ChallengeId, targetFlag.Id,
+                    time.StartTimeUtc, time.EndTimeUtc, token);
 
                 submissionType = bloodEligibleCount switch
                 {
@@ -442,7 +442,7 @@ public class GameInstanceRepository(
         }
     }
 
-    private Task<int> CountBloodEligibleSolves(int challengeId, DateTimeOffset start, DateTimeOffset end,
+    private Task<int> CountBloodEligibleSolves(int challengeId, int flagId, DateTimeOffset start, DateTimeOffset end,
         CancellationToken token)
     {
         // First, get blood-eligible participation IDs for the challenge
@@ -466,6 +466,7 @@ public class GameInstanceRepository(
             from fs in Context.FirstSolves.AsNoTracking()
             join submission in Context.Submissions.AsNoTracking() on fs.SubmissionId equals submission.Id
             where fs.ChallengeId == challengeId
+                  && fs.FlagId == flagId
                   && eligibleParticipationIds.Contains(fs.ParticipationId)
                   && submission.SubmitTimeUtc >= start
                   && submission.SubmitTimeUtc < end

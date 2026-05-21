@@ -10,7 +10,7 @@ using GZCTF.Services.Config;
 using GZCTF.Services.Concurrency;
 using GZCTF.Services.Container;
 using GZCTF.Services.CronJob;
-using GZCTF.Services.Docker;
+
 using GZCTF.Services.Fleet;
 using GZCTF.Services.Mail;
 using GZCTF.Services.Token;
@@ -93,7 +93,6 @@ internal static class ServicesExtension
             builder.Services.AddScoped<GameExportService>();
             builder.Services.AddScoped<GameImportService>();
 
-            builder.Services.AddChannel<Submission>();
             builder.Services.AddChannel<CacheRequest>();
             builder.Services.AddSingleton<CacheHelper>();
             builder.Services.AddSingleton<IMailSender, MailSender>();
@@ -105,8 +104,7 @@ internal static class ServicesExtension
             builder.Services.AddScoped<GuacamoleProxy>();
             builder.Services.AddScoped<LocalImageImporter>();
             builder.Services.AddScoped<IArchiveExtractor, ArchiveExtractor>();
-            builder.Services.AddScoped<DockerImageBuilder>();
-            builder.Services.AddScoped<DockerComposeDeployer>();
+
             builder.Services.AddScoped<GamePhaseService>();
 
             // Phase 3 fleet services

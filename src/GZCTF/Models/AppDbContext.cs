@@ -42,7 +42,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
     public DbSet<ApiToken> ApiTokens { get; set; } = null!;
     public DbSet<ImageTemplate> ImageTemplates { get; set; } = null!;
-    public DbSet<TimeSlot> TimeSlots { get; set; } = null!;
     public DbSet<VmInstance> VmInstances => Set<VmInstance>();
     public DbSet<WorkerNode> WorkerNodes { get; set; } = null!;
     public DbSet<DeploymentTarget> DeploymentTargets { get; set; } = null!;

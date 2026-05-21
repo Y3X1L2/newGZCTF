@@ -2,9 +2,13 @@ import { Group, GroupProps, LoadingOverlay, Stack } from '@mantine/core'
 import {
   mdiAccountCogOutline,
   mdiAccountGroupOutline,
+  mdiClipboardCheckOutline,
+  mdiClipboardListOutline,
   mdiFileDocumentOutline,
   mdiFlagOutline,
   mdiImageOutline,
+  mdiMonitorDashboard,
+  mdiServerNetwork,
   mdiSitemapOutline,
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
@@ -28,12 +32,16 @@ export const WithAdminTab: FC<AdminTabProps> = ({ head, headProps, isLoading, ch
   const { t } = useTranslation()
 
   const pages = [
+    { icon: mdiMonitorDashboard, title: '仪表盘', path: '' },
     { icon: mdiFlagOutline, title: t('admin.tab.games.index'), path: 'games' },
     { icon: mdiAccountGroupOutline, title: t('admin.tab.teams'), path: 'teams' },
     { icon: mdiAccountCogOutline, title: t('admin.tab.users'), path: 'users' },
+    { icon: mdiImageOutline, title: '环境模板', path: 'images' },
+    { icon: mdiServerNetwork, title: '节点管理', path: 'nodes' },
+    { icon: mdiClipboardListOutline, title: '部署队列', path: 'queue' },
+    { icon: mdiClipboardCheckOutline, title: '提交评审', path: 'submissionreview' },
     { icon: mdiFileDocumentOutline, title: t('admin.tab.logs'), path: 'logs' },
     { icon: mdiSitemapOutline, title: t('admin.tab.settings'), path: 'settings' },
-    { icon: mdiImageOutline, title: '环境模板', path: 'images' },
   ]
   const getTab = (path: string) => pages.findIndex((page) => path.startsWith(`/admin/${page.path}`))
   const tabIndex = getTab(location.pathname)
