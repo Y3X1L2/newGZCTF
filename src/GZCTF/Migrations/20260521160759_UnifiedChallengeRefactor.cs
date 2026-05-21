@@ -34,11 +34,22 @@ namespace GZCTF.Migrations
                 name: "StageDependencies");
 
             migrationBuilder.DropTable(
+                name: "TimeSlots");
+
+            migrationBuilder.DropTable(
                 name: "Stages");
 
             migrationBuilder.DropIndex(
-                name: "IX_TimeSlots_ScenarioId_StartTime",
-                table: "TimeSlots");
+                name: "IX_ExerciseInstances_ContainerId",
+                table: "ExerciseInstances");
+
+            migrationBuilder.DropIndex(
+                name: "IX_Containers_ExerciseInstanceId",
+                table: "Containers");
+
+            migrationBuilder.DropColumn(
+                name: "ExerciseInstanceId",
+                table: "Containers");
 
             migrationBuilder.AddColumn<int>(
                 name: "FlagContextId",
@@ -58,6 +69,26 @@ namespace GZCTF.Migrations
                 type: "character varying(256)",
                 maxLength: 256,
                 nullable: true);
+
+            migrationBuilder.AlterColumn<string>(
+                name: "PublicKey",
+                table: "Games",
+                type: "character varying(63)",
+                maxLength: 63,
+                nullable: false,
+                oldClrType: typeof(string),
+                oldType: "character varying(4096)",
+                oldMaxLength: 4096);
+
+            migrationBuilder.AlterColumn<string>(
+                name: "PrivateKey",
+                table: "Games",
+                type: "character varying(63)",
+                maxLength: 63,
+                nullable: false,
+                oldClrType: typeof(string),
+                oldType: "character varying(4096)",
+                oldMaxLength: 4096);
 
             migrationBuilder.AddColumn<byte>(
                 name: "Environment",
@@ -155,11 +186,6 @@ namespace GZCTF.Migrations
                 nullable: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_TimeSlots_ScenarioId",
-                table: "TimeSlots",
-                column: "ScenarioId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Submissions_FlagContextId",
                 table: "Submissions",
                 column: "FlagContextId");
@@ -173,6 +199,11 @@ namespace GZCTF.Migrations
                 name: "IX_FirstSolves_FlagContextId",
                 table: "FirstSolves",
                 column: "FlagContextId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ExerciseInstances_ContainerId",
+                table: "ExerciseInstances",
+                column: "ContainerId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ExerciseChallenges_ImageTemplateId",
@@ -228,10 +259,6 @@ namespace GZCTF.Migrations
                 table: "Submissions");
 
             migrationBuilder.DropIndex(
-                name: "IX_TimeSlots_ScenarioId",
-                table: "TimeSlots");
-
-            migrationBuilder.DropIndex(
                 name: "IX_Submissions_FlagContextId",
                 table: "Submissions");
 
@@ -242,6 +269,10 @@ namespace GZCTF.Migrations
             migrationBuilder.DropIndex(
                 name: "IX_FirstSolves_FlagContextId",
                 table: "FirstSolves");
+
+            migrationBuilder.DropIndex(
+                name: "IX_ExerciseInstances_ContainerId",
+                table: "ExerciseInstances");
 
             migrationBuilder.DropIndex(
                 name: "IX_ExerciseChallenges_ImageTemplateId",
@@ -315,6 +346,32 @@ namespace GZCTF.Migrations
                 name: "ImageTemplateId",
                 table: "ExerciseChallenges");
 
+            migrationBuilder.AlterColumn<string>(
+                name: "PublicKey",
+                table: "Games",
+                type: "character varying(4096)",
+                maxLength: 4096,
+                nullable: false,
+                oldClrType: typeof(string),
+                oldType: "character varying(63)",
+                oldMaxLength: 63);
+
+            migrationBuilder.AlterColumn<string>(
+                name: "PrivateKey",
+                table: "Games",
+                type: "character varying(4096)",
+                maxLength: 4096,
+                nullable: false,
+                oldClrType: typeof(string),
+                oldType: "character varying(63)",
+                oldMaxLength: 63);
+
+            migrationBuilder.AddColumn<int>(
+                name: "ExerciseInstanceId",
+                table: "Containers",
+                type: "integer",
+                nullable: true);
+
             migrationBuilder.CreateTable(
                 name: "DeploymentQueues",
                 columns: table => new
@@ -374,6 +431,105 @@ namespace GZCTF.Migrations
                         name: "FK_IRCheckpoints_GameChallenges_ChallengeId",
                         column: x => x.ChallengeId,
                         principalTable: "GameChallenges",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ScoringRules",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    ChallengeId = table.Column<int>(type: "integer", nullable: false),
+                    ExpectedAnswerHash = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    MaxAttempts = table.Column<int>(type: "integer", nullable: false),
+                    ScoreDecay = table.Column<byte>(type: "smallint", nullable: false),
+                    SubmissionType = table.Column<byte>(type: "smallint", nullable: false),
+                    VerificationConfig = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
+                    VerificationMode = table.Column<byte>(type: "smallint", nullable: false),
+                    Weight = table.Column<decimal>(type: "numeric", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ScoringRules", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ScoringRules_GameChallenges_ChallengeId",
+                        column: x => x.ChallengeId,
+                        principalTable: "GameChallenges",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Stages",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    ScenarioId = table.Column<int>(type: "integer", nullable: false),
+                    EnvironmentImageIds = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    FlagHash = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: false),
+                    NetworkRules = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
+                    OrderIndex = table.Column<int>(type: "integer", nullable: false),
+                    PrerequisiteStageIds = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    SkillDescription = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: true),
+                    Title = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Stages", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Stages_GameChallenges_ScenarioId",
+                        column: x => x.ScenarioId,
+                        principalTable: "GameChallenges",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "TimeSlots",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    ScenarioId = table.Column<int>(type: "integer", nullable: false),
+                    CurrentParticipants = table.Column<int>(type: "integer", nullable: false),
+                    EndTime = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    MaxParticipants = table.Column<int>(type: "integer", nullable: false),
+                    StartTime = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TimeSlots", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_TimeSlots_GameChallenges_ScenarioId",
+                        column: x => x.ScenarioId,
+                        principalTable: "GameChallenges",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "StageDependencies",
+                columns: table => new
+                {
+                    StageId = table.Column<int>(type: "integer", nullable: false),
+                    RequiredStageId = table.Column<int>(type: "integer", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_StageDependencies", x => new { x.StageId, x.RequiredStageId });
+                    table.ForeignKey(
+                        name: "FK_StageDependencies_Stages_RequiredStageId",
+                        column: x => x.RequiredStageId,
+                        principalTable: "Stages",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_StageDependencies_Stages_StageId",
+                        column: x => x.StageId,
+                        principalTable: "Stages",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -454,86 +610,16 @@ namespace GZCTF.Migrations
                         principalColumn: "Id");
                 });
 
-            migrationBuilder.CreateTable(
-                name: "ScoringRules",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    ChallengeId = table.Column<int>(type: "integer", nullable: false),
-                    ExpectedAnswerHash = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
-                    MaxAttempts = table.Column<int>(type: "integer", nullable: false),
-                    ScoreDecay = table.Column<byte>(type: "smallint", nullable: false),
-                    SubmissionType = table.Column<byte>(type: "smallint", nullable: false),
-                    VerificationConfig = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
-                    VerificationMode = table.Column<byte>(type: "smallint", nullable: false),
-                    Weight = table.Column<decimal>(type: "numeric", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ScoringRules", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_ScoringRules_GameChallenges_ChallengeId",
-                        column: x => x.ChallengeId,
-                        principalTable: "GameChallenges",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Stages",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    ScenarioId = table.Column<int>(type: "integer", nullable: false),
-                    EnvironmentImageIds = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
-                    FlagHash = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: false),
-                    NetworkRules = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
-                    OrderIndex = table.Column<int>(type: "integer", nullable: false),
-                    PrerequisiteStageIds = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
-                    SkillDescription = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: true),
-                    Title = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Stages", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Stages_GameChallenges_ScenarioId",
-                        column: x => x.ScenarioId,
-                        principalTable: "GameChallenges",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "StageDependencies",
-                columns: table => new
-                {
-                    StageId = table.Column<int>(type: "integer", nullable: false),
-                    RequiredStageId = table.Column<int>(type: "integer", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_StageDependencies", x => new { x.StageId, x.RequiredStageId });
-                    table.ForeignKey(
-                        name: "FK_StageDependencies_Stages_RequiredStageId",
-                        column: x => x.RequiredStageId,
-                        principalTable: "Stages",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_StageDependencies_Stages_StageId",
-                        column: x => x.StageId,
-                        principalTable: "Stages",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
+            migrationBuilder.CreateIndex(
+                name: "IX_ExerciseInstances_ContainerId",
+                table: "ExerciseInstances",
+                column: "ContainerId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_TimeSlots_ScenarioId_StartTime",
-                table: "TimeSlots",
-                columns: new[] { "ScenarioId", "StartTime" });
+                name: "IX_Containers_ExerciseInstanceId",
+                table: "Containers",
+                column: "ExerciseInstanceId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_DeploymentQueues_Status",
@@ -616,6 +702,11 @@ namespace GZCTF.Migrations
                 table: "Stages",
                 columns: new[] { "ScenarioId", "OrderIndex" },
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TimeSlots_ScenarioId_StartTime",
+                table: "TimeSlots",
+                columns: new[] { "ScenarioId", "StartTime" });
         }
     }
 }

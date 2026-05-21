@@ -1,0 +1,9 @@
+/* The GZ::CTF Project @unknown
+ * 
+ * License   : GNU Affero General Public License v3.0 (Core)
+ * License   : LicenseRef-GZCTF-Restricted (Restricted components)
+ * Commit    : Unofficial build version
+ * Build     : 2026-05-20T05:57:19.720Z
+ * Copyright (C) 2022-2026 GZTimeWalker. All Rights Reserved.
+ */
+import{g as e}from"./ngkkuwm9.js";import{i as t}from"./khr0xm81.js";import{A as n,x as r}from"./hmbv74xw.js";import{T as i,t as a,v as o}from"./jd1hyeum2.js";import{r as s}from"./f9u6cnui.js";import{m as c}from"./index.ot524qw3.js";var l=a(),u=e(),d=()=>{let e=c(),{t:a}=n(),{data:o,error:s,mutate:d}=r.account.useAccountProfile({refreshInterval:0,shouldRetryOnError:!1,revalidateOnFocus:!1,onErrorRetry:async(n,o,s,c,{retryCount:f})=>{if(n?.status===403){await r.account.accountLogOut(),e(`/`),t({color:`red`,message:a(`account.notification.login.banned`),icon:(0,u.jsx)(l.Icon,{path:i,size:1})});return}if(n?.status===401||f>=5){d(void 0,!1);return}setTimeout(()=>c({retryCount:f}),1e4)}});return{user:o,error:s,mutate:d}},f=()=>{let{user:e,error:t}=d();return{role:e?.role,error:t}},p=()=>{let{data:e,error:t,mutate:n}=r.team.useTeamGetTeamsInfo({refreshInterval:12e4,shouldRetryOnError:!1,revalidateOnFocus:!1});return{teams:e,error:t,mutate:n}},m=()=>{let e=c(),{mutate:i}=s(),{mutate:a}=d(),{t:f}=n();return async()=>{try{await r.account.accountLogOut(),e(`/`),i(e=>typeof e==`string`&&e.includes(`game/`),void 0,{revalidate:!1}),a(void 0,{revalidate:!1}),t({color:`teal`,message:f(`account.notification.logout`),icon:(0,u.jsx)(l.Icon,{path:o,size:1})})}catch{e(`/`),a(void 0,{revalidate:!1})}}};export{f as i,p as n,d as r,m as t};

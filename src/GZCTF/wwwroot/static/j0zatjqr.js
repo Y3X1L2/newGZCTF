@@ -1,0 +1,9 @@
+/* The GZ::CTF Project @unknown
+ * 
+ * License   : GNU Affero General Public License v3.0 (Core)
+ * License   : LicenseRef-GZCTF-Restricted (Restricted components)
+ * Commit    : Unofficial build version
+ * Build     : 2026-05-20T05:57:19.720Z
+ * Copyright (C) 2022-2026 GZTimeWalker. All Rights Reserved.
+ */
+import{a as e,t}from"./izagbnaw.js";import{g as n}from"./ngkkuwm9.js";import{n as r}from"./khr0xm81.js";import{t as i}from"./krt5u52u2.js";import{t as a}from"./fxwlajkf2.js";import{t as o}from"./d46jyaf72.js";import{O as s}from"./index.ot524qw3.js";import{t as c}from"./g463ojdo.js";import{t as l}from"./c80ir0s4.js";import{n as u,t as d}from"./j4c390o4.js";import{t as f}from"./cw2c7amx.js";var p=e(t(),1),m=n();function h(){let[e,t]=(0,p.useState)(!1),{deploy:n}=d();return(0,m.jsx)(s,{color:`green`,loading:e,onClick:async()=>{t(!0);try{await n(),r.show({title:`部署成功`,message:`所有服务已启动`,color:`green`})}catch{r.show({title:`部署失败`,message:`请检查服务器状态`,color:`red`})}finally{t(!1)}},"data-testid":`one-click-deploy`,children:`一键部署`})}function g(){let[e,t]=(0,p.useState)(!1),{cleanup:n}=d();return(0,m.jsx)(s,{color:`orange`,loading:e,onClick:async()=>{t(!0);try{await n(),r.show({title:`清理成功`,message:`环境已清理`,color:`blue`})}catch{r.show({title:`清理失败`,message:`请检查`,color:`red`})}finally{t(!1)}},"data-testid":`one-click-cleanup`,children:`一键清理`})}var _=()=>{let{nodes:e,isLoading:t}=u();return(0,m.jsxs)(l,{isLoading:t,children:[(0,m.jsx)(a,{justify:`space-between`,mb:`lg`,w:`100%`,children:(0,m.jsxs)(a,{children:[(0,m.jsx)(h,{}),(0,m.jsx)(g,{})]})}),(0,m.jsx)(i,{shadow:`md`,p:`md`,w:`100%`,children:(0,m.jsx)(o,{cols:{base:1,md:2,lg:3},children:e&&e.length>0?e.map(e=>(0,m.jsx)(f,{node:e},e.id)):t?null:(0,m.jsx)(`div`,{className:c.emptyState,children:`No nodes registered`})})})]})};export{_ as default};

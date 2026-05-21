@@ -23,7 +23,6 @@ namespace GZCTF.Utils;
 [JsonSerializable(typeof(HashSet<string>))]
 [JsonSerializable(typeof(DockerRegistryOptions))]
 [JsonSerializable(typeof(GameMetadata))]
-[JsonSerializable(typeof(ExerciseMetadata))]
 [JsonSerializable(typeof(RequestResponse))]
 [JsonSerializable(typeof(RequestResponse<RegisterStatus>))]
 [JsonSerializable(typeof(RequestResponse<bool>))]

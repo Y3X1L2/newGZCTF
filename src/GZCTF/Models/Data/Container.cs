@@ -7,7 +7,6 @@ using Microsoft.EntityFrameworkCore;
 namespace GZCTF.Models.Data;
 
 [Index(nameof(GameInstanceId))]
-[Index(nameof(ExerciseInstanceId))]
 public class Container
 {
     /// <summary>
@@ -143,17 +142,6 @@ public class Container
                     GameInstance.FlagContext?.Flag
                 ), options);
 
-        if (ExerciseInstance is not null)
-            return JsonSerializer.SerializeToUtf8Bytes(
-                new ExerciseMetadata(
-                    ExerciseInstance.Exercise.Title,
-                    ExerciseInstance.ExerciseId,
-                    ExerciseInstance.User.UserName,
-                    ExerciseInstance.UserId,
-                    ContainerId,
-                    ExerciseInstance.FlagContext?.Flag
-                ), options);
-
         return null;
     }
 
@@ -169,16 +157,6 @@ public class Container
     /// </summary>
     public int? GameInstanceId { get; set; }
 
-    /// <summary>
-    /// Exercise challenge instance object
-    /// </summary>
-    public ExerciseInstance? ExerciseInstance { get; set; }
-
-    /// <summary>
-    /// Exercise challenge instance object ID
-    /// </summary>
-    public int? ExerciseInstanceId { get; set; }
-
     #endregion Db Relationship
 }
 
@@ -190,10 +168,4 @@ internal record GameMetadata(
     string ContainerId,
     string? Flag);
 
-internal record ExerciseMetadata(
-    string Challenge,
-    int ExerciseId,
-    string? UserName,
-    Guid UserId,
-    string ContainerId,
-    string? Flag);
+

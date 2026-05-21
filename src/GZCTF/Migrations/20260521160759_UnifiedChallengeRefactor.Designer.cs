@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GZCTF.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260521111658_UnifiedChallengeRefactor")]
+    [Migration("20260521160759_UnifiedChallengeRefactor")]
     partial class UnifiedChallengeRefactor
     {
         /// <inheritdoc />
@@ -144,9 +144,6 @@ namespace GZCTF.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int?>("ExerciseInstanceId")
-                        .HasColumnType("integer");
-
                     b.Property<DateTimeOffset>("ExpectStopAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -180,8 +177,6 @@ namespace GZCTF.Migrations
                         .HasColumnType("smallint");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ExerciseInstanceId");
 
                     b.HasIndex("GameInstanceId");
 
@@ -434,8 +429,7 @@ namespace GZCTF.Migrations
 
                     b.HasKey("UserId", "ExerciseId");
 
-                    b.HasIndex("ContainerId")
-                        .IsUnique();
+                    b.HasIndex("ContainerId");
 
                     b.HasIndex("ExerciseId");
 
@@ -1234,36 +1228,6 @@ namespace GZCTF.Migrations
                     b.ToTable("Teams");
                 });
 
-            modelBuilder.Entity("GZCTF.Models.Data.TimeSlot", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("CurrentParticipants")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset>("EndTime")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("MaxParticipants")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("ScenarioId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset>("StartTime")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ScenarioId");
-
-                    b.ToTable("TimeSlots");
-                });
-
             modelBuilder.Entity("GZCTF.Models.Data.UserInfo", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1827,8 +1791,8 @@ namespace GZCTF.Migrations
             modelBuilder.Entity("GZCTF.Models.Data.ExerciseInstance", b =>
                 {
                     b.HasOne("GZCTF.Models.Data.Container", "Container")
-                        .WithOne("ExerciseInstance")
-                        .HasForeignKey("GZCTF.Models.Data.ExerciseInstance", "ContainerId");
+                        .WithMany()
+                        .HasForeignKey("ContainerId");
 
                     b.HasOne("GZCTF.Models.Data.ExerciseChallenge", "Exercise")
                         .WithMany()
@@ -2134,17 +2098,6 @@ namespace GZCTF.Migrations
                     b.Navigation("Captain");
                 });
 
-            modelBuilder.Entity("GZCTF.Models.Data.TimeSlot", b =>
-                {
-                    b.HasOne("GZCTF.Models.Data.GameChallenge", "Scenario")
-                        .WithMany()
-                        .HasForeignKey("ScenarioId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Scenario");
-                });
-
             modelBuilder.Entity("GZCTF.Models.Data.UserParticipation", b =>
                 {
                     b.HasOne("GZCTF.Models.Data.Game", "Game")
@@ -2259,8 +2212,6 @@ namespace GZCTF.Migrations
 
             modelBuilder.Entity("GZCTF.Models.Data.Container", b =>
                 {
-                    b.Navigation("ExerciseInstance");
-
                     b.Navigation("GameInstance");
                 });
 
