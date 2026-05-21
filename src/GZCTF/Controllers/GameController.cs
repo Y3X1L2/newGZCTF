@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Mime;
 using System.Security.Claims;
-using System.Threading.Channels;
+
 using GZCTF.Middlewares;
 using GZCTF.Models;
 using GZCTF.Models.Internal;
@@ -34,7 +34,7 @@ namespace GZCTF.Controllers;
 public class GameController(
     ILogger<GameController> logger,
     UserManager<UserInfo> userManager,
-    ChannelWriter<Submission> channelWriter,
+
     CacheHelper cacheHelper,
     IBlobStorage storage,
     IConfigService configService,
@@ -1032,8 +1032,9 @@ public class GameController(
                 submission = await submissionRepository.AddSubmission(submission, token);
                 await transaction.CommitAsync(token);
 
-                await channelWriter.WriteAsync(submission, token);
-                return Ok(submission.Id);
+                submission.FlagId = model.FlagId;
+                var result = await gameInstanceRepository.VerifyAnswer(submission, token);
+                return Ok(new { submission.Id, Status = result.AnsRes, BloodType = result.SubType });
             }
             catch (DbUpdateConcurrencyException) when (retry < maxRetries - 1)
             {
