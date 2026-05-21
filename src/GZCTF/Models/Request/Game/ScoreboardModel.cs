@@ -280,6 +280,12 @@ public partial class ChallengeItem
     public int Id { get; set; }
 
     /// <summary>
+    /// Flag ID
+    /// </summary>
+    [Required]
+    public int FlagId { get; set; }
+
+    /// <summary>
     /// Challenge score
     /// </summary>
     [Required]
@@ -345,6 +351,13 @@ public partial class ChallengeInfo
     [Required]
     [JsonPropertyName("solved")]
     public int SolvedCount { get; set; }
+
+    /// <summary>
+    /// Total number of flags in this challenge
+    /// </summary>
+    [Required]
+    [JsonPropertyName("totalFlags")]
+    public int TotalFlags { get; set; }
 
     /// <summary>
     /// The deadline of the challenge, null means no deadline

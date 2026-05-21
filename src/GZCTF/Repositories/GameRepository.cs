@@ -284,6 +284,7 @@ public class GameRepository(
         Dictionary<int, DivisionItem> divisions;
         Dictionary<int, ChallengeScoreMeta> challengeMetas;
         List<SolveSnapshot> solveSnapshots;
+        List<FlagContext> allFlags;
 
         // 0. Begin transaction
         await using (var trans = await Context.Database.BeginTransactionAsync(token))
@@ -368,6 +369,14 @@ public class GameRepository(
 
             var challengeIds = challengeRecords.Keys.ToArray();
 
+            // 3.5. fetch all FlagContexts for challenges in this game
+            allFlags = await Context.FlagContexts
+                .AsNoTracking()
+                .IgnoreAutoIncludes()
+                .Where(f => f.ChallengeId != null && challengeIds.Contains(f.ChallengeId.Value))
+                .OrderBy(f => f.OrderIndex)
+                .ToListAsync(token);
+
             // 4. fetch all recorded first solves for this game
             solveSnapshots = await Context.FirstSolves
                 .AsNoTracking()
@@ -383,6 +392,7 @@ public class GameRepository(
                     submission => submission.Id,
                     (x, submission) => new SolveSnapshot(
                         x.fs.ChallengeId,
+                        x.fs.FlagId,
                         x.fs.ParticipationId,
                         submission.SubmitTimeUtc,
                         submission.UserName))
@@ -392,7 +402,10 @@ public class GameRepository(
         }
 
         // Prepare solve metadata for scoring and statistics
-        Dictionary<int, int> challengeAcceptedCounts = [];
+        // Track accepted counts per-flag for dynamic decay
+        Dictionary<(int ChallengeId, int FlagId), int> flagAcceptedCounts = [];
+        // Track unique teams that solved each challenge (any flag)
+        Dictionary<int, HashSet<int>> challengeSolverTeams = [];
         List<ScoreboardSolve> solves = [];
 
         foreach (var snapshot in solveSnapshots)
@@ -422,14 +435,26 @@ public class GameRepository(
                                          snapshot.ChallengeId);
 
             if (affectDynamicScore)
-                challengeAcceptedCounts[snapshot.ChallengeId] =
-                    challengeAcceptedCounts.GetValueOrDefault(snapshot.ChallengeId) + 1;
+            {
+                var flagKey = (snapshot.ChallengeId, snapshot.FlagId);
+                flagAcceptedCounts[flagKey] =
+                    flagAcceptedCounts.GetValueOrDefault(flagKey) + 1;
+            }
+
+            // Track challenge-level solver teams for SolvedCount
+            if (scoreEligible)
+            {
+                if (!challengeSolverTeams.ContainsKey(snapshot.ChallengeId))
+                    challengeSolverTeams[snapshot.ChallengeId] = [];
+                challengeSolverTeams[snapshot.ChallengeId].Add(snapshot.ParticipantId);
+            }
 
             var bloodEligible = withinValidSubmissionWindow &&
                                 CheckDivisionPermission(division, GamePermission.GetBlood, snapshot.ChallengeId);
 
             solves.Add(new ScoreboardSolve(
                 snapshot.ChallengeId,
+                snapshot.FlagId,
                 snapshot.ParticipantId,
                 snapshot.SubmitTimeUtc,
                 snapshot.UserName,
@@ -437,16 +462,14 @@ public class GameRepository(
                 bloodEligible));
         }
 
+        // Set challenge-level info: SolvedCount and TotalFlags
         foreach ((int challengeId, ChallengeInfo info) in challenges)
         {
-            var meta = challengeMetas[challengeId];
-            var solvedCount = challengeAcceptedCounts.GetValueOrDefault(challengeId);
-            info.SolvedCount = solvedCount;
-            info.Score = GameChallenge.CalculateChallengeScore(meta.OriginalScore,
-                meta.MinScoreRate, meta.Difficulty, solvedCount);
+            info.SolvedCount = challengeSolverTeams.GetValueOrDefault(challengeId)?.Count ?? 0;
+            info.TotalFlags = allFlags.Count(f => f.ChallengeId == challengeId);
         }
 
-        // 5. sort challenge items by submit time, and update the Score and Type fields
+        // 5. Group solves by (ChallengeId, FlagId) and process per-flag
         var noBonus = game.BloodBonus.NoBonus;
 
         float[] bloodFactors =
@@ -456,80 +479,116 @@ public class GameRepository(
             game.BloodBonus.ThirdBloodFactor
         ];
 
-        foreach (var solve in solves.OrderBy(s => s.SubmitTimeUtc))
+        var flagGroups = solves
+            .GroupBy(s => (s.ChallengeId, s.FlagId))
+            .OrderBy(g => g.Min(s => s.SubmitTimeUtc))
+            .ToList();
+
+        foreach (var flagGroup in flagGroups)
         {
-            // skip if the team is not in the scoreboard
-            if (!items.TryGetValue(solve.ParticipantId, out var scoreboardItem))
+            var challengeId = flagGroup.Key.ChallengeId;
+            if (!challengeMetas.TryGetValue(challengeId, out var challengeMeta))
+                continue;
+            if (!challenges.TryGetValue(challengeId, out var challengeInfo))
                 continue;
 
-            if (!challenges.TryGetValue(solve.ChallengeId, out var challenge))
+            var flag = allFlags.FirstOrDefault(f => f.Id == flagGroup.Key.FlagId);
+            if (flag is null)
                 continue;
 
-            var item = new ChallengeItem
-            {
-                Id = solve.ChallengeId,
-                ParticipantId = solve.ParticipantId,
-                SubmitTimeUtc = solve.SubmitTimeUtc,
-                UserName = solve.UserName,
-                Type = SubmissionType.Normal,
-                Score = 0
-            };
+            // Determine this flag's base score
+            var flagBaseScore = flag.ScoreMode == FlagScoreMode.FixedScore
+                ? flag.FixedScore
+                : challengeMeta.OriginalScore;
 
-            // 5.1. generate bloods
-            if (solve.BloodEligible && challenge is { DisableBloodBonus: false, Bloods.Count: < 3 })
+            // Get accepted count for this flag (for dynamic decay formula)
+            var acceptedForFlag =
+                flagAcceptedCounts.GetValueOrDefault((challengeId, flagGroup.Key.FlagId));
+
+            // Calculate current score for this flag using challenge-level decay formula
+            var flagCurrentScore = GameChallenge.CalculateChallengeScore(
+                flagBaseScore,
+                challengeMeta.MinScoreRate,
+                challengeMeta.Difficulty,
+                acceptedForFlag);
+
+            // Iterate solves in time order, assign bloods and scores per-flag
+            var flagBloods = new List<(int ParticipantId, SubmissionType BloodType)>();
+
+            foreach (var solve in flagGroup.OrderBy(s => s.SubmitTimeUtc))
             {
-                item.Type = challenge.Bloods.Count switch
+                if (!items.TryGetValue(solve.ParticipantId, out var scoreboardItem))
+                    continue;
+
+                var item = new ChallengeItem
                 {
-                    0 => SubmissionType.FirstBlood,
-                    1 => SubmissionType.SecondBlood,
-                    2 => SubmissionType.ThirdBlood,
-                    _ => throw new UnreachableException()
+                    Id = solve.ChallengeId,
+                    FlagId = solve.FlagId,
+                    ParticipantId = solve.ParticipantId,
+                    SubmitTimeUtc = solve.SubmitTimeUtc,
+                    UserName = solve.UserName,
+                    Type = SubmissionType.Normal,
+                    Score = 0
                 };
 
-                challenge.Bloods.Add(new Blood
+                // 5.1. generate bloods per-flag
+                if (solve.BloodEligible && challengeInfo is { DisableBloodBonus: false } &&
+                    flagBloods.Count < 3)
                 {
-                    Id = scoreboardItem.Id,
-                    Avatar = scoreboardItem.Avatar,
-                    Name = scoreboardItem.Name,
-                    SubmitTimeUtc = item.SubmitTimeUtc
-                });
-            }
-
-            // 5.2. update score
-            if (solve.ScoreEligible)
-            {
-                item.Score = noBonus
-                    ? item.Type switch
+                    item.Type = flagBloods.Count switch
                     {
-                        SubmissionType.Unaccepted => throw new UnreachableException(),
-                        _ => challenge.Score
-                    }
-                    : item.Type switch
-                    {
-                        SubmissionType.Unaccepted => throw new UnreachableException(),
-                        SubmissionType.FirstBlood => Convert.ToInt32(challenge.Score * bloodFactors[0]),
-                        SubmissionType.SecondBlood => Convert.ToInt32(challenge.Score * bloodFactors[1]),
-                        SubmissionType.ThirdBlood => Convert.ToInt32(challenge.Score * bloodFactors[2]),
-                        SubmissionType.Normal => challenge.Score,
-                        _ => throw new ArgumentException(nameof(item.Type))
+                        0 => SubmissionType.FirstBlood,
+                        1 => SubmissionType.SecondBlood,
+                        2 => SubmissionType.ThirdBlood,
+                        _ => throw new UnreachableException()
                     };
+
+                    flagBloods.Add((solve.ParticipantId, item.Type));
+
+                    challengeInfo.Bloods.Add(new Blood
+                    {
+                        Id = scoreboardItem.Id,
+                        Avatar = scoreboardItem.Avatar,
+                        Name = scoreboardItem.Name,
+                        SubmitTimeUtc = item.SubmitTimeUtc
+                    });
+                }
+
+                // 5.2. calculate score
+                if (solve.ScoreEligible)
+                {
+                    item.Score = noBonus
+                        ? flagCurrentScore
+                        : item.Type switch
+                        {
+                            SubmissionType.Unaccepted => throw new UnreachableException(),
+                            SubmissionType.FirstBlood =>
+                                Convert.ToInt32(flagCurrentScore * bloodFactors[0]),
+                            SubmissionType.SecondBlood =>
+                                Convert.ToInt32(flagCurrentScore * bloodFactors[1]),
+                            SubmissionType.ThirdBlood =>
+                                Convert.ToInt32(flagCurrentScore * bloodFactors[2]),
+                            SubmissionType.Normal => flagCurrentScore,
+                            _ => throw new ArgumentException(nameof(item.Type))
+                        };
+                }
+                else
+                {
+                    item.Score = 0;
+                }
+
+                // 5.3. update scoreboard item
+                scoreboardItem.SolvedChallenges.Add(item);
+
+                if (!solve.ScoreEligible)
+                    continue;
+
+                // only update last submission time for eligible solves,
+                // to prevent incorrectly ranking teams with ineligible
+                // late submissions above teams with eligible early submissions
+                scoreboardItem.Score += item.Score;
+                scoreboardItem.LastSubmissionTime = item.SubmitTimeUtc;
             }
-            else
-            {
-                item.Score = 0;
-            }
-
-            // 5.3. update scoreboard item
-            scoreboardItem.SolvedChallenges.Add(item);
-
-            if (!solve.ScoreEligible)
-                continue;
-
-            // only update last submission time for eligible solves,
-            // to prevent incorrectly ranking teams with ineligible
-            // late submissions above teams with eligible early submissions
-            scoreboardItem.Score += item.Score;
-            scoreboardItem.LastSubmissionTime = item.SubmitTimeUtc;
         }
 
         // 6. sort scoreboard items by score and last submission time
@@ -624,12 +683,14 @@ public class GameRepository(
 
     private readonly record struct SolveSnapshot(
         int ChallengeId,
+        int FlagId,
         int ParticipantId,
         DateTimeOffset SubmitTimeUtc,
         string? UserName);
 
     private readonly record struct ScoreboardSolve(
         int ChallengeId,
+        int FlagId,
         int ParticipantId,
         DateTimeOffset SubmitTimeUtc,
         string? UserName,
