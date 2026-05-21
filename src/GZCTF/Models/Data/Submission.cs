@@ -50,7 +50,8 @@ public class Submission
     /// <summary>
     /// Type of submission (Flag, Writeup, IP, Credential, Custom)
     /// </summary>
-    public ScoringSubmissionType SubmissionType { get; set; } = ScoringSubmissionType.Flag;
+    [MaxLength(32)]
+    public string SubmissionType { get; set; } = "Flag";
 
     /// <summary>
     /// JSON content of the submission (used for Writeup, IP, Credential, Custom types)

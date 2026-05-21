@@ -6,7 +6,7 @@ using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Services.Cache;
 using GZCTF.Services.Config;
-using GZCTF.Services.Scoring;
+
 using GZCTF.Services.Concurrency;
 using GZCTF.Services.Container;
 using GZCTF.Services.CronJob;
@@ -105,19 +105,8 @@ internal static class ServicesExtension
             builder.Services.AddScoped<GuacamoleProxy>();
             builder.Services.AddScoped<LocalImageImporter>();
             builder.Services.AddScoped<DockerImageBuilder>();
-            builder.Services.AddScoped<EnvironmentService>();
             builder.Services.AddScoped<DockerComposeDeployer>();
-            builder.Services.AddScoped<SSHAccessService>();
-            builder.Services.AddScoped<ScoringService>();
-            builder.Services.AddScoped<LeaderboardService>();
             builder.Services.AddScoped<GamePhaseService>();
-
-            // Phase 1 scoring engine services
-            builder.Services.AddScoped<UnifiedScoringEngine>();
-            builder.Services.AddScoped<IVerificationStrategy, FlagHashVerification>();
-            builder.Services.AddScoped<IVerificationStrategy, RegexVerification>();
-            builder.Services.AddScoped<IVerificationStrategy, ScriptVerification>();
-            builder.Services.AddScoped<IVerificationStrategy, ManualReviewVerification>();
 
             // Phase 3 fleet services
             builder.Services.AddScoped<INodeRepository, NodeRepository>();
@@ -136,9 +125,7 @@ internal static class ServicesExtension
                 builder.Services.AddSingleton<IDistributedLockService, LocalSemaphoreLock>();
 
             builder.Services.AddHostedService<CacheMaker>();
-            builder.Services.AddHostedService<FlagChecker>();
             builder.Services.AddHostedService<CronJobService>();
-            builder.Services.AddHostedService<CheckpointVerificationService>();
         }
 
         internal void AddWebServices()
