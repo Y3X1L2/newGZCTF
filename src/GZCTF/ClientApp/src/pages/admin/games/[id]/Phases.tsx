@@ -17,8 +17,6 @@ export default function PhasesPage() {
             <Table.Th>开始</Table.Th>
             <Table.Th>结束</Table.Th>
             <Table.Th>CTF</Table.Th>
-            <Table.Th>IR</Table.Th>
-            <Table.Th>Scenario</Table.Th>
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -28,8 +26,6 @@ export default function PhasesPage() {
               <Table.Td>{new Date(p.startTime).toLocaleString()}</Table.Td>
               <Table.Td>{new Date(p.endTime).toLocaleString()}</Table.Td>
               <Table.Td><Badge color={p.ctfEnabled ? 'green' : 'red'}>{p.ctfEnabled ? '开' : '关'}</Badge></Table.Td>
-              <Table.Td><Badge color={p.irEnabled ? 'green' : 'red'}>{p.irEnabled ? '开' : '关'}</Badge></Table.Td>
-              <Table.Td><Badge color={p.scenarioEnabled ? 'green' : 'red'}>{p.scenarioEnabled ? '开' : '关'}</Badge></Table.Td>
             </Table.Tr>
           ))}
         </Table.Tbody>

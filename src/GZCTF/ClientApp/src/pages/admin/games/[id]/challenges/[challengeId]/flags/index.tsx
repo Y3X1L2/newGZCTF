@@ -115,7 +115,9 @@ export default function FlagsEdit() {
               onChange={v => setNewScoreMode(v as FlagScoreMode)} w={140} />
           </Group>
           <Group>
-            <NumberInput label="固定分值" value={newFixedScore} onChange={v => setNewFixedScore(Number(v) ?? 0)} w={120} />
+            {newScoreMode === FlagScoreMode.FixedScore && (
+              <NumberInput label="固定分值" value={newFixedScore} onChange={v => setNewFixedScore(Number(v) ?? 0)} w={120} />
+            )}
             <NumberInput label="最大尝试" value={newMaxAttempts} onChange={v => setNewMaxAttempts(Number(v) ?? 0)} w={120} placeholder="0=无限" />
             <Select label="答案类型" data={answerTypeOptions} value={newAnswerType}
               onChange={v => setNewAnswerType(v as AnswerType)} w={140} />

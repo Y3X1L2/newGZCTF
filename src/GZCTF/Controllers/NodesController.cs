@@ -6,6 +6,7 @@ using GZCTF.Repositories.Interface;
 using GZCTF.Services.Fleet;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Controllers;
@@ -77,6 +78,7 @@ public class NodesController : ControllerBase
 
     [HttpPost("{id:guid}/heartbeat")]
     [Authorize]
+    [EnableRateLimiting(nameof(RateLimiter.LimitPolicy.Query))]
     public async Task<IActionResult> Heartbeat(Guid id, [FromBody] HeartbeatRequest request)
     {
         var node = await _nodeRepo.GetNodeByIdAsync(id, HttpContext.RequestAborted);
