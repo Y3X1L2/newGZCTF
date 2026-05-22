@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using GZCTF.Models.Data;
 using GZCTF.Services.Vm;
 using GZCTF.Storage;
+using GZCTF.Middlewares;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -34,7 +35,7 @@ public class ImageTemplateController : ControllerBase
     /// Upload a VM disk image file.
     /// </summary>
     [HttpPost]
-    [Authorize(Roles = "Admin,Author")]
+    [RequireAdmin]
     [RequestSizeLimit(52_428_800_000)] // 50GB * 1.05 headroom
     public async Task<IActionResult> Upload(IFormFile file)
     {
@@ -108,7 +109,7 @@ public class ImageTemplateController : ControllerBase
     /// Import VM image from local filesystem path.
     /// </summary>
     [HttpPost("import-local")]
-    [Authorize(Roles = "Admin")]
+    [RequireAdmin]
     public async Task<IActionResult> ImportFromLocal([FromBody] LocalImportRequest request)
     {
         try
@@ -131,7 +132,7 @@ public class ImageTemplateController : ControllerBase
     /// Register a Docker image template from a registry URL.
     /// </summary>
     [HttpPost("register-docker")]
-    [Authorize(Roles = "Admin")]
+    [RequireAdmin]
     public async Task<IActionResult> RegisterDocker([FromBody] DockerRegisterRequest request, CancellationToken token)
     {
         if (!ModelState.IsValid)
@@ -159,7 +160,7 @@ public class ImageTemplateController : ControllerBase
     /// </summary>
     [HttpPost("upload")]
     [RequestSizeLimit(60L * 1024 * 1024 * 1024)] // 60GB
-    [Authorize(Roles = "Admin")]
+    [RequireAdmin]
     public async Task<IActionResult> UploadArchive(IFormFile file, CancellationToken token)
     {
         if (file is null || file.Length == 0)
@@ -206,7 +207,7 @@ public class ImageTemplateController : ControllerBase
     /// Delete an image template and its stored file.
     /// </summary>
     [HttpDelete("{id:int}")]
-    [Authorize(Roles = "Admin")]
+    [RequireAdmin]
     public async Task<IActionResult> Delete(int id)
     {
         var template = await _context.ImageTemplates.FindAsync(id);

@@ -68,7 +68,7 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
           closeTime: res.data.expectStopAt,
           instanceEntry: res.data.entry,
         },
-      })
+      }, false) // don't revalidate — API returns stale data until DB is updated
       showNotification({
         color: 'teal',
         title: t('challenge.notification.instance.created.title'),
@@ -84,8 +84,6 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
 
   const requestDestroy = async () => {
     try {
-      await mutate()
-
       if (!challenge?.context?.instanceEntry) return
 
       await api.game.gameDeleteContainer(gameId, challengeId)
@@ -96,7 +94,7 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
           closeTime: null,
           instanceEntry: null,
         },
-      })
+      }, false) // don't revalidate after destroy
       showNotification({
         color: 'teal',
         title: t('challenge.notification.instance.destroyed.title'),
