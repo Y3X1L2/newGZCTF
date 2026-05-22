@@ -1,6 +1,6 @@
 import { ModalProps } from '@mantine/core'
 import { useInputState } from '@mantine/hooks'
-import { notifications, showNotification, updateNotification } from '@mantine/notifications'
+import { showNotification } from '@mantine/notifications'
 import { mdiCheck, mdiClose, mdiLoading } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import React, { FC, useEffect, useState } from 'react'
@@ -49,7 +49,6 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
   }, [challenge?.flags])
 
   const [disabled, setDisabled] = useState(false)
-  const [submitId, setSubmitId] = useState(0)
   const [flag, setFlag] = useInputState('')
   const [solvedChallengeId, setSolvedChallengeId] = useState<number | null>(null)
   const [activeFlagId, setActiveFlagId] = useState<number | null>(null)
@@ -155,16 +154,6 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
         flag: await encryptApiData(t, flag, config.apiPublicKey),
         ...((challenge?.flags?.length ?? 0) > 1 && activeFlagId ? { flagId: activeFlagId } : {}),
       })
-      setSubmitId(res.data)
-      notifications.clean()
-      showNotification({
-        id: 'flag-submitted',
-        color: 'orange',
-        title: t('challenge.notification.flag.submitted.title'),
-        message: t('challenge.notification.flag.submitted.message'),
-        loading: true,
-        autoClose: false,
-      })
 
       const nxt = (challenge?.attempts ?? 0) + 1
       const attempts = challenge?.limit && challenge.limit > 0 ? Math.min(nxt, challenge.limit) : nxt
@@ -173,36 +162,15 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
         attempts,
         ...challenge,
       })
-      return
+
+      setDisabled(false)
+      setFlag('')
+      checkDataFlag(res.data.id, res.data.status)
     } catch (e) {
       showErrorMsg(e, t)
       setDisabled(false)
-      return
     }
   }
-
-  useEffect(() => {
-    if (!submitId) return
-
-    const polling = setInterval(async () => {
-      try {
-        const res = await api.game.gameStatus(gameId, challengeId, submitId)
-        if (res.data !== AnswerResult.FlagSubmitted) {
-          setDisabled(false)
-          setFlag('')
-          checkDataFlag(submitId, res.data)
-          clearInterval(polling)
-        }
-      } catch (err) {
-        setDisabled(false)
-        setFlag('')
-        showErrorMsg(err, t)
-        clearInterval(polling)
-      }
-    }, 500)
-
-    return () => clearInterval(polling)
-  }, [submitId])
 
   useEffect(() => {
     if (challengeId !== solvedChallengeId) return
@@ -216,8 +184,7 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
   const checkDataFlag = async (id: number, data: string) => {
     if (data === AnswerResult.Accepted) {
       setSolvedChallengeId(challengeId)
-      updateNotification({
-        id: 'flag-submitted',
+      showNotification({
         color: 'teal',
         title: t('challenge.notification.flag.accepted.title'),
         message: gameEnded
@@ -225,23 +192,19 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
           : t('challenge.notification.flag.accepted.message'),
         icon: <Icon path={mdiCheck} size={1} />,
         autoClose: 8000,
-        loading: false,
       })
       if (isDynamic && challenge.context?.instanceEntry) await requestDestroy()
       props.onClose()
     } else if (data === AnswerResult.WrongAnswer) {
-      updateNotification({
-        id: 'flag-submitted',
+      showNotification({
         color: 'red',
         title: t('challenge.notification.flag.wrong'),
         message: wrongFlagHints[Math.floor(Math.random() * wrongFlagHints.length)],
         icon: <Icon path={mdiClose} size={1} />,
         autoClose: 8000,
-        loading: false,
       })
     } else {
-      updateNotification({
-        id: 'flag-submitted',
+      showNotification({
         color: 'yellow',
         title: t('challenge.notification.flag.unknown.title'),
         message: t('challenge.notification.flag.unknown.message', {

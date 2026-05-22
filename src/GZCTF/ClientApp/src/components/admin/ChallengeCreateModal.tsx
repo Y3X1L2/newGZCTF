@@ -92,7 +92,6 @@ export const ChallengeCreateModal: FC<ChallengeCreateModalProps> = (props) => {
           onChange={setType}
           renderOption={ChallengeTypeItem}
           data={Object.entries(ChallengeType)
-            .filter(([, v]) => v !== 'Scenario' && v !== 'IRChallenge')
             .map((type) => {
               const data = challengeTypeLabelMap.get(type[1])
               return { value: type[1], label: data?.name, ...data } as ComboboxItem

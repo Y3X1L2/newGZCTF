@@ -73,8 +73,23 @@ export enum ChallengeType {
   StaticContainer = "StaticContainer",
   DynamicAttachment = "DynamicAttachment",
   DynamicContainer = "DynamicContainer",
-  Scenario = "Scenario",
-  IRChallenge = "IRChallenge",
+}
+
+export enum EnvironmentType {
+  None = "None",
+  Docker = "Docker",
+  WindowsVM = "WindowsVM",
+}
+
+export enum FlagScoreMode {
+  InheritDecay = "InheritDecay",
+  FixedScore = "FixedScore",
+}
+
+export enum AnswerType {
+  Flag = "Flag",
+  File = "File",
+  Custom = "Custom",
 }
 
 /** Game participant permission */
@@ -115,8 +130,6 @@ export enum ChallengeCategory {
   AI = "AI",
   Pentest = "Pentest",
   OSINT = "OSINT",
-  Scenario = "Scenario",
-  IR = "IR",
 }
 
 export enum ParticipationStatus {
@@ -5789,7 +5802,7 @@ export class Api<
       data: FlagSubmitModel,
       params: RequestParams = {},
     ) =>
-      this.request<number, RequestResponse>({
+      this.request<{ id: number; status: string; bloodType: string }, RequestResponse>({
         path: `/api/game/${id}/challenges/${challengeId}`,
         method: "POST",
         body: data,

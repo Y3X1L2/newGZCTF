@@ -1,9 +1,8 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text;
 using GZCTF.Models.Internal;
 using GZCTF.Services.Config;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Serilog;
 
 namespace GZCTF.Providers;
@@ -72,7 +71,6 @@ public class EntityConfigurationProvider(EntityConfigurationSource source) : Con
     {
         var builder = new DbContextOptionsBuilder<AppDbContext>();
         source.OptionsAction(builder);
-        builder.ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
 
         return new AppDbContext(builder.Options);
     }
