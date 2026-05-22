@@ -427,3 +427,142 @@
 ### 误判排除
 
 无。所有原始发现均经源码交叉验证确认，无假阳性。
+
+---
+
+## 三、节点/模板/调度/容器启动深度审计（2026-05-22）
+
+> 审计范围：节点注册、状态检测、模板注册、VM上传/格式转换/注册/分发、节点智能调度、多人容器启动
+
+### 1. 节点注册全链路
+
+| 检查项 | 状态 | 发现 |
+|--------|------|------|
+| Register 端点权限 | ✅ | `[RequireAdmin]` |
+| NodeDeployService 流程 | ❌ **P0** | 第 27-37 行：先创建 WorkerNode 入库（Status=Unknown），再 SSH 探测能力。SSH 失败时节点留在 DB 中 Status=Error，但**不回滚已创建的节点记录**。重复注册会创建多个 Error 节点 |
+| SSH 命令注入（已修复） | ✅ | 第 93-104 行：已添加 SafeHostPattern/SafeUserPattern 白名单验证，第 116 行 password 通过环境变量 `SSHPASS` 传递，不再拼入命令行参数 |
+| sshpass Windows 不可用 | ❌ **P1** | 第 109 行 `FileName = "sshpass"`，Windows 无此程序 |
+| NodeRegisterRequest 死代码 | ⚠️ P3 | `NodesController.cs:174` 定义了 `NodeRegisterRequest`（简单注册，无 SSH），但无端点使用它 |
+| Deregister 不删除节点 | ⚠️ P2 | 第 72-76 行：仅设 Status=Offline，不从 DB 删除。节点永远留在列表中 |
+| AuthToken 生成方式 | ✅ | 第 31 行 `Convert.ToBase64String(Guid.NewGuid().ToByteArray())`，22 字符随机 token |
+| 注册不验证 AuthToken 唯一性 | ⚠️ P3 | WorkerNode 无 AuthToken 唯一索引，理论上可能碰撞（概率极低） |
+
+### 2. 节点状态检测与心跳
+
+| 检查项 | 状态 | 发现 |
+|--------|------|------|
+| Heartbeat 端点 | ✅ | `[Authorize]` + `EnableRateLimiting(Query)` |
+| Heartbeat 不验证 AuthToken | ❌ **P0** | 第 82-94 行：仅 `[Authorize]`（任何登录用户），不验证请求者是否是该节点的 Agent。**任何登录用户可伪造任意节点的心跳数据**（CPU/内存/容器数等） |
+| FleetHealthCheckService | ✅ | 30 秒检查一次，120 秒无心跳标记 Offline |
+| 心跳数据无校验 | ❌ **P1** | HeartbeatRequest 的 CpuLoad/MemoryLoad 无范围校验，可提交负数或 >1 的值 |
+| 心跳不更新 UsedPorts/TotalPorts | ⚠️ P2 | HeartbeatRequest 有 UsedPorts 但无 TotalPorts，PortCapacityTracker 永远无数据 |
+
+### 3. 模板注册（Docker 镜像 + VM 磁盘）
+
+| 检查项 | 状态 | 发现 |
+|--------|------|------|
+| RegisterDocker | ✅ | 创建 ImageTemplate(ImageType=Docker)，不实际拉取镜像 |
+| Docker 注册不验证镜像存在 | ❌ **P1** | `ImageTemplateController.cs:148-162` 仅创建 DB 记录，不验证 RegistryUrl 是否可达或镜像是否存在。运行时容器创建才会发现镜像不存在 |
+| Docker 注册不拉取镜像 | ❌ **P1** | ContainerOrchestrator.PullImageFromRegistryAsync 存在但**从未被调用**。Docker 镜像注册后不会预拉取到任何节点 |
+| ImportFromLocal | ✅ | 复制文件 + SHA256 + 注册模板 |
+| LocalImportRequest 无路径校验 | ❌ **P0** | `ImageTemplateController.cs:120` `request.LocalPath` 无任何校验。可提交 `../../etc/passwd` 等路径，虽然 `LocalImageImporter` 只读取不返回内容，但可探测服务器文件是否存在（FileNotFoundException vs InvalidOperationException） |
+| Upload（直接上传磁盘） | ✅ | 验证扩展名 + 大小 + 保存 + virsh pool-refresh |
+| Upload 不计算 SHA256 | ⚠️ P2 | `ImageStorage.SaveImageAsync` 不计算 hash，ImageTemplate.ImageHash 为 null。无法做完整性校验 |
+| Upload 默认 OSType=Windows | ⚠️ P2 | `ImageStorage.cs:130` 硬编码 `OSType = OSType.Windows`，Linux 镜像上传后也标记为 Windows |
+
+### 4. VM 上传/格式转换/注册全链路
+
+| 检查项 | 状态 | 发现 |
+|--------|------|------|
+| UploadArchive 端点 | ✅ | 验证扩展名 + 保存临时文件 + 调用 ArchiveExtractor |
+| ArchiveExtractor .zip/.tar.gz/.tar.xz | ✅ | 解压 + 格式检测 + qemu-img 转换 + SHA256 + 注册 |
+| ArchiveExtractor .ova 未处理 | ❌ **P1** | 直接上传 .ova 走 `_ => false`；zip 内 .ova 检测到但无转换逻辑，会抛 FileNotFoundException |
+| ArchiveExtractor 清理临时文件 | ✅ | `finally { Directory.Delete(tempDir, true) }` |
+| qemu-img/virsh 命令注入 | ✅ | 路径由服务器生成（GUID），非用户输入 |
+| ArchiveExtractor 不处理嵌套目录 | ⚠️ P2 | `Directory.GetFiles(extractDir, "*.*", SearchOption.AllDirectories)` 搜索所有子目录，但只取第一个匹配的 vmdk/qcow2。嵌套目录中可能有多个镜像，取哪个不确定 |
+| 格式转换后不删除原始 vmdk | ⚠️ P3 | 转换为 qcow2 后原始 vmdk 仍留在磁盘上，占用空间 |
+
+### 5. 镜像分发服务
+
+| 检查项 | 状态 | 发现 |
+|--------|------|------|
+| ImageDistributionService | ❌ **P0** | `DistributeToCapableNodesAsync` 创建 DeploymentTarget，但**从未被任何代码调用**。镜像注册后不会自动分发到节点 |
+| Payload 序列化 localPath | ⚠️ P2 | 第 25 行 `localPath = template.LocalFilePath`，泄露服务器本地路径到 DeploymentTarget.Payload |
+| 仅分发给 KVM 节点 | ✅ | 第 16 行 `n.Capabilities & NodeCapability.Kvm`，Docker 镜像不分发 |
+| 无分发状态跟踪 | ⚠️ P2 | 创建 DeploymentTarget 后不跟踪分发结果 |
+
+### 6. 节点智能调度
+
+| 检查项 | 状态 | 发现 |
+|--------|------|------|
+| WeightedScheduler | ✅ | 评分公式合理：CPU(1000) + 内存(500) + 容器容量(200) + VM容量(200) |
+| 最低分阈值 200 | ⚠️ P2 | 第 25 行 `best.Score < 200` 返回 null。所有节点 CPU>80% 且 内存>80% 且 容器>90% 时拒绝调度，但无排队提示 |
+| FleetManager | ❌ **P0** | 注册到 DI 但**从未被任何 Controller/Repository/Service 调用**。整个调度系统是死代码 |
+| QueueManager | ❌ **P0** | 构造函数启动 `ProcessQueueAsync` 无限循环，但 `EnqueueAsync` **从未被调用**。队列永远为空，循环空转等待信号量 |
+| AutoTransferService | ❌ **P1** | 注册到 DI 但**从未被调用** |
+| PortCapacityTracker | ❌ **P1** | 注册到 DI 但**从未被调用**（UpdateCapacity 从未触发），所有端口容量数据为空 |
+| Docker 容器不经过调度 | ❌ **P0** | `GameInstanceRepository.CreateContainer` 直接调 `IContainerManager.CreateContainerAsync`，不经过 FleetManager/WeightedScheduler。**所有 Docker 容器都在主服务器创建，不分配到远程节点** |
+| VM 容器不经过调度 | ❌ **P0** | `GameController.CreateContainer` 第 1246-1260 行创建 DeploymentTarget(TargetNodeId=Guid.Empty)，不调 FleetManager.TryScheduleAsync。TargetNodeId 为空 GUID，Agent 无法处理 |
+
+### 7. 比赛中多人启动容器全链路
+
+| 检查项 | 状态 | 发现 |
+|--------|------|------|
+| Docker 容器创建流程 | ✅ | GetInstance → 检查限制 → CreateContainer → Docker API |
+| 容器数量限制 | ✅ | `game.ContainerCountLimit` + AutoDestroyOnLimitReached |
+| 容器操作频率限制 | ✅ | `IsContainerOperationTooFrequent` |
+| Flag 注入容器 | ✅ | `ContainerConfig.Flag = gameInstance.FlagContext?.Flag` |
+| 容器生命周期 | ✅ | Create → Running → Destroy，有 ExpectStopAt |
+| Docker 容器始终在本地创建 | ❌ **P0** | `IContainerManager` 是 `DockerManager`，连接本地 Docker daemon。**无远程节点 Docker 创建能力** |
+| VM 创建后无状态同步 | ❌ **P0** | `GameController.cs:1232-1263` 创建 VmInstance(Status=Creating) + DeploymentTarget，但无后台服务轮询 VM 状态。VmInstance 永远停留在 Creating 状态 |
+| VM 创建不等待完成 | ❌ **P1** | 立即返回 `{ status: "Creating" }`，前端无法知道 VM 何时就绪 |
+| VM 无销毁入口 | ❌ **P1** | 无 API 端点销毁 VM 实例。VmInstance 永远不会被标记为 Destroyed |
+| 多人并发创建容器 | ✅ | pg_advisory_lock 防止同一 Participation 的竞态 |
+| 容器创建失败不清理 GameInstance | ⚠️ P2 | `CreateContainer` 返回 null 时 GameInstance 仍存在（无 Container），下次请求会重新尝试创建 |
+
+### 发现汇总（本轮新增）
+
+#### P0 — 导致功能完全不可用
+
+| 编号 | 文件:行号 | 描述 |
+|------|-----------|------|
+| NP0-1 | `NodesController.cs:82-94` | Heartbeat 端点仅 `[Authorize]`，不验证请求者是否是该节点的 Agent。任何登录用户可伪造任意节点的心跳数据 |
+| NP0-2 | `ImageTemplateController.cs:120` | LocalImportRequest.LocalPath 无路径校验，可探测服务器任意文件是否存在 |
+| NP0-3 | `ImageDistributionService.cs:14-30` | 镜像分发服务从未被调用，注册后不会自动分发到节点 |
+| NP0-4 | FleetManager/WeightedScheduler/QueueManager | 整个调度系统注册到 DI 但从未被业务代码调用，是死代码 |
+| NP0-5 | `GameInstanceRepository.cs:167` | Docker 容器直接调本地 DockerManager，不经过节点调度，所有容器在主服务器创建 |
+| NP0-6 | `GameController.cs:1248` | VM DeploymentTarget.TargetNodeId=Guid.Empty，不经过调度，Agent 无法处理 |
+| NP0-7 | `GameController.cs:1232-1263` | VM 创建后无后台服务同步状态，VmInstance 永远停留在 Creating |
+
+#### P1 — 功能不可用或数据错误
+
+| 编号 | 文件:行号 | 描述 |
+|------|-----------|------|
+| NP1-1 | `NodeDeployService.cs:109` | sshpass 在 Windows 不可用，节点一键部署功能在 Windows 上完全无法使用 |
+| NP1-2 | `NodesController.cs:183-189` | HeartbeatRequest 无数据范围校验，可提交 CpuLoad=-1 或 999 |
+| NP1-3 | `ImageTemplateController.cs:148-162` | Docker 注册不验证镜像是否存在，运行时才发现 |
+| NP1-4 | ContainerOrchestrator | PullImageFromRegistryAsync 从未被调用，Docker 镜像不会预拉取 |
+| NP1-5 | AutoTransferService/PortCapacityTracker | 注册到 DI 但从未被调用 |
+| NP1-6 | VM 创建 | 无销毁入口，VmInstance 永远不会被标记为 Destroyed |
+| NP1-7 | VM 创建 | 不等待完成，前端无法知道 VM 何时就绪 |
+
+#### P2 — 可用但有缺陷
+
+| 编号 | 描述 |
+|------|------|
+| NP2-1 | NodeDeployService SSH 失败不回滚已创建的节点记录 |
+| NP2-2 | Deregister 不删除节点，仅设 Offline |
+| NP2-3 | HeartbeatRequest 无 TotalPorts，PortCapacityTracker 永远无数据 |
+| NP2-4 | ImageStorage.SaveImageAsync 不计算 SHA256 |
+| NP2-5 | ImageStorage 默认 OSType=Windows |
+| NP2-6 | ArchiveExtractor 嵌套目录中多个镜像时取哪个不确定 |
+| NP2-7 | ImageDistributionService Payload 泄露服务器路径 |
+| NP2-8 | 容器创建失败不清理 GameInstance |
+
+#### P3 — 代码卫生
+
+| 编号 | 描述 |
+|------|------|
+| NP3-1 | NodeRegisterRequest 死代码 |
+| NP3-2 | WorkerNode.AuthToken 无唯一索引 |
+| NP3-3 | ArchiveExtractor 转换后不删除原始 vmdk |
