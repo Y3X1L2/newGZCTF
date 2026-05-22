@@ -119,7 +119,7 @@ public class LocalImageImporter
             FileSize = fileInfo.Length,
             UploadedAt = DateTimeOffset.UtcNow,
             Status = ImageStatus.Ready,
-            Description = $"Imported from: {localPath}"
+            Description = $"Imported from local: {Path.GetFileName(localPath)}"
         };
 
         _context.ImageTemplates.Add(template);

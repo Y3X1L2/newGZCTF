@@ -36,7 +36,7 @@ public class ImageTemplateController : ControllerBase
     /// </summary>
     [HttpPost]
     [RequireAdmin]
-    [RequestSizeLimit(52_428_800_000)] // 50GB * 1.05 headroom
+    [RequestSizeLimit(64_424_509_440)] // 60GB
     public async Task<IActionResult> Upload(IFormFile file)
     {
         if (file is null || file.Length == 0)
@@ -102,7 +102,14 @@ public class ImageTemplateController : ControllerBase
         if (template is null)
             return NotFound();
 
-        return Ok(template);
+        return Ok(new
+        {
+            template.Id, template.Name, template.OSType, template.ImageType,
+            template.LocalFilePath, template.OriginalArchiveName,
+            template.FileSize, template.Status, template.Description,
+            template.ContainsMalware, template.ImageHash, template.UploadedAt,
+            template.RegistryUrl, // keep registry URL visible for reference
+        });
     }
 
     /// <summary>

@@ -66,6 +66,16 @@ public class ArchiveExtractor : IArchiveExtractor
 
             var qcow2Path = Path.Combine(extractDir, "disk.qcow2");
 
+            if (hasOva)
+            {
+                var ovaDir = Path.Combine(extractDir, "ova_extracted");
+                Directory.CreateDirectory(ovaDir);
+                var ovaFile = allFiles.First(f => f.EndsWith(".ova", StringComparison.OrdinalIgnoreCase));
+                await RunCommandAsync("tar", $"-xf \"{ovaFile}\" -C \"{ovaDir}\"", token);
+                allFiles = Directory.GetFiles(ovaDir, "*.*", SearchOption.AllDirectories);
+                hasVmdk = allFiles.Any(f => f.EndsWith(".vmdk", StringComparison.OrdinalIgnoreCase));
+            }
+
             if (hasVmx && hasVmdk)
             {
                 var baseVmdk = allFiles.First(f =>
@@ -73,11 +83,18 @@ public class ArchiveExtractor : IArchiveExtractor
                     !f.Contains("-s0") && !f.Contains("-flat"));
                 await RunCommandAsync("qemu-img", $"convert -f vmdk -O qcow2 \"{baseVmdk}\" \"{qcow2Path}\"", token);
             }
-            else if (hasQcow2)
+            else if (hasQcow2 && !hasVmdk)
             {
                 var qcow2 = allFiles.First(f => f.EndsWith(".qcow2", StringComparison.OrdinalIgnoreCase));
                 if (!string.Equals(qcow2, qcow2Path, StringComparison.OrdinalIgnoreCase))
                     File.Move(qcow2, qcow2Path);
+            }
+            else if (hasVmdk)
+            {
+                var baseVmdk = allFiles.First(f =>
+                    f.EndsWith(".vmdk", StringComparison.OrdinalIgnoreCase) &&
+                    !f.Contains("-s0") && !f.Contains("-flat"));
+                await RunCommandAsync("qemu-img", $"convert -f vmdk -O qcow2 \"{baseVmdk}\" \"{qcow2Path}\"", token);
             }
 
             // Detect OS

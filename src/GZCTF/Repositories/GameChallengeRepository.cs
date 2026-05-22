@@ -104,13 +104,17 @@ public class GameChallengeRepository(
         if (flag is null)
             return TaskStatus.NotFound;
 
+        var hasSolves = await Context.FirstSolves
+            .AnyAsync(f => f.FlagId == flagId, token);
+        if (hasSolves)
+            return TaskStatus.Failed;
+
         await blobRepository.DeleteAttachment(flag.Attachment, token);
 
         Context.Remove(flag);
 
         await SaveAsync(token);
 
-        // If there are no more flags, disable the challenge
         if (!await Context.FlagContexts.AnyAsync(f => f.Challenge == challenge, token))
         {
             challenge.IsEnabled = false;
