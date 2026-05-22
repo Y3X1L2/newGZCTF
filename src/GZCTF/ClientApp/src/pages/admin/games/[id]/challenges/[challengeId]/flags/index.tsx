@@ -49,11 +49,10 @@ export default function FlagsEdit() {
   const load = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/edit/Games/${gameId}/Challenges`)
+      const res = await fetch(`/api/edit/Games/${gameId}/Challenges/${challengeId}`)
       if (res.ok) {
         const data = await res.json()
-        const c = data.find((c: { id: number }) => c.id === Number(challengeId))
-        if (c?.flags) setFlags(c.flags)
+        if (data.flags) setFlags(data.flags)
       }
     } finally { setLoading(false) }
   }

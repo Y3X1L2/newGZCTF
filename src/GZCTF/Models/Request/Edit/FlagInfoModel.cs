@@ -1,25 +1,42 @@
-﻿namespace GZCTF.Models.Request.Edit;
+namespace GZCTF.Models.Request.Edit;
 
-/// <summary>
-/// Flag information (Edit)
-/// </summary>
 public class FlagInfoModel
 {
-    /// <summary>
-    /// Flag Id
-    /// </summary>
     public int Id { get; set; }
 
-    /// <summary>
-    /// Flag text
-    /// </summary>
     public string Flag { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Attachment corresponding to the Flag
-    /// </summary>
+    public int OrderIndex { get; set; }
+
+    public string? Description { get; set; }
+
+    public FlagScoreMode ScoreMode { get; set; }
+
+    public int FixedScore { get; set; }
+
+    public int MaxAttempts { get; set; }
+
+    public AnswerType AnswerType { get; set; }
+
+    public string? CustomName { get; set; }
+
+    public string? AttachmentHash { get; set; }
+
     public Attachment? Attachment { get; set; }
 
     internal static FlagInfoModel FromFlagContext(FlagContext context) =>
-        new() { Id = context.Id, Flag = context.Flag, Attachment = context.Attachment };
+        new()
+        {
+            Id = context.Id,
+            Flag = context.Flag,
+            OrderIndex = context.OrderIndex,
+            Description = context.Description,
+            ScoreMode = context.ScoreMode,
+            FixedScore = context.FixedScore,
+            MaxAttempts = context.MaxAttempts,
+            AnswerType = context.AnswerType,
+            CustomName = context.CustomName,
+            AttachmentHash = context.AttachmentHash,
+            Attachment = context.Attachment
+        };
 }

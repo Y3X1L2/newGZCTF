@@ -143,6 +143,7 @@ public class ImageTemplateController : ControllerBase
             OSType = request.OSType,
             ImageType = ImageType.Docker,
             RegistryUrl = request.RegistryUrl,
+            RegistryAuth = request.RegistryAuth,
             Status = ImageStatus.Ready,
             UploadedAt = DateTimeOffset.UtcNow,
         };
@@ -212,6 +213,12 @@ public class ImageTemplateController : ControllerBase
         if (template is null)
             return NotFound();
 
+        var inUse = await _context.GameChallenges
+            .AnyAsync(c => c.ImageTemplateId == id);
+
+        if (inUse)
+            return BadRequest(new { message = "该模板正在被题目使用，无法删除" });
+
         await _storage.DeleteImageAsync(template);
         _context.ImageTemplates.Remove(template);
         await _context.SaveChangesAsync();
@@ -232,6 +239,9 @@ public class DockerRegisterRequest
     public string RegistryUrl { get; set; } = string.Empty;
 
     public OSType OSType { get; set; } = OSType.Linux;
+
+    [MaxLength(512)]
+    public string? RegistryAuth { get; set; }
 }
 
 public class LocalImportRequest

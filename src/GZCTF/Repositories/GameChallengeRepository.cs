@@ -1,4 +1,4 @@
-﻿using GZCTF.Models.Request.Edit;
+using GZCTF.Models.Request.Edit;
 using GZCTF.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
 
@@ -16,7 +16,20 @@ public class GameChallengeRepository(
         {
             var attachment = model.ToAttachment(await blobRepository.GetBlobByHash(model.FileHash, token));
 
-            challenge.Flags.Add(new() { Flag = model.Flag, Challenge = challenge, Attachment = attachment });
+            challenge.Flags.Add(new()
+            {
+                Flag = model.Flag,
+                Challenge = challenge,
+                Attachment = attachment,
+                OrderIndex = model.OrderIndex,
+                Description = model.Description,
+                ScoreMode = model.ScoreMode,
+                FixedScore = model.FixedScore,
+                MaxAttempts = model.MaxAttempts,
+                AnswerType = model.AnswerType,
+                CustomName = model.CustomName,
+                AttachmentHash = model.AttachmentHash,
+            });
         }
 
         await SaveAsync(token);

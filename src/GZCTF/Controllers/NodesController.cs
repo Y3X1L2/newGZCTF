@@ -6,12 +6,10 @@ using GZCTF.Repositories.Interface;
 using GZCTF.Services.Fleet;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Controllers;
 
-/// <summary>
-/// Worker node management and fleet operations API.
-/// </summary>
 [ApiController]
 [Route("api/v1/nodes")]
 [Produces(MediaTypeNames.Application.Json)]
@@ -24,7 +22,6 @@ public class NodesController : ControllerBase
     public NodesController(INodeRepository nodeRepo, AppDbContext context, ILogger<NodesController> logger)
     { _nodeRepo = nodeRepo; _context = context; _logger = logger; }
 
-    /// <summary>One-click deploy a new target server: SSH in, install agent, register node.</summary>
     [HttpPost]
     [RequireAdmin]
     public async Task<IActionResult> Register([FromBody] NodeDeployRequest request)
@@ -40,7 +37,6 @@ public class NodesController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>List all nodes with current status.</summary>
     [HttpGet]
     [Authorize]
     public async Task<IActionResult> List()
@@ -54,17 +50,20 @@ public class NodesController : ControllerBase
         }));
     }
 
-    /// <summary>Get node detail.</summary>
     [HttpGet("{id:guid}")]
     [Authorize]
     public async Task<IActionResult> Detail(Guid id)
     {
         var node = await _nodeRepo.GetNodeByIdAsync(id, HttpContext.RequestAborted);
         if (node is null) return NotFound();
-        return Ok(node);
+        return Ok(new
+        {
+            node.Id, node.Name, node.HostAddress, node.Status, node.Capabilities,
+            node.CpuLoad, node.MemoryLoad, node.CurrentContainers, node.MaxContainers,
+            node.CurrentVms, node.MaxVms, node.UsedPorts, node.TotalPorts, node.LastHeartbeat
+        });
     }
 
-    /// <summary>Deregister a node.</summary>
     [HttpDelete("{id:guid}")]
     [RequireAdmin]
     public async Task<IActionResult> Deregister(Guid id)
@@ -76,7 +75,6 @@ public class NodesController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Agent heartbeat with load metrics.</summary>
     [HttpPost("{id:guid}/heartbeat")]
     [Authorize]
     public async Task<IActionResult> Heartbeat(Guid id, [FromBody] HeartbeatRequest request)
@@ -92,6 +90,74 @@ public class NodesController : ControllerBase
         node.Status = NodeStatus.Online;
         await _context.SaveChangesAsync();
         return Ok();
+    }
+}
+
+[ApiController]
+[Route("api/v1/deployment-targets")]
+[Produces(MediaTypeNames.Application.Json)]
+public class DeploymentTargetsController : ControllerBase
+{
+    private readonly AppDbContext _context;
+
+    public DeploymentTargetsController(AppDbContext context)
+    { _context = context; }
+
+    [HttpGet]
+    [Authorize]
+    public async Task<IActionResult> List(
+        [FromQuery] TargetStatus? status = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        var query = _context.DeploymentTargets.AsQueryable();
+
+        if (status.HasValue)
+            query = query.Where(t => t.Status == status.Value);
+
+        var total = await query.CountAsync();
+        var items = await query
+            .OrderByDescending(t => t.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(t => new
+            {
+                t.Id, t.TargetNodeId, t.Type, t.Action, t.Status,
+                t.Payload, t.ResultPort, t.ResultHost,
+                t.CreatedAt, t.CompletedAt, t.ErrorMessage
+            })
+            .ToListAsync();
+
+        return Ok(new { total, page, pageSize, items });
+    }
+
+    [HttpGet("{id:guid}")]
+    [Authorize]
+    public async Task<IActionResult> GetById(Guid id)
+    {
+        var target = await _context.DeploymentTargets.FindAsync(id);
+        if (target is null) return NotFound();
+        return Ok(new
+        {
+            target.Id, target.TargetNodeId, target.Type, target.Action, target.Status,
+            target.Payload, target.ResultPort, target.ResultHost,
+            target.CreatedAt, target.CompletedAt, target.ErrorMessage
+        });
+    }
+
+    [HttpDelete("{id:guid}")]
+    [RequireAdmin]
+    public async Task<IActionResult> Cancel(Guid id)
+    {
+        var target = await _context.DeploymentTargets.FindAsync(id);
+        if (target is null) return NotFound();
+        if (target.Status == TargetStatus.Pending || target.Status == TargetStatus.Running)
+        {
+            target.Status = TargetStatus.Cancelled;
+            target.CompletedAt = DateTimeOffset.UtcNow;
+            await _context.SaveChangesAsync();
+        }
+        return NoContent();
     }
 }
 

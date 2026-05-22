@@ -115,6 +115,7 @@ internal static class ServicesExtension
             builder.Services.AddScoped<WeightedScheduler>();
             builder.Services.AddScoped<QueueManager>();
             builder.Services.AddScoped<PortCapacityTracker>();
+            builder.Services.AddScoped<ImageDistributionService>();
             builder.Services.AddHostedService<FleetHealthCheckService>();
 
             // Phase 7 security: distributed lock
