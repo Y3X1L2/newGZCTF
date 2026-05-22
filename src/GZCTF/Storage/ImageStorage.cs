@@ -112,6 +112,20 @@ public class ImageStorage
 
         _logger.LogDebug("Image file written to '{FilePath}'", filePath);
 
+        // Compute SHA256 hash of the saved file
+        string hash;
+        using (var sha = System.Security.Cryptography.SHA256.Create())
+        {
+            await using var fs = File.OpenRead(filePath);
+            hash = Convert.ToHexString(await sha.ComputeHashAsync(fs)).ToLowerInvariant();
+        }
+
+        // Detect OS type from filename
+        var lowerName = file.FileName.ToLowerInvariant();
+        var osType = lowerName.Contains("linux") || lowerName.Contains("ubuntu")
+            || lowerName.Contains("centos") || lowerName.Contains("debian")
+            ? OSType.Linux : OSType.Windows;
+
         // Register with libvirt storage pool
         try
         {
@@ -127,9 +141,10 @@ public class ImageStorage
         var image = new ImageTemplate
         {
             Name = Path.GetFileNameWithoutExtension(safeName),
-            OSType = OSType.Windows,
+            OSType = osType,
             ImageType = imageType,
             LocalFilePath = filePath,
+            ImageHash = hash,
             FileSize = file.Length,
             UploadedAt = DateTimeOffset.UtcNow,
             Status = ImageStatus.Ready

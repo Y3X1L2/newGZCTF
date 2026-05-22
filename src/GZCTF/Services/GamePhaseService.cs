@@ -27,8 +27,8 @@ public class GamePhaseService
         return requiredType switch
         {
             PhaseRequiredType.CTF => activePhase.CTFEnabled ? PhaseCheckResult.Allowed : PhaseCheckResult.DisabledByPhase,
-            PhaseRequiredType.IR => activePhase.IREnabled ? PhaseCheckResult.Allowed : PhaseCheckResult.DisabledByPhase,
-            PhaseRequiredType.Scenario => activePhase.ScenarioEnabled ? PhaseCheckResult.Allowed : PhaseCheckResult.DisabledByPhase,
+            PhaseRequiredType.IR => PhaseCheckResult.Allowed,
+            PhaseRequiredType.Scenario => PhaseCheckResult.Allowed,
             _ => PhaseCheckResult.Allowed
         };
     }

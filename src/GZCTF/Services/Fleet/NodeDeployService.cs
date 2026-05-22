@@ -56,9 +56,9 @@ public class NodeDeployService
         }
         catch (Exception ex)
         {
-            node.Status = NodeStatus.Error;
+            _logger.LogError(ex, "Deploy failed for node {NodeId}, removing from database", node.Id);
+            _context.WorkerNodes.Remove(node);
             await _context.SaveChangesAsync(token);
-            _logger.LogError(ex, "Deploy failed for node {NodeId}", node.Id);
 
             return new NodeDeployResult
             {

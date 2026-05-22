@@ -22,7 +22,7 @@ public class ImageDistributionService
             {
                 TargetNodeId = node.Id, Type = TargetType.Vm,
                 Action = TargetAction.Create,
-                Payload = System.Text.Json.JsonSerializer.Serialize(new { imageId = template.Id, localPath = template.LocalFilePath })
+                Payload = System.Text.Json.JsonSerializer.Serialize(new { imageId = template.Id, hash = template.ImageHash })
             };
             _context.DeploymentTargets.Add(target);
         }

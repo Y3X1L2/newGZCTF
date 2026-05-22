@@ -74,6 +74,7 @@ public class ArchiveExtractor : IArchiveExtractor
                 await RunCommandAsync("tar", $"-xf \"{ovaFile}\" -C \"{ovaDir}\"", token);
                 allFiles = Directory.GetFiles(ovaDir, "*.*", SearchOption.AllDirectories);
                 hasVmdk = allFiles.Any(f => f.EndsWith(".vmdk", StringComparison.OrdinalIgnoreCase));
+                hasQcow2 = allFiles.Any(f => f.EndsWith(".qcow2", StringComparison.OrdinalIgnoreCase));
             }
 
             if (hasVmx && hasVmdk)

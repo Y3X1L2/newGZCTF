@@ -44,8 +44,6 @@ public class GamePhaseController : ControllerBase
         phase.StartTime = updated.StartTime;
         phase.EndTime = updated.EndTime;
         phase.CTFEnabled = updated.CTFEnabled;
-        phase.IREnabled = updated.IREnabled;
-        phase.ScenarioEnabled = updated.ScenarioEnabled;
         await _context.SaveChangesAsync();
         return Ok(phase);
     }

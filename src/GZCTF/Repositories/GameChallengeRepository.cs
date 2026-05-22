@@ -12,16 +12,22 @@ public class GameChallengeRepository(
 {
     public async Task AddFlags(GameChallenge challenge, FlagCreateModel[] models, CancellationToken token = default)
     {
+        var maxOrder = await Context.FlagContexts
+            .Where(f => f.Challenge == challenge)
+            .MaxAsync(f => (int?)f.OrderIndex, token) ?? -1;
+
         foreach (var model in models)
         {
             var attachment = model.ToAttachment(await blobRepository.GetBlobByHash(model.FileHash, token));
+
+            var orderIndex = model.OrderIndex > 0 ? model.OrderIndex : ++maxOrder;
 
             challenge.Flags.Add(new()
             {
                 Flag = model.Flag,
                 Challenge = challenge,
                 Attachment = attachment,
-                OrderIndex = model.OrderIndex,
+                OrderIndex = orderIndex,
                 Description = model.Description,
                 ScoreMode = model.ScoreMode,
                 FixedScore = model.FixedScore,

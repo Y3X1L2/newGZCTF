@@ -13,8 +13,6 @@ public class GamePhase
     public DateTimeOffset StartTime { get; set; }
     public DateTimeOffset EndTime { get; set; }
     public bool CTFEnabled { get; set; } = true;
-    public bool IREnabled { get; set; } = true;
-    public bool ScenarioEnabled { get; set; } = true;
     [MaxLength(2048)] public string? SecurityPolicy { get; set; }
 
     [ForeignKey(nameof(GameId))]
