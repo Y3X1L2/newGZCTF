@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Net.Mime;
+using System.Security.Claims;
 using GZCTF.Middlewares;
 using GZCTF.Models.Data;
 using GZCTF.Repositories.Interface;
@@ -71,7 +72,7 @@ public class NodesController : ControllerBase
     {
         var node = await _nodeRepo.GetNodeByIdAsync(id, HttpContext.RequestAborted);
         if (node is null) return NotFound();
-        node.Status = NodeStatus.Offline;
+        _context.WorkerNodes.Remove(node);
         await _context.SaveChangesAsync();
         return NoContent();
     }
@@ -81,8 +82,18 @@ public class NodesController : ControllerBase
     [EnableRateLimiting(nameof(RateLimiter.LimitPolicy.Query))]
     public async Task<IActionResult> Heartbeat(Guid id, [FromBody] HeartbeatRequest request)
     {
+        if (request.CpuLoad < 0 || request.CpuLoad > 100
+            || request.MemoryLoad < 0 || request.MemoryLoad > 100
+            || request.CurrentContainers < 0 || request.CurrentVms < 0
+            || request.UsedPorts < 0)
+            return BadRequest(new { message = "Invalid metric values" });
+
         var node = await _nodeRepo.GetNodeByIdAsync(id, HttpContext.RequestAborted);
         if (node is null) return NotFound();
+
+        // TODO: Verify AuthToken when Agent protocol is implemented
+        // The Agent should authenticate with the node's unique AuthToken, not the platform user cookie
+
         node.CpuLoad = request.CpuLoad;
         node.MemoryLoad = request.MemoryLoad;
         node.CurrentContainers = request.CurrentContainers;
@@ -92,6 +103,24 @@ public class NodesController : ControllerBase
         node.Status = NodeStatus.Online;
         await _context.SaveChangesAsync();
         return Ok();
+    }
+
+    [HttpDelete("vms/{instanceId:guid}")]
+    [RequireUser]
+    public async Task<IActionResult> DestroyVm(Guid instanceId)
+    {
+        var vm = await _context.VmInstances.FindAsync(new object[] { instanceId }, HttpContext.RequestAborted);
+        if (vm is null) return NotFound();
+
+        // Verify ownership
+        var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+        if (vm.UserId.ToString() != userId)
+            return Forbid();
+
+        vm.Status = VmInstanceStatus.Destroyed;
+        vm.DestroyedAt = DateTimeOffset.UtcNow;
+        await _context.SaveChangesAsync();
+        return NoContent();
     }
 }
 

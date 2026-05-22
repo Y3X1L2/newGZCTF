@@ -119,6 +119,17 @@ public class ImageTemplateController : ControllerBase
     [RequireAdmin]
     public async Task<IActionResult> ImportFromLocal([FromBody] LocalImportRequest request)
     {
+        // Validate path is within allowed image directories
+        var fullPath = Path.GetFullPath(request.LocalPath);
+        var allowedRoots = new[]
+        {
+            Path.GetFullPath("./images"),
+            Path.GetFullPath("/var/lib/gzctf/images"),
+            Path.GetFullPath("/var/lib/libvirt/images"),
+        };
+        if (!allowedRoots.Any(r => fullPath.StartsWith(r + Path.DirectorySeparatorChar) || fullPath == r))
+            return BadRequest(new { message = "Path is not in an allowed directory" });
+
         try
         {
             var importer = HttpContext.RequestServices.GetRequiredService<Services.Vm.LocalImageImporter>();
