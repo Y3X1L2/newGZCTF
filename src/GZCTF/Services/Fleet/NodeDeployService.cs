@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using GZCTF.Models.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -89,19 +90,30 @@ public class NodeDeployService
         return caps;
     }
 
+    private static readonly System.Text.RegularExpressions.Regex SafeHostPattern =
+        new(@"^[a-zA-Z0-9]([a-zA-Z0-9\-.]*[a-zA-Z0-9])?$", RegexOptions.Compiled);
+    private static readonly System.Text.RegularExpressions.Regex SafeUserPattern =
+        new(@"^[a-z_][a-z0-9_-]*$", RegexOptions.Compiled);
+
     private static async Task<string> RunRemoteCommandAsync(
         string host, string user, string password, string command, CancellationToken token)
     {
+        if (!SafeHostPattern.IsMatch(host))
+            throw new ArgumentException("Host contains invalid characters.", nameof(host));
+        if (!SafeUserPattern.IsMatch(user))
+            throw new ArgumentException("User contains invalid characters.", nameof(user));
+
         var safeCommand = command.Replace("\"", "\\\"");
         var psi = new ProcessStartInfo
         {
             FileName = "sshpass",
-            Arguments = $"-p \"{password}\" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 {user}@{host} \"{safeCommand}\"",
+            Arguments = $"-e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 {user}@{host} \"{safeCommand}\"",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true
         };
+        psi.Environment["SSHPASS"] = password;
 
         using var process = Process.Start(psi);
         if (process is null)

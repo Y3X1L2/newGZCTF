@@ -44,7 +44,7 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
 
   useEffect(() => {
     if ((challenge?.flags?.length ?? 0) > 1 && activeFlagId === null) {
-      setActiveFlagId(1)
+      setActiveFlagId(challenge!.flags![0].id!)
     }
   }, [challenge?.flags])
 

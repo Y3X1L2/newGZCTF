@@ -2057,11 +2057,10 @@ export interface ClientFlagContext {
 
 /** Flag submission */
 export interface FlagSubmitModel {
-  /**
-   * Flag content
-   * @minLength 1
-   */
+  /** Flag content @minLength 1 */
   flag: string;
+  /** Target flag ID for multi-flag challenges */
+  flagId?: number;
 }
 
 /** Game writeup submission information */

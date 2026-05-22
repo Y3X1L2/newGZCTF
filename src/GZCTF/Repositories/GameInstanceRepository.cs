@@ -23,6 +23,7 @@ public class GameInstanceRepository(
 
         var instance = await Context.GameInstances
             .Include(i => i.FlagContext)
+            .Include(i => i.Challenge).ThenInclude(c => c.Flags)
             .Where(e => e.ChallengeId == challengeId && e.Participation == part)
             .SingleOrDefaultAsync(token);
 
@@ -321,7 +322,8 @@ public class GameInstanceRepository(
                 var attemptCount = await Context.Submissions
                     .CountAsync(s => s.ParticipationId == submission.ParticipationId
                         && s.ChallengeId == submission.ChallengeId
-                        && s.FlagId == targetFlag.Id, token);
+                        && s.FlagId == targetFlag.Id
+                        && s.Id != updateSub.Id, token);
 
                 if (attemptCount >= targetFlag.MaxAttempts)
                 {

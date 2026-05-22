@@ -276,8 +276,8 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
       <Divider label={attemptsInfo} my={attemptsInfo ? '-0.4rem' : undefined} />
       {hasMultiFlags && (
         <Group gap="xs" justify="center">
-          {challenge!.flags!.map((_f, i) => {
-            const fid = i + 1
+          {challenge!.flags!.map((f) => {
+            const fid = f.id!
             const isActive = activeFlagId === fid
             return (
               <Button

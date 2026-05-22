@@ -323,6 +323,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .HasForeignKey(e => e.ReviewedById)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            entity.HasOne(e => e.FlagContext)
+                .WithMany()
+                .HasForeignKey(e => e.FlagId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             entity.HasIndex(e => e.Status);
 
             entity.Navigation(e => e.Team).AutoInclude();
@@ -405,12 +410,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
 
         builder.Entity<FirstSolve>(entity =>
         {
-            entity.HasKey(e => new { e.ParticipationId, e.ChallengeId });
+            entity.HasKey(e => new { e.ParticipationId, e.ChallengeId, e.FlagId });
 
             entity.HasOne(e => e.Submission)
                 .WithMany()
                 .HasForeignKey(e => e.SubmissionId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.FlagContext)
+                .WithMany()
+                .HasForeignKey(e => e.FlagId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<UserParticipation>(entity =>
