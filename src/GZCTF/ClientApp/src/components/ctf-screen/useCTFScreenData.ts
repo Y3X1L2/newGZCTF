@@ -2,7 +2,6 @@ import * as signalR from '@microsoft/signalr'
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { GameStatus } from '@Components/GameCard'
 import { useChallengeCategoryLabelMap } from '@Utils/Shared'
-import { useDemoScreenData } from '@Utils/screenDemoData'
 import { OnceSWRConfig } from '@Hooks/useConfig'
 import { getGameStatus, useAdminGame } from '@Hooks/useGame'
 import api, { AnswerResult, EventType, GameEvent, ParticipationStatus, Submission } from '@Api'
@@ -149,17 +148,6 @@ export const useCTFScreenData = (numId: number) => {
   const canLoadMonitor = numId > 0 && !!game && !isTestMode && statusInfo.status !== GameStatus.Coming
   const canLoadParticipations = numId > 0 && !!game && !isTestMode
 
-  // Demo data fallback
-  const demoData = useDemoScreenData(
-    game?.id && game?.title
-      ? {
-          id: game.id,
-          title: game.title,
-        }
-      : undefined,
-    now
-  )
-
   const { data: liveScoreboard, mutate: mutateScoreboard } = api.game.useGameScoreboard(
     numId,
     {
@@ -182,11 +170,10 @@ export const useCTFScreenData = (numId: number) => {
     canLoadMonitor
   )
 
-  // Use demo data when no real data available
-  const scoreboard = isTestMode ? demoData?.scoreboard : liveScoreboard
-  const participations = isTestMode ? demoData?.participations : liveParticipations
-  const eventFeed = isTestMode ? (demoData?.events ?? []) : liveEvents
-  const submissionFeed = isTestMode ? (demoData?.submissions ?? []) : liveSubmissions
+  const scoreboard = liveScoreboard
+  const participations = liveParticipations
+  const eventFeed = liveEvents
+  const submissionFeed = liveSubmissions
 
   // Clock update
   useEffect(() => {

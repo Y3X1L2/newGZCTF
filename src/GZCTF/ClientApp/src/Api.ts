@@ -1761,6 +1761,11 @@ export interface ChallengeInfo {
   deadline?: number | null;
   /** Bloods for the challenge */
   bloods: Blood[];
+  /**
+   * Total number of flags in this challenge
+   * @format int32
+   */
+  totalFlags?: number;
   /** Whether to disable blood bonus */
   disableBloodBonus: boolean;
 }

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import {
   Button, Card, Group, Stack, Text, TextInput, Alert, ActionIcon,
-  NumberInput, Select, Textarea,
+  NumberInput, Select, Textarea, Modal,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { AdminPage } from '@Components/admin/AdminPage'
@@ -45,6 +45,16 @@ export default function FlagsEdit() {
   const [newMaxAttempts, setNewMaxAttempts] = useState(0)
   const [newAnswerType, setNewAnswerType] = useState<AnswerType>(AnswerType.Flag)
   const [newCustomName, setNewCustomName] = useState('')
+
+  const [editingFlag, setEditingFlag] = useState<FlagInfo | null>(null)
+  const [editFlag, setEditFlag] = useState('')
+  const [editScoreMode, setEditScoreMode] = useState<string>('InheritDecay')
+  const [editFixedScore, setEditFixedScore] = useState(0)
+  const [editMaxAttempts, setEditMaxAttempts] = useState(0)
+  const [editOrderIndex, setEditOrderIndex] = useState(0)
+  const [editDescription, setEditDescription] = useState('')
+  const [editAnswerType, setEditAnswerType] = useState<string>('Flag')
+  const [editCustomName, setEditCustomName] = useState('')
 
   const load = async () => {
     setLoading(true)
@@ -89,6 +99,34 @@ export default function FlagsEdit() {
         load()
       } else {
         notifications.show({ title: '添加失败', message: '请检查 Flag 格式', color: 'red' })
+      }
+    } catch { /* ignore */ }
+  }
+
+  const handleUpdateFlag = async () => {
+    if (!editingFlag) return
+    try {
+      const res = await fetch(
+        `/api/edit/Games/${gameId}/Challenges/${challengeId}/Flags/${editingFlag.id}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            flag: editFlag,
+            orderIndex: editOrderIndex,
+            description: editDescription,
+            scoreMode: Number(editScoreMode),
+            fixedScore: editFixedScore,
+            maxAttempts: editMaxAttempts,
+            answerType: Number(editAnswerType),
+            customName: editCustomName,
+          }),
+        }
+      )
+      if (res.ok) {
+        notifications.show({ title: '更新成功', message: 'Flag 已更新', color: 'green' })
+        setEditingFlag(null)
+        load()
       }
     } catch { /* ignore */ }
   }
@@ -140,12 +178,42 @@ export default function FlagsEdit() {
                   {f.customName && <Text size="xs" c="blue">{f.customName}</Text>}
                   {f.scoreMode === FlagScoreMode.FixedScore && <Text size="xs" c="orange">{f.fixedScore}分</Text>}
                   {f.maxAttempts > 0 && <Text size="xs" c="dimmed">限{f.maxAttempts}次</Text>}
+                  <Button size="xs" variant="subtle" onClick={() => {
+                    setEditingFlag(f)
+                    setEditFlag(f.flag)
+                    setEditScoreMode(String(f.scoreMode ?? 0))
+                    setEditFixedScore(f.fixedScore ?? 0)
+                    setEditMaxAttempts(f.maxAttempts ?? 0)
+                    setEditOrderIndex(f.orderIndex ?? 0)
+                    setEditDescription(f.description ?? '')
+                    setEditAnswerType(String(f.answerType ?? 0))
+                    setEditCustomName(f.customName ?? '')
+                  }}>编辑</Button>
                 </Group>
               </Group>
               {f.description && <Text size="xs" c="dimmed" mt={4}>{f.description}</Text>}
             </Alert>
           ))}
         </Stack>
+        <Modal opened={!!editingFlag} onClose={() => setEditingFlag(null)} title="编辑 Flag">
+          <Stack>
+            <TextInput label="Flag" required value={editFlag} onChange={e => setEditFlag(e.currentTarget.value)} />
+            <Group>
+              <NumberInput label="顺序" value={editOrderIndex} onChange={v => setEditOrderIndex(Number(v) ?? 0)} />
+              <Select label="评分模式" data={scoreModeOptions} value={editScoreMode} onChange={v => v && setEditScoreMode(v)} />
+              {editScoreMode === '1' && (
+                <NumberInput label="固定分值" value={editFixedScore} onChange={v => setEditFixedScore(Number(v) ?? 0)} />
+              )}
+            </Group>
+            <Group>
+              <NumberInput label="最大尝试" value={editMaxAttempts} onChange={v => setEditMaxAttempts(Number(v) ?? 0)} placeholder="0=无限" />
+              <Select label="答案类型" data={answerTypeOptions} value={editAnswerType} onChange={v => v && setEditAnswerType(v)} />
+            </Group>
+            <TextInput label="自定义名称" value={editCustomName} onChange={e => setEditCustomName(e.currentTarget.value)} placeholder="如: 步骤1" />
+            <Textarea label="描述" value={editDescription} onChange={e => setEditDescription(e.currentTarget.value)} />
+            <Button fullWidth onClick={handleUpdateFlag}>保存修改</Button>
+          </Stack>
+        </Modal>
       </Card>
     </AdminPage>
   )

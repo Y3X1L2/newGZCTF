@@ -119,7 +119,12 @@ const TableHeader = React.memo((table: Record<string, ChallengeInfo[]>) => {
         {Object.keys(table).map((key) =>
           table[key].map((item) => (
             <Table.Th key={item.id} className={classes.mono}>
-              {item.score}
+              <Stack gap={0} align="center">
+                <Text>{item.score}</Text>
+                {item.totalFlags && item.totalFlags > 1 ? (
+                  <Text size="xs" c="dimmed">{item.solved ?? 0}/{item.totalFlags} Flags</Text>
+                ) : null}
+              </Stack>
             </Table.Th>
           ))
         )}

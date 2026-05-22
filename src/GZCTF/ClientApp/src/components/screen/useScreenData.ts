@@ -4,7 +4,6 @@ import type { EChartsOption } from 'echarts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { GameStatus } from '@Components/GameCard'
 import { useChallengeCategoryLabelMap } from '@Utils/Shared'
-import { useDemoScreenData } from '@Utils/screenDemoData'
 import { OnceSWRConfig } from '@Hooks/useConfig'
 import { getGameStatus, useAdminGame } from '@Hooks/useGame'
 import api, { AnswerResult, EventType, GameEvent, ParticipationStatus, ScoreboardItem, Submission } from '@Api'
@@ -209,16 +208,6 @@ export const useGameScreenData = (numId: number) => {
   const canLoadMonitor = numId > 0 && !!game && !isTestMode && statusInfo.status !== GameStatus.Coming
   const canLoadParticipations = numId > 0 && !!game && !isTestMode
 
-  const demoData = useDemoScreenData(
-    game?.id && game?.title
-      ? {
-          id: game.id,
-          title: game.title,
-        }
-      : undefined,
-    now
-  )
-
   const { data: liveScoreboard, mutate: mutateScoreboard } = api.game.useGameScoreboard(
     numId,
     {
@@ -241,10 +230,10 @@ export const useGameScreenData = (numId: number) => {
     canLoadMonitor
   )
 
-  const scoreboard = isTestMode ? demoData?.scoreboard : liveScoreboard
-  const participations = isTestMode ? demoData?.participations : liveParticipations
-  const eventFeed = isTestMode ? (demoData?.events ?? []) : liveEvents
-  const submissionFeed = isTestMode ? (demoData?.submissions ?? []) : liveSubmissions
+  const scoreboard = liveScoreboard
+  const participations = liveParticipations
+  const eventFeed = liveEvents
+  const submissionFeed = liveSubmissions
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
