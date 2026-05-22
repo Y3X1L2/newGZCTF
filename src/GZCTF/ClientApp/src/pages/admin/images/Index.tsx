@@ -20,7 +20,7 @@ export default function ImagesPage() {
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
-          {(data as any[])?.map((img: any) => (
+          {(data?.items as any[])?.map((img: any) => (
             <Table.Tr key={img.id}>
               <Table.Td>{img.name}</Table.Td>
               <Table.Td>{img.imageType}</Table.Td>
