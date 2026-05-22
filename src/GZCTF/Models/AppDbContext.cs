@@ -318,9 +318,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
         {
             entity.Property(e => e.Status).HasConversion<string>();
 
-            entity.Property(e => e.SubmissionType)
-                .HasConversion<byte>();
-
             entity.HasOne(e => e.ReviewedBy)
                 .WithMany()
                 .HasForeignKey(e => e.ReviewedById)
