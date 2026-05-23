@@ -118,6 +118,10 @@ internal static class ServicesExtension
             builder.Services.AddScoped<ImageDistributionService>();
             builder.Services.AddHostedService<FleetHealthCheckService>();
 
+            builder.Services.AddHttpClient("Agent");
+            builder.Services.AddSingleton<AgentClient>();
+            builder.Services.AddScoped<FleetVmService>();
+
             // Phase 7 security: distributed lock
             if (builder.Configuration.GetValue<string>("RunMode") == "Fleet")
                 builder.Services.AddSingleton<IDistributedLockService, RedisDistributedLock>();
@@ -126,6 +130,7 @@ internal static class ServicesExtension
 
             builder.Services.AddHostedService<CacheMaker>();
             builder.Services.AddHostedService<CronJobService>();
+            builder.Services.AddHostedService<LocalNodeRegistrar>();
         }
 
         internal void AddWebServices()

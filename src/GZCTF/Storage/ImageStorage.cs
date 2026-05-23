@@ -122,9 +122,9 @@ public class ImageStorage
 
         // Detect OS type from filename
         var lowerName = file.FileName.ToLowerInvariant();
-        var osType = lowerName.Contains("linux") || lowerName.Contains("ubuntu")
-            || lowerName.Contains("centos") || lowerName.Contains("debian")
-            ? OSType.Linux : OSType.Windows;
+        var osType = lowerName.Contains("windows") || lowerName.Contains("winserver")
+            || lowerName.Contains("winsrv") || lowerName.Contains("wkdb")
+            ? OSType.Windows : OSType.Linux;
 
         // Register with libvirt storage pool
         try

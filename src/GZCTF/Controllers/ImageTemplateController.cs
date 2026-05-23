@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using GZCTF.Models.Data;
+using GZCTF.Services;
 using GZCTF.Services.Vm;
 using GZCTF.Storage;
 using GZCTF.Middlewares;
@@ -36,7 +37,7 @@ public class ImageTemplateController : ControllerBase
     /// </summary>
     [HttpPost]
     [RequireAdmin]
-    [RequestSizeLimit(64_424_509_440)] // 60GB
+    [RequestSizeLimit(60L * 1024 * 1024 * 1024)]
     public async Task<IActionResult> Upload(IFormFile file)
     {
         if (file is null || file.Length == 0)
@@ -51,7 +52,11 @@ public class ImageTemplateController : ControllerBase
             _logger.LogInformation("Image template {Name} (ID:{Id}) uploaded by {User}",
                 imageTemplate.Name, imageTemplate.Id, User.Identity?.Name);
 
-            return CreatedAtAction(nameof(GetById), new { id = imageTemplate.Id }, imageTemplate);
+            return CreatedAtAction(nameof(GetById), new { id = imageTemplate.Id }, new
+            {
+                imageTemplate.Id, imageTemplate.Name, imageTemplate.OSType, imageTemplate.ImageType,
+                imageTemplate.FileSize, imageTemplate.Status, imageTemplate.ImageHash, imageTemplate.UploadedAt
+            });
         }
         catch (InvalidOperationException ex)
         {
@@ -89,7 +94,11 @@ public class ImageTemplateController : ControllerBase
             .Take(pageSize)
             .ToListAsync();
 
-        return Ok(new { total, page, pageSize, items = templates });
+        return Ok(new { total, page, pageSize, items = templates.Select(t => new
+        {
+            t.Id, t.Name, t.OSType, t.ImageType, t.FileSize, t.Status,
+            t.Description, t.ImageHash, t.UploadedAt, t.RegistryUrl
+        }) });
     }
 
     /// <summary>
@@ -105,10 +114,9 @@ public class ImageTemplateController : ControllerBase
         return Ok(new
         {
             template.Id, template.Name, template.OSType, template.ImageType,
-            template.LocalFilePath, template.OriginalArchiveName,
             template.FileSize, template.Status, template.Description,
             template.ContainsMalware, template.ImageHash, template.UploadedAt,
-            template.RegistryUrl, // keep registry URL visible for reference
+            template.RegistryUrl,
         });
     }
 
@@ -134,7 +142,11 @@ public class ImageTemplateController : ControllerBase
         {
             var importer = HttpContext.RequestServices.GetRequiredService<Services.Vm.LocalImageImporter>();
             var template = await importer.ImportFromLocalPathAsync(request.LocalPath, request.DisplayName);
-            return Ok(template);
+            return Ok(new
+            {
+                template.Id, template.Name, template.OSType, template.ImageType,
+                template.FileSize, template.Status, template.ImageHash, template.UploadedAt
+            });
         }
         catch (FileNotFoundException ex)
         {
@@ -169,6 +181,24 @@ public class ImageTemplateController : ControllerBase
 
         _context.ImageTemplates.Add(template);
         await _context.SaveChangesAsync(token);
+
+        var sp = HttpContext.RequestServices;
+        var imageName = request.Name;
+        var registryUrl = request.RegistryUrl;
+        var registryAuth = request.RegistryAuth;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var orchestrator = sp.GetRequiredService<ContainerOrchestrator>();
+                await orchestrator.PullImageFromRegistryAsync(
+                    registryUrl ?? "", imageName, registryAuth);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to pull Docker image: {Name}", imageName);
+            }
+        });
 
         return Ok(new { template.Id, template.Name, template.OSType, template.ImageType });
     }

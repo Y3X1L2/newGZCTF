@@ -10,6 +10,9 @@
   <Folder Name="/Solution Items/">
     <File Path="Directory.Packages.props" />
   </Folder>
+  <Project Path="GZCTF.Agent/GZCTF.Agent.csproj">
+    <BuildType Solution="GenAPI|*" Project="Debug" />
+  </Project>
   <Project Path="GZCTF.AppHost/GZCTF.AppHost.csproj">
     <BuildType Solution="GenAPI|*" Project="Debug" />
   </Project>

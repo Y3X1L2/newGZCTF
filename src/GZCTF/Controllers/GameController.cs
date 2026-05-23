@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿using System.ComponentModel.DataAnnotations;
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Mime;
@@ -13,6 +13,7 @@ using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Cache;
 using GZCTF.Services.Config;
+using GZCTF.Services.Fleet;
 using GZCTF.Storage.Interface;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -1026,7 +1027,8 @@ public class GameController(
                 Participation = context.Participation!,
                 Status = AnswerResult.FlagSubmitted,
                 SubmitTimeUtc = submitTime,
-                Answer = answer
+                Answer = answer,
+                FlagId = model.FlagId,
             };
 
             try
@@ -1034,7 +1036,6 @@ public class GameController(
                 submission = await submissionRepository.AddSubmission(submission, token);
                 await transaction.CommitAsync(token);
 
-                submission.FlagId = model.FlagId;
                 var result = await gameInstanceRepository.VerifyAnswer(submission, token);
                 return Ok(new { submission.Id, Status = result.AnsRes, BloodType = result.SubType });
             }
@@ -1242,25 +1243,18 @@ public class GameController(
             dbContext.VmInstances.Add(vmInstance);
             await dbContext.SaveChangesAsync(token);
 
-            // Create deployment target for node
-            var target = new DeploymentTarget
-            {
-                TargetNodeId = Guid.Empty,
-                Type = TargetType.Vm,
-                Action = TargetAction.Create,
-                Payload = System.Text.Json.JsonSerializer.Serialize(new
-                {
-                    templateId = instance.Challenge.ImageTemplateId,
-                    vmName = vmInstance.VmName,
-                    memory = instance.Challenge.MemoryLimit ?? 2048,
-                    cpu = instance.Challenge.CPUCount ?? 2,
-                }),
-                Status = TargetStatus.Pending,
-            };
-            dbContext.DeploymentTargets.Add(target);
-            await dbContext.SaveChangesAsync(token);
+            var fleetVm = HttpContext.RequestServices.GetRequiredService<FleetVmService>();
+            var imageTemplate = instance.Challenge.ImageTemplateId.HasValue
+                ? await dbContext.ImageTemplates.FindAsync(new object[] { instance.Challenge.ImageTemplateId.Value }, token)
+                : null;
+            var templatePath = imageTemplate?.LocalFilePath;
+            var result = await fleetVm.CreateVmAsync(vmInstance, instance.Challenge.ImageTemplateId, templatePath, instance.Challenge.MemoryLimit, instance.Challenge.CPUCount, token);
 
-            return Ok(new { status = "Creating", vmInstanceId = vmInstance.Id });
+            if (result is null)
+                return BadRequest(new { message = "No KVM node available" });
+
+            await dbContext.SaveChangesAsync(token);
+            return Ok(new { status = result.Status.ToString(), vmInstanceId = result.Id });
         }
 
         if (!instance.Challenge.Type.IsContainer())

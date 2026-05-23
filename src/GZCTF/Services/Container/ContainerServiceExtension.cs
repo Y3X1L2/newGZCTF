@@ -1,7 +1,8 @@
-﻿using Docker.DotNet;
+using Docker.DotNet;
 using GZCTF.Models.Internal;
 using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Container.Provider;
+using GZCTF.Services.Fleet;
 using k8s;
 
 namespace GZCTF.Services.Container;
@@ -51,7 +52,9 @@ public static class ContainerServiceExtension
             => config.Type switch
             {
                 ContainerProviderType.Kubernetes => services.AddSingleton<IContainerManager, KubernetesManager>(),
-                _ => services.AddSingleton<IContainerManager, DockerManager>()
+                _ => services
+                    .AddSingleton<DockerManager>()
+                    .AddSingleton<IContainerManager, FleetContainerManager>()
             };
     }
 }

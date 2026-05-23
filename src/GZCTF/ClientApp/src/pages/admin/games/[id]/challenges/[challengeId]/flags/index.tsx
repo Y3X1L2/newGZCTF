@@ -115,10 +115,10 @@ export default function FlagsEdit() {
             flag: editFlag,
             orderIndex: editOrderIndex,
             description: editDescription,
-            scoreMode: Number(editScoreMode),
+            scoreMode: editScoreMode,
             fixedScore: editFixedScore,
             maxAttempts: editMaxAttempts,
-            answerType: Number(editAnswerType),
+            answerType: editAnswerType,
             customName: editCustomName,
           }),
         }
@@ -201,7 +201,7 @@ export default function FlagsEdit() {
             <Group>
               <NumberInput label="顺序" value={editOrderIndex} onChange={v => setEditOrderIndex(Number(v) ?? 0)} />
               <Select label="评分模式" data={scoreModeOptions} value={editScoreMode} onChange={v => v && setEditScoreMode(v)} />
-              {editScoreMode === '1' && (
+              {editScoreMode === FlagScoreMode.FixedScore && (
                 <NumberInput label="固定分值" value={editFixedScore} onChange={v => setEditFixedScore(Number(v) ?? 0)} />
               )}
             </Group>

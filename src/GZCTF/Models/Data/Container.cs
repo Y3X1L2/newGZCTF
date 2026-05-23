@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json;
 using GZCTF.Storage.Interface;
@@ -146,6 +146,11 @@ public class Container
     }
 
     #region Db Relationship
+
+    public Guid? NodeId { get; set; }
+
+    [ForeignKey(nameof(NodeId))]
+    public WorkerNode? Node { get; set; }
 
     /// <summary>
     /// Game challenge instance object

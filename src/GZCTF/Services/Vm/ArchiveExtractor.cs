@@ -98,12 +98,20 @@ public class ArchiveExtractor : IArchiveExtractor
                 await RunCommandAsync("qemu-img", $"convert -f vmdk -O qcow2 \"{baseVmdk}\" \"{qcow2Path}\"", token);
             }
 
+            if (hasVmdk && File.Exists(qcow2Path))
+            {
+                foreach (var vmdk in allFiles.Where(f => f.EndsWith(".vmdk", StringComparison.OrdinalIgnoreCase)))
+                {
+                    try { File.Delete(vmdk); } catch { /* ignore cleanup failures */ }
+                }
+            }
+
             // Detect OS
-            var osType = OSType.Windows;
+            var osType = OSType.Linux;
             var lowerFiles = string.Join(" ", allFiles).ToLowerInvariant();
-            if (lowerFiles.Contains("linux") || lowerFiles.Contains("ubuntu") || lowerFiles.Contains("centos") ||
-                lowerFiles.Contains("debian"))
-                osType = OSType.Linux;
+            if (lowerFiles.Contains("windows") || lowerFiles.Contains("winserver") ||
+                lowerFiles.Contains("winsrv") || lowerFiles.Contains("wkdb"))
+                osType = OSType.Windows;
 
             // SHA256
             var hash = "";

@@ -23,7 +23,7 @@ public class NodeRepository : INodeRepository
     {
         var cutoff = DateTimeOffset.UtcNow - timeout;
         var stale = await _context.WorkerNodes
-            .Where(n => n.Status == NodeStatus.Online && n.LastHeartbeat < cutoff)
+            .Where(n => n.Status == NodeStatus.Online && !n.IsLocal && n.LastHeartbeat < cutoff)
             .ToListAsync(token);
         foreach (var node in stale) node.Status = NodeStatus.Offline;
         if (stale.Count > 0) await _context.SaveChangesAsync(token);

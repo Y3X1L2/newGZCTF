@@ -17,7 +17,7 @@ public class WeightedScheduler
         if (nodes.Count == 0) return null;
 
         var scored = nodes
-            .Where(n => (n.Capabilities & required) == required)
+            .Where(n => (n.Capabilities & required) == required && n.IsSchedulable)
             .Select(n => new { Node = n, Score = CalculateScore(n) })
             .OrderByDescending(x => x.Score).ToList();
 

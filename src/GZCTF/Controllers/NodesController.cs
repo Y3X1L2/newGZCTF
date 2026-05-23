@@ -48,7 +48,8 @@ public class NodesController : ControllerBase
         {
             n.Id, n.Name, n.HostAddress, n.Status, n.Capabilities,
             n.CpuLoad, n.MemoryLoad, n.CurrentContainers, n.MaxContainers,
-            n.CurrentVms, n.MaxVms, n.LastHeartbeat
+            n.CurrentVms, n.MaxVms, n.LastHeartbeat,
+            n.IsSchedulable, n.IsLocal, n.AgentPort
         }));
     }
 
@@ -62,7 +63,8 @@ public class NodesController : ControllerBase
         {
             node.Id, node.Name, node.HostAddress, node.Status, node.Capabilities,
             node.CpuLoad, node.MemoryLoad, node.CurrentContainers, node.MaxContainers,
-            node.CurrentVms, node.MaxVms, node.UsedPorts, node.TotalPorts, node.LastHeartbeat
+            node.CurrentVms, node.MaxVms, node.UsedPorts, node.TotalPorts, node.LastHeartbeat,
+            node.IsSchedulable, node.IsLocal, node.AgentPort
         });
     }
 
@@ -72,18 +74,33 @@ public class NodesController : ControllerBase
     {
         var node = await _nodeRepo.GetNodeByIdAsync(id, HttpContext.RequestAborted);
         if (node is null) return NotFound();
+        if (node.IsLocal) return BadRequest(new { message = "Cannot deregister local node" });
         _context.WorkerNodes.Remove(node);
         await _context.SaveChangesAsync();
         return NoContent();
     }
 
+    [HttpPatch("{id:guid}")]
+    [RequireAdmin]
+    public async Task<IActionResult> UpdateNode(Guid id, [FromBody] UpdateNodeRequest request)
+    {
+        var node = await _nodeRepo.GetNodeByIdAsync(id, HttpContext.RequestAborted);
+        if (node is null) return NotFound();
+
+        if (request.IsSchedulable.HasValue)
+            node.IsSchedulable = request.IsSchedulable.Value;
+
+        await _context.SaveChangesAsync();
+        return Ok(new { node.Id, node.IsSchedulable });
+    }
+
     [HttpPost("{id:guid}/heartbeat")]
-    [Authorize]
+    [AllowAnonymous]
     [EnableRateLimiting(nameof(RateLimiter.LimitPolicy.Query))]
     public async Task<IActionResult> Heartbeat(Guid id, [FromBody] HeartbeatRequest request)
     {
-        if (request.CpuLoad < 0 || request.CpuLoad > 100
-            || request.MemoryLoad < 0 || request.MemoryLoad > 100
+        if (request.CpuLoad < 0 || request.CpuLoad > 1
+            || request.MemoryLoad < 0 || request.MemoryLoad > 1
             || request.CurrentContainers < 0 || request.CurrentVms < 0
             || request.UsedPorts < 0)
             return BadRequest(new { message = "Invalid metric values" });
@@ -91,8 +108,10 @@ public class NodesController : ControllerBase
         var node = await _nodeRepo.GetNodeByIdAsync(id, HttpContext.RequestAborted);
         if (node is null) return NotFound();
 
-        // TODO: Verify AuthToken when Agent protocol is implemented
-        // The Agent should authenticate with the node's unique AuthToken, not the platform user cookie
+        var authToken = HttpContext.Request.Headers["Authorization"]
+            .ToString().Replace("Bearer ", "").Trim();
+        if (string.IsNullOrEmpty(authToken) || authToken != node.AuthToken)
+            return Forbid();
 
         node.CpuLoad = request.CpuLoad;
         node.MemoryLoad = request.MemoryLoad;
@@ -112,15 +131,24 @@ public class NodesController : ControllerBase
         var vm = await _context.VmInstances.FindAsync(new object[] { instanceId }, HttpContext.RequestAborted);
         if (vm is null) return NotFound();
 
-        // Verify ownership
         var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
         if (vm.UserId.ToString() != userId)
             return Forbid();
 
-        vm.Status = VmInstanceStatus.Destroyed;
-        vm.DestroyedAt = DateTimeOffset.UtcNow;
+        var fleetVm = HttpContext.RequestServices.GetRequiredService<FleetVmService>();
+        await fleetVm.DestroyVmAsync(vm, HttpContext.RequestAborted);
         await _context.SaveChangesAsync();
         return NoContent();
+    }
+
+    [HttpGet("/api/agent/download")]
+    [AllowAnonymous]
+    public IActionResult DownloadAgent()
+    {
+        var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "agent", "gzctf-agent");
+        if (!System.IO.File.Exists(path))
+            return NotFound(new { message = "Agent binary not available" });
+        return File(System.IO.File.OpenRead(path), "application/octet-stream", "gzctf-agent");
     }
 }
 
@@ -200,13 +228,9 @@ public class NodeDeployRequest
     public string? NodeName { get; set; }
 }
 
-public class NodeRegisterRequest
+public class UpdateNodeRequest
 {
-    [Required, MaxLength(128)] public string Name { get; set; } = string.Empty;
-    [Required, MaxLength(256)] public string HostAddress { get; set; } = string.Empty;
-    public NodeCapability Capabilities { get; set; } = NodeCapability.Docker;
-    public int MaxContainers { get; set; } = 20;
-    public int MaxVms { get; set; } = 5;
+    public bool? IsSchedulable { get; set; }
 }
 
 public class HeartbeatRequest

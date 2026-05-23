@@ -25,6 +25,9 @@ public class WorkerNode
     public DateTimeOffset RegisteredAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? LastHeartbeat { get; set; }
     [MaxLength(512)] public string? Labels { get; set; }
+    public bool IsSchedulable { get; set; } = true;
+    public bool IsLocal { get; set; }
+    public int AgentPort { get; set; } = 5001;
 
     [Timestamp] public uint ConcurrencyToken { get; set; }
 }

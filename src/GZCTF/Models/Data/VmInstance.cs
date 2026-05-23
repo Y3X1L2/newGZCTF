@@ -29,6 +29,11 @@ public class VmInstance
     #region Db Relationship
     [ForeignKey(nameof(ChallengeId))]
     public GameChallenge? Challenge { get; set; }
+
+    public Guid? NodeId { get; set; }
+
+    [ForeignKey(nameof(NodeId))]
+    public WorkerNode? Node { get; set; }
     #endregion
 }
 

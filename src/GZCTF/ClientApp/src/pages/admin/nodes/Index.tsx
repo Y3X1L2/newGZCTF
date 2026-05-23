@@ -78,6 +78,24 @@ export default function NodesPage() {
     return () => clearInterval(interval);
   }, [loadNodes]);
 
+  const toggleSchedulable = async (nodeId: string, value: boolean) => {
+    try {
+      const res = await fetch(`/api/v1/nodes/${nodeId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isSchedulable: value }),
+      });
+      if (res.ok) {
+        notifications.show({ title: '更新成功', message: value ? '节点已加入调度' : '节点已移出调度', color: 'green' });
+        loadNodes();
+      } else {
+        notifications.show({ title: '更新失败', message: '请重试', color: 'red' });
+      }
+    } catch {
+      notifications.show({ title: '更新失败', message: '网络错误', color: 'red' });
+    }
+  };
+
   const handleDeleteNode = async (id: string, name: string) => {
     if (!confirm(`确定删除节点 "${name}"？`)) return;
     try {
@@ -107,7 +125,7 @@ export default function NodesPage() {
       <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }}>
         {nodes?.map(node => (
           <div key={node.id} style={{ position: 'relative' }}>
-            <NodeCard node={node} />
+            <NodeCard node={node} onToggleSchedulable={toggleSchedulable} />
             <div style={{ position: 'absolute', top: 8, right: 8 }}>
               <Tooltip label="删除节点">
                 <ActionIcon color="red" variant="subtle" size="sm"

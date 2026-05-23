@@ -116,10 +116,11 @@ public class LocalImageImporter
             OSType = osType,
             ImageType = imageType,
             LocalFilePath = destPath,
+            ImageHash = hash,
             FileSize = fileInfo.Length,
             UploadedAt = DateTimeOffset.UtcNow,
             Status = ImageStatus.Ready,
-            Description = $"Imported from local: {Path.GetFileName(localPath)}"
+            Description = "Imported from local storage"
         };
 
         _context.ImageTemplates.Add(template);
