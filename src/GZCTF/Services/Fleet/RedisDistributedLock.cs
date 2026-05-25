@@ -4,8 +4,10 @@ using GZCTF.Services.Concurrency;
 namespace GZCTF.Services.Fleet;
 
 /// <summary>
-/// NOTE: Current implementation uses local ConcurrentDictionary+SemaphoreSlim.
-/// For true distributed locking, this should be replaced with Redis RedLock via StackExchange.Redis.
+/// IMPORTANT: Current implementation uses in-memory ConcurrentDictionary.
+/// For true distributed locking across multiple servers, replace with StackExchange.Redis RedLock.
+/// See: https://redis.io/docs/manual/patterns/distributed-locks/
+///
 /// This stub is sufficient for single-node deployments.
 /// </summary>
 public class RedisDistributedLock : IDistributedLockService

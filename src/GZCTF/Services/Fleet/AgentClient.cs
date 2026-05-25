@@ -123,7 +123,7 @@ public class AgentClient
         if (node is null) return;
 
         var client = BuildClient(node);
-        var serverUrl = _config["Urls"]?.Split(';').First() ?? "http://localhost:8080";
+        var serverUrl = _config["Agent:ServerPublicUrl"] ?? _config["Urls"]?.Split(';').First() ?? "http://localhost:8080";
         var body = JsonSerializer.Serialize(new { hash, downloadUrl = $"{serverUrl}/api/v1/image-templates/download/{hash}" });
         await client.PostAsync("/api/images/download-vm", new StringContent(body, Encoding.UTF8, "application/json"), token);
     }

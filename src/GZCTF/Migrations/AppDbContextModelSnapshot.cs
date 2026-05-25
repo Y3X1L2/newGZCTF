@@ -221,7 +221,7 @@ namespace GZCTF.Migrations
                     b.Property<byte>("Status")
                         .HasColumnType("smallint");
 
-                    b.Property<Guid>("TargetNodeId")
+                    b.Property<Guid?>("TargetNodeId")
                         .HasColumnType("uuid");
 
                     b.Property<byte>("Type")
@@ -1723,9 +1723,7 @@ namespace GZCTF.Migrations
                 {
                     b.HasOne("GZCTF.Models.Data.WorkerNode", "TargetNode")
                         .WithMany()
-                        .HasForeignKey("TargetNodeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("TargetNodeId");
 
                     b.Navigation("TargetNode");
                 });

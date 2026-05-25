@@ -9,7 +9,7 @@ namespace GZCTF.Models.Data;
 public class DeploymentTarget
 {
     [Key] public Guid Id { get; set; } = Guid.NewGuid();
-    [Required] public Guid TargetNodeId { get; set; }
+    public Guid? TargetNodeId { get; set; }
     public TargetType Type { get; set; } = TargetType.Docker;
     public TargetAction Action { get; set; } = TargetAction.Create;
     [MaxLength(4096)] public string Payload { get; set; } = "{}";

@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Services;
 
-public enum PhaseRequiredType { CTF, IR, Scenario }
+public enum PhaseRequiredType { CTF }
 public enum PhaseCheckResult { Allowed, DisabledByPhase, NoActivePhase }
 
 public class GamePhaseService
@@ -27,8 +27,6 @@ public class GamePhaseService
         return requiredType switch
         {
             PhaseRequiredType.CTF => activePhase.CTFEnabled ? PhaseCheckResult.Allowed : PhaseCheckResult.DisabledByPhase,
-            PhaseRequiredType.IR => PhaseCheckResult.Allowed,
-            PhaseRequiredType.Scenario => PhaseCheckResult.Allowed,
             _ => PhaseCheckResult.Allowed
         };
     }

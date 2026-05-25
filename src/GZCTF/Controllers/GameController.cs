@@ -11,6 +11,7 @@ using GZCTF.Models.Internal;
 using GZCTF.Models.Request.Admin;
 using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
+using GZCTF.Services;
 using GZCTF.Services.Cache;
 using GZCTF.Services.Config;
 using GZCTF.Services.Fleet;
@@ -54,6 +55,7 @@ public class GameController(
     IGameChallengeRepository challengeRepository,
     IGameInstanceRepository gameInstanceRepository,
     IParticipationRepository participationRepository,
+    GamePhaseService gamePhaseService,
     IOptionsSnapshot<ContainerPolicy> containerPolicy,
     IStringLocalizer<Program> localizer) : ControllerBase
 {
@@ -1001,6 +1003,13 @@ public class GameController(
             var hasExceededDeadline = instance.Challenge.DeadlineUtc is { } deadline && submitTime > deadline;
             if (hasExceededDeadline && !context.Game!.PracticeMode)
                 return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Challenge_DeadlinePassed)]));
+
+            if (context.Game is not null)
+            {
+                var phaseCheck = await gamePhaseService.CheckAsync(context.Game.Id, PhaseRequiredType.CTF, token);
+                if (phaseCheck == PhaseCheckResult.DisabledByPhase)
+                    return BadRequest(new RequestResponse("当前比赛阶段不允许提交 Flag"));
+            }
 
             var permission =
                 await divisionRepository.GetPermission(context.Participation?.DivisionId, challengeId, token);

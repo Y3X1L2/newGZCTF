@@ -98,7 +98,6 @@ internal static class ServicesExtension
             builder.Services.AddSingleton<ImageStorage>();
             builder.Services.AddSingleton<ContainerOrchestrator>();
             builder.Services.AddSingleton<IVirtualMachineProvider, KvmProvider>();
-            builder.Services.AddScoped<GuacamoleProxy>();
             builder.Services.AddScoped<LocalImageImporter>();
             builder.Services.AddScoped<IArchiveExtractor, ArchiveExtractor>();
 
@@ -109,9 +108,10 @@ internal static class ServicesExtension
             builder.Services.AddScoped<NodeDeployService>();
             builder.Services.AddScoped<FleetManager>();
             builder.Services.AddScoped<WeightedScheduler>();
-            builder.Services.AddScoped<QueueManager>();
+            builder.Services.AddSingleton<QueueManager>();
             builder.Services.AddScoped<ImageDistributionService>();
             builder.Services.AddHostedService<FleetHealthCheckService>();
+            builder.Services.AddHostedService<QueueProcessingService>();
 
             builder.Services.AddHttpClient("Agent");
             builder.Services.AddSingleton<AgentClient>();

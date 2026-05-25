@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Security.Cryptography;
 using GZCTF.Models.Data;
 
@@ -41,6 +42,17 @@ public class LocalImageImporter
         string localPath, string? displayName = null, CancellationToken token = default)
     {
         _logger.LogInformation("Importing VM image from local path: {Path}", localPath);
+
+        // Step 0: Validate path is in an allowed directory (defense-in-depth)
+        var fullPath = Path.GetFullPath(localPath);
+        var allowedRoots = new[]
+        {
+            Path.GetFullPath("./images"),
+            Path.GetFullPath("/var/lib/gzctf/images"),
+            Path.GetFullPath("/var/lib/libvirt/images"),
+        };
+        if (!allowedRoots.Any(r => fullPath.StartsWith(r + Path.DirectorySeparatorChar) || fullPath == r))
+            throw new InvalidOperationException("Path is not in an allowed directory");
 
         // Step 1: Validate path exists
         if (!File.Exists(localPath) && !Directory.Exists(localPath))
@@ -140,7 +152,7 @@ public class LocalImageImporter
     public static OSType DetectOsType(string name)
     {
         var lowered = name.ToLowerInvariant();
-        if (lowered.Contains("windows") || lowered.Contains("win") ||
+        if (lowered.Contains("windows") ||
             lowered.Contains("winserver") || lowered.Contains("winsrv") ||
             lowered.Contains("wkdb"))
             return OSType.Windows;

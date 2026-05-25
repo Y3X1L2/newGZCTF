@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
@@ -36,12 +37,13 @@ public class FleetContainerManager : IContainerManager
         {
             Type = TargetType.Docker,
             Action = TargetAction.Create,
+            Payload = JsonSerializer.Serialize(config)
         };
         var nodeId = await fleetManager.TryScheduleAsync(target, token);
 
         if (nodeId is null)
         {
-            _logger.LogWarning("No schedulable node available, container creation failed");
+            _logger.LogWarning("No schedulable node available, container creation queued");
             return null;
         }
 

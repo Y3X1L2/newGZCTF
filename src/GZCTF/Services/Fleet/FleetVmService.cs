@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
@@ -31,17 +32,20 @@ public class FleetVmService
         _logger = logger;
     }
 
-    public async Task<VmInstance?> CreateVmAsync(VmInstance vmInstance, int? templateId, string? templatePath, int? memory, int? cpu, CancellationToken token)
+    public async Task<VmInstance?> CreateVmAsync(VmInstance vmInstance, int? templateId, string? templatePath,
+        int? memory, int? cpu, CancellationToken token)
     {
         var target = new DeploymentTarget
         {
             Type = TargetType.Vm,
             Action = TargetAction.Create,
+            Payload = JsonSerializer.Serialize(new VmCreatePayload(
+                templateId, templatePath, memory, cpu, vmInstance.VmName))
         };
         var nodeId = await _fleetManager.TryScheduleAsync(target, token);
         if (nodeId is null)
         {
-            _logger.LogWarning("No KVM node available for VM creation");
+            _logger.LogWarning("No KVM node available, VM creation queued");
             return null;
         }
 
@@ -70,7 +74,8 @@ public class FleetVmService
         return vmInstance;
     }
 
-    private async Task<VmInstance?> CreateLocalVmAsync(VmInstance vmInstance, string? templatePath, CancellationToken token)
+    private async Task<VmInstance?> CreateLocalVmAsync(VmInstance vmInstance, string? templatePath,
+        CancellationToken token)
     {
         if (string.IsNullOrEmpty(templatePath))
         {
@@ -84,7 +89,8 @@ public class FleetVmService
             var createResult = await _vmProvider.CreateFromTemplateAsync(templatePath, vmInstance.VmName, token);
             if (!createResult.Success)
             {
-                _logger.LogError("Local VM creation failed for {VmName}: {Error}", vmInstance.VmName, createResult.ErrorMessage);
+                _logger.LogError("Local VM creation failed for {VmName}: {Error}", vmInstance.VmName,
+                    createResult.ErrorMessage);
                 vmInstance.Status = VmInstanceStatus.Error;
                 return vmInstance;
             }
@@ -92,7 +98,8 @@ public class FleetVmService
             var startResult = await _vmProvider.StartAsync(vmInstance.VmName, token);
             if (!startResult.Success)
             {
-                _logger.LogError("Local VM start failed for {VmName}: {Error}", vmInstance.VmName, startResult.ErrorMessage);
+                _logger.LogError("Local VM start failed for {VmName}: {Error}", vmInstance.VmName,
+                    startResult.ErrorMessage);
                 vmInstance.Status = VmInstanceStatus.Error;
                 return vmInstance;
             }
@@ -144,4 +151,7 @@ public class FleetVmService
         vmInstance.Status = VmInstanceStatus.Destroyed;
         vmInstance.DestroyedAt = DateTimeOffset.UtcNow;
     }
+
+    private sealed record VmCreatePayload(
+        int? TemplateId, string? TemplatePath, int? Memory, int? Cpu, string VmName);
 }
