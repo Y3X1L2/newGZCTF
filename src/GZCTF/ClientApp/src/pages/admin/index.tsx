@@ -1,1 +1,1 @@
-export { default } from './Dashboard/Index'
+export { default } from './dashboard/Index'

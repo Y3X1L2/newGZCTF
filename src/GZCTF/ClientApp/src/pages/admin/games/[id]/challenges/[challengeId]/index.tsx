@@ -2,12 +2,11 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import {
   Button, Card, Group, NumberInput, Select, Stack, Switch,
-  Text, TextInput, Textarea, LoadingOverlay, Badge, Alert,
+  Text, TextInput, Textarea, Badge, Alert,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useTranslation } from 'react-i18next'
 import { AdminPage } from '@Components/admin/AdminPage'
-import { DEFAULT_LOADING_OVERLAY } from '@Utils/Shared'
 
 interface ChallengeEditData {
   id: number
@@ -47,12 +46,9 @@ export default function ChallengeEdit() {
   const load = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/edit/Games/${gameId}/Challenges`)
-      if (res.ok) {
-        const data = await res.json()
-        const c = data.find((c: ChallengeEditData) => c.id === Number(challengeId))
-        if (c) setChallenge(c)
-      }
+      const res = await fetch(`/api/edit/Games/${gameId}/Challenges/${challengeId}`)
+      const c = res.ok ? await res.json() : null
+      if (c) setChallenge(c)
     } finally { setLoading(false) }
   }
 
@@ -232,7 +228,7 @@ export default function ChallengeEdit() {
             <Button loading={addingFlag} onClick={handleAddFlag}>添加 Flag</Button>
           </Group>
           {challenge.flags?.map((f, i) => (
-            <Alert key={i} color="green" mt="xs" py="xs">
+            <Alert key={f.id ?? i} color="green" mt="xs" py="xs">
               <Group wrap="nowrap" align="flex-start">
                 <Text size="sm" ff="monospace" style={{ flex: 1 }}>{f.flag}</Text>
                 <Select

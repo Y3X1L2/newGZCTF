@@ -129,7 +129,7 @@ const GameInfoEdit: FC = () => {
     try {
       await api.edit.editUpdateGame(game.id!, {
         ...game,
-        inviteCode: (game.inviteCode?.length ?? 0 > 6) ? game.inviteCode : null,
+        inviteCode: ((game.inviteCode?.length ?? 0) > 6) ? game.inviteCode : null,
         start: start.valueOf(),
         end: end.valueOf(),
         writeupDeadline: end.add(wpddl, 'h').valueOf(),

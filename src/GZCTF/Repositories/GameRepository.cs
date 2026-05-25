@@ -392,7 +392,7 @@ public class GameRepository(
                     submission => submission.Id,
                     (x, submission) => new SolveSnapshot(
                         x.fs.ChallengeId,
-                        x.fs.FlagId,
+                        x.fs.FlagId!.Value,
                         x.fs.ParticipationId,
                         submission.SubmitTimeUtc,
                         submission.UserName))

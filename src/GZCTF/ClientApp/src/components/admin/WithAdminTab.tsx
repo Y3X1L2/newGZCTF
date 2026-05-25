@@ -31,7 +31,7 @@ export const WithAdminTab: FC<AdminTabProps> = ({ head, headProps, isLoading, ch
   const { t } = useTranslation()
 
   const pages = [
-    { icon: mdiMonitorDashboard, title: '仪表盘', path: '' },
+    { icon: mdiMonitorDashboard, title: '仪表盘', path: 'dashboard' },
     { icon: mdiFlagOutline, title: t('admin.tab.games.index'), path: 'games' },
     { icon: mdiAccountGroupOutline, title: t('admin.tab.teams'), path: 'teams' },
     { icon: mdiAccountCogOutline, title: t('admin.tab.users'), path: 'users' },
@@ -59,7 +59,7 @@ export const WithAdminTab: FC<AdminTabProps> = ({ head, headProps, isLoading, ch
     }
   }, [location])
 
-  usePageTitle(pages[tabIndex].title)
+  usePageTitle(pages[Math.max(0, tabIndex)].title)
 
   return (
     <Stack gap="xs" align="center" pt="md">

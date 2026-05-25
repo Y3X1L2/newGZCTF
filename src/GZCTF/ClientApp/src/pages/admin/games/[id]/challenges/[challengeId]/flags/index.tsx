@@ -67,7 +67,7 @@ export default function FlagsEdit() {
     } finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [gameId, challengeId])
 
   const handleAddFlag = async () => {
     if (!newFlag.trim()) return

@@ -52,6 +52,10 @@ public class ImageTemplateController : ControllerBase
             _logger.LogInformation("Image template {Name} (ID:{Id}) uploaded by {User}",
                 imageTemplate.Name, imageTemplate.Id, User.Identity?.Name);
 
+            var distributor = HttpContext.RequestServices.GetService<Services.Fleet.ImageDistributionService>();
+            if (distributor is not null)
+                _ = Task.Run(() => distributor.DistributeToCapableNodesAsync(imageTemplate, CancellationToken.None));
+
             return CreatedAtAction(nameof(GetById), new { id = imageTemplate.Id }, new
             {
                 imageTemplate.Id, imageTemplate.Name, imageTemplate.OSType, imageTemplate.ImageType,
@@ -142,6 +146,11 @@ public class ImageTemplateController : ControllerBase
         {
             var importer = HttpContext.RequestServices.GetRequiredService<Services.Vm.LocalImageImporter>();
             var template = await importer.ImportFromLocalPathAsync(request.LocalPath, request.DisplayName);
+
+            var distributor = HttpContext.RequestServices.GetService<Services.Fleet.ImageDistributionService>();
+            if (distributor is not null)
+                _ = Task.Run(() => distributor.DistributeToCapableNodesAsync(template, CancellationToken.None));
+
             return Ok(new
             {
                 template.Id, template.Name, template.OSType, template.ImageType,
@@ -175,27 +184,30 @@ public class ImageTemplateController : ControllerBase
             ImageType = ImageType.Docker,
             RegistryUrl = request.RegistryUrl,
             RegistryAuth = request.RegistryAuth,
-            Status = ImageStatus.Ready,
+            Status = ImageStatus.Importing,
             UploadedAt = DateTimeOffset.UtcNow,
         };
 
         _context.ImageTemplates.Add(template);
         await _context.SaveChangesAsync(token);
 
-        var sp = HttpContext.RequestServices;
         var imageName = request.Name;
         var registryUrl = request.RegistryUrl;
         var registryAuth = request.RegistryAuth;
+        var templateId = template.Id;
         _ = Task.Run(async () =>
         {
+            using var scope = HttpContext.RequestServices.GetRequiredService<IServiceScopeFactory>().CreateScope();
+            var ctx = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             try
             {
-                var orchestrator = sp.GetRequiredService<ContainerOrchestrator>();
-                await orchestrator.PullImageFromRegistryAsync(
-                    registryUrl ?? "", imageName, registryAuth);
+                var orchestrator = scope.ServiceProvider.GetRequiredService<ContainerOrchestrator>();
+                await orchestrator.PullImageFromRegistryAsync(registryUrl ?? "", imageName, registryAuth);
             }
             catch (Exception ex)
             {
+                var t = await ctx.ImageTemplates.FindAsync(templateId);
+                if (t is not null) { t.Status = ImageStatus.Error; await ctx.SaveChangesAsync(); }
                 _logger.LogWarning(ex, "Failed to pull Docker image: {Name}", imageName);
             }
         });
@@ -241,6 +253,10 @@ public class ImageTemplateController : ControllerBase
 
             if (!result.Success)
                 return BadRequest(new { message = result.Error });
+
+            var distributor = HttpContext.RequestServices.GetService<Services.Fleet.ImageDistributionService>();
+            if (distributor is not null)
+                _ = Task.Run(() => distributor.DistributeToCapableNodesAsync(result.Template!, CancellationToken.None));
 
             return Ok(new { result.Template!.Id, result.Template.Name, result.Template.OSType, result.Template.ImageType, result.Template.FileSize });
         }

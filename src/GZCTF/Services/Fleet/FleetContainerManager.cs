@@ -67,7 +67,7 @@ public class FleetContainerManager : IContainerManager
             MemoryLimit = config.MemoryLimit,
             CPUCount = config.CPUCount,
             StorageLimit = config.StorageLimit,
-            NetworkMode = NetworkMode.Open,
+            NetworkMode = config.NetworkMode,
         };
         var result = await _agentClient.CreateContainerAsync(nodeId.Value, remoteConfig, token);
 

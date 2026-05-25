@@ -98,8 +98,6 @@ internal static class AppExtensions
             app.MapHub<UserHub>("/hub/user");
             app.MapHub<MonitorHub>("/hub/monitor");
             app.MapHub<AdminHub>("/hub/admin");
-            app.MapHub<ScenarioHub>("/hub/scenario");
-
             app.UseIndexAsync();
         }
     }

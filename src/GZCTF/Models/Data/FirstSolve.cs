@@ -32,8 +32,7 @@ public class FirstSolve
     /// <summary>
     /// Flag ID.
     /// </summary>
-    [Required]
-    public int FlagId { get; set; }
+    public int? FlagId { get; set; }
 
     /// <summary>
     /// Flag context.

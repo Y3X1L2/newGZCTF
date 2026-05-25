@@ -85,8 +85,6 @@ internal static class ServicesExtension
             builder.Services.AddScoped<IGameInstanceRepository, GameInstanceRepository>();
             builder.Services.AddScoped<IGameChallengeRepository, GameChallengeRepository>();
             builder.Services.AddScoped<IParticipationRepository, ParticipationRepository>();
-            builder.Services.AddScoped<IExerciseInstanceRepository, ExerciseInstanceRepository>();
-            builder.Services.AddScoped<IExerciseChallengeRepository, ExerciseChallengeRepository>();
             builder.Services.AddScoped<IDivisionRepository, DivisionRepository>();
 
             builder.Services.AddScoped<ExcelHelper>();
@@ -97,7 +95,6 @@ internal static class ServicesExtension
             builder.Services.AddSingleton<CacheHelper>();
             builder.Services.AddSingleton<IMailSender, MailSender>();
 
-            builder.Services.AddSingleton<VmManager>();
             builder.Services.AddSingleton<ImageStorage>();
             builder.Services.AddSingleton<ContainerOrchestrator>();
             builder.Services.AddSingleton<IVirtualMachineProvider, KvmProvider>();
@@ -111,10 +108,8 @@ internal static class ServicesExtension
             builder.Services.AddScoped<INodeRepository, NodeRepository>();
             builder.Services.AddScoped<NodeDeployService>();
             builder.Services.AddScoped<FleetManager>();
-            builder.Services.AddScoped<AutoTransferService>();
             builder.Services.AddScoped<WeightedScheduler>();
             builder.Services.AddScoped<QueueManager>();
-            builder.Services.AddScoped<PortCapacityTracker>();
             builder.Services.AddScoped<ImageDistributionService>();
             builder.Services.AddHostedService<FleetHealthCheckService>();
 

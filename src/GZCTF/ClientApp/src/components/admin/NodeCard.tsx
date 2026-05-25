@@ -23,6 +23,7 @@ export function NodeCard({ node, onToggleSchedulable }: { node: NodeInfo; onTogg
       <Progress value={node.cpuLoad * 100} color={node.cpuLoad > 0.8 ? 'red' : 'blue'} size="sm" mb="xs" />
       <Text size="xs">容器: {node.currentContainers}/{node.maxContainers}</Text>
       <Text size="xs">VM: {node.currentVms}/{node.maxVms}</Text>
+      <Text size="xs" c="dimmed">Agent 端口: {node.agentPort}</Text>
       <Switch
         label="参与调度"
         checked={node.isSchedulable}

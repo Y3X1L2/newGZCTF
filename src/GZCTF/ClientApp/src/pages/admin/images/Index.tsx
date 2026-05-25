@@ -24,6 +24,7 @@ function RegisterDockerModal({ opened, onClose, onDone }: { opened: boolean; onC
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [osType, setOsType] = useState<string>('0');
+  const [auth, setAuth] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
@@ -33,11 +34,11 @@ function RegisterDockerModal({ opened, onClose, onDone }: { opened: boolean; onC
       const res = await fetch('/api/v1/image-templates/register-docker', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, registryUrl: url, osType: Number(osType) }),
+        body: JSON.stringify({ name, registryUrl: url, osType: Number(osType), registryAuth: auth || null }),
       });
       if (res.ok) {
         notifications.show({ title: '注册成功', message: `Docker 镜像 ${name} 已注册`, color: 'green' });
-        setName(''); setUrl(''); setOsType('0');
+        setName(''); setUrl(''); setOsType('0'); setAuth('');
         onDone(); onClose();
       } else {
         const data = await res.json().catch(() => ({}));
@@ -54,6 +55,7 @@ function RegisterDockerModal({ opened, onClose, onDone }: { opened: boolean; onC
         <TextInput label="镜像名称" required value={name} onChange={e => setName(e.currentTarget.value)} placeholder="nginx:latest" />
         <TextInput label="Registry URL" required value={url} onChange={e => setUrl(e.currentTarget.value)} placeholder="registry.example.com/myimage:tag" />
         <Select label="操作系统" data={[{ value: '0', label: 'Linux' }, { value: '1', label: 'Windows' }]} value={osType} onChange={v => setOsType(v ?? '0')} />
+        <TextInput label="Registry Auth (Base64, optional)" type="password" value={auth} onChange={e => setAuth(e.currentTarget.value)} placeholder="Leave empty for public registry" />
         <Button fullWidth loading={loading} onClick={handleSubmit}>注册</Button>
       </Stack>
     </Modal>

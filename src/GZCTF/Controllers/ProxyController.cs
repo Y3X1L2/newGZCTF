@@ -9,6 +9,7 @@ using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Cache;
 using GZCTF.Storage.Interface;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Localization;
@@ -19,6 +20,7 @@ namespace GZCTF.Controllers;
 /// <summary>
 /// Container TCP traffic proxy and logging APIs
 /// </summary>
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 [ExcludeFromCodeCoverage]

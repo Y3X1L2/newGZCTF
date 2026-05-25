@@ -23,7 +23,7 @@ app.Use(async (context, next) =>
     var expectedToken = config.GetSection("Agent:AuthToken").Get<string>() ?? "";
     if (string.IsNullOrEmpty(expectedToken) || expectedToken == "__local__")
     {
-        context.Response.StatusCode = 403;
+        context.Response.StatusCode = 401;
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsync("{\"message\":\"Agent auth not configured. Set Agent:AuthToken in appsettings.json\"}");
         return;
@@ -31,7 +31,7 @@ app.Use(async (context, next) =>
     var authHeader = context.Request.Headers.Authorization.ToString().Replace("Bearer ", "").Trim();
     if (authHeader != expectedToken)
     {
-        context.Response.StatusCode = 403;
+        context.Response.StatusCode = 401;
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsync("{\"message\":\"Invalid auth token\"}");
         return;

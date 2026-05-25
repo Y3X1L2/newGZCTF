@@ -108,11 +108,13 @@ with tarfile.open(fileobj=buf, mode='w:gz') as tar:
         for f in files:
             full = os.path.join(root, f)
             arc = os.path.relpath(full, PROJECT_ROOT)
-            tar.add(full, arc)
+            try:
+                tar.add(full, arc)
+            except (FileNotFoundError, OSError):
+                pass
 
 log(f"代码打包: {buf.tell()//1024//1024}MB")
 ssh.exec_command(f"mkdir -p {PROJECT_DIR}")
-scp_put(ssh, "/tmp/placeholder", f"{PROJECT_DIR}/placeholder")  # no-op for setup
 
 # 通过 SFTP 传文件
 sftp = ssh.open_sftp()
@@ -126,7 +128,10 @@ for root, dirs, files in os.walk(PROJECT_ROOT):
     for f in files:
         local = os.path.join(root, f)
         remote = os.path.join(remote_root, f)
-        sftp.put(local, remote)
+        try:
+            sftp.put(local, remote)
+        except (FileNotFoundError, OSError):
+            pass
 sftp.close()
 log("代码上传完成")
 
