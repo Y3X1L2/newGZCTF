@@ -2022,6 +2022,8 @@ export interface ChallengeDetailModel {
   score?: number;
   /** Challenge type */
   type?: ChallengeType;
+  /** Environment type */
+  environment?: EnvironmentType;
   /** Challenge flags (for multi-flag challenges) */
   flags?: { id?: number; flag?: string; description?: string | null; orderIndex?: number; scoreMode?: string }[] | null;
   /** Flag context */
@@ -2058,6 +2060,20 @@ export interface ClientFlagContext {
    * @format int64
    */
   fileSize?: number | null;
+}
+
+/** VM instance status response */
+export interface VmStatusResponse {
+  /** VM instance ID */
+  vmInstanceId?: string;
+  /** Current status: Creating, Running, Stopped, Destroyed, Error */
+  status?: string;
+  /** VM IP address */
+  ipAddress?: string | null;
+  /** Guacamole RDP URL */
+  rdpUrl?: string | null;
+  /** When the VM was created */
+  createdAt?: string;
 }
 
 /** Flag submission */

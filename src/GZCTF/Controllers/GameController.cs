@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿using System.ComponentModel.DataAnnotations;
+﻿﻿﻿﻿﻿﻿﻿﻿﻿using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Mime;
@@ -1411,6 +1411,114 @@ public class GameController(
             StaticLocalizer[nameof(Resources.Program.Game_ContainerDeleted), context.Participation!.Team.Name,
                 instance.Challenge.Title,
                 destroyId],
+            context.User, TaskStatus.Success);
+
+        return Ok();
+    }
+
+    /// <summary>
+    /// Get VM instance status and RDP access URL
+    /// </summary>
+    /// <remarks>
+    /// Returns the current status of a Windows VM instance including RDP connection URL when ready.
+    /// </remarks>
+    /// <param name="id">Game ID</param>
+    /// <param name="challengeId">Challenge ID</param>
+    /// <param name="token"></param>
+    /// <response code="200">Successfully retrieved VM status</response>
+    /// <response code="404">VM instance not found</response>
+    [RequireUser]
+    [HttpGet("{id:int}/Vm/{challengeId:int}")]
+    [ProducesResponseType(typeof(VmStatusResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetVmStatus([FromRoute] int id, [FromRoute] int challengeId,
+        CancellationToken token)
+    {
+        var context = await GetContextInfo(id, denyAfterEnded: false, token: token);
+
+        if (context.Result is not null)
+            return context.Result;
+
+        var vmInstance = await dbContext.VmInstances
+            .Where(v => v.ChallengeId == challengeId
+                        && v.UserId == context.User!.Id
+                        && v.Status != VmInstanceStatus.Destroyed)
+            .OrderByDescending(v => v.CreatedAt)
+            .FirstOrDefaultAsync(token);
+
+        if (vmInstance is null)
+            return NotFound(new RequestResponse("No VM instance found", StatusCodes.Status404NotFound));
+
+        // Generate authenticated URL with Guacamole token for direct RDP access
+        var rdpUrl = vmInstance.RdpUrl;
+        if (!string.IsNullOrEmpty(vmInstance.GuacamoleConnectionId))
+        {
+            var guacService = HttpContext.RequestServices.GetRequiredService<GuacamoleService>();
+            var authUrl = await guacService.GetAuthenticatedConnectionUrlAsync(vmInstance.GuacamoleConnectionId, token);
+            if (authUrl is not null)
+                rdpUrl = authUrl;
+        }
+
+        return Ok(new VmStatusResponse
+        {
+            VmInstanceId = vmInstance.Id,
+            Status = vmInstance.Status.ToString(),
+            IpAddress = vmInstance.IpAddress,
+            RdpUrl = rdpUrl,
+            CreatedAt = vmInstance.CreatedAt
+        });
+    }
+
+    /// <summary>
+    /// Destroy a VM instance
+    /// </summary>
+    /// <remarks>
+    /// Destroys a Windows VM instance and cleans up the Guacamole RDP connection.
+    /// </remarks>
+    /// <param name="id">Game ID</param>
+    /// <param name="challengeId">Challenge ID</param>
+    /// <param name="token"></param>
+    /// <response code="200">Successfully destroyed VM</response>
+    /// <response code="404">VM instance not found</response>
+    [RequireUser]
+    [HttpDelete("{id:int}/Vm/{challengeId:int}")]
+    [EnableRateLimiting(nameof(RateLimiter.LimitPolicy.Container))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DestroyVm([FromRoute] int id, [FromRoute] int challengeId,
+        CancellationToken token)
+    {
+        var context = await GetContextInfo(id, denyAfterEnded: false, token: token);
+
+        if (context.Result is not null)
+            return context.Result;
+
+        var vmInstance = await dbContext.VmInstances
+            .Where(v => v.ChallengeId == challengeId
+                        && v.UserId == context.User!.Id
+                        && v.Status != VmInstanceStatus.Destroyed)
+            .OrderByDescending(v => v.CreatedAt)
+            .FirstOrDefaultAsync(token);
+
+        if (vmInstance is null)
+            return NotFound(new RequestResponse("No VM instance found", StatusCodes.Status404NotFound));
+
+        // Delete Guacamole connection if exists
+        if (!string.IsNullOrEmpty(vmInstance.GuacamoleConnectionId))
+        {
+            var guacService = HttpContext.RequestServices.GetRequiredService<GuacamoleService>();
+            await guacService.DeleteConnectionAsync(vmInstance.GuacamoleConnectionId, token);
+        }
+
+        // Destroy the VM
+        var fleetVm = HttpContext.RequestServices.GetRequiredService<FleetVmService>();
+        await fleetVm.DestroyVmAsync(vmInstance, token);
+
+        await dbContext.SaveChangesAsync(token);
+
+        logger.Log(
+            StaticLocalizer[nameof(Resources.Program.Game_ContainerDeleted), context.Participation!.Team.Name,
+                $"VM:{vmInstance.VmName}", vmInstance.Id.ToString()],
             context.User, TaskStatus.Success);
 
         return Ok();

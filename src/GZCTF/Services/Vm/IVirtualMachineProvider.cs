@@ -11,7 +11,7 @@ public interface IVirtualMachineProvider
     string ProviderName { get; }
     OSType SupportedOSType { get; }
 
-    Task<VmOperationResult> CreateFromTemplateAsync(string templatePath, string vmName, CancellationToken token);
+    Task<VmOperationResult> CreateFromTemplateAsync(string templatePath, string vmName, int? memoryMb = null, int? cpuCount = null, CancellationToken token = default);
     Task<VmOperationResult> StartAsync(string vmName, CancellationToken token);
     Task<VmOperationResult> ShutdownAsync(string vmName, CancellationToken token);
     Task<VmOperationResult> DestroyAsync(string vmName, CancellationToken token);

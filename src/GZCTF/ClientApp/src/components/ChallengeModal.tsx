@@ -19,10 +19,11 @@ import duration from 'dayjs/plugin/duration'
 import { FC, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { InstanceEntry } from '@Components/InstanceEntry'
+import { VmInstanceEntry } from '@Components/VmInstanceEntry'
 import { ContentPlaceholder, InlineMarkdown, Markdown } from '@Components/MarkdownRenderer'
 import { useLanguage } from '@Utils/I18n'
 import { ChallengeCategoryItemProps } from '@Utils/Shared'
-import { ChallengeDetailModel, ChallengeType } from '@Api'
+import { ChallengeDetailModel, ChallengeType, EnvironmentType } from '@Api'
 import classes from '@Styles/ChallengeModal.module.css'
 import misc from '@Styles/Misc.module.css'
 
@@ -78,6 +79,7 @@ const ChallengeDeadlineNotice: FC<ChallengeDeadlineNoticeProps> = ({ deadline, o
 
 export interface ChallengeModalProps extends ModalProps {
   challenge?: ChallengeDetailModel
+  gameId?: number
   cateData: ChallengeCategoryItemProps
   solved?: boolean
   disabled?: boolean
@@ -98,6 +100,7 @@ export interface ChallengeModalProps extends ModalProps {
 export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
   const {
     challenge,
+    gameId,
     cateData,
     solved,
     disabled,
@@ -139,6 +142,8 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
 
   const isContainer =
     challenge?.type === ChallengeType.StaticContainer || challenge?.type === ChallengeType.DynamicContainer
+
+  const isWindowsVm = challenge?.environment === EnvironmentType.WindowsVM
 
   const title = (
     <Stack gap="xs">
@@ -216,7 +221,7 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
     </Group>
   )
 
-  const withInstance = isContainer && challenge?.context
+  const withInstance = isContainer && !isWindowsVm && challenge?.context
 
   const instance = withInstance && (
     <InstanceEntry
@@ -225,6 +230,14 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
       onCreate={onCreate}
       onExtend={onExtend}
       onDestroy={onDestroy}
+      disabled={disabled}
+    />
+  )
+
+  const vmInstance = isWindowsVm && gameId && challenge?.id && (
+    <VmInstanceEntry
+      gameId={gameId}
+      challengeId={challenge.id}
       disabled={disabled}
     />
   )
@@ -265,11 +278,12 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
 
   const footer = (
     <Stack gap="xs" className={classes.footer}>
-      {(withAttachment || withInstance || withDeadline) && (
+      {(withAttachment || withInstance || isWindowsVm || withDeadline) && (
         <>
           <Divider mb={attemptsInfo ? '0.2rem' : undefined} />
           {attachment}
           {instance}
+          {vmInstance}
           {deadline}
         </>
       )}

@@ -30,4 +30,11 @@ public class GuacamoleSettings
     /// Connection timeout in seconds for Guacamole API calls
     /// </summary>
     public int ConnectionTimeoutSeconds { get; set; } = 10;
+
+    /// <summary>
+    /// Public URL for Guacamole web client (used for user-facing RDP links).
+    /// If empty, falls back to deriving from GuacamoleApiUrl.
+    /// Example: "http://10.0.7.118:8081/guacamole"
+    /// </summary>
+    public string GuacamolePublicUrl { get; set; } = string.Empty;
 }

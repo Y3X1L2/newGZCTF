@@ -52,7 +52,7 @@ public class FleetVmService
         var node = await _nodeRepo.GetNodeByIdAsync(nodeId.Value, token);
         if (node?.IsLocal == true)
         {
-            return await CreateLocalVmAsync(vmInstance, templatePath, token);
+            return await CreateLocalVmAsync(vmInstance, templatePath, memory, cpu, token);
         }
 
         var result = await _agentClient.CreateVmAsync(nodeId.Value, new AgentCreateVmRequest
@@ -75,7 +75,7 @@ public class FleetVmService
     }
 
     private async Task<VmInstance?> CreateLocalVmAsync(VmInstance vmInstance, string? templatePath,
-        CancellationToken token)
+        int? memory, int? cpu, CancellationToken token)
     {
         if (string.IsNullOrEmpty(templatePath))
         {
@@ -86,7 +86,7 @@ public class FleetVmService
 
         try
         {
-            var createResult = await _vmProvider.CreateFromTemplateAsync(templatePath, vmInstance.VmName, token);
+            var createResult = await _vmProvider.CreateFromTemplateAsync(templatePath, vmInstance.VmName, memory, cpu, token);
             if (!createResult.Success)
             {
                 _logger.LogError("Local VM creation failed for {VmName}: {Error}", vmInstance.VmName,
@@ -117,18 +117,20 @@ public class FleetVmService
 
     public async Task DestroyVmAsync(VmInstance vmInstance, CancellationToken token)
     {
-        if (!vmInstance.NodeId.HasValue)
+        // Try to actually destroy the VM regardless of NodeId
+        // If NodeId is null or points to a local node, destroy locally
+        var isLocal = true;
+        if (vmInstance.NodeId.HasValue)
         {
-            vmInstance.Status = VmInstanceStatus.Destroyed;
-            vmInstance.DestroyedAt = DateTimeOffset.UtcNow;
-            return;
+            var node = await _nodeRepo.GetNodeByIdAsync(vmInstance.NodeId.Value, token);
+            isLocal = node?.IsLocal ?? true;
         }
 
-        var node = await _nodeRepo.GetNodeByIdAsync(vmInstance.NodeId.Value, token);
-        if (node?.IsLocal == true)
+        if (isLocal)
         {
             try
             {
+                _logger.LogInformation("Destroying local VM {VmName}", vmInstance.VmName);
                 await _vmProvider.DestroyAsync(vmInstance.VmName, token);
             }
             catch (Exception ex)
@@ -140,7 +142,7 @@ public class FleetVmService
         {
             try
             {
-                await _agentClient.DestroyVmAsync(vmInstance.NodeId.Value, vmInstance.VmName, token);
+                await _agentClient.DestroyVmAsync(vmInstance.NodeId!.Value, vmInstance.VmName, token);
             }
             catch (Exception ex)
             {

@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using GZCTF.Models.Request.Game;
 
 namespace GZCTF.Models.Request.Edit;
@@ -137,6 +137,16 @@ public class ChallengeEditDetailModel
     public int SubmissionLimit { get; set; }
 
     /// <summary>
+    /// Deployment environment type
+    /// </summary>
+    public EnvironmentType Environment { get; set; } = EnvironmentType.None;
+
+    /// <summary>
+    /// Image template ID for VM deployment
+    /// </summary>
+    public int? ImageTemplateId { get; set; }
+
+    /// <summary>
     /// Initial score
     /// </summary>
     [Required]
@@ -181,6 +191,8 @@ public class ChallengeEditDetailModel
             Attachment = chal.Attachment,
             SubmissionLimit = chal.SubmissionLimit,
             DeadlineUtc = chal.DeadlineUtc,
+            Environment = chal.Environment,
+            ImageTemplateId = chal.ImageTemplateId,
             AcceptedCount = 0, // This field should be set externally
             TestContainer = chal.TestContainer is null ? null : ContainerInfoModel.FromContainer(chal.TestContainer),
             Flags = chal.Flags.Select(FlagInfoModel.FromFlagContext).ToList()

@@ -1,4 +1,4 @@
-﻿using GZCTF.Models.Request.Shared;
+using GZCTF.Models.Request.Shared;
 
 namespace GZCTF.Models.Request.Game;
 
@@ -22,6 +22,7 @@ public class ChallengeDetailModel
     public List<string>? Hints { get; set; }
     public int Score { get; set; }
     public ChallengeType Type { get; set; } = ChallengeType.StaticAttachment;
+    public EnvironmentType Environment { get; set; } = EnvironmentType.None;
     public ClientFlagContext Context { get; set; } = null!;
     public int Limit { get; set; }
     public int Attempts { get; set; }
@@ -55,6 +56,7 @@ public class ChallengeDetailModel
             Category = gameInstance.Challenge.Category,
             Title = gameInstance.Challenge.Title,
             Type = gameInstance.Challenge.Type,
+            Environment = gameInstance.Challenge.Environment,
             Limit = gameInstance.Challenge.SubmissionLimit,
             Deadline = gameInstance.Challenge.DeadlineUtc,
             Attempts = attemptCount,

@@ -17,7 +17,7 @@ public class HyperVProvider : IVirtualMachineProvider
     public HyperVProvider(ILogger<HyperVProvider> logger)
         => _logger = logger;
 
-    public Task<VmOperationResult> CreateFromTemplateAsync(string templatePath, string vmName, CancellationToken token)
+    public Task<VmOperationResult> CreateFromTemplateAsync(string templatePath, string vmName, int? memoryMb = null, int? cpuCount = null, CancellationToken token = default)
     {
         _logger.LogWarning("Hyper-V CreateFromTemplate not available for VM '{VmName}'", vmName);
         return Task.FromResult(VmOperationResult.Fail(vmName, "Hyper-V provider requires Windows host"));

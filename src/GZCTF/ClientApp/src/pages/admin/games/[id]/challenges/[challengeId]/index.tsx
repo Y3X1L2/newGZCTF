@@ -2,11 +2,19 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import {
   Button, Card, Group, NumberInput, Select, Stack, Switch,
-  Text, TextInput, Textarea, Badge, Alert,
+  Text, TextInput, Textarea, Badge, Alert, Loader,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { useTranslation } from 'react-i18next'
 import { AdminPage } from '@Components/admin/AdminPage'
+
+interface ImageTemplate {
+  id: number
+  name: string
+  description: string
+  localFilePath?: string
+  imagePath?: string
+  osType: number
+}
 
 interface ChallengeEditData {
   id: number
@@ -14,7 +22,8 @@ interface ChallengeEditData {
   content: string
   category: string
   type: string
-  environment: string | null
+  environment: string
+  imageTemplateId: number | null
   containerImage: string
   memoryLimit: number
   cpuCount: number
@@ -33,26 +42,75 @@ interface ChallengeEditData {
   flags: { id: number; flag: string; orderIndex?: number; scoreMode?: string }[]
 }
 
+// EnvironmentType enum string values matching backend JsonStringEnumConverter
+const ENV_NONE = 'None'
+const ENV_DOCKER = 'Docker'
+const ENV_WINDOWS_VM = 'WindowsVM'
+
+const envOptions = [
+  { value: 'None', label: '无环境（附件题）' },
+  { value: 'Docker', label: 'Linux Docker 容器' },
+  { value: 'WindowsVM', label: 'Windows 虚拟机 (RDP)' },
+]
+
 export default function ChallengeEdit() {
   const { id: gameId, challengeId } = useParams<{ id: string; challengeId: string }>()
   const navigate = useNavigate()
-  const { t } = useTranslation()
   const [challenge, setChallenge] = useState<ChallengeEditData | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [newFlag, setNewFlag] = useState('')
   const [addingFlag, setAddingFlag] = useState(false)
+  const [imageTemplates, setImageTemplates] = useState<ImageTemplate[]>([])
 
   const load = async () => {
     setLoading(true)
     try {
       const res = await fetch(`/api/edit/Games/${gameId}/Challenges/${challengeId}`)
-      const c = res.ok ? await res.json() : null
-      if (c) setChallenge(c)
+      if (!res.ok) {
+        console.error('Challenge load failed:', res.status)
+        return
+      }
+      const c = await res.json()
+      if (c) {
+        // Ensure defaults for fields that may be missing
+        setChallenge({
+          ...c,
+          environment: c.environment ?? 'None',
+          imageTemplateId: c.imageTemplateId ?? null,
+          flags: c.flags ?? [],
+          hints: c.hints ?? [],
+          containerImage: c.containerImage ?? '',
+          memoryLimit: c.memoryLimit ?? 64,
+          cpuCount: c.cpuCount ?? 1,
+          storageLimit: c.storageLimit ?? 256,
+          exposePort: c.exposePort ?? 80,
+          originalScore: c.originalScore ?? 500,
+          minScoreRate: c.minScoreRate ?? 0.25,
+          difficulty: c.difficulty ?? 3,
+          submissionLimit: c.submissionLimit ?? 0,
+          acceptedCount: c.acceptedCount ?? 0,
+          enableTrafficCapture: c.enableTrafficCapture ?? false,
+          disableBloodBonus: c.disableBloodBonus ?? false,
+        })
+      }
+    } catch (err) {
+      console.error('Challenge load error:', err)
     } finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [gameId, challengeId])
+  const loadTemplates = async () => {
+    try {
+      const res = await fetch('/api/v1/image-templates')
+      if (res.ok) {
+        const data = await res.json()
+        // API returns paginated: { total, items: [...] }
+        setImageTemplates(data.items ?? data ?? [])
+      }
+    } catch { /* ignore */ }
+  }
+
+  useEffect(() => { load(); loadTemplates() }, [gameId, challengeId])
 
   const handleSave = async () => {
     if (!challenge) return
@@ -73,7 +131,8 @@ export default function ChallengeEdit() {
           minScoreRate: challenge.minScoreRate,
           difficulty: challenge.difficulty,
           submissionLimit: challenge.submissionLimit,
-          environment: challenge.environment ?? 'None',
+          environment: challenge.environment,
+          imageTemplateId: challenge.imageTemplateId,
           enableTrafficCapture: challenge.enableTrafficCapture,
           disableBloodBonus: challenge.disableBloodBonus,
           flagTemplate: challenge.flagTemplate,
@@ -126,7 +185,6 @@ export default function ChallengeEdit() {
     const newFlags = [...challenge.flags]
     newFlags[index] = { ...newFlags[index], [field]: value }
     setChallenge({ ...challenge, flags: newFlags })
-    // Persist to backend
     try {
       await fetch(`/api/edit/Games/${gameId}/Challenges/${challengeId}/Flags/${newFlags[index].id}`, {
         method: 'PUT',
@@ -138,6 +196,12 @@ export default function ChallengeEdit() {
 
   if (loading) return <AdminPage isLoading />
   if (!challenge) return <AdminPage><Alert color="red">题目不存在</Alert></AdminPage>
+
+  const envType = challenge.environment ?? ENV_NONE
+  const isContainer = envType === ENV_DOCKER
+  const isWindowsVM = envType === ENV_WINDOWS_VM
+
+  const envLabel = envOptions.find(o => o.value === envType)?.label ?? '未知'
 
   return (
     <AdminPage head={
@@ -152,6 +216,9 @@ export default function ChallengeEdit() {
         />
         <Badge color="blue">{challenge.category}</Badge>
         <Badge color="grape">{challenge.type}</Badge>
+        <Badge color={isWindowsVM ? 'orange' : isContainer ? 'cyan' : 'gray'}>
+          {envLabel}
+        </Badge>
         <Badge color="green">Accepted: {challenge.acceptedCount}</Badge>
       </Group>
     }>
@@ -165,36 +232,85 @@ export default function ChallengeEdit() {
             onChange={e => setChallenge({ ...challenge, content: e.currentTarget.value })} />
         </Card>
 
-        {/* Container Config */}
-        <Card shadow="sm" padding="md" withBorder>
-          <Text fw={700} mb="sm">容器配置</Text>
-          <TextInput label="容器镜像" value={challenge.containerImage}
-            onChange={e => setChallenge({ ...challenge, containerImage: e.currentTarget.value })} />
-          <Group mt="sm">
-            <NumberInput label="内存 (MB)" value={challenge.memoryLimit} min={32} max={4096}
-              onChange={v => setChallenge({ ...challenge, memoryLimit: Number(v) || 64 })} />
-            <NumberInput label="CPU" value={challenge.cpuCount} min={1} max={8}
-              onChange={v => setChallenge({ ...challenge, cpuCount: Number(v) || 1 })} />
-            <NumberInput label="存储 (MB)" value={challenge.storageLimit} min={64} max={10240}
-              onChange={v => setChallenge({ ...challenge, storageLimit: Number(v) || 256 })} />
-            <NumberInput label="端口" value={challenge.exposePort} min={1} max={65535}
-              onChange={v => setChallenge({ ...challenge, exposePort: Number(v) || 80 })} />
-          </Group>
-        </Card>
-
         {/* Environment Config */}
-        <Card shadow="sm" padding="md" mt="md" withBorder>
+        <Card shadow="sm" padding="md" withBorder>
           <Text fw={700} mb="sm">环境配置</Text>
           <Select
             label="环境类型"
-            data={[
-              { value: 'None', label: '无环境（附件题）' },
-              { value: 'Docker', label: 'Linux Docker 容器' },
-              { value: 'WindowsVM', label: 'Windows 虚拟机 (RDP)' },
-            ]}
-            value={challenge.environment ?? 'None'}
-            onChange={(v) => setChallenge({ ...challenge, environment: v })}
+            data={envOptions}
+            value={envType}
+            onChange={(v) => {
+              const newEnv = v || ENV_NONE
+              setChallenge({
+                ...challenge,
+                environment: newEnv,
+                // Clear irrelevant fields when switching
+                imageTemplateId: newEnv === ENV_WINDOWS_VM ? challenge.imageTemplateId : null,
+              })
+            }}
           />
+
+          {/* Container-specific config */}
+          {isContainer && (
+            <Stack gap="sm" mt="md">
+              <Text size="sm" fw={600} c="cyan">容器配置</Text>
+              <TextInput label="容器镜像" value={challenge.containerImage}
+                onChange={e => setChallenge({ ...challenge, containerImage: e.currentTarget.value })} />
+              <Group>
+                <NumberInput label="内存 (MB)" value={challenge.memoryLimit} min={32} max={4096}
+                  onChange={v => setChallenge({ ...challenge, memoryLimit: Number(v) || 64 })} />
+                <NumberInput label="CPU" value={challenge.cpuCount} min={1} max={8}
+                  onChange={v => setChallenge({ ...challenge, cpuCount: Number(v) || 1 })} />
+                <NumberInput label="存储 (MB)" value={challenge.storageLimit} min={64} max={10240}
+                  onChange={v => setChallenge({ ...challenge, storageLimit: Number(v) || 256 })} />
+                <NumberInput label="端口" value={challenge.exposePort} min={1} max={65535}
+                  onChange={v => setChallenge({ ...challenge, exposePort: Number(v) || 80 })} />
+              </Group>
+            </Stack>
+          )}
+
+          {/* Windows VM-specific config */}
+          {isWindowsVM && (
+            <Stack gap="sm" mt="md">
+              <Text size="sm" fw={600} c="orange">Windows 虚拟机配置</Text>
+              <Select
+                label="镜像模板"
+                placeholder="选择 Windows 镜像模板..."
+                data={imageTemplates.map(t => ({
+                  value: String(t.id),
+                  label: `${t.name}${t.description ? ' — ' + t.description : ''}`,
+                }))}
+                value={challenge.imageTemplateId ? String(challenge.imageTemplateId) : null}
+                onChange={(v) => setChallenge({ ...challenge, imageTemplateId: v ? Number(v) : null })}
+              />
+              {challenge.imageTemplateId && (
+                <Alert color="blue" variant="light">
+                  已选择镜像模板 ID: {challenge.imageTemplateId}
+                  {imageTemplates.find(t => t.id === challenge.imageTemplateId) && (
+                    <Text size="xs" mt={4}>
+                      路径: {imageTemplates.find(t => t.id === challenge.imageTemplateId)?.localFilePath ?? '未知'}
+                    </Text>
+                  )}
+                </Alert>
+              )}
+              <Group>
+                <NumberInput label="内存 (MB)" value={challenge.memoryLimit} min={512} max={16384}
+                  onChange={v => setChallenge({ ...challenge, memoryLimit: Number(v) || 4096 })} />
+                <NumberInput label="CPU 核数" value={challenge.cpuCount} min={1} max={8}
+                  onChange={v => setChallenge({ ...challenge, cpuCount: Number(v) || 2 })} />
+              </Group>
+              <Alert color="orange" variant="light" mt="xs">
+                Windows 虚拟机将通过 Guacamole RDP 代理提供远程桌面访问。每个队伍启动后获得独立 VM 实例。
+              </Alert>
+            </Stack>
+          )}
+
+          {/* Attachment mode info */}
+          {!isContainer && !isWindowsVM && (
+            <Alert color="gray" variant="light" mt="md">
+              附件题模式：无需环境配置，仅通过附件和 Flag 评判。
+            </Alert>
+          )}
         </Card>
 
         {/* Scoring */}

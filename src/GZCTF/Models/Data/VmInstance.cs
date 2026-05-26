@@ -23,6 +23,31 @@ public class VmInstance
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? DestroyedAt { get; set; }
 
+    /// <summary>
+    /// IP address of the running VM (populated by VmReadyService after boot).
+    /// </summary>
+    public string? IpAddress { get; set; }
+
+    /// <summary>
+    /// Guacamole connection identifier for RDP access.
+    /// </summary>
+    public string? GuacamoleConnectionId { get; set; }
+
+    /// <summary>
+    /// RDP username for this VM instance.
+    /// </summary>
+    public string RdpUsername { get; set; } = "player";
+
+    /// <summary>
+    /// RDP password for this VM instance.
+    /// </summary>
+    public string RdpPassword { get; set; } = "qwer1234!";
+
+    /// <summary>
+    /// Full Guacamole URL for the user to access this VM via browser.
+    /// </summary>
+    public string? RdpUrl { get; set; }
+
     [Timestamp]
     public uint ConcurrencyToken { get; set; }
 

@@ -218,6 +218,7 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
   return (
     <ChallengeModal
       {...modalProps}
+      gameId={gameId}
       gameTitle={gameTitle}
       challenge={challenge ?? { title, score }}
       cateData={cateData}

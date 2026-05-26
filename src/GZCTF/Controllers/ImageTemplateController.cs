@@ -101,7 +101,7 @@ public class ImageTemplateController : ControllerBase
         return Ok(new { total, page, pageSize, items = templates.Select(t => new
         {
             t.Id, t.Name, t.OSType, t.ImageType, t.FileSize, t.Status,
-            t.Description, t.ImageHash, t.UploadedAt, t.RegistryUrl
+            t.Description, t.ImageHash, t.UploadedAt, t.RegistryUrl, t.LocalFilePath
         }) });
     }
 

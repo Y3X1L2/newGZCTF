@@ -116,6 +116,8 @@ internal static class ServicesExtension
             builder.Services.AddHttpClient("Agent");
             builder.Services.AddSingleton<AgentClient>();
             builder.Services.AddScoped<FleetVmService>();
+            builder.Services.AddScoped<GuacamoleService>();
+            builder.Services.AddHostedService<VmReadyService>();
 
             // Phase 7 security: distributed lock
             if (builder.Configuration.GetValue<string>("RunMode") == "Fleet")

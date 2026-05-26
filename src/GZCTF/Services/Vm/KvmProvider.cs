@@ -45,18 +45,36 @@ public class KvmProvider : IVirtualMachineProvider
         return name;
     }
 
-    public async Task<VmOperationResult> CreateFromTemplateAsync(string templatePath, string vmName, CancellationToken token)
+    public async Task<VmOperationResult> CreateFromTemplateAsync(string templatePath, string vmName, int? memoryMb = null, int? cpuCount = null, CancellationToken token = default)
     {
-        _logger.LogInformation("Creating VM '{VmName}' from template '{Template}'", vmName, templatePath);
+        _logger.LogInformation("Creating VM '{VmName}' from template '{Template}' (Memory={Mem}MB, CPU={Cpu})", vmName, templatePath, memoryMb ?? _defaultMemoryMb, cpuCount ?? _defaultCpu);
 
         if (!Directory.Exists(_imageStoragePath))
             Directory.CreateDirectory(_imageStoragePath);
 
         var newImagePath = Path.Combine(_imageStoragePath, $"{vmName}.qcow2");
 
+        // Step 0: Destroy any existing VM with the same name to avoid file locks
+        var existingCheck = await RunCommandAsync("virsh", $"-c {_libvirtUri} domstate \"{vmName}\"");
+        if (existingCheck.ExitCode == 0)
+        {
+            _logger.LogWarning("Found existing VM '{VmName}' (state: {State}), destroying it first", vmName, existingCheck.StandardOutput.Trim());
+            await RunCommandAsync("virsh", $"-c {_libvirtUri} destroy \"{vmName}\"");
+            await RunCommandAsync("virsh", $"-c {_libvirtUri} undefine \"{vmName}\"");
+            await Task.Delay(1000, token); // Wait for file locks to release
+        }
+
+        // Clean up any leftover disk image
+        if (File.Exists(newImagePath))
+        {
+            _logger.LogWarning("Removing leftover disk image: {Path}", newImagePath);
+            SafeDeleteFile(newImagePath);
+            await Task.Delay(500, token);
+        }
+
         // Step 1: Clone qcow2 image with backing file
         var cloneResult = await RunCommandAsync("qemu-img",
-            $"create -f qcow2 -b \"{templatePath}\" \"{newImagePath}\"");
+            $"create -f qcow2 -b \"{templatePath}\" -F qcow2 \"{newImagePath}\"");
         if (cloneResult.ExitCode != 0)
         {
             _logger.LogError("qemu-img create failed for '{VmName}': {Error}", vmName, cloneResult.StandardError);
@@ -64,7 +82,7 @@ public class KvmProvider : IVirtualMachineProvider
         }
 
         // Step 2: Generate domain XML and define
-        var xml = GenerateDomainXml(vmName, newImagePath);
+        var xml = GenerateDomainXml(vmName, newImagePath, memoryMb, cpuCount);
         var xmlPath = Path.Combine(_imageStoragePath, $"{vmName}.xml");
         await File.WriteAllTextAsync(xmlPath, xml, token);
         var defineResult = await RunCommandAsync("virsh",
@@ -131,13 +149,12 @@ public class KvmProvider : IVirtualMachineProvider
     public async Task<VmConnectionInfo?> GetConnectionInfoAsync(string vmName, CancellationToken token)
     {
         var ip = await GetIpAddressAsync(vmName, token);
-        var vncPort = await GetVncPortAsync(vmName);
 
         return new VmConnectionInfo
         {
             IP = ip,
-            VncPort = vncPort,
-            Protocol = "vnc"
+            RdpPort = 3389,
+            Protocol = "rdp"
         };
     }
 
@@ -146,12 +163,41 @@ public class KvmProvider : IVirtualMachineProvider
         // Try guest agent first
         var result = await RunCommandAsync("virsh",
             $"-c {_libvirtUri} domifaddr \"{vmName}\" --source agent");
-        if (result.ExitCode != 0 || string.IsNullOrWhiteSpace(result.StandardOutput))
-            result = await RunCommandAsync("virsh",
-                $"-c {_libvirtUri} domifaddr \"{vmName}\"");
-        if (result.ExitCode != 0 || string.IsNullOrWhiteSpace(result.StandardOutput))
-            return null;
-        return ParseFirstNonLoopbackIp(result.StandardOutput);
+        if (result.ExitCode == 0 && !string.IsNullOrWhiteSpace(result.StandardOutput))
+        {
+            var ip = ParseFirstNonLoopbackIp(result.StandardOutput);
+            if (ip is not null) return ip;
+        }
+
+        // Fallback: try without agent (uses ARP/DHCP lease)
+        result = await RunCommandAsync("virsh",
+            $"-c {_libvirtUri} domifaddr \"{vmName}\"");
+        if (result.ExitCode == 0 && !string.IsNullOrWhiteSpace(result.StandardOutput))
+        {
+            var ip = ParseFirstNonLoopbackIp(result.StandardOutput);
+            if (ip is not null) return ip;
+        }
+
+        // Fallback 2: try virsh net-dhcp-leases for default network
+        result = await RunCommandAsync("virsh",
+            $"-c {_libvirtUri} net-dhcp-leases default");
+        if (result.ExitCode == 0 && !string.IsNullOrWhiteSpace(result.StandardOutput))
+        {
+            // Look for the VM's MAC address in DHCP leases
+            var macResult = await RunCommandAsync("virsh",
+                $"-c {_libvirtUri} domiflist \"{vmName}\"");
+            if (macResult.ExitCode == 0)
+            {
+                var mac = ParseMacAddress(macResult.StandardOutput);
+                if (mac is not null)
+                {
+                    var ip = ParseIpFromDhcpLeases(result.StandardOutput, mac);
+                    if (ip is not null) return ip;
+                }
+            }
+        }
+
+        return null;
     }
 
     public async Task<bool> IsRunningAsync(string vmName, CancellationToken token)
@@ -173,9 +219,11 @@ public class KvmProvider : IVirtualMachineProvider
         return null;
     }
 
-    private string GenerateDomainXml(string vmName, string diskImagePath)
+    private string GenerateDomainXml(string vmName, string diskImagePath, int? memoryMb = null, int? cpuCount = null)
     {
-        var memoryKib = _defaultMemoryMb * 1024;
+        var actualMemory = memoryMb ?? _defaultMemoryMb;
+        var actualCpu = cpuCount ?? _defaultCpu;
+        var memoryKib = actualMemory * 1024;
         var escapedName = System.Security.SecurityElement.Escape(vmName);
         var escapedImage = System.Security.SecurityElement.Escape(diskImagePath);
         return $"""
@@ -183,7 +231,7 @@ public class KvmProvider : IVirtualMachineProvider
                   <name>{escapedName}</name>
                   <memory unit='KiB'>{memoryKib}</memory>
                   <currentMemory unit='KiB'>{memoryKib}</currentMemory>
-                  <vcpu placement='static'>{_defaultCpu}</vcpu>
+                  <vcpu placement='static'>{actualCpu}</vcpu>
                   <os>
                     <type arch='x86_64' machine='pc-q35-7.2'>hvm</type>
                     <boot dev='hd'/>
@@ -204,7 +252,7 @@ public class KvmProvider : IVirtualMachineProvider
                     <disk type='file' device='disk'>
                       <driver name='qemu' type='qcow2'/>
                       <source file='{escapedImage}'/>
-                      <target dev='vda' bus='virtio'/>
+                      <target dev='sda' bus='sata'/>
                     </disk>
                     <graphics type='vnc' port='-1' autoport='yes' listen='0.0.0.0'>
                       <listen type='address' address='0.0.0.0'/>
@@ -214,7 +262,7 @@ public class KvmProvider : IVirtualMachineProvider
                     </video>
                     <interface type='network'>
                       <source network='default'/>
-                      <model type='virtio'/>
+                      <model type='e1000e'/>
                     </interface>
                     <channel type='unix'>
                       <target type='virtio' name='org.qemu.guest_agent.0'/>
@@ -262,6 +310,44 @@ public class KvmProvider : IVirtualMachineProvider
             {
                 if (part.Contains('/') && !part.StartsWith("127.") && !part.StartsWith("::1") &&
                     !part.StartsWith("fe80:"))
+                {
+                    var ip = part.Split('/')[0];
+                    if (System.Net.IPAddress.TryParse(ip, out var addr) &&
+                        addr.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                        return ip;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static string? ParseMacAddress(string output)
+    {
+        foreach (var line in output.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+            foreach (var part in parts)
+            {
+                // MAC address pattern: xx:xx:xx:xx:xx:xx
+                if (part.Contains(':') && part.Split(':').Length == 6 && part.Length <= 17)
+                    return part.ToLowerInvariant();
+            }
+        }
+        return null;
+    }
+
+    private static string? ParseIpFromDhcpLeases(string leaseOutput, string macAddress)
+    {
+        var macLower = macAddress.ToLowerInvariant();
+        foreach (var line in leaseOutput.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!line.ToLowerInvariant().Contains(macLower)) continue;
+
+            var parts = line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+            foreach (var part in parts)
+            {
+                // Look for IP/CIDR format like 192.168.122.x/24
+                if (part.Contains('/') && !part.StartsWith("127."))
                 {
                     var ip = part.Split('/')[0];
                     if (System.Net.IPAddress.TryParse(ip, out var addr) &&
