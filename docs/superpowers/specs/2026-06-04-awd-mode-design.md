@@ -189,7 +189,8 @@ public enum GameType
 {
     Jeopardy = 0,      // 原生 Jeopardy CTF
     AWD = 1,           // AWD 攻防赛
-    Theory = 2         // 预留：理论赛（Exercise）
+    Theory = 2,        // 预留：理论赛（Exercise）
+    Mixed = 3          // 混合模式：同时包含 CTF + AWD
 }
 
 public class Game
@@ -199,7 +200,9 @@ public class Game
 }
 ```
 
-> **与 Exercise 的兼容性**：Exercise 功能可使用 `GameType.Theory = 2`，与 AWD 的 `GameType.AWD = 1` 互不冲突。
+> **Mixed 模式**：当 `GameType == Mixed` 时，比赛同时包含原生 CTF 题目（`GameChallenge`）和 AWD 服务（`AwdService`）。排行榜同时显示 CTF 总分和 AWD 总分，综合排名按两者之和排序。
+>
+> **与 Exercise 的兼容性**：Exercise 功能可使用 `GameType.Theory = 2`，与 AWD 的 `GameType.AWD = 1` / `Mixed = 3` 互不冲突。
 
 #### `EventType` 枚举 — 新增 AWD 事件类型
 ```csharp
@@ -287,10 +290,8 @@ flowchart TD
 
 **每轮执行流程**：
 
-1. **生成 Flag**：为每个队伍的每个服务生成随机 Flag（`FlagHelper.GenerateFlag()`）
-2. **注入 Flag**：
-   - 通过 Docker 环境变量注入：更新容器的环境变量 `FLAG={value}`
-   - 或重启容器（如果服务不支持热更新环境变量）
+1. **生成 Flag**：复用原生 `FlagHelper.GenerateFlag()` 为每个队伍的每个服务生成随机 Flag
+2. **注入 Flag**：复用原生动态 Flag 机制，通过 `ContainerConfig.Flag` 字段在容器创建/重启时注入（环境变量 `FLAG={value}`）
 3. **触发 Checker**：调用 `AwdCheckerService` 执行本轮检查
 4. **等待轮次结束**：睡眠到配置的轮次时长
 5. **结算得分**：
@@ -387,7 +388,22 @@ flowchart LR
 
 ### 6.4 对接原生排行榜
 
-AWD 的得分通过写入 `Submission` + `FirstSolve` 自动进入原生 `GameRepository.GenScoreboard()`：
+#### Mixed 模式排行榜展现
+
+当 `GameType == Mixed` 时，排行榜同时显示 CTF 分数和 AWD 分数：
+
+| 排名 | 队伍 | CTF 赛 | AWD 赛 | 综合总分 |
+|------|------|--------|--------|----------|
+| 1 | TeamA | 1500 | 800 | 2300 |
+| 2 | TeamB | 1200 | 1000 | 2200 |
+
+- **CTF 赛得分**：原生 `GenScoreboard()` 按 `GameChallenge` 计算的得分
+- **AWD 赛得分**：通过 `Submission` + `FirstSolve` 写入的 AWD 得分（攻击分 + SLA 分 - 被攻击失分）
+- **综合总分**：CTF 分 + AWD 分，用于最终排名
+
+#### 得分写入方式
+
+AWD 得分通过写入 `Submission` + `FirstSolve` 进入原生排行榜系统：
 
 ```csharp
 // AwdRoundService 结算时
@@ -418,7 +434,7 @@ foreach (var teamScore in roundScores)
 }
 ```
 
-> **注意**：这里 `challengeId` 的复用需要确认。如果 `GameRepository.GenScoreboard` 按 `ChallengeId` 分组，AWD 需要为每个服务创建一个虚拟的 `GameChallenge` 记录，或者修改排行榜计算逻辑。这是一个需要用户在实现前确认的关键设计点。
+> **实现说明**：为每个 `AwdService` 同步创建对应的 `GameChallenge` 记录（标记为特殊类型，前端 Challenge 列表中不显示），使原生 `GenScoreboard()` 能够自动按 Challenge 分组计算 AWD 每服务得分。
 
 ---
 
@@ -627,27 +643,15 @@ dotnet ef database update
 
 ## 12. 风险评估与关键决策点
 
-### 12.1 风险 1：原生排行榜 `GenScoreboard` 的 `ChallengeId` 分组
+### 12.1 风险 1：原生排行榜 `GenScoreboard` 的 `ChallengeId` 分组（已确认）
 
-**问题**：原生排行榜按 `ChallengeId` 分组计算每道题的得分。AWD 的 `ServiceId` 不是 `GameChallenge.Id`，如果不创建对应的 `GameChallenge` 记录，排行榜无法显示每道服务的得分。
+**决策**：采用方案 A。为每个 `AwdService` 同步创建对应的 `GameChallenge` 记录，但标记为特殊类型（如 `ChallengeType.AWDService`），前端 Challenge 列表中过滤隐藏。原生 `GenScoreboard()` 无需修改即可自动计算 AWD 每服务得分。
 
-**可选方案**：
-- **A. 为每个 AwdService 同步创建 GameChallenge**：简单直接，但污染原生 Challenge 表
-- **B. 修改 GenScoreboard 支持 AWD**：侵入性大，影响原生逻辑
-- **C. AWD 使用独立的排行榜计算**：不修改原生，但排行榜逻辑重复
+**Mixed 模式排行榜**：当 `GameType == Mixed` 时，排行榜同时显示 CTF 列和 AWD 列，综合总分 = CTF 分 + AWD 分。
 
-**建议**：方案 A（同步创建 `GameChallenge`，但标记为特殊类型，前端不显示在 Challenge 列表中）。需要用户确认。
+### 12.2 风险 2：Flag 注入方式（已确认）
 
-### 12.2 风险 2：Flag 注入方式
-
-**问题**：Docker 容器运行中更新环境变量需要重启容器，可能影响服务可用性。
-
-**可选方案**：
-- **A. 每轮重启容器**：简单可靠，但服务会中断几秒
-- **B. Volume 挂载 Flag 文件**：服务代码定时读取文件，无需重启
-- **C. 热更新环境变量**：通过 Docker API 更新，但并非所有基础镜像支持
-
-**建议**：方案 B（Volume 挂载），但要求服务代码按规范从固定路径读取 Flag。需要用户确认。
+**决策**：复用原生动态 Flag 机制。每轮通过 `FlagHelper.GenerateFlag()` 生成 Flag，通过 `ContainerConfig.Flag` 字段在容器创建/重启时注入（环境变量方式）。每轮开始时重启容器以刷新 Flag（服务中断 3-5 秒，在可接受范围内）。
 
 ### 12.3 风险 3：Checker 脚本安全性
 
@@ -660,13 +664,14 @@ dotnet ef database update
 
 ---
 
-## 13. 待确认事项
+## 13. 已确认的关键决策
 
-请在进入实现前确认以下关键决策：
+以下决策已由需求方确认，作为实现阶段的基准：
 
-1. **排行榜对接方式**：是否为每个 `AwdService` 同步创建 `GameChallenge` 记录，以便原生 `GenScoreboard` 自动计算每服务得分？
-2. **Flag 注入方式**：采用 Volume 挂载（服务代码从 `/flag` 文件读取）还是环境变量注入（每轮可能需重启容器）？
-3. **Checker 执行隔离**：Checker 脚本直接在宿主机执行（简单）还是在隔离 Docker 容器中执行（安全但复杂）？
+1. **比赛模式**：`GameType.Mixed = 3`，一场比赛同时包含原生 CTF 题目（`GameChallenge`）和 AWD 服务（`AwdService`）。排行榜同时显示 CTF 列和 AWD 列。
+2. **排行榜对接**：为每个 `AwdService` 同步创建对应的 `GameChallenge` 记录（标记为 `ChallengeType.AWDService`，前端 Challenge 列表中隐藏），原生 `GenScoreboard()` 无需修改。
+3. **Flag 注入**：复用原生动态 Flag 机制（`FlagHelper.GenerateFlag()` + `ContainerConfig.Flag`），每轮通过重启容器刷新 Flag。
+4. **Checker 实现**：采用 iCTF/ForcAD 标准 Checker 协议（OK/Mumble/Down/Corrupt），通过 `Process.Start()` 执行 Python 脚本，超时 30 秒。
 
 ---
 
