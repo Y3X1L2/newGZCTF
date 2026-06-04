@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Serialization;
+using System.ComponentModel;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Localization;
 
 namespace GZCTF.Utils;
@@ -184,6 +185,37 @@ public enum NoticeType : byte
 }
 
 /// <summary>
+/// Game type
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<GameType>))]
+public enum GameType : byte
+{
+    /// <summary>
+    /// Jeopardy mode
+    /// </summary>
+    [Description("Jeopardy")]
+    Jeopardy = 0,
+
+    /// <summary>
+    /// AWD mode
+    /// </summary>
+    [Description("AWD")]
+    AWD = 1,
+
+    /// <summary>
+    /// Theory mode
+    /// </summary>
+    [Description("Theory")]
+    Theory = 2,
+
+    /// <summary>
+    /// Mixed mode
+    /// </summary>
+    [Description("Mixed")]
+    Mixed = 3
+}
+
+/// <summary>
 /// Game event type
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<EventType>))]
@@ -212,7 +244,37 @@ public enum EventType : byte
     /// <summary>
     /// Cheating information
     /// </summary>
-    CheatDetected = 4
+    CheatDetected = 4,
+
+    /// <summary>
+    /// AWD flag submission
+    /// </summary>
+    AwdFlagSubmit = 20,
+
+    /// <summary>
+    /// AWD service up (checker OK)
+    /// </summary>
+    AwdServiceUp = 21,
+
+    /// <summary>
+    /// AWD service down
+    /// </summary>
+    AwdServiceDown = 22,
+
+    /// <summary>
+    /// AWD service mumble
+    /// </summary>
+    AwdServiceMumble = 23,
+
+    /// <summary>
+    /// AWD round start
+    /// </summary>
+    AwdRoundStart = 24,
+
+    /// <summary>
+    /// AWD attack success
+    /// </summary>
+    AwdAttackSuccess = 25
 }
 
 /// <summary>
@@ -313,7 +375,13 @@ public enum ChallengeType : byte
     /// Incident response challenge
     /// Time-boxed incident response exercise with forensic analysis and remediation tasks
     /// </summary>
-    IRChallenge = 0b1000
+    IRChallenge = 0b1000,
+
+    /// <summary>
+    /// AWD service challenge
+    /// Service-based challenge for AWD mode
+    /// </summary>
+    AWDService = 0b10000
 }
 
 public static class ChallengeTypeExtensions
@@ -349,6 +417,11 @@ public static class ChallengeTypeExtensions
         /// Is it an incident response challenge
         /// </summary>
         public bool IsIRChallenge() => ((byte)type & 0b1000) != 0;
+
+        /// <summary>
+        /// Is it an AWD service challenge
+        /// </summary>
+        public bool IsAwdService() => type == ChallengeType.AWDService;
     }
 }
 
