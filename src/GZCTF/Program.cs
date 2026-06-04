@@ -24,6 +24,7 @@ using GZCTF.Extensions.Startup;
 using GZCTF.Models;
 using GZCTF.Repositories;
 using GZCTF.Repositories.Interface;
+using GZCTF.Services;
 using Serilog;
 
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -45,6 +46,10 @@ builder.ConfigureTelemetry();
 builder.AddServiceConfigurations();
 builder.AddCustomServices();
 builder.Services.AddScoped<IAwdRepository, AwdRepository>();
+builder.Services.AddScoped<AwdInstanceService>();
+builder.Services.AddScoped<AwdCheckerService>();
+builder.Services.AddScoped<AwdScoreService>();
+builder.Services.AddHostedService<AwdRoundService>();
 builder.AddWebServices();
 builder.AddDevelopmentServices();
 

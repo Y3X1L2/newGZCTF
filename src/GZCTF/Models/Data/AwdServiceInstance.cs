@@ -13,7 +13,7 @@ public class AwdServiceInstance
     public int TeamId { get; set; }
     public Team Team { get; set; } = null!;
 
-    public int? ContainerId { get; set; }
+    public Guid? ContainerId { get; set; }
     public Container? Container { get; set; }
 
     public string NetworkName { get; set; } = string.Empty;
