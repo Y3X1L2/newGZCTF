@@ -1,12 +1,15 @@
-﻿using GZCTF.Models.Request.Edit;
+using GZCTF.Models.Request.Edit;
 using GZCTF.Repositories.Interface;
+using GZCTF.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Repositories;
 
 public class GameChallengeRepository(
     AppDbContext context,
-    IBlobRepository blobRepository
+    IBlobRepository blobRepository,
+    VmManager vmManager,
+    EnvironmentService environmentService
 ) : RepositoryBase(context),
     IGameChallengeRepository
 {
@@ -67,6 +70,52 @@ public class GameChallengeRepository(
 
     public async Task RemoveChallenge(GameChallenge challenge, bool save = true, CancellationToken token = default)
     {
+        // Clean up external resources for IR/Scenario challenges before deleting DB records
+        if (challenge.Type == ChallengeType.IRChallenge)
+        {
+            var irInstances = await Context.IRInstances
+                .Where(i => i.ChallengeId == challenge.Id)
+                .ToListAsync(token);
+
+            foreach (var instance in irInstances)
+            {
+                if (string.IsNullOrEmpty(instance.AccessDetails))
+                    continue;
+
+                try
+                {
+                    var details = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object?>>(instance.AccessDetails);
+                    var vmName = details?.GetValueOrDefault("VmName")?.ToString();
+                    if (!string.IsNullOrEmpty(vmName))
+                        await vmManager.Destroy(vmName);
+                }
+                catch { /* best effort cleanup */ }
+            }
+        }
+        else if (challenge.Type == ChallengeType.Scenario)
+        {
+            var scenarioInstances = await Context.ScenarioInstances
+                .Where(i => i.ScenarioId == challenge.Id)
+                .ToListAsync(token);
+
+            var stages = await Context.Stages
+                .Where(s => s.ScenarioId == challenge.Id)
+                .ToListAsync(token);
+
+            foreach (var instance in scenarioInstances)
+            {
+                var stage = stages.FirstOrDefault(s => s.Id == instance.CurrentStageId);
+                if (stage is not null)
+                {
+                    try
+                    {
+                        await environmentService.DestroyStageEnvironmentAsync(instance.Id, stage, token);
+                    }
+                    catch { /* best effort cleanup */ }
+                }
+            }
+        }
+
         await blobRepository.DeleteAttachment(challenge.Attachment, token);
 
         await LoadFlags(challenge, token);

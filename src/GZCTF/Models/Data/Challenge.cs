@@ -103,6 +103,11 @@ public class Challenge
     public uint ConcurrencyToken { get; set; }
 
     /// <summary>
+    /// OS type for the target environment (Windows or Linux), used by IR challenges
+    /// </summary>
+    public string? OsType { get; set; } = "Linux";
+
+    /// <summary>
     /// Flag template, used to generate flags based on token and challenge, game information
     /// </summary>
     [MaxLength(Limits.MaxFlagTemplateLength)]
