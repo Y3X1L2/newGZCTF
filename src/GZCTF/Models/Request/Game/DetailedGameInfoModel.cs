@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
 namespace GZCTF.Models.Request.Game;
@@ -96,6 +96,11 @@ public class DetailedGameInfoModel
     [JsonPropertyName("end")]
     public DateTimeOffset EndTimeUtc { get; set; } = DateTimeOffset.FromUnixTimeSeconds(0);
 
+    /// <summary>
+    /// Game type (Jeopardy, AWD, Theory, Mixed)
+    /// </summary>
+    public GameType GameType { get; set; } = GameType.Jeopardy;
+
     public DetailedGameInfoModel WithParticipation(Participation? part, int teamCount)
     {
         TeamCount = teamCount;
@@ -126,7 +131,8 @@ public class DetailedGameInfoModel
             PosterUrl = game.PosterUrl,
             StartTimeUtc = game.StartTimeUtc,
             EndTimeUtc = game.EndTimeUtc,
-            TeamMemberCountLimit = game.TeamMemberCountLimit
+            TeamMemberCountLimit = game.TeamMemberCountLimit,
+            GameType = game.GameType
         };
 }
 

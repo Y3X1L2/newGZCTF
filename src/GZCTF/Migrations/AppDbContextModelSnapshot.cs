@@ -90,6 +90,210 @@ namespace GZCTF.Migrations
                     b.ToTable("Attachments");
                 });
 
+            modelBuilder.Entity("GZCTF.Models.Data.AwdCheckerTask", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("ExecutedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Message")
+                        .HasColumnType("text");
+
+                    b.Property<int>("RoundId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ServiceId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TeamId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoundId");
+
+                    b.HasIndex("ServiceId");
+
+                    b.HasIndex("TeamId");
+
+                    b.ToTable("AwdCheckerTasks");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.AwdFlag", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset?>("FirstSubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FlagValue")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsSubmitted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("RoundId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ServiceId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TeamId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoundId");
+
+                    b.HasIndex("ServiceId");
+
+                    b.HasIndex("TeamId");
+
+                    b.ToTable("AwdFlags");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.AwdRound", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AwdServiceId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("EndTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("GameId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RoundNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("StartTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AwdServiceId");
+
+                    b.HasIndex("GameId");
+
+                    b.ToTable("AwdRounds");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.AwdService", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AttackPoints")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CheckerEntrypoint")
+                        .HasColumnType("text");
+
+                    b.Property<string>("CheckerScript")
+                        .HasColumnType("text");
+
+                    b.Property<int>("ExposePort")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("GameId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ImageName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("MaxAttackPerRound")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("OriginalScore")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RoundDurationMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SlaPoints")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TotalRounds")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GameId");
+
+                    b.ToTable("AwdServices");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.AwdServiceInstance", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("ContainerId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("ContainerId1")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsRunning")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("NetworkName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("ServiceId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TeamId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContainerId1");
+
+                    b.HasIndex("ServiceId");
+
+                    b.HasIndex("TeamId");
+
+                    b.ToTable("AwdServiceInstances");
+                });
+
             modelBuilder.Entity("GZCTF.Models.Data.CheatInfo", b =>
                 {
                     b.Property<int>("SubmissionId")
@@ -298,6 +502,9 @@ namespace GZCTF.Migrations
                         .HasColumnType("smallint")
                         .HasDefaultValue((byte)0);
 
+                    b.Property<string>("OsType")
+                        .HasColumnType("text");
+
                     b.Property<int?>("StorageLimit")
                         .HasColumnType("integer");
 
@@ -469,6 +676,9 @@ namespace GZCTF.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasJsonPropertyName("end");
 
+                    b.Property<byte>("GameType")
+                        .HasColumnType("smallint");
+
                     b.Property<bool>("Hidden")
                         .HasColumnType("boolean");
 
@@ -600,6 +810,9 @@ namespace GZCTF.Migrations
 
                     b.Property<int>("OriginalScore")
                         .HasColumnType("integer");
+
+                    b.Property<string>("OsType")
+                        .HasColumnType("text");
 
                     b.Property<int?>("StorageLimit")
                         .HasColumnType("integer");
@@ -1638,6 +1851,111 @@ namespace GZCTF.Migrations
                     b.Navigation("LocalFile");
                 });
 
+            modelBuilder.Entity("GZCTF.Models.Data.AwdCheckerTask", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.AwdRound", "Round")
+                        .WithMany("CheckerTasks")
+                        .HasForeignKey("RoundId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.AwdService", "Service")
+                        .WithMany()
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.Team", "Team")
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Round");
+
+                    b.Navigation("Service");
+
+                    b.Navigation("Team");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.AwdFlag", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.AwdRound", "Round")
+                        .WithMany("Flags")
+                        .HasForeignKey("RoundId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.AwdService", "Service")
+                        .WithMany()
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.Team", "Team")
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Round");
+
+                    b.Navigation("Service");
+
+                    b.Navigation("Team");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.AwdRound", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.AwdService", null)
+                        .WithMany("Rounds")
+                        .HasForeignKey("AwdServiceId");
+
+                    b.HasOne("GZCTF.Models.Data.Game", "Game")
+                        .WithMany()
+                        .HasForeignKey("GameId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Game");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.AwdService", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.Game", "Game")
+                        .WithMany()
+                        .HasForeignKey("GameId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Game");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.AwdServiceInstance", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.Container", "Container")
+                        .WithMany()
+                        .HasForeignKey("ContainerId1");
+
+                    b.HasOne("GZCTF.Models.Data.AwdService", "Service")
+                        .WithMany("Instances")
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.Team", "Team")
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Container");
+
+                    b.Navigation("Service");
+
+                    b.Navigation("Team");
+                });
+
             modelBuilder.Entity("GZCTF.Models.Data.CheatInfo", b =>
                 {
                     b.HasOne("GZCTF.Models.Data.Game", "Game")
@@ -2214,6 +2532,20 @@ namespace GZCTF.Migrations
                         .HasForeignKey("TeamsId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.AwdRound", b =>
+                {
+                    b.Navigation("CheckerTasks");
+
+                    b.Navigation("Flags");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.AwdService", b =>
+                {
+                    b.Navigation("Instances");
+
+                    b.Navigation("Rounds");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.Container", b =>

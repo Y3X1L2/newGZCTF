@@ -113,7 +113,7 @@ export default function ScenarioCreate() {
       })
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body })
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error((err as { title?: string }).title ?? 'Failed') }
-      notifications.show({ title: editId ? '更新成功' : '创建成功', color: 'green' })
+      notifications.show({ title: editId ? '更新成功' : '创建成功', message: '场景已保存', color: 'green' })
       navigate('/admin/scenarios')
     } catch (e) {
       notifications.show({ title: '操作失败', message: (e as Error).message, color: 'red' })

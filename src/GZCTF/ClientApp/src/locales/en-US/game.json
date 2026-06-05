@@ -225,6 +225,7 @@
     "search_team": "Search Team"
   },
   "tab": {
+    "awd": "AWD",
     "challenge": "Challenges",
     "monitor": {
       "cheatinfo": "Cheats",
@@ -240,6 +241,31 @@
     "individual": "Personal",
     "limited": "{{count}} players",
     "multiplayer": "Team"
+  },
+  "awd": {
+    "round": "Round {{round}}",
+    "round_running": "Running",
+    "round_waiting": "Waiting",
+    "service_up": "Service Up",
+    "service_down": "Service Down",
+    "address": "Address",
+    "no_address": "No address",
+    "attack_score": "Attack Score",
+    "sla_score": "SLA Score",
+    "defense_lost": "Defense Lost",
+    "attack_logs": "Attack Logs",
+    "time": "Time",
+    "attacker": "Attacker",
+    "victim": "Victim",
+    "service": "Service",
+    "points": "Points",
+    "submit_flag": "Submit Flag",
+    "flag_placeholder": "flag{...}",
+    "submit": "Submit",
+    "my_instances": "My Instances",
+    "no_instances": "No instances",
+    "flag_submitted": "Flag submitted successfully",
+    "scoreboard": "Scoreboard"
   },
   "title": {
     "index": "Games"

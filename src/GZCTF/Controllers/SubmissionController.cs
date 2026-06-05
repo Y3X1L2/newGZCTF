@@ -130,6 +130,24 @@ public class SubmissionController : ControllerBase
         };
 
         await _context.Submissions.AddAsync(submission, token);
+
+        if (status == AnswerResult.Accepted)
+        {
+            var existingSolve = await _context.FirstSolves
+                .FirstOrDefaultAsync(fs => fs.ParticipationId == request.ParticipationId
+                                        && fs.ChallengeId == request.ChallengeId, token);
+
+            if (existingSolve is null)
+            {
+                await _context.FirstSolves.AddAsync(new FirstSolve
+                {
+                    ParticipationId = request.ParticipationId,
+                    ChallengeId = request.ChallengeId,
+                    SubmissionId = submission.Id
+                }, token);
+            }
+        }
+
         await _context.SaveChangesAsync(token);
 
         _logger.LogInformation(
@@ -363,6 +381,23 @@ public class SubmissionController : ControllerBase
         submission.Score = request.Accepted ? (request.Score ?? 0) : 0;
         submission.ReviewComment = request.Comment;
         submission.ReviewedById = reviewer.Id;
+
+        if (submission.Status == AnswerResult.Accepted)
+        {
+            var existingSolve = await _context.FirstSolves
+                .FirstOrDefaultAsync(fs => fs.ParticipationId == submission.ParticipationId
+                                        && fs.ChallengeId == submission.ChallengeId, token);
+
+            if (existingSolve is null)
+            {
+                await _context.FirstSolves.AddAsync(new FirstSolve
+                {
+                    ParticipationId = submission.ParticipationId,
+                    ChallengeId = submission.ChallengeId,
+                    SubmissionId = submission.Id
+                }, token);
+            }
+        }
 
         await _context.SaveChangesAsync(token);
 

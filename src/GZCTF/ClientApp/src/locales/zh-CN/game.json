@@ -225,6 +225,7 @@
     "search_team": "搜索队伍"
   },
   "tab": {
+    "awd": "AWD 攻防",
     "challenge": "比赛题目",
     "monitor": {
       "cheatinfo": "作弊信息",
@@ -240,6 +241,31 @@
     "individual": "个人赛",
     "limited": "{{count}}人赛",
     "multiplayer": "团队赛"
+  },
+  "awd": {
+    "round": "第 {{round}} 轮",
+    "round_running": "进行中",
+    "round_waiting": "等待开始",
+    "service_up": "服务正常",
+    "service_down": "服务异常",
+    "address": "地址",
+    "no_address": "暂无地址",
+    "attack_score": "攻击分",
+    "sla_score": "SLA 分",
+    "defense_lost": "防守失分",
+    "attack_logs": "攻击日志",
+    "time": "时间",
+    "attacker": "攻击方",
+    "victim": "被攻击方",
+    "service": "服务",
+    "points": "得分",
+    "submit_flag": "提交 Flag",
+    "flag_placeholder": "flag{...}",
+    "submit": "提交",
+    "my_instances": "我的实例",
+    "no_instances": "暂无实例",
+    "flag_submitted": "Flag 提交成功",
+    "scoreboard": "排行榜"
   },
   "title": {
     "index": "赛事"

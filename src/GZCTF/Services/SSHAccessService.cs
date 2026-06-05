@@ -12,12 +12,14 @@ namespace GZCTF.Services;
 /// </summary>
 public class SSHAccessService
 {
+    private readonly AppDbContext _context;
     private readonly IConfiguration _config;
     private readonly ILogger<SSHAccessService> _logger;
     private const int TokenLength = 32;
 
-    public SSHAccessService(IConfiguration config, ILogger<SSHAccessService> logger)
+    public SSHAccessService(AppDbContext context, IConfiguration config, ILogger<SSHAccessService> logger)
     {
+        _context = context;
         _config = config;
         _logger = logger;
     }
@@ -31,9 +33,7 @@ public class SSHAccessService
     {
         _logger.LogInformation("Generating SSH credentials for IR instance {InstanceId}", instanceId);
 
-        await using var context = CreateDbContext();
-
-        var instance = await context.IRInstances
+        var instance = await _context.IRInstances
             .Include(i => i.Challenge)
             .FirstOrDefaultAsync(i => i.Id == instanceId);
 
@@ -65,7 +65,7 @@ public class SSHAccessService
         accessDetails["SshPasswordHash"] = HashPassword(password);
 
         instance.AccessDetails = JsonSerializer.Serialize(accessDetails);
-        await context.SaveChangesAsync();
+        await _context.SaveChangesAsync();
 
         _logger.LogInformation("SSH credentials generated for IR instance {InstanceId}: {Username}", instanceId, username);
 
@@ -82,9 +82,7 @@ public class SSHAccessService
     {
         _logger.LogInformation("Rotating SSH credentials for IR instance {InstanceId}", instanceId);
 
-        await using var context = CreateDbContext();
-
-        var instance = await context.IRInstances
+        var instance = await _context.IRInstances
             .FirstOrDefaultAsync(i => i.Id == instanceId);
 
         if (instance is null)
@@ -106,7 +104,7 @@ public class SSHAccessService
         accessDetails["SshPasswordHash"] = HashPassword(newPassword);
 
         instance.AccessDetails = JsonSerializer.Serialize(accessDetails);
-        await context.SaveChangesAsync();
+        await _context.SaveChangesAsync();
 
         _logger.LogInformation("SSH credentials rotated for IR instance {InstanceId}", instanceId);
 
@@ -125,9 +123,7 @@ public class SSHAccessService
     /// </summary>
     public async Task<SshCredentials?> GetCredentialsAsync(Guid instanceId)
     {
-        await using var context = CreateDbContext();
-
-        var instance = await context.IRInstances
+        var instance = await _context.IRInstances
             .FirstOrDefaultAsync(i => i.Id == instanceId);
 
         if (instance?.AccessDetails is null)
@@ -152,9 +148,7 @@ public class SSHAccessService
     /// </summary>
     public async Task<bool> VerifyPasswordAsync(Guid instanceId, string password)
     {
-        await using var context = CreateDbContext();
-
-        var instance = await context.IRInstances
+        var instance = await _context.IRInstances
             .FirstOrDefaultAsync(i => i.Id == instanceId);
 
         if (instance?.AccessDetails is null)
@@ -221,17 +215,6 @@ public class SSHAccessService
         }
     }
 
-    private AppDbContext CreateDbContext()
-    {
-        var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
-        var connectionString = _config.GetConnectionString("Database");
-        if (!string.IsNullOrEmpty(connectionString))
-            optionsBuilder.UseNpgsql(connectionString);
-        else
-            optionsBuilder.UseNpgsql(_config["Database:ConnectionString"] ?? string.Empty);
-
-        return new AppDbContext(optionsBuilder.Options);
-    }
 }
 
 /// <summary>

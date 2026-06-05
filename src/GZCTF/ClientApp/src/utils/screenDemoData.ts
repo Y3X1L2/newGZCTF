@@ -274,6 +274,8 @@ const buildScoreboard = (scenario: DemoScenario, timedSubmissions: TimedSubmissi
         lastSubmissionTime: now - timedSubmissions.length * DEMO_EVENT_GAP_MS,
         name: team.name,
         rank: 0,
+        ctfScore: 0,
+        awdScore: 0,
         score: 0,
         solvedChallenges: [],
         solvedCount: 0,

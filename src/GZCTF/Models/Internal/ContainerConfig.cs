@@ -1,4 +1,4 @@
-﻿namespace GZCTF.Models.Internal;
+namespace GZCTF.Models.Internal;
 
 public class ContainerConfig
 {
@@ -56,4 +56,9 @@ public class ContainerConfig
     /// Container network mode
     /// </summary>
     public NetworkMode NetworkMode { get; set; } = NetworkMode.Open;
+
+    /// <summary>
+    /// Custom Docker network name (overrides NetworkMode when set)
+    /// </summary>
+    public string? NetworkName { get; set; }
 }

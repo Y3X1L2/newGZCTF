@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 using GZCTF.Models.Request.Edit;
@@ -68,6 +68,11 @@ public partial class Game
     /// Detailed introduction of the game
     /// </summary>
     public string Content { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Game type (Jeopardy, AWD, Theory, Mixed)
+    /// </summary>
+    public GameType GameType { get; set; } = GameType.Jeopardy;
 
     /// <summary>
     /// Teams can join without review

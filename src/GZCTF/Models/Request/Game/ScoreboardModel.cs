@@ -214,10 +214,22 @@ public partial class ScoreboardItem
     public string? Avatar { get; set; } = string.Empty;
 
     /// <summary>
-    /// Score
+    /// CTF Score
     /// </summary>
     [Required]
-    public int Score { get; set; }
+    public int CtfScore { get; set; }
+
+    /// <summary>
+    /// AWD Score
+    /// </summary>
+    [Required]
+    public int AwdScore { get; set; }
+
+    /// <summary>
+    /// Total Score
+    /// </summary>
+    [Required]
+    public int Score => CtfScore + AwdScore;
 
     /// <summary>
     /// Rank

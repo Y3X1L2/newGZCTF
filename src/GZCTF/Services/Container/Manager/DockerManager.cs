@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: LicenseRef-GZCTF-Restricted
+// SPDX-License-Identifier: LicenseRef-GZCTF-Restricted
 // Copyright (C) 2022-2025 GZTimeWalker
 // Restricted Component - NOT under AGPLv3.
 // See licenses/LicenseRef-GZCTF-Restricted.txt
@@ -289,7 +289,9 @@ public class DockerManager : IContainerManager
             {
                 Memory = config.MemoryLimit * 1024 * 1024,
                 CPUPercent = config.CPUCount * 10,
-                NetworkMode = _meta.NetworkNames[config.NetworkMode]
+                NetworkMode = !string.IsNullOrEmpty(config.NetworkName)
+                    ? config.NetworkName
+                    : _meta.NetworkNames[config.NetworkMode]
             }
         };
 }

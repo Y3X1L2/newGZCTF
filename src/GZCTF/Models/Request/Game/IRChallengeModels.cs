@@ -188,6 +188,11 @@ public class IRChallengeUpdateModel
     public string? ContainerImage { get; set; }
 
     /// <summary>
+    /// OS type for the target environment (Windows or Linux)
+    /// </summary>
+    public string? OsType { get; set; }
+
+    /// <summary>
     /// Checkpoints to update (replaces existing)
     /// </summary>
     public List<CheckpointCreateModel>? Checkpoints { get; set; }
@@ -268,7 +273,7 @@ public class IRChallengeListItemModel
             IsEnabled = challenge.IsEnabled,
             OriginalScore = challenge.OriginalScore,
             CheckpointCount = checkpointCount,
-            OsType = challenge.ContainerImage is not null ? "Linux" : "Windows",
+            OsType = challenge.OsType ?? (challenge.ContainerImage is not null ? "Linux" : "Windows"),
             GameId = challenge.GameId
         };
 }
@@ -314,7 +319,7 @@ public class IRChallengeDetailModel
             MemoryLimit = challenge.MemoryLimit,
             CPUCount = challenge.CPUCount,
             StorageLimit = challenge.StorageLimit,
-            OsType = challenge.ContainerImage is not null ? "Linux" : "Windows",
+            OsType = challenge.OsType ?? (challenge.ContainerImage is not null ? "Linux" : "Windows"),
             GameId = challenge.GameId,
             TotalCheckpointScore = checkpoints.Sum(c => c.Score),
             Checkpoints = checkpoints.Select(c => CheckpointDetailModel.FromCheckpoint(c)).ToList()

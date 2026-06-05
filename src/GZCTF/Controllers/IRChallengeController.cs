@@ -95,6 +95,7 @@ public class IRChallengeController : ControllerBase
             MemoryLimit = model.MemoryLimit ?? 2048,
             CPUCount = model.CPUCount ?? 2,
             StorageLimit = model.StorageLimit ?? 10240,
+            OsType = model.OsType,
             GameId = model.GameId
         };
 
@@ -226,6 +227,8 @@ public class IRChallengeController : ControllerBase
             challenge.Difficulty = model.Difficulty.Value;
         if (model.ContainerImage is not null)
             challenge.ContainerImage = model.ContainerImage;
+        if (model.OsType is not null)
+            challenge.OsType = model.OsType;
 
         // Replace checkpoints if provided
         if (model.Checkpoints is { Count: > 0 })
@@ -576,6 +579,50 @@ public class IRChallengeController : ControllerBase
         };
 
         instance.CheckpointResults = JsonSerializer.Serialize(results);
+
+        // Create native Submission and FirstSolve for scoreboard integration
+        var challenge = await _context.GameChallenges
+            .FirstOrDefaultAsync(c => c.Id == instance.ChallengeId, token);
+
+        if (challenge is not null)
+        {
+            var userParticipation = await _context.Set<UserParticipation>()
+                .FirstOrDefaultAsync(up => up.UserId == instance.UserId && up.GameId == challenge.GameId, token);
+
+            if (userParticipation is not null)
+            {
+                var submission = new Submission
+                {
+                    Answer = model.Answer,
+                    Status = AnswerResult.Accepted,
+                    SubmissionType = ScoringSubmissionType.Flag,
+                    Score = checkpoint.Score,
+                    SubmitTimeUtc = DateTimeOffset.UtcNow,
+                    UserId = instance.UserId,
+                    ChallengeId = instance.ChallengeId,
+                    GameId = challenge.GameId,
+                    TeamId = userParticipation.TeamId,
+                    ParticipationId = userParticipation.ParticipationId
+                };
+
+                await _context.Submissions.AddAsync(submission, token);
+
+                var existingSolve = await _context.FirstSolves
+                    .FirstOrDefaultAsync(fs => fs.ParticipationId == userParticipation.ParticipationId
+                                            && fs.ChallengeId == instance.ChallengeId, token);
+
+                if (existingSolve is null)
+                {
+                    await _context.FirstSolves.AddAsync(new FirstSolve
+                    {
+                        ParticipationId = userParticipation.ParticipationId,
+                        ChallengeId = instance.ChallengeId,
+                        SubmissionId = submission.Id
+                    }, token);
+                }
+            }
+        }
+
         await _context.SaveChangesAsync(token);
 
         _logger.LogInformation("Checkpoint {CheckpointId} completed by manual answer for instance {InstanceId}",

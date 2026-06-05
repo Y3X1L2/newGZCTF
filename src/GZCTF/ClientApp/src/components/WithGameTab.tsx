@@ -1,6 +1,6 @@
 import { Card, LoadingOverlay, Stack, Text, Title } from '@mantine/core'
 import { showNotification } from '@mantine/notifications'
-import { mdiChartLine, mdiExclamationThick, mdiFlagOutline, mdiMonitorEye } from '@mdi/js'
+import { mdiChartLine, mdiExclamationThick, mdiFlagOutline, mdiMonitorEye, mdiSwordCross } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import dayjs from 'dayjs'
 import duration from 'dayjs/plugin/duration'
@@ -14,7 +14,7 @@ import { DEFAULT_LOADING_OVERLAY } from '@Utils/Shared'
 import { getGameStatus, useGame } from '@Hooks/useGame'
 import { usePageTitle } from '@Hooks/usePageTitle'
 import { useUserRole } from '@Hooks/useUser'
-import { DetailedGameInfoModel, ParticipationStatus, Role } from '@Api'
+import { DetailedGameInfoModel, GameType, ParticipationStatus, Role } from '@Api'
 import misc from '@Styles/Misc.module.css'
 
 dayjs.extend(duration)
@@ -62,6 +62,8 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
 
   const finished = dayjs() > dayjs(game?.end ?? new Date())
 
+  const isAwdGame = game?.gameType === GameType.AWD || game?.gameType === GameType.Mixed
+
   const pages = [
     {
       icon: mdiFlagOutline,
@@ -70,7 +72,21 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
       link: 'challenges',
       requireJoin: true,
       requireRole: Role.User,
+      requireAwd: false,
     },
+    ...(isAwdGame
+      ? [
+          {
+            icon: mdiSwordCross,
+            title: t('game.tab.awd'),
+            path: 'awd',
+            link: 'awd',
+            requireJoin: true,
+            requireRole: Role.User,
+            requireAwd: true,
+          },
+        ]
+      : []),
     {
       icon: mdiChartLine,
       title: t('game.tab.scoreboard'),
@@ -78,6 +94,7 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
       link: 'scoreboard',
       requireJoin: false,
       requireRole: Role.User,
+      requireAwd: false,
     },
     {
       icon: mdiMonitorEye,
@@ -86,6 +103,7 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
       link: 'monitor/events',
       requireJoin: false,
       requireRole: Role.Monitor,
+      requireAwd: false,
     },
   ]
 

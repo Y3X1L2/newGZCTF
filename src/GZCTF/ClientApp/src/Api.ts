@@ -77,6 +77,14 @@ export enum ChallengeType {
   IRChallenge = "IRChallenge",
 }
 
+/** Game type */
+export enum GameType {
+  Jeopardy = "Jeopardy",
+  AWD = "AWD",
+  Theory = "Theory",
+  Mixed = "Mixed",
+}
+
 /** Game participant permission */
 export enum GamePermission {
   JoinGame = 1,
@@ -991,6 +999,8 @@ export interface GameInfoModel {
    * @format int64
    */
   bloodBonus?: number;
+  /** Game type */
+  gameType?: GameType;
 }
 
 /** List response */
@@ -1506,6 +1516,8 @@ export interface DetailedGameInfoModel {
    * @format uint64
    */
   end?: number;
+  /** Game type */
+  gameType?: GameType;
 }
 
 export interface DivisionInfo {
@@ -1639,7 +1651,17 @@ export interface ScoreboardItem {
   /** Team avatar */
   avatar?: string | null;
   /**
-   * Score
+   * CTF Score
+   * @format int32
+   */
+  ctfScore: number;
+  /**
+   * AWD Score
+   * @format int32
+   */
+  awdScore: number;
+  /**
+   * Total Score
    * @format int32
    */
   score: number;

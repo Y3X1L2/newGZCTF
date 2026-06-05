@@ -164,6 +164,22 @@ export const ScoreboardItemModal: FC<ScoreboardItemModalProps> = (props) => {
             )}
             <Stack gap={2}>
               <Text fw="bold" size="sm" ff="monospace">
+                {item?.ctfScore ?? 0}
+              </Text>
+              <Text size="xs" fw={500}>
+                CTF
+              </Text>
+            </Stack>
+            <Stack gap={2}>
+              <Text fw="bold" size="sm" ff="monospace">
+                {item?.awdScore ?? 0}
+              </Text>
+              <Text size="xs" fw={500}>
+                AWD
+              </Text>
+            </Stack>
+            <Stack gap={2}>
+              <Text fw="bold" size="sm" ff="monospace">
                 {item?.score}
               </Text>
               <Text size="xs" fw={500}>

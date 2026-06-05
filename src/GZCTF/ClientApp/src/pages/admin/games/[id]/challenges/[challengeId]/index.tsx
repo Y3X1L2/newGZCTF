@@ -101,7 +101,7 @@ export default function ChallengeEdit() {
         body: JSON.stringify([{ flag: newFlag }]),
       })
       if (res.ok) {
-        notifications.show({ title: 'Flag 已添加', color: 'green' })
+        notifications.show({ title: 'Flag 已添加', message: '新的 Flag 已成功添加', color: 'green' })
         setNewFlag('')
         load()
       }
@@ -118,7 +118,7 @@ export default function ChallengeEdit() {
       })
       if (res.ok) {
         setChallenge({ ...challenge, isEnabled: enabled })
-        notifications.show({ title: enabled ? '已启用' : '已禁用', color: 'green' })
+        notifications.show({ title: enabled ? '已启用' : '已禁用', message: '题目状态已更新', color: 'green' })
       }
     } catch { /* ignore */ }
   }

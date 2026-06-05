@@ -63,7 +63,7 @@ export default function IRChallengeCreate() {
 
   const handleSubmit = async () => {
     if (!title || !gameId || checkpoints.length === 0) {
-      notifications.show({ title: '请填写必填字段', color: 'red' }); return
+      notifications.show({ title: '请填写必填字段', message: '标题、赛事和至少一个检查点为必填', color: 'red' }); return
     }
     setSubmitting(true)
     try {
@@ -73,7 +73,7 @@ export default function IRChallengeCreate() {
         body: JSON.stringify({ title, description, gameId: Number(gameId), osType, imageTemplateId: imageTemplateId ? Number(imageTemplateId) : null, checkpoints }),
       })
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error((err as { title?: string }).title ?? 'Failed') }
-      notifications.show({ title: editId ? '更新成功' : '创建成功', color: 'green' })
+      notifications.show({ title: editId ? '更新成功' : '创建成功', message: '题目已保存', color: 'green' })
       navigate('/admin/ir-challenges')
     } catch (e) {
       notifications.show({ title: '操作失败', message: (e as Error).message, color: 'red' })
