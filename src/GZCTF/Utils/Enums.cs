@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Serialization;
+using System.ComponentModel;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Localization;
 
 namespace GZCTF.Utils;
@@ -184,6 +185,37 @@ public enum NoticeType : byte
 }
 
 /// <summary>
+/// Game type
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<GameType>))]
+public enum GameType : byte
+{
+    /// <summary>
+    /// Jeopardy mode
+    /// </summary>
+    [Description("Jeopardy")]
+    Jeopardy = 0,
+
+    /// <summary>
+    /// AWD mode
+    /// </summary>
+    [Description("AWD")]
+    AWD = 1,
+
+    /// <summary>
+    /// Theory mode
+    /// </summary>
+    [Description("Theory")]
+    Theory = 2,
+
+    /// <summary>
+    /// Mixed mode
+    /// </summary>
+    [Description("Mixed")]
+    Mixed = 3
+}
+
+/// <summary>
 /// Game event type
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<EventType>))]
@@ -212,7 +244,37 @@ public enum EventType : byte
     /// <summary>
     /// Cheating information
     /// </summary>
-    CheatDetected = 4
+    CheatDetected = 4,
+
+    /// <summary>
+    /// AWD flag submission
+    /// </summary>
+    AwdFlagSubmit = 20,
+
+    /// <summary>
+    /// AWD service up (checker OK)
+    /// </summary>
+    AwdServiceUp = 21,
+
+    /// <summary>
+    /// AWD service down
+    /// </summary>
+    AwdServiceDown = 22,
+
+    /// <summary>
+    /// AWD service mumble
+    /// </summary>
+    AwdServiceMumble = 23,
+
+    /// <summary>
+    /// AWD round start
+    /// </summary>
+    AwdRoundStart = 24,
+
+    /// <summary>
+    /// AWD attack success
+    /// </summary>
+    AwdAttackSuccess = 25
 }
 
 /// <summary>
@@ -302,6 +364,24 @@ public enum ChallengeType : byte
     /// Randomly distribute containers, dynamic flag passed in via environment variables
     /// </summary>
     DynamicContainer = 0b11,
+
+    /// <summary>
+    /// Multi-stage attack chain scenario
+    /// A sequence of interconnected challenges forming a complete attack narrative
+    /// </summary>
+    Scenario = 0b100,
+
+    /// <summary>
+    /// Incident response challenge
+    /// Time-boxed incident response exercise with forensic analysis and remediation tasks
+    /// </summary>
+    IRChallenge = 0b1000,
+
+    /// <summary>
+    /// AWD service challenge
+    /// Service-based challenge for AWD mode
+    /// </summary>
+    AWDService = 0b10000
 }
 
 public static class ChallengeTypeExtensions
@@ -327,6 +407,21 @@ public static class ChallengeTypeExtensions
         /// Is it a container challenge
         /// </summary>
         public bool IsContainer() => ((byte)type & 0b01) != 0;
+
+        /// <summary>
+        /// Is it a multi-stage attack chain scenario
+        /// </summary>
+        public bool IsScenario() => ((byte)type & 0b100) != 0;
+
+        /// <summary>
+        /// Is it an incident response challenge
+        /// </summary>
+        public bool IsIRChallenge() => ((byte)type & 0b1000) != 0;
+
+        /// <summary>
+        /// Is it an AWD service challenge
+        /// </summary>
+        public bool IsAwdService() => type == ChallengeType.AWDService;
     }
 }
 
@@ -350,6 +445,60 @@ public enum EnvironmentType : byte
     /// Windows virtual machine environment
     /// </summary>
     WindowsVM = 2,
+}
+
+/// <summary>
+/// Verification type for IR challenge checkpoints
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<VerificationType>))]
+public enum VerificationType : byte
+{
+    /// <summary>
+    /// Auto-verify by running a script
+    /// </summary>
+    AutoScript = 0,
+
+    /// <summary>
+    /// Auto-verify by executing a command and checking output
+    /// </summary>
+    AutoCommand = 1,
+
+    /// <summary>
+    /// Verify by comparing player-submitted answer
+    /// </summary>
+    ManualAnswer = 2,
+
+    /// <summary>
+    /// Require manual admin review
+    /// </summary>
+    ManualReview = 3
+}
+
+/// <summary>
+/// Environment status for IR challenge instances
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EnvironmentStatus>))]
+public enum EnvironmentStatus : byte
+{
+    /// <summary>
+    /// Environment is being created
+    /// </summary>
+    Creating = 0,
+
+    /// <summary>
+    /// Environment is ready for use
+    /// </summary>
+    Ready = 1,
+
+    /// <summary>
+    /// Environment creation failed
+    /// </summary>
+    Error = 2,
+
+    /// <summary>
+    /// Environment has been destroyed
+    /// </summary>
+    Destroyed = 3
 }
 
 /// <summary>
@@ -414,6 +563,17 @@ public enum ChallengeCategory : byte
 
     // ReSharper disable once InconsistentNaming
     OSINT = 12,
+
+    /// <summary>
+    /// Multi-stage attack chain scenario
+    /// </summary>
+    Scenario = 13,
+
+    /// <summary>
+    /// Incident response challenge
+    /// </summary>
+    // ReSharper disable once InconsistentNaming
+    IR = 14
 }
 
 /// <summary>

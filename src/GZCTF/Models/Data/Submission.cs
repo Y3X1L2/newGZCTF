@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 
@@ -50,8 +50,7 @@ public class Submission
     /// <summary>
     /// Type of submission (Flag, Writeup, IP, Credential, Custom)
     /// </summary>
-    [MaxLength(32)]
-    public string SubmissionType { get; set; } = "Flag";
+    public ScoringSubmissionType SubmissionType { get; set; } = ScoringSubmissionType.Flag;
 
     /// <summary>
     /// JSON content of the submission (used for Writeup, IP, Credential, Custom types)

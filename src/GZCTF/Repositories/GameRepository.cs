@@ -1,8 +1,9 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Cache;
 using GZCTF.Services.Config;
+using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Repositories;
@@ -586,8 +587,36 @@ public class GameRepository(
                 // only update last submission time for eligible solves,
                 // to prevent incorrectly ranking teams with ineligible
                 // late submissions above teams with eligible early submissions
-                scoreboardItem.Score += item.Score;
+                scoreboardItem.CtfScore += item.Score;
                 scoreboardItem.LastSubmissionTime = item.SubmitTimeUtc;
+            }
+        }
+
+
+        // 5.4. calculate AWD scores if applicable
+        if (game.GameType is GameType.AWD or GameType.Mixed)
+        {
+            var awdServices = await Context.AwdServices
+                .AsNoTracking()
+                .Where(s => s.GameId == game.Id)
+                .Select(s => s.Id)
+                .ToListAsync(token);
+
+            if (awdServices.Count > 0)
+            {
+                var awdSubmissions = await Context.Submissions
+                    .AsNoTracking()
+                    .Where(s => s.GameId == game.Id
+                                && awdServices.Contains(s.ChallengeId)
+                                && s.Status == AnswerResult.Accepted)
+                    .GroupBy(s => s.TeamId)
+                    .Select(g => new { TeamId = g.Key, Score = g.Sum(s => s.Score) })
+                    .ToDictionaryAsync(x => x.TeamId, x => x.Score, token);
+
+                foreach (var item in items.Values)
+                {
+                    item.AwdScore = awdSubmissions.GetValueOrDefault(item.Id, 0);
+                }
             }
         }
 

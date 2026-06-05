@@ -1,4 +1,4 @@
-﻿using GZCTF.Models.Internal;
+using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Container.Manager;
 using Microsoft.EntityFrameworkCore;
@@ -40,6 +40,13 @@ public class GameInstanceRepository(
         var challenge = instance.Challenge;
 
         if (!challenge.IsEnabled)
+        {
+            await transaction.RollbackAsync(token);
+            return null;
+        }
+
+        // Scenario and IRChallenge do not use the native GameInstance flag dispatch flow
+        if (challenge.Type.IsScenario() || challenge.Type.IsIRChallenge())
         {
             await transaction.RollbackAsync(token);
             return null;

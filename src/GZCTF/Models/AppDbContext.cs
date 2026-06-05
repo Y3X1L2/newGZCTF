@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -46,6 +46,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<WorkerNode> WorkerNodes { get; set; } = null!;
     public DbSet<DeploymentTarget> DeploymentTargets { get; set; } = null!;
     public DbSet<GamePhase> GamePhases => Set<GamePhase>();
+    public DbSet<TimeSlot> TimeSlots { get; set; } = null!;
+    public DbSet<ScoringRule> ScoringRules { get; set; } = null!;
+    public DbSet<Stage> Stages { get; set; } = null!;
+    public DbSet<ScenarioInstance> ScenarioInstances { get; set; } = null!;
+    public DbSet<IRCheckpoint> IRCheckpoints { get; set; } = null!;
+    public DbSet<IRInstance> IRInstances { get; set; } = null!;
+    public DbSet<AwdService> AwdServices { get; set; } = null!;
+    public DbSet<AwdServiceInstance> AwdServiceInstances { get; set; } = null!;
+    public DbSet<AwdRound> AwdRounds { get; set; } = null!;
+    public DbSet<AwdFlag> AwdFlags { get; set; } = null!;
+    public DbSet<AwdCheckerTask> AwdCheckerTasks { get; set; } = null!;
 
     private static ValueConverter<T?, string> GetJsonConverter<T>() where T : class, new() =>
         new(

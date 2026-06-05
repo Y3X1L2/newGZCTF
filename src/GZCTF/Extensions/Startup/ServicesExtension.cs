@@ -98,10 +98,23 @@ internal static class ServicesExtension
             builder.Services.AddSingleton<ImageStorage>();
             builder.Services.AddSingleton<ContainerOrchestrator>();
             builder.Services.AddSingleton<IVirtualMachineProvider, KvmProvider>();
+            #pragma warning disable CS0618 // VmManager is obsolete but still needed by teammate's EnvironmentService/GameChallengeRepository
+            builder.Services.AddSingleton<VmManager>();
+            #pragma warning restore CS0618
             builder.Services.AddScoped<LocalImageImporter>();
             builder.Services.AddScoped<IArchiveExtractor, ArchiveExtractor>();
 
             builder.Services.AddScoped<GamePhaseService>();
+
+            // AWD and scenario services (from teammate's branch)
+            builder.Services.AddScoped<EnvironmentService>();
+            builder.Services.AddScoped<ScoringService>();
+            builder.Services.AddScoped<LeaderboardService>();
+            builder.Services.AddScoped<GuacamoleProxy>();
+            builder.Services.AddScoped<SSHAccessService>();
+            builder.Services.AddScoped<CheckpointVerificationService>();
+            builder.Services.AddScoped<FlagChecker>();
+            builder.Services.AddScoped<AuditLogService>();
 
             // Phase 3 fleet services
             builder.Services.AddScoped<INodeRepository, NodeRepository>();

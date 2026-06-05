@@ -40,7 +40,7 @@ import { ChallengeInfo, ChallengeCategory, ScoreboardItem, SubmissionType } from
 import misc from '@Styles/Misc.module.css'
 import classes from '@Styles/ScoreboardTable.module.css'
 
-const Widths = [60, 60, 175, 60, 70, 60]
+const Widths = [60, 60, 175, 60, 70, 70, 70]
 const Lefts = Widths.reduce(
   (acc, cur) => {
     acc.push(acc[acc.length - 1] + cur)
@@ -55,7 +55,7 @@ const TableHeader = React.memo((table: Record<string, ChallengeInfo[]>) => {
   const { t } = useTranslation()
   const challengeCategoryLabelMap = useChallengeCategoryLabelMap()
 
-  const hiddenCol = [...Array(5).keys()].map((i) => (
+  const hiddenCol = [...Array(7).keys()].map((i) => (
     <Table.Th
       key={i}
       className={classes.left}
@@ -110,6 +110,8 @@ const TableHeader = React.memo((table: Record<string, ChallengeInfo[]>) => {
           t('game.label.score_table.rank_division'),
           t('common.label.team'),
           t('game.label.score_table.solved_count'),
+          'CTF',
+          'AWD',
           t('game.label.score_table.score_total'),
         ].map((header, idx) => (
           <Table.Th key={idx} className={cx(classes.left, classes.header)} style={{ left: Lefts[idx] }}>
@@ -161,10 +163,6 @@ const TableRow: FC<{
     }
   }, [iconMap, theme, colorScheme])
 
-  const totalScore = useMemo(() => {
-    return solved?.reduce((acc, cur) => acc + (cur?.score ?? 0), 0) ?? 0
-  }, [solved])
-
   return (
     <Table.Tr>
       <Table.Td className={cx(classes.mono, classes.left)} style={{ left: Lefts[0] }}>
@@ -199,7 +197,13 @@ const TableRow: FC<{
         {solved?.length}
       </Table.Td>
       <Table.Td className={cx(classes.mono, classes.left)} style={{ left: Lefts[4] }}>
-        {totalScore}
+        {item.ctfScore}
+      </Table.Td>
+      <Table.Td className={cx(classes.mono, classes.left)} style={{ left: Lefts[5] }}>
+        {item.awdScore ?? 0}
+      </Table.Td>
+      <Table.Td className={cx(classes.mono, classes.left)} style={{ left: Lefts[6] }}>
+        {item.score}
       </Table.Td>
       {challenges &&
         Object.keys(challenges).map((key) =>
