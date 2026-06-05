@@ -21,33 +21,68 @@ public class AwdScoreService(
 
         foreach (var part in participations)
         {
-            int attackScore = 0;
-            int slaScore = 0;
-            int defenseLost = 0;
-
             foreach (var service in services)
             {
-                // SLA 分
+                var participation = await context.Participations
+                    .FirstOrDefaultAsync(p => p.TeamId == part.TeamId && p.GameId == game.Id, token);
+                if (participation is null) continue;
+
+                // SLA score: checker status OK earns SLA points
                 var task = checkerTasks.FirstOrDefault(t => t.ServiceId == service.Id && t.TeamId == part.TeamId);
                 if (task?.Status == CheckerStatus.OK)
-                    slaScore += service.SlaPoints;
+                {
+                    var slaSubmission = new Submission
+                    {
+                        GameId = game.Id,
+                        TeamId = part.TeamId,
+                        ChallengeId = service.Id,
+                        Answer = $"SLA-{service.Name}-R{round.RoundNumber}",
+                        Status = AnswerResult.Accepted,
+                        SubmitTimeUtc = DateTimeOffset.UtcNow,
+                        SubmissionType = ScoringSubmissionType.Flag,
+                        Score = service.SlaPoints,
+                        ParticipationId = participation.Id
+                    };
+                    await context.Submissions.AddAsync(slaSubmission, token);
+                }
 
-                // 被攻击失分
-                var serviceFlags = flags.Where(f => f.ServiceId == service.Id && f.TeamId == part.TeamId && f.IsSubmitted);
-                var attackCount = Math.Min(serviceFlags.Count(), service.MaxAttackPerRound);
-                defenseLost += attackCount * service.AttackPoints;
+                // Defense lost: each stolen flag deducts attack points from the victim
+                var stolenFlags = flags.Where(f => f.ServiceId == service.Id && f.TeamId == part.TeamId && f.IsSubmitted);
+                var attackCount = Math.Min(stolenFlags.Count(), service.MaxAttackPerRound);
+                if (attackCount > 0)
+                {
+                    var lostScore = -(service.AttackPoints * attackCount);
+                    var lostSubmission = new Submission
+                    {
+                        GameId = game.Id,
+                        TeamId = part.TeamId,
+                        ChallengeId = service.Id,
+                        Answer = $"DEF-LOST-{service.Name}-R{round.RoundNumber}",
+                        Status = AnswerResult.Accepted,
+                        SubmitTimeUtc = DateTimeOffset.UtcNow,
+                        SubmissionType = ScoringSubmissionType.Flag,
+                        Score = lostScore,
+                        ParticipationId = participation.Id
+                    };
+                    await context.Submissions.AddAsync(lostSubmission, token);
+                }
             }
-
-            // 攻击分已经在 Flag 提交时计算，这里只记录 SLA 和防守失分
-            // 实际实现中，攻击分通过 RecordFlagSubmission 实时写入
         }
+
+        await context.SaveChangesAsync(token);
+        logger.LogInformation("AWD round {RoundId} scores calculated", round.Id);
     }
 
     public async Task RecordFlagSubmission(int gameId, int attackerTeamId, AwdFlag flag, AwdService service, CancellationToken token = default)
     {
         var score = service.AttackPoints;
 
-        // 创建 Submission
+        // Mark flag as submitted
+        flag.IsSubmitted = true;
+        flag.FirstSubmittedAt = DateTimeOffset.UtcNow;
+        context.AwdFlags.Update(flag);
+
+        // Create Submission for attack score
         var participation = await context.Participations
             .FirstOrDefaultAsync(p => p.TeamId == attackerTeamId && p.GameId == gameId, token);
 
@@ -74,7 +109,7 @@ public class AwdScoreService(
         await context.Submissions.AddAsync(submission, token);
         await context.SaveChangesAsync(token);
 
-        // 创建或更新 FirstSolve
+        // Create or update FirstSolve
         var existingFirstSolve = await context.FirstSolves
             .FindAsync([participation.Id, flag.ServiceId], token);
 
@@ -89,12 +124,17 @@ public class AwdScoreService(
             await context.SaveChangesAsync(token);
         }
 
+        // Get victim team name for event
+        var victimTeam = await context.Teams.FindAsync([flag.TeamId], token);
+        var victimTeamName = victimTeam?.Name ?? "Unknown";
+
+        // Fix: Values format = [points, victimTeam, serviceName]
         await eventRepository.AddEvent(new GameEvent
         {
             GameId = gameId,
             TeamId = attackerTeamId,
             Type = EventType.AwdFlagSubmit,
-            Values = [$"+{score} pts", $"Service: {service.Name}"]
+            Values = [$"+{score} pts", victimTeamName, service.Name]
         }, token);
     }
 }

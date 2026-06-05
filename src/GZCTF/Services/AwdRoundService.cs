@@ -1,6 +1,11 @@
+using System.Collections.Concurrent;
+using GZCTF.Hubs;
+using GZCTF.Hubs.Clients;
 using GZCTF.Models.Data;
+using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
 using GZCTF.Utils;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Services;
@@ -9,7 +14,7 @@ public class AwdRoundService : IHostedService, IDisposable
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<AwdRoundService> _logger;
-    private readonly Dictionary<int, AwdGameState> _gameStates = new();
+    private readonly ConcurrentDictionary<int, AwdGameState> _gameStates = new();
 
     public AwdRoundService(IServiceProvider serviceProvider, ILogger<AwdRoundService> logger)
     {
@@ -17,10 +22,39 @@ public class AwdRoundService : IHostedService, IDisposable
         _logger = logger;
     }
 
-    public Task StartAsync(CancellationToken cancellationToken)
+    public async Task StartAsync(CancellationToken cancellationToken)
     {
+        _logger.LogInformation("AWD Round Service starting, recovering active games...");
+
+        using var scope = _serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var activeRounds = await context.AwdRounds
+            .Where(r => r.Status == AwdRoundStatus.Running)
+            .GroupBy(r => r.GameId)
+            .ToListAsync(cancellationToken);
+
+        foreach (var group in activeRounds)
+        {
+            var gameId = group.Key;
+            var maxRound = group.Max(r => r.RoundNumber);
+            _logger.LogInformation("Recovering AWD game {GameId} at round {Round}", gameId, maxRound);
+
+            var game = await context.Games.FindAsync([gameId], cancellationToken);
+            if (game is not null)
+            {
+                var state = new AwdGameState
+                {
+                    GameId = gameId,
+                    CurrentRound = maxRound,
+                    IsRunning = true
+                };
+                _gameStates[gameId] = state;
+                _ = Task.Run(async () => await RunGameLoop(game, maxRound + 1));
+            }
+        }
+
         _logger.LogInformation("AWD Round Service started");
-        return Task.CompletedTask;
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
@@ -39,15 +73,25 @@ public class AwdRoundService : IHostedService, IDisposable
             IsRunning = true
         };
 
-        _ = Task.Run(async () => await RunGameLoop(game));
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await RunGameLoop(game);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "AWD game loop crashed for game {GameId}", game.Id);
+                _gameStates.TryRemove(game.Id, out _);
+            }
+        });
     }
 
     public void StopGame(int gameId)
     {
-        if (_gameStates.TryGetValue(gameId, out var state))
+        if (_gameStates.TryRemove(gameId, out var state))
         {
             state.IsRunning = false;
-            _gameStates.Remove(gameId);
         }
     }
 
@@ -56,7 +100,7 @@ public class AwdRoundService : IHostedService, IDisposable
         return _gameStates.TryGetValue(gameId, out var state) ? state.CurrentRound : null;
     }
 
-    private async Task RunGameLoop(Game game)
+    private async Task RunGameLoop(Game game, int startRound = 1)
     {
         using var scope = _serviceProvider.CreateScope();
         var awdRepo = scope.ServiceProvider.GetRequiredService<IAwdRepository>();
@@ -65,25 +109,36 @@ public class AwdRoundService : IHostedService, IDisposable
         var scoreService = scope.ServiceProvider.GetRequiredService<AwdScoreService>();
         var eventRepo = scope.ServiceProvider.GetRequiredService<IGameEventRepository>();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<MonitorHub, IMonitorClient>>();
 
         var services = await awdRepo.GetServicesByGame(game.Id);
         if (services.Length == 0) return;
 
-        var service = services[0];
-        var roundDuration = TimeSpan.FromMinutes(service.RoundDurationMinutes);
-        var totalRounds = service.TotalRounds;
+        // Validate all services share the same round configuration
+        var roundDurationMinutes = services[0].RoundDurationMinutes;
+        var totalRounds = services[0].TotalRounds;
+        if (services.Any(s => s.RoundDurationMinutes != roundDurationMinutes || s.TotalRounds != totalRounds))
+        {
+            _logger.LogError("AWD game {GameId} has services with inconsistent round configuration", game.Id);
+            return;
+        }
 
-        // 预创建实例
-        await instanceService.CreateInstancesForGame(game);
+        var roundDuration = TimeSpan.FromMinutes(roundDurationMinutes);
 
-        for (int roundNum = 1; roundNum <= totalRounds; roundNum++)
+        // Pre-create instances only on fresh start
+        if (startRound == 1)
+        {
+            await instanceService.CreateInstancesForGame(game);
+        }
+
+        for (int roundNum = startRound; roundNum <= totalRounds; roundNum++)
         {
             if (!_gameStates.TryGetValue(game.Id, out var state) || !state.IsRunning)
                 break;
 
             state.CurrentRound = roundNum;
 
-            // 1. 创建轮次
+            // 1. Create round
             var round = new AwdRound
             {
                 GameId = game.Id,
@@ -93,7 +148,7 @@ public class AwdRoundService : IHostedService, IDisposable
             };
             await awdRepo.CreateRound(round);
 
-            // 2. 生成 Flag
+            // 2. Generate flags
             var participations = game.Participations.Where(p => p.Status == ParticipationStatus.Accepted).ToList();
             var flags = new List<AwdFlag>();
 
@@ -114,7 +169,7 @@ public class AwdRoundService : IHostedService, IDisposable
 
             await awdRepo.CreateFlags(flags);
 
-            // 3. 注入 Flag（重启容器）
+            // 3. Inject flags (reset containers)
             foreach (var svc in services)
             {
                 foreach (var part in participations)
@@ -131,7 +186,7 @@ public class AwdRoundService : IHostedService, IDisposable
                 }
             }
 
-            // 4. 广播轮次开始
+            // 4. Broadcast round start via SignalR
             await eventRepo.AddEvent(new GameEvent
             {
                 GameId = game.Id,
@@ -139,23 +194,36 @@ public class AwdRoundService : IHostedService, IDisposable
                 Values = [$"Round {roundNum} started"]
             });
 
-            // 5. 执行 Checker
+            await hubContext.Clients.All.ReceivedAwdRoundChange(new AwdGameStatusModel
+            {
+                GameId = game.Id,
+                CurrentRound = roundNum,
+                RoundStartTime = round.StartTime,
+                RoundDurationMinutes = roundDurationMinutes,
+                Status = AwdRoundStatus.Running
+            });
+
+            _logger.LogInformation("AWD game {GameId} round {Round} started", game.Id, roundNum);
+
+            // 5. Execute checkers
             await checkerService.RunCheckerForRound(round, services, participations);
 
-            // 6. 等待轮次结束
+            // 6. Wait for round end
             await Task.Delay(roundDuration);
 
-            // 7. 结算得分
+            // 7. Calculate scores
             await scoreService.CalculateRoundScores(round, game);
 
             round.Status = AwdRoundStatus.Finished;
             round.EndTime = DateTimeOffset.UtcNow;
             context.AwdRounds.Update(round);
             await context.SaveChangesAsync();
+
+            _logger.LogInformation("AWD game {GameId} round {Round} finished", game.Id, roundNum);
         }
 
-        _gameStates.Remove(game.Id);
-        _logger.LogInformation("AWD game {GameId} finished", game.Id);
+        _gameStates.TryRemove(game.Id, out _);
+        _logger.LogInformation("AWD game {GameId} all rounds completed", game.Id);
     }
 
     public void Dispose()

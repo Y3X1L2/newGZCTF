@@ -41,11 +41,11 @@ export default function IRChallengeList() {
     setDeleting(true);
     try {
       await fetch(`/api/v1/ir-challenges/${deleteTarget.id}`, { method: 'DELETE' });
-      notifications.show({ title: '已删除', color: 'green' });
+      notifications.show({ title: '已删除', message: '题目已删除', color: 'green' });
       setChallenges(challenges.filter(c => c.id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch {
-      notifications.show({ title: '删除失败', color: 'red' });
+      notifications.show({ title: '删除失败', message: '请检查网络后重试', color: 'red' });
     } finally { setDeleting(false); }
   };
 

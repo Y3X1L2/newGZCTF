@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -71,17 +71,11 @@ namespace GZCTF.Migrations
                     RoundNumber = table.Column<int>(type: "integer", nullable: false),
                     StartTime = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     EndTime = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    AwdServiceId = table.Column<int>(type: "integer", nullable: true)
+                    Status = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AwdRounds", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AwdRounds_AwdServices_AwdServiceId",
-                        column: x => x.AwdServiceId,
-                        principalTable: "AwdServices",
-                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_AwdRounds_Games_GameId",
                         column: x => x.GameId,
@@ -98,7 +92,6 @@ namespace GZCTF.Migrations
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     ServiceId = table.Column<int>(type: "integer", nullable: false),
                     TeamId = table.Column<int>(type: "integer", nullable: false),
-                    ContainerId = table.Column<int>(type: "integer", nullable: true),
                     ContainerId1 = table.Column<Guid>(type: "uuid", nullable: true),
                     NetworkName = table.Column<string>(type: "text", nullable: false),
                     IsRunning = table.Column<bool>(type: "boolean", nullable: false),
@@ -114,7 +107,7 @@ namespace GZCTF.Migrations
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_AwdServiceInstances_Containers_ContainerId1",
+                        name: "FK_AwdServiceInstances_Containers_ContainerUuid",
                         column: x => x.ContainerId1,
                         principalTable: "Containers",
                         principalColumn: "Id");
@@ -227,11 +220,6 @@ namespace GZCTF.Migrations
                 name: "IX_AwdFlags_TeamId",
                 table: "AwdFlags",
                 column: "TeamId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AwdRounds_AwdServiceId",
-                table: "AwdRounds",
-                column: "AwdServiceId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_AwdRounds_GameId",

@@ -41,11 +41,8 @@ public class AwdSubmitModel
     [Required]
     public string Flag { get; set; } = string.Empty;
 
-    [Required]
-    public int TargetTeamId { get; set; }
-
-    [Required]
-    public int ServiceId { get; set; }
+    public int? TargetTeamId { get; set; }
+    public int? ServiceId { get; set; }
 }
 
 public class AwdGameStatusModel
@@ -66,6 +63,7 @@ public class AwdServiceStatusModel
 
 public class TeamServiceStatus
 {
+    public int InstanceId { get; set; }
     public int TeamId { get; set; }
     public string TeamName { get; set; } = string.Empty;
     public string? IpAddress { get; set; }

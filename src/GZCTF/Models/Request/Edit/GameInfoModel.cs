@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
 namespace GZCTF.Models.Request.Edit;
@@ -113,6 +113,11 @@ public class GameInfoModel
     [JsonPropertyName("bloodBonus")]
     public long BloodBonusValue { get; set; } = BloodBonus.DefaultValue;
 
+    /// <summary>
+    /// Game type (Jeopardy, AWD, Theory, Mixed)
+    /// </summary>
+    public GameType GameType { get; set; } = GameType.Jeopardy;
+
     internal static GameInfoModel FromGame(Data.Game game) =>
         new()
         {
@@ -134,6 +139,7 @@ public class GameInfoModel
             WriteupDeadline = game.WriteupDeadline,
             WriteupNote = game.WriteupNote,
             WriteupRequired = game.WriteupRequired,
-            BloodBonusValue = game.BloodBonus.Val
+            BloodBonusValue = game.BloodBonus.Val,
+            GameType = game.GameType
         };
 }

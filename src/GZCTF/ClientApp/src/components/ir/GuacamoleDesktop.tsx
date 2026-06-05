@@ -21,8 +21,9 @@ export default function GuacamoleDesktop({ connectionUrl, token }: GuacamoleDesk
         // Guacamole JS client is loaded via CDN or bundled import
         // This component assumes guacamole-common-js is available in the window scope
         // In production, install: pnpm add guacamole-common-js
-        const GuacClient = (window as Record<string, unknown>).Guacamole?.Client;
-        const GuacDisplay = (window as Record<string, unknown>).Guacamole?.Display;
+        const Guacamole = (window as unknown as Record<string, unknown>).Guacamole as any;
+        const GuacClient = Guacamole?.Client;
+        const GuacDisplay = Guacamole?.Display;
 
         if (!GuacClient || !GuacDisplay) {
           setState('error');
@@ -30,14 +31,14 @@ export default function GuacamoleDesktop({ connectionUrl, token }: GuacamoleDesk
           return;
         }
 
-        const tunnel = new (window as Record<string, unknown>).Guacamole?.HTTPTunnel(
+        const tunnel = new Guacamole.HTTPTunnel(
           connectionUrl, false, { token }
         );
 
         const client = new GuacClient(tunnel);
         display = new GuacDisplay(client.getDisplay());
 
-        if (containerRef.current) {
+        if (containerRef.current && display) {
           display.classList.add('guac-display');
           containerRef.current.innerHTML = '';
           containerRef.current.appendChild(display);

@@ -6,6 +6,7 @@ import {
   mdiFlagOutline,
   mdiKeyboardBackspace,
   mdiMonitorDashboard,
+  mdiSwordCross,
   mdiTagOutline,
   mdiTextBoxOutline,
 } from '@mdi/js'
@@ -14,7 +15,9 @@ import React, { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, Link, useNavigate, useParams } from 'react-router'
 import { AdminPage } from '@Components/admin/AdminPage'
+import { useAdminGame } from '@Hooks/useGame'
 import { DEFAULT_LOADING_OVERLAY } from '@Utils/Shared'
+import api, { GameType } from '@Api'
 import misc from '@Styles/Misc.module.css'
 
 export interface GameEditTabProps extends React.PropsWithChildren {
@@ -37,11 +40,18 @@ export const WithGameEditTab: FC<GameEditTabProps> = ({
   const location = useLocation()
   const { id } = useParams()
   const { t } = useTranslation()
+  const numId = parseInt(id ?? '-1')
+  const { game } = useAdminGame(numId)
+
+  const isAwdGame = game?.gameType === GameType.AWD || game?.gameType === GameType.Mixed
 
   const pages = [
     { icon: mdiTextBoxOutline, title: t('admin.tab.games.info'), path: 'info' },
     { icon: mdiBullhornOutline, title: t('admin.tab.games.notices'), path: 'notices' },
     { icon: mdiFlagOutline, title: t('admin.tab.games.challenges'), path: 'challenges' },
+    ...(isAwdGame
+      ? [{ icon: mdiSwordCross, title: t('admin.tab.games.awd'), path: 'awd-services' }]
+      : []),
     { icon: mdiTagOutline, title: t('admin.tab.games.divisions'), path: 'divisions' },
     { icon: mdiAccountGroupOutline, title: t('admin.tab.games.review'), path: 'review' },
     { icon: mdiFileDocumentCheckOutline, title: t('admin.tab.games.writeups'), path: 'writeups' },
