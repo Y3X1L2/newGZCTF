@@ -216,6 +216,45 @@ public enum GameType : byte
 }
 
 /// <summary>
+/// Theory exam question type
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<TheoryQuestionType>))]
+public enum TheoryQuestionType : byte
+{
+    /// <summary>
+    /// Single choice question
+    /// </summary>
+    SingleChoice = 0,
+
+    /// <summary>
+    /// Multiple choice question
+    /// </summary>
+    MultipleChoice = 1,
+
+    /// <summary>
+    /// True or false question
+    /// </summary>
+    TrueFalse = 2
+}
+
+/// <summary>
+/// Theory answer sheet status
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<TheoryAnswerSheetStatus>))]
+public enum TheoryAnswerSheetStatus : byte
+{
+    /// <summary>
+    /// Draft saved but not submitted
+    /// </summary>
+    Draft = 0,
+
+    /// <summary>
+    /// Final answer sheet submitted
+    /// </summary>
+    Submitted = 1
+}
+
+/// <summary>
 /// Game event type
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<EventType>))]

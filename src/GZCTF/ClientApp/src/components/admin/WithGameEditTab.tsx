@@ -44,18 +44,30 @@ export const WithGameEditTab: FC<GameEditTabProps> = ({
   const { game } = useAdminGame(numId)
 
   const isAwdGame = game?.gameType === GameType.AWD || game?.gameType === GameType.Mixed
+  const isTheoryGame = game?.gameType === GameType.Theory || game?.gameType === GameType.Mixed
+  const isTheoryOnly = game?.gameType === GameType.Theory
 
   const pages = [
     { icon: mdiTextBoxOutline, title: t('admin.tab.games.info'), path: 'info' },
     { icon: mdiBullhornOutline, title: t('admin.tab.games.notices'), path: 'notices' },
-    { icon: mdiFlagOutline, title: t('admin.tab.games.challenges'), path: 'challenges' },
+    ...(!isTheoryOnly ? [{ icon: mdiFlagOutline, title: t('admin.tab.games.challenges'), path: 'challenges' }] : []),
     ...(isAwdGame
       ? [{ icon: mdiSwordCross, title: t('admin.tab.games.awd'), path: 'awd-services' }]
       : []),
+    ...(isTheoryGame
+      ? [
+          { icon: mdiFileDocumentCheckOutline, title: '理论试卷', path: 'theory-paper' },
+          { icon: mdiAccountGroupOutline, title: '理论成绩', path: 'theory-results' },
+        ]
+      : []),
     { icon: mdiTagOutline, title: t('admin.tab.games.divisions'), path: 'divisions' },
     { icon: mdiAccountGroupOutline, title: t('admin.tab.games.review'), path: 'review' },
-    { icon: mdiFileDocumentCheckOutline, title: t('admin.tab.games.writeups'), path: 'writeups' },
-    { icon: mdiMonitorDashboard, title: t('admin.tab.games.screen'), path: 'screen/control' },
+    ...(!isTheoryOnly
+      ? [
+          { icon: mdiFileDocumentCheckOutline, title: t('admin.tab.games.writeups'), path: 'writeups' },
+          { icon: mdiMonitorDashboard, title: t('admin.tab.games.screen'), path: 'screen/control' },
+        ]
+      : []),
   ]
 
   const getTab = (path: string) => pages.find((page) => path.includes(page.path))

@@ -30,7 +30,7 @@ import { useIsMobile } from '@Utils/ThemeOverride'
 import { getGameStatus, useGame } from '@Hooks/useGame'
 import { usePageTitle } from '@Hooks/usePageTitle'
 import { useTeams, useUser } from '@Hooks/useUser'
-import api, { GameJoinModel, ParticipationStatus } from '@Api'
+import api, { GameJoinModel, GameType, ParticipationStatus } from '@Api'
 import classes from '@Styles/Banner.module.css'
 
 const GetAlert = (status: ParticipationStatus, team: string) => {
@@ -157,6 +157,7 @@ const GameDetail: FC = () => {
 
   // Allow join if game is not finished OR practice mode is enabled
   const isGameOpenForJoin = !finished || game?.practiceMode
+  const isTheoryOnly = game?.gameType === GameType.Theory
 
   const canSubmit =
     (status === ParticipationStatus.Unsubmitted || status === ParticipationStatus.Rejected) &&
@@ -209,8 +210,8 @@ const GameDetail: FC = () => {
             : GameActionMap.get(status)}
       </Button>
       {started && (
-        <Button component={Link} to={`/games/${numId}/scoreboard`}>
-          {t('game.button.scoreboard')}
+        <Button component={Link} to={`/games/${numId}/${isTheoryOnly ? 'theory-scoreboard' : 'scoreboard'}`}>
+          {isTheoryOnly ? '查看理论榜单' : t('game.button.scoreboard')}
         </Button>
       )}
       {(status === ParticipationStatus.Pending || status === ParticipationStatus.Rejected) && (
@@ -219,8 +220,8 @@ const GameDetail: FC = () => {
         </Button>
       )}
       {status === ParticipationStatus.Accepted && started && !isMobile && (!finished || game?.practiceMode) && (
-        <Button component={Link} to={`/games/${numId}/challenges`}>
-          {t('game.button.challenges')}
+        <Button component={Link} to={`/games/${numId}/${isTheoryOnly ? 'theory' : 'challenges'}`}>
+          {isTheoryOnly ? '进入理论考试' : t('game.button.challenges')}
         </Button>
       )}
     </>

@@ -1,6 +1,13 @@
 import { Card, LoadingOverlay, Stack, Text, Title } from '@mantine/core'
 import { showNotification } from '@mantine/notifications'
-import { mdiChartLine, mdiExclamationThick, mdiFlagOutline, mdiMonitorEye, mdiSwordCross } from '@mdi/js'
+import {
+  mdiChartLine,
+  mdiExclamationThick,
+  mdiFileDocumentCheckOutline,
+  mdiFlagOutline,
+  mdiMonitorEye,
+  mdiSwordCross,
+} from '@mdi/js'
 import { Icon } from '@mdi/react'
 import dayjs from 'dayjs'
 import duration from 'dayjs/plugin/duration'
@@ -63,17 +70,23 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
   const finished = dayjs() > dayjs(game?.end ?? new Date())
 
   const isAwdGame = game?.gameType === GameType.AWD || game?.gameType === GameType.Mixed
+  const isTheoryGame = game?.gameType === GameType.Theory || game?.gameType === GameType.Mixed
+  const isTheoryOnly = game?.gameType === GameType.Theory
 
   const pages = [
-    {
-      icon: mdiFlagOutline,
-      title: t('game.tab.challenge'),
-      path: 'challenges',
-      link: 'challenges',
-      requireJoin: true,
-      requireRole: Role.User,
-      requireAwd: false,
-    },
+    ...(!isTheoryOnly
+      ? [
+          {
+            icon: mdiFlagOutline,
+            title: t('game.tab.challenge'),
+            path: 'challenges',
+            link: 'challenges',
+            requireJoin: true,
+            requireRole: Role.User,
+            requireAwd: false,
+          },
+        ]
+      : []),
     ...(isAwdGame
       ? [
           {
@@ -87,15 +100,42 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
           },
         ]
       : []),
-    {
-      icon: mdiChartLine,
-      title: t('game.tab.scoreboard'),
-      path: 'scoreboard',
-      link: 'scoreboard',
-      requireJoin: false,
-      requireRole: Role.User,
-      requireAwd: false,
-    },
+    ...(isTheoryGame
+      ? [
+          {
+            icon: mdiFileDocumentCheckOutline,
+            title: '理论考试',
+            path: 'theory',
+            link: 'theory',
+            requireJoin: true,
+            requireRole: Role.User,
+            requireAwd: false,
+          },
+        ]
+      : []),
+    ...(!isTheoryOnly
+      ? [
+          {
+            icon: mdiChartLine,
+            title: t('game.tab.scoreboard'),
+            path: 'scoreboard',
+            link: 'scoreboard',
+            requireJoin: false,
+            requireRole: Role.User,
+            requireAwd: false,
+          },
+        ]
+      : [
+          {
+            icon: mdiChartLine,
+            title: '理论榜单',
+            path: 'theory-scoreboard',
+            link: 'theory-scoreboard',
+            requireJoin: false,
+            requireRole: Role.User,
+            requireAwd: false,
+          },
+        ]),
     {
       icon: mdiMonitorEye,
       title: t('game.tab.monitor.index'),

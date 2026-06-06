@@ -57,6 +57,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<AwdRound> AwdRounds { get; set; } = null!;
     public DbSet<AwdFlag> AwdFlags { get; set; } = null!;
     public DbSet<AwdCheckerTask> AwdCheckerTasks { get; set; } = null!;
+    public DbSet<TheoryQuestionBankItem> TheoryQuestionBankItems { get; set; } = null!;
+    public DbSet<TheoryPaper> TheoryPapers { get; set; } = null!;
+    public DbSet<TheoryPaperQuestion> TheoryPaperQuestions { get; set; } = null!;
+    public DbSet<TheoryAnswerSheet> TheoryAnswerSheets { get; set; } = null!;
+    public DbSet<TheorySubmissionAnswer> TheorySubmissionAnswers { get; set; } = null!;
 
     private static ValueConverter<T?, string> GetJsonConverter<T>() where T : class, new() =>
         new(
@@ -79,6 +84,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
         // var setComparer = GetEnumerableComparer<HashSet<string>, string>();
         var listConverter = GetJsonConverter<List<string>>();
         var listComparer = GetEnumerableComparer<List<string>, string>();
+        var intListConverter = GetJsonConverter<List<int>>();
+        var intListComparer = GetEnumerableComparer<List<int>, int>();
 
         builder.Entity<UserInfo>(entity =>
         {
@@ -473,6 +480,106 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .HasForeignKey(e => e.GameId);
 
             entity.HasKey(e => new { e.GameId, e.TeamId, e.UserId });
+        });
+
+        builder.Entity<TheoryQuestionBankItem>(entity =>
+        {
+            entity.Property(e => e.Type)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.Property(e => e.Options)
+                .HasConversion(listConverter)
+                .Metadata
+                .SetValueComparer(listComparer);
+
+            entity.Property(e => e.AnswerIndexes)
+                .HasConversion(intListConverter)
+                .Metadata
+                .SetValueComparer(intListComparer);
+        });
+
+        builder.Entity<TheoryPaper>(entity =>
+        {
+            entity.HasOne(e => e.Game)
+                .WithMany()
+                .HasForeignKey(e => e.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(e => e.Questions)
+                .WithOne(e => e.Paper)
+                .HasForeignKey(e => e.PaperId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TheoryPaperQuestion>(entity =>
+        {
+            entity.Property(e => e.Type)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.Property(e => e.Options)
+                .HasConversion(listConverter)
+                .Metadata
+                .SetValueComparer(listComparer);
+
+            entity.Property(e => e.AnswerIndexes)
+                .HasConversion(intListConverter)
+                .Metadata
+                .SetValueComparer(intListComparer);
+
+            entity.HasOne(e => e.SourceQuestion)
+                .WithMany()
+                .HasForeignKey(e => e.SourceQuestionId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<TheoryAnswerSheet>(entity =>
+        {
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.HasOne(e => e.Game)
+                .WithMany()
+                .HasForeignKey(e => e.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Paper)
+                .WithMany()
+                .HasForeignKey(e => e.PaperId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Participation)
+                .WithMany()
+                .HasForeignKey(e => e.ParticipationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(e => e.Answers)
+                .WithOne(e => e.AnswerSheet)
+                .HasForeignKey(e => e.AnswerSheetId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.Navigation(e => e.Participation).AutoInclude();
+            entity.Navigation(e => e.User).AutoInclude();
+        });
+
+        builder.Entity<TheorySubmissionAnswer>(entity =>
+        {
+            entity.Property(e => e.SelectedIndexes)
+                .HasConversion(intListConverter)
+                .Metadata
+                .SetValueComparer(intListComparer);
+
+            entity.HasOne(e => e.PaperQuestion)
+                .WithMany()
+                .HasForeignKey(e => e.PaperQuestionId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<ApiToken>(entity =>
