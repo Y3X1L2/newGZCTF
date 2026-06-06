@@ -328,6 +328,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
         builder.Entity<Submission>(entity =>
         {
             entity.Property(e => e.Status).HasConversion<string>();
+            entity.Property(e => e.SubmissionType)
+                .HasConversion<string>()
+                .HasMaxLength(32);
 
             entity.HasOne(e => e.ReviewedBy)
                 .WithMany()
@@ -344,6 +347,27 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
             entity.Navigation(e => e.Team).AutoInclude();
             entity.Navigation(e => e.User).AutoInclude();
             entity.Navigation(e => e.GameChallenge).AutoInclude();
+        });
+
+        builder.Entity<AwdServiceInstance>(entity =>
+        {
+            entity.Property(e => e.ContainerId)
+                .HasColumnName("ContainerId1");
+
+            entity.HasOne(e => e.Container)
+                .WithMany()
+                .HasForeignKey(e => e.ContainerId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.Service)
+                .WithMany(e => e.Instances)
+                .HasForeignKey(e => e.ServiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Team)
+                .WithMany()
+                .HasForeignKey(e => e.TeamId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<FlagContext>(entity =>

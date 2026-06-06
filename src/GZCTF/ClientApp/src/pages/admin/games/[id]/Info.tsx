@@ -7,6 +7,7 @@ import {
   Image,
   Input,
   NumberInput,
+  Select,
   SimpleGrid,
   Stack,
   Switch,
@@ -40,7 +41,7 @@ import { downloadBlob } from '@Utils/ApiHelper'
 import { getInputNumber, randomInviteCode, showErrorMsg, tryGetErrorMsg } from '@Utils/Shared'
 import { IMAGE_MIME_TYPES } from '@Utils/Shared'
 import { useAdminGame } from '@Hooks/useGame'
-import api, { GameInfoModel } from '@Api'
+import api, { GameInfoModel, GameType } from '@Api'
 import misc from '@Styles/Misc.module.css'
 
 dayjs.extend(localizedFormat)
@@ -231,6 +232,19 @@ const GameInfoEdit: FC = () => {
           value={game?.title}
           required
           onChange={(e) => game && setGame({ ...game, title: e.target.value })}
+        />
+        <Select
+          label="Game type"
+          disabled={disabled}
+          required
+          value={game?.gameType ?? GameType.Jeopardy}
+          data={[
+            { value: GameType.Jeopardy, label: 'Jeopardy' },
+            { value: GameType.AWD, label: 'AWD' },
+            { value: GameType.Theory, label: 'Theory' },
+            { value: GameType.Mixed, label: 'Mixed' },
+          ]}
+          onChange={(value) => game && value && setGame({ ...game, gameType: value as GameType })}
         />
         <NumberInput
           label={t('admin.content.games.info.member_limit.label')}

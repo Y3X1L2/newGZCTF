@@ -120,8 +120,8 @@ export const useChallengeCategoryLabelMap = () => {
   const { colorScheme } = useMantineColorScheme()
   const invert = colorScheme === 'dark' ? 'light' : 'dark'
   const map = useMemo(
-    () =>
-      new Map<ChallengeCategory, ChallengeCategoryItemProps>([
+    () => {
+      const labels = new Map<ChallengeCategory, ChallengeCategoryItemProps>([
         [
           ChallengeCategory.Misc,
           {
@@ -252,7 +252,40 @@ export const useChallengeCategoryLabelMap = () => {
             colors: theme.colors['grape'],
           },
         ],
-      ]),
+        [
+          ChallengeCategory.Scenario,
+          {
+            desrc: t('challenge.category.scenario'),
+            icon: mdiTarget,
+            name: ChallengeCategory.Scenario,
+            color: 'lime',
+            colors: theme.colors['lime'],
+          },
+        ],
+        [
+          ChallengeCategory.IR,
+          {
+            desrc: t('challenge.category.ir'),
+            icon: mdiShieldHalfFull,
+            name: ChallengeCategory.IR,
+            color: 'cyan',
+            colors: theme.colors['cyan'],
+          },
+        ],
+      ])
+
+      const getLabel = labels.get.bind(labels)
+      labels.get = (key) =>
+        getLabel(key) ?? {
+          desrc: String(key),
+          icon: mdiHelpCircleOutline,
+          name: String(key) as ChallengeCategory,
+          color: 'gray',
+          colors: theme.colors['gray'],
+        }
+
+      return labels
+    },
     [t, theme, invert]
   )
 

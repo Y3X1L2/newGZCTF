@@ -388,7 +388,7 @@ public class GameRepository(
                 .Where(x => x.participation.GameId == game.Id &&
                             x.participation.Status == ParticipationStatus.Accepted &&
                             challengeIds.Contains(x.fs.ChallengeId))
-                .Join(Context.Submissions.AsNoTracking().IgnoreAutoIncludes().Include(s => s.User),
+                .Join(Context.Submissions.AsNoTracking().IgnoreAutoIncludes(),
                     x => x.fs.SubmissionId,
                     submission => submission.Id,
                     (x, submission) => new SolveSnapshot(
@@ -396,7 +396,7 @@ public class GameRepository(
                         x.fs.FlagId!.Value,
                         x.fs.ParticipationId,
                         submission.SubmitTimeUtc,
-                        submission.UserName))
+                        submission.User == null ? string.Empty : submission.User.UserName ?? string.Empty))
                 .ToListAsync(token);
 
             await trans.CommitAsync(token);

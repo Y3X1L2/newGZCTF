@@ -49,7 +49,8 @@ builder.Services.AddScoped<IAwdRepository, AwdRepository>();
 builder.Services.AddScoped<AwdInstanceService>();
 builder.Services.AddScoped<AwdCheckerService>();
 builder.Services.AddScoped<AwdScoreService>();
-builder.Services.AddHostedService<AwdRoundService>();
+builder.Services.AddSingleton<AwdRoundService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<AwdRoundService>());
 builder.AddWebServices();
 builder.AddDevelopmentServices();
 

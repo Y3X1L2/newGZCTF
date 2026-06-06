@@ -573,6 +573,8 @@ public class EditController(
         var res = await challengeRepository.CreateChallenge(game,
             new GameChallenge { Title = model.Title, Type = model.Type, Category = model.Category }, token);
 
+        await cacheHelper.FlushScoreboardCache(id, token);
+
         return Ok(ChallengeEditDetailModel.FromChallenge(res));
     }
 
@@ -891,6 +893,8 @@ public class EditController(
 
         await challengeRepository.UpdateAttachment(challenge, model, token);
 
+        await cacheHelper.FlushScoreboardCache(id, token);
+
         return Ok();
     }
 
@@ -919,6 +923,8 @@ public class EditController(
 
         await challengeRepository.AddFlags(challenge, models, token);
 
+        await cacheHelper.FlushScoreboardCache(id, token);
+
         return Ok();
     }
 
@@ -945,7 +951,11 @@ public class EditController(
             return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Challenge_NotFound)],
                 StatusCodes.Status404NotFound));
 
-        return Ok(await challengeRepository.RemoveFlag(challenge, fId, token));
+        var result = await challengeRepository.RemoveFlag(challenge, fId, token);
+
+        await cacheHelper.FlushScoreboardCache(id, token);
+
+        return Ok(result);
     }
 
     /// <summary>
@@ -991,6 +1001,8 @@ public class EditController(
         flag.CustomName = model.CustomName;
 
         await challengeRepository.SaveAsync(token);
+
+        await cacheHelper.FlushScoreboardCache(id, token);
 
         return Ok();
     }

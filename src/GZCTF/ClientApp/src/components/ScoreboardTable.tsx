@@ -17,7 +17,7 @@ import {
   useMantineTheme,
 } from '@mantine/core'
 import { useDebouncedValue } from '@mantine/hooks'
-import { mdiAccountGroup, mdiMagnify, mdiFlagOutline } from '@mdi/js'
+import { mdiAccountGroup, mdiMagnify, mdiFlagOutline, mdiHelpCircleOutline } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import cx from 'clsx'
 import dayjs from 'dayjs'
@@ -75,7 +75,13 @@ const TableHeader = React.memo((table: Record<string, ChallengeInfo[]>) => {
       <Table.Tr className={misc.noBorder}>
         {hiddenCol}
         {Object.keys(table).map((key) => {
-          const cate = challengeCategoryLabelMap.get(key as ChallengeCategory)!
+          const cate = challengeCategoryLabelMap.get(key as ChallengeCategory) ?? {
+            desrc: key,
+            icon: mdiHelpCircleOutline,
+            name: key as ChallengeCategory,
+            color: 'gray',
+            colors: theme.colors.gray,
+          }
           return (
             <Table.Th
               key={key}
@@ -214,7 +220,13 @@ const TableRow: FC<{
 
             if (!icon) return <Table.Td key={item.id} className={classes.mono} />
 
-            const cate = challengeCategoryLabelMap.get(item.category as ChallengeCategory)!
+            const cate = challengeCategoryLabelMap.get(item.category as ChallengeCategory) ?? {
+              desrc: item.category,
+              icon: mdiHelpCircleOutline,
+              name: item.category as ChallengeCategory,
+              color: 'gray',
+              colors: theme.colors.gray,
+            }
 
             return (
               <Table.Td key={item.id} className={classes.mono}>

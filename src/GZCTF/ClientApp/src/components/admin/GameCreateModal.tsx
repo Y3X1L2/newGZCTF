@@ -1,4 +1,4 @@
-import { Button, Group, Modal, ModalProps, Stack, Switch, TextInput } from '@mantine/core'
+import { Button, Group, Modal, ModalProps, Select, Stack, Switch, TextInput } from '@mantine/core'
 import { DateTimePicker } from '@mantine/dates'
 import { useInputState } from '@mantine/hooks'
 import { showNotification } from '@mantine/notifications'
@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import { SwitchLabel } from '@Components/admin/SwitchLabel'
 import { showErrorMsg } from '@Utils/Shared'
-import api, { GameInfoModel } from '@Api'
+import api, { GameInfoModel, GameType } from '@Api'
 import misc from '@Styles/Misc.module.css'
 
 interface GameCreateModalProps extends ModalProps {
@@ -25,6 +25,7 @@ export const GameCreateModal: FC<GameCreateModalProps> = (props) => {
   const [start, setStart] = useInputState(dayjs())
   const [end, setEnd] = useInputState(dayjs().add(2, 'h'))
   const [isTest, setIsTest] = useState(false)
+  const [gameType, setGameType] = useState(GameType.Jeopardy)
 
   const { t } = useTranslation()
 
@@ -45,6 +46,7 @@ export const GameCreateModal: FC<GameCreateModalProps> = (props) => {
       const res = await api.edit.editAddGame({
         title,
         isTest,
+        gameType,
         start: start.valueOf(),
         end: end.valueOf(),
       })
@@ -99,6 +101,18 @@ export const GameCreateModal: FC<GameCreateModalProps> = (props) => {
           }}
           error={end < start}
           required
+        />
+        <Select
+          label="Game type"
+          required
+          value={gameType}
+          data={[
+            { value: GameType.Jeopardy, label: 'Jeopardy' },
+            { value: GameType.AWD, label: 'AWD' },
+            { value: GameType.Theory, label: 'Theory' },
+            { value: GameType.Mixed, label: 'Mixed' },
+          ]}
+          onChange={(value) => value && setGameType(value as GameType)}
         />
         <Switch
           checked={isTest}

@@ -202,6 +202,7 @@ public partial class Game
         Hidden = model.Hidden;
         PracticeMode = model.PracticeMode;
         IsTest = model.IsTest;
+        GameType = model.GameType;
         AcceptWithoutReview = model.AcceptWithoutReview;
         InviteCode = model.InviteCode;
         EndTimeUtc = model.EndTimeUtc;
