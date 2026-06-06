@@ -1,0 +1,119 @@
+{
+  "anchor": {
+    "login": "アカウントを持っていますか？",
+    "recovery": "パスワードをお忘れですか？"
+  },
+  "button": {
+    "change_password": "パスワードを変更",
+    "confirm_email": "メールを確認",
+    "login": "ログイン",
+    "recovery": "確認メールを送信",
+    "register": "新規登録",
+    "reset": "パスワードをリセット",
+    "save_profile": "個人情報を保存",
+    "update_email": "メールを変更",
+    "verify_account": "アカウントを認証"
+  },
+  "content": {
+    "confirm": {
+      "message": "次のボタンをクリックしてメールの変更を確認してください。"
+    },
+    "link_check": "リンクを確認して再アクセスしてください",
+    "link_invalid": "あかん! リンクは無効のようです",
+    "profile": {
+      "update_email_note": "メールアドレスを変更すると、元のメールアドレスがログインできなくなります。<br/>新メールアドレスに確認用のリンクが含まれたメールが送信されますので、そこから確認を完了してください。"
+    },
+    "verify": {
+      "message": "次のボタンをクリックしてアカウントを認証してください"
+    },
+    "verify_email": {
+      "message": "もう少しで完了です！<br/>次のメールアドレスに確認メールを送信しました：",
+      "not_received": {
+        "list": "<0>迷惑メールフォルダを確認してください。</0><1>同じメールアドレスで再登録できます。確認後、最新の登録情報が使用されます。</1>",
+        "title": "メールが届かないときは"
+      },
+      "title": "メール確認"
+    },
+    "welcome": "{{decodeEmail}}, こんにちは👋"
+  },
+  "label": {
+    "bio": "一言",
+    "captcha": "キャプチャ",
+    "email": "メール",
+    "email_new": "新メール",
+    "password": "パスワード",
+    "password_old": "現在のパスワード",
+    "password_retype": "パスワード再確認",
+    "phone": "電話番号",
+    "real_name": "氏名",
+    "student_id": "学生番号",
+    "username": "ユーザー名",
+    "username_or_email": "ユーザー名またはメール"
+  },
+  "notification": {
+    "captcha": {
+      "not_valid": "キャプチャ認証をお待ちください……",
+      "request_sent": {
+        "message": "サーバーからの認証を待っています",
+        "title": "リクエストが送信されました……"
+      }
+    },
+    "confirm": {
+      "failed": "メールの認証に失敗しました",
+      "success": "メールの認証が完了しました"
+    },
+    "login": {
+      "banned": "ユーザーはブロックされました",
+      "invalid": "ユーザー名またはパスワードが正しくありません",
+      "success": {
+        "message": "ログイン前のページへ移動",
+        "title": "ログイン成功"
+      }
+    },
+    "logout": "ログアウト成功",
+    "profile": {
+      "password_updated": "パスワードが変更されましたためログインし直してください。",
+      "profile_updated": "個人情報が更新されました。"
+    },
+    "register": {
+      "logged_in": "新規登録が完了しました",
+      "request_sent": {
+        "message": "管理者の承認までしばらくお待ちください~",
+        "title": "新規登録リクエストが送信されました"
+      }
+    },
+    "reset": {
+      "success": {
+        "message": "ログインし直してください",
+        "title": "パスワードがリセットされました"
+      }
+    },
+    "verify": {
+      "failed": "アカウントを認証できませんでした",
+      "success": "アカウント認証済みです。ログインしてください"
+    }
+  },
+  "password": {
+    "empty": "パスワードは空にできません",
+    "include_lowercase": "小文字が含まれています",
+    "include_number": "数字が含まれています",
+    "include_symbol": "特殊文字が含まれています",
+    "include_uppercase": "大文字が含まれています",
+    "min_length": "最低 6 文字",
+    "not_match": "パスワードが一致しません"
+  },
+  "placeholder": {
+    "bio": "この怠け者は何でも書いていない",
+    "computing": "計算中にしばらくお待ちください..."
+  },
+  "title": {
+    "confirm": "メールによる認証",
+    "login": "ログイン",
+    "profile": "個人情報",
+    "recovery": "アカウント回復",
+    "register": "新規登録",
+    "reset": "パスワードリセット",
+    "verify": "アカウント認証",
+    "verify_email": "メール確認待ち"
+  }
+}

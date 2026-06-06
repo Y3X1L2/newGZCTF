@@ -1,0 +1,137 @@
+@keyframes marqueeX {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-33.33%, 0, 0);
+  }
+}
+
+.container {
+  height: calc(100vh - 16px);
+  gap: var(--mantine-spacing-xl);
+  padding: var(--mantine-spacing-xl);
+
+  .scrollContainer {
+    position: relative;
+    height: 40px;
+    overflow: hidden;
+    max-width: calc(80vw - var(--app-shell-navbar-width));
+    mask: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%);
+  }
+
+  .scrollGroup {
+    display: flex;
+    width: max-content;
+    animation: marqueeX 32s linear infinite;
+    will-change: transform;
+    backface-visibility: hidden;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.container[data-mobile] {
+  height: auto;
+  gap: var(--mantine-spacing-lg);
+  padding: var(--mantine-spacing-md);
+
+  .scrollContainer {
+    max-width: 100vw;
+  }
+
+  .scrollGroup {
+    animation: marqueeX 16s linear infinite;
+  }
+
+  .mainIcon {
+    width: 3rem;
+    height: 3rem;
+  }
+
+  .mainTitle {
+    font-size: 2.5rem;
+  }
+
+  .slogan {
+    display: none;
+  }
+
+  .contentFlex {
+    gap: var(--mantine-spacing-lg);
+    flex-direction: column;
+  }
+
+  .contentStack {
+    min-width: 100%;
+    max-width: 100%;
+  }
+
+  .contributorsGroup {
+    gap: var(--mantine-spacing-xs);
+  }
+
+  .contributorLink {
+    font-size: var(--mantine-font-size-sm);
+  }
+
+  .resourceLink {
+    font-size: var(--mantine-font-size-sm);
+  }
+
+  .licenseText {
+    font-size: var(--mantine-font-size-xs);
+  }
+
+  .licenseLink {
+    font-size: var(--mantine-font-size-sm);
+  }
+
+  .versionBadge {
+    font-size: var(--mantine-font-size-md);
+  }
+
+  .copyright {
+    max-width: 90%;
+  }
+}
+
+.copyright {
+  max-width: 100%;
+  font-size: var(--mantine-font-size-sm);
+
+  &::after {
+    content: 'All Rights Reserved.';
+    display: block;
+    margin-top: var(--mantine-spacing-xs);
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.blink {
+  font-family: var(--mantine-font-family-monospace);
+  font-weight: bold;
+  font-size: var(--mantine-font-size-xl);
+  animation: blink 1s infinite steps(1, start);
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .scrollGroup {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+.contributorAvatar {
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+}

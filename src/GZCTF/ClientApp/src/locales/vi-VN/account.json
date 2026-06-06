@@ -1,0 +1,119 @@
+{
+  "anchor": {
+    "login": "Đã có tài khoản?",
+    "recovery": "Quên mật khẩu?"
+  },
+  "button": {
+    "change_password": "Thay đổi mật khẩu",
+    "confirm_email": "Xác nhận Email",
+    "login": "Đăng nhập",
+    "recovery": "Gửi email đặt lại mật khẩu",
+    "register": "Đăng ký",
+    "reset": "Đặt lại Mật khẩu",
+    "save_profile": "Lưu Hồ sơ",
+    "update_email": "Thay đổi Email",
+    "verify_account": "Xác minh Tài khoản"
+  },
+  "content": {
+    "confirm": {
+      "message": "Nhấn vào nút bên dưới để xác nhận email."
+    },
+    "link_check": "Vui lòng kiểm tra link kích hoạt và thử lại",
+    "link_invalid": "Ouch! Link kích hoạt của bạn có vấn đề",
+    "profile": {
+      "update_email_note": "Sau khi thay đổi email, bạn sẽ không thể sử dụng địa chỉ email cũ để đăng nhập nữa. <br/>Một email đã được gửi tới địa chỉ email mới của bạn, hãy nhấp vào đường link trong đó để hoàn tất quá trình xác minh."
+    },
+    "verify": {
+      "message": "Vui lòng nhấp vào nút phía dưới để xác minh tài khoản."
+    },
+    "verify_email": {
+      "message": "Gần hoàn tất rồi!<br/>Chúng tôi đã gửi email tới:",
+      "not_received": {
+        "list": "<0>Kiểm tra thư mục spam hoặc thư rác.</0><1>Bạn có thể đăng ký lại bằng cùng email; thông tin đăng ký mới nhất sẽ được dùng sau khi xác minh.</1>",
+        "title": "Không nhận được email?"
+      },
+      "title": "Xác minh email"
+    },
+    "welcome": "Xin chào, {{decodeEmail}} 👋"
+  },
+  "label": {
+    "bio": "Mô tả",
+    "captcha": "Captcha",
+    "email": "Email",
+    "email_new": "Email mới",
+    "password": "Mật khẩu",
+    "password_old": "Mật khẩu hiện tại",
+    "password_retype": "Xác nhận mật khẩu",
+    "phone": "Số điện thoại",
+    "real_name": "Tên thật",
+    "student_id": "Mã số sinh viên",
+    "username": "Tên người dùng",
+    "username_or_email": "Tên người dùng hoặc Email"
+  },
+  "notification": {
+    "captcha": {
+      "not_valid": "Đang tải captcha, vui lòng đợi...",
+      "request_sent": {
+        "message": "Đang chờ xác minh máy chủ",
+        "title": "Đã gửi yêu cầu..."
+      }
+    },
+    "confirm": {
+      "failed": "Xác nhận email thất bại",
+      "success": "Đã xác minh Email"
+    },
+    "login": {
+      "banned": "Người dùng đã bị cấm",
+      "invalid": "Sai tên người dùng hoặc mật khẩu",
+      "success": {
+        "message": "Chuyển hướng đến trang trước khi đăng nhập",
+        "title": "Đăng nhập thành công"
+      }
+    },
+    "logout": "Đăng xuất thành công",
+    "profile": {
+      "password_updated": "Mật khẩu đã thay đổi, vui lòng đăng nhập lại",
+      "profile_updated": "Hồ sơ đã được cập nhật"
+    },
+    "register": {
+      "logged_in": "Đăng ký thành công",
+      "request_sent": {
+        "message": "Vui lòng đợi quản trị viên xác nhận kích hoạt~",
+        "title": "Đã gửi yêu cầu đăng ký"
+      }
+    },
+    "reset": {
+      "success": {
+        "message": "Vui lòng đăng nhập lại",
+        "title": "Mật khẩu đã bị đặt lại"
+      }
+    },
+    "verify": {
+      "failed": "Xác minh tài khoản thất bại",
+      "success": "Đã xác minh tài khoản, vui lòng đăng nhập"
+    }
+  },
+  "password": {
+    "empty": "Mật khẩu không được để trống",
+    "include_lowercase": "Bao gồm chữ thường",
+    "include_number": "Bao gồm số",
+    "include_symbol": "Bao gồm ký tự đặc biệt",
+    "include_uppercase": "Bao gồm chữ hoa",
+    "min_length": "Ít nhất 6 ký tự",
+    "not_match": "Mật khẩu không trùng khớp"
+  },
+  "placeholder": {
+    "bio": "Người dùng này khá lười biếng, không có gì được viết ở đây cả",
+    "computing": "Vui lòng chờ trong giây lát..."
+  },
+  "title": {
+    "confirm": "Xác Minh Email",
+    "login": "Đăng nhập",
+    "profile": "Hồ sơ người dùng",
+    "recovery": "Khôi phục tài khoản",
+    "register": "Đăng ký",
+    "reset": "Đặt lại mật khẩu",
+    "verify": "Xác Minh Tài Khoản",
+    "verify_email": "Đang Chờ Xác Minh Email"
+  }
+}

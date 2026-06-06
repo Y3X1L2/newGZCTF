@@ -1,0 +1,9 @@
+/* The GZ::CTF Project @unknown
+ * 
+ * License   : GNU Affero General Public License v3.0 (Core)
+ * License   : LicenseRef-GZCTF-Restricted (Restricted components)
+ * Commit    : Unofficial build version
+ * Build     : 2026-05-20T05:57:19.720Z
+ * Copyright (C) 2022-2026 GZTimeWalker. All Rights Reserved.
+ */
+import{g as e}from"./ngkkuwm9.js";import{n as t}from"./khr0xm81.js";import{t as n}from"./fxwlajkf2.js";import{t as r}from"./gi0mgpwi2.js";import{t as i}from"./d67vm5lx2.js";import{n as a}from"./f9u6cnui.js";import{O as o,k as s,x as c}from"./index.ot524qw3.js";var l=e(),u=e=>fetch(e).then(e=>e.json());function d(){let{data:e,error:d,isLoading:f,mutate:p}=a(`/api/v1/docker/images`,u),m=async e=>{await fetch(`/api/v1/docker/images/${e}`,{method:`DELETE`}),p(),t.show({title:`已删除`,message:`Docker 镜像已移除`,color:`green`})};return f?(0,l.jsx)(r,{children:`加载中...`}):(0,l.jsxs)(`div`,{"data-testid":`docker-images-page`,children:[(0,l.jsx)(n,{justify:`space-between`,mb:`lg`,children:(0,l.jsx)(c,{order:2,children:`Docker 镜像管理`})}),(0,l.jsxs)(i,{children:[(0,l.jsx)(i.Thead,{children:(0,l.jsxs)(i.Tr,{children:[(0,l.jsx)(i.Th,{children:`名称`}),(0,l.jsx)(i.Th,{children:`标签`}),(0,l.jsx)(i.Th,{children:`系统`}),(0,l.jsx)(i.Th,{children:`大小`}),(0,l.jsx)(i.Th,{children:`操作`})]})}),(0,l.jsx)(i.Tbody,{children:e?.map(e=>(0,l.jsxs)(i.Tr,{children:[(0,l.jsx)(i.Td,{children:e.name}),(0,l.jsx)(i.Td,{children:e.imageTag||`-`}),(0,l.jsx)(i.Td,{children:(0,l.jsx)(s,{children:e.osType===0?`Linux`:`Windows`})}),(0,l.jsxs)(i.Td,{children:[(e.fileSize/1024/1024).toFixed(1),` MB`]}),(0,l.jsx)(i.Td,{children:(0,l.jsx)(o,{size:`xs`,color:`red`,onClick:()=>m(e.id),children:`删除`})})]},e.id))})]})]})}export{d as default};

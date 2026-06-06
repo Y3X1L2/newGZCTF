@@ -1,0 +1,33 @@
+{
+  "button": {
+    "delete": "게시물 삭제",
+    "edit": "게시물 수정",
+    "goto": "이동",
+    "new": "글쓰기",
+    "save": "저장"
+  },
+  "content": {
+    "delete": "정말로 {{title}} 게시글을 삭제하시겠습니까?",
+    "details": "자세히 보기",
+    "metadata": "{{author}} 가 {{date}} 에 작성하였습니다.",
+    "pinned": "[고정]",
+    "updated": {
+      "content": "글이 변경되었습니다. 저장하시겠습니까?",
+      "title": "글 변경됨"
+    }
+  },
+  "label": {
+    "add_tag": "태그를 추가하세요",
+    "content": "내용",
+    "summary": "요약",
+    "tag": "태그",
+    "title": "제목"
+  },
+  "notification": {
+    "created": "글이 생성되었습니다.",
+    "saved": "글이 저장되었습니다."
+  },
+  "title": {
+    "index": "게시글"
+  }
+}

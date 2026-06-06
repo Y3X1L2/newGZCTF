@@ -1,0 +1,33 @@
+{
+  "button": {
+    "config": "Konfigurasi WSRX"
+  },
+  "config": {
+    "allow_lan": "Izinkan akses LAN",
+    "api": "API URL"
+  },
+  "error": {
+    "daemon_error": {
+      "message": "Please check the WSRX software log and report the issue.",
+      "title": "WSRX daemon error"
+    },
+    "daemon_offline": {
+      "message": "The WSRX daemon is offline. Please check if the WSRX daemon is running.",
+      "title": "WSRX daemon sedang offline"
+    },
+    "daemon_unavailable": {
+      "message": "WSRX daemon sedang tidak berjalan. Jika klien sudah berjalan, coba cek apakah WSRX kontrol address di platform sudah di seting dengan benar.",
+      "title": "WSRX daemon unavailable"
+    },
+    "unknown": "An unknown error occurred while calling the WSRX API.",
+    "version_mismatch": {
+      "message": "WSRX version is too low, please update to the latest version before using platform integration.",
+      "title": "Version mismatch"
+    }
+  },
+  "state": {
+    "invalid": "WSRX disconnected",
+    "pending": "Waiting for local authorization",
+    "usable": "WSRX terkoneksi"
+  }
+}

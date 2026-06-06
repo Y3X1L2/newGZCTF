@@ -1,0 +1,43 @@
+.text {
+  color: var(--mantine-color-text);
+  font-weight: 500;
+  font-family: var(--mantine-font-family-monospace);
+}
+
+.container {
+  height: var(--input-height);
+  line-height: var(--input-line-height);
+  border-radius: var(--input-radius);
+  border: none;
+  text-align: center;
+}
+
+@keyframes bg-move {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.text[data-done] {
+  background: linear-gradient(
+    120deg,
+    var(--mantine-primary-color-7),
+    var(--mantine-primary-color-3),
+    var(--mantine-primary-color-7),
+    var(--mantine-primary-color-3)
+  );
+
+  color: transparent;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+
+  background-size: 400% 400%;
+  animation: bg-move 10s linear infinite;
+}

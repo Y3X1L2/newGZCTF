@@ -1,0 +1,49 @@
+"""Start newGZCTF on server — fire and forget version."""
+import paramiko, json, time, sys, io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+
+ssh = paramiko.SSHClient()
+ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+ssh.connect('203.195.157.191', username='ubuntu', password='Fisher(1^', timeout=10)
+
+# Step 1: Kill existing processes
+ssh.exec_command('sudo pkill -9 dotnet 2>/dev/null; sudo fuser -k 3000/tcp 2>/dev/null; true')
+time.sleep(3)
+
+# Step 2: Write config
+config = json.dumps({
+    'XorKey': 'gzctf-test-xor-key-2024',
+    'ConnectionStrings': {
+        'Database': 'Host=localhost;Port=5432;Database=gzctf;Username=postgres;Password=gzctf_pass',
+        'RedisCache': 'localhost:6379'
+    }
+}, indent=2)
+sftp = ssh.open_sftp()
+with sftp.file('/home/ubuntu/newGZCTF/src/GZCTF/appsettings.json', 'w') as f:
+    f.write(config)
+sftp.close()
+print("Config OK")
+
+# Step 3: Start (don't wait for PID output)
+channel = ssh.get_transport().open_session()
+channel.exec_command(
+    'export PATH=/usr/local/share/dotnet:$PATH; '
+    'cd /home/ubuntu/newGZCTF; '
+    'ASPNETCORE_URLS=http://0.0.0.0:8080 '
+    'nohup dotnet run --project src/GZCTF/GZCTF.csproj -c Release --no-build '
+    '> /tmp/gzctf.log 2>&1 &'
+)
+print("Started, waiting 35s...")
+time.sleep(35)
+
+# Step 4: Check
+_, out, _ = ssh.exec_command('curl -s http://localhost:8080/api/info', timeout=10)
+resp = out.read().decode('utf-8', errors='replace')
+if resp and len(resp) > 10 and resp[0] in '{[':
+    print('SUCCESS!')
+    print(resp[:400])
+else:
+    _, out, _ = ssh.exec_command('grep "Now listening\|Hosting failed\|Application started\|ftl" /tmp/gzctf.log | tail -3', timeout=5)
+    print('Status:', out.read().decode('utf-8', errors='replace')[:500])
+
+ssh.close()

@@ -1,0 +1,33 @@
+{
+  "button": {
+    "config": "Cấu hình WSRX"
+  },
+  "config": {
+    "allow_lan": "Cho phép truy cập LAN",
+    "api": "URL API"
+  },
+  "error": {
+    "daemon_error": {
+      "message": "Kiểm tra log của WSRX và báo cáo sự cố cho ban tổ chức.",
+      "title": "Lỗi WSRX daemon"
+    },
+    "daemon_offline": {
+      "message": "WSRX Daemon ngoại tuyến. Hãy kiểm tra trạng thái của WSRX daemon.",
+      "title": "WSRX Daemon ngoại tuyến"
+    },
+    "daemon_unavailable": {
+      "message": "WSRX Daemon không hoạt động. Nếu desktop client đã khởi động, hãy kiểm tra xem WSRX control address trong cài đặt platform có đúng không.",
+      "title": "WSRX daemon không có sẵn"
+    },
+    "unknown": "Đã xảy ra lỗi không xác định khi gọi WSRX API.",
+    "version_mismatch": {
+      "message": "Phiên bản WSRX quá cũ, hãy cập nhật lên phiên bản mới nhất trước khi tích hợp vào nền tảng.",
+      "title": "Phiên bản không khớp"
+    }
+  },
+  "state": {
+    "invalid": "Ngắt kết nối WSRX",
+    "pending": "Đang chờ local authorization",
+    "usable": "Đã kết nối WSRX"
+  }
+}

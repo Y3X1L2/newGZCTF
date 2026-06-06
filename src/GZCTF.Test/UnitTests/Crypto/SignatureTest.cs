@@ -1,0 +1,247 @@
+using System.Text;
+using GZCTF.Utils;
+using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Crypto.Generators;
+using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Security;
+using Org.BouncyCastle.Utilities.Encoders;
+using Xunit;
+using Xunit.Abstractions;
+
+namespace GZCTF.Test.UnitTests.Crypto;
+
+public class SignatureTest(ITestOutputHelper output)
+{
+    [Fact]
+    public void Ed25519Test()
+    {
+        var sAlgorithm = SignAlgorithm.Ed25519;
+        var s = "Hello " + sAlgorithm;
+        output.WriteLine(s);
+        SecureRandom sr = new();
+        Ed25519KeyPairGenerator kpg = new();
+        kpg.Init(new Ed25519KeyGenerationParameters(sr));
+
+        var kp = kpg.GenerateKeyPair();
+        var privateKey = (Ed25519PrivateKeyParameters)kp.Private;
+        var publicKey = (Ed25519PublicKeyParameters)kp.Public;
+
+        output.WriteLine("Private Key:");
+        output.WriteLine(Base64.ToBase64String(privateKey.GetEncoded()));
+        output.WriteLine("Public Key:");
+        output.WriteLine(Base64.ToBase64String(publicKey.GetEncoded()));
+
+        var sign = CryptoUtils.GenerateSignature(s, privateKey, sAlgorithm);
+        output.WriteLine($"Signature:\n{sign}");
+
+        var verified = CryptoUtils.VerifySignature(s, sign, publicKey, sAlgorithm);
+
+        output.WriteLine("Verification Result:");
+        output.WriteLine(verified ? "Signature verified" : "Signature not verified");
+        Assert.True(verified);
+    }
+
+    [Fact]
+    public void Ed25519WithXorTest()
+    {
+        var sAlgorithm = SignAlgorithm.Ed25519;
+        var s = "Hello " + sAlgorithm;
+        output.WriteLine(s);
+
+        Ed25519PrivateKeyParameters privateKey =
+            new(Codec.Base64.DecodeToBytes("Qu4G33WZ7DYTUEdlf3P5amVg7f8yXcOmFcG0EJvfQEY="), 0);
+        Ed25519PublicKeyParameters publicKey =
+            new(Codec.Base64.DecodeToBytes("t4zduq4LGA1hEYhkCVK19xRACXuDxm/W72v4PBN1EXY="), 0);
+
+        output.WriteLine("Private Key:");
+        output.WriteLine(Base64.ToBase64String(privateKey.GetEncoded()));
+
+        var xorkey = "helloworld"u8.ToArray();
+        var encodedkey = Base64.ToBase64String(Codec.Xor(privateKey.GetEncoded(), xorkey));
+
+        output.WriteLine("Encoded Private Key with XOR:");
+        output.WriteLine(encodedkey);
+
+        var bytekey = Codec.Xor(Codec.Base64.DecodeToBytes(encodedkey), xorkey);
+        privateKey = new(bytekey, 0);
+
+        output.WriteLine("Decoded PrivateKey:");
+        output.WriteLine(Base64.ToBase64String(privateKey.GetEncoded()));
+        output.WriteLine("Public Key:");
+        output.WriteLine(Base64.ToBase64String(publicKey.GetEncoded()));
+
+        var sign = CryptoUtils.GenerateSignature(s, privateKey, sAlgorithm);
+        output.WriteLine($"Signature:\n{sign}");
+
+        var verified = CryptoUtils.VerifySignature(s, sign, publicKey, sAlgorithm);
+
+        output.WriteLine("Verification Result:");
+        output.WriteLine(verified ? "Signature verified" : "Signature not verified");
+        Assert.True(verified);
+    }
+
+    [Fact]
+    public void Ed25519CtxTest()
+    {
+        const SignAlgorithm sAlgorithm = SignAlgorithm.Ed25519Ctx;
+        var s = "Hello " + sAlgorithm;
+        output.WriteLine(s);
+        SecureRandom sr = new();
+        Ed25519KeyPairGenerator kpg = new();
+        kpg.Init(new Ed25519KeyGenerationParameters(sr));
+
+        var kp = kpg.GenerateKeyPair();
+        var privateKey = (Ed25519PrivateKeyParameters)kp.Private;
+        var publicKey = (Ed25519PublicKeyParameters)kp.Public;
+
+        output.WriteLine("Private Key:");
+        output.WriteLine(Base64.ToBase64String(privateKey.GetEncoded()));
+        output.WriteLine("Public Key:");
+        output.WriteLine(Base64.ToBase64String(publicKey.GetEncoded()));
+
+        var sign = CryptoUtils.GenerateSignature(s, privateKey, sAlgorithm);
+        output.WriteLine($"Signature:\n{sign}");
+
+        var verified = CryptoUtils.VerifySignature(s, sign, publicKey, sAlgorithm);
+
+        output.WriteLine("Verification Result:");
+        output.WriteLine(verified ? "Signature verified" : "Signature not verified");
+        Assert.True(verified);
+    }
+
+    [Fact]
+    public void Ed448Test()
+    {
+        var sAlgorithm = SignAlgorithm.Ed448;
+        var s = "Hello " + sAlgorithm;
+        output.WriteLine(s);
+        SecureRandom sr = new();
+        Ed448KeyPairGenerator kpg = new();
+        kpg.Init(new Ed448KeyGenerationParameters(sr));
+
+        var kp = kpg.GenerateKeyPair();
+        var privateKey = (Ed448PrivateKeyParameters)kp.Private;
+        var publicKey = (Ed448PublicKeyParameters)kp.Public;
+
+        output.WriteLine("Private Key:");
+        output.WriteLine(Base64.ToBase64String(privateKey.GetEncoded()));
+        output.WriteLine("Public Key:");
+        output.WriteLine(Base64.ToBase64String(publicKey.GetEncoded()));
+
+        var sign = CryptoUtils.GenerateSignature(s, privateKey, sAlgorithm);
+        output.WriteLine($"Signature:\n{sign}");
+
+        var verified = CryptoUtils.VerifySignature(s, sign, publicKey, sAlgorithm);
+
+        output.WriteLine("Verification Result:");
+        output.WriteLine(verified ? "Signature verified" : "Signature not verified");
+        Assert.True(verified);
+    }
+
+    [Fact]
+    public void SHA512WithRSATest()
+    {
+        const SignAlgorithm sAlgorithm = SignAlgorithm.SHA512WithRSA;
+        var s = "Hello " + sAlgorithm;
+        output.WriteLine(s);
+        SecureRandom sr = new();
+        RsaKeyPairGenerator kpg = new();
+        kpg.Init(new KeyGenerationParameters(sr, 2048));
+
+        var kp = kpg.GenerateKeyPair();
+        var privateKey = (RsaKeyParameters)kp.Private;
+        var publicKey = (RsaKeyParameters)kp.Public;
+
+        output.WriteLine("Private Key:");
+        output.WriteLine(privateKey.Exponent.ToString());
+        output.WriteLine("Public Key:");
+        output.WriteLine(publicKey.Exponent.ToString());
+
+        var sign = CryptoUtils.GenerateSignature(s, privateKey, sAlgorithm);
+        output.WriteLine($"Signature:\n{sign}");
+
+        var verified = CryptoUtils.VerifySignature(s, sign, publicKey, sAlgorithm);
+
+        output.WriteLine("Verification Result:");
+        output.WriteLine(verified ? "Signature verified" : "Signature not verified");
+        Assert.True(verified);
+    }
+
+    [Fact]
+    public void TestEncryptData()
+    {
+        SecureRandom sr = new();
+        X25519KeyPairGenerator kpg = new();
+        kpg.Init(new X25519KeyGenerationParameters(sr));
+
+        var kp = kpg.GenerateKeyPair();
+        var privateKey = (X25519PrivateKeyParameters)kp.Private;
+        var publicKey = (X25519PublicKeyParameters)kp.Public;
+
+        output.WriteLine("Private Key:");
+        output.WriteLine(Base64.ToBase64String(privateKey.GetEncoded()));
+        output.WriteLine("Public Key:");
+        output.WriteLine(Base64.ToBase64String(publicKey.GetEncoded()));
+
+        var data = new string('0', 127);
+        // output.WriteLine($"原始数据:({data.Length})\n{data}");
+        output.WriteLine($"Original Data({data.Length})\n{data}");
+        var encryptedData = CryptoUtils.EncryptData(Encoding.UTF8.GetBytes(data), publicKey);
+        var base64EncryptedData = Base64.ToBase64String(encryptedData);
+        output.WriteLine($"Encrypted:({base64EncryptedData.Length})\n{base64EncryptedData}");
+        var decryptedData = CryptoUtils.DecryptData(encryptedData, privateKey);
+        var decryptedString = Encoding.UTF8.GetString(decryptedData);
+        output.WriteLine($"Decrypted:({decryptedString.Length})\n{decryptedString}");
+        Assert.Equal(data, Encoding.UTF8.GetString(decryptedData));
+    }
+
+    [Fact]
+    public void Ed25519_VerifySignature_WithWrongKey_ReturnsFalse()
+    {
+        // Arrange
+        const SignAlgorithm sAlgorithm = SignAlgorithm.Ed25519;
+        var message = "Test Message";
+
+        SecureRandom sr = new();
+        Ed25519KeyPairGenerator kpg = new();
+        kpg.Init(new Ed25519KeyGenerationParameters(sr));
+
+        // Generate two different key pairs
+        var kp1 = kpg.GenerateKeyPair();
+        var kp2 = kpg.GenerateKeyPair();
+
+        var privateKey1 = (Ed25519PrivateKeyParameters)kp1.Private;
+        var publicKey2 = (Ed25519PublicKeyParameters)kp2.Public;
+
+        // Act - Sign with key 1, verify with key 2
+        var signature = CryptoUtils.GenerateSignature(message, privateKey1, sAlgorithm);
+        var verified = CryptoUtils.VerifySignature(message, signature, publicKey2, sAlgorithm);
+
+        // Assert
+        Assert.False(verified);
+    }
+
+    [Fact]
+    public void Ed25519_VerifySignature_WithModifiedMessage_ReturnsFalse()
+    {
+        // Arrange
+        const SignAlgorithm sAlgorithm = SignAlgorithm.Ed25519;
+        var originalMessage = "Original Message";
+        var modifiedMessage = "Modified Message";
+
+        SecureRandom sr = new();
+        Ed25519KeyPairGenerator kpg = new();
+        kpg.Init(new Ed25519KeyGenerationParameters(sr));
+
+        var kp = kpg.GenerateKeyPair();
+        var privateKey = (Ed25519PrivateKeyParameters)kp.Private;
+        var publicKey = (Ed25519PublicKeyParameters)kp.Public;
+
+        // Act - Sign original, verify modified
+        var signature = CryptoUtils.GenerateSignature(originalMessage, privateKey, sAlgorithm);
+        var verified = CryptoUtils.VerifySignature(modifiedMessage, signature, publicKey, sAlgorithm);
+
+        // Assert
+        Assert.False(verified);
+    }
+}

@@ -1,0 +1,140 @@
+{
+  "avatar": {
+    "save": "アイコンを保存する",
+    "upload_failed": "アイコンを更新できませんでした",
+    "uploaded": "アイコンが更新されました",
+    "uploading": "アイコンをアップロードしています"
+  },
+  "button": {
+    "copy": "クリップボードにコピー",
+    "reset": "リセット",
+    "retry": "再試行",
+    "select_file": "ファイルを選択",
+    "try_again": "再試行",
+    "uploading": "アップロード中"
+  },
+  "content": {
+    "404": {
+      "text": "どこでもしまい、なぜここに？",
+      "title": "ページが存在しません"
+    },
+    "about": {
+      "contributors": "貢献者",
+      "documentation": "公式ドキュメント",
+      "repository": "GitHub リポジトリ",
+      "resources": "リソース",
+      "slogan": "Hack for fun not for profit",
+      "version": "バージョン"
+    },
+    "color": {
+      "custom": {
+        "description": "カスタムカラーを指定する",
+        "label": "カスタムカラー",
+        "placeholder": "デフォルトカラーを使用"
+      },
+      "palette": {
+        "description": "カスタムカラーに基づいて生成されたカラーパレット",
+        "label": "カスタムカラーパレット"
+      },
+      "provider": {
+        "custom": "個人用設定",
+        "default": "標準設定",
+        "description": "使用するカラーテーマを指定する",
+        "label": "カラーテーマ設定",
+        "managed": "管理者設定"
+      },
+      "title": "カラーテーマ"
+    },
+    "drop_zone": {
+      "content": "画像をここにドロップするか、ここをクリックして{{type}}を選択してください",
+      "limit": "3MB以下の画像を選択してください",
+      "type": {
+        "avatar": "アイコン",
+        "poster": "ポスター"
+      }
+    },
+    "external_link": "外部リンク",
+    "home": {
+      "recent_games": "最近のゲーム"
+    },
+    "no_data": "データがありません",
+    "report_error": "エラーが発生しました。管理者に連絡してください",
+    "wider": {
+      "text": "このページにアクセスするには、より広いデバイスを使用してください",
+      "title": "ページの幅が足りません"
+    }
+  },
+  "download": {
+    "failed": "ダウンロードに失敗しました",
+    "started": "ダウンロードしています",
+    "success": "ダウンロードが完了しました"
+  },
+  "email": {
+    "sent": {
+      "message": "迷惑メールを含めてメールをご確認ください",
+      "title": "メールが送信されました"
+    }
+  },
+  "error": {
+    "check_input": "入力内容を確認してください",
+    "empty": "内容は空にできません",
+    "encountered": "エラーが発生しました",
+    "encryption_failed": {
+      "need_upgrade": "Chrome 133+ / Firefox 130+ / Safari 17+ にアップグレードしてもう一度お試しください",
+      "not_secure_contexts": "Web Crypto APIを有効にするにはHTTPSを使用してください",
+      "title": "データの暗号化に失敗しました"
+    },
+    "file_invalid": {
+      "message": "ファイル形式とサイズを確認してください",
+      "title": "ファイルの読み込みに失敗しました"
+    },
+    "invalid_username_or_password": "ユーザー名またはパスワードが正しくありません",
+    "no_change": "変更がないようです",
+    "param_error": "パラメータが間違っています。確認してください",
+    "param_invalid": "無効なパラメータ",
+    "param_missing": "パラメータが不足しています",
+    "param_unknown": "不明なパラメータ",
+    "request_too_frequent": "リクエストが頻繁すぎます",
+    "try_later": "しばらくしてからもう一度お試しください",
+    "unknown": "不明なエラー"
+  },
+  "label": {
+    "challenge": "チャレンジ",
+    "flag": "フラッグ",
+    "game": "ゲーム",
+    "ip": "IP",
+    "team": "チーム",
+    "time": "時間",
+    "user": "ユーザー"
+  },
+  "modal": {
+    "cancel": "キャンセル",
+    "confirm": "確認",
+    "confirm_delete": "削除確認",
+    "confirm_update": "変更確認",
+    "delete": "削除"
+  },
+  "tab": {
+    "about": "プラットフォーム情報",
+    "account": {
+      "clean_cache": "キャッシュを削除",
+      "login": "ログイン",
+      "logout": "ログアウト",
+      "profile": "ユーザー情報"
+    },
+    "admin": "管理",
+    "game": "ゲーム",
+    "home": "ホーム",
+    "post": "記事",
+    "team": "チーム",
+    "theme": {
+      "dark": "ダーク",
+      "light": "ライト",
+      "switch_to": "テーマを{{theme}}に切り替える"
+    }
+  },
+  "title": {
+    "404": "どこにもない",
+    "about": "プラットフォーム情報"
+  }
+}

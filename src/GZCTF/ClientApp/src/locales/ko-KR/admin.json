@@ -1,0 +1,612 @@
+{
+  "button": {
+    "back": "뒤로 가기",
+    "challenges": {
+      "attachment": {
+        "save_url": "링크 저장",
+        "upload": "업로드",
+        "uploading": "업로드 중..."
+      },
+      "bonus": "Triple Blood 보너스",
+      "delete": "삭제",
+      "disable": "비활성화",
+      "edit": "문제 수정",
+      "edit_more": "플래그 수정",
+      "enable": "활성화",
+      "flag": {
+        "add": {
+          "dynamic": "첨부 파일 업로드",
+          "normal": "플래그 추가",
+          "remote": "서버 추가"
+        },
+        "delete": "삭제",
+        "save": "템플릿 저장"
+      },
+      "flush_scoreboard": "스코어보드 새로고침",
+      "hint": {
+        "add": "힌트 추가"
+      },
+      "new": "문제 추가",
+      "next": "다음",
+      "preview": "미리보기",
+      "previous": "이전",
+      "test_container": {
+        "create": "생성",
+        "destroy": "삭제"
+      }
+    },
+    "divisions": {
+      "edit": "디비전을 편집",
+      "new": "새 디비전"
+    },
+    "games": {
+      "challenges": {
+        "attachment": {
+          "batch_add": "일괄 추가"
+        }
+      },
+      "copy_public_key": "공개키 복사",
+      "delete": "삭제",
+      "export": "게임 내보내기",
+      "import": "게임 가져오기",
+      "new": "새 게임"
+    },
+    "notices": {
+      "delete": "삭제",
+      "edit": "알림 수정",
+      "new": "알림 생성"
+    },
+    "save": "저장",
+    "teams": {
+      "do_lock": "잠금",
+      "do_unlock": "잠금 해제",
+      "edit": "팀 편집"
+    },
+    "users": {
+      "edit": "사용자 편집"
+    },
+    "writeups": {
+      "download_all": "모두 다운로드"
+    }
+  },
+  "content": {
+    "games": {
+      "challenges": {
+        "attachment": {
+          "clear": {
+            "description": "정말로 이 첨부파일을 삭제하시겠습니까?",
+            "title": "첨부 파일 제거"
+          },
+          "instruction": {
+            "amount_double": "예상 참여 팀 수의 두 배에 달하는 동적 첨부 파일을 업로드하는 것이 좋습니다.",
+            "dynamic": {
+              "content": "동적 첨부 파일을 일괄 업로드하면 모두 동일한 파일 이름으로 배포됩니다.",
+              "format": "각 플래그 파일의 이름을 flag 로 사용하세요."
+            },
+            "remote": {
+              "content": "한 줄당 하나의 그룹으로 원격 첨부 파일 및 해당 플래그를 일괄 설정합니다.",
+              "format": "flag 과 URL 사이를 공백으로 구분해주세요."
+            }
+          },
+          "link": "첨부파일 링크",
+          "title": "첨부파일 관리",
+          "type": "첨부파일 유형"
+        },
+        "attachment_name": {
+          "description": "모든 동적 첨부 파일은 이 파일 이름으로 다운로드됩니다",
+          "label": "전역 첨부 파일 이름"
+        },
+        "blood_bonus": {
+          "description": "이 문제의 blood 보너스를 활성화합니다",
+          "label": "Blood 보너스"
+        },
+        "bonus": {
+          "description": "Triple Blood Bonus는 문제을 해결한 첫 세 팀에게 추가로 주어지는 점수를 의미합니다. 각 팀은 문제의 현재 점수를 기준으로 보너스를 받을 수 있습니다. 이 보너스는 고정된 비율로 팀의 점수에 추가됩니다.",
+          "first_blood": "First Blood 보상 (%)",
+          "second_blood": "Second Blood 보상 (%)",
+          "third_blood": "Third Blood 보상 (%)"
+        },
+        "category": "분야",
+        "container_image": "컨테이너 이미지",
+        "cpu_limit": {
+          "description": "0.1 CPU 코어 개수",
+          "label": "CPU 제한 (단위: 0.1 CPU)"
+        },
+        "deadline": {
+          "label": "마감 시간",
+          "placeholder": "마감 없음"
+        },
+        "delete": "{{name}} 챌린지를 삭제하시겠습니까?",
+        "description": "설명",
+        "difficulty": "난이도",
+        "disable": "{{name}} 챌린지를 비활성화 하시겠습니까?",
+        "empty": {
+          "description": "우측 상단을 클릭하여 첫 챌린지를 생성하세요",
+          "title": "앗! 아직 이 게임에는 챌린지가 없어요."
+        },
+        "enable": "{{name}} 챌린지를 활성화 하시겠습니까?",
+        "flag": {
+          "create": "한 줄에 한 플래그씩 설정할 수 있습니다.<br/>각 문제에 여러 플래그를 설정할 수 있습니다. ",
+          "delete": "정말로 플래그를 삭제하시겠습니까?",
+          "empty": {
+            "description": "오른쪽 위에서 플래그를 추가해주세요.",
+            "title": "플래그 없음"
+          },
+          "instructions": {
+            "both": "<1>[TEAM_HASH]/<1>로 leet 플래그를 활성화 하는 경우, 플래그 템플릿 문자열 <strong> 앞에 </strong> <2>[LET]</2> 태그를 추가합니다. 플래그 템플릿 문자열의 복잡도는 확인되지 않습니다.",
+            "complex": "플래그 생성에서 특수 문자를 활성화해야 하는 경우 문자열 시작 부분에 <2>[LEET]/<2> 대신 <1>[CLET]/<1>을 사용합니다. 이로 인해 인젝션 문제가 발생할 수 있습니다.",
+            "description": "플래그 형식을 입력해주세요. 빈칸일 시 랜덤한 GUID 로 플래그가 설정됩니다.",
+            "example": "예시",
+            "guid": "<1>[GUID]<1> 를 지정하여 무작위 GUID로 설정하세요.",
+            "leave_empty": "빈칸으로 두세요.",
+            "leet": "<1>[TEAM_HASH]</1> 가 지정되지 않았을 경우 leet 이 활성화되고 중괄호 안의 템플릿에 따라 변경됩니다. 플래그 템플릿을 충분히 복잡하게 만들어주세요.",
+            "team_hash": "만약 <1>[TEAM_HASH]</1> 이 지정된 경우, 팀 토큰과 대회 정보에 따라 자동으로 해시 값이 플래그로 설정됩니다.",
+            "will_generate": "생성될 예정"
+          },
+          "template": "플래그 템플릿",
+          "title": "플래그 관리"
+        },
+        "hints": "힌트",
+        "memory_limit": {
+          "description": "컨테이너 RAM 제한",
+          "label": "메모리 제한 (MB)"
+        },
+        "min_score_radio": {
+          "description": "최소 점수: {{min_score}} 점",
+          "label": "최소 점수 비율"
+        },
+        "network_mode": {
+          "description": "공용 네트워크 액세스",
+          "label": "네트워크 모드",
+          "modes": {
+            "custom": "사용자 지정",
+            "isolated": "격리됨",
+            "open": "공개"
+          }
+        },
+        "score": "점수",
+        "service_port": {
+          "description": "컨테이너 포트 정보",
+          "label": "서비스 포트"
+        },
+        "solve_count": "해결",
+        "storage_limit": {
+          "description": "저장소 (이미지 포함)",
+          "label": "저장소 제한 (MB)"
+        },
+        "submission_limit": {
+          "description": "0 = 무제한",
+          "label": "최대 시도 횟수",
+          "placeholder": "무제한"
+        },
+        "title": "제목",
+        "traffic_capture": {
+          "description": "팀이 문제를 해결했을 때 트래픽을 캡처합니다. 플랫폼 프록시가 설정되어 있어야 합니다.",
+          "label": "트래픽 캡처 활성화"
+        },
+        "type": {
+          "description": "생성된 이후 변경할 수 없습니다.",
+          "label": "분야"
+        }
+      },
+      "divisions": {
+        "default_permission_label": "기본 권한",
+        "delete_confirm": "디비전 {{name}}을(를) 삭제할까요?",
+        "empty": {
+          "description": "새 디비전을 눌러 첫 디비전을 생성하세요",
+          "title": "아직 디비전이 없습니다"
+        },
+        "form": {
+          "challenge_overrides": {
+            "description": "권한을 재정의할 챌린지를 선택하세요",
+            "label": "챌린지 권한 재정의",
+            "placeholder": "재정의할 챌린지를 검색"
+          },
+          "default_permissions": {
+            "description": "이 디비전에 속한 팀에 기본으로 적용될 권한",
+            "label": "기본 권한"
+          },
+          "invite_code": {
+            "description": "게임 수준의 초대 코드를 덮어씁니다",
+            "label": "초대 코드"
+          },
+          "name": {
+            "description": "디비전의 이름입니다.",
+            "label": "디비전 이름"
+          }
+        },
+        "no_permission": "부여된 권한이 없습니다",
+        "override_label": "챌린지 권한 재정의",
+        "permissions": {
+          "affect_dynamic_score": {
+            "description": "동적 점수 계산에 영향",
+            "label": "동적 점수 영향"
+          },
+          "all": "모든 권한",
+          "get_blood": {
+            "description": "선혈 보너스를 받아 점수를 얻을 수 있도록 허용",
+            "label": "선혈 보너스"
+          },
+          "get_score": {
+            "description": "챌린지로 점수를 획득할 수 있도록 허용",
+            "label": "점수 획득"
+          },
+          "join_game": {
+            "description": "이 디비전의 사용자가 게임에 참여하도록 허용",
+            "label": "게임 참여"
+          },
+          "rank_overall": {
+            "description": "전체 순위표에 표시되도록 허용",
+            "label": "전체 순위"
+          },
+          "require_review": {
+            "description": "팀 등록 시 수동 승인 필요",
+            "label": "승인 필요"
+          },
+          "submit_flags": {
+            "description": "플래그 제출을 허용",
+            "label": "플래그 제출"
+          },
+          "view_challenge": {
+            "description": "챌린지 설명을 볼 수 있도록 허용",
+            "label": "챌린지 보기"
+          }
+        },
+        "unknown_challenge": "챌린지 #{{id}}"
+      },
+      "info": {
+        "accept_without_review": {
+          "description": "부서에 의해 재정의됨",
+          "label": "검토 없이 수락"
+        },
+        "container_limit": {
+          "description": "한 팀이 공유하는 컨테이너 (0 = 제한 없음)",
+          "label": "팀별 컨테이너 제한"
+        },
+        "content": "게임 정보",
+        "delete": "정말로 {{name}} 게임을 삭제하시겠습니까?",
+        "divisions": {
+          "description": "스코어보드를 그룹으로 나누려면 부문을 추가하고, 아니면 빈 칸으로 두세요.",
+          "label": "부문 별 참가 목록"
+        },
+        "end_date": "종료 날짜",
+        "end_time": "종료 시간",
+        "invite_code": {
+          "description": "부문에 의해 덮어씌워질 수 있습니다",
+          "label": "초대 코드",
+          "placeholder": "비활성화하려면 빈 칸으로 두세요"
+        },
+        "member_limit": {
+          "description": "0은 팀 멤버 수 제한이 없음을 의미합니다.",
+          "label": "최대 팀 멤버 수"
+        },
+        "poster": "포스터",
+        "practice_mode": {
+          "description": "게임이 종료된 후 문제 확인",
+          "label": "연습 모드"
+        },
+        "start_date": "시작 날짜",
+        "start_time": "시작 시간",
+        "summary": {
+          "description": "게임 목록에 표시됩니다.",
+          "label": "요약"
+        },
+        "title": {
+          "description": "과도한 길이는 표시될 때 영향을 미칠 수 있습니다.",
+          "label": "제목"
+        },
+        "writeup_deadline": {
+          "description": "게임 종료 후 풀이 제출 기한",
+          "label": "풀이 제출 기한"
+        },
+        "writeup_instruction": "풀이 작성 규칙",
+        "writeup_required": {
+          "description": "풀이 제출 활성화",
+          "label": "풀이 필요"
+        }
+      },
+      "notices": {
+        "delete": "이 알림을 삭제하시겠습니까?",
+        "empty": {
+          "description": "오른쪽 위의 버튼을 눌러 새 알림을 생성하세요.",
+          "title": "알림 없음"
+        }
+      },
+      "review": {
+        "edit_division": "팀 부문 편집",
+        "empty": {
+          "description": "진행 중... 걱정 마세요!",
+          "title": "이런! 아직 게임에 참가한 팀이 없습니다."
+        },
+        "participation": {
+          "joined": "참가됨",
+          "no_division": "디비전 없음",
+          "not_joined": "가입되지 않음",
+          "stats": "{{count}}/{{total}} 가입함",
+          "update": "팀의 상태를 \"{{status}}\"로 변경하시겠습니까?"
+        }
+      },
+      "stats": "<1>{{total}}</1> 중 <1>{{current}}</1> 게임이 표시됩니다.",
+      "writeups": {
+        "empty": {
+          "description": "풀이가 이곳에 나타날 것입니다.",
+          "title": "이런, 아직 아무 풀이도 없습니다."
+        },
+        "pdf_fallback": "PDF를 불러오는데 실패했습니다."
+      }
+    },
+    "instances": {
+      "destroy": "정말로 {{name}} 인스턴스를 삭제하시겠습니까?",
+      "note": "정보: 컨테이너 통계는 관리자의 테스트용 컨테이너와 삭제된 컨테이너를 포함하지 않습니다.",
+      "stats": "총 <1>{{count}}</1> 개 인스턴스 생성됨"
+    },
+    "markdown_inline_support": "인라인 마크다운이 지원됩니다.",
+    "markdown_support": "마크다운이 지원됩니다.",
+    "nothing_found": "아무것도 없음",
+    "settings": {
+      "account": {
+        "allow_register": {
+          "description": "사용자의 새로운 계정 가입을 허용합니다.",
+          "label": "가입 허용"
+        },
+        "auto_active": {
+          "description": "회원 가입 후 사용자 활성화 여부",
+          "label": "자동 활성화"
+        },
+        "email_confirmation_required": {
+          "description": "사용자 이메일 검증 필수 여부",
+          "label": "이메일 인증 필요"
+        },
+        "email_domain_list": {
+          "description": "가입 시 허용할 이메일 도메인 목록입니다. 여러 도메인을 , 로 구분하고 빈칸으로 두면 모두 허용합니다.",
+          "label": "이메일 도메인 화이트리스트"
+        },
+        "title": "계정 정책",
+        "use_captcha": {
+          "description": "로그인, 회원 가입 및 복구 시 인증",
+          "label": "CAPTCHA 활성화"
+        }
+      },
+      "container": {
+        "auto_destroy": {
+          "description": "기한이 지난 인스턴스 자동 삭제 여부",
+          "label": "만료된 인스턴스 자동 삭제"
+        },
+        "default_lifetime": {
+          "description": "컨테이너 기본 수명",
+          "label": "기본 수명 (분)"
+        },
+        "extension_duration": {
+          "description": "컨테이너 갱신 기간",
+          "label": "갱신 기간 (분)"
+        },
+        "renewal_window": {
+          "description": "컨테이너가 만료되어 갱신되기 전의 창",
+          "label": "창 새로고침 (분)"
+        },
+        "title": "컨테이너 정책"
+      },
+      "platform": {
+        "api_encryption": {
+          "description": "일부 API에서 민감한 데이터 암호화",
+          "label": "API 암호화 활성화",
+          "not_available": "Web Crypto API를 사용할 수 없음"
+        },
+        "color": {
+          "description": "플랫폼 색상 지정",
+          "label": "플랫폼 색상"
+        },
+        "color_palette": {
+          "description": "새 사용자 색상 팔레트가 생성되었습니다.",
+          "label": "색상 팔레트"
+        },
+        "description": {
+          "description": "SEO 를 위해 제공된 설명입니다.",
+          "label": "사이트 설명"
+        },
+        "footer": {
+          "description": "마크다운 문법을 지원하여 모바일 기기에서 <mbr/> 는 <br/> 로 대체됩니다.",
+          "label": "꼬리말"
+        },
+        "logo": {
+          "description": "페이지 로고인 favicon 에 사용됩니다.",
+          "label": "플랫폼 로고"
+        },
+        "name": {
+          "description": "플랫폼 이름에 ::CTF 가 함께 표시될 것입니다.",
+          "label": "플랫폼 이름"
+        },
+        "slogan": {
+          "description": "페이지 맨 위에 표시됩니다.",
+          "label": "플랫폼 슬로건"
+        },
+        "title": "플랫폼 설정"
+      }
+    },
+    "show_all": "모두 보기",
+    "teams": {
+      "delete": "정말로 {{name}} 팀을 삭제하시겠습니까?",
+      "lock": "정말로 {{name}} 팀을 {{action}} 하시겠습니까?",
+      "locked": "잠김",
+      "stats": "<1>{{total}}</1> 개 팀 중 <1>{{current}}</1> 개 팀 표시됨",
+      "unlocked": "잠금 해제됨"
+    },
+    "users": {
+      "delete": "정말로 사용자 {{name}} 을 삭제하시겠습니까?",
+      "reset": {
+        "content": "사용자의 비밀번호가 초기화되었습니다.<strong>이 비밀번호는 단 한번 볼 수 있으며</strong> 저장해주시길 바랍니다.",
+        "message": "정말로 {{name}} 의 비밀번호를 초기화 하시겠습니까?",
+        "title": "{{name}} 의 비밀번호 초기화"
+      },
+      "stats": "<1>{{total}}</1> 명 중 <1>{{current}}</1> 명 표시됨"
+    }
+  },
+  "label": {
+    "games": {
+      "hide": "숨김",
+      "summary": "요약"
+    },
+    "instances": {
+      "container_id": "컨테이어 ID",
+      "entry": "인스턴스 정보",
+      "life_cycle": "수명 주기"
+    },
+    "logs": {
+      "message": "메시지",
+      "status": "상태"
+    },
+    "teams": {
+      "bio": "소개",
+      "members": "팀원"
+    },
+    "users": {
+      "active": "활성화",
+      "last_visit": "최근 방문",
+      "role": "사용자 역할"
+    }
+  },
+  "notification": {
+    "games": {
+      "challenges": {
+        "attachment": {
+          "no_selected": "하나 이상의 파일을 선택하세요.",
+          "updated": "첨부파일이 업로드되었습니다"
+        },
+        "created": "문제가 생성되었습니다",
+        "deleted": "문제가 삭제되었습니다",
+        "flag": {
+          "copied": "플래그가 클립보드에 복사되었습니다.",
+          "created": "플래그가 생성되었습니다",
+          "deleted": "플래그가 삭제되었습니다"
+        },
+        "flag_template": {
+          "updated": "플래그 템플릿 업데이트됨"
+        },
+        "preview": {
+          "attachment_downloaded": "첨부파일이 다운로드되었습니다!",
+          "flag_submitted": "플래그가 제출되었습니다"
+        },
+        "updated": "문제가 업데이트 되었습니다."
+      },
+      "created": "게임이 생성되었습니다.",
+      "divisions": {
+        "created": "디비전이 생성되었습니다",
+        "deleted": "디비전이 삭제되었습니다",
+        "invite_copied": "초대 코드가 클립보드에 복사되었습니다",
+        "updated": "디비전이 업데이트되었습니다"
+      },
+      "export": {
+        "exported": "게임이 성공적으로 내보내졌습니다",
+        "exporting": "게임 내보내는 중..."
+      },
+      "import": {
+        "imported": "게임이 성공적으로 가져와졌습니다",
+        "importing": "게임 가져오는 중..."
+      },
+      "info": {
+        "deleted": "게임이 삭제되었습니다",
+        "info_updated": "게임이 업데이트 되었습니다.",
+        "poster": {
+          "upload_failed": "글 업로드 실패",
+          "uploaded": "포스터가 업로드되었습니다.",
+          "uploading": "포스터 업로드 중..."
+        },
+        "public_key_copied": "공개키가 클립보드에 복사되었습니다.",
+        "scoreboard_flushed": "스코어보드 캐시를 초기화했습니다."
+      },
+      "instances": {
+        "created": "인스턴스가 생성되었습니다.",
+        "deleted": "인스턴스가 삭제되었습니다."
+      },
+      "no_title_time": "게임의 제목과 시간을 설정해주세요.",
+      "notices": {
+        "created": "공지사항이 추가되었습니다.",
+        "deleted": "공지사항이 삭제되었습니다.",
+        "updated": "공지사항이 수정되었습니다."
+      },
+      "participation": {
+        "updated": "팀 참여 상태 업데이트."
+      }
+    },
+    "instances": {
+      "destroyed": "인스턴스가 삭제되었습니다.",
+      "entry_copied": "인스턴스 정보가 클립보드에 복사되었습니다.",
+      "url_copied": {
+        "message": "클라이언트로 접근하세요.",
+        "title": "프록시 URL 이 클립보드에 복사되었습니다."
+      }
+    },
+    "logs": {
+      "connected": "실시간 로그 접속됨",
+      "fetch_failed": "로그를 불러오는데 실패했습니다."
+    },
+    "teams": {
+      "deleted": "{{name}} 팀을 삭제했습니다."
+    },
+    "users": {
+      "deleted": "{{name}} 사용자를 삭제했습니다.",
+      "password_copied": "비밀번호가 클립보드에 복사되었습니다.",
+      "updated": "프로필이 수정되었습니다."
+    }
+  },
+  "placeholder": {
+    "empty": "비어 있음",
+    "games": {
+      "challenges": {
+        "attachment": {
+          "no_file_selected": {
+            "comment": "선택된 파일이 여기에 표시됩니다.",
+            "title": "아무 파일도 선택되지 않았습니다."
+          }
+        }
+      },
+      "divisions": "디비전 이름 입력",
+      "participation": {
+        "bio": "(이력 없음)",
+        "team": "(이름 없음)"
+      }
+    },
+    "instances": {
+      "challenges": {
+        "not_found": "문제를 찾을 수 없습니다.",
+        "select": "모든 문제"
+      },
+      "teams": {
+        "not_found": "팀을 찾을 수 없습니다.",
+        "select": "전체 팀"
+      }
+    },
+    "settings": {
+      "email_domain_list": "제한 없음",
+      "footer": "`Test` <mbr/> 중...",
+      "logo": {
+        "custom": "커스텀 로고",
+        "default": "GZCTF 아이콘 사용하기"
+      }
+    },
+    "teams": {
+      "search": "이름으로 검색"
+    },
+    "users": {
+      "real_name": "비어 있음",
+      "search": "ID/사용자 이름/이메일/학생 ID/실제 이름 으로 검색",
+      "student_id": "00000000"
+    }
+  },
+  "tab": {
+    "games": {
+      "challenges": "문제",
+      "divisions": "디비전",
+      "index": "게임",
+      "info": "정보",
+      "notices": "공지사항",
+      "review": "팀",
+      "writeups": "풀이"
+    },
+    "instances": "인스턴스",
+    "logs": "로그",
+    "settings": "설정",
+    "teams": "팀",
+    "users": "사용자"
+  }
+}

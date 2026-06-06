@@ -1,0 +1,143 @@
+.root {
+  box-sizing: border-box;
+  max-width: max-content;
+  min-width: 100%;
+  --typo-line-gap: calc(var(--mantine-spacing-xs) / 2);
+
+  & :global(.shiki),
+  & :global(.shiki) span {
+    @mixin dark {
+      font-style: var(--code-dark-font-style);
+      font-weight: var(--code-dark-font-weight);
+      text-decoration: var(--code-dark-text-decoration);
+    }
+
+    @mixin light {
+      font-style: var(--code-light-font-style);
+      font-weight: var(--code-light-font-weight);
+      text-decoration: var(--code-light-text-decoration);
+    }
+  }
+
+  & :where(p) {
+    word-break: break-word;
+    word-wrap: break-word;
+    overflow: hidden;
+    margin-bottom: var(--mantine-spacing-xs);
+  }
+
+  & :where(ol):not([data-type='taskList']) {
+    padding-inline-start: calc(2 * var(--mantine-font-size-lg));
+
+    @mixin smaller-than $mantine-breakpoint-xs {
+      padding-inline-start: calc(2 * var(--mantine-font-size-xs));
+    }
+  }
+
+  & :where(ul):not([data-type='taskList']) {
+    padding-inline-start: var(--mantine-font-size-lg);
+  }
+
+  & :where(ul, ol):not([data-type='taskList']) {
+    margin-bottom: var(--typo-line-gap);
+  }
+
+  & :where(ul, ol):last-child,
+  :where(li):last-child {
+    margin-bottom: 0;
+  }
+
+  & :where(li)::marker {
+    color: light-dark(var(--mantine-color-gray-8), var(--mantine-color-dark-1));
+    font-weight: 500;
+  }
+
+  & :where(li) {
+    line-height: var(--mantine-line-height);
+    margin-bottom: var(--typo-line-gap);
+  }
+
+  & :where(table) :where(th) {
+    /* revert style set by mantine */
+    text-align: revert-layer;
+  }
+
+  & :where(strong) {
+    color: light-dark(var(--mantine-primary-color-6), var(--mantine-primary-color-5));
+
+    & :where(code) {
+      color: inherit;
+    }
+  }
+
+  & :where(blockquote) {
+    padding: var(--typo-line-gap) var(--mantine-spacing-xs);
+    margin: var(--typo-line-gap) 0;
+    font-size: var(--mantine-font-size-md);
+    color: light-dark(alpha(var(--mantine-color-gray-7), 0.9), alpha(var(--mantine-color-dark-0), 0.9));
+    background-color: light-dark(alpha(var(--mantine-color-dark-1), 0.1), alpha(var(--mantine-color-light-2), 0.03));
+    border-left: light-dark(4px solid var(--mantine-color-gray-5), 4px solid var(--mantine-color-dark-0));
+
+    & :where(pre, code) {
+      background-color: light-dark(alpha(var(--mantine-color-light-1), 0.8), alpha(var(--mantine-color-dark-6), 0.8));
+    }
+  }
+
+  & :where(pre) {
+    background-color: light-dark(var(--mantine-color-light-1), var(--mantine-color-dark-6));
+    padding: var(--mantine-spacing-sm);
+    white-space: pre;
+    overflow-wrap: anywhere;
+  }
+
+  & :not(pre) > code {
+    white-space: normal;
+    font-size: calc(var(--mantine-font-size-md) * 0.9375);
+    padding: 1px var(--typo-line-gap);
+    border: none;
+    background-color: light-dark(alpha(var(--mantine-white), 0.05), alpha(var(--mantine-black), 0.1));
+  }
+
+  & :where(pre) > code {
+    padding: 0;
+    background-color: transparent;
+    color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-light-2));
+    font-family: var(--mantine-font-family-monospace);
+    font-weight: 500;
+    text-align: left;
+    white-space: pre-wrap;
+    word-break: normal;
+    font-size: var(--mantine-font-size-sm);
+    line-height: var(--mantine-line-height-sm);
+    tab-size: 4;
+    hyphens: none;
+  }
+}
+
+.inline {
+  word-break: break-word;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+
+  & :where(code) {
+    white-space: normal;
+    font-weight: 500;
+    background-color: transparent;
+    font-family: var(--mantine-font-family-monospace);
+    padding: 0 2px;
+    border: none;
+  }
+
+  & :where(a, strong) {
+    color: light-dark(var(--mantine-primary-color-6), var(--mantine-primary-color-5));
+  }
+
+  & :where(a) {
+    text-decoration: underline;
+    transition: all 0.2s ease-in-out;
+  }
+
+  & :where(a):hover {
+    text-decoration: none;
+  }
+}

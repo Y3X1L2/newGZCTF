@@ -1,0 +1,119 @@
+import { Button, Group, GroupProps, LoadingOverlay, Stack, Tabs } from '@mantine/core'
+import {
+  mdiAccountGroupOutline,
+  mdiBullhornOutline,
+  mdiFileDocumentCheckOutline,
+  mdiFlagOutline,
+  mdiKeyboardBackspace,
+  mdiMonitorDashboard,
+  mdiSwordCross,
+  mdiTagOutline,
+  mdiTextBoxOutline,
+} from '@mdi/js'
+import { Icon } from '@mdi/react'
+import React, { FC, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { useLocation, Link, useNavigate, useParams } from 'react-router'
+import { AdminPage } from '@Components/admin/AdminPage'
+import { useAdminGame } from '@Hooks/useGame'
+import { DEFAULT_LOADING_OVERLAY } from '@Utils/Shared'
+import api, { GameType } from '@Api'
+import misc from '@Styles/Misc.module.css'
+
+export interface GameEditTabProps extends React.PropsWithChildren {
+  head?: React.ReactNode
+  headProps?: GroupProps
+  contentPos?: React.CSSProperties['justifyContent']
+  isLoading?: boolean
+  backUrl?: string
+}
+
+export const WithGameEditTab: FC<GameEditTabProps> = ({
+  children,
+  isLoading,
+  contentPos,
+  head,
+  backUrl,
+  ...others
+}) => {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { id } = useParams()
+  const { t } = useTranslation()
+  const numId = parseInt(id ?? '-1')
+  const { game } = useAdminGame(numId)
+
+  const isAwdGame = game?.gameType === GameType.AWD || game?.gameType === GameType.Mixed
+
+  const pages = [
+    { icon: mdiTextBoxOutline, title: t('admin.tab.games.info'), path: 'info' },
+    { icon: mdiBullhornOutline, title: t('admin.tab.games.notices'), path: 'notices' },
+    { icon: mdiFlagOutline, title: t('admin.tab.games.challenges'), path: 'challenges' },
+    ...(isAwdGame
+      ? [{ icon: mdiSwordCross, title: t('admin.tab.games.awd'), path: 'awd-services' }]
+      : []),
+    { icon: mdiTagOutline, title: t('admin.tab.games.divisions'), path: 'divisions' },
+    { icon: mdiAccountGroupOutline, title: t('admin.tab.games.review'), path: 'review' },
+    { icon: mdiFileDocumentCheckOutline, title: t('admin.tab.games.writeups'), path: 'writeups' },
+    { icon: mdiMonitorDashboard, title: t('admin.tab.games.screen'), path: 'screen/control' },
+  ]
+
+  const getTab = (path: string) => pages.find((page) => path.includes(page.path))
+
+  const [activeTab, setActiveTab] = useState(getTab(location.pathname)?.path ?? pages[0].path)
+
+  useEffect(() => {
+    const tab = getTab(location.pathname)
+    if (tab) {
+      setActiveTab(tab.path ?? '')
+    } else {
+      navigate(pages[0].path)
+    }
+  }, [location])
+
+  return (
+    <AdminPage
+      {...others}
+      head={
+        <>
+          <Button
+            w="10rem"
+            component={Link}
+            classNames={{ inner: misc.justifyBetween }}
+            leftSection={<Icon path={mdiKeyboardBackspace} size={1} />}
+            to={backUrl ?? '/admin/games'}
+          >
+            {t('admin.button.back')}
+          </Button>
+          <Group wrap="nowrap" justify={contentPos ?? 'space-between'} w="calc(100% - 11rem)">
+            {head}
+          </Group>
+        </>
+      }
+    >
+      <Group wrap="nowrap" justify="space-between" align="flex-start" w="100%" pb="xl">
+        <Tabs
+          orientation="vertical"
+          value={activeTab}
+          onChange={(value) => value && navigate(`/admin/games/${id}/${value}`)}
+          classNames={{
+            root: misc.w10rem,
+            list: misc.w10rem,
+          }}
+        >
+          <Tabs.List>
+            {pages.map((page) => (
+              <Tabs.Tab key={page.path} leftSection={<Icon path={page.icon} size={1} />} value={page.path}>
+                {page.title}
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
+        </Tabs>
+        <Stack w="calc(100% - 11rem)" pos="relative">
+          <LoadingOverlay visible={isLoading ?? false} overlayProps={DEFAULT_LOADING_OVERLAY} />
+          {children}
+        </Stack>
+      </Group>
+    </AdminPage>
+  )
+}

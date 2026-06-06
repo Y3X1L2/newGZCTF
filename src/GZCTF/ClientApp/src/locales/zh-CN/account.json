@@ -1,0 +1,119 @@
+{
+  "anchor": {
+    "login": "准备好登录？",
+    "recovery": "忘记密码？"
+  },
+  "button": {
+    "change_password": "更改密码",
+    "confirm_email": "确认邮箱",
+    "login": "登录",
+    "recovery": "发送重置邮件",
+    "register": "注册",
+    "reset": "重置密码",
+    "save_profile": "保存个人信息",
+    "update_email": "更改邮箱",
+    "verify_account": "验证账户"
+  },
+  "content": {
+    "confirm": {
+      "message": "请点击下方按钮确认更改邮箱。"
+    },
+    "link_check": "请检查链接是否正确后再次访问",
+    "link_invalid": "Ouch! 你的链接好像有问题",
+    "profile": {
+      "update_email_note": "更改邮箱后，您将不能通过原邮箱登录。<br/>一封邮件将发送至新邮箱，点击其中链接完成验证。"
+    },
+    "verify": {
+      "message": "请点击下方按钮验证账户。"
+    },
+    "verify_email": {
+      "message": "快要完成了！<br/>我们已经向以下邮箱发送了一封邮件：",
+      "not_received": {
+        "list": "<0>如果没有收到邮件，请检查垃圾邮件文件夹。</0><1>您可以使用相同的邮箱地址重新注册，验证通过后将使用最近一次注册的信息。</1>",
+        "title": "未收到邮件时应当怎么办"
+      },
+      "title": "请验证您的邮箱"
+    },
+    "welcome": "{{decodeEmail}}, 你好👋"
+  },
+  "label": {
+    "bio": "描述",
+    "captcha": "验证码",
+    "email": "邮箱",
+    "email_new": "新邮箱",
+    "password": "密码",
+    "password_old": "原密码",
+    "password_retype": "确认密码",
+    "phone": "手机号",
+    "real_name": "真实姓名",
+    "student_id": "学工号",
+    "username": "用户名",
+    "username_or_email": "用户名或邮箱"
+  },
+  "notification": {
+    "captcha": {
+      "not_valid": "请等待验证码……",
+      "request_sent": {
+        "message": "等待服务器验证",
+        "title": "请求已发送……"
+      }
+    },
+    "confirm": {
+      "failed": "邮箱验证失败",
+      "success": "邮箱已验证"
+    },
+    "login": {
+      "banned": "用户已被禁用",
+      "invalid": "用户名或密码错误",
+      "success": {
+        "message": "跳转回登录前页面",
+        "title": "登录成功"
+      }
+    },
+    "logout": "登出成功",
+    "profile": {
+      "password_updated": "密码已修改，请重新登录",
+      "profile_updated": "个人信息已更新"
+    },
+    "register": {
+      "logged_in": "注册成功",
+      "request_sent": {
+        "message": "请等待管理员审核激活~",
+        "title": "注册请求已发送"
+      }
+    },
+    "reset": {
+      "success": {
+        "message": "请重新登录",
+        "title": "密码已重置"
+      }
+    },
+    "verify": {
+      "failed": "账户验证失败",
+      "success": "账户已验证，请登录"
+    }
+  },
+  "password": {
+    "empty": "密码不能为空",
+    "include_lowercase": "包含小写字母",
+    "include_number": "包含数字",
+    "include_symbol": "包含特殊字符",
+    "include_uppercase": "包含大写字母",
+    "min_length": "至少 6 个字符",
+    "not_match": "重复密码有误"
+  },
+  "placeholder": {
+    "bio": "这个人很懒，什么都没有写",
+    "computing": "计算中，请稍等..."
+  },
+  "title": {
+    "confirm": "邮箱验证",
+    "login": "登录",
+    "profile": "个人资料",
+    "recovery": "找回帐号",
+    "register": "注册",
+    "reset": "重置密码",
+    "verify": "账户验证",
+    "verify_email": "等待邮箱验证"
+  }
+}

@@ -1,0 +1,247 @@
+{
+  "button": {
+    "challenges": "Thử thách",
+    "delete": {
+      "all_traffic": "Xóa tất cả lưu lượng đã liệt kê"
+    },
+    "download": {
+      "all_traffic": "Tải xuống tất cả lưu lượng đã liệt kê",
+      "scoreboard": "Bảng điểm",
+      "submissionsheet": "Bài nộp"
+    },
+    "finished": "Trò chơi đã kết thúc",
+    "hide_solved": "Ẩn các thử thách đã giải",
+    "join": "Tham gia",
+    "leave": "Rời trò chơi",
+    "login_required": "Vui lòng đăng nhập",
+    "scoreboard": "Bảng điểm",
+    "submit_writeup": "Nộp Writeup",
+    "writeup": {
+      "upload": "Tải Writeup",
+      "uploading": "Đang tải lên..."
+    }
+  },
+  "content": {
+    "all_solved": {
+      "comment": "Có thể những thử thách khó khăn hơn đang chờ bạn...",
+      "title": "Tất cả các thử thách đã được giải quyết!"
+    },
+    "duration": "{{hours}} giờ",
+    "end_at": "Kết thúc lúc",
+    "end_time": "Thời gian kết thúc",
+    "game_ended": "Đã kết thúc",
+    "game_lasts_long": "Trò chơi sẽ kéo dài lâu",
+    "hide_container_events": {
+      "description": "Ẩn các sự kiện tạo/hủy container",
+      "label": "Ẩn sự kiện container"
+    },
+    "join": {
+      "confirm": "Xác nhận đăng ký",
+      "content": [
+        "Bạn có chắc chắn muốn đăng ký tham gia trò chơi này không?",
+        "Sau khi đăng ký thành công và qua xét duyệt, đội sẽ bị khóa và <strong>bạn sẽ không thể xóa bất kỳ thành viên nào khỏi đội.</strong> Đội sẽ được mở khóa sau khi trận đấu kết thúc hoặc khi yêu cầu tham gia bị từ chối.",
+        "Giới hạn về số lượng người chơi ám chỉ số thành viên đã quyết định tham gia như một phần của đội cụ thể, <strong>dù bạn chọn đội nào để chơi.</strong>"
+      ],
+      "division": {
+        "description": "Trò chơi này có nhiều bảng. Vui lòng chọn bảng của bạn.",
+        "label": "Chọn bảng"
+      },
+      "invite_code": {
+        "description": "Trò chơi này chỉ dành cho người được mời. Để tham gia, vui lòng nhập mã mời.",
+        "label": "Vui lòng nhập mã mời"
+      },
+      "team": {
+        "description": "Vui lòng chọn đội bạn muốn tham gia trong trò chơi này. Điều này không thể thay đổi sau khi yêu cầu tham gia được phê duyệt.",
+        "label": "Chọn đội của bạn"
+      },
+      "title": "Thông tin đăng ký"
+    },
+    "joined_status": "<strong>{{count}}</strong> đội đã tham gia",
+    "leave": {
+      "confirm": "Xác nhận rời",
+      "content": [
+        "Bạn có chắc chắn muốn rời khỏi trò chơi này không?",
+        "Nếu số lượng thành viên trong đội là không sau khi bạn rời đi, dữ liệu tham gia của đội sẽ bị xóa."
+      ]
+    },
+    "no_challenge": "Ối! Không có thử thách nào cho trò chơi này.",
+    "no_cheat": {
+      "comment": "Có vẻ như mọi người đều chơi công bằng!",
+      "title": "Chưa phát hiện gian lận"
+    },
+    "no_notice": "Không có gì ở đây.",
+    "no_traffic": {
+      "comment": "Cần thiết lập cả nền tảng và thử thách để thu thập lưu lượng",
+      "title": "Không có thử thách nào được kích hoạt thu thập lưu lượng"
+    },
+    "remaining_duration": "còn lại {{hours}} giờ",
+    "remaining_time": "Thời gian còn lại",
+    "scoreboard_not_ready": {
+      "comment": "Chờ chút nha…",
+      "title": "Đang tải challenges"
+    },
+    "scoreboard_note": "Lưu ý: Các đội cùng điểm sẽ sắp xếp theo thời gian nộp.",
+    "scoreboard_tip": "Mẹo: Xem danh sách challenges bằng phím mũi tên trái và phải!",
+    "start_at": "Bắt đầu lúc",
+    "start_time": "Thời gian bắt đầu",
+    "team_view": {
+      "description": "Hiển thị thông tin gian lận theo đội",
+      "label": "Xem với tư cách đội"
+    },
+    "total_duration": "tổng thời gian là: {{hours}} giờ",
+    "total_time": "Thời gian",
+    "traffic": {
+      "delete_confirm": "Xóa traffic file này?",
+      "deleted_all_confirm": "Xóa tất cả traffic đã list?"
+    },
+    "writeup": {
+      "current": "Writeup hiện tại",
+      "deadline_exceeded": "Đã hết thời hạn submit",
+      "instructions": {
+        "additional": "Ghi chú khác",
+        "deadline": "Hãy submit writeup trước <1>{{datetime}}</1>, những writeup nộp muộn hay không nộp thì sẽ đều được tính là bỏ kết quả của giải.",
+        "file_format": "Hãy viết writeup của các challenge mà bạn giải dưới dạng <1> PDF và có dung lượng nhỏ hơn 20MB</1>.",
+        "title": "Hướng dẫn submit"
+      },
+      "submitted": "Submit thành công",
+      "title": "Quản lý writeup",
+      "unsubmitted": "Chưa submit",
+      "unsubmitted_note": "Team của bạn chưa submit"
+    }
+  },
+  "event": {
+    "answer": {
+      "accepted": "Flag đã đúng",
+      "cheat": "Đang gian lận",
+      "not_found": "Không rõ",
+      "submitted": "Submit thành công",
+      "wrong": "Flag sai"
+    },
+    "cheat_detected": "Phát hiện gian lận của challenge {{chal}}, từ team {{team}} sử dụng flag của {{steam}}.",
+    "container": {
+      "destroy": "Hủy challenge instance cho {{chal}}#{{id}}",
+      "start": "Đã tạo challenge instance cho {{chal}}#{{id}}"
+    },
+    "flag_submit": "[{{status}}] {{flag}} [{{chal}}#{{id}}]"
+  },
+  "label": {
+    "cheat_info": {
+      "owned_team": "Source team",
+      "submit_team": "Đội submit",
+      "submit_user": "Người submit"
+    },
+    "notice_type": {
+      "all": "All",
+      "challenge": "Challenge",
+      "events": "Thông báo",
+      "game": "Chú ý"
+    },
+    "score": "Điểm số",
+    "score_formatter": "{value}",
+    "score_table": {
+      "all_teams": "Tất cả các đội",
+      "rank_division": "Hạng",
+      "rank_total": "Tổng",
+      "score": "Điểm",
+      "score_total": "Điểm",
+      "solved_count": "Đã giải",
+      "team": "Đội",
+      "type": "Loại"
+    },
+    "traffic": "Traffic"
+  },
+  "notice": {
+    "blood": "Chúc mừng đội {{team}} đã {{blood}} thử thách {{chal}}.",
+    "new_challenge": "Challenge mới [{{title}}] đã được mở.",
+    "new_hint": "Gợi ý cho [{{title}}] đã được cập nhật."
+  },
+  "notification": {
+    "connected": {
+      "event": "Sự kiện thời gian thực đã được kết nối",
+      "submission": "Đã kết nối với Real-time submission"
+    },
+    "ended": "Trò chơi đã kết thúc",
+    "fetch_failed": {
+      "event": "Không thể fetch sự kiện",
+      "notice": "Không thể fetch thông báo",
+      "submission": "Không thể fetch bài nộp"
+    },
+    "joined": "Đăng ký thành công",
+    "left": "Hủy thành công",
+    "no_division": "Hãy chọn bảng",
+    "no_invite_code": "Mã mời không được để trống",
+    "no_team": "Vui lòng chọn đội để tham gia",
+    "not_joined": "Bạn chưa tham gia trò chơi",
+    "not_started": "Trò chơi chưa bắt đầu",
+    "select_chal_and_part": "Hãy lựa chọn challenge và đội trước",
+    "suspended": "Bạn đã bị cấm",
+    "traffic": {
+      "deleted": "Traffic file đã bị xóa"
+    },
+    "writeup": {
+      "submitted": "Writeup đã được nộp thành công"
+    }
+  },
+  "participation": {
+    "actions": {
+      "accepted": "Chấp thuận",
+      "pending": "Đang chờ xem xét",
+      "rejected": "Đăng ký lại",
+      "suspended": "Đã bị cấm",
+      "unsubmitted": "Tham gia"
+    },
+    "alert": {
+      "not_started": {
+        "content": "Bạn đã thành công đăng ký và vượt qua đánh giá thành viên của team {{team}}. Hãy chờ cho trò chơi bắt đầu.",
+        "mobile": "Vui lòng sử dụng trang web dành cho máy tính để xem thông tin chi tiết về trò chơi.",
+        "title": "Trò chơi chưa bắt đầu"
+      },
+      "pending": {
+        "content": "Vui lòng chờ kết quả đánh giá",
+        "title": "Bạn đã đăng ký thành công để trở thành thành viên của nhóm {{team}}"
+      },
+      "rejected": {
+        "content": "Hãy đảm bảo rằng bạn đủ điều kiện để đăng ký vào trò chơi và thử lại sau khi bạn đáp ứng đủ các yêu cầu",
+        "title": "Yêu cầu tham gia của bạn đã bị từ chối"
+      },
+      "suspended": {
+        "content": "Nếu bạn có bất kỳ phản đối nào, vui lòng liên hệ với người quản lý để kháng cáo.",
+        "title": "Đội của bạn {{team}} đã bị đình chỉ"
+      },
+      "team_required": {
+        "content": "Bạn chưa tham gia đội nào, vui lòng tạo hoặc tham gia đội trên trang <1> Quản lý nhóm </1>.",
+        "title": "Không thể đăng kí ngay lúc này"
+      }
+    },
+    "status": {
+      "accepted": "Chấp thuận",
+      "pending": "Đợi duyệt",
+      "rejected": "Đã từ chối",
+      "suspended": "Đã bị cấm"
+    }
+  },
+  "placeholder": {
+    "no_solved": "Team này chưa giải được bài nào cả...",
+    "search_team": "Tìm đội"
+  },
+  "tab": {
+    "challenge": "Challenges",
+    "monitor": {
+      "cheatinfo": "Gian lận",
+      "events": "Các sự kiện",
+      "index": "Đang theo dõi",
+      "submissions": "Bài nộp",
+      "traffic": "Lưu lượng"
+    },
+    "scoreboard": "Bảng điểm"
+  },
+  "tag": {
+    "hidden": "Bị ẩn",
+    "individual": "Cá nhân",
+    "limited": "{{count}} người chơi",
+    "multiplayer": "Đội"
+  },
+  "title": {
+    "index": "Trò chơi"
+  }
+}
