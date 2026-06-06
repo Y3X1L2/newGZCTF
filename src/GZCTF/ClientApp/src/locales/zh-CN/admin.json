@@ -668,7 +668,7 @@
     }
   },
   "awd": {
-    "title": "AWD 管理",
+    "title": "AWDP 管理",
     "new_service": "新建服务",
     "edit_service": "编辑服务",
     "create_service": "创建服务",
@@ -685,7 +685,7 @@
     "refresh": "刷新",
     "start_game": "开始比赛",
     "stop_game": "停止比赛",
-    "game_status": "AWD 比赛状态",
+    "game_status": "AWDP 比赛状态",
     "current_round": "当前轮次",
     "running": "进行中",
     "finished": "已结束",
@@ -723,7 +723,7 @@
   },
   "tab": {
     "games": {
-      "awd": "AWD 管理",
+      "awd": "AWDP 管理",
       "challenges": "题目管理",
       "divisions": "分组管理",
       "index": "比赛管理",

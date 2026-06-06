@@ -52,11 +52,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<ScenarioInstance> ScenarioInstances { get; set; } = null!;
     public DbSet<IRCheckpoint> IRCheckpoints { get; set; } = null!;
     public DbSet<IRInstance> IRInstances { get; set; } = null!;
-    public DbSet<AwdService> AwdServices { get; set; } = null!;
-    public DbSet<AwdServiceInstance> AwdServiceInstances { get; set; } = null!;
-    public DbSet<AwdRound> AwdRounds { get; set; } = null!;
-    public DbSet<AwdFlag> AwdFlags { get; set; } = null!;
-    public DbSet<AwdCheckerTask> AwdCheckerTasks { get; set; } = null!;
 
     private static ValueConverter<T?, string> GetJsonConverter<T>() where T : class, new() =>
         new(
@@ -347,27 +342,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
             entity.Navigation(e => e.Team).AutoInclude();
             entity.Navigation(e => e.User).AutoInclude();
             entity.Navigation(e => e.GameChallenge).AutoInclude();
-        });
-
-        builder.Entity<AwdServiceInstance>(entity =>
-        {
-            entity.Property(e => e.ContainerId)
-                .HasColumnName("ContainerId1");
-
-            entity.HasOne(e => e.Container)
-                .WithMany()
-                .HasForeignKey(e => e.ContainerId)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            entity.HasOne(e => e.Service)
-                .WithMany(e => e.Instances)
-                .HasForeignKey(e => e.ServiceId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.Team)
-                .WithMany()
-                .HasForeignKey(e => e.TeamId)
-                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<FlagContext>(entity =>

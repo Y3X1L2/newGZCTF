@@ -43,7 +43,7 @@ export const WithGameEditTab: FC<GameEditTabProps> = ({
   const numId = parseInt(id ?? '-1')
   const { game } = useAdminGame(numId)
 
-  const isAwdGame = game?.gameType === GameType.AWD || game?.gameType === GameType.Mixed
+  const isAwdGame = game?.gameType === GameType.AWDP || game?.gameType === GameType.Mixed
 
   const pages = [
     { icon: mdiTextBoxOutline, title: t('admin.tab.games.info'), path: 'info' },

@@ -95,7 +95,7 @@ export enum AnswerType {
 /** Game type */
 export enum GameType {
   Jeopardy = "Jeopardy",
-  AWD = "AWD",
+  AWDP = "AWDP",
   Theory = "Theory",
   Mixed = "Mixed",
 }
@@ -1670,11 +1670,6 @@ export interface ScoreboardItem {
    * @format int32
    */
   ctfScore: number;
-  /**
-   * AWD Score
-   * @format int32
-   */
-  awdScore: number;
   /**
    * Total Score
    * @format int32

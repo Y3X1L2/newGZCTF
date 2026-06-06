@@ -13,14 +13,4 @@ public interface IMonitorClient
     /// 接收到比赛提交信息
     /// </summary>
     public Task ReceivedSubmissions(Submission submission);
-
-    /// <summary>
-    /// 接收到AWD轮次变化
-    /// </summary>
-    public Task ReceivedAwdRoundChange(AwdGameStatusModel status);
-
-    /// <summary>
-    /// 接收到AWD服务状态变化
-    /// </summary>
-    public Task ReceivedAwdServiceStatusChange(AwdServiceStatusModel status);
 }

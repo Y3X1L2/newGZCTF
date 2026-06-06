@@ -240,7 +240,7 @@ const GameInfoEdit: FC = () => {
           value={game?.gameType ?? GameType.Jeopardy}
           data={[
             { value: GameType.Jeopardy, label: 'Jeopardy' },
-            { value: GameType.AWD, label: 'AWD' },
+            { value: GameType.AWDP, label: 'AWDP' },
             { value: GameType.Theory, label: 'Theory' },
             { value: GameType.Mixed, label: 'Mixed' },
           ]}

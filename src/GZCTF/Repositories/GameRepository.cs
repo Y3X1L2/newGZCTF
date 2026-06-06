@@ -592,33 +592,7 @@ public class GameRepository(
             }
         }
 
-
-        // 5.4. calculate AWD scores if applicable
-        if (game.GameType is GameType.AWD or GameType.Mixed)
-        {
-            var awdServices = await Context.AwdServices
-                .AsNoTracking()
-                .Where(s => s.GameId == game.Id)
-                .Select(s => s.Id)
-                .ToListAsync(token);
-
-            if (awdServices.Count > 0)
-            {
-                var awdSubmissions = await Context.Submissions
-                    .AsNoTracking()
-                    .Where(s => s.GameId == game.Id
-                                && awdServices.Contains(s.ChallengeId)
-                                && s.Status == AnswerResult.Accepted)
-                    .GroupBy(s => s.TeamId)
-                    .Select(g => new { TeamId = g.Key, Score = g.Sum(s => s.Score) })
-                    .ToDictionaryAsync(x => x.TeamId, x => x.Score, token);
-
-                foreach (var item in items.Values)
-                {
-                    item.AwdScore = awdSubmissions.GetValueOrDefault(item.Id, 0);
-                }
-            }
-        }
+        // TODO: AWDP scoreboard integration — will be restored when AWDP models are created
 
         // 6. sort scoreboard items by score and last submission time
         items = items.Values

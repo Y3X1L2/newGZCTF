@@ -62,7 +62,7 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
 
   const finished = dayjs() > dayjs(game?.end ?? new Date())
 
-  const isAwdGame = game?.gameType === GameType.AWD || game?.gameType === GameType.Mixed
+  const isAwdGame = game?.gameType === GameType.AWDP || game?.gameType === GameType.Mixed
 
   const pages = [
     {

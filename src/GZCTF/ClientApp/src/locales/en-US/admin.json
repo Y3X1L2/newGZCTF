@@ -668,7 +668,7 @@
     }
   },
   "awd": {
-    "title": "AWD Management",
+    "title": "AWDP Management",
     "new_service": "New Service",
     "edit_service": "Edit Service",
     "create_service": "Create Service",
@@ -685,7 +685,7 @@
     "refresh": "Refresh",
     "start_game": "Start Game",
     "stop_game": "Stop Game",
-    "game_status": "AWD Game Status",
+    "game_status": "AWDP Game Status",
     "current_round": "Current Round",
     "running": "Running",
     "finished": "Finished",
@@ -723,7 +723,7 @@
   },
   "tab": {
     "games": {
-      "awd": "AWD Management",
+      "awd": "AWDP Management",
       "challenges": "Challenges",
       "divisions": "Divisions",
       "index": "Games",
