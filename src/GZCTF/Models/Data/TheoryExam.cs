@@ -4,13 +4,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Models.Data;
 
-[Index(nameof(Type))]
+[Index(nameof(Type), nameof(BankName))]
 public class TheoryQuestionBankItem
 {
     [Key]
     public int Id { get; set; }
 
     public TheoryQuestionType Type { get; set; }
+
+    [Required]
+    public string BankName { get; set; } = "Default";
 
     [Required]
     public string Title { get; set; } = string.Empty;

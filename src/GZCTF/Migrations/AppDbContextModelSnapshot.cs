@@ -1765,6 +1765,11 @@ namespace GZCTF.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("BankName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<string>("Content")
                         .IsRequired()
                         .HasColumnType("text");
@@ -1840,7 +1845,7 @@ namespace GZCTF.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Type");
+                    b.HasIndex("Type", "BankName");
 
                     b.ToTable("TheoryQuestionBankItems");
                 });

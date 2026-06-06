@@ -488,6 +488,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .HasConversion<string>()
                 .HasMaxLength(32);
 
+            entity.Property(e => e.BankName)
+                .HasMaxLength(128);
+
             entity.Property(e => e.Options)
                 .HasConversion(listConverter)
                 .Metadata

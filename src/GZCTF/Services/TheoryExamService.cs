@@ -5,12 +5,15 @@ namespace GZCTF.Services;
 
 public class TheoryExamService(AppDbContext context)
 {
+    public const string DefaultBankName = "Default";
+
     private static readonly List<string> TrueFalseOptions = ["True", "False"];
 
     public static bool IsTheoryGame(Game game) => game.GameType is GameType.Theory or GameType.Mixed;
 
     public string? NormalizeAndValidate(TheoryQuestionEditModel model, int? score = null)
     {
+        model.BankName = string.IsNullOrWhiteSpace(model.BankName) ? DefaultBankName : model.BankName.Trim();
         model.Title = model.Title.Trim();
         model.Content = model.Content.Trim();
         model.Options = model.Type == TheoryQuestionType.TrueFalse
@@ -20,6 +23,9 @@ public class TheoryExamService(AppDbContext context)
 
         if (string.IsNullOrWhiteSpace(model.Title))
             return "Question title is required.";
+
+        if (model.BankName.Length > 128)
+            return "Question bank name is too long.";
 
         if (score is <= 0)
             return "Question score must be greater than 0.";
@@ -73,6 +79,7 @@ public class TheoryExamService(AppDbContext context)
     {
         item ??= new TheoryQuestionBankItem { CreatedAt = DateTimeOffset.UtcNow };
         item.Type = model.Type;
+        item.BankName = string.IsNullOrWhiteSpace(model.BankName) ? DefaultBankName : model.BankName.Trim();
         item.Title = model.Title.Trim();
         item.Content = model.Content.Trim();
         item.Options = model.Options;

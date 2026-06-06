@@ -136,15 +136,19 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
             requireAwd: false,
           },
         ]),
-    {
-      icon: mdiMonitorEye,
-      title: t('game.tab.monitor.index'),
-      path: 'monitor',
-      link: 'monitor/events',
-      requireJoin: false,
-      requireRole: Role.Monitor,
-      requireAwd: false,
-    },
+    ...(!isTheoryOnly
+      ? [
+          {
+            icon: mdiMonitorEye,
+            title: t('game.tab.monitor.index'),
+            path: 'monitor',
+            link: 'monitor/events',
+            requireJoin: false,
+            requireRole: Role.Monitor,
+            requireAwd: false,
+          },
+        ]
+      : []),
   ]
 
   const filteredPages = pages
@@ -157,7 +161,19 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
     label: p.title,
     icon: <Icon path={p.icon} size={1} />,
   }))
-  const getTab = (path: string) => filteredPages?.findIndex((page) => path.includes(page.path))
+  const getTab = (path: string) => {
+    const segments = path.split('/').filter(Boolean)
+    const gamePathIndex = segments.findIndex((segment, index) => segment === 'games' && segments[index + 1] === String(numId))
+    const currentPath = gamePathIndex >= 0 ? segments.slice(gamePathIndex + 2).join('/') : segments[segments.length - 1] ?? ''
+
+    return filteredPages?.findIndex(
+      (page) =>
+        currentPath === page.path ||
+        currentPath === page.link ||
+        currentPath.startsWith(`${page.path}/`) ||
+        currentPath.startsWith(`${page.link}/`)
+    )
+  }
 
   const tabIndex = getTab(location.pathname)
   const [activeTab, setActiveTab] = useState(tabIndex < 0 ? 0 : tabIndex)
@@ -171,7 +187,7 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
 
   useEffect(() => {
     const tab = getTab(location.pathname)
-    if (!tab || tab < 0) return
+    if (tab < 0) return
     setActiveTab(tab)
   })
 

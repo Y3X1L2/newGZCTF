@@ -8,6 +8,7 @@ import {
   FileButton,
   Group,
   Modal,
+  MultiSelect,
   NumberInput,
   Radio,
   ScrollArea,
@@ -50,8 +51,13 @@ const questionTypeOptions = [
   { value: TheoryQuestionType.TrueFalse, label: '判断题' },
 ]
 
+const DEFAULT_BANK_NAME = 'Default'
+
+const normalizeBankName = (bankName?: string | null) => bankName?.trim() || DEFAULT_BANK_NAME
+
 const defaultQuestion = (order: number): TheoryPaperQuestionEditModel => ({
   type: TheoryQuestionType.SingleChoice,
+  bankName: DEFAULT_BANK_NAME,
   title: '',
   content: '',
   options: ['选项 A', '选项 B'],
@@ -68,6 +74,7 @@ const normalizeQuestion = (question: Partial<TheoryPaperQuestionEditModel>, inde
     id: question.id,
     sourceQuestionId: question.sourceQuestionId ?? null,
     type,
+    bankName: normalizeBankName(question.bankName),
     title: question.title ?? '',
     content: question.content ?? '',
     options,
@@ -263,8 +270,55 @@ const TheoryPaper: FC = () => {
   const [bankOpened, setBankOpened] = useState(false)
   const [jsonOpened, setJsonOpened] = useState(false)
   const [jsonText, setJsonText] = useState('')
+  const [bankType, setBankType] = useState<TheoryQuestionType>(TheoryQuestionType.SingleChoice)
+  const [selectedBankNames, setSelectedBankNames] = useState<string[]>([])
+  const [selectedBankQuestionIds, setSelectedBankQuestionIds] = useState<string[]>([])
+  const [bankKeyword, setBankKeyword] = useState('')
+  const [bankScore, setBankScore] = useState(1)
+  const [randomCount, setRandomCount] = useState(1)
 
   const totalScore = useMemo(() => paper?.questions.reduce((sum, q) => sum + Number(q.score || 0), 0) ?? 0, [paper])
+  const currentSourceIds = useMemo(
+    () => new Set((paper?.questions ?? []).map((q) => q.sourceQuestionId).filter((id): id is number => typeof id === 'number')),
+    [paper]
+  )
+  const bankStats = useMemo(() => {
+    const stats = new Map<string, number>()
+    questions
+      .filter((question) => question.type === bankType)
+      .forEach((question) => {
+        const bankName = normalizeBankName(question.bankName)
+        stats.set(bankName, (stats.get(bankName) ?? 0) + 1)
+      })
+
+    return stats
+  }, [questions, bankType])
+  const bankNameOptions = useMemo(
+    () =>
+      [...bankStats.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([bankName, count]) => ({ value: bankName, label: `${bankName} (${count})` })),
+    [bankStats]
+  )
+  const filteredBankQuestions = useMemo(() => {
+    const keyword = bankKeyword.trim().toLowerCase()
+
+    return questions
+      .filter((question) => question.type === bankType)
+      .filter((question) => selectedBankNames.length === 0 || selectedBankNames.includes(normalizeBankName(question.bankName)))
+      .filter((question) => {
+        if (!keyword) return true
+        return `${question.title} ${question.content}`.toLowerCase().includes(keyword)
+      })
+  }, [questions, bankType, selectedBankNames, bankKeyword])
+  const availableBankQuestions = useMemo(
+    () => filteredBankQuestions.filter((question) => !currentSourceIds.has(question.id)),
+    [filteredBankQuestions, currentSourceIds]
+  )
+  const selectedBankQuestions = useMemo(
+    () => filteredBankQuestions.filter((question) => selectedBankQuestionIds.includes(String(question.id))),
+    [filteredBankQuestions, selectedBankQuestionIds]
+  )
 
   const fetchPaper = async () => {
     if (numId < 0) return
@@ -317,18 +371,53 @@ const TheoryPaper: FC = () => {
     })
   }
 
-  const addFromBank = (item: TheoryQuestionBankItemModel) => {
-    addQuestion({
-      sourceQuestionId: item.id,
-      type: item.type,
-      title: item.title,
-      content: item.content,
-      options: [...item.options],
-      answerIndexes: [...item.answerIndexes],
-      score: 1,
-      order: (paper?.questions.length ?? 0) + 1,
+  const bankQuestionToPaperQuestion = (
+    item: TheoryQuestionBankItemModel,
+    order: number
+  ): TheoryPaperQuestionEditModel => ({
+    sourceQuestionId: item.id,
+    type: item.type,
+    bankName: normalizeBankName(item.bankName),
+    title: item.title,
+    content: item.content,
+    options: [...item.options],
+    answerIndexes: [...item.answerIndexes],
+    score: Number(bankScore || 1),
+    order,
+  })
+
+  const addFromBank = (items: TheoryQuestionBankItemModel[]) => {
+    if (!paper || items.length === 0) return
+
+    const existingSourceIds = new Set(
+      paper.questions.map((question) => question.sourceQuestionId).filter((sourceId): sourceId is number => typeof sourceId === 'number')
+    )
+    const uniqueItems = items.filter((item) => !existingSourceIds.has(item.id))
+    if (uniqueItems.length === 0) {
+      showNotification({ color: 'yellow', message: '选中的题目已经在试卷中' })
+      return
+    }
+
+    setPaper({
+      ...paper,
+      questions: [
+        ...paper.questions,
+        ...uniqueItems.map((item, index) => bankQuestionToPaperQuestion(item, paper.questions.length + index + 1)),
+      ],
     })
-    setBankOpened(false)
+    setSelectedBankQuestionIds((ids) => ids.filter((id) => !uniqueItems.some((item) => String(item.id) === id)))
+    showNotification({ color: 'teal', message: `已添加 ${uniqueItems.length} 道题目`, icon: <Icon path={mdiCheck} size={1} /> })
+  }
+
+  const addRandomFromBank = () => {
+    const count = Math.min(Number(randomCount || 0), availableBankQuestions.length)
+    if (count <= 0) {
+      showNotification({ color: 'yellow', message: '当前筛选条件下没有可添加的题目' })
+      return
+    }
+
+    const selected = [...availableBankQuestions].sort(() => Math.random() - 0.5).slice(0, count)
+    addFromBank(selected)
   }
 
   const saveToBank = async (question: TheoryPaperQuestionEditModel, index: number) => {
@@ -336,6 +425,7 @@ const TheoryPaper: FC = () => {
     try {
       const payload = {
         type: question.type,
+        bankName: normalizeBankName(questions.find((item) => item.id === question.sourceQuestionId)?.bankName ?? question.bankName),
         title: question.title,
         content: question.content,
         options: question.options,
@@ -491,36 +581,145 @@ const TheoryPaper: FC = () => {
         )}
       </Stack>
 
-      <Modal opened={bankOpened} onClose={() => setBankOpened(false)} title="共享题库" size="xl">
-        <ScrollArea h={420}>
-          <Table>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>题干</Table.Th>
-                <Table.Th>题型</Table.Th>
-                <Table.Th>答案</Table.Th>
-                <Table.Th />
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {questions.map((item) => (
-                <Table.Tr key={item.id}>
-                  <Table.Td>
-                    <Text fw={600}>{item.title}</Text>
-                    {item.content && <Text size="xs" c="dimmed" lineClamp={1}>{item.content}</Text>}
-                  </Table.Td>
-                  <Table.Td>{questionTypeOptions.find((type) => type.value === item.type)?.label}</Table.Td>
-                  <Table.Td>{getAnswerLabel({ ...item, score: 1, order: 1 })}</Table.Td>
-                  <Table.Td ta="right">
-                    <Button size="xs" onClick={() => addFromBank(item)}>
-                      添加
-                    </Button>
-                  </Table.Td>
+      <Modal opened={bankOpened} onClose={() => setBankOpened(false)} title="共享题库" size="90%">
+        <Stack gap="md">
+          <SimpleGrid cols={{ base: 1, md: 4 }}>
+            <Select
+              label="题型"
+              data={questionTypeOptions}
+              value={bankType}
+              onChange={(value) => {
+                if (!value) return
+                setBankType(value as TheoryQuestionType)
+                setSelectedBankNames([])
+                setSelectedBankQuestionIds([])
+              }}
+            />
+            <MultiSelect
+              label="题库"
+              data={bankNameOptions}
+              value={selectedBankNames}
+              placeholder="默认包含全部题库"
+              searchable
+              clearable
+              onChange={(value) => {
+                setSelectedBankNames(value)
+                setSelectedBankQuestionIds([])
+              }}
+            />
+            <NumberInput
+              label="统一分值"
+              min={1}
+              value={bankScore}
+              onChange={(value) => setBankScore(Number(value || 1))}
+            />
+            <TextInput
+              label="搜索题干"
+              value={bankKeyword}
+              placeholder="按题干或说明过滤"
+              onChange={(event) => setBankKeyword(event.currentTarget.value)}
+            />
+          </SimpleGrid>
+
+          <Group justify="space-between" align="flex-end">
+            <Group gap="xs">
+              <Badge variant="light">符合条件 {filteredBankQuestions.length}</Badge>
+              <Badge color="teal" variant="light">可添加 {availableBankQuestions.length}</Badge>
+              <Badge color="gray" variant="light">已选择 {selectedBankQuestions.length}</Badge>
+            </Group>
+            <Group>
+              <NumberInput
+                label="随机抽取数量"
+                min={1}
+                max={availableBankQuestions.length || 1}
+                value={randomCount}
+                w={140}
+                onChange={(value) => setRandomCount(Number(value || 1))}
+              />
+              <Button variant="outline" disabled={!availableBankQuestions.length} onClick={addRandomFromBank}>
+                随机添加
+              </Button>
+              <Button disabled={!selectedBankQuestions.length} onClick={() => addFromBank(selectedBankQuestions)}>
+                添加选中
+              </Button>
+            </Group>
+          </Group>
+
+          <ScrollArea h={430}>
+            <Table striped highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th w={48}>
+                    <Checkbox
+                      disabled={!availableBankQuestions.length}
+                      checked={
+                        availableBankQuestions.length > 0 &&
+                        availableBankQuestions.every((question) => selectedBankQuestionIds.includes(String(question.id)))
+                      }
+                      indeterminate={
+                        availableBankQuestions.some((question) => selectedBankQuestionIds.includes(String(question.id))) &&
+                        !availableBankQuestions.every((question) => selectedBankQuestionIds.includes(String(question.id)))
+                      }
+                      onChange={(event) => {
+                        setSelectedBankQuestionIds(
+                          event.currentTarget.checked ? availableBankQuestions.map((question) => String(question.id)) : []
+                        )
+                      }}
+                    />
+                  </Table.Th>
+                  <Table.Th>题干</Table.Th>
+                  <Table.Th>题库</Table.Th>
+                  <Table.Th>答案</Table.Th>
+                  <Table.Th>状态</Table.Th>
                 </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </ScrollArea>
+              </Table.Thead>
+              <Table.Tbody>
+                {filteredBankQuestions.map((item) => {
+                  const added = currentSourceIds.has(item.id)
+
+                  return (
+                    <Table.Tr key={item.id}>
+                      <Table.Td>
+                        <Checkbox
+                          disabled={added}
+                          checked={selectedBankQuestionIds.includes(String(item.id))}
+                          onChange={(event) =>
+                            setSelectedBankQuestionIds((ids) =>
+                              event.currentTarget.checked
+                                ? [...ids, String(item.id)]
+                                : ids.filter((id) => id !== String(item.id))
+                            )
+                          }
+                        />
+                      </Table.Td>
+                      <Table.Td>
+                        <Text fw={600}>{item.title}</Text>
+                        {item.content && (
+                          <Text size="xs" c="dimmed" lineClamp={1}>
+                            {item.content}
+                          </Text>
+                        )}
+                      </Table.Td>
+                      <Table.Td>{normalizeBankName(item.bankName)}</Table.Td>
+                      <Table.Td>{getAnswerLabel({ ...item, score: 1, order: 1 })}</Table.Td>
+                      <Table.Td>
+                        {added ? (
+                          <Badge color="gray" variant="light">
+                            已添加
+                          </Badge>
+                        ) : (
+                          <Button size="xs" variant="subtle" onClick={() => addFromBank([item])}>
+                            添加
+                          </Button>
+                        )}
+                      </Table.Td>
+                    </Table.Tr>
+                  )
+                })}
+              </Table.Tbody>
+            </Table>
+          </ScrollArea>
+        </Stack>
       </Modal>
 
       <Modal opened={jsonOpened} onClose={() => setJsonOpened(false)} title="JSON 导入" size="lg">

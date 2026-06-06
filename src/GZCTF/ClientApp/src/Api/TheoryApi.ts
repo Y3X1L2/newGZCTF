@@ -13,6 +13,7 @@ export enum TheoryAnswerSheetStatus {
 
 export interface TheoryQuestionEditModel {
   type: TheoryQuestionType
+  bankName?: string
   title: string
   content: string
   options: string[]
@@ -113,11 +114,11 @@ export interface TheoryResultsModel {
 const request = api.request
 
 export const theoryAdminApi = {
-  getQuestions: (keyword?: string) =>
+  getQuestions: (keyword?: string, count = 1000) =>
     request<TheoryQuestionBankItemModel[], unknown>({
       path: '/api/admin/theory/questions',
       method: 'GET',
-      query: { keyword, count: 200 },
+      query: { keyword, count },
     }),
 
   createQuestion: (data: TheoryQuestionEditModel) =>

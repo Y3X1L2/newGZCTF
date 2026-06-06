@@ -7,6 +7,8 @@ public class TheoryQuestionEditModel
     [Required]
     public TheoryQuestionType Type { get; set; }
 
+    public string BankName { get; set; } = "Default";
+
     [Required]
     public string Title { get; set; } = string.Empty;
 
@@ -30,6 +32,7 @@ public class TheoryQuestionBankItemModel : TheoryQuestionEditModel
         {
             Id = item.Id,
             Type = item.Type,
+            BankName = item.BankName,
             Title = item.Title,
             Content = item.Content,
             Options = item.Options,

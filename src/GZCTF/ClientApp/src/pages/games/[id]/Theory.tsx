@@ -4,15 +4,17 @@ import {
   Button,
   Card,
   Checkbox,
+  Grid,
   Group,
   Modal,
   Radio,
+  SimpleGrid,
   Stack,
   Text,
   Title,
 } from '@mantine/core'
 import { showNotification } from '@mantine/notifications'
-import { mdiCheck, mdiContentSaveOutline, mdiSendCheckOutline } from '@mdi/js'
+import { mdiArrowLeftBold, mdiArrowRightBold, mdiCheck, mdiContentSaveOutline, mdiSendCheckOutline } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { FC, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router'
@@ -87,6 +89,7 @@ const TheoryPage: FC = () => {
   const [loading, setLoading] = useState(false)
   const [errorText, setErrorText] = useState<string>()
   const [confirmOpened, setConfirmOpened] = useState(false)
+  const [currentIndex, setCurrentIndex] = useState(0)
 
   const submitted = paper?.status === TheoryAnswerSheetStatus.Submitted
   const answeredCount = useMemo(
@@ -121,6 +124,11 @@ const TheoryPage: FC = () => {
     loadPaper()
   }, [numId])
 
+  useEffect(() => {
+    if (!paper?.questions.length) return
+    setCurrentIndex((index) => Math.min(Math.max(index, 0), paper.questions.length - 1))
+  }, [paper?.questions.length])
+
   const saveDraft = async () => {
     if (!paper || submitted) return
     setLoading(true)
@@ -151,6 +159,10 @@ const TheoryPage: FC = () => {
   }
 
   const confirmSubmit = () => setConfirmOpened(true)
+
+  const currentQuestion = paper?.questions[currentIndex]
+  const goToQuestion = (index: number) => setCurrentIndex(Math.min(Math.max(index, 0), (paper?.questions.length ?? 1) - 1))
+  const currentAnswered = currentQuestion ? (answers[currentQuestion.id]?.length ?? 0) > 0 : false
 
   return (
     <WithNavBar minWidth={0} isLoading={loading} withFooter>
@@ -223,17 +235,87 @@ const TheoryPage: FC = () => {
                 </Alert>
               )}
 
-              <Stack gap="md">
-                {paper.questions.map((question) => (
-                  <TheoryQuestionCard
-                    key={question.id}
-                    question={question}
-                    selected={answers[question.id] ?? []}
-                    disabled={submitted || loading}
-                    onChange={(selected) => setAnswers({ ...answers, [question.id]: selected })}
-                  />
-                ))}
-              </Stack>
+              <Grid align="flex-start">
+                <Grid.Col span={{ base: 12, lg: 9 }}>
+                  {currentQuestion && (
+                    <Stack gap="md">
+                      <Card withBorder radius="sm">
+                        <Group justify="space-between" align="center">
+                          <Stack gap={2}>
+                            <Text size="sm" c="dimmed">
+                              第 {currentIndex + 1} 题 / 共 {paper.questions.length} 题
+                            </Text>
+                            <Group gap="xs">
+                              <Badge color={currentAnswered ? 'teal' : 'gray'} variant="light">
+                                {currentAnswered ? '已作答' : '未作答'}
+                              </Badge>
+                              <Badge variant="light">
+                                剩余 {paper.questions.length - currentIndex - 1} 题
+                              </Badge>
+                            </Group>
+                          </Stack>
+                          <Group>
+                            <Button
+                              variant="default"
+                              disabled={currentIndex <= 0}
+                              leftSection={<Icon path={mdiArrowLeftBold} size={1} />}
+                              onClick={() => goToQuestion(currentIndex - 1)}
+                            >
+                              上一题
+                            </Button>
+                            <Button
+                              variant="default"
+                              disabled={currentIndex >= paper.questions.length - 1}
+                              rightSection={<Icon path={mdiArrowRightBold} size={1} />}
+                              onClick={() => goToQuestion(currentIndex + 1)}
+                            >
+                              下一题
+                            </Button>
+                          </Group>
+                        </Group>
+                      </Card>
+
+                      <TheoryQuestionCard
+                        question={currentQuestion}
+                        selected={answers[currentQuestion.id] ?? []}
+                        disabled={submitted || loading}
+                        onChange={(selected) => setAnswers({ ...answers, [currentQuestion.id]: selected })}
+                      />
+                    </Stack>
+                  )}
+                </Grid.Col>
+                <Grid.Col span={{ base: 12, lg: 3 }}>
+                  <Card withBorder radius="sm" style={{ position: 'sticky', top: '1rem' }}>
+                    <Stack gap="sm">
+                      <Group justify="space-between">
+                        <Text fw={700}>题目索引</Text>
+                        <Badge variant="light">
+                          {answeredCount} / {paper.questions.length}
+                        </Badge>
+                      </Group>
+                      <SimpleGrid cols={{ base: 6, sm: 8, lg: 5 }} spacing="xs">
+                        {paper.questions.map((question, index) => {
+                          const answered = (answers[question.id]?.length ?? 0) > 0
+                          const active = index === currentIndex
+
+                          return (
+                            <Button
+                              key={question.id}
+                              size="xs"
+                              px={0}
+                              variant={active ? 'filled' : answered ? 'light' : 'outline'}
+                              color={active ? 'blue' : answered ? 'teal' : 'gray'}
+                              onClick={() => goToQuestion(index)}
+                            >
+                              {index + 1}
+                            </Button>
+                          )
+                        })}
+                      </SimpleGrid>
+                    </Stack>
+                  </Card>
+                </Grid.Col>
+              </Grid>
             </>
           )}
         </Stack>

@@ -24,7 +24,7 @@ public class TheoryAdminController(
     [ProducesResponseType(typeof(TheoryQuestionBankItemModel[]), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetQuestions(
         [FromQuery] string? keyword,
-        [FromQuery][Range(0, 200)] int count = 100,
+        [FromQuery][Range(0, 5000)] int count = 1000,
         [FromQuery] int skip = 0,
         CancellationToken token = default)
     {
