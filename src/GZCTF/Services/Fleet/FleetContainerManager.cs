@@ -34,6 +34,13 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         var fleetManager = scope.ServiceProvider.GetRequiredService<FleetManager>();
         var nodeRepo = scope.ServiceProvider.GetRequiredService<INodeRepository>();
 
+        var onlineNodes = await nodeRepo.GetOnlineNodesAsync(token);
+        if (onlineNodes.Count == 0)
+        {
+            _logger.LogInformation("No online fleet node available, falling back to local Docker manager");
+            return await _localManager.CreateContainerAsync(config, token);
+        }
+
         var target = new DeploymentTarget
         {
             Type = TargetType.Docker,

@@ -92,8 +92,8 @@ public class AwdpPlayerController(
             return BadRequest(new RequestResponse("Invalid AWDP flag."));
 
         var teamId = ctx.Participation!.TeamId;
-        if (flag.TeamId != teamId)
-            return BadRequest(new RequestResponse("This AWDP flag does not belong to your team instance."));
+        if (flag.TeamId == teamId)
+            return BadRequest(new RequestResponse("You cannot submit your own AWDP flag."));
 
         if (flag.IsSubmitted)
             return BadRequest(new RequestResponse("This AWDP flag has already been submitted."));
