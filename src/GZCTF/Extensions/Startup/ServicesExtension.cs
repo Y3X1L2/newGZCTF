@@ -152,6 +152,7 @@ internal static class ServicesExtension
             builder.Services.AddHostedService<CacheMaker>();
             builder.Services.AddHostedService<CronJobService>();
             builder.Services.AddHostedService<LocalNodeRegistrar>();
+            builder.Services.AddHostedService<LocalNodeMetricsService>();
         }
 
         internal void AddWebServices()

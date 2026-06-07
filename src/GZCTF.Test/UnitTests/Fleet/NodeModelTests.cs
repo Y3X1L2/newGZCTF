@@ -1,6 +1,8 @@
 using System;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using GZCTF.Models.Data;
 using GZCTF.Services.Fleet;
 using Xunit;
@@ -61,6 +63,15 @@ public class WorkerNodeTests
         var status = node.GetEffectiveStatus(DateTimeOffset.UtcNow);
 
         Assert.Equal(NodeStatus.Online, status);
+    }
+
+    [Fact]
+    public async Task LocalNodeMetricsSampler_ReturnsNormalizedRatios()
+    {
+        var (cpuLoad, memoryLoad) = await LocalNodeMetricsService.SystemMetricsSampler.SampleAsync(CancellationToken.None);
+
+        Assert.InRange(cpuLoad, 0f, 1f);
+        Assert.InRange(memoryLoad, 0f, 1f);
     }
 }
 
