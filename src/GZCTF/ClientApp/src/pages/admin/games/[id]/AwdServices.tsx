@@ -84,7 +84,7 @@ const AwdServices: FC = () => {
   const modals = useModals()
 
   const [services, setServices] = useState<AwdpServiceViewModel[]>([])
-  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [selectedId, setSelectedId] = useState<number | null>()
   const [draft, setDraft] = useState(defaultService())
   const [status, setStatus] = useState<AwdpGameStatusModel>()
   const [instances, setInstances] = useState<AwdpServiceStatusModel[]>([])
@@ -189,10 +189,23 @@ const AwdServices: FC = () => {
   }, [selectedService])
 
   useEffect(() => {
-    if (loading || !selectedId || services.some((service) => service.id === selectedId)) return
+    if (loading) return
 
-    setSelectedId(null)
-    setDraft(defaultService())
+    if (selectedId === undefined) {
+      if (services.length > 0) {
+        setSelectedId(services[0].id)
+      }
+      return
+    }
+
+    if (selectedId === null || services.some((service) => service.id === selectedId)) return
+
+    if (services.length > 0) {
+      setSelectedId(services[0].id)
+    } else {
+      setSelectedId(undefined)
+      setDraft(defaultService())
+    }
   }, [loading, selectedId, services])
 
   const onSave = async () => {
@@ -234,8 +247,7 @@ const AwdServices: FC = () => {
         setLoading(true)
         try {
           await awdpAdminApi.deleteService(selectedId)
-          setSelectedId(null)
-          setDraft(defaultService())
+          setSelectedId(undefined)
           await load()
         } catch (e) {
           showErrorMsg(e, t)

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Container.Manager;
@@ -13,6 +14,8 @@ public class AwdpInstanceService(
     IServiceProvider serviceProvider,
     ILogger<AwdpInstanceService> logger)
 {
+    static readonly ConcurrentDictionary<int, SemaphoreSlim> InstanceLocks = new();
+
     public async Task CreateInstancesForGame(Game game, CancellationToken token = default)
     {
         var services = await awdpRepository.GetServicesByGame(game.Id, token);
@@ -64,6 +67,8 @@ public class AwdpInstanceService(
 
     public async Task DestroyInstancesForGame(int gameId, CancellationToken token = default)
     {
+        context.ChangeTracker.Clear();
+
         var instances = await context.AwdpServiceInstances
             .Include(i => i.Container)
             .Include(i => i.Service)
@@ -72,6 +77,8 @@ public class AwdpInstanceService(
 
         foreach (var instance in instances)
             await DestroyInstanceContainer(instance, token);
+
+        await context.SaveChangesAsync(token);
 
         context.AwdpServiceInstances.RemoveRange(instances);
         await context.SaveChangesAsync(token);
@@ -83,6 +90,8 @@ public class AwdpInstanceService(
 
     public async Task DestroyInstancesForService(int serviceId, CancellationToken token = default)
     {
+        context.ChangeTracker.Clear();
+
         var instances = await context.AwdpServiceInstances
             .Include(i => i.Container)
             .Where(i => i.ServiceId == serviceId)
@@ -90,6 +99,8 @@ public class AwdpInstanceService(
 
         foreach (var instance in instances)
             await DestroyInstanceContainer(instance, token);
+
+        await context.SaveChangesAsync(token);
 
         context.AwdpServiceInstances.RemoveRange(instances);
         await context.SaveChangesAsync(token);
@@ -101,22 +112,43 @@ public class AwdpInstanceService(
 
     public Task<(bool Success, string Message)> ResetInstance(int instanceId, string? newFlag = null,
         CancellationToken token = default) =>
-        ResetInstance(instanceId, AwdpResetType.Admin, false, newFlag, token);
+        RunWithInstanceLock(instanceId, token,
+            () => ResetInstance(instanceId, AwdpResetType.Admin, false, newFlag, token));
 
     public Task<(bool Success, string Message)> ResetInstanceForRound(int instanceId, string newFlag,
         CancellationToken token = default) =>
-        ResetInstance(instanceId, AwdpResetType.Admin, false, newFlag, token, false);
+        RunWithInstanceLock(instanceId, token,
+            () => ResetInstance(instanceId, AwdpResetType.Admin, false, newFlag, token, false));
 
     public Task<(bool Success, string Message)> ResetInstanceByPlayer(int instanceId, int teamId,
         CancellationToken token = default) =>
-        ResetInstanceForTeam(instanceId, teamId, AwdpResetType.Player, true, null, token);
+        RunWithInstanceLock(instanceId, token,
+            () => ResetInstanceForTeam(instanceId, teamId, AwdpResetType.Player, true, null, token));
 
     public Task<(bool Success, string Message)> RecoverInstanceByPlayer(int instanceId, int teamId,
         CancellationToken token = default) =>
-        RecoverInstanceForTeam(instanceId, teamId, true, token);
+        RunWithInstanceLock(instanceId, token,
+            () => RecoverInstanceForTeam(instanceId, teamId, true, token));
 
     public Task<(bool Success, string Message)> RecoverInstance(int instanceId, CancellationToken token = default) =>
-        RecoverInstanceForTeam(instanceId, null, false, token);
+        RunWithInstanceLock(instanceId, token,
+            () => RecoverInstanceForTeam(instanceId, null, false, token));
+
+    static async Task<(bool Success, string Message)> RunWithInstanceLock(int instanceId, CancellationToken token,
+        Func<Task<(bool Success, string Message)>> action)
+    {
+        var gate = InstanceLocks.GetOrAdd(instanceId, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(token);
+
+        try
+        {
+            return await action();
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
 
     async Task<(bool Success, string Message)> ResetInstanceForTeam(int instanceId, int teamId,
         AwdpResetType resetType, bool enforceLimit, string? newFlag, CancellationToken token)
@@ -153,6 +185,7 @@ public class AwdpInstanceService(
         }
 
         await DestroyInstanceContainer(instance, token);
+        await context.SaveChangesAsync(token);
 
         var container = await CreateContainer(instance.Service, instance.TeamId,
             string.IsNullOrWhiteSpace(instance.NetworkName) ? null : instance.NetworkName, newFlag, token);
@@ -274,7 +307,7 @@ public class AwdpInstanceService(
             if (containerOrchestrator is null)
                 return false;
 
-            await containerOrchestrator.CreateIsolatedNetwork(networkName);
+            await containerOrchestrator.CreateIsolatedNetwork(networkName, true);
             return true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !token.IsCancellationRequested)

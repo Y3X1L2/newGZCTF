@@ -18,6 +18,7 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator
     private readonly DockerClient _client;
     private readonly ILogger<DockerManager> _logger;
     private readonly DockerMetadata _meta;
+    private readonly bool _isWindowsDaemon;
     private static readonly TimeSpan PatchApplyTimeout = TimeSpan.FromSeconds(60);
     private const int MaxExtractedPatchArchiveSize = 64 * 1024 * 1024;
 
@@ -26,6 +27,7 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator
         _logger = logger;
         _meta = provider.GetMetadata();
         _client = provider.GetProvider();
+        _isWindowsDaemon = IsWindowsDockerDaemon();
 
         logger.SystemLog(StaticLocalizer[nameof(Resources.Program.ContainerManager_DockerMode)],
             TaskStatus.Success, LogLevel.Debug);
@@ -89,7 +91,8 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator
 
         if (_meta.ExposePort)
         {
-            parameters.ExposedPorts = new Dictionary<string, EmptyStruct> { [config.ExposedPort.ToString()] = new() };
+            var exposedPortBindingKey = GetTcpPortKey(config.ExposedPort);
+            parameters.ExposedPorts = new Dictionary<string, EmptyStruct> { [exposedPortBindingKey] = new() };
             parameters.HostConfig.PortBindings = new Dictionary<string, IList<PortBinding>>
             {
                 // let docker choose a random port, do not use "PublishAllPorts" option
@@ -98,7 +101,7 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator
                 // comment:
                 //     If portStart and portEnd are 0 it returns
                 //     the first free port in the default ephemeral range.
-                [config.ExposedPort.ToString()] = [new PortBinding { HostPort = "0" }]
+                [exposedPortBindingKey] = [new PortBinding { HostPort = "0" }]
             };
         }
 
@@ -113,13 +116,20 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator
                 _logger.SystemLog(
                     StaticLocalizer[nameof(Resources.Program.ContainerManager_ContainerCreationFailed),
                         parameters.Name], TaskStatus.Failed, LogLevel.Information);
+                _logger.LogWarning(
+                    "Docker container creation retry limit reached for {ContainerName}. Image={Image}, Network={Network}, ExposedPort={ExposedPort}, CPUCount={CPUCount}, MemoryLimit={MemoryLimit}MiB",
+                    parameters.Name, config.Image, parameters.HostConfig.NetworkMode, config.ExposedPort,
+                    config.CPUCount, config.MemoryLimit);
                 return null;
             }
 
             containerRes = await _client.Containers.CreateContainerAsync(parameters, token);
         }
-        catch (DockerImageNotFoundException)
+        catch (DockerImageNotFoundException ex)
         {
+            _logger.LogWarning(ex,
+                "Docker image {Image} was not found while creating {ContainerName}; pulling and retrying.",
+                config.Image, parameters.Name);
             _logger.SystemLog(
                 StaticLocalizer[nameof(Resources.Program.ContainerManager_PullContainerImage), config.Image],
                 TaskStatus.Pending, LogLevel.Information);
@@ -137,6 +147,10 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator
         }
         catch (DockerApiException e)
         {
+            _logger.LogWarning(e,
+                "Docker API failed while creating {ContainerName}. Status={StatusCode}, Response={ResponseBody}",
+                parameters.Name, e.StatusCode, e.ResponseBody);
+
             if (e.StatusCode == HttpStatusCode.Conflict)
             {
                 _logger.SystemLog(
@@ -231,8 +245,14 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator
             return container;
 
         var portString = config.ExposedPort.ToString();
-        var bindings = info.NetworkSettings.Ports.Where(kv => kv.Key.StartsWith(portString)).Select(kv => kv.Value)
-            .SingleOrDefault();
+        var exposedPortKey = GetTcpPortKey(config.ExposedPort);
+        var bindings = info.NetworkSettings.Ports.TryGetValue(exposedPortKey, out var exactBindings)
+            ? exactBindings
+            : info.NetworkSettings.Ports
+                .Where(kv => kv.Key.Equals(portString, StringComparison.OrdinalIgnoreCase) ||
+                             kv.Key.StartsWith($"{portString}/", StringComparison.OrdinalIgnoreCase))
+                .Select(kv => kv.Value)
+                .SingleOrDefault();
 
         if (bindings is not { Count: > 0 })
         {
@@ -382,8 +402,25 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator
                 string.IsNullOrWhiteSpace(message) ? "Patch command failed" : message);
     }
 
-    private CreateContainerParameters GetCreateContainerParameters(GZCTF.Models.Internal.ContainerConfig config) =>
-        new()
+    private CreateContainerParameters GetCreateContainerParameters(GZCTF.Models.Internal.ContainerConfig config)
+    {
+        var hostConfig = new HostConfig
+        {
+            Memory = config.MemoryLimit * 1024 * 1024,
+            NetworkMode = !string.IsNullOrEmpty(config.NetworkName)
+                ? config.NetworkName
+                : _meta.NetworkNames[config.NetworkMode]
+        };
+
+        if (config.CPUCount > 0)
+        {
+            if (_isWindowsDaemon)
+                hostConfig.CPUPercent = config.CPUCount * 10;
+            else
+                hostConfig.NanoCPUs = config.CPUCount * 100_000_000L;
+        }
+
+        return new()
         {
             Image = config.Image,
             Labels =
@@ -409,13 +446,23 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator
             Env = config.Flag is null
                 ? [$"GZCTF_TEAM_ID={config.TeamId}"]
                 : [$"GZCTF_FLAG={config.Flag}", $"GZCTF_TEAM_ID={config.TeamId}"],
-            HostConfig = new()
-            {
-                Memory = config.MemoryLimit * 1024 * 1024,
-                CPUPercent = config.CPUCount * 10,
-                NetworkMode = !string.IsNullOrEmpty(config.NetworkName)
-                    ? config.NetworkName
-                    : _meta.NetworkNames[config.NetworkMode]
-            }
+            HostConfig = hostConfig
         };
+    }
+
+    private bool IsWindowsDockerDaemon()
+    {
+        try
+        {
+            var info = _client.System.GetSystemInfoAsync().GetAwaiter().GetResult();
+            return string.Equals(info.OSType, "windows", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to determine Docker daemon OS type; using Linux-compatible CPU limits.");
+            return false;
+        }
+    }
+
+    static string GetTcpPortKey(int port) => $"{port}/tcp";
 }

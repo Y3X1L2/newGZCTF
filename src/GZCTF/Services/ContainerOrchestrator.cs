@@ -90,12 +90,13 @@ public class ContainerOrchestrator
 
     /// <summary>
     /// Creates an isolated Docker bridge network for scenario environment isolation.
-    /// The network has no external connectivity (internal mode).
+    /// The network has no external connectivity by default.
     /// </summary>
     /// <param name="networkName">Unique name for the Docker network.</param>
+    /// <param name="enableHostPortPublishing">Allows AWDP services on this network to publish ports to the host.</param>
     /// <returns>The created network ID.</returns>
     /// <exception cref="ContainerOrchestrationException">Thrown when network creation fails.</exception>
-    public async Task<string> CreateIsolatedNetwork(string networkName)
+    public async Task<string> CreateIsolatedNetwork(string networkName, bool enableHostPortPublishing = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(networkName);
 
@@ -119,7 +120,7 @@ public class ContainerOrchestrator
                 {
                     Name = networkName,
                     Driver = "bridge",
-                    Internal = true, // No external connectivity for scenario isolation
+                    Internal = !enableHostPortPublishing,
                     Attachable = true,
                     Options = new Dictionary<string, string>
                     {
