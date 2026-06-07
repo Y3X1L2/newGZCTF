@@ -31,8 +31,8 @@ internal static class AppBuilderExtensions
                 kestrelSection.Bind(options);
             }).UseKestrel(options =>
             {
-                options.ListenAnyIP(ServerPort);
-                options.ListenAnyIP(MetricPort);
+                options.ListenAnyIP(builder.Configuration.GetValue("ServerPort", ServerPort));
+                options.ListenAnyIP(builder.Configuration.GetValue("MetricPort", MetricPort));
             });
 
             builder.Logging.ClearProviders();
