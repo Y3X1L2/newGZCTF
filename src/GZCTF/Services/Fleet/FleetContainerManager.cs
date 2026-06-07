@@ -51,8 +51,13 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
 
         if (nodeId is null)
         {
-            _logger.LogWarning("No schedulable node available, container creation queued");
-            return null;
+            target.Status = TargetStatus.Cancelled;
+            target.CompletedAt = DateTimeOffset.UtcNow;
+            target.ErrorMessage = "Handled by local Docker fallback";
+            await scope.ServiceProvider.GetRequiredService<AppDbContext>().SaveChangesAsync(token);
+
+            _logger.LogWarning("No schedulable fleet node available, falling back to local Docker manager");
+            return await _localManager.CreateContainerAsync(config, token);
         }
 
         var node = await nodeRepo.GetNodeByIdAsync(nodeId.Value, token);
