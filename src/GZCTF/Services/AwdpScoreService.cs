@@ -85,6 +85,7 @@ public class AwdpScoreService(AppDbContext context)
             .Where(p => p.Round.GameId == gameId)
             .Select(p => new
             {
+                p.RoundId,
                 p.ServiceId,
                 p.TeamId,
                 p.FinalStatus,
@@ -92,7 +93,9 @@ public class AwdpScoreService(AppDbContext context)
             })
             .ToArrayAsync(token);
 
-        foreach (var patch in patches)
+        foreach (var patch in patches
+                     .GroupBy(p => new { p.RoundId, p.ServiceId, p.TeamId })
+                     .Select(g => g.OrderByDescending(p => p.SubmittedAt).First()))
         {
             if (!mutable.TryGetValue(patch.TeamId, out var item) ||
                 !services.TryGetValue(patch.ServiceId, out var service))
@@ -145,13 +148,21 @@ public class AwdpScoreService(AppDbContext context)
                 PatchScore = breakdown.PatchScore,
                 PenaltyScore = breakdown.PenaltyScore
             };
-        }).OrderByDescending(i => i.TotalScore).ThenBy(i => i.TeamName).ToArray();
+        }).OrderByDescending(i => i.TotalScore)
+            .ThenBy(i => NormalizeTieBreakTime(breakdowns.GetValueOrDefault(i.TeamId)?.LastScoreTime))
+            .ThenBy(i => i.TeamName)
+            .ToArray();
 
         for (var i = 0; i < rows.Length; i++)
             rows[i].Rank = i + 1;
 
         return rows;
     }
+
+    static DateTimeOffset NormalizeTieBreakTime(DateTimeOffset? value) =>
+        !value.HasValue || value.Value == DateTimeOffset.MinValue
+            ? DateTimeOffset.MaxValue
+            : value.Value;
 
     sealed class MutableBreakdown(int teamId)
     {

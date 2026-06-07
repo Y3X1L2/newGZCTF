@@ -68,6 +68,58 @@ public class WeightedSchedulerTests
         var selected = await scheduler.SelectOptimalNodeAsync(NodeCapability.Docker, CancellationToken.None);
         Assert.Null(selected);
     }
+
+    [Fact]
+    public async Task SelectOptimalNode_SkipsFullDockerNodes()
+    {
+        var nodes = new List<WorkerNode>
+        {
+            new()
+            {
+                Id = Guid.NewGuid(),
+                Capabilities = NodeCapability.Docker,
+                Status = NodeStatus.Online,
+                CurrentContainers = 20,
+                MaxContainers = 20
+            },
+            new()
+            {
+                Id = Guid.NewGuid(),
+                Capabilities = NodeCapability.Docker,
+                Status = NodeStatus.Online,
+                CurrentContainers = 1,
+                MaxContainers = 20
+            },
+        };
+        var mock = new Mock<INodeRepository>();
+        mock.Setup(r => r.GetOnlineNodesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(nodes);
+        var scheduler = new WeightedScheduler(mock.Object, null!);
+
+        var selected = await scheduler.SelectOptimalNodeAsync(NodeCapability.Docker, CancellationToken.None);
+
+        Assert.Equal(nodes[1].Id, selected);
+    }
+
+    [Fact]
+    public void SelectOptimalNode_UsesUpdatedCapacityForBatchScheduling()
+    {
+        var node = new WorkerNode
+        {
+            Id = Guid.NewGuid(),
+            Capabilities = NodeCapability.Docker,
+            Status = NodeStatus.Online,
+            CurrentContainers = 19,
+            MaxContainers = 20
+        };
+
+        var first = WeightedScheduler.SelectOptimalNode([node], NodeCapability.Docker);
+        Assert.Equal(node.Id, first?.Id);
+
+        node.CurrentContainers++;
+        var second = WeightedScheduler.SelectOptimalNode([node], NodeCapability.Docker);
+
+        Assert.Null(second);
+    }
 }
 
 public class QueueManagerTests

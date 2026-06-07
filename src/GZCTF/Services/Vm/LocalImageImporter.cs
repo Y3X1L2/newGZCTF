@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using GZCTF.Models.Data;
 
 namespace GZCTF.Services.Vm;
@@ -154,7 +155,8 @@ public class LocalImageImporter
         var lowered = name.ToLowerInvariant();
         if (lowered.Contains("windows") ||
             lowered.Contains("winserver") || lowered.Contains("winsrv") ||
-            lowered.Contains("wkdb"))
+            lowered.Contains("wkdb") ||
+            Regex.IsMatch(lowered, @"(^|[^a-z0-9])win(?:dows)?(?:[0-9]{2,4}|srv|server)?([^a-z0-9]|$)"))
             return OSType.Windows;
         return OSType.Linux;
     }

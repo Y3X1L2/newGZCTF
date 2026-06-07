@@ -114,18 +114,32 @@ public class AgentClient
 
         var client = BuildClient(node);
         var body = JsonSerializer.Serialize(new { image, registryAuth });
-        await client.PostAsync("/api/images/pull-docker", new StringContent(body, Encoding.UTF8, "application/json"), token);
+        var response = await client.PostAsync("/api/images/pull-docker",
+            new StringContent(body, Encoding.UTF8, "application/json"), token);
+        if (!response.IsSuccessStatusCode)
+            _logger.LogWarning("Agent Docker image pull failed on node {NodeId}: {Status}", nodeId,
+                response.StatusCode);
     }
 
-    public async Task DownloadVmImageAsync(Guid nodeId, string hash, CancellationToken token)
+    public async Task DownloadVmImageAsync(Guid nodeId, int templateId, string hash, CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null) return;
 
         var client = BuildClient(node);
         var serverUrl = _config["Agent:ServerPublicUrl"] ?? _config["Urls"]?.Split(';').First() ?? "http://localhost:8080";
-        var body = JsonSerializer.Serialize(new { hash, downloadUrl = $"{serverUrl}/api/v1/image-templates/download/{hash}" });
-        await client.PostAsync("/api/images/download-vm", new StringContent(body, Encoding.UTF8, "application/json"), token);
+        var body = JsonSerializer.Serialize(new
+        {
+            templateId,
+            hash,
+            downloadUrl = $"{serverUrl}/api/v1/image-templates/download/{hash}?nodeId={nodeId}",
+            authToken = node.AuthToken
+        });
+        var response = await client.PostAsync("/api/images/download-vm",
+            new StringContent(body, Encoding.UTF8, "application/json"), token);
+        if (!response.IsSuccessStatusCode)
+            _logger.LogWarning("Agent VM image download failed on node {NodeId}: {Status}", nodeId,
+                response.StatusCode);
     }
 }
 

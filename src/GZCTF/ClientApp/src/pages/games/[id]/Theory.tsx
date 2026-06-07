@@ -67,7 +67,7 @@ const TheoryQuestionCard: FC<{
             </Stack>
           </Checkbox.Group>
         ) : (
-          <Radio.Group value={selected[0] !== undefined ? String(selected[0]) : null} onChange={(value) => onChange([Number(value)])}>
+          <Radio.Group value={selected[0] !== undefined ? String(selected[0]) : null} onChange={(value) => onChange(value === null ? [] : [Number(value)])}>
             <Stack gap="xs">
               {question.options.map((option, index) => (
                 <Radio key={index} disabled={disabled} value={String(index)} label={option} />
@@ -96,6 +96,7 @@ const TheoryPage: FC = () => {
     () => paper?.questions.filter((q) => (answers[q.id]?.length ?? 0) > 0).length ?? 0,
     [answers, paper]
   )
+  const unansweredCount = (paper?.questions.length ?? 0) - answeredCount
 
   const toAnswerModel = (): TheoryAnswerModel[] =>
     Object.entries(answers).map(([paperQuestionId, selectedIndexes]) => ({
@@ -217,7 +218,9 @@ const TheoryPage: FC = () => {
                 centered
               >
                 <Stack gap="md">
-                  <Text size="sm">提交后不可修改，系统会立即判分并计入理论排行榜。</Text>
+                  <Text size="sm">
+                    提交后不可修改，系统会立即判分并计入理论排行榜。当前还有 {unansweredCount} 题未作答。
+                  </Text>
                   <Group justify="flex-end">
                     <Button variant="default" disabled={loading} onClick={() => setConfirmOpened(false)}>
                       取消

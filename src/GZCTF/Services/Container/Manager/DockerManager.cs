@@ -225,6 +225,10 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator
 
         if (container.Status != ContainerStatus.Running)
         {
+            _logger.LogWarning(
+                "Docker container {ContainerName} for image {Image} started but is not running. State={State}, ExitCode={ExitCode}, Error={Error}",
+                parameters.Name, config.Image, info.State.Status, info.State.ExitCode, info.State.Error);
+
             _logger.SystemLog(
                 StaticLocalizer[
                     nameof(Resources.Program.ContainerManager_ContainerInstanceCreationFailedWithError),

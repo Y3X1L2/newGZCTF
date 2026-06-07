@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Net.Mime;
 using GZCTF.Extensions;
 using GZCTF.Middlewares;
+using GZCTF.Models;
 using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
@@ -279,6 +280,14 @@ public class AwdpAdminController(
 
         if (model.MaxResetCount < 0 || model.MaxRecoveryCount < 0)
             return "Reset and recovery limits must be greater than or equal to 0.";
+
+        if ((model.CheckerScript?.Length ?? 0) > Limits.MaxScriptLength ||
+            (model.ExpScript?.Length ?? 0) > Limits.MaxScriptLength)
+            return "Checker and Exp scripts are too long.";
+
+        if ((model.CheckerEntrypoint?.Length ?? 0) > Limits.MaxEntrypointLength ||
+            (model.ExpEntrypoint?.Length ?? 0) > Limits.MaxEntrypointLength)
+            return "Checker and Exp entrypoints are too long.";
 
         return null;
     }

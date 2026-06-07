@@ -22,13 +22,16 @@ public class ImageTemplateController : ControllerBase
     private readonly AppDbContext _context;
     private readonly ImageStorage _storage;
     private readonly IArchiveExtractor _archiveExtractor;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ImageTemplateController> _logger;
 
-    public ImageTemplateController(AppDbContext context, ImageStorage storage, IArchiveExtractor archiveExtractor, ILogger<ImageTemplateController> logger)
+    public ImageTemplateController(AppDbContext context, ImageStorage storage, IArchiveExtractor archiveExtractor,
+        IServiceScopeFactory scopeFactory, ILogger<ImageTemplateController> logger)
     {
         _context = context;
         _storage = storage;
         _archiveExtractor = archiveExtractor;
+        _scopeFactory = scopeFactory;
         _logger = logger;
     }
 
@@ -52,9 +55,7 @@ public class ImageTemplateController : ControllerBase
             _logger.LogInformation("Image template {Name} (ID:{Id}) uploaded by {User}",
                 imageTemplate.Name, imageTemplate.Id, User.Identity?.Name);
 
-            var distributor = HttpContext.RequestServices.GetService<Services.Fleet.ImageDistributionService>();
-            if (distributor is not null)
-                _ = Task.Run(() => distributor.DistributeToCapableNodesAsync(imageTemplate, CancellationToken.None));
+            QueueDistribution(imageTemplate.Id);
 
             return CreatedAtAction(nameof(GetById), new { id = imageTemplate.Id }, new
             {
@@ -90,6 +91,9 @@ public class ImageTemplateController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(search))
             query = query.Where(t => t.Name.Contains(search));
+
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
 
         var total = await query.CountAsync();
         var templates = await query
@@ -131,6 +135,9 @@ public class ImageTemplateController : ControllerBase
     [RequireAdmin]
     public async Task<IActionResult> ImportFromLocal([FromBody] LocalImportRequest request)
     {
+        if (string.IsNullOrWhiteSpace(request.LocalPath))
+            return BadRequest(new { message = "Local path is required" });
+
         // Validate path is within allowed image directories
         var fullPath = Path.GetFullPath(request.LocalPath);
         var allowedRoots = new[]
@@ -147,9 +154,7 @@ public class ImageTemplateController : ControllerBase
             var importer = HttpContext.RequestServices.GetRequiredService<Services.Vm.LocalImageImporter>();
             var template = await importer.ImportFromLocalPathAsync(request.LocalPath, request.DisplayName);
 
-            var distributor = HttpContext.RequestServices.GetService<Services.Fleet.ImageDistributionService>();
-            if (distributor is not null)
-                _ = Task.Run(() => distributor.DistributeToCapableNodesAsync(template, CancellationToken.None));
+            QueueDistribution(template.Id);
 
             return Ok(new
             {
@@ -177,6 +182,12 @@ public class ImageTemplateController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
+        var duplicateExists = await _context.ImageTemplates.AsNoTracking()
+            .AnyAsync(t => t.ImageType == ImageType.Docker &&
+                           (t.Name == request.Name || t.RegistryUrl == request.RegistryUrl), token);
+        if (duplicateExists)
+            return BadRequest(new { message = "同名或同 Registry URL 的 Docker 模板已存在" });
+
         var template = new ImageTemplate
         {
             Name = request.Name,
@@ -197,7 +208,7 @@ public class ImageTemplateController : ControllerBase
         var templateId = template.Id;
         _ = Task.Run(async () =>
         {
-            using var scope = HttpContext.RequestServices.GetRequiredService<IServiceScopeFactory>().CreateScope();
+            using var scope = _scopeFactory.CreateScope();
             var ctx = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             try
             {
@@ -260,9 +271,7 @@ public class ImageTemplateController : ControllerBase
             if (!result.Success)
                 return BadRequest(new { message = result.Error });
 
-            var distributor = HttpContext.RequestServices.GetService<Services.Fleet.ImageDistributionService>();
-            if (distributor is not null)
-                _ = Task.Run(() => distributor.DistributeToCapableNodesAsync(result.Template!, CancellationToken.None));
+            QueueDistribution(result.Template!.Id);
 
             return Ok(new { result.Template!.Id, result.Template.Name, result.Template.OSType, result.Template.ImageType, result.Template.FileSize });
         }
@@ -298,6 +307,79 @@ public class ImageTemplateController : ControllerBase
             template.Name, id, User.Identity?.Name);
 
         return NoContent();
+    }
+
+    [HttpGet("download/{hash}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> DownloadByHash([FromRoute] string hash, [FromQuery] Guid? nodeId,
+        CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(hash))
+            return BadRequest(new { message = "Image hash is required" });
+
+        var userId = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        var isAdmin = Guid.TryParse(userId, out var parsedUserId) &&
+                      await _context.Users.AsNoTracking()
+                          .AnyAsync(u => u.Id == parsedUserId && u.Role >= Role.Admin, token);
+        if (!isAdmin)
+        {
+            if (!nodeId.HasValue)
+                return Unauthorized(new { message = "Node authentication is required" });
+
+            var node = await _context.WorkerNodes.AsNoTracking()
+                .FirstOrDefaultAsync(n => n.Id == nodeId.Value, token);
+            if (node is null || !TryGetBearerToken(Request, out var authToken) || authToken != node.AuthToken)
+                return Unauthorized(new { message = "Invalid node token" });
+        }
+
+        var template = await _context.ImageTemplates.AsNoTracking()
+            .FirstOrDefaultAsync(t => t.ImageHash == hash, token);
+        if (template is null || string.IsNullOrWhiteSpace(template.LocalFilePath))
+            return NotFound(new { message = "Image template not found" });
+
+        var fullPath = Path.GetFullPath(template.LocalFilePath);
+        if (!System.IO.File.Exists(fullPath))
+            return NotFound(new { message = "Image file not found" });
+
+        return PhysicalFile(fullPath, "application/octet-stream", Path.GetFileName(fullPath));
+    }
+
+    private void QueueDistribution(int templateId)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var ctx = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var distributor = scope.ServiceProvider.GetService<Services.Fleet.ImageDistributionService>();
+                if (distributor is null)
+                    return;
+
+                var template = await ctx.ImageTemplates.AsNoTracking().FirstOrDefaultAsync(t => t.Id == templateId);
+                if (template is null)
+                    return;
+
+                await distributor.DistributeToCapableNodesAsync(template, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Image distribution task failed for template {TemplateId}", templateId);
+            }
+        });
+    }
+
+    private static bool TryGetBearerToken(HttpRequest request, out string token)
+    {
+        token = string.Empty;
+        var header = request.Headers.Authorization.FirstOrDefault();
+        if (!System.Net.Http.Headers.AuthenticationHeaderValue.TryParse(header, out var value) ||
+            !string.Equals(value.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(value.Parameter))
+            return false;
+
+        token = value.Parameter.Trim();
+        return true;
     }
 }
 

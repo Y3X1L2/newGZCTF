@@ -52,8 +52,12 @@ public class AwdpPatchService(
         if (instance is null)
             return (null, "服务实例不存在");
 
-        if (instance.Container is null)
+        if (instance.Container is null || !instance.IsRunning || instance.Container.Status != ContainerStatus.Running)
             return (null, "服务容器不存在或未运行");
+
+        var latestSubmission = await awdpRepository.GetPatchSubmission(round.Id, service.Id, teamId, token);
+        if (latestSubmission?.FinalStatus == AwdpPatchStatus.ExpFailed)
+            return (null, "本轮该服务已通过补丁验证，无需重复提交");
 
         var buffer = new MemoryStream((int)file.Length);
         await file.CopyToAsync(buffer, token);
@@ -191,6 +195,12 @@ public class AwdpPatchService(
                 if (entry.EntryType is TarEntryType.SymbolicLink or TarEntryType.HardLink)
                 {
                     error = "补丁包不能包含符号链接或硬链接";
+                    return false;
+                }
+
+                if (entry.EntryType is TarEntryType.BlockDevice or TarEntryType.CharacterDevice or TarEntryType.Fifo)
+                {
+                    error = "补丁包不能包含设备文件或 FIFO";
                     return false;
                 }
 

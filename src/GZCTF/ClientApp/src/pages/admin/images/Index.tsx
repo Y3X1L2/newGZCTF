@@ -7,6 +7,7 @@ import {
   Loader,
   Modal,
   Paper,
+  Progress,
   Select,
   Stack,
   Table,
@@ -16,7 +17,7 @@ import {
   Tooltip,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { mdiArchiveArrowUpOutline, mdiDeleteOutline, mdiDocker, mdiFileImportOutline, mdiMagnify, mdiRefresh } from '@mdi/js';
+import { mdiArchiveArrowUpOutline, mdiCubeOutline, mdiDeleteOutline, mdiDocker, mdiFileImportOutline, mdiMagnify, mdiRefresh } from '@mdi/js';
 import { Icon } from '@mdi/react';
 import dayjs from 'dayjs';
 import useSWR from 'swr';
@@ -86,6 +87,14 @@ function formatSize(bytes: number) {
     index += 1;
   }
   return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+function typeIcon(value: string | number | undefined | null) {
+  return labelFor(imageTypeLabels, value) === 'Docker' ? mdiDocker : mdiCubeOutline;
+}
+
+function shortHash(hash?: string | null) {
+  return hash ? `${hash.slice(0, 12)}...${hash.slice(-6)}` : '-';
 }
 
 function RegisterDockerModal({ opened, onClose, onDone }: { opened: boolean; onClose: () => void; onDone: () => void }) {
@@ -382,16 +391,29 @@ export default function ImagesPage() {
                   <Table.Tr key={img.id}>
                     <Table.Td>
                       <Stack gap={2}>
-                        <Text fw={700}>{img.name}</Text>
+                        <Group gap="xs" wrap="nowrap">
+                          <Icon path={typeIcon(img.imageType)} size={0.78} />
+                          <Text fw={700} truncate>{img.name}</Text>
+                        </Group>
                         {img.description && <Text size="xs" c="dimmed">{img.description}</Text>}
                       </Stack>
                     </Table.Td>
                     <Table.Td>{labelFor(imageTypeLabels, img.imageType)}</Table.Td>
                     <Table.Td><Badge variant="light">{labelFor(osTypeLabels, img.osType)}</Badge></Table.Td>
                     <Table.Td>{formatSize(img.fileSize)}</Table.Td>
-                    <Table.Td><Badge color={status.color} variant="light">{status.label}</Badge></Table.Td>
+                    <Table.Td>
+                      <Stack gap={4}>
+                        <Badge color={status.color} variant="light">{status.label}</Badge>
+                        {normalizeKey(img.status) === '1' || normalizeKey(img.status) === 'importing' ? (
+                          <Progress value={66} color="yellow" size={3} radius="xs" animated />
+                        ) : null}
+                      </Stack>
+                    </Table.Td>
                     <Table.Td maw={260}>
                       <Text size="xs" c="dimmed" truncate title={source}>{source}</Text>
+                      <Text size="xs" c="dimmed" ff="monospace" truncate title={img.imageHash ?? undefined}>
+                        {shortHash(img.imageHash)}
+                      </Text>
                     </Table.Td>
                     <Table.Td>{img.uploadedAt ? dayjs(img.uploadedAt).format('YYYY-MM-DD HH:mm') : '-'}</Table.Td>
                     <Table.Td>

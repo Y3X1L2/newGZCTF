@@ -35,7 +35,8 @@ public class ImageController : ControllerBase
         try
         {
             var storagePath = "/var/lib/gzctf/images";
-            var fileName = request.Hash + ".qcow2";
+            var fileStem = request.TemplateId.HasValue ? request.TemplateId.Value.ToString() : request.Hash;
+            var fileName = fileStem + ".qcow2";
             var destPath = Path.Combine(storagePath, fileName);
 
             if (System.IO.File.Exists(destPath))
@@ -45,13 +46,20 @@ public class ImageController : ControllerBase
                 return BadRequest(new { message = "Download URL required" });
 
             var client = HttpContext.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient();
+            if (!string.IsNullOrWhiteSpace(request.AuthToken))
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", request.AuthToken);
             var response = await client.GetAsync(request.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, token);
             response.EnsureSuccessStatusCode();
 
             var totalBytes = response.Content.Headers.ContentLength ?? -1L;
             Directory.CreateDirectory(storagePath);
 
-            await using var fs = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
+            var tempPath = destPath + ".part";
+            if (System.IO.File.Exists(tempPath))
+                System.IO.File.Delete(tempPath);
+
+            await using var fs = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 8192, true);
             var buffer = new byte[81920];
             long bytesRead = 0;
             int lastReportPercent = -1;
@@ -74,6 +82,10 @@ public class ImageController : ControllerBase
                     }
                 }
             }
+
+            await fs.FlushAsync(token);
+            fs.Close();
+            System.IO.File.Move(tempPath, destPath, overwrite: true);
 
             _logger.LogInformation("VM image downloaded: {Hash} ({MB}MB)", request.Hash, bytesRead / 1024 / 1024);
             return Ok(new { message = "Image downloaded successfully", size = bytesRead });

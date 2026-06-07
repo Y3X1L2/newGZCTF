@@ -96,7 +96,8 @@ public static class TelemetryExtension
         public void MapHealthCheck() =>
             app.MapHealthChecks("/healthz").DisableHttpMetrics()
                 .AddEndpointFilter(async (context, next)
-                    => context.HttpContext.Connection.LocalPort == MetricPort
+                    => context.HttpContext.Connection.LocalPort ==
+                       app.Configuration.GetValue("MetricPort", MetricPort)
                         ? await next(context)
                         : Results.NotFound());
     }
@@ -109,7 +110,8 @@ public static class TelemetryExtension
                 return;
 
             appBuilder.UseOpenTelemetryPrometheusScrapingEndpoint(context
-                => context.Connection.LocalPort == MetricPort
+                => context.Connection.LocalPort ==
+                   context.RequestServices.GetRequiredService<IConfiguration>().GetValue("MetricPort", MetricPort)
                    && string.Equals(
                        context.Request.Path.ToString().TrimEnd('/'),
                        "/metrics",

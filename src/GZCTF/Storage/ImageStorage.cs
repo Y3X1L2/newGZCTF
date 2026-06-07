@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
+using GZCTF.Services.Vm;
 using Microsoft.Extensions.Options;
 
 namespace GZCTF.Storage;
@@ -121,10 +122,7 @@ public class ImageStorage
         }
 
         // Detect OS type from filename
-        var lowerName = file.FileName.ToLowerInvariant();
-        var osType = lowerName.Contains("windows") || lowerName.Contains("winserver")
-            || lowerName.Contains("winsrv") || lowerName.Contains("wkdb")
-            ? OSType.Windows : OSType.Linux;
+        var osType = LocalImageImporter.DetectOsType(file.FileName);
 
         // Register with libvirt storage pool
         try

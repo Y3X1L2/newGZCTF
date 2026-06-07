@@ -49,7 +49,7 @@ public class NodesController : ControllerBase
         {
             n.Id, n.Name, n.HostAddress, Status = n.GetEffectiveStatus(now), n.Capabilities,
             n.CpuLoad, n.MemoryLoad, n.CurrentContainers, n.MaxContainers,
-            n.CurrentVms, n.MaxVms, n.LastHeartbeat,
+            n.CurrentVms, n.MaxVms, n.UsedPorts, n.TotalPorts, n.LastHeartbeat,
             n.IsSchedulable, n.IsLocal, n.AgentPort
         }));
     }
@@ -171,6 +171,9 @@ public class DeploymentTargetsController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var query = _context.DeploymentTargets.AsQueryable();
 
         if (status.HasValue)
@@ -184,6 +187,8 @@ public class DeploymentTargetsController : ControllerBase
             .Select(t => new
             {
                 t.Id, t.TargetNodeId, t.Type, t.Action, t.Status,
+                TargetNodeName = t.TargetNode == null ? null : t.TargetNode.Name,
+                TargetNodeHost = t.TargetNode == null ? null : t.TargetNode.HostAddress,
                 t.Payload, t.ResultPort, t.ResultHost,
                 t.CreatedAt, t.CompletedAt, t.ErrorMessage
             })

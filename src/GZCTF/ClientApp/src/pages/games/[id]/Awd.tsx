@@ -47,6 +47,7 @@ import { WithRole } from '@Components/WithRole'
 import { encryptApiData } from '@Utils/Crypto'
 import { showErrorMsg } from '@Utils/Shared'
 import { useConfig } from '@Hooks/useConfig'
+import { useGame } from '@Hooks/useGame'
 import { AwdpChallengeStatus, Role } from '@Api'
 import {
   AwdpAttackLogItem,
@@ -62,6 +63,7 @@ const Awd: FC = () => {
   const gameId = parseInt(id ?? '-1')
   const { t } = useTranslation()
   const { config } = useConfig()
+  const { game } = useGame(gameId)
   const awd = (key: string, defaultValue: string, options?: Record<string, unknown>) =>
     t(`game.awd.${key}`, { defaultValue, ...options })
   const statusLabel = (value?: AwdpStatusLike) => (value ? awd(`status_labels.${value}`, String(value)) : undefined)
@@ -80,7 +82,18 @@ const Awd: FC = () => {
     () => patchStatus.map((item) => ({ value: item.serviceId.toString(), label: item.serviceName })),
     [patchStatus]
   )
-  const myTeamId = instances[0]?.teamId
+  const myTeamId = useMemo(() => {
+    const activeTeamId = instances[0]?.teamId
+    if (activeTeamId) return activeTeamId
+
+    const teamName = game?.teamName?.trim()
+    if (teamName) {
+      const namedTeam = scoreboard.find((item) => item.teamName === teamName)
+      if (namedTeam) return namedTeam.teamId
+    }
+
+    return scoreboard.length === 1 ? scoreboard[0].teamId : undefined
+  }, [game?.teamName, instances, scoreboard])
   const myScore = scoreboard.find((item) => item.teamId === myTeamId)
   const runningInstances = instances.filter((item) => item.isRunning).length
   const remainingResets = instances.reduce((sum, item) => sum + item.remainingResetCount, 0)

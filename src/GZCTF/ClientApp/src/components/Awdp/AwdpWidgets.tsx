@@ -92,16 +92,25 @@ export const AwdpMetricTile: FC<{
   sub?: ReactNode
   color?: string
 }> = ({ icon, label, value, sub, color = 'indigo' }) => (
-  <Paper withBorder radius="md" p="sm" h="100%" style={{ borderLeft: `3px solid var(--mantine-color-${color}-6)` }}>
+  <Paper
+    withBorder
+    radius="sm"
+    p="md"
+    h="100%"
+    style={{
+      borderLeft: `3px solid var(--mantine-color-${color}-6)`,
+      background: 'var(--mantine-color-body)',
+    }}
+  >
     <Group gap="sm" wrap="nowrap" align="center">
-      <ThemeIcon variant="light" color={color} radius="md" size="lg">
+      <ThemeIcon variant="light" color={color} radius="sm" size="lg">
         <Icon path={icon} size={0.85} />
       </ThemeIcon>
       <Stack gap={0} miw={0}>
         <Text size="xs" c="dimmed" truncate>
           {label}
         </Text>
-        <Text fw={700} lh={1.2} truncate>
+        <Text fw={800} lh={1.15} truncate>
           {value}
         </Text>
         {sub && (

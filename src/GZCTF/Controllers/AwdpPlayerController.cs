@@ -147,6 +147,9 @@ public class AwdpPlayerController(
         if (ctx.Result is not null)
             return ctx.Result;
 
+        if (model.File is null)
+            return BadRequest(new RequestResponse("Patch file is required."));
+
         var result = await patchService.SubmitPatch(gameId, ctx.Participation!.TeamId, model.ServiceId, model.File,
             token);
         if (result.Error is not null)
@@ -223,7 +226,7 @@ public class AwdpPlayerController(
         var logs = await query
             .OrderByDescending(f => f.FirstSubmittedAt)
             .Skip(Math.Max(0, skip))
-            .Take(count <= 0 ? 50 : count)
+            .Take(count <= 0 ? 50 : Math.Min(count, 100))
             .Select(f => new AwdpAttackLogItem
             {
                 Time = f.FirstSubmittedAt ?? DateTimeOffset.MinValue,

@@ -19,6 +19,8 @@ export interface NodeInfo {
   maxContainers: number;
   currentVms: number;
   maxVms: number;
+  usedPorts?: number;
+  totalPorts?: number;
   lastHeartbeat?: string | null;
   isSchedulable: boolean;
   isLocal: boolean;
@@ -59,6 +61,12 @@ function capabilityLabels(value: string | number | undefined) {
   if (key.includes('kvm') || key === '2') return ['KVM'];
   if (key === '3') return ['Docker', 'KVM'];
   return [String(value)];
+}
+
+function pressureColor(value: number) {
+  if (value >= 90) return 'red';
+  if (value >= 70) return 'orange';
+  return 'teal';
 }
 
 function MetricLine({
@@ -102,9 +110,22 @@ export function NodeCard({
   const cpu = toPercent(node.cpuLoad);
   const memory = toPercent(node.memoryLoad);
   const isOffline = normalizeKey(node.status) === 'offline' || normalizeKey(node.status) === '2';
+  const containerUsage = ratio(node.currentContainers, node.maxContainers);
+  const vmUsage = ratio(node.currentVms, node.maxVms);
+  const portUsage = ratio(node.usedPorts ?? 0, node.totalPorts ?? 0);
 
   return (
-    <Card shadow="sm" padding="md" radius="sm" withBorder data-testid={`node-card-${node.id}`}>
+    <Card
+      shadow="sm"
+      padding="md"
+      radius="sm"
+      withBorder
+      data-testid={`node-card-${node.id}`}
+      style={{
+        borderTop: `3px solid var(--mantine-color-${status.color}-6)`,
+        opacity: isOffline ? 0.78 : 1,
+      }}
+    >
       <Stack gap="sm">
         <Group justify="space-between" align="flex-start" wrap="nowrap">
           <Stack gap={2} style={{ minWidth: 0 }}>
@@ -144,11 +165,29 @@ export function NodeCard({
               label="内存负载"
               current={Number(memory.toFixed(0))}
               total={100}
-              color={memory >= 85 ? 'red' : memory >= 65 ? 'orange' : 'grape'}
+              color={pressureColor(memory)}
               valueLabel={`${memory.toFixed(0)}%`}
             />
-            <MetricLine label="容器容量" current={node.currentContainers} total={node.maxContainers} color="cyan" />
-            <MetricLine label="虚拟机容量" current={node.currentVms} total={node.maxVms} color="violet" />
+            <MetricLine
+              label="容器容量"
+              current={node.currentContainers}
+              total={node.maxContainers}
+              color={pressureColor(containerUsage)}
+            />
+            <MetricLine
+              label="虚拟机容量"
+              current={node.currentVms}
+              total={node.maxVms}
+              color={pressureColor(vmUsage)}
+            />
+            {(node.totalPorts ?? 0) > 0 && (
+              <MetricLine
+                label="端口池"
+                current={node.usedPorts ?? 0}
+                total={node.totalPorts ?? 0}
+                color={pressureColor(portUsage)}
+              />
+            )}
           </Stack>
         </Group>
 

@@ -24,6 +24,8 @@ public class PullDockerImageRequest
 
 public class DownloadVmImageRequest
 {
+    public int? TemplateId { get; set; }
     public string Hash { get; set; } = string.Empty;
     public string DownloadUrl { get; set; } = string.Empty;
+    public string AuthToken { get; set; } = string.Empty;
 }

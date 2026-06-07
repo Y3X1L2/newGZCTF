@@ -14,6 +14,12 @@ public class ImageDistributionService
 
     public async Task DistributeToCapableNodesAsync(ImageTemplate template, CancellationToken token)
     {
+        if (string.IsNullOrWhiteSpace(template.ImageHash))
+        {
+            _logger.LogDebug("Skipping image distribution for template {ImageId}: no image hash", template.Id);
+            return;
+        }
+
         var cutoff = DateTimeOffset.UtcNow - WorkerNode.DefaultHeartbeatTimeout;
         var nodes = await _context.WorkerNodes
             .Where(n => n.Status == NodeStatus.Online
@@ -28,7 +34,7 @@ public class ImageDistributionService
             try
             {
                 _logger.LogInformation("Distributing image {ImageId} to node {NodeId}", template.Id, node.Id);
-                await _agentClient.DownloadVmImageAsync(node.Id, template.ImageHash ?? "", token);
+                await _agentClient.DownloadVmImageAsync(node.Id, template.Id, template.ImageHash, token);
             }
             catch (Exception ex)
             {

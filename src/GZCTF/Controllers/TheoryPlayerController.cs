@@ -64,6 +64,9 @@ public class TheoryPlayerController(
         if (paper is null)
             return NotFound(new RequestResponse("Theory paper is not published.", StatusCodes.Status404NotFound));
 
+        if (model.Answers.Count > paper.Questions.Count)
+            return BadRequest(new RequestResponse("Too many answers submitted."));
+
         var sheet = await GetOrCreateSheet(game, paper, participation!, user!, token);
         if (sheet.Status == TheoryAnswerSheetStatus.Submitted)
             return BadRequest(new RequestResponse("Answer sheet has already been submitted."));
@@ -95,17 +98,29 @@ public class TheoryPlayerController(
         if (paper is null)
             return NotFound(new RequestResponse("Theory paper is not published.", StatusCodes.Status404NotFound));
 
+        if (model.Answers.Count > paper.Questions.Count)
+            return BadRequest(new RequestResponse("Too many answers submitted."));
+
         await using var transaction = await context.Database.BeginTransactionAsync(token);
 
         var sheet = await GetOrCreateSheet(game, paper, participation!, user!, token);
         if (sheet.Status == TheoryAnswerSheetStatus.Submitted)
-            return BadRequest(new RequestResponse("Answer sheet has already been submitted."));
+            return StatusCode(StatusCodes.Status409Conflict,
+                new RequestResponse("Answer sheet has already been submitted.", StatusCodes.Status409Conflict));
 
         if (theoryService.ApplyAnswers(sheet, paper, model.Answers) is { } applyError)
             return BadRequest(new RequestResponse(applyError));
 
         theoryService.Grade(sheet, paper);
-        await context.SaveChangesAsync(token);
+        try
+        {
+            await context.SaveChangesAsync(token);
+        }
+        catch (DbUpdateException)
+        {
+            return StatusCode(StatusCodes.Status409Conflict,
+                new RequestResponse("Answer sheet has already been submitted.", StatusCodes.Status409Conflict));
+        }
         await transaction.CommitAsync(token);
 
         return Ok(TheoryPlayerPaperModel.FromPaper(paper, sheet));
