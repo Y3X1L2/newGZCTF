@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Cache;
@@ -592,31 +592,21 @@ public class GameRepository(
             }
         }
 
+        var awdpStates = game.GameType is GameType.AWDP or GameType.Mixed
+            ? await GetAwdpScoreStates(game.Id, token)
+            : new Dictionary<int, AwdpScoreState>();
 
-        // 5.4. calculate AWD scores if applicable
-        if (game.GameType is GameType.AWD or GameType.Mixed)
+        if (awdpStates.Count > 0)
         {
-            var awdServices = await Context.AwdServices
-                .AsNoTracking()
-                .Where(s => s.GameId == game.Id)
-                .Select(s => s.Id)
-                .ToListAsync(token);
-
-            if (awdServices.Count > 0)
+            var itemsByTeamId = items.Values.ToDictionary(i => i.Id);
+            foreach (var (teamId, state) in awdpStates)
             {
-                var awdSubmissions = await Context.Submissions
-                    .AsNoTracking()
-                    .Where(s => s.GameId == game.Id
-                                && awdServices.Contains(s.ChallengeId)
-                                && s.Status == AnswerResult.Accepted)
-                    .GroupBy(s => s.TeamId)
-                    .Select(g => new { TeamId = g.Key, Score = g.Sum(s => s.Score) })
-                    .ToDictionaryAsync(x => x.TeamId, x => x.Score, token);
+                if (!itemsByTeamId.TryGetValue(teamId, out var item))
+                    continue;
 
-                foreach (var item in items.Values)
-                {
-                    item.AwdScore = awdSubmissions.GetValueOrDefault(item.Id, 0);
-                }
+                item.AwdScore = state.TotalScore;
+                if (state.LastScoreTime > item.LastSubmissionTime)
+                    item.LastSubmissionTime = state.LastScoreTime;
             }
         }
 
@@ -672,11 +662,14 @@ public class GameRepository(
                         Id = item.Id,
                         Name = item.Name,
                         Items = item.SolvedChallenges
-                            .OrderBy(c => c.SubmitTimeUtc)
-                            .Aggregate(new List<TimeLine>(), (acc, c) =>
+                            .Select(c => new ScoreTimelineEvent(c.SubmitTimeUtc, c.Score))
+                            .Concat(awdpStates.GetValueOrDefault(item.Id)?.TimelineEvents ??
+                                    Enumerable.Empty<ScoreTimelineEvent>())
+                            .OrderBy(e => e.Time)
+                            .Aggregate(new List<TimeLine>(), (acc, e) =>
                             {
                                 var last = acc.LastOrDefault();
-                                acc.Add(new TimeLine { Score = (last?.Score ?? 0) + c.Score, Time = c.SubmitTimeUtc });
+                                acc.Add(new TimeLine { Score = (last?.Score ?? 0) + e.Score, Time = e.Time });
                                 return acc;
                             })
                     };
@@ -725,6 +718,127 @@ public class GameRepository(
         string? UserName,
         bool ScoreEligible,
         bool BloodEligible);
+
+    private readonly record struct ScoreTimelineEvent(DateTimeOffset Time, int Score);
+
+    private sealed class AwdpScoreState
+    {
+        public int TotalScore { get; private set; }
+        public DateTimeOffset LastScoreTime { get; private set; } = DateTimeOffset.MinValue;
+        public List<ScoreTimelineEvent> TimelineEvents { get; } = [];
+
+        public void Add(int score, DateTimeOffset? time)
+        {
+            if (score == 0)
+                return;
+
+            var eventTime = time ?? DateTimeOffset.MinValue;
+            TotalScore += score;
+            TimelineEvents.Add(new ScoreTimelineEvent(eventTime, score));
+
+            if (eventTime > LastScoreTime)
+                LastScoreTime = eventTime;
+        }
+    }
+
+    private async Task<Dictionary<int, AwdpScoreState>> GetAwdpScoreStates(int gameId,
+        CancellationToken token = default)
+    {
+        var services = await Context.AwdpServices.AsNoTracking()
+            .Where(s => s.GameId == gameId)
+            .Select(s => new
+            {
+                s.Id,
+                s.AttackPoints,
+                s.SlaPoints,
+                s.PatchPoints,
+                s.ServiceAbnormalPenalty
+            })
+            .ToDictionaryAsync(s => s.Id, token);
+
+        Dictionary<int, AwdpScoreState> states = [];
+        if (services.Count == 0)
+            return states;
+
+        AwdpScoreState GetState(int teamId)
+        {
+            if (!states.TryGetValue(teamId, out var state))
+            {
+                state = new AwdpScoreState();
+                states[teamId] = state;
+            }
+
+            return state;
+        }
+
+        var flags = await Context.AwdpFlags.AsNoTracking()
+            .Include(f => f.Round)
+            .Where(f => f.Round.GameId == gameId && f.IsSubmitted && f.SubmittedByTeamId != null)
+            .Select(f => new
+            {
+                f.ServiceId,
+                f.SubmittedByTeamId,
+                f.FirstSubmittedAt
+            })
+            .ToArrayAsync(token);
+
+        foreach (var flag in flags)
+        {
+            if (flag.SubmittedByTeamId is not { } teamId ||
+                !services.TryGetValue(flag.ServiceId, out var service))
+                continue;
+
+            GetState(teamId).Add(service.AttackPoints, flag.FirstSubmittedAt);
+        }
+
+        var checkerTasks = await Context.AwdpCheckerTasks.AsNoTracking()
+            .Include(t => t.Round)
+            .Where(t => t.Round.GameId == gameId && t.Status == CheckerStatus.OK)
+            .Select(t => new
+            {
+                t.ServiceId,
+                t.TeamId,
+                t.ExecutedAt
+            })
+            .ToArrayAsync(token);
+
+        foreach (var task in checkerTasks)
+        {
+            if (!services.TryGetValue(task.ServiceId, out var service))
+                continue;
+
+            GetState(task.TeamId).Add(service.SlaPoints, task.ExecutedAt);
+        }
+
+        var patches = await Context.AwdpPatchSubmissions.AsNoTracking()
+            .Include(p => p.Round)
+            .Where(p => p.Round.GameId == gameId)
+            .Select(p => new
+            {
+                p.ServiceId,
+                p.TeamId,
+                p.FinalStatus,
+                p.SubmittedAt
+            })
+            .ToArrayAsync(token);
+
+        foreach (var patch in patches)
+        {
+            if (!services.TryGetValue(patch.ServiceId, out var service))
+                continue;
+
+            var delta = patch.FinalStatus switch
+            {
+                AwdpPatchStatus.ExpFailed => service.PatchPoints,
+                AwdpPatchStatus.CheckerFailed => -service.ServiceAbnormalPenalty,
+                _ => 0
+            };
+
+            GetState(patch.TeamId).Add(delta, patch.SubmittedAt);
+        }
+
+        return states;
+    }
 
     private static bool CheckDivisionPermission(DivisionItem? division, GamePermission permission,
         int? challengeId = null)

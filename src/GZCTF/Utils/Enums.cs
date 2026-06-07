@@ -197,10 +197,10 @@ public enum GameType : byte
     Jeopardy = 0,
 
     /// <summary>
-    /// AWD mode
+    /// AWDP mode (Attack with Defense Plus)
     /// </summary>
-    [Description("AWD")]
-    AWD = 1,
+    [Description("AWDP")]
+    AWDP = 1,
 
     /// <summary>
     /// Theory mode
@@ -286,34 +286,39 @@ public enum EventType : byte
     CheatDetected = 4,
 
     /// <summary>
-    /// AWD flag submission
+    /// AWDP flag submission
     /// </summary>
-    AwdFlagSubmit = 20,
+    AwdpFlagSubmit = 20,
 
     /// <summary>
-    /// AWD service up (checker OK)
+    /// AWDP service up (checker OK)
     /// </summary>
-    AwdServiceUp = 21,
+    AwdpServiceUp = 21,
 
     /// <summary>
-    /// AWD service down
+    /// AWDP service down
     /// </summary>
-    AwdServiceDown = 22,
+    AwdpServiceDown = 22,
 
     /// <summary>
-    /// AWD service mumble
+    /// AWDP service mumble
     /// </summary>
-    AwdServiceMumble = 23,
+    AwdpServiceMumble = 23,
 
     /// <summary>
-    /// AWD round start
+    /// AWDP round start
     /// </summary>
-    AwdRoundStart = 24,
+    AwdpRoundStart = 24,
 
     /// <summary>
-    /// AWD attack success
+    /// AWDP attack success
     /// </summary>
-    AwdAttackSuccess = 25
+    AwdpAttackSuccess = 25,
+
+    /// <summary>
+    /// AWDP patch submission result
+    /// </summary>
+    AwdpPatchResult = 26
 }
 
 /// <summary>
@@ -416,11 +421,6 @@ public enum ChallengeType : byte
     /// </summary>
     IRChallenge = 0b1000,
 
-    /// <summary>
-    /// AWD service challenge
-    /// Service-based challenge for AWD mode
-    /// </summary>
-    AWDService = 0b10000
 }
 
 public static class ChallengeTypeExtensions
@@ -456,11 +456,6 @@ public static class ChallengeTypeExtensions
         /// Is it an incident response challenge
         /// </summary>
         public bool IsIRChallenge() => ((byte)type & 0b1000) != 0;
-
-        /// <summary>
-        /// Is it an AWD service challenge
-        /// </summary>
-        public bool IsAwdService() => type == ChallengeType.AWDService;
     }
 }
 
@@ -831,4 +826,171 @@ public static class ErrorCodes
     /// Game ended
     /// </summary>
     public const int GameEnded = 10002;
+}
+
+/// <summary>
+/// Checker execution status
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<CheckerStatus>))]
+public enum CheckerStatus : byte
+{
+    /// <summary>
+    /// Service is functioning normally
+    /// </summary>
+    [Description("OK")]
+    OK = 0,
+
+    /// <summary>
+    /// Service is degraded but partially functional
+    /// </summary>
+    [Description("Mumble")]
+    Mumble = 1,
+
+    /// <summary>
+    /// Service is completely down
+    /// </summary>
+    [Description("Down")]
+    Down = 2,
+
+    /// <summary>
+    /// Service data is corrupted
+    /// </summary>
+    [Description("Corrupt")]
+    Corrupt = 3,
+
+    /// <summary>
+    /// Checker execution was skipped
+    /// </summary>
+    [Description("Skipped")]
+    Skipped = 4
+}
+
+/// <summary>
+/// AWDP round phase status
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<AwdpRoundStatus>))]
+public enum AwdpRoundStatus : byte
+{
+    /// <summary>
+    /// Attack phase: players can submit flags
+    /// </summary>
+    [Description("AttackPhase")]
+    AttackPhase = 0,
+
+    /// <summary>
+    /// Patch phase: players can upload patches
+    /// </summary>
+    [Description("PatchPhase")]
+    PatchPhase = 1,
+
+    /// <summary>
+    /// Round finished, scores calculated
+    /// </summary>
+    [Description("Finished")]
+    Finished = 2
+}
+
+/// <summary>
+/// AWDP patch verification result
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<AwdpPatchStatus>))]
+public enum AwdpPatchStatus : byte
+{
+    /// <summary>
+    /// Patch submitted, awaiting verification
+    /// </summary>
+    [Description("Pending")]
+    Pending = 0,
+
+    /// <summary>
+    /// Checker failed after patch (service abnormal)
+    /// </summary>
+    [Description("CheckerFailed")]
+    CheckerFailed = 1,
+
+    /// <summary>
+    /// Exp succeeded after patch (vulnerability not fixed)
+    /// </summary>
+    [Description("ExpSucceeded")]
+    ExpSucceeded = 2,
+
+    /// <summary>
+    /// Exp failed after patch (vulnerability fixed, patch success)
+    /// </summary>
+    [Description("ExpFailed")]
+    ExpFailed = 3,
+
+    /// <summary>
+    /// Verification timed out
+    /// </summary>
+    [Description("Timeout")]
+    Timeout = 4,
+
+    /// <summary>
+    /// Patch application is not supported by the current container backend
+    /// </summary>
+    [Description("Unsupported")]
+    Unsupported = 5
+}
+
+/// <summary>
+/// AWDP challenge status from player perspective
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<AwdpChallengeStatus>))]
+public enum AwdpChallengeStatus : byte
+{
+    /// <summary>
+    /// Flag not yet submitted for this challenge
+    /// </summary>
+    [Description("Unattacked")]
+    Unattacked = 0,
+
+    /// <summary>
+    /// Flag successfully submitted
+    /// </summary>
+    [Description("Attacked")]
+    Attacked = 1,
+
+    /// <summary>
+    /// No patch submitted yet
+    /// </summary>
+    [Description("Undefended")]
+    Undefended = 2,
+
+    /// <summary>
+    /// Patch verified successfully (checker OK + exp failed)
+    /// </summary>
+    [Description("Defended")]
+    Defended = 3,
+
+    /// <summary>
+    /// Patch caused service abnormal (checker failed)
+    /// </summary>
+    [Description("DefenseAbnormal")]
+    DefenseAbnormal = 4,
+
+    /// <summary>
+    /// Patch did not fix vulnerability (exp succeeded)
+    /// </summary>
+    [Description("DefenseFailed")]
+    DefenseFailed = 5
+}
+
+/// <summary>
+/// AWDP reset type
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<AwdpResetType>))]
+public enum AwdpResetType : byte
+{
+    /// <summary>
+    /// Player self-service reset
+    /// </summary>
+    [Description("Player")]
+    Player = 0,
+
+    /// <summary>
+    /// Admin manual reset
+    /// </summary>
+    [Description("Admin")]
+    Admin = 1
 }

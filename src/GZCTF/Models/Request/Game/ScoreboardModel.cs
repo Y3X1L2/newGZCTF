@@ -220,7 +220,7 @@ public partial class ScoreboardItem
     public int CtfScore { get; set; }
 
     /// <summary>
-    /// AWD Score
+    /// AWDP Score
     /// </summary>
     [Required]
     public int AwdScore { get; set; }

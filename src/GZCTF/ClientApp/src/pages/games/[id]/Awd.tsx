@@ -1,326 +1,611 @@
 import {
-  ActionIcon,
   Badge,
   Button,
-  Card,
-  CopyButton,
-  Grid,
+  FileInput,
   Group,
-  NumberInput,
+  Paper,
+  PasswordInput,
+  ScrollArea,
+  Select,
+  SimpleGrid,
   Stack,
   Table,
   Text,
-  TextInput,
   Title,
-  Tooltip,
 } from '@mantine/core'
 import { showNotification } from '@mantine/notifications'
 import {
   mdiCheck,
-  mdiContentCopy,
+  mdiChartLine,
   mdiFlagOutline,
+  mdiPackageUp,
   mdiRefresh,
-  mdiShieldOff,
-  mdiSwordCross,
+  mdiRestore,
+  mdiServerNetwork,
+  mdiShieldCheckOutline,
+  mdiTimerSand,
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
+import * as signalR from '@microsoft/signalr'
 import dayjs from 'dayjs'
-import duration from 'dayjs/plugin/duration'
-import { FC, useEffect, useState } from 'react'
+import { FC, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router'
-import { GameProgress } from '@Components/GameProgress'
+import {
+  AwdpEmptyTableRow,
+  AwdpEndpointText,
+  AwdpInstanceStateBadge,
+  AwdpMetricTile,
+  AwdpSectionTitle,
+  AwdpStatusBadge,
+  AwdpStatusLike,
+  awdpStatusColor,
+} from '@Components/Awdp/AwdpWidgets'
 import { WithGameTab } from '@Components/WithGameTab'
 import { WithNavBar } from '@Components/WithNavbar'
+import { WithRole } from '@Components/WithRole'
+import { encryptApiData } from '@Utils/Crypto'
 import { showErrorMsg } from '@Utils/Shared'
-import { useGame } from '@Hooks/useGame'
+import { useConfig } from '@Hooks/useConfig'
+import { AwdpChallengeStatus, Role } from '@Api'
 import {
-  awdPlayerApi,
-  AwdAttackLogItem,
-  AwdGameStatusModel,
-  AwdScoreboardItem,
-  TeamServiceStatus,
-} from '../../../Api/AwdApi'
-import { AwdRoundStatus } from '../../../Api/AwdApi'
+  AwdpAttackLogItem,
+  AwdpGameStatusModel,
+  AwdpPatchStatusItem,
+  AwdpScoreboardItem,
+  AwdpTeamServiceStatus,
+  awdpPlayerApi,
+} from '../../../Api/AwdpApi'
 
-dayjs.extend(duration)
-
-const AwdStatusCard: FC<{ status?: AwdGameStatusModel }> = ({ status }) => {
-  const { t } = useTranslation()
-  const [now, setNow] = useState(dayjs())
-
-  useEffect(() => {
-    const interval = setInterval(() => setNow(dayjs()), 1000)
-    return () => clearInterval(interval)
-  }, [])
-
-  if (!status) return null
-
-  const roundEnd = dayjs(status.roundStartTime).add(status.roundDurationMinutes, 'minute')
-  const remaining = dayjs.duration(roundEnd.diff(now))
-  const isRunning = status.status === AwdRoundStatus.Running && remaining.asSeconds() > 0
-
-  return (
-    <Card withBorder>
-      <Stack gap="xs">
-        <Group justify="space-between">
-          <Text fw="bold" size="lg">
-            {t('game.awd.round', { current: status.currentRound })}
-          </Text>
-          <Badge color={isRunning ? 'teal' : 'gray'}>
-            {isRunning ? t('game.awd.round_running') : t('game.awd.round_waiting')}
-          </Badge>
-        </Group>
-        <GameProgress
-          percentage={
-            isRunning
-              ? Math.min(
-                  100,
-                  (remaining.asMilliseconds() /
-                    (status.roundDurationMinutes * 60 * 1000)) *
-                    100
-                )
-              : 0
-          }
-        />
-        <Text ta="center" fw="bold">
-          {isRunning
-            ? `${Math.floor(remaining.asMinutes())}:${remaining.format('ss')}`
-            : t('game.awd.round_waiting')}
-        </Text>
-      </Stack>
-    </Card>
-  )
-}
-
-const AwdInstanceCard: FC<{ instance: TeamServiceStatus }> = ({ instance }) => {
-  const { t } = useTranslation()
-
-  const address = instance.port
-    ? `${instance.ipAddress}:${instance.port}`
-    : instance.ipAddress
-
-  return (
-    <Card withBorder>
-      <Stack gap="xs">
-        <Group justify="space-between">
-          <Text fw="bold">{instance.teamName}</Text>
-          <Badge color={instance.isRunning ? 'teal' : 'red'}>
-            {instance.isRunning ? t('game.awd.service_up') : t('game.awd.service_down')}
-          </Badge>
-        </Group>
-        <Group gap="xs">
-          <Text size="sm" c="dimmed">
-            {t('game.awd.address')}:
-          </Text>
-          <Text size="sm" ff="mono">
-            {address ?? t('game.awd.no_address')}
-          </Text>
-          {address && (
-            <CopyButton value={address}>
-              {({ copied }) => (
-                <ActionIcon
-                  color={copied ? 'teal' : 'gray'}
-                  variant="subtle"
-                >
-                  <Icon path={copied ? mdiCheck : mdiContentCopy} size={0.8} />
-                </ActionIcon>
-              )}
-            </CopyButton>
-          )}
-        </Group>
-      </Stack>
-    </Card>
-  )
-}
-
-const AwdScoreboardCard: FC<{ items: AwdScoreboardItem[] }> = ({ items }) => {
-  const { t } = useTranslation()
-
-  return (
-    <Card withBorder>
-      <Stack gap="xs">
-        <Text fw="bold">{t('game.tab.scoreboard')}</Text>
-        <Table>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>{t('game.label.score_table.rank_total')}</Table.Th>
-              <Table.Th>{t('common.label.team')}</Table.Th>
-              <Table.Th>{t('game.awd.attack_score')}</Table.Th>
-              <Table.Th>{t('game.awd.sla_score')}</Table.Th>
-              <Table.Th>{t('game.awd.defense_lost')}</Table.Th>
-              <Table.Th>{t('game.label.score_table.score_total')}</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {items.slice(0, 10).map((item) => (
-              <Table.Tr key={item.teamId}>
-                <Table.Td>{item.rank}</Table.Td>
-                <Table.Td>{item.teamName}</Table.Td>
-                <Table.Td>+{item.attackScore}</Table.Td>
-                <Table.Td>+{item.slaScore}</Table.Td>
-                <Table.Td c="red">-{item.defenseLost}</Table.Td>
-                <Table.Td fw="bold">{item.totalScore}</Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
-      </Stack>
-    </Card>
-  )
-}
-
-const AwdAttackLogCard: FC<{ logs: AwdAttackLogItem[] }> = ({ logs }) => {
-  const { t } = useTranslation()
-
-  return (
-    <Card withBorder>
-      <Stack gap="xs">
-        <Text fw="bold">{t('game.awd.attack_logs')}</Text>
-        <Table>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>{t('game.awd.time')}</Table.Th>
-              <Table.Th>{t('game.awd.attacker')}</Table.Th>
-              <Table.Th>{t('game.awd.victim')}</Table.Th>
-              <Table.Th>{t('game.awd.service')}</Table.Th>
-              <Table.Th>{t('game.awd.points')}</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {logs.slice(0, 10).map((log, idx) => (
-              <Table.Tr key={idx}>
-                <Table.Td>{dayjs(log.time).format('HH:mm:ss')}</Table.Td>
-                <Table.Td c="teal">{log.attackerTeam}</Table.Td>
-                <Table.Td c="red">{log.victimTeam}</Table.Td>
-                <Table.Td>{log.serviceName}</Table.Td>
-                <Table.Td fw="bold">+{log.points}</Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
-      </Stack>
-    </Card>
-  )
-}
-
-const AwdPage: FC = () => {
+const Awd: FC = () => {
   const { id } = useParams()
-  const numId = parseInt(id ?? '-1')
-  const { game } = useGame(numId)
+  const gameId = parseInt(id ?? '-1')
   const { t } = useTranslation()
+  const { config } = useConfig()
+  const awd = (key: string, defaultValue: string, options?: Record<string, unknown>) =>
+    t(`game.awd.${key}`, { defaultValue, ...options })
+  const statusLabel = (value?: AwdpStatusLike) => (value ? awd(`status_labels.${value}`, String(value)) : undefined)
 
-  const [status, setStatus] = useState<AwdGameStatusModel | undefined>()
-  const [instances, setInstances] = useState<TeamServiceStatus[]>([])
-  const [scoreboard, setScoreboard] = useState<AwdScoreboardItem[]>([])
-  const [attackLogs, setAttackLogs] = useState<AwdAttackLogItem[]>([])
+  const [status, setStatus] = useState<AwdpGameStatusModel>()
+  const [instances, setInstances] = useState<AwdpTeamServiceStatus[]>([])
+  const [scoreboard, setScoreboard] = useState<AwdpScoreboardItem[]>([])
+  const [attackLogs, setAttackLogs] = useState<AwdpAttackLogItem[]>([])
+  const [patchStatus, setPatchStatus] = useState<AwdpPatchStatusItem[]>([])
   const [flag, setFlag] = useState('')
+  const [patchServiceId, setPatchServiceId] = useState<string | null>(null)
+  const [patchFile, setPatchFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const fetchData = async () => {
-    if (numId < 0) return
-    try {
-      const [s, i, sb, al] = await Promise.all([
-        awdPlayerApi.getGameStatus(numId),
-        awdPlayerApi.getMyInstances(numId),
-        awdPlayerApi.getScoreboard(numId),
-        awdPlayerApi.getAttackLogs(numId, 20),
-      ])
-      setStatus(s.data)
-      setInstances(i.data ?? [])
-      setScoreboard(sb.data ?? [])
-      setAttackLogs(al.data ?? [])
-    } catch (err) {
-      showErrorMsg(err, t)
-    }
-  }
+  const serviceOptions = useMemo(
+    () => patchStatus.map((item) => ({ value: item.serviceId.toString(), label: item.serviceName })),
+    [patchStatus]
+  )
+  const myTeamId = instances[0]?.teamId
+  const myScore = scoreboard.find((item) => item.teamId === myTeamId)
+  const runningInstances = instances.filter((item) => item.isRunning).length
+  const remainingResets = instances.reduce((sum, item) => sum + item.remainingResetCount, 0)
+  const remainingRecoveries = instances.reduce((sum, item) => sum + item.remainingRecoveryCount, 0)
+  const defendedServices = patchStatus.filter((item) => item.defenseStatus === AwdpChallengeStatus.Defended).length
+  const roundStart = status?.roundStartTime ? dayjs(status.roundStartTime).format('YYYY-MM-DD HH:mm:ss') : '-'
+  const runningText = awd('running_status', 'Running')
+  const stoppedText = awd('stopped', 'Stopped')
+
+  const load = useCallback(
+    async (showSpinner = true) => {
+      if (gameId <= 0) return
+      if (showSpinner) {
+        setLoading(true)
+      }
+
+      try {
+        const [statusRes, instanceRes, scoreRes, logRes, patchRes] = await Promise.all([
+          awdpPlayerApi.getStatus(gameId),
+          awdpPlayerApi.getInstances(gameId),
+          awdpPlayerApi.getScoreboard(gameId),
+          awdpPlayerApi.getAttackLogs(gameId, 30, 0),
+          awdpPlayerApi.getPatchStatus(gameId),
+        ])
+        setStatus(statusRes.data)
+        setInstances(instanceRes.data)
+        setScoreboard(scoreRes.data)
+        setAttackLogs(logRes.data.data)
+        setPatchStatus(patchRes.data)
+        setPatchServiceId((current) => current ?? patchRes.data[0]?.serviceId.toString() ?? null)
+      } catch (e) {
+        if (showSpinner) {
+          showErrorMsg(e, t)
+        } else {
+          console.error(e)
+        }
+      } finally {
+        if (showSpinner) {
+          setLoading(false)
+        }
+      }
+    },
+    [gameId, t]
+  )
 
   useEffect(() => {
-    fetchData()
-    const interval = setInterval(fetchData, 30000)
-    return () => clearInterval(interval)
-  }, [numId])
+    void load()
+  }, [load])
 
-  const onSubmitFlag = async () => {
+  useEffect(() => {
+    setPatchServiceId((current) => {
+      if (patchStatus.length === 0) return null
+      if (current && patchStatus.some((item) => item.serviceId.toString() === current)) return current
+      return patchStatus[0].serviceId.toString()
+    })
+  }, [patchStatus])
+
+  useEffect(() => {
+    if (gameId <= 0) return
+
+    const connection = new signalR.HubConnectionBuilder()
+      .withUrl(`/hub/monitor?game=${gameId}`)
+      .withHubProtocol(new signalR.JsonHubProtocol())
+      .withAutomaticReconnect()
+      .configureLogging(signalR.LogLevel.None)
+      .build()
+
+    connection.serverTimeoutInMilliseconds = 60 * 1000 * 60 * 2
+
+    connection.on('ReceivedAwdpRoundChange', (nextStatus: AwdpGameStatusModel) => {
+      setStatus(nextStatus)
+      void load(false)
+    })
+    connection.on('ReceivedAwdpServiceStatusChange', () => {
+      void load(false)
+    })
+    connection.on('ReceivedAwdpPatchResult', () => {
+      void load(false)
+    })
+    connection.onreconnected(() => {
+      void load(false)
+    })
+
+    void connection.start().catch((err) => {
+      console.error(err)
+    })
+
+    return () => {
+      void connection.stop().catch((err) => {
+        console.error(err)
+      })
+    }
+  }, [gameId, load])
+
+  const submitFlag = async () => {
     if (!flag.trim()) return
     setLoading(true)
     try {
-      await awdPlayerApi.submitFlag(numId, {
-        flag: flag.trim(),
-      })
+      const encrypted = await encryptApiData(t, flag.trim(), config.apiPublicKey)
+      const res = await awdpPlayerApi.submitFlag(gameId, encrypted)
       showNotification({
         color: 'teal',
-        message: t('game.awd.flag_submitted'),
+        message: `${res.data.serviceName} +${res.data.points}`,
+        icon: <Icon path={mdiCheck} size={1} />,
       })
       setFlag('')
-      fetchData()
-    } catch (err) {
-      showErrorMsg(err, t)
+      await load()
+    } catch (e) {
+      showErrorMsg(e, t)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const submitPatch = async () => {
+    if (!patchServiceId || !patchFile) return
+    setLoading(true)
+    try {
+      const res = await awdpPlayerApi.submitPatch(gameId, Number(patchServiceId), patchFile)
+      showNotification({
+        color: awdpStatusColor(res.data.finalStatus),
+        message: `${res.data.serviceName}: ${statusLabel(res.data.finalStatus) ?? res.data.finalStatus}`,
+        icon: <Icon path={mdiShieldCheckOutline} size={1} />,
+      })
+      setPatchFile(null)
+      await load()
+    } catch (e) {
+      showErrorMsg(e, t)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const instanceAction = async (action: () => Promise<unknown>, message: string) => {
+    setLoading(true)
+    try {
+      await action()
+      showNotification({ color: 'teal', message, icon: <Icon path={mdiCheck} size={1} /> })
+      await load()
+    } catch (e) {
+      showErrorMsg(e, t)
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <WithNavBar width="90%">
-      <WithGameTab>
-        <Stack pb="2rem" gap="md">
-          <Grid>
-            <Grid.Col span={{ base: 12, md: 4 }}>
-              <AwdStatusCard status={status} />
-            </Grid.Col>
-            <Grid.Col span={{ base: 12, md: 8 }}>
-              <Card withBorder>
-                <Stack gap="xs">
-                  <Text fw="bold">{t('game.awd.submit_flag')}</Text>
-                  <Group gap="sm">
-                    <TextInput
-                      placeholder={t('game.awd.flag_placeholder')}
+    <WithNavBar width="90%" minWidth={0}>
+      <WithRole requiredRole={Role.User}>
+        <WithGameTab>
+          <Stack gap="md">
+            <Paper p="md" shadow="xs" radius="md" withBorder>
+              <Group justify="space-between" align="flex-start" wrap="wrap">
+                <Stack gap={2}>
+                  <Title order={4}>{awd('round', 'Round {{round}}', { round: status?.currentRound ?? 0 })}</Title>
+                  <Text size="sm" c="dimmed">
+                    {awd('round_started', 'Started at {{time}}', { time: roundStart })}
+                  </Text>
+                </Stack>
+                <Group>
+                  <AwdpStatusBadge
+                    status={status?.status}
+                    fallback={awd('idle', 'Idle')}
+                    label={statusLabel(status?.status)}
+                  />
+                  <Button
+                    leftSection={<Icon path={mdiRefresh} size={1} />}
+                    variant="outline"
+                    loading={loading}
+                    onClick={() => void load()}
+                  >
+                    {awd('refresh', 'Refresh')}
+                  </Button>
+                </Group>
+              </Group>
+              <SimpleGrid cols={{ base: 1, xs: 2, md: 5 }} mt="md">
+                <AwdpMetricTile
+                  icon={mdiTimerSand}
+                  color={awdpStatusColor(status?.status)}
+                  label={awd('phase_status', 'Phase')}
+                  value={statusLabel(status?.status) ?? awd('idle', 'Idle')}
+                  sub={awd('phase_minutes', '{{attack}}+{{patch}} min', {
+                    attack: status?.attackPhaseMinutes ?? 0,
+                    patch: status?.patchPhaseMinutes ?? 0,
+                  })}
+                />
+                <AwdpMetricTile
+                  icon={mdiChartLine}
+                  color="teal"
+                  label={awd('my_score', 'My AWDP score')}
+                  value={myScore?.awdpScore ?? 0}
+                  sub={myScore ? `#${myScore.rank}` : '-'}
+                />
+                <AwdpMetricTile
+                  icon={mdiServerNetwork}
+                  color={runningInstances === instances.length && instances.length > 0 ? 'teal' : 'yellow'}
+                  label={awd('running_instances', 'Running instances')}
+                  value={`${runningInstances}/${instances.length}`}
+                  sub={instances[0]?.teamName ?? '-'}
+                />
+                <AwdpMetricTile
+                  icon={mdiRefresh}
+                  color="cyan"
+                  label={awd('remaining_resets', 'Remaining resets')}
+                  value={remainingResets}
+                  sub={awd('recoveries_left', '{{count}} recoveries', { count: remainingRecoveries })}
+                />
+                <AwdpMetricTile
+                  icon={mdiShieldCheckOutline}
+                  color="violet"
+                  label={awd('defended_services', 'Defended services')}
+                  value={`${defendedServices}/${patchStatus.length}`}
+                  sub={awd('patch_status', 'Patch Status')}
+                />
+              </SimpleGrid>
+            </Paper>
+
+            <SimpleGrid cols={{ base: 1, md: 2 }}>
+              <Paper p="md" shadow="xs" radius="md" withBorder>
+                <Stack>
+                  <AwdpSectionTitle title={awd('flag', 'Flag')} />
+                  <Group align="flex-end" wrap="wrap">
+                    <PasswordInput
+                      label={awd('flag', 'Flag')}
                       value={flag}
                       onChange={(e) => setFlag(e.currentTarget.value)}
-                      style={{ flex: 1 }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') void submitFlag()
+                      }}
+                      style={{ flex: '1 1 16rem' }}
                     />
                     <Button
                       leftSection={<Icon path={mdiFlagOutline} size={1} />}
-                      onClick={onSubmitFlag}
                       loading={loading}
+                      disabled={!flag.trim()}
+                      onClick={submitFlag}
                     >
-                      {t('game.awd.submit')}
+                      {awd('submit', 'Submit')}
                     </Button>
                   </Group>
                 </Stack>
-              </Card>
-            </Grid.Col>
-          </Grid>
+              </Paper>
 
-          <Title order={4}>{t('game.awd.my_instances')}</Title>
-          <Grid>
-            {instances.map((instance) => (
-              <Grid.Col span={{ base: 12, sm: 6, lg: 4 }} key={instance.teamId}>
-                <AwdInstanceCard instance={instance} />
-              </Grid.Col>
-            ))}
-            {instances.length === 0 && (
-              <Grid.Col span={12}>
-                <Text c="dimmed" ta="center">
-                  {t('game.awd.no_instances')}
-                </Text>
-              </Grid.Col>
-            )}
-          </Grid>
+              <Paper p="md" shadow="xs" radius="md" withBorder>
+                <Stack>
+                  <AwdpSectionTitle title={awd('patch', 'Patch')} />
+                  <Group align="flex-end" wrap="wrap">
+                    <Select
+                      label={awd('service', 'Service')}
+                      data={serviceOptions}
+                      value={patchServiceId}
+                      onChange={setPatchServiceId}
+                      style={{ flex: '1 1 12rem' }}
+                    />
+                    <FileInput
+                      label={awd('archive', 'Archive')}
+                      value={patchFile}
+                      onChange={setPatchFile}
+                      accept=".tar.gz,.tgz"
+                      style={{ flex: '2 1 16rem' }}
+                    />
+                    <Button
+                      leftSection={<Icon path={mdiPackageUp} size={1} />}
+                      loading={loading}
+                      disabled={!patchServiceId || !patchFile}
+                      onClick={submitPatch}
+                    >
+                      {awd('upload', 'Upload')}
+                    </Button>
+                  </Group>
+                </Stack>
+              </Paper>
+            </SimpleGrid>
 
-          <Grid>
-            <Grid.Col span={{ base: 12, lg: 6 }}>
-              <AwdScoreboardCard items={scoreboard} />
-            </Grid.Col>
-            <Grid.Col span={{ base: 12, lg: 6 }}>
-              <AwdAttackLogCard logs={attackLogs} />
-            </Grid.Col>
-          </Grid>
-        </Stack>
-      </WithGameTab>
+            <Paper p="md" shadow="xs" radius="md" withBorder>
+              <AwdpSectionTitle
+                title={awd('instances', 'Instances')}
+                extra={<Badge variant="light">{`${runningInstances}/${instances.length}`}</Badge>}
+              />
+              <ScrollArea offsetScrollbars>
+                <Table highlightOnHover verticalSpacing="sm" miw={860}>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>{awd('service', 'Service')}</Table.Th>
+                      <Table.Th>{awd('endpoint', 'Endpoint')}</Table.Th>
+                      <Table.Th>{awd('status', 'Status')}</Table.Th>
+                      <Table.Th>{awd('checker', 'Checker')}</Table.Th>
+                      <Table.Th>{awd('resets', 'Resets')}</Table.Th>
+                      <Table.Th>{awd('recoveries', 'Recoveries')}</Table.Th>
+                      <Table.Th />
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {instances.length === 0 ? (
+                      <AwdpEmptyTableRow colSpan={7} text={awd('no_instances', 'No instances')} />
+                    ) : (
+                      instances.map((item) => (
+                        <Table.Tr key={item.instanceId}>
+                          <Table.Td>{item.serviceName}</Table.Td>
+                          <Table.Td>
+                            <AwdpEndpointText ip={item.ipAddress} port={item.port} />
+                          </Table.Td>
+                          <Table.Td>
+                            <AwdpInstanceStateBadge
+                              running={item.isRunning}
+                              runningText={runningText}
+                              stoppedText={stoppedText}
+                            />
+                          </Table.Td>
+                          <Table.Td>
+                            <AwdpStatusBadge
+                              status={item.lastCheckerStatus}
+                              label={statusLabel(item.lastCheckerStatus)}
+                            />
+                          </Table.Td>
+                          <Table.Td>{item.remainingResetCount}</Table.Td>
+                          <Table.Td>{item.remainingRecoveryCount}</Table.Td>
+                          <Table.Td>
+                            <Group justify="right" gap="xs" wrap="nowrap">
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                disabled={loading}
+                                leftSection={<Icon path={mdiRefresh} size={0.75} />}
+                                onClick={() =>
+                                  instanceAction(
+                                    () => awdpPlayerApi.resetInstance(item.instanceId),
+                                    awd('instance_reset', 'Instance reset.')
+                                  )
+                                }
+                              >
+                                {awd('reset', 'Reset')}
+                              </Button>
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                disabled={loading}
+                                leftSection={<Icon path={mdiRestore} size={0.75} />}
+                                onClick={() =>
+                                  instanceAction(
+                                    () => awdpPlayerApi.recoverInstance(item.instanceId),
+                                    awd('instance_recovered', 'Instance recovered.')
+                                  )
+                                }
+                              >
+                                {awd('recover', 'Recover')}
+                              </Button>
+                            </Group>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))
+                    )}
+                  </Table.Tbody>
+                </Table>
+              </ScrollArea>
+            </Paper>
+
+            <SimpleGrid cols={{ base: 1, md: 2 }}>
+              <Paper p="md" shadow="xs" radius="md" withBorder>
+                <AwdpSectionTitle
+                  title={awd('scoreboard', 'AWDP Scoreboard')}
+                  extra={
+                    myScore && <Badge color="teal" variant="light">{`${myScore.teamName} #${myScore.rank}`}</Badge>
+                  }
+                />
+                <ScrollArea h="20rem" offsetScrollbars>
+                  <Table highlightOnHover verticalSpacing="sm" miw={720}>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>#</Table.Th>
+                        <Table.Th>{awd('team', 'Team')}</Table.Th>
+                        <Table.Th>{awd('attack', 'Attack')}</Table.Th>
+                        <Table.Th>SLA</Table.Th>
+                        <Table.Th>{awd('patch', 'Patch')}</Table.Th>
+                        <Table.Th>{awd('penalty', 'Penalty')}</Table.Th>
+                        <Table.Th>{awd('total', 'Total')}</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {scoreboard.length === 0 ? (
+                        <AwdpEmptyTableRow colSpan={7} text={awd('no_scoreboard', 'No scoreboard data')} />
+                      ) : (
+                        scoreboard.map((row) => {
+                          const isSelf = row.teamId === myTeamId
+
+                          return (
+                            <Table.Tr
+                              key={row.teamId}
+                              style={isSelf ? { backgroundColor: 'var(--mantine-color-teal-light)' } : undefined}
+                            >
+                              <Table.Td>{row.rank}</Table.Td>
+                              <Table.Td>
+                                <Group gap="xs" wrap="nowrap">
+                                  <Text fw={isSelf ? 700 : 400} truncate>
+                                    {row.teamName}
+                                  </Text>
+                                  {isSelf && (
+                                    <Badge color="teal" variant="light" size="xs">
+                                      {awd('me', 'Me')}
+                                    </Badge>
+                                  )}
+                                </Group>
+                              </Table.Td>
+                              <Table.Td>
+                                <Text c="teal" fw={600}>
+                                  {row.attackScore}
+                                </Text>
+                              </Table.Td>
+                              <Table.Td>{row.slaScore}</Table.Td>
+                              <Table.Td>{row.patchScore}</Table.Td>
+                              <Table.Td>{row.penaltyScore}</Table.Td>
+                              <Table.Td>
+                                <Text fw={700}>{row.awdpScore}</Text>
+                              </Table.Td>
+                            </Table.Tr>
+                          )
+                        })
+                      )}
+                    </Table.Tbody>
+                  </Table>
+                </ScrollArea>
+              </Paper>
+
+              <Paper p="md" shadow="xs" radius="md" withBorder>
+                <AwdpSectionTitle
+                  title={awd('patch_status', 'Patch Status')}
+                  extra={<Badge color="violet" variant="light">{`${defendedServices}/${patchStatus.length}`}</Badge>}
+                />
+                <ScrollArea h="20rem" offsetScrollbars>
+                  <Table highlightOnHover verticalSpacing="sm" miw={760}>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>{awd('service', 'Service')}</Table.Th>
+                        <Table.Th>{awd('attack', 'Attack')}</Table.Th>
+                        <Table.Th>{awd('defense', 'Defense')}</Table.Th>
+                        <Table.Th>{awd('result', 'Result')}</Table.Th>
+                        <Table.Th>{awd('time', 'Time')}</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {patchStatus.length === 0 ? (
+                        <AwdpEmptyTableRow colSpan={5} text={awd('no_patch_status', 'No patch status')} />
+                      ) : (
+                        patchStatus.map((item) => (
+                          <Table.Tr key={item.serviceId}>
+                            <Table.Td>{item.serviceName}</Table.Td>
+                            <Table.Td>
+                              <AwdpStatusBadge status={item.attackStatus} label={statusLabel(item.attackStatus)} />
+                            </Table.Td>
+                            <Table.Td>
+                              <AwdpStatusBadge status={item.defenseStatus} label={statusLabel(item.defenseStatus)} />
+                            </Table.Td>
+                            <Table.Td>
+                              {item.lastPatchResult ? (
+                                <AwdpStatusBadge
+                                  status={item.lastPatchResult}
+                                  label={statusLabel(item.lastPatchResult)}
+                                />
+                              ) : (
+                                <Text size="sm" c="dimmed">
+                                  -
+                                </Text>
+                              )}
+                            </Table.Td>
+                            <Table.Td>
+                              <Text size="sm" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
+                                {item.lastPatchTime ? dayjs(item.lastPatchTime).format('YYYY-MM-DD HH:mm:ss') : '-'}
+                              </Text>
+                            </Table.Td>
+                          </Table.Tr>
+                        ))
+                      )}
+                    </Table.Tbody>
+                  </Table>
+                </ScrollArea>
+              </Paper>
+            </SimpleGrid>
+
+            <Paper p="md" shadow="xs" radius="md" withBorder>
+              <AwdpSectionTitle
+                title={awd('attack_logs', 'Attack Logs')}
+                extra={<Badge variant="light">{attackLogs.length}</Badge>}
+              />
+              <ScrollArea h="18rem" offsetScrollbars>
+                <Table highlightOnHover verticalSpacing="sm" miw={780}>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>{awd('time', 'Time')}</Table.Th>
+                      <Table.Th>{awd('attacker_team', 'Attacker')}</Table.Th>
+                      <Table.Th>{awd('victim_team', 'Victim')}</Table.Th>
+                      <Table.Th>{awd('service', 'Service')}</Table.Th>
+                      <Table.Th>{awd('points', 'Points')}</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {attackLogs.length === 0 ? (
+                      <AwdpEmptyTableRow colSpan={5} text={awd('no_attack_logs', 'No attack logs')} />
+                    ) : (
+                      attackLogs.map((log, idx) => (
+                        <Table.Tr key={`${log.time}-${idx}`}>
+                          <Table.Td>
+                            <Text size="sm" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
+                              {dayjs(log.time).format('YYYY-MM-DD HH:mm:ss')}
+                            </Text>
+                          </Table.Td>
+                          <Table.Td>{log.attackerTeam}</Table.Td>
+                          <Table.Td>{log.victimTeam}</Table.Td>
+                          <Table.Td>{log.serviceName}</Table.Td>
+                          <Table.Td>
+                            <Text c="teal" fw={700}>
+                              +{log.points}
+                            </Text>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))
+                    )}
+                  </Table.Tbody>
+                </Table>
+              </ScrollArea>
+            </Paper>
+          </Stack>
+        </WithGameTab>
+      </WithRole>
     </WithNavBar>
   )
 }
 
-export default AwdPage
+export default Awd

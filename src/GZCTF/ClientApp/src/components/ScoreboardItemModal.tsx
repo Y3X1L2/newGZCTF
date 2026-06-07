@@ -175,7 +175,7 @@ export const ScoreboardItemModal: FC<ScoreboardItemModalProps> = (props) => {
                 {item?.awdScore ?? 0}
               </Text>
               <Text size="xs" fw={500}>
-                AWD
+                AWDP
               </Text>
             </Stack>
             <Stack gap={2}>

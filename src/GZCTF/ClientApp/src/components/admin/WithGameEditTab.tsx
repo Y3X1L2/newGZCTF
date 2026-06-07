@@ -43,7 +43,7 @@ export const WithGameEditTab: FC<GameEditTabProps> = ({
   const numId = parseInt(id ?? '-1')
   const { game } = useAdminGame(numId)
 
-  const isAwdGame = game?.gameType === GameType.AWD || game?.gameType === GameType.Mixed
+  const isAwdGame = game?.gameType === GameType.AWDP || game?.gameType === GameType.Mixed
   const isTheoryGame = game?.gameType === GameType.Theory || game?.gameType === GameType.Mixed
   const isTheoryOnly = game?.gameType === GameType.Theory
 
@@ -52,7 +52,7 @@ export const WithGameEditTab: FC<GameEditTabProps> = ({
     { icon: mdiBullhornOutline, title: t('admin.tab.games.notices'), path: 'notices' },
     ...(!isTheoryOnly ? [{ icon: mdiFlagOutline, title: t('admin.tab.games.challenges'), path: 'challenges' }] : []),
     ...(isAwdGame
-      ? [{ icon: mdiSwordCross, title: t('admin.tab.games.awd'), path: 'awd-services' }]
+      ? [{ icon: mdiSwordCross, title: t('admin.tab.games.awd'), path: 'awdp-services' }]
       : []),
     ...(isTheoryGame
       ? [
@@ -75,13 +75,15 @@ export const WithGameEditTab: FC<GameEditTabProps> = ({
   const [activeTab, setActiveTab] = useState(getTab(location.pathname)?.path ?? pages[0].path)
 
   useEffect(() => {
+    if (!game) return
+
     const tab = getTab(location.pathname)
     if (tab) {
       setActiveTab(tab.path ?? '')
     } else {
       navigate(pages[0].path)
     }
-  }, [location])
+  }, [location, game])
 
   return (
     <AdminPage

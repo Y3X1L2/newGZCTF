@@ -15,12 +15,17 @@ public interface IMonitorClient
     public Task ReceivedSubmissions(Submission submission);
 
     /// <summary>
-    /// 接收到AWD轮次变化
+    /// 接收到 AWDP 轮次状态变化
     /// </summary>
-    public Task ReceivedAwdRoundChange(AwdGameStatusModel status);
+    public Task ReceivedAwdpRoundChange(AwdpGameStatusModel status);
 
     /// <summary>
-    /// 接收到AWD服务状态变化
+    /// 接收到 AWDP 服务状态变化
     /// </summary>
-    public Task ReceivedAwdServiceStatusChange(AwdServiceStatusModel status);
+    public Task ReceivedAwdpServiceStatusChange(AwdpServiceStatusModel status);
+
+    /// <summary>
+    /// 接收到 AWDP 修补结果
+    /// </summary>
+    public Task ReceivedAwdpPatchResult(AwdpPatchResultModel result);
 }

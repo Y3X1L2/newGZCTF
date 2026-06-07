@@ -91,4 +91,29 @@ public static class Limits
     /// 分组名称最大长度
     /// </summary>
     public const int MaxDivisionNameLength = 31;
+
+    /// <summary>
+    /// AWDP 服务名称最大长度
+    /// </summary>
+    public const int MaxServiceNameLength = 128;
+
+    /// <summary>
+    /// AWDP 容器镜像名最大长度
+    /// </summary>
+    public const int MaxImageNameLength = 256;
+
+    /// <summary>
+    /// AWDP 脚本内容最大长度
+    /// </summary>
+    public const int MaxScriptLength = 65536;
+
+    /// <summary>
+    /// AWDP 入口命令最大长度
+    /// </summary>
+    public const int MaxEntrypointLength = 256;
+
+    /// <summary>
+    /// AWDP 网络名称最大长度
+    /// </summary>
+    public const int MaxNetworkNameLength = 128;
 }

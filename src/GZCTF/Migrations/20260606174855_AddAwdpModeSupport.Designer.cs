@@ -4,6 +4,7 @@ using System.Net;
 using GZCTF.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GZCTF.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260606174855_AddAwdpModeSupport")]
+    partial class AddAwdpModeSupport
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1841,229 +1844,6 @@ namespace GZCTF.Migrations
                     b.ToTable("Teams");
                 });
 
-            modelBuilder.Entity("GZCTF.Models.Data.TheoryAnswerSheet", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("GameId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("MaxScore")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("PaperId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("ParticipationId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Score")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<DateTimeOffset?>("SubmittedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("GameId");
-
-                    b.HasIndex("PaperId");
-
-                    b.HasIndex("ParticipationId");
-
-                    b.HasIndex("UserId", "GameId")
-                        .IsUnique();
-
-                    b.ToTable("TheoryAnswerSheets");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.TheoryPaper", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("GameId")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsPublished")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTimeOffset?>("PublishedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("GameId")
-                        .IsUnique();
-
-                    b.ToTable("TheoryPapers");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.TheoryPaperQuestion", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AnswerIndexes")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Options")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("Order")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("PaperId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Score")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("SourceQuestionId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PaperId");
-
-                    b.HasIndex("SourceQuestionId");
-
-                    b.ToTable("TheoryPaperQuestions");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.TheoryQuestionBankItem", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AnswerIndexes")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("BankName")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Options")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Type", "BankName");
-
-                    b.ToTable("TheoryQuestionBankItems");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.TheorySubmissionAnswer", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AnswerSheetId")
-                        .HasColumnType("integer");
-
-                    b.Property<bool?>("IsCorrect")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("PaperQuestionId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Score")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("SelectedIndexes")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AnswerSheetId");
-
-                    b.HasIndex("PaperQuestionId");
-
-                    b.ToTable("TheorySubmissionAnswers");
-                });
-
             modelBuilder.Entity("GZCTF.Models.Data.TimeSlot", b =>
                 {
                     b.Property<int>("Id")
@@ -3273,89 +3053,6 @@ namespace GZCTF.Migrations
                     b.Navigation("Captain");
                 });
 
-            modelBuilder.Entity("GZCTF.Models.Data.TheoryAnswerSheet", b =>
-                {
-                    b.HasOne("GZCTF.Models.Data.Game", "Game")
-                        .WithMany()
-                        .HasForeignKey("GameId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GZCTF.Models.Data.TheoryPaper", "Paper")
-                        .WithMany()
-                        .HasForeignKey("PaperId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GZCTF.Models.Data.Participation", "Participation")
-                        .WithMany()
-                        .HasForeignKey("ParticipationId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GZCTF.Models.Data.UserInfo", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Game");
-
-                    b.Navigation("Paper");
-
-                    b.Navigation("Participation");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.TheoryPaper", b =>
-                {
-                    b.HasOne("GZCTF.Models.Data.Game", "Game")
-                        .WithMany()
-                        .HasForeignKey("GameId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Game");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.TheoryPaperQuestion", b =>
-                {
-                    b.HasOne("GZCTF.Models.Data.TheoryPaper", "Paper")
-                        .WithMany("Questions")
-                        .HasForeignKey("PaperId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GZCTF.Models.Data.TheoryQuestionBankItem", "SourceQuestion")
-                        .WithMany()
-                        .HasForeignKey("SourceQuestionId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Paper");
-
-                    b.Navigation("SourceQuestion");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.TheorySubmissionAnswer", b =>
-                {
-                    b.HasOne("GZCTF.Models.Data.TheoryAnswerSheet", "AnswerSheet")
-                        .WithMany("Answers")
-                        .HasForeignKey("AnswerSheetId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GZCTF.Models.Data.TheoryPaperQuestion", "PaperQuestion")
-                        .WithMany()
-                        .HasForeignKey("PaperQuestionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("AnswerSheet");
-
-                    b.Navigation("PaperQuestion");
-                });
-
             modelBuilder.Entity("GZCTF.Models.Data.TimeSlot", b =>
                 {
                     b.HasOne("GZCTF.Models.Data.GameChallenge", "Scenario")
@@ -3560,16 +3257,6 @@ namespace GZCTF.Migrations
             modelBuilder.Entity("GZCTF.Models.Data.Team", b =>
                 {
                     b.Navigation("Participations");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.TheoryAnswerSheet", b =>
-                {
-                    b.Navigation("Answers");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.TheoryPaper", b =>
-                {
-                    b.Navigation("Questions");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.UserInfo", b =>

@@ -20,11 +20,6 @@ const TableRow: FC<{
   onOpenDetail: () => void
 }> = React.memo(({ item, onOpenDetail }) => {
   const theme = useMantineTheme()
-  const solved = item.solvedChallenges
-
-  const totalScore = useMemo(() => {
-    return solved?.reduce((acc, cur) => acc + (cur?.score ?? 0), 0) ?? 0
-  }, [solved])
 
   return (
     <Table.Tr>
@@ -49,7 +44,7 @@ const TableRow: FC<{
           />
         </Group>
       </Table.Td>
-      <Table.Td className={cx(classes.mono, classes.left)}>{totalScore}</Table.Td>
+      <Table.Td className={cx(classes.mono, classes.left)}>{item.score}</Table.Td>
     </Table.Tr>
   )
 })

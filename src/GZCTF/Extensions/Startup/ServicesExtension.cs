@@ -86,11 +86,21 @@ internal static class ServicesExtension
             builder.Services.AddScoped<IGameChallengeRepository, GameChallengeRepository>();
             builder.Services.AddScoped<IParticipationRepository, ParticipationRepository>();
             builder.Services.AddScoped<IDivisionRepository, DivisionRepository>();
+            builder.Services.AddScoped<IAwdpRepository, AwdpRepository>();
+
+            builder.Services.AddScoped<AwdpScriptRunner>();
+            builder.Services.AddScoped<AwdpInstanceService>();
+            builder.Services.AddScoped<AwdpCheckerService>();
+            builder.Services.AddScoped<AwdpScoreService>();
+            builder.Services.AddScoped<AwdpPatchService>();
+            builder.Services.AddSingleton<AwdpRoundService>();
+            builder.Services.AddHostedService(sp => sp.GetRequiredService<AwdpRoundService>());
 
             builder.Services.AddScoped<ExcelHelper>();
             builder.Services.AddScoped<GameExportService>();
             builder.Services.AddScoped<GameImportService>();
 
+            builder.Services.AddChannel<Submission>();
             builder.Services.AddChannel<CacheRequest>();
             builder.Services.AddSingleton<CacheHelper>();
             builder.Services.AddSingleton<IMailSender, MailSender>();
@@ -114,7 +124,7 @@ internal static class ServicesExtension
             builder.Services.AddScoped<GuacamoleProxy>();
             builder.Services.AddScoped<SSHAccessService>();
             builder.Services.AddScoped<CheckpointVerificationService>();
-            builder.Services.AddScoped<FlagChecker>();
+            builder.Services.AddHostedService<FlagChecker>();
             builder.Services.AddScoped<AuditLogService>();
 
             // Phase 3 fleet services

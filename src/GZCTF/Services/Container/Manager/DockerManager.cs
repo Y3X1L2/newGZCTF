@@ -4,6 +4,8 @@
 // See licenses/LicenseRef-GZCTF-Restricted.txt
 
 using System.Net;
+using System.IO.Compression;
+using System.Text;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using GZCTF.Services.Container.Provider;
@@ -11,17 +13,21 @@ using ContainerStatus = GZCTF.Utils.ContainerStatus;
 
 namespace GZCTF.Services.Container.Manager;
 
-public class DockerManager : IContainerManager
+public class DockerManager : IContainerManager, IContainerPatchApplicator
 {
     private readonly DockerClient _client;
     private readonly ILogger<DockerManager> _logger;
     private readonly DockerMetadata _meta;
+    private readonly bool _isWindowsDaemon;
+    private static readonly TimeSpan PatchApplyTimeout = TimeSpan.FromSeconds(60);
+    private const int MaxExtractedPatchArchiveSize = 64 * 1024 * 1024;
 
     public DockerManager(IContainerProvider<DockerClient, DockerMetadata> provider, ILogger<DockerManager> logger)
     {
         _logger = logger;
         _meta = provider.GetMetadata();
         _client = provider.GetProvider();
+        _isWindowsDaemon = IsWindowsDockerDaemon();
 
         logger.SystemLog(StaticLocalizer[nameof(Resources.Program.ContainerManager_DockerMode)],
             TaskStatus.Success, LogLevel.Debug);
@@ -85,7 +91,8 @@ public class DockerManager : IContainerManager
 
         if (_meta.ExposePort)
         {
-            parameters.ExposedPorts = new Dictionary<string, EmptyStruct> { [config.ExposedPort.ToString()] = new() };
+            var exposedPortBindingKey = GetTcpPortKey(config.ExposedPort);
+            parameters.ExposedPorts = new Dictionary<string, EmptyStruct> { [exposedPortBindingKey] = new() };
             parameters.HostConfig.PortBindings = new Dictionary<string, IList<PortBinding>>
             {
                 // let docker choose a random port, do not use "PublishAllPorts" option
@@ -94,7 +101,7 @@ public class DockerManager : IContainerManager
                 // comment:
                 //     If portStart and portEnd are 0 it returns
                 //     the first free port in the default ephemeral range.
-                [config.ExposedPort.ToString()] = [new PortBinding { HostPort = "0" }]
+                [exposedPortBindingKey] = [new PortBinding { HostPort = "0" }]
             };
         }
 
@@ -109,13 +116,20 @@ public class DockerManager : IContainerManager
                 _logger.SystemLog(
                     StaticLocalizer[nameof(Resources.Program.ContainerManager_ContainerCreationFailed),
                         parameters.Name], TaskStatus.Failed, LogLevel.Information);
+                _logger.LogWarning(
+                    "Docker container creation retry limit reached for {ContainerName}. Image={Image}, Network={Network}, ExposedPort={ExposedPort}, CPUCount={CPUCount}, MemoryLimit={MemoryLimit}MiB",
+                    parameters.Name, config.Image, parameters.HostConfig.NetworkMode, config.ExposedPort,
+                    config.CPUCount, config.MemoryLimit);
                 return null;
             }
 
             containerRes = await _client.Containers.CreateContainerAsync(parameters, token);
         }
-        catch (DockerImageNotFoundException)
+        catch (DockerImageNotFoundException ex)
         {
+            _logger.LogWarning(ex,
+                "Docker image {Image} was not found while creating {ContainerName}; pulling and retrying.",
+                config.Image, parameters.Name);
             _logger.SystemLog(
                 StaticLocalizer[nameof(Resources.Program.ContainerManager_PullContainerImage), config.Image],
                 TaskStatus.Pending, LogLevel.Information);
@@ -133,6 +147,10 @@ public class DockerManager : IContainerManager
         }
         catch (DockerApiException e)
         {
+            _logger.LogWarning(e,
+                "Docker API failed while creating {ContainerName}. Status={StatusCode}, Response={ResponseBody}",
+                parameters.Name, e.StatusCode, e.ResponseBody);
+
             if (e.StatusCode == HttpStatusCode.Conflict)
             {
                 _logger.SystemLog(
@@ -227,8 +245,14 @@ public class DockerManager : IContainerManager
             return container;
 
         var portString = config.ExposedPort.ToString();
-        var bindings = info.NetworkSettings.Ports.Where(kv => kv.Key.StartsWith(portString)).Select(kv => kv.Value)
-            .SingleOrDefault();
+        var exposedPortKey = GetTcpPortKey(config.ExposedPort);
+        var bindings = info.NetworkSettings.Ports.TryGetValue(exposedPortKey, out var exactBindings)
+            ? exactBindings
+            : info.NetworkSettings.Ports
+                .Where(kv => kv.Key.Equals(portString, StringComparison.OrdinalIgnoreCase) ||
+                             kv.Key.StartsWith($"{portString}/", StringComparison.OrdinalIgnoreCase))
+                .Select(kv => kv.Value)
+                .SingleOrDefault();
 
         if (bindings is not { Count: > 0 })
         {
@@ -258,8 +282,145 @@ public class DockerManager : IContainerManager
         return container;
     }
 
-    private CreateContainerParameters GetCreateContainerParameters(GZCTF.Models.Internal.ContainerConfig config) =>
-        new()
+    public async Task<ContainerPatchApplyResult> ApplyPatchAsync(Models.Data.Container container, Stream archive,
+        CancellationToken token = default)
+    {
+        if (container.Status != ContainerStatus.Running)
+            return ContainerPatchApplyResult.Failed(null, "Container is not running");
+
+        var patchDir = $"/tmp/gzctf-awdp-{Guid.NewGuid():N}";
+
+        try
+        {
+            var initResult = await RunExec(container.ContainerId, ["sh", "-c", $"mkdir -p {patchDir}"],
+                TimeSpan.FromSeconds(10), token);
+
+            if (!initResult.Succeeded)
+                return initResult;
+
+            await using var tarArchive = await DecompressGzipArchive(archive, token);
+            await _client.Containers.ExtractArchiveToContainerAsync(container.ContainerId,
+                new CopyToContainerParameters { Path = patchDir, AllowOverwriteDirWithFile = false },
+                tarArchive, token);
+
+            var command =
+                $"cd {patchDir} && chmod +x update.sh && ./update.sh";
+            var result = await RunExec(container.ContainerId, ["sh", "-c", command], PatchApplyTimeout, token);
+
+            _ = await RunExec(container.ContainerId, ["sh", "-c", $"rm -rf {patchDir}"],
+                TimeSpan.FromSeconds(10), token);
+
+            return result;
+        }
+        catch (InvalidDataException ex)
+        {
+            _logger.LogWarning(ex, "Invalid AWDP patch archive for container {ContainerId}", container.ContainerId);
+            return ContainerPatchApplyResult.Failed(null, "Invalid patch archive");
+        }
+        catch (DockerApiException ex)
+        {
+            _logger.LogWarning(ex, "Docker AWDP patch application failed for container {ContainerId}",
+                container.ContainerId);
+            return ContainerPatchApplyResult.Failed(null, ex.ResponseBody);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "AWDP patch application failed for container {ContainerId}", container.ContainerId);
+            return ContainerPatchApplyResult.Failed(null, ex.Message);
+        }
+    }
+
+    static async Task<MemoryStream> DecompressGzipArchive(Stream archive, CancellationToken token)
+    {
+        archive.Position = 0;
+        var output = new MemoryStream();
+        await using var gzip = new GZipStream(archive, CompressionMode.Decompress, leaveOpen: true);
+        var buffer = new byte[8192];
+
+        while (true)
+        {
+            var read = await gzip.ReadAsync(buffer, token);
+            if (read == 0)
+                break;
+
+            if (output.Length + read > MaxExtractedPatchArchiveSize)
+                throw new InvalidDataException("Patch archive is too large after decompression");
+
+            await output.WriteAsync(buffer.AsMemory(0, read), token);
+        }
+
+        output.Position = 0;
+        return output;
+    }
+
+    async Task<ContainerPatchApplyResult> RunExec(string containerId, IList<string> command, TimeSpan timeout,
+        CancellationToken token)
+    {
+        var exec = await _client.Exec.CreateContainerExecAsync(containerId, new ContainerExecCreateParameters
+        {
+            AttachStderr = true,
+            AttachStdout = true,
+            Cmd = command
+        }, token);
+
+        using var stream = await _client.Exec.StartContainerExecAsync(exec.ID, new ContainerExecStartParameters
+        {
+            Detach = false
+        }, token);
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        cts.CancelAfter(timeout);
+
+        var output = new StringBuilder();
+
+        try
+        {
+            var buffer = new byte[8192];
+
+            while (true)
+            {
+                var result = await stream.ReadOutputAsync(buffer, 0, buffer.Length, cts.Token);
+
+                if (result.EOF)
+                    break;
+
+                if (result.Count > 0 && output.Length < 2048)
+                    output.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+            }
+        }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested)
+        {
+            return ContainerPatchApplyResult.Timeout("Patch execution timed out");
+        }
+
+        var inspect = await _client.Exec.InspectContainerExecAsync(exec.ID, token);
+        var message = output.ToString().Trim();
+
+        return inspect.ExitCode == 0
+            ? ContainerPatchApplyResult.Success(string.IsNullOrWhiteSpace(message) ? "Patch applied" : message)
+            : ContainerPatchApplyResult.Failed(inspect.ExitCode,
+                string.IsNullOrWhiteSpace(message) ? "Patch command failed" : message);
+    }
+
+    private CreateContainerParameters GetCreateContainerParameters(GZCTF.Models.Internal.ContainerConfig config)
+    {
+        var hostConfig = new HostConfig
+        {
+            Memory = config.MemoryLimit * 1024 * 1024,
+            NetworkMode = !string.IsNullOrEmpty(config.NetworkName)
+                ? config.NetworkName
+                : _meta.NetworkNames[config.NetworkMode]
+        };
+
+        if (config.CPUCount > 0)
+        {
+            if (_isWindowsDaemon)
+                hostConfig.CPUPercent = config.CPUCount * 10;
+            else
+                hostConfig.NanoCPUs = config.CPUCount * 100_000_000L;
+        }
+
+        return new()
         {
             Image = config.Image,
             Labels =
@@ -285,13 +446,23 @@ public class DockerManager : IContainerManager
             Env = config.Flag is null
                 ? [$"GZCTF_TEAM_ID={config.TeamId}"]
                 : [$"GZCTF_FLAG={config.Flag}", $"GZCTF_TEAM_ID={config.TeamId}"],
-            HostConfig = new()
-            {
-                Memory = config.MemoryLimit * 1024 * 1024,
-                CPUPercent = config.CPUCount * 10,
-                NetworkMode = !string.IsNullOrEmpty(config.NetworkName)
-                    ? config.NetworkName
-                    : _meta.NetworkNames[config.NetworkMode]
-            }
+            HostConfig = hostConfig
         };
+    }
+
+    private bool IsWindowsDockerDaemon()
+    {
+        try
+        {
+            var info = _client.System.GetSystemInfoAsync().GetAwaiter().GetResult();
+            return string.Equals(info.OSType, "windows", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to determine Docker daemon OS type; using Linux-compatible CPU limits.");
+            return false;
+        }
+    }
+
+    static string GetTcpPortKey(int port) => $"{port}/tcp";
 }

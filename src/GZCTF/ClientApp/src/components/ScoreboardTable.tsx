@@ -117,7 +117,7 @@ const TableHeader = React.memo((table: Record<string, ChallengeInfo[]>) => {
           t('common.label.team'),
           t('game.label.score_table.solved_count'),
           'CTF',
-          'AWD',
+          'AWDP',
           t('game.label.score_table.score_total'),
         ].map((header, idx) => (
           <Table.Th key={idx} className={cx(classes.left, classes.header)} style={{ left: Lefts[idx] }}>
@@ -206,7 +206,7 @@ const TableRow: FC<{
         {item.ctfScore}
       </Table.Td>
       <Table.Td className={cx(classes.mono, classes.left)} style={{ left: Lefts[5] }}>
-        {item.awdScore ?? 0}
+        {item.awdScore}
       </Table.Td>
       <Table.Td className={cx(classes.mono, classes.left)} style={{ left: Lefts[6] }}>
         {item.score}

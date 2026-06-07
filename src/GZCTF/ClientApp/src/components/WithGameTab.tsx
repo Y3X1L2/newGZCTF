@@ -69,7 +69,7 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
 
   const finished = dayjs() > dayjs(game?.end ?? new Date())
 
-  const isAwdGame = game?.gameType === GameType.AWD || game?.gameType === GameType.Mixed
+  const isAwdGame = game?.gameType === GameType.AWDP || game?.gameType === GameType.Mixed
   const isTheoryGame = game?.gameType === GameType.Theory || game?.gameType === GameType.Mixed
   const isTheoryOnly = game?.gameType === GameType.Theory
 
@@ -92,8 +92,8 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
           {
             icon: mdiSwordCross,
             title: t('game.tab.awd'),
-            path: 'awd',
-            link: 'awd',
+            path: 'awdp',
+            link: 'awdp',
             requireJoin: true,
             requireRole: Role.User,
             requireAwd: true,
