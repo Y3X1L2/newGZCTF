@@ -1257,7 +1257,8 @@ public class GameController(
                 ? await dbContext.ImageTemplates.FindAsync(new object[] { instance.Challenge.ImageTemplateId.Value }, token)
                 : null;
             var templatePath = imageTemplate?.LocalFilePath;
-            var result = await fleetVm.CreateVmAsync(vmInstance, instance.Challenge.ImageTemplateId, templatePath, instance.Challenge.MemoryLimit, instance.Challenge.CPUCount, token);
+            var result = await fleetVm.CreateVmAsync(vmInstance, instance.Challenge.ImageTemplateId, templatePath,
+                instance.Challenge.MemoryLimit, instance.Challenge.CPUCount, instance.FlagContext?.Flag, token);
 
             if (result is null)
                 return BadRequest(new { message = "No KVM node available" });

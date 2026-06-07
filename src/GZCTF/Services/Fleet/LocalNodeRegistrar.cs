@@ -18,12 +18,21 @@ public class LocalNodeRegistrar : IHostedService
         using var scope = _scopeFactory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        if (await context.WorkerNodes.AnyAsync(n => n.IsLocal, token))
-            return;
-
         var publicEntry = _config["ContainerProvider:PublicEntry"] ?? "localhost";
         var providerType = _config.GetValue<string>("ContainerProvider:Type") ?? "Docker";
         var hasDocker = providerType != "Kubernetes";
+        var localNode = await context.WorkerNodes.FirstOrDefaultAsync(n => n.IsLocal, token);
+
+        if (localNode is not null)
+        {
+            localNode.HostAddress = publicEntry;
+            localNode.Capabilities = hasDocker ? NodeCapability.Docker : NodeCapability.None;
+            localNode.Status = NodeStatus.Online;
+            localNode.LastHeartbeat = DateTimeOffset.UtcNow;
+            await context.SaveChangesAsync(token);
+            _logger.LogInformation("Refreshed local server node: {Id}", localNode.Id);
+            return;
+        }
 
         var node = new WorkerNode
         {

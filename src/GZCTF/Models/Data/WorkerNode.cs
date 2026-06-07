@@ -8,6 +8,8 @@ namespace GZCTF.Models.Data;
 [Index(nameof(LastHeartbeat))]
 public class WorkerNode
 {
+    public static readonly TimeSpan DefaultHeartbeatTimeout = TimeSpan.FromSeconds(120);
+
     [Key] public Guid Id { get; set; } = Guid.NewGuid();
     [Required, MaxLength(128)] public string Name { get; set; } = string.Empty;
     [Required, MaxLength(256)] public string HostAddress { get; set; } = string.Empty;
@@ -30,6 +32,19 @@ public class WorkerNode
     public int AgentPort { get; set; } = 5001;
 
     [Timestamp] public uint ConcurrencyToken { get; set; }
+
+    public NodeStatus GetEffectiveStatus(DateTimeOffset utcNow)
+    {
+        if (Status != NodeStatus.Online || IsLocal)
+            return Status;
+
+        if (!LastHeartbeat.HasValue)
+            return NodeStatus.Offline;
+
+        return LastHeartbeat.Value < utcNow - DefaultHeartbeatTimeout
+            ? NodeStatus.Offline
+            : Status;
+    }
 }
 
 [Flags]

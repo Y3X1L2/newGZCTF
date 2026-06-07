@@ -14,8 +14,13 @@ public class ImageDistributionService
 
     public async Task DistributeToCapableNodesAsync(ImageTemplate template, CancellationToken token)
     {
+        var cutoff = DateTimeOffset.UtcNow - WorkerNode.DefaultHeartbeatTimeout;
         var nodes = await _context.WorkerNodes
-            .Where(n => n.Status == NodeStatus.Online && (n.Capabilities & NodeCapability.Kvm) != 0 && !n.IsLocal)
+            .Where(n => n.Status == NodeStatus.Online
+                && n.LastHeartbeat.HasValue
+                && n.LastHeartbeat >= cutoff
+                && (n.Capabilities & NodeCapability.Kvm) != 0
+                && !n.IsLocal)
             .ToListAsync(token);
 
         foreach (var node in nodes)

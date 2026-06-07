@@ -203,6 +203,12 @@ public class ImageTemplateController : ControllerBase
             {
                 var orchestrator = scope.ServiceProvider.GetRequiredService<ContainerOrchestrator>();
                 await orchestrator.PullImageFromRegistryAsync(registryUrl ?? "", imageName, registryAuth);
+                var t = await ctx.ImageTemplates.FindAsync(templateId);
+                if (t is not null)
+                {
+                    t.Status = ImageStatus.Ready;
+                    await ctx.SaveChangesAsync();
+                }
             }
             catch (Exception ex)
             {

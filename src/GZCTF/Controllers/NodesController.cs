@@ -44,9 +44,10 @@ public class NodesController : ControllerBase
     public async Task<IActionResult> List()
     {
         var nodes = await _nodeRepo.GetAllNodesAsync(HttpContext.RequestAborted);
+        var now = DateTimeOffset.UtcNow;
         return Ok(nodes.Select(n => new
         {
-            n.Id, n.Name, n.HostAddress, n.Status, n.Capabilities,
+            n.Id, n.Name, n.HostAddress, Status = n.GetEffectiveStatus(now), n.Capabilities,
             n.CpuLoad, n.MemoryLoad, n.CurrentContainers, n.MaxContainers,
             n.CurrentVms, n.MaxVms, n.LastHeartbeat,
             n.IsSchedulable, n.IsLocal, n.AgentPort
@@ -59,9 +60,10 @@ public class NodesController : ControllerBase
     {
         var node = await _nodeRepo.GetNodeByIdAsync(id, HttpContext.RequestAborted);
         if (node is null) return NotFound();
+        var now = DateTimeOffset.UtcNow;
         return Ok(new
         {
-            node.Id, node.Name, node.HostAddress, node.Status, node.Capabilities,
+            node.Id, node.Name, node.HostAddress, Status = node.GetEffectiveStatus(now), node.Capabilities,
             node.CpuLoad, node.MemoryLoad, node.CurrentContainers, node.MaxContainers,
             node.CurrentVms, node.MaxVms, node.UsedPorts, node.TotalPorts, node.LastHeartbeat,
             node.IsSchedulable, node.IsLocal, node.AgentPort

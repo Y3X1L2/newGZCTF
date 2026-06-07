@@ -33,14 +33,14 @@ public class FleetVmService
     }
 
     public async Task<VmInstance?> CreateVmAsync(VmInstance vmInstance, int? templateId, string? templatePath,
-        int? memory, int? cpu, CancellationToken token)
+        int? memory, int? cpu, string? flag, CancellationToken token)
     {
         var target = new DeploymentTarget
         {
             Type = TargetType.Vm,
             Action = TargetAction.Create,
             Payload = JsonSerializer.Serialize(new VmCreatePayload(
-                templateId, templatePath, memory, cpu, vmInstance.VmName))
+                templateId, templatePath, memory, cpu, vmInstance.VmName, flag))
         };
         var nodeId = await _fleetManager.TryScheduleAsync(target, token);
         if (nodeId is null)
@@ -60,7 +60,8 @@ public class FleetVmService
             TemplateId = templateId,
             VmName = vmInstance.VmName,
             Memory = memory ?? _kvmSettings.DefaultVmMemoryMb,
-            Cpu = cpu ?? _kvmSettings.DefaultVmCpu
+            Cpu = cpu ?? _kvmSettings.DefaultVmCpu,
+            Flag = flag
         }, token);
 
         if (result is null)
@@ -155,5 +156,5 @@ public class FleetVmService
     }
 
     private sealed record VmCreatePayload(
-        int? TemplateId, string? TemplatePath, int? Memory, int? Cpu, string VmName);
+        int? TemplateId, string? TemplatePath, int? Memory, int? Cpu, string VmName, string? Flag);
 }

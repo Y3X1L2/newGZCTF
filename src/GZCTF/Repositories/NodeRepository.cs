@@ -10,8 +10,15 @@ public class NodeRepository : INodeRepository
 
     public NodeRepository(AppDbContext context) => _context = context;
 
-    public Task<List<WorkerNode>> GetOnlineNodesAsync(CancellationToken token) =>
-        _context.WorkerNodes.Where(n => n.Status == NodeStatus.Online).ToListAsync(token);
+    public Task<List<WorkerNode>> GetOnlineNodesAsync(CancellationToken token)
+    {
+        var cutoff = DateTimeOffset.UtcNow - WorkerNode.DefaultHeartbeatTimeout;
+
+        return _context.WorkerNodes
+            .Where(n => n.Status == NodeStatus.Online
+                && (n.IsLocal || (n.LastHeartbeat.HasValue && n.LastHeartbeat >= cutoff)))
+            .ToListAsync(token);
+    }
 
     public Task<List<WorkerNode>> GetAllNodesAsync(CancellationToken token) =>
         _context.WorkerNodes.ToListAsync(token);
@@ -23,7 +30,9 @@ public class NodeRepository : INodeRepository
     {
         var cutoff = DateTimeOffset.UtcNow - timeout;
         var stale = await _context.WorkerNodes
-            .Where(n => n.Status == NodeStatus.Online && !n.IsLocal && n.LastHeartbeat < cutoff)
+            .Where(n => n.Status == NodeStatus.Online
+                && !n.IsLocal
+                && (!n.LastHeartbeat.HasValue || n.LastHeartbeat < cutoff))
             .ToListAsync(token);
         foreach (var node in stale) node.Status = NodeStatus.Offline;
         if (stale.Count > 0) await _context.SaveChangesAsync(token);

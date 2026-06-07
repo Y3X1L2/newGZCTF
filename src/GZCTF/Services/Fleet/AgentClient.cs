@@ -143,6 +143,7 @@ public class AgentCreateVmRequest
     public string VmName { get; set; } = string.Empty;
     public int Memory { get; set; } = 2048;
     public int Cpu { get; set; } = 2;
+    public string? Flag { get; set; }
 }
 
 public class AgentCreateVmResponse
