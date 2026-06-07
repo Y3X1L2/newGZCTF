@@ -124,6 +124,18 @@ export const MobileScoreboardItemModal: FC<ScoreboardItemModalProps> = React.mem
             )}
             <Stack gap={1}>
               <Text fw="bold" size="sm" ff="monospace">
+                {item?.ctfScore ?? 0}
+              </Text>
+              <Text size="xs">CTF</Text>
+            </Stack>
+            <Stack gap={1}>
+              <Text fw="bold" size="sm" ff="monospace">
+                {item?.awdScore ?? 0}
+              </Text>
+              <Text size="xs">AWDP</Text>
+            </Stack>
+            <Stack gap={1}>
+              <Text fw="bold" size="sm" ff="monospace">
                 {item?.score}
               </Text>
               <Text size="xs">{t('game.label.score_table.score')}</Text>

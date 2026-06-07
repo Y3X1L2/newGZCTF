@@ -275,6 +275,7 @@ const buildScoreboard = (scenario: DemoScenario, timedSubmissions: TimedSubmissi
         name: team.name,
         rank: 0,
         ctfScore: 0,
+        awdScore: 0,
         score: 0,
         solvedChallenges: [],
         solvedCount: 0,

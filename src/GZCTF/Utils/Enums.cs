@@ -817,7 +817,13 @@ public enum CheckerStatus : byte
     /// Service data is corrupted
     /// </summary>
     [Description("Corrupt")]
-    Corrupt = 3
+    Corrupt = 3,
+
+    /// <summary>
+    /// Checker execution was skipped
+    /// </summary>
+    [Description("Skipped")]
+    Skipped = 4
 }
 
 /// <summary>
@@ -879,7 +885,13 @@ public enum AwdpPatchStatus : byte
     /// Verification timed out
     /// </summary>
     [Description("Timeout")]
-    Timeout = 4
+    Timeout = 4,
+
+    /// <summary>
+    /// Patch application is not supported by the current container backend
+    /// </summary>
+    [Description("Unsupported")]
+    Unsupported = 5
 }
 
 /// <summary>

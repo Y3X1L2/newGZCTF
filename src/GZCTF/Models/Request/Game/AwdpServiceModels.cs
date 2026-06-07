@@ -116,11 +116,16 @@ public class AwdpServiceViewModel
     public string Name { get; set; } = string.Empty;
     public string ImageName { get; set; } = string.Empty;
     public int ExposePort { get; set; }
+    public string? CheckerScript { get; set; }
+    public string? CheckerEntrypoint { get; set; }
+    public string? ExpScript { get; set; }
+    public string? ExpEntrypoint { get; set; }
     public int OriginalScore { get; set; }
     public int AttackPoints { get; set; }
     public int SlaPoints { get; set; }
     public int PatchPoints { get; set; }
     public int ServiceAbnormalPenalty { get; set; }
+    public int MaxAttackPerRound { get; set; }
     public int AttackPhaseMinutes { get; set; }
     public int PatchPhaseMinutes { get; set; }
     public int TotalRounds { get; set; }
@@ -138,6 +143,47 @@ public class AwdpSubmitModel
     /// </summary>
     [Required]
     public string Flag { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// AWDP Flag submission result model
+/// </summary>
+public class AwdpSubmitResultModel
+{
+    public bool Accepted { get; set; }
+    public int Points { get; set; }
+    public int RoundNumber { get; set; }
+    public int ServiceId { get; set; }
+    public string ServiceName { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// AWDP 修补包上传模型
+/// </summary>
+public class AwdpPatchSubmitModel
+{
+    /// <summary>
+    /// 服务 ID
+    /// </summary>
+    [Required]
+    public int ServiceId { get; set; }
+
+    /// <summary>
+    /// 修补包文件，必须是 tar.gz/tgz 归档并包含 update.sh
+    /// </summary>
+    [Required]
+    public IFormFile File { get; set; } = null!;
+}
+
+/// <summary>
+/// AWDP 容器操作结果
+/// </summary>
+public class AwdpInstanceActionModel
+{
+    public int InstanceId { get; set; }
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -159,6 +205,8 @@ public class AwdpGameStatusModel
 public class AwdpTeamServiceStatus
 {
     public int InstanceId { get; set; }
+    public int ServiceId { get; set; }
+    public string ServiceName { get; set; } = string.Empty;
     public int TeamId { get; set; }
     public string TeamName { get; set; } = string.Empty;
     public string? IpAddress { get; set; }
@@ -193,6 +241,7 @@ public class AwdpAttackLogItem
 {
     public DateTimeOffset Time { get; set; }
     public string AttackerTeam { get; set; } = string.Empty;
+    public string VictimTeam { get; set; } = string.Empty;
     public string ServiceName { get; set; } = string.Empty;
     public int Points { get; set; }
 }
@@ -208,6 +257,27 @@ public class AwdpPatchStatusItem
     public AwdpChallengeStatus DefenseStatus { get; set; }
     public AwdpPatchStatus? LastPatchResult { get; set; }
     public DateTimeOffset? LastPatchTime { get; set; }
+    public string? Message { get; set; }
+}
+
+/// <summary>
+/// AWDP 修补包提交视图
+/// </summary>
+public class AwdpPatchSubmissionViewModel
+{
+    public int Id { get; set; }
+    public int RoundId { get; set; }
+    public int RoundNumber { get; set; }
+    public int ServiceId { get; set; }
+    public string ServiceName { get; set; } = string.Empty;
+    public int TeamId { get; set; }
+    public string TeamName { get; set; } = string.Empty;
+    public string PatchFileHash { get; set; } = string.Empty;
+    public DateTimeOffset SubmittedAt { get; set; }
+    public CheckerStatus CheckerResult { get; set; }
+    public AwdpPatchStatus ExpResult { get; set; }
+    public AwdpPatchStatus FinalStatus { get; set; }
+    public string? Message { get; set; }
 }
 
 /// <summary>

@@ -172,6 +172,14 @@ export const ScoreboardItemModal: FC<ScoreboardItemModalProps> = (props) => {
             </Stack>
             <Stack gap={2}>
               <Text fw="bold" size="sm" ff="monospace">
+                {item?.awdScore ?? 0}
+              </Text>
+              <Text size="xs" fw={500}>
+                AWDP
+              </Text>
+            </Stack>
+            <Stack gap={2}>
+              <Text fw="bold" size="sm" ff="monospace">
                 {item?.score}
               </Text>
               <Text size="xs" fw={500}>

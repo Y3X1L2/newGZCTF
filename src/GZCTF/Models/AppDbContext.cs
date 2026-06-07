@@ -52,6 +52,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<ScenarioInstance> ScenarioInstances { get; set; } = null!;
     public DbSet<IRCheckpoint> IRCheckpoints { get; set; } = null!;
     public DbSet<IRInstance> IRInstances { get; set; } = null!;
+    public DbSet<AwdpService> AwdpServices { get; set; } = null!;
+    public DbSet<AwdpServiceInstance> AwdpServiceInstances { get; set; } = null!;
+    public DbSet<AwdpRound> AwdpRounds { get; set; } = null!;
+    public DbSet<AwdpFlag> AwdpFlags { get; set; } = null!;
+    public DbSet<AwdpCheckerTask> AwdpCheckerTasks { get; set; } = null!;
+    public DbSet<AwdpPatchSubmission> AwdpPatchSubmissions { get; set; } = null!;
+    public DbSet<AwdpResetRecord> AwdpResetRecords { get; set; } = null!;
+    public DbSet<AwdpRecoveryRecord> AwdpRecoveryRecords { get; set; } = null!;
 
     private static ValueConverter<T?, string> GetJsonConverter<T>() where T : class, new() =>
         new(
@@ -473,6 +481,192 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
         builder.Entity<VmInstance>(entity =>
         {
             entity.HasOne(v => v.Challenge).WithMany().HasForeignKey(v => v.ChallengeId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<AwdpService>(entity =>
+        {
+            entity.HasIndex(e => e.GameId);
+            entity.HasIndex(e => new { e.GameId, e.Name }).IsUnique();
+
+            entity.HasOne(e => e.Game)
+                .WithMany(e => e.AwdpServices)
+                .HasForeignKey(e => e.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<AwdpServiceInstance>(entity =>
+        {
+            entity.Property(e => e.ContainerId)
+                .HasColumnName("ContainerId1");
+
+            entity.HasIndex(e => e.ServiceId);
+            entity.HasIndex(e => e.TeamId);
+            entity.HasIndex(e => new { e.ServiceId, e.TeamId }).IsUnique();
+
+            entity.HasOne(e => e.Container)
+                .WithMany()
+                .HasForeignKey(e => e.ContainerId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.Service)
+                .WithMany(e => e.Instances)
+                .HasForeignKey(e => e.ServiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Team)
+                .WithMany()
+                .HasForeignKey(e => e.TeamId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<AwdpRound>(entity =>
+        {
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.HasIndex(e => e.GameId);
+            entity.HasIndex(e => new { e.GameId, e.RoundNumber }).IsUnique();
+
+            entity.HasOne(e => e.Game)
+                .WithMany(e => e.AwdpRounds)
+                .HasForeignKey(e => e.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<AwdpFlag>(entity =>
+        {
+            entity.HasIndex(e => e.RoundId);
+            entity.HasIndex(e => e.ServiceId);
+            entity.HasIndex(e => e.TeamId);
+            entity.HasIndex(e => e.SubmittedByTeamId);
+            entity.HasIndex(e => e.FlagValue).IsUnique();
+            entity.HasIndex(e => new { e.RoundId, e.ServiceId, e.TeamId }).IsUnique();
+
+            entity.HasOne(e => e.Round)
+                .WithMany(e => e.Flags)
+                .HasForeignKey(e => e.RoundId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Service)
+                .WithMany()
+                .HasForeignKey(e => e.ServiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Team)
+                .WithMany()
+                .HasForeignKey(e => e.TeamId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.SubmittedByTeam)
+                .WithMany()
+                .HasForeignKey(e => e.SubmittedByTeamId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.SubmittedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.SubmittedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<AwdpCheckerTask>(entity =>
+        {
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.HasIndex(e => e.RoundId);
+            entity.HasIndex(e => e.ServiceId);
+            entity.HasIndex(e => e.TeamId);
+            entity.HasIndex(e => new { e.RoundId, e.ServiceId, e.TeamId }).IsUnique();
+
+            entity.HasOne(e => e.Round)
+                .WithMany(e => e.CheckerTasks)
+                .HasForeignKey(e => e.RoundId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Service)
+                .WithMany()
+                .HasForeignKey(e => e.ServiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Team)
+                .WithMany()
+                .HasForeignKey(e => e.TeamId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<AwdpPatchSubmission>(entity =>
+        {
+            entity.Property(e => e.CheckerResult)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.Property(e => e.ExpResult)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.Property(e => e.FinalStatus)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.HasIndex(e => e.RoundId);
+            entity.HasIndex(e => e.ServiceId);
+            entity.HasIndex(e => e.TeamId);
+            entity.HasIndex(e => new { e.RoundId, e.ServiceId, e.TeamId, e.SubmittedAt });
+
+            entity.HasOne(e => e.Round)
+                .WithMany(e => e.PatchSubmissions)
+                .HasForeignKey(e => e.RoundId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Service)
+                .WithMany()
+                .HasForeignKey(e => e.ServiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Team)
+                .WithMany()
+                .HasForeignKey(e => e.TeamId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<AwdpResetRecord>(entity =>
+        {
+            entity.Property(e => e.ResetType)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.HasIndex(e => e.ServiceId);
+            entity.HasIndex(e => e.TeamId);
+            entity.HasIndex(e => new { e.ServiceId, e.TeamId, e.ResetAt });
+
+            entity.HasOne(e => e.Service)
+                .WithMany()
+                .HasForeignKey(e => e.ServiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Team)
+                .WithMany()
+                .HasForeignKey(e => e.TeamId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<AwdpRecoveryRecord>(entity =>
+        {
+            entity.HasIndex(e => e.ServiceId);
+            entity.HasIndex(e => e.TeamId);
+            entity.HasIndex(e => new { e.ServiceId, e.TeamId, e.RecoveryAt });
+
+            entity.HasOne(e => e.Service)
+                .WithMany()
+                .HasForeignKey(e => e.ServiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Team)
+                .WithMany()
+                .HasForeignKey(e => e.TeamId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

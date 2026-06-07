@@ -220,10 +220,16 @@ public partial class ScoreboardItem
     public int CtfScore { get; set; }
 
     /// <summary>
+    /// AWDP Score
+    /// </summary>
+    [Required]
+    public int AwdScore { get; set; }
+
+    /// <summary>
     /// Total Score
     /// </summary>
     [Required]
-    public int Score => CtfScore;
+    public int Score => CtfScore + AwdScore;
 
     /// <summary>
     /// Rank

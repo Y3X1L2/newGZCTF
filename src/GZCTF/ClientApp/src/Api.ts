@@ -37,6 +37,45 @@ export enum EventType {
   ContainerDestroy = "ContainerDestroy",
   FlagSubmit = "FlagSubmit",
   CheatDetected = "CheatDetected",
+  AwdpFlagSubmit = "AwdpFlagSubmit",
+  AwdpServiceUp = "AwdpServiceUp",
+  AwdpServiceDown = "AwdpServiceDown",
+  AwdpServiceMumble = "AwdpServiceMumble",
+  AwdpRoundStart = "AwdpRoundStart",
+  AwdpAttackSuccess = "AwdpAttackSuccess",
+  AwdpPatchResult = "AwdpPatchResult",
+}
+
+export enum CheckerStatus {
+  OK = "OK",
+  Mumble = "Mumble",
+  Down = "Down",
+  Corrupt = "Corrupt",
+  Skipped = "Skipped",
+}
+
+export enum AwdpRoundStatus {
+  AttackPhase = "AttackPhase",
+  PatchPhase = "PatchPhase",
+  Finished = "Finished",
+}
+
+export enum AwdpPatchStatus {
+  Pending = "Pending",
+  CheckerFailed = "CheckerFailed",
+  ExpSucceeded = "ExpSucceeded",
+  ExpFailed = "ExpFailed",
+  Timeout = "Timeout",
+  Unsupported = "Unsupported",
+}
+
+export enum AwdpChallengeStatus {
+  Unattacked = "Unattacked",
+  Attacked = "Attacked",
+  Undefended = "Undefended",
+  Defended = "Defended",
+  DefenseAbnormal = "DefenseAbnormal",
+  DefenseFailed = "DefenseFailed",
 }
 
 /** Submission type */
@@ -1670,6 +1709,11 @@ export interface ScoreboardItem {
    * @format int32
    */
   ctfScore: number;
+  /**
+   * AWDP Score
+   * @format int32
+   */
+  awdScore: number;
   /**
    * Total Score
    * @format int32

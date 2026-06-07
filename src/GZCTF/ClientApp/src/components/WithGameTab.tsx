@@ -79,8 +79,8 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
           {
             icon: mdiSwordCross,
             title: t('game.tab.awd'),
-            path: 'awd',
-            link: 'awd',
+            path: 'awdp',
+            link: 'awdp',
             requireJoin: true,
             requireRole: Role.User,
             requireAwd: true,

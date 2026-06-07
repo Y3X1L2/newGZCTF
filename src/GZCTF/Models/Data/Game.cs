@@ -244,6 +244,18 @@ public partial class Game
     public HashSet<GameChallenge> Challenges { get; set; } = [];
 
     /// <summary>
+    /// AWDP services in the game
+    /// </summary>
+    [JsonIgnore]
+    public List<AwdpService> AwdpServices { get; set; } = [];
+
+    /// <summary>
+    /// AWDP rounds in the game
+    /// </summary>
+    [JsonIgnore]
+    public List<AwdpRound> AwdpRounds { get; set; } = [];
+
+    /// <summary>
     /// Game participations
     /// </summary>
     [JsonIgnore]

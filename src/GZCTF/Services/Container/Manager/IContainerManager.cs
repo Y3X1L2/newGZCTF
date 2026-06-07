@@ -27,6 +27,32 @@ public interface IContainerManager
     public Task DestroyContainerAsync(Models.Data.Container container, CancellationToken token = default);
 }
 
+public interface IContainerPatchApplicator
+{
+    public Task<ContainerPatchApplyResult> ApplyPatchAsync(Models.Data.Container container, Stream archive,
+        CancellationToken token = default);
+}
+
+public sealed record ContainerPatchApplyResult(
+    bool IsSupported,
+    bool Succeeded,
+    bool TimedOut,
+    long? ExitCode,
+    string? Message)
+{
+    public static ContainerPatchApplyResult Success(string? message = null) =>
+        new(true, true, false, 0, message);
+
+    public static ContainerPatchApplyResult Failed(long? exitCode, string? message) =>
+        new(true, false, false, exitCode, message);
+
+    public static ContainerPatchApplyResult Timeout(string? message = null) =>
+        new(true, false, true, null, message);
+
+    public static ContainerPatchApplyResult Unsupported(string? message = null) =>
+        new(false, false, false, null, message);
+}
+
 internal static class ContainerManagerLogHelper
 {
     private static void LogWithHttpContext<T>(

@@ -56,4 +56,24 @@ public class AwdpFlag
     /// 首次被提交的时间
     /// </summary>
     public DateTimeOffset? FirstSubmittedAt { get; set; }
+
+    /// <summary>
+    /// 首次提交该 Flag 的队伍 ID
+    /// </summary>
+    public int? SubmittedByTeamId { get; set; }
+
+    /// <summary>
+    /// 首次提交该 Flag 的队伍
+    /// </summary>
+    public Team? SubmittedByTeam { get; set; }
+
+    /// <summary>
+    /// 首次提交该 Flag 的用户 ID
+    /// </summary>
+    public Guid? SubmittedByUserId { get; set; }
+
+    /// <summary>
+    /// 首次提交该 Flag 的用户
+    /// </summary>
+    public UserInfo? SubmittedByUser { get; set; }
 }

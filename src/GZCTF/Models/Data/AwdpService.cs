@@ -135,8 +135,4 @@ public class AwdpService
     /// </summary>
     public List<AwdpServiceInstance> Instances { get; set; } = [];
 
-    /// <summary>
-    /// 该服务的所有轮次
-    /// </summary>
-    public List<AwdpRound> Rounds { get; set; } = [];
 }

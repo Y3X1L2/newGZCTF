@@ -12,7 +12,7 @@ using k8s.Models;
 
 namespace GZCTF.Services.Container.Manager;
 
-public class KubernetesManager : IContainerManager
+public class KubernetesManager : IContainerManager, IContainerPatchApplicator
 {
     private readonly Kubernetes _client;
     private readonly ILogger<KubernetesManager> _logger;
@@ -253,4 +253,8 @@ public class KubernetesManager : IContainerManager
 
         container.Status = ContainerStatus.Destroyed;
     }
+
+    public Task<ContainerPatchApplyResult> ApplyPatchAsync(Models.Data.Container container, Stream archive,
+        CancellationToken token = default) =>
+        Task.FromResult(ContainerPatchApplyResult.Unsupported("Kubernetes container patch application is not supported"));
 }

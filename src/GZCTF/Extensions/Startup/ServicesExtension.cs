@@ -86,6 +86,15 @@ internal static class ServicesExtension
             builder.Services.AddScoped<IGameChallengeRepository, GameChallengeRepository>();
             builder.Services.AddScoped<IParticipationRepository, ParticipationRepository>();
             builder.Services.AddScoped<IDivisionRepository, DivisionRepository>();
+            builder.Services.AddScoped<IAwdpRepository, AwdpRepository>();
+
+            builder.Services.AddScoped<AwdpScriptRunner>();
+            builder.Services.AddScoped<AwdpInstanceService>();
+            builder.Services.AddScoped<AwdpCheckerService>();
+            builder.Services.AddScoped<AwdpScoreService>();
+            builder.Services.AddScoped<AwdpPatchService>();
+            builder.Services.AddSingleton<AwdpRoundService>();
+            builder.Services.AddHostedService(sp => sp.GetRequiredService<AwdpRoundService>());
 
             builder.Services.AddScoped<ExcelHelper>();
             builder.Services.AddScoped<GameExportService>();

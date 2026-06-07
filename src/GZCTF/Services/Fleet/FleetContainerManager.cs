@@ -2,13 +2,14 @@ using System.Text.Json;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
+using GZCTF.Services.Container.Manager;
 using DockerManager = GZCTF.Services.Container.Manager.DockerManager;
 using IContainerManager = GZCTF.Services.Container.Manager.IContainerManager;
 using DataContainer = GZCTF.Models.Data.Container;
 
 namespace GZCTF.Services.Fleet;
 
-public class FleetContainerManager : IContainerManager
+public class FleetContainerManager : IContainerManager, IContainerPatchApplicator
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly AgentClient _agentClient;
@@ -121,5 +122,20 @@ public class FleetContainerManager : IContainerManager
             }
             container.Status = ContainerStatus.Destroyed;
         }
+    }
+
+    public async Task<ContainerPatchApplyResult> ApplyPatchAsync(DataContainer container, Stream archive,
+        CancellationToken token = default)
+    {
+        if (!container.NodeId.HasValue)
+            return await _localManager.ApplyPatchAsync(container, archive, token);
+
+        using var scope = _scopeFactory.CreateScope();
+        var nodeRepo = scope.ServiceProvider.GetRequiredService<INodeRepository>();
+        var node = await nodeRepo.GetNodeByIdAsync(container.NodeId.Value, token);
+
+        return node?.IsLocal == true
+            ? await _localManager.ApplyPatchAsync(container, archive, token)
+            : ContainerPatchApplyResult.Unsupported("Remote fleet node patch application is not supported");
     }
 }

@@ -51,10 +51,15 @@ public static class ContainerServiceExtension
         private IServiceCollection AddManager(ContainerProvider config)
             => config.Type switch
             {
-                ContainerProviderType.Kubernetes => services.AddSingleton<IContainerManager, KubernetesManager>(),
+                ContainerProviderType.Kubernetes => services
+                    .AddSingleton<KubernetesManager>()
+                    .AddSingleton<IContainerManager>(sp => sp.GetRequiredService<KubernetesManager>())
+                    .AddSingleton<IContainerPatchApplicator>(sp => sp.GetRequiredService<KubernetesManager>()),
                 _ => services
                     .AddSingleton<DockerManager>()
-                    .AddSingleton<IContainerManager, FleetContainerManager>()
+                    .AddSingleton<FleetContainerManager>()
+                    .AddSingleton<IContainerManager>(sp => sp.GetRequiredService<FleetContainerManager>())
+                    .AddSingleton<IContainerPatchApplicator>(sp => sp.GetRequiredService<FleetContainerManager>())
             };
     }
 }
