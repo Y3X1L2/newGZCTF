@@ -42,16 +42,18 @@ public class FleetVmService
             Payload = JsonSerializer.Serialize(new VmCreatePayload(
                 templateId, templatePath, memory, cpu, vmInstance.VmName, flag))
         };
-        var nodeId = await _fleetManager.TryScheduleAsync(target, token);
+        var nodeId = await _fleetManager.TryScheduleAsync(target, token, queueWhenNoNode: false);
         if (nodeId is null)
         {
-            _logger.LogWarning("No KVM node available, VM creation queued");
+            vmInstance.Status = VmInstanceStatus.Error;
+            _logger.LogWarning("No KVM node available for VM creation");
             return null;
         }
 
         var node = await _nodeRepo.GetNodeByIdAsync(nodeId.Value, token);
         if (node?.IsLocal == true)
         {
+            vmInstance.NodeId = nodeId.Value;
             return await CreateLocalVmAsync(vmInstance, templatePath, memory, cpu, token);
         }
 
@@ -67,6 +69,8 @@ public class FleetVmService
         if (result is null)
         {
             _logger.LogWarning("Agent VM creation failed on node {NodeId}", nodeId.Value);
+            vmInstance.Status = VmInstanceStatus.Error;
+            vmInstance.NodeId = nodeId.Value;
             return null;
         }
 

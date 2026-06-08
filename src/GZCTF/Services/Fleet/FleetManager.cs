@@ -28,13 +28,21 @@ public class FleetManager
         _logger = logger;
     }
 
-    public async Task<Guid?> TryScheduleAsync(DeploymentTarget target, CancellationToken token)
+    public async Task<Guid?> TryScheduleAsync(DeploymentTarget target, CancellationToken token,
+        bool queueWhenNoNode = true)
     {
         var capability = target.Type == TargetType.Vm ? NodeCapability.Kvm : NodeCapability.Docker;
         var nodeId = await _scheduler.SelectOptimalNodeAsync(capability, token);
 
         if (nodeId is null)
         {
+            if (!queueWhenNoNode)
+            {
+                _logger.LogInformation("Deployment {Id} ({Type}) was not queued - no node available",
+                    target.Id, target.Type);
+                return null;
+            }
+
             target.Status = TargetStatus.Pending;
             target.TargetNodeId = null;
             _context.DeploymentTargets.Add(target);

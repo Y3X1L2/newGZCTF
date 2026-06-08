@@ -67,8 +67,11 @@ public class CacheHelper(
         memoryCache.Remove(key);
     }
 
-    public async Task FlushScoreboardCache(int gameId, CancellationToken token) =>
+    public async Task FlushScoreboardCache(int gameId, CancellationToken token)
+    {
+        await RemoveAsync(CacheKey.ScoreBoard(gameId), token);
         await channelWriter.WriteAsync(ScoreboardCacheHandler.MakeCacheRequest(gameId), token);
+    }
 
     public async Task FlushRecentGamesCache(CancellationToken token) =>
         await channelWriter.WriteAsync(RecentGamesCacheHandler.MakeCacheRequest(), token);

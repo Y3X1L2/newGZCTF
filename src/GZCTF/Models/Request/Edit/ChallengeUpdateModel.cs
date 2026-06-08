@@ -124,7 +124,7 @@ public class ChallengeUpdateModel
     /// <summary>
     /// Deployment environment type
     /// </summary>
-    public EnvironmentType Environment { get; set; } = EnvironmentType.None;
+    public EnvironmentType? Environment { get; set; }
 
     /// <summary>
     /// Image template ID for VM/container deployment

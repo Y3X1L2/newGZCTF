@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Table, Title, Text, Badge, Group, Button, Select, ActionIcon, Tooltip } from '@mantine/core';
+import { Table, Title, Text, Badge, Group, Button, Select, ActionIcon, Tooltip, Paper, Stack, Box } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { mdiRefresh, mdiClose } from '@mdi/js';
 import { Icon } from '@mdi/react';
 import useSWR from 'swr';
+import { AdminPage } from '@Components/admin/AdminPage';
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
 
@@ -42,10 +43,11 @@ export default function QueuePage() {
   const items = (data?.items as any[]) ?? [];
 
   return (
-    <div data-testid="queue-page">
-      <Group justify="space-between" mb="lg">
+    <AdminPage>
+    <Stack data-testid="queue-page" gap="lg" w="100%">
+      <Group justify="space-between" mb="lg" wrap="nowrap">
         <Title order={2}>部署队列</Title>
-        <Group>
+        <Group wrap="nowrap" style={{ overflowX: 'auto' }}>
           <Select
             placeholder="筛选状态"
             clearable
@@ -62,7 +64,9 @@ export default function QueuePage() {
           <Button variant="default" leftSection={<Icon path={mdiRefresh} size={1} />} onClick={() => mutate()}>刷新</Button>
         </Group>
       </Group>
-      <Table>
+      <Paper withBorder radius="sm" p={0} w="100%" style={{ overflow: 'hidden' }}>
+      <Box style={{ overflowX: 'auto' }}>
+      <Table miw={960}>
         <Table.Thead>
           <Table.Tr>
             <Table.Th>请求ID</Table.Th>
@@ -112,9 +116,12 @@ export default function QueuePage() {
           })}
         </Table.Tbody>
       </Table>
+      </Box>
+      </Paper>
       {data?.total > 0 && (
         <Text size="sm" c="dimmed" mt="sm">共 {data.total} 条记录</Text>
       )}
-    </div>
+    </Stack>
+    </AdminPage>
   );
 }

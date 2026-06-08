@@ -56,6 +56,19 @@ public class ContainerRepository(
 
             await cache.RemoveAsync(CacheKey.ConnectionCount(container.Id), token);
 
+            await Context.GameInstances
+                .Where(i => i.ContainerId == container.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(i => i.ContainerId, (Guid?)null), token);
+            await Context.ExerciseInstances
+                .Where(i => i.ContainerId == container.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(i => i.ContainerId, (Guid?)null), token);
+            await Context.AwdpServiceInstances
+                .Where(i => i.ContainerId == container.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(i => i.ContainerId, (Guid?)null), token);
+            await Context.GameChallenges
+                .Where(c => c.TestContainerId == container.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.TestContainerId, (Guid?)null), token);
+
             Context.Containers.Remove(container);
             await SaveAsync(token);
 

@@ -286,6 +286,7 @@ public class GameRepository(
         Dictionary<int, ChallengeScoreMeta> challengeMetas;
         List<SolveSnapshot> solveSnapshots;
         List<FlagContext> allFlags;
+        Dictionary<(int ParticipationId, int ChallengeId), int> dynamicInstanceFlagIds;
 
         // 0. Begin transaction
         await using (var trans = await Context.Database.BeginTransactionAsync(token))
@@ -349,6 +350,7 @@ public class GameRepository(
                 (
                     c.Id,
                     new ChallengeScoreMeta(
+                        c.Type,
                         c.OriginalScore,
                         c.MinScoreRate,
                         c.Difficulty),
@@ -377,6 +379,18 @@ public class GameRepository(
                 .Where(f => f.ChallengeId != null && challengeIds.Contains(f.ChallengeId.Value))
                 .OrderBy(f => f.OrderIndex)
                 .ToListAsync(token);
+
+            var dynamicChallengeIds = challengeRecords
+                .Where(c => c.Value.Meta.Type.IsDynamic())
+                .Select(c => c.Key)
+                .ToArray();
+
+            dynamicInstanceFlagIds = await Context.GameInstances
+                .AsNoTracking()
+                .IgnoreAutoIncludes()
+                .Where(i => dynamicChallengeIds.Contains(i.ChallengeId) && i.FlagId != null)
+                .Select(i => new { i.ParticipationId, i.ChallengeId, FlagId = i.FlagId!.Value })
+                .ToDictionaryAsync(i => (i.ParticipationId, i.ChallengeId), i => i.FlagId, token);
 
             // 4. fetch all recorded first solves for this game
             solveSnapshots = await Context.FirstSolves
@@ -411,6 +425,15 @@ public class GameRepository(
 
         foreach (var snapshot in solveSnapshots)
         {
+            if (!challengeMetas.TryGetValue(snapshot.ChallengeId, out var challengeMeta))
+                continue;
+
+            if (challengeMeta.Type.IsDynamic() &&
+                (!dynamicInstanceFlagIds.TryGetValue((snapshot.ParticipantId, snapshot.ChallengeId),
+                     out var expectedFlagId) ||
+                 expectedFlagId != snapshot.FlagId))
+                continue;
+
             if (!items.TryGetValue(snapshot.ParticipantId, out var scoreboardItem))
                 continue;
 
@@ -437,7 +460,7 @@ public class GameRepository(
 
             if (affectDynamicScore)
             {
-                var flagKey = (snapshot.ChallengeId, snapshot.FlagId);
+                var flagKey = ScoreBucket(snapshot.ChallengeId, snapshot.FlagId, challengeMeta);
                 flagAcceptedCounts[flagKey] =
                     flagAcceptedCounts.GetValueOrDefault(flagKey) + 1;
             }
@@ -467,7 +490,10 @@ public class GameRepository(
         foreach ((int challengeId, ChallengeInfo info) in challenges)
         {
             info.SolvedCount = challengeSolverTeams.GetValueOrDefault(challengeId)?.Count ?? 0;
-            info.TotalFlags = allFlags.Count(f => f.ChallengeId == challengeId);
+            info.TotalFlags =
+                challengeMetas.TryGetValue(challengeId, out var meta) && meta.Type.IsDynamic()
+                    ? 1
+                    : allFlags.Count(f => f.ChallengeId == challengeId);
         }
 
         // 5. Group solves by (ChallengeId, FlagId) and process per-flag
@@ -481,7 +507,7 @@ public class GameRepository(
         ];
 
         var flagGroups = solves
-            .GroupBy(s => (s.ChallengeId, s.FlagId))
+            .GroupBy(s => ScoreBucket(s.ChallengeId, s.FlagId, challengeMetas[s.ChallengeId]))
             .OrderBy(g => g.Min(s => s.SubmitTimeUtc))
             .ToList();
 
@@ -493,12 +519,14 @@ public class GameRepository(
             if (!challenges.TryGetValue(challengeId, out var challengeInfo))
                 continue;
 
-            var flag = allFlags.FirstOrDefault(f => f.Id == flagGroup.Key.FlagId);
-            if (flag is null)
+            var flag = challengeMeta.Type.IsDynamic()
+                ? null
+                : allFlags.FirstOrDefault(f => f.Id == flagGroup.Key.FlagId);
+            if (!challengeMeta.Type.IsDynamic() && flag is null)
                 continue;
 
             // Determine this flag's base score
-            var flagBaseScore = flag.ScoreMode == FlagScoreMode.FixedScore
+            var flagBaseScore = flag?.ScoreMode == FlagScoreMode.FixedScore
                 ? flag.FixedScore
                 : challengeMeta.OriginalScore;
 
@@ -699,6 +727,7 @@ public class GameRepository(
         ChallengeInfo Info);
 
     private readonly record struct ChallengeScoreMeta(
+        ChallengeType Type,
         int OriginalScore,
         double MinScoreRate,
         double Difficulty);
@@ -718,6 +747,9 @@ public class GameRepository(
         string? UserName,
         bool ScoreEligible,
         bool BloodEligible);
+
+    private static (int ChallengeId, int FlagId) ScoreBucket(int challengeId, int flagId, ChallengeScoreMeta meta) =>
+        (challengeId, meta.Type.IsDynamic() ? 0 : flagId);
 
     private readonly record struct ScoreTimelineEvent(DateTimeOffset Time, int Score);
 

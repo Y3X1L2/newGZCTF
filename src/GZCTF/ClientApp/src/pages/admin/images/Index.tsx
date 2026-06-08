@@ -21,6 +21,7 @@ import { mdiArchiveArrowUpOutline, mdiCubeOutline, mdiDeleteOutline, mdiDocker, 
 import { Icon } from '@mdi/react';
 import dayjs from 'dayjs';
 import useSWR from 'swr';
+import { AdminPage } from '@Components/admin/AdminPage';
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -281,13 +282,14 @@ export default function ImagesPage() {
   };
 
   return (
-    <Stack gap="lg">
+    <AdminPage>
+    <Stack gap="lg" w="100%">
       <Group justify="space-between" align="flex-start">
         <Stack gap={2}>
           <Title order={2}>环境模板</Title>
           <Text size="sm" c="dimmed">管理 Docker 镜像、Windows/QCOW2 模板与本地导入资源。</Text>
         </Stack>
-        <Group>
+        <Group wrap="nowrap" style={{ overflowX: 'auto' }}>
           <Button variant="default" leftSection={<Icon path={mdiRefresh} size={0.8} />} onClick={() => mutate()}>
             刷新
           </Button>
@@ -436,5 +438,6 @@ export default function ImagesPage() {
       <RegisterDockerModal opened={dockerModalOpen} onClose={() => setDockerModalOpen(false)} onDone={() => mutate()} />
       <ImportLocalModal opened={localModalOpen} onClose={() => setLocalModalOpen(false)} onDone={() => mutate()} />
     </Stack>
+    </AdminPage>
   );
 }

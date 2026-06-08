@@ -12,6 +12,7 @@
   cursor: pointer;
   border: 0;
   display: block;
+  flex: 0 0 auto;
   background-color: transparent;
 
   @mixin smaller-than $mantine-breakpoint-xs {
@@ -58,6 +59,7 @@
 
 .label {
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .icon {
@@ -87,5 +89,22 @@
   @mixin smaller-than $mantine-breakpoint-xs {
     width: 100%;
     justify-content: space-around;
+  }
+}
+
+.adminPanes {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  margin-left: var(--mantine-spacing-lg);
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  @mixin smaller-than $mantine-breakpoint-xs {
+    margin-left: 0;
   }
 }

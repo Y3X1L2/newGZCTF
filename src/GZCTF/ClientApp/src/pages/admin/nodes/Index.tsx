@@ -20,6 +20,7 @@ import { mdiDeleteOutline, mdiMagnify, mdiPlus, mdiRefresh } from '@mdi/js';
 import { Icon } from '@mdi/react';
 import { CleanupButton } from '../../../components/admin/CleanupButton';
 import { NodeCard, NodeInfo } from '../../../components/admin/NodeCard';
+import { AdminPage } from '@Components/admin/AdminPage';
 
 type StatusFilter = 'all' | 'online' | 'offline' | 'busy' | 'error';
 
@@ -192,13 +193,14 @@ export default function NodesPage() {
   };
 
   return (
-    <Stack data-testid="nodes-page" gap="lg">
+    <AdminPage>
+    <Stack data-testid="nodes-page" gap="lg" w="100%">
       <Group justify="space-between" align="flex-start">
         <Stack gap={2}>
           <Title order={2}>节点管理</Title>
           <Text size="sm" c="dimmed">统一查看节点心跳、资源负载和调度状态。</Text>
         </Stack>
-        <Group>
+        <Group wrap="nowrap" style={{ overflowX: 'auto' }}>
           <Button variant="default" leftSection={<Icon path={mdiRefresh} size={0.8} />} onClick={loadNodes}>
             刷新
           </Button>
@@ -278,5 +280,6 @@ export default function NodesPage() {
 
       <AddNodeModal opened={modalOpen} onClose={() => setModalOpen(false)} onAdded={loadNodes} />
     </Stack>
+    </AdminPage>
   );
 }

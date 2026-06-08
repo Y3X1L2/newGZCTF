@@ -90,7 +90,7 @@ public class GameChallenge : Challenge
         // Container only
         EnableTrafficCapture = Type.IsContainer() && (model.EnableTrafficCapture ?? EnableTrafficCapture);
 
-        Environment = model.Environment;
+        Environment = model.Environment ?? Environment;
         ImageTemplateId = model.ImageTemplateId ?? ImageTemplateId;
     }
 

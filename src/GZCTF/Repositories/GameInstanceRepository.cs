@@ -23,6 +23,7 @@ public class GameInstanceRepository(
 
         var instance = await Context.GameInstances
             .Include(i => i.FlagContext)
+            .Include(i => i.Container)
             .Include(i => i.Challenge).ThenInclude(c => c.Flags)
             .Where(e => e.ChallengeId == challengeId && e.Participation == part)
             .SingleOrDefaultAsync(token);
@@ -134,13 +135,20 @@ public class GameInstanceRepository(
             return new TaskResult<Container>(TaskStatus.Failed);
         }
 
+        if (gameInstance.ContainerId is not null && gameInstance.Container is null)
+            await Context.Entry(gameInstance).Reference(e => e.Container).LoadAsync(token);
+
+        if (gameInstance.Container is not null)
+            return new TaskResult<Container>(TaskStatus.Success, gameInstance.Container);
+
         // containerLimit == 0 means unlimited
         if (game.ContainerCountLimit > 0)
         {
             if (containerPolicy.Value.AutoDestroyOnLimitReached)
             {
                 var running = await Context.GameInstances
-                    .Where(i => i.Participation == gameInstance.Participation && i.Container != null)
+                    .Include(i => i.Container)
+                    .Where(i => i.ParticipationId == gameInstance.ParticipationId && i.ContainerId != null)
                     .OrderBy(i => i.Container!.StartedAt).ToListAsync(token);
 
                 var first = running.FirstOrDefault();
@@ -157,16 +165,13 @@ public class GameInstanceRepository(
             else
             {
                 var count = await Context.GameInstances.CountAsync(
-                    i => i.Participation == gameInstance.Participation &&
-                         i.Container != null, token);
+                    i => i.ParticipationId == gameInstance.ParticipationId &&
+                         i.ContainerId != null, token);
 
                 if (count >= game.ContainerCountLimit)
                     return new TaskResult<Container>(TaskStatus.Denied);
             }
         }
-
-        if (gameInstance.Container is not null)
-            return new TaskResult<Container>(TaskStatus.Success, gameInstance.Container);
 
         await Context.Entry(gameInstance).Reference(e => e.FlagContext).LoadAsync(token);
 
@@ -202,6 +207,7 @@ public class GameInstanceRepository(
 
         gameInstance.Container = container;
         gameInstance.LastContainerOperation = DateTimeOffset.UtcNow;
+        await SaveAsync(token);
 
         await gameEventRepository.AddEvent(
             new()
@@ -297,7 +303,11 @@ public class GameInstanceRepository(
             // If FlagId is provided, use that specific flag; otherwise find the first flag by OrderIndex
             FlagContext? targetFlag;
 
-            if (submission.FlagId.HasValue)
+            if (challenge.Type.IsDynamic() && instance.FlagContext is not null)
+            {
+                targetFlag = instance.FlagContext;
+            }
+            else if (submission.FlagId.HasValue)
             {
                 targetFlag = await Context.FlagContexts
                     .FirstOrDefaultAsync(f => f.Id == submission.FlagId.Value
@@ -418,7 +428,7 @@ public class GameInstanceRepository(
             if (hasBloodPermission)
             {
                 var bloodEligibleCount = await CountBloodEligibleSolves(submission.ChallengeId, targetFlag.Id,
-                    time.StartTimeUtc, time.EndTimeUtc, token);
+                    challenge.Type.IsDynamic(), time.StartTimeUtc, time.EndTimeUtc, token);
 
                 submissionType = bloodEligibleCount switch
                 {
@@ -451,8 +461,8 @@ public class GameInstanceRepository(
         }
     }
 
-    private Task<int> CountBloodEligibleSolves(int challengeId, int flagId, DateTimeOffset start, DateTimeOffset end,
-        CancellationToken token)
+    private Task<int> CountBloodEligibleSolves(int challengeId, int flagId, bool groupByChallenge,
+        DateTimeOffset start, DateTimeOffset end, CancellationToken token)
     {
         // First, get blood-eligible participation IDs for the challenge
         var eligibleParticipationIds =
@@ -475,7 +485,7 @@ public class GameInstanceRepository(
             from fs in Context.FirstSolves.AsNoTracking()
             join submission in Context.Submissions.AsNoTracking() on fs.SubmissionId equals submission.Id
             where fs.ChallengeId == challengeId
-                  && fs.FlagId == flagId
+                  && (groupByChallenge || fs.FlagId == flagId)
                   && eligibleParticipationIds.Contains(fs.ParticipationId)
                   && submission.SubmitTimeUtc >= start
                   && submission.SubmitTimeUtc < end

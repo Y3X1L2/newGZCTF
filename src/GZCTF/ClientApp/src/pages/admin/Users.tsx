@@ -196,7 +196,9 @@ const Users: FC = () => {
       head={
         <>
           <TextInput
-            w="36%"
+            miw={280}
+            maw={460}
+            style={{ flex: '1 1 22rem' }}
             leftSection={<Icon path={mdiMagnify} size={1} />}
             placeholder={t('admin.placeholder.users.search')}
             value={hint}
@@ -206,7 +208,7 @@ const Users: FC = () => {
             }}
             rightSection={<Icon path={mdiAccountOutline} size={1} />}
           />
-          <Group justify="right">
+          <Group justify="right" wrap="nowrap" style={{ overflowX: 'auto' }}>
             <Text fw="bold" size="sm">
               <Trans
                 i18nKey="admin.content.users.stats"

@@ -1,5 +1,6 @@
 import { Box, Group, GroupProps, MantineColor, useMantineColorScheme, useMantineTheme } from '@mantine/core'
 import { clamp } from '@mantine/hooks'
+import cx from 'clsx'
 import React, { FC, useEffect, useState } from 'react'
 import { LogoHeader } from '@Components/LogoHeader'
 import classes from '@Styles/IconTabs.module.css'
@@ -19,6 +20,7 @@ interface IconTabsProps extends GroupProps {
   withIcon?: boolean
   disabled?: boolean
   aside?: React.ReactNode
+  panesClassName?: string
   onTabChange?: (tabIndex: number, tabKey: string) => void
 }
 
@@ -48,7 +50,7 @@ const Tab: FC<TabProps & { active: boolean; onClick?: () => void; disabled?: boo
 }
 
 export const IconTabs: FC<IconTabsProps> = (props) => {
-  const { active, onTabChange, tabs, withIcon, aside, disabled, ...others } = props
+  const { active, onTabChange, tabs, withIcon, aside, disabled, panesClassName, ...others } = props
   const [activeTab, setActiveTab] = useState(active ?? 0)
   const theme = useMantineTheme()
   const { colorScheme } = useMantineColorScheme()
@@ -78,7 +80,7 @@ export const IconTabs: FC<IconTabsProps> = (props) => {
     <Group gap={0} justify="space-between" w="100%" wrap="nowrap">
       {aside}
       {withIcon && <LogoHeader className={classes.hidable} />}
-      <Group className={classes.panes} {...others}>
+      <Group className={cx(classes.panes, panesClassName)} {...others}>
         {panes}
       </Group>
     </Group>

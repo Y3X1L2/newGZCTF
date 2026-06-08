@@ -1044,14 +1044,12 @@ public class GameController(
             {
                 submission = await submissionRepository.AddSubmission(submission, token);
                 await transaction.CommitAsync(token);
-
-                var result = await gameInstanceRepository.VerifyAnswer(submission, token);
-                return Ok(new { submission.Id, Status = result.AnsRes, BloodType = result.SubType });
             }
             catch (DbUpdateConcurrencyException) when (retry < maxRetries - 1)
             {
                 await transaction.RollbackAsync(token);
                 await Task.Delay((retry + 1) * 100, token);
+                continue;
             }
             catch (Exception ex)
             {
@@ -1061,6 +1059,32 @@ public class GameController(
                     new RequestResponse(localizer[nameof(Resources.Program.Error_InternalServerError)],
                         StatusCodes.Status500InternalServerError));
             }
+
+            var result = await gameInstanceRepository.VerifyAnswer(submission, token);
+
+            try
+            {
+                await gameEventRepository.AddEvent(
+                    GameEvent.FromSubmission(submission, result.SubType, result.AnsRes, StaticLocalizer), token);
+
+                if (result.AnsRes == AnswerResult.Accepted)
+                    await cacheHelper.FlushScoreboardCache(id, token);
+
+                if (context.Game!.EndTimeUtc > DateTimeOffset.UtcNow
+                    && result.SubType != SubmissionType.Unaccepted
+                    && result.SubType != SubmissionType.Normal)
+                    await noticeRepository.AddNotice(
+                        GameNotice.FromSubmission(submission, result.SubType, StaticLocalizer), token);
+
+                submission.Status = result.AnsRes;
+                await submissionRepository.SendSubmission(submission);
+            }
+            catch (Exception ex)
+            {
+                logger.LogErrorMessage(ex, "Failed to publish submission side effects.");
+            }
+
+            return Ok(new { submission.Id, Status = result.AnsRes, BloodType = result.SubType });
         }
 
         return StatusCode(StatusCodes.Status409Conflict,
@@ -1261,7 +1285,10 @@ public class GameController(
                 instance.Challenge.MemoryLimit, instance.Challenge.CPUCount, instance.FlagContext?.Flag, token);
 
             if (result is null)
+            {
+                await dbContext.SaveChangesAsync(token);
                 return BadRequest(new { message = "No KVM node available" });
+            }
 
             await dbContext.SaveChangesAsync(token);
             return Ok(new { status = result.Status.ToString(), vmInstanceId = result.Id });
@@ -1443,7 +1470,8 @@ public class GameController(
         var vmInstance = await dbContext.VmInstances
             .Where(v => v.ChallengeId == challengeId
                         && v.UserId == context.User!.Id
-                        && v.Status != VmInstanceStatus.Destroyed)
+                        && v.Status != VmInstanceStatus.Destroyed
+                        && v.Status != VmInstanceStatus.Error)
             .OrderByDescending(v => v.CreatedAt)
             .FirstOrDefaultAsync(token);
 
@@ -1497,7 +1525,8 @@ public class GameController(
         var vmInstance = await dbContext.VmInstances
             .Where(v => v.ChallengeId == challengeId
                         && v.UserId == context.User!.Id
-                        && v.Status != VmInstanceStatus.Destroyed)
+                        && v.Status != VmInstanceStatus.Destroyed
+                        && v.Status != VmInstanceStatus.Error)
             .OrderByDescending(v => v.CreatedAt)
             .FirstOrDefaultAsync(token);
 

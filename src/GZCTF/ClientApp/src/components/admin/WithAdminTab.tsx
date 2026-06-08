@@ -7,7 +7,6 @@ import {
   mdiFileDocumentOutline,
   mdiFlagOutline,
   mdiImageOutline,
-  mdiMonitorDashboard,
   mdiServerNetwork,
   mdiSitemapOutline,
 } from '@mdi/js'
@@ -18,6 +17,7 @@ import { useLocation, useNavigate } from 'react-router'
 import { IconTabs } from '@Components/IconTabs'
 import { DEFAULT_LOADING_OVERLAY } from '@Utils/Shared'
 import { usePageTitle } from '@Hooks/usePageTitle'
+import tabClasses from '@Styles/IconTabs.module.css'
 
 export interface AdminTabProps extends React.PropsWithChildren {
   head?: React.ReactNode
@@ -32,7 +32,6 @@ export const WithAdminTab: FC<AdminTabProps> = ({ head, headProps, isLoading, ch
   const { t } = useTranslation()
 
   const pages = [
-    { icon: mdiMonitorDashboard, title: '仪表盘', path: 'dashboard' },
     { icon: mdiFlagOutline, title: t('admin.tab.games.index'), path: 'games' },
     { icon: mdiBookOpenPageVariantOutline, title: '题库管理', path: 'theory-bank' },
     { icon: mdiAccountGroupOutline, title: t('admin.tab.teams'), path: 'teams' },
@@ -57,7 +56,7 @@ export const WithAdminTab: FC<AdminTabProps> = ({ head, headProps, isLoading, ch
     if (tab >= 0) {
       setActiveTab(tab)
     } else {
-      navigate(pages[0].path)
+      navigate(`/admin/${pages[0].path}`)
     }
   }, [location])
 
@@ -69,6 +68,7 @@ export const WithAdminTab: FC<AdminTabProps> = ({ head, headProps, isLoading, ch
         withIcon
         active={activeTab}
         onTabChange={onChange}
+        panesClassName={tabClasses.adminPanes}
         tabs={pages.map((p) => ({
           tabKey: p.path,
           label: p.title,
