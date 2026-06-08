@@ -50,7 +50,10 @@ public class NodesController : ControllerBase
             n.Id, n.Name, n.HostAddress, Status = n.GetEffectiveStatus(now), n.Capabilities,
             n.CpuLoad, n.MemoryLoad, n.CurrentContainers, n.MaxContainers,
             n.CurrentVms, n.MaxVms, n.UsedPorts, n.TotalPorts, n.LastHeartbeat,
-            n.IsSchedulable, n.IsLocal, n.AgentPort
+            n.IsSchedulable, n.IsLocal, n.AgentPort,
+            UnschedulableReasons = GetUnschedulableReasons(n),
+            UnschedulableByCapability = GetUnschedulableByCapability(n),
+            SchedulableCapabilities = GetSchedulableCapabilities(n)
         }));
     }
 
@@ -66,7 +69,10 @@ public class NodesController : ControllerBase
             node.Id, node.Name, node.HostAddress, Status = node.GetEffectiveStatus(now), node.Capabilities,
             node.CpuLoad, node.MemoryLoad, node.CurrentContainers, node.MaxContainers,
             node.CurrentVms, node.MaxVms, node.UsedPorts, node.TotalPorts, node.LastHeartbeat,
-            node.IsSchedulable, node.IsLocal, node.AgentPort
+            node.IsSchedulable, node.IsLocal, node.AgentPort,
+            UnschedulableReasons = GetUnschedulableReasons(node),
+            UnschedulableByCapability = GetUnschedulableByCapability(node),
+            SchedulableCapabilities = GetSchedulableCapabilities(node)
         });
     }
 
@@ -152,6 +158,38 @@ public class NodesController : ControllerBase
             return NotFound(new { message = "Agent binary not available" });
         return File(System.IO.File.OpenRead(path), "application/octet-stream", "gzctf-agent");
     }
+
+    static string[] GetUnschedulableReasons(WorkerNode node)
+    {
+        var dockerReason = WeightedScheduler.GetUnschedulableReason(node, NodeCapability.Docker);
+        var kvmReason = WeightedScheduler.GetUnschedulableReason(node, NodeCapability.Kvm);
+
+        if (dockerReason is null || kvmReason is null)
+            return [];
+
+        var reasons = new[]
+        {
+            dockerReason,
+            kvmReason
+        }.OfType<string>().Where(reason => !string.IsNullOrWhiteSpace(reason)).Distinct().ToArray();
+
+        return reasons.Length == 2 && reasons[0] == reasons[1] ? [reasons[0]] : reasons;
+    }
+
+    static object GetUnschedulableByCapability(WorkerNode node) => new
+    {
+        Docker = WeightedScheduler.GetUnschedulableReason(node, NodeCapability.Docker),
+        Kvm = WeightedScheduler.GetUnschedulableReason(node, NodeCapability.Kvm)
+    };
+
+    static string[] GetSchedulableCapabilities(WorkerNode node) =>
+    [
+        .. new[]
+        {
+            WeightedScheduler.CanHost(node, NodeCapability.Docker) ? nameof(NodeCapability.Docker) : null,
+            WeightedScheduler.CanHost(node, NodeCapability.Kvm) ? nameof(NodeCapability.Kvm) : null
+        }.OfType<string>()
+    ];
 }
 
 [ApiController]

@@ -2,6 +2,8 @@ using Docker.DotNet;
 using Docker.DotNet.Models;
 using GZCTF.Agent.Models;
 using Microsoft.Extensions.Options;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace GZCTF.Agent.Services;
 
@@ -22,7 +24,7 @@ public class DockerService
     {
         await EnsureNetworkAsync(token);
 
-        var containerName = $"gzctf_c{request.ChallengeId}_u{request.UserId.ToString("N")[..8]}";
+        var containerName = BuildContainerName(request);
         var portSpec = $"{request.ExposedPort}/tcp";
 
         var createParams = new CreateContainerParameters
@@ -135,5 +137,32 @@ public class DockerService
                 Labels = new Dictionary<string, string> { ["ManagedBy"] = "GZCTF" }
             }, token);
         }
+    }
+
+    public static string BuildContainerName(CreateContainerRequest request)
+    {
+        var fingerprint = string.Join('|',
+            request.ChallengeId,
+            request.TeamId,
+            request.UserId.ToString("N"),
+            request.ExposedPort,
+            request.Flag ?? string.Empty);
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprint)))[..12].ToLowerInvariant();
+        return $"gzctf_c{request.ChallengeId}_t{SanitizeNamePart(request.TeamId)}_{hash}";
+    }
+
+    private static string SanitizeNamePart(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "none";
+
+        var builder = new StringBuilder(value.Length);
+        foreach (var ch in value.Trim().ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(ch) || ch == '_' || ch == '-')
+                builder.Append(ch);
+        }
+
+        return builder.Length == 0 ? "none" : builder.ToString()[..Math.Min(builder.Length, 32)];
     }
 }

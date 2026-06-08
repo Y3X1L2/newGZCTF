@@ -1,4 +1,5 @@
 using GZCTF.Models.Data;
+using GZCTF.Services.Concurrency;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Services.Fleet;
@@ -6,11 +7,14 @@ namespace GZCTF.Services.Fleet;
 public class QueueManager
 {
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IDistributedLockService _lockService;
     private readonly ILogger<QueueManager> _logger;
 
-    public QueueManager(IServiceScopeFactory scopeFactory, ILogger<QueueManager> logger)
+    public QueueManager(IServiceScopeFactory scopeFactory, IDistributedLockService lockService,
+        ILogger<QueueManager> logger)
     {
         _scopeFactory = scopeFactory;
+        _lockService = lockService;
         _logger = logger;
     }
 
@@ -23,6 +27,7 @@ public class QueueManager
 
     public async Task<int> ProcessPendingAsync(CancellationToken token)
     {
+        using var scheduleLock = await _lockService.AcquireAsync("fleet:scheduler", TimeSpan.FromSeconds(10));
         using var scope = _scopeFactory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
@@ -32,7 +37,6 @@ public class QueueManager
             .ToListAsync(token);
         var cutoff = DateTimeOffset.UtcNow - WorkerNode.DefaultHeartbeatTimeout;
         var nodes = await context.WorkerNodes
-            .AsNoTracking()
             .Where(n => n.Status == NodeStatus.Online
                 && (n.IsLocal || (n.LastHeartbeat.HasValue && n.LastHeartbeat >= cutoff)))
             .ToListAsync(token);
@@ -43,7 +47,7 @@ public class QueueManager
             if (token.IsCancellationRequested)
                 break;
 
-            var required = target.Type == TargetType.Vm ? NodeCapability.Kvm : NodeCapability.Docker;
+            var required = FleetManager.GetRequiredCapability(target.Type);
             var node = WeightedScheduler.SelectOptimalNode(nodes, required);
 
             if (node is null)
@@ -55,10 +59,8 @@ public class QueueManager
 
             target.TargetNodeId = node.Id;
             target.Status = TargetStatus.Running;
-            if (target.Type == TargetType.Vm)
-                node.CurrentVms++;
-            else
-                node.CurrentContainers++;
+            target.ErrorMessage = null;
+            FleetManager.ReserveCapacity(node, required);
             processed++;
 
             _logger.LogInformation("Queued deployment {Id} ({Type}) assigned to node {NodeId}",

@@ -158,6 +158,7 @@ const GameDetail: FC = () => {
   // Allow join if game is not finished OR practice mode is enabled
   const isGameOpenForJoin = !finished || game?.practiceMode
   const isTheoryOnly = game?.gameType === GameType.Theory
+  const isAwdOnly = game?.gameType === GameType.AWDP
 
   const canSubmit =
     (status === ParticipationStatus.Unsubmitted || status === ParticipationStatus.Rejected) &&
@@ -220,8 +221,8 @@ const GameDetail: FC = () => {
         </Button>
       )}
       {status === ParticipationStatus.Accepted && started && !isMobile && (!finished || game?.practiceMode) && (
-        <Button component={Link} to={`/games/${numId}/${isTheoryOnly ? 'theory' : 'challenges'}`}>
-          {isTheoryOnly ? '进入理论考试' : t('game.button.challenges')}
+        <Button component={Link} to={`/games/${numId}/${isTheoryOnly ? 'theory' : isAwdOnly ? 'awdp' : 'challenges'}`}>
+          {isTheoryOnly ? '进入理论考试' : isAwdOnly ? t('game.tab.awd') : t('game.button.challenges')}
         </Button>
       )}
     </>

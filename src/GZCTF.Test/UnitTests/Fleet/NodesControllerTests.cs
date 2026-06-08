@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using GZCTF.Controllers;
 using GZCTF.Models.Data;
 using GZCTF.Services.Fleet;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace GZCTF.Test.UnitTests.Fleet;
@@ -104,5 +106,30 @@ public class NodesControllerTests
         Assert.Contains("http://127.0.0.1:5101/api/status", script);
         Assert.Contains("journalctl -u gzctf-agent.service", script);
         Assert.DoesNotContain("curl -fsS -H 'Authorization: Bearer token' http://127.0.0.1:5101/api/status >/dev/null && exit 0", script);
+    }
+
+    [Fact]
+    public async Task RedisDistributedLock_UsesLocalFallback_WhenRedisIsNotConfigured()
+    {
+        var config = new ConfigurationBuilder().Build();
+        using var locker = new RedisDistributedLock(config, NullLogger<RedisDistributedLock>.Instance);
+
+        using var handle = await locker.AcquireAsync("unit-test", TimeSpan.FromSeconds(1));
+
+        Assert.NotNull(handle);
+    }
+
+    [Fact]
+    public void RedisDistributedLock_FailsClosed_WhenConfiguredRedisIsUnreachable()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:RedisCache"] = "127.0.0.1:1,connectTimeout=50,abortConnect=true"
+            })
+            .Build();
+
+        Assert.Throws<InvalidOperationException>(() =>
+            new RedisDistributedLock(config, NullLogger<RedisDistributedLock>.Instance));
     }
 }
