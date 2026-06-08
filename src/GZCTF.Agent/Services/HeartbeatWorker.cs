@@ -42,7 +42,13 @@ public class HeartbeatWorker : BackgroundService
                 };
 
                 var url = $"{_config.ServerUrl}/api/v1/nodes/{_config.NodeId}/heartbeat";
-                await client.PostAsJsonAsync(url, payload, token);
+                using var response = await client.PostAsJsonAsync(url, payload, token);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var body = await response.Content.ReadAsStringAsync(token);
+                    _logger.LogWarning("Heartbeat failed with HTTP {StatusCode}: {Body}",
+                        (int)response.StatusCode, body);
+                }
             }
             catch (Exception ex)
             {
