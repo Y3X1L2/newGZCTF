@@ -34,9 +34,27 @@ public class WeightedScheduler
     }
 
     internal static bool CanHost(WorkerNode node, NodeCapability required) =>
-        node.IsSchedulable
-        && (node.Capabilities & required) == required
-        && required switch
+        GetUnschedulableReason(node, required) is null;
+
+    internal static string? GetUnschedulableReason(WorkerNode node, NodeCapability required)
+    {
+        if (node.GetEffectiveStatus(DateTimeOffset.UtcNow) != NodeStatus.Online)
+            return "Node is offline or heartbeat is stale";
+
+        if (!node.IsSchedulable)
+            return "Node scheduling is disabled";
+
+        if ((node.Capabilities & required) != required)
+            return $"Node lacks required capability: {required}";
+
+        if (!float.IsFinite(node.CpuLoad) || !float.IsFinite(node.MemoryLoad)
+            || node.CpuLoad < 0 || node.CpuLoad > 1
+            || node.MemoryLoad < 0 || node.MemoryLoad > 1
+            || node.MaxContainers < 0 || node.MaxVms < 0
+            || node.CurrentContainers < 0 || node.CurrentVms < 0)
+            return "Node capacity metrics are invalid";
+
+        var hasCapacity = required switch
         {
             NodeCapability.Docker => node.CurrentContainers < node.MaxContainers,
             NodeCapability.Kvm => node.CurrentVms < node.MaxVms,
@@ -44,6 +62,9 @@ public class WeightedScheduler
                 node.CurrentContainers < node.MaxContainers && node.CurrentVms < node.MaxVms,
             _ => true
         };
+
+        return hasCapacity ? null : $"Node capacity exhausted for {required}";
+    }
 
     private static float CalculateScore(WorkerNode n) =>
         1000f * (1 - Math.Clamp(n.CpuLoad, 0f, 1f))

@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\GZCTF\GZCTF.csproj" />
+    <ProjectReference Include="..\GZCTF.Agent\GZCTF.Agent.csproj" />
     <None Include="..\GZCTF\appsettings*" />
   </ItemGroup>
 </Project>

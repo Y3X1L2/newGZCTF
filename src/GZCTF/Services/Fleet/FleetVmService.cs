@@ -14,6 +14,7 @@ public class FleetVmService
     private readonly INodeRepository _nodeRepo;
     private readonly IVirtualMachineProvider _vmProvider;
     private readonly KvmSettings _kvmSettings;
+    private readonly AppDbContext _context;
     private readonly ILogger<FleetVmService> _logger;
 
     public FleetVmService(
@@ -22,6 +23,7 @@ public class FleetVmService
         INodeRepository nodeRepo,
         IVirtualMachineProvider vmProvider,
         IOptions<KvmSettings> kvmSettings,
+        AppDbContext context,
         ILogger<FleetVmService> logger)
     {
         _fleetManager = fleetManager;
@@ -29,6 +31,7 @@ public class FleetVmService
         _nodeRepo = nodeRepo;
         _vmProvider = vmProvider;
         _kvmSettings = kvmSettings.Value;
+        _context = context;
         _logger = logger;
     }
 
@@ -42,7 +45,8 @@ public class FleetVmService
             Payload = JsonSerializer.Serialize(new VmCreatePayload(
                 templateId, templatePath, memory, cpu, vmInstance.VmName, flag))
         };
-        var nodeId = await _fleetManager.TryScheduleAsync(target, token, queueWhenNoNode: false);
+        var schedule = await _fleetManager.TryScheduleWithTargetAsync(target, token, queueWhenNoNode: false);
+        var nodeId = schedule.NodeId;
         if (nodeId is null)
         {
             vmInstance.Status = VmInstanceStatus.Error;
@@ -50,11 +54,15 @@ public class FleetVmService
             return null;
         }
 
-        var node = await _nodeRepo.GetNodeByIdAsync(nodeId.Value, token);
+        var node = schedule.Node ?? await _nodeRepo.GetNodeByIdAsync(nodeId.Value, token);
         if (node?.IsLocal == true)
         {
             vmInstance.NodeId = nodeId.Value;
-            return await CreateLocalVmAsync(vmInstance, templatePath, memory, cpu, token);
+            var vm = await CreateLocalVmAsync(vmInstance, templatePath, memory, cpu, token);
+            if (vm is null || vm.Status == VmInstanceStatus.Error)
+                FleetManager.ReleaseCapacity(node, NodeCapability.Kvm);
+            await CompleteTarget(schedule.Target, vm, node.HostAddress, token);
+            return vm;
         }
 
         var result = await _agentClient.CreateVmAsync(nodeId.Value, new AgentCreateVmRequest
@@ -71,11 +79,15 @@ public class FleetVmService
             _logger.LogWarning("Agent VM creation failed on node {NodeId}", nodeId.Value);
             vmInstance.Status = VmInstanceStatus.Error;
             vmInstance.NodeId = nodeId.Value;
+            if (node is not null)
+                FleetManager.ReleaseCapacity(node, NodeCapability.Kvm);
+            await FailTarget(schedule.Target, "Agent VM creation failed", token);
             return null;
         }
 
         vmInstance.Status = VmInstanceStatus.Running;
         vmInstance.NodeId = nodeId.Value;
+        await CompleteTarget(schedule.Target, vmInstance, node?.HostAddress, token);
         return vmInstance;
     }
 
@@ -161,4 +173,36 @@ public class FleetVmService
 
     private sealed record VmCreatePayload(
         int? TemplateId, string? TemplatePath, int? Memory, int? Cpu, string VmName, string? Flag);
+
+    async Task CompleteTarget(DeploymentTarget? target, VmInstance? vm, string? host, CancellationToken token)
+    {
+        if (target is null)
+            return;
+
+        target.CompletedAt = DateTimeOffset.UtcNow;
+        if (vm is null || vm.Status == VmInstanceStatus.Error)
+        {
+            target.Status = TargetStatus.Failed;
+            target.ErrorMessage = "VM creation failed";
+        }
+        else
+        {
+            target.Status = TargetStatus.Completed;
+            target.ResultHost = host;
+            target.ErrorMessage = null;
+        }
+
+        await _context.SaveChangesAsync(token);
+    }
+
+    async Task FailTarget(DeploymentTarget? target, string message, CancellationToken token)
+    {
+        if (target is null)
+            return;
+
+        target.Status = TargetStatus.Failed;
+        target.CompletedAt = DateTimeOffset.UtcNow;
+        target.ErrorMessage = message;
+        await _context.SaveChangesAsync(token);
+    }
 }
