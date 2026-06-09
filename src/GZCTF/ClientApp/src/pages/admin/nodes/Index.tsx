@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActionIcon,
+  Alert,
   Badge,
   Button,
   Group,
@@ -16,7 +17,15 @@ import {
   Tooltip,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { mdiDeleteOutline, mdiMagnify, mdiPlus, mdiRefresh } from '@mdi/js';
+import {
+  mdiCheckboxMarkedCircleOutline,
+  mdiDeleteOutline,
+  mdiMagnify,
+  mdiPlus,
+  mdiProgressWrench,
+  mdiRefresh,
+  mdiServerNetwork,
+} from '@mdi/js';
 import { Icon } from '@mdi/react';
 import { CleanupButton } from '../../../components/admin/CleanupButton';
 import { NodeCard, NodeInfo } from '../../../components/admin/NodeCard';
@@ -60,7 +69,7 @@ function AddNodeModal({ opened, onClose, onAdded }: { opened: boolean; onClose: 
       if (res.ok) {
         notifications.show({
           title: '部署成功',
-          message: `节点 ${data.nodeName || host} 已接入`,
+          message: `节点 ${data.nodeName || host} 已接入，能力：${data.capabilities ?? '已检测'}`,
           color: 'green',
         });
         onAdded();
@@ -72,8 +81,9 @@ function AddNodeModal({ opened, onClose, onAdded }: { opened: boolean; onClose: 
       } else {
         notifications.show({
           title: '部署失败',
-          message: data.message || '请检查服务器地址和账号权限',
+          message: data.message || '请检查服务器地址、账号权限、包源和 Docker/KVM 支持状态',
           color: 'red',
+          autoClose: 9000,
         });
       }
     } catch {
@@ -88,14 +98,47 @@ function AddNodeModal({ opened, onClose, onAdded }: { opened: boolean; onClose: 
   };
 
   return (
-    <Modal opened={opened} onClose={onClose} title="添加目标服务器" data-testid="add-node-modal" radius="sm">
-      <Stack>
-        <TextInput label="节点名称" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="可选" />
-        <TextInput label="IP 地址" required value={host} onChange={(e) => setHost(e.currentTarget.value)} placeholder="192.168.1.100" />
-        <TextInput label="用户名" required value={user} onChange={(e) => setUser(e.currentTarget.value)} />
-        <TextInput label="密码" type="password" required value={pass} onChange={(e) => setPass(e.currentTarget.value)} />
+    <Modal
+      opened={opened}
+      onClose={loading ? () => undefined : onClose}
+      title="添加目标服务器"
+      data-testid="add-node-modal"
+      radius="sm"
+      centered
+      closeOnClickOutside={!loading}
+    >
+      <Stack gap="md">
+        <Alert
+          variant="light"
+          color="blue"
+          radius="sm"
+          icon={<Icon path={loading ? mdiProgressWrench : mdiServerNetwork} size={0.85} />}
+        >
+          <Stack gap={4}>
+            <Text size="sm" fw={700}>{loading ? '正在自动部署节点' : '一站式接入工作节点'}</Text>
+            <Text size="xs" c="dimmed">
+              {loading
+                ? '平台正在通过 SSH 探测环境、安装 Docker/KVM/libvirt、写入 Agent 配置并等待心跳。'
+                : '提交后会自动探测并安装分布式运行所需依赖，完成后节点会出现在调度池中。'}
+            </Text>
+          </Stack>
+        </Alert>
+        <TextInput label="节点名称" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="可选" disabled={loading} />
+        <TextInput label="IP 地址" required value={host} onChange={(e) => setHost(e.currentTarget.value)} placeholder="10.0.7.125" disabled={loading} />
+        <TextInput label="用户名" required value={user} onChange={(e) => setUser(e.currentTarget.value)} disabled={loading} />
+        <TextInput label="密码" type="password" required value={pass} onChange={(e) => setPass(e.currentTarget.value)} disabled={loading} />
+        <Alert
+          variant="outline"
+          color="gray"
+          radius="sm"
+          icon={<Icon path={mdiCheckboxMarkedCircleOutline} size={0.78} />}
+        >
+          <Text size="xs" c="dimmed">
+            目标账号需要 root 或免密 sudo 权限；重复添加同一 IP 会复用原节点并重新安装 Agent。
+          </Text>
+        </Alert>
         <Button fullWidth leftSection={<Icon path={mdiPlus} size={0.8} />} loading={loading} onClick={handleAdd} data-testid="confirm-add-node">
-          一键部署
+          {loading ? '正在部署，等待节点心跳' : '一键部署'}
         </Button>
       </Stack>
     </Modal>

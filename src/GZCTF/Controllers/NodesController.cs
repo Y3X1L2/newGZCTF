@@ -29,9 +29,10 @@ public class NodesController : ControllerBase
     public async Task<IActionResult> Register([FromBody] NodeDeployRequest request)
     {
         var deployer = HttpContext.RequestServices.GetRequiredService<NodeDeployService>();
+        var requestBaseUrl = $"{Request.Scheme}://{Request.Host}{Request.PathBase}";
         var result = await deployer.DeployToServerAsync(
             request.HostAddress, request.Username, request.Password,
-            request.NodeName, HttpContext.RequestAborted);
+            request.NodeName, HttpContext.RequestAborted, requestBaseUrl);
 
         if (!result.Success)
             return BadRequest(new { message = result.Message });

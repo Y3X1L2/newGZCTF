@@ -52,6 +52,52 @@ public class NodesControllerTests
     }
 
     [Fact]
+    public void ResolveServerUrl_UsesReachableRequestBaseUrl()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Urls"] = "http://0.0.0.0:18082"
+            })
+            .Build();
+
+        Assert.Equal("http://10.0.7.118:18082",
+            NodeDeployService.ResolveServerUrl(config, "http://10.0.7.118:18082"));
+    }
+
+    [Theory]
+    [InlineData("http://localhost:18082")]
+    [InlineData("http://127.0.0.1:18082")]
+    [InlineData("http://0.0.0.0:18082")]
+    public void ResolveServerUrl_IgnoresLoopbackRequestBaseUrl(string requestBaseUrl)
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Urls"] = "http://server-from-config:18082"
+            })
+            .Build();
+
+        Assert.Equal("http://server-from-config:18082",
+            NodeDeployService.ResolveServerUrl(config, requestBaseUrl));
+    }
+
+    [Fact]
+    public void BuildBootstrapScript_InstallsDistributedDependencies()
+    {
+        var script = NodeDeployService.BuildBootstrapScript();
+
+        Assert.Contains("install_docker", script);
+        Assert.Contains("docker info", script);
+        Assert.Contains("install_kvm", script);
+        Assert.Contains("qemu-kvm", script);
+        Assert.Contains("libvirt", script);
+        Assert.Contains("install_dotnet_runtime", script);
+        Assert.Contains("dotnet-install.sh", script);
+        Assert.Contains("self-contained", script);
+    }
+
+    [Fact]
     public void BuildAgentConfigJson_UsesListenPortContract()
     {
         var node = new WorkerNode
@@ -79,6 +125,7 @@ public class NodesControllerTests
         Assert.Contains("Environment=DOTNET_ROOT_X64=/usr/local/share/dotnet", content);
         Assert.Contains("ExecStart=/usr/local/bin/gzctf-agent", content);
         Assert.Contains("WorkingDirectory=/etc/gzctf-agent", content);
+        Assert.Contains("Description=YINYU CTF Agent", content);
     }
 
     [Fact]

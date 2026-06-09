@@ -168,4 +168,22 @@
     </ItemGroup>
   </Target>
 
+  <Target Name="PublishFleetAgent" AfterTargets="ComputeFilesToPublish">
+    <PropertyGroup>
+      <FleetAgentPublishDir>$(BaseIntermediateOutputPath)fleet-agent/</FleetAgentPublishDir>
+    </PropertyGroup>
+
+    <Exec
+      Command="dotnet publish &quot;$(MSBuildThisFileDirectory)../GZCTF.Agent/GZCTF.Agent.csproj&quot; -c $(Configuration) -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -p:EnableCompressionInSingleFile=true -p:DebugType=None -p:DebugSymbols=false -o &quot;$(FleetAgentPublishDir)&quot;" />
+
+    <ItemGroup>
+      <FleetAgentBinary Include="$(FleetAgentPublishDir)GZCTF.Agent" />
+      <ResolvedFileToPublish Include="@(FleetAgentBinary->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>agent/gzctf-agent</RelativePath>
+        <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
 </Project>

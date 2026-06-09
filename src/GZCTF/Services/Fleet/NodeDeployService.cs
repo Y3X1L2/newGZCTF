@@ -17,23 +17,39 @@ public class NodeDeployService
 
     public async Task<NodeDeployResult> DeployToServerAsync(
         string hostAddress, string username, string password,
-        string? nodeName = null, CancellationToken token = default)
+        string? nodeName = null, CancellationToken token = default,
+        string? serverUrlOverride = null)
     {
+        hostAddress = hostAddress.Trim();
+        username = username.Trim();
+        nodeName = string.IsNullOrWhiteSpace(nodeName) ? null : nodeName.Trim();
+
         if (!SafeHostPattern.IsMatch(hostAddress))
             throw new ArgumentException("Host contains invalid characters.", nameof(hostAddress));
         if (!SafeUserPattern.IsMatch(username))
             throw new ArgumentException("User contains invalid characters.", nameof(username));
 
-        var node = new WorkerNode
+        var node = await _context.WorkerNodes
+            .FirstOrDefaultAsync(n => !n.IsLocal && n.HostAddress == hostAddress, token);
+        var createdNode = node is null;
+
+        node ??= new WorkerNode
         {
-            Name = nodeName ?? hostAddress,
             HostAddress = hostAddress,
-            AuthToken = Convert.ToBase64String(Guid.NewGuid().ToByteArray()),
-            Capabilities = NodeCapability.None,
-            Status = NodeStatus.Unknown
+            AuthToken = Convert.ToBase64String(Guid.NewGuid().ToByteArray())
         };
 
-        _context.WorkerNodes.Add(node);
+        node.Name = nodeName ?? NullIfWhiteSpace(node.Name) ?? hostAddress;
+        node.HostAddress = hostAddress;
+        node.AuthToken = NullIfWhiteSpace(node.AuthToken)
+                         ?? Convert.ToBase64String(Guid.NewGuid().ToByteArray());
+        node.Capabilities = NodeCapability.None;
+        node.Status = NodeStatus.Unknown;
+        node.LastHeartbeat = null;
+
+        if (createdNode)
+            _context.WorkerNodes.Add(node);
+
         await _context.SaveChangesAsync(token);
 
         _logger.LogInformation("Deploying to node {NodeId} at {Host}", node.Id, hostAddress);
@@ -50,35 +66,26 @@ public class NodeDeployService
             await Task.Run(() => ssh.Connect(), token);
             sudo = DetectPrivilegePrefix(ssh);
 
-            var caps = NodeCapability.None;
-            var dockerCheck = ssh.RunCommand("command -v docker && docker --version 2>&1 || echo NO_DOCKER");
-            if (!dockerCheck.Result.Contains("NO_DOCKER"))
-                caps |= NodeCapability.Docker;
+            RunChecked(ssh, BuildBootstrapScript(), "Bootstrap node dependencies");
 
-            var kvmCheck = ssh.RunCommand("command -v virsh && virsh --version 2>&1 || echo NO_KVM");
-            if (!kvmCheck.Result.Contains("NO_KVM"))
-                caps |= NodeCapability.Kvm;
+            var caps = DetectCapabilities(ssh, sudo);
 
             if (caps == NodeCapability.None)
             {
-                _context.WorkerNodes.Remove(node);
-                await _context.SaveChangesAsync(token);
+                await MarkDeployFailedAsync(node.Id, createdNode, token);
                 ssh.Disconnect();
                 return new NodeDeployResult
                 {
                     Success = false, NodeId = node.Id,
-                    Message = "No Docker or KVM detected on target server"
+                    Message = "No usable Docker or KVM capability detected after automatic installation. Check virtualization support and package manager access on the target server."
                 };
             }
 
             node.Capabilities = caps;
             await _context.SaveChangesAsync(token);
 
-            var serverUrl = ResolveServerUrl(_config);
+            var serverUrl = ResolveServerUrl(_config, serverUrlOverride);
             var dotnetRoot = DetectDotnetRoot(ssh);
-            if (string.IsNullOrWhiteSpace(dotnetRoot))
-                throw new InvalidOperationException(
-                    ".NET runtime not found on target server. Install .NET 10 runtime or provide a self-contained agent binary.");
 
             var configJson = BuildAgentConfigJson(serverUrl, node);
             WriteRemoteFile(ssh, sudo, "/etc/gzctf-agent/appsettings.json", configJson,
@@ -143,8 +150,8 @@ rm -f "$tmp"
             if (remoteInstallStarted && ssh is { IsConnected: true })
                 TryRollbackRemoteAgent(ssh, sudo);
 
-            _logger.LogError(ex, "Deploy failed for node {NodeId}, removing from database", node.Id);
-            await DeleteNodeAsync(node.Id, token);
+            _logger.LogError(ex, "Deploy failed for node {NodeId}", node.Id);
+            await MarkDeployFailedAsync(node.Id, createdNode, token);
 
             return new NodeDeployResult
             {
@@ -158,14 +165,246 @@ rm -f "$tmp"
         }
     }
 
-    internal static string ResolveServerUrl(IConfiguration config)
+    internal static string ResolveServerUrl(IConfiguration config, string? requestBaseUrl = null)
     {
         var publicUrl = config["Agent:ServerPublicUrl"];
         if (!string.IsNullOrWhiteSpace(publicUrl))
             return publicUrl;
 
+        if (!string.IsNullOrWhiteSpace(requestBaseUrl) && IsReachableServerUrl(requestBaseUrl))
+            return requestBaseUrl;
+
         return config["Urls"]?.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault()
                ?? "http://localhost:8080";
+    }
+
+    private static bool IsReachableServerUrl(string value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
+            return false;
+
+        var host = uri.Host;
+        return !string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+               && host != "127.0.0.1"
+               && host != "::1"
+               && host != "0.0.0.0"
+               && host != "[::]";
+    }
+
+    internal static string BuildBootstrapScript() => """
+set -euo pipefail
+
+need_cmd() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+run_sudo() {
+  if [ "$(id -u)" = "0" ]; then
+    "$@"
+  else
+    sudo -n "$@"
+  fi
+}
+
+detect_pm() {
+  if need_cmd apt-get; then echo apt; return; fi
+  if need_cmd dnf; then echo dnf; return; fi
+  if need_cmd yum; then echo yum; return; fi
+  if need_cmd zypper; then echo zypper; return; fi
+  if need_cmd pacman; then echo pacman; return; fi
+  echo unknown
+}
+
+pm="$(detect_pm)"
+if [ "$pm" = "unknown" ]; then
+  echo "Unsupported Linux package manager. Supported: apt, dnf, yum, zypper, pacman." >&2
+  exit 2
+fi
+
+install_pkgs() {
+  case "$pm" in
+    apt)
+      export DEBIAN_FRONTEND=noninteractive
+      run_sudo apt-get update -y
+      run_sudo apt-get install -y --no-install-recommends "$@"
+      ;;
+    dnf)
+      run_sudo dnf install -y "$@"
+      ;;
+    yum)
+      run_sudo yum install -y "$@"
+      ;;
+    zypper)
+      run_sudo zypper --non-interactive install -y "$@"
+      ;;
+    pacman)
+      run_sudo pacman -Sy --noconfirm --needed "$@"
+      ;;
+  esac
+}
+
+try_install_pkgs() {
+  install_pkgs "$@" >/dev/null 2>&1
+}
+
+install_apt_pkg_fallback() {
+  pkg="$1"
+  wget -q "https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb" -O /tmp/packages-microsoft-prod.deb || \
+    wget -q "https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb" -O /tmp/packages-microsoft-prod.deb
+  run_sudo dpkg -i /tmp/packages-microsoft-prod.deb >/dev/null
+  rm -f /tmp/packages-microsoft-prod.deb
+  run_sudo apt-get update -y
+  run_sudo apt-get install -y --no-install-recommends "$pkg"
+}
+
+install_base() {
+  case "$pm" in
+    apt) install_pkgs ca-certificates curl wget gnupg lsb-release iproute2 procps tar gzip coreutils ;;
+    dnf|yum) install_pkgs ca-certificates curl wget gnupg2 iproute procps-ng tar gzip coreutils ;;
+    zypper) install_pkgs ca-certificates curl wget gpg2 iproute2 procps tar gzip coreutils ;;
+    pacman) install_pkgs ca-certificates curl wget gnupg iproute2 procps-ng tar gzip coreutils ;;
+  esac
+}
+
+install_docker() {
+  if need_cmd docker && docker info >/dev/null 2>&1; then
+    return
+  fi
+
+  case "$pm" in
+    apt)
+      if ! need_cmd docker; then
+        install_pkgs docker.io docker-compose-plugin || {
+          curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+          run_sudo sh /tmp/get-docker.sh
+          rm -f /tmp/get-docker.sh
+        }
+      fi
+      ;;
+    dnf|yum)
+      try_install_pkgs docker docker-cli containerd docker-compose-plugin || \
+        try_install_pkgs moby-engine docker-compose-plugin || {
+          curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+          run_sudo sh /tmp/get-docker.sh
+          rm -f /tmp/get-docker.sh
+        }
+      ;;
+    zypper)
+      install_pkgs docker docker-compose
+      ;;
+    pacman)
+      install_pkgs docker docker-compose
+      ;;
+  esac
+
+  if need_cmd systemctl; then
+    run_sudo systemctl enable --now docker >/dev/null 2>&1 || true
+    run_sudo systemctl restart docker >/dev/null 2>&1 || true
+  elif need_cmd service; then
+    run_sudo service docker start >/dev/null 2>&1 || true
+  fi
+
+  if ! docker info >/dev/null 2>&1; then
+    echo "Docker installed but daemon is not healthy." >&2
+    exit 3
+  fi
+}
+
+install_kvm() {
+  case "$pm" in
+    apt)
+      install_pkgs qemu-kvm qemu-utils libvirt-daemon-system libvirt-clients virtinst dnsmasq-base bridge-utils || true
+      ;;
+    dnf|yum)
+      install_pkgs qemu-kvm libvirt virt-install virt-manager libvirt-daemon-config-network libvirt-daemon-kvm qemu-img dnsmasq || true
+      ;;
+    zypper)
+      install_pkgs qemu-kvm libvirt libvirt-client virt-install qemu-tools dnsmasq || true
+      ;;
+    pacman)
+      install_pkgs qemu-full libvirt virt-install dnsmasq bridge-utils || true
+      ;;
+  esac
+
+  if need_cmd systemctl; then
+    run_sudo systemctl enable --now libvirtd >/dev/null 2>&1 || \
+      run_sudo systemctl enable --now virtqemud >/dev/null 2>&1 || true
+    run_sudo systemctl enable --now virtlogd >/dev/null 2>&1 || true
+  fi
+
+  if need_cmd virsh; then
+    run_sudo virsh net-info default >/dev/null 2>&1 || run_sudo virsh net-define /usr/share/libvirt/networks/default.xml >/dev/null 2>&1 || true
+    run_sudo virsh net-start default >/dev/null 2>&1 || true
+    run_sudo virsh net-autostart default >/dev/null 2>&1 || true
+  fi
+
+  run_sudo mkdir -p /var/lib/gzctf/images /var/lib/libvirt/images
+  run_sudo chmod 755 /var/lib/gzctf /var/lib/gzctf/images 2>/dev/null || true
+}
+
+install_dotnet_runtime() {
+  if need_cmd dotnet && dotnet --list-runtimes 2>/dev/null | grep -Eq 'Microsoft\.AspNetCore\.App (10\.|[1-9][1-9]\.)'; then
+    return
+  fi
+
+  case "$pm" in
+    apt)
+      try_install_pkgs dotnet-runtime-10.0 aspnetcore-runtime-10.0 || \
+        install_apt_pkg_fallback aspnetcore-runtime-10.0 || true
+      ;;
+    dnf|yum)
+      try_install_pkgs dotnet-runtime-10.0 aspnetcore-runtime-10.0 || true
+      ;;
+    zypper)
+      try_install_pkgs dotnet-runtime-10.0 aspnetcore-runtime-10.0 || true
+      ;;
+    pacman)
+      try_install_pkgs dotnet-runtime aspnet-runtime || true
+      ;;
+  esac
+
+  if ! need_cmd dotnet || ! dotnet --list-runtimes 2>/dev/null | grep -Eq 'Microsoft\.AspNetCore\.App (10\.|[1-9][1-9]\.)'; then
+    dotnet_dir="/usr/local/share/dotnet"
+    run_sudo mkdir -p "$dotnet_dir"
+    curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
+    chmod +x /tmp/dotnet-install.sh
+    run_sudo /tmp/dotnet-install.sh --channel 10.0 --runtime aspnetcore --install-dir "$dotnet_dir" --no-path || true
+    run_sudo ln -sf "$dotnet_dir/dotnet" /usr/local/bin/dotnet
+    rm -f /tmp/dotnet-install.sh
+  fi
+
+  if ! need_cmd dotnet || ! dotnet --list-runtimes 2>/dev/null | grep -Eq 'Microsoft\.AspNetCore\.App (10\.|[1-9][1-9]\.)'; then
+    echo "ASP.NET Core runtime 10.0 was not installed; continuing because the packaged agent is self-contained." >&2
+  fi
+}
+
+install_base
+install_docker
+install_kvm
+install_dotnet_runtime
+
+echo "Docker: $(docker --version 2>/dev/null || echo unavailable)"
+echo "Virsh: $(virsh --version 2>/dev/null || echo unavailable)"
+echo "Dotnet: $(dotnet --version 2>/dev/null || echo unavailable)"
+""";
+
+    private static NodeCapability DetectCapabilities(SshClient ssh, string sudo)
+    {
+        var caps = NodeCapability.None;
+
+        var dockerCheck = ssh.RunCommand($$"""
+bash -lc 'if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then echo DOCKER_OK; else echo NO_DOCKER; fi'
+""");
+        if (dockerCheck.Result.Contains("DOCKER_OK"))
+            caps |= NodeCapability.Docker;
+
+        var kvmCheck = ssh.RunCommand($$"""
+bash -lc 'if command -v virsh >/dev/null 2>&1 && {{sudo}} virsh -c qemu:///system list >/dev/null 2>&1; then echo KVM_OK; else echo NO_KVM; fi'
+""");
+        if (kvmCheck.Result.Contains("KVM_OK"))
+            caps |= NodeCapability.Kvm;
+
+        return caps;
     }
 
     internal static string BuildAgentConfigJson(string serverUrl, WorkerNode node) =>
@@ -183,7 +422,7 @@ rm -f "$tmp"
 
     internal static string BuildAgentServiceContent(string dotnetRoot) => $$"""
 [Unit]
-Description=GZCTF Agent
+Description=YINYU CTF Agent
 After=network.target docker.service
 Wants=docker.service
 
@@ -270,8 +509,23 @@ exit 1
             : null;
     }
 
-    private Task DeleteNodeAsync(Guid nodeId, CancellationToken token) =>
-        _context.WorkerNodes.Where(n => n.Id == nodeId).ExecuteDeleteAsync(token);
+    private async Task MarkDeployFailedAsync(Guid nodeId, bool createdNode, CancellationToken token)
+    {
+        if (createdNode)
+        {
+            await _context.WorkerNodes.Where(n => n.Id == nodeId).ExecuteDeleteAsync(token);
+            return;
+        }
+
+        var node = await _context.WorkerNodes.FirstOrDefaultAsync(n => n.Id == nodeId, token);
+        if (node is null)
+            return;
+
+        node.Status = NodeStatus.Error;
+        node.Capabilities = NodeCapability.None;
+        node.LastHeartbeat = null;
+        await _context.SaveChangesAsync(token);
+    }
 
     private async Task WaitForHeartbeatAsync(WorkerNode node, DateTimeOffset deployStartedAt,
         CancellationToken token)
@@ -317,7 +571,7 @@ fi
 """, "Detect .NET runtime");
 
         return command.Result.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries).LastOrDefault()?.Trim()
-               ?? string.Empty;
+               ?? "/usr/local/share/dotnet";
     }
 
     private static void WriteRemoteFile(SshClient ssh, string sudo, string remotePath, string content, string step)
@@ -363,6 +617,9 @@ rm -f {{BashQuote(tmp)}}
     }
 
     private static string BashQuote(string value) => $"'{value.Replace("'", "'\"'\"'")}'";
+
+    private static string? NullIfWhiteSpace(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
 
     private static readonly Regex SafeHostPattern =
         new(@"^[a-zA-Z0-9]([a-zA-Z0-9\-.]*[a-zA-Z0-9])?$", RegexOptions.Compiled);
