@@ -77,7 +77,7 @@
       },
       "entry": {
         "description": {
-          "anchor": "Obtener cliente proxy",
+          "anchor": "Use the platform proxy client",
           "proxy": "El modo proxy WebSocket ha sido habilitado."
         },
         "label": "Información de la instancia"

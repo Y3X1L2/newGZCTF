@@ -32,7 +32,7 @@ public static class TelemetryExtension
             var otl = builder.Services.AddOpenTelemetry();
 
             otl.ConfigureResource(resource =>
-                resource.AddService("GZCTF",
+                resource.AddService("YINYU",
                     serviceVersion: typeof(Program).Assembly.GetName().Version?.ToString(3)));
 
             otl.WithMetrics(metrics =>

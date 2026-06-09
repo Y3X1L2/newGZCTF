@@ -24,7 +24,7 @@ const ScreenDisplayShell: FC<ScreenDisplayShellProps> = ({
   countdownLabel,
   countdownValue,
   statusLabel,
-  subtitle = 'GZCTF ASTEROID COMMAND SCREEN',
+  subtitle = 'YINYU CTF COMMAND SCREEN',
   leftAside,
   rightAside,
   boardClassName,

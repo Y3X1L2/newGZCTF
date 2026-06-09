@@ -1,0 +1,6 @@
+/* YINYU CTF Platform @unknown
+ *
+ * Commit    : Unofficial build version
+ * Build     : 2026-06-09T06:10:58.565Z
+ */
+import{c as e,d as t,h as n,n as r}from"./i794nfmz.js";import{t as i}from"./oh2ifgq12.js";function a(n,r,i){let a=t(n,r,i),{label:o,description:s,error:c,required:l,classNames:u,styles:d,className:f,unstyled:p,__staticSelector:m,__stylesApiProps:h,errorProps:g,labelProps:_,descriptionProps:v,wrapperProps:y,id:b,size:x,style:S,inputContainer:C,inputWrapperOrder:w,withAsterisk:T,variant:E,vars:D,mod:O,attributes:k,...A}=a,{styleProps:j,rest:M}=e(A),N={label:o,description:s,error:c,required:l,classNames:u,className:f,__staticSelector:m,__stylesApiProps:h||a,errorProps:g,labelProps:_,descriptionProps:v,unstyled:p,styles:d,size:x,style:S,inputContainer:C,inputWrapperOrder:w,withAsterisk:T,variant:E,id:b,mod:O,attributes:k,...y};return{...M,classNames:u,styles:d,unstyled:p,wrapperProps:{...N,...j},inputProps:{required:l,classNames:u,styles:d,unstyled:p,size:x,__staticSelector:m,__stylesApiProps:h||a,error:c,variant:E,id:b,attributes:k}}}var o=n(),s={__staticSelector:`InputBase`,withAria:!0,size:`sm`},c=r(e=>{let{inputProps:t,wrapperProps:n,...r}=a(`InputBase`,s,e);return(0,o.jsx)(i.Wrapper,{...n,children:(0,o.jsx)(i,{...t,...r})})});c.classes={...i.classes,...i.Wrapper.classes},c.displayName=`@mantine/core/InputBase`;export{a as n,c as t};

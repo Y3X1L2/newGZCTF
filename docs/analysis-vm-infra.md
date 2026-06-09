@@ -325,6 +325,6 @@ Cleanup:  [disk image delete -- MISSING]
 
 3. **GuacamoleProxy is isolated** - exists but nothing wires it into the lifecycle.
 
-4. **Codebase assumes a single GZCTF server** - no distributed primitives.
+4. **Codebase assumes a single platform server** - no distributed primitives.
 
 5. **Image format handling is inconsistent** - ImageStorage accepts vmdk/ova/img but VmManager only knows qcow2.

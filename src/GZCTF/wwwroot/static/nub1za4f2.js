@@ -1,0 +1,6 @@
+/* YINYU CTF Platform @unknown
+ *
+ * Commit    : Unofficial build version
+ * Build     : 2026-06-09T06:10:58.565Z
+ */
+import{C as e,I as t,L as n,P as r,d as i,h as a,n as o,t as s,u as c}from"./i794nfmz.js";var l={root:`m_b6d8b162`},u=a();function d(e){if(e===`start`)return`start`;if(e===`end`||e)return`end`}var f={inherit:!1},p=r((r,{variant:i,lineClamp:a,gradient:o,size:s})=>({root:{"--text-fz":t(s),"--text-lh":n(s),"--text-gradient":i===`gradient`?e(o,r):void 0,"--text-line-clamp":typeof a==`number`?a.toString():void 0}})),m=o(e=>{let t=i(`Text`,f,e),{lineClamp:n,truncate:r,inline:a,inherit:o,gradient:m,span:h,__staticSelector:g,vars:_,className:v,style:y,classNames:b,styles:x,unstyled:S,variant:C,mod:w,size:T,attributes:E,...D}=t;return(0,u.jsx)(s,{...c({name:[`Text`,g],props:t,classes:l,className:v,style:y,classNames:b,styles:x,unstyled:S,attributes:E,vars:_,varsResolver:p})(`root`,{focusable:!0}),component:h?`span`:`p`,variant:C,mod:[{"data-truncate":d(r),"data-line-clamp":typeof n==`number`,"data-inline":a,"data-inherit":o},w],size:T,...D})});m.classes=l,m.varsResolver=p,m.displayName=`@mantine/core/Text`;export{m as t};

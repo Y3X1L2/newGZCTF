@@ -3,13 +3,14 @@
 # 用法: bash scripts/deploy.sh
 set -e
 
-HOST=203.195.157.191
-USER=ubuntu
-BASE=/home/ubuntu/newGZCTF/src/GZCTF
-LOCAL_DLL="D:/newGZ/newGZCTF/src/GZCTF/bin/Release/net10.0/GZCTF.dll"
-LOCAL_BUILD="D:/newGZ/newGZCTF/src/GZCTF/ClientApp/build"
+HOST="${YINYU_DEPLOY_HOST:?Set YINYU_DEPLOY_HOST}"
+USER="${YINYU_DEPLOY_USER:-ubuntu}"
+REMOTE_ROOT="${YINYU_REMOTE_ROOT:-/home/$USER/yinyu-ctf-platform}"
+BASE="$REMOTE_ROOT/src/GZCTF"
+LOCAL_DLL="${YINYU_LOCAL_DLL:-D:/newGZ/yinyu-ctf-platform/src/GZCTF/bin/Release/net10.0/GZCTF.dll}"
+LOCAL_BUILD="${YINYU_LOCAL_BUILD:-D:/newGZ/yinyu-ctf-platform/src/GZCTF/ClientApp/build}"
 
-echo "=== GZCTF Deploy ==="
+echo "=== YINYU CTF Deploy ==="
 echo ""
 
 echo "[1/4] Stopping server..."

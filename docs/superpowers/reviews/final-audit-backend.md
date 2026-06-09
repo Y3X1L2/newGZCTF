@@ -1,7 +1,7 @@
 # Phase 1-5 & 7 Backend Compliance Audit
 
 > **Date:** 2026-05-19
-> **Plan:** `docs/superpowers/plans/2026-05-19-newGZCTF-refactor.md`
+> **Plan:** `docs/superpowers/plans/2026-05-19-yinyu-ctf-platform-refactor.md`
 > **Audit scope:** Every "Create" and "Modify" file in Phase 1-5 and Phase 7
 > **Status:** COMPLETE -- 66 files verified
 

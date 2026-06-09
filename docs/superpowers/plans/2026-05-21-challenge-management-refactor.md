@@ -67,7 +67,7 @@
 ### Task A1: 枚举清理与新增
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Utils\Enums.cs`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Utils\Enums.cs`
 
 **Step 1: 删除 Scenario 和 IRChallenge 枚举值**
 
@@ -157,7 +157,7 @@ git commit -m "feat(model): remove Scenario/IRChallenge enums, add EnvironmentTy
 ### Task A2: FlagContext 模型扩展
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Models\Data\FlagContext.cs`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Models\Data\FlagContext.cs`
 
 **Step 1: 扩展 FlagContext**
 
@@ -191,7 +191,7 @@ git commit -m "feat(model): extend FlagContext with multi-flag support fields"
 ### Task A3: Challenge 基类扩展
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Models\Data\Challenge.cs`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Models\Data\Challenge.cs`
 
 **Step 1: 新增字段**
 
@@ -213,7 +213,7 @@ git commit -m "feat(model): add EnvironmentType and ImageTemplateId to Challenge
 ### Task A4: FirstSolve 主键变更
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Models\Data\FirstSolve.cs`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Models\Data\FirstSolve.cs`
 
 **Step 1: 变更复合主键**
 
@@ -240,7 +240,7 @@ git commit -m "feat(model): change FirstSolve PK to include FlagId"
 ### Task A5: Submission 新增 FlagId
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Models\Data\Submission.cs`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Models\Data\Submission.cs`
 
 **Step 1: 新增字段**
 
@@ -261,8 +261,8 @@ git commit -m "feat(model): add FlagId to Submission"
 ### Task A6: ImageTemplate 扩展 + DockerImage 删除
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Models\Data\ImageTemplate.cs`
-- Delete: `D:\newGZ\newGZCTF\src\GZCTF\Models\Data\DockerImage.cs`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Models\Data\ImageTemplate.cs`
+- Delete: `D:\newGZ\YINYU CTF平台\src\GZCTF\Models\Data\DockerImage.cs`
 
 **Step 1: ImageTemplate 新增字段**
 
@@ -294,9 +294,9 @@ git commit -m "feat(model): extend ImageTemplate, remove DockerImage model"
 ### Task A7: 删除冗余模型文件
 
 **Files:**
-- Delete: `D:\newGZ\newGZCTF\src\GZCTF\Models\Data\ScenarioEntities.cs`
-- Delete: `D:\newGZ\newGZCTF\src\GZCTF\Models\Data\IREntities.cs`
-- Delete: `D:\newGZ\newGZCTF\src\GZCTF\Models\Data\ScoringRule.cs`
+- Delete: `D:\newGZ\YINYU CTF平台\src\GZCTF\Models\Data\ScenarioEntities.cs`
+- Delete: `D:\newGZ\YINYU CTF平台\src\GZCTF\Models\Data\IREntities.cs`
+- Delete: `D:\newGZ\YINYU CTF平台\src\GZCTF\Models\Data\ScoringRule.cs`
 
 **Step 1: 删除 ScenarioEntities.cs（Stage, ScenarioInstance, ScenarioTimelineEntry）**
 
@@ -331,7 +331,7 @@ git commit -m "feat(model): remove Scenario/IR/ScoringRule models"
 ### Task A8: 简化 ChallengeSubmissionType
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Models\Data\ChallengeSubmissionType.cs`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Models\Data\ChallengeSubmissionType.cs`
 
 **Step 1: 简化模型**
 
@@ -366,7 +366,7 @@ git commit -m "feat(model): simplify ChallengeSubmissionType to AnswerType/Label
 ### Task A9: 更新 GameChallenge 导航属性
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Models\Data\GameChallenge.cs`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Models\Data\GameChallenge.cs`
 
 **Step 1: 删除 ScoringRules 导航属性，更新 SubmissionTypes**
 
@@ -394,10 +394,10 @@ git commit -m "feat(model): update GameChallenge nav properties for unified mode
 ### Task A10: 更新 Request/Response 模型
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Models\Request\Edit\ChallengeUpdateModel.cs`
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Models\Request\Edit\FlagCreateModel.cs`
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Models\Request\Game\FlagSubmitModel.cs`
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Models\Request\Edit\ChallengeInfoModel.cs`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Models\Request\Edit\ChallengeUpdateModel.cs`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Models\Request\Edit\FlagCreateModel.cs`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Models\Request\Game\FlagSubmitModel.cs`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Models\Request\Edit\ChallengeInfoModel.cs`
 
 **Step 1: ChallengeUpdateModel 新增字段**
 
@@ -460,10 +460,10 @@ git commit -m "feat(model): update request models for unified challenge system"
 ### Task B1: 删除旧控制器
 
 **Files:**
-- Delete: `D:\newGZ\newGZCTF\src\GZCTF\Controllers\ScenarioController.cs`
-- Delete: `D:\newGZ\newGZCTF\src\GZCTF\Controllers\IRChallengeController.cs`
-- Delete: `D:\newGZ\newGZCTF\src\GZCTF\Controllers\DockerController.cs`
-- Delete: `D:\newGZ\newGZCTF\src\GZCTF\Controllers\SubmissionController.cs`
+- Delete: `D:\newGZ\YINYU CTF平台\src\GZCTF\Controllers\ScenarioController.cs`
+- Delete: `D:\newGZ\YINYU CTF平台\src\GZCTF\Controllers\IRChallengeController.cs`
+- Delete: `D:\newGZ\YINYU CTF平台\src\GZCTF\Controllers\DockerController.cs`
+- Delete: `D:\newGZ\YINYU CTF平台\src\GZCTF\Controllers\SubmissionController.cs`
 
 ```bash
 git rm src/GZCTF/Controllers/ScenarioController.cs
@@ -478,10 +478,10 @@ git commit -m "feat: remove Scenario/IR/Docker/Submission controllers"
 ### Task B2: 删除旧服务
 
 **Files:**
-- Delete: `D:\newGZ\newGZCTF\src\GZCTF\Services\FlagChecker.cs`
-- Delete: `D:\newGZ\newGZCTF\src\GZCTF\Services\LeaderboardService.cs`
-- Delete: `D:\newGZ\newGZCTF\src\GZCTF\Services\ScoringService.cs`
-- Delete: `D:\newGZ\newGZCTF\src\GZCTF\Services\Scoring\` (整个目录)
+- Delete: `D:\newGZ\YINYU CTF平台\src\GZCTF\Services\FlagChecker.cs`
+- Delete: `D:\newGZ\YINYU CTF平台\src\GZCTF\Services\LeaderboardService.cs`
+- Delete: `D:\newGZ\YINYU CTF平台\src\GZCTF\Services\ScoringService.cs`
+- Delete: `D:\newGZ\YINYU CTF平台\src\GZCTF\Services\Scoring\` (整个目录)
 
 ```bash
 git rm src/GZCTF/Services/FlagChecker.cs
@@ -496,7 +496,7 @@ git commit -m "feat: remove FlagChecker/LeaderboardService/Scoring services"
 ### Task B3: 更新依赖注入注册
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Extensions\Startup\ServicesExtension.cs` 或相应 DI 注册文件
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Extensions\Startup\ServicesExtension.cs` 或相应 DI 注册文件
 
 **Step 1: 移除已删除服务的注册**
 
@@ -530,7 +530,7 @@ git commit -m "feat(di): remove registrations for deleted services"
 ### Task C1: 扩展 EditController — Flag CRUD
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Controllers\EditController.cs`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Controllers\EditController.cs`
 
 **Step 1: 新增 PUT Flag 端点**
 
@@ -607,7 +607,7 @@ git commit -m "feat(api): extend EditController Flag CRUD with PUT and new field
 ### Task C2: 扩展 EditController — Challenge Update 扩展字段
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Controllers\EditController.cs`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Controllers\EditController.cs`
 
 **Step 1: 更新 UpdateGameChallenge 方法**
 
@@ -633,7 +633,7 @@ git commit -m "feat(api): extend challenge update with environment/image templat
 ### Task C3: 重写 GameController.Submit — 同步处理
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Controllers\GameController.cs`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Controllers\GameController.cs`
 
 **Step 1: 将提交从异步 Channel 改为同步处理**
 
@@ -690,7 +690,7 @@ git commit -m "feat(api): convert flag submit to synchronous processing"
 ### Task C4: 扩展 ImageTemplateController
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Controllers\ImageTemplateController.cs`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Controllers\ImageTemplateController.cs`
 
 **Step 1: 新增 zip 上传端点**
 
@@ -771,7 +771,7 @@ git commit -m "feat(api): add zip upload and docker register to image templates"
 ### Task D1: 重写 GameInstanceRepository.VerifyAnswer
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Repositories\GameInstanceRepository.cs`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Repositories\GameInstanceRepository.cs`
 
 **Step 1: 扩展 VerifyAnswer 签名**
 
@@ -866,7 +866,7 @@ git commit -m "feat(scoring): rewrite VerifyAnswer for multi-flag support"
 ### Task D2: 重写 GenScoreboard — Flag 粒度
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Repositories\GameRepository.cs`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Repositories\GameRepository.cs`
 
 **Step 1: 调整 SolveSnapshot 结构体**
 
@@ -940,7 +940,7 @@ git commit -m "feat(scoring): rewrite GenScoreboard for per-flag granularity"
 ### Task E1: 新增 ArchiveExtractor 服务
 
 **Files:**
-- Create: `D:\newGZ\newGZCTF\src\GZCTF\Services\Vm\ArchiveExtractor.cs`
+- Create: `D:\newGZ\YINYU CTF平台\src\GZCTF\Services\Vm\ArchiveExtractor.cs`
 
 **Step 1: 创建 IArchiveExtractor 接口**
 
@@ -1117,7 +1117,7 @@ git commit -m "feat(vm): add ArchiveExtractor for zip upload and VM format conve
 ### Task F1: GameController 容器创建路由到 VM
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\Controllers\GameController.cs`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\Controllers\GameController.cs`
 
 **Step 1: 扩展 CreateContainer 方法**
 
@@ -1240,7 +1240,7 @@ git commit -m "feat(db): add migration for unified challenge refactor"
 ### Task H1: 管理导航精简
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\ClientApp\src\components\admin\WithAdminTab.tsx`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\ClientApp\src\components\admin\WithAdminTab.tsx`
 
 **Step 1: 更新 pages 数组**
 
@@ -1297,7 +1297,7 @@ git commit -m "feat(ui): delete Scenario/IR/Docker/Instances admin pages"
 ### Task H3: 更新 ChallengeCreateModal
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\ClientApp\src\components\admin\ChallengeCreateModal.tsx`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\ClientApp\src\components\admin\ChallengeCreateModal.tsx`
 
 **Step 1: 从类型下拉中删除 Scenario 和 IRChallenge**
 
@@ -1329,7 +1329,7 @@ git commit -m "feat(ui): remove Scenario/IRChallenge from challenge create modal
 ### Task H4: 重构挑战编辑页面 — 基础信息 + 环境配置
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\ClientApp\src\pages\admin\games\[id]\challenges\[challengeId]\index.tsx`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\ClientApp\src\pages\admin\games\[id]\challenges\[challengeId]\index.tsx`
 
 **Step 1: 扩展 ChallengeEditData 接口**
 
@@ -1395,7 +1395,7 @@ git commit -m "feat(ui): add environment type and image template selector to cha
 ### Task H5: 重构挑战编辑页面 — Flag 阶段条
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\ClientApp\src\pages\admin\games\[id]\challenges\[challengeId]\index.tsx`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\ClientApp\src\pages\admin\games\[id]\challenges\[challengeId]\index.tsx`
 
 **Step 1: 替换简单 Flag 列表为阶段编辑器**
 
@@ -1523,7 +1523,7 @@ git commit -m "feat(ui): add flag stage editor with arrow stepper to challenge e
 ### Task H6: 更新 ChallengeModal — 玩家端阶段条
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\ClientApp\src\components\ChallengeModal.tsx`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\ClientApp\src\components\ChallengeModal.tsx`
 
 **Step 1: 新增 Flag 阶段步骤条组件**
 
@@ -1605,7 +1605,7 @@ git commit -m "feat(ui): add flag stepper arrow UI to player challenge modal"
 ### Task H7: 更新 ChallengeModal props — 传递多 Flag 信息
 
 **Files:**
-- Modify: `D:\newGZ\newGZCTF\src\GZCTF\ClientApp\src\components\GameChallengeModal.tsx`
+- Modify: `D:\newGZ\YINYU CTF平台\src\GZCTF\ClientApp\src\components\GameChallengeModal.tsx`
 
 **Step 1: 更新 flag 提交逻辑以包含 FlagId**
 

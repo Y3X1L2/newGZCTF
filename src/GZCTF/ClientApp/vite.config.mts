@@ -6,8 +6,8 @@ import { optimizeCssModules } from 'vite-plugin-optimize-css-modules'
 import Pages from 'vite-plugin-pages'
 import webfontDownload from 'vite-plugin-webfont-dl'
 import tailwindcss from '@tailwindcss/vite'
-import { fetchContributors } from './plugins/vite-fetch-contributors'
 import { i18nVirtualManifest } from './plugins/vite-i18n-virtual-manifest'
+import { sanitizeGeneratedOutput } from './plugins/vite-sanitize-generated-output'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd())
@@ -16,12 +16,10 @@ export default defineConfig(({ mode }) => {
   const current = new Date()
 
   const BANNER =
-    `/* The GZ::CTF Project @${env.VITE_APP_GIT_NAME ?? 'unknown'}\n * \n` +
-    ` * License   : GNU Affero General Public License v3.0 (Core)\n` +
-    ` * License   : LicenseRef-GZCTF-Restricted (Restricted components)\n` +
+    `/* YINYU CTF Platform @${env.VITE_APP_GIT_NAME ?? 'unknown'}\n *\n` +
     ` * Commit    : ${env.VITE_APP_GIT_SHA ?? 'Unofficial build version'}\n` +
     ` * Build     : ${env.VITE_APP_BUILD_TIMESTAMP ?? current.toISOString()}\n` +
-    ` * Copyright (C) 2022-${current.getFullYear()} GZTimeWalker. All Rights Reserved.\n */`
+    ` */`
 
   console.log(`Using backend URL: ${TARGET}`)
 
@@ -72,7 +70,7 @@ export default defineConfig(({ mode }) => {
       ),
       Pages({ dirs: [{ dir: './src/pages', baseRoute: '', filePattern: '**/*.tsx' }] }),
       i18nVirtualManifest(),
-      fetchContributors(),
+      sanitizeGeneratedOutput(),
       optimizeCssModules(),
       tailwindcss(),
     ],

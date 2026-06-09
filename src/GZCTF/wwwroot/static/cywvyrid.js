@@ -1,9 +1,0 @@
-/* The GZ::CTF Project @unknown
- * 
- * License   : GNU Affero General Public License v3.0 (Core)
- * License   : LicenseRef-GZCTF-Restricted (Restricted components)
- * Commit    : Unofficial build version
- * Build     : 2026-05-20T05:57:19.720Z
- * Copyright (C) 2022-2026 GZTimeWalker. All Rights Reserved.
- */
-import{g as e}from"./ngkkuwm9.js";import{a as t,i as n}from"./khr0xm81.js";import{C as r,d as i}from"./hmbv74xw.js";import{T as a,t as o,v as s}from"./jd1hyeum2.js";var c=o(),l=e(),u=async e=>{if(e instanceof r){if(e.response?.data instanceof Blob){let t=e.response.data;if(t.type===i.Text)return await t.text();if(t.type===i.Json){let e=window.JSON.parse(await t.text());if(e.title)return e.title}}return e.message}else return String(e)},d=(e,t)=>{if(e.data instanceof Blob){let n=window.URL.createObjectURL(e.data),r=e.headers[`content-disposition`];!t&&r&&(t=(e=>{let t=e.match(/filename\*=UTF-8''([^;]+)/i);if(t)return decodeURIComponent(t[1]);let n=e.match(/filename="?([^";]+)"?/);if(n)return n[1]})(r));let i=document.createElement(`a`);i.style.display=`none`,i.href=n,t&&(i.download=t),document.body.appendChild(i),i.click(),window.setTimeout(()=>{i.remove(),window.URL.revokeObjectURL(n)})}else throw Error(`Response data is not a Blob`)},f=async(e,r,i,o)=>{r(!0),n({color:`orange`,id:`blob-download`,message:i(`common.download.started`),loading:!0,autoClose:!1});try{let n=await e;t({id:`blob-download`,color:`teal`,message:i(`common.download.success`),icon:(0,l.jsx)(c.Icon,{path:s,size:1}),loading:!1,autoClose:!0}),d(n,o)}catch(e){t({id:`blob-download`,color:`red`,title:i(`common.download.failed`),message:await u(e),icon:(0,l.jsx)(c.Icon,{path:a,size:1}),autoClose:!1,withCloseButton:!0})}finally{r(!1)}};export{u as n,f as t};

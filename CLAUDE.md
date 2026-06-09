@@ -1,6 +1,6 @@
-# newGZCTF 全栈重构开发规范
+# YINYU CTF平台 全栈重构开发规范
 
-> **跟进计划:** `docs/superpowers/plans/2026-05-19-newGZCTF-refactor.md`
+> **跟进计划:** `docs/superpowers/plans/2026-05-19-yinyu-ctf-platform-refactor.md`
 > **TDD 规范:** `docs/superpowers/plans/2026-05-19-tdd-supplement.md`
 > **代码库分析:** `docs/codebase-analysis.md`
 > **审计报告:** `docs/superpowers/reviews/final-audit-*.md`
@@ -13,7 +13,7 @@
 🎉 8/8 Phase 完成 | 3 轮审计通过 | 227/227 测试 | 0 失败
 
 主分支: 001-ctf-scenario-engine
-平台服务器: 203.195.157.191 (Ubuntu 22.04)
+平台服务器: <test-server-ip> (Ubuntu 22.04)
 部署: docker compose -f docker-compose.yml up -d
 ```
 
@@ -21,7 +21,7 @@
 
 ## 一、项目概述
 
-**newGZCTF** 基于 GZCTF v1.8.3 二次开发的 CTF 场景化实战平台。
+**YINYU CTF平台** 是面向赛事管理、攻防演练、理论赛与分布式靶场调度的 CTF 场景化实战平台。
 
 ### 技术栈
 
@@ -39,7 +39,7 @@
 ### 架构
 
 ```
-Platform (newGZCTF)   ← Admin Panel
+Platform (YINYU CTF平台)   ← Admin Panel
   ├── PostgreSQL + Redis + Guacd
   ├── UnifiedScoringEngine (统一评分)
   ├── IVirtualMachineProvider (KVM/Docker)
@@ -65,7 +65,7 @@ docs/
 ├── deploy/agent-node.md                     靶机部署指南
 └── superpowers/
     ├── plans/
-    │   ├── 2026-05-19-newGZCTF-refactor.md  实施计划 v2.2
+    │   ├── 2026-05-19-yinyu-ctf-platform-refactor.md  实施计划 v2.2
     │   └── 2026-05-19-tdd-supplement.md     TDD 规范
     └── reviews/
         ├── phase1-3-critical-review.md      计划审查
@@ -195,7 +195,7 @@ dotnet test 输出必须: "失败: 0，已跳过: 0"
 
 | 环境 | 信息 |
 |---|---|
-| 平台服务器 | 203.195.157.191 (Ubuntu 22.04) |
+| 平台服务器 | <test-server-ip> (Ubuntu 22.04) |
 | 测试 DB | localhost:5433 (gzctf_test) |
 | Redis | localhost:6380 |
 | Guacd | localhost:4822 |

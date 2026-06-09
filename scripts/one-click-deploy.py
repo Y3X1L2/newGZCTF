@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-""" newGZCTF 一键部署 + 测试脚本 (Windows/Linux 通用)
+""" yinyu-ctf-platform 一键部署 + 测试脚本 (Windows/Linux 通用)
 用法: python one-click-deploy.py <IP> <USER> <PASSWORD>
-示例: python one-click-deploy.py 203.195.157.191 ubuntu "Fisher(1^"
+示例: python one-click-deploy.py <server-ip> ubuntu "<password>"
 """
 import sys, os, paramiko, subprocess, tempfile, time, json
 
@@ -14,7 +14,7 @@ if len(sys.argv) < 4:
 
 IP, USER, PASS = sys.argv[1], sys.argv[2], sys.argv[3]
 HOME = f"/home/{USER}"
-PROJECT_DIR = f"{HOME}/newGZCTF"
+PROJECT_DIR = f"{HOME}/yinyu-ctf-platform"
 
 # ============================================================
 log("STEP 0: 安装 paramiko")
@@ -97,7 +97,7 @@ if code != 0: warn(f"部分失败: {err[:200]}")
 log("STEP 3: 打包并上传代码")
 # ============================================================
 PROJECT_ROOT = os.getcwd()
-tgz_path = "/tmp/newGZCTF-code.tar.gz"
+tgz_path = "/tmp/yinyu-ctf-platform-code.tar.gz"
 
 # 打包
 import tarfile, io
@@ -229,7 +229,7 @@ log("STEP 6: 验收报告")
 out, _, _ = ssh_run(ssh, "cat /tmp/unit-results.txt 2>/dev/null | tail -3 || echo '待运行'")
 print(f"""
 ╔══════════════════════════════════════════════════════════╗
-║           newGZCTF 一键部署完成报告                       ║
+║           yinyu-ctf-platform 一键部署完成报告                       ║
 ╠══════════════════════════════════════════════════════════╣
 ║  服务器:   {IP:<45} ║
 ║  项目路径: {PROJECT_DIR:<43} ║

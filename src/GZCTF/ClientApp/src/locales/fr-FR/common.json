@@ -18,14 +18,6 @@
       "text": "Une désolation, pourquoi est-ce ici",
       "title": "Page inexistante"
     },
-    "about": {
-      "contributors": "Contributeurs",
-      "documentation": "Documentation Officielle",
-      "repository": "Dépôt GitHub",
-      "resources": "Ressources",
-      "slogan": "Hack for fun not for profit",
-      "version": "Version"
-    },
     "color": {
       "custom": {
         "description": "Sélectionnez la couleur de base que vous souhaitez utiliser",

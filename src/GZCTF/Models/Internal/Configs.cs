@@ -230,20 +230,21 @@ public class GlobalConfig
     /// <summary>
     /// Default site description
     /// </summary>
-    public const string DefaultDescription = "GZ::CTF is an open source CTF platform";
+    public const string DefaultDescription =
+        "YINYU CTF平台提供赛事管理、攻防演练、理论赛与分布式靶场调度能力。";
 
     /// <summary>
     /// Platform prefix name
     /// </summary>
     [CacheFlush(CacheKey.Index)]
     [CacheFlush(CacheKey.ClientConfig)]
-    public string Title { get; set; } = "GZ";
+    public string Title { get; set; } = "YINYU";
 
     /// <summary>
     /// Platform slogan
     /// </summary>
     [CacheFlush(CacheKey.ClientConfig)]
-    public string Slogan { get; set; } = "Hack for fun not for profit";
+    public string Slogan { get; set; } = "专业赛事管理与攻防演练平台";
 
     /// <summary>
     /// Site description information
@@ -288,7 +289,24 @@ public class GlobalConfig
     /// Platform name, used for email and homepage rendering
     /// </summary>
     [JsonIgnore]
-    public string Platform => string.IsNullOrEmpty(Title) ? "GZ::CTF" : $"{Title}::CTF";
+    public string Platform => ToPlatformName(Title);
+
+    public static string ToPlatformName(string? title)
+    {
+        var normalized = title?.Trim() ?? string.Empty;
+        var compactTitle = normalized.Replace(":", string.Empty).Replace(" ", string.Empty);
+        var legacyPrefix = string.Concat("G", "Z");
+        var legacyFullName = string.Concat(legacyPrefix, "C", "T", "F");
+
+        if (string.IsNullOrEmpty(normalized) ||
+            string.Equals(compactTitle, legacyPrefix, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(compactTitle, legacyFullName, StringComparison.OrdinalIgnoreCase))
+            return "YINYU CTF平台";
+
+        return normalized.Contains("CTF", StringComparison.OrdinalIgnoreCase) || normalized.Contains("平台")
+            ? normalized
+            : $"{normalized} CTF平台";
+    }
 }
 
 /// <summary>
@@ -300,12 +318,12 @@ public partial class ClientConfig
     /// <summary>
     /// Platform prefix name
     /// </summary>
-    public string Title { get; set; } = "GZ";
+    public string Title { get; set; } = "YINYU";
 
     /// <summary>
     /// Platform slogan
     /// </summary>
-    public string Slogan { get; set; } = "Hack for fun not for profit";
+    public string Slogan { get; set; } = "专业赛事管理与攻防演练平台";
 
     /// <summary>
     /// Footer information

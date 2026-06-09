@@ -77,7 +77,7 @@
       },
       "entry": {
         "description": {
-          "anchor": "Mendapatkan proxy client",
+          "anchor": "Use the platform proxy client",
           "proxy": "Mode proxy WebSocket telah diaktifkan."
         },
         "label": "Informasi instance"

@@ -485,7 +485,7 @@
       "defaults": {
         "challenge": "Challenge",
         "team": "Team",
-        "system": "GZCTF"
+        "system": "YINYU CTF Platform"
       },
       "messages": {
         "accepted": "{{team}} broke through, result: {{result}}",
@@ -655,7 +655,7 @@
       "footer": "`Test` <mbr/> Something...",
       "logo": {
         "custom": "Custom Logo",
-        "default": "Use GZCTF Icon"
+        "default": "Use YINYU CTF Platform icon"
       }
     },
     "teams": {

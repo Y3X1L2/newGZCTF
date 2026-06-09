@@ -203,8 +203,8 @@ internal static class ServicesExtension
             {
                 settings.DocumentName = "v1";
                 settings.Version = "v1";
-                settings.Title = "GZCTF Server API";
-                settings.Description = "GZCTF Server API Document";
+                settings.Title = "YINYU CTF Platform API";
+                settings.Description = "YINYU CTF Platform API Document";
                 settings.UseControllerSummaryAsTagDescription = true;
                 settings.SchemaSettings.TypeMappers.Add(new OpenApiDateTimeOffsetToUIntMapper());
                 settings.SchemaSettings.TypeMappers.Add(new OpenApiIPAddressToStringMapper());

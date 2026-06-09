@@ -77,7 +77,7 @@
       },
       "entry": {
         "description": {
-          "anchor": "Proxy-Client abrufen",
+          "anchor": "Use the platform proxy client",
           "proxy": "WebSocket-Proxy-Modus wurde aktiviert."
         },
         "label": "Instanzinformationen"

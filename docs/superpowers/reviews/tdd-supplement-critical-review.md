@@ -1,6 +1,6 @@
 # Critical Review: TDD Supplement Plan (2026-05-19-tdd-supplement.md)
 
-> Review conducted against the actual codebase at `D:\newGZ\newGZCTF`
+> Review conducted against the actual codebase at `D:\newGZ\YINYU CTF平台`
 
 ---
 
@@ -54,7 +54,7 @@ The existing unit tests in `GZCTF.Test` do not use mocking frameworks; they test
 
 ## 3. Entities and Services That Do Not Exist Yet
 
-The TDD plan assumes the existence of several entities and services that are only defined in the companion refactor plan (`2026-05-19-newGZCTF-refactor.md`). These have NOT been created yet. The tests will fail at compile time, not test logic time.
+The TDD plan assumes the existence of several entities and services that are only defined in the companion refactor plan (`2026-05-19-yinyu-ctf-platform-refactor.md`). These have NOT been created yet. The tests will fail at compile time, not test logic time.
 
 ### 3.1 Missing Entities (Cannot Compile)
 
@@ -218,8 +218,8 @@ No `.github/workflows/*.yml` files exist in the repository. The plan's CI pipeli
 The CI pipeline plan hardcodes database credentials in the YAML:
 
 ```yaml
-ConnectionStrings__Database: "Host=203.195.157.191;Port=5433;Database=gzctf_test;Username=testuser;Password=testpass"
-ConnectionStrings__RedisCache: "203.195.157.191:6380"
+ConnectionStrings__Database: "Host=<test-server-ip>;Port=5433;Database=gzctf_test;Username=testuser;Password=testpass"
+ConnectionStrings__RedisCache: "<test-server-ip>:6380"
 ```
 
 These must be stored as GitHub secrets, not in the committed workflow file. The plan shows them in plain text.
@@ -249,9 +249,9 @@ Total CI time would be the sum of all stages. For E2E tests with VM lifecycle te
 
 The plan's `TestConfig.cs` hardcodes:
 
-- `ServerHost = "203.195.157.191"`
+- `ServerHost = "<test-server-ip>"`
 - `DbPassword = "testpass"`
-- `RedisHost = "203.195.157.191:6380"`
+- `RedisHost = "<test-server-ip>:6380"`
 - `KvmUri = "qemu:///system"`
 - `TestVmTemplate = "/var/lib/gzctf-test/images/windows-server-2012-test.qcow2"`
 
@@ -260,7 +260,7 @@ The plan's `TestConfig.cs` hardcodes:
 - `qemu:///system` requires root/libvirt access from within the test process
 - The VM template path assumes a specific file exists on the test server
 - These values would be committed to the repository
-- The test server `203.195.157.191` may not be accessible from CI runners
+- The test server `<test-server-ip>` may not be accessible from CI runners
 
 The existing integration test infrastructure solves this elegantly with Testcontainers -- it spins up a local PostgreSQL container per test run. The plan should follow the same pattern for test isolation.
 

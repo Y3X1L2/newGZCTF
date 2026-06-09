@@ -1,4 +1,4 @@
-import { ActionIcon, Anchor, Button, Divider, Group, Stack, Text, TextInput, Tooltip } from '@mantine/core'
+import { ActionIcon, Button, Divider, Group, Stack, Text, TextInput, Tooltip } from '@mantine/core'
 import { useClipboard } from '@mantine/hooks'
 import { useDebouncedCallback, useDebouncedState } from '@mantine/hooks'
 import { showNotification } from '@mantine/notifications'
@@ -215,9 +215,7 @@ export const InstanceEntry: FC<InstanceEntryProps> = (props) => {
             <Text span size="sm">
               {t('challenge.content.instance.entry.description.proxy')}
               &nbsp;
-              <Anchor href="https://github.com/XDSEC/WebSocketReflectorX/releases" target="_blank" rel="noreferrer">
-                {t('challenge.content.instance.entry.description.anchor')}
-              </Anchor>
+              {t('challenge.content.instance.entry.description.anchor')}
             </Text>
           )
         }
