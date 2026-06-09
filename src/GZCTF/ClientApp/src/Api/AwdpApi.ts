@@ -62,6 +62,7 @@ export interface AwdpTeamServiceStatus {
   isRunning: boolean
   remainingResetCount: number
   remainingRecoveryCount: number
+  canManage: boolean
 }
 
 export interface AwdpServiceStatusModel {

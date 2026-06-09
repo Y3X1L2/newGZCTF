@@ -51,7 +51,7 @@ public class AwdpService
     /// Checker 入口命令
     /// </summary>
     [MaxLength(Limits.MaxEntrypointLength)]
-    public string? CheckerEntrypoint { get; set; } = "python checker.py";
+    public string? CheckerEntrypoint { get; set; } = "python3 checker.py";
 
     // ===== Exp (漏洞验证) =====
 
@@ -65,7 +65,7 @@ public class AwdpService
     /// Exp 入口命令
     /// </summary>
     [MaxLength(Limits.MaxEntrypointLength)]
-    public string? ExpEntrypoint { get; set; } = "python exp.py";
+    public string? ExpEntrypoint { get; set; } = "python3 exp.py";
 
     // ===== 分数配置 =====
 

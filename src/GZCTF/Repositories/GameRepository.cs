@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
+using GZCTF.Services;
 using GZCTF.Services.Cache;
 using GZCTF.Services.Config;
 using GZCTF.Utils;
@@ -845,16 +846,26 @@ public class GameRepository(
         var patches = await Context.AwdpPatchSubmissions.AsNoTracking()
             .Include(p => p.Round)
             .Where(p => p.Round.GameId == gameId)
-            .Select(p => new
-            {
-                p.ServiceId,
-                p.TeamId,
-                p.FinalStatus,
-                p.SubmittedAt
-            })
+            .ToArrayAsync(token);
+        var resets = await Context.AwdpResetRecords.AsNoTracking()
+            .Include(r => r.Service)
+            .Where(r => r.Service.GameId == gameId)
+            .ToArrayAsync(token);
+        var recoveries = await Context.AwdpRecoveryRecords.AsNoTracking()
+            .Include(r => r.Service)
+            .Where(r => r.Service.GameId == gameId)
             .ToArrayAsync(token);
 
-        foreach (var patch in patches)
+        foreach (var patch in patches
+                     .GroupBy(p => new { p.RoundId, p.ServiceId, p.TeamId })
+                     .Select(g =>
+                     {
+                         var first = g.First();
+                         return AwdpPatchStateResolver.GetEffectivePatch(first.ServiceId, first.TeamId, g,
+                             resets, recoveries, first.Round.StartTime, first.Round.EndTime);
+                     })
+                     .Where(p => p is not null)
+                     .Cast<AwdpPatchSubmission>())
         {
             if (!services.TryGetValue(patch.ServiceId, out var service))
                 continue;

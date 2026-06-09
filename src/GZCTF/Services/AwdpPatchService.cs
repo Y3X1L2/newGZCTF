@@ -55,7 +55,11 @@ public class AwdpPatchService(
         if (instance.Container is null || !instance.IsRunning || instance.Container.Status != ContainerStatus.Running)
             return (null, "服务容器不存在或未运行");
 
-        var latestSubmission = await awdpRepository.GetPatchSubmission(round.Id, service.Id, teamId, token);
+        var roundPatches = await awdpRepository.GetPatchSubmissionsByRound(round.Id, token);
+        var resets = await awdpRepository.GetResetRecordsByGame(gameId, token);
+        var recoveries = await awdpRepository.GetRecoveryRecordsByGame(gameId, token);
+        var latestSubmission = AwdpPatchStateResolver.GetEffectivePatch(service.Id, teamId, roundPatches, resets,
+            recoveries, round.StartTime, round.EndTime);
         if (latestSubmission?.FinalStatus == AwdpPatchStatus.ExpFailed)
             return (null, "本轮该服务已通过补丁验证，无需重复提交");
 
@@ -88,6 +92,30 @@ public class AwdpPatchService(
         };
 
         await context.AwdpPatchSubmissions.AddAsync(submission, token);
+        await context.SaveChangesAsync(token);
+
+        var checkerTask = await context.AwdpCheckerTasks
+            .FirstOrDefaultAsync(t =>
+                t.RoundId == round.Id && t.ServiceId == service.Id && t.TeamId == teamId, token);
+        if (checkerTask is null)
+        {
+            await context.AwdpCheckerTasks.AddAsync(new AwdpCheckerTask
+            {
+                RoundId = round.Id,
+                ServiceId = service.Id,
+                TeamId = teamId,
+                Status = result.CheckerResult,
+                Message = result.Message,
+                ExecutedAt = submission.SubmittedAt
+            }, token);
+        }
+        else
+        {
+            checkerTask.Status = result.CheckerResult;
+            checkerTask.Message = result.Message;
+            checkerTask.ExecutedAt = submission.SubmittedAt;
+        }
+
         await context.SaveChangesAsync(token);
 
         submission = await context.AwdpPatchSubmissions

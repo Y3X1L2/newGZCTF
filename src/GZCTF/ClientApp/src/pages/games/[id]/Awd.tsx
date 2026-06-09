@@ -83,7 +83,7 @@ const Awd: FC = () => {
     [patchStatus]
   )
   const myTeamId = useMemo(() => {
-    const activeTeamId = instances[0]?.teamId
+    const activeTeamId = instances.find((item) => item.canManage)?.teamId
     if (activeTeamId) return activeTeamId
 
     const teamName = game?.teamName?.trim()
@@ -95,9 +95,10 @@ const Awd: FC = () => {
     return scoreboard.length === 1 ? scoreboard[0].teamId : undefined
   }, [game?.teamName, instances, scoreboard])
   const myScore = scoreboard.find((item) => item.teamId === myTeamId)
+  const manageableInstances = instances.filter((item) => item.canManage)
   const runningInstances = instances.filter((item) => item.isRunning).length
-  const remainingResets = instances.reduce((sum, item) => sum + item.remainingResetCount, 0)
-  const remainingRecoveries = instances.reduce((sum, item) => sum + item.remainingRecoveryCount, 0)
+  const remainingResets = manageableInstances.reduce((sum, item) => sum + item.remainingResetCount, 0)
+  const remainingRecoveries = manageableInstances.reduce((sum, item) => sum + item.remainingRecoveryCount, 0)
   const defendedServices = patchStatus.filter((item) => item.defenseStatus === AwdpChallengeStatus.Defended).length
   const roundStart = status?.roundStartTime ? dayjs(status.roundStartTime).format('YYYY-MM-DD HH:mm:ss') : '-'
   const runningText = awd('running_status', 'Running')
@@ -292,7 +293,7 @@ const Awd: FC = () => {
                   color={runningInstances === instances.length && instances.length > 0 ? 'teal' : 'yellow'}
                   label={awd('running_instances', 'Running instances')}
                   value={`${runningInstances}/${instances.length}`}
-                  sub={instances[0]?.teamName ?? '-'}
+                  sub={myScore?.teamName ?? '-'}
                 />
                 <AwdpMetricTile
                   icon={mdiRefresh}
@@ -378,6 +379,7 @@ const Awd: FC = () => {
                   <Table.Thead>
                     <Table.Tr>
                       <Table.Th>{awd('service', 'Service')}</Table.Th>
+                      <Table.Th>{awd('team', 'Team')}</Table.Th>
                       <Table.Th>{awd('endpoint', 'Endpoint')}</Table.Th>
                       <Table.Th>{awd('status', 'Status')}</Table.Th>
                       <Table.Th>{awd('checker', 'Checker')}</Table.Th>
@@ -388,63 +390,88 @@ const Awd: FC = () => {
                   </Table.Thead>
                   <Table.Tbody>
                     {instances.length === 0 ? (
-                      <AwdpEmptyTableRow colSpan={7} text={awd('no_instances', 'No instances')} />
+                      <AwdpEmptyTableRow colSpan={8} text={awd('no_instances', 'No instances')} />
                     ) : (
-                      instances.map((item) => (
-                        <Table.Tr key={item.instanceId}>
-                          <Table.Td>{item.serviceName}</Table.Td>
-                          <Table.Td>
-                            <AwdpEndpointText ip={item.ipAddress} port={item.port} />
-                          </Table.Td>
-                          <Table.Td>
-                            <AwdpInstanceStateBadge
-                              running={item.isRunning}
-                              runningText={runningText}
-                              stoppedText={stoppedText}
-                            />
-                          </Table.Td>
-                          <Table.Td>
-                            <AwdpStatusBadge
-                              status={item.lastCheckerStatus}
-                              label={statusLabel(item.lastCheckerStatus)}
-                            />
-                          </Table.Td>
-                          <Table.Td>{item.remainingResetCount}</Table.Td>
-                          <Table.Td>{item.remainingRecoveryCount}</Table.Td>
-                          <Table.Td>
-                            <Group justify="right" gap="xs" wrap="nowrap">
-                              <Button
-                                size="xs"
-                                variant="outline"
-                                disabled={loading}
-                                leftSection={<Icon path={mdiRefresh} size={0.75} />}
-                                onClick={() =>
-                                  instanceAction(
-                                    () => awdpPlayerApi.resetInstance(item.instanceId),
-                                    awd('instance_reset', 'Instance reset.')
-                                  )
-                                }
-                              >
-                                {awd('reset', 'Reset')}
-                              </Button>
-                              <Button
-                                size="xs"
-                                variant="outline"
-                                disabled={loading}
-                                leftSection={<Icon path={mdiRestore} size={0.75} />}
-                                onClick={() =>
-                                  instanceAction(
-                                    () => awdpPlayerApi.recoverInstance(item.instanceId),
-                                    awd('instance_recovered', 'Instance recovered.')
-                                  )
-                                }
-                              >
-                                {awd('recover', 'Recover')}
-                              </Button>
-                            </Group>
-                          </Table.Td>
-                        </Table.Tr>
-                      ))
+                      instances.map((item) => {
+                        const isSelf = item.teamId === myTeamId
+
+                        return (
+                          <Table.Tr
+                            key={item.instanceId}
+                            style={isSelf ? { backgroundColor: 'var(--mantine-color-teal-light)' } : undefined}
+                          >
+                            <Table.Td>{item.serviceName}</Table.Td>
+                            <Table.Td>
+                              <Group gap="xs" wrap="nowrap">
+                                <Text fw={isSelf ? 700 : 400} truncate>
+                                  {item.teamName}
+                                </Text>
+                                {isSelf && (
+                                  <Badge color="teal" variant="light" size="xs">
+                                    {awd('me', 'Me')}
+                                  </Badge>
+                                )}
+                              </Group>
+                            </Table.Td>
+                            <Table.Td>
+                              <AwdpEndpointText ip={item.ipAddress} port={item.port} />
+                            </Table.Td>
+                            <Table.Td>
+                              <AwdpInstanceStateBadge
+                                running={item.isRunning}
+                                runningText={runningText}
+                                stoppedText={stoppedText}
+                              />
+                            </Table.Td>
+                            <Table.Td>
+                              <AwdpStatusBadge
+                                status={item.lastCheckerStatus}
+                                label={statusLabel(item.lastCheckerStatus)}
+                              />
+                            </Table.Td>
+                            <Table.Td>{item.remainingResetCount}</Table.Td>
+                            <Table.Td>{item.remainingRecoveryCount}</Table.Td>
+                            <Table.Td>
+                              {item.canManage ? (
+                                <Group justify="right" gap="xs" wrap="nowrap">
+                                  <Button
+                                    size="xs"
+                                    variant="outline"
+                                    disabled={loading}
+                                    leftSection={<Icon path={mdiRefresh} size={0.75} />}
+                                    onClick={() =>
+                                      instanceAction(
+                                        () => awdpPlayerApi.resetInstance(item.instanceId),
+                                        awd('instance_reset', 'Instance reset.')
+                                      )
+                                    }
+                                  >
+                                    {awd('reset', 'Reset')}
+                                  </Button>
+                                  <Button
+                                    size="xs"
+                                    variant="outline"
+                                    disabled={loading}
+                                    leftSection={<Icon path={mdiRestore} size={0.75} />}
+                                    onClick={() =>
+                                      instanceAction(
+                                        () => awdpPlayerApi.recoverInstance(item.instanceId),
+                                        awd('instance_recovered', 'Instance recovered.')
+                                      )
+                                    }
+                                  >
+                                    {awd('recover', 'Recover')}
+                                  </Button>
+                                </Group>
+                              ) : (
+                                <Text ta="right" c="dimmed" size="sm">
+                                  -
+                                </Text>
+                              )}
+                            </Table.Td>
+                          </Table.Tr>
+                        )
+                      })
                     )}
                   </Table.Tbody>
                 </Table>

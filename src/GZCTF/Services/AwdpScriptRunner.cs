@@ -50,7 +50,7 @@ public class AwdpScriptRunner(ILogger<AwdpScriptRunner> logger)
         foreach (var fileName in new[] { "script.py", "checker.py", "exp.py" })
             await File.WriteAllTextAsync(Path.Combine(tempDir, fileName), script, Encoding.UTF8, token);
 
-        var command = string.IsNullOrWhiteSpace(entrypoint) ? "python script.py" : entrypoint;
+        var command = string.IsNullOrWhiteSpace(entrypoint) ? "python3 script.py" : entrypoint;
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
         cts.CancelAfter(timeout);
@@ -128,7 +128,13 @@ public class AwdpScriptRunner(ILogger<AwdpScriptRunner> logger)
         var output = stdout.Trim().Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
             .LastOrDefault()?.Trim().ToUpperInvariant();
 
-        return output switch
+        if (string.IsNullOrWhiteSpace(output))
+            return CheckerStatus.Mumble;
+
+        var status = output.Split([' ', '\t', ':'], StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault() ?? output;
+
+        return status switch
         {
             "OK" => CheckerStatus.OK,
             "MUMBLE" => CheckerStatus.Mumble,

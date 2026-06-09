@@ -228,6 +228,9 @@ public class AwdpAdminController(
         var checkerTasks = round is null
             ? Array.Empty<AwdpCheckerTask>()
             : await awdpRepository.GetCheckerTasksByRound(round.Id, token);
+        var patchSubmissions = round is null
+            ? Array.Empty<AwdpPatchSubmission>()
+            : await awdpRepository.GetPatchSubmissionsByRound(round.Id, token);
         var resets = await awdpRepository.GetResetRecordsByGame(gameId, token);
         var recoveries = await awdpRepository.GetRecoveryRecordsByGame(gameId, token);
 
@@ -245,8 +248,8 @@ public class AwdpAdminController(
                     TeamName = i.Team.Name,
                     IpAddress = i.Container?.PublicIP ?? i.Container?.IP,
                     Port = i.Container?.PublicPort ?? i.Container?.Port,
-                    LastCheckerStatus = checkerTasks
-                        .FirstOrDefault(t => t.ServiceId == service.Id && t.TeamId == i.TeamId)?.Status,
+                    LastCheckerStatus = AwdpPatchStateResolver.ResolveLatestCheckerStatus(service.Id, i.TeamId,
+                        checkerTasks, patchSubmissions, resets, recoveries, round?.StartTime, round?.EndTime),
                     IsRunning = i.IsRunning && i.Container?.Status == ContainerStatus.Running,
                     RemainingResetCount = Math.Max(0,
                         service.MaxResetCount - resets.Count(r =>
@@ -254,7 +257,8 @@ public class AwdpAdminController(
                             r.ResetType == AwdpResetType.Player)),
                     RemainingRecoveryCount = Math.Max(0,
                         service.MaxRecoveryCount -
-                        recoveries.Count(r => r.ServiceId == service.Id && r.TeamId == i.TeamId))
+                        recoveries.Count(r => r.ServiceId == service.Id && r.TeamId == i.TeamId)),
+                    CanManage = true
                 }).ToList()
         }).ToArray();
     }
@@ -299,11 +303,11 @@ public class AwdpAdminController(
         service.ExposePort = model.ExposePort;
         service.CheckerScript = string.IsNullOrWhiteSpace(model.CheckerScript) ? null : model.CheckerScript;
         service.CheckerEntrypoint = string.IsNullOrWhiteSpace(model.CheckerEntrypoint)
-            ? "python checker.py"
+            ? "python3 checker.py"
             : model.CheckerEntrypoint.Trim();
         service.ExpScript = string.IsNullOrWhiteSpace(model.ExpScript) ? null : model.ExpScript;
         service.ExpEntrypoint = string.IsNullOrWhiteSpace(model.ExpEntrypoint)
-            ? "python exp.py"
+            ? "python3 exp.py"
             : model.ExpEntrypoint.Trim();
         service.OriginalScore = model.OriginalScore;
         service.AttackPoints = model.AttackPoints;

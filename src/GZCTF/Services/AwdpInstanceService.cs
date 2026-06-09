@@ -160,7 +160,8 @@ public class AwdpInstanceService(
         if (instance.TeamId != teamId)
             return (false, "不能操作其他队伍的实例");
 
-        return await ResetLoadedInstance(instance, resetType, enforceLimit, newFlag, token);
+        var flagValue = newFlag ?? await GetCurrentFlagValue(instance, token);
+        return await ResetLoadedInstance(instance, resetType, enforceLimit, flagValue, token);
     }
 
     async Task<(bool Success, string Message)> ResetInstance(int instanceId, AwdpResetType resetType,
@@ -170,7 +171,8 @@ public class AwdpInstanceService(
         if (instance is null)
             return (false, "实例未找到");
 
-        return await ResetLoadedInstance(instance, resetType, enforceLimit, newFlag, token, recordReset);
+        var flagValue = newFlag ?? await GetCurrentFlagValue(instance, token);
+        return await ResetLoadedInstance(instance, resetType, enforceLimit, flagValue, token, recordReset);
     }
 
     async Task<(bool Success, string Message)> ResetLoadedInstance(AwdpServiceInstance instance,
@@ -253,6 +255,16 @@ public class AwdpInstanceService(
 
         await context.SaveChangesAsync(token);
         return (true, "实例已恢复");
+    }
+
+    async Task<string?> GetCurrentFlagValue(AwdpServiceInstance instance, CancellationToken token)
+    {
+        var currentRound = await awdpRepository.GetCurrentRound(instance.Service.GameId, token);
+        if (currentRound is null)
+            return null;
+
+        var flag = await awdpRepository.GetFlag(currentRound.Id, instance.ServiceId, instance.TeamId, token);
+        return flag?.FlagValue;
     }
 
     async Task<DataContainer?> CreateContainer(AwdpService service, int teamId, string? networkName, string? flag,

@@ -9,6 +9,9 @@ public class AwdpCheckerService(
     AwdpScriptRunner scriptRunner,
     ILogger<AwdpCheckerService> logger)
 {
+    const int MaxDownRetries = 2;
+    static readonly TimeSpan DownRetryDelay = TimeSpan.FromSeconds(2);
+
     public async Task<AwdpCheckerTask[]> RunCheckerForRound(AwdpRound round, AwdpService[] services,
         Participation[] participations, CancellationToken token = default)
     {
@@ -27,7 +30,7 @@ public class AwdpCheckerService(
 
                 var result = instance?.Container is null
                     ? (CheckerStatus.Down, "服务实例不存在或容器未运行")
-                    : await scriptRunner.RunChecker(service, instance, flag?.FlagValue ?? string.Empty, token);
+                    : await RunCheckerWithWarmup(service, instance, flag?.FlagValue ?? string.Empty, token);
 
                 if (existing.TryGetValue(key, out var task))
                 {
@@ -54,6 +57,20 @@ public class AwdpCheckerService(
             round.RoundNumber);
 
         return await awdpRepository.GetCheckerTasksByRound(round.Id, token);
+    }
+
+    async Task<(CheckerStatus Status, string? Message)> RunCheckerWithWarmup(AwdpService service,
+        AwdpServiceInstance instance, string flag, CancellationToken token)
+    {
+        var result = await scriptRunner.RunChecker(service, instance, flag, token);
+
+        for (var retry = 0; result.Status == CheckerStatus.Down && retry < MaxDownRetries; retry++)
+        {
+            await Task.Delay(DownRetryDelay, token);
+            result = await scriptRunner.RunChecker(service, instance, flag, token);
+        }
+
+        return result;
     }
 
     readonly record struct CheckerTaskKey(int ServiceId, int TeamId);

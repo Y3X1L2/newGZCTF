@@ -259,14 +259,14 @@ public class AwdpPlayerController(
         var patches = round is null
             ? Array.Empty<AwdpPatchSubmission>()
             : await awdpRepository.GetPatchSubmissionsByRound(round.Id, token);
+        var resets = await awdpRepository.GetResetRecordsByGame(gameId, token);
+        var recoveries = await awdpRepository.GetRecoveryRecordsByGame(gameId, token);
 
         return Ok(services.Select(service =>
         {
             var flag = flags.FirstOrDefault(f => f.ServiceId == service.Id && f.SubmittedByTeamId == teamId);
-            var patch = patches
-                .Where(p => p.ServiceId == service.Id && p.TeamId == teamId)
-                .OrderByDescending(p => p.SubmittedAt)
-                .FirstOrDefault();
+            var patch = AwdpPatchStateResolver.GetEffectivePatch(service.Id, teamId, patches, resets, recoveries,
+                round?.StartTime, round?.EndTime);
 
             return new AwdpPatchStatusItem
             {
@@ -346,11 +346,14 @@ public class AwdpPlayerController(
         var checkerTasks = round is null
             ? Array.Empty<AwdpCheckerTask>()
             : await awdpRepository.GetCheckerTasksByRound(round.Id, token);
+        var patchSubmissions = round is null
+            ? Array.Empty<AwdpPatchSubmission>()
+            : await awdpRepository.GetPatchSubmissionsByRound(round.Id, token);
         var resets = await awdpRepository.GetResetRecordsByGame(gameId, token);
         var recoveries = await awdpRepository.GetRecoveryRecordsByGame(gameId, token);
 
         return services.SelectMany(service => instances
-            .Where(i => i.ServiceId == service.Id && i.TeamId == teamId)
+            .Where(i => i.ServiceId == service.Id)
             .Select(i => new AwdpTeamServiceStatus
             {
                 InstanceId = i.Id,
@@ -360,15 +363,16 @@ public class AwdpPlayerController(
                 TeamName = i.Team.Name,
                 IpAddress = i.Container?.PublicIP ?? i.Container?.IP,
                 Port = i.Container?.PublicPort ?? i.Container?.Port,
-                LastCheckerStatus = checkerTasks
-                    .FirstOrDefault(t => t.ServiceId == service.Id && t.TeamId == i.TeamId)?.Status,
+                LastCheckerStatus = AwdpPatchStateResolver.ResolveLatestCheckerStatus(service.Id, i.TeamId,
+                    checkerTasks, patchSubmissions, resets, recoveries, round?.StartTime, round?.EndTime),
                 IsRunning = i.IsRunning && i.Container?.Status == ContainerStatus.Running,
                 RemainingResetCount = Math.Max(0,
                     service.MaxResetCount - resets.Count(r =>
                         r.ServiceId == service.Id && r.TeamId == i.TeamId &&
                         r.ResetType == AwdpResetType.Player)),
                 RemainingRecoveryCount = Math.Max(0,
-                    service.MaxRecoveryCount - recoveries.Count(r => r.ServiceId == service.Id && r.TeamId == i.TeamId))
+                    service.MaxRecoveryCount - recoveries.Count(r => r.ServiceId == service.Id && r.TeamId == i.TeamId)),
+                CanManage = i.TeamId == teamId
             })).ToArray();
     }
 

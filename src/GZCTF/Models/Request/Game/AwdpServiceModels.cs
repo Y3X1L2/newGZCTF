@@ -32,7 +32,7 @@ public class AwdpServiceCreateModel
     /// <summary>
     /// Checker 入口命令
     /// </summary>
-    public string? CheckerEntrypoint { get; set; } = "python checker.py";
+    public string? CheckerEntrypoint { get; set; } = "python3 checker.py";
 
     /// <summary>
     /// Exp 脚本内容
@@ -42,7 +42,7 @@ public class AwdpServiceCreateModel
     /// <summary>
     /// Exp 入口命令
     /// </summary>
-    public string? ExpEntrypoint { get; set; } = "python exp.py";
+    public string? ExpEntrypoint { get; set; } = "python3 exp.py";
 
     /// <summary>
     /// 原始分数
@@ -215,6 +215,7 @@ public class AwdpTeamServiceStatus
     public bool IsRunning { get; set; }
     public int RemainingResetCount { get; set; }
     public int RemainingRecoveryCount { get; set; }
+    public bool CanManage { get; set; }
 }
 
 /// <summary>

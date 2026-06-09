@@ -52,13 +52,23 @@ public class AwdpRoundService(
         if (services.Length == 0)
             return (false, "请先配置至少一个 AWDP 服务");
 
-        if (!TryGetSchedule(services, out _, out _, out _, out var error))
+        if (!TryGetSchedule(services, out _, out _, out var totalRounds, out var error))
             return (false, error);
 
         var participantCount = await context.Participations.AsNoTracking()
             .CountAsync(p => p.GameId == game.Id && p.Status == ParticipationStatus.Accepted, token);
         if (participantCount == 0)
             return (false, "没有已通过审核的参赛队伍");
+
+        var hasActiveRound = await context.AwdpRounds.AsNoTracking()
+            .AnyAsync(r => r.GameId == game.Id && r.Status != AwdpRoundStatus.Finished, token);
+        var lastRoundNumber = await context.AwdpRounds.AsNoTracking()
+            .Where(r => r.GameId == game.Id)
+            .Select(r => (int?)r.RoundNumber)
+            .MaxAsync(token) ?? 0;
+
+        if (!hasActiveRound && lastRoundNumber >= totalRounds)
+            return (false, "AWDP 比赛轮次已结束，请新建比赛或清理轮次后重新开始。");
 
         var started = StartLoop(game.Id);
         return started ? (true, "AWDP 比赛已启动") : (false, "AWDP 比赛已经在运行");
@@ -202,12 +212,11 @@ public class AwdpRoundService(
         if (participations.Length == 0)
             return false;
 
-        await instanceService.CreateInstancesForGame(game, token);
-
         var round = await context.AwdpRounds
             .Where(r => r.GameId == gameId && r.Status != AwdpRoundStatus.Finished)
             .OrderByDescending(r => r.RoundNumber)
             .FirstOrDefaultAsync(token);
+        var isNewRound = false;
 
         if (round is null)
         {
@@ -229,9 +238,13 @@ public class AwdpRoundService(
             };
             await context.AwdpRounds.AddAsync(round, token);
             await context.SaveChangesAsync(token);
-
-            await GenerateFlagsAndInject(round, services, participations, instanceService, repository, token);
+            isNewRound = true;
         }
+
+        await instanceService.CreateInstancesForGame(game, token);
+
+        if (isNewRound)
+            await GenerateFlagsAndInject(round, services, participations, instanceService, repository, token);
 
         if (round.Status == AwdpRoundStatus.AttackPhase)
         {
@@ -304,6 +317,10 @@ public class AwdpRoundService(
         var instances = await repository.GetInstancesByGame(gameId, token);
         var resets = await repository.GetResetRecordsByGame(gameId, token);
         var recoveries = await repository.GetRecoveryRecordsByGame(gameId, token);
+        var latestRound = await repository.GetCurrentRound(gameId, token);
+        var patchSubmissions = latestRound is null
+            ? Array.Empty<AwdpPatchSubmission>()
+            : await repository.GetPatchSubmissionsByRound(latestRound.Id, token);
 
         foreach (var service in services)
         {
@@ -321,8 +338,9 @@ public class AwdpRoundService(
                         TeamName = i.Team.Name,
                         IpAddress = i.Container?.PublicIP ?? i.Container?.IP,
                         Port = i.Container?.PublicPort ?? i.Container?.Port,
-                        LastCheckerStatus = checkerTasks
-                            .FirstOrDefault(t => t.ServiceId == service.Id && t.TeamId == i.TeamId)?.Status,
+                        LastCheckerStatus = AwdpPatchStateResolver.ResolveLatestCheckerStatus(service.Id, i.TeamId,
+                            checkerTasks, patchSubmissions, resets, recoveries, latestRound?.StartTime,
+                            latestRound?.EndTime),
                         IsRunning = i.IsRunning && i.Container?.Status == ContainerStatus.Running,
                         RemainingResetCount = Math.Max(0,
                             service.MaxResetCount - resets.Count(r =>
