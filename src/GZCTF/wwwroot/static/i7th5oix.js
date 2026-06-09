@@ -1,0 +1,6 @@
+/* YINYU CTF Platform @unknown
+ *
+ * Commit    : Unofficial build version
+ * Build     : 2026-06-09T06:10:58.565Z
+ */
+import{N as e,W as t,h as n,p as r}from"./i794nfmz.js";import{t as i}from"./j5ay0tzz.js";import{w as a}from"./hr5sxgyp.js";import{et as o}from"./d08360rz.js";var s={bar:`Va`,pulse:`Wa`,box:`Xa`,back:`Ya`,spikes:`Za`,spike:`_c`,l:`-c`,r:`ac`,t:`bc`,b:`cc`},c=n(),l=n=>{let{thickness:l=4,spikeLength:u=250,percentage:d,color:f,...p}=n,m=r(),{colorScheme:h}=a(),g=d<100,_=g?h===`dark`?`light`:f??m.primaryColor:`gray`,v=m.colors[_][5],y=m.colors[_][2];return(0,c.jsx)(o,{py:l*u/100,...p,__vars:{"--thickness":t(l),"--spike-length":`${u}%`,"--neg-spike-length":`${-u}%`,"--percentage":`${d}%`,"--spike-color":v,"--bg-color":y,"--pulsing-display":g?`block`:`none`},children:(0,c.jsx)(`div`,{className:s.back,children:(0,c.jsxs)(i,{justify:`right`,className:s.box,children:[(0,c.jsx)(`div`,{className:s.bar,children:(0,c.jsx)(`div`,{})}),(0,c.jsxs)(`div`,{className:s.spikes,children:[(0,c.jsx)(`div`,{className:e(s.spike,s.r)}),(0,c.jsx)(`div`,{className:e(s.spike,s.l)}),(0,c.jsx)(`div`,{className:e(s.spike,s.t)}),(0,c.jsx)(`div`,{className:e(s.spike,s.b)})]})]})})})};export{l as t};

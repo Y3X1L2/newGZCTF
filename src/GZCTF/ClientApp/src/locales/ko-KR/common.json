@@ -18,14 +18,6 @@
       "text": "아무것도 없어요!",
       "title": "페이지가 존재하지 않습니다"
     },
-    "about": {
-      "contributors": "기여자",
-      "documentation": "공식 문서",
-      "repository": "GitHub 저장소",
-      "resources": "리소스",
-      "slogan": "수익이 아니라 재미를 위해 해킹을 하세요!",
-      "version": "버전"
-    },
     "color": {
       "custom": {
         "description": "당신이 원하는 베이스 색상을 선택해주세요",

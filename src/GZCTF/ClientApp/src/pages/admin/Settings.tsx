@@ -27,6 +27,7 @@ import { LogoBox } from '@Components/LogoBox'
 import { AdminPage } from '@Components/admin/AdminPage'
 import { SwitchLabel } from '@Components/admin/SwitchLabel'
 import { webCryptoAvailable } from '@Utils/Crypto'
+import { PLATFORM_DESCRIPTION, PLATFORM_SLOGAN, PLATFORM_TITLE } from '@Utils/Brand'
 import { getInputNumber, showErrorMsg } from '@Utils/Shared'
 import { IMAGE_MIME_TYPES } from '@Utils/Shared'
 import { OnceSWRConfig, useCaptchaConfig, useConfig } from '@Hooks/useConfig'
@@ -133,7 +134,7 @@ const Configs: FC = () => {
               <TextInput
                 label={t('admin.content.settings.platform.name.label')}
                 description={t('admin.content.settings.platform.name.description')}
-                placeholder="GZ"
+                placeholder={PLATFORM_TITLE}
                 disabled={disabled}
                 value={globalConfig?.title ?? ''}
                 onChange={(e) => {
@@ -145,7 +146,7 @@ const Configs: FC = () => {
               <TextInput
                 label={t('admin.content.settings.platform.slogan.label')}
                 description={t('admin.content.settings.platform.slogan.description')}
-                placeholder="Hack for fun not for profit"
+                placeholder={PLATFORM_SLOGAN}
                 disabled={disabled}
                 value={globalConfig?.slogan ?? ''}
                 onChange={(e) => {
@@ -192,7 +193,7 @@ const Configs: FC = () => {
               <TextInput
                 label={t('admin.content.settings.platform.description.label')}
                 description={t('admin.content.settings.platform.description.description')}
-                placeholder="GZ::CTF is an open source CTF platform"
+                placeholder={PLATFORM_DESCRIPTION}
                 disabled={disabled}
                 value={globalConfig?.description ?? ''}
                 onChange={(e) => {

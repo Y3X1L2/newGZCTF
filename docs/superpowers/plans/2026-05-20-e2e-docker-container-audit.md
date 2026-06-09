@@ -6,7 +6,7 @@
 
 **Architecture:** 全链路分为 6 个阶段，每个阶段先通过 Playwright 检测当前实际行为，记录问题，修复，再验证
 
-**测试原则:** 所有检测通过 Playwright 在 `http://203.195.157.191:8080` 执行
+**测试原则:** 所有检测通过 Playwright 在 `http://<test-server-ip>:8080` 执行
 
 ---
 
@@ -36,7 +36,7 @@
 - [ ] **Step 1: Playwright 检测 — 截图当前 Docker 镜像列表页**
 
 ```
-操作: 打开 http://203.195.157.191:8080/admin/dockerimages
+操作: 打开 http://<test-server-ip>:8080/admin/dockerimages
 检查: 每个镜像行显示的大小值、名称、标签、系统类型、删除按钮
 预期: 显示实际 Docker 镜像大小（83.7MB），而非 0.0 MB
 实际: 显示 0.0 MB ← Bug

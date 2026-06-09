@@ -18,14 +18,6 @@
       "text": "Eine Ödnis, warum ist es hier",
       "title": "Seite existiert nicht"
     },
-    "about": {
-      "contributors": "Mitwirkende",
-      "documentation": "Offizielle Dokumentation",
-      "repository": "GitHub-Repository",
-      "resources": "Ressourcen",
-      "slogan": "Hacke aus Spaß, nicht für Profit",
-      "version": "Version"
-    },
     "color": {
       "custom": {
         "description": "Wählen Sie die Basisfarbe aus, die Sie verwenden möchten",

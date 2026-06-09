@@ -1,4 +1,4 @@
-# newGZCTF API Endpoint Analysis
+# YINYU CTF平台 API Endpoint Analysis
 
 > Generated: 2026-05-19
 > Scope: All controllers under src/GZCTF/Controllers/ (17 controllers)

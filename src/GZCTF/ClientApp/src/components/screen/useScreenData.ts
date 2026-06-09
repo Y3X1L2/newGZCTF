@@ -471,7 +471,7 @@ export const useGameScreenData = (numId: number) => {
   }, [categoryHeat])
 
   const radarSeriesData = useMemo(
-    () => [{ name: game?.title ?? 'GZCTF', value: radarMetrics.map((item) => item.value) }],
+    () => [{ name: game?.title ?? 'YINYU CTF平台', value: radarMetrics.map((item) => item.value) }],
     [game?.title, radarMetrics]
   )
 

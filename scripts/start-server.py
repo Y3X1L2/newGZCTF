@@ -1,10 +1,19 @@
-"""Start newGZCTF on server — fire and forget version."""
-import paramiko, json, time, sys, io
+"""Start yinyu-ctf-platform on server — fire and forget version."""
+import os, paramiko, json, time, sys, io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
 ssh = paramiko.SSHClient()
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-ssh.connect('203.195.157.191', username='ubuntu', password='Fisher(1^', timeout=10)
+HOST = os.environ.get('YINYU_DEPLOY_HOST')
+USER = os.environ.get('YINYU_DEPLOY_USER', 'ubuntu')
+PASS = os.environ.get('YINYU_DEPLOY_PASS')
+REMOTE_ROOT = os.environ.get('YINYU_REMOTE_ROOT', f'/home/{USER}/yinyu-ctf-platform')
+
+if not HOST or not PASS:
+    print('Set YINYU_DEPLOY_HOST and YINYU_DEPLOY_PASS before running this script.', file=sys.stderr)
+    sys.exit(2)
+
+ssh.connect(HOST, username=USER, password=PASS, timeout=10)
 
 # Step 1: Kill existing processes
 ssh.exec_command('sudo pkill -9 dotnet 2>/dev/null; sudo fuser -k 3000/tcp 2>/dev/null; true')
@@ -12,14 +21,17 @@ time.sleep(3)
 
 # Step 2: Write config
 config = json.dumps({
-    'XorKey': 'gzctf-test-xor-key-2024',
+    'XorKey': os.environ.get('YINYU_TEST_XOR_KEY', 'replace-this-test-xor-key'),
     'ConnectionStrings': {
-        'Database': 'Host=localhost;Port=5432;Database=gzctf;Username=postgres;Password=gzctf_pass',
-        'RedisCache': 'localhost:6379'
+        'Database': os.environ.get(
+            'YINYU_TEST_DATABASE',
+            'Host=localhost;Port=5432;Database=yinyu_ctf;Username=postgres;Password=change-me',
+        ),
+        'RedisCache': os.environ.get('YINYU_TEST_REDIS', 'localhost:6379')
     }
 }, indent=2)
 sftp = ssh.open_sftp()
-with sftp.file('/home/ubuntu/newGZCTF/src/GZCTF/appsettings.json', 'w') as f:
+with sftp.file(f'{REMOTE_ROOT}/src/GZCTF/appsettings.json', 'w') as f:
     f.write(config)
 sftp.close()
 print("Config OK")
@@ -28,7 +40,7 @@ print("Config OK")
 channel = ssh.get_transport().open_session()
 channel.exec_command(
     'export PATH=/usr/local/share/dotnet:$PATH; '
-    'cd /home/ubuntu/newGZCTF; '
+    f'cd {REMOTE_ROOT}; '
     'ASPNETCORE_URLS=http://0.0.0.0:8080 '
     'nohup dotnet run --project src/GZCTF/GZCTF.csproj -c Release --no-build '
     '> /tmp/gzctf.log 2>&1 &'

@@ -1,4 +1,4 @@
-# newGZCTF 代码库全面分析报告（深度挖掘汇总）
+# YINYU CTF平台 代码库全面分析报告（深度挖掘汇总）
 
 > 生成日期: 2026-05-19
 > 分析范围: 深层扫描 5 个板块（VM/容器基础设施、评分验证管线、API 表面、前端 UI、数据模型）
@@ -51,7 +51,7 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                   newGZCTF 验证体系全景图                          │
+│                   YINYU CTF平台 验证体系全景图                          │
 ├──────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  A. FlagChecker（后台 Channel Worker）                            │
@@ -151,7 +151,7 @@ ManualReview = 3                        ManualReview = 3
 | POST | /api/v1/image-templates | ImageTemplate.Upload | Admin | 50GB |
 | GET | /api/v1/image-templates/{id} | ImageTemplate.GetById | Authorize | |
 | DELETE | /api/v1/image-templates/{id} | ImageTemplate.Delete | Admin | 返回 **204** |
-| ... | /api/[controller] | Game/Team/Account/Admin | 多种 | 传统 GZCTF |
+| ... | /api/[controller] | Game/Team/Account/Admin | 多种 | 传统赛制 |
 
 ### 3.2 路由风格冲突
 
@@ -161,7 +161,7 @@ ManualReview = 3                        ManualReview = 3
 /api/v1/submissions                ← 新 RESTful
 /api/v1/image-templates            ← 新 RESTful
 /api/v1/time-slots                 ← 新 RESTful
-/api/[controller]                  ← 传统 GZCTF（Game/Team/Account/Admin）
+/api/[controller]                  ← 传统赛制（Game/Team/Account/Admin）
 /api/Info                          ← 无版本前缀
 /api/tokens                        ← 无版本前缀
 [controller]/action                ← AssetsController 无 API 前缀
@@ -348,7 +348,7 @@ tests/e2e/topology-editor.spec.ts       ✓
 **缺失**: VM 镜像上传、Guacamole RDP 连接流、多阶段场景完整流
 
 ### 集成测试（17 个文件）
-覆盖 GZCTF 原始功能较完整，**缺失**: IRChallengeController、ScenarioController、SubmissionController 的多类型提交测试
+覆盖原有赛制功能较完整，**缺失**: IRChallengeController、ScenarioController、SubmissionController 的多类型提交测试
 
 ---
 

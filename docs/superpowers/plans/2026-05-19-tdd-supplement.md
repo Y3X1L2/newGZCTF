@@ -1,7 +1,7 @@
-# newGZCTF TDD 测试驱动规范 v1
+# YINYU CTF平台 TDD 测试驱动规范 v1
 
-> **配套文件:** `docs/superpowers/plans/2026-05-19-newGZCTF-refactor.md`
-> **测试服务器:** 203.195.157.191 (Ubuntu 22.04 / OpenSSH 8.9)
+> **配套文件:** `docs/superpowers/plans/2026-05-19-YINYU CTF平台-refactor.md`
+> **测试服务器:** <test-server-ip> (Ubuntu 22.04 / OpenSSH 8.9)
 > **测试原则:** Red-Green-Refactor 三步循环——每次提交前必须先有失败测试，通过最小实现让其通过，然后重构
 
 ---
@@ -12,7 +12,7 @@
 
 ```bash
 # 连接测试服务器
-ssh ubuntu@203.195.157.191
+ssh ubuntu@<test-server-ip>
 
 # === 安装测试依赖 ===
 sudo apt update && sudo apt install -y \
@@ -28,8 +28,8 @@ sudo apt update && sudo apt install -y \
 sudo usermod -aG docker ubuntu && newgrp docker
 
 # === 创建测试目录 ===
-mkdir -p ~/newGZCTF-tests/{unit,integration,e2e,perf,security}
-mkdir -p ~/newGZCTF-tests/data/{images,flags,writeup-files}
+mkdir -p ~/yinyu-ctf-platform-tests/{unit,integration,e2e,perf,security}
+mkdir -p ~/yinyu-ctf-platform-tests/data/{images,flags,writeup-files}
 
 # === PostgreSQL 测试数据库 ===
 docker run -d --name gzctf-test-db \
@@ -60,21 +60,21 @@ mkdir -p /var/lib/gzctf-test/images
 public static class TestConfig
 {
     // 测试服务器
-    public const string ServerHost = "203.195.157.191";
+    public const string ServerHost = "<test-server-ip>";
     public const string ServerUser = "ubuntu";
 
     // 测试数据库
-    public const string DbHost = "203.195.157.191";
+    public const string DbHost = "<test-server-ip>";
     public const int DbPort = 5433;
     public const string DbName = "gzctf_test";
     public const string DbUser = "testuser";
     public const string DbPassword = "testpass";
 
     // 测试 Redis
-    public const string RedisHost = "203.195.157.191:6380";
+    public const string RedisHost = "<test-server-ip>:6380";
 
     // 测试 Guacd
-    public const string GuacdHost = "203.195.157.191:4822";
+    public const string GuacdHost = "<test-server-ip>:4822";
 
     // 测试 VM 配置
     public const string KvmUri = "qemu:///system";
@@ -847,7 +847,7 @@ public class LocalImageImporterTests : GZCTFTestFixture
         var node = new WorkerNode
         {
             Id = Guid.NewGuid(), Name = "kvm-node-1",
-            HostAddress = "203.195.157.191:9001",
+            HostAddress = "<test-server-ip>:9001",
             Capabilities = NodeCapability.Kvm,
             Status = NodeStatus.Online
         };
@@ -1426,7 +1426,7 @@ public class ScoringEngineThroughputTests : GZCTFTestFixture
 
 ```sql
 -- 测试服务器上运行
--- 连接: psql -h 203.195.157.191 -p 5433 -U testuser -d gzctf_test
+-- 连接: psql -h <test-server-ip> -p 5433 -U testuser -d gzctf_test
 
 -- 插入 5000 支队伍 + 50000 条提交的性能基线
 \timing on
@@ -1470,7 +1470,7 @@ LIMIT 50;
 
 ```yaml
 # .github/workflows/tdd-pipeline.yml
-# 用于测试服务器: 203.195.157.191
+# 用于测试服务器: <test-server-ip>
 
 name: TDD Pipeline
 
@@ -1497,8 +1497,8 @@ jobs:
     needs: unit-tests
     env:
       ASPNETCORE_ENVIRONMENT: Test
-      ConnectionStrings__Database: "Host=203.195.157.191;Port=5433;Database=gzctf_test;Username=testuser;Password=testpass"
-      ConnectionStrings__RedisCache: "203.195.157.191:6380"
+      ConnectionStrings__Database: "Host=<test-server-ip>;Port=5433;Database=gzctf_test;Username=testuser;Password=testpass"
+      ConnectionStrings__RedisCache: "<test-server-ip>:6380"
     steps:
       - uses: actions/checkout@v4
       - name: Integration Tests
@@ -1534,7 +1534,7 @@ jobs:
       - name: OWASP ZAP Scan
         uses: zaproxy/action-full-scan@v0.10.0
         with:
-          target: http://203.195.157.191:8080
+          target: http://<test-server-ip>:8080
       - name: Semgrep SAST
         uses: semgrep/semgrep-action@v1
 ```

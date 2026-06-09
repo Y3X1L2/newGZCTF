@@ -1,9 +1,0 @@
-/* The GZ::CTF Project @unknown
- * 
- * License   : GNU Affero General Public License v3.0 (Core)
- * License   : LicenseRef-GZCTF-Restricted (Restricted components)
- * Commit    : Unofficial build version
- * Build     : 2026-05-20T05:57:19.720Z
- * Copyright (C) 2022-2026 GZTimeWalker. All Rights Reserved.
- */
-import{a as e,t}from"./izagbnaw.js";import{g as n}from"./ngkkuwm9.js";import{i as r}from"./khr0xm81.js";import{t as i}from"./m3q1fbg0.js";import{A as a,x as o}from"./hmbv74xw.js";import{t as s}from"./gi0mgpwi2.js";import{T as c,t as l,v as u}from"./jd1hyeum2.js";import{O as d,m as f,p}from"./index.ot524qw3.js";import{t as m}from"./fdqw44ki.js";var h=l(),g=e(t(),1),_=n(),v=()=>{let e=f(),t=p(),n=new URLSearchParams(t.search),l=n.get(`token`),v=n.get(`email`),[y,b]=(0,g.useState)(!1),{t:x}=a();return i(x(`account.title.verify`)),(0,_.jsx)(m,{onSubmit:async t=>{if(t.preventDefault(),!l||!v){r({color:`red`,title:x(`account.notification.verify.failed`),message:x(`common.error.param_missing`),icon:(0,_.jsx)(h.Icon,{path:c,size:1})});return}b(!0);try{await o.account.accountVerify({token:l,email:v}),r({color:`teal`,title:x(`account.notification.verify.success`),message:window.atob(v),icon:(0,_.jsx)(h.Icon,{path:u,size:1})}),e(`/account/login`)}catch{r({color:`red`,title:x(`account.notification.verify.failed`),message:x(`common.error.param_error`),icon:(0,_.jsx)(h.Icon,{path:c,size:1})})}finally{b(!1)}},children:v&&l?(0,_.jsxs)(_.Fragment,{children:[(0,_.jsx)(s,{size:`md`,fw:500,children:x(`account.content.welcome`,{decodeEmail:window.atob(v)})}),(0,_.jsx)(s,{size:`md`,fw:500,children:x(`account.content.verify.message`)}),(0,_.jsx)(d,{mt:`lg`,type:`submit`,w:`50%`,disabled:y,children:x(`account.button.verify_account`)})]}):(0,_.jsxs)(_.Fragment,{children:[(0,_.jsx)(s,{size:`md`,fw:500,children:x(`account.content.link_invalid`)}),(0,_.jsx)(s,{size:`md`,fw:500,children:x(`account.content.link_check`)})]})})};export{v as default};

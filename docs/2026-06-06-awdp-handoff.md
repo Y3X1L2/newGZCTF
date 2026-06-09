@@ -2,13 +2,13 @@
 
 > 日期：2026-06-06
 > 分支：`awdp-rewrite`
-> 目标：在 newGZCTF 平台完全重写 AWDP (Attack with Defense Plus) 比赛模式
+> 目标：在 YINYU CTF平台完全重写 AWDP (Attack with Defense Plus) 比赛模式
 
 ---
 
 ## 一、项目背景
 
-newGZCTF 是基于 GZCTF v1.8.3 二次开发的 CTF 场景化实战平台。本次任务是在原有基础上新增 AWDP 比赛形式，采用**完全重写**策略（非在旧 AWD 代码上修补）。
+YINYU CTF平台是面向赛事管理、攻防演练、理论赛与分布式靶场调度的 CTF 场景化实战平台。本次任务是在原有基础上新增 AWDP 比赛形式，采用**完全重写**策略（非在旧 AWD 代码上修补）。
 
 ### AWDP 核心特征
 - 队伍间互不干扰，独立环境（非互攻）
@@ -363,7 +363,7 @@ git add -A && git commit -m "feat(awdp): <description>"
 ### 8.3 分支信息
 
 - 当前分支：`awdp-rewrite`
-- 远程仓库：`https://github.com/Y3X1L2/newGZCTF.git`
+- 远程仓库：`<internal-repository-url>`
 - 基线提交：`814d45c` (Initial commit: existing project state before AWDP rewrite)
 
 ---

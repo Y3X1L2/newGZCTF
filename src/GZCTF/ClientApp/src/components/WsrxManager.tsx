@@ -1,4 +1,4 @@
-import { ActionIcon, Anchor, Divider, Group, Stack, Switch, Text, TextInput, Tooltip } from '@mantine/core'
+import { ActionIcon, Divider, Group, Stack, Switch, Text, TextInput, Tooltip } from '@mantine/core'
 import { useDebouncedValue } from '@mantine/hooks'
 import { mdiRefresh, mdiTuneVertical } from '@mdi/js'
 import { Icon } from '@mdi/react'
@@ -39,15 +39,8 @@ export const WsrxManager: FC = () => {
                 : t('wsrx.state.invalid')}
           </Text>
           {wsrxState !== WsrxState.Usable && (
-            <Text size="xs" fw="normal">
-              <Anchor
-                c="dimmed"
-                href="https://github.com/XDSEC/WebSocketReflectorX/releases"
-                target="_blank"
-                rel="noreferrer"
-              >
-                {t('challenge.content.instance.entry.description.anchor')}
-              </Anchor>
+            <Text size="xs" fw="normal" c="dimmed">
+              {t('challenge.content.instance.entry.description.anchor')}
             </Text>
           )}
         </Stack>

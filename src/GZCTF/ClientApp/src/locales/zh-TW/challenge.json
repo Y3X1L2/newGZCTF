@@ -77,7 +77,7 @@
       },
       "entry": {
         "description": {
-          "anchor": "獲取客戶端",
+          "anchor": "請使用平台提供的代理用戶端",
           "proxy": "平臺已啟用 tcp over ws 代理模式。"
         },
         "label": "實例入口"

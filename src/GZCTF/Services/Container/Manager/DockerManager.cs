@@ -1,8 +1,3 @@
-// SPDX-License-Identifier: LicenseRef-GZCTF-Restricted
-// Copyright (C) 2022-2025 GZTimeWalker
-// Restricted Component - NOT under AGPLv3.
-// See licenses/LicenseRef-GZCTF-Restricted.txt
-
 using System.Net;
 using System.IO.Compression;
 using System.Text;
@@ -436,17 +431,7 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator
                 },
             Name = DockerMetadata.GetName(config),
 
-            // GZCTF_FLAG is Per-team dynamic flag issued & audited by the platform.
-            //
-            // Compliance & Abuse Notice:
-            //
-            // These env vars are integral to anti-abuse, audit trails and license compliance under
-            // the Restricted License (LicenseRef-GZCTF-Restricted). Unauthorized removal, renaming
-            // or semantic alteration can indicate an attempt to bypass license terms or weaken
-            // challenge isolation guarantees. Downstream extensions MUST preserve their semantics.
-            // Modification without a valid authorization may be treated as misuse.
-            //
-            // References: NOTICE, LICENSE_ADDENDUM.txt, licenses/LicenseRef-GZCTF-Restricted.txt
+            // Keep the legacy dynamic-flag environment variable names for challenge image compatibility.
             Env = config.Flag is null
                 ? [$"GZCTF_TEAM_ID={config.TeamId}"]
                 : [$"GZCTF_FLAG={config.Flag}", $"GZCTF_TEAM_ID={config.TeamId}"],

@@ -77,7 +77,7 @@
       },
       "entry": {
         "description": {
-          "anchor": "Получить прокси-клиент",
+          "anchor": "Use the platform proxy client",
           "proxy": "Включен режим проксирования через WebSocket."
         },
         "label": "Информация о контейнере"

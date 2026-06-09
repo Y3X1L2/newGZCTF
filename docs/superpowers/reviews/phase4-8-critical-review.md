@@ -1,6 +1,6 @@
 # Phase 4-8 关键审查报告
 
-> 审查依据: `docs/superpowers/plans/2026-05-19-newGZCTF-refactor.md` (Phase 4-8)
+> 审查依据: `docs/superpowers/plans/2026-05-19-yinyu-ctf-platform-refactor.md` (Phase 4-8)
 > 审查日期: 2026-05-19
 > 审查范围: 分布式调度、游戏阶段、数据模型并发、前端、部署
 

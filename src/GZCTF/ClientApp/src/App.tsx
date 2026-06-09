@@ -14,7 +14,6 @@ import { WsrxProvider } from '@Components/WsrxProvider'
 import { localCacheProvider } from '@Utils/Cache'
 import { useLanguage } from '@Utils/I18n'
 import { useCustomTheme } from '@Utils/ThemeOverride'
-import { useBanner } from '@Hooks/useConfig'
 import { fetcher } from '@Api'
 import '@mantine/core/styles.css'
 import '@mantine/dates/styles.css'
@@ -23,8 +22,6 @@ import '@mantine/notifications/styles.css'
 import './styles/App.css'
 
 export const App: FC = () => {
-  useBanner()
-
   const { t } = useTranslation()
   const { locale } = useLanguage()
   const { theme } = useCustomTheme()

@@ -6,6 +6,7 @@ import { Wsrx, WsrxError, WsrxErrorKind, WsrxFeature, WsrxOptions, WsrxState } f
 import { t } from 'i18next'
 import { createContext, useCallback, use, useEffect, useMemo, useState } from 'react'
 import { showErrorMsg } from '@Utils/Shared'
+import { getPlatformName, PLATFORM_BRAND } from '@Utils/Brand'
 import { useConfig } from '@Hooks/useConfig'
 
 interface CustomWsrxOptions {
@@ -16,7 +17,7 @@ interface CustomWsrxOptions {
 
 export const DefaultWsrxOptions: CustomWsrxOptions = {
   api: 'http://127.0.0.1:3307',
-  name: 'GZ::CTF',
+  name: PLATFORM_BRAND,
   allowLan: false,
 }
 
@@ -119,7 +120,7 @@ export const WsrxProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
   useEffect(() => {
     if (platformConfig?.config.title) {
-      const newName = platformConfig.config.title + '::CTF'
+      const newName = getPlatformName(platformConfig.config.title)
       setWsrxOptions((prevOptions) => {
         if (prevOptions.name === newName) return prevOptions
         return {

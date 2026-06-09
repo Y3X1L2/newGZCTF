@@ -10,7 +10,7 @@
 ## 1. 概述
 
 ### 1.1 目标
-为 NEWGZCTF 平台引入传统团队 AWD（Attack With Defense）赛制，作为独立于原生 Jeopardy CTF 和应急响应（IR）赛制的第三种比赛模式。
+为 YINYU CTF平台 平台引入传统团队 AWD（Attack With Defense）赛制，作为独立于原生 Jeopardy CTF 和应急响应（IR）赛制的第三种比赛模式。
 
 ### 1.2 核心特征
 - **赛制类型**：传统团队 AWD（CTF-AWD）
@@ -675,4 +675,4 @@ dotnet ef database update
 
 ---
 
-*本文档基于对 newGZCTF 项目的深度代码审查和主流 AWD 平台（iCTF、ForcAD、VulnRange、OpenAWD）的功能调研编写。*
+*本文档基于对 YINYU CTF平台 项目的深度代码审查和主流 AWD 平台（iCTF、ForcAD、VulnRange、OpenAWD）的功能调研编写。*

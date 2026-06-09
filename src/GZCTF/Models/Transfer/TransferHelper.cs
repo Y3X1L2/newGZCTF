@@ -21,7 +21,7 @@ public static class TransferHelper
     public static T? FromJson<T>(string json) where T : class => JsonSerializer.Deserialize<T>(json, JsonOptions);
 
     /// <summary>
-    /// Get GZCTF version for export metadata
+    /// Get platform version for export metadata
     /// </summary>
     public static string GetExporterVersion()
     {

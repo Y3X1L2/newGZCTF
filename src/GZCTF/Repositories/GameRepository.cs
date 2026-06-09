@@ -277,8 +277,7 @@ public class GameRepository(
     public Task<Game[]> GetGames(int count, int skip, CancellationToken token) =>
         Context.Games.OrderByDescending(g => g.Id).Skip(skip).Take(count).ToArrayAsync(token);
 
-    // By xfoxfu & GZTimeWalker @ 2022/04/03
-    // Refactored by GZTimeWalker @ 2024/08/31
+    // Generates a scoreboard snapshot inside a transaction so ranks and solve metadata stay consistent.
     public async Task<ScoreboardModel> GenScoreboard(Game game, CancellationToken token = default)
     {
         Dictionary<int, ScoreboardItem> items;
