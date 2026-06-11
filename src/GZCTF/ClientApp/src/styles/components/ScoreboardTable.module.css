@@ -2,27 +2,45 @@
   table-layout: fixed;
   width: auto;
   min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
 
   & thead tr th,
   & tbody tr td {
     text-align: center;
-    padding: 6px 4px;
+    padding: 8px 6px;
     white-space: nowrap;
-    font-size: 12px;
+    font-size: 12.5px;
+    border-color: var(--yy-line);
+    color: var(--yy-muted-readable);
+  }
+
+  & tbody tr td {
+    background: rgba(255, 255, 255, 0.032);
+  }
+
+  & tbody tr:hover td {
+    background:
+      radial-gradient(ellipse at 18% 50%, rgba(107, 238, 177, 0.086), transparent 36%), rgba(255, 255, 255, 0.06);
   }
 }
 
 .thead {
   z-index: 5;
+  position: relative;
 }
 
 .left {
   position: sticky;
-  background-color: light-dark(var(--mantine-color-white), var(--mantine-color-dark-7));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.036)), rgba(11, 14, 14, 0.98);
+  box-shadow: 1px 0 0 var(--yy-line);
 }
 
 .header {
   font-weight: bold;
+  color: var(--yy-text);
+  background:
+    radial-gradient(ellipse at 18% 0%, rgba(107, 238, 177, 0.08), transparent 42%), rgba(255, 255, 255, 0.045);
 }
 
 .mono {
@@ -37,13 +55,16 @@
 }
 
 .legend {
-  position: absolute;
-  top: 0;
-  left: 0;
+  position: relative;
+  display: inline-grid;
   padding: 12px;
-  padding-left: 0;
-  float: left;
+  margin-top: 0.72rem;
+  width: fit-content;
   z-index: 20;
+  border: 1px solid var(--yy-line);
+  border-radius: var(--yy-radius);
+  background: radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.12), transparent 42%), rgba(15, 18, 18, 0.9);
+  backdrop-filter: blur(0.7rem);
 }
 
 .text {
@@ -55,6 +76,8 @@
 .pointer {
   &:hover {
     cursor: pointer;
+    background:
+      radial-gradient(ellipse at 16% 50%, rgba(107, 238, 177, 0.075), transparent 40%), rgba(255, 255, 255, 0.035);
   }
 }
 

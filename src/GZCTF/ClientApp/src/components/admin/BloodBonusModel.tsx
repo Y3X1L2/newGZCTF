@@ -2,6 +2,7 @@ import { Button, Group, Modal, ModalProps, NumberInput, Stack, Text } from '@man
 import { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router'
+import { YinyuModalBody } from '@Components/yinyu/YinyuUI'
 import { BloodBonus } from '@Utils/Shared'
 import { OnceSWRConfig } from '@Hooks/useConfig'
 import api, { SubmissionType } from '@Api'
@@ -52,50 +53,52 @@ export const BloodBonusModel: FC<ModalProps> = (props) => {
 
   return (
     <Modal {...props}>
-      <Stack>
-        <Text>{t('admin.content.games.challenges.bonus.description')}</Text>
-        <NumberInput
-          label={t('admin.content.games.challenges.bonus.first_blood')}
-          defaultValue={5}
-          decimalScale={1}
-          fixedDecimalScale
-          min={0}
-          step={1}
-          max={100}
-          disabled={disabled}
-          value={firstBloodBonus / 10}
-          onChange={(value) => setFirstBloodBonus(Math.floor(toNumber(value) * 10))}
-        />
-        <NumberInput
-          label={t('admin.content.games.challenges.bonus.second_blood')}
-          defaultValue={3}
-          decimalScale={1}
-          fixedDecimalScale
-          min={0}
-          step={1}
-          max={100}
-          disabled={disabled}
-          value={secondBloodBonus / 10}
-          onChange={(value) => setSecondBloodBonus(Math.floor(toNumber(value) * 10))}
-        />
-        <NumberInput
-          label={t('admin.content.games.challenges.bonus.third_blood')}
-          defaultValue={1}
-          decimalScale={1}
-          fixedDecimalScale
-          min={0}
-          step={1}
-          max={100}
-          disabled={disabled}
-          value={thirdBloodBonus / 10}
-          onChange={(value) => setThirdBloodBonus(Math.floor(toNumber(value) * 10))}
-        />
-        <Group grow m="auto" w="100%">
-          <Button fullWidth disabled={disabled} onClick={onUpdate}>
-            {t('admin.button.save')}
-          </Button>
-        </Group>
-      </Stack>
+      <YinyuModalBody>
+        <Stack>
+          <Text>{t('admin.content.games.challenges.bonus.description')}</Text>
+          <NumberInput
+            label={t('admin.content.games.challenges.bonus.first_blood')}
+            defaultValue={5}
+            decimalScale={1}
+            fixedDecimalScale
+            min={0}
+            step={1}
+            max={100}
+            disabled={disabled}
+            value={firstBloodBonus / 10}
+            onChange={(value) => setFirstBloodBonus(Math.floor(toNumber(value) * 10))}
+          />
+          <NumberInput
+            label={t('admin.content.games.challenges.bonus.second_blood')}
+            defaultValue={3}
+            decimalScale={1}
+            fixedDecimalScale
+            min={0}
+            step={1}
+            max={100}
+            disabled={disabled}
+            value={secondBloodBonus / 10}
+            onChange={(value) => setSecondBloodBonus(Math.floor(toNumber(value) * 10))}
+          />
+          <NumberInput
+            label={t('admin.content.games.challenges.bonus.third_blood')}
+            defaultValue={1}
+            decimalScale={1}
+            fixedDecimalScale
+            min={0}
+            step={1}
+            max={100}
+            disabled={disabled}
+            value={thirdBloodBonus / 10}
+            onChange={(value) => setThirdBloodBonus(Math.floor(toNumber(value) * 10))}
+          />
+          <Group grow m="auto" w="100%">
+            <Button fullWidth disabled={disabled} onClick={onUpdate}>
+              {t('admin.button.save')}
+            </Button>
+          </Group>
+        </Stack>
+      </YinyuModalBody>
     </Modal>
   )
 }

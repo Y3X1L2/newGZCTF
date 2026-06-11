@@ -6,6 +6,7 @@ import { Icon } from '@mdi/react'
 import { FC, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { useParams } from 'react-router'
+import { YinyuModalBody } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import { useEditChallenge } from '@Hooks/useEdit'
 import api from '@Api'
@@ -58,7 +59,8 @@ export const FlagCreateModal: FC<ModalProps> = (props) => {
 
   return (
     <Modal {...props}>
-      <Stack>
+      <YinyuModalBody>
+        <Stack>
         <Text size="sm">
           <Trans i18nKey="admin.content.games.challenges.flag.create" />
         </Text>
@@ -79,7 +81,8 @@ export const FlagCreateModal: FC<ModalProps> = (props) => {
             {t('admin.button.challenges.flag.add.normal')}
           </Button>
         </Group>
-      </Stack>
+        </Stack>
+      </YinyuModalBody>
     </Modal>
   )
 }

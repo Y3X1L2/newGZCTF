@@ -1,0 +1,1206 @@
+/* Final YINYU visual refinement layer. Keep this after YinyuTheme.css. */
+:root {
+  --font-display:
+    'Bahnschrift', 'Bahnschrift SemiCondensed', 'DIN Alternate', 'Segoe UI Variable Display', 'Microsoft YaHei UI',
+    'Noto Sans SC', ui-sans-serif, system-ui, sans-serif;
+  --yy-title-glow: 0 0 2rem rgba(107, 238, 177, 0.13), 0 0.9rem 2.4rem rgba(0, 0, 0, 0.42);
+  --yy-hex-border: rgba(118, 255, 189, 0.24);
+  --yy-hex-border-hot: rgba(107, 238, 177, 0.72);
+}
+
+.yy-brand-title,
+.yy-home-title-row h3,
+.yy-about-heading h1,
+.yy-section-head h1,
+.yy-section-head h2,
+.heading h3,
+.game-index-card h4 {
+  font-family: var(--font-display);
+  font-weight: 820;
+  font-stretch: condensed;
+  letter-spacing: 0;
+  text-shadow: var(--yy-title-glow);
+}
+
+.yy-brand-title em,
+.yy-about-heading h1 em {
+  color: var(--yy-green);
+  font-style: normal;
+  font-weight: 760;
+}
+
+.yy-home-title-row h3 {
+  font-size: clamp(2.95rem, 5.15vw, 5.55rem);
+}
+
+.yy-about-stage {
+  grid-template-columns: minmax(22rem, 0.82fr) minmax(42rem, 1.18fr);
+  gap: clamp(1.3rem, 3.6vw, 4.2rem);
+}
+
+.yy-about-heading {
+  max-width: 48rem;
+}
+
+.yy-about-heading h1 {
+  font-size: clamp(3.55rem, 6.6vw, 7.2rem);
+  line-height: 0.86;
+}
+
+.yy-about-hive {
+  --about-hex-width: clamp(11.1rem, 12.8vw, 14.4rem);
+  --about-hex-height: calc(var(--about-hex-width) * 0.8660254);
+  display: block;
+  width: calc(var(--about-hex-width) * 2.72);
+  max-width: 100%;
+  margin-top: clamp(0.45rem, 1.2vh, 0.85rem);
+  padding: clamp(0.5rem, 1vw, 0.75rem) 0 clamp(1.2rem, 2vw, 1.6rem);
+  overflow: visible;
+}
+
+.yy-about-hive-row {
+  display: flex;
+  gap: 0;
+  width: max-content;
+  margin-top: calc(var(--about-hex-height) * -0.5);
+}
+
+.yy-about-hive-row:first-child {
+  margin-top: 0;
+  margin-left: calc(var(--about-hex-width) * 0.375);
+}
+
+.yy-about-hive-row:nth-child(2) {
+  margin-left: 0;
+}
+
+.yy-about-hive-row:nth-child(3) {
+  margin-left: calc(var(--about-hex-width) * 0.375);
+}
+
+.yy-about-hive-cell {
+  width: var(--about-hex-width);
+  height: var(--about-hex-height);
+  margin-left: calc(var(--about-hex-width) * -0.25);
+  padding: calc(var(--about-hex-width) * 0.1) calc(var(--about-hex-width) * 0.18);
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+  background:
+    radial-gradient(ellipse at 48% 31%, rgba(107, 238, 177, 0.12), transparent 54%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.062), rgba(255, 255, 255, 0.013)), rgba(4, 6, 6, 0.9);
+  box-shadow:
+    inset 0 0 0 1px var(--yy-hex-border),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.02),
+    0 1rem 2.6rem rgba(0, 0, 0, 0.2);
+}
+
+.yy-about-hive-cell:first-child {
+  margin-left: 0;
+}
+
+.yy-about-hive-cell::before {
+  background:
+    var(--yy-hex-flow),
+    radial-gradient(ellipse at 50% 50%, rgba(107, 238, 177, 0.2), transparent 62%);
+  background-size:
+    0.92rem 0.8rem,
+    auto;
+  opacity: 0.3;
+}
+
+.yy-about-hive-cell::after {
+  inset: 0;
+  clip-path: inherit;
+  background:
+    linear-gradient(116deg, transparent 18%, rgba(107, 238, 177, 0.2) 42%, transparent 67%),
+    radial-gradient(ellipse at 50% 50%, rgba(107, 238, 177, 0.16), transparent 62%);
+  opacity: 0;
+}
+
+.yy-about-hive-cell:hover,
+.yy-about-hive-cell:focus-within {
+  transform: translateY(-0.18rem) scale(1.016);
+  box-shadow:
+    inset 0 0 0 1px var(--yy-hex-border-hot),
+    inset 0 0 0 2px rgba(107, 238, 177, 0.1),
+    0 0 0.9rem rgba(107, 238, 177, 0.2),
+    0 0 2.8rem rgba(107, 238, 177, 0.24),
+    0 1.2rem 3rem rgba(0, 0, 0, 0.34);
+}
+
+.yy-about-hive-icon {
+  width: clamp(1.95rem, 2.5vw, 2.65rem);
+  height: clamp(1.95rem, 2.5vw, 2.65rem);
+  margin-bottom: clamp(0.22rem, 0.45vw, 0.38rem);
+}
+
+.yy-about-hive-cell strong {
+  max-width: 7.6em;
+  font-size: clamp(0.96rem, 1.05vw, 1.16rem);
+  line-height: 1.02;
+}
+
+.yy-about-hive-cell p {
+  display: -webkit-box;
+  max-width: 8.9em;
+  margin-top: 0.3rem;
+  overflow: hidden;
+  color: rgba(244, 245, 245, 0.78);
+  font-size: clamp(0.68rem, 0.78vw, 0.82rem);
+  font-weight: 640;
+  line-height: 1.34;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.yy-about-hive-cell.is-accent p {
+  max-width: 7.2em;
+  -webkit-line-clamp: 2;
+}
+
+.yy-game-hive-grid {
+  --game-hex-width: clamp(18.4rem, 24vw, 23.4rem);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--game-hex-width)), var(--game-hex-width)));
+  justify-content: center;
+  gap: clamp(0.55rem, 1.2vw, 0.85rem) clamp(0.35rem, 0.9vw, 0.65rem);
+  padding-top: clamp(0.15rem, 0.8vh, 0.45rem);
+}
+
+@media (min-width: 70em) {
+  .yy-game-hive-grid > .game-index-card:nth-child(3n + 2),
+  .yy-game-hive-grid > .game-index-card:nth-child(3n) {
+    margin-top: 0;
+  }
+}
+
+.game-index-card.game-honey-card.panel-card {
+  width: var(--game-hex-width);
+  max-width: 100%;
+  min-height: calc(var(--game-hex-width) * 0.87);
+  aspect-ratio: 1.1547;
+  padding: calc(var(--game-hex-width) * 0.115) calc(var(--game-hex-width) * 0.18);
+  gap: clamp(0.42rem, 0.9vw, 0.72rem);
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+  box-shadow:
+    inset 0 0 0 1px rgba(118, 255, 189, 0.2),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.018),
+    0 1.2rem 3rem rgba(0, 0, 0, 0.24);
+}
+
+.game-index-card > .mantine-Group-root {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  min-width: 0;
+}
+
+.game-index-card .game-flag-glyph {
+  width: clamp(5.4rem, 7vw, 7.1rem);
+  height: clamp(5.4rem, 7vw, 7.1rem);
+  margin-top: 0;
+}
+
+.game-index-card h4 {
+  display: -webkit-box;
+  max-width: 12.5em;
+  overflow: hidden;
+  font-size: clamp(1.04rem, 1.26vw, 1.3rem);
+  line-height: 1.05;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.game-index-card .yy-readable-text {
+  max-width: 16.5em;
+  color: rgba(244, 245, 245, 0.76);
+  font-size: clamp(0.78rem, 0.9vw, 0.9rem);
+  line-height: 1.42;
+}
+
+.game-index-card dl {
+  gap: clamp(0.34rem, 0.8vw, 0.55rem);
+  padding-top: clamp(0.42rem, 0.8vw, 0.64rem);
+}
+
+.game-index-card dt,
+.game-index-card dd {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 64em) {
+  .yy-about-hive {
+    --about-hex-width: clamp(10rem, 33vw, 12.2rem);
+    overflow-x: auto;
+  }
+
+  .yy-game-hive-grid {
+    --game-hex-width: min(22rem, calc(100vw - 2rem));
+  }
+}
+
+/* Geometry correction: point-top honeycomb tiles touch without crushing content. */
+.yy-about-hive {
+  --about-hex-height: clamp(13.2rem, 14.4vw, 16.8rem);
+  --about-hex-width: calc(var(--about-hex-height) * 0.8660254);
+  width: calc(var(--about-hex-width) * 3);
+}
+
+.yy-about-hive-row {
+  margin-top: calc(var(--about-hex-height) * -0.25);
+}
+
+.yy-about-hive-row:first-child,
+.yy-about-hive-row:nth-child(3) {
+  margin-left: calc(var(--about-hex-width) * 0.5);
+}
+
+.yy-about-hive-row:nth-child(2) {
+  margin-left: 0;
+}
+
+.yy-about-hive-cell {
+  width: var(--about-hex-width);
+  height: var(--about-hex-height);
+  margin-left: 0;
+  padding: calc(var(--about-hex-height) * 0.13) calc(var(--about-hex-width) * 0.16);
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+
+.yy-about-hive-icon {
+  margin-bottom: clamp(0.28rem, 0.5vw, 0.44rem);
+}
+
+.yy-about-hive-cell strong {
+  max-width: calc(var(--about-hex-width) * 0.62);
+  font-size: clamp(1rem, 1.1vw, 1.22rem);
+}
+
+.yy-about-hive-cell p {
+  max-width: calc(var(--about-hex-width) * 0.66);
+  font-size: clamp(0.72rem, 0.82vw, 0.88rem);
+  line-height: 1.38;
+}
+
+.yy-about-hive-cell.is-accent p {
+  max-width: calc(var(--about-hex-width) * 0.58);
+}
+
+.game-index-card dl {
+  grid-template-columns: minmax(4.4rem, 0.74fr) minmax(9.8rem, 1.26fr);
+}
+
+.game-index-card dl div:last-child dt,
+.game-index-card dl div:last-child dd {
+  overflow: visible;
+  color: rgba(244, 245, 245, 0.9);
+  font-size: clamp(0.68rem, 0.74vw, 0.76rem);
+  line-height: 1.24;
+  text-overflow: clip;
+  white-space: normal;
+  word-break: keep-all;
+}
+
+@media (max-width: 64em) {
+  .yy-about-hive {
+    --about-hex-height: clamp(12rem, 43vw, 15rem);
+    width: max-content;
+  }
+
+  .game-index-card dl {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Home recent games use the same honeycomb language as the games index, scaled for the side rail. */
+.yy-home-layout .recent-games-draft {
+  gap: clamp(0.72rem, 1.2vh, 0.95rem);
+  justify-items: center;
+  overflow: visible;
+}
+
+.yy-home-layout .recent-game-card.panel-card {
+  position: relative;
+  width: min(100%, 28rem);
+  min-height: auto;
+  aspect-ratio: 1.1547;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, auto) auto;
+  align-content: center;
+  gap: clamp(0.38rem, 0.7vw, 0.55rem);
+  padding: clamp(1.05rem, 1.6vw, 1.28rem) clamp(3.1rem, 4.4vw, 4rem) clamp(1.2rem, 1.8vw, 1.5rem);
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+  background:
+    radial-gradient(ellipse at 52% 28%, rgba(107, 238, 177, 0.11), transparent 56%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.058), rgba(255, 255, 255, 0.014)), rgba(4, 6, 6, 0.9);
+  box-shadow:
+    inset 0 0 0 1px rgba(118, 255, 189, 0.2),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.018),
+    0 1.1rem 2.6rem rgba(0, 0, 0, 0.24);
+}
+
+.yy-home-layout .recent-game-card.panel-card::before {
+  background:
+    var(--yy-hex-flow),
+    radial-gradient(ellipse at 50% 35%, rgba(107, 238, 177, 0.15), transparent 62%);
+  background-size:
+    0.95rem 0.82rem,
+    auto;
+  opacity: 0.32;
+}
+
+.yy-home-layout .recent-game-card.panel-card:hover {
+  color: inherit;
+  transform: translateY(-0.16rem) scale(1.01);
+  box-shadow:
+    inset 0 0 0 1px var(--yy-hex-border-hot),
+    inset 0 0 0 2px rgba(107, 238, 177, 0.08),
+    0 0 2.2rem rgba(107, 238, 177, 0.18),
+    0 1.2rem 3rem rgba(0, 0, 0, 0.34);
+}
+
+.yy-home-layout .recent-game-card .yy-status-pill,
+.yy-home-layout .recent-game-card .status-pill {
+  justify-self: end;
+  margin-right: clamp(0.4rem, 1vw, 0.9rem);
+  max-width: 100%;
+}
+
+.yy-home-layout .recent-game-card .game-flag-glyph {
+  width: clamp(3.25rem, 4.4vw, 4.25rem);
+  height: clamp(3.25rem, 4.4vw, 4.25rem);
+  margin: 0 auto 0.02rem;
+}
+
+.yy-home-layout .recent-game-card h4 {
+  display: -webkit-box;
+  width: min(100%, 15.5rem);
+  max-width: 72%;
+  justify-self: center;
+  margin: 0;
+  overflow: hidden;
+  font-size: clamp(0.92rem, 1.08vw, 1.12rem);
+  line-height: 1.08;
+  text-align: left;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.yy-home-layout .recent-game-card dl {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: clamp(0.28rem, 0.6vw, 0.42rem);
+  width: min(100%, 15.5rem);
+  max-width: 72%;
+  justify-self: center;
+  margin: 0;
+  padding-top: clamp(0.38rem, 0.7vw, 0.54rem);
+  border-top: 1px solid rgba(107, 238, 177, 0.14);
+}
+
+.yy-home-layout .recent-game-card dl div {
+  display: grid;
+  grid-template-columns: minmax(3.8em, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.48rem;
+}
+
+.yy-home-layout .recent-game-card dt,
+.yy-home-layout .recent-game-card dd {
+  min-width: 0;
+  margin: 0;
+  overflow: visible;
+  font-size: clamp(0.62rem, 0.7vw, 0.7rem);
+  line-height: 1.24;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.yy-home-layout .recent-game-card dt {
+  color: rgba(244, 245, 245, 0.58);
+}
+
+.yy-home-layout .recent-game-card dd {
+  color: rgba(244, 245, 245, 0.92);
+  text-align: right;
+  word-break: keep-all;
+}
+
+@media (max-width: 88em) {
+  .yy-home-layout .recent-game-card.panel-card {
+    padding-inline: clamp(2.75rem, 5vw, 3.4rem);
+  }
+
+  .yy-home-layout .recent-game-card h4,
+  .yy-home-layout .recent-game-card dl {
+    max-width: 66%;
+  }
+}
+
+/* Scoreboard readability: keep the original chart/table logic, but lift it into
+   the YINYU low-noise panel language so the live background does not fight data. */
+.yy-score-timeline-panel {
+  width: 100%;
+  min-height: 460px;
+  padding: clamp(0.9rem, 1.4vw, 1.18rem);
+  border-color: rgba(107, 238, 177, 0.17);
+  background:
+    radial-gradient(ellipse at 12% 6%, rgba(107, 238, 177, 0.12), transparent 34%),
+    radial-gradient(ellipse at 84% 78%, rgba(245, 245, 247, 0.055), transparent 42%),
+    rgba(15, 18, 18, 0.82);
+  backdrop-filter: blur(0.82rem);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.028),
+    0 1.25rem 3.2rem rgba(0, 0, 0, 0.32);
+}
+
+.scoreboard-draft.yy-table-shell,
+.scoreboard-draft.panel-card {
+  border-color: rgba(107, 238, 177, 0.16);
+  background:
+    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.1), transparent 38%),
+    radial-gradient(ellipse at 82% 88%, rgba(245, 245, 247, 0.045), transparent 44%),
+    rgba(15, 18, 18, 0.84);
+  backdrop-filter: blur(0.86rem);
+}
+
+.scoreboard-draft .mantine-TableScrollContainer-scrollContainer {
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: var(--yy-radius);
+  background: rgba(7, 9, 9, 0.38);
+}
+
+.scoreboard-draft .mantine-Input-input,
+.scoreboard-draft .mantine-Select-input,
+.scoreboard-draft .mantine-TextInput-input {
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.scoreboard-draft .mantine-Pagination-control[data-active] {
+  background: linear-gradient(135deg, rgba(107, 238, 177, 0.9), rgba(80, 218, 156, 0.72));
+  color: #03100b;
+}
+
+/* Admin route transition: design-lab signal sweep instead of the legacy plain fade. */
+.yy-admin-shell .admin-main,
+.yy-game-edit-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.yy-admin-tab-scroll,
+.yy-admin-shell .admin-toolbar,
+.yy-game-edit-nav,
+.yy-game-edit-panel > .mantine-Stack-root,
+.yy-game-edit-panel > form,
+.yy-game-edit-panel > div:not(.yy-admin-transition-overlay) {
+  position: relative;
+  z-index: 3;
+}
+
+.yy-admin-shell .admin-toolbar {
+  z-index: 6;
+}
+
+.yy-admin-shell .admin-toolbar.panel-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 3.5rem;
+  height: auto;
+  overflow: visible;
+}
+
+.yy-admin-shell .admin-toolbar.panel-card > * {
+  min-width: 0;
+  position: relative;
+  z-index: 5;
+}
+
+.yy-admin-shell .admin-toolbar .mantine-Button-root,
+.yy-admin-shell .admin-toolbar .mantine-ActionIcon-root {
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.yy-admin-shell .admin-toolbar .mantine-Progress-root {
+  pointer-events: none;
+}
+
+.yy-admin-route-stage {
+  position: relative;
+  min-width: 0;
+  isolation: isolate;
+  animation: yy-admin-route-enter 440ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.yy-admin-route-stage > :not(.yy-admin-route-pulse) {
+  position: relative;
+  z-index: 3;
+}
+
+.yy-admin-route-stage > .yy-admin-route-pulse {
+  position: absolute;
+  inset: 0.5rem auto auto 0.7rem;
+  z-index: 0;
+  width: min(12rem, calc(100% - 1.4rem));
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-0.18rem);
+  animation: yy-admin-route-transition 920ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.yy-admin-transition-overlay .route-loader {
+  min-height: 3.18rem;
+}
+
+.yy-admin-route-pulse,
+.yy-admin-transition-overlay .route-progress {
+  grid-template-columns: repeat(18, minmax(0, 0.48rem));
+}
+
+.yy-admin-route-pulse i,
+.yy-admin-transition-overlay .route-progress i {
+  box-shadow: 0 0 0.86rem rgba(107, 238, 177, 0.12);
+}
+
+.yy-game-edit-grid {
+  display: grid;
+  grid-template-columns: 10rem minmax(0, 1fr);
+  align-items: start;
+  gap: 0.85rem;
+}
+
+.yy-game-edit-nav.admin-panel {
+  min-height: auto;
+  padding: 0.62rem;
+  overflow: hidden;
+}
+
+.yy-game-edit-panel.admin-panel.large {
+  width: 100%;
+  min-width: 0;
+  min-height: min(58rem, calc(100dvh - 12rem));
+  padding: clamp(1rem, 1.45vw, 1.35rem);
+}
+
+.yy-game-edit-nav .mantine-Tabs-list {
+  display: grid;
+  gap: 0.42rem;
+  width: 100%;
+}
+
+.yy-game-edit-nav .mantine-Tabs-tab {
+  min-height: 2.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: var(--yy-radius);
+  background:
+    radial-gradient(ellipse at 18% 18%, rgba(107, 238, 177, 0.06), transparent 42%),
+    rgba(255, 255, 255, 0.022);
+  color: var(--yy-muted-readable);
+  font-weight: 820;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.yy-game-edit-nav .mantine-Tabs-tab:hover,
+.yy-game-edit-nav .mantine-Tabs-tab[data-active] {
+  color: var(--yy-text);
+  border-color: rgba(107, 238, 177, 0.28);
+  background:
+    radial-gradient(ellipse at 28% 20%, rgba(107, 238, 177, 0.15), transparent 48%),
+    var(--yy-hex-flow),
+    rgba(107, 238, 177, 0.05);
+  background-size:
+    auto,
+    1.08rem 0.94rem,
+    auto;
+  transform: translateX(2px);
+}
+
+@media (max-width: 64em) {
+  .yy-game-edit-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.yy-admin-route-stage::before,
+.yy-admin-route-stage::after {
+  content: '';
+  position: absolute;
+  inset: -0.25rem;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.yy-admin-route-stage::before {
+  background:
+    linear-gradient(90deg, transparent, rgba(107, 238, 177, 0.18), transparent),
+    var(--yy-hex-flow);
+  background-size:
+    auto,
+    1.05rem 0.91rem;
+  opacity: 0;
+  transform: translateX(-112%);
+  animation: yy-admin-route-sweep 680ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  mix-blend-mode: screen;
+}
+
+.yy-admin-route-stage::after {
+  border: 1px solid rgba(107, 238, 177, 0.16);
+  background:
+    radial-gradient(ellipse at 14% 8%, rgba(107, 238, 177, 0.1), transparent 32%),
+    radial-gradient(ellipse at 86% 92%, rgba(107, 238, 177, 0.07), transparent 36%);
+  opacity: 0;
+  animation: yy-admin-route-frame 720ms ease-out both;
+}
+
+.yy-admin-transition-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: clamp(1rem, 3vw, 2rem);
+  background:
+    radial-gradient(ellipse at 50% 28%, rgba(107, 238, 177, 0.11), transparent 28rem),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.38), rgba(0, 0, 0, 0.64));
+  backdrop-filter: blur(0.34rem);
+}
+
+.yy-admin-transition-overlay .route-loader {
+  min-width: min(27rem, calc(100vw - 4rem));
+  border-color: rgba(107, 238, 177, 0.24);
+  background:
+    radial-gradient(ellipse at 20% 18%, rgba(107, 238, 177, 0.14), transparent 42%),
+    var(--yy-hex-flow),
+    rgba(4, 6, 6, 0.82);
+  background-size:
+    auto,
+    1rem 0.866rem,
+    auto;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.035),
+    0 1.4rem 4rem rgba(0, 0, 0, 0.42),
+    0 0 2rem rgba(107, 238, 177, 0.14);
+}
+
+.yy-admin-transition-overlay .yy-route-transition {
+  width: min(27rem, calc(100vw - 4rem));
+}
+
+@keyframes yy-admin-route-enter {
+  0% {
+    opacity: 0.66;
+    filter: saturate(0.82) brightness(0.9);
+  }
+  58% {
+    opacity: 1;
+    filter: saturate(1.06) brightness(1.05);
+  }
+  100% {
+    opacity: 1;
+    filter: none;
+  }
+}
+
+@keyframes yy-admin-route-transition {
+  0% {
+    opacity: 0;
+    transform: translateY(-0.32rem);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  68% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-0.16rem);
+  }
+}
+
+@keyframes yy-admin-route-sweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-112%);
+  }
+  24% {
+    opacity: 0.72;
+  }
+  72% {
+    opacity: 0.42;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(112%);
+  }
+}
+
+@keyframes yy-admin-route-frame {
+  0% {
+    opacity: 0;
+    transform: scaleX(0.985);
+  }
+  35% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yy-admin-route-stage,
+  .yy-admin-route-stage::before,
+  .yy-admin-route-stage::after,
+  .yy-admin-route-stage > .yy-admin-route-pulse {
+    animation: none !important;
+  }
+
+  .yy-admin-route-stage > .yy-admin-route-pulse {
+    display: none;
+  }
+}
+
+/* Event rows: the real app now uses one horizontal poster-card language for
+   home and /games. These rules intentionally outrank the earlier honeycomb
+   experiment and the base design-lab square card defaults. */
+.yy-game-event-list,
+.yy-home-event-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(0.9rem, 1.4vw, 1.15rem);
+  width: 100%;
+}
+
+.yy-games-page .yy-game-event-list {
+  max-width: min(100%, 82rem);
+  margin-inline: auto;
+}
+
+.game-index-card.game-event-row.panel-card {
+  width: 100%;
+  max-width: 100%;
+  min-height: clamp(12.6rem, 15.8vw, 16.2rem);
+  aspect-ratio: auto;
+  display: grid;
+  grid-template-columns: clamp(15rem, 22vw, 22rem) minmax(0, 1fr) auto;
+  grid-template-rows: none;
+  align-items: stretch;
+  gap: clamp(1rem, 1.55vw, 1.45rem);
+  padding: clamp(0.74rem, 1.18vw, 1rem);
+  clip-path: none;
+  border-radius: var(--yy-radius);
+}
+
+.game-index-card.game-event-row.panel-card::before,
+.game-index-card.game-event-row.panel-card::after {
+  clip-path: none;
+}
+
+.game-event-row .game-flag-glyph {
+  width: clamp(7.2rem, 10.4vw, 9.8rem);
+  height: clamp(7.2rem, 10.4vw, 9.8rem);
+  margin: 0;
+}
+
+.game-event-row [class*='posterFallback'] .game-flag-glyph {
+  width: clamp(6.8rem, 9.2vw, 8.8rem);
+  height: clamp(6.8rem, 9.2vw, 8.8rem);
+  margin: 0;
+  transform: translateY(0.28rem);
+}
+
+.yy-home-event-list .game-event-row [class*='posterFallback'] .game-flag-glyph {
+  width: clamp(5.8rem, 6.8vw, 7rem);
+  height: clamp(5.8rem, 6.8vw, 7rem);
+}
+
+.game-event-row h4 {
+  display: block;
+  width: auto;
+  max-width: min(100%, 34em);
+  overflow: visible;
+  color: var(--yy-text);
+  font-size: clamp(1.42rem, 2.05vw, 2.28rem);
+  line-height: 1.08;
+  -webkit-line-clamp: unset;
+}
+
+.game-event-row .yy-readable-text {
+  max-width: 58rem;
+  color: rgba(244, 245, 245, 0.78);
+  font-size: clamp(0.95rem, 1vw, 1.06rem);
+  line-height: 1.58;
+}
+
+.game-event-row dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(0.55rem, 1vw, 0.75rem);
+  width: 100%;
+  max-width: min(100%, 34rem);
+  margin: clamp(0.15rem, 0.55vw, 0.38rem) 0 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.game-event-row dl div {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+  padding: 0.52rem 0.62rem;
+  border: 1px solid rgba(255, 255, 255, 0.058);
+  border-radius: calc(var(--yy-radius) - 3px);
+  background:
+    radial-gradient(ellipse at 16% 12%, rgba(107, 238, 177, 0.07), transparent 46%),
+    rgba(255, 255, 255, 0.028);
+}
+
+.game-event-row dt,
+.game-event-row dd,
+.game-event-row dl div:last-child dt,
+.game-event-row dl div:last-child dd {
+  min-width: 0;
+  margin: 0;
+  overflow: visible;
+  color: rgba(244, 245, 245, 0.92);
+  font-size: clamp(0.78rem, 0.84vw, 0.9rem);
+  line-height: 1.28;
+  text-overflow: clip;
+  white-space: normal;
+  word-break: keep-all;
+}
+
+.game-event-row dt,
+.game-event-row dl div:last-child dt {
+  color: rgba(244, 245, 245, 0.54);
+  font-size: 0.7rem;
+}
+
+.game-event-row.game-index-card .yy-status-pill {
+  width: max-content;
+  max-width: max-content;
+}
+
+.yy-home-event-list .game-event-row.game-index-card.panel-card {
+  min-height: clamp(10.8rem, 13.5vw, 13.5rem);
+  grid-template-columns: clamp(12rem, 18vw, 17rem) minmax(0, 1fr) auto;
+}
+
+.yy-home-event-list .game-event-row dl {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 72em) {
+  .game-index-card.game-event-row.panel-card,
+  .yy-home-event-list .game-event-row.game-index-card.panel-card {
+    grid-template-columns: minmax(12rem, 17rem) minmax(0, 1fr);
+  }
+
+  .game-event-row dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 48em) {
+  .game-index-card.game-event-row.panel-card,
+  .yy-home-event-list .game-event-row.game-index-card.panel-card {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Team center redesign: readable controls and YINYU signal-card language. */
+.yy-team-page {
+  min-height: calc(100dvh - 5rem);
+  gap: clamp(0.9rem, 1.55vw, 1.18rem);
+  padding-block: clamp(0.1rem, 0.6vh, 0.42rem) clamp(0.6rem, 1.4vh, 1rem);
+}
+
+.yy-team-hero.panel-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: clamp(0.9rem, 1.5vw, 1.25rem);
+  min-height: clamp(8.8rem, 12vw, 11.4rem);
+  padding: clamp(1rem, 1.8vw, 1.55rem);
+  overflow: hidden;
+  border-color: rgba(107, 238, 177, 0.18);
+  background:
+    radial-gradient(ellipse at 12% 8%, rgba(107, 238, 177, 0.13), transparent 42%),
+    radial-gradient(ellipse at 91% 78%, rgba(107, 238, 177, 0.08), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.016)),
+    rgba(5, 7, 7, 0.86);
+}
+
+.yy-team-hero.panel-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.yy-team-hero-copy {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.yy-team-hero-copy h1 {
+  margin: 0;
+  color: var(--yy-text);
+  font-size: clamp(2.5rem, 4.4vw, 4.6rem);
+  line-height: 0.98;
+}
+
+.yy-team-hero-copy p {
+  max-width: 62ch;
+  margin: 0;
+  color: rgba(244, 245, 245, 0.78);
+  font-size: clamp(0.96rem, 1.08vw, 1.12rem);
+  line-height: 1.62;
+}
+
+.yy-team-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(7.8rem, 1fr));
+  gap: 0.65rem;
+}
+
+.yy-team-hero-stats > div {
+  min-width: 0;
+  padding: 0.72rem 0.82rem;
+  border: 1px solid rgba(107, 238, 177, 0.14);
+  border-radius: calc(var(--yy-radius) - 4px);
+  background:
+    var(--yy-hex-flow),
+    rgba(255, 255, 255, 0.026);
+  background-size: 1rem 0.866rem, auto;
+}
+
+.yy-team-hero-stats span {
+  display: block;
+  color: rgba(244, 245, 245, 0.54);
+  font-size: 0.72rem;
+  font-weight: 780;
+  letter-spacing: 0.08em;
+}
+
+.yy-team-hero-stats strong {
+  display: block;
+  color: var(--yy-text);
+  font-family: var(--font-display);
+  font-size: clamp(1.55rem, 2.4vw, 2.35rem);
+  line-height: 1;
+}
+
+.yy-team-actions {
+  min-width: max-content;
+}
+
+.yy-team-action.mantine-Button-root {
+  position: relative;
+  min-height: 2.85rem;
+  padding-inline: 1.05rem;
+  overflow: hidden;
+  border-radius: 999px;
+  color: rgba(244, 245, 245, 0.96) !important;
+  font-weight: 820;
+  letter-spacing: 0.02em;
+  box-shadow: none;
+}
+
+.yy-team-action.mantine-Button-root::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(112deg, transparent 12%, rgba(107, 238, 177, 0.26) 44%, transparent 72%);
+  opacity: 0;
+  transform: translateX(-45%);
+  transition:
+    opacity 180ms ease,
+    transform 260ms ease;
+}
+
+.yy-team-action.mantine-Button-root:hover::before,
+.yy-team-action.mantine-Button-root:focus-visible::before {
+  opacity: 0.72;
+  transform: translateX(38%);
+}
+
+.yy-team-action-join.mantine-Button-root {
+  border-color: rgba(107, 238, 177, 0.44) !important;
+  background:
+    radial-gradient(ellipse at 24% 20%, rgba(107, 238, 177, 0.12), transparent 50%),
+    rgba(8, 13, 12, 0.78) !important;
+}
+
+.yy-team-action-create.mantine-Button-root {
+  border-color: rgba(107, 238, 177, 0.56) !important;
+  background:
+    radial-gradient(ellipse at 30% 16%, rgba(255, 255, 255, 0.16), transparent 42%),
+    linear-gradient(135deg, rgba(107, 238, 177, 0.28), rgba(30, 106, 76, 0.74)) !important;
+}
+
+.yy-team-action.mantine-Button-root .mantine-Button-inner {
+  position: relative;
+  z-index: 1;
+}
+
+.yy-team-grid {
+  align-items: stretch;
+}
+
+/* About page compact pass: keep the large-logo / honeycomb concept visible at 100% zoom. */
+.yy-about-page {
+  min-height: calc(100dvh - 4.75rem);
+  padding-block: clamp(0.05rem, 0.5vh, 0.35rem);
+}
+
+.yy-about-stage {
+  grid-template-columns: minmax(18rem, 0.72fr) minmax(31rem, 1.28fr);
+  gap: clamp(0.85rem, 2.2vw, 2.65rem);
+  min-height: calc(100dvh - 5.1rem);
+  align-items: center;
+}
+
+.yy-about-logo-panel {
+  min-height: clamp(21rem, 56vh, 33rem);
+  transform: translateX(clamp(-1.25rem, -1.9vw, -0.3rem));
+}
+
+.yy-about-logo-distortion {
+  width: min(100%, 31.5rem);
+}
+
+.yy-about-copy {
+  gap: clamp(0.72rem, 1.35vw, 1.08rem);
+  min-height: auto;
+  transform: translateX(clamp(-0.55rem, -0.7vw, -0.12rem));
+}
+
+.yy-about-heading {
+  max-width: 43rem;
+}
+
+.yy-about-heading h1 {
+  margin-top: 0.28rem;
+  font-size: clamp(2.65rem, 4.75vw, 5.25rem);
+  line-height: 0.98;
+}
+
+.yy-about-heading h1 span,
+.yy-about-heading h1 em {
+  display: block;
+}
+
+.yy-about-slogan {
+  margin-top: 0.15rem;
+  font-size: clamp(0.96rem, 1.25vw, 1.18rem);
+  line-height: 1.42;
+}
+
+.yy-about-description {
+  max-width: 42rem;
+  font-size: clamp(0.88rem, 1vw, 1rem);
+  line-height: 1.58;
+}
+
+.yy-about-hive {
+  --about-hex-height: clamp(9.45rem, 10.4vw, 12.3rem);
+  --about-hex-width: calc(var(--about-hex-height) * 0.8660254);
+  width: calc(var(--about-hex-width) * 3);
+  margin-top: clamp(0.12rem, 0.45vh, 0.36rem);
+  padding: 0;
+}
+
+.yy-about-hive-row {
+  margin-top: calc(var(--about-hex-height) * -0.25);
+}
+
+.yy-about-hive-row:first-child,
+.yy-about-hive-row:nth-child(3) {
+  margin-left: calc(var(--about-hex-width) * 0.5);
+}
+
+.yy-about-hive-cell {
+  width: var(--about-hex-width);
+  height: var(--about-hex-height);
+  padding: calc(var(--about-hex-height) * 0.115) calc(var(--about-hex-width) * 0.16);
+}
+
+.yy-about-hive-icon {
+  width: clamp(1.55rem, 1.8vw, 2.15rem);
+  height: clamp(1.55rem, 1.8vw, 2.15rem);
+  margin-bottom: clamp(0.16rem, 0.28vw, 0.3rem);
+}
+
+.yy-about-hive-cell strong {
+  max-width: calc(var(--about-hex-width) * 0.68);
+  font-size: clamp(0.84rem, 0.92vw, 1.02rem);
+  line-height: 1.05;
+}
+
+.yy-about-hive-cell p {
+  max-width: calc(var(--about-hex-width) * 0.68);
+  margin-top: 0.24rem;
+  font-size: clamp(0.62rem, 0.68vw, 0.74rem);
+  line-height: 1.28;
+  -webkit-line-clamp: 3;
+}
+
+.yy-about-hive-cell.is-accent p {
+  -webkit-line-clamp: 2;
+}
+
+@media (max-width: 72em) {
+  .yy-team-hero.panel-card {
+    grid-template-columns: 1fr;
+  }
+
+  .yy-team-actions,
+  .yy-team-hero-stats {
+    width: 100%;
+  }
+}
+
+@media (max-width: 64em) {
+  .yy-about-stage {
+    min-height: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .yy-about-logo-panel {
+    min-height: clamp(15rem, 34vh, 22rem);
+    transform: none;
+  }
+
+  .yy-about-logo-distortion {
+    width: min(72vw, 24rem);
+  }
+
+  .yy-about-copy {
+    transform: none;
+  }
+
+  .yy-about-hive {
+    --about-hex-height: clamp(9rem, 31vw, 11.5rem);
+    width: max-content;
+    max-width: 100%;
+    overflow-x: auto;
+    padding-bottom: 0.7rem;
+  }
+}

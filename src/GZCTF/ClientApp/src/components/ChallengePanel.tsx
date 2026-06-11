@@ -24,6 +24,7 @@ import { ChallengeCard } from '@Components/ChallengeCard'
 import { Empty } from '@Components/Empty'
 import { GameChallengeModal } from '@Components/GameChallengeModal'
 import { WriteupSubmitModal } from '@Components/WriteupSubmitModal'
+import { YinyuHexField } from '@Components/yinyu/YinyuUI'
 import { useChallengeCategoryLabelMap, SubmissionTypeIconMap } from '@Utils/Shared'
 import { useGame, useGameTeamInfo } from '@Hooks/useGame'
 import { ChallengeInfo, ChallengeCategory, SubmissionType } from '@Api'
@@ -144,7 +145,8 @@ export const ChallengePanel: FC = () => {
 
   return (
     <>
-      <Stack miw="10.5rem">
+      <Stack miw="10.5rem" className="detail-panel panel-card" p="sm">
+        <YinyuHexField cells={24} />
         {game?.writeupRequired && (
           <>
             <Button
@@ -227,6 +229,7 @@ export const ChallengePanel: FC = () => {
           </Center>
         ) : currentChallenges && currentChallenges.length ? (
           <SimpleGrid
+            className="challenge-grid"
             p="xs"
             w="100%"
             pt={0}

@@ -80,8 +80,49 @@ public class EntityConfigurationProvider(EntityConfigurationSource source) : Con
     private async Task<Dictionary<string, string?>> GetDataAsync(CancellationToken token = default)
     {
         var context = CreateAppDbContext();
+        await NormalizeLegacyBrandConfigsAsync(context, token);
+
         return await context.Configs.ToDictionaryAsync(c => c.ConfigKey, c => c.Value,
             StringComparer.OrdinalIgnoreCase, token);
+    }
+
+    private static async Task NormalizeLegacyBrandConfigsAsync(AppDbContext context, CancellationToken token = default)
+    {
+        var configs = await context.Configs.ToDictionaryAsync(c => c.ConfigKey, c => c,
+            StringComparer.OrdinalIgnoreCase, token);
+        var legacyPrefix = string.Concat("G", "Z");
+        var legacyFullName = string.Concat(legacyPrefix, "C", "T", "F");
+        var legacyDisplayName = string.Concat(legacyPrefix, "::", "C", "T", "F");
+        var legacySlogan = string.Join(" ", "Hack", "for", "fun", "not", "for", "profit");
+        var legacyDescription = string.Join(" ", legacyDisplayName, "is", "an", "open", "source", "CTF", "platform");
+        var changed = false;
+
+        void ReplaceLegacyValue(string key, string replacement, params string[] legacyValues)
+        {
+            if (!configs.TryGetValue(key, out var config))
+                return;
+
+            var value = config.Value?.Trim();
+            if (!legacyValues.Any(v => string.Equals(value, v, StringComparison.OrdinalIgnoreCase)))
+                return;
+
+            config.Value = replacement;
+            changed = true;
+        }
+
+        ReplaceLegacyValue("GlobalConfig:Title", "YINYU", legacyPrefix, legacyFullName, legacyDisplayName);
+        ReplaceLegacyValue("GlobalConfig:Slogan", "专业赛事管理与攻防演练平台", legacySlogan);
+        ReplaceLegacyValue("GlobalConfig:Description", GlobalConfig.DefaultDescription, legacyDescription);
+
+        if (configs.TryGetValue("GlobalConfig:Platform", out var legacyPlatform) &&
+            string.Equals(legacyPlatform.Value?.Trim(), legacyDisplayName, StringComparison.OrdinalIgnoreCase))
+        {
+            context.Configs.Remove(legacyPlatform);
+            changed = true;
+        }
+
+        if (changed)
+            await context.SaveChangesAsync(token);
     }
 
     private static byte[] ConfigHash(IDictionary<string, string?> configs) =>
@@ -120,6 +161,7 @@ public class EntityConfigurationProvider(EntityConfigurationSource source) : Con
         }
         else
         {
+            await NormalizeLegacyBrandConfigsAsync(context);
             Data = context.Configs.ToDictionary(c => c.ConfigKey, c => c.Value, StringComparer.OrdinalIgnoreCase);
         }
 

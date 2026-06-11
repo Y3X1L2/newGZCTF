@@ -4,9 +4,28 @@
   justify-content: center;
   background-size: cover;
   background-position: center center;
-  padding: calc(var(--mantine-spacing-xl) * 3) 0;
+  padding: calc(var(--mantine-spacing-xl) * 2.4) 0 calc(var(--mantine-spacing-xl) * 1.6);
 
-  background: light-dark(var(--mantine-color-white), rgba(0, 0, 0, 0.2));
+  background:
+    radial-gradient(ellipse at 18% 18%, rgba(107, 238, 177, 0.11), transparent 30rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.012)), rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--yy-line);
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.14), transparent 30rem),
+      radial-gradient(ellipse at 88% 16%, rgba(245, 245, 247, 0.045), transparent 28rem), var(--yy-hex-flow);
+    background-size:
+      auto,
+      auto,
+      1.8rem 1.56rem;
+    opacity: 0.58;
+  }
 
   @mixin smaller-than $mantine-breakpoint-sm {
     justify-content: start;
@@ -22,6 +41,22 @@
   max-width: 960px;
   width: 100%;
   z-index: 1;
+  padding: clamp(1rem, 3vw, 1.5rem);
+  border: 1px solid var(--yy-line);
+  border-radius: var(--yy-radius);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.058), rgba(255, 255, 255, 0.018)), rgba(8, 9, 10, 0.72);
+  box-shadow: 0 1.5rem 5rem rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(1rem);
+  overflow: hidden;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(107, 238, 177, 0.5), rgba(245, 245, 247, 0.18), transparent);
+    opacity: 0.8;
+  }
 
   @mixin smaller-than $mantine-breakpoint-md {
     padding: var(--mantine-spacing-md) calc(var(--mantine-spacing-md) * 2);
@@ -46,7 +81,7 @@
   font-weight: 900;
   line-height: 1.1;
 
-  color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-white));
+  color: var(--yy-text);
 
   @mixin smaller-than $mantine-breakpoint-md {
     max-width: 100%;
@@ -56,13 +91,38 @@
 }
 
 .content {
-  padding-top: 1rem;
+  padding-top: var(--mantine-spacing-xl);
+  padding-bottom: var(--mantine-spacing-xl);
 }
 
 .banner {
   max-width: 50%;
   height: 100%;
   width: 40vw;
+  border: 1px solid var(--yy-line);
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(107, 238, 177, 0.14), transparent 50%), var(--yy-hex-flow),
+    rgba(255, 255, 255, 0.025);
+  background-size:
+    auto,
+    1.6rem 1.38rem,
+    auto;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at 20% 18%, rgba(107, 238, 177, 0.18), transparent 36%),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.5)), var(--yy-hex-flow);
+    background-size:
+      auto,
+      auto,
+      1.35rem 1.17rem;
+    opacity: 0.6;
+  }
 
   @mixin smaller-than $mantine-breakpoint-sm {
     display: none;
@@ -70,5 +130,5 @@
 }
 
 .date {
-  color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-white));
+  color: var(--yy-muted);
 }

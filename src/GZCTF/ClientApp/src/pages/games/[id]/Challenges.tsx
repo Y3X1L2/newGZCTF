@@ -1,4 +1,4 @@
-import { Group, Stack } from '@mantine/core'
+import { Stack } from '@mantine/core'
 import { FC } from 'react'
 import { ChallengePanel } from '@Components/ChallengePanel'
 import { GameNoticePanel } from '@Components/GameNoticePanel'
@@ -10,16 +10,16 @@ import { Role } from '@Api'
 
 const Challenges: FC = () => {
   return (
-    <WithNavBar width="90%">
+    <WithNavBar width="var(--container)">
       <WithRole requiredRole={Role.User}>
         <WithGameTab>
-          <Group gap="sm" justify="space-between" align="flex-start" wrap="nowrap">
+          <div className="challenge-layout game-challenge-layout">
             <ChallengePanel />
             <Stack gap="sm" miw="22rem" maw="22rem">
               <TeamRank />
               <GameNoticePanel />
             </Stack>
-          </Group>
+          </div>
         </WithGameTab>
       </WithRole>
     </WithNavBar>

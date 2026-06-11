@@ -9,6 +9,7 @@ import { FC, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import { SwitchLabel } from '@Components/admin/SwitchLabel'
+import { YinyuModalBody } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import api, { GameInfoModel, GameType } from '@Api'
 import misc from '@Styles/Misc.module.css'
@@ -64,8 +65,9 @@ export const GameCreateModal: FC<GameCreateModalProps> = (props) => {
   }
 
   return (
-    <Modal size="30%" title={t('admin.button.games.new')} {...modalProps}>
-      <Stack>
+    <Modal size="lg" title={t('admin.button.games.new')} {...modalProps}>
+      <YinyuModalBody>
+        <Stack>
         <TextInput
           label={t('admin.content.games.info.title.label')}
           type="text"
@@ -128,7 +130,8 @@ export const GameCreateModal: FC<GameCreateModalProps> = (props) => {
             {t('admin.button.games.new')}
           </Button>
         </Group>
-      </Stack>
+        </Stack>
+      </YinyuModalBody>
     </Modal>
   )
 }

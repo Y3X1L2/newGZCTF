@@ -1,7 +1,7 @@
 .layout {
   margin-left: var(--mantine-spacing-md);
   margin-right: var(--mantine-spacing-md);
-  border-radius: var(--mantine-radius-sm);
+  border-radius: var(--yy-radius);
 
   @mixin larger-than calc(1100 + var(--mantine-spacing-md) * 2) {
     max-width: 900px;
@@ -13,8 +13,8 @@
     min-width: 100% !important;
     max-width: 100% !important;
     height: auto !important;
-    border-radius: var(--mantine-radius-xs);
-    box-shadow: var(--mantine-shadows-sm);
+    border-radius: var(--yy-radius);
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.28);
   }
 }
 
@@ -35,8 +35,11 @@
       right: 0;
       bottom: 0;
       left: 0;
-      background-color: var(--mantine-color-gray-7);
-      opacity: 0.13;
+      background: radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.05), transparent 42%), var(--yy-hex-flow);
+      background-size:
+        auto,
+        1.3rem 1.13rem;
+      opacity: 0.18;
       z-index: 10;
       user-select: none;
       pointer-events: none;

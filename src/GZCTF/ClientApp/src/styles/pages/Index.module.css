@@ -1,6 +1,13 @@
+.page {
+  min-height: calc(100vh - 7rem);
+  padding-top: var(--mantine-spacing-md);
+  padding-bottom: clamp(1rem, 4vh, 3rem);
+}
+
 .posts {
   width: 75%;
   min-width: calc(100% - 320px);
+  gap: var(--mantine-spacing-md);
 
   @mixin smaller-than 900px {
     width: 100%;
@@ -31,4 +38,50 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+}
+
+.sectionHead,
+.sideHead,
+.emptyPanel {
+  border-radius: var(--yy-radius);
+  border: 1px solid var(--yy-line);
+  background:
+    radial-gradient(ellipse at 12% 16%, rgba(107, 238, 177, 0.09), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.018)), rgba(8, 9, 10, 0.76);
+  backdrop-filter: blur(1rem);
+}
+
+.sectionHead {
+  position: sticky;
+  top: calc(var(--mantine-spacing-xs) + 76px);
+  z-index: 8;
+  overflow: hidden;
+}
+
+.sectionHead::before,
+.sideHead::before,
+.emptyPanel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse at 86% 18%, rgba(245, 245, 247, 0.055), transparent 34%),
+    radial-gradient(ellipse at 18% 74%, rgba(107, 238, 177, 0.08), transparent 36%);
+  opacity: 0.5;
+}
+
+.sectionHead > *,
+.sideHead > *,
+.emptyPanel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.emptyPanel {
+  min-height: 12rem;
+  display: grid;
+  place-items: center;
 }

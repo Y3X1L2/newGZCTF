@@ -3,7 +3,6 @@ import {
   Button,
   FileInput,
   Group,
-  Paper,
   PasswordInput,
   ScrollArea,
   Select,
@@ -44,6 +43,7 @@ import {
 import { WithGameTab } from '@Components/WithGameTab'
 import { WithNavBar } from '@Components/WithNavbar'
 import { WithRole } from '@Components/WithRole'
+import { YinyuPanel, YinyuTableShell } from '@Components/yinyu/YinyuUI'
 import { encryptApiData } from '@Utils/Crypto'
 import { showErrorMsg } from '@Utils/Shared'
 import { useConfig } from '@Hooks/useConfig'
@@ -242,11 +242,11 @@ const Awd: FC = () => {
   }
 
   return (
-    <WithNavBar width="90%" minWidth={0}>
+    <WithNavBar width="var(--container)" minWidth={0}>
       <WithRole requiredRole={Role.User}>
         <WithGameTab>
           <Stack gap="md">
-            <Paper p="md" shadow="xs" radius="md" withBorder>
+            <YinyuPanel p="md" className="service-map">
               <Group justify="space-between" align="flex-start" wrap="wrap">
                 <Stack gap={2}>
                   <Title order={4}>{awd('round', 'Round {{round}}', { round: status?.currentRound ?? 0 })}</Title>
@@ -310,10 +310,10 @@ const Awd: FC = () => {
                   sub={awd('patch_status', 'Patch Status')}
                 />
               </SimpleGrid>
-            </Paper>
+            </YinyuPanel>
 
             <SimpleGrid cols={{ base: 1, md: 2 }}>
-              <Paper p="md" shadow="xs" radius="md" withBorder>
+              <YinyuPanel p="md" className="admin-panel">
                 <Stack>
                   <AwdpSectionTitle title={awd('flag', 'Flag')} />
                   <Group align="flex-end" wrap="wrap">
@@ -336,9 +336,9 @@ const Awd: FC = () => {
                     </Button>
                   </Group>
                 </Stack>
-              </Paper>
+              </YinyuPanel>
 
-              <Paper p="md" shadow="xs" radius="md" withBorder>
+              <YinyuPanel p="md" className="admin-panel">
                 <Stack>
                   <AwdpSectionTitle title={awd('patch', 'Patch')} />
                   <Group align="flex-end" wrap="wrap">
@@ -366,10 +366,10 @@ const Awd: FC = () => {
                     </Button>
                   </Group>
                 </Stack>
-              </Paper>
+              </YinyuPanel>
             </SimpleGrid>
 
-            <Paper p="md" shadow="xs" radius="md" withBorder>
+            <YinyuTableShell p="md" className="admin-panel large">
               <AwdpSectionTitle
                 title={awd('instances', 'Instances')}
                 extra={<Badge variant="light">{`${runningInstances}/${instances.length}`}</Badge>}
@@ -398,7 +398,14 @@ const Awd: FC = () => {
                         return (
                           <Table.Tr
                             key={item.instanceId}
-                            style={isSelf ? { backgroundColor: 'var(--mantine-color-teal-light)' } : undefined}
+                            style={
+                              isSelf
+                                ? {
+                                    background:
+                                      'radial-gradient(ellipse at 16% 50%, rgba(107, 238, 177, 0.075), transparent 42%), rgba(107, 238, 177, 0.045)',
+                                  }
+                                : undefined
+                            }
                           >
                             <Table.Td>{item.serviceName}</Table.Td>
                             <Table.Td>
@@ -476,10 +483,10 @@ const Awd: FC = () => {
                   </Table.Tbody>
                 </Table>
               </ScrollArea>
-            </Paper>
+            </YinyuTableShell>
 
             <SimpleGrid cols={{ base: 1, md: 2 }}>
-              <Paper p="md" shadow="xs" radius="md" withBorder>
+              <YinyuTableShell p="md" className="admin-panel">
                 <AwdpSectionTitle
                   title={awd('scoreboard', 'AWDP Scoreboard')}
                   extra={
@@ -509,7 +516,14 @@ const Awd: FC = () => {
                           return (
                             <Table.Tr
                               key={row.teamId}
-                              style={isSelf ? { backgroundColor: 'var(--mantine-color-teal-light)' } : undefined}
+                              style={
+                                isSelf
+                                  ? {
+                                      background:
+                                        'radial-gradient(ellipse at 16% 50%, rgba(107, 238, 177, 0.075), transparent 42%), rgba(107, 238, 177, 0.045)',
+                                    }
+                                  : undefined
+                              }
                             >
                               <Table.Td>{row.rank}</Table.Td>
                               <Table.Td>
@@ -542,9 +556,9 @@ const Awd: FC = () => {
                     </Table.Tbody>
                   </Table>
                 </ScrollArea>
-              </Paper>
+              </YinyuTableShell>
 
-              <Paper p="md" shadow="xs" radius="md" withBorder>
+              <YinyuTableShell p="md" className="admin-panel">
                 <AwdpSectionTitle
                   title={awd('patch_status', 'Patch Status')}
                   extra={<Badge color="violet" variant="light">{`${defendedServices}/${patchStatus.length}`}</Badge>}
@@ -596,10 +610,10 @@ const Awd: FC = () => {
                     </Table.Tbody>
                   </Table>
                 </ScrollArea>
-              </Paper>
+              </YinyuTableShell>
             </SimpleGrid>
 
-            <Paper p="md" shadow="xs" radius="md" withBorder>
+            <YinyuTableShell p="md" className="round-stream">
               <AwdpSectionTitle
                 title={awd('attack_logs', 'Attack Logs')}
                 extra={<Badge variant="light">{attackLogs.length}</Badge>}
@@ -640,7 +654,7 @@ const Awd: FC = () => {
                   </Table.Tbody>
                 </Table>
               </ScrollArea>
-            </Paper>
+            </YinyuTableShell>
           </Stack>
         </WithGameTab>
       </WithRole>

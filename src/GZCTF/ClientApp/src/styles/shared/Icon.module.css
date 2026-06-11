@@ -1,5 +1,9 @@
 .main {
-  fill: light-dark(var(--mantine-color-gray-6), var(--mantine-color-white));
+  fill: var(--yy-text);
+}
+
+.logoImage {
+  filter: drop-shadow(0 0 0.42rem rgba(107, 238, 177, 0.16));
 }
 
 .front {

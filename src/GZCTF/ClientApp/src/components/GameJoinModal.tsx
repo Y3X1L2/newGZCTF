@@ -5,6 +5,7 @@ import { Icon } from '@mdi/react'
 import { FC, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router'
+import { YinyuModalBody } from '@Components/yinyu/YinyuUI'
 import { OnceSWRConfig } from '@Hooks/useConfig'
 import { useGame } from '@Hooks/useGame'
 import { useTeams } from '@Hooks/useUser'
@@ -144,58 +145,60 @@ export const GameJoinModal: FC<GameJoinModalProps> = (props) => {
 
   return (
     <Modal {...modalProps}>
-      <Stack>
-        <Select
-          required
-          label={t('game.content.join.team.label')}
-          description={t('game.content.join.team.description')}
-          data={teamsData}
-          disabled={disabled}
-          value={team}
-          onChange={(e) => e && setTeam(e)}
-        />
-        {canSelectDivision && hasDivision && (
+      <YinyuModalBody>
+        <Stack>
           <Select
             required
-            label={t('game.content.join.division.label')}
-            description={t('game.content.join.division.description')}
-            readOnly={!canSelectDivision}
-            data={divisionOptions}
+            label={t('game.content.join.team.label')}
+            description={t('game.content.join.team.description')}
+            data={teamsData}
             disabled={disabled}
-            value={divisionId}
-            onChange={(e) => setDivisionId(e ?? '')}
+            value={team}
+            onChange={(e) => e && setTeam(e)}
           />
-        )}
-        {!canSelectDivision && joinedDivision && (
-          <Select
-            required
-            label={t('game.content.join.division.label')}
-            description={t('game.content.join.division.description')}
-            readOnly={true}
-            disabled={true}
-            data={[
-              {
-                label: joinedDivision.name ?? `Division #${joinedDivision.id}`,
-                value: joinedDivision.id!.toString(),
-              },
-            ]}
-            value={joinedDivision.id!.toString()}
-          />
-        )}
-        {shouldRequireInviteCode && (
-          <TextInput
-            required
-            label={t('game.content.join.invite_code.label')}
-            description={t('game.content.join.invite_code.description')}
-            value={inviteCode}
-            onChange={(e) => setInviteCode(e.target.value)}
-            disabled={disabled}
-          />
-        )}
-        <Button disabled={disabled} onClick={onJoinGame}>
-          {t('game.button.join')}
-        </Button>
-      </Stack>
+          {canSelectDivision && hasDivision && (
+            <Select
+              required
+              label={t('game.content.join.division.label')}
+              description={t('game.content.join.division.description')}
+              readOnly={!canSelectDivision}
+              data={divisionOptions}
+              disabled={disabled}
+              value={divisionId}
+              onChange={(e) => setDivisionId(e ?? '')}
+            />
+          )}
+          {!canSelectDivision && joinedDivision && (
+            <Select
+              required
+              label={t('game.content.join.division.label')}
+              description={t('game.content.join.division.description')}
+              readOnly={true}
+              disabled={true}
+              data={[
+                {
+                  label: joinedDivision.name ?? `Division #${joinedDivision.id}`,
+                  value: joinedDivision.id!.toString(),
+                },
+              ]}
+              value={joinedDivision.id!.toString()}
+            />
+          )}
+          {shouldRequireInviteCode && (
+            <TextInput
+              required
+              label={t('game.content.join.invite_code.label')}
+              description={t('game.content.join.invite_code.description')}
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value)}
+              disabled={disabled}
+            />
+          )}
+          <Button disabled={disabled} onClick={onJoinGame}>
+            {t('game.button.join')}
+          </Button>
+        </Stack>
+      </YinyuModalBody>
     </Modal>
   )
 }

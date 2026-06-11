@@ -1,4 +1,4 @@
-import { useMantineColorScheme, useMantineTheme } from '@mantine/core'
+import { useMantineTheme } from '@mantine/core'
 import type { EChartsOption } from 'echarts'
 import { FC, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -22,10 +22,9 @@ export const ScoreFunc: FC<ScoreFuncProps> = ({ originalScore, difficulty, minSc
   const showCount = currentAcceptCount > 5.8 * difficulty ? 5.8 * difficulty : currentAcceptCount
   const theme = useMantineTheme()
   const plotData = [...Array(100).keys()].map((x) => [toX(x), func(toX(x))])
-  const { colorScheme } = useMantineColorScheme()
   const { t } = useTranslation()
   const primaryColors = theme.colors[theme.primaryColor]
-  const color = primaryColors[colorScheme === 'dark' ? 8 : 6]
+  const color = primaryColors[8]
 
   const option: EChartsOption = useMemo(
     () =>

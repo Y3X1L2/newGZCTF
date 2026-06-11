@@ -4,9 +4,11 @@ import { Icon } from '@mdi/react'
 import { FC, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
+import { Empty } from '@Components/Empty'
 import { PostCard } from '@Components/PostCard'
 import { WithNavBar } from '@Components/WithNavbar'
 import { RequireRole } from '@Components/WithRole'
+import { YinyuRouteLoader, YinyuSectionHead, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import { OnceSWRConfig } from '@Hooks/useConfig'
 import { usePageTitle } from '@Hooks/usePageTitle'
@@ -18,10 +20,8 @@ const ITEMS_PER_PAGE = 10
 
 const Posts: FC = () => {
   const { data: posts, mutate } = api.info.useInfoGetPosts(OnceSWRConfig)
-
   const [activePage, setPage] = useState(1)
   const { role } = useUserRole()
-
   const { t } = useTranslation()
 
   usePageTitle(t('post.title.index'))
@@ -55,30 +55,46 @@ const Posts: FC = () => {
   }
 
   return (
-    <WithNavBar isLoading={!posts} minWidth={0} withHeader stickyHeader>
-      <Stack justify="space-between" mih="calc(100vh - 78px)">
-        <Stack>
-          {posts?.slice((activePage - 1) * ITEMS_PER_PAGE, activePage * ITEMS_PER_PAGE).map((post) => (
-            <PostCard key={post.id} post={post} onTogglePinned={onTogglePinned} />
-          ))}
+    <WithNavBar minWidth={0} width="var(--container)">
+      <section className="yy-page-frame view-stack yy-archive-page">
+        <YinyuSectionHead eyebrow="NOTICE CENTER" title={t('post.title.index')}>
+          <YinyuStatusPill tone="neutral" state="open">
+            {posts?.length ?? 0} 条通知
+          </YinyuStatusPill>
+        </YinyuSectionHead>
+        <Stack gap="md">
+          {!posts ? (
+            <article className="state-card panel-card yy-list-loading">
+              <YinyuRouteLoader title={t('post.title.index')} description="通知列表加载中" />
+            </article>
+          ) : posts.length > 0 ? (
+            posts
+              .slice((activePage - 1) * ITEMS_PER_PAGE, activePage * ITEMS_PER_PAGE)
+              .map((post) => <PostCard key={post.id} post={post} onTogglePinned={onTogglePinned} />)
+          ) : (
+            <article className="state-card panel-card">
+              <Empty description="暂无通知" />
+            </article>
+          )}
         </Stack>
-
-        <Pagination.Root
-          total={Math.ceil((posts?.length ?? 0) / ITEMS_PER_PAGE)}
-          siblings={3}
-          value={activePage}
-          onChange={setPage}
-          mb="xl"
-        >
-          <Group gap={5} justify="flex-end">
-            <Pagination.First />
-            <Pagination.Previous />
-            <Pagination.Items />
-            <Pagination.Next />
-            <Pagination.Last />
-          </Group>
-        </Pagination.Root>
-      </Stack>
+        {(posts?.length ?? 0) > 0 && (
+          <Pagination.Root
+            total={Math.ceil((posts?.length ?? 0) / ITEMS_PER_PAGE)}
+            siblings={3}
+            value={activePage}
+            onChange={setPage}
+            mb="xl"
+          >
+            <Group gap={5} justify="flex-end">
+              <Pagination.First />
+              <Pagination.Previous />
+              <Pagination.Items />
+              <Pagination.Next />
+              <Pagination.Last />
+            </Group>
+          </Pagination.Root>
+        )}
+      </section>
       {RequireRole(Role.Admin, role) && (
         <Button
           component={Link}

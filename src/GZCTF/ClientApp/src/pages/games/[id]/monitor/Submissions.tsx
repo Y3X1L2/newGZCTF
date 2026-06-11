@@ -3,13 +3,11 @@ import {
   Badge,
   Group,
   Input,
-  Paper,
   ScrollArea,
   SegmentedControl,
   Table,
   Text,
   Tooltip,
-  useMantineColorScheme,
   useMantineTheme,
 } from '@mantine/core'
 import { showNotification } from '@mantine/notifications'
@@ -33,6 +31,7 @@ import { FC, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router'
 import { WithGameMonitor } from '@Components/WithGameMonitor'
+import { YinyuTableShell } from '@Components/yinyu/YinyuUI'
 import { downloadBlob, handleAxiosError } from '@Utils/ApiHelper'
 import { useLanguage } from '@Utils/I18n'
 import { useDisplayInputStyles } from '@Utils/ThemeOverride'
@@ -51,16 +50,14 @@ const AnswerResultMap = new Map([
 
 const AnswerResultIconMap = (size: number) => {
   const theme = useMantineTheme()
-  const { colorScheme } = useMantineColorScheme()
-
-  const colorIdx = colorScheme === 'dark' ? 4 : 7
+  const colorIdx = 4
 
   return new Map([
     [AnswerResult.Accepted, { path: mdiCheck, size, color: theme.colors.green[colorIdx] }],
     [AnswerResult.WrongAnswer, { path: mdiClose, size, color: theme.colors.red[colorIdx] }],
-    [AnswerResult.NotFound, { path: mdiCrosshairsQuestion, size, color: theme.colors.gray[colorIdx] }],
+    [AnswerResult.NotFound, { path: mdiCrosshairsQuestion, size, color: theme.colors.light[colorIdx] }],
     [AnswerResult.CheatDetected, { path: mdiExclamationThick, size, color: theme.colors.orange[colorIdx] }],
-    [AnswerResult.FlagSubmitted, { path: mdiDotsHorizontal, size, color: theme.colors.gray[colorIdx] }],
+    [AnswerResult.FlagSubmitted, { path: mdiDotsHorizontal, size, color: theme.colors.light[colorIdx] }],
   ])
 }
 
@@ -241,7 +238,7 @@ const Submissions: FC = () => {
           </ActionIcon>
         </Group>
       </Group>
-      <Paper shadow="md" p="md">
+      <YinyuTableShell p="md">
         <ScrollArea viewportRef={viewport} offsetScrollbars h="calc(100vh - 200px)">
           <Table className={tableClasses.table}>
             <Table.Thead>
@@ -261,7 +258,7 @@ const Submissions: FC = () => {
             <Table.Tbody>{rows}</Table.Tbody>
           </Table>
         </ScrollArea>
-      </Paper>
+      </YinyuTableShell>
     </WithGameMonitor>
   )
 }

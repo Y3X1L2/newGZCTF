@@ -5,6 +5,7 @@ import { Icon } from '@mdi/react'
 import { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router'
+import { YinyuModalBody } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import api, { GameNotice } from '@Api'
 
@@ -67,22 +68,24 @@ export const GameNoticeEditModal: FC<GameNoticeEditModalProps> = (props) => {
 
   return (
     <Modal {...modalProps}>
-      <Stack>
-        <Text>{t('admin.content.markdown_inline_support')}</Text>
-        <Textarea
-          value={content}
-          w="100%"
-          autosize
-          minRows={5}
-          maxRows={16}
-          onChange={(e) => setContent(e.currentTarget.value)}
-        />
-        <Group grow m="auto" w="100%">
-          <Button fullWidth disabled={disabled} onClick={onConfirm}>
-            {t('common.modal.confirm')}
-          </Button>
-        </Group>
-      </Stack>
+      <YinyuModalBody>
+        <Stack>
+          <Text>{t('admin.content.markdown_inline_support')}</Text>
+          <Textarea
+            value={content}
+            w="100%"
+            autosize
+            minRows={5}
+            maxRows={16}
+            onChange={(e) => setContent(e.currentTarget.value)}
+          />
+          <Group grow m="auto" w="100%">
+            <Button fullWidth disabled={disabled} onClick={onConfirm}>
+              {t('common.modal.confirm')}
+            </Button>
+          </Group>
+        </Stack>
+      </YinyuModalBody>
     </Modal>
   )
 }

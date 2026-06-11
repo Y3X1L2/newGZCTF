@@ -2,11 +2,17 @@
   width: 100%;
   z-index: 150;
   border: none;
-  box-shadow: var(--mantine-shadow-md);
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.28);
 
-  background-color: light-dark(var(--mantine-color-light-0), var(--mantine-color-gray-8));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.018)),
+    radial-gradient(ellipse at 24% 0%, rgba(107, 238, 177, 0.08), transparent 16rem), rgba(6, 7, 7, 0.84);
+  backdrop-filter: blur(18px);
 }
 
 .button {
-  color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-gray-0));
+  color: var(--yy-muted);
+  border: 1px solid var(--yy-line);
+  background:
+    radial-gradient(ellipse at 22% 18%, rgba(107, 238, 177, 0.055), transparent 42%), rgba(255, 255, 255, 0.028);
 }

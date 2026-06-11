@@ -1,7 +1,38 @@
+.box {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-width: min(100%, 18rem);
+  padding: var(--mantine-spacing-md);
+  border-radius: var(--yy-radius);
+}
+
+.box > * {
+  position: relative;
+  z-index: 1;
+}
+
+.box :global(.yy-hex-field) {
+  z-index: 0;
+  opacity: 0.44;
+}
+
 .box[data-border] {
   border-style: dashed;
-  border-color: gray;
-  border-width: thick;
-  border-radius: 1rem;
-  padding: 1rem;
+  border-color: rgba(107, 238, 177, 0.28);
+  border-width: 1px;
+  border-radius: var(--yy-radius);
+  padding: var(--mantine-spacing-xl);
+  background:
+    radial-gradient(ellipse at 50% 20%, rgba(107, 238, 177, 0.08), transparent 42%), rgba(255, 255, 255, 0.026);
+}
+
+.box svg {
+  color: var(--yy-green);
+  opacity: 0.74;
+  filter: drop-shadow(0 0.8rem 1.4rem rgba(107, 238, 177, 0.12));
+}
+
+.icon {
+  color: var(--yy-green);
 }

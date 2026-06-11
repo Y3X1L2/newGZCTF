@@ -1,13 +1,14 @@
-import { ActionIcon, Card, Group, CardProps, Stack, Text } from '@mantine/core'
+import { ActionIcon, BoxProps, Group, Stack, Text } from '@mantine/core'
 import { mdiDeleteOutline, mdiPencilOutline } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import dayjs from 'dayjs'
 import { FC } from 'react'
 import { InlineMarkdown } from '@Components/MarkdownRenderer'
+import { YinyuPanel } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
 import { GameNotice } from '@Api'
 
-interface GameNoticeEditCardProps extends CardProps {
+interface GameNoticeEditCardProps extends BoxProps {
   gameNotice: GameNotice
   onDelete: () => void
   onEdit: () => void
@@ -17,7 +18,7 @@ export const GameNoticeEditCard: FC<GameNoticeEditCardProps> = ({ gameNotice, on
   const { locale } = useLanguage()
 
   return (
-    <Card {...props} shadow="sm" p="sm">
+    <YinyuPanel {...props} p="sm">
       <Group justify="space-between" wrap="nowrap">
         <Stack gap={1}>
           <InlineMarkdown source={gameNotice.values.at(-1) || ''} />
@@ -34,6 +35,6 @@ export const GameNoticeEditCard: FC<GameNoticeEditCardProps> = ({ gameNotice, on
           </ActionIcon>
         </Group>
       </Group>
-    </Card>
+    </YinyuPanel>
   )
 }

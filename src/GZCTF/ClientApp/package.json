@@ -15,6 +15,7 @@
   "dependencies": {
     "@babel/core": "^7.29.0",
     "@emotion/react": "^11.14.0",
+    "@gsap/react": "^2.1.2",
     "@mantine/carousel": "^9.0.1",
     "@mantine/colors-generator": "^9.0.1",
     "@mantine/core": "^9.0.1",
@@ -29,6 +30,8 @@
     "@mdi/js": "^7.4.47",
     "@mdi/react": "^1.6.1",
     "@microsoft/signalr": "^10.0.0",
+    "@react-three/fiber": "^9.6.1",
+    "@react-three/postprocessing": "^3.0.4",
     "@shikijs/colorized-brackets": "^4.0.2",
     "@shikijs/langs": "^4.0.2",
     "@shikijs/themes": "^4.0.2",
@@ -44,6 +47,7 @@
     "embla-carousel-autoplay": "^8.6.0",
     "embla-carousel-react": "^8.6.0",
     "fast-average-color": "^9.5.2",
+    "gsap": "^3.15.0",
     "i18next": "^26.0.3",
     "i18next-browser-languagedetector": "^8.2.1",
     "i18next-resources-to-backend": "^1.2.1",
@@ -53,6 +57,7 @@
     "marked": "^17.0.6",
     "pako": "^2.1.0",
     "pdfjs-dist": "5.4.296",
+    "postprocessing": "^6.39.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-error-boundary": "^6.1.1",
@@ -61,7 +66,8 @@
     "react-router": "^7.14.0",
     "recharts": "^2.15.2",
     "shiki": "^4.0.2",
-    "swr": "^2.4.1"
+    "swr": "^2.4.1",
+    "three": "^0.184.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",
@@ -73,6 +79,7 @@
     "@types/prismjs": "^1.26.6",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.184.1",
     "@vitejs/plugin-react": "^6.0.1",
     "babel-plugin-prismjs": "^2.1.0",
     "esbuild": "^0.28.0",

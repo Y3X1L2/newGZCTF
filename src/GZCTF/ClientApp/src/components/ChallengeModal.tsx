@@ -19,8 +19,9 @@ import duration from 'dayjs/plugin/duration'
 import { FC, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { InstanceEntry } from '@Components/InstanceEntry'
-import { VmInstanceEntry } from '@Components/VmInstanceEntry'
 import { ContentPlaceholder, InlineMarkdown, Markdown } from '@Components/MarkdownRenderer'
+import { VmInstanceEntry } from '@Components/VmInstanceEntry'
+import { YinyuHexField } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
 import { ChallengeCategoryItemProps } from '@Utils/Shared'
 import { ChallengeDetailModel, ChallengeType, EnvironmentType } from '@Api'
@@ -235,11 +236,7 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
   )
 
   const vmInstance = isWindowsVm && gameId && challenge?.id && (
-    <VmInstanceEntry
-      gameId={gameId}
-      challengeId={challenge.id}
-      disabled={disabled}
-    />
+    <VmInstanceEntry gameId={gameId} challengeId={challenge.id} disabled={disabled} />
   )
 
   const attemptsInfo = useMemo(() => {
@@ -342,7 +339,8 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
       classNames={classes}
     >
       <Modal.Overlay />
-      <Modal.Content>
+      <Modal.Content className="challenge-drawer-draft panel-card">
+        <YinyuHexField cells={42} />
         <Modal.Header>
           <Modal.Title>{title}</Modal.Title>
         </Modal.Header>

@@ -1,7 +1,7 @@
 import { useLocalStorage } from '@mantine/hooks'
 import { useEffect } from 'react'
 import { SWRConfiguration } from 'swr'
-import { PLATFORM_SLOGAN, PLATFORM_TITLE } from '@Utils/Brand'
+import { PLATFORM_BRAND, PLATFORM_SLOGAN, PLATFORM_TITLE } from '@Utils/Brand'
 import api, { ClientConfig, ContainerPortMappingType } from '@Api'
 
 export const OnceSWRConfig: SWRConfiguration = {
@@ -57,4 +57,13 @@ export const useCaptchaConfig = () => {
   })
 
   return { info: data, error, mutate }
+}
+
+export const useBanner = () => {
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    console.info(`%c${PLATFORM_BRAND}`, 'color:#6beeb1;font-weight:800;font-size:16px;')
+    console.info(PLATFORM_SLOGAN)
+  }, [])
 }

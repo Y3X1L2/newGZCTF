@@ -1,72 +1,73 @@
-import { Badge, Card, Divider, Group, Progress, RingProgress, Stack, Switch, Text, Tooltip } from '@mantine/core';
-import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
-import { ReactNode } from 'react';
-import { mdiChip, mdiDatabaseOutline, mdiLan, mdiServerNetwork, mdiTimerOutline } from '@mdi/js';
-import { Icon } from '@mdi/react';
+import { Badge, Divider, Group, Progress, RingProgress, Stack, Switch, Text, Tooltip } from '@mantine/core'
+import { mdiChip, mdiDatabaseOutline, mdiLan, mdiServerNetwork, mdiTimerOutline } from '@mdi/js'
+import { Icon } from '@mdi/react'
+import dayjs from 'dayjs'
+import relativeTime from 'dayjs/plugin/relativeTime'
+import { ReactNode } from 'react'
+import { YinyuPanel, YinyuStatusPill, YinyuStatusState, YinyuStatusTone } from '@Components/yinyu/YinyuUI'
 
-dayjs.extend(relativeTime);
+dayjs.extend(relativeTime)
 
 export interface NodeInfo {
-  id: string;
-  name: string;
-  hostAddress: string;
-  status: string | number;
-  capabilities?: string | number;
-  cpuLoad: number;
-  memoryLoad: number;
-  currentContainers: number;
-  maxContainers: number;
-  currentVms: number;
-  maxVms: number;
-  usedPorts?: number;
-  totalPorts?: number;
-  lastHeartbeat?: string | null;
-  isSchedulable: boolean;
-  isLocal: boolean;
-  agentPort: number;
+  id: string
+  name: string
+  hostAddress: string
+  status: string | number
+  capabilities?: string | number
+  cpuLoad: number
+  memoryLoad: number
+  currentContainers: number
+  maxContainers: number
+  currentVms: number
+  maxVms: number
+  usedPorts?: number
+  totalPorts?: number
+  lastHeartbeat?: string | null
+  isSchedulable: boolean
+  isLocal: boolean
+  agentPort: number
 }
 
-const statusMap: Record<string, { label: string; color: string }> = {
-  '0': { label: '未知', color: 'gray' },
-  unknown: { label: '未知', color: 'gray' },
-  '1': { label: '在线', color: 'teal' },
-  online: { label: '在线', color: 'teal' },
-  '2': { label: '离线', color: 'red' },
-  offline: { label: '离线', color: 'red' },
-  '3': { label: '繁忙', color: 'orange' },
-  busy: { label: '繁忙', color: 'orange' },
-  '4': { label: '异常', color: 'red' },
-  error: { label: '异常', color: 'red' },
-};
+const statusMap: Record<string, { label: string; color: string; tone: YinyuStatusTone; state: YinyuStatusState }> = {
+  '0': { label: '未知', color: 'gray', tone: 'neutral', state: 'idle' },
+  unknown: { label: '未知', color: 'gray', tone: 'neutral', state: 'idle' },
+  '1': { label: '在线', color: 'teal', tone: 'success', state: 'running' },
+  online: { label: '在线', color: 'teal', tone: 'success', state: 'running' },
+  '2': { label: '离线', color: 'red', tone: 'danger', state: 'alert' },
+  offline: { label: '离线', color: 'red', tone: 'danger', state: 'alert' },
+  '3': { label: '繁忙', color: 'orange', tone: 'warm', state: 'busy' },
+  busy: { label: '繁忙', color: 'orange', tone: 'warm', state: 'busy' },
+  '4': { label: '异常', color: 'red', tone: 'danger', state: 'alert' },
+  error: { label: '异常', color: 'red', tone: 'danger', state: 'alert' },
+}
 
 function normalizeKey(value: string | number | undefined) {
-  return String(value ?? '').toLowerCase();
+  return String(value ?? '').toLowerCase()
 }
 
 function toPercent(value: number) {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(100, value * 100));
+  if (!Number.isFinite(value)) return 0
+  return Math.max(0, Math.min(100, value * 100))
 }
 
 function ratio(current: number, total: number) {
-  if (!Number.isFinite(total) || total <= 0) return 0;
-  return Math.max(0, Math.min(100, (current / total) * 100));
+  if (!Number.isFinite(total) || total <= 0) return 0
+  return Math.max(0, Math.min(100, (current / total) * 100))
 }
 
 function capabilityLabels(value: string | number | undefined) {
-  const key = normalizeKey(value);
-  if (!key || key === '0' || key === 'none') return ['None'];
-  if (key.includes('docker') || key === '1') return key.includes('kvm') || key === '3' ? ['Docker', 'KVM'] : ['Docker'];
-  if (key.includes('kvm') || key === '2') return ['KVM'];
-  if (key === '3') return ['Docker', 'KVM'];
-  return [String(value)];
+  const key = normalizeKey(value)
+  if (!key || key === '0' || key === 'none') return ['None']
+  if (key.includes('docker') || key === '1') return key.includes('kvm') || key === '3' ? ['Docker', 'KVM'] : ['Docker']
+  if (key.includes('kvm') || key === '2') return ['KVM']
+  if (key === '3') return ['Docker', 'KVM']
+  return [String(value)]
 }
 
 function pressureColor(value: number) {
-  if (value >= 90) return 'red';
-  if (value >= 70) return 'orange';
-  return 'teal';
+  if (value >= 90) return 'red'
+  if (value >= 70) return 'orange'
+  return 'teal'
 }
 
 function MetricLine({
@@ -76,23 +77,27 @@ function MetricLine({
   color,
   valueLabel,
 }: {
-  label: string;
-  current: number;
-  total: number;
-  color: string;
-  valueLabel?: string;
+  label: string
+  current: number
+  total: number
+  color: string
+  valueLabel?: string
 }) {
-  const value = ratio(current, total);
+  const value = ratio(current, total)
 
   return (
     <Stack gap={4}>
       <Group justify="space-between" gap="xs">
-        <Text size="xs" c="dimmed">{label}</Text>
-        <Text size="xs" fw={600}>{valueLabel ?? `${current}/${total}`}</Text>
+        <Text size="xs" c="dimmed">
+          {label}
+        </Text>
+        <Text size="xs" fw={600}>
+          {valueLabel ?? `${current}/${total}`}
+        </Text>
       </Group>
       <Progress value={value} color={color} size="xs" radius="xs" />
     </Stack>
-  );
+  )
 }
 
 export function NodeCard({
@@ -100,26 +105,29 @@ export function NodeCard({
   onToggleSchedulable,
   rightSection,
 }: {
-  node: NodeInfo;
-  onToggleSchedulable?: (id: string, val: boolean) => void;
-  rightSection?: ReactNode;
+  node: NodeInfo
+  onToggleSchedulable?: (id: string, val: boolean) => void
+  rightSection?: ReactNode
 }) {
-  const status = statusMap[normalizeKey(node.status)] ?? { label: String(node.status ?? '未知'), color: 'gray' };
-  const heartbeat = node.lastHeartbeat ? dayjs(node.lastHeartbeat) : null;
-  const heartbeatText = heartbeat?.isValid() ? heartbeat.fromNow() : '无心跳';
-  const cpu = toPercent(node.cpuLoad);
-  const memory = toPercent(node.memoryLoad);
-  const isOffline = normalizeKey(node.status) === 'offline' || normalizeKey(node.status) === '2';
-  const containerUsage = ratio(node.currentContainers, node.maxContainers);
-  const vmUsage = ratio(node.currentVms, node.maxVms);
-  const portUsage = ratio(node.usedPorts ?? 0, node.totalPorts ?? 0);
+  const status = statusMap[normalizeKey(node.status)] ?? {
+    label: String(node.status ?? '未知'),
+    color: 'gray',
+    tone: 'neutral' as const,
+    state: 'idle' as const,
+  }
+  const heartbeat = node.lastHeartbeat ? dayjs(node.lastHeartbeat) : null
+  const heartbeatText = heartbeat?.isValid() ? heartbeat.fromNow() : '无心跳'
+  const cpu = toPercent(node.cpuLoad)
+  const memory = toPercent(node.memoryLoad)
+  const isOffline = normalizeKey(node.status) === 'offline' || normalizeKey(node.status) === '2'
+  const containerUsage = ratio(node.currentContainers, node.maxContainers)
+  const vmUsage = ratio(node.currentVms, node.maxVms)
+  const portUsage = ratio(node.usedPorts ?? 0, node.totalPorts ?? 0)
 
   return (
-    <Card
-      shadow="sm"
-      padding="md"
-      radius="sm"
-      withBorder
+    <YinyuPanel
+      p="md"
+      cells={42}
       data-testid={`node-card-${node.id}`}
       style={{
         borderTop: `3px solid var(--mantine-color-${status.color}-6)`,
@@ -130,16 +138,26 @@ export function NodeCard({
         <Group justify="space-between" align="flex-start" wrap="nowrap">
           <Stack gap={2} style={{ minWidth: 0 }}>
             <Group gap={6} wrap="nowrap">
-              <Text fw={700} truncate>{node.name || node.hostAddress}</Text>
-              {node.isLocal && <Badge size="sm" variant="light" color="blue">本地</Badge>}
+              <Text fw={700} truncate>
+                {node.name || node.hostAddress}
+              </Text>
+              {node.isLocal && (
+                <Badge size="sm" variant="light" color="blue">
+                  本地
+                </Badge>
+              )}
             </Group>
             <Group gap={6} c="dimmed" wrap="nowrap">
               <Icon path={mdiLan} size={0.62} />
-              <Text size="xs" truncate>{node.hostAddress}:{node.agentPort}</Text>
+              <Text size="xs" truncate>
+                {node.hostAddress}:{node.agentPort}
+              </Text>
             </Group>
           </Stack>
           <Group gap={6} wrap="nowrap">
-            <Badge color={status.color} variant="light">{status.label}</Badge>
+            <YinyuStatusPill tone={status.tone} state={status.state}>
+              {status.label}
+            </YinyuStatusPill>
             {rightSection}
           </Group>
         </Group>
@@ -158,7 +176,11 @@ export function NodeCard({
             thickness={8}
             roundCaps
             sections={[{ value: cpu, color: cpu >= 85 ? 'red' : cpu >= 65 ? 'orange' : 'blue' }]}
-            label={<Text ta="center" size="xs" fw={700}>{cpu.toFixed(0)}%</Text>}
+            label={
+              <Text ta="center" size="xs" fw={700}>
+                {cpu.toFixed(0)}%
+              </Text>
+            }
           />
           <Stack gap={8}>
             <MetricLine
@@ -194,7 +216,9 @@ export function NodeCard({
         <Divider />
 
         <Group justify="space-between" align="center">
-          <Tooltip label={node.lastHeartbeat ? dayjs(node.lastHeartbeat).format('YYYY-MM-DD HH:mm:ss') : '没有收到过心跳'}>
+          <Tooltip
+            label={node.lastHeartbeat ? dayjs(node.lastHeartbeat).format('YYYY-MM-DD HH:mm:ss') : '没有收到过心跳'}
+          >
             <Group gap={6} c={isOffline ? 'red' : 'dimmed'}>
               <Icon path={mdiTimerOutline} size={0.65} />
               <Text size="xs">{heartbeatText}</Text>
@@ -209,7 +233,9 @@ export function NodeCard({
         <Group justify="space-between" align="center">
           <Group gap={6}>
             <Icon path={mdiChip} size={0.7} />
-            <Text size="sm" fw={600}>参与调度</Text>
+            <Text size="sm" fw={600}>
+              参与调度
+            </Text>
           </Group>
           <Switch
             checked={node.isSchedulable}
@@ -218,6 +244,6 @@ export function NodeCard({
           />
         </Group>
       </Stack>
-    </Card>
-  );
+    </YinyuPanel>
+  )
 }

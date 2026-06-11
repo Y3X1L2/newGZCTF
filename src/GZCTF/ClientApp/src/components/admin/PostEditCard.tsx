@@ -1,11 +1,12 @@
-import { ActionIcon, Badge, Card, CardProps, Group, Stack, Title, useMantineTheme } from '@mantine/core'
+import { ActionIcon, Badge, BoxProps, Group, Stack, Title, useMantineTheme } from '@mantine/core'
 import { mdiDeleteOutline, mdiPencilOutline, mdiPinOffOutline, mdiPinOutline } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { FC } from 'react'
 import { Markdown } from '@Components/MarkdownRenderer'
+import { YinyuPanel } from '@Components/yinyu/YinyuUI'
 import { PostInfoModel } from '@Api'
 
-interface PostEditCardProps extends CardProps {
+interface PostEditCardProps extends BoxProps {
   post: PostInfoModel
   onDelete: () => void
   onEdit: () => void
@@ -15,7 +16,7 @@ interface PostEditCardProps extends CardProps {
 export const PostEditCard: FC<PostEditCardProps> = ({ post, onDelete, onEdit, onPin, ...props }) => {
   const theme = useMantineTheme()
   return (
-    <Card {...props} shadow="sm" p="lg">
+    <YinyuPanel {...props} p="lg">
       <Stack>
         <Group justify="space-between">
           <Group justify="left">
@@ -41,6 +42,6 @@ export const PostEditCard: FC<PostEditCardProps> = ({ post, onDelete, onEdit, on
           </Badge>
         </Group>
       </Stack>
-    </Card>
+    </YinyuPanel>
   )
 }

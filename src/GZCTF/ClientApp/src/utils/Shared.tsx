@@ -5,7 +5,6 @@ import {
   darken,
   lighten,
   useMantineTheme,
-  useMantineColorScheme,
   SelectProps,
   ComboboxItem,
   MantineColorsTuple,
@@ -117,177 +116,173 @@ export const ChallengeCategoryList = Object.values(ChallengeCategory)
 export const useChallengeCategoryLabelMap = () => {
   const { t } = useTranslation()
   const theme = useMantineTheme()
-  const { colorScheme } = useMantineColorScheme()
-  const invert = colorScheme === 'dark' ? 'light' : 'dark'
-  const map = useMemo(
-    () => {
-      const labels = new Map<ChallengeCategory, ChallengeCategoryItemProps>([
-        [
-          ChallengeCategory.Misc,
-          {
-            desrc: t('challenge.category.misc'),
-            icon: mdiGamepadVariantOutline,
-            name: ChallengeCategory.Misc,
-            color: 'teal',
-            colors: theme.colors['teal'],
-          },
-        ],
-        [
-          ChallengeCategory.Pwn,
-          {
-            desrc: t('challenge.category.pwn'),
-            icon: mdiBomb,
-            name: ChallengeCategory.Pwn,
-            color: 'red',
-            colors: theme.colors['red'],
-          },
-        ],
-        [
-          ChallengeCategory.Web,
-          {
-            desrc: t('challenge.category.web'),
-            icon: mdiWeb,
-            name: ChallengeCategory.Web,
-            color: 'blue',
-            colors: theme.colors['blue'],
-          },
-        ],
-        [
-          ChallengeCategory.Reverse,
-          {
-            desrc: t('challenge.category.reverse'),
-            icon: mdiChevronTripleLeft,
-            name: ChallengeCategory.Reverse,
-            color: 'yellow',
-            colors: theme.colors['yellow'],
-          },
-        ],
-        [
-          ChallengeCategory.Crypto,
-          {
-            desrc: t('challenge.category.crypto'),
-            icon: mdiMatrix,
-            name: ChallengeCategory.Crypto,
-            color: 'violet',
-            colors: theme.colors['violet'],
-          },
-        ],
-        [
-          ChallengeCategory.Blockchain,
-          {
-            desrc: t('challenge.category.blockchain'),
-            icon: mdiEthereum,
-            name: ChallengeCategory.Blockchain,
-            color: 'green',
-            colors: theme.colors['green'],
-          },
-        ],
-        [
-          ChallengeCategory.Forensics,
-          {
-            desrc: t('challenge.category.forensics'),
-            icon: mdiFingerprint,
-            name: ChallengeCategory.Forensics,
-            color: 'indigo',
-            colors: theme.colors['indigo'],
-          },
-        ],
-        [
-          ChallengeCategory.Hardware,
-          {
-            desrc: t('challenge.category.hardware'),
-            icon: mdiChip,
-            name: ChallengeCategory.Hardware,
-            color: invert,
-            colors: theme.colors[invert],
-          },
-        ],
-        [
-          ChallengeCategory.Mobile,
-          {
-            desrc: t('challenge.category.mobile'),
-            icon: mdiCellphoneCog,
-            name: ChallengeCategory.Mobile,
-            color: 'pink',
-            colors: theme.colors['pink'],
-          },
-        ],
-        [
-          ChallengeCategory.PPC,
-          {
-            desrc: t('challenge.category.ppc'),
-            icon: mdiConsole,
-            name: ChallengeCategory.PPC,
-            color: 'cyan',
-            colors: theme.colors['cyan'],
-          },
-        ],
-        [
-          ChallengeCategory.AI,
-          {
-            desrc: t('challenge.category.ai'),
-            icon: mdiRobotLoveOutline,
-            name: ChallengeCategory.AI,
-            color: 'lime',
-            colors: theme.colors['lime'],
-          },
-        ],
-        [
-          ChallengeCategory.OSINT,
-          {
-            desrc: t('challenge.category.osint'),
-            icon: mdiSearchWeb,
-            name: ChallengeCategory.OSINT,
-            color: 'orange',
-            colors: theme.colors['orange'],
-          },
-        ],
-        [
-          ChallengeCategory.Pentest,
-          {
-            desrc: t('challenge.category.pentest'),
-            icon: mdiLanPending,
-            name: ChallengeCategory.Pentest,
-            color: 'grape',
-            colors: theme.colors['grape'],
-          },
-        ],
-        [
-          ChallengeCategory.Scenario,
-          {
-            desrc: t('challenge.category.scenario'),
-            icon: mdiTarget,
-            name: ChallengeCategory.Scenario,
-            color: 'lime',
-            colors: theme.colors['lime'],
-          },
-        ],
-        [
-          ChallengeCategory.IR,
-          {
-            desrc: t('challenge.category.ir'),
-            icon: mdiShieldHalfFull,
-            name: ChallengeCategory.IR,
-            color: 'cyan',
-            colors: theme.colors['cyan'],
-          },
-        ],
-      ])
+  const invert = 'light'
+  const map = useMemo(() => {
+    const labels = new Map<ChallengeCategory, ChallengeCategoryItemProps>([
+      [
+        ChallengeCategory.Misc,
+        {
+          desrc: t('challenge.category.misc'),
+          icon: mdiGamepadVariantOutline,
+          name: ChallengeCategory.Misc,
+          color: 'teal',
+          colors: theme.colors['teal'],
+        },
+      ],
+      [
+        ChallengeCategory.Pwn,
+        {
+          desrc: t('challenge.category.pwn'),
+          icon: mdiBomb,
+          name: ChallengeCategory.Pwn,
+          color: 'red',
+          colors: theme.colors['red'],
+        },
+      ],
+      [
+        ChallengeCategory.Web,
+        {
+          desrc: t('challenge.category.web'),
+          icon: mdiWeb,
+          name: ChallengeCategory.Web,
+          color: 'blue',
+          colors: theme.colors['blue'],
+        },
+      ],
+      [
+        ChallengeCategory.Reverse,
+        {
+          desrc: t('challenge.category.reverse'),
+          icon: mdiChevronTripleLeft,
+          name: ChallengeCategory.Reverse,
+          color: 'yellow',
+          colors: theme.colors['yellow'],
+        },
+      ],
+      [
+        ChallengeCategory.Crypto,
+        {
+          desrc: t('challenge.category.crypto'),
+          icon: mdiMatrix,
+          name: ChallengeCategory.Crypto,
+          color: 'violet',
+          colors: theme.colors['violet'],
+        },
+      ],
+      [
+        ChallengeCategory.Blockchain,
+        {
+          desrc: t('challenge.category.blockchain'),
+          icon: mdiEthereum,
+          name: ChallengeCategory.Blockchain,
+          color: 'green',
+          colors: theme.colors['green'],
+        },
+      ],
+      [
+        ChallengeCategory.Forensics,
+        {
+          desrc: t('challenge.category.forensics'),
+          icon: mdiFingerprint,
+          name: ChallengeCategory.Forensics,
+          color: 'indigo',
+          colors: theme.colors['indigo'],
+        },
+      ],
+      [
+        ChallengeCategory.Hardware,
+        {
+          desrc: t('challenge.category.hardware'),
+          icon: mdiChip,
+          name: ChallengeCategory.Hardware,
+          color: invert,
+          colors: theme.colors[invert],
+        },
+      ],
+      [
+        ChallengeCategory.Mobile,
+        {
+          desrc: t('challenge.category.mobile'),
+          icon: mdiCellphoneCog,
+          name: ChallengeCategory.Mobile,
+          color: 'pink',
+          colors: theme.colors['pink'],
+        },
+      ],
+      [
+        ChallengeCategory.PPC,
+        {
+          desrc: t('challenge.category.ppc'),
+          icon: mdiConsole,
+          name: ChallengeCategory.PPC,
+          color: 'cyan',
+          colors: theme.colors['cyan'],
+        },
+      ],
+      [
+        ChallengeCategory.AI,
+        {
+          desrc: t('challenge.category.ai'),
+          icon: mdiRobotLoveOutline,
+          name: ChallengeCategory.AI,
+          color: 'lime',
+          colors: theme.colors['lime'],
+        },
+      ],
+      [
+        ChallengeCategory.OSINT,
+        {
+          desrc: t('challenge.category.osint'),
+          icon: mdiSearchWeb,
+          name: ChallengeCategory.OSINT,
+          color: 'orange',
+          colors: theme.colors['orange'],
+        },
+      ],
+      [
+        ChallengeCategory.Pentest,
+        {
+          desrc: t('challenge.category.pentest'),
+          icon: mdiLanPending,
+          name: ChallengeCategory.Pentest,
+          color: 'grape',
+          colors: theme.colors['grape'],
+        },
+      ],
+      [
+        ChallengeCategory.Scenario,
+        {
+          desrc: t('challenge.category.scenario'),
+          icon: mdiTarget,
+          name: ChallengeCategory.Scenario,
+          color: 'lime',
+          colors: theme.colors['lime'],
+        },
+      ],
+      [
+        ChallengeCategory.IR,
+        {
+          desrc: t('challenge.category.ir'),
+          icon: mdiShieldHalfFull,
+          name: ChallengeCategory.IR,
+          color: 'cyan',
+          colors: theme.colors['cyan'],
+        },
+      ],
+    ])
 
-      const getLabel = labels.get.bind(labels)
-      labels.get = (key) =>
-        getLabel(key) ?? {
-          desrc: String(key),
-          icon: mdiHelpCircleOutline,
-          name: String(key) as ChallengeCategory,
-          color: 'gray',
-          colors: theme.colors['gray'],
-        }
+    const getLabel = labels.get.bind(labels)
+    labels.get = (key) =>
+      getLabel(key) ?? {
+        desrc: String(key),
+        icon: mdiHelpCircleOutline,
+        name: String(key) as ChallengeCategory,
+        color: 'gray',
+        colors: theme.colors['gray'],
+      }
 
-      return labels
-    },
-    [t, theme, invert]
-  )
+    return labels
+  }, [t, theme, invert])
 
   return map
 }
@@ -322,24 +317,17 @@ export const BloodsTypes = [SubmissionType.FirstBlood, SubmissionType.SecondBloo
 
 export const SubmissionTypeColorMap = () => {
   const theme = useMantineTheme()
-  const { colorScheme } = useMantineColorScheme()
 
   const map = useMemo(
     () =>
       new Map([
         [SubmissionType.Unaccepted, undefined],
-        [SubmissionType.Normal, theme.colors[theme.primaryColor][colorScheme === 'dark' ? 8 : 6]],
+        [SubmissionType.Normal, theme.colors[theme.primaryColor][8]],
         [SubmissionType.FirstBlood, theme.colors.yellow[5]],
-        [
-          SubmissionType.SecondBlood,
-          colorScheme === 'dark' ? lighten(theme.colors.gray[2], 0.3) : darken(theme.colors.gray[1], 0.2),
-        ],
-        [
-          SubmissionType.ThirdBlood,
-          colorScheme === 'dark' ? darken(theme.colors.orange[7], 0.25) : lighten(theme.colors.orange[7], 0.2),
-        ],
+        [SubmissionType.SecondBlood, lighten(theme.colors.light[2], 0.3)],
+        [SubmissionType.ThirdBlood, darken(theme.colors.orange[7], 0.25)],
       ]),
-    [theme, colorScheme]
+    [theme]
   )
 
   return map
@@ -377,10 +365,9 @@ export const SubmissionTypeIconMap = (size: number) => {
 export const NoticTypeIconMap = (size: number) => {
   const theme = useMantineTheme()
   const { iconMap } = SubmissionTypeIconMap(size)
-  const { colorScheme } = useMantineColorScheme()
 
   const map = useMemo(() => {
-    const colorIdx = colorScheme === 'dark' ? 4 : 7
+    const colorIdx = 4
 
     return new Map([
       [NoticeType.Normal, { path: mdiBullhornOutline, size: size, color: theme.colors[theme.primaryColor][colorIdx] }],
@@ -390,7 +377,7 @@ export const NoticTypeIconMap = (size: number) => {
       [NoticeType.SecondBlood, iconMap.get(SubmissionType.SecondBlood)],
       [NoticeType.ThirdBlood, iconMap.get(SubmissionType.ThirdBlood)],
     ])
-  }, [theme, colorScheme, size, iconMap])
+  }, [theme, size, iconMap])
 
   return map
 }

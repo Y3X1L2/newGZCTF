@@ -26,6 +26,7 @@ import { mdiCheck, mdiClose, mdiRefresh, mdiStar } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { YinyuModalBody } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg, tryGetErrorMsg } from '@Utils/Shared'
 import { IMAGE_MIME_TYPES } from '@Utils/Shared'
 import api, { TeamInfoModel, TeamUserInfoModel } from '@Api'
@@ -321,204 +322,208 @@ export const TeamEditModal: FC<TeamEditModalProps> = (props) => {
         props.onClose()
       }}
     >
-      <Stack gap="sm">
-        {/* Team Info */}
-        <Grid grow>
-          <Grid.Col span={8}>
-            <TextInput
-              label={t('team.label.name')}
-              type="text"
-              placeholder={team?.name ?? 'ctfteam'}
-              w="100%"
-              value={teamInfo?.name ?? 'team'}
-              disabled={!isCaptain}
-              onChange={(event) => setTeamInfo({ ...teamInfo, name: event.target.value })}
-            />
-          </Grid.Col>
-          <Grid.Col span={4}>
-            <Center>
-              <Avatar
-                alt="avatar"
-                radius="xl"
-                size={70}
-                src={teamInfo?.avatar}
-                onClick={() => isCaptain && setDropzoneOpened(true)}
-              >
-                {teamInfo?.name?.slice(0, 1) ?? 'T'}
-              </Avatar>
-            </Center>
-          </Grid.Col>
-        </Grid>
-        {isCaptain && (
-          <PasswordInput
-            label={
-              <Group gap={3}>
-                <Text fw={500} size="sm">
-                  {t('team.label.invite_code')}
-                </Text>
-                <ActionIcon size="sm" onClick={onRefreshInviteCode}>
-                  <Icon path={mdiRefresh} size={1} />
-                </ActionIcon>
-              </Group>
-            }
-            value={inviteCode}
-            placeholder="loading..."
-            onClick={() => {
-              clipboard.copy(inviteCode)
-              showNotification({
-                color: 'teal',
-                message: t('team.notification.invite_code.copied'),
-                icon: <Icon path={mdiCheck} size={1} />,
-              })
-            }}
-            readOnly
-          />
-        )}
-        <Textarea
-          label={t('team.label.bio')}
-          placeholder={teamInfo?.bio ?? t('team.placeholder.bio')}
-          value={teamInfo?.bio ?? ''}
-          w="100%"
-          disabled={!isCaptain}
-          autosize
-          minRows={2}
-          maxRows={4}
-          onChange={(event) => setTeamInfo({ ...teamInfo, bio: event.target.value })}
-        />
-        <Text fw={500} size="sm">
-          {t('team.label.members')}
-        </Text>
-        <ScrollArea h={210} offsetScrollbars>
-          <Stack gap="xs">
-            {captain && (
-              <Group justify="space-between" p="xs" className={styles.captainGroup}>
-                <Group justify="left">
-                  <Avatar alt="avatar" src={captain.avatar} radius="xl" size="md">
-                    {captain.userName?.slice(0, 1) ?? 'C'}
-                  </Avatar>
+      <YinyuModalBody p="md">
+        <Stack gap="sm">
+          {/* Team Info */}
+          <Grid grow>
+            <Grid.Col span={8}>
+              <TextInput
+                label={t('team.label.name')}
+                type="text"
+                placeholder={team?.name ?? 'ctfteam'}
+                w="100%"
+                value={teamInfo?.name ?? 'team'}
+                disabled={!isCaptain}
+                onChange={(event) => setTeamInfo({ ...teamInfo, name: event.target.value })}
+              />
+            </Grid.Col>
+            <Grid.Col span={4}>
+              <Center>
+                <Avatar
+                  alt="avatar"
+                  radius="xl"
+                  size={70}
+                  src={teamInfo?.avatar}
+                  onClick={() => isCaptain && setDropzoneOpened(true)}
+                >
+                  {teamInfo?.name?.slice(0, 1) ?? 'T'}
+                </Avatar>
+              </Center>
+            </Grid.Col>
+          </Grid>
+          {isCaptain && (
+            <PasswordInput
+              label={
+                <Group gap={3}>
                   <Text fw={500} size="sm">
-                    {captain.userName}
+                    {t('team.label.invite_code')}
                   </Text>
+                  <ActionIcon size="sm" onClick={onRefreshInviteCode}>
+                    <Icon path={mdiRefresh} size={1} />
+                  </ActionIcon>
                 </Group>
-                <Badge color="orange" leftSection={<Icon path={mdiStar} size={0.6} />}>
-                  {t('team.content.role.captain')}
-                </Badge>
-              </Group>
-            )}
-            {crew &&
-              crew.map((user) => (
-                <TeamMemberInfo
-                  key={user.id}
-                  isCaptain={isCaptain}
-                  user={user}
-                  onTransferCaptain={(user: TeamUserInfoModel) => {
-                    modals.openConfirmModal({
-                      title: t('team.content.transfer.confirm.title'),
-                      children: (
-                        <Text size="sm">
-                          {t('team.content.transfer.confirm.message', {
-                            team: teamInfo?.name,
-                            user: user.userName,
-                          })}
-                        </Text>
-                      ),
-                      onConfirm: () => onTransferCaptain(user.id!),
-                      confirmProps: { color: 'orange' },
-                      zIndex: 10000,
-                    })
-                  }}
-                  onKick={(user: TeamUserInfoModel) => {
-                    modals.openConfirmModal({
-                      title: t('team.content.kick.confirm.title'),
-                      children: (
-                        <Text size="sm">
-                          {t('team.content.kick.confirm.message', {
-                            user: user.userName,
-                          })}
-                        </Text>
-                      ),
-                      onConfirm: () => onConfirmKickUser(user.id!),
-                      confirmProps: { color: 'orange' },
-                      zIndex: 10000,
-                    })
-                  }}
-                />
-              ))}
-          </Stack>
-        </ScrollArea>
+              }
+              value={inviteCode}
+              placeholder="loading..."
+              onClick={() => {
+                clipboard.copy(inviteCode)
+                showNotification({
+                  color: 'teal',
+                  message: t('team.notification.invite_code.copied'),
+                  icon: <Icon path={mdiCheck} size={1} />,
+                })
+              }}
+              readOnly
+            />
+          )}
+          <Textarea
+            label={t('team.label.bio')}
+            placeholder={teamInfo?.bio ?? t('team.placeholder.bio')}
+            value={teamInfo?.bio ?? ''}
+            w="100%"
+            disabled={!isCaptain}
+            autosize
+            minRows={2}
+            maxRows={4}
+            onChange={(event) => setTeamInfo({ ...teamInfo, bio: event.target.value })}
+          />
+          <Text fw={500} size="sm">
+            {t('team.label.members')}
+          </Text>
+          <ScrollArea h={210} offsetScrollbars>
+            <Stack gap="xs">
+              {captain && (
+                <Group justify="space-between" p="xs" className={styles.captainGroup}>
+                  <Group justify="left">
+                    <Avatar alt="avatar" src={captain.avatar} radius="xl" size="md">
+                      {captain.userName?.slice(0, 1) ?? 'C'}
+                    </Avatar>
+                    <Text fw={500} size="sm">
+                      {captain.userName}
+                    </Text>
+                  </Group>
+                  <Badge color="orange" leftSection={<Icon path={mdiStar} size={0.6} />}>
+                    {t('team.content.role.captain')}
+                  </Badge>
+                </Group>
+              )}
+              {crew &&
+                crew.map((user) => (
+                  <TeamMemberInfo
+                    key={user.id}
+                    isCaptain={isCaptain}
+                    user={user}
+                    onTransferCaptain={(user: TeamUserInfoModel) => {
+                      modals.openConfirmModal({
+                        title: t('team.content.transfer.confirm.title'),
+                        children: (
+                          <Text size="sm">
+                            {t('team.content.transfer.confirm.message', {
+                              team: teamInfo?.name,
+                              user: user.userName,
+                            })}
+                          </Text>
+                        ),
+                        onConfirm: () => onTransferCaptain(user.id!),
+                        confirmProps: { color: 'orange' },
+                        zIndex: 10000,
+                      })
+                    }}
+                    onKick={(user: TeamUserInfoModel) => {
+                      modals.openConfirmModal({
+                        title: t('team.content.kick.confirm.title'),
+                        children: (
+                          <Text size="sm">
+                            {t('team.content.kick.confirm.message', {
+                              user: user.userName,
+                            })}
+                          </Text>
+                        ),
+                        onConfirm: () => onConfirmKickUser(user.id!),
+                        confirmProps: { color: 'orange' },
+                        zIndex: 10000,
+                      })
+                    }}
+                  />
+                ))}
+            </Stack>
+          </ScrollArea>
 
-        <Group grow m="auto" w="100%">
-          <Button
-            fullWidth
-            color="red"
-            variant="outline"
-            onClick={() => {
-              modals.openConfirmModal({
-                title: isCaptain ? t('team.content.disband.confirm.title') : t('team.content.leave.confirm.title'),
-                children: (
-                  <Text size="sm">
-                    {isCaptain
-                      ? t('team.content.disband.confirm.message', {
-                          team: teamInfo?.name,
-                        })
-                      : t('team.content.leave.confirm.message', {
-                          team: teamInfo?.name,
-                        })}
-                  </Text>
-                ),
-                onConfirm: isCaptain ? onConfirmDisbandTeam : onConfirmLeaveTeam,
-                confirmProps: { color: 'red' },
-                zIndex: 10000,
-              })
-            }}
-          >
-            {isCaptain ? t('team.button.disband') : t('team.button.leave')}
-          </Button>
-          <Button fullWidth disabled={!isCaptain} onClick={onSaveChange}>
-            {t('team.button.save')}
-          </Button>
-        </Group>
-      </Stack>
+          <Group grow m="auto" w="100%">
+            <Button
+              fullWidth
+              color="red"
+              variant="outline"
+              onClick={() => {
+                modals.openConfirmModal({
+                  title: isCaptain ? t('team.content.disband.confirm.title') : t('team.content.leave.confirm.title'),
+                  children: (
+                    <Text size="sm">
+                      {isCaptain
+                        ? t('team.content.disband.confirm.message', {
+                            team: teamInfo?.name,
+                          })
+                        : t('team.content.leave.confirm.message', {
+                            team: teamInfo?.name,
+                          })}
+                    </Text>
+                  ),
+                  onConfirm: isCaptain ? onConfirmDisbandTeam : onConfirmLeaveTeam,
+                  confirmProps: { color: 'red' },
+                  zIndex: 10000,
+                })
+              }}
+            >
+              {isCaptain ? t('team.button.disband') : t('team.button.leave')}
+            </Button>
+            <Button fullWidth disabled={!isCaptain} onClick={onSaveChange}>
+              {t('team.button.save')}
+            </Button>
+          </Group>
+        </Stack>
+      </YinyuModalBody>
 
       {/* 更新头像浮窗 */}
       <Modal opened={dropzoneOpened} onClose={() => setDropzoneOpened(false)} withCloseButton={false} zIndex={1000}>
-        <Dropzone
-          onDrop={(files) => setAvatarFile(files[0])}
-          onReject={() => {
-            showNotification({
-              color: 'red',
-              title: t('common.error.file_invalid.title'),
-              message: t('common.error.file_invalid.message'),
-              icon: <Icon path={mdiClose} size={1} />,
-            })
-          }}
-          m="0 auto 20px auto"
-          miw={220}
-          mih={220}
-          disabled={disabled}
-          maxSize={3 * 1024 * 1024}
-          accept={IMAGE_MIME_TYPES}
-        >
-          <Group justify="center" gap="xl" mih={240} className={misc.n}>
-            {avatarFile ? (
-              <Image fit="contain" src={URL.createObjectURL(avatarFile)} alt="avatar" />
-            ) : (
-              <Box>
-                <Text size="xl" inline>
-                  {t('common.content.drop_zone.content', {
-                    type: t('common.content.drop_zone.type.avatar'),
-                  })}
-                </Text>
-                <Text size="sm" c="dimmed" inline mt={7}>
-                  {t('common.content.drop_zone.limit')}
-                </Text>
-              </Box>
-            )}
-          </Group>
-        </Dropzone>
-        <Button fullWidth variant="outline" disabled={disabled} onClick={onChangeAvatar}>
-          {t('common.avatar.save')}
-        </Button>
+        <YinyuModalBody p="md">
+          <Dropzone
+            onDrop={(files) => setAvatarFile(files[0])}
+            onReject={() => {
+              showNotification({
+                color: 'red',
+                title: t('common.error.file_invalid.title'),
+                message: t('common.error.file_invalid.message'),
+                icon: <Icon path={mdiClose} size={1} />,
+              })
+            }}
+            m="0 auto 20px auto"
+            miw={220}
+            mih={220}
+            disabled={disabled}
+            maxSize={3 * 1024 * 1024}
+            accept={IMAGE_MIME_TYPES}
+          >
+            <Group justify="center" gap="xl" mih={240} className={misc.n}>
+              {avatarFile ? (
+                <Image fit="contain" src={URL.createObjectURL(avatarFile)} alt="avatar" />
+              ) : (
+                <Box>
+                  <Text size="xl" inline>
+                    {t('common.content.drop_zone.content', {
+                      type: t('common.content.drop_zone.type.avatar'),
+                    })}
+                  </Text>
+                  <Text size="sm" className="yy-readable-text" inline mt={7}>
+                    {t('common.content.drop_zone.limit')}
+                  </Text>
+                </Box>
+              )}
+            </Group>
+          </Dropzone>
+          <Button fullWidth variant="outline" disabled={disabled} onClick={onChangeAvatar}>
+            {t('common.avatar.save')}
+          </Button>
+        </YinyuModalBody>
       </Modal>
     </Modal>
   )

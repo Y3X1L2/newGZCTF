@@ -1,8 +1,11 @@
 .brand {
   display: inline-block;
-  color: light-dark(var(--mantine-primary-color-6), var(--mantine-primary-color-4));
+  color: var(--yy-green);
 }
 
 .title {
-  color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-light-0));
+  color: var(--yy-text);
+  font-weight: 900;
+  letter-spacing: 0;
+  text-shadow: 0 0.9rem 2.4rem rgba(107, 238, 177, 0.08);
 }

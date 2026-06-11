@@ -1,7 +1,8 @@
-import { Badge, Group, Paper, Stack, Table, Text, ThemeIcon, Title } from '@mantine/core'
+import { Group, Stack, Table, Text, ThemeIcon, Title } from '@mantine/core'
 import { mdiServerOff } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { FC, ReactNode } from 'react'
+import { YinyuPanel, YinyuStatusPill, YinyuStatusState, YinyuStatusTone } from '@Components/yinyu/YinyuUI'
 import { AwdpChallengeStatus, AwdpPatchStatus, AwdpRoundStatus, CheckerStatus } from '@Api'
 
 export type AwdpStatusLike = CheckerStatus | AwdpRoundStatus | AwdpPatchStatus | AwdpChallengeStatus | null | undefined
@@ -30,6 +31,51 @@ export const awdpStatusColor = (status?: AwdpStatusLike) => {
   }
 }
 
+const awdpStatusTone = (status?: AwdpStatusLike): YinyuStatusTone => {
+  switch (status) {
+    case CheckerStatus.OK:
+    case AwdpPatchStatus.ExpFailed:
+    case AwdpChallengeStatus.Attacked:
+    case AwdpChallengeStatus.Defended:
+      return 'success'
+    case CheckerStatus.Mumble:
+    case CheckerStatus.Skipped:
+    case AwdpRoundStatus.PatchPhase:
+    case AwdpPatchStatus.Pending:
+    case AwdpPatchStatus.Unsupported:
+    case AwdpChallengeStatus.Undefended:
+      return 'warm'
+    case AwdpRoundStatus.AttackPhase:
+      return 'success'
+    case AwdpRoundStatus.Finished:
+    case AwdpChallengeStatus.Unattacked:
+      return 'neutral'
+    default:
+      return 'danger'
+  }
+}
+
+const awdpStatusState = (status?: AwdpStatusLike): YinyuStatusState => {
+  switch (status) {
+    case AwdpRoundStatus.AttackPhase:
+    case AwdpRoundStatus.PatchPhase:
+    case AwdpPatchStatus.Pending:
+      return 'running'
+    case CheckerStatus.OK:
+    case AwdpChallengeStatus.Defended:
+      return 'solved'
+    case AwdpRoundStatus.Finished:
+    case AwdpChallengeStatus.Unattacked:
+      return 'idle'
+    case CheckerStatus.Mumble:
+    case CheckerStatus.Skipped:
+    case AwdpChallengeStatus.Undefended:
+      return 'busy'
+    default:
+      return awdpStatusTone(status) === 'danger' ? 'alert' : 'open'
+  }
+}
+
 export const AwdpSectionTitle: FC<{ title: string; extra?: ReactNode }> = ({ title, extra }) => (
   <Group justify="space-between" mb="sm" align="center" wrap="wrap">
     <Title order={4} style={{ minWidth: 0 }}>
@@ -44,9 +90,9 @@ export const AwdpStatusBadge: FC<{ status: AwdpStatusLike; fallback?: string; la
   fallback = '-',
   label,
 }) => (
-  <Badge color={awdpStatusColor(status)} variant="dot" size="sm">
+  <YinyuStatusPill tone={awdpStatusTone(status)} state={awdpStatusState(status)}>
     {status ? (label ?? status) : fallback}
-  </Badge>
+  </YinyuStatusPill>
 )
 
 export const AwdpInstanceStateBadge: FC<{ running: boolean; runningText: string; stoppedText: string }> = ({
@@ -54,9 +100,9 @@ export const AwdpInstanceStateBadge: FC<{ running: boolean; runningText: string;
   runningText,
   stoppedText,
 }) => (
-  <Badge color={running ? 'teal' : 'gray'} variant="dot" size="sm">
+  <YinyuStatusPill tone={running ? 'success' : 'neutral'} state={running ? 'running' : 'idle'}>
     {running ? runningText : stoppedText}
-  </Badge>
+  </YinyuStatusPill>
 )
 
 export const AwdpEndpointText: FC<{ ip?: string | null; port?: number | null }> = ({ ip, port }) => (
@@ -92,15 +138,11 @@ export const AwdpMetricTile: FC<{
   sub?: ReactNode
   color?: string
 }> = ({ icon, label, value, sub, color = 'indigo' }) => (
-  <Paper
-    withBorder
-    radius="sm"
+  <YinyuPanel
     p="md"
     h="100%"
-    style={{
-      borderLeft: `3px solid var(--mantine-color-${color}-6)`,
-      background: 'var(--mantine-color-body)',
-    }}
+    className="yy-metric-tile"
+    style={{ borderLeft: `3px solid var(--mantine-color-${color}-6)` }}
   >
     <Group gap="sm" wrap="nowrap" align="center">
       <ThemeIcon variant="light" color={color} radius="sm" size="lg">
@@ -120,5 +162,5 @@ export const AwdpMetricTile: FC<{
         )}
       </Stack>
     </Group>
-  </Paper>
+  </YinyuPanel>
 )

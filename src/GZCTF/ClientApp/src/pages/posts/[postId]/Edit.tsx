@@ -1,5 +1,4 @@
 import {
-  alpha,
   Button,
   Group,
   SimpleGrid,
@@ -9,7 +8,6 @@ import {
   Textarea,
   TextInput,
   Title,
-  useMantineColorScheme,
   useMantineTheme,
 } from '@mantine/core'
 import { useModals } from '@mantine/modals'
@@ -21,6 +19,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router'
 import { WithNavBar } from '@Components/WithNavbar'
 import { WithRole } from '@Components/WithRole'
+import { YinyuFormSection } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import { useIsMobile } from '@Utils/ThemeOverride'
 import api, { PostEditModel, Role } from '@Api'
@@ -63,7 +62,6 @@ const PostEdit: FC = () => {
   const modals = useModals()
 
   const isMobile = useIsMobile()
-  const { colorScheme } = useMantineColorScheme()
 
   const onUpdate = async () => {
     if (postId === 'new') {
@@ -172,10 +170,10 @@ const PostEdit: FC = () => {
   return (
     <WithNavBar minWidth={0} withHeader stickyHeader>
       <WithRole requiredRole={Role.Admin}>
-        <Stack mt={isMobile ? 25 : 30}>
+        <Stack mt={isMobile ? 25 : 30} className="yy-page-frame view-stack">
           <Group justify={isMobile ? 'right' : 'space-between'}>
             {!isMobile && (
-              <Title order={1} c={alpha(colorScheme === 'dark' ? theme.colors.light[6] : theme.colors.gray[7], 0.5)}>
+              <Title order={1} c={theme.colors.light[6]}>
                 {`> ${postId === 'new' ? t('post.button.new') : t('post.button.edit')}`}
               </Title>
             )}
@@ -235,37 +233,41 @@ const PostEdit: FC = () => {
               </Button>
             </Group>
           </Group>
-          {isMobile ? titlePart : <SimpleGrid cols={2}>{titlePart}</SimpleGrid>}
-          <Textarea
-            label={
-              <Group gap="sm">
-                <Text size="sm">{t('post.label.summary')}</Text>
-                <Text size="xs" c="dimmed">
-                  {t('admin.content.markdown_support')}
-                </Text>
-              </Group>
-            }
-            autosize
-            value={post.summary ?? ''}
-            onChange={(e) => setPost({ ...post, summary: e.currentTarget.value })}
-            minRows={5}
-            maxRows={5}
-          />
-          <Textarea
-            label={
-              <Group gap="sm">
-                <Text size="sm">{t('post.label.content')}</Text>
-                <Text size="xs" c="dimmed">
-                  {t('admin.content.markdown_support')}
-                </Text>
-              </Group>
-            }
-            autosize
-            value={post.content ?? ''}
-            onChange={(e) => setPost({ ...post, content: e.currentTarget.value })}
-            minRows={isMobile ? 14 : 16}
-            maxRows={isMobile ? 14 : 16}
-          />
+          <YinyuFormSection p="lg">
+            <Stack gap="md">
+              {isMobile ? titlePart : <SimpleGrid cols={2}>{titlePart}</SimpleGrid>}
+              <Textarea
+                label={
+                  <Group gap="sm">
+                    <Text size="sm">{t('post.label.summary')}</Text>
+                    <Text size="xs" className="yy-readable-text">
+                      {t('admin.content.markdown_support')}
+                    </Text>
+                  </Group>
+                }
+                autosize
+                value={post.summary ?? ''}
+                onChange={(e) => setPost({ ...post, summary: e.currentTarget.value })}
+                minRows={5}
+                maxRows={5}
+              />
+              <Textarea
+                label={
+                  <Group gap="sm">
+                    <Text size="sm">{t('post.label.content')}</Text>
+                    <Text size="xs" className="yy-readable-text">
+                      {t('admin.content.markdown_support')}
+                    </Text>
+                  </Group>
+                }
+                autosize
+                value={post.content ?? ''}
+                onChange={(e) => setPost({ ...post, content: e.currentTarget.value })}
+                minRows={isMobile ? 14 : 16}
+                maxRows={isMobile ? 14 : 16}
+              />
+            </Stack>
+          </YinyuFormSection>
         </Stack>
       </WithRole>
     </WithNavBar>

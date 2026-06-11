@@ -1,10 +1,11 @@
-import { Badge, Card, Group, Stack, Table, Text, Title } from '@mantine/core'
+import { Badge, Group, Stack, Table, Text, Title } from '@mantine/core'
 import dayjs from 'dayjs'
 import { FC, useEffect, useState } from 'react'
 import { useParams } from 'react-router'
 import { Empty } from '@Components/Empty'
 import { WithGameTab } from '@Components/WithGameTab'
 import { WithNavBar } from '@Components/WithNavbar'
+import { YinyuTableShell } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import { theoryPlayerApi, TheoryScoreboardItemModel } from '../../../Api/TheoryApi'
 
@@ -34,9 +35,9 @@ const TheoryScoreboard: FC = () => {
   }, [numId])
 
   return (
-    <WithNavBar minWidth={0} isLoading={loading || !items} withFooter>
+    <WithNavBar minWidth={0} isLoading={loading || !items} withFooter width="var(--container)">
       <WithGameTab>
-        <Card withBorder radius="sm">
+        <YinyuTableShell p="md" className="admin-panel large">
           <Stack gap="sm">
             <Group justify="space-between">
               <Title order={3}>理论排行榜</Title>
@@ -66,7 +67,9 @@ const TheoryScoreboard: FC = () => {
                         {item.score} / {item.maxScore}
                       </Table.Td>
                       <Table.Td>{item.userName ?? '-'}</Table.Td>
-                      <Table.Td>{item.submittedAt ? dayjs(item.submittedAt).format('YYYY-MM-DD HH:mm:ss') : '-'}</Table.Td>
+                      <Table.Td>
+                        {item.submittedAt ? dayjs(item.submittedAt).format('YYYY-MM-DD HH:mm:ss') : '-'}
+                      </Table.Td>
                     </Table.Tr>
                   ))}
                 </Table.Tbody>
@@ -75,7 +78,7 @@ const TheoryScoreboard: FC = () => {
               <Empty description="暂无理论考试成绩。" />
             )}
           </Stack>
-        </Card>
+        </YinyuTableShell>
       </WithGameTab>
     </WithNavBar>
   )

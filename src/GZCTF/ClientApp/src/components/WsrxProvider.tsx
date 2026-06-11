@@ -5,8 +5,8 @@ import { Icon } from '@mdi/react'
 import { Wsrx, WsrxError, WsrxErrorKind, WsrxFeature, WsrxOptions, WsrxState } from '@xdsec/wsrx'
 import { t } from 'i18next'
 import { createContext, useCallback, use, useEffect, useMemo, useState } from 'react'
-import { showErrorMsg } from '@Utils/Shared'
 import { getPlatformName, PLATFORM_BRAND } from '@Utils/Brand'
+import { showErrorMsg } from '@Utils/Shared'
 import { useConfig } from '@Hooks/useConfig'
 
 interface CustomWsrxOptions {

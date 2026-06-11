@@ -106,7 +106,9 @@ const ChartsView: FC<ChartsViewProps> = (props) => {
 
         <div className={classes.headerRight}>
           <Text className={classes.currentTime}>{dayjs(now).format('YYYY-MM-DD HH:mm:ss')}</Text>
-          <Badge variant="light" color="cyan">{statusLabel}</Badge>
+          <Badge variant="light" color="cyan">
+            {statusLabel}
+          </Badge>
         </div>
       </header>
 
@@ -138,9 +140,7 @@ const ChartsView: FC<ChartsViewProps> = (props) => {
             <div className={classes.rankList}>
               {rankItems.map((team, index) => {
                 const solveRatio =
-                  challengeCount > 0
-                    ? Math.round((team.solvedCount / Math.max(challengeCount, 1)) * 100)
-                    : 0
+                  challengeCount > 0 ? Math.round((team.solvedCount / Math.max(challengeCount, 1)) * 100) : 0
 
                 return (
                   <div key={team.id} className={classes.rankItem} data-top={index < 3 || undefined}>

@@ -6,7 +6,6 @@ import {
   FileButton,
   Group,
   Modal,
-  Paper,
   Radio,
   ScrollArea,
   Select,
@@ -30,17 +29,19 @@ import {
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { FC, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ActionIconWithConfirm } from '@Components/ActionIconWithConfirm'
-import { AdminPage } from '@Components/admin/AdminPage'
 import { Empty } from '@Components/Empty'
+import { AdminPage } from '@Components/admin/AdminPage'
+import { YinyuModalBody, YinyuPanel, YinyuTableShell } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
+import tableClasses from '@Styles/Table.module.css'
 import {
   theoryAdminApi,
   TheoryQuestionBankItemModel,
   TheoryQuestionEditModel,
   TheoryQuestionType,
 } from '../../Api/TheoryApi'
-import tableClasses from '@Styles/Table.module.css'
 
 const DEFAULT_BANK_NAME = 'Default'
 
@@ -70,7 +71,9 @@ const emptyQuestion = (): TheoryQuestionEditModel => ({
 })
 
 const normalizeAnswerIndexes = (indexes: number[], optionCount: number, multiple: boolean) => {
-  const values = [...new Set(indexes.map(Number).filter((index) => Number.isInteger(index) && index >= 0 && index < optionCount))]
+  const values = [
+    ...new Set(indexes.map(Number).filter((index) => Number.isInteger(index) && index >= 0 && index < optionCount)),
+  ]
   if (values.length === 0) return [0]
   return multiple ? values.sort((a, b) => a - b) : [values[0]]
 }
@@ -89,7 +92,11 @@ const normalizeDraft = (question: TheoryQuestionEditModel): TheoryQuestionEditMo
     title: question.title.trim(),
     content: question.content.trim(),
     options: safeOptions,
-    answerIndexes: normalizeAnswerIndexes(question.answerIndexes, safeOptions.length, type === TheoryQuestionType.MultipleChoice),
+    answerIndexes: normalizeAnswerIndexes(
+      question.answerIndexes,
+      safeOptions.length,
+      type === TheoryQuestionType.MultipleChoice
+    ),
   }
 }
 
@@ -101,8 +108,9 @@ const getAnswerLabel = (question: TheoryQuestionEditModel) =>
 
 const normalizeType = (value: unknown): TheoryQuestionType => {
   const raw = String(value ?? '').toLowerCase()
-  if (raw.includes('multiple') || raw.includes('multi') || raw.includes('多')) return TheoryQuestionType.MultipleChoice
-  if (raw.includes('true') || raw.includes('false') || raw.includes('judge') || raw.includes('判断')) return TheoryQuestionType.TrueFalse
+  if (raw.includes('multiple') || raw.includes('multi') || raw.includes('多选')) return TheoryQuestionType.MultipleChoice
+  if (raw.includes('true') || raw.includes('false') || raw.includes('judge') || raw.includes('判断'))
+    return TheoryQuestionType.TrueFalse
   return TheoryQuestionType.SingleChoice
 }
 
@@ -117,8 +125,9 @@ const parseAnswerIndexes = (raw: unknown, options: string[]): number[] => {
     const optionIndex = options.findIndex((option) => option.trim() === text)
     if (optionIndex >= 0) return [optionIndex]
 
-    const letter = text.toUpperCase().charCodeAt(0) - 65
-    if (/^[A-Z]$/.test(text.toUpperCase()) && letter >= 0) return [letter]
+    const upper = text.toUpperCase()
+    const letter = upper.charCodeAt(0) - 65
+    if (/^[A-Z]$/.test(upper) && letter >= 0) return [letter]
 
     const numeric = Number(text)
     return Number.isInteger(numeric) ? [numeric] : []
@@ -139,7 +148,9 @@ const parseImportedQuestions = (text: string, bankName: string): TheoryQuestionE
     const options =
       type === TheoryQuestionType.TrueFalse
         ? ['正确', '错误']
-        : (item.options ?? item.choices ?? item.answers ?? []).map((option: unknown) => String(option).trim()).filter(Boolean)
+        : (item.options ?? item.choices ?? item.answers ?? [])
+            .map((option: unknown) => String(option).trim())
+            .filter(Boolean)
     const safeOptions = options.length >= 2 ? options : ['选项 A', '选项 B']
     const answerRaw = item.answerIndexes ?? item.answerIndex ?? item.correctIndexes ?? item.correctIndex ?? item.answer
 
@@ -200,139 +211,150 @@ const QuestionEditorModal: FC<{
 
   return (
     <Modal opened={opened} onClose={onClose} title="题目编辑" size="xl">
-      <Stack gap="md">
-        <SimpleGrid cols={{ base: 1, md: 2 }}>
+      <YinyuModalBody p="md">
+        <Stack gap="md">
+          <SimpleGrid cols={{ base: 1, md: 2 }}>
+            <TextInput
+              label="题库"
+              value={draft.bankName ?? DEFAULT_BANK_NAME}
+              onChange={(event) => setDraft({ ...draft, bankName: event.currentTarget.value })}
+            />
+            <Select
+              label="题型"
+              data={questionTypeOptions}
+              value={draft.type}
+              onChange={(value) => value && setType(value as TheoryQuestionType)}
+            />
+          </SimpleGrid>
+
           <TextInput
-            label="题库"
-            value={draft.bankName ?? DEFAULT_BANK_NAME}
-            onChange={(event) => setDraft({ ...draft, bankName: event.currentTarget.value })}
+            required
+            label="题干"
+            value={draft.title}
+            onChange={(event) => setDraft({ ...draft, title: event.currentTarget.value })}
           />
-          <Select
-            label="题型"
-            data={questionTypeOptions}
-            value={draft.type}
-            onChange={(value) => value && setType(value as TheoryQuestionType)}
+          <Textarea
+            label="说明"
+            autosize
+            minRows={2}
+            value={draft.content}
+            onChange={(event) => setDraft({ ...draft, content: event.currentTarget.value })}
           />
-        </SimpleGrid>
 
-        <TextInput
-          required
-          label="题干"
-          value={draft.title}
-          onChange={(event) => setDraft({ ...draft, title: event.currentTarget.value })}
-        />
-        <Textarea
-          label="补充说明"
-          minRows={2}
-          value={draft.content}
-          onChange={(event) => setDraft({ ...draft, content: event.currentTarget.value })}
-        />
+          <Stack gap="xs">
+            <Group justify="space-between">
+              <Text fw={700}>选项与答案</Text>
+              {!trueFalse && (
+                <Button
+                  size="xs"
+                  variant="default"
+                  leftSection={<Icon path={mdiPlus} size={0.75} />}
+                  onClick={() =>
+                    setDraft({
+                      ...draft,
+                      options: [...draft.options, `选项 ${String.fromCharCode(65 + draft.options.length)}`],
+                    })
+                  }
+                >
+                  添加选项
+                </Button>
+              )}
+            </Group>
 
-        <Stack gap="xs">
-          <Group justify="space-between">
-            <Text fw={600}>选项与答案</Text>
-            {!trueFalse && (
-              <Button size="xs" variant="default" onClick={() => setDraft({ ...draft, options: [...draft.options, ''] })}>
-                添加选项
-              </Button>
+            {multiple ? (
+              <Checkbox.Group
+                value={draft.answerIndexes.map(String)}
+                onChange={(values) =>
+                  setDraft({
+                    ...draft,
+                    answerIndexes: normalizeAnswerIndexes(values.map(Number), draft.options.length, true),
+                  })
+                }
+              >
+                <Stack gap="xs">
+                  {draft.options.map((option, index) => (
+                    <Group key={index} wrap="nowrap" align="center">
+                      <Checkbox value={String(index)} />
+                      <TextInput
+                        value={option}
+                        onChange={(event) => setOption(index, event.currentTarget.value)}
+                        disabled={trueFalse}
+                        style={{ flex: 1 }}
+                      />
+                      {!trueFalse && draft.options.length > 2 && (
+                        <ActionIcon color="red" variant="subtle" onClick={() => removeOption(index)}>
+                          <Icon path={mdiDeleteOutline} size={0.8} />
+                        </ActionIcon>
+                      )}
+                    </Group>
+                  ))}
+                </Stack>
+              </Checkbox.Group>
+            ) : (
+              <Radio.Group
+                value={String(draft.answerIndexes[0] ?? 0)}
+                onChange={(value) => setDraft({ ...draft, answerIndexes: [Number(value)] })}
+              >
+                <Stack gap="xs">
+                  {draft.options.map((option, index) => (
+                    <Group key={index} wrap="nowrap" align="center">
+                      <Radio value={String(index)} />
+                      <TextInput
+                        value={option}
+                        onChange={(event) => setOption(index, event.currentTarget.value)}
+                        disabled={trueFalse}
+                        style={{ flex: 1 }}
+                      />
+                      {!trueFalse && draft.options.length > 2 && (
+                        <ActionIcon color="red" variant="subtle" onClick={() => removeOption(index)}>
+                          <Icon path={mdiDeleteOutline} size={0.8} />
+                        </ActionIcon>
+                      )}
+                    </Group>
+                  ))}
+                </Stack>
+              </Radio.Group>
             )}
+          </Stack>
+
+          <Group justify="right">
+            <Button variant="default" onClick={onClose}>
+              取消
+            </Button>
+            <Button
+              loading={loading}
+              leftSection={<Icon path={mdiCheck} size={1} />}
+              onClick={() => onSave(normalizeDraft(draft))}
+            >
+              保存题目
+            </Button>
           </Group>
-
-          {multiple ? (
-            <Checkbox.Group
-              value={draft.answerIndexes.map(String)}
-              onChange={(values) =>
-                setDraft({ ...draft, answerIndexes: normalizeAnswerIndexes(values.map(Number), draft.options.length, true) })
-              }
-            >
-              <Stack gap="xs">
-                {draft.options.map((option, index) => (
-                  <Group key={index} wrap="nowrap">
-                    <Checkbox value={String(index)} />
-                    <TextInput
-                      flex={1}
-                      value={option}
-                      disabled={trueFalse}
-                      onChange={(event) => setOption(index, event.currentTarget.value)}
-                    />
-                    {!trueFalse && (
-                      <Button variant="subtle" color="red" disabled={draft.options.length <= 2} onClick={() => removeOption(index)}>
-                        删除
-                      </Button>
-                    )}
-                  </Group>
-                ))}
-              </Stack>
-            </Checkbox.Group>
-          ) : (
-            <Radio.Group
-              value={String(draft.answerIndexes[0] ?? 0)}
-              onChange={(value) => setDraft({ ...draft, answerIndexes: [Number(value)] })}
-            >
-              <Stack gap="xs">
-                {draft.options.map((option, index) => (
-                  <Group key={index} wrap="nowrap">
-                    <Radio value={String(index)} />
-                    <TextInput
-                      flex={1}
-                      value={option}
-                      disabled={trueFalse}
-                      onChange={(event) => setOption(index, event.currentTarget.value)}
-                    />
-                    {!trueFalse && (
-                      <Button variant="subtle" color="red" disabled={draft.options.length <= 2} onClick={() => removeOption(index)}>
-                        删除
-                      </Button>
-                    )}
-                  </Group>
-                ))}
-              </Stack>
-            </Radio.Group>
-          )}
         </Stack>
-
-        <Group justify="flex-end">
-          <Button variant="default" disabled={loading} onClick={onClose}>
-            取消
-          </Button>
-          <Button
-            loading={loading}
-            onClick={() => {
-              const normalized = normalizeDraft(draft)
-              if (!normalized.title) {
-                showNotification({ color: 'red', message: '题干不能为空' })
-                return
-              }
-              onSave(normalized)
-            }}
-          >
-            保存
-          </Button>
-        </Group>
-      </Stack>
+      </YinyuModalBody>
     </Modal>
   )
 }
 
 const TheoryBank: FC = () => {
+  const { t } = useTranslation()
   const [questions, setQuestions] = useState<TheoryQuestionBankItemModel[]>([])
   const [loading, setLoading] = useState(false)
-  const [editorOpened, setEditorOpened] = useState(false)
-  const [activeQuestion, setActiveQuestion] = useState<TheoryQuestionBankItemModel>()
   const [keyword, setKeyword] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('All')
   const [bankFilter, setBankFilter] = useState<string>('All')
+  const [editorOpened, setEditorOpened] = useState(false)
   const [jsonOpened, setJsonOpened] = useState(false)
+  const [activeQuestion, setActiveQuestion] = useState<TheoryQuestionBankItemModel | undefined>()
   const [jsonText, setJsonText] = useState('')
-  const [importBankName, setImportBankName] = useState(DEFAULT_BANK_NAME)
+  const [jsonBankName, setJsonBankName] = useState(DEFAULT_BANK_NAME)
 
   const fetchQuestions = async () => {
-    setLoading(true)
     try {
-      const res = await theoryAdminApi.getQuestions(undefined, 5000)
-      setQuestions(res.data ?? [])
+      setLoading(true)
+      const res = await theoryAdminApi.getQuestions(keyword.trim() || undefined)
+      setQuestions(res.data)
     } catch (err) {
-      showErrorMsg(err, (key) => key)
+      showErrorMsg(err, t)
     } finally {
       setLoading(false)
     }
@@ -343,35 +365,32 @@ const TheoryBank: FC = () => {
   }, [])
 
   const bankOptions = useMemo(() => {
-    const banks = [...new Set(questions.map((question) => normalizeBankName(question.bankName)))].sort((a, b) => a.localeCompare(b))
+    const banks = [...new Set(questions.map((question) => normalizeBankName(question.bankName)))].sort()
     return [{ value: 'All', label: '全部题库' }, ...banks.map((bank) => ({ value: bank, label: bank }))]
   }, [questions])
 
-  const filteredQuestions = useMemo(() => {
-    const hint = keyword.trim().toLowerCase()
-
-    return questions.filter((question) => {
-      if (typeFilter !== 'All' && question.type !== typeFilter) return false
-      if (bankFilter !== 'All' && normalizeBankName(question.bankName) !== bankFilter) return false
-      if (!hint) return true
-      return `${question.title} ${question.content}`.toLowerCase().includes(hint)
-    })
-  }, [questions, keyword, typeFilter, bankFilter])
-
   const typeStats = useMemo(
-    () =>
-      questions.reduce(
-        (stats, question) => {
-          stats[question.type] += 1
-          return stats
-        },
-        {
-          [TheoryQuestionType.SingleChoice]: 0,
-          [TheoryQuestionType.MultipleChoice]: 0,
-          [TheoryQuestionType.TrueFalse]: 0,
-        }
-      ),
+    () => ({
+      [TheoryQuestionType.SingleChoice]: questions.filter(
+        (question) => question.type === TheoryQuestionType.SingleChoice
+      ).length,
+      [TheoryQuestionType.MultipleChoice]: questions.filter(
+        (question) => question.type === TheoryQuestionType.MultipleChoice
+      ).length,
+      [TheoryQuestionType.TrueFalse]: questions.filter((question) => question.type === TheoryQuestionType.TrueFalse)
+        .length,
+    }),
     [questions]
+  )
+
+  const filteredQuestions = useMemo(
+    () =>
+      questions.filter((question) => {
+        const matchesType = typeFilter === 'All' || question.type === typeFilter
+        const matchesBank = bankFilter === 'All' || normalizeBankName(question.bankName) === bankFilter
+        return matchesType && matchesBank
+      }),
+    [bankFilter, questions, typeFilter]
   )
 
   const openCreate = () => {
@@ -385,58 +404,35 @@ const TheoryBank: FC = () => {
   }
 
   const saveQuestion = async (question: TheoryQuestionEditModel) => {
-    setLoading(true)
+    if (!question.title.trim()) return
+
     try {
-      const res = activeQuestion
-        ? await theoryAdminApi.updateQuestion(activeQuestion.id, question)
-        : await theoryAdminApi.createQuestion(question)
-      setQuestions((items) =>
-        activeQuestion
-          ? items.map((item) => (item.id === activeQuestion.id ? res.data : item))
-          : [res.data, ...items]
-      )
-      showNotification({ color: 'teal', message: activeQuestion ? '题目已更新' : '题目已创建', icon: <Icon path={mdiCheck} size={1} /> })
+      setLoading(true)
+      if (activeQuestion?.id) {
+        await theoryAdminApi.updateQuestion(activeQuestion.id, question)
+        showNotification({ color: 'teal', message: '题目已更新', icon: <Icon path={mdiCheck} size={1} /> })
+      } else {
+        await theoryAdminApi.createQuestion(question)
+        showNotification({ color: 'teal', message: '题目已创建', icon: <Icon path={mdiCheck} size={1} /> })
+      }
+
       setEditorOpened(false)
+      await fetchQuestions()
     } catch (err) {
-      showErrorMsg(err, (key) => key)
+      showErrorMsg(err, t)
     } finally {
       setLoading(false)
     }
   }
 
   const deleteQuestion = async (question: TheoryQuestionBankItemModel) => {
-    setLoading(true)
     try {
+      setLoading(true)
       await theoryAdminApi.deleteQuestion(question.id)
-      setQuestions((items) => items.filter((item) => item.id !== question.id))
       showNotification({ color: 'teal', message: '题目已删除', icon: <Icon path={mdiCheck} size={1} /> })
+      setQuestions((items) => items.filter((item) => item.id !== question.id))
     } catch (err) {
-      showErrorMsg(err, (key) => key)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const importQuestions = async (text: string) => {
-    const imported = parseImportedQuestions(text, importBankName)
-    if (!imported.length) {
-      showNotification({ color: 'yellow', message: '没有可导入的题目' })
-      return
-    }
-
-    setLoading(true)
-    try {
-      const created: TheoryQuestionBankItemModel[] = []
-      for (const question of imported) {
-        const res = await theoryAdminApi.createQuestion(question)
-        created.push(res.data)
-      }
-      setQuestions((items) => [...created.reverse(), ...items])
-      setJsonOpened(false)
-      setJsonText('')
-      showNotification({ color: 'teal', message: `已导入 ${created.length} 道题目`, icon: <Icon path={mdiCheck} size={1} /> })
-    } catch (err) {
-      showErrorMsg(err, (key) => key)
+      showErrorMsg(err, t)
     } finally {
       setLoading(false)
     }
@@ -445,7 +441,30 @@ const TheoryBank: FC = () => {
   const onJsonFile = async (file: File | null) => {
     if (!file) return
     setJsonText(await file.text())
-    setJsonOpened(true)
+  }
+
+  const importJson = async () => {
+    try {
+      setLoading(true)
+      const imported = parseImportedQuestions(jsonText, jsonBankName)
+
+      for (const question of imported) {
+        await theoryAdminApi.createQuestion(question)
+      }
+
+      showNotification({
+        color: 'teal',
+        message: `已导入 ${imported.length} 道题目`,
+        icon: <Icon path={mdiCheck} size={1} />,
+      })
+      setJsonText('')
+      setJsonOpened(false)
+      await fetchQuestions()
+    } catch (err) {
+      showErrorMsg(err, t)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -459,9 +478,17 @@ const TheoryBank: FC = () => {
             placeholder="搜索题干或说明"
             value={keyword}
             onChange={(event) => setKeyword(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') fetchQuestions()
+            }}
           />
           <Group justify="right">
-            <Button variant="default" leftSection={<Icon path={mdiRefresh} size={1} />} loading={loading} onClick={fetchQuestions}>
+            <Button
+              variant="default"
+              leftSection={<Icon path={mdiRefresh} size={1} />}
+              loading={loading}
+              onClick={fetchQuestions}
+            >
               刷新
             </Button>
             <Button
@@ -479,10 +506,16 @@ const TheoryBank: FC = () => {
       }
     >
       <Stack gap="md" w="100%">
-        <Paper shadow="md" p="md" w="100%">
+        <YinyuPanel p="md" w="100%">
           <SimpleGrid cols={{ base: 1, md: 5 }}>
             <Select label="题型" data={filterTypeOptions} value={typeFilter} onChange={(value) => setTypeFilter(value ?? 'All')} />
-            <Select label="题库" data={bankOptions} value={bankFilter} onChange={(value) => setBankFilter(value ?? 'All')} searchable />
+            <Select
+              label="题库"
+              data={bankOptions}
+              value={bankFilter}
+              onChange={(value) => setBankFilter(value ?? 'All')}
+              searchable
+            />
             <Badge size="lg" variant="light" color="teal">
               单选 {typeStats[TheoryQuestionType.SingleChoice]}
             </Badge>
@@ -493,9 +526,9 @@ const TheoryBank: FC = () => {
               判断 {typeStats[TheoryQuestionType.TrueFalse]}
             </Badge>
           </SimpleGrid>
-        </Paper>
+        </YinyuPanel>
 
-        <Paper shadow="md" p="xs" w="100%">
+        <YinyuTableShell p="xs" w="100%">
           <ScrollArea offsetScrollbars scrollbarSize={4} h="calc(100vh - 245px)">
             <Table className={tableClasses.table} striped highlightOnHover>
               <Table.Thead>
@@ -520,7 +553,7 @@ const TheoryBank: FC = () => {
                         {question.title}
                       </Text>
                       {question.content && (
-                        <Text size="xs" c="dimmed" lineClamp={1}>
+                        <Text size="xs" className="yy-readable-text" lineClamp={1}>
                           {question.content}
                         </Text>
                       )}
@@ -553,7 +586,7 @@ const TheoryBank: FC = () => {
             </Table>
             {!filteredQuestions.length && <Empty description="当前筛选条件下没有题目" />}
           </ScrollArea>
-        </Paper>
+        </YinyuTableShell>
       </Stack>
 
       <QuestionEditorModal
@@ -565,39 +598,43 @@ const TheoryBank: FC = () => {
       />
 
       <Modal opened={jsonOpened} onClose={() => setJsonOpened(false)} title="批量导入题库 JSON" size="lg">
-        <Stack gap="md">
-          <Group justify="space-between">
-            <Text size="sm" c="dimmed">
-              支持数组或包含 questions 数组的对象，answerIndexes 使用从 0 开始的选项下标。
-            </Text>
-            <FileButton onChange={onJsonFile} accept="application/json,.json">
-              {(props) => (
-                <Button {...props} variant="default" leftSection={<Icon path={mdiFileUploadOutline} size={1} />}>
-                  选择 JSON 文件
-                </Button>
-              )}
-            </FileButton>
-          </Group>
-          <TextInput
-            label="默认题库"
-            value={importBankName}
-            onChange={(event) => setImportBankName(event.currentTarget.value)}
-          />
-          <Textarea
-            minRows={14}
-            value={jsonText}
-            onChange={(event) => setJsonText(event.currentTarget.value)}
-            placeholder='{"questions":[{"type":"SingleChoice","bankName":"Web 基础","title":"...","options":["A","B"],"answerIndexes":[0]}]}'
-          />
-          <Group justify="flex-end">
-            <Button variant="default" disabled={loading} onClick={() => setJsonOpened(false)}>
-              取消
-            </Button>
-            <Button loading={loading} disabled={!jsonText.trim()} onClick={() => importQuestions(jsonText)}>
-              导入
-            </Button>
-          </Group>
-        </Stack>
+        <YinyuModalBody p="md">
+          <Stack gap="md">
+            <Group justify="space-between">
+              <Text size="sm" className="yy-readable-text">
+                支持数组或包含 questions 数组的对象，answerIndexes 使用从 0 开始的选项下标。
+              </Text>
+              <FileButton onChange={onJsonFile} accept="application/json,.json">
+                {(props) => (
+                  <Button {...props} variant="default" leftSection={<Icon path={mdiFileUploadOutline} size={1} />}>
+                    选择 JSON 文件
+                  </Button>
+                )}
+              </FileButton>
+            </Group>
+            <TextInput
+              label="默认题库"
+              value={jsonBankName}
+              onChange={(event) => setJsonBankName(event.currentTarget.value)}
+            />
+            <Textarea
+              autosize
+              minRows={12}
+              label="JSON 内容"
+              value={jsonText}
+              onChange={(event) => setJsonText(event.currentTarget.value)}
+              placeholder='[{"type":"SingleChoice","title":"题干","options":["A","B"],"answerIndexes":[0]}]'
+            />
+            <Group justify="right">
+              <Button variant="default" onClick={() => setJsonOpened(false)}>
+                取消
+              </Button>
+              <Button loading={loading} onClick={importJson}>
+                导入
+              </Button>
+            </Group>
+          </Stack>
+        </YinyuModalBody>
       </Modal>
     </AdminPage>
   )

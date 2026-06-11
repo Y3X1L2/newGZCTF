@@ -9,10 +9,12 @@ import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router'
 import { Empty } from '@Components/Empty'
 import { InlineMarkdown } from '@Components/MarkdownRenderer'
+import { YinyuHexField } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
 import { NoticTypeIconMap } from '@Utils/Shared'
 import { OnceSWRConfig } from '@Hooks/useConfig'
 import api, { GameNotice, NoticeType } from '@Api'
+import gameClasses from '@Styles/GameCard.module.css'
 import misc from '@Styles/Misc.module.css'
 import typoClasses from '@Styles/Typography.module.css'
 
@@ -154,7 +156,8 @@ export const GameNoticePanel: FC = () => {
   )
 
   return (
-    <Card shadow="sm" w="100%">
+    <Card shadow="sm" w="100%" className={`panel-card ${gameClasses.sidePanel}`}>
+      <YinyuHexField cells={28} />
       <Stack gap="xs">
         <SegmentedControl
           value={filter}

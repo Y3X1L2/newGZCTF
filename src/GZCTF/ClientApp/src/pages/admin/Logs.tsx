@@ -1,14 +1,4 @@
-import {
-  ActionIcon,
-  Badge,
-  Group,
-  Paper,
-  ScrollArea,
-  SegmentedControl,
-  Table,
-  Text,
-  useMantineTheme,
-} from '@mantine/core'
+import { ActionIcon, Badge, Group, ScrollArea, SegmentedControl, Table, Text, useMantineTheme } from '@mantine/core'
 import { showNotification } from '@mantine/notifications'
 import { mdiArrowLeftBold, mdiArrowRightBold, mdiCheck, mdiClose } from '@mdi/js'
 import { Icon } from '@mdi/react'
@@ -18,6 +8,7 @@ import dayjs from 'dayjs'
 import { FC, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AdminPage } from '@Components/admin/AdminPage'
+import { YinyuTableShell } from '@Components/yinyu/YinyuUI'
 import { handleAxiosError } from '@Utils/ApiHelper'
 import { useLanguage } from '@Utils/I18n'
 import { TaskStatusColorMap } from '@Utils/Shared'
@@ -191,7 +182,7 @@ const Logs: FC = () => {
         </>
       }
     >
-      <Paper shadow="md" p="md" w="100%">
+      <YinyuTableShell p="md" w="100%">
         <ScrollArea viewportRef={viewport} offsetScrollbars scrollbarSize={4} h="calc(100vh - 190px)">
           <Table className={cx(tableClasses.table, tableClasses.fixed)}>
             <Table.Thead>
@@ -206,7 +197,7 @@ const Logs: FC = () => {
             <Table.Tbody>{rows}</Table.Tbody>
           </Table>
         </ScrollArea>
-      </Paper>
+      </YinyuTableShell>
     </AdminPage>
   )
 }

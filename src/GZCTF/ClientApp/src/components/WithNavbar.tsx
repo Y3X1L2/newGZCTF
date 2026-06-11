@@ -1,9 +1,7 @@
 import { AppShell, Box, LoadingOverlay, Stack } from '@mantine/core'
-import React, { FC, useState } from 'react'
-import { AppFooter } from '@Components/AppFooter'
+import React, { FC } from 'react'
 import { AppHeader } from '@Components/AppHeader'
 import { AppNavbar } from '@Components/AppNavbar'
-import { CustomColorModal } from '@Components/CustomColorModal'
 import { IconHeader } from '@Components/IconHeader'
 import { WithWiderScreen } from '@Components/WithWiderScreen'
 import { DEFAULT_LOADING_OVERLAY } from '@Utils/Shared'
@@ -19,54 +17,51 @@ interface WithNavBarProps extends React.PropsWithChildren {
   stickyHeader?: boolean
 }
 
-export interface AppControlProps {
-  openColorModal: () => void
-}
+export type AppControlProps = Record<string, never>
 
 export const WithNavBar: FC<WithNavBarProps> = ({
   children,
   width,
   isLoading,
   minWidth,
-  withFooter = false,
   withHeader,
   stickyHeader = false,
 }) => {
   const isMobile = useIsMobile()
-  const [colorModalOpened, setColorModalOpened] = useState(false)
-
-  const openColorModal = () => setColorModalOpened(true)
 
   return (
     <WithWiderScreen minWidth={minWidth}>
       <AppShell
         p={0}
+        className="yy-app-frame"
         header={{ height: 60, collapsed: !isMobile }}
         navbar={{
-          width: 65,
+          width: 78,
           breakpoint: 'sm',
           collapsed: {
             mobile: true,
           },
         }}
       >
-        <AppHeader openColorModal={openColorModal} />
-        <AppNavbar openColorModal={openColorModal} />
-        <AppShell.Main w="100%">
-          <Stack data-mobile={isMobile || undefined} data-pb={withFooter || undefined} className={classes.main}>
+        <AppHeader />
+        <AppNavbar />
+        <AppShell.Main w="100%" className={classes.shellMain}>
+          <Stack
+            data-mobile={isMobile || undefined}
+            className={classes.main}
+          >
             <LoadingOverlay visible={isLoading ?? false} overlayProps={DEFAULT_LOADING_OVERLAY} />
             {withHeader && <IconHeader px={isMobile ? '2%' : '10%'} sticky={stickyHeader} />}
             <Box
               w={width ?? (isMobile ? '96%' : '80%')}
+              className={classes.content}
               style={{
                 zIndex: 20,
               }}
             >
               {children}
             </Box>
-            <CustomColorModal opened={colorModalOpened} onClose={() => setColorModalOpened(false)} />
           </Stack>
-          {withFooter && <AppFooter />}
         </AppShell.Main>
       </AppShell>
     </WithWiderScreen>

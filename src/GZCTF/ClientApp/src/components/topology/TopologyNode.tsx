@@ -1,15 +1,15 @@
-import { memo } from 'react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { Badge, Text, Paper } from '@mantine/core';
+import { Badge, Text, Paper } from '@mantine/core'
+import { Handle, Position, type NodeProps } from '@xyflow/react'
+import { memo } from 'react'
 
-type StageStatus = 'locked' | 'unlocked' | 'completed';
+type StageStatus = 'locked' | 'unlocked' | 'completed'
 
 interface TopologyNodeData {
-  label: string;
-  nodeType: 'entry' | 'internal' | 'dc' | 'dmz' | 'core' | 'custom';
-  status: StageStatus;
-  skillDescription?: string;
-  stageIndex: number;
+  label: string
+  nodeType: 'entry' | 'internal' | 'dc' | 'dmz' | 'core' | 'custom'
+  status: StageStatus
+  skillDescription?: string
+  stageIndex: number
 }
 
 const NODE_COLORS: Record<string, string> = {
@@ -19,7 +19,7 @@ const NODE_COLORS: Record<string, string> = {
   dmz: '#ff9800',
   core: '#f44336',
   custom: '#607d8b',
-};
+}
 
 const NODE_LABELS: Record<string, string> = {
   entry: '入口',
@@ -28,18 +28,18 @@ const NODE_LABELS: Record<string, string> = {
   dmz: 'DMZ',
   core: '核心',
   custom: '自定义',
-};
+}
 
 const STATUS_COLORS: Record<StageStatus, string> = {
   locked: 'gray',
   unlocked: 'blue',
   completed: 'green',
-};
+}
 
 function TopologyNode({ data }: NodeProps) {
-  const nodeData = data as unknown as TopologyNodeData;
-  const bgColor = NODE_COLORS[nodeData.nodeType] || NODE_COLORS.custom;
-  const statusColor = STATUS_COLORS[nodeData.status];
+  const nodeData = data as unknown as TopologyNodeData
+  const bgColor = NODE_COLORS[nodeData.nodeType] || NODE_COLORS.custom
+  const statusColor = STATUS_COLORS[nodeData.status]
 
   return (
     <Paper
@@ -58,16 +58,20 @@ function TopologyNode({ data }: NodeProps) {
       <Badge size="xs" color={statusColor} mb={4}>
         {nodeData.status === 'locked' ? '锁定' : nodeData.status === 'unlocked' ? '进行中' : '已完成'}
       </Badge>
-      <Text fw={600} size="sm">{nodeData.label}</Text>
-      <Text size="xs" c="dimmed">阶段 {nodeData.stageIndex}</Text>
+      <Text fw={600} size="sm">
+        {nodeData.label}
+      </Text>
+      <Text size="xs" c="dimmed">
+        阶段 {nodeData.stageIndex}
+      </Text>
       <Badge size="xs" color={bgColor} variant="light" mt={4}>
         {NODE_LABELS[nodeData.nodeType] || nodeData.nodeType}
       </Badge>
       <Handle type="source" position={Position.Bottom} />
     </Paper>
-  );
+  )
 }
 
-export { NODE_COLORS, NODE_LABELS, STATUS_COLORS };
-export type { TopologyNodeData, StageStatus };
-export default memo(TopologyNode);
+export { NODE_COLORS, NODE_LABELS, STATUS_COLORS }
+export type { TopologyNodeData, StageStatus }
+export default memo(TopologyNode)

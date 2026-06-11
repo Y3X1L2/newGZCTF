@@ -5,7 +5,6 @@ import {
   Button,
   Code,
   Group,
-  Paper,
   ScrollArea,
   Stack,
   Switch,
@@ -32,6 +31,7 @@ import { Trans, useTranslation } from 'react-i18next'
 import { ActionIconWithConfirm } from '@Components/ActionIconWithConfirm'
 import { AdminPage } from '@Components/admin/AdminPage'
 import { UserEditModal, RoleColorMap } from '@Components/admin/UserEditModal'
+import { YinyuTableShell } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import { useArrayResponse } from '@Hooks/useArrayResponse'
 import { useUser } from '@Hooks/useUser'
@@ -233,7 +233,7 @@ const Users: FC = () => {
         </>
       }
     >
-      <Paper shadow="md" p="xs" w="100%">
+      <YinyuTableShell p="xs" w="100%">
         <ScrollArea viewportRef={viewport} offsetScrollbars scrollbarSize={4} h="calc(100vh - 190px)">
           <Table className={tableClasses.table}>
             <Table.Thead>
@@ -337,7 +337,7 @@ const Users: FC = () => {
             )
           }}
         />
-      </Paper>
+      </YinyuTableShell>
     </AdminPage>
   )
 }

@@ -48,7 +48,7 @@
   }
 
   & :where(li)::marker {
-    color: light-dark(var(--mantine-color-gray-8), var(--mantine-color-dark-1));
+    color: var(--yy-green);
     font-weight: 500;
   }
 
@@ -63,7 +63,7 @@
   }
 
   & :where(strong) {
-    color: light-dark(var(--mantine-primary-color-6), var(--mantine-primary-color-5));
+    color: var(--yy-green);
 
     & :where(code) {
       color: inherit;
@@ -74,17 +74,20 @@
     padding: var(--typo-line-gap) var(--mantine-spacing-xs);
     margin: var(--typo-line-gap) 0;
     font-size: var(--mantine-font-size-md);
-    color: light-dark(alpha(var(--mantine-color-gray-7), 0.9), alpha(var(--mantine-color-dark-0), 0.9));
-    background-color: light-dark(alpha(var(--mantine-color-dark-1), 0.1), alpha(var(--mantine-color-light-2), 0.03));
-    border-left: light-dark(4px solid var(--mantine-color-gray-5), 4px solid var(--mantine-color-dark-0));
+    color: var(--yy-muted);
+    background:
+      radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.06), transparent 42%), rgba(255, 255, 255, 0.028);
+    border-left: 4px solid rgba(107, 238, 177, 0.45);
 
     & :where(pre, code) {
-      background-color: light-dark(alpha(var(--mantine-color-light-1), 0.8), alpha(var(--mantine-color-dark-6), 0.8));
+      background-color: rgba(0, 0, 0, 0.22);
     }
   }
 
   & :where(pre) {
-    background-color: light-dark(var(--mantine-color-light-1), var(--mantine-color-dark-6));
+    border: 1px solid var(--yy-line);
+    border-radius: var(--yy-radius);
+    background: radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.06), transparent 42%), rgba(0, 0, 0, 0.28);
     padding: var(--mantine-spacing-sm);
     white-space: pre;
     overflow-wrap: anywhere;
@@ -95,13 +98,14 @@
     font-size: calc(var(--mantine-font-size-md) * 0.9375);
     padding: 1px var(--typo-line-gap);
     border: none;
-    background-color: light-dark(alpha(var(--mantine-white), 0.05), alpha(var(--mantine-black), 0.1));
+    color: var(--yy-green);
+    background-color: rgba(107, 238, 177, 0.08);
   }
 
   & :where(pre) > code {
     padding: 0;
     background-color: transparent;
-    color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-light-2));
+    color: var(--yy-text);
     font-family: var(--mantine-font-family-monospace);
     font-weight: 500;
     text-align: left;
@@ -129,7 +133,7 @@
   }
 
   & :where(a, strong) {
-    color: light-dark(var(--mantine-primary-color-6), var(--mantine-primary-color-5));
+    color: var(--yy-green);
   }
 
   & :where(a) {

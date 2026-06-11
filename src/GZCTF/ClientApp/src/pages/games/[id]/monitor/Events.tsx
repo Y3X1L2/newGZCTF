@@ -1,13 +1,11 @@
 import {
   ActionIcon,
-  Card,
   Group,
   Input,
   ScrollArea,
   Stack,
   Switch,
   Text,
-  useMantineColorScheme,
   useMantineTheme,
 } from '@mantine/core'
 import { useLocalStorage } from '@mantine/hooks'
@@ -36,6 +34,7 @@ import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router'
 import { WithGameMonitor } from '@Components/WithGameMonitor'
 import { SwitchLabel } from '@Components/admin/SwitchLabel'
+import { YinyuPanel } from '@Components/yinyu/YinyuUI'
 import { handleAxiosError } from '@Utils/ApiHelper'
 import { useLanguage } from '@Utils/I18n'
 import { useDisplayInputStyles } from '@Utils/ThemeOverride'
@@ -47,10 +46,9 @@ const ITEM_COUNT_PER_PAGE = 30
 
 const EventTypeIconMap = (size: number) => {
   const theme = useMantineTheme()
-  const { colorScheme } = useMantineColorScheme()
 
   return useMemo(() => {
-    const colorIdx = colorScheme === 'dark' ? 5 : 6
+    const colorIdx = 5
     return new Map([
       [EventType.FlagSubmit, { path: mdiFlag, size, color: theme.colors.cyan[colorIdx] }],
       [EventType.ContainerStart, { path: mdiToggleSwitchOutline, size, color: theme.colors.green[colorIdx] }],
@@ -58,7 +56,7 @@ const EventTypeIconMap = (size: number) => {
       [EventType.CheatDetected, { path: mdiExclamationThick, size, color: theme.colors.orange[colorIdx] }],
       [EventType.Normal, { path: mdiLightningBolt, size, color: theme.colors.light[colorIdx] }],
     ])
-  }, [size, colorScheme, theme.colors])
+  }, [size, theme.colors])
 }
 
 const formatAnswer = (t: TFunction, res: AnswerResult) => {
@@ -119,7 +117,7 @@ const IconBadge: FC<IconBadgeProps> = ({ path, content }) => {
   return (
     <Group gap={3} wrap="nowrap">
       <Icon path={path} size={0.75} color="var(--mantine-color-dimmed)" />
-      <Text size="sm" fw={500} c="dimmed">
+      <Text size="sm" fw={500} className="yy-readable-text">
         {content}
       </Text>
     </Group>
@@ -255,11 +253,13 @@ const Events: FC = () => {
       <ScrollArea viewportRef={viewport} offsetScrollbars h="calc(100vh - 160px)">
         <Stack gap="xs" pr={10} w="100%">
           {[...(activePage === 1 ? filteredEvents : []), ...(events ?? [])]?.map((event, i) => (
-            <Card
-              shadow="sm"
+            <YinyuPanel
               p="xs"
+              cells={18}
               key={`${event.time}@${i}`}
-              className={cx({ [tableClasses.fade]: i === 0 && activePage === 1 && filteredEvents.length > 0 })}
+              className={cx('task-row', {
+                [tableClasses.fade]: i === 0 && activePage === 1 && filteredEvents.length > 0,
+              })}
             >
               <Group wrap="nowrap" align="flex-start" justify="right" gap="sm" w="100%">
                 <Icon {...iconMap.get(event.type)!} />
@@ -276,13 +276,13 @@ const Events: FC = () => {
                       <IconBadge path={mdiAccountOutline} content={event.user} />
                       <IconBadge path={mdiAccountGroupOutline} content={event.team} />
                     </Group>
-                    <Text size="xs" fw={500} c="dimmed">
+                    <Text size="xs" fw={500} className="yy-readable-text">
                       {dayjs(event.time).locale(locale).format('SL LTS')}
                     </Text>
                   </Group>
                 </Stack>
               </Group>
-            </Card>
+            </YinyuPanel>
           ))}
         </Stack>
       </ScrollArea>

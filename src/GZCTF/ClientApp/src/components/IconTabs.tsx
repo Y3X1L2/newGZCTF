@@ -1,4 +1,4 @@
-import { Box, Group, GroupProps, MantineColor, useMantineColorScheme, useMantineTheme } from '@mantine/core'
+import { Box, Group, GroupProps, MantineColor, useMantineTheme } from '@mantine/core'
 import { clamp } from '@mantine/hooks'
 import cx from 'clsx'
 import React, { FC, useEffect, useState } from 'react'
@@ -53,9 +53,7 @@ export const IconTabs: FC<IconTabsProps> = (props) => {
   const { active, onTabChange, tabs, withIcon, aside, disabled, panesClassName, ...others } = props
   const [activeTab, setActiveTab] = useState(active ?? 0)
   const theme = useMantineTheme()
-  const { colorScheme } = useMantineColorScheme()
-  const resolveColor = (color?: MantineColor) =>
-    color ? theme.colors[theme.primaryColor][colorScheme === 'dark' ? 4 : 6] : undefined
+  const resolveColor = (color?: MantineColor) => (color ? theme.colors[theme.primaryColor][4] : undefined)
   const current = clamp(activeTab, 0, tabs.length - 1)
 
   useEffect(() => {
@@ -80,7 +78,7 @@ export const IconTabs: FC<IconTabsProps> = (props) => {
     <Group gap={0} justify="space-between" w="100%" wrap="nowrap">
       {aside}
       {withIcon && <LogoHeader className={classes.hidable} />}
-      <Group className={cx(classes.panes, panesClassName)} {...others}>
+      <Group className={cx('mode-switch', classes.panes, panesClassName)} {...others}>
         {panes}
       </Group>
     </Group>

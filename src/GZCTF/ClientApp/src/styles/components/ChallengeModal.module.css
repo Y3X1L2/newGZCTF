@@ -5,10 +5,14 @@
 
 .header {
   padding-bottom: var(--mantine-spacing-xs);
+  border-bottom: 1px solid var(--yy-line);
+  background:
+    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.08), transparent 44%), rgba(255, 255, 255, 0.018);
 }
 
 .body {
   padding-bottom: 0;
+  background: radial-gradient(ellipse at 82% 10%, rgba(245, 245, 247, 0.035), transparent 36%), transparent;
 }
 
 .content {
@@ -16,16 +20,24 @@
   flex-direction: column;
   justify-content: space-between;
   max-height: calc(50vh + 300px);
+  border: 1px solid var(--yy-line);
+  background:
+    radial-gradient(ellipse at 12% 8%, rgba(107, 238, 177, 0.08), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.058), rgba(255, 255, 255, 0.018)), rgba(8, 9, 10, 0.92);
 }
 
 .footer {
   display: flex;
   justify-content: space-between;
   position: sticky;
-  background-color: var(--mantine-color-body);
+  background:
+    linear-gradient(180deg, rgba(5, 6, 6, 0.54), rgba(5, 6, 6, 0.94)),
+    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.075), transparent 42%);
   bottom: 0;
   width: 100%;
   z-index: 400;
   padding: var(--mantine-spacing-md);
   padding-top: var(--mantine-spacing-xs);
+  border-top: 1px solid var(--yy-line);
+  backdrop-filter: blur(0.85rem);
 }

@@ -6,7 +6,6 @@ import {
   Center,
   Group,
   Input,
-  Paper,
   ScrollArea,
   Stack,
   Switch,
@@ -27,6 +26,7 @@ import { WithGameMonitor } from '@Components/WithGameMonitor'
 import { RequireRole } from '@Components/WithRole'
 import { ParticipationStatusControl } from '@Components/admin/ParticipationStatusControl'
 import { SwitchLabel } from '@Components/admin/SwitchLabel'
+import { YinyuTableShell } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
 import { showErrorMsg } from '@Utils/Shared'
 import { useParticipationStatusMap } from '@Utils/Shared'
@@ -338,7 +338,7 @@ const CheatInfoTableView: FC<CheatInfoTableViewProps> = (props) => {
     ))
 
   return (
-    <Paper shadow="md" p="md">
+    <YinyuTableShell p="md">
       <ScrollArea offsetScrollbars h="calc(100vh - 200px)">
         <Table className={classes.table}>
           <Table.Thead>
@@ -355,7 +355,7 @@ const CheatInfoTableView: FC<CheatInfoTableViewProps> = (props) => {
           <Table.Tbody>{rows}</Table.Tbody>
         </Table>
       </ScrollArea>
-    </Paper>
+    </YinyuTableShell>
   )
 }
 

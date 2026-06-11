@@ -1,33 +1,33 @@
 {
   "button": {
-    "delete": "删除文章",
-    "edit": "编辑文章",
-    "goto": "转到文章",
-    "new": "新建文章",
-    "save": "保存文章"
+    "delete": "\u5220\u9664\u901a\u77e5",
+    "edit": "\u7f16\u8f91\u901a\u77e5",
+    "goto": "\u8f6c\u5230\u901a\u77e5",
+    "new": "\u65b0\u5efa\u901a\u77e5",
+    "save": "\u4fdd\u5b58\u901a\u77e5"
   },
   "content": {
-    "delete": "你确定要删除文章 “{{title}}” 吗？",
-    "details": "查看详情",
-    "metadata": "{{author}} 发布于 {{date}}",
-    "pinned": "[置顶]",
+    "delete": "\u4f60\u786e\u5b9a\u8981\u5220\u9664\u901a\u77e5 \u201c{{title}}\u201d \u5417\uff1f",
+    "details": "\u67e5\u770b\u901a\u77e5",
+    "metadata": "{{author}} \u53d1\u5e03\u4e8e {{date}}",
+    "pinned": "[\u7f6e\u9876]",
     "updated": {
-      "content": "文章内容已更改，是否保存？",
-      "title": "文章已更改"
+      "content": "\u901a\u77e5\u5185\u5bb9\u5df2\u66f4\u6539\uff0c\u662f\u5426\u4fdd\u5b58\uff1f",
+      "title": "\u901a\u77e5\u5df2\u66f4\u6539"
     }
   },
   "label": {
-    "add_tag": "回车添加标签",
-    "content": "文章内容",
-    "summary": "文章梗概",
-    "tag": "文章标签",
-    "title": "文章标题"
+    "add_tag": "\u56de\u8f66\u6dfb\u52a0\u6807\u7b7e",
+    "content": "\u901a\u77e5\u5185\u5bb9",
+    "summary": "\u901a\u77e5\u6458\u8981",
+    "tag": "\u901a\u77e5\u6807\u7b7e",
+    "title": "\u901a\u77e5\u6807\u9898"
   },
   "notification": {
-    "created": "文章已创建",
-    "saved": "文章已保存"
+    "created": "\u901a\u77e5\u5df2\u521b\u5efa",
+    "saved": "\u901a\u77e5\u5df2\u4fdd\u5b58"
   },
   "title": {
-    "index": "文章"
+    "index": "\u901a\u77e5"
   }
 }

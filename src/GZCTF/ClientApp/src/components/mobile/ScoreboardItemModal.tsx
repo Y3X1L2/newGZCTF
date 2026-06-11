@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next'
 import { ScoreboardItemModalProps } from '@Components/ScoreboardItemModal'
 import { ScrollingText } from '@Components/ScrollingText'
 import { TeamRadarMap } from '@Components/charts/TeamRadarMap'
+import { YinyuModalBody } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
 import { ChallengeInfo } from '@Api'
 import modalClasses from '@Styles/ScoreboardItemModal.module.css'
@@ -99,90 +100,92 @@ export const MobileScoreboardItemModal: FC<ScoreboardItemModalProps> = React.mem
         </Group>
       }
     >
-      <Stack align="center" gap="xs">
-        <Stack w="60%" miw="20rem">
-          <Center h="14rem">
-            <LoadingOverlay visible={!indicator || !values} />
-            {item && indicator && values && (
-              <TeamRadarMap indicator={indicator} value={values} name={item?.name ?? ''} />
-            )}
-          </Center>
-          <Group grow ta="center">
-            <Stack gap={1}>
-              <Text fw="bold" size="sm" ff="monospace">
-                {item?.rank || '-'}
-              </Text>
-              <Text size="xs">{t('game.label.score_table.rank_total')}</Text>
-            </Stack>
-            {item?.divisionId && (
+      <YinyuModalBody>
+        <Stack align="center" gap="xs">
+          <Stack w="60%" miw="20rem">
+            <Center h="14rem">
+              <LoadingOverlay visible={!indicator || !values} />
+              {item && indicator && values && (
+                <TeamRadarMap indicator={indicator} value={values} name={item?.name ?? ''} />
+              )}
+            </Center>
+            <Group grow ta="center">
               <Stack gap={1}>
                 <Text fw="bold" size="sm" ff="monospace">
-                  {item?.divisionRank || '-'}
+                  {item?.rank || '-'}
                 </Text>
-                <Text size="xs">{t('game.label.score_table.rank_division')}</Text>
+                <Text size="xs">{t('game.label.score_table.rank_total')}</Text>
               </Stack>
-            )}
-            <Stack gap={1}>
-              <Text fw="bold" size="sm" ff="monospace">
-                {item?.ctfScore ?? 0}
-              </Text>
-              <Text size="xs">CTF</Text>
-            </Stack>
-            <Stack gap={1}>
-              <Text fw="bold" size="sm" ff="monospace">
-                {item?.awdScore ?? 0}
-              </Text>
-              <Text size="xs">AWDP</Text>
-            </Stack>
-            <Stack gap={1}>
-              <Text fw="bold" size="sm" ff="monospace">
-                {item?.score}
-              </Text>
-              <Text size="xs">{t('game.label.score_table.score')}</Text>
-            </Stack>
-            <Stack gap={1}>
-              <Text fw="bold" size="sm" ff="monospace">
-                {item?.solvedCount}
-              </Text>
-              <Text size="xs">{t('game.label.score_table.solved_count')}</Text>
-            </Stack>
-          </Group>
-          <Progress value={solved * 100} size="sm" />
+              {item?.divisionId && (
+                <Stack gap={1}>
+                  <Text fw="bold" size="sm" ff="monospace">
+                    {item?.divisionRank || '-'}
+                  </Text>
+                  <Text size="xs">{t('game.label.score_table.rank_division')}</Text>
+                </Stack>
+              )}
+              <Stack gap={1}>
+                <Text fw="bold" size="sm" ff="monospace">
+                  {item?.ctfScore ?? 0}
+                </Text>
+                <Text size="xs">CTF</Text>
+              </Stack>
+              <Stack gap={1}>
+                <Text fw="bold" size="sm" ff="monospace">
+                  {item?.awdScore ?? 0}
+                </Text>
+                <Text size="xs">AWDP</Text>
+              </Stack>
+              <Stack gap={1}>
+                <Text fw="bold" size="sm" ff="monospace">
+                  {item?.score}
+                </Text>
+                <Text size="xs">{t('game.label.score_table.score')}</Text>
+              </Stack>
+              <Stack gap={1}>
+                <Text fw="bold" size="sm" ff="monospace">
+                  {item?.solvedCount}
+                </Text>
+                <Text size="xs">{t('game.label.score_table.solved_count')}</Text>
+              </Stack>
+            </Group>
+            <Progress value={solved * 100} size="sm" />
+          </Stack>
+          {item?.solvedCount && item?.solvedCount > 0 ? (
+            <ScrollArea scrollbarSize={6} h="12rem" w="100%">
+              <Table className={tableClasses.table} fz="sm">
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>{t('common.label.challenge')}</Table.Th>
+                    <Table.Th>{t('game.label.score_table.score')}</Table.Th>
+                    <Table.Th>{t('common.label.time')}</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {sortedSolvedChallenges &&
+                    challengeIdMap &&
+                    sortedSolvedChallenges.map((chal) => {
+                      const info = challengeIdMap.get(chal.id!)
+                      return (
+                        <Table.Tr key={chal.id} ff="monospace">
+                          <Table.Td>
+                            <ScrollingText text={info?.title ?? ''} />
+                          </Table.Td>
+                          <Table.Td>{chal.score}</Table.Td>
+                          <Table.Td>{dayjs(chal.time).locale(locale).format('SL HH:mm')}</Table.Td>
+                        </Table.Tr>
+                      )
+                    })}
+                </Table.Tbody>
+              </Table>
+            </ScrollArea>
+          ) : (
+            <Text py="1rem" fw="bold">
+              {t('game.placeholder.no_solved')}
+            </Text>
+          )}
         </Stack>
-        {item?.solvedCount && item?.solvedCount > 0 ? (
-          <ScrollArea scrollbarSize={6} h="12rem" w="100%">
-            <Table className={tableClasses.table} fz="sm">
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>{t('common.label.challenge')}</Table.Th>
-                  <Table.Th>{t('game.label.score_table.score')}</Table.Th>
-                  <Table.Th>{t('common.label.time')}</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {sortedSolvedChallenges &&
-                  challengeIdMap &&
-                  sortedSolvedChallenges.map((chal) => {
-                    const info = challengeIdMap.get(chal.id!)
-                    return (
-                      <Table.Tr key={chal.id} ff="monospace">
-                        <Table.Td>
-                          <ScrollingText text={info?.title ?? ''} />
-                        </Table.Td>
-                        <Table.Td>{chal.score}</Table.Td>
-                        <Table.Td>{dayjs(chal.time).locale(locale).format('SL HH:mm')}</Table.Td>
-                      </Table.Tr>
-                    )
-                  })}
-              </Table.Tbody>
-            </Table>
-          </ScrollArea>
-        ) : (
-          <Text py="1rem" fw="bold">
-            {t('game.placeholder.no_solved')}
-          </Text>
-        )}
-      </Stack>
+      </YinyuModalBody>
     </Modal>
   )
 })

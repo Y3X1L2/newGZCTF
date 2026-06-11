@@ -1,28 +1,33 @@
-import { useState, useEffect } from 'react';
-import { Table, Text, Badge } from '@mantine/core';
-import { scenarioHub, LeaderboardEntry } from '../../services/scenarioHub';
+import { Table, Text, Badge } from '@mantine/core'
+import { useState, useEffect } from 'react'
+import { scenarioHub, LeaderboardEntry } from '../../services/scenarioHub'
 
 interface LeaderboardProps {
-  challengeId: number;
+  challengeId: number
 }
 
 export default function Leaderboard({ challengeId }: LeaderboardProps) {
-  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [entries, setEntries] = useState<LeaderboardEntry[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     fetch(`/api/v1/scenarios/${challengeId}/leaderboard`)
-      .then(r => r.json())
-      .then(data => { setEntries(data.entries ?? data); setLoading(false); })
-      .catch(() => setLoading(false));
+      .then((r) => r.json())
+      .then((data) => {
+        setEntries(data.entries ?? data)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
 
     scenarioHub.onLeaderboardUpdated((payload) => {
-      if (payload.challengeId === challengeId) setEntries(payload.entries);
-    });
-    return () => { scenarioHub.offLeaderboardUpdated(() => {}); };
-  }, [challengeId]);
+      if (payload.challengeId === challengeId) setEntries(payload.entries)
+    })
+    return () => {
+      scenarioHub.offLeaderboardUpdated(() => {})
+    }
+  }, [challengeId])
 
-  if (loading) return <Text>加载排行榜...</Text>;
+  if (loading) return <Text>加载排行榜...</Text>
 
   return (
     <Table striped highlightOnHover data-testid="leaderboard-table">
@@ -45,7 +50,9 @@ export default function Leaderboard({ challengeId }: LeaderboardProps) {
               </Badge>
             </Table.Td>
             <Table.Td>{entry.userName}</Table.Td>
-            <Table.Td><Text fw={700}>{entry.totalScore}</Text></Table.Td>
+            <Table.Td>
+              <Text fw={700}>{entry.totalScore}</Text>
+            </Table.Td>
             <Table.Td>{entry.detailScores?.Flag ?? '-'}</Table.Td>
             <Table.Td>{entry.detailScores?.Writeup ?? '-'}</Table.Td>
             <Table.Td>{entry.detailScores?.IP ?? '-'}</Table.Td>
@@ -53,5 +60,5 @@ export default function Leaderboard({ challengeId }: LeaderboardProps) {
         ))}
       </Table.Tbody>
     </Table>
-  );
+  )
 }

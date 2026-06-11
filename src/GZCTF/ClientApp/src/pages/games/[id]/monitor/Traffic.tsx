@@ -4,13 +4,11 @@ import {
   Divider,
   Grid,
   Group,
-  Paper,
   rem,
   Stack,
   Text,
   Title,
   Tooltip,
-  useMantineColorScheme,
   useMantineTheme,
 } from '@mantine/core'
 import { useModals } from '@mantine/modals'
@@ -24,6 +22,7 @@ import { useParams } from 'react-router'
 import { ScrollSelect } from '@Components/ScrollSelect'
 import { ChallengeItem, FileItem, TeamItem } from '@Components/TrafficItems'
 import { WithGameMonitor } from '@Components/WithGameMonitor'
+import { YinyuTableShell } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
 import { showErrorMsg } from '@Utils/Shared'
 import { HunamizeSize } from '@Utils/Shared'
@@ -46,7 +45,6 @@ const Traffic: FC = () => {
 
   const { t } = useTranslation()
   const { locale } = useLanguage()
-  const { colorScheme } = useMantineColorScheme()
   const modals = useModals()
 
   const { data: challengeTraffic, mutate: mutateChallenges } = api.game.useGameGetChallengesWithTrafficCapturing(
@@ -133,7 +131,7 @@ const Traffic: FC = () => {
   const orderedFileRecords = fileRecords?.sort((a, b) => dayjs(b.updateTime).diff(dayjs(a.updateTime))) ?? []
 
   const innerStyle: CSSProperties = {
-    borderRight: `${rem(2)} solid ${colorScheme === 'dark' ? theme.colors.dark[4] : theme.colors.gray[4]}`,
+    borderRight: `${rem(2)} solid ${theme.colors.dark[4]}`,
   }
 
   const scrollHeight = 'calc(100vh - 174px)'
@@ -152,7 +150,7 @@ const Traffic: FC = () => {
           </Stack>
         </Center>
       ) : (
-        <Paper shadow="md" p="md">
+        <YinyuTableShell p="md">
           <Grid gap={0} h="calc(100vh - 142px)">
             <Grid.Col span={3} style={innerStyle}>
               <Group h={headerHeight} pb="3px" px="xs">
@@ -188,7 +186,7 @@ const Traffic: FC = () => {
               <Group h={headerHeight} pb="3px" px="xs" justify="space-between" wrap="nowrap">
                 <Text size="md" fw="bold">
                   {t('game.label.traffic')}
-                  <Text span px="md" fw="bold" size="sm" c="dimmed">
+                  <Text span px="md" fw="bold" size="sm" className="yy-readable-text">
                     {HunamizeSize(totalFileSize ?? 0)}
                   </Text>
                 </Text>
@@ -224,7 +222,7 @@ const Traffic: FC = () => {
               />
             </Grid.Col>
           </Grid>
-        </Paper>
+        </YinyuTableShell>
       )}
     </WithGameMonitor>
   )

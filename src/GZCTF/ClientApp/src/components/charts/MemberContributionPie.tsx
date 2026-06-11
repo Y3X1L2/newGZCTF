@@ -1,4 +1,4 @@
-import { useMantineColorScheme, useMantineTheme } from '@mantine/core'
+import { useMantineTheme } from '@mantine/core'
 import chroma from 'chroma-js'
 import type { EChartsOption } from 'echarts'
 import { FC, useMemo } from 'react'
@@ -10,18 +10,16 @@ export interface MemberContributionPieProps {
 
 export const MemberContributionPie: FC<MemberContributionPieProps> = ({ data }) => {
   const theme = useMantineTheme()
-  const { colorScheme } = useMantineColorScheme()
 
-  const labelColor = colorScheme === 'dark' ? theme.colors.light[1] : theme.colors.dark[5]
-  const backgroundColor = colorScheme === 'dark' ? theme.colors.gray[6] : theme.colors.light[1]
+  const labelColor = theme.colors.light[1]
+  const backgroundColor = theme.colors.dark[6]
 
   const colorPalette = useMemo(() => {
-    const [start, end] = colorScheme === 'dark' ? [3, 7] : [4, 8]
     return chroma
-      .scale([theme.colors[theme.primaryColor][start], theme.colors[theme.primaryColor][end]])
+      .scale([theme.colors[theme.primaryColor][3], theme.colors[theme.primaryColor][7]])
       .mode('oklch')
       .colors(data.length)
-  }, [data.length, theme.primaryColor, theme.colors, colorScheme])
+  }, [data.length, theme.primaryColor, theme.colors])
 
   const option: EChartsOption = useMemo(
     () =>

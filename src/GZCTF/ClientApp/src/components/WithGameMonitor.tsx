@@ -7,6 +7,7 @@ import { useLocation, useNavigate, useParams } from 'react-router'
 import { WithGameTab } from '@Components/WithGameTab'
 import { WithNavBar } from '@Components/WithNavbar'
 import { WithRole } from '@Components/WithRole'
+import { YinyuPanel } from '@Components/yinyu/YinyuUI'
 import { downloadBlob } from '@Utils/ApiHelper'
 import { DEFAULT_LOADING_OVERLAY } from '@Utils/Shared'
 import api, { Role } from '@Api'
@@ -58,7 +59,7 @@ export const WithGameMonitor: FC<WithGameMonitorProps> = ({ children, isLoading 
       <WithRole requiredRole={Role.Monitor}>
         <WithGameTab>
           <Group justify="space-between" align="flex-start">
-            <Stack>
+            <YinyuPanel p="sm" cells={24}>
               <Button
                 disabled={disabled}
                 w="10rem"
@@ -85,7 +86,7 @@ export const WithGameMonitor: FC<WithGameMonitorProps> = ({ children, isLoading 
                   ))}
                 </Tabs.List>
               </Tabs>
-            </Stack>
+            </YinyuPanel>
             <Stack w="calc(100% - 11rem)" pos="relative">
               <LoadingOverlay visible={isLoading ?? false} overlayProps={DEFAULT_LOADING_OVERLAY} />
               {children}

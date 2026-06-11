@@ -1,0 +1,339 @@
+.root {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: clamp(15rem, 22vw, 22rem) minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: clamp(1rem, 1.6vw, 1.45rem);
+  min-height: clamp(12.5rem, 18vw, 16.5rem);
+  padding: clamp(0.75rem, 1.2vw, 1rem);
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  border-color: rgba(107, 238, 177, 0.18);
+  background:
+    radial-gradient(ellipse at 8% 12%, rgba(107, 238, 177, 0.13), transparent 34%),
+    radial-gradient(ellipse at 92% 78%, rgba(245, 245, 247, 0.055), transparent 40%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.074), rgba(255, 255, 255, 0.026)),
+    rgba(13, 16, 16, 0.86);
+  backdrop-filter: blur(0.92rem);
+  transform: translateZ(0);
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.root::before,
+.root::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.root::before {
+  background:
+    var(--yy-hex-flow),
+    linear-gradient(90deg, transparent, rgba(107, 238, 177, 0.08), transparent);
+  background-size:
+    1.14rem 0.99rem,
+    auto;
+  opacity: 0.22;
+  transition:
+    opacity 180ms ease,
+    transform 280ms ease;
+}
+
+.root::after {
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(110deg, transparent 16%, rgba(107, 238, 177, 0.17) 43%, transparent 68%),
+    radial-gradient(ellipse at 85% 0%, rgba(107, 238, 177, 0.1), transparent 40%);
+  opacity: 0;
+  transform: translateX(-18%);
+  transition:
+    opacity 180ms ease,
+    transform 260ms ease;
+}
+
+.root > * {
+  position: relative;
+  z-index: 1;
+}
+
+.root :global(.yy-hex-field) {
+  z-index: 0;
+}
+
+.root:hover {
+  color: inherit;
+  border-color: rgba(107, 238, 177, 0.42);
+  box-shadow:
+    inset 0 0 0 1px rgba(107, 238, 177, 0.16),
+    0 1.45rem 4.2rem rgba(0, 0, 0, 0.34),
+    0 0 2.6rem rgba(107, 238, 177, 0.12);
+  transform: translateY(-0.12rem);
+}
+
+.root:hover::before {
+  opacity: 0.38;
+  transform: translate3d(0.42rem, 0, 0);
+}
+
+.root:hover::after {
+  opacity: 0.55;
+  transform: translateX(14%);
+}
+
+.poster {
+  position: relative;
+  min-height: 100%;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: calc(var(--yy-radius) - 2px);
+  background:
+    radial-gradient(ellipse at 50% 22%, rgba(107, 238, 177, 0.13), transparent 50%),
+    var(--yy-hex-flow),
+    rgba(0, 0, 0, 0.34);
+  background-size:
+    auto,
+    1.18rem 1.02rem,
+    auto;
+  box-shadow:
+    inset 0 0 0 1px rgba(107, 238, 177, 0.08),
+    0 0.9rem 2rem rgba(0, 0, 0, 0.22);
+}
+
+.poster::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.26), transparent 38%, rgba(0, 0, 0, 0.22)),
+    linear-gradient(180deg, transparent 52%, rgba(0, 0, 0, 0.28));
+}
+
+.posterImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: clamp(11rem, 16vw, 14.5rem);
+  object-fit: cover;
+  filter: saturate(0.96) contrast(1.04);
+}
+
+.posterFallback {
+  display: grid;
+  min-height: clamp(11rem, 16vw, 14.5rem);
+  place-items: center;
+  padding: clamp(1rem, 2vw, 1.6rem);
+}
+
+.posterFallback :global(.game-flag-glyph) {
+  width: clamp(6.8rem, 9.2vw, 8.8rem);
+  height: clamp(6.8rem, 9.2vw, 8.8rem);
+  margin: 0;
+  place-self: center;
+  transform: translateY(0.28rem);
+}
+
+.content {
+  min-width: 0;
+  align-self: center;
+  padding-block: clamp(0.15rem, 0.55vw, 0.45rem);
+}
+
+.header {
+  gap: clamp(0.75rem, 1.4vw, 1.2rem);
+}
+
+.kicker {
+  display: block;
+  margin-bottom: 0.26rem;
+  color: rgba(107, 238, 177, 0.78);
+  font-family: var(--font-mono);
+  font-size: clamp(0.67rem, 0.78vw, 0.78rem);
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.root h4 {
+  max-width: 100%;
+  margin: 0;
+  color: var(--yy-text);
+  font-family: var(--font-display);
+  font-size: clamp(1.45rem, 2.15vw, 2.35rem);
+  font-stretch: condensed;
+  font-weight: 840;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+  text-shadow: var(--yy-title-glow);
+}
+
+.summary {
+  max-width: 62rem;
+  color: rgba(244, 245, 245, 0.78);
+  font-size: clamp(0.95rem, 1vw, 1.06rem);
+  line-height: 1.62;
+}
+
+.status {
+  flex: 0 0 auto;
+}
+
+.metaGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(0.55rem, 1vw, 0.75rem);
+  margin: clamp(0.15rem, 0.55vw, 0.38rem) 0 0;
+}
+
+.metaGrid div {
+  min-width: 0;
+  padding: 0.52rem 0.62rem;
+  border: 1px solid rgba(255, 255, 255, 0.058);
+  border-radius: calc(var(--yy-radius) - 3px);
+  background:
+    radial-gradient(ellipse at 16% 12%, rgba(107, 238, 177, 0.07), transparent 46%),
+    rgba(255, 255, 255, 0.028);
+}
+
+.metaGrid dt,
+.metaGrid dd {
+  min-width: 0;
+  margin: 0;
+  line-height: 1.28;
+}
+
+.metaGrid dt {
+  color: rgba(244, 245, 245, 0.54);
+  font-size: 0.7rem;
+  font-weight: 820;
+}
+
+.metaGrid dd {
+  margin-top: 0.18rem;
+  color: rgba(244, 245, 245, 0.92);
+  font-size: clamp(0.78rem, 0.84vw, 0.9rem);
+  font-weight: 820;
+  overflow-wrap: anywhere;
+}
+
+.chevron {
+  align-self: center;
+  display: grid;
+  width: clamp(2.15rem, 2.8vw, 2.7rem);
+  height: clamp(2.15rem, 2.8vw, 2.7rem);
+  place-items: center;
+  border: 1px solid rgba(107, 238, 177, 0.18);
+  border-radius: 999px;
+  color: rgba(107, 238, 177, 0.8);
+  font-family: var(--font-mono);
+  font-size: clamp(1.08rem, 1.2vw, 1.28rem);
+  font-weight: 900;
+  background: rgba(107, 238, 177, 0.055);
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease;
+}
+
+.root:hover .chevron {
+  border-color: rgba(107, 238, 177, 0.42);
+  background: rgba(107, 238, 177, 0.12);
+  transform: translateX(0.18rem);
+}
+
+.root:global(.is-compact) {
+  grid-template-columns: clamp(12rem, 18vw, 17rem) minmax(0, 1fr) auto;
+  min-height: clamp(10.8rem, 14vw, 13.6rem);
+  gap: clamp(0.82rem, 1.2vw, 1.1rem);
+}
+
+.root:global(.is-compact) .posterImage,
+.root:global(.is-compact) .posterFallback {
+  min-height: clamp(9.6rem, 12.4vw, 12rem);
+}
+
+.root:global(.is-compact) .posterFallback :global(.game-flag-glyph) {
+  width: clamp(5.8rem, 6.8vw, 7rem);
+  height: clamp(5.8rem, 6.8vw, 7rem);
+}
+
+.root:global(.is-compact) h4 {
+  font-size: clamp(1.24rem, 1.78vw, 1.86rem);
+}
+
+.root:global(.is-compact) .summary {
+  font-size: clamp(0.88rem, 0.94vw, 1rem);
+  line-height: 1.52;
+}
+
+.root:global(.is-compact) .metaGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.root:global(.is-compact) .chevron {
+  width: 2.15rem;
+  height: 2.15rem;
+}
+
+.glyph {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.glyphPoster {
+  position: absolute;
+  inset: 0.34rem;
+  border-radius: 6px;
+  background-position: center;
+  background-size: cover;
+  opacity: 0.34;
+  filter: saturate(0.65) contrast(1.08);
+  overflow: hidden;
+}
+
+.glyphBrand {
+  position: relative;
+  z-index: 2;
+  width: 86%;
+  height: 86%;
+  filter: drop-shadow(0 0.75rem 1.8rem rgba(107, 238, 177, 0.3));
+}
+
+@media (max-width: 72em) {
+  .root {
+    grid-template-columns: minmax(12rem, 17rem) minmax(0, 1fr);
+  }
+
+  .chevron {
+    display: none;
+  }
+
+  .metaGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 48em) {
+  .root {
+    grid-template-columns: 1fr;
+  }
+
+  .posterImage,
+  .posterFallback {
+    min-height: 12rem;
+  }
+
+  .header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

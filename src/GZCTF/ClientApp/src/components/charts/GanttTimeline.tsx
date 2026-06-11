@@ -1,9 +1,12 @@
-import { Box, ScrollArea, Stack, Text, Title } from '@mantine/core'
+import { Text } from '@mantine/core'
 import cx from 'clsx'
 import dayjs, { Dayjs } from 'dayjs'
-import { FC, useEffect, useMemo, useRef, useState } from 'react'
+import gsap from 'gsap'
+import { CSSProperties, FC, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
+import { BrandMark } from '@Components/yinyu/BrandMark'
+import { YinyuHeartbeatIcon } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
 import classes from '@Styles/GanttTimeline.module.css'
 
@@ -20,233 +23,206 @@ export interface GanttItem {
   end: Dayjs
 }
 
-const MonthBox = (i: number, content: string, ex: string) => (
-  <Box key={i} left={i * 40} className={cx(classes.date, ex)}>
-    <div className={classes.left}>
-      <Text className={classes.label} span>
-        {content}
-      </Text>
-    </div>
-  </Box>
-)
+const clamp = (value: number, min = 0, max = 100) => Math.min(Math.max(value, min), max)
 
-const DayBox = (i: number, content: string, ex: string) => (
-  <Box key={i} left={i * 40} className={cx(classes.date, ex)}>
-    <div className={classes.center}>
-      <Text className={classes.label} span>
-        {content}
-      </Text>
-    </div>
-  </Box>
-)
+const dateWindow = () => {
+  const now = dayjs()
+  const start = now.startOf('week').subtract(3, 'week')
+  const end = start.add(7, 'week')
+  const duration = Math.max(end.diff(start, 'second'), 1)
 
-const TodayBox = (i: number, content: string) => (
-  <Box key={i} left={i * 40} className={cx(classes.date, classes.day)}>
-    <div className={cx(classes.center, classes.today)}>
-      <Text className={classes.label} span>
-        {content}
-      </Text>
-    </div>
-  </Box>
-)
-
-const VIEW_WIDTH = 40 * 7 * 7
-const VIEW_HEIGHT = 300
-const STICKY_WIDTH = 240
-const EDGE_PADDING = 10
-
-interface MonthHeader {
-  position: number
-  time: Dayjs
-}
-
-interface DateData {
-  start: Dayjs
-  end: Dayjs
-  now: Dayjs
-  total: number
-  duration: number
-
-  weekends: React.ReactNode[]
-  days: React.ReactNode[]
-  months: React.ReactNode[]
-
-  monthMap: MonthHeader[]
+  return { now, start, end, duration }
 }
 
 export const GanttTimeLine: FC<GanttTimeLineProps> = ({ items }) => {
-  const viewport = useRef<HTMLDivElement>(null)
-  const [scrollPosition, onScrollPositionChange] = useState({ x: 0, y: 0 })
-
-  useEffect(() => {
-    if (!viewport.current) return
-
-    viewport.current.scrollTo({ left: viewport.current.scrollWidth / 3 })
-  }, [viewport.current])
-
+  const rootRef = useRef<HTMLElement>(null)
   const { t } = useTranslation()
   const { locale } = useLanguage()
 
-  const dateData = useMemo<DateData>(() => {
-    const now = dayjs().startOf('h')
-    const start = now.startOf('w').subtract(3, 'w')
-    const end = start.add(7, 'w').subtract(1, 's')
-    const total = end.diff(start, 'd')
-    const duration = end.diff(start, 's')
+  const timeline = useMemo(() => {
+    const { now, start, end, duration } = dateWindow()
+    const nowPercent = clamp((now.diff(start, 'second') / duration) * 100)
 
-    const weekends: React.ReactNode[] = []
-    const days: React.ReactNode[] = []
-    const months: React.ReactNode[] = []
-    const monthMap: MonthHeader[] = []
-
-    monthMap.push({ position: 0, time: start })
-
-    for (let i = 0; i <= total; i++) {
-      const current = start.add(i, 'd').locale(locale)
-      if (current.isSame(now, 'd')) {
-        days.push(TodayBox(i, current.format('DD')))
-      } else {
-        days.push(DayBox(i, current.format('DD'), classes.day))
+    const ticks = Array.from({ length: 8 }).map((_, index) => {
+      const tick = start.add(index, 'week').locale(locale)
+      return {
+        id: tick.valueOf(),
+        label: tick.format('MM/DD'),
+        longLabel: tick.format('MMM D'),
+        left: clamp((tick.diff(start, 'second') / duration) * 100),
       }
-      if (current.date() === 1) {
-        months.push(MonthBox(i, current.format('MMMM'), classes.month))
-        monthMap.push({ position: i * 40, time: current })
-      }
-      if (current.day() === 6) {
-        weekends.push(<Box key={i} left={i * 40} className={classes.weekend} />)
-      }
-    }
+    })
 
-    monthMap.reverse()
+    const rows = items.map((item) => {
+      const rawLeft = (item.start.diff(start, 'second') / duration) * 100
+      const rawRight = (item.end.diff(start, 'second') / duration) * 100
+      const visibleLeft = clamp(rawLeft)
+      const visibleRight = clamp(rawRight)
+      const width = Math.max(visibleRight - visibleLeft, 3.8)
+      const active = now.isAfter(item.start) && now.isBefore(item.end)
+      const upcoming = now.isBefore(item.start)
+      const state = active ? 'active' : upcoming ? 'upcoming' : 'ended'
+
+      return {
+        ...item,
+        left: visibleLeft,
+        width,
+        state,
+        startsBefore: rawLeft < 0,
+        endsAfter: rawRight > 100,
+        startLabel: item.start.locale(locale).format('MM/DD HH:mm'),
+        endLabel: item.end.locale(locale).format('MM/DD HH:mm'),
+      }
+    })
 
     return {
-      start,
       now,
+      start,
       end,
-      total,
-      duration,
-      weekends,
-      days,
-      months,
-      monthMap,
+      nowPercent,
+      ticks,
+      rows,
+      activeCount: rows.filter((row) => row.state === 'active').length,
+      upcomingCount: rows.filter((row) => row.state === 'upcoming').length,
     }
-  }, [locale])
-
-  const [currentMonth, setCurrentMonth] = useState(dayjs().locale(locale).format('SMY'))
+  }, [items, locale])
 
   useEffect(() => {
-    const map = dateData.monthMap
+    const root = rootRef.current
+    if (!root || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined
 
-    for (let i = 0; i < map.length; i++) {
-      if (scrollPosition.x > map[i].position) {
-        const str = map[i].time.locale(locale).format('SMY')
-        if (str === currentMonth) return
-        setCurrentMonth(str)
-        break
-      }
-    }
-  }, [scrollPosition, locale, dateData.monthMap])
+    const ctx = gsap.context(() => {
+      const rows = gsap.utils.toArray<HTMLElement>(`.${classes.timelineRow}`)
+      const bars = gsap.utils.toArray<HTMLElement>(`.${classes.rowBar}`)
+      const nodes = gsap.utils.toArray<HTMLElement>(`.${classes.signalNode}`)
 
-  const nowOffset = (dateData.now.diff(dateData.start, 's') / dateData.duration) * VIEW_WIDTH + STICKY_WIDTH
-  const scrollPos = scrollPosition.x + EDGE_PADDING
+      gsap.from(rows, {
+        opacity: 0,
+        y: 18,
+        duration: 0.58,
+        ease: 'power3.out',
+        stagger: 0.045,
+      })
+
+      gsap.from(bars, {
+        scaleX: 0.08,
+        transformOrigin: 'left center',
+        duration: 0.82,
+        ease: 'expo.out',
+        stagger: 0.04,
+      })
+
+      gsap.to(nodes, {
+        opacity: 0.92,
+        scale: 1.18,
+        duration: 1.65,
+        ease: 'sine.inOut',
+        stagger: { each: 0.12, repeat: -1, yoyo: true },
+      })
+
+      gsap.to(root, {
+        '--timeline-breathe': 1,
+        duration: 2.8,
+        repeat: -1,
+        yoyo: true,
+        ease: 'sine.inOut',
+      })
+    }, root)
+
+    return () => ctx.revert()
+  }, [items.length])
+
+  if (!items.length) return null
 
   return (
-    <ScrollArea h={VIEW_HEIGHT} scrollbars="x" viewportRef={viewport} onScrollPositionChange={onScrollPositionChange}>
-      <Box
-        className={classes.view}
-        __vars={{
-          '--sticky-width': `${STICKY_WIDTH}px`,
-          '--view-width': `${VIEW_WIDTH}px`,
-          '--view-height': `${VIEW_HEIGHT}px`,
-          '--now-offset': `${nowOffset}px`,
-          '--edge-padding': `${EDGE_PADDING}px`,
-        }}
-      >
-        {/* bars, position: absolute */}
-        <div className={classes.background}>
-          <div className={classes.weekends}>{dateData.weekends}</div>
-        </div>
-
-        {/* content rows, position: absolute  */}
-        <div className={classes.dataPos}>
-          {items.map((item) => {
-            if (item.end.isBefore(dateData.start) || item.start.isAfter(dateData.end))
-              return <div key={item.id} className={classes.dataRow} />
-
-            const left =
-              item.start < dateData.start
-                ? -10
-                : (item.start.diff(dateData.start, 's') / dateData.duration) * VIEW_WIDTH
-
-            const rightOverflow = item.end > dateData.end
-            const right = rightOverflow
-              ? VIEW_WIDTH
-              : (item.end.diff(dateData.start, 's') / dateData.duration) * VIEW_WIDTH
-
-            const state = scrollPos < left ? 'b' : scrollPos > right ? 'a' : 'i'
-
-            return (
-              <Box
-                key={item.id}
-                className={classes.dataRow}
-                __vars={{
-                  '--left': `${left + STICKY_WIDTH}px`,
-                  '--right': `${right + STICKY_WIDTH}px`,
-                  '--width': `${right - left}px`,
-                  '--color': item.color,
-                }}
-              >
-                <div className={cx(classes.dataItem, classes.dataRect)} data-rov={rightOverflow || undefined}>
-                  <Link className={classes.dataLink} to={`/games/${item.id}`} />
-                </div>
-                <div data-state={state} className={cx(classes.dataText, classes.dataRect)}>
-                  <Text>{item.textTitle}</Text>
-                </div>
-              </Box>
-            )
-          })}
-        </div>
-
-        {/* headering */}
-        <div className={classes.datePos}>
-          <div className={classes.months}>{dateData.months}</div>
-          <div className={classes.days}>{dateData.days}</div>
-          <div className={classes.nowPoint} />
-        </div>
-
-        {/* current time */}
-        <div className={classes.nowPos}>
-          <div className={classes.nowBox}>
-            <Text size="sm" fw={500}>
-              {currentMonth}
-            </Text>
-            <div className={classes.fadeBox} />
+    <section
+      ref={rootRef}
+      className={classes.shell}
+      aria-label={t('common.content.home.recent_games')}
+      style={
+        {
+          '--timeline-now': `${timeline.nowPercent}%`,
+          '--timeline-breathe': 0,
+        } as CSSProperties
+      }
+    >
+      <header className={classes.header}>
+        <div className={classes.heading}>
+          <BrandMark className={classes.headingMark} />
+          <div>
+            <span>EVENT SCHEDULE</span>
+            <h3>{t('common.content.home.recent_games')}</h3>
           </div>
         </div>
+        <div className={classes.summary}>
+          <YinyuHeartbeatIcon label="schedule signal" />
+          <Text span>{timeline.activeCount} LIVE</Text>
+          <Text span>{timeline.upcomingCount} READY</Text>
+        </div>
+      </header>
 
-        {/* title table */}
-        <div className={classes.titlePos}>
-          <div className={classes.titleBox}>
-            <div className={classes.titleHeader}>
-              <Stack justify="center" gap={4} align="center" h="100%">
-                <Title order={3} size="xl">
-                  {t('common.content.home.recent_games')}
-                </Title>
-                <Text size="sm" fw={500}>
-                  <span>{dateData.start.locale(locale).format('SLL')}</span>
-                  <span> - </span>
-                  <span>{dateData.end.locale(locale).format('SLL')}</span>
-                </Text>
-              </Stack>
-            </div>
-            {items.map((item) => (
-              <div key={item.id} className={classes.titleRow}>
-                {item.title}
+      <div className={classes.viewport}>
+        <div className={classes.axis} aria-hidden="true">
+          {timeline.ticks.map((tick) => (
+            <span key={tick.id} className={classes.tick} style={{ '--tick-left': `${tick.left}%` } as CSSProperties}>
+              <i />
+              <b>{tick.label}</b>
+            </span>
+          ))}
+          <span className={classes.nowAxis}>
+            <i />
+            <b>{timeline.now.locale(locale).format('MM/DD HH:mm')}</b>
+          </span>
+        </div>
+
+        <div className={classes.rows}>
+          {timeline.rows.map((item, index) => (
+            <Link
+              key={item.id}
+              to={`/games/${item.id}`}
+              className={cx(
+                classes.timelineRow,
+                item.state === 'active' && classes.active,
+                item.state === 'upcoming' && classes.upcoming,
+                item.state === 'ended' && classes.ended
+              )}
+              data-state={item.state}
+              style={
+                {
+                  '--row-left': `${item.left}%`,
+                  '--row-width': `${item.width}%`,
+                  '--row-color': item.color || 'rgba(107, 238, 177, 0.75)',
+                  '--row-index': index,
+                } as CSSProperties
+              }
+            >
+              <div className={classes.rowMeta}>
+                <span className={classes.metaMark}>
+                  <BrandMark />
+                  <i className={classes.signalNode} />
+                </span>
+                <span>
+                  <strong>{item.textTitle}</strong>
+                  <small>
+                    {item.startLabel} / {item.endLabel}
+                  </small>
+                </span>
               </div>
-            ))}
-          </div>
+              <div className={classes.track}>
+                <span
+                  className={classes.rowBar}
+                  data-start-overflow={item.startsBefore || undefined}
+                  data-end-overflow={item.endsAfter || undefined}
+                >
+                  <i className={classes.barLead} />
+                  <i className={classes.barCore} />
+                  <i className={classes.barTail} />
+                </span>
+              </div>
+            </Link>
+          ))}
         </div>
-      </Box>
-    </ScrollArea>
+      </div>
+    </section>
   )
 }

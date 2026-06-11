@@ -99,6 +99,7 @@ const GameInfoEdit: FC = () => {
 
     try {
       const res = await api.edit.editUpdateGamePoster(game.id!, { file })
+      const nextGame = { ...game, poster: res.data }
       updateNotification({
         id: 'upload-poster',
         color: 'teal',
@@ -107,7 +108,11 @@ const GameInfoEdit: FC = () => {
         autoClose: true,
         loading: false,
       })
-      mutate({ ...game, poster: res.data })
+      setGame(nextGame)
+      mutate(nextGame, { revalidate: false })
+      api.game.mutateGameGames({ count: 5, skip: 0 })
+      api.game.mutateGameGames({ count: 12, skip: 0 })
+      api.game.mutateGameRecentGames({ limit: 7 })
     } catch (err) {
       updateNotification({
         id: 'upload-poster',
@@ -130,7 +135,7 @@ const GameInfoEdit: FC = () => {
     try {
       await api.edit.editUpdateGame(game.id!, {
         ...game,
-        inviteCode: ((game.inviteCode?.length ?? 0) > 6) ? game.inviteCode : null,
+        inviteCode: (game.inviteCode?.length ?? 0) > 6 ? game.inviteCode : null,
         start: start.valueOf(),
         end: end.valueOf(),
         writeupDeadline: end.add(wpddl, 'h').valueOf(),

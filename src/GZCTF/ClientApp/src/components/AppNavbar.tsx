@@ -7,7 +7,6 @@ import {
   Popover,
   Stack,
   Tooltip,
-  useMantineColorScheme,
 } from '@mantine/core'
 import {
   mdiAccountCircleOutline,
@@ -19,10 +18,6 @@ import {
   mdiLogin,
   mdiLogout,
   mdiNoteTextOutline,
-  mdiPalette,
-  mdiTranslate,
-  mdiWeatherNight,
-  mdiWeatherSunny,
   mdiWrenchOutline,
   mdiTransitConnectionVariant,
 } from '@mdi/js'
@@ -32,10 +27,8 @@ import React, { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router'
 import { LogoBox } from '@Components/LogoBox'
-import { AppControlProps } from '@Components/WithNavbar'
 import { WsrxManager } from '@Components/WsrxManager'
 import { clearLocalCache } from '@Utils/Cache'
-import { LanguageMap, SupportedLanguages, useLanguage } from '@Utils/I18n'
 import { useConfig } from '@Hooks/useConfig'
 import { useLogOut, useUser } from '@Hooks/useUser'
 import { ContainerPortMappingType, Role } from '@Api'
@@ -67,7 +60,7 @@ const NavbarLink: FC<NavbarLinkProps> = (props: NavbarLinkProps) => {
         component={Link}
         to={props.link ?? '#'}
         data-active={props.isActive || undefined}
-        className={classes.link}
+        className={cx(classes.link, 'rail-button')}
       >
         <Icon path={props.icon} size={1} />
       </ActionIcon>
@@ -75,15 +68,13 @@ const NavbarLink: FC<NavbarLinkProps> = (props: NavbarLinkProps) => {
   )
 }
 
-export const AppNavbar: FC<AppControlProps> = ({ openColorModal }) => {
+export const AppNavbar: FC = () => {
   const location = useLocation()
-  const { colorScheme, toggleColorScheme } = useMantineColorScheme()
 
   const logout = useLogOut()
   const { user, error } = useUser()
   const { config } = useConfig()
   const { t } = useTranslation()
-  const { setLanguage, supportedLanguages } = useLanguage()
 
   const items: NavbarItem[] = [
     { icon: mdiHomeVariantOutline, label: 'common.tab.home', link: '/' },
@@ -121,21 +112,19 @@ export const AppNavbar: FC<AppControlProps> = ({ openColorModal }) => {
 
   return (
     <AppShell.Navbar className={classes.navbar}>
-      {/* Logo */}
-      <AppShell.Section grow>
-        <LogoBox size="100%" className={classes.logo} component={Link} to="/" />
+      <AppShell.Section className={classes.brandSection}>
+        <LogoBox size="58px" className={classes.logo} component={Link} to="/" />
       </AppShell.Section>
 
-      {/* Common Nav */}
-      <AppShell.Section className={cx(classes.section, misc.justifyCenter)}>{links}</AppShell.Section>
+      <AppShell.Section className={classes.section}>{links}</AppShell.Section>
 
-      <AppShell.Section className={cx(classes.section, misc.justifyEnd)}>
+      <AppShell.Section className={cx(classes.section, classes.utilitySection, misc.justifyEnd)}>
         <Stack w="100%" align="center" justify="center" gap={5}>
           {/* WebSocket Reflector X Integration */}
           {config.portMapping === ContainerPortMappingType.PlatformProxy && (
             <Popover position="right" offset={24} width={320}>
               <Popover.Target>
-                <ActionIcon className={classes.link}>
+                <ActionIcon className={cx(classes.link, 'rail-button')}>
                   <Icon path={mdiTransitConnectionVariant} size={1} />
                 </ActionIcon>
               </Popover.Target>
@@ -145,44 +134,10 @@ export const AppNavbar: FC<AppControlProps> = ({ openColorModal }) => {
             </Popover>
           )}
 
-          {/* Language */}
-          <Menu position="right" offset={24} width={160}>
-            <Menu.Target>
-              <ActionIcon className={classes.link}>
-                <Icon path={mdiTranslate} size={1} />
-              </ActionIcon>
-            </Menu.Target>
-
-            <Menu.Dropdown>
-              {supportedLanguages.map((lang: SupportedLanguages) => (
-                <Menu.Item key={lang} fw={500} onClick={() => setLanguage(lang)}>
-                  {LanguageMap[lang] ?? lang}
-                </Menu.Item>
-              ))}
-            </Menu.Dropdown>
-          </Menu>
-
-          {/* Color Mode */}
-          <Tooltip
-            label={t('common.tab.theme.switch_to', {
-              theme: colorScheme === 'dark' ? t('common.tab.theme.light') : t('common.tab.theme.dark'),
-            })}
-            classNames={classes}
-            position="right"
-          >
-            <ActionIcon onClick={() => toggleColorScheme()} className={classes.link}>
-              {colorScheme === 'dark' ? (
-                <Icon path={mdiWeatherSunny} size={1} />
-              ) : (
-                <Icon path={mdiWeatherNight} size={1} />
-              )}
-            </ActionIcon>
-          </Tooltip>
-
           {/* User Info */}
           <Menu position="right-end" offset={24}>
             <Menu.Target>
-              <ActionIcon className={classes.link}>
+              <ActionIcon className={cx(classes.link, 'rail-button')}>
                 {user?.avatar ? (
                   <Avatar alt="avatar" src={user?.avatar} radius="md" size="md">
                     {user.userName?.slice(0, 1) ?? 'U'}
@@ -207,9 +162,6 @@ export const AppNavbar: FC<AppControlProps> = ({ openColorModal }) => {
               )}
               <Menu.Item onClick={clearLocalCache} leftSection={<Icon path={mdiCached} size={1} />}>
                 {t('common.tab.account.clean_cache')}
-              </Menu.Item>
-              <Menu.Item onClick={openColorModal} leftSection={<Icon path={mdiPalette} size={1} />}>
-                {t('common.content.color.title')}
               </Menu.Item>
               <MenuDivider />
               {loggedIn ? (

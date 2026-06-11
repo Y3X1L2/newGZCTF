@@ -1,3 +1,4 @@
+import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import process from 'process'
 import { defineConfig, loadEnv } from 'vite'
@@ -5,7 +6,6 @@ import banner from 'vite-plugin-banner'
 import { optimizeCssModules } from 'vite-plugin-optimize-css-modules'
 import Pages from 'vite-plugin-pages'
 import webfontDownload from 'vite-plugin-webfont-dl'
-import tailwindcss from '@tailwindcss/vite'
 import { i18nVirtualManifest } from './plugins/vite-i18n-virtual-manifest'
 import { sanitizeGeneratedOutput } from './plugins/vite-sanitize-generated-output'
 
