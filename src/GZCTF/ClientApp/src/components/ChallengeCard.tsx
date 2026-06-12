@@ -1,5 +1,4 @@
-import { Box, Code, Group, Stack, Text, Tooltip } from '@mantine/core'
-import { Icon } from '@mdi/react'
+import { Code, Group, Stack, Text, Tooltip } from '@mantine/core'
 import cx from 'clsx'
 import dayjs from 'dayjs'
 import { ChevronRight } from 'lucide-react'
@@ -20,8 +19,10 @@ interface ChallengeCardProps {
   teamId?: number
 }
 
+const bloodLabel = (index: number) => (index === 0 ? '一血' : index === 1 ? '二血' : '三血')
+
 export const ChallengeCard: FC<ChallengeCardProps> = (props: ChallengeCardProps) => {
-  const { challenge, solved, onClick, iconMap, teamId, colorMap } = props
+  const { challenge, solved, onClick, teamId } = props
   const challengeCategoryLabelMap = useChallengeCategoryLabelMap()
   const cateData = challengeCategoryLabelMap.get(challenge.category!)
   const { locale } = useLanguage()
@@ -61,36 +62,38 @@ export const ChallengeCard: FC<ChallengeCardProps> = (props: ChallengeCardProps)
         <YinyuStatusPill tone={solved ? 'success' : isFaded ? 'danger' : 'neutral'} state={state}>
           {solved ? '已解出' : isFaded ? '已截止' : '开放'}
         </YinyuStatusPill>
-        <Group justify="center" gap="sm" h={20} wrap="nowrap">
-          {challenge.bloods?.map((blood, idx) => {
-            const iconProps = iconMap.get(BloodsTypes[idx])!
+        <Group justify="center" gap={7} h={28} wrap="nowrap" className={classes.bloodRack}>
+          {BloodsTypes.map((type, index) => {
+            const blood = challenge.bloods?.[index]
+            const label = bloodLabel(index)
+
             return (
               <Tooltip.Floating
-                key={idx}
+                key={type}
                 position="bottom"
                 multiline
                 label={
                   <Stack gap={0}>
-                    <Text fw={500} size="sm">
-                      {blood?.name}
+                    <Text fw={600} size="sm">
+                      {blood?.name ?? `暂无${label}`}
                     </Text>
-                    <Text fw={500} size="xs" className="yy-readable-text">
-                      {dayjs(blood?.submitTimeUtc).locale(locale).format('SLL LTS')}
-                    </Text>
+                    {blood?.submitTimeUtc && (
+                      <Text fw={500} size="xs" className="yy-readable-text">
+                        {dayjs(blood.submitTimeUtc).locale(locale).format('SLL LTS')}
+                      </Text>
+                    )}
                   </Stack>
                 }
               >
-                <span style={{ position: 'relative', height: 20 }}>
-                  <span className={classes.blood}>
-                    <Icon {...iconProps} />
-                  </span>
-                  <Box
-                    className={classes.spike}
-                    data-blood={teamId === blood?.id || undefined}
-                    __vars={{
-                      '--blood-color': colorMap.get(BloodsTypes[idx]),
-                    }}
-                  />
+                <span
+                  className={classes.bloodMedal}
+                  data-tier={index + 1}
+                  data-active={!!blood || undefined}
+                  data-own={teamId === blood?.id || undefined}
+                  aria-label={label}
+                >
+                  <span>{index + 1}</span>
+                  <em>{label}</em>
                 </span>
               </Tooltip.Floating>
             )

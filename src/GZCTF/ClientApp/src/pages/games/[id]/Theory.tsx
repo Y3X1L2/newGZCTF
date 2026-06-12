@@ -21,7 +21,7 @@ import { FC, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router'
 import { WithGameTab } from '@Components/WithGameTab'
 import { WithNavBar } from '@Components/WithNavbar'
-import { YinyuModalBody, YinyuPanel, YinyuStatePage } from '@Components/yinyu/YinyuUI'
+import { YinyuHeartbeatIcon, YinyuModalBody, YinyuPanel, YinyuStatePage } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import {
   theoryPlayerApi,
@@ -47,10 +47,10 @@ const TheoryQuestionCard: FC<{
   const isMultiple = question.type === TheoryQuestionType.MultipleChoice
 
   return (
-    <YinyuPanel p="md" className="admin-panel yy-theory-question-card">
+    <YinyuPanel p="md" className="yy-theory-question-card">
       <Stack gap="sm">
         <Group justify="space-between" align="flex-start">
-          <Stack gap={4}>
+          <Stack gap={6}>
             <Group gap="xs">
               <Badge variant="light">{questionTypeLabel(question.type)}</Badge>
               <Badge color="teal" variant="light">
@@ -109,7 +109,7 @@ const TheoryPage: FC = () => {
   const submitted = paper?.status === TheoryAnswerSheetStatus.Submitted
   const questions = useMemo(() => [...(paper?.questions ?? [])].sort((a, b) => a.order - b.order), [paper?.questions])
   const answeredCount = useMemo(
-    () => questions.filter((q) => (answers[q.id]?.length ?? 0) > 0).length,
+    () => questions.filter((question) => (answers[question.id]?.length ?? 0) > 0).length,
     [answers, questions]
   )
   const unansweredCount = questions.length - answeredCount
@@ -205,8 +205,8 @@ const TheoryPage: FC = () => {
 
           {paper && (
             <>
-              <YinyuPanel p="md" className="admin-panel yy-theory-header">
-                <Group justify="space-between" align="flex-start" wrap="wrap">
+              <YinyuPanel p="md" className="yy-theory-header">
+                <Group justify="space-between" align="center" wrap="wrap">
                   <Stack gap={4}>
                     <Title order={3}>{paper.title}</Title>
                     {paper.description && <Text className="yy-readable-text">{paper.description}</Text>}
@@ -235,11 +235,12 @@ const TheoryPage: FC = () => {
                     </Button>
                     <Button
                       disabled={submitted || loading}
-                      loading={loading}
-                      leftSection={<Icon path={mdiSendCheckOutline} size={1} />}
+                      leftSection={
+                        loading ? <YinyuHeartbeatIcon label="submitting theory answer" /> : <Icon path={mdiSendCheckOutline} size={1} />
+                      }
                       onClick={() => setConfirmOpened(true)}
                     >
-                      提交答卷
+                      {loading ? '正在提交' : '提交答卷'}
                     </Button>
                   </Group>
                 </Group>
@@ -255,8 +256,13 @@ const TheoryPage: FC = () => {
                       <Button variant="default" disabled={loading} onClick={() => setConfirmOpened(false)}>
                         取消
                       </Button>
-                      <Button color="teal" loading={loading} onClick={submit}>
-                        确认提交
+                      <Button
+                        color="teal"
+                        disabled={loading}
+                        leftSection={loading ? <YinyuHeartbeatIcon label="confirm theory submit" /> : undefined}
+                        onClick={submit}
+                      >
+                        {loading ? '正在提交' : '确认提交'}
                       </Button>
                     </Group>
                   </Stack>
@@ -272,8 +278,8 @@ const TheoryPage: FC = () => {
               <Grid align="flex-start" className="yy-theory-workspace">
                 <Grid.Col span={{ base: 12, lg: 9 }}>
                   {currentQuestion && (
-                    <Stack gap="md">
-                      <YinyuPanel p="md" className="admin-panel yy-theory-nav-panel">
+                    <Stack gap="md" className="yy-theory-main-column">
+                      <YinyuPanel p="md" className="yy-theory-nav-panel">
                         <Group justify="space-between" align="center" wrap="wrap">
                           <Stack gap={2}>
                             <Text size="sm" className="yy-readable-text">
@@ -319,7 +325,7 @@ const TheoryPage: FC = () => {
                   )}
                 </Grid.Col>
                 <Grid.Col span={{ base: 12, lg: 3 }}>
-                  <YinyuPanel p="md" className="admin-panel yy-theory-side-panel">
+                  <YinyuPanel p="md" className="yy-theory-side-panel">
                     <Stack gap="sm">
                       <Group justify="space-between">
                         <Text fw={700}>题目索引</Text>

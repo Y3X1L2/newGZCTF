@@ -21,7 +21,7 @@ import { useTranslation } from 'react-i18next'
 import { InstanceEntry } from '@Components/InstanceEntry'
 import { ContentPlaceholder, InlineMarkdown, Markdown } from '@Components/MarkdownRenderer'
 import { VmInstanceEntry } from '@Components/VmInstanceEntry'
-import { YinyuHexField } from '@Components/yinyu/YinyuUI'
+import { YinyuHeartbeatIcon, YinyuHexField, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
 import { ChallengeCategoryItemProps } from '@Utils/Shared'
 import { ChallengeDetailModel, ChallengeType, EnvironmentType } from '@Api'
@@ -50,27 +50,25 @@ const ChallengeDeadlineNotice: FC<ChallengeDeadlineNoticeProps> = ({ deadline, o
     onExpiredChange(now.isAfter(deadline))
   }, [now, deadline, onExpiredChange])
 
-  if (now.isAfter(deadline)) {
-    return null
-  }
-
   const formattedDeadline = useMemo(() => deadline.locale(locale).format('L LTS'), [deadline, locale])
 
   const diff = deadline.diff(now)
   const duration = dayjs.duration(diff)
   const countdownText = `${Math.floor(duration.asHours())}:${duration.format('mm:ss')}`
 
+  if (now.isAfter(deadline)) {
+    return null
+  }
+
   return (
-    <Group gap="xs" justify="space-between" wrap="nowrap">
-      <Text fw="bold" size="sm">
-        {t('challenge.content.deadline.remaining')}&nbsp;
-        <Text span ff="monospace" fw="bold" size="sm" c="brand">
-          {countdownText}
-        </Text>
-      </Text>
-      <Text fw="bold" size="xs" c="dimmed">
+    <Group gap="sm" justify="space-between" wrap="wrap" className="yy-challenge-deadline-row">
+      <YinyuStatusPill tone="warm" state="running" icon={YinyuHeartbeatIcon} className="yy-challenge-deadline-pill">
+        <span className="yy-instance-countdown-label">{t('challenge.content.deadline.remaining')}</span>
+        <span className="yy-instance-countdown-value">{countdownText}</span>
+      </YinyuStatusPill>
+      <Text fw={700} size="xs" className="yy-readable-text yy-challenge-deadline-target">
         {t('challenge.content.deadline.label')}&nbsp;
-        <Text span ff="monospace" c="dimmed" fw="bold" size="xs">
+        <Text span ff="monospace" fw={800} className="yy-readable-text">
           {formattedDeadline}
         </Text>
       </Text>

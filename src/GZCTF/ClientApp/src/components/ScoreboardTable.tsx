@@ -257,6 +257,8 @@ const TableRow: FC<{
 
 const ITEM_COUNT_PER_PAGE = 30
 
+const bloodTierLabel = (index: number) => (index === 0 ? '一血' : index === 1 ? '二血' : '三血')
+
 export interface ScoreboardProps {
   divisionId: number | null
   setDivisionId: (div: number | null) => void
@@ -368,7 +370,7 @@ export const ScoreboardTable: FC<ScoreboardProps> = ({ divisionId, setDivisionId
             />
           </Grid.Col>
         </Grid>
-        <Box pos="relative" mih="calc(100vh - 14rem)">
+        <Box pos="relative" className={classes.tableStage}>
           <Table.ScrollContainer
             minWidth="100%"
             classNames={{
@@ -400,12 +402,15 @@ export const ScoreboardTable: FC<ScoreboardProps> = ({ divisionId, setDivisionId
           <Box className={classes.legend}>
             <Stack gap="xs">
               <Tooltip.Group>
-                <Group gap="lg">
+                <Group gap="sm" wrap="wrap">
                   {BloodsTypes.map((type, idx) => (
                     <Tooltip key={idx} label={bloodData.get(type)?.name} transitionProps={{ transition: 'pop' }}>
-                      <Group justify="left" gap={2}>
-                        <Icon {...iconMap.get(type)!} />
-                        <Text>{bloodData.get(type)?.descr}</Text>
+                      <Group justify="left" gap={7} className={classes.bloodLegendItem} data-tier={idx + 1}>
+                        <span className={classes.bloodLegendBadge}>
+                          <span>{idx + 1}</span>
+                          <em>{bloodTierLabel(idx)}</em>
+                        </span>
+                        <Text className={classes.bloodLegendText}>{bloodData.get(type)?.descr}</Text>
                       </Group>
                     </Tooltip>
                   ))}

@@ -1,9 +1,9 @@
-import { Button, Group, Loader, Stack, Text, ThemeIcon } from '@mantine/core'
+import { Button, Group, Stack, Text, ThemeIcon } from '@mantine/core'
 import { showNotification } from '@mantine/notifications'
 import { mdiAlertCircleOutline, mdiCheck, mdiClose, mdiDesktopClassic, mdiMonitorScreenshot } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { FC, useCallback, useEffect, useState } from 'react'
-import { YinyuPanel, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
+import { YinyuHeartbeatIcon, YinyuPanel, YinyuRouteLoader, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
 import { VmStatusResponse } from '@Api'
 
 interface VmInstanceEntryProps {
@@ -166,9 +166,9 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
 
   if (vmState === 'none') {
     return (
-      <YinyuPanel p="sm" cells={24} className="yy-instance-panel">
-        <Group justify="space-between" wrap="nowrap">
-          <Stack align="left" gap={0}>
+      <YinyuPanel p="sm" cells={24} className="yy-instance-panel yy-vm-entry-panel">
+        <Group justify="space-between" wrap="nowrap" className="yy-instance-row">
+          <Stack gap={2}>
             <Text size="sm" fw="bold">
               本题需要启动 Windows 远程靶机
             </Text>
@@ -179,10 +179,11 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
           <Button
             onClick={handleCreate}
             disabled={disabled || loading}
-            loading={loading}
-            leftSection={<Icon path={mdiDesktopClassic} size={0.9} />}
+            leftSection={
+              loading ? <YinyuHeartbeatIcon label="vm starting" /> : <Icon path={mdiDesktopClassic} size={0.9} />
+            }
           >
-            启动靶机
+            {loading ? '正在启动' : '启动靶机'}
           </Button>
         </Group>
       </YinyuPanel>
@@ -190,26 +191,19 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
   }
 
   if (vmState === 'creating' || vmState === 'running') {
+    const creating = vmState === 'creating'
     return (
-      <YinyuPanel p="sm" cells={24} className="yy-instance-panel">
+      <YinyuPanel p="sm" cells={28} className="yy-instance-panel yy-vm-entry-panel">
         <Stack gap="sm" w="100%">
-          <YinyuStatusPill tone="warm" state="running">
-            {vmState === 'creating' ? '靶机创建中' : '等待靶机就绪'}
+          <YinyuStatusPill tone="warm" state="running" icon={YinyuHeartbeatIcon}>
+            {creating ? '靶机创建中' : '等待靶机就绪'}
           </YinyuStatusPill>
-          <Group justify="space-between" wrap="nowrap">
-            <Group gap="sm">
-              <Loader size="sm" />
-              <Stack gap={0}>
-                <Text size="sm" fw="bold">
-                  {vmState === 'creating' ? '靶机创建中...' : '等待靶机就绪...'}
-                </Text>
-                <Text size="xs" className="yy-readable-text">
-                  {vmState === 'creating'
-                    ? '正在克隆镜像并启动虚拟机。'
-                    : '虚拟机已启动，正在获取网络地址并配置远程桌面。'}
-                </Text>
-              </Stack>
-            </Group>
+          <Group justify="space-between" wrap="nowrap" className="yy-instance-row yy-instance-loading-row">
+            <YinyuRouteLoader
+              title={creating ? '正在启动靶机' : '正在配置远程桌面'}
+              description={creating ? '正在克隆镜像并启动虚拟机' : '虚拟机已启动，正在获取网络地址与 RDP 入口'}
+              className="yy-instance-loader"
+            />
             <Button color="red" variant="light" onClick={handleDestroy} disabled={loading} size="sm">
               取消
             </Button>
@@ -221,13 +215,13 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
 
   if (vmState === 'ready') {
     return (
-      <YinyuPanel p="sm" cells={28} className="yy-instance-panel">
+      <YinyuPanel p="sm" cells={28} className="yy-instance-panel yy-vm-entry-panel">
         <Stack gap="sm" w="100%">
           <YinyuStatusPill tone="success" state="solved">
             靶机就绪
           </YinyuStatusPill>
-          <Group justify="space-between" wrap="nowrap">
-            <Group gap="sm">
+          <Group justify="space-between" wrap="nowrap" className="yy-instance-row">
+            <Group gap="sm" wrap="nowrap">
               <ThemeIcon color="teal" variant="light" size="lg">
                 <Icon path={mdiMonitorScreenshot} size={1} />
               </ThemeIcon>
@@ -256,21 +250,16 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
 
   if (vmState === 'destroying') {
     return (
-      <YinyuPanel p="sm" cells={20} className="yy-instance-panel">
-        <Group gap="sm">
-          <Loader size="sm" />
-          <Text size="sm" fw="bold">
-            正在销毁靶机...
-          </Text>
-        </Group>
+      <YinyuPanel p="sm" cells={20} className="yy-instance-panel yy-vm-entry-panel">
+        <YinyuRouteLoader title="正在销毁靶机" description="正在释放虚拟机与远程桌面资源" className="yy-instance-loader" />
       </YinyuPanel>
     )
   }
 
   return (
-    <YinyuPanel p="sm" cells={24} className="yy-instance-panel">
-      <Group justify="space-between" wrap="nowrap">
-        <Group gap="sm">
+    <YinyuPanel p="sm" cells={24} className="yy-instance-panel yy-vm-entry-panel">
+      <Group justify="space-between" wrap="nowrap" className="yy-instance-row">
+        <Group gap="sm" wrap="nowrap">
           <ThemeIcon color="red" variant="light" size="lg">
             <Icon path={mdiAlertCircleOutline} size={1} />
           </ThemeIcon>
@@ -283,8 +272,12 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
             </Text>
           </Stack>
         </Group>
-        <Button onClick={handleCreate} disabled={loading} loading={loading}>
-          重新启动
+        <Button
+          onClick={handleCreate}
+          disabled={loading}
+          leftSection={loading ? <YinyuHeartbeatIcon label="vm restart" /> : undefined}
+        >
+          {loading ? '正在重启' : '重新启动'}
         </Button>
       </Group>
     </YinyuPanel>

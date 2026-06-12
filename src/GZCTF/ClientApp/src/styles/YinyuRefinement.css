@@ -1672,7 +1672,7 @@
 .yy-game-detail-hero.panel-card {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(12rem, 0.26fr);
+  grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.42fr);
   align-items: center;
   gap: clamp(1rem, 2.6vw, 2.5rem);
   min-height: clamp(19rem, 34vh, 26rem);
@@ -1788,12 +1788,67 @@
 }
 
 .yy-game-detail-emblem {
+  position: relative;
   display: grid;
   place-items: center;
-  justify-self: center;
-  width: clamp(9.5rem, 17vw, 16rem);
-  aspect-ratio: 1;
-  opacity: 0.88;
+  justify-self: stretch;
+  width: min(100%, clamp(18rem, 28vw, 34rem));
+  aspect-ratio: 16 / 9;
+  padding: clamp(0.75rem, 1.2vw, 1rem);
+  margin-inline: auto;
+  overflow: hidden;
+  border: 1px solid rgba(107, 238, 177, 0.14);
+  border-radius: calc(var(--yy-radius) + 2px);
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(107, 238, 177, 0.11), transparent 54%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.058), rgba(255, 255, 255, 0.016)),
+    rgba(4, 7, 7, 0.42);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.026),
+    0 1.4rem 3.2rem rgba(0, 0, 0, 0.38);
+}
+
+.yy-game-detail-emblem::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--yy-hex-flow);
+  background-size: 1.12rem 0.97rem;
+  opacity: 0.16;
+}
+
+.yy-game-detail-emblem[data-has-poster='true'] {
+  padding: 0;
+}
+
+.yy-game-detail-poster {
+  width: 100%;
+  height: 100%;
+}
+
+.yy-game-detail-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.yy-game-detail-brand {
+  display: contents;
+  opacity: 0.92;
+}
+
+.yy-game-detail-brand img {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 50%;
+  width: auto;
+  height: min(66%, 14.5rem);
+  max-width: 44%;
+  object-fit: contain;
+  object-position: center;
+  transform: translate(-50%, -53%);
   filter: drop-shadow(0 1.4rem 2.6rem rgba(0, 0, 0, 0.46));
 }
 
@@ -1809,6 +1864,13 @@
 .yy-theory-page {
   width: 100%;
   min-height: calc(100dvh - 8.5rem);
+  display: flex !important;
+  flex-direction: column;
+  gap: clamp(0.72rem, 1.15vw, 1rem) !important;
+}
+
+.yy-theory-page > .yy-theory-header.panel-card {
+  flex: 0 0 auto;
 }
 
 .yy-theory-header.panel-card,
@@ -1823,6 +1885,17 @@
     rgba(8, 11, 11, 0.86);
 }
 
+.yy-theory-header.panel-card,
+.yy-theory-nav-panel.panel-card,
+.yy-theory-question-card.panel-card,
+.yy-theory-side-panel.panel-card {
+  min-height: 0 !important;
+}
+
+.yy-theory-header.panel-card {
+  padding: clamp(0.78rem, 1.05vw, 1rem) clamp(0.92rem, 1.35vw, 1.15rem) !important;
+}
+
 .yy-theory-header h3,
 .yy-theory-scoreboard h3,
 .yy-theory-question-card h4 {
@@ -1834,16 +1907,50 @@
 
 .yy-theory-workspace {
   width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  --grid-gutter: clamp(0.75rem, 1.2vw, 1rem);
+}
+
+.yy-theory-main-column {
+  min-height: 0;
+  gap: clamp(0.72rem, 1.1vw, 0.95rem) !important;
 }
 
 .yy-theory-side-panel.panel-card {
   position: sticky;
   top: 0.8rem;
+  max-height: calc(100dvh - 11rem);
+  overflow: auto;
+  padding: clamp(0.78rem, 1.05vw, 1rem) !important;
+}
+
+.yy-theory-nav-panel.panel-card {
+  min-height: 0 !important;
+  padding: clamp(0.72rem, 1vw, 0.95rem) clamp(0.85rem, 1.2vw, 1.08rem) !important;
+}
+
+.yy-theory-question-card.panel-card {
+  min-height: 0 !important;
+  display: flex;
+  align-items: stretch;
+  padding: clamp(0.9rem, 1.35vw, 1.2rem) !important;
+}
+
+.yy-theory-question-card.panel-card > .hex-field {
+  opacity: 0.22;
+}
+
+.yy-theory-question-card.panel-card > .mantine-Stack-root {
+  width: 100%;
+  justify-content: flex-start;
+  gap: clamp(0.7rem, 1.05vw, 0.95rem) !important;
 }
 
 .yy-theory-option-list .mantine-Checkbox-root,
 .yy-theory-option-list .mantine-Radio-root {
-  padding: 0.62rem 0.72rem;
+  min-height: 2.74rem;
+  padding: 0.58rem 0.72rem;
   border: 1px solid rgba(107, 238, 177, 0.09);
   border-radius: calc(var(--yy-radius) - 2px);
   background: rgba(255, 255, 255, 0.024);
@@ -1853,6 +1960,95 @@
 .yy-theory-option-list .mantine-Radio-label {
   color: rgba(235, 247, 241, 0.9);
   line-height: 1.5;
+}
+
+.yy-instance-countdown-pill.yy-status-pill {
+  width: max-content;
+  max-width: 100%;
+  min-width: min(16.5rem, 100%);
+  gap: 0.42rem;
+  padding-block: 0.38rem;
+  padding-inline: 0.58rem 0.9rem;
+  border-color: rgba(107, 238, 177, 0.46);
+  color: var(--yy-green);
+  background:
+    radial-gradient(ellipse at 18% 50%, rgba(107, 238, 177, 0.18), transparent 48%),
+    rgba(107, 238, 177, 0.12);
+  box-shadow:
+    inset 0 0 0 1px rgba(107, 238, 177, 0.06),
+    0 0 1.3rem rgba(107, 238, 177, 0.1);
+}
+
+.yy-instance-countdown-pill .yy-status-text {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.yy-instance-countdown-label {
+  color: rgba(210, 245, 229, 0.88);
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.yy-instance-countdown-value {
+  margin-left: 0;
+  color: #baffdc;
+  font-family: var(--font-mono);
+  font-size: 0.96rem;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 0.8rem rgba(107, 238, 177, 0.42);
+  white-space: nowrap;
+}
+
+.yy-instance-renew-note {
+  padding-left: 0.1rem;
+}
+
+.yy-instance-row {
+  gap: clamp(0.75rem, 1.2vw, 1rem);
+}
+
+.yy-instance-loading-row {
+  align-items: center;
+  min-width: 0;
+}
+
+.yy-instance-loader.route-loader {
+  width: min(34rem, 100%);
+  min-height: 3.55rem;
+  padding: 0.52rem 0.72rem;
+  border-color: rgba(107, 238, 177, 0.16);
+  background:
+    radial-gradient(ellipse at 16% 20%, rgba(107, 238, 177, 0.1), transparent 44%),
+    rgba(255, 255, 255, 0.026);
+}
+
+.yy-instance-loader.route-loader strong {
+  color: var(--yy-text);
+}
+
+.yy-instance-loader.route-loader span {
+  color: var(--yy-muted-readable);
+}
+
+.yy-instance-loader.route-loader .heartbeat-icon {
+  color: var(--yy-green);
+}
+
+.yy-challenge-deadline-row {
+  width: 100%;
+  min-width: 0;
+}
+
+.yy-challenge-deadline-pill.yy-status-pill {
+  min-width: min(15.5rem, 100%);
+}
+
+.yy-challenge-deadline-target {
+  margin-left: auto;
 }
 
 .yy-theory-scoreboard.panel-card {
@@ -2065,6 +2261,13 @@
   max-width: none !important;
   justify-self: stretch;
   align-self: stretch;
+}
+
+.yy-game-tab-shell .yy-theory-header.panel-card,
+.yy-game-tab-shell .yy-theory-nav-panel.panel-card,
+.yy-game-tab-shell .yy-theory-question-card.panel-card,
+.yy-game-tab-shell .yy-theory-side-panel.panel-card {
+  min-height: 0 !important;
 }
 
 .yy-game-tab-shell .yy-theory-scoreboard.panel-card {

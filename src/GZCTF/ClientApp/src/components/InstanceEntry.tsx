@@ -73,9 +73,9 @@ const Countdown: FC<CountdownProps> = (props) => {
   }, [countdown, config.renewalWindow, timeoutExecuted, onTimeout])
 
   return (
-    <Text span fw="bold">
+    <span className="yy-instance-countdown-value">
       {countdown.asSeconds() > 0 ? countdown.format('HH:mm:ss') : '00:00:00'}
-    </Text>
+    </span>
   )
 }
 
@@ -196,7 +196,11 @@ export const InstanceEntry: FC<InstanceEntryProps> = (props) => {
             </Text>
           </Stack>
 
-          <Button onClick={onCreate} disabled={disabled} loading={disabled}>
+          <Button
+            onClick={onCreate}
+            disabled={disabled}
+            leftSection={disabled ? <YinyuHeartbeatIcon label="instance starting" /> : undefined}
+          >
             {t('challenge.button.instance.create')}
           </Button>
         </Group>
@@ -207,8 +211,14 @@ export const InstanceEntry: FC<InstanceEntryProps> = (props) => {
   return (
     <YinyuPanel p="sm" cells={28} className="yy-instance-panel">
       <Stack gap="sm" w="100%">
-        <YinyuStatusPill tone="success" state="running" icon={YinyuHeartbeatIcon}>
-          {t('challenge.content.instance.actions.count_down')}
+        <YinyuStatusPill tone="success" state="running" icon={YinyuHeartbeatIcon} className="yy-instance-countdown-pill">
+          <span className="yy-instance-countdown-label">{t('challenge.content.instance.actions.count_down')}</span>
+          <Countdown
+            time={context.closeTime}
+            extendEnabled={canExtend}
+            enableExtend={enableExtend}
+            onTimeout={onDestroy}
+          />
         </YinyuStatusPill>
         <TextInput
           label={
@@ -281,16 +291,7 @@ export const InstanceEntry: FC<InstanceEntryProps> = (props) => {
         {!isPreview && (
           <Group justify="space-between" wrap="nowrap">
             <Stack align="left" gap={0}>
-              <Text size="sm" fw={600}>
-                {t('challenge.content.instance.actions.count_down')}
-                <Countdown
-                  time={context.closeTime}
-                  extendEnabled={canExtend}
-                  enableExtend={enableExtend}
-                  onTimeout={onDestroy}
-                />
-              </Text>
-              <Text size="xs" c="dimmed" fw={600}>
+              <Text size="xs" fw={600} className="yy-readable-text yy-instance-renew-note">
                 {t('challenge.content.instance.actions.note', { min: config.renewalWindow })}
               </Text>
             </Stack>

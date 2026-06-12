@@ -1,4 +1,4 @@
-import { Alert, Anchor, Badge, Button, Group, Stack, Text, Title, useMantineTheme } from '@mantine/core'
+import { Alert, Anchor, Badge, Button, Group, Image, Stack, Text, Title, useMantineTheme } from '@mantine/core'
 import { useModals } from '@mantine/modals'
 import { showNotification } from '@mantine/notifications'
 import { mdiAlertCircle, mdiCheck, mdiTimerSand } from '@mdi/js'
@@ -253,8 +253,12 @@ const GameDetail: FC = () => {
             <GameProgress percentage={progress} />
             <Group className="yy-game-detail-actions">{ControlButtons}</Group>
           </Stack>
-          <div className="yy-game-detail-emblem" aria-hidden="true">
-            <BrandMark />
+          <div className="yy-game-detail-emblem" aria-hidden="true" data-has-poster={game?.poster ? 'true' : undefined}>
+            {game?.poster ? (
+              <Image src={game.poster} alt="" fit="cover" className="yy-game-detail-poster" />
+            ) : (
+              <BrandMark className="yy-game-detail-brand" />
+            )}
           </div>
         </header>
         <Stack gap="xs" className="panel-card yy-game-detail-content" p="lg">
