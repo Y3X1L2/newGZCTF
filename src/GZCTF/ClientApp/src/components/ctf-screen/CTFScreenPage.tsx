@@ -6,7 +6,8 @@ import { OnceSWRConfig } from '@Hooks/useConfig'
 import api from '@Api'
 import yinyuIcon from '../../assets/yinyu-icon-transparent.png'
 import { MetalScoreCity } from './MetalScoreCity'
-import { SolveEvent, Team, useCTFScreenData } from './useCTFScreenData'
+import { useCTFScreenData } from './useCTFScreenData'
+import type { SolveEvent, Team, TeamCategoryBreakdown } from './useCTFScreenData'
 import '../../styles/ctf-screen/fonts.css'
 import '../../styles/ctf-screen/metal-screen.css'
 
@@ -84,6 +85,27 @@ const rankClass = (rank: number) => (rank <= 3 ? `is-rank-${rank}` : '')
 
 const formatScore = (score: number) => Math.round(score).toLocaleString('zh-CN')
 
+const makeDemoBreakdown = (teamId: number, score: number, solves: number): TeamCategoryBreakdown[] => {
+  const weights = [
+    { category: 'Web', weight: 0.28 },
+    { category: 'Reverse', weight: 0.22 },
+    { category: 'Crypto', weight: 0.18 },
+    { category: 'Forensics', weight: 0.16 },
+    { category: 'AWDP', weight: 0.16 },
+  ]
+
+  return weights
+    .map((item, index) => {
+      const factor = 0.78 + (((teamId * 13 + index * 7) % 21) / 100)
+      return {
+        category: item.category,
+        score: Math.max(0, Math.round(score * item.weight * factor)),
+        solved: Math.max(0, Math.round(solves * item.weight * factor)),
+      }
+    })
+    .filter((item) => item.score > 0 || item.solved > 0)
+}
+
 const makeDemoScreenData = (now: Date): ScreenData => {
   const baseScores = [
     2380, 2210, 2050, 1860, 1720, 1650, 1510, 1390, 1260, 1180,
@@ -96,16 +118,19 @@ const makeDemoScreenData = (now: Date): ScreenData => {
       const surge = ((tick + index * 5) % 23 === 0 ? 180 : 0) + ((tick + index * 7) % 41 === 0 ? 300 : 0)
       const drift = Math.round(Math.sin((tick + index * 1.73) * 0.22) * 64 + Math.cos(index * 0.91) * 34)
       const stagedGain = (Math.floor(tick / 8) % 24) * (index % 4 === 0 ? 9 : index % 3 === 0 ? 6 : 3)
+      const finalScore = Math.max(40, score + drift + surge + stagedGain)
+      const finalSolves = Math.max(0, 28 - index + (index % 5) + Math.floor(tick / 7) % 4)
       return {
         id: index + 1,
         rank: index + 1,
         prevRank: index + 1,
         name: demoTeamNames[index % demoTeamNames.length] + (index >= demoTeamNames.length ? ` ${index + 1}` : ''),
         country: index < 10 ? '正式队伍' : '演练队伍',
-        score: Math.max(40, score + drift + surge + stagedGain),
-        solves: Math.max(0, 28 - index + (index % 5) + Math.floor(tick / 7) % 4),
+        score: finalScore,
+        solves: finalSolves,
         lastSolve: index < 8 ? `${index + 1}分钟前` : '候场',
         color: '#d7dde0',
+        breakdown: makeDemoBreakdown(index + 1, finalScore, finalSolves),
       }
     })
     .sort((left, right) => right.score - left.score)
@@ -384,12 +409,60 @@ const SolveFeedPanel: FC<{ events: SolveEvent[] }> = ({ events }) => {
   )
 }
 
+const TeamDetailPanel: FC<{ team: Team }> = ({ team }) => {
+  const maxCategoryScore = Math.max(1, ...team.breakdown.map((item) => item.score), 1)
+
+  return (
+    <aside className="metal-team-detail-panel">
+      <span className="metal-kicker">Team Detail</span>
+      <div className="metal-team-detail-title">
+        <div>
+          <strong>{team.name}</strong>
+          <span>{team.country}</span>
+        </div>
+        <b>#{team.rank.toString().padStart(2, '0')}</b>
+      </div>
+
+      <div className="metal-team-detail-stats">
+        <div>
+          <span>总分</span>
+          <strong>{formatScore(team.score)}</strong>
+        </div>
+        <div>
+          <span>解题</span>
+          <strong>{team.solves}</strong>
+        </div>
+      </div>
+
+      <div className="metal-team-breakdown">
+        {team.breakdown.length > 0 ? (
+          team.breakdown.map((item) => (
+            <div className="metal-team-breakdown-row" key={item.category}>
+              <div>
+                <span>{item.category}</span>
+                <strong>{item.solved} 道</strong>
+              </div>
+              <div className="metal-team-breakdown-bar">
+                <i style={{ width: `${Math.max(8, (item.score / maxCategoryScore) * 100)}%` }} />
+              </div>
+              <em>{formatScore(item.score)}</em>
+            </div>
+          ))
+        ) : (
+          <div className="metal-team-breakdown-empty">暂无分类得分记录</div>
+        )}
+      </div>
+    </aside>
+  )
+}
+
 const CTFScreenPage: FC<CTFScreenPageProps> = ({ gameId, demoMode = false }) => {
   const navigate = useNavigate()
   const liveData = useCTFScreenData(gameId)
   const { data: games } = api.edit.useEditGetGames({ count: 100, skip: 0 }, OnceSWRConfig)
   const [currentTime, setCurrentTime] = useState(() => new Date())
   const [selectorOpen, setSelectorOpen] = useState(false)
+  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null)
 
   useEffect(() => {
     const timer = window.setInterval(() => setCurrentTime(new Date()), 1000)
@@ -413,7 +486,12 @@ const CTFScreenPage: FC<CTFScreenPageProps> = ({ gameId, demoMode = false }) => 
   )
   const scoreTeamSignature = data.teams
     .slice(0, 64)
-    .map((team) => `${team.id}:${team.rank}:${team.prevRank}:${team.name}:${team.country}:${team.score}:${team.solves}:${team.color}`)
+    .map((team) => {
+      const breakdownSignature = team.breakdown
+        .map((item) => `${item.category}:${item.solved}:${item.score}`)
+        .join(',')
+      return `${team.id}:${team.rank}:${team.prevRank}:${team.name}:${team.country}:${team.score}:${team.solves}:${team.color}:${breakdownSignature}`
+    })
     .join('|')
   const scoreTeams = useMemo(
     () =>
@@ -426,11 +504,28 @@ const CTFScreenPage: FC<CTFScreenPageProps> = ({ gameId, demoMode = false }) => 
   const rankTeams = useMemo(() => scoreTeams.slice(0, 20), [scoreTeams])
   const topTeams = useMemo(() => scoreTeams.slice(0, Math.min(Math.max(scoreTeams.length, 1), 64)), [scoreTeams])
   const leadingTeam = data.teams[0]
+  const selectedTeam = useMemo(
+    () => topTeams.find((team) => team.id === selectedTeamId) ?? null,
+    [selectedTeamId, topTeams]
+  )
+
+  useEffect(() => {
+    if (selectedTeamId === null) return
+    if (!topTeams.some((team) => team.id === selectedTeamId)) {
+      setSelectedTeamId(null)
+    }
+  }, [selectedTeamId, topTeams])
 
   return (
     <main className="metal-screen">
       <div className="metal-screen-ambient" />
       <div className="metal-screen-grid" />
+
+      {selectedTeam && (
+        <button className="metal-overview-button" type="button" onClick={() => setSelectedTeamId(null)}>
+          返回总览
+        </button>
+      )}
 
       <header className="metal-screen-header">
         <div className="metal-brand-cluster">
@@ -497,7 +592,13 @@ const CTFScreenPage: FC<CTFScreenPageProps> = ({ gameId, demoMode = false }) => 
             </div>
           </div>
 
-          <MetalScoreCity teams={topTeams} />
+          <MetalScoreCity
+            teams={topTeams}
+            selectedTeamId={selectedTeamId}
+            onSelectTeam={(team) => setSelectedTeamId(team.id)}
+          />
+
+          {selectedTeam && <TeamDetailPanel team={selectedTeam} />}
 
           {topTeams.length === 0 && (
             <div className="metal-city-empty">

@@ -247,8 +247,9 @@
 
 .nowAxis b {
   position: absolute;
-  top: -1.02rem;
+  top: -1.72rem;
   left: 50%;
+  z-index: 3;
   width: max-content;
   max-width: 9.4rem;
   overflow: hidden;
@@ -256,8 +257,12 @@
   font-family: var(--font-mono);
   font-size: 0.7rem;
   font-weight: 900;
+  line-height: 1;
   text-align: center;
   text-overflow: ellipsis;
+  text-shadow:
+    0 0 0.85rem rgba(107, 238, 177, 0.34),
+    0 0 0.25rem rgba(0, 0, 0, 0.85);
   white-space: nowrap;
   transform: translateX(-50%);
 }

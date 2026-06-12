@@ -4,6 +4,8 @@ import type { Team } from './useCTFScreenData'
 
 interface MetalScoreCityProps {
   teams: Team[]
+  selectedTeamId?: number | null
+  onSelectTeam?: (team: Team) => void
 }
 
 interface TeamLayout {
@@ -54,13 +56,20 @@ const SILVER = new THREE.Color(0xc9d0d2)
 const SILVER_EMISSIVE = new THREE.Color(0x111820)
 const DIM_SILVER = new THREE.Color(0x6d7479)
 const SCENE_CENTER = new THREE.Vector3(0, 0, 0)
+const FOCUS_CENTER = new THREE.Vector3(0, 0, 0)
 const BAR_GEOMETRY = new THREE.BoxGeometry(1, 1, 1, 3, 1, 3)
 const EDGE_GEOMETRY = new THREE.EdgesGeometry(BAR_GEOMETRY)
 const TARGET_COLOR = new THREE.Color()
 const TARGET_EMISSIVE = new THREE.Color()
+const FOCUS_GOLD_EDGE = new THREE.Color(0xffe28a)
+const FOCUS_SILVER_EDGE = new THREE.Color(0xf5fbff)
+const FOCUS_GOLD_EMISSIVE = new THREE.Color(0x7a5417)
+const FOCUS_SILVER_EMISSIVE = new THREE.Color(0x2d383c)
+const LABEL_SCALE_TARGET = new THREE.Vector3()
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 const ease = (current: number, target: number, factor: number) => current + (target - current) * factor
+const isGoldColor = (color: THREE.Color) => color.r > 0.68 && color.g > 0.48 && color.b < 0.4
 
 const createMetalEnvironment = () => {
   const faces = [
@@ -354,8 +363,11 @@ const syncTeamRecords = (
         envMapIntensity: layout.isPodium ? 1.45 : 1.15,
         metalness: 0.96,
         roughness: 0.16,
+        transparent: true,
+        opacity: 1,
       })
       const mesh = new THREE.Mesh(BAR_GEOMETRY, material)
+      mesh.userData.teamId = layout.id
       mesh.castShadow = true
       mesh.receiveShadow = true
       mesh.scale.set(0.92, 0.2, 0.92)
@@ -432,9 +444,11 @@ const syncTeamRecords = (
   }
 }
 
-export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams }) => {
+export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams, selectedTeamId = null, onSelectTeam }) => {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const teamsRef = useRef<Team[]>(teams)
+  const selectedTeamIdRef = useRef<number | null>(selectedTeamId)
+  const onSelectTeamRef = useRef(onSelectTeam)
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
   const cityRef = useRef<THREE.Group | null>(null)
@@ -446,6 +460,14 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams }) => {
   const rotationSpeedRef = useRef(0.08)
   const targetCameraRef = useRef<CameraTarget>({ x: 0, zFocus: 0, y: 9, z: 19, lookAtY: 1.8 })
   const envMapRef = useRef<THREE.CubeTexture | null>(null)
+
+  useEffect(() => {
+    selectedTeamIdRef.current = selectedTeamId
+  }, [selectedTeamId])
+
+  useEffect(() => {
+    onSelectTeamRef.current = onSelectTeam
+  }, [onSelectTeam])
 
   useEffect(() => {
     teamsRef.current = teams
@@ -493,6 +515,8 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams }) => {
     const bars = new THREE.Group()
     city.add(bars)
     barsRef.current = bars
+    const raycaster = new THREE.Raycaster()
+    const pointer = new THREE.Vector2()
 
     const ambient = new THREE.HemisphereLight(0xffffff, 0x2a2d30, 4.1)
     scene.add(ambient)
@@ -594,6 +618,23 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams }) => {
       mouseRef.current.y = -(((event.clientY - rect.top) / Math.max(rect.height, 1)) * 2 - 1)
     }
 
+    const onPointerDown = (event: PointerEvent) => {
+      if (!onSelectTeamRef.current) return
+      const rect = host.getBoundingClientRect()
+      pointer.x = ((event.clientX - rect.left) / Math.max(rect.width, 1)) * 2 - 1
+      pointer.y = -(((event.clientY - rect.top) / Math.max(rect.height, 1)) * 2 - 1)
+      bars.updateMatrixWorld(true)
+      raycaster.setFromCamera(pointer, camera)
+
+      const meshes = [...recordsRef.current.values()].map((record) => record.mesh)
+      const hit = raycaster.intersectObjects(meshes, false)[0]
+      const teamId = hit?.object.userData.teamId as number | undefined
+      if (!teamId) return
+
+      const team = teamsRef.current.find((item) => item.id === teamId)
+      if (team) onSelectTeamRef.current(team)
+    }
+
     const resize = () => {
       const width = host.clientWidth || 1200
       const height = host.clientHeight || 720
@@ -604,6 +645,7 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams }) => {
     }
 
     host.addEventListener('pointermove', onPointerMove, { passive: true })
+    host.addEventListener('pointerdown', onPointerDown, { passive: true })
     const resizeObserver = new ResizeObserver(resize)
     resizeObserver.observe(host)
     resize()
@@ -614,10 +656,15 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams }) => {
       const elapsed = clock.elapsedTime
       const mouse = mouseRef.current
 
-      const targetSpeed = 0.075 + Math.sin(elapsed * 0.29) * 0.026 + mouse.x * 0.012
+      const selectedTeamId = selectedTeamIdRef.current
+      const targetSpeed = selectedTeamId === null
+        ? 0.075 + Math.sin(elapsed * 0.29) * 0.026 + mouse.x * 0.012
+        : 0.018 + Math.sin(elapsed * 0.23) * 0.006
       rotationSpeedRef.current = ease(rotationSpeedRef.current, targetSpeed, 0.018)
       city.rotation.y += rotationSpeedRef.current * delta
-      const targetTilt = clamp(0.32 + Math.sin(elapsed * 0.22) * 0.055 + mouse.y * 0.085, 0.2, 0.56)
+      const targetTilt = selectedTeamId === null
+        ? clamp(0.32 + Math.sin(elapsed * 0.22) * 0.055 + mouse.y * 0.085, 0.2, 0.56)
+        : clamp(0.24 + Math.sin(elapsed * 0.2) * 0.028, 0.2, 0.34)
       city.rotation.x = ease(city.rotation.x, targetTilt, 0.035)
 
       particles.rotation.y += delta * 0.035
@@ -635,27 +682,75 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams }) => {
       coolFill.position.z = Math.sin(elapsed * 0.24) * 10
 
       for (const record of recordsRef.current.values()) {
+        const selectedTeamId = selectedTeamIdRef.current
+        const isSelected = selectedTeamId === record.mesh.userData.teamId
+        const isDimmed = selectedTeamId !== null && !isSelected
         record.group.position.lerp(record.targetPosition, 0.045)
         const nextHeight = ease(record.mesh.scale.y, record.targetHeight, 0.055)
         record.mesh.scale.y = nextHeight
         record.mesh.position.y = nextHeight / 2
         record.mesh.material.color.lerp(record.targetColor, 0.045)
-        record.mesh.material.emissive.lerp(record.targetEmissive, 0.045)
+        const isGold = isGoldColor(record.targetColor)
+        const focusEmissive = isGold ? FOCUS_GOLD_EMISSIVE : FOCUS_SILVER_EMISSIVE
+        record.mesh.material.emissive.lerp(isSelected ? focusEmissive : record.targetEmissive, 0.045)
+        record.mesh.material.opacity = isDimmed ? ease(record.mesh.material.opacity, 0.58, 0.06) : ease(record.mesh.material.opacity, 1, 0.06)
+        record.mesh.material.transparent = record.mesh.material.opacity < 0.995
         record.label.position.lerp(record.targetLabelPosition, 0.055)
         record.label.position.y += Math.sin(elapsed * 1.35 + record.group.position.x) * 0.018
-        record.label.scale.lerp(record.targetLabelScale, 0.05)
+        const labelScaleBoost = isSelected ? 1.2 : isDimmed ? 0.92 : 1
+        record.label.scale.lerp(
+          LABEL_SCALE_TARGET.set(
+            record.targetLabelScale.x * labelScaleBoost,
+            record.targetLabelScale.y * labelScaleBoost,
+            record.targetLabelScale.z
+          ),
+          0.05
+        )
+        record.labelMaterial.opacity = isDimmed ? ease(record.labelMaterial.opacity, 0.45, 0.06) : ease(record.labelMaterial.opacity, 1, 0.06)
+        const edgePulse = isSelected ? 0.72 + Math.sin(elapsed * 3.2) * 0.2 : 0
+        const focusEdgeColor = isGold ? FOCUS_GOLD_EDGE : FOCUS_SILVER_EDGE
+        record.edgeMaterial.color.lerp(isSelected ? focusEdgeColor : record.targetColor, 0.12)
+        record.edgeMaterial.opacity = isSelected
+          ? edgePulse
+          : isDimmed
+            ? ease(record.edgeMaterial.opacity, 0.16, 0.05)
+            : ease(record.edgeMaterial.opacity, isGold ? 0.54 : 0.32, 0.05)
       }
 
-      const dolly = Math.sin(elapsed * 0.18) * 2.1 + Math.sin(elapsed * 0.07) * 1.15
-      camera.position.y = ease(camera.position.y, targetCameraRef.current.y + Math.sin(elapsed * 0.12) * 0.8, 0.025)
-      camera.position.z = ease(camera.position.z, targetCameraRef.current.z + dolly, 0.025)
-      camera.position.x = ease(camera.position.x, targetCameraRef.current.x + mouse.x * 0.5, 0.025)
-      SCENE_CENTER.set(
-        targetCameraRef.current.x * 0.28 + Math.sin(elapsed * 0.16) * 0.42,
-        targetCameraRef.current.lookAtY + Math.sin(elapsed * 0.11) * 0.26,
-        targetCameraRef.current.zFocus * 0.35
-      )
-      camera.lookAt(SCENE_CENTER)
+      const selectedRecord = selectedTeamIdRef.current === null ? undefined : recordsRef.current.get(selectedTeamIdRef.current)
+      if (selectedRecord) {
+        selectedRecord.group.getWorldPosition(FOCUS_CENTER)
+        const focusX = FOCUS_CENTER.x
+        const focusY = FOCUS_CENTER.y
+        const focusZ = FOCUS_CENTER.z
+        const focusHeight = Math.max(1.6, selectedRecord.mesh.scale.y)
+        const orbit = elapsed * 0.32
+        const radius = clamp(5.8 + focusHeight * 0.42 + Math.sin(elapsed * 0.17) * 0.55, 5.8, 9.6)
+        const cameraX = focusX + Math.sin(orbit) * radius
+        const cameraZ = focusZ + Math.cos(orbit) * radius
+        const cameraY = focusY + clamp(3.9 + focusHeight * 0.44 + Math.sin(elapsed * 0.21) * 0.34, 4.2, 8.4)
+
+        camera.position.x = ease(camera.position.x, cameraX, 0.035)
+        camera.position.y = ease(camera.position.y, cameraY, 0.035)
+        camera.position.z = ease(camera.position.z, cameraZ, 0.035)
+        FOCUS_CENTER.set(
+          focusX,
+          focusY + clamp(1.1 + focusHeight * 0.52, 1.6, 5.8),
+          focusZ
+        )
+        camera.lookAt(FOCUS_CENTER)
+      } else {
+        const dolly = Math.sin(elapsed * 0.18) * 2.1 + Math.sin(elapsed * 0.07) * 1.15
+        camera.position.y = ease(camera.position.y, targetCameraRef.current.y + Math.sin(elapsed * 0.12) * 0.8, 0.025)
+        camera.position.z = ease(camera.position.z, targetCameraRef.current.z + dolly, 0.025)
+        camera.position.x = ease(camera.position.x, targetCameraRef.current.x + mouse.x * 0.5, 0.025)
+        SCENE_CENTER.set(
+          targetCameraRef.current.x * 0.28 + Math.sin(elapsed * 0.16) * 0.42,
+          targetCameraRef.current.lookAtY + Math.sin(elapsed * 0.11) * 0.26,
+          targetCameraRef.current.zFocus * 0.35
+        )
+        camera.lookAt(SCENE_CENTER)
+      }
       renderer.render(scene, camera)
       animationRef.current = window.requestAnimationFrame(animate)
     }
@@ -668,6 +763,7 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams }) => {
       if (animationRef.current) window.cancelAnimationFrame(animationRef.current)
       resizeObserver.disconnect()
       host.removeEventListener('pointermove', onPointerMove)
+      host.removeEventListener('pointerdown', onPointerDown)
       recordsRef.current.forEach(disposeRecord)
       recordsRef.current.clear()
       beamsRef.current.forEach((beam) => beam.mesh.material.dispose())

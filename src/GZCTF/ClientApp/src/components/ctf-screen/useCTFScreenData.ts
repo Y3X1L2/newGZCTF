@@ -4,7 +4,8 @@ import { GameStatus } from '@Components/GameCard'
 import { useChallengeCategoryLabelMap } from '@Utils/Shared'
 import { OnceSWRConfig } from '@Hooks/useConfig'
 import { getGameStatus, useAdminGame } from '@Hooks/useGame'
-import api, { AnswerResult, EventType, GameEvent, ParticipationStatus, Submission } from '@Api'
+import api, { AnswerResult, EventType, GameEvent, GameType, ParticipationStatus, ScoreboardItem, Submission } from '@Api'
+import { theoryPlayerApi, TheoryScoreboardItemModel } from '../../Api/TheoryApi'
 
 // ─── Data Types (matching Ctfscreen interfaces) ────────────────────────────────
 
@@ -18,6 +19,24 @@ export interface Team {
   solves: number
   lastSolve: string
   color: string
+  breakdown: TeamCategoryBreakdown[]
+}
+
+export interface TeamCategoryBreakdown {
+  category: string
+  solved: number
+  score: number
+}
+
+interface ScreenScoreItem {
+  id: number
+  name: string
+  divisionId?: number | null
+  score: number
+  rank: number
+  solvedCount: number
+  lastSubmissionTime?: number
+  breakdown: TeamCategoryBreakdown[]
 }
 
 export interface Category {
@@ -136,6 +155,7 @@ export const useCTFScreenData = (numId: number) => {
   const [now, setNow] = useState(() => Date.now())
   const [liveEvents, setLiveEvents] = useState<GameEvent[]>([])
   const [liveSubmissions, setLiveSubmissions] = useState<Submission[]>([])
+  const [theoryScoreboard, setTheoryScoreboard] = useState<TheoryScoreboardItemModel[]>([])
   const [prevRankMap, setPrevRankMap] = useState(new Map<number, number>())
   const scoreboardSnapshotRef = useRef(new Map<number, { rank: number; score: number }>())
 
@@ -147,6 +167,8 @@ export const useCTFScreenData = (numId: number) => {
   const canLoadScoreboard = numId > 0 && !!game && !isTestMode && statusInfo.status !== GameStatus.Coming
   const canLoadMonitor = numId > 0 && !!game && !isTestMode && statusInfo.status !== GameStatus.Coming
   const canLoadParticipations = numId > 0 && !!game && !isTestMode
+  const isTheoryScoreGame = game?.gameType === GameType.Theory || game?.gameType === GameType.Mixed
+  const canLoadTheoryScoreboard = canLoadScoreboard && isTheoryScoreGame
 
   const { data: liveScoreboard, mutate: mutateScoreboard } = api.game.useGameScoreboard(
     numId,
@@ -174,6 +196,123 @@ export const useCTFScreenData = (numId: number) => {
   const participations = liveParticipations
   const eventFeed = liveEvents
   const submissionFeed = liveSubmissions
+  const acceptedParticipations = useMemo(
+    () => (participations ?? []).filter((item) => item.status === ParticipationStatus.Accepted),
+    [participations]
+  )
+  const theoryScoreMap = useMemo(
+    () => new Map(theoryScoreboard.map((item) => [item.teamId, item])),
+    [theoryScoreboard]
+  )
+  const challengeCategoryMap = useMemo(() => {
+    const map = new Map<number, string>()
+    Object.entries(scoreboard?.challenges ?? {}).forEach(([categoryKey, challengeList]) => {
+      const categoryName = challengeCategoryLabelMap.get(categoryKey as never)?.desrc ?? categoryKey
+      challengeList.forEach((challenge) => {
+        map.set(challenge.id, categoryName)
+      })
+    })
+    return map
+  }, [challengeCategoryLabelMap, scoreboard?.challenges])
+  const buildTeamBreakdown = useCallback(
+    (
+      base: ScoreboardItem | undefined,
+      theory: TheoryScoreboardItemModel | undefined
+    ): TeamCategoryBreakdown[] => {
+      const categoryMap = new Map<string, TeamCategoryBreakdown>()
+      const addCategory = (category: string, score: number, solved = 1) => {
+        if (score <= 0 && solved <= 0) return
+        const current = categoryMap.get(category) ?? { category, solved: 0, score: 0 }
+        current.solved += solved
+        current.score += score
+        categoryMap.set(category, current)
+      }
+
+      base?.solvedChallenges?.forEach((challenge) => {
+        addCategory(challengeCategoryMap.get(challenge.id) ?? 'Other', challenge.score, 1)
+      })
+
+      if ((base?.awdScore ?? 0) > 0) {
+        addCategory('AWDP', base?.awdScore ?? 0, 0)
+      }
+
+      if ((theory?.score ?? 0) > 0) {
+        addCategory('Theory', theory?.score ?? 0, theory?.submittedAt ? 1 : 0)
+      }
+
+      return [...categoryMap.values()].sort((left, right) => {
+        if (right.score !== left.score) return right.score - left.score
+        return left.category.localeCompare(right.category)
+      })
+    },
+    [challengeCategoryMap]
+  )
+  const scoreItems = useMemo<ScreenScoreItem[]>(() => {
+    const baseItems = scoreboard?.items ?? []
+
+    if (!isTheoryScoreGame) {
+      return [...baseItems]
+        .sort((left, right) => left.rank - right.rank)
+        .map((item) => ({ ...item, breakdown: buildTeamBreakdown(item, undefined) }))
+    }
+
+    const baseByTeam = new Map(baseItems.map((item) => [item.id, item]))
+    const participationByTeam = new Map(
+      acceptedParticipations
+        .filter((item) => typeof item.team?.id === 'number')
+        .map((item) => [item.team.id!, item])
+    )
+    const teamIds = new Set<number>([
+      ...baseByTeam.keys(),
+      ...theoryScoreMap.keys(),
+      ...participationByTeam.keys(),
+    ])
+
+    const merged = [...teamIds].map((teamId) => {
+      const base = baseByTeam.get(teamId)
+      const theory = theoryScoreMap.get(teamId)
+      const participation = participationByTeam.get(teamId)
+      const commonScore = game?.gameType === GameType.Theory ? 0 : base?.score ?? 0
+      const theoryScore = theory?.score ?? 0
+      const theorySubmittedAt = theory?.submittedAt ?? 0
+      const commonSubmittedAt = base?.lastSubmissionTime ?? 0
+
+      return {
+        id: teamId,
+        name: base?.name ?? theory?.teamName ?? participation?.team?.name ?? `Team ${teamId}`,
+        divisionId: base?.divisionId ?? theory?.divisionId ?? participation?.divisionId,
+        score: commonScore + theoryScore,
+        rank: 0,
+        solvedCount: (game?.gameType === GameType.Theory ? 0 : base?.solvedCount ?? 0) + (theorySubmittedAt ? 1 : 0),
+        lastSubmissionTime: Math.max(commonSubmittedAt, theorySubmittedAt),
+        breakdown: buildTeamBreakdown(game?.gameType === GameType.Theory ? undefined : base, theory),
+      }
+    })
+
+    merged.sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score
+      const leftTime = left.lastSubmissionTime || Number.MAX_SAFE_INTEGER
+      const rightTime = right.lastSubmissionTime || Number.MAX_SAFE_INTEGER
+      if (leftTime !== rightTime) return leftTime - rightTime
+      return left.id - right.id
+    })
+
+    return merged.map((item, index) => ({ ...item, rank: index + 1 }))
+  }, [acceptedParticipations, buildTeamBreakdown, game?.gameType, isTheoryScoreGame, scoreboard?.items, theoryScoreMap])
+
+  const loadTheoryScoreboard = useCallback(async () => {
+    if (!canLoadTheoryScoreboard) {
+      setTheoryScoreboard([])
+      return
+    }
+
+    try {
+      const response = await theoryPlayerApi.getScoreboard(numId)
+      setTheoryScoreboard(response.data ?? [])
+    } catch {
+      setTheoryScoreboard([])
+    }
+  }, [canLoadTheoryScoreboard, numId])
 
   // Clock update
   useEffect(() => {
@@ -192,21 +331,33 @@ export const useCTFScreenData = (numId: number) => {
     if (initialSubmissions) setLiveSubmissions(initialSubmissions.slice(0, MAX_SUBMISSIONS))
   }, [initialSubmissions, isTestMode])
 
+  useEffect(() => {
+    void loadTheoryScoreboard()
+
+    if (!canLoadTheoryScoreboard || statusInfo.status !== GameStatus.OnGoing) return undefined
+
+    const timer = window.setInterval(() => {
+      void loadTheoryScoreboard()
+    }, 30000)
+
+    return () => window.clearInterval(timer)
+  }, [canLoadTheoryScoreboard, loadTheoryScoreboard, statusInfo.status])
+
   // Track rank changes
   useEffect(() => {
-    if (!scoreboard?.items) return
+    if (scoreItems.length === 0) return
 
     const nextPrevRank = new Map<number, number>()
-    for (const item of scoreboard.items) {
+    for (const item of scoreItems) {
       const previous = scoreboardSnapshotRef.current.get(item.id)
       nextPrevRank.set(item.id, previous ? previous.rank : item.rank)
     }
 
     scoreboardSnapshotRef.current = new Map(
-      scoreboard.items.map((item) => [item.id, { rank: item.rank, score: item.score }])
+      scoreItems.map((item) => [item.id, { rank: item.rank, score: item.score }])
     )
     setPrevRankMap(nextPrevRank)
-  }, [scoreboard?.items, scoreboard?.updateTimeUtc])
+  }, [scoreItems, scoreboard?.updateTimeUtc])
 
   // SignalR connection (only for non-test mode and ongoing games)
   useEffect(() => {
@@ -242,16 +393,9 @@ export const useCTFScreenData = (numId: number) => {
 
   // ─── Derived Data (matching Ctfscreen format) ────────────────────────────────
 
-  const acceptedParticipations = useMemo(
-    () => (participations ?? []).filter((item) => item.status === ParticipationStatus.Accepted),
-    [participations]
-  )
-
   // Teams for leaderboard
   const teams: Team[] = useMemo(() => {
-    const items = scoreboard?.items ?? []
-    return items
-      .sort((a, b) => a.rank - b.rank)
+    return scoreItems
       .map((item, index) => ({
         id: item.id,
         rank: item.rank,
@@ -262,8 +406,9 @@ export const useCTFScreenData = (numId: number) => {
         solves: item.solvedCount,
         lastSolve: formatTimeAgo(item.lastSubmissionTime, now),
         color: TEAM_COLORS[index % TEAM_COLORS.length],
+        breakdown: item.breakdown,
       }))
-  }, [scoreboard?.items, prevRankMap, now])
+  }, [scoreItems, prevRankMap, now])
 
   // Score history for chart - with forward-fill to show cumulative scores
   const scoreHistory: ScoreData[] = useMemo(() => {
@@ -303,7 +448,7 @@ export const useCTFScreenData = (numId: number) => {
 
       // Since we can't easily derive individual challenge scores from submissions alone,
       // use scoreboard.items rank-ordered top 5 teams with their current scores as single points
-      const topTeams = [...(scoreboard?.items ?? [])]
+      const topTeams = [...scoreItems]
         .sort((a, b) => a.rank - b.rank)
         .slice(0, 5)
 
@@ -357,7 +502,7 @@ export const useCTFScreenData = (numId: number) => {
 
       return point
     })
-  }, [scoreboard?.timelines, scoreboard?.items, submissionFeed])
+  }, [scoreboard?.timelines, scoreItems, submissionFeed])
 
   // Categories for stats
   const categories: Category[] = useMemo(() => {
@@ -436,8 +581,8 @@ export const useCTFScreenData = (numId: number) => {
   // Stats
   const totalTeams = useMemo(() => acceptedParticipations.length, [acceptedParticipations])
   const totalSolves = useMemo(
-    () => (scoreboard?.items ?? []).reduce((sum, item) => sum + item.solvedCount, 0),
-    [scoreboard?.items]
+    () => scoreItems.reduce((sum, item) => sum + item.solvedCount, 0),
+    [scoreItems]
   )
   const totalChallenges = scoreboard?.challengeCount ?? 0
   const eventName = game?.title ?? 'CTF Competition'
@@ -459,10 +604,9 @@ export const useCTFScreenData = (numId: number) => {
   }, [scoreboard?.challenges])
 
   const avgScore = useMemo(() => {
-    const items = scoreboard?.items ?? []
-    if (items.length === 0) return 0
-    return Math.round(items.reduce((sum, item) => sum + item.score, 0) / items.length)
-  }, [scoreboard?.items])
+    if (scoreItems.length === 0) return 0
+    return Math.round(scoreItems.reduce((sum, item) => sum + item.score, 0) / scoreItems.length)
+  }, [scoreItems])
 
   const activeTeams = useMemo(() => {
     const recentActive = submissionFeed

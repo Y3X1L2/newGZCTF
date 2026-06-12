@@ -511,6 +511,7 @@
   min-height: 0;
   width: 100%;
   height: 100%;
+  cursor: crosshair;
 }
 
 .metal-city-canvas canvas {
@@ -527,6 +528,212 @@
   place-items: center;
   text-align: center;
   pointer-events: none;
+}
+
+.metal-overview-button {
+  position: absolute;
+  top: 8.6rem;
+  left: 1.5rem;
+  z-index: 8;
+  min-width: 7.8rem;
+  height: 2.65rem;
+  border: 1px solid rgba(242, 214, 139, 0.42);
+  border-radius: 999px;
+  color: #fff4cf;
+  background:
+    linear-gradient(135deg, rgba(244, 215, 137, 0.22), rgba(255, 255, 255, 0.045)),
+    rgba(15, 18, 20, 0.78);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 0 28px rgba(244, 215, 137, 0.18),
+    0 16px 42px rgba(0, 0, 0, 0.26);
+  font-family: 'Share Tech Mono', 'Microsoft YaHei', monospace;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+
+.metal-overview-button:hover {
+  color: #111315;
+  background: linear-gradient(135deg, #fff1bb, #c99a3c);
+  box-shadow:
+    0 0 34px rgba(244, 215, 137, 0.34),
+    0 18px 54px rgba(0, 0, 0, 0.32);
+}
+
+.metal-team-detail-panel {
+  position: absolute;
+  left: clamp(1rem, 2vw, 2rem);
+  bottom: clamp(1rem, 2vw, 2rem);
+  z-index: 5;
+  width: min(26rem, calc(100% - 2rem));
+  padding: 1.05rem;
+  border: 1px solid rgba(230, 238, 240, 0.2);
+  border-radius: 1rem;
+  color: #eef4f3;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.035) 52%, rgba(0, 0, 0, 0.48)),
+    rgba(10, 12, 13, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -22px 42px rgba(0, 0, 0, 0.2),
+    0 28px 80px rgba(0, 0, 0, 0.34),
+    0 0 42px rgba(235, 241, 241, 0.08);
+  backdrop-filter: blur(16px);
+}
+
+.metal-team-detail-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.45rem;
+}
+
+.metal-team-detail-title strong,
+.metal-team-detail-title span,
+.metal-team-detail-title b {
+  display: block;
+}
+
+.metal-team-detail-title strong {
+  overflow: hidden;
+  max-width: 18rem;
+  color: #fffdf4;
+  font-size: clamp(1.25rem, 1.55vw, 1.8rem);
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 0 24px rgba(244, 215, 137, 0.22);
+}
+
+.metal-team-detail-title span {
+  margin-top: 0.32rem;
+  color: rgba(229, 238, 240, 0.7);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+}
+
+.metal-team-detail-title b {
+  flex: 0 0 auto;
+  min-width: 4.2rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid rgba(242, 214, 139, 0.34);
+  border-radius: 0.8rem;
+  color: #f4d789;
+  background: rgba(113, 81, 28, 0.18);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 1.15rem;
+  text-align: center;
+}
+
+.metal-team-detail-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin-top: 0.95rem;
+}
+
+.metal-team-detail-stats div {
+  padding: 0.75rem 0.8rem;
+  border: 1px solid rgba(226, 234, 235, 0.14);
+  border-radius: 0.8rem;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.095), rgba(255, 255, 255, 0.018)),
+    rgba(9, 11, 12, 0.54);
+}
+
+.metal-team-detail-stats span,
+.metal-team-detail-stats strong {
+  display: block;
+}
+
+.metal-team-detail-stats span {
+  color: rgba(226, 235, 236, 0.64);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+}
+
+.metal-team-detail-stats strong {
+  margin-top: 0.22rem;
+  color: #f4d789;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.metal-team-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.62rem;
+  margin-top: 0.95rem;
+}
+
+.metal-team-breakdown-row {
+  display: grid;
+  grid-template-columns: minmax(6.2rem, 0.72fr) minmax(0, 1fr) 4.8rem;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.metal-team-breakdown-row span,
+.metal-team-breakdown-row strong,
+.metal-team-breakdown-row em {
+  font-family: 'Share Tech Mono', 'Microsoft YaHei', monospace;
+}
+
+.metal-team-breakdown-row span {
+  display: block;
+  overflow: hidden;
+  color: #f4f7f6;
+  font-size: 0.88rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metal-team-breakdown-row strong {
+  display: block;
+  margin-top: 0.1rem;
+  color: rgba(226, 235, 236, 0.68);
+  font-size: 0.72rem;
+}
+
+.metal-team-breakdown-row em {
+  color: #f4d789;
+  font-size: 0.86rem;
+  font-style: normal;
+  font-weight: 800;
+  text-align: right;
+}
+
+.metal-team-breakdown-bar {
+  position: relative;
+  overflow: hidden;
+  height: 0.62rem;
+  border: 1px solid rgba(230, 238, 240, 0.12);
+  border-radius: 999px;
+  background: rgba(5, 7, 8, 0.58);
+}
+
+.metal-team-breakdown-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #879194, #f4d789);
+  box-shadow: 0 0 18px rgba(244, 215, 137, 0.22);
+}
+
+.metal-team-breakdown-empty {
+  padding: 0.85rem;
+  border: 1px solid rgba(230, 238, 240, 0.12);
+  border-radius: 0.8rem;
+  color: rgba(226, 235, 236, 0.66);
+  background: rgba(8, 10, 11, 0.5);
+  font-family: 'Share Tech Mono', 'Microsoft YaHei', monospace;
+  text-align: center;
 }
 
 .metal-city-empty span,
