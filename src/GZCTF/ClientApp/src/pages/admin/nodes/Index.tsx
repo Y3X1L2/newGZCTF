@@ -27,7 +27,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AdminPage } from '@Components/admin/AdminPage'
 import { CleanupButton } from '@Components/admin/CleanupButton'
 import { NodeCard, NodeInfo } from '@Components/admin/NodeCard'
-import { YinyuMetricTile, YinyuModalBody, YinyuPanel, YinyuRouteLoader, YinyuStatePage } from '@Components/yinyu/YinyuUI'
+import { YinyuMetricTile, YinyuModalBody, YinyuPanel, YinyuRouteLoader } from '@Components/yinyu/YinyuUI'
 
 type StatusFilter = 'all' | 'online' | 'offline' | 'busy' | 'error'
 
@@ -302,69 +302,71 @@ export default function NodesPage() {
           <MetricTile label="可调度" value={stats.schedulable} tone="blue" />
         </SimpleGrid>
 
-        <YinyuPanel p="md" className="admin-panel">
-          <Group justify="space-between" align="end">
-            <TextInput
-              leftSection={<Icon path={mdiMagnify} size={0.75} />}
-              placeholder="搜索节点名称或地址"
-              value={query}
-              onChange={(event) => setQuery(event.currentTarget.value)}
-              style={{ minWidth: 260 }}
-            />
-            <Select
-              label="状态"
-              value={filter}
-              onChange={(value) => setFilter((value as StatusFilter | null) ?? 'all')}
-              data={[
-                { value: 'all', label: '全部' },
-                { value: 'online', label: '在线' },
-                { value: 'offline', label: '离线' },
-                { value: 'busy', label: '繁忙' },
-                { value: 'error', label: '异常' },
-              ]}
-              w={160}
-            />
-          </Group>
-        </YinyuPanel>
-
-        {isLoading ? (
-          <YinyuStatePage p="xl" className="yy-admin-inline-state">
-            <YinyuRouteLoader title="节点管理" description="正在读取节点状态" />
-          </YinyuStatePage>
-        ) : filteredNodes.length > 0 ? (
-          <SimpleGrid cols={{ base: 1, md: 2, xl: 3 }}>
-            {filteredNodes.map((node) => (
-              <NodeCard
-                key={node.id}
-                node={node}
-                onToggleSchedulable={toggleSchedulable}
-                rightSection={
-                  !node.isLocal && (
-                    <Tooltip label="删除节点">
-                      <ActionIcon
-                        color="red"
-                        variant="subtle"
-                        size="sm"
-                        onClick={() => handleDeleteNode(node.id, node.name || node.hostAddress)}
-                      >
-                        <Icon path={mdiDeleteOutline} size={0.82} />
-                      </ActionIcon>
-                    </Tooltip>
-                  )
-                }
+        <YinyuPanel p="md" className="admin-panel yy-admin-nodes-panel" cells={72}>
+          <Stack gap="md">
+            <Group justify="space-between" align="end" className="yy-admin-nodes-filter">
+              <TextInput
+                leftSection={<Icon path={mdiMagnify} size={0.75} />}
+                placeholder="搜索节点名称或地址"
+                value={query}
+                onChange={(event) => setQuery(event.currentTarget.value)}
+                style={{ minWidth: 260 }}
               />
-            ))}
-          </SimpleGrid>
-        ) : (
-          <YinyuStatePage p="xl">
-            <Stack align="center" gap="xs">
-              <Text fw={700}>没有匹配的节点</Text>
-              <Text className="yy-readable-text" size="sm">
-                调整筛选条件，或添加新的目标服务器。
-              </Text>
-            </Stack>
-          </YinyuStatePage>
-        )}
+              <Select
+                label="状态"
+                value={filter}
+                onChange={(value) => setFilter((value as StatusFilter | null) ?? 'all')}
+                data={[
+                  { value: 'all', label: '全部' },
+                  { value: 'online', label: '在线' },
+                  { value: 'offline', label: '离线' },
+                  { value: 'busy', label: '繁忙' },
+                  { value: 'error', label: '异常' },
+                ]}
+                w={160}
+              />
+            </Group>
+
+            {isLoading ? (
+              <div className="yy-admin-nodes-state">
+                <YinyuRouteLoader title="节点管理" description="正在读取节点状态" />
+              </div>
+            ) : filteredNodes.length > 0 ? (
+              <SimpleGrid className="yy-admin-node-grid" cols={{ base: 1, md: 2, xl: 3 }}>
+                {filteredNodes.map((node) => (
+                  <NodeCard
+                    key={node.id}
+                    node={node}
+                    onToggleSchedulable={toggleSchedulable}
+                    rightSection={
+                      !node.isLocal && (
+                        <Tooltip label="删除节点">
+                          <ActionIcon
+                            color="red"
+                            variant="subtle"
+                            size="sm"
+                            onClick={() => handleDeleteNode(node.id, node.name || node.hostAddress)}
+                          >
+                            <Icon path={mdiDeleteOutline} size={0.82} />
+                          </ActionIcon>
+                        </Tooltip>
+                      )
+                    }
+                  />
+                ))}
+              </SimpleGrid>
+            ) : (
+              <div className="yy-admin-nodes-state">
+                <Stack align="center" gap="xs">
+                  <Text fw={700}>没有匹配的节点</Text>
+                  <Text className="yy-readable-text" size="sm">
+                    调整筛选条件，或添加新的目标服务器。
+                  </Text>
+                </Stack>
+              </div>
+            )}
+          </Stack>
+        </YinyuPanel>
 
         <AddNodeModal opened={modalOpen} onClose={() => setModalOpen(false)} onAdded={loadNodes} />
       </Stack>

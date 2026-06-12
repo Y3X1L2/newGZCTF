@@ -1,6 +1,6 @@
-import { useFrame, useThree } from '@react-three/fiber'
+import { useThree } from '@react-three/fiber'
 import { BlendFunction } from 'postprocessing'
-import { forwardRef, useEffect, useMemo, useRef } from 'react'
+import { forwardRef, useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { PixelationEffect } from './PixelationEffect'
 
@@ -38,7 +38,6 @@ const Pixelation = forwardRef<PixelationEffect, PixelationProps>(
     ref
   ) => {
     const { size } = useThree()
-    const lastResize = useRef(0)
     const effect = useMemo(
       () =>
         new PixelationEffect({
@@ -61,20 +60,33 @@ const Pixelation = forwardRef<PixelationEffect, PixelationProps>(
     )
 
     useEffect(() => {
-      const handleMouseMove = (e: MouseEvent) => {
-        effect.setMousePosition(e.clientX / window.innerWidth, 1 - e.clientY / window.innerHeight)
+      let frame = 0
+      const mouse = { x: 0.5, y: 0.5 }
+
+      const flushMouse = () => {
+        frame = 0
+        effect.setMousePosition(mouse.x, mouse.y)
       }
+
+      const handleMouseMove = (e: MouseEvent) => {
+        mouse.x = e.clientX / window.innerWidth
+        mouse.y = 1 - e.clientY / window.innerHeight
+
+        if (!frame) {
+          frame = requestAnimationFrame(flushMouse)
+        }
+      }
+
       window.addEventListener('mousemove', handleMouseMove, { passive: true })
-      return () => window.removeEventListener('mousemove', handleMouseMove)
+      return () => {
+        if (frame) cancelAnimationFrame(frame)
+        window.removeEventListener('mousemove', handleMouseMove)
+      }
     }, [effect])
 
-    useFrame(() => {
-      const now = Date.now()
-      if (now - lastResize.current > 200) {
-        effect.setResolution(size.width, size.height)
-        lastResize.current = now
-      }
-    })
+    useEffect(() => {
+      effect.setResolution(size.width, size.height)
+    }, [effect, size.height, size.width])
 
     useEffect(() => {
       ;[

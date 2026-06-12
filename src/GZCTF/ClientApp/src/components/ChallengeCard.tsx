@@ -2,7 +2,7 @@ import { Code, Group, Stack, Text, Tooltip } from '@mantine/core'
 import cx from 'clsx'
 import dayjs from 'dayjs'
 import { ChevronRight } from 'lucide-react'
-import { FC, useMemo } from 'react'
+import { CSSProperties, FC, useMemo } from 'react'
 import { Trans } from 'react-i18next'
 import { useLanguage } from '@Utils/I18n'
 import { BloodsTypes, PartialIconProps, useChallengeCategoryLabelMap } from '@Utils/Shared'
@@ -34,6 +34,8 @@ export const ChallengeCard: FC<ChallengeCardProps> = (props: ChallengeCardProps)
 
   const heat = Math.min(100, Math.max(8, (challenge.solved ?? 0) * 8))
   const state = solved ? 'solved' : isFaded ? 'alert' : 'open'
+  const categoryColor = cateData?.colors?.[5] ?? 'rgba(107, 238, 177, 0.88)'
+  const categorySoftColor = cateData?.colors?.[8] ?? 'rgba(107, 238, 177, 0.16)'
 
   return (
     <button
@@ -43,7 +45,17 @@ export const ChallengeCard: FC<ChallengeCardProps> = (props: ChallengeCardProps)
       data-faded={solved || isFaded || undefined}
     >
       <YinyuHexField cells={28} />
-      <span className="challenge-category">{cateData?.name ?? challenge.category}</span>
+      <span
+        className="challenge-category yy-challenge-category-token"
+        style={
+          {
+            '--challenge-category-color': categoryColor,
+            '--challenge-category-soft': categorySoftColor,
+          } as CSSProperties
+        }
+      >
+        {cateData?.name ?? challenge.category}
+      </span>
       <strong>{challenge.title}</strong>
       <div className="challenge-meta">
         <span>{challenge.score}&nbsp;pts</span>

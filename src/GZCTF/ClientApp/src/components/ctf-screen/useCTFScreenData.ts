@@ -252,7 +252,6 @@ export const useCTFScreenData = (numId: number) => {
     const items = scoreboard?.items ?? []
     return items
       .sort((a, b) => a.rank - b.rank)
-      .slice(0, 15)
       .map((item, index) => ({
         id: item.id,
         rank: item.rank,

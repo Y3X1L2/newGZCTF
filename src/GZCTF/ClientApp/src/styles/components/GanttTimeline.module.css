@@ -1,8 +1,11 @@
 .shell {
   --timeline-breathe: 0;
+  --timeline-meta-width: clamp(10.2rem, 22vw, 18rem);
+  --timeline-row-count: 0;
   position: relative;
   isolation: isolate;
-  overflow: hidden;
+  contain: layout style;
+  overflow: visible;
   width: 100%;
   padding: clamp(0.92rem, 1.45vw, 1.18rem);
   color: var(--yy-text);
@@ -18,7 +21,7 @@
     1.28rem 1.1rem,
     auto;
   border: 1px solid rgba(107, 238, 177, 0.15);
-  clip-path: polygon(1.15rem 0, calc(100% - 1.15rem) 0, 100% 50%, calc(100% - 1.15rem) 100%, 1.15rem 100%, 0 50%);
+  border-radius: var(--yy-radius);
   box-shadow:
     0 1.4rem 4rem rgba(0, 0, 0, 0.48),
     inset 0 0 0 1px rgba(255, 255, 255, 0.035);
@@ -37,8 +40,8 @@
   background:
     linear-gradient(90deg, transparent, rgba(107, 238, 177, 0.08), transparent),
     repeating-linear-gradient(120deg, rgba(255, 255, 255, 0.026) 0 1px, transparent 1px 3.6rem);
-  opacity: calc(0.28 + var(--timeline-breathe) * 0.18);
-  transform: translateX(calc(var(--timeline-breathe) * 1.4rem));
+  opacity: 0.28;
+  transform: translateX(0);
 }
 
 .shell::after {
@@ -114,21 +117,27 @@
 
 .viewport {
   width: 100%;
-  overflow-x: auto;
+  overflow-x: clip;
   overflow-y: visible;
-  padding-bottom: 0.18rem;
+  padding-bottom: clamp(0.5rem, 0.95vw, 0.8rem);
   scrollbar-color: rgba(107, 238, 177, 0.34) rgba(255, 255, 255, 0.04);
+  scrollbar-gutter: stable;
+  overscroll-behavior: auto;
+  contain: layout style;
 }
 
 .axis,
 .rows {
-  min-width: min(68rem, 100%);
+  width: 100%;
+  min-width: 0;
 }
 
 .axis {
   position: relative;
+  width: calc(100% - var(--timeline-meta-width));
   height: 3.05rem;
-  margin-left: clamp(10.2rem, 22vw, 18rem);
+  margin-left: var(--timeline-meta-width);
+  overflow: visible;
   border-bottom: 1px solid rgba(107, 238, 177, 0.22);
   background:
     linear-gradient(90deg, rgba(107, 238, 177, 0.12) 1px, transparent 1px),
@@ -202,55 +211,15 @@
   box-shadow: 0 0 0.75rem rgba(107, 238, 177, 0.24);
 }
 
-.focusRange {
-  position: absolute;
-  left: var(--focus-left);
-  bottom: calc(100% + 0.28rem);
-  z-index: 6;
-  width: max(var(--focus-width), 13rem);
-  max-width: min(34rem, 88vw);
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(0.2rem);
-  transition:
-    opacity 150ms ease,
-    transform 150ms ease;
-}
-
-.focusRange b {
-  display: inline-flex;
-  max-width: 100%;
-  padding: 0.32rem 0.56rem;
-  overflow: hidden;
-  border: 1px solid rgba(107, 238, 177, 0.28);
-  border-radius: 999px;
-  color: rgba(232, 255, 244, 0.96);
-  background:
-    radial-gradient(ellipse at 20% 20%, rgba(107, 238, 177, 0.14), transparent 44%),
-    rgba(4, 8, 7, 0.96);
-  box-shadow: 0 0.8rem 1.8rem rgba(0, 0, 0, 0.34);
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  font-weight: 860;
-  line-height: 1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.shell[data-has-focus] .focusRange {
-  opacity: 1;
-  transform: translateY(0);
-}
-
 .nowAxis {
   position: absolute;
   left: var(--timeline-now);
   top: 0;
-  bottom: -100vh;
+  bottom: 0;
   width: 1px;
   pointer-events: none;
   background: linear-gradient(180deg, rgba(107, 238, 177, 0.7), rgba(107, 238, 177, 0.12) 38%, transparent);
-  filter: drop-shadow(0 0 0.7rem rgba(107, 238, 177, calc(0.24 + var(--timeline-breathe) * 0.18)));
+  filter: drop-shadow(0 0 0.7rem rgba(107, 238, 177, 0.24));
 }
 
 .nowAxis i {
@@ -264,42 +233,81 @@
     radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.5), transparent 45%),
     var(--yy-green);
   box-shadow:
-    0 0 0 calc(0.25rem + var(--timeline-breathe) * 0.32rem) rgba(107, 238, 177, 0.09),
+    0 0 0 0.25rem rgba(107, 238, 177, 0.09),
     0 0 1.4rem rgba(107, 238, 177, 0.42);
 }
 
 .nowAxis b {
   position: absolute;
-  top: 0;
+  top: -0.18rem;
   left: 0.58rem;
   width: max-content;
+  max-width: 8.2rem;
+  overflow: hidden;
   color: var(--yy-green);
   font-family: var(--font-mono);
   font-size: 0.7rem;
   font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell[data-now-side='left'] .nowAxis b {
+  left: auto;
+  right: 0.58rem;
 }
 
 .rows {
+  position: relative;
   display: grid;
-  gap: 0.55rem;
-  max-height: clamp(13.4rem, 24vh, 18rem);
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 0.24rem;
-  scrollbar-color: rgba(107, 238, 177, 0.28) rgba(255, 255, 255, 0.04);
+  gap: clamp(0.62rem, 0.9vw, 0.8rem);
+  overflow: visible;
+  padding: 0.35rem 0 clamp(0.55rem, 0.95vw, 0.82rem);
+  isolation: isolate;
+}
+
+.rows::before {
+  content: '';
+  position: absolute;
+  inset: 0 1rem 0 var(--timeline-meta-width);
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(107, 238, 177, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size:
+    calc(100% / 7) 100%,
+    calc(100% / 14) 100%;
+  opacity: 0.66;
 }
 
 .timelineRow {
   --row-left: 0%;
   --row-width: 12%;
+  --tooltip-left: 50%;
   --row-color: rgba(107, 238, 177, 0.75);
   position: relative;
+  contain: layout style;
   display: grid;
-  grid-template-columns: clamp(10.2rem, 22vw, 18rem) minmax(34rem, 1fr);
+  grid-template-columns: var(--timeline-meta-width) minmax(0, 1fr);
   align-items: center;
-  min-height: clamp(3rem, 4.4vw, 3.5rem);
+  min-height: clamp(3.65rem, 5vw, 4.25rem);
   color: inherit;
   text-decoration: none;
+  border: 0;
+  background: transparent;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease;
+  transform: translateZ(0);
+}
+
+.timelineRow::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
   border: 1px solid rgba(107, 238, 177, 0.08);
   background:
     linear-gradient(90deg, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.18)),
@@ -309,14 +317,25 @@
   transition:
     border-color 180ms ease,
     background 180ms ease,
-    transform 180ms ease,
-    box-shadow 180ms ease;
+    opacity 180ms ease;
+}
+
+.timelineRow > * {
+  position: relative;
+  z-index: 1;
 }
 
 .timelineRow:hover,
 .timelineRow:focus-visible {
   color: inherit;
-  transform: translateY(-1px);
+  transform: translate3d(0, -1px, 0);
+  box-shadow:
+    0 0 0 1px rgba(107, 238, 177, 0.08),
+    0 1rem 2.8rem rgba(0, 0, 0, 0.28);
+}
+
+.timelineRow:hover::before,
+.timelineRow:focus-visible::before {
   border-color: rgba(107, 238, 177, 0.32);
   background:
     radial-gradient(ellipse at 15% 50%, rgba(107, 238, 177, 0.16), transparent 42%),
@@ -326,9 +345,6 @@
     auto,
     1.1rem 0.95rem,
     auto;
-  box-shadow:
-    0 0 0 1px rgba(107, 238, 177, 0.08),
-    0 1rem 2.8rem rgba(0, 0, 0, 0.28);
 }
 
 .rowMeta {
@@ -337,7 +353,7 @@
   align-items: center;
   gap: 0.72rem;
   min-width: 0;
-  padding: 0 0.85rem 0 1rem;
+  padding: 0 0.95rem 0 1rem;
 }
 
 .metaMark {
@@ -388,6 +404,10 @@
   white-space: nowrap;
 }
 
+.rowMeta > span {
+  min-width: 0;
+}
+
 .rowMeta strong {
   color: var(--yy-text);
   font-family: var(--font-display);
@@ -407,15 +427,11 @@
 .track {
   position: relative;
   height: 100%;
-  min-height: 2.95rem;
+  min-height: clamp(3.35rem, 4.2vw, 3.8rem);
   margin-right: 1rem;
   border-left: 1px solid rgba(107, 238, 177, 0.1);
-  background:
-    linear-gradient(90deg, rgba(107, 238, 177, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.024) 1px, transparent 1px);
-  background-size:
-    calc(100% / 7) 100%,
-    calc(100% / 14) 100%;
+  background: transparent;
+  overflow: visible;
 }
 
 .rowBar {
@@ -455,7 +471,7 @@
     180% 100%,
     0.95rem 0.82rem,
     auto;
-  animation: yy-schedule-flow 4.6s ease-in-out infinite;
+  animation: none;
 }
 
 .barLead {
@@ -515,7 +531,23 @@
   }
 }
 
+@keyframes yy-schedule-glint {
+  0%,
+  100% {
+    opacity: 0.78;
+    transform: translate3d(-1.8%, 0, 0);
+  }
+  50% {
+    opacity: 1;
+    transform: translate3d(1.8%, 0, 0);
+  }
+}
+
 @media (max-width: 64em) {
+  .shell {
+    --timeline-meta-width: 13rem;
+  }
+
   .header {
     display: grid;
   }
@@ -524,12 +556,23 @@
     justify-content: flex-start;
   }
 
+  .viewport {
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+
+  .axis,
+  .rows {
+    min-width: 44rem;
+  }
+
   .timelineRow {
-    grid-template-columns: 13rem minmax(28rem, 1fr);
+    grid-template-columns: var(--timeline-meta-width) minmax(28rem, 1fr);
   }
 
   .axis {
-    margin-left: 13rem;
+    width: calc(100% - var(--timeline-meta-width));
+    margin-left: var(--timeline-meta-width);
   }
 }
 
@@ -543,10 +586,6 @@
 }
 
 /* Meaningful schedule track: thin duration line with start/end nodes. */
-.shell {
-  clip-path: polygon(0.9rem 0, calc(100% - 0.9rem) 0, 100% 50%, calc(100% - 0.9rem) 100%, 0.9rem 100%, 0 50%);
-}
-
 .shell::before {
   background:
     linear-gradient(90deg, transparent, rgba(107, 238, 177, 0.065), transparent),
@@ -554,31 +593,25 @@
   background-size:
     auto,
     1rem 0.866rem;
-  opacity: calc(0.2 + var(--timeline-breathe) * 0.13);
+  opacity: 0.22;
 }
 
 .track {
   min-height: 3rem;
   border-left: 0;
-  background:
-    linear-gradient(90deg, rgba(107, 238, 177, 0.11) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(180deg, transparent 47%, rgba(255, 255, 255, 0.08) 47% 53%, transparent 53%);
-  background-size:
-    calc(100% / 7) 100%,
-    calc(100% / 14) 100%,
-    100% 100%;
+  background: linear-gradient(180deg, transparent 47%, rgba(255, 255, 255, 0.08) 47% 53%, transparent 53%);
 }
 
 .rowBar {
   display: block;
   min-width: 3.9rem;
   height: 2rem;
-  filter: drop-shadow(0 0 0.8rem rgba(107, 238, 177, 0.13));
+  filter: none;
   transition:
     transform 180ms ease,
-    filter 180ms ease,
-    min-width 180ms ease;
+    opacity 180ms ease,
+    filter 180ms ease;
+  will-change: transform;
 }
 
 .rowBar::before {
@@ -587,12 +620,16 @@
   border-radius: 999px;
   background:
     linear-gradient(90deg, color-mix(in srgb, var(--row-color) 58%, rgba(107, 238, 177, 0.3)), rgba(107, 238, 177, 0.64)),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.28), transparent 36%, rgba(107, 238, 177, 0.3) 70%, transparent);
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.36), transparent);
   background-size:
     auto,
-    220% 100%;
+    42% 100%;
+  background-position:
+    0 0,
+    50% 0;
   opacity: 0.98;
-  animation: yy-schedule-flow 5.2s ease-in-out infinite;
+  animation: yy-schedule-glint 2.8s ease-in-out infinite;
+  will-change: opacity, transform;
 }
 
 .rowBar::after {
@@ -617,20 +654,19 @@
 
 .timelineRow:hover .rowBar,
 .timelineRow:focus-visible .rowBar {
-  min-width: 5.6rem;
-  filter: drop-shadow(0 0 1.25rem rgba(107, 238, 177, 0.34));
-  transform: translateY(-50%) scaleY(1.12);
+  transform: translateY(-50%) scaleY(1.08);
 }
 
 .timeTooltip {
   position: absolute;
-  left: 50%;
-  bottom: calc(100% + 0.38rem);
-  z-index: 5;
+  left: var(--tooltip-left);
+  bottom: calc(50% + 0.82rem);
+  z-index: 25;
   display: block;
-  width: max-content;
-  max-width: min(22rem, 72vw);
-  padding: 0.3rem 0.52rem;
+  width: clamp(18.5rem, 24vw, 25rem);
+  max-width: calc(100vw - 4rem);
+  padding: 0.34rem 0.62rem;
+  overflow: hidden;
   border: 1px solid rgba(107, 238, 177, 0.24);
   border-radius: 999px;
   color: rgba(232, 255, 244, 0.96);
@@ -642,18 +678,35 @@
   font-size: 0.68rem;
   font-weight: 860;
   line-height: 1;
+  text-align: center;
+  text-overflow: clip;
+  white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  transform: translate(-50%, 0.25rem);
+  transform: translate3d(-50%, 0.32rem, 0);
   transition:
     opacity 150ms ease,
     transform 150ms ease;
 }
 
+.timelineRow:first-child .timeTooltip,
+.timelineRow:nth-child(2) .timeTooltip {
+  bottom: auto;
+  top: calc(50% + 0.82rem);
+  transform: translate3d(-50%, -0.32rem, 0);
+}
+
 .timelineRow:hover .timeTooltip,
 .timelineRow:focus-visible .timeTooltip {
   opacity: 1;
-  transform: translate(-50%, 0);
+  transform: translate3d(-50%, 0, 0);
+}
+
+.timelineRow:first-child:hover .timeTooltip,
+.timelineRow:first-child:focus-visible .timeTooltip,
+.timelineRow:nth-child(2):hover .timeTooltip,
+.timelineRow:nth-child(2):focus-visible .timeTooltip {
+  transform: translate3d(-50%, 0, 0);
 }
 
 .barLead {
@@ -679,7 +732,7 @@
 }
 
 .ended .rowBar {
-  filter: saturate(0.55) opacity(0.78);
+  opacity: 0.78;
 }
 
 .ended .barLead,

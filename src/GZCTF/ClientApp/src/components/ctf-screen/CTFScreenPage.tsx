@@ -1,187 +1,251 @@
-import { FC, useEffect, useState } from "react";
-import { CTFHeader } from "./CTFHeader";
-import { Leaderboard } from "./Leaderboard";
-import { ScoreChart } from "./ScoreChart";
-import { CategoryStats } from "./CategoryStats";
-import { RecentSolves } from "./RecentSolves";
-import { HeatmapPanel } from "./HeatmapPanel";
-import { useCTFScreenData } from "./useCTFScreenData";
-import "../../styles/ctf-screen/index.css";
-
-// ─── Animated Background ────────────────────────────────────────────────────
-
-function BinaryRain() {
-  const cols = 20;
-  const chars = "01001011001100110101011001010101010011001101010100110011010";
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none" style={{ opacity: 0.04 }}>
-      {Array.from({ length: cols }).map((_, i) => (
-        <div key={i}
-          className="absolute top-0 text-xs"
-          style={{
-            left: `${(i / cols) * 100}%`,
-            color: "#00d4ff",
-            fontFamily: "'Courier New', monospace",
-            fontSize: "10px",
-            lineHeight: "1.4",
-            animation: `data-stream ${3 + i * 0.3}s linear infinite`,
-            animationDelay: `${-i * 0.5}s`,
-            whiteSpace: "nowrap",
-            writingMode: "horizontal-tb"
-          }}>
-          {chars.slice(i % 10, i % 10 + 30)}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function HexParticles() {
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i}
-          className="absolute"
-          style={{
-            width: "6px",
-            height: "6px",
-            background: i % 2 === 0 ? "#00d4ff" : "#00ff88",
-            opacity: 0.3 + (i % 3) * 0.1,
-            left: `${10 + i * 11}%`,
-            top: `${20 + (i % 4) * 15}%`,
-            clipPath: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
-            animation: `pulse-glow ${2 + i * 0.4}s ease-in-out infinite`,
-            animationDelay: `${i * 0.3}s`
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-// ─── Main Screen Component ───────────────────────────────────────────────────────
+import { FC, useEffect, useMemo, useState } from 'react'
+import yinyuIcon from '../../assets/yinyu-icon-transparent.png'
+import { MetalScoreCity } from './MetalScoreCity'
+import { SolveEvent, Team, useCTFScreenData } from './useCTFScreenData'
+import '../../styles/ctf-screen/fonts.css'
+import '../../styles/ctf-screen/metal-screen.css'
 
 interface CTFScreenPageProps {
-  gameId: number;
+  gameId: number
 }
 
-const SHANGHAI_TIMEZONE = "Asia/Shanghai";
+const SHANGHAI_TIMEZONE = 'Asia/Shanghai'
 
-const CTFScreenPage: FC<CTFScreenPageProps> = ({ gameId }) => {
-  const data = useCTFScreenData(gameId);
-  const [currentTime, setCurrentTime] = useState(() => new Date());
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  const currentTimeText = currentTime.toLocaleTimeString("zh-CN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
+const formatClock = (date: Date) =>
+  date.toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
     hour12: false,
     timeZone: SHANGHAI_TIMEZONE,
-  });
+  })
+
+const formatDate = (date: Date) =>
+  date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: SHANGHAI_TIMEZONE,
+  })
+
+const formatRange = (start: Date, end: Date) =>
+  `${start.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: SHANGHAI_TIMEZONE,
+  })} - ${end.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: SHANGHAI_TIMEZONE,
+  })}`
+
+const formatDuration = (from: number, to: number) => {
+  const diff = Math.max(0, to - from)
+  const totalSeconds = Math.floor(diff / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds
+    .toString()
+    .padStart(2, '0')}`
+}
+
+const getStatusText = (status: unknown) => {
+  const value = String(status).toLowerCase()
+  if (value.includes('coming')) return '待启动'
+  if (value.includes('ended')) return '已结束'
+  if (value.includes('ongoing') || value.includes('running')) return '演练中'
+  return '待同步'
+}
+
+const getCountdownLabel = (now: number, start: Date, end: Date) => {
+  if (now < start.getTime()) return { label: '距离开始', value: formatDuration(now, start.getTime()) }
+  if (now <= end.getTime()) return { label: '剩余时间', value: formatDuration(now, end.getTime()) }
+  return { label: '演练状态', value: '已结束' }
+}
+
+const rankClass = (rank: number) => (rank <= 3 ? `is-rank-${rank}` : '')
+
+const LeaderboardPanel: FC<{ teams: Team[] }> = ({ teams }) => (
+  <section className="metal-screen-panel metal-screen-rank-panel">
+    <div className="metal-panel-head">
+      <div>
+        <span className="metal-kicker">Scoreboard</span>
+        <h2>实时排行</h2>
+      </div>
+      <span className="metal-live-badge">LIVE</span>
+    </div>
+
+    <div className="metal-rank-list">
+      {teams.slice(0, 12).map((team) => {
+        const delta = team.prevRank - team.rank
+        return (
+          <article key={team.id} className={`metal-rank-row ${rankClass(team.rank)}`}>
+            <div className="metal-rank-number">{team.rank}</div>
+            <div className="metal-rank-main">
+              <div className="metal-rank-name">{team.name}</div>
+              <div className="metal-rank-meta">
+                <span>{team.country}</span>
+                <span>{team.solves} solves</span>
+              </div>
+            </div>
+            <div className="metal-rank-score">
+              <strong>{team.score}</strong>
+              <span>{delta > 0 ? `+${delta}` : delta < 0 ? `${delta}` : 'stable'}</span>
+            </div>
+          </article>
+        )
+      })}
+
+      {teams.length === 0 && (
+        <div className="metal-empty-state">
+          <span>Awaiting scoreboard data</span>
+          <strong>暂无排行数据</strong>
+        </div>
+      )}
+    </div>
+  </section>
+)
+
+const SolveFeedPanel: FC<{ events: SolveEvent[] }> = ({ events }) => (
+  <section className="metal-screen-panel metal-feed-panel">
+    <div className="metal-panel-head">
+      <div>
+        <span className="metal-kicker">Live Feed</span>
+        <h2>实时解题日志</h2>
+      </div>
+      <span className="metal-feed-count">{events.length}</span>
+    </div>
+
+    <div className="metal-feed-list">
+      {events.slice(0, 13).map((event) => (
+        <article key={event.id} className={event.isFirst ? 'metal-feed-item is-first' : 'metal-feed-item'}>
+          <div className="metal-feed-topline">
+            <span className="metal-feed-team">{event.team}</span>
+            <span className="metal-feed-time">{event.time}</span>
+          </div>
+          <div className="metal-feed-challenge">{event.challenge}</div>
+          <div className="metal-feed-bottomline">
+            <span>{event.category}</span>
+            <strong>{event.points} pts</strong>
+          </div>
+        </article>
+      ))}
+
+      {events.length === 0 && (
+        <div className="metal-empty-state">
+          <span>Waiting for accepted submissions</span>
+          <strong>暂无实时解题记录</strong>
+        </div>
+      )}
+    </div>
+  </section>
+)
+
+const CTFScreenPage: FC<CTFScreenPageProps> = ({ gameId }) => {
+  const data = useCTFScreenData(gameId)
+  const [currentTime, setCurrentTime] = useState(() => new Date())
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const countdown = useMemo(
+    () => getCountdownLabel(currentTime.getTime(), data.startTime, data.endTime),
+    [currentTime, data.endTime, data.startTime]
+  )
+  const topTeams = useMemo(() => data.teams.slice(0, Math.min(Math.max(data.teams.length, 1), 48)), [data.teams])
+  const leadingTeam = data.teams[0]
 
   return (
-    <div className="ctf-screen scanline-overlay relative w-screen h-screen overflow-hidden flex flex-col"
-      style={{ fontFamily: "'Courier New', monospace" }}>
+    <main className="metal-screen">
+      <div className="metal-screen-ambient" />
+      <div className="metal-screen-grid" />
 
-      {/* Ambient background effects */}
-      <BinaryRain />
-      <HexParticles />
-
-      {/* Gradient overlays for depth */}
-      <div className="absolute inset-0 pointer-events-none"
-        style={{
-          background: "radial-gradient(ellipse at 20% 50%, rgba(0,212,255,0.04) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(179,71,255,0.04) 0%, transparent 50%), radial-gradient(ellipse at 50% 100%, rgba(0,255,136,0.03) 0%, transparent 40%)"
-        }} />
-
-      {/* Header */}
-      <CTFHeader
-        eventName={data.eventName}
-        totalTeams={data.totalTeams}
-        totalSolves={data.totalSolves}
-        totalChallenges={data.totalChallenges}
-        startTime={data.startTime}
-        endTime={data.endTime}
-      />
-
-      {/* Main Content */}
-      <div className="flex-1 flex gap-2 p-2 min-h-0 overflow-hidden">
-
-        {/* LEFT: Leaderboard */}
-        <div className="flex flex-col" style={{ width: "22%" }}>
-          <Leaderboard teams={data.teams} />
-        </div>
-
-        {/* CENTER */}
-        <div className="flex-1 flex flex-col gap-2 min-w-0">
-          {/* Score chart - top */}
-          <div style={{ flex: "1.2" }}>
-            <ScoreChart data={data.scoreHistory} teams={data.top5Teams} />
+      <header className="metal-screen-header">
+        <div className="metal-brand-cluster">
+          <div className="metal-brand-orb">
+            <img src={yinyuIcon} alt="" draggable="false" />
           </div>
-          {/* Category stats + heatmap - bottom */}
-          <div className="flex gap-2" style={{ flex: "0.8" }}>
-            <div style={{ flex: "1.1" }}>
-              <CategoryStats categories={data.categories} />
-            </div>
-            <div style={{ flex: "1" }}>
-              <HeatmapPanel
-                data={data.heatmapData}
-                totalBlood={data.totalBlood}
-                avgScore={data.avgScore}
-                activeTeams={data.activeTeams}
-              />
-            </div>
+          <div>
+            <div className="metal-brand-kicker">YINYU SECURITY RANGE</div>
+            <h1>{data.eventName}</h1>
+            <p>安全综合演练态势大屏</p>
           </div>
         </div>
 
-        {/* RIGHT: Recent Solves */}
-        <div className="flex flex-col" style={{ width: "19%" }}>
-          <RecentSolves events={data.solveEvents} />
+        <div className="metal-screen-stats">
+          <div className="metal-stat">
+            <span>队伍</span>
+            <strong>{data.totalTeams}</strong>
+          </div>
+          <div className="metal-stat">
+            <span>解题</span>
+            <strong>{data.totalSolves}</strong>
+          </div>
+          <div className="metal-stat">
+            <span>题目</span>
+            <strong>{data.totalChallenges}</strong>
+          </div>
+          <div className="metal-stat is-wide">
+            <span>{countdown.label}</span>
+            <strong>{countdown.value}</strong>
+          </div>
         </div>
-      </div>
 
-      {/* Bottom status bar */}
-      <div className="flex items-center justify-between px-4 py-1.5"
-        style={{
-          borderTop: "1px solid rgba(0,212,255,0.15)",
-          background: "rgba(0,10,20,0.9)"
-        }}>
-        <div className="flex items-center gap-6">
-          {[
-            { label: "系统状态", value: "NORMAL", color: "#00ff88" },
-            { label: "当前时间", value: currentTimeText, color: "#00d4ff" },
-          ].map(({ label, value, color }) => (
-            <div key={label} className="flex items-center gap-1.5 text-xs">
-              <div className="w-1.5 h-1.5 rounded-full" style={{ background: color, boxShadow: `0 0 6px ${color}` }} />
-              <span style={{ color: "rgba(255,255,255,0.3)" }}>{label}:</span>
-              <span style={{ color, fontFamily: "'Courier New', monospace" }}>{value}</span>
+        <div className="metal-clock-block">
+          <span>{formatDate(currentTime)}</span>
+          <strong>{formatClock(currentTime)}</strong>
+        </div>
+      </header>
+
+      <section className="metal-screen-stage">
+        <LeaderboardPanel teams={data.teams} />
+
+        <section className="metal-city-stage">
+          <div className="metal-city-hud">
+            <div>
+              <span className="metal-kicker">Dynamic Score City</span>
+              <h2>分数金属城市</h2>
             </div>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-1 text-xs" style={{ color: "rgba(0,212,255,0.3)", fontFamily: "'Courier New', monospace" }}>
-          <span>DEVELOPED BY</span>
-          <span>SCU</span>
-          <span style={{ color: "#00d4ff" }}>CYBERRANGE</span>
-        </div>
-
-        <div className="flex items-center gap-4 text-xs" style={{ fontFamily: "'Courier New', monospace" }}>
-          {[
-            { label: "STATUS", value: data.statusInfo.status },
-          ].map(({ label, value }) => (
-            <div key={label} className="flex items-center gap-1">
-              <span style={{ color: "rgba(255,255,255,0.2)" }}>{label}:</span>
-              <span style={{ color: "rgba(0,212,255,0.6)" }}>{value}</span>
+            <div className="metal-city-leader">
+              <span>当前领先</span>
+              <strong>{leadingTeam?.name ?? '--'}</strong>
             </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
+          </div>
 
-export default CTFScreenPage;
+          <MetalScoreCity teams={topTeams} />
+
+          {topTeams.length === 0 && (
+            <div className="metal-city-empty">
+              <span>Score data stream is not ready</span>
+              <strong>等待记分榜数据接入</strong>
+            </div>
+          )}
+
+          <div className="metal-city-footer">
+            <span>{formatRange(data.startTime, data.endTime)}</span>
+            <span>{getStatusText(data.statusInfo.status)}</span>
+          </div>
+        </section>
+
+        <SolveFeedPanel events={data.solveEvents} />
+      </section>
+
+      <footer className="metal-screen-footer">
+        <span>系统状态：{getStatusText(data.statusInfo.status)}</span>
+        <span>TOP 3 金色柱体 / 其他队伍银色柱体 / 分数变更实时缓动</span>
+        <span>SCU Cyber Range</span>
+      </footer>
+    </main>
+  )
+}
+
+export default CTFScreenPage

@@ -445,8 +445,9 @@
    the YINYU low-noise panel language so the live background does not fight data. */
 .yy-score-timeline-panel {
   width: 100%;
-  min-height: 460px;
-  padding: clamp(0.9rem, 1.4vw, 1.18rem);
+  min-height: 540px;
+  padding: clamp(0.9rem, 1.4vw, 1.18rem) clamp(0.9rem, 1.4vw, 1.18rem) clamp(1.2rem, 1.8vw, 1.55rem);
+  overflow: visible;
   border-color: rgba(107, 238, 177, 0.17);
   background:
     radial-gradient(ellipse at 12% 6%, rgba(107, 238, 177, 0.12), transparent 34%),
@@ -456,6 +457,10 @@
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.028),
     0 1.25rem 3.2rem rgba(0, 0, 0, 0.32);
+}
+
+.yy-score-timeline-panel > div:not(.hex-field):not(.yy-hex-field) {
+  min-height: 500px;
 }
 
 .scoreboard-draft.yy-table-shell,
@@ -1158,8 +1163,8 @@
   text-align: left;
   margin: 0;
   color: var(--yy-text);
-  font-size: clamp(2.5rem, 4.4vw, 4.6rem);
-  line-height: 0.98;
+  font-size: clamp(2.12rem, 3.45vw, 3.78rem);
+  line-height: 1;
 }
 
 .yy-team-hero-copy p {
@@ -1452,6 +1457,83 @@
   width: min(100%, 28rem);
 }
 
+.yy-admin-nodes-panel.admin-panel.panel-card {
+  min-height: 0;
+  padding: clamp(0.88rem, 1.35vw, 1.18rem) !important;
+  overflow: visible;
+  border-color: rgba(107, 238, 177, 0.18);
+  background:
+    radial-gradient(ellipse at 12% 0%, rgba(107, 238, 177, 0.12), transparent 36rem),
+    radial-gradient(ellipse at 88% 100%, rgba(107, 238, 177, 0.08), transparent 32rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.014)),
+    rgba(7, 10, 10, 0.86);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.026),
+    0 1rem 2.8rem rgba(0, 0, 0, 0.28);
+}
+
+.yy-admin-nodes-panel > .hex-field,
+.yy-admin-nodes-panel > .yy-hex-field {
+  opacity: 0.48;
+}
+
+.yy-admin-nodes-panel > *:not(.hex-field):not(.yy-hex-field) {
+  position: relative;
+  z-index: 1;
+}
+
+.yy-admin-nodes-filter {
+  min-height: 0;
+  padding: clamp(0.18rem, 0.5vw, 0.34rem) clamp(0.18rem, 0.5vw, 0.34rem) clamp(0.7rem, 1vw, 0.92rem);
+  border-bottom: 1px solid rgba(107, 238, 177, 0.12);
+}
+
+.yy-admin-nodes-filter .mantine-InputWrapper-root {
+  min-width: min(100%, 20rem);
+}
+
+.yy-admin-node-grid {
+  width: 100%;
+  align-items: stretch;
+  gap: clamp(0.72rem, 1.18vw, 1rem);
+}
+
+.yy-admin-node-grid > * {
+  min-width: 0;
+}
+
+.yy-admin-node-grid .yy-panel-card,
+.yy-admin-node-grid .panel-card {
+  height: 100%;
+  background:
+    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.1), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.056), rgba(255, 255, 255, 0.014)),
+    rgba(8, 11, 11, 0.78);
+}
+
+.yy-admin-nodes-state {
+  min-height: clamp(9rem, 20vh, 14rem);
+  display: grid;
+  place-items: center;
+  padding: clamp(1rem, 2vw, 1.45rem);
+  border: 1px solid rgba(107, 238, 177, 0.1);
+  border-radius: var(--yy-radius);
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(107, 238, 177, 0.08), transparent 52%),
+    rgba(255, 255, 255, 0.018);
+}
+
+@media (max-width: 48em) {
+  .yy-admin-nodes-filter {
+    align-items: stretch !important;
+  }
+
+  .yy-admin-nodes-filter .mantine-InputWrapper-root,
+  .yy-admin-nodes-filter .mantine-Select-root {
+    width: 100% !important;
+  }
+}
+
 .yy-team-empty-state {
   min-height: clamp(18rem, 42vh, 28rem);
 }
@@ -1491,7 +1573,7 @@
 .yy-about-copy {
   gap: clamp(0.72rem, 1.35vw, 1.08rem);
   min-height: auto;
-  transform: translateX(clamp(-0.55rem, -0.7vw, -0.12rem));
+  transform: translateX(clamp(-0.2rem, -0.25vw, 0rem));
 }
 
 .yy-about-heading {
@@ -1527,6 +1609,7 @@
   width: calc(var(--about-hex-width) * 3);
   margin-top: clamp(0.12rem, 0.45vh, 0.36rem);
   padding: 0;
+  transform: translateX(clamp(1.15rem, 2.1vw, 2.65rem));
 }
 
 .yy-about-hive-row {
@@ -1610,6 +1693,7 @@
     max-width: 100%;
     overflow-x: auto;
     padding-bottom: 0.7rem;
+    transform: none;
   }
 }
 
@@ -2246,7 +2330,56 @@
 
 .yy-game-countdown.route-loader {
   width: 100%;
-  min-width: min(26rem, 100%);
+  min-width: min(27rem, 100%);
+  display: grid !important;
+  grid-template-columns: max-content minmax(12rem, 1fr);
+  align-items: center;
+  gap: clamp(0.72rem, 1.35vw, 1rem);
+  padding: 0.55rem 0.72rem !important;
+  overflow: hidden;
+}
+
+.yy-game-countdown.route-loader .yy-hex-field,
+.yy-game-countdown.route-loader .heartbeat-icon,
+.yy-game-countdown.route-loader .status-pill {
+  display: none !important;
+}
+
+.yy-game-countdown-copy,
+.yy-game-countdown-progress {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.yy-game-countdown-copy {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.yy-game-countdown-copy span,
+.yy-game-countdown-progress span {
+  display: block;
+  color: var(--yy-muted-readable);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.yy-game-countdown-copy strong {
+  color: var(--yy-text);
+  font-family: var(--font-mono);
+  font-size: clamp(0.92rem, 1.28vw, 1.22rem);
+  font-weight: 920;
+  line-height: 1.05;
+  white-space: nowrap;
+  text-shadow: 0 0 1rem rgba(107, 238, 177, 0.12);
+}
+
+.yy-game-countdown-progress {
+  display: grid;
+  gap: 0.32rem;
 }
 
 .yy-game-tab-panes.mode-switch {
@@ -2998,5 +3131,185 @@
   .yy-challenge-side {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  }
+}
+
+/* Animation performance pass:
+   keep the YINYU signal language, but move high-density list animations away from
+   repaint-heavy background-position/filter loops. The WebGL background stays smooth
+   because it centralizes motion in one GPU layer; these rules give DOM cards the
+   same discipline: static texture + small transform/opacity overlays. */
+.yy-home-page,
+.yy-games-page {
+  --yy-card-motion-duration: 180ms;
+}
+
+.yy-home-page .panel-card,
+.yy-games-page .panel-card,
+.yy-home-event-list > *,
+.yy-home-notice-list > *,
+.yy-game-event-list > * {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.yy-home-page .panel-card::before,
+.yy-home-page .panel-card::after,
+.yy-games-page .panel-card::before,
+.yy-games-page .panel-card::after,
+.yy-home-page .game-index-card::before,
+.yy-home-page .game-index-card::after,
+.yy-games-page .game-index-card::before,
+.yy-games-page .game-index-card::after {
+  animation: none !important;
+  filter: none !important;
+  will-change: opacity, transform;
+}
+
+.yy-home-page .panel-card::before,
+.yy-games-page .panel-card::before {
+  background:
+    radial-gradient(ellipse at 16% 12%, rgba(107, 238, 177, 0.14), transparent 34%),
+    radial-gradient(ellipse at 86% 82%, rgba(245, 245, 247, 0.06), transparent 38%),
+    var(--yy-hex-flow);
+  background-size:
+    auto,
+    auto,
+    1.1rem 0.95rem;
+  background-position:
+    0 0,
+    100% 100%,
+    0 0;
+  opacity: 0.22;
+  transform: translate3d(0, 0, 0);
+  transition:
+    opacity var(--yy-card-motion-duration) ease,
+    transform 260ms ease;
+}
+
+.yy-home-page .panel-card::after,
+.yy-games-page .panel-card::after {
+  inset: 1px;
+  background:
+    linear-gradient(112deg, transparent 12%, rgba(107, 238, 177, 0.18) 42%, transparent 70%),
+    radial-gradient(ellipse at 82% 0%, rgba(107, 238, 177, 0.1), transparent 40%);
+  opacity: 0;
+  transform: translate3d(-18%, 0, 0);
+  transition:
+    opacity var(--yy-card-motion-duration) ease,
+    transform 260ms ease;
+}
+
+.yy-home-page .panel-card:hover::before,
+.yy-home-page .panel-card:focus-within::before,
+.yy-games-page .panel-card:hover::before,
+.yy-games-page .panel-card:focus-within::before {
+  opacity: 0.38;
+  transform: translate3d(0.32rem, 0, 0);
+}
+
+.yy-home-page .panel-card:hover::after,
+.yy-home-page .panel-card:focus-within::after,
+.yy-games-page .panel-card:hover::after,
+.yy-games-page .panel-card:focus-within::after {
+  opacity: 0.52;
+  transform: translate3d(10%, 0, 0);
+}
+
+.yy-home-page .panel-card:hover > .yy-hex-field,
+.yy-home-page .panel-card:focus-within > .yy-hex-field,
+.yy-games-page .panel-card:hover > .yy-hex-field,
+.yy-games-page .panel-card:focus-within > .yy-hex-field {
+  animation: yy-composite-field-pulse 2.4s ease-in-out infinite;
+}
+
+.yy-home-page .status-pill,
+.yy-games-page .status-pill,
+.yy-game-tab-shell .status-pill,
+.challenge-drawer-draft .status-pill {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.yy-home-page .status-pill::before,
+.yy-games-page .status-pill::before,
+.yy-game-tab-shell .status-pill::before,
+.challenge-drawer-draft .status-pill::before,
+.yy-home-page .status-pill::after,
+.yy-games-page .status-pill::after,
+.yy-game-tab-shell .status-pill::after,
+.challenge-drawer-draft .status-pill::after {
+  animation: none !important;
+  filter: none !important;
+  will-change: opacity, transform;
+}
+
+.yy-home-page .state-running::before,
+.yy-games-page .state-running::before,
+.yy-game-tab-shell .state-running::before,
+.challenge-drawer-draft .state-running::before {
+  opacity: 0.74;
+  transform-origin: center;
+  animation: yy-composite-pill-breathe 1.85s ease-in-out infinite !important;
+}
+
+.yy-home-page .state-running .status-tail,
+.yy-games-page .state-running .status-tail,
+.yy-game-tab-shell .state-running .status-tail,
+.challenge-drawer-draft .state-running .status-tail {
+  animation: yy-composite-tail-pulse 1.15s steps(4) infinite !important;
+}
+
+.yy-home-page .state-running .status-signal i,
+.yy-games-page .state-running .status-signal i,
+.yy-game-tab-shell .state-running .status-signal i,
+.challenge-drawer-draft .state-running .status-signal i {
+  transform-origin: bottom;
+  animation: yy-composite-bar-pulse 1.45s ease-in-out infinite !important;
+}
+
+.yy-home-page .state-open .status-signal i,
+.yy-games-page .state-open .status-signal i {
+  animation: yy-composite-open-pulse 2.4s ease-in-out infinite !important;
+}
+
+.yy-home-page .heartbeat-line,
+.yy-games-page .heartbeat-line,
+.yy-game-tab-shell .heartbeat-line {
+  will-change: stroke-dashoffset;
+}
+
+.yy-home-event-list .game-index-card.game-event-row.panel-card,
+.yy-game-event-list .game-index-card.game-event-row.panel-card {
+  backdrop-filter: none !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.026),
+    0 0.9rem 2.4rem rgba(0, 0, 0, 0.26);
+}
+
+.yy-home-event-list .game-index-card.game-event-row.panel-card:hover,
+.yy-game-event-list .game-index-card.game-event-row.panel-card:hover {
+  box-shadow:
+    inset 0 0 0 1px rgba(107, 238, 177, 0.14),
+    0 1.1rem 2.8rem rgba(0, 0, 0, 0.32),
+    0 0 1.6rem rgba(107, 238, 177, 0.1);
+}
+
+.yy-home-event-list .game-index-card.game-event-row [class*='poster'],
+.yy-game-event-list .game-index-card.game-event-row [class*='poster'],
+.yy-home-notice-list .post-preview,
+.yy-game-event-list .game-index-card.game-event-row {
+  contain: layout paint style;
+}
+
+@keyframes yy-composite-field-pulse {
+  0%,
+  100% {
+    opacity: 0.58;
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    opacity: 0.78;
+    transform: translate3d(0.18rem, -0.08rem, 0);
   }
 }

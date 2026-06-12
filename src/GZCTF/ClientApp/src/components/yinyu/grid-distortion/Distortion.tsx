@@ -86,6 +86,9 @@ export default function Distortion({
       camera.top = 0.5
       camera.bottom = -0.5
       camera.updateProjectionMatrix()
+      if (uniforms.uTexture.value) {
+        renderer.render(scene, camera)
+      }
     }
 
     const textureLoader = new THREE.TextureLoader()
@@ -95,14 +98,25 @@ export default function Distortion({
       texture.colorSpace = THREE.SRGBColorSpace
       uniforms.uTexture.value = texture
       resize()
+      renderer.render(scene, camera)
+      requestAnimationFrame(() => {
+        resize()
+        renderer.render(scene, camera)
+      })
     })
 
     const mouseState = { x: 0, y: 0, prevX: 0, prevY: 0, vX: 0, vY: 0 }
     let settleFrames = 0
-    let idleFrame = 0
     let pointerReady = false
-    let visible = true
+    let inView = true
     const clampOffset = (value: number) => Math.max(-7.5, Math.min(7.5, value))
+    let animationId = 0
+
+    const scheduleRender = () => {
+      if (!animationId && inView) {
+        animationId = requestAnimationFrame(animate)
+      }
+    }
 
     const move = (event: PointerEvent) => {
       const rect = container.getBoundingClientRect()
@@ -122,6 +136,7 @@ export default function Distortion({
       mouseState.prevX = x
       mouseState.prevY = y
       settleFrames = 90
+      scheduleRender()
     }
 
     const enter = (event: PointerEvent) => {
@@ -136,6 +151,7 @@ export default function Distortion({
       mouseState.vX = 0.018
       mouseState.vY = -0.012
       settleFrames = 46
+      scheduleRender()
     }
 
     const leave = () => {
@@ -143,30 +159,27 @@ export default function Distortion({
       mouseState.vY = 0
       pointerReady = false
       settleFrames = 45
+      scheduleRender()
     }
 
-    const onVisibility = () => {
-      visible = !document.hidden
-    }
+    const intersectionObserver = new IntersectionObserver(([entry]) => {
+      inView = Boolean(entry?.isIntersecting)
+      if (inView) scheduleRender()
+    })
 
     const resizeObserver = new ResizeObserver(resize)
     resizeObserver.observe(container)
+    intersectionObserver.observe(container)
     container.addEventListener('pointerenter', enter)
     container.addEventListener('pointermove', move)
     container.addEventListener('pointerleave', leave)
-    document.addEventListener('visibilitychange', onVisibility)
     resize()
 
-    let animationId = 0
-    const animate = () => {
-      animationId = requestAnimationFrame(animate)
-      if (!visible) return
-
+    function animate() {
+      animationId = 0
+      if (!inView) return
       const isSettling = settleFrames > 0
-      if (!isSettling) {
-        idleFrame = (idleFrame + 1) % 6
-        if (idleFrame !== 0) return
-      }
+      if (!isSettling) return
 
       const imageData = dataTexture.image.data as Float32Array
       for (let i = 0; i < grid * grid; i += 1) {
@@ -195,17 +208,21 @@ export default function Distortion({
 
       dataTexture.needsUpdate = true
       renderer.render(scene, camera)
+
+      if (settleFrames > 0) {
+        animationId = requestAnimationFrame(animate)
+      }
     }
 
-    animate()
+    renderer.render(scene, camera)
 
     return () => {
       cancelAnimationFrame(animationId)
       resizeObserver.disconnect()
+      intersectionObserver.disconnect()
       container.removeEventListener('pointerenter', enter)
       container.removeEventListener('pointermove', move)
       container.removeEventListener('pointerleave', leave)
-      document.removeEventListener('visibilitychange', onVisibility)
       renderer.dispose()
       geometry.dispose()
       material.dispose()

@@ -110,21 +110,7 @@ export function YinyuStatusPill({
 
 export function YinyuHexField({ cells = 42 }: { cells?: number }) {
   return (
-    <span className="hex-field yy-hex-field" aria-hidden="true">
-      {Array.from({ length: cells }).map((_, index) => (
-        <i
-          key={index}
-          style={
-            {
-              '--hex-delay': `${(index % 14) * 0.071}s`,
-              '--hex-row': `${Math.floor(index / 14)}`,
-              '--hex-x': `${(index % 14) * 7.5 + (Math.floor(index / 14) % 2) * 3.75}%`,
-              '--hex-y': `${Math.floor(index / 14) * 18}%`,
-            } as CSSProperties
-          }
-        />
-      ))}
-    </span>
+    <span className="hex-field yy-hex-field" style={{ '--yy-hex-density': cells } as CSSProperties} aria-hidden="true" />
   )
 }
 

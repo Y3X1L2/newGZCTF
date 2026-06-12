@@ -17,7 +17,7 @@ import { useLocation, useNavigate, useParams } from 'react-router'
 import { GameProgress } from '@Components/GameProgress'
 import { IconTabs } from '@Components/IconTabs'
 import { RequireRole } from '@Components/WithRole'
-import { YinyuHeartbeatIcon, YinyuHexField, YinyuRouteTransition, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
+import { YinyuRouteTransition } from '@Components/yinyu/YinyuUI'
 import { getGameStatus, useGame } from '@Hooks/useGame'
 import { usePageTitle } from '@Hooks/usePageTitle'
 import { useUserRole } from '@Hooks/useUser'
@@ -40,20 +40,18 @@ const GameCountdown: FC<{ game?: DetailedGameInfoModel }> = ({ game }) => {
 
   return (
     <div className="route-loader yy-game-countdown">
-      <YinyuHexField cells={18} />
-      <YinyuStatusPill
-        tone={countdown.asSeconds() > 0 ? 'success' : 'neutral'}
-        state={countdown.asSeconds() > 0 ? 'running' : 'idle'}
-        icon={YinyuHeartbeatIcon}
-      >
-        {countdown.asHours() > 999
-          ? t('game.content.game_lasts_long')
-          : countdown.asSeconds() > 0
-            ? `${Math.floor(countdown.asHours())} : ${countdown.format('mm : ss')}`
-            : t('game.content.game_ended')}
-      </YinyuStatusPill>
-      <div>
-        <strong>回合时间</strong>
+      <div className="yy-game-countdown-copy">
+        <span>剩余时间</span>
+        <strong>
+          {countdown.asHours() > 999
+            ? t('game.content.game_lasts_long')
+            : countdown.asSeconds() > 0
+              ? `${Math.floor(countdown.asHours())}:${countdown.format('mm:ss')}`
+              : t('game.content.game_ended')}
+        </strong>
+      </div>
+      <div className="yy-game-countdown-progress">
+        <span>回合进度</span>
         <GameProgress percentage={progress} py={0} />
       </div>
     </div>

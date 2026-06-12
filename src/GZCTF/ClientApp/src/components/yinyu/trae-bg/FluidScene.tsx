@@ -23,13 +23,6 @@ function useWebgl2Supported() {
 
 export default function FluidScene({ className, style }: FluidSceneProps) {
   const webgl2Supported = useWebgl2Supported()
-  const [hidden, setHidden] = useState(() => typeof document !== 'undefined' && document.hidden)
-
-  useEffect(() => {
-    const onVisibility = () => setHidden(document.hidden)
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => document.removeEventListener('visibilitychange', onVisibility)
-  }, [])
 
   const fluidParams = useMemo(
     () => ({
@@ -73,43 +66,41 @@ export default function FluidScene({ className, style }: FluidSceneProps) {
           }) 30%, rgba(5,5,5,${1 - fluidParams.opacity}) 60%, rgba(5,5,5,1) 100%)`,
         }}
       />
-      {!hidden && (
-        <Canvas
-          style={{
-            width: '100%',
-            height: '100%',
-            background: 'black',
-            position: 'absolute',
-            inset: 0,
-            zIndex: 0,
-          }}
-          dpr={[0.75, 1.1]}
-          performance={{ min: 0.35 }}
-          resize={{ scroll: false }}
-          frameloop="always"
-          gl={{
-            antialias: false,
-            powerPreference: 'high-performance',
-            depth: false,
-            stencil: false,
-          }}
-        >
-          <FluidMesh {...fluidParams} />
-          <Suspense fallback={null}>
-            <EffectComposer multisampling={0}>
-              <BrightnessContrast brightness={-0.2} />
-              <Pixelation
-                {...pixelationParams}
-                greenColor={fluidParams.color1}
-                mouseRadius={fluidParams.mouseRadius}
-                mouseStrength={fluidParams.mouseStrength}
-                color1={fluidParams.color1}
-                color2={fluidParams.color2}
-              />
-            </EffectComposer>
-          </Suspense>
-        </Canvas>
-      )}
+      <Canvas
+        style={{
+          width: '100%',
+          height: '100%',
+          background: 'black',
+          position: 'absolute',
+          inset: 0,
+          zIndex: 0,
+        }}
+        dpr={[0.75, 1.1]}
+        performance={{ min: 0.35 }}
+        resize={{ scroll: false }}
+        frameloop="always"
+        gl={{
+          antialias: false,
+          powerPreference: 'high-performance',
+          depth: false,
+          stencil: false,
+        }}
+      >
+        <FluidMesh {...fluidParams} />
+        <Suspense fallback={null}>
+          <EffectComposer multisampling={0}>
+            <BrightnessContrast brightness={-0.2} />
+            <Pixelation
+              {...pixelationParams}
+              greenColor={fluidParams.color1}
+              mouseRadius={fluidParams.mouseRadius}
+              mouseStrength={fluidParams.mouseStrength}
+              color1={fluidParams.color1}
+              color2={fluidParams.color2}
+            />
+          </EffectComposer>
+        </Suspense>
+      </Canvas>
     </div>
   )
 }

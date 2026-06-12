@@ -5,7 +5,7 @@ import { FC, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router'
 import { EchartsContainer } from '@Components/charts/EchartsContainer'
-import { YinyuHexField } from '@Components/yinyu/YinyuUI'
+import { YinyuHexField, YinyuRouteLoader } from '@Components/yinyu/YinyuUI'
 import { normalizeLanguage, useLanguage } from '@Utils/I18n'
 import { getGameStatus, useGame, useGameScoreboard } from '@Hooks/useGame'
 import { TimeLine, TopTimeLine } from '@Api'
@@ -22,6 +22,9 @@ export const ScoreTimeLine: FC<TimeLineProps> = ({ divisionId }) => {
   const { scoreboard } = useGameScoreboard(numId)
 
   const { game } = useGame(numId)
+  const { t } = useTranslation()
+  const { language } = useLanguage()
+  const locale = normalizeLanguage(language)
 
   const { startTime, endTime, progress, finished } = getGameStatus(game)
 
@@ -34,10 +37,6 @@ export const ScoreTimeLine: FC<TimeLineProps> = ({ divisionId }) => {
 
   const drawStart = longGame && !finished ? weekStart : 0
   const drawEnd = longGame && !finished ? weekEnd : 100
-
-  const { t } = useTranslation()
-  const { language } = useLanguage()
-  const locale = normalizeLanguage(language)
 
   const divisionTimelineMap = useMemo(() => {
     const map = new Map<number, TopTimeLine[]>()
@@ -139,7 +138,7 @@ export const ScoreTimeLine: FC<TimeLineProps> = ({ divisionId }) => {
     const backgroundColor = 'rgba(8, 12, 12, 0.94)'
 
     return {
-      animation: true,
+      animation: false,
       backgroundColor: 'transparent',
       color: ['#6beeb1', '#d6f75f', '#8ad7ff', '#f5f5f7', '#e2b35e', '#8f7aff', '#ff7a90'],
       toolbox: {
@@ -155,7 +154,9 @@ export const ScoreTimeLine: FC<TimeLineProps> = ({ divisionId }) => {
           },
         },
         feature: {
-          dataZoom: {},
+          dataZoom: {
+            yAxisIndex: false,
+          },
           restore: {},
           saveAsImage: {},
         },
@@ -217,6 +218,8 @@ export const ScoreTimeLine: FC<TimeLineProps> = ({ divisionId }) => {
       },
       tooltip: {
         trigger: 'axis',
+        confine: true,
+        appendToBody: false,
         textStyle: {
           fontSize: 12,
           color: labelColor,
@@ -228,7 +231,15 @@ export const ScoreTimeLine: FC<TimeLineProps> = ({ divisionId }) => {
       },
       legend: {
         orient: 'horizontal',
-        top: 420,
+        type: 'scroll',
+        left: 'center',
+        right: 36,
+        bottom: 0,
+        pageIconColor: '#6beeb1',
+        pageIconInactiveColor: 'rgba(244, 245, 245, 0.22)',
+        pageTextStyle: {
+          color: labelColor,
+        },
         textStyle: {
           fontSize: 12,
           color: labelColor,
@@ -237,39 +248,33 @@ export const ScoreTimeLine: FC<TimeLineProps> = ({ divisionId }) => {
       grid: {
         top: 50,
         left: 70,
-        right: 40,
-        bottom: 110,
+        right: 64,
+        bottom: 124,
       },
       dataZoom: [
-        {
-          type: 'inside',
-          start: drawStart,
-          end: drawEnd,
-          xAxisIndex: 0,
-          filterMode: 'none',
-        },
         {
           type: 'slider',
           start: drawStart,
           end: drawEnd,
           xAxisIndex: 0,
-          showDetail: false,
-          bottom: 60,
-          height: 20,
+          showDetail: true,
+          bottom: 48,
+          height: 28,
+          brushSelect: false,
           borderColor: 'rgba(107, 238, 177, 0.16)',
           fillerColor: 'rgba(107, 238, 177, 0.18)',
           backgroundColor: 'rgba(255, 255, 255, 0.045)',
+          textStyle: {
+            color: labelColor,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+          },
+          labelFormatter: (value: number | string) => dayjs(value).format('MM/DD HH:mm'),
+          handleSize: '92%',
           dataBackground: {
             lineStyle: { color: 'rgba(107, 238, 177, 0.32)' },
             areaStyle: { color: 'rgba(107, 238, 177, 0.08)' },
           },
-        },
-        {
-          type: 'inside',
-          start: 0,
-          end: 100,
-          yAxisIndex: 0,
-          filterMode: 'none',
         },
         {
           type: 'slider',
@@ -279,6 +284,7 @@ export const ScoreTimeLine: FC<TimeLineProps> = ({ divisionId }) => {
           showDetail: false,
           right: 10,
           width: 20,
+          brushSelect: false,
           borderColor: 'rgba(107, 238, 177, 0.16)',
           fillerColor: 'rgba(107, 238, 177, 0.18)',
           backgroundColor: 'rgba(255, 255, 255, 0.045)',
@@ -286,6 +292,15 @@ export const ScoreTimeLine: FC<TimeLineProps> = ({ divisionId }) => {
       ],
     } satisfies EChartsOption
   }, [t, game?.start, game?.end, drawStart, drawEnd])
+
+  if (!game) {
+    return (
+      <section className="panel-card yy-score-timeline-panel yy-score-timeline-loading">
+        <YinyuHexField cells={46} />
+        <YinyuRouteLoader title={t('game.label.scoreboard')} description="Loading timeline coordinates" />
+      </section>
+    )
+  }
 
   return (
     <section className="panel-card yy-score-timeline-panel">
@@ -301,7 +316,7 @@ export const ScoreTimeLine: FC<TimeLineProps> = ({ divisionId }) => {
         }}
         style={{
           width: '100%',
-          height: '430px',
+          height: '500px',
           display: 'flex',
         }}
       />

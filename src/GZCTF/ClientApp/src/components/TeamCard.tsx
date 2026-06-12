@@ -1,5 +1,5 @@
 import { Avatar, Card, Stack, Title } from '@mantine/core'
-import { FC, KeyboardEvent } from 'react'
+import { FC, KeyboardEvent, memo } from 'react'
 import { YinyuHexField } from '@Components/yinyu/YinyuUI'
 import { TeamInfoModel } from '@Api'
 import teamCardClasses from '@Styles/TeamCard.module.css'
@@ -12,7 +12,7 @@ interface TeamCardProps {
 
 const actionLabel = '\u67e5\u770b\u961f\u4f0d\u8be6\u60c5'
 
-export const TeamCard: FC<TeamCardProps> = (props) => {
+export const TeamCard: FC<TeamCardProps> = memo((props) => {
   const { team, onEdit } = props
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -49,4 +49,4 @@ export const TeamCard: FC<TeamCardProps> = (props) => {
       </Stack>
     </Card>
   )
-}
+})

@@ -1,5 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { FluidShader } from './shaders/fluidShader'
 
@@ -28,8 +28,9 @@ export default function FluidMesh({
 }: FluidMeshProps) {
   const materialRef = useRef<THREE.ShaderMaterial>(null)
   const { size, viewport } = useThree()
-  const [mousePos, setMousePos] = useState(new THREE.Vector2(0.5, 0.5))
+  const mousePos = useRef(new THREE.Vector2(0.5, 0.5))
   const smoothMouse = useRef(new THREE.Vector2(0.5, 0.5))
+  const lastResolution = useRef({ width: size.width, height: size.height })
 
   const uniforms = useMemo(
     () => ({
@@ -50,7 +51,7 @@ export default function FluidMesh({
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      setMousePos(new THREE.Vector2(e.clientX / window.innerWidth, 1 - e.clientY / window.innerHeight))
+      mousePos.current.set(e.clientX / window.innerWidth, 1 - e.clientY / window.innerHeight)
     }
     window.addEventListener('mousemove', handleMouseMove, { passive: true })
     return () => window.removeEventListener('mousemove', handleMouseMove)
@@ -60,11 +61,14 @@ export default function FluidMesh({
     const material = materialRef.current
     if (!material) return
 
-    material.uniforms.uResolution.value.set(size.width, size.height)
+    if (lastResolution.current.width !== size.width || lastResolution.current.height !== size.height) {
+      material.uniforms.uResolution.value.set(size.width, size.height)
+      lastResolution.current = { width: size.width, height: size.height }
+    }
     material.uniforms.uTime.value = state.clock.elapsedTime
 
-    smoothMouse.current.x += (mousePos.x - smoothMouse.current.x) * mouseEase
-    smoothMouse.current.y += (mousePos.y - smoothMouse.current.y) * mouseEase
+    smoothMouse.current.x += (mousePos.current.x - smoothMouse.current.x) * mouseEase
+    smoothMouse.current.y += (mousePos.current.y - smoothMouse.current.y) * mouseEase
     material.uniforms.uMouse.value.copy(smoothMouse.current)
   })
 

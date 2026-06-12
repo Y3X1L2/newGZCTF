@@ -2,7 +2,7 @@ import { ActionIcon, Avatar, Group, Text, Title } from '@mantine/core'
 import { mdiPencilOutline, mdiPinOffOutline, mdiPinOutline } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import dayjs from 'dayjs'
-import { FC, useState } from 'react'
+import { FC, memo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router'
 import { Markdown } from '@Components/MarkdownRenderer'
@@ -18,7 +18,7 @@ export interface PostCardProps {
   onTogglePinned?: (post: PostInfoModel, setDisabled: (value: boolean) => void) => void
 }
 
-export const PostCard: FC<PostCardProps> = ({ post, onTogglePinned }) => {
+export const PostCard: FC<PostCardProps> = memo(({ post, onTogglePinned }) => {
   const { role } = useUserRole()
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -82,4 +82,4 @@ export const PostCard: FC<PostCardProps> = ({ post, onTogglePinned }) => {
       </footer>
     </article>
   )
-}
+})

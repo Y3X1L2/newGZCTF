@@ -321,6 +321,46 @@
   gap: clamp(0.9rem, 2vw, 1.35rem);
 }
 
+.panel-card,
+.yy-panel-card,
+.yy-table-shell,
+.yy-form-section,
+.yy-modal-shell,
+.yy-drawer-body,
+.yy-confirm-panel,
+.game-index-card,
+.recent-game-card,
+.post-preview,
+.admin-panel,
+.metric-tile,
+.state-card {
+  contain: layout paint style;
+}
+
+.yy-game-event-list > *,
+.yy-team-grid > *,
+.challenge-grid > * {
+  content-visibility: auto;
+  contain-intrinsic-size: 13.5rem;
+}
+
+.yy-home-event-list > *,
+.yy-home-notice-list > * {
+  content-visibility: auto;
+  contain-intrinsic-size: 10rem;
+}
+
+.mantine-TableScrollContainer-scrollContainer,
+.mantine-ScrollArea-viewport,
+.scoreboard-draft,
+.yy-theory-page,
+.yy-theory-scoreboard,
+.yy-admin-shell .admin-main,
+.yy-game-tab-shell,
+.game-challenge-layout {
+  contain: layout paint;
+}
+
 .yy-page-loading-overlay,
 .yy-game-tab-loading {
   position: absolute;
@@ -361,6 +401,83 @@
 .status-pill::before,
 .status-pill::after {
   pointer-events: none;
+}
+
+.yy-hex-field {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  padding: 0.72rem;
+  opacity: 0;
+  mix-blend-mode: screen;
+  mask-image:
+    radial-gradient(ellipse at 14% 18%, rgba(0, 0, 0, 0.78), transparent 33%),
+    radial-gradient(ellipse at 86% 76%, rgba(0, 0, 0, 0.62), transparent 38%),
+    radial-gradient(ellipse at 58% 42%, rgba(0, 0, 0, 0.34), transparent 44%);
+  background:
+    radial-gradient(ellipse at 14% 18%, rgba(245, 245, 247, 0.08), transparent 2px),
+    radial-gradient(ellipse at 86% 76%, rgba(245, 245, 247, 0.06), transparent 2px),
+    radial-gradient(ellipse at 58% 42%, rgba(107, 238, 177, 0.08), transparent 2px),
+    linear-gradient(135deg, transparent 24%, rgba(107, 238, 177, 0.05) 25%, transparent 26% 74%, rgba(245, 245, 247, 0.03) 75%, transparent 76%);
+  background-size:
+    7.5rem 6.5rem,
+    8.2rem 7.1rem,
+    9.6rem 8.2rem,
+    18px 16px;
+  transition: opacity 220ms ease;
+  will-change: opacity, transform;
+}
+
+@keyframes yy-composite-pill-breathe {
+  0%,
+  100% {
+    opacity: 0.56;
+    transform: scaleX(0.985);
+  }
+  50% {
+    opacity: 0.86;
+    transform: scaleX(1.012);
+  }
+}
+
+@keyframes yy-composite-tail-pulse {
+  0% {
+    opacity: 0.2;
+    transform: translate3d(-0.12rem, 0, 0) scaleX(0.85);
+  }
+  50% {
+    opacity: 0.86;
+    transform: translate3d(0.16rem, 0, 0) scaleX(1.18);
+  }
+  100% {
+    opacity: 0.28;
+    transform: translate3d(0.28rem, 0, 0) scaleX(0.78);
+  }
+}
+
+@keyframes yy-composite-bar-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: translate3d(0, 0, 0) scaleY(0.72);
+  }
+  48% {
+    opacity: 0.92;
+    transform: translate3d(0, 0, 0) scaleY(1.16);
+  }
+}
+
+@keyframes yy-composite-open-pulse {
+  0%,
+  100% {
+    opacity: 0.22;
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    opacity: 0.64;
+    transform: translate3d(0, -0.05rem, 0);
+  }
 }
 
 .yy-footer {
@@ -1357,6 +1474,37 @@
   border-radius: var(--radius);
   color: var(--yy-muted-readable);
   background: rgba(255, 255, 255, 0.035);
+}
+
+.challenge-category.yy-challenge-category-token {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.18rem 0.48rem;
+  border: 1px solid color-mix(in srgb, var(--challenge-category-color, var(--yy-green)) 38%, transparent);
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--challenge-category-color, var(--yy-green)) 82%, white 18%);
+  background:
+    radial-gradient(ellipse at 18% 50%, color-mix(in srgb, var(--challenge-category-color, var(--yy-green)) 18%, transparent), transparent 56%),
+    color-mix(in srgb, var(--challenge-category-soft, rgba(107, 238, 177, 0.16)) 58%, transparent);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.035),
+    0 0 1rem color-mix(in srgb, var(--challenge-category-color, var(--yy-green)) 10%, transparent);
+  font-size: clamp(0.82rem, 0.92vw, 0.96rem);
+  line-height: 1.05;
+  text-shadow: 0 0 0.9rem color-mix(in srgb, var(--challenge-category-color, var(--yy-green)) 22%, transparent);
+}
+
+.challenge-category.yy-challenge-category-token::before {
+  content: '';
+  width: 0.42rem;
+  height: 0.42rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--challenge-category-color, var(--yy-green));
+  box-shadow: 0 0 0.8rem color-mix(in srgb, var(--challenge-category-color, var(--yy-green)) 46%, transparent);
 }
 
 .yy-profile-panel {

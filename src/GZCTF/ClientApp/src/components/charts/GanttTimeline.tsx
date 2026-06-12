@@ -94,6 +94,7 @@ export const GanttTimeLine: FC<GanttTimeLineProps> = ({ items }) => {
   }, [items, locale])
 
   const hoveredRow = timeline.rows.find((item) => item.id === hoveredId)
+  const nowLabelSide = timeline.nowPercent > 66 ? 'left' : 'right'
 
   useEffect(() => {
     const root = rootRef.current
@@ -101,39 +102,12 @@ export const GanttTimeLine: FC<GanttTimeLineProps> = ({ items }) => {
 
     const ctx = gsap.context(() => {
       const rows = gsap.utils.toArray<HTMLElement>(`.${classes.timelineRow}`)
-      const bars = gsap.utils.toArray<HTMLElement>(`.${classes.rowBar}`)
-      const nodes = gsap.utils.toArray<HTMLElement>(`.${classes.signalNode}`)
-
       gsap.from(rows, {
         opacity: 0,
         y: 18,
         duration: 0.58,
         ease: 'power3.out',
         stagger: 0.045,
-      })
-
-      gsap.from(bars, {
-        scaleX: 0.08,
-        transformOrigin: 'left center',
-        duration: 0.82,
-        ease: 'expo.out',
-        stagger: 0.04,
-      })
-
-      gsap.to(nodes, {
-        opacity: 0.92,
-        scale: 1.18,
-        duration: 1.65,
-        ease: 'sine.inOut',
-        stagger: { each: 0.12, repeat: -1, yoyo: true },
-      })
-
-      gsap.to(root, {
-        '--timeline-breathe': 1,
-        duration: 2.8,
-        repeat: -1,
-        yoyo: true,
-        ease: 'sine.inOut',
       })
     }, root)
 
@@ -152,10 +126,13 @@ export const GanttTimeLine: FC<GanttTimeLineProps> = ({ items }) => {
           '--timeline-now': `${timeline.nowPercent}%`,
           '--timeline-breathe': 0,
           '--focus-left': `${hoveredRow?.left ?? timeline.nowPercent}%`,
+          '--focus-right': `${hoveredRow?.visibleRight ?? timeline.nowPercent}%`,
           '--focus-width': `${hoveredRow?.width ?? 0}%`,
+          '--timeline-row-count': timeline.rows.length,
         } as CSSProperties
       }
       data-has-focus={hoveredRow ? true : undefined}
+      data-now-side={nowLabelSide}
     >
       <header className={classes.header}>
         <div className={classes.heading}>
@@ -189,13 +166,6 @@ export const GanttTimeLine: FC<GanttTimeLineProps> = ({ items }) => {
               <b>{tick.label}</b>
             </span>
           ))}
-          <span className={classes.focusRange}>
-            {hoveredRow ? (
-              <b>
-                {hoveredRow.fullStartLabel} - {hoveredRow.fullEndLabel}
-              </b>
-            ) : null}
-          </span>
           <span className={classes.nowAxis}>
             <i />
             <b>{timeline.now.locale(locale).format('MM/DD HH:mm')}</b>
@@ -222,6 +192,7 @@ export const GanttTimeLine: FC<GanttTimeLineProps> = ({ items }) => {
                 {
                   '--row-left': `${item.left}%`,
                   '--row-width': `${item.width}%`,
+                  '--tooltip-left': `${clamp(item.left + item.width / 2, 16, 84)}%`,
                   '--row-color': item.color || 'rgba(107, 238, 177, 0.75)',
                   '--row-index': index,
                 } as CSSProperties
@@ -240,15 +211,13 @@ export const GanttTimeLine: FC<GanttTimeLineProps> = ({ items }) => {
                 </span>
               </div>
               <div className={classes.track}>
+                <b className={classes.timeTooltip}>{item.fullStartLabel} - {item.fullEndLabel}</b>
                 <span
                   className={classes.rowBar}
                   aria-label={`${item.textTitle}: ${item.startLabel} - ${item.endLabel}`}
                   data-start-overflow={item.startsBefore || undefined}
                   data-end-overflow={item.endsAfter || undefined}
                 >
-                  <b className={classes.timeTooltip}>
-                    {item.fullStartLabel} - {item.fullEndLabel}
-                  </b>
                   <i className={classes.barLead} />
                   <i className={classes.barCore} />
                   <i className={classes.barTail} />

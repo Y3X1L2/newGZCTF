@@ -1,6 +1,6 @@
 import { Group, MantineColor, Stack, Text } from '@mantine/core'
 import cx from 'clsx'
-import { ComponentPropsWithoutRef, FC } from 'react'
+import { ComponentPropsWithoutRef, FC, memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { BrandMark } from '@Components/yinyu/BrandMark'
@@ -61,7 +61,7 @@ export function compareGamesForDisplay(a: BasicGameInfoModel, b: BasicGameInfoMo
   return aStatus.startTime.valueOf() - bStatus.startTime.valueOf()
 }
 
-export const GameFlagGlyph: FC<{ tone?: YinyuStatusTone; poster?: string | null }> = ({ tone = 'neutral', poster }) => {
+export const GameFlagGlyph: FC<{ tone?: YinyuStatusTone; poster?: string | null }> = memo(({ tone = 'neutral', poster }) => {
   return (
     <span className={cx('game-flag-glyph', `glyph-${tone}`, classes.glyph)} aria-hidden="true">
       {poster ? <span className={classes.glyphPoster} style={{ backgroundImage: `url(${poster})` }} /> : null}
@@ -69,9 +69,9 @@ export const GameFlagGlyph: FC<{ tone?: YinyuStatusTone; poster?: string | null 
       <YinyuHexField cells={18} />
     </span>
   )
-}
+})
 
-export const GameCard: FC<GameCardProps> = ({ game, compact = false, className, ...others }) => {
+export const GameCard: FC<GameCardProps> = memo(({ game, compact = false, className, ...others }) => {
   const { t } = useTranslation()
   const { locale } = useLanguage()
   const { summary, title, limit, poster } = game
@@ -133,4 +133,4 @@ export const GameCard: FC<GameCardProps> = ({ game, compact = false, className, 
       </span>
     </Link>
   )
-}
+})

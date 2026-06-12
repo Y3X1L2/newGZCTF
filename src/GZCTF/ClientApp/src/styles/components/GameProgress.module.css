@@ -1,131 +1,94 @@
-@keyframes pulse {
+@keyframes yy-progress-sheen {
   0% {
-    transform: translateX(-100%);
-  }
-  60% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateX(120%);
+    transform: translate3d(-115%, 0, 0);
     opacity: 0;
   }
+
+  18%,
+  72% {
+    opacity: 0.78;
+  }
+
+  100% {
+    transform: translate3d(118%, 0, 0);
+    opacity: 0;
+  }
+}
+
+.back {
+  position: relative;
+  width: 100%;
+  height: max(var(--thickness), 0.38rem);
+  overflow: hidden;
+  border-radius: 999px;
+  background:
+    var(--yy-hex-flow),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.035)),
+    rgba(255, 255, 255, 0.055);
+  background-size:
+    0.95rem 0.82rem,
+    auto,
+    auto;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.045),
+    0 0 1rem rgba(107, 238, 177, 0.055);
+}
+
+.back::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.08), transparent 24%, transparent 76%, rgba(255, 255, 255, 0.08));
+  opacity: 0.48;
+}
+
+.box {
+  position: relative;
+  width: var(--percentage);
+  min-width: min(var(--thickness), 100%);
+  height: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--spike-color) 72%, transparent), color-mix(in srgb, var(--spike-color) 44%, rgba(255, 255, 255, 0.14))),
+    var(--yy-hex-flow);
+  background-size:
+    auto,
+    1rem 0.866rem;
+  box-shadow:
+    0 0 0.9rem color-mix(in srgb, var(--spike-color) 22%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  transform: translateZ(0);
+  transition: width 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: width;
 }
 
 .bar {
   display: var(--pulsing-display);
   position: absolute;
-  width: 100%;
-  height: 100%;
-
-  & div {
-    width: 36%;
-    height: 100%;
-    background:
-      linear-gradient(90deg, #fff0, alpha(var(--spike-color), 0.65), rgba(255, 255, 255, 0.18), #fff0),
-      var(--yy-hex-flow);
-    background-size:
-      auto,
-      0.8rem 0.7rem;
-    animation: pulse 3.8s cubic-bezier(0.2, 0.8, 0.2, 1) 0s infinite normal;
-  }
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
 
-.box {
-  position: relative;
-  height: 100%;
-  width: var(--percentage);
-  min-width: var(--thickness);
-
-  @mixin dark {
-    background:
-      linear-gradient(90deg, alpha(var(--spike-color), 0.72), alpha(var(--spike-color), 0.38)), var(--yy-hex-flow);
-    background-size:
-      auto,
-      1rem 0.86rem;
-  }
-
-  @mixin light {
-    background-color: alpha(var(--bg-color), 0.8);
-  }
-}
-
-.back {
-  display: flex;
-  align-items: center;
-  height: var(--thickness);
-  width: 100%;
-
-  @mixin dark {
-    background:
-      var(--yy-hex-flow), linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.035)),
-      rgba(255, 255, 255, 0.05);
-    background-size:
-      0.92rem 0.8rem,
-      auto,
-      auto;
-  }
-
-  @mixin light {
-    background-color: alpha(var(--mantine-color-light-4), 0.8);
-  }
-}
-
-@keyframes spike {
-  0% {
-    opacity: 0.3;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-.spikes {
-  display: none;
-  position: relative;
-  height: 100%;
-  aspect-ratio: 1 / 1;
-
-  @mixin dark {
-    background-color: var(--mantine-color-white);
-  }
-
-  @mixin light {
-    background-color: var(--spike-color);
-  }
-}
-
-.spike {
+.bar::before {
+  content: '';
   position: absolute;
-}
-
-.l {
+  inset-block: 0;
   left: 0;
-  top: var(--neg-spike-length);
-  height: var(--spike-length);
-  width: 100%;
-  background: linear-gradient(0deg, alpha(var(--spike-color), 0.75), #fff0);
+  width: min(42%, 12rem);
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.34), color-mix(in srgb, var(--spike-color) 56%, rgba(255, 255, 255, 0.18)), transparent),
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+  opacity: 0;
+  transform: translate3d(-115%, 0, 0);
+  animation: yy-progress-sheen 2.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+  will-change: transform, opacity;
 }
 
-.r {
-  left: 0;
-  bottom: var(--neg-spike-length);
-  height: var(--spike-length);
-  width: 100%;
-  background: linear-gradient(180deg, alpha(var(--spike-color), 0.75), #fff0);
-}
-
-.t {
-  right: var(--neg-spike-length);
-  top: 0;
-  height: 100%;
-  width: var(--spike-length);
-  background: linear-gradient(90deg, alpha(var(--spike-color), 0.75), #fff0);
-}
-
-.b {
-  left: var(--neg-spike-length);
-  top: 0;
-  height: 100%;
-  width: var(--spike-length);
-  background: linear-gradient(-90deg, alpha(var(--spike-color), 0.75), #fff0);
+@media (prefers-reduced-motion: reduce) {
+  .bar::before {
+    animation: none;
+  }
 }

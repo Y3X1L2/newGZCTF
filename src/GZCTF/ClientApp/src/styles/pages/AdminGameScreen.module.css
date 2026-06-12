@@ -2,37 +2,121 @@
   width: 100%;
 }
 
+.pageHead :global(.mantine-Title-root) {
+  color: var(--yy-text, #f1fff8);
+  letter-spacing: 0.02em;
+}
+
+.pageHead :global(.mantine-Text-root) {
+  color: var(--yy-muted-readable, rgba(210, 245, 228, 0.74));
+}
+
 .hero {
+  position: relative;
+  overflow: hidden;
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(16rem, 0.9fr);
-  gap: 1.5rem;
-  padding: 1.4rem 1.5rem;
-  border: 1px solid rgba(74, 128, 224, 0.28);
-  border-radius: 1rem;
+  grid-template-columns: minmax(11rem, 0.26fr) minmax(0, 1fr) minmax(16rem, 0.42fr);
+  align-items: center;
+  gap: 1.35rem;
+  min-height: 21rem;
+  padding: 1.65rem;
+  border: 1px solid rgba(104, 255, 178, 0.24);
+  border-radius: 1.15rem;
   background:
-    radial-gradient(circle at top left, rgba(70, 182, 255, 0.14), transparent 32%),
-    linear-gradient(180deg, rgba(10, 17, 40, 0.96), rgba(10, 18, 42, 0.88));
-  box-shadow: inset 0 0 28px rgba(14, 45, 111, 0.24);
+    radial-gradient(circle at 16% 24%, rgba(104, 255, 178, 0.22), transparent 25%),
+    radial-gradient(circle at 85% 70%, rgba(201, 255, 226, 0.08), transparent 28%),
+    linear-gradient(135deg, rgba(8, 23, 18, 0.96), rgba(5, 9, 12, 0.86));
+  box-shadow:
+    inset 0 0 50px rgba(104, 255, 178, 0.08),
+    0 26px 90px rgba(0, 0, 0, 0.28);
+}
+
+.hero::before,
+.hero::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+}
+
+.hero::before {
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(104, 255, 178, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(104, 255, 178, 0.038) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(circle at 50% 50%, black, transparent 76%);
+}
+
+.hero::after {
+  inset: auto 8% 0;
+  height: 7rem;
+  background: linear-gradient(90deg, transparent, rgba(104, 255, 178, 0.2), transparent);
+  filter: blur(20px);
+  opacity: 0.5;
+}
+
+.heroVisual,
+.heroCopy,
+.heroMeta {
+  position: relative;
+  z-index: 1;
+}
+
+.heroVisual {
+  min-height: 12rem;
+  display: grid;
+  place-items: center;
+}
+
+.heroMark {
+  width: clamp(7.5rem, 9vw, 10rem);
+  height: clamp(7.5rem, 9vw, 10rem);
+  filter: drop-shadow(0 0 34px rgba(104, 255, 178, 0.38));
+}
+
+.heroSignal {
+  position: absolute;
+  width: 14rem;
+  height: 14rem;
+  border: 1px solid rgba(104, 255, 178, 0.22);
+  border-radius: 999px;
+  background:
+    conic-gradient(from 90deg, transparent, rgba(104, 255, 178, 0.32), transparent 42%),
+    radial-gradient(circle, transparent 47%, rgba(104, 255, 178, 0.12) 48%, transparent 52%);
+  animation: screen-control-orbit 12s linear infinite;
 }
 
 .heroLabel,
 .modeLabel {
-  color: #6fb9ff;
-  letter-spacing: 0.16em;
+  color: rgba(104, 255, 178, 0.78);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 0.76rem;
+  font-weight: 800;
 }
 
 .heroTitle,
 .modeTitle {
-  color: #edf6ff;
+  color: #f1fff8;
+}
+
+.heroTitle {
+  margin-top: 0.5rem;
+  font-size: clamp(2rem, 3.5vw, 4rem);
+  line-height: 1.05;
 }
 
 .heroDescription,
 .modeDescription {
-  color: #9ab7d6;
-  line-height: 1.7;
+  max-width: 48rem;
+  color: rgba(216, 246, 231, 0.76);
+  line-height: 1.78;
+}
+
+.heroDescription {
+  margin-top: 1rem;
+  font-size: 1rem;
 }
 
 .heroMeta {
@@ -42,57 +126,91 @@
 }
 
 .heroMetaItem,
-.modeCard {
-  border: 1px solid rgba(74, 128, 224, 0.22);
-  background: rgba(7, 15, 36, 0.8);
+.displayCard {
+  border: 1px solid rgba(104, 255, 178, 0.18);
+  background:
+    linear-gradient(145deg, rgba(104, 255, 178, 0.09), rgba(255, 255, 255, 0.025)),
+    rgba(3, 11, 10, 0.72);
+  box-shadow: inset 0 0 24px rgba(104, 255, 178, 0.05);
 }
 
 .heroMetaItem {
-  padding: 1rem 1.1rem;
-  border-radius: 0.9rem;
+  padding: 1.05rem 1.1rem;
+  border-radius: 0.95rem;
 }
 
 .heroMetaItem span {
   display: block;
   margin-bottom: 0.35rem;
-  color: #7fa9d5;
-  font-size: 0.8rem;
+  color: rgba(185, 230, 210, 0.68);
+  font-size: 0.78rem;
 }
 
 .heroMetaItem strong {
-  color: #f1f7ff;
+  color: #f1fff8;
   font-size: 1.05rem;
 }
 
-.modeCard {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 1.2rem;
-  border-radius: 1rem;
-  box-shadow: inset 0 0 20px rgba(13, 37, 95, 0.16);
+.displayCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(19rem, 0.36fr);
+  align-items: end;
+  gap: 1.25rem;
+  padding: 1.35rem;
+  border-radius: 1.05rem;
 }
 
-.modeHead {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
+.displayCardMain {
+  min-width: 0;
+}
+
+.modeDescription {
+  margin: 0.6rem 0 1rem;
 }
 
 .pathBox {
-  padding: 0.9rem 1rem;
-  border: 1px solid rgba(74, 128, 224, 0.2);
-  border-radius: 0.8rem;
-  background: rgba(11, 21, 52, 0.75);
-  color: #c7dbf5;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.85rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(104, 255, 178, 0.2);
+  border-radius: 0.85rem;
+  background: rgba(2, 8, 9, 0.68);
+  color: rgba(224, 255, 240, 0.86);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.92rem;
   word-break: break-all;
+}
+
+.actionGroup {
+  justify-content: flex-end;
+}
+
+.actionGroup :global(.mantine-Button-root) {
+  min-width: 10.5rem;
+}
+
+@keyframes screen-control-orbit {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 1200px) {
   .hero {
     grid-template-columns: 1fr;
+  }
+
+  .heroVisual {
+    min-height: 9rem;
+  }
+
+  .displayCard {
+    grid-template-columns: 1fr;
+  }
+
+  .actionGroup {
+    justify-content: flex-start;
   }
 }

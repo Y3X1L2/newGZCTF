@@ -392,43 +392,12 @@ a {
   transition: opacity 260ms ease;
 }
 
-.hex-field i {
-  position: absolute;
-  left: var(--hex-x);
-  top: var(--hex-y);
-  width: 7px;
-  height: 8px;
-  border-radius: 1px;
-  clip-path: polygon(50% 0, 94% 25%, 94% 75%, 50% 100%, 6% 75%, 6% 25%);
-  background: rgba(245, 245, 247, 0.34);
-  opacity: 0.08;
-  box-shadow: 0 0 8px rgba(245, 245, 247, 0.08);
-  transform: translate3d(0, 0, 0) scale(0.82);
-  will-change: opacity, transform;
-  animation: hex-drift 5.6s calc(var(--hex-delay, 0s) + var(--hex-row, 0) * 0.16s) infinite ease-in-out;
-  animation-play-state: paused;
-}
-
-.hex-field i:nth-child(5n),
-.hex-field i:nth-child(13n) {
-  background: rgba(107, 238, 177, 0.72);
-  box-shadow: 0 0 12px rgba(107, 238, 177, 0.26);
-}
-
 .panel-card:hover > .hex-field,
 .panel-card.is-active > .hex-field,
 .challenge-card.is-active > .hex-field,
 .score-row.is-leader > .hex-field,
 .metric-tile:hover > .hex-field {
   opacity: 0.74;
-}
-
-.panel-card:hover > .hex-field i,
-.panel-card.is-active > .hex-field i,
-.challenge-card.is-active > .hex-field i,
-.score-row.is-leader > .hex-field i,
-.metric-tile:hover > .hex-field i {
-  animation-play-state: running;
 }
 
 .panel-card::before {
@@ -463,7 +432,7 @@ a {
   mix-blend-mode: screen;
   opacity: 0;
   transition: opacity 260ms ease;
-  animation: signal-card-flow 8.4s ease-in-out infinite;
+  animation: none;
 }
 
 .panel-card::after {
@@ -484,7 +453,7 @@ a {
   opacity: 0;
   transform: translate3d(0, 0, 0);
   transition: opacity 260ms ease;
-  animation: signal-pixel-breathe 7.2s ease-in-out infinite;
+  animation: none;
 }
 
 .panel-card > * {
@@ -978,15 +947,15 @@ a {
 
 .state-running::before {
   opacity: 0.78;
-  animation: pill-honey-flow 3.6s infinite linear;
+  animation: yy-composite-pill-breathe 1.85s infinite ease-in-out;
 }
 
 .state-running .status-tail {
-  animation: status-tail-run 1.1s infinite steps(4);
+  animation: yy-composite-tail-pulse 1.15s infinite steps(4);
 }
 
 .state-running .status-signal i {
-  animation: status-flow-bars 1.65s infinite ease-in-out;
+  animation: yy-composite-bar-pulse 1.45s infinite ease-in-out;
 }
 
 .state-running .status-signal i:nth-child(2) {
@@ -1003,11 +972,11 @@ a {
 
 .state-solved::after {
   opacity: 0.5;
-  animation: solved-wave-bg 2.8s infinite ease-in-out;
+  animation: yy-composite-pill-breathe 2.6s infinite ease-in-out;
 }
 
 .state-solved .status-signal i {
-  animation: solved-check-bars 2.4s infinite ease-in-out;
+  animation: yy-composite-bar-pulse 2.1s infinite ease-in-out;
 }
 
 .state-open {
@@ -1015,11 +984,11 @@ a {
 }
 
 .state-open .status-signal i:nth-child(odd) {
-  animation: open-mote 3.2s infinite ease-in-out;
+  animation: yy-composite-open-pulse 2.4s infinite ease-in-out;
 }
 
 .state-busy .status-signal i {
-  animation: busy-stack 1.25s infinite steps(3);
+  animation: yy-composite-open-pulse 1.35s infinite ease-in-out;
 }
 
 .state-alert {
@@ -1027,7 +996,7 @@ a {
 }
 
 .state-alert .status-tail {
-  animation: alert-break 1.7s infinite steps(2);
+  animation: yy-composite-tail-pulse 1.25s infinite steps(3);
 }
 
 .tone-success {
