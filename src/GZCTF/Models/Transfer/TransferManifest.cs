@@ -21,7 +21,7 @@ public class TransferManifest
     public DateTimeOffset ExportedAt { get; set; } = DateTimeOffset.UtcNow;
 
     /// <summary>
-    /// Exporter version (GZCTF version)
+    /// Exporter version (platform version)
     /// </summary>
     public string ExporterVersion { get; set; } = string.Empty;
 

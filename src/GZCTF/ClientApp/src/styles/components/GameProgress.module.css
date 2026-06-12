@@ -1,14 +1,13 @@
 @keyframes pulse {
   0% {
-    width: 0%;
+    transform: translateX(-100%);
   }
-  80% {
+  60% {
     opacity: 1;
-    width: 100%;
   }
   100% {
+    transform: translateX(120%);
     opacity: 0;
-    width: 100%;
   }
 }
 
@@ -19,10 +18,15 @@
   height: 100%;
 
   & div {
-    width: 25%;
+    width: 36%;
     height: 100%;
-    background: linear-gradient(-90deg, alpha(var(--spike-color), 0.75), #fff0);
-    animation: pulse 2s linear 0s infinite normal;
+    background:
+      linear-gradient(90deg, #fff0, alpha(var(--spike-color), 0.65), rgba(255, 255, 255, 0.18), #fff0),
+      var(--yy-hex-flow);
+    background-size:
+      auto,
+      0.8rem 0.7rem;
+    animation: pulse 3.8s cubic-bezier(0.2, 0.8, 0.2, 1) 0s infinite normal;
   }
 }
 
@@ -33,7 +37,11 @@
   min-width: var(--thickness);
 
   @mixin dark {
-    background-color: alpha(var(--mantine-color-gray-4), 0.8);
+    background:
+      linear-gradient(90deg, alpha(var(--spike-color), 0.72), alpha(var(--spike-color), 0.38)), var(--yy-hex-flow);
+    background-size:
+      auto,
+      1rem 0.86rem;
   }
 
   @mixin light {
@@ -48,7 +56,13 @@
   width: 100%;
 
   @mixin dark {
-    background-color: alpha(var(--mantine-color-gray-6), 0.8);
+    background:
+      var(--yy-hex-flow), linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.035)),
+      rgba(255, 255, 255, 0.05);
+    background-size:
+      0.92rem 0.8rem,
+      auto,
+      auto;
   }
 
   @mixin light {
@@ -66,7 +80,7 @@
 }
 
 .spikes {
-  display: var(--pulsing-display);
+  display: none;
   position: relative;
   height: 100%;
   aspect-ratio: 1 / 1;
@@ -77,10 +91,6 @@
 
   @mixin light {
     background-color: var(--spike-color);
-  }
-
-  & div {
-    animation: spike 2s linear 0s infinite alternate;
   }
 }
 

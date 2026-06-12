@@ -1,6 +1,5 @@
 import {
   Button,
-  Card,
   Divider,
   FileButton,
   Group,
@@ -22,6 +21,7 @@ import dayjs from 'dayjs'
 import { FC, useEffect, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { Markdown } from '@Components/MarkdownRenderer'
+import { YinyuModalBody, YinyuPanel } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
 import { showErrorMsg } from '@Utils/Shared'
 import { HunamizeSize } from '@Utils/Shared'
@@ -105,97 +105,99 @@ export const WriteupSubmitModal: FC<WriteupSubmitModalProps> = ({ gameId, writeu
         title: cx(misc.w100, misc.m0),
       }}
     >
-      <Stack gap="xs" mt={0}>
-        <Divider />
-        <Title order={5}>{t('game.content.writeup.instructions.title')}</Title>
-        <List classNames={{ itemWrapper: misc.listItemWrapper }}>
-          <List.Item>
-            <Text>
-              <Trans
-                i18nKey="game.content.writeup.instructions.deadline"
-                values={{
-                  datetime: ddl.locale(locale).format('LL LTS'),
-                }}
+      <YinyuModalBody>
+        <Stack gap="xs" mt={0}>
+          <Divider />
+          <Title order={5}>{t('game.content.writeup.instructions.title')}</Title>
+          <List classNames={{ itemWrapper: misc.listItemWrapper }}>
+            <List.Item>
+              <Text>
+                <Trans
+                  i18nKey="game.content.writeup.instructions.deadline"
+                  values={{
+                    datetime: ddl.locale(locale).format('LL LTS'),
+                  }}
+                >
+                  _
+                  <Text mx={5} span fw={600} c="yellow">
+                    _
+                  </Text>
+                  _
+                </Trans>
+              </Text>
+            </List.Item>
+            <List.Item>
+              <Text>
+                <Trans i18nKey="game.content.writeup.instructions.file_format">
+                  _
+                  <Text mx={5} fw={600} span c="yellow">
+                    _
+                  </Text>
+                  _
+                </Trans>
+              </Text>
+            </List.Item>
+          </List>
+          {data?.note && (
+            <>
+              <Title order={5}>{t('game.content.writeup.instructions.additional')}</Title>
+              <Markdown source={data.note} />
+            </>
+          )}
+          <Title order={5}>{t('game.content.writeup.current')}</Title>
+          <YinyuPanel p="md" cells={16}>
+            {data && data.submitted ? (
+              <Group>
+                <Icon path={mdiFileDocumentOutline} size={1.5} />
+                <Stack gap={0}>
+                  <Text fw={600} size="md">
+                    {data.name}
+                  </Text>
+                  <Text fw={600} size="sm" className="yy-readable-text" ff="monospace">
+                    {data.fileSize && HunamizeSize(data.fileSize)}
+                  </Text>
+                </Stack>
+              </Group>
+            ) : (
+              <Group>
+                <Icon path={mdiFileHidden} size={1.5} />
+                <Stack gap={0}>
+                  <Text fw={600} size="md">
+                    {t('game.content.writeup.unsubmitted_note')}
+                  </Text>
+                </Stack>
+              </Group>
+            )}
+          </YinyuPanel>
+          <FileButton onChange={onUpload} accept="application/pdf">
+            {(props) => (
+              <Button
+                {...props}
+                fullWidth
+                className={uploadClasses.button}
+                disabled={disabled}
+                color={progress !== 0 ? 'cyan' : theme.primaryColor}
               >
-                _
-                <Text mx={5} span fw={600} c="yellow">
-                  _
-                </Text>
-                _
-              </Trans>
-            </Text>
-          </List.Item>
-          <List.Item>
-            <Text>
-              <Trans i18nKey="game.content.writeup.instructions.file_format">
-                _
-                <Text mx={5} fw={600} span c="yellow">
-                  _
-                </Text>
-                _
-              </Trans>
-            </Text>
-          </List.Item>
-        </List>
-        {data?.note && (
-          <>
-            <Title order={5}>{t('game.content.writeup.instructions.additional')}</Title>
-            <Markdown source={data.note} />
-          </>
-        )}
-        <Title order={5}>{t('game.content.writeup.current')}</Title>
-        <Card>
-          {data && data.submitted ? (
-            <Group>
-              <Icon path={mdiFileDocumentOutline} size={1.5} />
-              <Stack gap={0}>
-                <Text fw={600} size="md">
-                  {data.name}
-                </Text>
-                <Text fw={600} size="sm" c="dimmed" ff="monospace">
-                  {data.fileSize && HunamizeSize(data.fileSize)}
-                </Text>
-              </Stack>
-            </Group>
-          ) : (
-            <Group>
-              <Icon path={mdiFileHidden} size={1.5} />
-              <Stack gap={0}>
-                <Text fw={600} size="md">
-                  {t('game.content.writeup.unsubmitted_note')}
-                </Text>
-              </Stack>
-            </Group>
-          )}
-        </Card>
-        <FileButton onChange={onUpload} accept="application/pdf">
-          {(props) => (
-            <Button
-              {...props}
-              fullWidth
-              className={uploadClasses.button}
-              disabled={disabled}
-              color={progress !== 0 ? 'cyan' : theme.primaryColor}
-            >
-              <div className={uploadClasses.label}>
-                {dayjs().isAfter(ddl)
-                  ? t('game.content.writeup.deadline_exceeded')
-                  : progress !== 0
-                    ? t('game.button.writeup.uploading')
-                    : t('game.button.writeup.upload')}
-              </div>
-              {progress !== 0 && (
-                <Progress
-                  value={progress}
-                  className={uploadClasses.progress}
-                  color={alpha(theme.colors[theme.primaryColor][2], 0.35)}
-                  radius="sm"
-                />
-              )}
-            </Button>
-          )}
-        </FileButton>
-      </Stack>
+                <div className={uploadClasses.label}>
+                  {dayjs().isAfter(ddl)
+                    ? t('game.content.writeup.deadline_exceeded')
+                    : progress !== 0
+                      ? t('game.button.writeup.uploading')
+                      : t('game.button.writeup.upload')}
+                </div>
+                {progress !== 0 && (
+                  <Progress
+                    value={progress}
+                    className={uploadClasses.progress}
+                    color={alpha(theme.colors[theme.primaryColor][2], 0.35)}
+                    radius="sm"
+                  />
+                )}
+              </Button>
+            )}
+          </FileButton>
+        </Stack>
+      </YinyuModalBody>
     </Modal>
   )
 }

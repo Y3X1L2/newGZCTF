@@ -1,4 +1,4 @@
-import { Card, Center, List, ScrollArea, SegmentedControl, Stack, Text, useMantineTheme } from '@mantine/core'
+import { Card, Center, List, ScrollArea, Stack, Text, useMantineTheme } from '@mantine/core'
 import { showNotification } from '@mantine/notifications'
 import { Icon } from '@mdi/react'
 import * as signalR from '@microsoft/signalr'
@@ -9,10 +9,12 @@ import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router'
 import { Empty } from '@Components/Empty'
 import { InlineMarkdown } from '@Components/MarkdownRenderer'
+import { YinyuHexField } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
 import { NoticTypeIconMap } from '@Utils/Shared'
 import { OnceSWRConfig } from '@Hooks/useConfig'
 import api, { GameNotice, NoticeType } from '@Api'
+import gameClasses from '@Styles/GameCard.module.css'
 import misc from '@Styles/Misc.module.css'
 import typoClasses from '@Styles/Typography.module.css'
 
@@ -146,6 +148,12 @@ export const GameNoticePanel: FC = () => {
 
   const allNotices = [...newNotices.current, ...(notices ?? [])]
   const filteredNotices = ApplyFilter(allNotices, filter)
+  const filterOptions = [
+    { value: NoticeFilter.All, label: t('game.label.notice_type.all') },
+    { value: NoticeFilter.Game, label: t('game.label.notice_type.game') },
+    { value: NoticeFilter.Events, label: t('game.label.notice_type.events') },
+    { value: NoticeFilter.Challenge, label: t('game.label.notice_type.challenge') },
+  ]
 
   filteredNotices.sort((a, b) =>
     a.type !== b.type && (a.type === NoticeType.Normal || b.type == NoticeType.Normal)
@@ -154,35 +162,37 @@ export const GameNoticePanel: FC = () => {
   )
 
   return (
-    <Card shadow="sm" w="100%">
+    <Card shadow="sm" w="100%" className={`panel-card ${gameClasses.sidePanel}`}>
+      <YinyuHexField cells={28} />
       <Stack gap="xs">
-        <SegmentedControl
-          value={filter}
-          color={theme.primaryColor}
-          fullWidth
-          bg="transparent"
-          fw={500}
-          onChange={(value) => setFilter(value as NoticeFilter)}
-          data={[
-            { value: NoticeFilter.All, label: t('game.label.notice_type.all') },
-            { value: NoticeFilter.Game, label: t('game.label.notice_type.game') },
-            { value: NoticeFilter.Events, label: t('game.label.notice_type.events') },
-            { value: NoticeFilter.Challenge, label: t('game.label.notice_type.challenge') },
-          ]}
-        />
+        <div className="yy-notice-filter-list" role="tablist" aria-label="比赛事件筛选">
+          {filterOptions.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              className="yy-notice-filter-button"
+              data-active={filter === item.value ? 'true' : undefined}
+              role="tab"
+              aria-selected={filter === item.value}
+              onClick={() => setFilter(item.value)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
         {filteredNotices.length ? (
           <ScrollArea offsetScrollbars scrollbarSize={0} h={PANEL_HEIGHT}>
             <List size="sm" spacing={3} classNames={{ itemWrapper: misc.alignNormal }}>
               {filteredNotices.map((notice) => (
                 <List.Item key={notice.id} icon={<Icon {...iconMap.get(notice.type)!} />}>
                   <Stack gap={1}>
-                    <Text fz="xs" fw="bold" c="dimmed">
+                    <Text fz="xs" fw="bold" className="yy-readable-text">
                       {dayjs(notice.time).locale(locale).format('SLL LTS')}
                     </Text>
                     {notice.type === NoticeType.Normal ? (
-                      <InlineMarkdown fz="sm" fw={500} c="dimmed" source={formatNotice(t, notice)} />
+                      <InlineMarkdown fz="sm" fw={500} className="yy-readable-text" source={formatNotice(t, notice)} />
                     ) : (
-                      <Text fz="sm" fw={500} c="dimmed" className={typoClasses.inline}>
+                      <Text fz="sm" fw={500} className={`${typoClasses.inline} yy-readable-text`}>
                         {formatNotice(t, notice)}
                       </Text>
                     )}

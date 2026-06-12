@@ -1,4 +1,4 @@
-import { alpha, useMantineColorScheme, useMantineTheme } from '@mantine/core'
+import { alpha, useMantineTheme } from '@mantine/core'
 import type { EChartsOption } from 'echarts'
 import { FC, useMemo } from 'react'
 import { EchartsContainer } from '@Components/charts/EchartsContainer'
@@ -11,7 +11,6 @@ export interface TeamRadarMapProps {
 
 export const TeamRadarMap: FC<TeamRadarMapProps> = ({ indicator, value, name }) => {
   const theme = useMantineTheme()
-  const { colorScheme } = useMantineColorScheme()
 
   const option: EChartsOption = useMemo(
     () =>
@@ -25,7 +24,7 @@ export const TeamRadarMap: FC<TeamRadarMapProps> = ({ indicator, value, name }) 
           radius: '75%',
           center: ['50%', '55%'],
           axisName: {
-            color: colorScheme === 'dark' ? theme.colors.light[1] : theme.colors.dark[5],
+            color: theme.colors.light[1],
             fontWeight: 'bold',
           },
         },
@@ -48,7 +47,7 @@ export const TeamRadarMap: FC<TeamRadarMapProps> = ({ indicator, value, name }) 
           },
         ],
       }) satisfies EChartsOption,
-    [alpha, theme, indicator, value, name]
+    [theme, indicator, value, name]
   )
 
   return (

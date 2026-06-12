@@ -1,4 +1,4 @@
-import { Button, Group, LoadingOverlay, Stack, Tabs } from '@mantine/core'
+import { Button, Stack } from '@mantine/core'
 import { mdiExclamationThick, mdiFlag, mdiLightningBolt, mdiPackageVariant, mdiTableArrowDown } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import React, { FC, useEffect, useState } from 'react'
@@ -7,10 +7,9 @@ import { useLocation, useNavigate, useParams } from 'react-router'
 import { WithGameTab } from '@Components/WithGameTab'
 import { WithNavBar } from '@Components/WithNavbar'
 import { WithRole } from '@Components/WithRole'
+import { YinyuPanel, YinyuRouteTransition } from '@Components/yinyu/YinyuUI'
 import { downloadBlob } from '@Utils/ApiHelper'
-import { DEFAULT_LOADING_OVERLAY } from '@Utils/Shared'
 import api, { Role } from '@Api'
-import misc from '@Styles/Misc.module.css'
 
 interface WithGameMonitorProps extends React.PropsWithChildren {
   isLoading?: boolean
@@ -39,7 +38,7 @@ export const WithGameMonitor: FC<WithGameMonitorProps> = ({ children, isLoading 
   useEffect(() => {
     const tab = getTab(location.pathname)
     if (tab) {
-      setActiveTab(tab.path ?? '')
+      setActiveTab(tab.path)
     } else {
       navigate(pages[0].path)
     }
@@ -54,43 +53,49 @@ export const WithGameMonitor: FC<WithGameMonitorProps> = ({ children, isLoading 
     )
 
   return (
-    <WithNavBar width="90%">
+    <WithNavBar width="min(100%, calc(100vw - 7.25rem))">
       <WithRole requiredRole={Role.Monitor}>
         <WithGameTab>
-          <Group justify="space-between" align="flex-start">
-            <Stack>
+          <div className="yy-monitor-layout">
+            <YinyuPanel p="sm" cells={24} className="yy-monitor-sidebar">
               <Button
                 disabled={disabled}
-                w="10rem"
-                classNames={{ inner: misc.justifyBetween }}
+                fullWidth
+                className="yy-monitor-download"
                 leftSection={<Icon path={mdiTableArrowDown} size={1} />}
                 onClick={onDownloadScoreboardSheet}
               >
                 {t('game.button.download.scoreboard')}
               </Button>
-              <Tabs
-                orientation="vertical"
-                value={activeTab}
-                onChange={(value) => value && navigate(`/games/${id}/monitor/${value}`)}
-                classNames={{
-                  root: misc.w10rem,
-                  list: misc.w10rem,
-                }}
-              >
-                <Tabs.List>
-                  {pages.map((page) => (
-                    <Tabs.Tab key={page.path} leftSection={<Icon path={page.icon} size={1} />} value={page.path}>
-                      {page.title}
-                    </Tabs.Tab>
-                  ))}
-                </Tabs.List>
-              </Tabs>
-            </Stack>
-            <Stack w="calc(100% - 11rem)" pos="relative">
-              <LoadingOverlay visible={isLoading ?? false} overlayProps={DEFAULT_LOADING_OVERLAY} />
+              <nav className="yy-monitor-nav-list" aria-label={t('game.tab.monitor.index')}>
+                {pages.map((page) => {
+                  const isActive = activeTab === page.path
+
+                  return (
+                    <button
+                      key={page.path}
+                      type="button"
+                      className="yy-monitor-nav-button"
+                      data-active={isActive ? 'true' : undefined}
+                      aria-current={isActive ? 'page' : undefined}
+                      onClick={() => navigate(`/games/${id}/monitor/${page.path}`)}
+                    >
+                      <Icon path={page.icon} size={1} />
+                      <span>{page.title}</span>
+                    </button>
+                  )
+                })}
+              </nav>
+            </YinyuPanel>
+            <Stack pos="relative" className="yy-monitor-content">
+              {isLoading ? (
+                <div className="yy-game-tab-loading" role="status" aria-live="polite">
+                  <YinyuRouteTransition title={t('game.tab.monitor.index')} description="正在读取监控数据" />
+                </div>
+              ) : null}
               {children}
             </Stack>
-          </Group>
+          </div>
         </WithGameTab>
       </WithRole>
     </WithNavBar>

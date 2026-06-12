@@ -1,4 +1,23 @@
 .tooltip {
-  color: light-dark(black, white);
-  background-color: light-dark(white, var(--mantine-color-dark-6));
+  color: var(--yy-text);
+  border: 1px solid var(--yy-line);
+  background: radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.08), transparent 42%), rgba(8, 9, 10, 0.92);
+}
+
+.card {
+  border: 1px solid var(--yy-line);
+  border-radius: var(--yy-radius);
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(ellipse at 16% 18%, rgba(107, 238, 177, 0.09), transparent 34%), var(--yy-hex-flow);
+  background-size:
+    auto,
+    1.2rem 1.04rem;
+  opacity: 0.4;
 }

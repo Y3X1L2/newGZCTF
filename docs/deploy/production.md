@@ -1,4 +1,4 @@
-# newGZCTF 生产部署指南
+# YINYU CTF平台 生产部署指南
 
 ## 前置要求
 - Docker 24+ 和 Docker Compose v2
@@ -9,8 +9,8 @@
 
 ### 1. 克隆代码
 ```bash
-git clone https://github.com/Y3X1L2/newGZCTF
-cd newGZCTF
+git clone <internal-repository-url> yinyu-ctf-platform
+cd yinyu-ctf-platform
 ```
 
 ### 2. 配置环境变量

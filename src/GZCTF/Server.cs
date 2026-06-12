@@ -33,22 +33,15 @@ public class Server
 
     internal static void Banner()
     {
-        // GZCTF Banner ASCII Art
-        // Core: AGPLv3; Restricted components: LicenseRef-GZCTF-Restricted
-        // Refer to NOTICE / LICENSE_ADDENDUM.txt for licensing & trademark policy.
         const string banner =
             """
-                  ___           ___           ___                       ___
-                 /  /\         /  /\         /  /\          ___        /  /\
-                /  /:/_       /  /::|       /  /:/         /  /\      /  /:/_
-               /  /:/ /\     /  /:/:|      /  /:/         /  /:/     /  /:/ /\
-              /  /:/_/::\   /  /:/|:|__   /  /:/  ___    /  /:/     /  /:/ /:/
-             /__/:/__\/\:\ /__/:/ |:| /\ /__/:/  /  /\  /  /::\    /__/:/ /:/
-             \  \:\ /~~/:/ \__\/  |:|/:/ \  \:\ /  /:/ /__/:/\:\   \  \:\/:/
-              \  \:\  /:/      |  |:/:/   \  \:\  /:/  \__\/  \:\   \  \::/
-               \  \:\/:/       |  |::/     \  \:\/:/        \  \:\   \  \:\
-                \  \::/        |  |:/       \  \::/          \__\/    \  \:\
-                 \__\/         |__|/         \__\/                     \__\/
+            __   __ ___ _   _ __   __ _   _      ____ _____ _____
+            \ \ / /|_ _| \ | |\ \ / /| | | |    / ___|_   _|  ___|
+             \ V /  | ||  \| | \ V / | | | |   | |     | | | |_
+              | |   | || |\  |  | |  | |_| |   | |___  | | |  _|
+              |_|  |___|_| \_|  |_|   \___/     \____| |_| |_|
+
+                        YINYU CTF Platform
             """ + "\n";
         Console.WriteLine(banner);
 
@@ -57,10 +50,8 @@ public class Server
         if (version is not null)
             versionStr = $"Version: {version.Major}.{version.Minor}.{version.Build}";
 
-        var currentYear = DateTime.Now.Year;
-
         // ReSharper disable once LocalizableElement
-        Console.WriteLine($"GZCTF © 2022-{currentYear} GZTimeWalker {versionStr,33}\n");
+        Console.WriteLine($"YINYU CTF Platform {versionStr,33}\n");
 
         // Show warning if a language is machine translated
         string[] machineTranslated = ["de-DE", "fr-FR", "es-ES"];

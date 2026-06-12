@@ -5,7 +5,6 @@ import {
   Code,
   Group,
   Input,
-  Paper,
   ScrollArea,
   Table,
   Text,
@@ -32,6 +31,7 @@ import { Trans, useTranslation } from 'react-i18next'
 import { ActionIconWithConfirm } from '@Components/ActionIconWithConfirm'
 import { AdminPage } from '@Components/admin/AdminPage'
 import { TeamEditModal } from '@Components/admin/TeamEditModal'
+import { YinyuTableShell } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import { useArrayResponse } from '@Hooks/useArrayResponse'
 import api, { TeamInfoModel } from '@Api'
@@ -193,7 +193,7 @@ const Teams: FC = () => {
         </>
       }
     >
-      <Paper shadow="md" p="md" w="100%">
+      <YinyuTableShell p="md" w="100%">
         <ScrollArea viewportRef={viewport} offsetScrollbars scrollbarSize={4} h="calc(100vh - 190px)">
           <Table className={tableClasses.table}>
             <Table.Thead>
@@ -322,7 +322,7 @@ const Teams: FC = () => {
             )
           }}
         />
-      </Paper>
+      </YinyuTableShell>
     </AdminPage>
   )
 }

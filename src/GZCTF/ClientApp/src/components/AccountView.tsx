@@ -1,8 +1,9 @@
-import { Center, Stack } from '@mantine/core'
-import { FC } from 'react'
-import { PropsWithChildren } from 'react'
+import { Center } from '@mantine/core'
+import { FC, PropsWithChildren } from 'react'
 import { useNavigate } from 'react-router'
 import { LogoHeader } from '@Components/LogoHeader'
+import { YinyuHexField } from '@Components/yinyu/YinyuUI'
+import { LogoDistortion } from '@Components/yinyu/grid-distortion/LogoDistortion'
 import misc from '@Styles/Misc.module.css'
 
 interface AccountViewProps extends PropsWithChildren {
@@ -13,15 +14,21 @@ export const AccountView: FC<AccountViewProps> = ({ onSubmit, children }) => {
   const navigate = useNavigate()
 
   return (
-    <Center h="100vh">
-      <Stack align="center" justify="center">
-        <LogoHeader onClick={() => navigate('/')} />
-        <form className={misc.accountForm} onSubmit={onSubmit}>
-          <Stack gap="xs" align="center" justify="center">
-            {children}
-          </Stack>
-        </form>
-      </Stack>
+    <Center mih="100vh" px="md" py="xl" className="yy-standalone-shell">
+      <article className="auth-stage">
+        <div className="panel-card auth-form-card">
+          <YinyuHexField cells={28} />
+          <div className="auth-form-panel">
+            <LogoHeader onClick={() => navigate('/')} />
+            <form className={misc.accountForm} onSubmit={onSubmit}>
+              {children}
+            </form>
+          </div>
+        </div>
+        <div className="auth-logo-panel" aria-hidden="true">
+          <LogoDistortion className="auth-logo-distortion" />
+        </div>
+      </article>
     </Center>
   )
 }

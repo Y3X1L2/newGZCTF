@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyVersion>1.8.3.0</AssemblyVersion>
-    <Description>GZ::CTF $(VITE_APP_GIT_NAME)-$(VITE_APP_GIT_SHA) build at $(VITE_APP_BUILD_TIMESTAMP)</Description>
+    <Description>YINYU CTF Platform $(VITE_APP_GIT_NAME)-$(VITE_APP_GIT_SHA) build at $(VITE_APP_BUILD_TIMESTAMP)</Description>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TypeScriptCompileBlocked>true</TypeScriptCompileBlocked>
@@ -163,6 +163,24 @@
       <ResolvedFileToPublish Include="@(DistFiles->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
         <RelativePath>wwwroot\%(RecursiveDir)%(FileName)%(Extension)</RelativePath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="PublishFleetAgent" AfterTargets="ComputeFilesToPublish">
+    <PropertyGroup>
+      <FleetAgentPublishDir>$(BaseIntermediateOutputPath)fleet-agent/</FleetAgentPublishDir>
+    </PropertyGroup>
+
+    <Exec
+      Command="dotnet publish &quot;$(MSBuildThisFileDirectory)../GZCTF.Agent/GZCTF.Agent.csproj&quot; -c $(Configuration) -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -p:EnableCompressionInSingleFile=true -p:DebugType=None -p:DebugSymbols=false -o &quot;$(FleetAgentPublishDir)&quot;" />
+
+    <ItemGroup>
+      <FleetAgentBinary Include="$(FleetAgentPublishDir)GZCTF.Agent" />
+      <ResolvedFileToPublish Include="@(FleetAgentBinary->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>agent/gzctf-agent</RelativePath>
+        <CopyToPublishDirectory>Always</CopyToPublishDirectory>
         <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
       </ResolvedFileToPublish>
     </ItemGroup>

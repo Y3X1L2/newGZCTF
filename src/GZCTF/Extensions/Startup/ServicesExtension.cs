@@ -140,7 +140,7 @@ internal static class ServicesExtension
             builder.Services.AddHttpClient("Agent");
             builder.Services.AddSingleton<AgentClient>();
             builder.Services.AddScoped<FleetVmService>();
-            builder.Services.AddScoped<GuacamoleService>();
+            builder.Services.AddSingleton<GuacamoleService>();
             builder.Services.AddHostedService<VmReadyService>();
 
             // Phase 7 security: distributed lock
@@ -203,8 +203,8 @@ internal static class ServicesExtension
             {
                 settings.DocumentName = "v1";
                 settings.Version = "v1";
-                settings.Title = "GZCTF Server API";
-                settings.Description = "GZCTF Server API Document";
+                settings.Title = "YINYU CTF Platform API";
+                settings.Description = "YINYU CTF Platform API Document";
                 settings.UseControllerSummaryAsTagDescription = true;
                 settings.SchemaSettings.TypeMappers.Add(new OpenApiDateTimeOffsetToUIntMapper());
                 settings.SchemaSettings.TypeMappers.Add(new OpenApiIPAddressToStringMapper());

@@ -17,7 +17,7 @@ const Confirm: FC = () => {
   const email = sp.get('email')
   const [disabled, setDisabled] = useState(false)
   const { t } = useTranslation()
-  const decodeEmail = window.atob(email ?? '')
+  const decodeEmail = email ? window.atob(email) : ''
 
   usePageTitle(t('account.title.confirm'))
 

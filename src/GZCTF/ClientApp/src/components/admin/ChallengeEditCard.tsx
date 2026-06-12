@@ -1,13 +1,11 @@
 import {
   ActionIcon,
-  Card,
   Group,
   Progress,
   Stack,
   Switch,
   Text,
   Tooltip,
-  useMantineColorScheme,
   useMantineTheme,
 } from '@mantine/core'
 import { mdiDatabaseEditOutline, mdiPuzzleEditOutline } from '@mdi/js'
@@ -15,6 +13,7 @@ import { Icon } from '@mdi/react'
 import { Dispatch, FC, SetStateAction, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
+import { YinyuPanel } from '@Components/yinyu/YinyuUI'
 import { useChallengeCategoryLabelMap } from '@Utils/Shared'
 import { ChallengeInfoModel, ChallengeCategory } from '@Api'
 import classes from '@Styles/ChallengeEditCard.module.css'
@@ -33,13 +32,12 @@ export const ChallengeEditCard: FC<ChallengeEditCardProps> = ({ challenge, onTog
   const [disabled, setDisabled] = useState(false)
 
   const { t } = useTranslation()
-  const { colorScheme } = useMantineColorScheme()
 
   const color = data?.color ?? theme.primaryColor
   const colors = theme.colors[color]
 
-  const minIdx = colorScheme === 'dark' ? 8 : 6
-  const curIdx = colorScheme === 'dark' ? 6 : 4
+  const minIdx = 8
+  const curIdx = 6
 
   const [min, cur, tot] = [challenge.minScore ?? 0, challenge.score ?? 500, challenge.originalScore ?? 500]
   const minRate = (min / tot) * 100
@@ -48,7 +46,7 @@ export const ChallengeEditCard: FC<ChallengeEditCardProps> = ({ challenge, onTog
   const contentWidth = 'calc(100% - 12rem)'
 
   return (
-    <Card shadow="sm" p="sm">
+    <YinyuPanel p="sm" className={classes.card}>
       <Group wrap="nowrap" justify="space-between" gap="xs">
         <Switch
           color={color}
@@ -57,7 +55,11 @@ export const ChallengeEditCard: FC<ChallengeEditCardProps> = ({ challenge, onTog
           onChange={() => onToggle(challenge, setDisabled)}
         />
 
-        <Icon path={data?.icon ?? mdiPuzzleEditOutline} color={theme.colors[data?.color ?? theme.primaryColor][5]} size={1.2} />
+        <Icon
+          path={data?.icon ?? mdiPuzzleEditOutline}
+          color={theme.colors[data?.color ?? theme.primaryColor][5]}
+          size={1.2}
+        />
 
         <Stack gap={0} maw={contentWidth} miw={contentWidth}>
           <Text truncate fw="bold">
@@ -65,7 +67,7 @@ export const ChallengeEditCard: FC<ChallengeEditCardProps> = ({ challenge, onTog
           </Text>
           <Text size="sm" fw="bold" ff="monospace" w="5rem">
             {challenge.score}
-            <Text span fw="bold" c="dimmed">
+            <Text span fw="bold" className="yy-readable-text">
               /{challenge.originalScore}pts
             </Text>
           </Text>
@@ -89,12 +91,10 @@ export const ChallengeEditCard: FC<ChallengeEditCardProps> = ({ challenge, onTog
         </Tooltip>
       </Group>
 
-      <Card.Section mt="sm">
-        <Progress.Root radius={0}>
-          <Progress.Section value={minRate} color={colors[minIdx]} />
-          <Progress.Section value={curRate - minRate} color={colors[curIdx]} />
-        </Progress.Root>
-      </Card.Section>
-    </Card>
+      <Progress.Root radius={0} mt="sm">
+        <Progress.Section value={minRate} color={colors[minIdx]} />
+        <Progress.Section value={curRate - minRate} color={colors[curIdx]} />
+      </Progress.Root>
+    </YinyuPanel>
   )
 }

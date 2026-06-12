@@ -1,25 +1,18 @@
-import { Badge, Button, Card, Group, Stack, Table, Text, Title } from '@mantine/core'
+import { Badge, Button, Group, Stack, Table, Text, Title } from '@mantine/core'
 import { showNotification } from '@mantine/notifications'
 import { mdiCheck, mdiRefresh } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import dayjs from 'dayjs'
 import { FC, useEffect, useState } from 'react'
 import { useParams } from 'react-router'
-import { WithGameEditTab } from '@Components/admin/WithGameEditTab'
 import { Empty } from '@Components/Empty'
+import { WithGameEditTab } from '@Components/admin/WithGameEditTab'
+import { YinyuTableShell } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
-import {
-  theoryAdminApi,
-  TheoryAnswerSheetStatus,
-  TheoryResultsModel,
-} from '../../../../Api/TheoryApi'
+import { theoryAdminApi, TheoryAnswerSheetStatus, TheoryResultsModel } from '../../../../Api/TheoryApi'
 
 const statusBadge = (status: TheoryAnswerSheetStatus) =>
-  status === TheoryAnswerSheetStatus.Submitted ? (
-    <Badge color="teal">已提交</Badge>
-  ) : (
-    <Badge color="yellow">草稿</Badge>
-  )
+  status === TheoryAnswerSheetStatus.Submitted ? <Badge color="teal">已提交</Badge> : <Badge color="yellow">草稿</Badge>
 
 const TheoryResults: FC = () => {
   const { id } = useParams()
@@ -73,7 +66,7 @@ const TheoryResults: FC = () => {
       }
     >
       <Stack gap="md">
-        <Card withBorder radius="sm">
+        <YinyuTableShell p="md">
           <Stack gap="sm">
             <Group justify="space-between">
               <Title order={4}>理论排行榜</Title>
@@ -101,7 +94,9 @@ const TheoryResults: FC = () => {
                       <Table.Td fw="bold">
                         {item.score} / {item.maxScore}
                       </Table.Td>
-                      <Table.Td>{item.submittedAt ? dayjs(item.submittedAt).format('YYYY-MM-DD HH:mm:ss') : '-'}</Table.Td>
+                      <Table.Td>
+                        {item.submittedAt ? dayjs(item.submittedAt).format('YYYY-MM-DD HH:mm:ss') : '-'}
+                      </Table.Td>
                     </Table.Tr>
                   ))}
                 </Table.Tbody>
@@ -110,9 +105,9 @@ const TheoryResults: FC = () => {
               <Empty description="暂无已审核队伍或提交记录。" />
             )}
           </Stack>
-        </Card>
+        </YinyuTableShell>
 
-        <Card withBorder radius="sm">
+        <YinyuTableShell p="md">
           <Stack gap="sm">
             <Title order={4}>个人答卷</Title>
             {results?.submissions.length ? (
@@ -137,7 +132,9 @@ const TheoryResults: FC = () => {
                         {item.status === TheoryAnswerSheetStatus.Submitted ? `${item.score} / ${item.maxScore}` : '-'}
                       </Table.Td>
                       <Table.Td>{dayjs(item.updatedAt).format('YYYY-MM-DD HH:mm:ss')}</Table.Td>
-                      <Table.Td>{item.submittedAt ? dayjs(item.submittedAt).format('YYYY-MM-DD HH:mm:ss') : '-'}</Table.Td>
+                      <Table.Td>
+                        {item.submittedAt ? dayjs(item.submittedAt).format('YYYY-MM-DD HH:mm:ss') : '-'}
+                      </Table.Td>
                     </Table.Tr>
                   ))}
                 </Table.Tbody>
@@ -146,7 +143,7 @@ const TheoryResults: FC = () => {
               <Empty description="暂无个人答卷。" />
             )}
           </Stack>
-        </Card>
+        </YinyuTableShell>
       </Stack>
     </WithGameEditTab>
   )

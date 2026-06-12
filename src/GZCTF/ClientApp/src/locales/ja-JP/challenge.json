@@ -77,7 +77,7 @@
       },
       "entry": {
         "description": {
-          "anchor": "クライアントを取得",
+          "anchor": "Use the platform proxy client",
           "proxy": "プラットフォームは tcp over ws プロキシが有効になっています。"
         },
         "label": "インスタンスエントリー"

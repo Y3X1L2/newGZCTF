@@ -1,4 +1,4 @@
-import { Card, Skeleton, Group } from '@mantine/core';
+import { Card, Skeleton, Group } from '@mantine/core'
 
 export function SkeletonCard() {
   return (
@@ -11,5 +11,5 @@ export function SkeletonCard() {
       <Skeleton height={8} width="100%" mb="xs" />
       <Skeleton height={8} width="100%" mb="xs" />
     </Card>
-  );
+  )
 }

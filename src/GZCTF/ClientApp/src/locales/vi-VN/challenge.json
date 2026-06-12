@@ -77,7 +77,7 @@
       },
       "entry": {
         "description": {
-          "anchor": "Lấy client proxy",
+          "anchor": "Use the platform proxy client",
           "proxy": "Chế độ proxy WebSocket đã được kích hoạt."
         },
         "label": "Thông tin Instance"

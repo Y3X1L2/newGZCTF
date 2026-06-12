@@ -263,7 +263,13 @@ docker-data/
 
 # Local development files
 .codex/
+.codex-run/
+.codegraph/
 design-system/
+design-lab/
+design-lab.zip
+gsap-skills-clone/
+trae-bg-effect/
 Dockerfile.local
 docker-compose.local.yml
 

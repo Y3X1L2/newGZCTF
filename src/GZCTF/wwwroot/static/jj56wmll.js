@@ -1,9 +1,6 @@
-/* The GZ::CTF Project @unknown
- * 
- * License   : GNU Affero General Public License v3.0 (Core)
- * License   : LicenseRef-GZCTF-Restricted (Restricted components)
+/* YINYU CTF Platform @unknown
+ *
  * Commit    : Unofficial build version
- * Build     : 2026-05-20T05:57:19.720Z
- * Copyright (C) 2022-2026 GZTimeWalker. All Rights Reserved.
+ * Build     : 2026-06-09T06:10:58.565Z
  */
 var e=()=>{};export{e as t};

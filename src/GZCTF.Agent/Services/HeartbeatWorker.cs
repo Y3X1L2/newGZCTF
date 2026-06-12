@@ -31,6 +31,7 @@ public class HeartbeatWorker : BackgroundService
                 var memLoad = GetMemoryLoad();
                 var containers = await docker.GetContainerCountAsync(token);
                 var vms = await kvm.GetVmCountAsync(token);
+                await kvm.RestoreRdpProxiesAsync(token);
 
                 var payload = new
                 {

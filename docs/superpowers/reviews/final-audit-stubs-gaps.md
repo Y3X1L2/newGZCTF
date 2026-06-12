@@ -1,7 +1,7 @@
 # Final Audit: Stubs, Logic Gaps, Missing DI, Missing Endpoints
 
 **Audit date:** 2026-05-19
-**Scope:** `D:\newGZ\newGZCTF\src\` (entire codebase)
+**Scope:** `D:\newGZ\YINYU CTF平台\src\` (entire codebase)
 **Methodology:** Automated grep + manual inspection of every controller, service, provider, DI registration, and frontend API call.
 
 ---

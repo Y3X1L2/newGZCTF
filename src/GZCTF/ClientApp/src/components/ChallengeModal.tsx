@@ -19,8 +19,9 @@ import duration from 'dayjs/plugin/duration'
 import { FC, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { InstanceEntry } from '@Components/InstanceEntry'
-import { VmInstanceEntry } from '@Components/VmInstanceEntry'
 import { ContentPlaceholder, InlineMarkdown, Markdown } from '@Components/MarkdownRenderer'
+import { VmInstanceEntry } from '@Components/VmInstanceEntry'
+import { YinyuHeartbeatIcon, YinyuHexField, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
 import { ChallengeCategoryItemProps } from '@Utils/Shared'
 import { ChallengeDetailModel, ChallengeType, EnvironmentType } from '@Api'
@@ -49,27 +50,25 @@ const ChallengeDeadlineNotice: FC<ChallengeDeadlineNoticeProps> = ({ deadline, o
     onExpiredChange(now.isAfter(deadline))
   }, [now, deadline, onExpiredChange])
 
-  if (now.isAfter(deadline)) {
-    return null
-  }
-
   const formattedDeadline = useMemo(() => deadline.locale(locale).format('L LTS'), [deadline, locale])
 
   const diff = deadline.diff(now)
   const duration = dayjs.duration(diff)
   const countdownText = `${Math.floor(duration.asHours())}:${duration.format('mm:ss')}`
 
+  if (now.isAfter(deadline)) {
+    return null
+  }
+
   return (
-    <Group gap="xs" justify="space-between" wrap="nowrap">
-      <Text fw="bold" size="sm">
-        {t('challenge.content.deadline.remaining')}&nbsp;
-        <Text span ff="monospace" fw="bold" size="sm" c="brand">
-          {countdownText}
-        </Text>
-      </Text>
-      <Text fw="bold" size="xs" c="dimmed">
+    <Group gap="sm" justify="space-between" wrap="wrap" className="yy-challenge-deadline-row">
+      <YinyuStatusPill tone="warm" state="running" icon={YinyuHeartbeatIcon} className="yy-challenge-deadline-pill">
+        <span className="yy-instance-countdown-label">{t('challenge.content.deadline.remaining')}</span>
+        <span className="yy-instance-countdown-value">{countdownText}</span>
+      </YinyuStatusPill>
+      <Text fw={700} size="xs" className="yy-readable-text yy-challenge-deadline-target">
         {t('challenge.content.deadline.label')}&nbsp;
-        <Text span ff="monospace" c="dimmed" fw="bold" size="xs">
+        <Text span ff="monospace" fw={800} className="yy-readable-text">
           {formattedDeadline}
         </Text>
       </Text>
@@ -121,6 +120,14 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
   const { t } = useTranslation()
   const theme = useMantineTheme()
   const { locale } = useLanguage()
+  const modalClassNames = useMemo(
+    () => ({
+      ...classes,
+      content: `${classes.content} challenge-drawer-draft panel-card`,
+      inner: 'yy-challenge-modal-inner',
+    }),
+    []
+  )
 
   const placeholders = t('challenge.content.flag_placeholders', {
     returnObjects: true,
@@ -163,7 +170,14 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
   )
 
   const content = (
-    <ScrollAreaAutosize mah="52vh" maw="100%" scrollbars="y" scrollbarSize={6} type="scroll">
+    <ScrollAreaAutosize
+      mah="52vh"
+      maw="100%"
+      scrollbars="y"
+      scrollbarSize={6}
+      type="scroll"
+      className="yy-challenge-modal-content"
+    >
       {challenge?.content === undefined ? (
         <ContentPlaceholder />
       ) : (
@@ -235,11 +249,7 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
   )
 
   const vmInstance = isWindowsVm && gameId && challenge?.id && (
-    <VmInstanceEntry
-      gameId={gameId}
-      challengeId={challenge.id}
-      disabled={disabled}
-    />
+    <VmInstanceEntry gameId={gameId} challengeId={challenge.id} disabled={disabled} />
   )
 
   const attemptsInfo = useMemo(() => {
@@ -332,17 +342,19 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
 
   return (
     <Modal.Root
-      size="42vw"
+      size="min(72rem, calc(100vw - 6rem))"
       {...modalProps}
       onClose={() => {
         setFlag('')
         modalProps.onClose()
       }}
       centered
-      classNames={classes}
+      zIndex={4600}
+      classNames={modalClassNames}
     >
       <Modal.Overlay />
       <Modal.Content>
+        <YinyuHexField cells={42} />
         <Modal.Header>
           <Modal.Title>{title}</Modal.Title>
         </Modal.Header>

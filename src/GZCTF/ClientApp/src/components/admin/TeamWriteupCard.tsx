@@ -2,12 +2,10 @@ import {
   ActionIcon,
   Avatar,
   Badge,
-  Card,
+  BoxProps,
   Group,
-  CardProps,
   Stack,
   Text,
-  useMantineColorScheme,
   useMantineTheme,
 } from '@mantine/core'
 import { mdiDownload } from '@mdi/js'
@@ -16,11 +14,12 @@ import dayjs from 'dayjs'
 import { FC } from 'react'
 import { Link } from 'react-router'
 import { ScrollingText } from '@Components/ScrollingText'
+import { YinyuPanel } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
 import { WriteupInfo } from '@Api'
 import misc from '@Styles/Misc.module.css'
 
-interface TeamWriteupCardProps extends CardProps {
+interface TeamWriteupCardProps extends BoxProps {
   writeup: WriteupInfo
   selected?: boolean
   onClick: () => void
@@ -28,20 +27,12 @@ interface TeamWriteupCardProps extends CardProps {
 }
 
 export const TeamWriteupCard: FC<TeamWriteupCardProps> = ({ writeup, selected, divisionName, ...props }) => {
-  const { colorScheme } = useMantineColorScheme()
   const { locale } = useLanguage()
   const theme = useMantineTheme()
-  const borderColor = selected ? theme.colors[theme.primaryColor][colorScheme === 'dark' ? 8 : 6] : 'transparent'
+  const borderColor = selected ? theme.colors[theme.primaryColor][8] : 'transparent'
 
   return (
-    <Card
-      {...props}
-      p="sm"
-      shadow="sm"
-      classNames={{ root: misc.hoverCard }}
-      bd={`2px solid ${borderColor}`}
-      data-no-move
-    >
+    <YinyuPanel {...props} p="sm" className={misc.hoverCard} bd={`2px solid ${borderColor}`} data-no-move>
       <Group wrap="nowrap" gap={3} justify="space-between">
         <Group gap="sm" wrap="nowrap" justify="space-between" maw="calc(100% - 2rem)">
           <Avatar alt="avatar" src={writeup.team?.avatar} size="md">
@@ -49,7 +40,7 @@ export const TeamWriteupCard: FC<TeamWriteupCardProps> = ({ writeup, selected, d
           </Avatar>
           <Stack gap={0} justify="space-between" maw="calc(100% - 3rem)">
             <Group gap="xs">
-              <Text size="0.8rem" lineClamp={1} c="dimmed">
+              <Text size="0.8rem" lineClamp={1} className="yy-readable-text">
                 #{writeup.team?.id}
               </Text>
               {divisionName && (
@@ -59,7 +50,7 @@ export const TeamWriteupCard: FC<TeamWriteupCardProps> = ({ writeup, selected, d
               )}
             </Group>
             <ScrollingText size="md" fw={600} text={writeup.team?.name ?? ''} />
-            <Text size="xs" lineClamp={1} c="dimmed">
+            <Text size="xs" lineClamp={1} className="yy-readable-text">
               {dayjs(writeup.uploadTimeUtc).locale(locale).format('SLL LT')}
             </Text>
           </Stack>
@@ -68,6 +59,6 @@ export const TeamWriteupCard: FC<TeamWriteupCardProps> = ({ writeup, selected, d
           <Icon path={mdiDownload} size={1} />
         </ActionIcon>
       </Group>
-    </Card>
+    </YinyuPanel>
   )
 }

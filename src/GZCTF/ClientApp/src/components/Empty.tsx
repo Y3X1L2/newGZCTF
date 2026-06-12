@@ -3,6 +3,7 @@ import { mdiInbox } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { FC, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { YinyuHexField } from '@Components/yinyu/YinyuUI'
 import classes from '@Styles/Empty.module.css'
 
 interface EmptyProps {
@@ -18,8 +19,9 @@ export const Empty: FC<EmptyProps> = (props) => {
 
   return (
     <Stack align="center" data-border={props.bordered || undefined} className={classes.box}>
-      <Icon path={props.mdiPath ?? mdiInbox} size={props.iconSize ?? 4} color="gray" />
-      <Text c="dimmed" size={props.fontSize}>
+      <YinyuHexField cells={24} />
+      <Icon path={props.mdiPath ?? mdiInbox} size={props.iconSize ?? 4} className={classes.icon} />
+      <Text className="yy-readable-text" size={props.fontSize}>
         {props.description ?? t('common.content.no_data')}
       </Text>
     </Stack>

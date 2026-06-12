@@ -1,4 +1,4 @@
-import { Button, Group, GroupProps, LoadingOverlay, Stack, Tabs } from '@mantine/core'
+import { Button, Group, GroupProps, Stack, Tabs } from '@mantine/core'
 import {
   mdiAccountGroupOutline,
   mdiBullhornOutline,
@@ -9,14 +9,15 @@ import {
   mdiSwordCross,
   mdiTagOutline,
   mdiTextBoxOutline,
+  mdiTimelineClockOutline,
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import React, { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useLocation, Link, useNavigate, useParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { AdminPage } from '@Components/admin/AdminPage'
+import { YinyuRouteProgress, YinyuRouteTransition } from '@Components/yinyu/YinyuUI'
 import { useAdminGame } from '@Hooks/useGame'
-import { DEFAULT_LOADING_OVERLAY } from '@Utils/Shared'
 import api, { GameType } from '@Api'
 import misc from '@Styles/Misc.module.css'
 
@@ -28,14 +29,7 @@ export interface GameEditTabProps extends React.PropsWithChildren {
   backUrl?: string
 }
 
-export const WithGameEditTab: FC<GameEditTabProps> = ({
-  children,
-  isLoading,
-  contentPos,
-  head,
-  backUrl,
-  ...others
-}) => {
+export const WithGameEditTab: FC<GameEditTabProps> = ({ children, isLoading, contentPos, head, backUrl, ...others }) => {
   const navigate = useNavigate()
   const location = useLocation()
   const { id } = useParams()
@@ -51,15 +45,14 @@ export const WithGameEditTab: FC<GameEditTabProps> = ({
     { icon: mdiTextBoxOutline, title: t('admin.tab.games.info'), path: 'info' },
     { icon: mdiBullhornOutline, title: t('admin.tab.games.notices'), path: 'notices' },
     ...(!isTheoryOnly ? [{ icon: mdiFlagOutline, title: t('admin.tab.games.challenges'), path: 'challenges' }] : []),
-    ...(isAwdGame
-      ? [{ icon: mdiSwordCross, title: t('admin.tab.games.awd'), path: 'awdp-services' }]
-      : []),
+    ...(isAwdGame ? [{ icon: mdiSwordCross, title: t('admin.tab.games.awd'), path: 'awdp-services' }] : []),
     ...(isTheoryGame
       ? [
           { icon: mdiFileDocumentCheckOutline, title: '理论试卷', path: 'theory-paper' },
           { icon: mdiAccountGroupOutline, title: '理论成绩', path: 'theory-results' },
         ]
       : []),
+    { icon: mdiTimelineClockOutline, title: '比赛阶段', path: 'phases' },
     { icon: mdiTagOutline, title: t('admin.tab.games.divisions'), path: 'divisions' },
     { icon: mdiAccountGroupOutline, title: t('admin.tab.games.review'), path: 'review' },
     ...(!isTheoryOnly
@@ -69,17 +62,17 @@ export const WithGameEditTab: FC<GameEditTabProps> = ({
         ]
       : []),
   ]
-
   const getTab = (path: string) => pages.find((page) => path.includes(page.path))
 
   const [activeTab, setActiveTab] = useState(getTab(location.pathname)?.path ?? pages[0].path)
+  const activeEditPage = pages.find((page) => page.path === activeTab) ?? pages[0]
 
   useEffect(() => {
     if (!game) return
 
     const tab = getTab(location.pathname)
     if (tab) {
-      setActiveTab(tab.path ?? '')
+      setActiveTab(tab.path)
     } else {
       navigate(pages[0].path)
     }
@@ -105,11 +98,12 @@ export const WithGameEditTab: FC<GameEditTabProps> = ({
         </>
       }
     >
-      <Group wrap="nowrap" justify="space-between" align="flex-start" w="100%" pb="xl">
+      <div className="yy-game-edit-grid" style={{ width: '100%', paddingBottom: 'var(--mantine-spacing-xl)' }}>
         <Tabs
           orientation="vertical"
           value={activeTab}
           onChange={(value) => value && navigate(`/admin/games/${id}/${value}`)}
+          className="panel-card admin-panel yy-game-edit-nav"
           classNames={{
             root: misc.w10rem,
             list: misc.w10rem,
@@ -123,11 +117,18 @@ export const WithGameEditTab: FC<GameEditTabProps> = ({
             ))}
           </Tabs.List>
         </Tabs>
-        <Stack w="calc(100% - 11rem)" pos="relative">
-          <LoadingOverlay visible={isLoading ?? false} overlayProps={DEFAULT_LOADING_OVERLAY} />
-          {children}
+        <Stack pos="relative" className="panel-card admin-panel large yy-game-edit-panel">
+          <div key={activeTab} className="yy-admin-route-stage yy-game-edit-route-stage">
+            <YinyuRouteProgress className="yy-admin-route-pulse" />
+            {children}
+          </div>
+          {isLoading ? (
+            <div className="yy-admin-transition-overlay" role="status" aria-live="polite">
+              <YinyuRouteTransition title={activeEditPage.title} description="正在加载赛事配置" />
+            </div>
+          ) : null}
         </Stack>
-      </Group>
+      </div>
     </AdminPage>
   )
 }

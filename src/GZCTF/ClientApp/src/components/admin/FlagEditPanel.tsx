@@ -1,10 +1,11 @@
-import { ActionIcon, Card, Group, Input, SimpleGrid, Stack, Text } from '@mantine/core'
+import { ActionIcon, Group, Input, SimpleGrid, Stack, Text } from '@mantine/core'
 import { useClipboard } from '@mantine/hooks'
 import { showNotification } from '@mantine/notifications'
 import { mdiCheck, mdiDeleteOutline } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { FC } from 'react'
 import { useTranslation } from 'react-i18next'
+import { YinyuPanel } from '@Components/yinyu/YinyuUI'
 import { useDisplayInputStyles } from '@Utils/ThemeOverride'
 import { Attachment, FlagInfoModel } from '@Api'
 
@@ -22,7 +23,7 @@ const FlagCard: FC<FlagCardProps> = ({ flag, onDelete, unifiedAttachment }) => {
   const { t } = useTranslation()
 
   return (
-    <Card p="sm">
+    <YinyuPanel p="sm">
       <Group wrap="nowrap" justify="space-between" gap={3}>
         <Stack align="flex-start" gap={0} w="100%">
           <Input
@@ -49,7 +50,7 @@ const FlagCard: FC<FlagCardProps> = ({ flag, onDelete, unifiedAttachment }) => {
           <Icon path={mdiDeleteOutline} size={1} />
         </ActionIcon>
       </Group>
-    </Card>
+    </YinyuPanel>
   )
 }
 
@@ -65,7 +66,12 @@ export const FlagEditPanel: FC<FlagEditPanelProps> = ({ flags, onDelete, unified
       <SimpleGrid spacing="sm" cols={{ base: 2, w18: 3, w24: 4, w30: 5, w36: 6, w42: 7, w48: 8 }}>
         {flags &&
           flags.map((flag, i) => (
-            <FlagCard key={flag.id ?? i} flag={flag} onDelete={() => onDelete(flag)} unifiedAttachment={unifiedAttachment} />
+            <FlagCard
+              key={flag.id ?? i}
+              flag={flag}
+              onDelete={() => onDelete(flag)}
+              unifiedAttachment={unifiedAttachment}
+            />
           ))}
       </SimpleGrid>
     </Stack>

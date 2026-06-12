@@ -18,14 +18,6 @@
       "text": "Una desolación, ¿por qué está aquí?",
       "title": "La página no existe"
     },
-    "about": {
-      "contributors": "Contribuyentes",
-      "documentation": "Documentación Oficial",
-      "repository": "Repositorio GitHub",
-      "resources": "Recursos",
-      "slogan": "Hackea por diversión, sin ánimo de lucro",
-      "version": "Versión"
-    },
     "color": {
       "custom": {
         "description": "Selecciona el color base que deseas usar",

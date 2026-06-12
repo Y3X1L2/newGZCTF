@@ -39,6 +39,28 @@ public static class PrelaunchHelper
 
                 await context.SaveChangesAsync();
             }
+            else
+            {
+                var legacyPostMarker = string.Concat("G", "Z", "::", "C", "T", "F");
+                var legacyPosts = await context.Posts
+                    .Where(p => p.Title.Contains(legacyPostMarker) ||
+                                p.Summary.Contains(legacyPostMarker) ||
+                                p.Content.Contains(legacyPostMarker))
+                    .ToListAsync();
+
+                if (legacyPosts.Count > 0)
+                {
+                    foreach (var post in legacyPosts)
+                    {
+                        post.UpdateTimeUtc = DateTimeOffset.UtcNow;
+                        post.Title = StaticLocalizer[nameof(Resources.Program.Init_PostTitle)];
+                        post.Summary = StaticLocalizer[nameof(Resources.Program.Init_PostSummary)];
+                        post.Content = StaticLocalizer[nameof(Resources.Program.Init_PostContent)];
+                    }
+
+                    await context.SaveChangesAsync();
+                }
+            }
 
             if (app.Environment.IsDevelopment() || app.Configuration.GetSection("ADMIN_PASSWORD").Exists())
             {

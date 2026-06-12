@@ -26,4 +26,21 @@ public class VmController : ControllerBase
         await _kvm.DestroyVmAsync(vmName, token);
         return NoContent();
     }
+
+    [HttpGet("{vmName}/ip")]
+    public async Task<IActionResult> GetIp(string vmName, CancellationToken token)
+    {
+        var ip = await _kvm.GetIpAddressAsync(vmName, token);
+        var rdpPort = string.IsNullOrEmpty(ip)
+            ? null
+            : await _kvm.EnsureRdpProxyAsync(vmName, ip, token);
+
+        return Ok(new VmIpResponse
+        {
+            VmName = vmName,
+            IpAddress = ip,
+            RdpPort = rdpPort,
+            Status = string.IsNullOrEmpty(ip) ? "Pending" : "Ready"
+        });
+    }
 }

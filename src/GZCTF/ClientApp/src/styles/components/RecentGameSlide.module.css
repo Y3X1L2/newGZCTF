@@ -8,8 +8,18 @@
   background-size: cover;
   background-position: center;
 
-  background-blend-mode: plus-darker;
-  background-image: radial-gradient(circle, rgba(0, 0, 0, 0) 70%, rgba(0, 0, 0, 0.3) 100%), var(--slide-image);
+  border: 1px solid var(--yy-line);
+  border-radius: var(--yy-radius);
+  overflow: hidden;
+  background-blend-mode: normal;
+  background-image:
+    radial-gradient(ellipse at 18% 12%, rgba(107, 238, 177, 0.18), transparent 28%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.75)), var(--yy-hex-flow), var(--slide-image);
+  background-size:
+    auto,
+    auto,
+    1.45rem 1.25rem,
+    cover;
 }
 
 .title {

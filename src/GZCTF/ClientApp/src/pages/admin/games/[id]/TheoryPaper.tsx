@@ -3,7 +3,6 @@ import {
   Alert,
   Badge,
   Button,
-  Card,
   Checkbox,
   FileButton,
   Group,
@@ -34,24 +33,26 @@ import {
 import { Icon } from '@mdi/react'
 import { FC, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router'
-import { WithGameEditTab } from '@Components/admin/WithGameEditTab'
 import { Empty } from '@Components/Empty'
+import { WithGameEditTab } from '@Components/admin/WithGameEditTab'
+import { YinyuModalBody, YinyuPanel, YinyuTableShell } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import {
   theoryAdminApi,
   TheoryPaperDetailModel,
   TheoryPaperQuestionEditModel,
   TheoryQuestionBankItemModel,
+  TheoryQuestionEditModel,
   TheoryQuestionType,
 } from '../../../../Api/TheoryApi'
+
+const DEFAULT_BANK_NAME = 'Default'
 
 const questionTypeOptions = [
   { value: TheoryQuestionType.SingleChoice, label: '单选题' },
   { value: TheoryQuestionType.MultipleChoice, label: '多选题' },
   { value: TheoryQuestionType.TrueFalse, label: '判断题' },
 ]
-
-const DEFAULT_BANK_NAME = 'Default'
 
 const normalizeBankName = (bankName?: string | null) => bankName?.trim() || DEFAULT_BANK_NAME
 
@@ -66,9 +67,28 @@ const defaultQuestion = (order: number): TheoryPaperQuestionEditModel => ({
   order,
 })
 
-const normalizeQuestion = (question: Partial<TheoryPaperQuestionEditModel>, index: number): TheoryPaperQuestionEditModel => {
+const normalizeAnswerIndexes = (indexes: number[] | undefined, optionCount: number, multiple: boolean) => {
+  const values = [
+    ...new Set(
+      (indexes ?? []).map(Number).filter((index) => Number.isInteger(index) && index >= 0 && index < optionCount)
+    ),
+  ]
+
+  if (!values.length) return [0]
+  return multiple ? values.sort((a, b) => a - b) : [values[0]]
+}
+
+const normalizeQuestion = (
+  question: Partial<TheoryPaperQuestionEditModel>,
+  index: number
+): TheoryPaperQuestionEditModel => {
   const type = question.type ?? TheoryQuestionType.SingleChoice
-  const options = type === TheoryQuestionType.TrueFalse ? ['正确', '错误'] : question.options?.length ? question.options : ['选项 A', '选项 B']
+  const options =
+    type === TheoryQuestionType.TrueFalse
+      ? ['正确', '错误']
+      : question.options?.length
+        ? question.options
+        : ['选项 A', '选项 B']
 
   return {
     id: question.id,
@@ -78,13 +98,22 @@ const normalizeQuestion = (question: Partial<TheoryPaperQuestionEditModel>, inde
     title: question.title ?? '',
     content: question.content ?? '',
     options,
-    answerIndexes: question.answerIndexes?.length ? question.answerIndexes : [0],
+    answerIndexes: normalizeAnswerIndexes(
+      question.answerIndexes,
+      options.length,
+      type === TheoryQuestionType.MultipleChoice
+    ),
     score: Number(question.score || 1),
     order: Number(question.order || index + 1),
   }
 }
 
-const getAnswerLabel = (question: TheoryPaperQuestionEditModel) =>
+const normalizePaper = (paper: TheoryPaperDetailModel): TheoryPaperDetailModel => ({
+  ...paper,
+  questions: (paper.questions ?? []).map(normalizeQuestion).sort((a, b) => a.order - b.order),
+})
+
+const getAnswerLabel = (question: Pick<TheoryQuestionEditModel, 'answerIndexes' | 'options'>) =>
   question.answerIndexes.map((idx) => question.options[idx] ?? `#${idx}`).join(' / ')
 
 const PaperQuestionEditor: FC<{
@@ -99,12 +128,18 @@ const PaperQuestionEditor: FC<{
   const isMultiple = question.type === TheoryQuestionType.MultipleChoice
 
   const setType = (type: TheoryQuestionType) => {
-    const options = type === TheoryQuestionType.TrueFalse ? ['正确', '错误'] : question.options.length >= 2 ? question.options : ['选项 A', '选项 B']
+    const options =
+      type === TheoryQuestionType.TrueFalse
+        ? ['正确', '错误']
+        : question.options.length >= 2
+          ? question.options
+          : ['选项 A', '选项 B']
+
     onChange({
       ...question,
       type,
       options,
-      answerIndexes: question.answerIndexes.filter((i) => i < options.length).slice(0, type === TheoryQuestionType.MultipleChoice ? undefined : 1),
+      answerIndexes: normalizeAnswerIndexes(question.answerIndexes, options.length, type === TheoryQuestionType.MultipleChoice),
     })
   }
 
@@ -119,11 +154,15 @@ const PaperQuestionEditor: FC<{
     const answerIndexes = question.answerIndexes
       .filter((idx) => idx !== optionIndex)
       .map((idx) => (idx > optionIndex ? idx - 1 : idx))
-    onChange({ ...question, options, answerIndexes: answerIndexes.length ? answerIndexes : [0] })
+    onChange({
+      ...question,
+      options,
+      answerIndexes: normalizeAnswerIndexes(answerIndexes, options.length, isMultiple),
+    })
   }
 
   return (
-    <Card withBorder radius="sm">
+    <YinyuPanel p="md">
       <Stack gap="sm">
         <Group justify="space-between" align="flex-start">
           <Group gap="xs">
@@ -186,7 +225,12 @@ const PaperQuestionEditor: FC<{
           <Checkbox.Group
             label="正确答案"
             value={question.answerIndexes.map(String)}
-            onChange={(values) => onChange({ ...question, answerIndexes: values.map(Number).sort((a, b) => a - b) })}
+            onChange={(values) =>
+              onChange({
+                ...question,
+                answerIndexes: normalizeAnswerIndexes(values.map(Number), question.options.length, true),
+              })
+            }
           >
             <Stack gap="xs" mt="xs">
               {question.options.map((option, optionIndex) => (
@@ -250,13 +294,18 @@ const PaperQuestionEditor: FC<{
             variant="default"
             leftSection={<Icon path={mdiPlus} size={0.75} />}
             disabled={disabled}
-            onClick={() => onChange({ ...question, options: [...question.options, `选项 ${question.options.length + 1}`] })}
+            onClick={() =>
+              onChange({
+                ...question,
+                options: [...question.options, `选项 ${String.fromCharCode(65 + question.options.length)}`],
+              })
+            }
           >
             添加选项
           </Button>
         )}
       </Stack>
-    </Card>
+    </YinyuPanel>
   )
 }
 
@@ -279,7 +328,10 @@ const TheoryPaper: FC = () => {
 
   const totalScore = useMemo(() => paper?.questions.reduce((sum, q) => sum + Number(q.score || 0), 0) ?? 0, [paper])
   const currentSourceIds = useMemo(
-    () => new Set((paper?.questions ?? []).map((q) => q.sourceQuestionId).filter((id): id is number => typeof id === 'number')),
+    () =>
+      new Set(
+        (paper?.questions ?? []).map((q) => q.sourceQuestionId).filter((sourceId): sourceId is number => typeof sourceId === 'number')
+      ),
     [paper]
   )
   const bankStats = useMemo(() => {
@@ -305,7 +357,9 @@ const TheoryPaper: FC = () => {
 
     return questions
       .filter((question) => question.type === bankType)
-      .filter((question) => selectedBankNames.length === 0 || selectedBankNames.includes(normalizeBankName(question.bankName)))
+      .filter(
+        (question) => selectedBankNames.length === 0 || selectedBankNames.includes(normalizeBankName(question.bankName))
+      )
       .filter((question) => {
         if (!keyword) return true
         return `${question.title} ${question.content}`.toLowerCase().includes(keyword)
@@ -324,10 +378,7 @@ const TheoryPaper: FC = () => {
     if (numId < 0) return
     try {
       const res = await theoryAdminApi.getPaper(numId)
-      setPaper({
-        ...res.data,
-        questions: (res.data.questions ?? []).map(normalizeQuestion),
-      })
+      setPaper(normalizePaper(res.data))
     } catch (err) {
       showErrorMsg(err, (key) => key)
     }
@@ -390,7 +441,9 @@ const TheoryPaper: FC = () => {
     if (!paper || items.length === 0) return
 
     const existingSourceIds = new Set(
-      paper.questions.map((question) => question.sourceQuestionId).filter((sourceId): sourceId is number => typeof sourceId === 'number')
+      paper.questions
+        .map((question) => question.sourceQuestionId)
+        .filter((sourceId): sourceId is number => typeof sourceId === 'number')
     )
     const uniqueItems = items.filter((item) => !existingSourceIds.has(item.id))
     if (uniqueItems.length === 0) {
@@ -406,7 +459,11 @@ const TheoryPaper: FC = () => {
       ],
     })
     setSelectedBankQuestionIds((ids) => ids.filter((id) => !uniqueItems.some((item) => String(item.id) === id)))
-    showNotification({ color: 'teal', message: `已添加 ${uniqueItems.length} 道题目`, icon: <Icon path={mdiCheck} size={1} /> })
+    showNotification({
+      color: 'teal',
+      message: `已添加 ${uniqueItems.length} 道题目`,
+      icon: <Icon path={mdiCheck} size={1} />,
+    })
   }
 
   const addRandomFromBank = () => {
@@ -423,9 +480,11 @@ const TheoryPaper: FC = () => {
   const saveToBank = async (question: TheoryPaperQuestionEditModel, index: number) => {
     setDisabled(true)
     try {
-      const payload = {
+      const payload: TheoryQuestionEditModel = {
         type: question.type,
-        bankName: normalizeBankName(questions.find((item) => item.id === question.sourceQuestionId)?.bankName ?? question.bankName),
+        bankName: normalizeBankName(
+          questions.find((item) => item.id === question.sourceQuestionId)?.bankName ?? question.bankName
+        ),
         title: question.title,
         content: question.content,
         options: question.options,
@@ -478,7 +537,7 @@ const TheoryPaper: FC = () => {
         description: paper.description,
         questions: paper.questions,
       })
-      setPaper({ ...res.data, questions: res.data.questions.map(normalizeQuestion) })
+      setPaper(normalizePaper(res.data))
       showNotification({ color: 'teal', message: '试卷已保存', icon: <Icon path={mdiCheck} size={1} /> })
     } catch (err) {
       showErrorMsg(err, (key) => key)
@@ -491,7 +550,7 @@ const TheoryPaper: FC = () => {
     setDisabled(true)
     try {
       const res = await theoryAdminApi.publishPaper(numId)
-      setPaper({ ...res.data, questions: res.data.questions.map(normalizeQuestion) })
+      setPaper(normalizePaper(res.data))
       showNotification({ color: 'teal', message: '试卷已发放', icon: <Icon path={mdiCheck} size={1} /> })
     } catch (err) {
       showErrorMsg(err, (key) => key)
@@ -506,7 +565,11 @@ const TheoryPaper: FC = () => {
       contentPos="right"
       head={
         <>
-          <Button leftSection={<Icon path={mdiFileUploadOutline} size={1} />} variant="outline" onClick={() => setJsonOpened(true)}>
+          <Button
+            leftSection={<Icon path={mdiFileUploadOutline} size={1} />}
+            variant="outline"
+            onClick={() => setJsonOpened(true)}
+          >
             JSON 导入
           </Button>
           <FileButton onChange={onJsonFile} accept="application/json,.json">
@@ -519,7 +582,11 @@ const TheoryPaper: FC = () => {
           <Button leftSection={<Icon path={mdiContentSaveOutline} size={1} />} disabled={disabled} onClick={savePaper}>
             保存试卷
           </Button>
-          <Button leftSection={<Icon path={mdiSendCheckOutline} size={1} />} disabled={disabled || !paper?.questions.length} onClick={publishPaper}>
+          <Button
+            leftSection={<Icon path={mdiSendCheckOutline} size={1} />}
+            disabled={disabled || !paper?.questions.length}
+            onClick={publishPaper}
+          >
             发放试卷
           </Button>
         </>
@@ -528,27 +595,31 @@ const TheoryPaper: FC = () => {
       <Stack gap="md">
         {paper?.isPublished && (
           <Alert color="teal" icon={<Icon path={mdiCheck} />}>
-            试卷已发放，选手可以进入理论考试页面作答。已有提交后将不能再编辑试卷。
+            试卷已发放，选手可以进入理论考试页面作答。已有提交后将不能再随意修改试卷。
           </Alert>
         )}
 
-        <SimpleGrid cols={{ base: 1, md: 3 }}>
-          <TextInput
-            label="试卷名称"
-            value={paper?.title ?? ''}
-            disabled={disabled}
-            onChange={(event) => paper && setPaper({ ...paper, title: event.currentTarget.value })}
-          />
-          <NumberInput label="题目数量" value={paper?.questions.length ?? 0} disabled />
-          <NumberInput label="总分" value={totalScore} disabled />
-        </SimpleGrid>
-        <Textarea
-          label="试卷说明"
-          minRows={2}
-          value={paper?.description ?? ''}
-          disabled={disabled}
-          onChange={(event) => paper && setPaper({ ...paper, description: event.currentTarget.value })}
-        />
+        <YinyuPanel p="md">
+          <Stack gap="md">
+            <SimpleGrid cols={{ base: 1, md: 3 }}>
+              <TextInput
+                label="试卷名称"
+                value={paper?.title ?? ''}
+                disabled={disabled}
+                onChange={(event) => paper && setPaper({ ...paper, title: event.currentTarget.value })}
+              />
+              <NumberInput label="题目数量" value={paper?.questions.length ?? 0} disabled />
+              <NumberInput label="总分" value={totalScore} disabled />
+            </SimpleGrid>
+            <Textarea
+              label="试卷说明"
+              minRows={2}
+              value={paper?.description ?? ''}
+              disabled={disabled}
+              onChange={(event) => paper && setPaper({ ...paper, description: event.currentTarget.value })}
+            />
+          </Stack>
+        </YinyuPanel>
 
         <Group justify="space-between">
           <Title order={4}>题目配置</Title>
@@ -582,167 +653,185 @@ const TheoryPaper: FC = () => {
       </Stack>
 
       <Modal opened={bankOpened} onClose={() => setBankOpened(false)} title="共享题库" size="90%">
-        <Stack gap="md">
-          <SimpleGrid cols={{ base: 1, md: 4 }}>
-            <Select
-              label="题型"
-              data={questionTypeOptions}
-              value={bankType}
-              onChange={(value) => {
-                if (!value) return
-                setBankType(value as TheoryQuestionType)
-                setSelectedBankNames([])
-                setSelectedBankQuestionIds([])
-              }}
-            />
-            <MultiSelect
-              label="题库"
-              data={bankNameOptions}
-              value={selectedBankNames}
-              placeholder="默认包含全部题库"
-              searchable
-              clearable
-              onChange={(value) => {
-                setSelectedBankNames(value)
-                setSelectedBankQuestionIds([])
-              }}
-            />
-            <NumberInput
-              label="统一分值"
-              min={1}
-              value={bankScore}
-              onChange={(value) => setBankScore(Number(value || 1))}
-            />
-            <TextInput
-              label="搜索题干"
-              value={bankKeyword}
-              placeholder="按题干或说明过滤"
-              onChange={(event) => setBankKeyword(event.currentTarget.value)}
-            />
-          </SimpleGrid>
-
-          <Group justify="space-between" align="flex-end">
-            <Group gap="xs">
-              <Badge variant="light">符合条件 {filteredBankQuestions.length}</Badge>
-              <Badge color="teal" variant="light">可添加 {availableBankQuestions.length}</Badge>
-              <Badge color="gray" variant="light">已选择 {selectedBankQuestions.length}</Badge>
-            </Group>
-            <Group>
-              <NumberInput
-                label="随机抽取数量"
-                min={1}
-                max={availableBankQuestions.length || 1}
-                value={randomCount}
-                w={140}
-                onChange={(value) => setRandomCount(Number(value || 1))}
+        <YinyuModalBody p="md">
+          <Stack gap="md">
+            <SimpleGrid cols={{ base: 1, md: 4 }}>
+              <Select
+                label="题型"
+                data={questionTypeOptions}
+                value={bankType}
+                onChange={(value) => {
+                  if (!value) return
+                  setBankType(value as TheoryQuestionType)
+                  setSelectedBankNames([])
+                  setSelectedBankQuestionIds([])
+                }}
               />
-              <Button variant="outline" disabled={!availableBankQuestions.length} onClick={addRandomFromBank}>
-                随机添加
-              </Button>
-              <Button disabled={!selectedBankQuestions.length} onClick={() => addFromBank(selectedBankQuestions)}>
-                添加选中
-              </Button>
+              <MultiSelect
+                label="题库"
+                data={bankNameOptions}
+                value={selectedBankNames}
+                placeholder="默认包含全部题库"
+                searchable
+                clearable
+                onChange={(value) => {
+                  setSelectedBankNames(value)
+                  setSelectedBankQuestionIds([])
+                }}
+              />
+              <NumberInput
+                label="统一分值"
+                min={1}
+                value={bankScore}
+                onChange={(value) => setBankScore(Number(value || 1))}
+              />
+              <TextInput
+                label="搜索题干"
+                value={bankKeyword}
+                placeholder="按题干或说明过滤"
+                onChange={(event) => setBankKeyword(event.currentTarget.value)}
+              />
+            </SimpleGrid>
+
+            <Group justify="space-between" align="flex-end">
+              <Group gap="xs">
+                <Badge variant="light">符合条件 {filteredBankQuestions.length}</Badge>
+                <Badge color="teal" variant="light">
+                  可添加 {availableBankQuestions.length}
+                </Badge>
+                <Badge color="yellow" variant="light">
+                  已选择 {selectedBankQuestions.length}
+                </Badge>
+              </Group>
+              <Group>
+                <NumberInput
+                  label="随机抽取数量"
+                  min={1}
+                  max={availableBankQuestions.length || 1}
+                  value={randomCount}
+                  w={140}
+                  onChange={(value) => setRandomCount(Number(value || 1))}
+                />
+                <Button variant="outline" disabled={!availableBankQuestions.length} onClick={addRandomFromBank}>
+                  随机添加
+                </Button>
+                <Button disabled={!selectedBankQuestions.length} onClick={() => addFromBank(selectedBankQuestions)}>
+                  添加选中
+                </Button>
+              </Group>
             </Group>
-          </Group>
 
-          <ScrollArea h={430}>
-            <Table striped highlightOnHover>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th w={48}>
-                    <Checkbox
-                      disabled={!availableBankQuestions.length}
-                      checked={
-                        availableBankQuestions.length > 0 &&
-                        availableBankQuestions.every((question) => selectedBankQuestionIds.includes(String(question.id)))
-                      }
-                      indeterminate={
-                        availableBankQuestions.some((question) => selectedBankQuestionIds.includes(String(question.id))) &&
-                        !availableBankQuestions.every((question) => selectedBankQuestionIds.includes(String(question.id)))
-                      }
-                      onChange={(event) => {
-                        setSelectedBankQuestionIds(
-                          event.currentTarget.checked ? availableBankQuestions.map((question) => String(question.id)) : []
-                        )
-                      }}
-                    />
-                  </Table.Th>
-                  <Table.Th>题干</Table.Th>
-                  <Table.Th>题库</Table.Th>
-                  <Table.Th>答案</Table.Th>
-                  <Table.Th>状态</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {filteredBankQuestions.map((item) => {
-                  const added = currentSourceIds.has(item.id)
-
-                  return (
-                    <Table.Tr key={item.id}>
-                      <Table.Td>
+            <YinyuTableShell p="xs">
+              <ScrollArea h={430}>
+                <Table striped highlightOnHover>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th w={48}>
                         <Checkbox
-                          disabled={added}
-                          checked={selectedBankQuestionIds.includes(String(item.id))}
-                          onChange={(event) =>
-                            setSelectedBankQuestionIds((ids) =>
-                              event.currentTarget.checked
-                                ? [...ids, String(item.id)]
-                                : ids.filter((id) => id !== String(item.id))
+                          disabled={!availableBankQuestions.length}
+                          checked={
+                            availableBankQuestions.length > 0 &&
+                            availableBankQuestions.every((question) =>
+                              selectedBankQuestionIds.includes(String(question.id))
                             )
                           }
+                          indeterminate={
+                            availableBankQuestions.some((question) =>
+                              selectedBankQuestionIds.includes(String(question.id))
+                            ) &&
+                            !availableBankQuestions.every((question) =>
+                              selectedBankQuestionIds.includes(String(question.id))
+                            )
+                          }
+                          onChange={(event) => {
+                            setSelectedBankQuestionIds(
+                              event.currentTarget.checked
+                                ? availableBankQuestions.map((question) => String(question.id))
+                                : []
+                            )
+                          }}
                         />
-                      </Table.Td>
-                      <Table.Td>
-                        <Text fw={600}>{item.title}</Text>
-                        {item.content && (
-                          <Text size="xs" c="dimmed" lineClamp={1}>
-                            {item.content}
-                          </Text>
-                        )}
-                      </Table.Td>
-                      <Table.Td>{normalizeBankName(item.bankName)}</Table.Td>
-                      <Table.Td>{getAnswerLabel({ ...item, score: 1, order: 1 })}</Table.Td>
-                      <Table.Td>
-                        {added ? (
-                          <Badge color="gray" variant="light">
-                            已添加
-                          </Badge>
-                        ) : (
-                          <Button size="xs" variant="subtle" onClick={() => addFromBank([item])}>
-                            添加
-                          </Button>
-                        )}
-                      </Table.Td>
+                      </Table.Th>
+                      <Table.Th>题干</Table.Th>
+                      <Table.Th>题库</Table.Th>
+                      <Table.Th>答案</Table.Th>
+                      <Table.Th>状态</Table.Th>
                     </Table.Tr>
-                  )
-                })}
-              </Table.Tbody>
-            </Table>
-          </ScrollArea>
-        </Stack>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {filteredBankQuestions.map((item) => {
+                      const added = currentSourceIds.has(item.id)
+
+                      return (
+                        <Table.Tr key={item.id}>
+                          <Table.Td>
+                            <Checkbox
+                              disabled={added}
+                              checked={selectedBankQuestionIds.includes(String(item.id))}
+                              onChange={(event) =>
+                                setSelectedBankQuestionIds((ids) =>
+                                  event.currentTarget.checked
+                                    ? [...ids, String(item.id)]
+                                    : ids.filter((selectedId) => selectedId !== String(item.id))
+                                )
+                              }
+                            />
+                          </Table.Td>
+                          <Table.Td>
+                            <Text fw={600}>{item.title}</Text>
+                            {item.content && (
+                              <Text size="xs" className="yy-readable-text" lineClamp={1}>
+                                {item.content}
+                              </Text>
+                            )}
+                          </Table.Td>
+                          <Table.Td>{normalizeBankName(item.bankName)}</Table.Td>
+                          <Table.Td>{getAnswerLabel(item)}</Table.Td>
+                          <Table.Td>
+                            {added ? (
+                              <Badge color="yellow" variant="light">
+                                已添加
+                              </Badge>
+                            ) : (
+                              <Button size="xs" variant="subtle" onClick={() => addFromBank([item])}>
+                                添加
+                              </Button>
+                            )}
+                          </Table.Td>
+                        </Table.Tr>
+                      )
+                    })}
+                  </Table.Tbody>
+                </Table>
+              </ScrollArea>
+            </YinyuTableShell>
+          </Stack>
+        </YinyuModalBody>
       </Modal>
 
       <Modal opened={jsonOpened} onClose={() => setJsonOpened(false)} title="JSON 导入" size="lg">
-        <Stack>
-          <Textarea
-            minRows={14}
-            value={jsonText}
-            onChange={(event) => setJsonText(event.currentTarget.value)}
-            placeholder='{"title":"理论考试","questions":[{"type":"SingleChoice","title":"...","options":["A","B"],"answerIndexes":[0],"score":5}]}'
-          />
-          <Button
-            disabled={!jsonText.trim()}
-            onClick={() => {
-              try {
-                importJson(jsonText)
-              } catch (err) {
-                showErrorMsg(err, (key) => key)
-              }
-            }}
-          >
-            导入
-          </Button>
-        </Stack>
+        <YinyuModalBody p="md">
+          <Stack>
+            <Textarea
+              minRows={14}
+              value={jsonText}
+              onChange={(event) => setJsonText(event.currentTarget.value)}
+              placeholder='{"title":"理论考试","questions":[{"type":"SingleChoice","title":"...","options":["A","B"],"answerIndexes":[0],"score":5}]}'
+            />
+            <Button
+              disabled={!jsonText.trim()}
+              onClick={() => {
+                try {
+                  importJson(jsonText)
+                } catch (err) {
+                  showErrorMsg(err, (key) => key)
+                }
+              }}
+            >
+              导入
+            </Button>
+          </Stack>
+        </YinyuModalBody>
       </Modal>
     </WithGameEditTab>
   )

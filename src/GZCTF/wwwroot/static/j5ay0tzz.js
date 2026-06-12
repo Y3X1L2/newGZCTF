@@ -1,0 +1,6 @@
+/* YINYU CTF Platform @unknown
+ *
+ * Commit    : Unofficial build version
+ * Build     : 2026-06-09T06:10:58.565Z
+ */
+import{a as e,t}from"./izagbnaw.js";import{P as n,V as r,d as i,h as a,r as o,t as s,u as c}from"./i794nfmz.js";function l(e=`mantine-`){return`${e}${Math.random().toString(36).slice(2,11)}`}var u=e(t(),1);function d(e){return u.Children.toArray(e).filter(Boolean)}var f={root:`m_4081bf90`},p=a(),m={preventGrowOverflow:!0,gap:`md`,align:`center`,justify:`flex-start`,wrap:`wrap`},h=n((e,{grow:t,preventGrowOverflow:n,gap:i,align:a,justify:o,wrap:s},{childWidth:c})=>({root:{"--group-child-width":t&&n?c:void 0,"--group-gap":r(i),"--group-align":a,"--group-justify":o,"--group-wrap":s}})),g=o(e=>{let t=i(`Group`,m,e),{classNames:n,className:a,style:o,styles:l,unstyled:u,children:g,gap:_,align:v,justify:y,wrap:b,grow:x,preventGrowOverflow:S,vars:C,variant:w,__size:T,mod:E,attributes:D,...O}=t,k=d(g),A=k.length,j=r(_??`md`);return(0,p.jsx)(s,{...c({name:`Group`,props:t,stylesCtx:{childWidth:`calc(${100/A}% - (${j} - ${j} / ${A}))`},className:a,style:o,classes:f,classNames:n,styles:l,unstyled:u,attributes:D,vars:C,varsResolver:h})(`root`),variant:w,mod:[{grow:x},E],size:T,...O,children:k})});g.classes=f,g.varsResolver=h,g.displayName=`@mantine/core/Group`;export{l as n,g as t};

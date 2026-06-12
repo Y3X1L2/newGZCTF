@@ -13,7 +13,7 @@ Seven distinct verification paths were identified:
 - File: Services/FlagChecker.cs (lines 1-209)
 - Mechanism: Channel<Submission> consumer with 1-4 parallel workers. Reads unchecked submissions from DB on startup, processes them in a loop.
 - Verification call: Delegates to GameInstanceRepository.VerifyAnswer() (line 99).
-- Scope: Traditional GZCTF challenge types (DynamicContainer, StaticAttachment, DynamicAttachment, StaticContainer).
+- Scope: Traditional challenge types (DynamicContainer, StaticAttachment, DynamicAttachment, StaticContainer).
 - Post-verification: Adds GameEvent, flushes scoreboard cache, checks for cheating, sends SignalR game notice.
 
 ### System B: GameInstanceRepository.VerifyAnswer()
@@ -224,6 +224,6 @@ Yes, technically. Nothing prevents creating ScoringRules for an IRChallenge (Cha
 6. VerifyAutoExactAsync for Flag type has three fallback paths (rule.ExpectedAnswerHash -> Stage.FlagHash -> FlagContexts). If rule.ExpectedAnswerHash is set but wrong, the method returns WrongAnswer immediately and never checks stages or FlagContexts. This means a challenge with both ExpectedAnswerHash and FlagContexts would only check the first.
 
 ### Architecture Overlaps
-7. Two parallel scoring universes. Original GZCTF uses GenScoreboard() with dynamic scoring + blood bonuses. New system uses ScoringService with weighted rules. They coexist but serve different challenge types. IR and Scenario challenges straddle both systems incompletely.
+7. Two parallel scoring universes. The original challenge flow uses GenScoreboard() with dynamic scoring + blood bonuses. New system uses ScoringService with weighted rules. They coexist but serve different challenge types. IR and Scenario challenges straddle both systems incompletely.
 
 8. SignalR group naming: SubmissionController broadcasts to scenario_{challengeId} (line 546). CheckpointVerificationService broadcasts to ir_{instance.ChallengeId} (line 138). IRChallengeController broadcasts to ir_{instance.ChallengeId} (line 586). ScenarioController broadcasts to scenario_{instance.ScenarioId} (line 585). These are consistent within domains but a client needs to know which type to subscribe to.

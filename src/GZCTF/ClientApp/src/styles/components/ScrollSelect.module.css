@@ -5,14 +5,25 @@
   margin-top: 2pt;
   user-select: none;
   cursor: pointer;
-  border-radius: var(--mantine-radius-md);
+  border-radius: var(--yy-radius);
+  border: 1px solid transparent;
 
   &:hover {
-    background-color: light-dark(var(--mantine-color-light-2), var(--mantine-color-dark-6));
+    border-color: rgba(107, 238, 177, 0.16);
+    background:
+      radial-gradient(ellipse at 16% 50%, rgba(107, 238, 177, 0.07), transparent 44%), rgba(255, 255, 255, 0.035);
   }
 
   &[data-active] {
-    background-color: light-dark(var(--mantine-color-light-3), var(--mantine-color-dark-5));
+    color: var(--yy-green);
+    border-color: rgba(107, 238, 177, 0.28);
+    background:
+      radial-gradient(ellipse at 16% 50%, rgba(107, 238, 177, 0.12), transparent 44%), var(--yy-hex-flow),
+      rgba(107, 238, 177, 0.05);
+    background-size:
+      auto,
+      1.08rem 0.94rem,
+      auto;
   }
 
   &[data-disabled] {

@@ -8,7 +8,6 @@ import {
   Group,
   Image,
   Modal,
-  Paper,
   SimpleGrid,
   Stack,
   Text,
@@ -24,6 +23,7 @@ import { FC, useEffect, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { PasswordChangeModal } from '@Components/PasswordChangeModal'
 import { WithNavBar } from '@Components/WithNavbar'
+import { YinyuHexField, YinyuModalBody } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg, tryGetErrorMsg } from '@Utils/Shared'
 import { IMAGE_MIME_TYPES } from '@Utils/Shared'
 import { useIsMobile } from '@Utils/ThemeOverride'
@@ -237,14 +237,16 @@ const Profile: FC = () => {
   return (
     <WithNavBar minWidth={0}>
       {isMobile ? (
-        <Box mt="md" p="sm">
+        <Box mt="md" p="sm" className="panel-card admin-panel yy-profile-panel">
+          <YinyuHexField cells={32} />
           {context}
         </Box>
       ) : (
         <Center h="100vh">
-          <Paper w="55%" maw={600} shadow="sm" p="5%">
+          <Box w="55%" maw={680} p="5%" className="panel-card admin-panel yy-profile-panel">
+            <YinyuHexField cells={36} />
             {context}
-          </Paper>
+          </Box>
         </Center>
       )}
 
@@ -255,73 +257,77 @@ const Profile: FC = () => {
       />
 
       <Modal opened={mailEditOpened} onClose={() => setMailEditOpened(false)} title={t('account.button.update_email')}>
-        <Stack>
-          <Text>
-            <Trans i18nKey="account.content.profile.update_email_note"></Trans>
-          </Text>
-          <TextInput
-            required
-            label={t('account.label.email_new')}
-            type="email"
-            w="100%"
-            placeholder={user?.email ?? 'ctfer@gzti.me'}
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-          />
-          <Group justify="right">
-            <Button
-              variant="default"
-              onClick={() => {
-                setEmail(user?.email ?? '')
-                setMailEditOpened(false)
-              }}
-            >
-              {t('common.modal.cancel')}
-            </Button>
-            <Button color="orange" onClick={onChangeEmail}>
-              {t('common.modal.confirm')}
-            </Button>
-          </Group>
-        </Stack>
+        <YinyuModalBody p="md">
+          <Stack>
+            <Text>
+              <Trans i18nKey="account.content.profile.update_email_note"></Trans>
+            </Text>
+            <TextInput
+              required
+              label={t('account.label.email_new')}
+              type="email"
+              w="100%"
+              placeholder={user?.email ?? 'ctfer@gzti.me'}
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+            <Group justify="right">
+              <Button
+                variant="default"
+                onClick={() => {
+                  setEmail(user?.email ?? '')
+                  setMailEditOpened(false)
+                }}
+              >
+                {t('common.modal.cancel')}
+              </Button>
+              <Button color="orange" onClick={onChangeEmail}>
+                {t('common.modal.confirm')}
+              </Button>
+            </Group>
+          </Stack>
+        </YinyuModalBody>
       </Modal>
 
       <Modal opened={dropzoneOpened} onClose={() => setDropzoneOpened(false)} withCloseButton={false}>
-        <Dropzone
-          onDrop={(files) => setAvatarFile(files[0])}
-          onReject={() => {
-            showNotification({
-              color: 'red',
-              title: t('common.error.file_invalid.title'),
-              message: t('common.error.file_invalid.message'),
-              icon: <Icon path={mdiClose} size={1} />,
-            })
-          }}
-          m="0 auto 20px auto"
-          miw={220}
-          mih={220}
-          maxSize={3 * 1024 * 1024}
-          accept={IMAGE_MIME_TYPES}
-        >
-          <Group justify="center" gap="xl" mih={240} className={misc.noPointerEvents}>
-            {avatarFile ? (
-              <Image fit="contain" src={URL.createObjectURL(avatarFile)} alt="avatar" />
-            ) : (
-              <Box>
-                <Text size="xl" inline>
-                  {t('common.content.drop_zone.content', {
-                    type: t('common.content.drop_zone.type.avatar'),
-                  })}
-                </Text>
-                <Text size="sm" c="dimmed" inline mt={7}>
-                  {t('common.content.drop_zone.limit')}
-                </Text>
-              </Box>
-            )}
-          </Group>
-        </Dropzone>
-        <Button fullWidth variant="outline" disabled={disabled} onClick={onChangeAvatar}>
-          {t('common.avatar.save')}
-        </Button>
+        <YinyuModalBody p="md">
+          <Dropzone
+            onDrop={(files) => setAvatarFile(files[0])}
+            onReject={() => {
+              showNotification({
+                color: 'red',
+                title: t('common.error.file_invalid.title'),
+                message: t('common.error.file_invalid.message'),
+                icon: <Icon path={mdiClose} size={1} />,
+              })
+            }}
+            m="0 auto 20px auto"
+            miw={220}
+            mih={220}
+            maxSize={3 * 1024 * 1024}
+            accept={IMAGE_MIME_TYPES}
+          >
+            <Group justify="center" gap="xl" mih={240} className={misc.noPointerEvents}>
+              {avatarFile ? (
+                <Image fit="contain" src={URL.createObjectURL(avatarFile)} alt="avatar" />
+              ) : (
+                <Box>
+                  <Text size="xl" inline>
+                    {t('common.content.drop_zone.content', {
+                      type: t('common.content.drop_zone.type.avatar'),
+                    })}
+                  </Text>
+                  <Text size="sm" className="yy-readable-text" inline mt={7}>
+                    {t('common.content.drop_zone.limit')}
+                  </Text>
+                </Box>
+              )}
+            </Group>
+          </Dropzone>
+          <Button fullWidth variant="outline" disabled={disabled} onClick={onChangeAvatar}>
+            {t('common.avatar.save')}
+          </Button>
+        </YinyuModalBody>
       </Modal>
     </WithNavBar>
   )

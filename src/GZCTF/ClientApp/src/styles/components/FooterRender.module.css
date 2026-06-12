@@ -21,11 +21,11 @@
   }
 
   & strong {
-    color: light-dark(var(--mantine-primary-color-7), var(--mantine-primary-color-6));
+    color: var(--yy-green);
   }
 
   & a {
-    color: var(--mantine-color-dimmed);
+    color: var(--yy-muted);
     text-decoration: none;
     transition: all 0.2s ease-in-out;
   }

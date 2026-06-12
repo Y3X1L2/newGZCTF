@@ -1,14 +1,24 @@
-import { useCallback, useState } from 'react';
+import { Select, Button, Group, Text } from '@mantine/core'
 import {
-  ReactFlow, Controls, Background, MiniMap, addEdge, useNodesState, useEdgesState,
-  type Connection, type Node, type Edge, BackgroundVariant, Panel,
-} from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
-import { Select, Button, Group, Text } from '@mantine/core';
-import TopologyNode from './TopologyNode';
-import type { TopologyNodeData } from './TopologyNode';
+  ReactFlow,
+  Controls,
+  Background,
+  MiniMap,
+  addEdge,
+  useNodesState,
+  useEdgesState,
+  type Connection,
+  type Node,
+  type Edge,
+  BackgroundVariant,
+  Panel,
+} from '@xyflow/react'
+import { useCallback, useState } from 'react'
+import '@xyflow/react/dist/style.css'
+import TopologyNode from './TopologyNode'
+import type { TopologyNodeData } from './TopologyNode'
 
-const nodeTypes = { topologyNode: TopologyNode };
+const nodeTypes = { topologyNode: TopologyNode }
 
 const NODE_TYPE_OPTIONS = [
   { value: 'entry', label: '入口节点' },
@@ -17,25 +27,28 @@ const NODE_TYPE_OPTIONS = [
   { value: 'dc', label: '域控制器' },
   { value: 'core', label: '核心节点' },
   { value: 'custom', label: '自定义' },
-];
+]
 
 interface TopologyEditorProps {
-  initialNodes?: Node[];
-  initialEdges?: Edge[];
-  onChange?: (nodes: Node[], edges: Edge[]) => void;
-  stages?: { index: number; title: string }[];
+  initialNodes?: Node[]
+  initialEdges?: Edge[]
+  onChange?: (nodes: Node[], edges: Edge[]) => void
+  stages?: { index: number; title: string }[]
 }
 
-let nodeIdCounter = 0;
+let nodeIdCounter = 0
 
 export default function TopologyEditor({ initialNodes, initialEdges, onChange, stages }: TopologyEditorProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes ?? []);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges ?? []);
-  const [selectedType, setSelectedType] = useState<string>('entry');
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes ?? [])
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges ?? [])
+  const [selectedType, setSelectedType] = useState<string>('entry')
 
-  const onConnect = useCallback((params: Connection) => {
-    setEdges(eds => addEdge({ ...params, animated: true }, eds));
-  }, [setEdges]);
+  const onConnect = useCallback(
+    (params: Connection) => {
+      setEdges((eds) => addEdge({ ...params, animated: true }, eds))
+    },
+    [setEdges]
+  )
 
   const addNode = () => {
     const newNode: Node = {
@@ -48,15 +61,15 @@ export default function TopologyEditor({ initialNodes, initialEdges, onChange, s
         status: 'unlocked',
         stageIndex: nodeIdCounter,
       } as Record<string, unknown>,
-    };
-    const updated = [...nodes, newNode];
-    setNodes(updated);
-    onChange?.(updated, edges);
-  };
+    }
+    const updated = [...nodes, newNode]
+    setNodes(updated)
+    onChange?.(updated, edges)
+  }
 
   const handleChange = () => {
-    onChange?.(nodes, edges);
-  };
+    onChange?.(nodes, edges)
+  }
 
   return (
     <div style={{ height: 500, border: '1px solid #dee2e6', borderRadius: 8 }}>
@@ -74,13 +87,23 @@ export default function TopologyEditor({ initialNodes, initialEdges, onChange, s
         <MiniMap />
         <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
         <Panel position="top-left">
-          <Group gap="xs" p="sm" style={{ background: 'white', borderRadius: 4, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-            <Select data={NODE_TYPE_OPTIONS} value={selectedType}
-              onChange={v => setSelectedType(v ?? 'entry')} w={130} />
-            <Button size="xs" onClick={addNode} data-testid="add-topology-node">+ 添加节点</Button>
+          <Group
+            gap="xs"
+            p="sm"
+            style={{ background: 'white', borderRadius: 4, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}
+          >
+            <Select
+              data={NODE_TYPE_OPTIONS}
+              value={selectedType}
+              onChange={(v) => setSelectedType(v ?? 'entry')}
+              w={130}
+            />
+            <Button size="xs" onClick={addNode} data-testid="add-topology-node">
+              + 添加节点
+            </Button>
           </Group>
         </Panel>
       </ReactFlow>
     </div>
-  );
+  )
 }

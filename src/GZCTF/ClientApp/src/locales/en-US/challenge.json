@@ -77,7 +77,7 @@
       },
       "entry": {
         "description": {
-          "anchor": "Get proxy client",
+          "anchor": "Use the platform proxy client",
           "proxy": "WebSocket proxy mode has been enabled."
         },
         "label": "Instance Info"

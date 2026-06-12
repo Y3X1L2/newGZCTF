@@ -5,6 +5,12 @@
 
 .tabList {
   width: 100%;
+  gap: 0.35rem;
+  padding: 0.35rem;
+  border: 1px solid var(--yy-line);
+  border-radius: var(--yy-radius);
+  background:
+    radial-gradient(ellipse at 18% 0%, rgba(107, 238, 177, 0.06), transparent 48%), rgba(255, 255, 255, 0.024);
 }
 
 .tabLabel {
@@ -12,18 +18,38 @@
 }
 
 .tab {
+  min-height: 2.45rem;
+  border: 1px solid transparent;
+  color: var(--yy-muted);
+  background: transparent;
+
   &:not([data-active='true']) {
     span[data-position='left'] {
       color: var(--tabs-color);
       filter: saturate(0.8);
     }
   }
+
+  &[data-active='true'] {
+    color: var(--yy-green);
+    border-color: rgba(107, 238, 177, 0.32);
+    background:
+      radial-gradient(ellipse at 16% 50%, rgba(107, 238, 177, 0.13), transparent 42%), var(--yy-hex-flow),
+      rgba(107, 238, 177, 0.055);
+    background-size:
+      auto,
+      1.08rem 0.94rem,
+      auto;
+  }
 }
 
 .switch {
   justify-content: space-between;
+  padding: 0.4rem 0.2rem;
 }
 
 .scrollArea {
   flex-grow: 1;
+  border-left: 1px solid rgba(246, 247, 248, 0.055);
+  padding-left: var(--mantine-spacing-xs);
 }

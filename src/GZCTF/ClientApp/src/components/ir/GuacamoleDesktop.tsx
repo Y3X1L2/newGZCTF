@@ -1,75 +1,73 @@
-import { useEffect, useRef, useState } from 'react';
-import { Alert, Text, Loader } from '@mantine/core';
+import { Alert, Text, Loader } from '@mantine/core'
+import { useEffect, useRef, useState } from 'react'
 
 interface GuacamoleDesktopProps {
-  connectionUrl: string;
-  token: string;
+  connectionUrl: string
+  token: string
 }
 
-type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'error';
+type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'error'
 
 export default function GuacamoleDesktop({ connectionUrl, token }: GuacamoleDesktopProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [state, setState] = useState<ConnectionState>('connecting');
-  const [error, setError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [state, setState] = useState<ConnectionState>('connecting')
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    let display: HTMLDivElement | null = null;
+    let display: HTMLDivElement | null = null
 
     const initGuacamole = async () => {
       try {
         // Guacamole JS client is loaded via CDN or bundled import
         // This component assumes guacamole-common-js is available in the window scope
         // In production, install: pnpm add guacamole-common-js
-        const Guacamole = (window as unknown as Record<string, unknown>).Guacamole as any;
-        const GuacClient = Guacamole?.Client;
-        const GuacDisplay = Guacamole?.Display;
+        const Guacamole = (window as unknown as Record<string, unknown>).Guacamole as any
+        const GuacClient = Guacamole?.Client
+        const GuacDisplay = Guacamole?.Display
 
         if (!GuacClient || !GuacDisplay) {
-          setState('error');
-          setError('Guacamole 客户端库未加载。请联系管理员。');
-          return;
+          setState('error')
+          setError('Guacamole 客户端库未加载。请联系管理员。')
+          return
         }
 
-        const tunnel = new Guacamole.HTTPTunnel(
-          connectionUrl, false, { token }
-        );
+        const tunnel = new Guacamole.HTTPTunnel(connectionUrl, false, { token })
 
-        const client = new GuacClient(tunnel);
-        display = new GuacDisplay(client.getDisplay());
+        const client = new GuacClient(tunnel)
+        display = new GuacDisplay(client.getDisplay())
 
         if (containerRef.current && display) {
-          display.classList.add('guac-display');
-          containerRef.current.innerHTML = '';
-          containerRef.current.appendChild(display);
+          display.classList.add('guac-display')
+          containerRef.current.innerHTML = ''
+          containerRef.current.appendChild(display)
         }
 
         client.onstatechange = (guacState: number) => {
           // 0=IDLE, 1=CONNECTING, 2=WAITING, 3=CONNECTED, 4=DISCONNECTING, 5=DISCONNECTED
-          if (guacState === 3) setState('connected');
-          else if (guacState === 5) setState('disconnected');
-        };
+          if (guacState === 3) setState('connected')
+          else if (guacState === 5) setState('disconnected')
+        }
 
         client.onerror = (guacError: { message: string }) => {
-          setState('error');
-          setError(guacError.message || '连接错误');
-        };
+          setState('error')
+          setError(guacError.message || '连接错误')
+        }
 
-        client.connect();
+        client.connect()
       } catch (e) {
-        setState('error');
-        setError(e instanceof Error ? e.message : '初始化失败');
+        setState('error')
+        setError(e instanceof Error ? e.message : '初始化失败')
       }
-    };
+    }
 
-    initGuacamole();
+    initGuacamole()
 
     return () => {
       if (display && containerRef.current) {
-        containerRef.current.innerHTML = '';
+        containerRef.current.innerHTML = ''
       }
-    };
-  }, [connectionUrl, token]);
+    }
+  }, [connectionUrl, token])
 
   return (
     <div>
@@ -100,5 +98,5 @@ export default function GuacamoleDesktop({ connectionUrl, token }: GuacamoleDesk
         }}
       />
     </div>
-  );
+  )
 }

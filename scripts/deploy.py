@@ -1,12 +1,25 @@
 #!/usr/bin/env python3
+from pathlib import Path
 import paramiko, os, sys, time
 
-HOST = '203.195.157.191'
-USER = 'ubuntu'
-PASS = 'Fisher(1^'
-BASE = '/home/ubuntu/newGZCTF/src/GZCTF'
-LOCAL_DLL = r'D:\newGZ\newGZCTF\src\GZCTF\bin\Release\net10.0\GZCTF.dll'
-LOCAL_BUILD = r'D:\newGZ\newGZCTF\src\GZCTF\ClientApp\build'
+HOST = os.environ.get('YINYU_DEPLOY_HOST')
+USER = os.environ.get('YINYU_DEPLOY_USER', 'ubuntu')
+PASS = os.environ.get('YINYU_DEPLOY_PASS')
+PROJECT_ROOT = Path(os.environ.get('YINYU_PROJECT_ROOT', Path(__file__).resolve().parents[1]))
+REMOTE_ROOT = os.environ.get('YINYU_REMOTE_ROOT', f'/home/{USER}/yinyu-ctf-platform')
+BASE = f'{REMOTE_ROOT}/src/GZCTF'
+LOCAL_DLL = os.environ.get(
+    'YINYU_LOCAL_DLL',
+    str(PROJECT_ROOT / 'src' / 'GZCTF' / 'bin' / 'Release' / 'net10.0' / 'GZCTF.dll'),
+)
+LOCAL_BUILD = os.environ.get(
+    'YINYU_LOCAL_BUILD',
+    str(PROJECT_ROOT / 'src' / 'GZCTF' / 'ClientApp' / 'build'),
+)
+
+if not HOST or not PASS:
+    print('Set YINYU_DEPLOY_HOST and YINYU_DEPLOY_PASS before running this script.', file=sys.stderr)
+    sys.exit(2)
 
 try:
     print('1/5 Connecting...', flush=True)

@@ -1,10 +1,11 @@
-import { useMantineColorScheme, useMantineTheme } from '@mantine/core'
+import { useMantineTheme } from '@mantine/core'
 import dayjs from 'dayjs'
 import type { EChartsOption, SeriesOption } from 'echarts'
 import { FC, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router'
 import { EchartsContainer } from '@Components/charts/EchartsContainer'
+import { YinyuHexField } from '@Components/yinyu/YinyuUI'
 import { normalizeLanguage, useLanguage } from '@Utils/I18n'
 import { getGameStatus, useGame, useGameScoreboard } from '@Hooks/useGame'
 import { TimeLine, TopTimeLine } from '@Api'
@@ -34,7 +35,6 @@ export const ScoreTimeLine: FC<TimeLineProps> = ({ divisionId }) => {
   const drawStart = longGame && !finished ? weekStart : 0
   const drawEnd = longGame && !finished ? weekEnd : 100
 
-  const { colorScheme } = useMantineColorScheme()
   const { t } = useTranslation()
   const { language } = useLanguage()
   const locale = normalizeLanguage(language)
@@ -90,7 +90,7 @@ export const ScoreTimeLine: FC<TimeLineProps> = ({ divisionId }) => {
                     // xAxis?: string | number, but we need to use a Date object
                     xAxis: last.toDate(),
                     lineStyle: {
-                      color: colorScheme === 'dark' ? theme.colors.gray[3] : theme.colors.gray[6],
+                      color: theme.colors.dark[3],
                       wight: 2,
                     },
                     label: {
@@ -108,6 +108,20 @@ export const ScoreTimeLine: FC<TimeLineProps> = ({ divisionId }) => {
             type: 'line',
             step: 'end',
             name: team.name,
+            showSymbol: false,
+            symbol: 'circle',
+            symbolSize: 6,
+            lineStyle: {
+              width: 2.4,
+              shadowBlur: 10,
+              shadowColor: 'rgba(107, 238, 177, 0.16)',
+            },
+            emphasis: {
+              focus: 'series',
+              lineStyle: {
+                width: 3.2,
+              },
+            },
             data: [
               [dayjs(game.start).toDate(), 0],
               ...(team.items?.map((timeline: TimeLine) => [timeline.time, timeline.score]) ?? []),
@@ -116,19 +130,30 @@ export const ScoreTimeLine: FC<TimeLineProps> = ({ divisionId }) => {
           }) satisfies SeriesOption
       ) ?? []),
     ]
-  }, [activeTeams, game, endTime, colorScheme, theme])
+  }, [activeTeams, game, endTime, theme])
 
   const staticOption: EChartsOption = useMemo(() => {
-    const isDark = colorScheme === 'dark'
-    const labelColor = isDark ? theme.colors.light[1] : theme.colors.dark[5]
-    const lineColor = isDark ? theme.colors.gray[3] : theme.colors.gray[6]
-    const backgroundColor = isDark ? theme.colors.gray[6] : theme.colors.light[1]
+    const labelColor = 'rgba(244, 245, 245, 0.82)'
+    const quietColor = 'rgba(244, 245, 245, 0.54)'
+    const lineColor = 'rgba(244, 245, 245, 0.14)'
+    const backgroundColor = 'rgba(8, 12, 12, 0.94)'
 
     return {
       animation: true,
       backgroundColor: 'transparent',
+      color: ['#6beeb1', '#d6f75f', '#8ad7ff', '#f5f5f7', '#e2b35e', '#8f7aff', '#ff7a90'],
       toolbox: {
         show: true,
+        right: 10,
+        top: 8,
+        iconStyle: {
+          borderColor: quietColor,
+        },
+        emphasis: {
+          iconStyle: {
+            borderColor: '#6beeb1',
+          },
+        },
         feature: {
           dataZoom: {},
           restore: {},
@@ -140,7 +165,23 @@ export const ScoreTimeLine: FC<TimeLineProps> = ({ divisionId }) => {
         min: dayjs(game?.start).toDate(),
         max: dayjs(game?.end).toDate(),
         splitLine: {
-          show: false,
+          show: true,
+          lineStyle: {
+            color: 'rgba(244, 245, 245, 0.055)',
+          },
+        },
+        axisLabel: {
+          color: quietColor,
+        },
+        axisLine: {
+          lineStyle: {
+            color: lineColor,
+          },
+        },
+        axisTick: {
+          lineStyle: {
+            color: lineColor,
+          },
         },
       },
       yAxis: {
@@ -163,15 +204,27 @@ export const ScoreTimeLine: FC<TimeLineProps> = ({ divisionId }) => {
             type: 'dashed',
           },
         },
+        axisLine: {
+          lineStyle: {
+            color: lineColor,
+          },
+        },
+        axisTick: {
+          lineStyle: {
+            color: lineColor,
+          },
+        },
       },
       tooltip: {
         trigger: 'axis',
-        borderWidth: 0,
         textStyle: {
           fontSize: 12,
           color: labelColor,
         },
         backgroundColor: backgroundColor,
+        borderColor: 'rgba(107, 238, 177, 0.22)',
+        borderWidth: 1,
+        extraCssText: 'box-shadow: 0 1rem 2.4rem rgba(0,0,0,.36); border-radius: 6px; backdrop-filter: blur(14px);',
       },
       legend: {
         orient: 'horizontal',
@@ -203,6 +256,13 @@ export const ScoreTimeLine: FC<TimeLineProps> = ({ divisionId }) => {
           showDetail: false,
           bottom: 60,
           height: 20,
+          borderColor: 'rgba(107, 238, 177, 0.16)',
+          fillerColor: 'rgba(107, 238, 177, 0.18)',
+          backgroundColor: 'rgba(255, 255, 255, 0.045)',
+          dataBackground: {
+            lineStyle: { color: 'rgba(107, 238, 177, 0.32)' },
+            areaStyle: { color: 'rgba(107, 238, 177, 0.08)' },
+          },
         },
         {
           type: 'inside',
@@ -219,26 +279,32 @@ export const ScoreTimeLine: FC<TimeLineProps> = ({ divisionId }) => {
           showDetail: false,
           right: 10,
           width: 20,
+          borderColor: 'rgba(107, 238, 177, 0.16)',
+          fillerColor: 'rgba(107, 238, 177, 0.18)',
+          backgroundColor: 'rgba(255, 255, 255, 0.045)',
         },
       ],
     } satisfies EChartsOption
-  }, [t, game?.start, game?.end, colorScheme, theme, drawStart, drawEnd])
+  }, [t, game?.start, game?.end, drawStart, drawEnd])
 
   return (
-    <EchartsContainer
-      option={{
-        ...staticOption,
-        series: chartData,
-      }}
-      opts={{
-        renderer: 'svg',
-        locale,
-      }}
-      style={{
-        width: '100%',
-        height: '460px',
-        display: 'flex',
-      }}
-    />
+    <section className="panel-card yy-score-timeline-panel">
+      <YinyuHexField cells={46} />
+      <EchartsContainer
+        option={{
+          ...staticOption,
+          series: chartData,
+        }}
+        opts={{
+          renderer: 'svg',
+          locale,
+        }}
+        style={{
+          width: '100%',
+          height: '430px',
+          display: 'flex',
+        }}
+      />
+    </section>
   )
 }

@@ -1,13 +1,13 @@
 #!/bin/bash
 set -euo pipefail
-# newGZCTF 一键部署 + 测试脚本
+# yinyu-ctf-platform 一键部署 + 测试脚本
 # 用法: bash one-click-deploy.sh <IP> <USER> <PASS>
-# 示例: bash one-click-deploy.sh 203.195.157.191 ubuntu "Fisher(1^"
+# 示例: bash one-click-deploy.sh <server-ip> ubuntu "<password>"
 
 SERVER_IP="${1:?请提供服务器IP}"
 SERVER_USER="${2:?请提供用户名}"
 SERVER_PASS="${3:?请提供密码}"
-PROJECT_DIR="/home/$SERVER_USER/newGZCTF"
+PROJECT_DIR="/home/$SERVER_USER/yinyu-ctf-platform"
 BRANCH="feature/phase3-deploy-panel"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
@@ -88,9 +88,9 @@ cd "$PROJECT_ROOT"
 
 # 打包当前工作区代码（不含 .git 大文件）
 log "打包代码..."
-git archive --format=tar HEAD | gzip > /tmp/newGZCTF-code.tar.gz
-$SCP /tmp/newGZCTF-code.tar.gz $SERVER_USER@$SERVER_IP:$PROJECT_DIR/
-$SSH "cd $PROJECT_DIR && tar xzf newGZCTF-code.tar.gz && rm newGZCTF-code.tar.gz"
+git archive --format=tar HEAD | gzip > /tmp/yinyu-ctf-platform-code.tar.gz
+$SCP /tmp/yinyu-ctf-platform-code.tar.gz $SERVER_USER@$SERVER_IP:$PROJECT_DIR/
+$SSH "cd $PROJECT_DIR && tar xzf yinyu-ctf-platform-code.tar.gz && rm yinyu-ctf-platform-code.tar.gz"
 
 # 同步 .worktrees 中已完成 Phase 的代码
 for phase_dir in .worktrees/phase1-scoring .worktrees/phase2-vm-docker .worktrees/phase3-deploy; do
@@ -109,7 +109,7 @@ log "STEP 3: 服务器端编译 + 运行全量测试"
 $SSH "bash -s" << 'BUILD_TEST'
 set -e
 export PATH="/usr/local/share/dotnet:$PATH"
-cd ~/newGZCTF
+cd ~/yinyu-ctf-platform
 
 echo ">>> NuGet 还原 <<<"
 dotnet restore src/GZCTF.slnx --verbosity minimal
@@ -148,7 +148,7 @@ log "STEP 4: 导入测试 Docker 镜像 + Windows VM 模板"
 # ============================================================
 $SSH "bash -s" << 'DEPLOY_IMAGES'
 set -e
-cd ~/newGZCTF
+cd ~/yinyu-ctf-platform
 
 echo ">>> 构建测试 Docker CTF 镜像 <<<"
 cat > /tmp/test-ctf-Dockerfile << 'DOCKERFILE'
@@ -173,7 +173,7 @@ fi
 echo ">>> VM 模板就绪 <<<"
 
 echo ">>> Docker Compose 一键部署文件生成 <<<"
-cat > ~/newGZCTF/docker-compose.test.yml << 'COMPOSE'
+cat > ~/yinyu-ctf-platform/docker-compose.test.yml << 'COMPOSE'
 version: '3.9'
 services:
   api:
@@ -212,10 +212,10 @@ log "STEP 5: 验收报告"
 cat << 'REPORT'
 
 ╔══════════════════════════════════════════════════════════╗
-║              newGZCTF 一键部署完成报告                    ║
+║              yinyu-ctf-platform 一键部署完成报告                    ║
 ╠══════════════════════════════════════════════════════════╣
 ║  服务器:   SERVER_IP_PLACEHOLDER                        ║
-║  项目路径: /home/SERVER_USER_PLACEHOLDER/newGZCTF        ║
+║  项目路径: /home/SERVER_USER_PLACEHOLDER/yinyu-ctf-platform        ║
 ║                                                        ║
 ║  运行的服务:                                             ║
 ║    PostgreSQL 16 → localhost:5433 (gzctf_test)           ║
@@ -229,7 +229,7 @@ cat << 'REPORT'
 ║    /var/lib/gzctf-test/images/windows-test.qcow2        ║
 ║                                                        ║
 ║  启动命令:                                               ║
-║    cd ~/newGZCTF                                       ║
+║    cd ~/yinyu-ctf-platform                                       ║
 ║    docker compose -f docker-compose.test.yml up -d       ║
 ║                                                        ║
 ║  运行测试:                                               ║

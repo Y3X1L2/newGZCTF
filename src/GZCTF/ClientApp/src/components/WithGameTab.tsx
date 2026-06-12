@@ -1,4 +1,4 @@
-import { Card, LoadingOverlay, Stack, Text, Title } from '@mantine/core'
+import { Stack, Title } from '@mantine/core'
 import { showNotification } from '@mantine/notifications'
 import {
   mdiChartLine,
@@ -17,20 +17,17 @@ import { useLocation, useNavigate, useParams } from 'react-router'
 import { GameProgress } from '@Components/GameProgress'
 import { IconTabs } from '@Components/IconTabs'
 import { RequireRole } from '@Components/WithRole'
-import { DEFAULT_LOADING_OVERLAY } from '@Utils/Shared'
+import { YinyuHeartbeatIcon, YinyuHexField, YinyuRouteTransition, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
 import { getGameStatus, useGame } from '@Hooks/useGame'
 import { usePageTitle } from '@Hooks/usePageTitle'
 import { useUserRole } from '@Hooks/useUser'
 import { DetailedGameInfoModel, GameType, ParticipationStatus, Role } from '@Api'
-import misc from '@Styles/Misc.module.css'
 
 dayjs.extend(duration)
 
 const GameCountdown: FC<{ game?: DetailedGameInfoModel }> = ({ game }) => {
   const { endTime, progress } = getGameStatus(game)
-
   const [now, setNow] = useState(dayjs())
-
   const { t } = useTranslation()
 
   useEffect(() => {
@@ -42,18 +39,24 @@ const GameCountdown: FC<{ game?: DetailedGameInfoModel }> = ({ game }) => {
   const countdown = dayjs.duration(endTime.diff(now))
 
   return (
-    <Card miw="9rem" ta="center" pt={4} className={misc.overflowVisible}>
-      <Text fw="bold" lineClamp={1}>
+    <div className="route-loader yy-game-countdown">
+      <YinyuHexField cells={18} />
+      <YinyuStatusPill
+        tone={countdown.asSeconds() > 0 ? 'success' : 'neutral'}
+        state={countdown.asSeconds() > 0 ? 'running' : 'idle'}
+        icon={YinyuHeartbeatIcon}
+      >
         {countdown.asHours() > 999
           ? t('game.content.game_lasts_long')
           : countdown.asSeconds() > 0
             ? `${Math.floor(countdown.asHours())} : ${countdown.format('mm : ss')}`
             : t('game.content.game_ended')}
-      </Text>
-      <Card.Section mt={4}>
+      </YinyuStatusPill>
+      <div>
+        <strong>回合时间</strong>
         <GameProgress percentage={progress} py={0} />
-      </Card.Section>
-    </Card>
+      </div>
+    </div>
   )
 }
 
@@ -161,10 +164,14 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
     label: p.title,
     icon: <Icon path={p.icon} size={1} />,
   }))
+
   const getTab = (path: string) => {
     const segments = path.split('/').filter(Boolean)
-    const gamePathIndex = segments.findIndex((segment, index) => segment === 'games' && segments[index + 1] === String(numId))
-    const currentPath = gamePathIndex >= 0 ? segments.slice(gamePathIndex + 2).join('/') : segments[segments.length - 1] ?? ''
+    const gamePathIndex = segments.findIndex(
+      (segment, index) => segment === 'games' && segments[index + 1] === String(numId)
+    )
+    const currentPath =
+      gamePathIndex >= 0 ? segments.slice(gamePathIndex + 2).join('/') : (segments[segments.length - 1] ?? '')
 
     return filteredPages?.findIndex(
       (page) =>
@@ -206,12 +213,10 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
       }
 
       if (location.pathname.includes('scoreboard')) {
-        // allow access to scoreboard
         return
       }
 
       if (location.pathname.includes('monitor') && RequireRole(Role.Monitor, role)) {
-        // allow access to monitor
         return
       }
 
@@ -234,9 +239,6 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
           })
         }
       } else if (!game.practiceMode && !RequireRole(Role.Monitor, role)) {
-        // not allow access to game after it ends if:
-        // 1. not monitor
-        // 2. not practice mode
         navigate(`/games/${numId}`)
         showNotification({
           id: 'no-access',
@@ -249,18 +251,23 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
   }, [game, status, role, location])
 
   return (
-    <Stack pos="relative" mt="md">
-      <LoadingOverlay visible={!game} overlayProps={DEFAULT_LOADING_OVERLAY} />
+    <Stack pos="relative" mt="md" className="yy-game-tab-shell view-stack">
+      {!game ? (
+        <div className="yy-game-tab-loading" role="status" aria-live="polite">
+          <YinyuRouteTransition title="YINYU MATCH" description="正在读取演练信息" />
+        </div>
+      ) : null}
       <IconTabs
         active={activeTab}
         onTabChange={onChange}
         tabs={tabs}
+        panesClassName="yy-game-tab-panes"
         aside={
           game && (
-            <>
-              <Title>{game?.title}</Title>
+            <div className="yy-game-tab-aside">
+              <Title order={2}>{game?.title}</Title>
               <GameCountdown game={game} />
-            </>
+            </div>
           )
         }
       />

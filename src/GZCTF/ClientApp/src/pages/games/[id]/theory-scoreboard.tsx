@@ -1,10 +1,11 @@
-import { Badge, Card, Group, Stack, Table, Text, Title } from '@mantine/core'
+import { Badge, Group, Stack, Table, Text, Title } from '@mantine/core'
 import dayjs from 'dayjs'
 import { FC, useEffect, useState } from 'react'
 import { useParams } from 'react-router'
 import { Empty } from '@Components/Empty'
 import { WithGameTab } from '@Components/WithGameTab'
 import { WithNavBar } from '@Components/WithNavbar'
+import { YinyuStatePage, YinyuTableShell } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import { theoryPlayerApi, TheoryScoreboardItemModel } from '../../../Api/TheoryApi'
 
@@ -34,13 +35,22 @@ const TheoryScoreboard: FC = () => {
   }, [numId])
 
   return (
-    <WithNavBar minWidth={0} isLoading={loading || !items} withFooter>
+    <WithNavBar minWidth={0} width="min(100%, calc(100vw - 7.25rem))">
       <WithGameTab>
-        <Card withBorder radius="sm">
+        {loading && !items ? (
+          <YinyuStatePage tone="neutral" p="xl" className="yy-theory-loading">
+            <Stack gap="xs">
+              <Badge variant="light">Theory</Badge>
+              <Title order={2}>理论榜单加载中</Title>
+              <Text className="yy-readable-text">正在读取队伍得分与最高分成员记录。</Text>
+            </Stack>
+          </YinyuStatePage>
+        ) : null}
+        <YinyuTableShell p="md" className="admin-panel large yy-theory-scoreboard">
           <Stack gap="sm">
-            <Group justify="space-between">
+            <Group justify="space-between" className="yy-theory-scoreboard-head">
               <Title order={3}>理论排行榜</Title>
-              <Text size="sm" c="dimmed">
+              <Text size="sm" className="yy-readable-text">
                 队伍成绩取队内成员最高分
               </Text>
             </Group>
@@ -66,7 +76,9 @@ const TheoryScoreboard: FC = () => {
                         {item.score} / {item.maxScore}
                       </Table.Td>
                       <Table.Td>{item.userName ?? '-'}</Table.Td>
-                      <Table.Td>{item.submittedAt ? dayjs(item.submittedAt).format('YYYY-MM-DD HH:mm:ss') : '-'}</Table.Td>
+                      <Table.Td>
+                        {item.submittedAt ? dayjs(item.submittedAt).format('YYYY-MM-DD HH:mm:ss') : '-'}
+                      </Table.Td>
                     </Table.Tr>
                   ))}
                 </Table.Tbody>
@@ -75,7 +87,7 @@ const TheoryScoreboard: FC = () => {
               <Empty description="暂无理论考试成绩。" />
             )}
           </Stack>
-        </Card>
+        </YinyuTableShell>
       </WithGameTab>
     </WithNavBar>
   )

@@ -7,6 +7,7 @@ import { FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import { StrengthPasswordInput } from '@Components/StrengthPasswordInput'
+import { YinyuModalBody } from '@Components/yinyu/YinyuUI'
 import { encryptApiData } from '@Utils/Crypto'
 import { showErrorMsg } from '@Utils/Shared'
 import { useConfig } from '@Hooks/useConfig'
@@ -59,42 +60,44 @@ export const PasswordChangeModal: FC<ModalProps> = (props) => {
 
   return (
     <Modal {...props}>
-      <Stack>
-        <PasswordInput
-          required
-          label={t('account.label.password_old')}
-          placeholder="P4ssW@rd"
-          w="100%"
-          value={oldPwd}
-          onChange={setOldPwd}
-        />
-        <StrengthPasswordInput value={pwd} onChange={setPwd} />
-        <PasswordInput
-          required
-          label={t('account.label.password_retype')}
-          placeholder="P4ssW@rd"
-          w="100%"
-          value={retypedPwd}
-          onChange={setRetypedPwd}
-        />
+      <YinyuModalBody>
+        <Stack>
+          <PasswordInput
+            required
+            label={t('account.label.password_old')}
+            placeholder="P4ssW@rd"
+            w="100%"
+            value={oldPwd}
+            onChange={setOldPwd}
+          />
+          <StrengthPasswordInput value={pwd} onChange={setPwd} />
+          <PasswordInput
+            required
+            label={t('account.label.password_retype')}
+            placeholder="P4ssW@rd"
+            w="100%"
+            value={retypedPwd}
+            onChange={setRetypedPwd}
+          />
 
-        <Group justify="right">
-          <Button
-            variant="default"
-            onClick={() => {
-              setOldPwd('')
-              setPwd('')
-              setRetypedPwd('')
-              props.onClose()
-            }}
-          >
-            {t('common.modal.cancel')}
-          </Button>
-          <Button color="orange" onClick={onChangePwd}>
-            {t('common.modal.confirm_update')}
-          </Button>
-        </Group>
-      </Stack>
+          <Group justify="right">
+            <Button
+              variant="default"
+              onClick={() => {
+                setOldPwd('')
+                setPwd('')
+                setRetypedPwd('')
+                props.onClose()
+              }}
+            >
+              {t('common.modal.cancel')}
+            </Button>
+            <Button color="orange" onClick={onChangePwd}>
+              {t('common.modal.confirm_update')}
+            </Button>
+          </Group>
+        </Stack>
+      </YinyuModalBody>
     </Modal>
   )
 }

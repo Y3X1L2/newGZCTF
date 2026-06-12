@@ -1,6 +1,7 @@
 import { ModalProps, Modal, Stack, Select, Button } from '@mantine/core'
 import { FC, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { YinyuModalBody } from '@Components/yinyu/YinyuUI'
 import { Division, ParticipationEditModel } from '@Api'
 
 interface ParticipationDivisionEditModalProps extends ModalProps {
@@ -44,20 +45,22 @@ export const ParticipationDivisionEditModal: FC<ParticipationDivisionEditModalPr
 
   return (
     <Modal {...modalProps}>
-      <Stack>
-        <Select
-          label={t('game.content.join.division.label')}
-          data={options}
-          clearable
-          disabled={disabled}
-          value={divisionId}
-          placeholder={t('admin.content.games.review.participation.no_division')}
-          onChange={(e) => setDivisionId(e ?? '')}
-        />
-        <Button fullWidth disabled={disabled} onClick={onConfirm}>
-          {t('common.modal.confirm_update')}
-        </Button>
-      </Stack>
+      <YinyuModalBody>
+        <Stack>
+          <Select
+            label={t('game.content.join.division.label')}
+            data={options}
+            clearable
+            disabled={disabled}
+            value={divisionId}
+            placeholder={t('admin.content.games.review.participation.no_division')}
+            onChange={(e) => setDivisionId(e ?? '')}
+          />
+          <Button fullWidth disabled={disabled} onClick={onConfirm}>
+            {t('common.modal.confirm_update')}
+          </Button>
+        </Stack>
+      </YinyuModalBody>
     </Modal>
   )
 }

@@ -107,6 +107,31 @@ public class AgentClient
         }
     }
 
+    public async Task<AgentVmIpResponse?> GetVmIpAsync(Guid nodeId, string vmName, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null) return null;
+
+        var client = BuildClient(node);
+        try
+        {
+            var response = await client.GetAsync($"/api/vms/{Uri.EscapeDataString(vmName)}/ip", token);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Agent VM IP lookup failed on node {NodeId}: {Status}",
+                    nodeId, response.StatusCode);
+                return null;
+            }
+
+            return await response.Content.ReadFromJsonAsync<AgentVmIpResponse>(token);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Agent VM IP lookup failed on node {NodeId}", nodeId);
+            return null;
+        }
+    }
+
     public async Task PullDockerImageAsync(Guid nodeId, string image, string? registryAuth, CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
@@ -127,12 +152,12 @@ public class AgentClient
         if (node is null) return;
 
         var client = BuildClient(node);
-        var serverUrl = _config["Agent:ServerPublicUrl"] ?? _config["Urls"]?.Split(';').First() ?? "http://localhost:8080";
+        var serverUrl = NodeDeployService.ResolveServerUrl(_config);
         var body = JsonSerializer.Serialize(new
         {
             templateId,
             hash,
-            downloadUrl = $"{serverUrl}/api/v1/image-templates/download/{hash}?nodeId={nodeId}",
+            downloadUrl = $"{serverUrl.TrimEnd('/')}/api/v1/image-templates/download/{hash}?nodeId={nodeId}",
             authToken = node.AuthToken
         });
         var response = await client.PostAsync("/api/images/download-vm",
@@ -165,4 +190,12 @@ public class AgentCreateVmResponse
     public string VmName { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string? VncAddress { get; set; }
+}
+
+public class AgentVmIpResponse
+{
+    public string VmName { get; set; } = string.Empty;
+    public string? IpAddress { get; set; }
+    public int? RdpPort { get; set; }
+    public string Status { get; set; } = string.Empty;
 }

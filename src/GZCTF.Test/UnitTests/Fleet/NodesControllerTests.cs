@@ -52,6 +52,80 @@ public class NodesControllerTests
     }
 
     [Fact]
+    public void ResolveServerUrl_UsesReachableRequestBaseUrl()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Urls"] = "http://0.0.0.0:18082",
+                ["ContainerProvider:PublicEntry"] = "fallback.example.com"
+            })
+            .Build();
+
+        Assert.Equal("http://10.0.7.118:18082",
+            NodeDeployService.ResolveServerUrl(config, "http://10.0.7.118:18082"));
+    }
+
+    [Theory]
+    [InlineData("http://localhost:18082")]
+    [InlineData("http://127.0.0.1:18082")]
+    [InlineData("http://0.0.0.0:18082")]
+    public void ResolveServerUrl_IgnoresLoopbackRequestBaseUrl(string requestBaseUrl)
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Urls"] = "http://server-from-config:18082"
+            })
+            .Build();
+
+        Assert.Equal("http://server-from-config:18082",
+            NodeDeployService.ResolveServerUrl(config, requestBaseUrl));
+    }
+
+    [Fact]
+    public void ResolveServerUrl_UsesContainerPublicEntryWhenBoundToWildcard()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Urls"] = "http://0.0.0.0:8080",
+                ["ContainerProvider:PublicEntry"] = "10.0.7.118"
+            })
+            .Build();
+
+        Assert.Equal("http://10.0.7.118:8080", NodeDeployService.ResolveServerUrl(config));
+    }
+
+    [Fact]
+    public void ResolveServerUrl_DoesNotReturnWildcardAddress()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Urls"] = "http://0.0.0.0:8080;http://platform.local:8080"
+            })
+            .Build();
+
+        Assert.Equal("http://platform.local:8080", NodeDeployService.ResolveServerUrl(config));
+    }
+
+    [Fact]
+    public void BuildBootstrapScript_InstallsDistributedDependencies()
+    {
+        var script = NodeDeployService.BuildBootstrapScript();
+
+        Assert.Contains("install_docker", script);
+        Assert.Contains("docker info", script);
+        Assert.Contains("install_kvm", script);
+        Assert.Contains("qemu-kvm", script);
+        Assert.Contains("libvirt", script);
+        Assert.Contains("install_dotnet_runtime", script);
+        Assert.Contains("dotnet-install.sh", script);
+        Assert.Contains("self-contained", script);
+    }
+
+    [Fact]
     public void BuildAgentConfigJson_UsesListenPortContract()
     {
         var node = new WorkerNode
@@ -79,6 +153,41 @@ public class NodesControllerTests
         Assert.Contains("Environment=DOTNET_ROOT_X64=/usr/local/share/dotnet", content);
         Assert.Contains("ExecStart=/usr/local/bin/gzctf-agent", content);
         Assert.Contains("WorkingDirectory=/etc/gzctf-agent", content);
+        Assert.Contains("Description=YINYU CTF Agent", content);
+    }
+
+    [Fact]
+    public void BuildDotnetRootDetectScript_AvoidsMultiLineConditionalParsing()
+    {
+        var script = NodeDeployService.BuildDotnetRootDetectScript();
+
+        Assert.Contains("command -v dotnet", script);
+        Assert.Contains("/usr/share/dotnet/dotnet", script);
+        Assert.Contains("readlink -f", script);
+        Assert.DoesNotContain("elif", script);
+        Assert.DoesNotContain("'", script);
+    }
+
+    [Fact]
+    public void BuildAgentInstallScript_AvoidsMultiLineConditionalParsing()
+    {
+        var script = NodeDeployService.BuildAgentInstallScript("http://server/api/agent/download",
+            Guid.Parse("2e361192-0b30-4244-ad7c-fa7947ea8f41"), "sudo -n");
+
+        Assert.Contains("wget -q -O \"$tmp\"", script);
+        Assert.Contains("curl -fsSL", script);
+        Assert.Contains("/tmp/gzctf-agent-2e3611920b304244ad7cfa7947ea8f41", script);
+        Assert.DoesNotContain("elif", script);
+        Assert.DoesNotContain("\r", script);
+    }
+
+    [Fact]
+    public void NormalizeShellScript_RemovesWindowsLineEndings()
+    {
+        var script = NodeDeployService.NormalizeShellScript("one\r\ntwo\rthree");
+
+        Assert.Equal("one\ntwo\nthree", script);
+        Assert.DoesNotContain("\r", script);
     }
 
     [Fact]
@@ -88,6 +197,8 @@ public class NodesControllerTests
 
         Assert.Contains("sudo -n systemctl daemon-reload", script);
         Assert.Contains("sudo -n systemctl enable gzctf-agent >/dev/null 2>&1 || true", script);
+        Assert.Contains("sudo -n systemctl stop gzctf-agent >/dev/null 2>&1 || true", script);
+        Assert.Contains("pgrep -f '(^|/)(gzctf-agent|GZCTF.Agent|manual-agent)( |$)'", script);
         Assert.Contains("sudo -n systemctl restart gzctf-agent", script);
         Assert.DoesNotContain("sudo -n systemctl restart gzctf-agent || true", script);
         Assert.Contains("sudo -n systemctl is-active --quiet gzctf-agent", script);

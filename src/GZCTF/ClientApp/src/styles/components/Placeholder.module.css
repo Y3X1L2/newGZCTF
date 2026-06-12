@@ -1,14 +1,36 @@
 .board {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   justify-content: center;
-  height: 100vh;
-  padding: var(--mantine-spacing-lg);
+  min-height: 100vh;
+  padding: clamp(2rem, 5vw, 4rem);
   align-items: center;
+  border: 1px solid var(--yy-line);
+  border-radius: var(--yy-radius);
+  background:
+    radial-gradient(ellipse at 50% 18%, rgba(107, 238, 177, 0.1), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.058), rgba(255, 255, 255, 0.018)), rgba(8, 9, 10, 0.72);
+  box-shadow: var(--yy-shadow);
 }
 
 .board > * {
+  position: relative;
+  z-index: 1;
   text-align: center;
 }
 
+.board :global(.yy-hex-field) {
+  z-index: 0;
+  opacity: 0.55;
+}
+
+.board > svg {
+  max-width: min(18rem, 72vw);
+  height: auto;
+  filter: drop-shadow(0 1.5rem 3rem rgba(0, 0, 0, 0.42));
+}
+
 .board > h1 {
-  color: light-dark(var(--mantine-primary-color-filled), var(--mantine-primary-color-4));
+  color: var(--yy-green);
 }

@@ -16,6 +16,14 @@ public class CreateVmResponse
     public string? VncAddress { get; set; }
 }
 
+public class VmIpResponse
+{
+    public string VmName { get; set; } = string.Empty;
+    public string? IpAddress { get; set; }
+    public int? RdpPort { get; set; }
+    public string Status { get; set; } = "Pending";
+}
+
 public class PullDockerImageRequest
 {
     public string Image { get; set; } = string.Empty;

@@ -1,4 +1,4 @@
-import { ActionIcon, Card, CardProps, Group, Stack, Text, Title, Tooltip } from '@mantine/core'
+import { ActionIcon, BoxProps, Group, Stack, Text, Title, Tooltip } from '@mantine/core'
 import { mdiContentCopy, mdiDeleteOutline, mdiPencilOutline, mdiTagOutline } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { FC } from 'react'
@@ -6,10 +6,11 @@ import { useTranslation } from 'react-i18next'
 import { ActionIconWithConfirm } from '@Components/ActionIconWithConfirm'
 import { ScrollingText } from '@Components/ScrollingText'
 import { PermissionDot } from '@Components/admin/PermissionSelector'
+import { YinyuPanel } from '@Components/yinyu/YinyuUI'
 import { PERMISSION_DEFINITIONS, permissionMaskToArray } from '@Utils/Permission'
 import { Division } from '@Api'
 
-export interface DivisionCardProps extends CardProps {
+export interface DivisionCardProps extends BoxProps {
   division: Division
   challengeTitleMap: Map<number, string>
   onEdit: (division: Division) => void
@@ -48,7 +49,7 @@ export const DivisionCard: FC<DivisionCardProps> = ({
   }
 
   return (
-    <Card withBorder shadow="sm" padding="md" {...cardProps}>
+    <YinyuPanel p="md" {...cardProps}>
       <Stack gap="xs">
         <Group justify="space-between" align="flex-start">
           <Group gap="sm">
@@ -104,6 +105,6 @@ export const DivisionCard: FC<DivisionCardProps> = ({
           </Stack>
         )}
       </Stack>
-    </Card>
+    </YinyuPanel>
   )
 }

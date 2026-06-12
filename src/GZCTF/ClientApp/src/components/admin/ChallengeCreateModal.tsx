@@ -6,6 +6,7 @@ import { Icon } from '@mdi/react'
 import { FC, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router'
+import { YinyuModalBody } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import {
   ChallengeCategoryItem,
@@ -62,7 +63,8 @@ export const ChallengeCreateModal: FC<ChallengeCreateModalProps> = (props) => {
 
   return (
     <Modal {...modalProps}>
-      <Stack>
+      <YinyuModalBody>
+        <Stack>
         <TextInput
           label={t('admin.content.games.challenges.title')}
           type="text"
@@ -91,16 +93,16 @@ export const ChallengeCreateModal: FC<ChallengeCreateModalProps> = (props) => {
           value={type}
           onChange={setType}
           renderOption={ChallengeTypeItem}
-          data={Object.entries(ChallengeType)
-            .map((type) => {
-              const data = challengeTypeLabelMap.get(type[1])
-              return { value: type[1], label: data?.name, ...data } as ComboboxItem
-            })}
+          data={Object.entries(ChallengeType).map((type) => {
+            const data = challengeTypeLabelMap.get(type[1])
+            return { value: type[1], label: data?.name, ...data } as ComboboxItem
+          })}
         />
         <Button fullWidth disabled={disabled} onClick={onCreate}>
           {t('admin.button.challenges.new')}
         </Button>
-      </Stack>
+        </Stack>
+      </YinyuModalBody>
     </Modal>
   )
 }

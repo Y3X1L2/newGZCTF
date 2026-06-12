@@ -2,7 +2,6 @@ import {
   Alert,
   Badge,
   Button,
-  Card,
   Checkbox,
   Grid,
   Group,
@@ -12,15 +11,17 @@ import {
   Stack,
   Text,
   Title,
+  Tooltip,
+  UnstyledButton,
 } from '@mantine/core'
 import { showNotification } from '@mantine/notifications'
 import { mdiArrowLeftBold, mdiArrowRightBold, mdiCheck, mdiContentSaveOutline, mdiSendCheckOutline } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { FC, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router'
-import { Empty } from '@Components/Empty'
 import { WithGameTab } from '@Components/WithGameTab'
 import { WithNavBar } from '@Components/WithNavbar'
+import { YinyuHeartbeatIcon, YinyuModalBody, YinyuPanel, YinyuStatePage } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import {
   theoryPlayerApi,
@@ -34,6 +35,9 @@ import {
 const questionTypeLabel = (type: TheoryQuestionType) =>
   type === TheoryQuestionType.MultipleChoice ? '多选题' : type === TheoryQuestionType.TrueFalse ? '判断题' : '单选题'
 
+const questionTypeShort = (type: TheoryQuestionType) =>
+  type === TheoryQuestionType.MultipleChoice ? '多' : type === TheoryQuestionType.TrueFalse ? '判' : '单'
+
 const TheoryQuestionCard: FC<{
   question: TheoryPlayerQuestionModel
   selected: number[]
@@ -43,10 +47,10 @@ const TheoryQuestionCard: FC<{
   const isMultiple = question.type === TheoryQuestionType.MultipleChoice
 
   return (
-    <Card withBorder radius="sm">
+    <YinyuPanel p="md" className="yy-theory-question-card">
       <Stack gap="sm">
         <Group justify="space-between" align="flex-start">
-          <Stack gap={4}>
+          <Stack gap={6}>
             <Group gap="xs">
               <Badge variant="light">{questionTypeLabel(question.type)}</Badge>
               <Badge color="teal" variant="light">
@@ -56,19 +60,30 @@ const TheoryQuestionCard: FC<{
             <Title order={4}>{question.title}</Title>
           </Stack>
         </Group>
-        {question.content && <Text c="dimmed">{question.content}</Text>}
+
+        {question.content && (
+          <Text className="yy-readable-text" size="sm">
+            {question.content}
+          </Text>
+        )}
 
         {isMultiple ? (
-          <Checkbox.Group value={selected.map(String)} onChange={(values) => onChange(values.map(Number).sort((a, b) => a - b))}>
-            <Stack gap="xs">
+          <Checkbox.Group
+            value={selected.map(String)}
+            onChange={(values) => onChange(values.map(Number).sort((a, b) => a - b))}
+          >
+            <Stack gap="xs" className="yy-theory-option-list">
               {question.options.map((option, index) => (
                 <Checkbox key={index} disabled={disabled} value={String(index)} label={option} />
               ))}
             </Stack>
           </Checkbox.Group>
         ) : (
-          <Radio.Group value={selected[0] !== undefined ? String(selected[0]) : null} onChange={(value) => onChange(value === null ? [] : [Number(value)])}>
-            <Stack gap="xs">
+          <Radio.Group
+            value={selected[0] !== undefined ? String(selected[0]) : null}
+            onChange={(value) => onChange(value === null ? [] : [Number(value)])}
+          >
+            <Stack gap="xs" className="yy-theory-option-list">
               {question.options.map((option, index) => (
                 <Radio key={index} disabled={disabled} value={String(index)} label={option} />
               ))}
@@ -76,7 +91,7 @@ const TheoryQuestionCard: FC<{
           </Radio.Group>
         )}
       </Stack>
-    </Card>
+    </YinyuPanel>
   )
 }
 
@@ -92,11 +107,12 @@ const TheoryPage: FC = () => {
   const [currentIndex, setCurrentIndex] = useState(0)
 
   const submitted = paper?.status === TheoryAnswerSheetStatus.Submitted
+  const questions = useMemo(() => [...(paper?.questions ?? [])].sort((a, b) => a.order - b.order), [paper?.questions])
   const answeredCount = useMemo(
-    () => paper?.questions.filter((q) => (answers[q.id]?.length ?? 0) > 0).length ?? 0,
-    [answers, paper]
+    () => questions.filter((question) => (answers[question.id]?.length ?? 0) > 0).length,
+    [answers, questions]
   )
-  const unansweredCount = (paper?.questions.length ?? 0) - answeredCount
+  const unansweredCount = questions.length - answeredCount
 
   const toAnswerModel = (): TheoryAnswerModel[] =>
     Object.entries(answers).map(([paperQuestionId, selectedIndexes]) => ({
@@ -115,7 +131,7 @@ const TheoryPage: FC = () => {
         Object.fromEntries((res.data.answers ?? []).map((answer) => [answer.paperQuestionId, answer.selectedIndexes]))
       )
     } catch (err) {
-      setErrorText('理论试卷尚未发放或当前账号暂无访问权限。')
+      setErrorText('理论试卷尚未发布，或当前账号暂无访问权限。')
     } finally {
       setLoading(false)
     }
@@ -126,9 +142,9 @@ const TheoryPage: FC = () => {
   }, [numId])
 
   useEffect(() => {
-    if (!paper?.questions.length) return
-    setCurrentIndex((index) => Math.min(Math.max(index, 0), paper.questions.length - 1))
-  }, [paper?.questions.length])
+    if (!questions.length) return
+    setCurrentIndex((index) => Math.min(Math.max(index, 0), questions.length - 1))
+  }, [questions.length])
 
   const saveDraft = async () => {
     if (!paper || submitted) return
@@ -159,39 +175,56 @@ const TheoryPage: FC = () => {
     }
   }
 
-  const confirmSubmit = () => setConfirmOpened(true)
-
-  const currentQuestion = paper?.questions[currentIndex]
-  const goToQuestion = (index: number) => setCurrentIndex(Math.min(Math.max(index, 0), (paper?.questions.length ?? 1) - 1))
+  const currentQuestion = questions[currentIndex]
+  const goToQuestion = (index: number) => setCurrentIndex(Math.min(Math.max(index, 0), questions.length - 1))
   const currentAnswered = currentQuestion ? (answers[currentQuestion.id]?.length ?? 0) > 0 : false
 
   return (
-    <WithNavBar minWidth={0} isLoading={loading} withFooter>
+    <WithNavBar minWidth={0} width="min(100%, calc(100vw - 7.25rem))">
       <WithGameTab>
-        <Stack gap="md">
-          {errorText && <Empty description={errorText} />}
+        <Stack gap="md" className="yy-theory-page">
+          {loading && !paper ? (
+            <YinyuStatePage tone="neutral" p="xl" className="yy-theory-loading">
+              <Stack gap="xs">
+                <Badge variant="light">Theory</Badge>
+                <Title order={2}>理论赛加载中</Title>
+                <Text className="yy-readable-text">正在读取试卷、答题状态与队伍权限。</Text>
+              </Stack>
+            </YinyuStatePage>
+          ) : null}
+
+          {errorText && !paper && (
+            <YinyuStatePage tone="neutral" p="xl" className="yy-theory-loading">
+              <Stack gap="xs">
+                <Badge variant="light">Theory</Badge>
+                <Title order={2}>理论赛暂不可用</Title>
+                <Text className="yy-readable-text">{errorText}</Text>
+              </Stack>
+            </YinyuStatePage>
+          )}
+
           {paper && (
             <>
-              <Card withBorder radius="sm">
-                <Group justify="space-between" align="flex-start">
+              <YinyuPanel p="md" className="yy-theory-header">
+                <Group justify="space-between" align="center" wrap="wrap">
                   <Stack gap={4}>
                     <Title order={3}>{paper.title}</Title>
-                    {paper.description && <Text c="dimmed">{paper.description}</Text>}
+                    {paper.description && <Text className="yy-readable-text">{paper.description}</Text>}
                     <Group gap="xs">
                       <Badge variant="light">
-                        {answeredCount} / {paper.questions.length} 已作答
+                        {answeredCount} / {questions.length} 已作答
                       </Badge>
                       <Badge color="teal" variant="light">
                         总分 {paper.totalScore}
                       </Badge>
                       {submitted && (
                         <Badge color="green" variant="light">
-                          得分 {paper.score} / {paper.totalScore}
+                          得分 {paper.score ?? 0} / {paper.totalScore}
                         </Badge>
                       )}
                     </Group>
                   </Stack>
-                  <Group>
+                  <Group className="yy-theory-actions">
                     <Button
                       variant="outline"
                       disabled={submitted || loading}
@@ -202,59 +235,61 @@ const TheoryPage: FC = () => {
                     </Button>
                     <Button
                       disabled={submitted || loading}
-                      leftSection={<Icon path={mdiSendCheckOutline} size={1} />}
-                      onClick={confirmSubmit}
+                      leftSection={
+                        loading ? <YinyuHeartbeatIcon label="submitting theory answer" /> : <Icon path={mdiSendCheckOutline} size={1} />
+                      }
+                      onClick={() => setConfirmOpened(true)}
                     >
-                      提交答卷
+                      {loading ? '正在提交' : '提交答卷'}
                     </Button>
                   </Group>
                 </Group>
-              </Card>
+              </YinyuPanel>
 
-              <Modal
-                opened={confirmOpened && !submitted}
-                onClose={() => setConfirmOpened(false)}
-                title="确认提交答卷"
-                centered
-              >
-                <Stack gap="md">
-                  <Text size="sm">
-                    提交后不可修改，系统会立即判分并计入理论排行榜。当前还有 {unansweredCount} 题未作答。
-                  </Text>
-                  <Group justify="flex-end">
-                    <Button variant="default" disabled={loading} onClick={() => setConfirmOpened(false)}>
-                      取消
-                    </Button>
-                    <Button color="teal" loading={loading} onClick={submit}>
-                      确认提交
-                    </Button>
-                  </Group>
-                </Stack>
+              <Modal opened={confirmOpened && !submitted} onClose={() => setConfirmOpened(false)} title="确认提交答卷" centered>
+                <YinyuModalBody p="md">
+                  <Stack gap="md">
+                    <Text size="sm" className="yy-readable-text">
+                      提交后不再允许修改，系统会立即判分并计入理论赛排行。当前还有 {unansweredCount} 题未作答。
+                    </Text>
+                    <Group justify="flex-end">
+                      <Button variant="default" disabled={loading} onClick={() => setConfirmOpened(false)}>
+                        取消
+                      </Button>
+                      <Button
+                        color="teal"
+                        disabled={loading}
+                        leftSection={loading ? <YinyuHeartbeatIcon label="confirm theory submit" /> : undefined}
+                        onClick={submit}
+                      >
+                        {loading ? '正在提交' : '确认提交'}
+                      </Button>
+                    </Group>
+                  </Stack>
+                </YinyuModalBody>
               </Modal>
 
               {submitted && (
                 <Alert color="teal" icon={<Icon path={mdiCheck} />}>
-                  答卷已提交，当前成绩已计入理论排行榜。
+                  答卷已提交，当前成绩已经计入理论赛排行榜。
                 </Alert>
               )}
 
-              <Grid align="flex-start">
+              <Grid align="flex-start" className="yy-theory-workspace">
                 <Grid.Col span={{ base: 12, lg: 9 }}>
                   {currentQuestion && (
-                    <Stack gap="md">
-                      <Card withBorder radius="sm">
-                        <Group justify="space-between" align="center">
+                    <Stack gap="md" className="yy-theory-main-column">
+                      <YinyuPanel p="md" className="yy-theory-nav-panel">
+                        <Group justify="space-between" align="center" wrap="wrap">
                           <Stack gap={2}>
-                            <Text size="sm" c="dimmed">
-                              第 {currentIndex + 1} 题 / 共 {paper.questions.length} 题
+                            <Text size="sm" className="yy-readable-text">
+                              第 {currentIndex + 1} 题 / 共 {questions.length} 题
                             </Text>
                             <Group gap="xs">
                               <Badge color={currentAnswered ? 'teal' : 'gray'} variant="light">
                                 {currentAnswered ? '已作答' : '未作答'}
                               </Badge>
-                              <Badge variant="light">
-                                剩余 {paper.questions.length - currentIndex - 1} 题
-                              </Badge>
+                              <Badge variant="light">剩余 {questions.length - currentIndex - 1} 题</Badge>
                             </Group>
                           </Stack>
                           <Group>
@@ -268,7 +303,7 @@ const TheoryPage: FC = () => {
                             </Button>
                             <Button
                               variant="default"
-                              disabled={currentIndex >= paper.questions.length - 1}
+                              disabled={currentIndex >= questions.length - 1}
                               rightSection={<Icon path={mdiArrowRightBold} size={1} />}
                               onClick={() => goToQuestion(currentIndex + 1)}
                             >
@@ -276,47 +311,50 @@ const TheoryPage: FC = () => {
                             </Button>
                           </Group>
                         </Group>
-                      </Card>
+                      </YinyuPanel>
 
                       <TheoryQuestionCard
                         question={currentQuestion}
                         selected={answers[currentQuestion.id] ?? []}
                         disabled={submitted || loading}
-                        onChange={(selected) => setAnswers({ ...answers, [currentQuestion.id]: selected })}
+                        onChange={(selected) =>
+                          setAnswers((current) => ({ ...current, [currentQuestion.id]: selected }))
+                        }
                       />
                     </Stack>
                   )}
                 </Grid.Col>
                 <Grid.Col span={{ base: 12, lg: 3 }}>
-                  <Card withBorder radius="sm" style={{ position: 'sticky', top: '1rem' }}>
+                  <YinyuPanel p="md" className="yy-theory-side-panel">
                     <Stack gap="sm">
                       <Group justify="space-between">
                         <Text fw={700}>题目索引</Text>
                         <Badge variant="light">
-                          {answeredCount} / {paper.questions.length}
+                          {answeredCount} / {questions.length}
                         </Badge>
                       </Group>
-                      <SimpleGrid cols={{ base: 6, sm: 8, lg: 5 }} spacing="xs">
-                        {paper.questions.map((question, index) => {
+                      <SimpleGrid className="yy-theory-index-grid" cols={{ base: 4, sm: 6, lg: 4 }} spacing="xs">
+                        {questions.map((question, index) => {
                           const answered = (answers[question.id]?.length ?? 0) > 0
                           const active = index === currentIndex
 
                           return (
-                            <Button
-                              key={question.id}
-                              size="xs"
-                              px={0}
-                              variant={active ? 'filled' : answered ? 'light' : 'outline'}
-                              color={active ? 'blue' : answered ? 'teal' : 'gray'}
-                              onClick={() => goToQuestion(index)}
-                            >
-                              {index + 1}
-                            </Button>
+                            <Tooltip key={question.id} label={`${index + 1}. ${questionTypeLabel(question.type)}`}>
+                              <UnstyledButton
+                                className="yy-theory-node"
+                                data-active={active || undefined}
+                                data-answered={answered || undefined}
+                                onClick={() => goToQuestion(index)}
+                              >
+                                <span className="yy-theory-node-number">{index + 1}</span>
+                                <span className="yy-theory-node-type">{questionTypeShort(question.type)}</span>
+                              </UnstyledButton>
+                            </Tooltip>
                           )
                         })}
                       </SimpleGrid>
                     </Stack>
-                  </Card>
+                  </YinyuPanel>
                 </Grid.Col>
               </Grid>
             </>

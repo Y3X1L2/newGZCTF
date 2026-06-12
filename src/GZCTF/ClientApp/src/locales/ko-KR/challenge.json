@@ -77,7 +77,7 @@
       },
       "entry": {
         "description": {
-          "anchor": "프록시 클라이언트",
+          "anchor": "Use the platform proxy client",
           "proxy": "웹소켓 프록시 모드가 활성화 되었습니다."
         },
         "label": "인스턴스 정보"

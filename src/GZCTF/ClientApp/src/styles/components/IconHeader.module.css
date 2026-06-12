@@ -1,13 +1,16 @@
 .group {
   width: 100%;
   top: 16px;
-  padding-bottom: 8px;
   z-index: 50;
   justify-content: space-between;
   align-items: flex-end;
   padding: 0 var(--header-px) var(--mantine-spacing-sm) var(--header-px);
   position: relative;
-  background-color: light-dark(var(--mantine-color-light-2), var(--mantine-color-gray-7));
+  background:
+    linear-gradient(180deg, rgba(5, 6, 6, 0.92), rgba(5, 6, 6, 0.54) 72%, rgba(5, 6, 6, 0)),
+    radial-gradient(ellipse at 20% 0%, rgba(107, 238, 177, 0.07), transparent 28rem);
+  backdrop-filter: blur(0.9rem);
+  border-bottom: 1px solid rgba(246, 247, 248, 0.055);
 
   &[data-sticky] {
     position: sticky;
@@ -20,7 +23,7 @@
     right: 0;
     left: 0;
     padding-top: 16px;
-    background-color: light-dark(var(--mantine-color-light-2), var(--mantine-color-gray-7));
+    background: rgba(5, 6, 6, 0.88);
   }
 }
 
@@ -43,6 +46,6 @@
 
 .subtitle {
   font-family: var(--mantine-font-family-monospace);
-  font-weight: bold;
-  color: light-dark(var(--mantine-color-dark-4), var(--mantine-color-gray-4));
+  font-weight: 800;
+  color: var(--yy-muted);
 }

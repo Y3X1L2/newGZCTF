@@ -8,8 +8,10 @@ import { Link, useNavigate } from 'react-router'
 import { Markdown } from '@Components/MarkdownRenderer'
 import { PostCardProps } from '@Components/PostCard'
 import { RequireRole } from '@Components/WithRole'
+import { YinyuHexField, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
 import { useUserRole } from '@Hooks/useUser'
 import { Role } from '@Api'
+import classes from '@Styles/GameCard.module.css'
 
 export const MobilePostCard: FC<PostCardProps> = ({ post, onTogglePinned }) => {
   const { role } = useUserRole()
@@ -20,7 +22,8 @@ export const MobilePostCard: FC<PostCardProps> = ({ post, onTogglePinned }) => {
   const theme = useMantineTheme()
 
   return (
-    <Card shadow="sm" p="sm">
+    <Card shadow="sm" p="sm" className={`post-preview panel-card ${classes.postCard}`}>
+      <YinyuHexField cells={32} />
       <Stack gap="xs">
         <Box onClick={() => navigate(`/posts/${post.id}`)}>
           <Title order={3} pb={4}>
@@ -35,9 +38,9 @@ export const MobilePostCard: FC<PostCardProps> = ({ post, onTogglePinned }) => {
           {post.tags && (
             <Group justify="left">
               {post.tags.map((tag, idx) => (
-                <Text key={idx} size="sm" fw="bold" span c={theme.primaryColor}>
-                  {`#${tag}`}
-                </Text>
+                <YinyuStatusPill key={idx} tone="neutral" state="open">
+                  #{tag}
+                </YinyuStatusPill>
               ))}
             </Group>
           )}

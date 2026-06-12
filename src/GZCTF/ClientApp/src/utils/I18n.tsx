@@ -1,4 +1,4 @@
-import { Anchor, Code, Divider, List, Text } from '@mantine/core'
+import { Code, Divider, List, Text } from '@mantine/core'
 import { useLocalStorage } from '@mantine/hooks'
 import { modals } from '@mantine/modals'
 import dayjs from 'dayjs'
@@ -123,7 +123,7 @@ export const LanguageProvider = ({ children }: PropsWithChildren) => {
                   : 'This language is still in progress, some parts may not be translated.'}
               </Text>
               <Divider my={10} />
-              <Text>If you want to help with the translation:</Text>
+              <Text>Translation status:</Text>
               <List>
                 <List.Item>
                   <Text>
@@ -132,18 +132,6 @@ export const LanguageProvider = ({ children }: PropsWithChildren) => {
                       {LanguageMap[lang]}
                     </Text>
                   </Text>
-                </List.Item>
-                <List.Item>
-                  Contact us on{' '}
-                  <Anchor href="https://github.com/GZTimeWalker/GZCTF" target="_blank" rel="noreferrer">
-                    GitHub
-                  </Anchor>
-                </List.Item>
-                <List.Item>
-                  Track the progress on{' '}
-                  <Anchor href="https://crowdin.com/project/gzctf" target="_blank" rel="noreferrer">
-                    Crowdin
-                  </Anchor>
                 </List.Item>
               </List>
             </>

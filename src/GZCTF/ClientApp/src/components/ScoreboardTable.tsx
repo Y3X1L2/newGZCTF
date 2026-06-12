@@ -13,7 +13,6 @@ import {
   Text,
   TextInput,
   Tooltip,
-  useMantineColorScheme,
   useMantineTheme,
 } from '@mantine/core'
 import { useDebouncedValue } from '@mantine/hooks'
@@ -26,6 +25,7 @@ import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router'
 import { ScoreboardItemModal } from '@Components/ScoreboardItemModal'
 import { ScrollingText } from '@Components/ScrollingText'
+import { YinyuTableShell } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
 import {
   BloodBonus,
@@ -51,7 +51,6 @@ const Lefts = Widths.reduce(
 
 const TableHeader = React.memo((table: Record<string, ChallengeInfo[]>) => {
   const theme = useMantineTheme()
-  const { colorScheme } = useMantineColorScheme()
   const { t } = useTranslation()
   const challengeCategoryLabelMap = useChallengeCategoryLabelMap()
 
@@ -79,8 +78,8 @@ const TableHeader = React.memo((table: Record<string, ChallengeInfo[]>) => {
             desrc: key,
             icon: mdiHelpCircleOutline,
             name: key as ChallengeCategory,
-            color: 'gray',
-            colors: theme.colors.gray,
+            color: 'light',
+            colors: theme.colors.light,
           }
           return (
             <Table.Th
@@ -88,14 +87,11 @@ const TableHeader = React.memo((table: Record<string, ChallengeInfo[]>) => {
               colSpan={table[key].length}
               h="3rem"
               style={{
-                backgroundColor: alpha(
-                  theme.colors[cate.color][colorScheme === 'dark' ? 8 : 6],
-                  colorScheme === 'dark' ? 0.15 : 0.2
-                ),
+                backgroundColor: alpha(theme.colors[cate.color][8], 0.15),
               }}
             >
               <Group gap={4} wrap="nowrap" justify="center" w="100%">
-                <Icon path={cate.icon} size={1} color={theme.colors[cate.color][colorScheme === 'dark' ? 8 : 6]} />
+                <Icon path={cate.icon} size={1} color={theme.colors[cate.color][8]} />
                 <Text c={cate.color} className={classes.text} ff="text" fz="sm">
                   {key}
                 </Text>
@@ -130,7 +126,9 @@ const TableHeader = React.memo((table: Record<string, ChallengeInfo[]>) => {
               <Stack gap={0} align="center">
                 <Text>{item.score}</Text>
                 {item.totalFlags && item.totalFlags > 1 ? (
-                  <Text size="xs" c="dimmed">{item.solved ?? 0}/{item.totalFlags} Flags</Text>
+                  <Text size="xs" className="yy-readable-text">
+                    {item.solved ?? 0}/{item.totalFlags} Flags
+                  </Text>
                 ) : null}
               </Stack>
             </Table.Th>
@@ -153,21 +151,20 @@ const TableRow: FC<{
   const challengeCategoryLabelMap = useChallengeCategoryLabelMap()
   const solved = item.solvedChallenges
   const theme = useMantineTheme()
-  const { colorScheme } = useMantineColorScheme()
   const { locale } = useLanguage()
   const divisionName =
     item.divisionId !== undefined && item.divisionId !== null ? divisionMap.get(item.divisionId) : undefined
 
   const zeroScoreIcon = useMemo(() => {
     const normalIcon = iconMap.get(SubmissionType.Normal)
-    const color = colorScheme === 'dark' ? theme.colors.gray[4] : theme.colors.gray[6]
+    const color = theme.colors.light[4]
 
     return {
       path: mdiFlagOutline,
       size: normalIcon?.size ?? 1,
       color,
     }
-  }, [iconMap, theme, colorScheme])
+  }, [iconMap, theme])
 
   return (
     <Table.Tr>
@@ -192,7 +189,7 @@ const TableRow: FC<{
           <Stack gap={0} h="2.5rem" justify="center" w={Widths[2] - 45}>
             <ScrollingText size="sm" text={item.name || ''} onClick={onOpenDetail} />
             {!!divisionName && (
-              <Text size="xs" c="dimmed" ta="start" truncate className={classes.text}>
+              <Text size="xs" ta="start" truncate className={cx(classes.text, 'yy-readable-text')}>
                 {divisionName}
               </Text>
             )}
@@ -224,8 +221,8 @@ const TableRow: FC<{
               desrc: item.category,
               icon: mdiHelpCircleOutline,
               name: item.category as ChallengeCategory,
-              color: 'gray',
-              colors: theme.colors.gray,
+              color: 'light',
+              colors: theme.colors.light,
             }
 
             return (
@@ -240,7 +237,7 @@ const TableRow: FC<{
                       <Text c={cate.color} fz="xs" className={cx(classes.text, classes.mono)}>
                         + {chal?.score} pts
                       </Text>
-                      <Text c="dimmed" fz="xs" className={cx(classes.text, classes.mono)}>
+                      <Text fz="xs" className={cx(classes.text, classes.mono, 'yy-readable-text')}>
                         # {dayjs(chal?.time).locale(locale).format('L LTS')}
                       </Text>
                     </Stack>
@@ -259,6 +256,8 @@ const TableRow: FC<{
 })
 
 const ITEM_COUNT_PER_PAGE = 30
+
+const bloodTierLabel = (index: number) => (index === 0 ? '一血' : index === 1 ? '二血' : '三血')
 
 export interface ScoreboardProps {
   divisionId: number | null
@@ -340,7 +339,7 @@ export const ScoreboardTable: FC<ScoreboardProps> = ({ divisionId, setDivisionId
   const hasDivisionFilter = divisionOptions.length > 0
 
   return (
-    <Paper shadow="md" p="md">
+    <YinyuTableShell p="md" className="scoreboard-draft">
       <Stack gap="xs">
         <Grid>
           <Grid.Col span={3}>
@@ -371,7 +370,7 @@ export const ScoreboardTable: FC<ScoreboardProps> = ({ divisionId, setDivisionId
             />
           </Grid.Col>
         </Grid>
-        <Box pos="relative" mih="calc(100vh - 14rem)">
+        <Box pos="relative" className={classes.tableStage}>
           <Table.ScrollContainer
             minWidth="100%"
             classNames={{
@@ -403,25 +402,28 @@ export const ScoreboardTable: FC<ScoreboardProps> = ({ divisionId, setDivisionId
           <Box className={classes.legend}>
             <Stack gap="xs">
               <Tooltip.Group>
-                <Group gap="lg">
+                <Group gap="sm" wrap="wrap">
                   {BloodsTypes.map((type, idx) => (
                     <Tooltip key={idx} label={bloodData.get(type)?.name} transitionProps={{ transition: 'pop' }}>
-                      <Group justify="left" gap={2}>
-                        <Icon {...iconMap.get(type)!} />
-                        <Text>{bloodData.get(type)?.descr}</Text>
+                      <Group justify="left" gap={7} className={classes.bloodLegendItem} data-tier={idx + 1}>
+                        <span className={classes.bloodLegendBadge}>
+                          <span>{idx + 1}</span>
+                          <em>{bloodTierLabel(idx)}</em>
+                        </span>
+                        <Text className={classes.bloodLegendText}>{bloodData.get(type)?.descr}</Text>
                       </Group>
                     </Tooltip>
                   ))}
                 </Group>
               </Tooltip.Group>
-              <Text size="sm" c="dimmed">
+              <Text size="sm" className="yy-readable-text">
                 {t('game.content.scoreboard_note')}
               </Text>
             </Stack>
           </Box>
         </Box>
         <Group justify="space-between">
-          <Text size="sm" c="dimmed">
+          <Text size="sm" className="yy-readable-text">
             {t('game.content.scoreboard_tip')}
           </Text>
           <Pagination
@@ -442,6 +444,6 @@ export const ScoreboardTable: FC<ScoreboardProps> = ({ divisionId, setDivisionId
         onClose={() => setItemDetailOpened(false)}
         item={currentItem}
       />
-    </Paper>
+    </YinyuTableShell>
   )
 }

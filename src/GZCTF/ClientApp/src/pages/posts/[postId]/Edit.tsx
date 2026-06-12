@@ -1,17 +1,4 @@
-import {
-  alpha,
-  Button,
-  Group,
-  SimpleGrid,
-  Stack,
-  TagsInput,
-  Text,
-  Textarea,
-  TextInput,
-  Title,
-  useMantineColorScheme,
-  useMantineTheme,
-} from '@mantine/core'
+import { Button, Group, SimpleGrid, Stack, TagsInput, Text, Textarea, TextInput, Title } from '@mantine/core'
 import { useModals } from '@mantine/modals'
 import { showNotification } from '@mantine/notifications'
 import { mdiCheck, mdiContentSaveOutline, mdiDeleteOutline, mdiFileCheckOutline } from '@mdi/js'
@@ -21,13 +8,13 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router'
 import { WithNavBar } from '@Components/WithNavbar'
 import { WithRole } from '@Components/WithRole'
+import { YinyuFormSection } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import { useIsMobile } from '@Utils/ThemeOverride'
 import api, { PostEditModel, Role } from '@Api'
 
 const PostEdit: FC = () => {
   const { postId } = useParams()
-  const theme = useMantineTheme()
   const navigate = useNavigate()
 
   const { t } = useTranslation()
@@ -63,7 +50,6 @@ const PostEdit: FC = () => {
   const modals = useModals()
 
   const isMobile = useIsMobile()
-  const { colorScheme } = useMantineColorScheme()
 
   const onUpdate = async () => {
     if (postId === 'new') {
@@ -172,10 +158,10 @@ const PostEdit: FC = () => {
   return (
     <WithNavBar minWidth={0} withHeader stickyHeader>
       <WithRole requiredRole={Role.Admin}>
-        <Stack mt={isMobile ? 25 : 30}>
+        <Stack className="yy-page-frame view-stack yy-post-edit-page">
           <Group justify={isMobile ? 'right' : 'space-between'}>
             {!isMobile && (
-              <Title order={1} c={alpha(colorScheme === 'dark' ? theme.colors.light[6] : theme.colors.gray[7], 0.5)}>
+              <Title order={1} className="yy-brand-title">
                 {`> ${postId === 'new' ? t('post.button.new') : t('post.button.edit')}`}
               </Title>
             )}
@@ -187,6 +173,7 @@ const PostEdit: FC = () => {
                     color="red"
                     leftSection={<Icon path={mdiDeleteOutline} size={1} />}
                     variant="outline"
+                    className="yy-post-edit-button yy-post-danger-button"
                     onClick={() =>
                       modals.openConfirmModal({
                         title: t('post.button.delete'),
@@ -207,6 +194,7 @@ const PostEdit: FC = () => {
                   <Button
                     disabled={disabled}
                     leftSection={<Icon path={mdiFileCheckOutline} size={1} />}
+                    className="yy-post-edit-button"
                     onClick={() => {
                       if (hasChanged) {
                         modals.openConfirmModal({
@@ -229,43 +217,48 @@ const PostEdit: FC = () => {
               <Button
                 disabled={disabled}
                 leftSection={<Icon path={mdiContentSaveOutline} size={1} />}
+                className="yy-post-edit-button"
                 onClick={onUpdate}
               >
                 {postId === 'new' ? t('post.button.new') : t('post.button.save')}
               </Button>
             </Group>
           </Group>
-          {isMobile ? titlePart : <SimpleGrid cols={2}>{titlePart}</SimpleGrid>}
-          <Textarea
-            label={
-              <Group gap="sm">
-                <Text size="sm">{t('post.label.summary')}</Text>
-                <Text size="xs" c="dimmed">
-                  {t('admin.content.markdown_support')}
-                </Text>
-              </Group>
-            }
-            autosize
-            value={post.summary ?? ''}
-            onChange={(e) => setPost({ ...post, summary: e.currentTarget.value })}
-            minRows={5}
-            maxRows={5}
-          />
-          <Textarea
-            label={
-              <Group gap="sm">
-                <Text size="sm">{t('post.label.content')}</Text>
-                <Text size="xs" c="dimmed">
-                  {t('admin.content.markdown_support')}
-                </Text>
-              </Group>
-            }
-            autosize
-            value={post.content ?? ''}
-            onChange={(e) => setPost({ ...post, content: e.currentTarget.value })}
-            minRows={isMobile ? 14 : 16}
-            maxRows={isMobile ? 14 : 16}
-          />
+          <YinyuFormSection p="lg">
+            <Stack gap="md">
+              {isMobile ? titlePart : <SimpleGrid cols={2}>{titlePart}</SimpleGrid>}
+              <Textarea
+                label={
+                  <Group gap="sm">
+                    <Text size="sm">{t('post.label.summary')}</Text>
+                    <Text size="xs" className="yy-readable-text">
+                      {t('admin.content.markdown_support')}
+                    </Text>
+                  </Group>
+                }
+                autosize
+                value={post.summary ?? ''}
+                onChange={(e) => setPost({ ...post, summary: e.currentTarget.value })}
+                minRows={5}
+                maxRows={5}
+              />
+              <Textarea
+                label={
+                  <Group gap="sm">
+                    <Text size="sm">{t('post.label.content')}</Text>
+                    <Text size="xs" className="yy-readable-text">
+                      {t('admin.content.markdown_support')}
+                    </Text>
+                  </Group>
+                }
+                autosize
+                value={post.content ?? ''}
+                onChange={(e) => setPost({ ...post, content: e.currentTarget.value })}
+                minRows={isMobile ? 14 : 16}
+                maxRows={isMobile ? 14 : 16}
+              />
+            </Stack>
+          </YinyuFormSection>
         </Stack>
       </WithRole>
     </WithNavBar>

@@ -1,4 +1,3 @@
-import { useMantineColorScheme } from '@mantine/core'
 import type { EChartsOption } from 'echarts'
 import * as echarts from 'echarts'
 import { FC, useEffect, useRef } from 'react'
@@ -14,11 +13,9 @@ export const EchartsContainer: FC<EchartsContainerProps> = (props) => {
   const chartInstance = useRef<echarts.ECharts | null>(null)
   const { option, opts, style, ...rest } = props
 
-  const { colorScheme } = useMantineColorScheme()
-
   useEffect(() => {
     if (chartRef.current && !chartInstance.current) {
-      chartInstance.current = echarts.init(chartRef.current, colorScheme === 'dark' ? 'dark' : 'default', opts)
+      chartInstance.current = echarts.init(chartRef.current, 'dark', opts)
       chartInstance.current.setOption(option)
     }
 
@@ -29,14 +26,6 @@ export const EchartsContainer: FC<EchartsContainerProps> = (props) => {
       }
     }
   }, [])
-
-  useEffect(() => {
-    if (chartInstance.current) {
-      chartInstance.current.dispose()
-    }
-    chartInstance.current = echarts.init(chartRef.current, colorScheme === 'dark' ? 'dark' : 'default', opts)
-    chartInstance.current.setOption(option)
-  }, [colorScheme])
 
   useEffect(() => {
     if (chartInstance.current) {

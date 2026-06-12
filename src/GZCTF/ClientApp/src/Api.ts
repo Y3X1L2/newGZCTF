@@ -3,10 +3,7 @@
 // @ts-nocheck
 /*
  * ---------------------------------------------------------------
- * ## THIS FILE WAS GENERATED VIA SWAGGER-TYPESCRIPT-API        ##
- * ##                                                           ##
- * ## AUTHOR: acacode                                           ##
- * ## SOURCE: https://github.com/acacode/swagger-typescript-api ##
+ * ## THIS FILE WAS GENERATED FROM THE PLATFORM OPENAPI SCHEMA  ##
  * ---------------------------------------------------------------
  */
 
@@ -2463,10 +2460,10 @@ export class HttpClient<SecurityDataType = unknown> {
 import useSWR, { MutatorOptions, SWRConfiguration, mutate } from "swr";
 
 /**
- * @title GZCTF Server API
+ * @title YINYU CTF Platform API
  * @version v1
  *
- * GZCTF Server API Document
+ * YINYU CTF Platform API Document
  */
 export class Api<
   SecurityDataType extends unknown,

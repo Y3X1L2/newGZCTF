@@ -4,7 +4,6 @@ import {
   Divider,
   Group,
   NumberInput,
-  Paper,
   ScrollArea,
   Select,
   SimpleGrid,
@@ -47,6 +46,7 @@ import {
   awdpStatusColor,
 } from '@Components/Awdp/AwdpWidgets'
 import { WithGameEditTab } from '@Components/admin/WithGameEditTab'
+import { YinyuPanel, YinyuTableShell } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import { AwdpPatchStatus } from '@Api'
 import {
@@ -305,7 +305,7 @@ const AwdServices: FC = () => {
       }
     >
       <Stack gap="md">
-        <Paper p="md" shadow="xs" radius="md" withBorder>
+        <YinyuPanel p="md">
           <Group justify="space-between" align="flex-start" wrap="wrap">
             <Stack gap={2}>
               <Title order={4}>
@@ -354,9 +354,9 @@ const AwdServices: FC = () => {
               sub={awd('total_rounds_with_count', '{{count}} rounds', { count: draft.totalRounds })}
             />
           </SimpleGrid>
-        </Paper>
+        </YinyuPanel>
 
-        <Paper p="md" shadow="xs" radius="md" withBorder>
+        <YinyuPanel p="md">
           <Stack>
             <Group justify="space-between" align="flex-end" wrap="wrap">
               <Select
@@ -526,9 +526,9 @@ const AwdServices: FC = () => {
               </Stack>
             </SimpleGrid>
           </Stack>
-        </Paper>
+        </YinyuPanel>
 
-        <Paper p="md" shadow="xs" radius="md" withBorder>
+        <YinyuTableShell p="md">
           <AwdpSectionTitle
             title={awd('instance_status', 'Instances')}
             extra={<Badge variant="light">{`${runningInstances}/${instanceCount}`}</Badge>}
@@ -613,9 +613,9 @@ const AwdServices: FC = () => {
               </Table.Tbody>
             </Table>
           </ScrollArea>
-        </Paper>
+        </YinyuTableShell>
 
-        <Paper p="md" shadow="xs" radius="md" withBorder>
+        <YinyuTableShell p="md">
           <AwdpSectionTitle
             title={awd('patch_submissions', 'Patch Submissions')}
             extra={
@@ -672,7 +672,7 @@ const AwdServices: FC = () => {
               </Table.Tbody>
             </Table>
           </ScrollArea>
-        </Paper>
+        </YinyuTableShell>
       </Stack>
     </WithGameEditTab>
   )

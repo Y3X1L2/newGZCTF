@@ -5,7 +5,6 @@ import {
   ComboboxItem,
   Group,
   Input,
-  Paper,
   ScrollArea,
   Select,
   SelectProps,
@@ -29,6 +28,7 @@ import { FC, useEffect, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { ActionIconWithConfirm } from '@Components/ActionIconWithConfirm'
 import { AdminPage } from '@Components/admin/AdminPage'
+import { YinyuTableShell } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
 import { showErrorMsg } from '@Utils/Shared'
 import { useChallengeCategoryLabelMap, getProxyUrl } from '@Utils/Shared'
@@ -199,7 +199,7 @@ const Instances: FC = () => {
         </>
       }
     >
-      <Paper shadow="md" p="xs" w="100%">
+      <YinyuTableShell p="xs" w="100%">
         <ScrollArea offsetScrollbars scrollbarSize={4} h="calc(100vh - 205px)">
           <Table className={tableClasses.table}>
             <Table.Thead>
@@ -315,7 +315,7 @@ const Instances: FC = () => {
         <Text size="xs" c="dimmed">
           {t('admin.content.instances.note')}
         </Text>
-      </Paper>
+      </YinyuTableShell>
     </AdminPage>
   )
 }

@@ -5,6 +5,7 @@ import { Icon } from '@mdi/react'
 import { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router'
+import { YinyuModalBody } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import { useEditChallenge } from '@Hooks/useEdit'
 import api, { FileType, FlagCreateModel } from '@Api'
@@ -62,33 +63,35 @@ export const AttachmentRemoteEditModal: FC<ModalProps> = (props) => {
 
   return (
     <Modal {...props}>
-      <Stack>
-        <Text>
-          {t('admin.content.games.challenges.attachment.instruction.remote.content')}
-          <br />
-          <Text fw="bold" span>
-            {t('admin.content.games.challenges.attachment.instruction.remote.format')}
+      <YinyuModalBody>
+        <Stack>
+          <Text>
+            {t('admin.content.games.challenges.attachment.instruction.remote.content')}
+            <br />
+            <Text fw="bold" span>
+              {t('admin.content.games.challenges.attachment.instruction.remote.format')}
+            </Text>
+            <br />
+            <Text fw="bold" c="orange" span>
+              {t('admin.content.games.challenges.attachment.instruction.amount_double')}
+            </Text>
+            <br />
           </Text>
-          <br />
-          <Text fw="bold" c="orange" span>
-            {t('admin.content.games.challenges.attachment.instruction.amount_double')}
-          </Text>
-          <br />
-        </Text>
-        <Textarea
-          required
-          autosize
-          minRows={8}
-          maxRows={12}
-          value={text}
-          classNames={{ input: misc.ffmono }}
-          onChange={(e) => setText(e.target.value)}
-          placeholder={'flag{hello_world} http://example.com/1.zip\nflag{he11o_world} http://example.com/2.zip'}
-        />
-        <Button fullWidth disabled={disabled} onClick={onUpload}>
-          {t('admin.button.games.challenges.attachment.batch_add')}
-        </Button>
-      </Stack>
+          <Textarea
+            required
+            autosize
+            minRows={8}
+            maxRows={12}
+            value={text}
+            classNames={{ input: misc.ffmono }}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={'flag{hello_world} http://example.com/1.zip\nflag{he11o_world} http://example.com/2.zip'}
+          />
+          <Button fullWidth disabled={disabled} onClick={onUpload}>
+            {t('admin.button.games.challenges.attachment.batch_add')}
+          </Button>
+        </Stack>
+      </YinyuModalBody>
     </Modal>
   )
 }

@@ -20,7 +20,7 @@ const Scoreboard: FC = () => {
   const isVertical = useIsMobile()
 
   return (
-    <WithNavBar width="90%" minWidth={0}>
+    <WithNavBar width="var(--container)" minWidth={0}>
       {isMobile ? (
         <Stack pt="md">
           {teamInfo && !error && <TeamRank />}

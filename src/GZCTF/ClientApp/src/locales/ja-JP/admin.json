@@ -581,7 +581,7 @@
       "footer": "`テスト` <mbr/> [某大学ホームページ](...)",
       "logo": {
         "custom": "アイコンをカスタマイズします。",
-        "default": "GZCTFのアイコンを使用"
+        "default": "YINYU CTF Platformのアイコンを使用"
       }
     },
     "teams": {

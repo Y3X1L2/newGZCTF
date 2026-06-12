@@ -1,4 +1,4 @@
-import { ActionIcon, Anchor, Button, Divider, Group, Stack, Text, TextInput, Tooltip } from '@mantine/core'
+import { ActionIcon, Button, Divider, Group, Stack, Text, TextInput, Tooltip } from '@mantine/core'
 import { useClipboard } from '@mantine/hooks'
 import { useDebouncedCallback, useDebouncedState } from '@mantine/hooks'
 import { showNotification } from '@mantine/notifications'
@@ -17,6 +17,7 @@ import duration from 'dayjs/plugin/duration'
 import { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { HandleWsrxError, useWsrx } from '@Components/WsrxProvider'
+import { YinyuHeartbeatIcon, YinyuPanel, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
 import { getProxyUrl as getProxyEntry } from '@Utils/Shared'
 import { useConfig } from '@Hooks/useConfig'
 import { ClientFlagContext, ContainerPortMappingType } from '@Api'
@@ -72,9 +73,9 @@ const Countdown: FC<CountdownProps> = (props) => {
   }, [countdown, config.renewalWindow, timeoutExecuted, onTimeout])
 
   return (
-    <Text span fw="bold">
+    <span className="yy-instance-countdown-value">
       {countdown.asSeconds() > 0 ? countdown.format('HH:mm:ss') : '00:00:00'}
-    </Text>
+    </span>
   )
 }
 
@@ -182,123 +183,129 @@ export const InstanceEntry: FC<InstanceEntryProps> = (props) => {
         {t('challenge.content.instance.test.no_container')}
       </Text>
     ) : (
-      <Group justify="space-between" wrap="nowrap">
-        <Stack align="left" gap={0}>
-          <Text size="sm" fw="bold">
-            {t('challenge.content.instance.no_container.message')}
-          </Text>
-          <Text size="xs" c="dimmed" fw="bold">
-            {t('challenge.content.instance.no_container.note', {
-              min: config.defaultLifetime,
-            })}
-          </Text>
-        </Stack>
+      <YinyuPanel p="sm" cells={24} className="yy-instance-panel">
+        <Group justify="space-between" wrap="nowrap">
+          <Stack align="left" gap={0}>
+            <Text size="sm" fw="bold">
+              {t('challenge.content.instance.no_container.message')}
+            </Text>
+            <Text size="xs" c="dimmed" fw="bold">
+              {t('challenge.content.instance.no_container.note', {
+                min: config.defaultLifetime,
+              })}
+            </Text>
+          </Stack>
 
-        <Button onClick={onCreate} disabled={disabled} loading={disabled}>
-          {t('challenge.button.instance.create')}
-        </Button>
-      </Group>
+          <Button
+            onClick={onCreate}
+            disabled={disabled}
+            leftSection={disabled ? <YinyuHeartbeatIcon label="instance starting" /> : undefined}
+          >
+            {t('challenge.button.instance.create')}
+          </Button>
+        </Group>
+      </YinyuPanel>
     )
   }
 
   return (
-    <Stack gap="sm" w="100%">
-      <TextInput
-        label={
-          <Text size="sm" fw="bold">
-            {t('challenge.content.instance.entry.label')}
-          </Text>
-        }
-        description={
-          isPlatformProxy &&
-          !isPreview && (
-            <Text span size="sm">
-              {t('challenge.content.instance.entry.description.proxy')}
-              &nbsp;
-              <Anchor href="https://github.com/XDSEC/WebSocketReflectorX/releases" target="_blank" rel="noreferrer">
-                {t('challenge.content.instance.entry.description.anchor')}
-              </Anchor>
-            </Text>
-          )
-        }
-        leftSection={
-          <Icon
-            path={mdiServerNetwork}
-            size={1}
-            data-proxied={(isWsrxUsable && !useOriginal) || undefined}
-            className={classes.icon}
+    <YinyuPanel p="sm" cells={28} className="yy-instance-panel">
+      <Stack gap="sm" w="100%">
+        <YinyuStatusPill tone="success" state="running" icon={YinyuHeartbeatIcon} className="yy-instance-countdown-pill">
+          <span className="yy-instance-countdown-label">{t('challenge.content.instance.actions.count_down')}</span>
+          <Countdown
+            time={context.closeTime}
+            extendEnabled={canExtend}
+            enableExtend={enableExtend}
+            onTimeout={onDestroy}
           />
-        }
-        value={entry}
-        readOnly
-        classNames={{ input: misc.ffmono }}
-        rightSection={
-          <Group gap={2}>
-            <Divider orientation="vertical" pr={4} />
-            {isWsrxUsable && (
-              <Tooltip
-                label={
-                  forceShowOriginal
-                    ? t('challenge.button.instance.show.proxied')
-                    : t('challenge.button.instance.show.original')
-                }
-                withArrow
-              >
-                <ActionIcon onClick={() => setForceShowOriginal((prev) => !prev)}>
-                  <Icon path={mdiTransitConnectionVariant} size={1} />
+        </YinyuStatusPill>
+        <TextInput
+          label={
+            <Text size="sm" fw="bold">
+              {t('challenge.content.instance.entry.label')}
+            </Text>
+          }
+          description={
+            isPlatformProxy &&
+            !isPreview && (
+              <Text span size="sm">
+                {t('challenge.content.instance.entry.description.proxy')}
+                &nbsp;
+                {t('challenge.content.instance.entry.description.anchor')}
+              </Text>
+            )
+          }
+          leftSection={
+            <Icon
+              path={mdiServerNetwork}
+              size={1}
+              data-proxied={(isWsrxUsable && !useOriginal) || undefined}
+              className={classes.icon}
+            />
+          }
+          value={entry}
+          readOnly
+          classNames={{ input: misc.ffmono }}
+          rightSection={
+            <Group gap={2}>
+              <Divider orientation="vertical" pr={4} />
+              {isWsrxUsable && (
+                <Tooltip
+                  label={
+                    forceShowOriginal
+                      ? t('challenge.button.instance.show.proxied')
+                      : t('challenge.button.instance.show.original')
+                  }
+                  withArrow
+                >
+                  <ActionIcon onClick={() => setForceShowOriginal((prev) => !prev)}>
+                    <Icon path={mdiTransitConnectionVariant} size={1} />
+                  </ActionIcon>
+                </Tooltip>
+              )}
+              <Tooltip label={t('common.button.copy')} withArrow>
+                <ActionIcon onClick={onCopyEntry}>
+                  <Icon path={mdiContentCopy} size={1} />
                 </ActionIcon>
               </Tooltip>
-            )}
-            <Tooltip label={t('common.button.copy')} withArrow>
-              <ActionIcon onClick={onCopyEntry}>
-                <Icon path={mdiContentCopy} size={1} />
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label={t('challenge.content.instance.open.web')} withArrow>
-              <ActionIcon
-                disabled={entryIsWss}
-                component="a"
-                href={
-                  entryIsWss
-                    ? '#'
-                    : `http://${useLocal && wsrxOptions.allowLan ? entry.replace('0.0.0.0', '127.0.0.1') : entry}`
-                }
-                target={entryIsWss ? undefined : '_blank'}
-                rel="noreferrer"
-              >
-                <Icon path={mdiOpenInNew} size={1} />
-              </ActionIcon>
-            </Tooltip>
+              <Tooltip label={t('challenge.content.instance.open.web')} withArrow>
+                <ActionIcon
+                  disabled={entryIsWss}
+                  component="a"
+                  href={
+                    entryIsWss
+                      ? '#'
+                      : `http://${useLocal && wsrxOptions.allowLan ? entry.replace('0.0.0.0', '127.0.0.1') : entry}`
+                  }
+                  target={entryIsWss ? undefined : '_blank'}
+                  rel="noreferrer"
+                >
+                  <Icon path={mdiOpenInNew} size={1} />
+                </ActionIcon>
+              </Tooltip>
+            </Group>
+          }
+          rightSectionWidth={isWsrxUsable ? '6.5rem' : '5rem'}
+        />
+        {!isPreview && (
+          <Group justify="space-between" wrap="nowrap">
+            <Stack align="left" gap={0}>
+              <Text size="xs" fw={600} className="yy-readable-text yy-instance-renew-note">
+                {t('challenge.content.instance.actions.note', { min: config.renewalWindow })}
+              </Text>
+            </Stack>
+            <Group justify="right" wrap="nowrap" gap="xs">
+              <Button color="orange" onClick={onExtend} disabled={!canExtend || disabled}>
+                {t('challenge.button.instance.extend')}
+              </Button>
+              <Button color="red" onClick={onDestroy} disabled={disabled}>
+                {t('challenge.button.instance.destroy')}
+              </Button>
+            </Group>
           </Group>
-        }
-        rightSectionWidth={isWsrxUsable ? '6.5rem' : '5rem'}
-      />
-      {!isPreview && (
-        <Group justify="space-between" wrap="nowrap">
-          <Stack align="left" gap={0}>
-            <Text size="sm" fw={600}>
-              {t('challenge.content.instance.actions.count_down')}
-              <Countdown
-                time={context.closeTime}
-                extendEnabled={canExtend}
-                enableExtend={enableExtend}
-                onTimeout={onDestroy}
-              />
-            </Text>
-            <Text size="xs" c="dimmed" fw={600}>
-              {t('challenge.content.instance.actions.note', { min: config.renewalWindow })}
-            </Text>
-          </Stack>
-          <Group justify="right" wrap="nowrap" gap="xs">
-            <Button color="orange" onClick={onExtend} disabled={!canExtend || disabled}>
-              {t('challenge.button.instance.extend')}
-            </Button>
-            <Button color="red" onClick={onDestroy} disabled={disabled}>
-              {t('challenge.button.instance.destroy')}
-            </Button>
-          </Group>
-        </Group>
-      )}
-    </Stack>
+        )}
+      </Stack>
+    </YinyuPanel>
   )
 }

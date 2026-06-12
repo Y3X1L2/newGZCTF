@@ -6,7 +6,6 @@ import {
   Code,
   FileButton,
   Group,
-  Paper,
   Progress,
   ScrollArea,
   Switch,
@@ -31,6 +30,7 @@ import { Link, useNavigate } from 'react-router'
 import { GameColorMap } from '@Components/GameCard'
 import { AdminPage } from '@Components/admin/AdminPage'
 import { GameCreateModal } from '@Components/admin/GameCreateModal'
+import { YinyuTableShell } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import { useArrayResponse } from '@Hooks/useArrayResponse'
 import { getGameStatus } from '@Hooks/useGame'
@@ -140,7 +140,7 @@ const Games: FC = () => {
       headProps={{ justify: 'apart' }}
       head={
         <>
-          <Group gap="md" wrap="nowrap">
+          <Group gap="md" wrap="wrap">
             <Button leftSection={<Icon path={mdiPlus} size={1} />} onClick={() => setCreateOpened(true)}>
               {t('admin.button.games.new')}
             </Button>
@@ -169,7 +169,7 @@ const Games: FC = () => {
               )}
             </FileButton>
           </Group>
-          <Group w="calc(100% - 9rem)" justify="right">
+          <Group flex={1} justify="right" wrap="wrap">
             <Text fw="bold" size="sm">
               <Trans
                 i18nKey="admin.content.games.stats"
@@ -194,7 +194,7 @@ const Games: FC = () => {
         </>
       }
     >
-      <Paper shadow="md" p="md" w="100%">
+      <YinyuTableShell p="md" w="100%" className="admin-panel large">
         <ScrollArea offsetScrollbars h="calc(100vh - 190px)">
           <Table className={tableClasses.table}>
             <Table.Thead>
@@ -264,7 +264,7 @@ const Games: FC = () => {
             </Table.Tbody>
           </Table>
         </ScrollArea>
-      </Paper>
+      </YinyuTableShell>
       <GameCreateModal
         opened={createOpened}
         onClose={() => setCreateOpened(false)}

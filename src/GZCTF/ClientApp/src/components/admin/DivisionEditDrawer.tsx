@@ -19,6 +19,7 @@ import { FC, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ScrollingText } from '@Components/ScrollingText'
 import { PermissionDot, PermissionSelector } from '@Components/admin/PermissionSelector'
+import { YinyuDrawerBody } from '@Components/yinyu/YinyuUI'
 import { PERMISSION_DEFINITIONS, permissionMaskToArray } from '@Utils/Permission'
 import { randomInviteCode, showErrorMsg } from '@Utils/Shared'
 import { ChallengeInfoModel, Division, DivisionCreateModel, GamePermission } from '@Api'
@@ -233,104 +234,106 @@ export const DivisionEditDrawer: FC<DivisionEditDrawerProps> = ({
       onClose={() => !loading && onClose?.()}
       overlayProps={overlayProps}
     >
-      <Stack gap="sm">
-        <Group gap="sm" grow>
-          <TextInput
-            label={t('admin.content.games.divisions.form.name.label')}
-            description={t('admin.content.games.divisions.form.name.description')}
-            placeholder={t('admin.placeholder.games.divisions')}
-            withAsterisk
-            disabled={loading}
-            value={name}
-            onChange={(event) => setName(event.currentTarget.value)}
+      <YinyuDrawerBody>
+        <Stack gap="sm">
+          <Group gap="sm" grow>
+            <TextInput
+              label={t('admin.content.games.divisions.form.name.label')}
+              description={t('admin.content.games.divisions.form.name.description')}
+              placeholder={t('admin.placeholder.games.divisions')}
+              withAsterisk
+              disabled={loading}
+              value={name}
+              onChange={(event) => setName(event.currentTarget.value)}
+            />
+            <TextInput
+              label={t('admin.content.games.divisions.form.invite_code.label')}
+              description={t('admin.content.games.divisions.form.invite_code.description')}
+              placeholder={t('admin.content.games.info.invite_code.placeholder')}
+              value={inviteCode}
+              disabled={loading}
+              onChange={(event) => setInviteCode(event.currentTarget.value)}
+              rightSection={
+                <ActionIcon disabled={loading} onClick={() => !loading && setInviteCode(randomInviteCode())}>
+                  <Icon path={mdiDiceMultiple} size={0.9} />
+                </ActionIcon>
+              }
+            />
+          </Group>
+
+          <Input.Wrapper
+            label={t('admin.content.games.divisions.form.default_permissions.label')}
+            description={t('admin.content.games.divisions.form.default_permissions.description')}
+          >
+            <PermissionSelector pt="md" value={defaultPermissions} onChange={setDefaultPermissions} disabled={loading} />
+          </Input.Wrapper>
+
+          <MultiSelect
+            label={t('admin.content.games.divisions.form.challenge_overrides.label')}
+            description={t('admin.content.games.divisions.form.challenge_overrides.description')}
+            data={challengeOptions}
+            value={selectedChallenges}
+            onChange={handleChallengeSelection}
+            searchable
+            disabled={loading || !challenges}
+            nothingFoundMessage={t('admin.content.nothing_found')}
+            placeholder={t('admin.content.games.divisions.form.challenge_overrides.placeholder')}
           />
-          <TextInput
-            label={t('admin.content.games.divisions.form.invite_code.label')}
-            description={t('admin.content.games.divisions.form.invite_code.description')}
-            placeholder={t('admin.content.games.info.invite_code.placeholder')}
-            value={inviteCode}
-            disabled={loading}
-            onChange={(event) => setInviteCode(event.currentTarget.value)}
-            rightSection={
-              <ActionIcon disabled={loading} onClick={() => !loading && setInviteCode(randomInviteCode())}>
-                <Icon path={mdiDiceMultiple} size={0.9} />
-              </ActionIcon>
-            }
-          />
-        </Group>
 
-        <Input.Wrapper
-          label={t('admin.content.games.divisions.form.default_permissions.label')}
-          description={t('admin.content.games.divisions.form.default_permissions.description')}
-        >
-          <PermissionSelector pt="md" value={defaultPermissions} onChange={setDefaultPermissions} disabled={loading} />
-        </Input.Wrapper>
-
-        <MultiSelect
-          label={t('admin.content.games.divisions.form.challenge_overrides.label')}
-          description={t('admin.content.games.divisions.form.challenge_overrides.description')}
-          data={challengeOptions}
-          value={selectedChallenges}
-          onChange={handleChallengeSelection}
-          searchable
-          disabled={loading || !challenges}
-          nothingFoundMessage={t('admin.content.nothing_found')}
-          placeholder={t('admin.content.games.divisions.form.challenge_overrides.placeholder')}
-        />
-
-        {sortedSelected.length > 0 && (
-          <ScrollArea type="auto" offsetScrollbars h={300}>
-            <Accordion chevronPosition="left" variant="filled">
-              {sortedSelected.map((value) => {
-                const id = Number(value)
-                return (
-                  <Accordion.Item value={value} key={value}>
-                    <Accordion.Control>
-                      <Group justify="space-between" wrap="nowrap">
-                        <Group gap="xs">
-                          <Text size="sm" miw="2rem">{`#${id}`}</Text>
-                          <ScrollingText text={getChallengeTitle(id)} w="12rem" />
-                          {renderPermissionDots(challengePermissions[id])}
+          {sortedSelected.length > 0 && (
+            <ScrollArea type="auto" offsetScrollbars h={300}>
+              <Accordion chevronPosition="left" variant="filled">
+                {sortedSelected.map((value) => {
+                  const id = Number(value)
+                  return (
+                    <Accordion.Item value={value} key={value}>
+                      <Accordion.Control>
+                        <Group justify="space-between" wrap="nowrap">
+                          <Group gap="xs">
+                            <Text size="sm" miw="2rem">{`#${id}`}</Text>
+                            <ScrollingText text={getChallengeTitle(id)} w="12rem" />
+                            {renderPermissionDots(challengePermissions[id])}
+                          </Group>
+                          <Button
+                            variant="subtle"
+                            size="xs"
+                            color="red"
+                            disabled={loading}
+                            leftSection={<Icon path={mdiMinusCircle} size={0.8} />}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              handleChallengeSelection(selectedChallenges.filter((item) => item !== value))
+                            }}
+                          >
+                            {t('common.modal.delete')}
+                          </Button>
                         </Group>
-                        <Button
-                          variant="subtle"
-                          size="xs"
-                          color="red"
+                      </Accordion.Control>
+                      <Accordion.Panel>
+                        <PermissionSelector
+                          challengeScoped
+                          value={challengePermissions[id] ?? defaultPermissions}
+                          onChange={(permissions) => handleOverrideChange(id, permissions)}
                           disabled={loading}
-                          leftSection={<Icon path={mdiMinusCircle} size={0.8} />}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            handleChallengeSelection(selectedChallenges.filter((item) => item !== value))
-                          }}
-                        >
-                          {t('common.modal.delete')}
-                        </Button>
-                      </Group>
-                    </Accordion.Control>
-                    <Accordion.Panel>
-                      <PermissionSelector
-                        challengeScoped
-                        value={challengePermissions[id] ?? defaultPermissions}
-                        onChange={(permissions) => handleOverrideChange(id, permissions)}
-                        disabled={loading}
-                      />
-                    </Accordion.Panel>
-                  </Accordion.Item>
-                )
-              })}
-            </Accordion>
-          </ScrollArea>
-        )}
+                        />
+                      </Accordion.Panel>
+                    </Accordion.Item>
+                  )
+                })}
+              </Accordion>
+            </ScrollArea>
+          )}
 
-        <Group justify="flex-end">
-          <Button variant="default" disabled={loading} onClick={onClose}>
-            {t('common.modal.cancel')}
-          </Button>
-          <Button onClick={handleSubmit} loading={loading}>
-            {division ? t('common.modal.confirm_update') : t('common.modal.confirm')}
-          </Button>
-        </Group>
-      </Stack>
+          <Group justify="flex-end">
+            <Button variant="default" disabled={loading} onClick={onClose}>
+              {t('common.modal.cancel')}
+            </Button>
+            <Button onClick={handleSubmit} loading={loading}>
+              {division ? t('common.modal.confirm_update') : t('common.modal.confirm')}
+            </Button>
+          </Group>
+        </Stack>
+      </YinyuDrawerBody>
     </Drawer>
   )
 }

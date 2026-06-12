@@ -9,7 +9,6 @@ import {
   Skeleton,
   Stack,
   Switch,
-  Tabs,
   Text,
   Title,
 } from '@mantine/core'
@@ -24,6 +23,7 @@ import { ChallengeCard } from '@Components/ChallengeCard'
 import { Empty } from '@Components/Empty'
 import { GameChallengeModal } from '@Components/GameChallengeModal'
 import { WriteupSubmitModal } from '@Components/WriteupSubmitModal'
+import { YinyuHexField } from '@Components/yinyu/YinyuUI'
 import { useChallengeCategoryLabelMap, SubmissionTypeIconMap } from '@Utils/Shared'
 import { useGame, useGameTeamInfo } from '@Hooks/useGame'
 import { ChallengeInfo, ChallengeCategory, SubmissionType } from '@Api'
@@ -82,7 +82,8 @@ export const ChallengePanel: FC = () => {
   if (!challenges) {
     return (
       <>
-        <Stack miw="10rem" maw="10rem">
+        <Stack className="detail-panel panel-card yy-challenge-filter-panel" p="sm">
+          <YinyuHexField cells={24} />
           {Array(9)
             .fill(null)
             .map((_v, i) => (
@@ -93,11 +94,11 @@ export const ChallengePanel: FC = () => {
             ))}
         </Stack>
         <SimpleGrid
+          className="challenge-grid yy-challenge-grid yy-challenge-grid-loading"
           p="xs"
           pt={0}
           spacing="sm"
           pos="relative"
-          w="calc(100% - 9rem)"
           cols={{ base: 3, w18: 4, w24: 6, w30: 8, w36: 10, w42: 12, w48: 14 }}
         >
           {Array(13)
@@ -130,21 +131,30 @@ export const ChallengePanel: FC = () => {
 
   if (allChallenges.length === 0) {
     return (
-      <Center h="calc(100vh - 100px)" w="100%">
-        <Empty
-          bordered
-          description={t('game.content.no_challenge')}
-          fontSize="xl"
-          mdiPath={mdiFlagOutline}
-          iconSize={8}
-        />
-      </Center>
+      <>
+        <Stack className="detail-panel panel-card yy-challenge-filter-panel" p="sm">
+          <YinyuHexField cells={24} />
+          <Title order={3}>题目筛选</Title>
+          <Text className="yy-readable-text">当前比赛暂无可用题目</Text>
+        </Stack>
+        <Center className="panel-card yy-challenge-empty-main">
+          <YinyuHexField cells={40} />
+          <Empty
+            bordered
+            description={t('game.content.no_challenge')}
+            fontSize="xl"
+            mdiPath={mdiFlagOutline}
+            iconSize={8}
+          />
+        </Center>
+      </>
     )
   }
 
   return (
     <>
-      <Stack miw="10.5rem">
+      <Stack className="detail-panel panel-card yy-challenge-filter-panel" p="sm">
+        <YinyuHexField cells={24} />
         {game?.writeupRequired && (
           <>
             <Button
@@ -159,62 +169,51 @@ export const ChallengePanel: FC = () => {
           </>
         )}
         <Switch
-          w="10.5rem"
+          className="yy-challenge-solved-switch"
           checked={hideSolved}
           onChange={(e) => setHideSolved(e.target.checked)}
           classNames={{ body: classes.switch }}
           label={
-            <Text fz="md" fw="bold" ta="right">
+            <Text fz="md" fw="bold">
               {t('game.button.hide_solved')}
             </Text>
           }
         />
-        <Tabs
-          orientation="vertical"
-          variant="pills"
-          value={activeTab}
-          onChange={(value) => setActiveTab(value as ChallengeCategory)}
-          classNames={{
-            root: classes.tabRoot,
-            list: classes.tabList,
-            tabLabel: classes.tabLabel,
-            tab: classes.tab,
-          }}
-        >
-          <Tabs.List>
-            <Tabs.Tab value={'All'} leftSection={<Icon path={mdiPuzzle} size={1} />}>
-              <Group justify="space-between" wrap="nowrap" gap={2}>
-                <Text fz="sm" fw="bold">
-                  All
-                </Text>
-                <Text fz="sm" fw="bold">
-                  {allChallenges.length}
-                </Text>
-              </Group>
-            </Tabs.Tab>
-            {categories.map((tab) => {
-              const data = challengeCategoryLabelMap.get(tab as ChallengeCategory)!
-              return (
-                <Tabs.Tab key={tab} value={tab} leftSection={<Icon path={data?.icon} size={1} />} color={data?.color}>
-                  <Group justify="space-between" wrap="nowrap" gap={2}>
-                    <Text fz="sm" fw="bold">
-                      {data?.name}
-                    </Text>
-                    <Text fz="sm" fw="bold">
-                      {challenges && challenges[tab].length}
-                    </Text>
-                  </Group>
-                </Tabs.Tab>
-              )
-            })}
-          </Tabs.List>
-        </Tabs>
+        <div className="yy-challenge-filter-list" role="tablist" aria-label="题目分类">
+          <button
+            type="button"
+            className="yy-challenge-filter-button"
+            data-active={activeTab === 'All' ? 'true' : undefined}
+            onClick={() => setActiveTab('All')}
+          >
+            <Icon path={mdiPuzzle} size={1} />
+            <span>All</span>
+            <strong>{allChallenges.length}</strong>
+          </button>
+          {categories.map((tab) => {
+            const data = challengeCategoryLabelMap.get(tab as ChallengeCategory)!
+            return (
+              <button
+                key={tab}
+                type="button"
+                className="yy-challenge-filter-button"
+                data-active={activeTab === tab ? 'true' : undefined}
+                onClick={() => setActiveTab(tab as ChallengeCategory)}
+              >
+                <Icon path={data?.icon} size={1} />
+                <span>{data?.name}</span>
+                <strong>{challenges && challenges[tab].length}</strong>
+              </button>
+            )
+          })}
+        </div>
       </Stack>
       <ScrollArea
         h="calc(100vh - 6.67rem)"
         pos="relative"
         offsetScrollbars
         scrollbarSize={4}
+        className="yy-challenge-list"
         classNames={{ root: classes.scrollArea }}
       >
         {/* if rank is 0, and have no division, means scoreboard not ready yet */}
@@ -227,8 +226,8 @@ export const ChallengePanel: FC = () => {
           </Center>
         ) : currentChallenges && currentChallenges.length ? (
           <SimpleGrid
+            className="challenge-grid yy-challenge-grid"
             p="xs"
-            w="100%"
             pt={0}
             spacing="sm"
             cols={{ base: 3, w18: 4, w24: 6, w30: 8, w36: 10, w42: 12, w48: 14 }}

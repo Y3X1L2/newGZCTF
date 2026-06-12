@@ -19,9 +19,11 @@ import cx from 'clsx'
 import { FC, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router'
+import { YinyuHexField } from '@Components/yinyu/YinyuUI'
 import { ErrorCodes } from '@Utils/Shared'
 import { useIsMobile } from '@Utils/ThemeOverride'
 import { useGameTeamInfo } from '@Hooks/useGame'
+import gameClasses from '@Styles/GameCard.module.css'
 import misc from '@Styles/Misc.module.css'
 
 export const TeamRank: FC<CardProps> = (props) => {
@@ -73,7 +75,8 @@ export const TeamRank: FC<CardProps> = (props) => {
   )
 
   return (
-    <Card {...props} shadow="sm">
+    <Card {...props} shadow="sm" className={`panel-card ${gameClasses.sidePanel}`}>
+      <YinyuHexField cells={28} />
       <Stack gap="xs">
         <Group gap="sm" wrap="nowrap">
           <Avatar alt="avatar" size={50} radius="md" src={rank?.avatar}>

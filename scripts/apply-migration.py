@@ -1,10 +1,22 @@
+import os, sys
 import paramiko, time
 
 ssh = paramiko.SSHClient()
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-ssh.connect('203.195.157.191', username='ubuntu', password='Fisher(1^', timeout=10, look_for_keys=False, allow_agent=False)
+HOST = os.environ.get('YINYU_DEPLOY_HOST')
+USER = os.environ.get('YINYU_DEPLOY_USER', 'ubuntu')
+PASS = os.environ.get('YINYU_DEPLOY_PASS')
+REMOTE_ROOT = os.environ.get('YINYU_REMOTE_ROOT', f'/home/{USER}/yinyu-ctf-platform')
+DB_CONTAINER = os.environ.get('YINYU_DB_CONTAINER', 'yinyu-ctf-db-1')
+DB_NAME = os.environ.get('YINYU_DB_NAME', 'gzctf')
+
+if not HOST or not PASS:
+    print('Set YINYU_DEPLOY_HOST and YINYU_DEPLOY_PASS before running this script.', file=sys.stderr)
+    sys.exit(2)
+
+ssh.connect(HOST, username=USER, password=PASS, timeout=10, look_for_keys=False, allow_agent=False)
 DOTNET = '/usr/local/share/dotnet/dotnet'
-PROJ = '/home/ubuntu/newGZCTF/src/GZCTF'
+PROJ = f'{REMOTE_ROOT}/src/GZCTF'
 
 # Write SQL to temp file on server (avoids quoting issues)
 sql = r"""
@@ -20,28 +32,28 @@ DELETE FROM "__EFMigrationsHistory" WHERE "MigrationId" LIKE '%SyncChallengeMode
 """
 
 _, stdout, stderr = ssh.exec_command(f'cat > /tmp/migration.sql << \'SQLEOF\'\n{sql}\nSQLEOF')
-ssh.exec_command('docker cp /tmp/migration.sql newgzctf-db-1:/tmp/migration.sql')
+ssh.exec_command(f'docker cp /tmp/migration.sql {DB_CONTAINER}:/tmp/migration.sql')
 _, stdout, stderr = ssh.exec_command(
-    'docker exec newgzctf-db-1 psql -U postgres -d gzctf -f /tmp/migration.sql 2>&1'
+    f'docker exec {DB_CONTAINER} psql -U postgres -d {DB_NAME} -f /tmp/migration.sql 2>&1'
 )
 print('SQL result:', stdout.read().decode() + stderr.read().decode())
 
 # Verify columns
 _, stdout, _ = ssh.exec_command(
-    "docker exec newgzctf-db-1 psql -U postgres -d gzctf -t -c "
+    f"docker exec {DB_CONTAINER} psql -U postgres -d {DB_NAME} -t -c "
     "\"SELECT COUNT(*) FROM information_schema.columns WHERE table_name='GameChallenges' AND column_name IN ('Environment','ImageTemplateId')\" 2>&1"
 )
 print(f'GameChallenges cols: {stdout.read().decode().strip()} (expect 2)')
 
 _, stdout, _ = ssh.exec_command(
-    "docker exec newgzctf-db-1 psql -U postgres -d gzctf -t -c "
+    f"docker exec {DB_CONTAINER} psql -U postgres -d {DB_NAME} -t -c "
     "\"SELECT COUNT(*) FROM information_schema.columns WHERE table_name='ExerciseChallenges' AND column_name IN ('Environment','ImageTemplateId')\" 2>&1"
 )
 print(f'ExerciseChallenges cols: {stdout.read().decode().strip()} (expect 2)')
 
 # Check migration history
 _, stdout, _ = ssh.exec_command(
-    'docker exec newgzctf-db-1 psql -U postgres -d gzctf -c '
+    f'docker exec {DB_CONTAINER} psql -U postgres -d {DB_NAME} -c '
     '"SELECT \"MigrationId\" FROM \"__EFMigrationsHistory\" ORDER BY \"MigrationId\" DESC LIMIT 3" 2>&1'
 )
 print('Last migrations:', stdout.read().decode()[:200])
