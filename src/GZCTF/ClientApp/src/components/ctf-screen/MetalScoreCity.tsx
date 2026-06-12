@@ -15,6 +15,13 @@ interface TeamLayout {
   isPodium: boolean
 }
 
+interface CameraTarget {
+  x: number
+  y: number
+  z: number
+  lookAtY: number
+}
+
 interface BarRecord {
   group: THREE.Group
   mesh: THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>
@@ -41,6 +48,7 @@ const GOLD_EMISSIVE = new THREE.Color(0x4d3510)
 const SILVER = new THREE.Color(0xc9d0d2)
 const SILVER_EMISSIVE = new THREE.Color(0x111820)
 const DIM_SILVER = new THREE.Color(0x6d7479)
+const SCENE_CENTER = new THREE.Vector3(0, 0, 0)
 const BAR_GEOMETRY = new THREE.BoxGeometry(1, 1, 1, 3, 1, 3)
 const EDGE_GEOMETRY = new THREE.EdgesGeometry(BAR_GEOMETRY)
 
@@ -105,6 +113,37 @@ const makeLayouts = (teams: Team[]): TeamLayout[] => {
   })
 }
 
+const resolveCameraTarget = (layouts: TeamLayout[], aspect: number): CameraTarget => {
+  if (layouts.length === 0) return { x: 0, y: 9, z: 19, lookAtY: 1.8 }
+
+  const highest = layouts.reduce((current, item) => (item.height > current.height ? item : current), layouts[0])
+  let minX = Infinity
+  let maxX = -Infinity
+  let minZ = Infinity
+  let maxZ = -Infinity
+  let maxHeight = 0
+
+  for (const layout of layouts) {
+    minX = Math.min(minX, layout.x - 0.95)
+    maxX = Math.max(maxX, layout.x + 0.95)
+    minZ = Math.min(minZ, layout.z - 0.95)
+    maxZ = Math.max(maxZ, layout.z + 0.95)
+    maxHeight = Math.max(maxHeight, layout.height)
+  }
+
+  const width = Math.max(4.8, maxX - minX)
+  const depth = Math.max(4.8, maxZ - minZ)
+  const spread = Math.max(width / Math.max(aspect, 0.75), depth)
+  const focusX = clamp(highest.x * 0.18, -1.4, 1.4)
+
+  return {
+    x: focusX,
+    y: clamp(7.8 + spread * 0.28 + maxHeight * 0.52, 9.8, 19.5),
+    z: clamp(12.5 + spread * 1.45 + maxHeight * 0.84, 18, 46),
+    lookAtY: clamp(1.7 + maxHeight * 0.25, 2.1, 5.2),
+  }
+}
+
 const makeLabelTexture = (team: Team, isPodium: boolean) => {
   const canvas = document.createElement('canvas')
   canvas.width = 512
@@ -136,7 +175,7 @@ const makeLabelTexture = (team: Team, isPodium: boolean) => {
 
   ctx.fillStyle = sub
   ctx.font = '600 28px Share Tech Mono, Microsoft YaHei, sans-serif'
-  ctx.fillText(`#${team.rank.toString().padStart(2, '0')}  ${team.score} pts`, 256, 112)
+  ctx.fillText(`#${team.rank.toString().padStart(2, '0')}  ${team.score} 分`, 256, 112)
 
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
@@ -155,15 +194,12 @@ const syncTeamRecords = (
   teams: Team[],
   bars: THREE.Group,
   records: Map<number, BarRecord>,
-  targetCamera: { current: { y: number; z: number } }
+  targetCamera: { current: CameraTarget },
+  aspect: number
 ) => {
   const layouts = makeLayouts(teams)
   const seen = new Set<number>()
-  const maxRadius = layouts.reduce((radius, item) => Math.max(radius, Math.hypot(item.x, item.z)), 4)
-  targetCamera.current = {
-    y: clamp(7.5 + maxRadius * 0.18, 7.5, 14.5),
-    z: clamp(13.5 + maxRadius * 1.38, 14, 34),
-  }
+  targetCamera.current = resolveCameraTarget(layouts, aspect)
 
   for (const layout of layouts) {
     seen.add(layout.id)
@@ -267,13 +303,14 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams }) => {
   const animationRef = useRef<number | null>(null)
   const mouseRef = useRef({ x: 0, y: 0 })
   const rotationSpeedRef = useRef(0.08)
-  const targetCameraRef = useRef({ y: 9, z: 19 })
+  const targetCameraRef = useRef<CameraTarget>({ x: 0, y: 9, z: 19, lookAtY: 1.8 })
 
   useEffect(() => {
     teamsRef.current = teams
     const bars = barsRef.current
+    const camera = cameraRef.current
     if (!bars) return
-    syncTeamRecords(teams, bars, recordsRef.current, targetCameraRef)
+    syncTeamRecords(teams, bars, recordsRef.current, targetCameraRef, camera?.aspect ?? 1.6)
   }, [teams])
 
   useEffect(() => {
@@ -294,8 +331,8 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams }) => {
     rendererRef.current = renderer
 
     const scene = new THREE.Scene()
-    scene.background = new THREE.Color(0x15181b)
-    scene.fog = new THREE.Fog(0x1c2024, 16, 44)
+    scene.background = new THREE.Color(0x1b1e20)
+    scene.fog = new THREE.Fog(0x24282b, 18, 58)
 
     const camera = new THREE.PerspectiveCamera(25, (host.clientWidth || 1200) / (host.clientHeight || 720), 0.1, 160)
     camera.position.set(0, 8.5, 19)
@@ -310,22 +347,32 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams }) => {
     city.add(bars)
     barsRef.current = bars
 
-    const ambient = new THREE.HemisphereLight(0xffffff, 0x22262a, 3.2)
+    const ambient = new THREE.HemisphereLight(0xffffff, 0x2a2d30, 4.1)
     scene.add(ambient)
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 4.8)
-    keyLight.position.set(-5, 12, 8)
+    const keyLight = new THREE.DirectionalLight(0xffffff, 6.2)
+    keyLight.position.set(-8, 15, 10)
     keyLight.castShadow = true
-    keyLight.shadow.mapSize.set(1024, 1024)
+    keyLight.shadow.mapSize.set(1536, 1536)
+    keyLight.shadow.camera.near = 0.5
+    keyLight.shadow.camera.far = 64
+    keyLight.shadow.camera.left = -18
+    keyLight.shadow.camera.right = 18
+    keyLight.shadow.camera.top = 18
+    keyLight.shadow.camera.bottom = -18
     scene.add(keyLight)
 
-    const rimLight = new THREE.PointLight(0xf5d68a, 9, 42)
-    rimLight.position.set(7, 7, -8)
+    const rimLight = new THREE.PointLight(0xffdf8e, 13, 54)
+    rimLight.position.set(10, 9, -10)
     scene.add(rimLight)
 
-    const coolFill = new THREE.PointLight(0xe9f4ff, 3.2, 38)
-    coolFill.position.set(-8, 4, 7)
+    const coolFill = new THREE.PointLight(0xf5fbff, 5.4, 48)
+    coolFill.position.set(-12, 5, 9)
     scene.add(coolFill)
+
+    const highBackLight = new THREE.DirectionalLight(0xf8f3e4, 3.8)
+    highBackLight.position.set(7, 18, -14)
+    scene.add(highBackLight)
 
     const groundMaterial = new THREE.MeshStandardMaterial({
       color: 0x3a3d3f,
@@ -406,6 +453,7 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams }) => {
       camera.aspect = width / height
       camera.updateProjectionMatrix()
       renderer.setSize(width, height, false)
+      syncTeamRecords(teamsRef.current, bars, recordsRef.current, targetCameraRef, camera.aspect)
     }
 
     host.addEventListener('pointermove', onPointerMove, { passive: true })
@@ -446,13 +494,14 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams }) => {
 
       camera.position.y = ease(camera.position.y, targetCameraRef.current.y, 0.025)
       camera.position.z = ease(camera.position.z, targetCameraRef.current.z, 0.025)
-      camera.position.x = ease(camera.position.x, mouse.x * 0.6, 0.025)
-      camera.lookAt(0, 1.6, 0)
+      camera.position.x = ease(camera.position.x, targetCameraRef.current.x + mouse.x * 0.5, 0.025)
+      SCENE_CENTER.set(targetCameraRef.current.x * 0.25, targetCameraRef.current.lookAtY, 0)
+      camera.lookAt(SCENE_CENTER)
       renderer.render(scene, camera)
       animationRef.current = window.requestAnimationFrame(animate)
     }
 
-    syncTeamRecords(teamsRef.current, bars, recordsRef.current, targetCameraRef)
+    syncTeamRecords(teamsRef.current, bars, recordsRef.current, targetCameraRef, camera.aspect)
 
     animationRef.current = window.requestAnimationFrame(animate)
 

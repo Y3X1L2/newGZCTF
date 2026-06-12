@@ -11,6 +11,18 @@
   color: var(--yy-muted-readable, rgba(210, 245, 228, 0.74));
 }
 
+.gameSelect {
+  min-width: min(24rem, 100%);
+}
+
+.gameSelect :global(.mantine-Input-input) {
+  border-color: rgba(104, 255, 178, 0.24);
+  color: var(--yy-text, #f1fff8);
+  background:
+    radial-gradient(ellipse at 14% 50%, rgba(104, 255, 178, 0.11), transparent 42%),
+    rgba(3, 11, 10, 0.78);
+}
+
 .hero {
   position: relative;
   overflow: hidden;
@@ -153,7 +165,7 @@
 
 .displayCard {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(19rem, 0.36fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: end;
   gap: 1.25rem;
   padding: 1.35rem;
@@ -180,11 +192,31 @@
 }
 
 .actionGroup {
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .actionGroup :global(.mantine-Button-root) {
   min-width: 10.5rem;
+}
+
+.noteCard {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(104, 255, 178, 0.18);
+  border-radius: 1rem;
+  color: rgba(216, 246, 231, 0.78);
+  background:
+    radial-gradient(ellipse at 12% 50%, rgba(104, 255, 178, 0.12), transparent 42%),
+    linear-gradient(145deg, rgba(104, 255, 178, 0.07), rgba(255, 255, 255, 0.025)),
+    rgba(3, 11, 10, 0.68);
+}
+
+.noteCard svg {
+  flex: 0 0 auto;
+  color: var(--yy-green, #68ffb2);
+  filter: drop-shadow(0 0 0.7rem rgba(104, 255, 178, 0.3));
 }
 
 @keyframes screen-control-orbit {

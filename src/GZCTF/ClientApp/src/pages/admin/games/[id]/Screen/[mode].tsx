@@ -4,13 +4,17 @@ import ScreenDisplayPage from '@Components/screen/ScreenDisplayPage'
 
 const ScreenModePage: FC = () => {
   const navigate = useNavigate()
-  const { id } = useParams()
+  const { id, mode } = useParams()
   const numId = parseInt(id ?? '-1', 10)
 
-  // Redirect to main screen index
   useEffect(() => {
+    if (mode === 'demo') return
     navigate(`/admin/games/${numId}/screen`, { replace: true })
-  }, [navigate, numId])
+  }, [mode, navigate, numId])
+
+  if (mode === 'demo') {
+    return <ScreenDisplayPage gameId={numId} demoMode />
+  }
 
   return null
 }

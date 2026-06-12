@@ -6,14 +6,15 @@ import CTFScreenPage from '@Components/ctf-screen/CTFScreenPage'
 
 interface ScreenDisplayPageProps {
   gameId: number
+  demoMode?: boolean
 }
 
-const ScreenDisplayPage: FC<ScreenDisplayPageProps> = ({ gameId }) => {
-  usePageTitle('赛事大屏')
+const ScreenDisplayPage: FC<ScreenDisplayPageProps> = ({ gameId, demoMode = false }) => {
+  usePageTitle(demoMode ? '大屏演示模式' : '赛事态势大屏')
 
   return (
     <WithRole requiredRole={Role.Admin}>
-      <CTFScreenPage gameId={gameId} />
+      <CTFScreenPage gameId={gameId} demoMode={demoMode} />
     </WithRole>
   )
 }

@@ -1,36 +1,90 @@
-import { Badge, Button, Group, Stack, Text, Title } from '@mantine/core'
+import { Button, Group, Select, SimpleGrid, Stack, Text, Title } from '@mantine/core'
 import { useClipboard } from '@mantine/hooks'
 import { showNotification } from '@mantine/notifications'
-import { mdiCheck, mdiContentCopy, mdiOpenInNew } from '@mdi/js'
+import { mdiCheck, mdiContentCopy, mdiOpenInNew, mdiPresentationPlay, mdiSwapHorizontal } from '@mdi/js'
 import { Icon } from '@mdi/react'
-import { FC } from 'react'
-import { useParams } from 'react-router'
+import { FC, useMemo } from 'react'
+import { useNavigate, useParams } from 'react-router'
 import { WithGameEditTab } from '@Components/admin/WithGameEditTab'
 import { BrandMark } from '@Components/yinyu/BrandMark'
 import { useAdminGame } from '@Hooks/useGame'
 import { usePageTitle } from '@Hooks/usePageTitle'
+import { OnceSWRConfig } from '@Hooks/useConfig'
+import api from '@Api'
 import classes from '@Styles/AdminGameScreen.module.css'
+
+interface DisplayModeCardProps {
+  eyebrow: string
+  title: string
+  description: string
+  path: string
+  actionLabel: string
+  onOpen: () => void
+  onCopy: () => void
+}
+
+const DisplayModeCard: FC<DisplayModeCardProps> = ({
+  eyebrow,
+  title,
+  description,
+  path,
+  actionLabel,
+  onOpen,
+  onCopy,
+}) => (
+  <section className={classes.displayCard}>
+    <div className={classes.displayCardMain}>
+      <Text className={classes.modeLabel}>{eyebrow}</Text>
+      <Title order={3} className={classes.modeTitle}>
+        {title}
+      </Title>
+      <Text className={classes.modeDescription}>{description}</Text>
+      <div className={classes.pathBox}>{path}</div>
+    </div>
+
+    <Group className={classes.actionGroup}>
+      <Button leftSection={<Icon path={mdiOpenInNew} size={0.9} />} onClick={onOpen}>
+        {actionLabel}
+      </Button>
+      <Button variant="light" leftSection={<Icon path={mdiContentCopy} size={0.9} />} onClick={onCopy}>
+        复制链接
+      </Button>
+    </Group>
+  </section>
+)
 
 const ScreenControl: FC = () => {
   const { id } = useParams()
   const numId = parseInt(id ?? '-1', 10)
   const clipboard = useClipboard()
+  const navigate = useNavigate()
   const { game } = useAdminGame(numId)
+  const { data: games } = api.edit.useEditGetGames({ count: 100, skip: 0 }, OnceSWRConfig)
   const displayPath = `/admin/games/${numId}/screen`
+  const demoPath = `/admin/games/${numId}/screen/demo`
 
-  usePageTitle('赛事大屏')
+  usePageTitle('赛事态势大屏')
 
-  const copyLink = () => {
-    clipboard.copy(`${window.location.origin}${displayPath}`)
+  const gameOptions = useMemo(
+    () =>
+      (games?.data ?? []).map((item) => ({
+        value: String(item.id),
+        label: item.title ?? `赛事 #${item.id}`,
+      })),
+    [games?.data]
+  )
+
+  const copyLink = (path: string, label: string) => {
+    clipboard.copy(`${window.location.origin}${path}`)
     showNotification({
       color: 'green',
-      message: '主显示屏链接已复制到剪贴板',
+      message: `${label}链接已复制到剪贴板`,
       icon: <Icon path={mdiCheck} size={1} />,
     })
   }
 
-  const openDisplay = () => {
-    window.open(displayPath, '_blank', 'noopener,noreferrer')
+  const openDisplay = (path: string) => {
+    window.open(path, '_blank', 'noopener,noreferrer')
   }
 
   return (
@@ -38,14 +92,21 @@ const ScreenControl: FC = () => {
       head={
         <Group justify="space-between" w="100%" align="center" className={classes.pageHead}>
           <div>
-            <Title order={3}>赛事大屏</Title>
-            <Text size="sm">打开独立展示窗口，实时呈现排行、分数城市与解题动态。</Text>
+            <Title order={3}>赛事态势大屏</Title>
+            <Text size="sm">面向展示终端的正式比赛大屏与演示效果大屏。</Text>
           </div>
-          {game?.isTest && (
-            <Badge color="orange" variant="filled">
-              演示模式
-            </Badge>
-          )}
+          <Select
+            className={classes.gameSelect}
+            data={gameOptions}
+            leftSection={<Icon path={mdiSwapHorizontal} size={0.85} />}
+            placeholder="切换比赛"
+            value={Number.isFinite(numId) ? String(numId) : null}
+            searchable
+            onChange={(value) => {
+              if (!value) return
+              navigate(`/admin/games/${value}/screen/control`)
+            }}
+          />
         </Group>
       }
     >
@@ -62,46 +123,52 @@ const ScreenControl: FC = () => {
               {game?.title ?? '安全综合演练大屏'}
             </Title>
             <Text className={classes.heroDescription}>
-              主显示屏采用 16:9 全屏展示逻辑，聚合比赛排行、3D 分数城市和实时解题日志。建议在独立浏览器窗口中打开后进入系统全屏。
+              大屏展示采用 16:9 全屏布局，聚合赛事排行、3D 分数金属城市与实时解题日志。正式入口读取当前赛事数据，演示入口使用 30 个动态柱体展示视觉效果。
             </Text>
           </div>
 
           <div className={classes.heroMeta}>
             <div className={classes.heroMetaItem}>
-              <span>展示模式</span>
-              <strong>单主屏</strong>
+              <span>展示规格</span>
+              <strong>16:9 全屏</strong>
             </div>
             <div className={classes.heroMetaItem}>
-              <span>视觉风格</span>
+              <span>视觉基调</span>
               <strong>银色金属态势</strong>
             </div>
             <div className={classes.heroMetaItem}>
               <span>数据来源</span>
-              <strong>实时记分榜</strong>
+              <strong>赛事计分榜</strong>
             </div>
           </div>
         </section>
 
-        <section className={classes.displayCard}>
-          <div className={classes.displayCardMain}>
-            <Text className={classes.modeLabel}>MAIN SCREEN</Text>
-            <Title order={3} className={classes.modeTitle}>
-              主显示屏
-            </Title>
-            <Text className={classes.modeDescription}>
-              一个链接完成大屏展示，左侧排行、中央 3D 分数城市、右侧实时解题日志会随比赛数据自动更新。
-            </Text>
-            <div className={classes.pathBox}>{displayPath}</div>
-          </div>
+        <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="lg">
+          <DisplayModeCard
+            eyebrow="OFFICIAL SCREEN"
+            title="正式比赛入口"
+            description="读取当前赛事计分榜、解题提交和时间状态，用于现场主屏展示。"
+            path={displayPath}
+            actionLabel="打开正式大屏"
+            onOpen={() => openDisplay(displayPath)}
+            onCopy={() => copyLink(displayPath, '正式大屏')}
+          />
+          <DisplayModeCard
+            eyebrow="DEMO SCREEN"
+            title="演示效果入口"
+            description="使用 30 个动态柱体展示金属城市效果，便于现场调试屏幕、投影和录制效果。"
+            path={demoPath}
+            actionLabel="打开演示大屏"
+            onOpen={() => openDisplay(demoPath)}
+            onCopy={() => copyLink(demoPath, '演示大屏')}
+          />
+        </SimpleGrid>
 
-          <Group className={classes.actionGroup}>
-            <Button leftSection={<Icon path={mdiOpenInNew} size={0.9} />} onClick={openDisplay}>
-              打开主显示屏
-            </Button>
-            <Button variant="light" leftSection={<Icon path={mdiContentCopy} size={0.9} />} onClick={copyLink}>
-              复制链接
-            </Button>
-          </Group>
+        <section className={classes.noteCard}>
+          <Icon path={mdiPresentationPlay} size={1.15} />
+          <Text>
+            建议在独立浏览器窗口打开后进入系统全屏。正式入口支持切换比赛；演示入口不写入任何赛事数据，仅用于展示验证。
+          </Text>
         </section>
       </Stack>
     </WithGameEditTab>
