@@ -4,7 +4,7 @@
   height: 100vh;
   overflow: hidden;
   display: grid;
-  grid-template-rows: 6.7rem minmax(0, 1fr) 2.2rem;
+  grid-template-rows: 6.7rem minmax(0, 1fr);
   gap: 0.8rem;
   padding: 1rem;
   color: #eef1ef;
@@ -46,8 +46,7 @@
 }
 
 .metal-screen-header,
-.metal-screen-stage,
-.metal-screen-footer {
+.metal-screen-stage {
   position: relative;
   z-index: 1;
 }
@@ -109,15 +108,52 @@
   text-transform: uppercase;
 }
 
-.metal-brand-cluster h1 {
+.metal-title-block {
+  position: relative;
+  min-width: 0;
+}
+
+.metal-title-button {
   margin: 0.14rem 0 0;
+  width: 100%;
   overflow: hidden;
+  padding: 0;
+  border: 0;
   color: #f7faf9;
+  background: transparent;
   font-size: clamp(1.45rem, 2.3vw, 2.65rem);
+  font-weight: 800;
+  font-family: 'Orbitron', 'Share Tech Mono', 'Microsoft YaHei', sans-serif;
   line-height: 1.05;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
   text-shadow: 0 0 20px rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+}
+
+.metal-title-button:hover {
+  color: #fff7dc;
+  text-shadow:
+    0 0 18px rgba(244, 215, 137, 0.28),
+    0 0 28px rgba(255, 255, 255, 0.16);
+}
+
+.metal-game-switcher {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  left: 0;
+  z-index: 20;
+  width: min(24rem, 70vw);
+}
+
+.metal-game-switcher input {
+  border: 1px solid rgba(236, 241, 242, 0.22);
+  color: #f4f8f7;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.035)),
+    rgba(14, 17, 19, 0.94);
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.34);
 }
 
 .metal-brand-cluster p {
@@ -219,8 +255,7 @@
 
 .metal-panel-head,
 .metal-city-hud,
-.metal-city-footer,
-.metal-screen-footer {
+.metal-city-hud {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -266,6 +301,17 @@
   flex-direction: column;
   gap: 0.55rem;
   padding-top: 0.8rem;
+}
+
+.metal-rank-track {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  will-change: transform;
+}
+
+.metal-rank-list.is-scrolling .metal-rank-track {
+  animation: metal-rank-scroll 42s linear infinite;
 }
 
 .metal-rank-row,
@@ -381,7 +427,7 @@
   position: relative;
   overflow: hidden;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .metal-city-stage::before,
@@ -407,8 +453,7 @@
   z-index: 0;
 }
 
-.metal-city-hud,
-.metal-city-footer {
+.metal-city-hud {
   position: relative;
   z-index: 3;
   padding: 1rem 1.1rem;
@@ -486,14 +531,6 @@
   font-size: 1.2rem;
 }
 
-.metal-city-footer {
-  color: rgba(222, 231, 233, 0.66);
-  border-top: 1px solid rgba(230, 238, 240, 0.12);
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 0.86rem;
-  letter-spacing: 0.08em;
-}
-
 .metal-feed-item {
   min-height: 4.9rem;
   padding: 0.76rem 0.82rem;
@@ -545,12 +582,14 @@
   text-align: center;
 }
 
-.metal-screen-footer {
-  padding: 0 0.5rem;
-  color: rgba(220, 228, 230, 0.54);
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 0.82rem;
-  letter-spacing: 0.1em;
+@keyframes metal-rank-scroll {
+  from {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(-50%);
+  }
 }
 
 @media (max-width: 1500px) {
@@ -574,7 +613,7 @@
 
 @media (max-width: 1180px) {
   .metal-screen {
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .metal-screen-header {

@@ -93,7 +93,7 @@ const ScreenControl: FC = () => {
         <Group justify="space-between" w="100%" align="center" className={classes.pageHead}>
           <div>
             <Title order={3}>赛事态势大屏</Title>
-            <Text size="sm">面向展示终端的正式比赛大屏与演示效果大屏。</Text>
+            <Text size="sm">面向现场终端的正式比赛大屏与演示大屏。</Text>
           </div>
           <Select
             className={classes.gameSelect}
@@ -123,7 +123,7 @@ const ScreenControl: FC = () => {
               {game?.title ?? '安全综合演练大屏'}
             </Title>
             <Text className={classes.heroDescription}>
-              大屏展示采用 16:9 全屏布局，聚合赛事排行、3D 分数金属城市与实时解题日志。正式入口读取当前赛事数据，演示入口使用 30 个动态柱体展示视觉效果。
+              大屏采用 16:9 全屏布局，聚合赛事排行、实时解题日志与动态分数场景。正式入口读取当前赛事数据，演示入口用于现场调试屏幕、投影和录制效果。
             </Text>
           </div>
 
@@ -155,8 +155,8 @@ const ScreenControl: FC = () => {
           />
           <DisplayModeCard
             eyebrow="DEMO SCREEN"
-            title="演示效果入口"
-            description="使用 30 个动态柱体展示金属城市效果，便于现场调试屏幕、投影和录制效果。"
+            title="演示大屏入口"
+            description="使用动态演练数据，便于现场调试屏幕、投影和录制效果。"
             path={demoPath}
             actionLabel="打开演示大屏"
             onOpen={() => openDisplay(demoPath)}
