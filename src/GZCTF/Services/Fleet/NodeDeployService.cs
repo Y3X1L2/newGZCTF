@@ -93,23 +93,7 @@ public class NodeDeployService
             remoteInstallStarted = true;
 
             var agentUrl = $"{serverUrl.TrimEnd('/')}/api/agent/download";
-            RunChecked(ssh, $$"""
-tmp="/tmp/gzctf-agent-{{node.Id:N}}"
-rm -f "$tmp"
-if command -v wget >/dev/null 2>&1; then
-  wget -q -O "$tmp" {{BashQuote(agentUrl)}}
-elif command -v curl >/dev/null 2>&1; then
-  curl -fsSL {{BashQuote(agentUrl)}} -o "$tmp"
-else
-  echo "wget or curl is required to download the agent" >&2
-  exit 127
-fi
-test -s "$tmp"
-chmod +x "$tmp"
-{{sudo}} install -m 0755 "$tmp" /usr/local/bin/gzctf-agent
-rm -f "$tmp"
-{{sudo}} test -x /usr/local/bin/gzctf-agent
-""", "Install agent binary");
+            RunChecked(ssh, BuildAgentInstallScript(agentUrl, node.Id, sudo), "Install agent binary");
 
             WriteRemoteFile(ssh, sudo, "/etc/systemd/system/gzctf-agent.service",
                 BuildAgentServiceContent(dotnetRoot), "Write agent systemd unit");
@@ -169,13 +153,52 @@ rm -f "$tmp"
     {
         var publicUrl = config["Agent:ServerPublicUrl"];
         if (!string.IsNullOrWhiteSpace(publicUrl))
-            return publicUrl;
+            return publicUrl.TrimEnd('/');
 
         if (!string.IsNullOrWhiteSpace(requestBaseUrl) && IsReachableServerUrl(requestBaseUrl))
-            return requestBaseUrl;
+            return requestBaseUrl.TrimEnd('/');
 
-        return config["Urls"]?.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault()
-               ?? "http://localhost:8080";
+        var urls = config["Urls"]?.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            ?? [];
+        var firstUrl = urls.FirstOrDefault();
+        var publicEntry = config["ContainerProvider:PublicEntry"];
+
+        if (!string.IsNullOrWhiteSpace(publicEntry))
+        {
+            var scheme = "http";
+            var port = "8080";
+
+            if (!string.IsNullOrWhiteSpace(firstUrl) && Uri.TryCreate(firstUrl, UriKind.Absolute, out var boundUri))
+            {
+                scheme = boundUri.Scheme;
+                if (!boundUri.IsDefaultPort)
+                    port = boundUri.Port.ToString();
+            }
+
+            var entry = publicEntry.Trim().TrimEnd('/');
+            var hasScheme = entry.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                            || entry.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+            return hasScheme ? entry : $"{scheme}://{entry}:{port}";
+        }
+
+        var routableUrl = urls.FirstOrDefault(IsRoutableServerUrl);
+        if (!string.IsNullOrWhiteSpace(routableUrl))
+            return routableUrl.TrimEnd('/');
+
+        return "http://localhost:8080";
+    }
+
+    internal static bool IsRoutableServerUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return false;
+
+        var host = uri.Host;
+        return !string.Equals(host, "0.0.0.0", StringComparison.OrdinalIgnoreCase)
+               && !string.Equals(host, "::", StringComparison.OrdinalIgnoreCase)
+               && !string.Equals(host, "[::]", StringComparison.OrdinalIgnoreCase)
+               && !string.Equals(host, "+", StringComparison.OrdinalIgnoreCase)
+               && !string.Equals(host, "*", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsReachableServerUrl(string value)
@@ -442,6 +465,11 @@ WantedBy=multi-user.target
     internal static string BuildAgentStartScript(string sudo) => $$"""
 {{sudo}} systemctl daemon-reload
 {{sudo}} systemctl enable gzctf-agent >/dev/null 2>&1 || true
+{{sudo}} systemctl stop gzctf-agent >/dev/null 2>&1 || true
+for pid in $(pgrep -f '(^|/)(gzctf-agent|GZCTF.Agent|manual-agent)( |$)' || true); do
+  {{sudo}} kill "$pid" >/dev/null 2>&1 || true
+done
+sleep 1
 restart_status=0
 restart_output="$({{sudo}} systemctl restart gzctf-agent 2>&1)" || restart_status=$?
 for i in $(seq 1 20); do
@@ -559,20 +587,34 @@ exit 1
 
     private static string DetectDotnetRoot(SshClient ssh)
     {
-        var command = RunChecked(ssh, """
-dotnet_bin="$(command -v dotnet || true)"
-if [ -n "$dotnet_bin" ]; then
-  dirname "$(readlink -f "$dotnet_bin")"
-elif [ -x /usr/share/dotnet/dotnet ]; then
-  echo /usr/share/dotnet
-elif [ -x /usr/local/share/dotnet/dotnet ]; then
-  echo /usr/local/share/dotnet
-fi
-""", "Detect .NET runtime");
+        var command = RunChecked(ssh, BuildDotnetRootDetectScript(), "Detect .NET runtime");
 
         return command.Result.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries).LastOrDefault()?.Trim()
                ?? "/usr/local/share/dotnet";
     }
+
+    internal static string BuildDotnetRootDetectScript() =>
+        "for p in \"$(command -v dotnet 2>/dev/null || true)\" /usr/share/dotnet/dotnet /usr/local/share/dotnet/dotnet /usr/bin/dotnet; do " +
+        "[ -n \"$p\" ] && [ -x \"$p\" ] || continue; " +
+        "resolved=\"$(readlink -f \"$p\" 2>/dev/null || printf \"%s\\n\" \"$p\")\"; " +
+        "dirname \"$resolved\"; " +
+        "break; " +
+        "done";
+
+    internal static string BuildAgentInstallScript(string agentUrl, Guid nodeId, string sudo) =>
+        NormalizeShellScript($$"""
+tmp="/tmp/gzctf-agent-{{nodeId:N}}"
+rm -f "$tmp"
+download_status=127
+command -v wget >/dev/null 2>&1 && wget -q -O "$tmp" {{BashQuote(agentUrl)}} && download_status=0
+[ "$download_status" -eq 0 ] || { command -v curl >/dev/null 2>&1 && curl -fsSL {{BashQuote(agentUrl)}} -o "$tmp" && download_status=0; }
+[ "$download_status" -eq 0 ] || { echo "wget or curl is required to download the agent" >&2; exit 127; }
+test -s "$tmp"
+chmod +x "$tmp"
+{{sudo}} install -m 0755 "$tmp" /usr/local/bin/gzctf-agent
+rm -f "$tmp"
+{{sudo}} test -x /usr/local/bin/gzctf-agent
+""");
 
     private static void WriteRemoteFile(SshClient ssh, string sudo, string remotePath, string content, string step)
     {
@@ -589,7 +631,8 @@ rm -f {{BashQuote(tmp)}}
 
     private static SshCommand RunChecked(SshClient ssh, string command, string step)
     {
-        var result = ssh.RunCommand($"bash -lc {BashQuote($"set -euo pipefail\n{command}")}");
+        var script = $"set -euo pipefail\n{NormalizeShellScript(command)}";
+        var result = ssh.RunCommand($"bash -lc {BashQuote(script)}");
         if (result.ExitStatus == 0)
             return result;
 
@@ -615,6 +658,9 @@ rm -f {{BashQuote(tmp)}}
                 step);
         }
     }
+
+    internal static string NormalizeShellScript(string command) =>
+        command.Replace("\r\n", "\n").Replace("\r", "\n");
 
     private static string BashQuote(string value) => $"'{value.Replace("'", "'\"'\"'")}'";
 

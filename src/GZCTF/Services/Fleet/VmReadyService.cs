@@ -1,4 +1,5 @@
 using GZCTF.Models.Data;
+using GZCTF.Repositories.Interface;
 using GZCTF.Services.Vm;
 using Microsoft.EntityFrameworkCore;
 
@@ -53,6 +54,8 @@ public class VmReadyService : BackgroundService
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var vmProvider = scope.ServiceProvider.GetRequiredService<IVirtualMachineProvider>();
         var guacService = scope.ServiceProvider.GetRequiredService<GuacamoleService>();
+        var nodeRepo = scope.ServiceProvider.GetRequiredService<INodeRepository>();
+        var agentClient = scope.ServiceProvider.GetRequiredService<AgentClient>();
 
         // Find VMs that are Running but don't have an IP or Guacamole connection yet
         var pendingVms = await dbContext.VmInstances
@@ -78,28 +81,40 @@ public class VmReadyService : BackgroundService
                     continue;
                 }
 
+                var node = vm.NodeId.HasValue
+                    ? await nodeRepo.GetNodeByIdAsync(vm.NodeId.Value, token)
+                    : null;
+                VmAccessEndpoint? accessEndpoint = null;
+
                 // Step 1: Get IP if not yet available
                 if (string.IsNullOrEmpty(vm.IpAddress))
                 {
-                    var ip = await vmProvider.GetIpAddressAsync(vm.VmName, token);
-                    if (string.IsNullOrEmpty(ip))
+                    accessEndpoint = await GetVmAccessEndpointAsync(vm, node, agentClient, vmProvider, token);
+                    if (string.IsNullOrEmpty(accessEndpoint?.IpAddress))
                     {
                         _logger.LogDebug("VM {VmName}: IP not yet available, will retry", vm.VmName);
                         continue;
                     }
 
-                    vm.IpAddress = ip;
+                    vm.IpAddress = accessEndpoint.IpAddress;
                     await dbContext.SaveChangesAsync(token);
-                    _logger.LogInformation("VM {VmName}: got IP {Ip}", vm.VmName, ip);
+                    _logger.LogInformation("VM {VmName}: got IP {Ip}", vm.VmName, accessEndpoint.IpAddress);
                 }
 
                 // Step 2: Create Guacamole RDP connection if not yet created
                 if (string.IsNullOrEmpty(vm.GuacamoleConnectionId))
                 {
+                    accessEndpoint ??= await GetVmAccessEndpointAsync(vm, node, agentClient, vmProvider, token);
+                    if (accessEndpoint is null)
+                    {
+                        _logger.LogDebug("VM {VmName}: RDP endpoint not yet available, will retry", vm.VmName);
+                        continue;
+                    }
+
                     var connectionId = await guacService.CreateRdpConnectionAsync(
                         connectionName: vm.VmName,
-                        vmIp: vm.IpAddress!,
-                        rdpPort: 3389,
+                        vmIp: accessEndpoint.RdpHost,
+                        rdpPort: accessEndpoint.RdpPort,
                         username: vm.RdpUsername,
                         password: vm.RdpPassword,
                         token: token);
@@ -126,4 +141,28 @@ public class VmReadyService : BackgroundService
             }
         }
     }
+
+    private async Task<VmAccessEndpoint?> GetVmAccessEndpointAsync(
+        VmInstance vm,
+        WorkerNode? node,
+        AgentClient agentClient,
+        IVirtualMachineProvider vmProvider,
+        CancellationToken token)
+    {
+        if (node is null || node.IsLocal)
+        {
+            var ip = vm.IpAddress ?? await vmProvider.GetIpAddressAsync(vm.VmName, token);
+            return string.IsNullOrEmpty(ip)
+                ? null
+                : new VmAccessEndpoint(ip, ip, 3389);
+        }
+
+        var response = await agentClient.GetVmIpAsync(node.Id, vm.VmName, token);
+        if (string.IsNullOrEmpty(response?.IpAddress))
+            return null;
+
+        return new VmAccessEndpoint(response.IpAddress, node.HostAddress, response.RdpPort ?? 3389);
+    }
+
+    private sealed record VmAccessEndpoint(string IpAddress, string RdpHost, int RdpPort);
 }

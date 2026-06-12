@@ -15,6 +15,7 @@ public class GuacamoleService
     private readonly HttpClient _httpClient;
     private readonly GuacamoleSettings _settings;
     private readonly ILogger<GuacamoleService> _logger;
+    private readonly SemaphoreSlim _tokenLock = new(1, 1);
 
     private string? _cachedToken;
     private DateTimeOffset _tokenExpiry = DateTimeOffset.MinValue;
@@ -44,41 +45,52 @@ public class GuacamoleService
         if (_cachedToken is not null && DateTimeOffset.UtcNow < _tokenExpiry)
             return _cachedToken;
 
-        // If pre-configured token exists, use it
-        if (!string.IsNullOrEmpty(_settings.GuacamoleAuthToken))
-        {
-            _cachedToken = _settings.GuacamoleAuthToken;
-            _tokenExpiry = DateTimeOffset.UtcNow.AddHours(1);
-            return _cachedToken;
-        }
-
+        await _tokenLock.WaitAsync(token);
         try
         {
-            var content = new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                ["username"] = "guacadmin",
-                ["password"] = "guacadmin"
-            });
+            if (_cachedToken is not null && DateTimeOffset.UtcNow < _tokenExpiry)
+                return _cachedToken;
 
-            var response = await _httpClient.PostAsync(
-                $"{_settings.GuacamoleApiUrl}/tokens", content, token);
-
-            if (!response.IsSuccessStatusCode)
+            // If pre-configured token exists, use it
+            if (!string.IsNullOrEmpty(_settings.GuacamoleAuthToken))
             {
-                _logger.LogError("Guacamole auth failed: {Status}", response.StatusCode);
-                return null;
+                _cachedToken = _settings.GuacamoleAuthToken;
+                _tokenExpiry = DateTimeOffset.UtcNow.AddHours(1);
+                return _cachedToken;
             }
 
-            var json = await response.Content.ReadAsStringAsync(token);
-            using var doc = JsonDocument.Parse(json);
-            _cachedToken = doc.RootElement.GetProperty("authToken").GetString();
-            _tokenExpiry = DateTimeOffset.UtcNow.AddMinutes(50); // tokens last ~60min
-            return _cachedToken;
+            try
+            {
+                var content = new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["username"] = "guacadmin",
+                    ["password"] = "guacadmin"
+                });
+
+                var response = await _httpClient.PostAsync(
+                    $"{_settings.GuacamoleApiUrl}/tokens", content, token);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogError("Guacamole auth failed: {Status}", response.StatusCode);
+                    return null;
+                }
+
+                var json = await response.Content.ReadAsStringAsync(token);
+                using var doc = JsonDocument.Parse(json);
+                _cachedToken = doc.RootElement.GetProperty("authToken").GetString();
+                _tokenExpiry = DateTimeOffset.UtcNow.AddMinutes(50); // tokens last ~60min
+                return _cachedToken;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to authenticate with Guacamole");
+                return null;
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            _logger.LogError(ex, "Failed to authenticate with Guacamole");
-            return null;
+            _tokenLock.Release();
         }
     }
 
