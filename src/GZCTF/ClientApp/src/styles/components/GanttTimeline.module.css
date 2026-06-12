@@ -117,7 +117,7 @@
 
 .viewport {
   width: 100%;
-  overflow-x: clip;
+  overflow-x: visible;
   overflow-y: visible;
   padding-bottom: clamp(0.5rem, 0.95vw, 0.8rem);
   scrollbar-color: rgba(107, 238, 177, 0.34) rgba(255, 255, 255, 0.04);
@@ -214,20 +214,28 @@
 .nowAxis {
   position: absolute;
   left: var(--timeline-now);
-  top: 0;
-  bottom: 0;
+  top: 1.05rem;
+  height: 2.38rem;
   width: 1px;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(107, 238, 177, 0.7), rgba(107, 238, 177, 0.12) 38%, transparent);
+  background: linear-gradient(
+    180deg,
+    transparent 0,
+    rgba(107, 238, 177, 0.18) 8%,
+    rgba(107, 238, 177, 0.78) 42%,
+    rgba(107, 238, 177, 0.78) 58%,
+    rgba(107, 238, 177, 0.18) 92%,
+    transparent 100%
+  );
   filter: drop-shadow(0 0 0.7rem rgba(107, 238, 177, 0.24));
 }
 
 .nowAxis i {
   position: absolute;
-  left: -0.37rem;
-  top: 1.42rem;
-  width: 0.74rem;
-  height: 0.74rem;
+  left: -0.43rem;
+  top: 1.18rem;
+  width: 0.86rem;
+  height: 0.86rem;
   border-radius: 50%;
   background:
     radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.5), transparent 45%),
@@ -239,22 +247,30 @@
 
 .nowAxis b {
   position: absolute;
-  top: -0.18rem;
-  left: 0.58rem;
+  top: -1.02rem;
+  left: 50%;
   width: max-content;
-  max-width: 8.2rem;
+  max-width: 9.4rem;
   overflow: hidden;
   color: var(--yy-green);
   font-family: var(--font-mono);
   font-size: 0.7rem;
   font-weight: 900;
+  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transform: translateX(-50%);
 }
 
 .shell[data-now-side='left'] .nowAxis b {
   left: auto;
-  right: 0.58rem;
+  right: 0.72rem;
+  transform: none;
+}
+
+.shell[data-now-side='right'] .nowAxis b {
+  left: 0.72rem;
+  transform: none;
 }
 
 .rows {
@@ -663,8 +679,9 @@
   bottom: calc(50% + 0.82rem);
   z-index: 25;
   display: block;
-  width: clamp(18.5rem, 24vw, 25rem);
-  max-width: calc(100vw - 4rem);
+  min-width: min(24rem, calc(100vw - 3rem));
+  width: max-content;
+  max-width: min(32rem, calc(100vw - 4rem));
   padding: 0.34rem 0.62rem;
   overflow: hidden;
   border: 1px solid rgba(107, 238, 177, 0.24);
@@ -679,7 +696,7 @@
   font-weight: 860;
   line-height: 1;
   text-align: center;
-  text-overflow: clip;
+  text-overflow: ellipsis;
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;

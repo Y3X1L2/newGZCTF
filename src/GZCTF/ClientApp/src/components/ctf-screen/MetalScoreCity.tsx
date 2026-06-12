@@ -11,6 +11,9 @@ interface TeamLayout {
   team: Team
   x: number
   z: number
+  labelX: number
+  labelZ: number
+  labelLift: number
   height: number
   isPodium: boolean
 }
@@ -34,6 +37,7 @@ interface BarRecord {
   targetHeight: number
   targetColor: THREE.Color
   targetEmissive: THREE.Color
+  targetLabelPosition: THREE.Vector3
   targetLabelScale: THREE.Vector3
   lastLabelKey: string
 }
@@ -52,6 +56,8 @@ const DIM_SILVER = new THREE.Color(0x6d7479)
 const SCENE_CENTER = new THREE.Vector3(0, 0, 0)
 const BAR_GEOMETRY = new THREE.BoxGeometry(1, 1, 1, 3, 1, 3)
 const EDGE_GEOMETRY = new THREE.EdgesGeometry(BAR_GEOMETRY)
+const TARGET_COLOR = new THREE.Color()
+const TARGET_EMISSIVE = new THREE.Color()
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 const ease = (current: number, target: number, factor: number) => current + (target - current) * factor
@@ -108,26 +114,128 @@ const seededRandom = (seed: number) => {
 }
 
 const makeLayouts = (teams: Team[]): TeamLayout[] => {
-  const ranked = [...teams].sort((left, right) => left.rank - right.rank || right.score - left.score)
-  if (ranked.length === 0) return []
+  const stableTeams = [...teams]
+    .map((team) => ({ team, seed: hashString(`${team.id}-${team.name}`) }))
+    .sort((left, right) => left.seed - right.seed)
 
-  const count = ranked.length
-  const maxScore = Math.max(1, ...ranked.map((team) => team.score))
-  const radius = clamp(3.2 + Math.sqrt(count) * 0.78, 4.6, 11.8)
+  if (stableTeams.length === 0) return []
 
-  return ranked.map((team) => {
-    const rand = seededRandom(hashString(`${team.id}-${team.name}`))
+  const count = stableTeams.length
+  const maxScore = Math.max(1, ...stableTeams.map(({ team }) => team.score))
+  const radius = clamp(4.6 + Math.sqrt(count) * 1.02, 6.2, 15.2)
+  const pointLimit = radius * 1.08
+  const minDistance = clamp(2.18 - count * 0.012, 1.58, 2.02)
+  const labelMinDistance = clamp(3.35 - count * 0.018, 2.32, 3)
+  const points = stableTeams.map(({ team, seed }, index) => {
+    const rand = seededRandom(seed)
     const angle = rand() * Math.PI * 2
-    const ring = Math.sqrt(rand())
-    const radialNoise = 0.7 + rand() * 0.46
+    const ring = 0.22 + Math.sqrt(rand()) * 0.86
+    const radialNoise = 0.88 + rand() * 0.22
+    const spiral = Math.sin(index * 1.618 + seed * 0.00001) * 0.38
+
+    return {
+      team,
+      seed,
+      x: Math.cos(angle + spiral) * radius * ring * radialNoise,
+      z: Math.sin(angle + spiral) * radius * ring * radialNoise,
+      labelX: 0,
+      labelZ: 0,
+      labelLift: 0,
+    }
+  })
+
+  const clampPoint = (point: { x: number; z: number }, limit: number) => {
+    const length = Math.hypot(point.x, point.z)
+    if (length <= limit || length === 0) return
+    const scale = limit / length
+    point.x *= scale
+    point.z *= scale
+  }
+
+  for (let iteration = 0; iteration < 9; iteration += 1) {
+    for (let i = 0; i < points.length; i += 1) {
+      for (let j = i + 1; j < points.length; j += 1) {
+        const left = points[i]
+        const right = points[j]
+        const dx = right.x - left.x
+        const dz = right.z - left.z
+        const distance = Math.hypot(dx, dz) || 0.001
+        const overlap = minDistance - distance
+
+        if (overlap <= 0) continue
+
+        const angle = distance < 0.002 ? seededRandom(left.seed ^ right.seed)() * Math.PI * 2 : Math.atan2(dz, dx)
+        const pushX = Math.cos(angle) * overlap * 0.56
+        const pushZ = Math.sin(angle) * overlap * 0.56
+        left.x -= pushX
+        left.z -= pushZ
+        right.x += pushX
+        right.z += pushZ
+        clampPoint(left, pointLimit)
+        clampPoint(right, pointLimit)
+      }
+    }
+  }
+
+  const labelPoints = points.map((point, index) => {
+    const rand = seededRandom(point.seed ^ 0x9e3779b9)
+    const length = Math.max(Math.hypot(point.x, point.z), 0.001)
+    const outwardX = point.x / length
+    const outwardZ = point.z / length
+    const tangentX = -outwardZ
+    const tangentZ = outwardX
+    const side = (rand() - 0.5) * 1.35
+    const labelOut = 1.08 + rand() * 0.52 + (point.team.rank <= 3 ? 0.22 : 0)
+
+    return {
+      x: point.x + outwardX * labelOut + tangentX * side,
+      z: point.z + outwardZ * labelOut + tangentZ * side,
+      lift: (index % 4) * 0.2 + (point.team.rank <= 3 ? 0.28 : 0),
+    }
+  })
+
+  for (let iteration = 0; iteration < 7; iteration += 1) {
+    for (let i = 0; i < labelPoints.length; i += 1) {
+      for (let j = i + 1; j < labelPoints.length; j += 1) {
+        const left = labelPoints[i]
+        const right = labelPoints[j]
+        const dx = right.x - left.x
+        const dz = right.z - left.z
+        const distance = Math.hypot(dx, dz) || 0.001
+        const overlap = labelMinDistance - distance
+
+        if (overlap <= 0) continue
+
+        const angle = distance < 0.002 ? (i + j) * 1.618 : Math.atan2(dz, dx)
+        const pushX = Math.cos(angle) * overlap * 0.42
+        const pushZ = Math.sin(angle) * overlap * 0.42
+        left.x -= pushX
+        left.z -= pushZ
+        right.x += pushX
+        right.z += pushZ
+        left.lift += 0.018
+        right.lift += 0.018
+        clampPoint(left, pointLimit + 2.2)
+        clampPoint(right, pointLimit + 2.2)
+      }
+    }
+  }
+
+  return points.map((point, index) => {
+    const { team } = point
+
     const scoreRatio = Math.pow(clamp(team.score / maxScore, 0, 1), 0.72)
     const podiumBoost = team.rank <= 3 ? 0.85 - team.rank * 0.12 : 0
+    const labelPoint = labelPoints[index]
 
     return {
       id: team.id,
       team,
-      x: Math.cos(angle) * radius * ring * radialNoise,
-      z: Math.sin(angle) * radius * ring * radialNoise,
+      x: point.x,
+      z: point.z,
+      labelX: labelPoint.x - point.x,
+      labelZ: labelPoint.z - point.z,
+      labelLift: labelPoint.lift,
       height: 0.55 + scoreRatio * 7.6 + podiumBoost,
       isPodium: team.rank <= 3,
     }
@@ -145,10 +253,12 @@ const resolveCameraTarget = (layouts: TeamLayout[], aspect: number): CameraTarge
   let maxHeight = 0
 
   for (const layout of layouts) {
-    minX = Math.min(minX, layout.x - 0.95)
-    maxX = Math.max(maxX, layout.x + 0.95)
-    minZ = Math.min(minZ, layout.z - 0.95)
-    maxZ = Math.max(maxZ, layout.z + 0.95)
+    const labelWorldX = layout.x + layout.labelX
+    const labelWorldZ = layout.z + layout.labelZ
+    minX = Math.min(minX, layout.x - 0.95, labelWorldX - 1.35)
+    maxX = Math.max(maxX, layout.x + 0.95, labelWorldX + 1.35)
+    minZ = Math.min(minZ, layout.z - 0.95, labelWorldZ - 0.75)
+    maxZ = Math.max(maxZ, layout.z + 0.95, labelWorldZ + 0.75)
     maxHeight = Math.max(maxHeight, layout.height)
   }
 
@@ -161,8 +271,8 @@ const resolveCameraTarget = (layouts: TeamLayout[], aspect: number): CameraTarge
   return {
     x: focusX,
     zFocus: focusZ,
-    y: clamp(7.8 + spread * 0.28 + maxHeight * 0.52, 9.8, 19.5),
-    z: clamp(12.5 + spread * 1.45 + maxHeight * 0.84, 18, 46),
+    y: clamp(7.4 + spread * 0.22 + maxHeight * 0.42, 9.2, 17.8),
+    z: clamp(11.6 + spread * 1.18 + maxHeight * 0.62, 17, 38),
     lookAtY: clamp(1.7 + maxHeight * 0.25, 2.1, 5.2),
   }
 }
@@ -176,11 +286,11 @@ const makeLabelTexture = (team: Team, isPodium: boolean) => {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   const accent = isPodium ? '#f1ce79' : '#d7dde0'
-  const sub = isPodium ? 'rgba(255, 224, 151, 0.82)' : 'rgba(224, 235, 238, 0.72)'
+  const sub = isPodium ? 'rgba(255, 230, 164, 0.9)' : 'rgba(232, 243, 245, 0.82)'
 
   const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height)
-  gradient.addColorStop(0, isPodium ? 'rgba(116, 80, 20, 0.55)' : 'rgba(40, 48, 52, 0.58)')
-  gradient.addColorStop(1, 'rgba(10, 12, 14, 0.72)')
+  gradient.addColorStop(0, isPodium ? 'rgba(116, 80, 20, 0.68)' : 'rgba(48, 58, 62, 0.72)')
+  gradient.addColorStop(1, 'rgba(8, 10, 11, 0.84)')
   ctx.fillStyle = gradient
   ctx.strokeStyle = isPodium ? 'rgba(247, 207, 104, 0.92)' : 'rgba(229, 238, 240, 0.6)'
   ctx.lineWidth = 4
@@ -190,15 +300,15 @@ const makeLabelTexture = (team: Team, isPodium: boolean) => {
   ctx.stroke()
 
   ctx.fillStyle = accent
-  ctx.font = '800 56px Orbitron, Share Tech Mono, Microsoft YaHei, sans-serif'
+  ctx.font = '900 60px Orbitron, Share Tech Mono, Microsoft YaHei, sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  const displayName = team.name.length > 18 ? `${team.name.slice(0, 17)}...` : team.name
+  const displayName = team.name.length > 16 ? `${team.name.slice(0, 15)}...` : team.name
   ctx.fillText(displayName, 384, 84)
 
   ctx.fillStyle = sub
-  ctx.font = '700 34px Share Tech Mono, Microsoft YaHei, sans-serif'
-  ctx.fillText(`#${team.rank.toString().padStart(2, '0')}   ${team.score} 分`, 384, 142)
+  ctx.font = '900 42px Share Tech Mono, Microsoft YaHei, sans-serif'
+  ctx.fillText(`#${team.rank.toString().padStart(2, '0')}   ${team.score.toLocaleString('zh-CN')} 分`, 384, 142)
 
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
@@ -227,9 +337,10 @@ const syncTeamRecords = (
 
   for (const layout of layouts) {
     seen.add(layout.id)
-    const labelKey = `${layout.team.rank}-${layout.team.name}-${layout.team.score}-${layout.isPodium}`
-    const targetColor = layout.isPodium ? GOLD.clone() : SILVER.clone()
-    const targetEmissive = layout.isPodium ? GOLD_EMISSIVE.clone() : SILVER_EMISSIVE.clone()
+    const scoreBucket = Math.round(layout.team.score / 50)
+    const labelKey = `${layout.team.rank}-${layout.team.name}-${scoreBucket}-${layout.isPodium}`
+    const targetColor = TARGET_COLOR.copy(layout.isPodium ? GOLD : SILVER)
+    const targetEmissive = TARGET_EMISSIVE.copy(layout.isPodium ? GOLD_EMISSIVE : SILVER_EMISSIVE)
     let record = records.get(layout.id)
 
     if (!record) {
@@ -262,14 +373,14 @@ const syncTeamRecords = (
       const labelMaterial = new THREE.SpriteMaterial({
         map: labelTexture,
         transparent: true,
-        opacity: 0.92,
+        opacity: 1,
         depthTest: false,
         depthWrite: false,
       })
       const label = new THREE.Sprite(labelMaterial)
       label.renderOrder = 20
-      label.scale.set(3.05, 0.92, 1)
-      label.position.y = 1.2
+      label.scale.set(3.42, 1.03, 1)
+      label.position.set(layout.labelX, 1.2 + layout.labelLift, layout.labelZ)
 
       group.add(mesh, label)
       bars.add(group)
@@ -283,9 +394,10 @@ const syncTeamRecords = (
         labelTexture,
         targetPosition: new THREE.Vector3(layout.x, 0, layout.z),
         targetHeight: layout.height,
-        targetColor,
-        targetEmissive,
-        targetLabelScale: new THREE.Vector3(layout.isPodium ? 3.45 : 3.05, layout.isPodium ? 1.04 : 0.92, 1),
+        targetColor: targetColor.clone(),
+        targetEmissive: targetEmissive.clone(),
+        targetLabelPosition: new THREE.Vector3(layout.labelX, layout.height + 0.72 + layout.labelLift, layout.labelZ),
+        targetLabelScale: new THREE.Vector3(layout.isPodium ? 3.92 : 3.42, layout.isPodium ? 1.18 : 1.03, 1),
         lastLabelKey: labelKey,
       }
       records.set(layout.id, record)
@@ -295,8 +407,10 @@ const syncTeamRecords = (
     record.targetHeight = layout.height
     record.targetColor.copy(targetColor)
     record.targetEmissive.copy(targetEmissive)
-    record.targetLabelScale.set(layout.isPodium ? 3.45 : 3.05, layout.isPodium ? 1.04 : 0.92, 1)
-    record.mesh.material.envMapIntensity = layout.isPodium ? 1.45 : 1.15
+    record.targetLabelPosition.set(layout.labelX, layout.height + 0.72 + layout.labelLift, layout.labelZ)
+    record.targetLabelScale.set(layout.isPodium ? 3.92 : 3.42, layout.isPodium ? 1.18 : 1.03, 1)
+    record.mesh.material.envMapIntensity = layout.isPodium ? 1.68 : 1.26
+    record.mesh.material.roughness = layout.isPodium ? 0.12 : 0.15
     record.edgeMaterial.color.lerp(layout.isPodium ? GOLD : SILVER, 0.7)
     record.edgeMaterial.opacity = layout.isPodium ? 0.54 : 0.32
 
@@ -527,7 +641,8 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams }) => {
         record.mesh.position.y = nextHeight / 2
         record.mesh.material.color.lerp(record.targetColor, 0.045)
         record.mesh.material.emissive.lerp(record.targetEmissive, 0.045)
-        record.label.position.y = nextHeight + 0.66 + Math.sin(elapsed * 1.7 + record.group.position.x) * 0.055
+        record.label.position.lerp(record.targetLabelPosition, 0.055)
+        record.label.position.y += Math.sin(elapsed * 1.35 + record.group.position.x) * 0.018
         record.label.scale.lerp(record.targetLabelScale, 0.05)
       }
 

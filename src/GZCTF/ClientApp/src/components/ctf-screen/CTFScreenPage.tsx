@@ -1,6 +1,7 @@
-import { FC, useEffect, useMemo, useState } from 'react'
+import { FC, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Select } from '@mantine/core'
+import gsap from 'gsap'
 import { OnceSWRConfig } from '@Hooks/useConfig'
 import api from '@Api'
 import yinyuIcon from '../../assets/yinyu-icon-transparent.png'
@@ -81,24 +82,27 @@ const getCountdownLabel = (now: number, start: Date, end: Date) => {
 
 const rankClass = (rank: number) => (rank <= 3 ? `is-rank-${rank}` : '')
 
+const formatScore = (score: number) => Math.round(score).toLocaleString('zh-CN')
+
 const makeDemoScreenData = (now: Date): ScreenData => {
   const baseScores = [
     2380, 2210, 2050, 1860, 1720, 1650, 1510, 1390, 1260, 1180,
     1090, 980, 910, 840, 760, 700, 650, 590, 540, 500,
     460, 420, 380, 350, 320, 290, 260, 230, 210, 190,
   ]
-  const tick = Math.floor(now.getTime() / 2200)
+  const tick = Math.floor((now.getTime() % (90 * 60 * 1000)) / 2800)
   const teams = baseScores
     .map((score, index) => {
-      const surge = ((tick + index * 5) % 23 === 0 ? 180 : 0) + ((tick + index * 7) % 41 === 0 ? 320 : 0)
-      const drift = Math.round(Math.sin((tick + index * 1.73) * 0.31) * 90 + Math.cos(index * 0.91) * 42)
+      const surge = ((tick + index * 5) % 23 === 0 ? 180 : 0) + ((tick + index * 7) % 41 === 0 ? 300 : 0)
+      const drift = Math.round(Math.sin((tick + index * 1.73) * 0.22) * 64 + Math.cos(index * 0.91) * 34)
+      const stagedGain = (Math.floor(tick / 8) % 24) * (index % 4 === 0 ? 9 : index % 3 === 0 ? 6 : 3)
       return {
         id: index + 1,
         rank: index + 1,
         prevRank: index + 1,
         name: demoTeamNames[index % demoTeamNames.length] + (index >= demoTeamNames.length ? ` ${index + 1}` : ''),
         country: index < 10 ? '正式队伍' : '演练队伍',
-        score: Math.max(40, score + drift + surge + tick * (index % 4 === 0 ? 7 : 3)),
+        score: Math.max(40, score + drift + surge + stagedGain),
         solves: Math.max(0, 28 - index + (index % 5) + Math.floor(tick / 7) % 4),
         lastSolve: index < 8 ? `${index + 1}分钟前` : '候场',
         color: '#d7dde0',
@@ -113,16 +117,33 @@ const makeDemoScreenData = (now: Date): ScreenData => {
 
   const startTime = new Date(now.getTime() - 2 * 60 * 60 * 1000)
   const endTime = new Date(now.getTime() + 6 * 60 * 60 * 1000)
-  const solveEvents = teams.slice(0, 12).map((team, index) => ({
-    id: `demo-${tick}-${team.id}`,
-    team: team.name,
-    teamColor: '#d7dde0',
-    challenge: ['边界巡检', '凭证溯源', '协议分析', '权限校验', '日志研判', '流量复盘'][index % 6],
-    category: ['Web', 'Crypto', 'Reverse', 'Forensics', 'Misc', 'AWDP'][index % 6],
-    points: 100 + (index % 4) * 50,
-    time: `${index + 1}分钟前`,
-    isFirst: index < 3,
-  }))
+  const feedTick = Math.floor(now.getTime() / 6000)
+  const demoChallenges = [
+    { category: 'Web', challenge: '边界巡检', points: 100 },
+    { category: 'Crypto', challenge: '凭证溯源', points: 150 },
+    { category: 'Reverse', challenge: '协议分析', points: 200 },
+    { category: 'Forensics', challenge: '日志研判', points: 250 },
+    { category: 'Misc', challenge: '流量复盘', points: 100 },
+    { category: 'AWDP', challenge: '服务加固', points: 300 },
+  ]
+  const solveEvents = Array.from({ length: 14 }, (_, index) => {
+    const eventTick = feedTick - index
+    const teamIndex = Math.abs(eventTick * 7 + index * 3) % baseScores.length
+    const challenge = demoChallenges[Math.abs(eventTick + index) % demoChallenges.length]
+
+    return {
+      id: `demo-feed-${eventTick}`,
+      team:
+        demoTeamNames[teamIndex % demoTeamNames.length] +
+        (teamIndex >= demoTeamNames.length ? ` ${teamIndex + 1}` : ''),
+      teamColor: '#d7dde0',
+      challenge: challenge.challenge,
+      category: challenge.category,
+      points: challenge.points,
+      time: index === 0 ? '刚刚' : `${Math.max(1, Math.ceil((index * 6) / 60))}分钟前`,
+      isFirst: eventTick % 17 === 0,
+    }
+  })
 
   return {
     teams,
@@ -136,8 +157,81 @@ const makeDemoScreenData = (now: Date): ScreenData => {
   }
 }
 
+const RollingScore: FC<{ value: number }> = ({ value }) => {
+  const scoreRef = useRef<HTMLElement | null>(null)
+  const currentRef = useRef(value)
+
+  useLayoutEffect(() => {
+    const node = scoreRef.current
+    if (!node) return undefined
+
+    const from = currentRef.current
+    if (from === value) {
+      node.textContent = formatScore(value)
+      return undefined
+    }
+
+    const proxy = { score: from }
+    const tween = gsap.to(proxy, {
+      score: value,
+      duration: 0.9,
+      ease: 'power3.out',
+      onUpdate: () => {
+        node.textContent = formatScore(proxy.score)
+      },
+      onComplete: () => {
+        currentRef.current = value
+        node.textContent = formatScore(value)
+      },
+    })
+
+    currentRef.current = value
+    return () => {
+      tween.kill()
+    }
+  }, [value])
+
+  return <strong ref={scoreRef}>{formatScore(value)}</strong>
+}
+
 const LeaderboardPanel: FC<{ teams: Team[] }> = ({ teams }) => {
-  const list = teams.length > 8 ? [...teams, ...teams] : teams
+  const visibleTeams = teams.slice(0, 20)
+  const rowRefs = useRef(new Map<number, HTMLElement>())
+  const rowPositionsRef = useRef(new Map<number, number>())
+  const rankSignature = visibleTeams
+    .map((team) => `${team.id}:${team.rank}:${team.prevRank}:${team.score}:${team.solves}:${team.name}`)
+    .join('|')
+
+  useLayoutEffect(() => {
+    const previousPositions = rowPositionsRef.current
+    const nextPositions = new Map<number, number>()
+
+    rowRefs.current.forEach((node, id) => {
+      const top = node.getBoundingClientRect().top
+      const previousTop = previousPositions.get(id)
+
+      if (previousTop === undefined) {
+        gsap.fromTo(
+          node,
+          { autoAlpha: 0, y: 12, scale: 0.985 },
+          { autoAlpha: 1, y: 0, scale: 1, duration: 0.45, ease: 'power3.out', clearProps: 'transform' }
+        )
+      } else {
+        const delta = previousTop - top
+        if (Math.abs(delta) > 1) {
+          gsap.fromTo(
+            node,
+            { y: delta },
+            { y: 0, duration: 0.62, ease: 'power3.out', clearProps: 'transform' }
+          )
+        }
+      }
+
+      nextPositions.set(id, top)
+    })
+
+    rowPositionsRef.current = nextPositions
+  }, [rankSignature])
 
   return (
     <section className="metal-screen-panel metal-screen-rank-panel">
@@ -149,12 +243,19 @@ const LeaderboardPanel: FC<{ teams: Team[] }> = ({ teams }) => {
         <span className="metal-live-badge">LIVE</span>
       </div>
 
-      <div className={teams.length > 8 ? 'metal-rank-list is-scrolling' : 'metal-rank-list'}>
+      <div className="metal-rank-list">
         <div className="metal-rank-track">
-          {list.map((team, index) => {
+          {visibleTeams.map((team) => {
             const delta = team.prevRank - team.rank
             return (
-              <article key={`${team.id}-${index}`} className={`metal-rank-row ${rankClass(team.rank)}`}>
+              <article
+                key={team.id}
+                ref={(node) => {
+                  if (node) rowRefs.current.set(team.id, node)
+                  else rowRefs.current.delete(team.id)
+                }}
+                className={`metal-rank-row ${rankClass(team.rank)}`}
+              >
                 <div className="metal-rank-number">{team.rank}</div>
                 <div className="metal-rank-main">
                   <div className="metal-rank-name">{team.name}</div>
@@ -164,7 +265,7 @@ const LeaderboardPanel: FC<{ teams: Team[] }> = ({ teams }) => {
                   </div>
                 </div>
                 <div className="metal-rank-score">
-                  <strong>{team.score}</strong>
+                  <RollingScore value={team.score} />
                   <span>{delta > 0 ? `上升 ${delta}` : delta < 0 ? `下降 ${Math.abs(delta)}` : '名次稳定'}</span>
                 </div>
               </article>
@@ -172,7 +273,7 @@ const LeaderboardPanel: FC<{ teams: Team[] }> = ({ teams }) => {
           })}
         </div>
 
-        {teams.length === 0 && (
+        {visibleTeams.length === 0 && (
           <div className="metal-empty-state">
             <span>计分榜数据待接入</span>
             <strong>暂无排行数据</strong>
@@ -183,40 +284,105 @@ const LeaderboardPanel: FC<{ teams: Team[] }> = ({ teams }) => {
   )
 }
 
-const SolveFeedPanel: FC<{ events: SolveEvent[] }> = ({ events }) => (
-  <section className="metal-screen-panel metal-feed-panel">
-    <div className="metal-panel-head">
-      <div>
-        <span className="metal-kicker">Live Feed</span>
-        <h2>实时解题日志</h2>
-      </div>
-      <span className="metal-feed-count">{events.length}</span>
-    </div>
+const SolveFeedPanel: FC<{ events: SolveEvent[] }> = ({ events }) => {
+  const maxEvents = 14
+  const incomingEvents = useMemo(() => events.slice(0, maxEvents).reverse(), [events])
+  const [visibleEvents, setVisibleEvents] = useState<SolveEvent[]>(() => incomingEvents)
+  const itemRefs = useRef(new Map<string, HTMLElement>())
+  const itemPositionsRef = useRef(new Map<string, number>())
+  const newEventIdsRef = useRef<string[]>([])
+  const incomingEventsRef = useRef(incomingEvents)
+  const eventIdsSignature = incomingEvents.map((event) => event.id).join('|')
 
-    <div className="metal-feed-list">
-      {events.slice(0, 13).map((event) => (
-        <article key={event.id} className={event.isFirst ? 'metal-feed-item is-first' : 'metal-feed-item'}>
-          <div className="metal-feed-topline">
-            <span className="metal-feed-team">{event.team}</span>
-            <span className="metal-feed-time">{event.time}</span>
-          </div>
-          <div className="metal-feed-challenge">{event.challenge}</div>
-          <div className="metal-feed-bottomline">
-            <span>{event.category}</span>
-            <strong>{event.points} 分</strong>
-          </div>
-        </article>
-      ))}
+  incomingEventsRef.current = incomingEvents
 
-      {events.length === 0 && (
-        <div className="metal-empty-state">
-          <span>等待有效提交记录</span>
-          <strong>暂无实时解题记录</strong>
+  useEffect(() => {
+    const nextEvents = incomingEventsRef.current
+    setVisibleEvents((current) => {
+      const currentIds = new Set(current.map((event) => event.id))
+      const newEvents = nextEvents.filter((event) => !currentIds.has(event.id))
+      newEventIdsRef.current = newEvents.map((event) => event.id)
+      return nextEvents
+    })
+  }, [eventIdsSignature])
+
+  useLayoutEffect(() => {
+    const previousPositions = itemPositionsRef.current
+    const nextPositions = new Map<string, number>()
+    const newIds = new Set(newEventIdsRef.current)
+
+    itemRefs.current.forEach((node, id) => {
+      const top = node.getBoundingClientRect().top
+      const previousTop = previousPositions.get(id)
+
+      if (previousTop !== undefined) {
+        const delta = previousTop - top
+        if (Math.abs(delta) > 1) {
+          gsap.fromTo(
+            node,
+            { y: delta },
+            { y: 0, duration: 0.56, ease: 'power3.out', clearProps: 'transform' }
+          )
+        }
+      } else if (newIds.has(id)) {
+        gsap.fromTo(
+          node,
+          { autoAlpha: 0, y: 14, scale: 0.982 },
+          { autoAlpha: 1, y: 0, scale: 1, duration: 0.48, ease: 'power3.out', clearProps: 'transform' }
+        )
+      }
+
+      nextPositions.set(id, top)
+    })
+
+    itemPositionsRef.current = nextPositions
+    newEventIdsRef.current = []
+  }, [visibleEvents])
+
+  return (
+    <section className="metal-screen-panel metal-feed-panel">
+      <div className="metal-panel-head">
+        <div>
+          <span className="metal-kicker">Live Feed</span>
+          <h2>实时解题日志</h2>
         </div>
-      )}
-    </div>
-  </section>
-)
+        <span className="metal-feed-count">{events.length}</span>
+      </div>
+
+      <div className="metal-feed-list">
+        <div className="metal-feed-track">
+          {visibleEvents.map((event) => (
+            <article
+              key={event.id}
+              ref={(node) => {
+                if (node) itemRefs.current.set(event.id, node)
+                else itemRefs.current.delete(event.id)
+              }}
+              className={event.isFirst ? 'metal-feed-item is-first' : 'metal-feed-item'}
+            >
+              <div className="metal-feed-topline">
+                <span className="metal-feed-team">{event.team}</span>
+                <span className="metal-feed-time">{event.time}</span>
+              </div>
+              <div className="metal-feed-challenge">解题 [{event.category}] {event.challenge}</div>
+              <div className="metal-feed-bottomline">
+                <span>得分记录</span>
+                <strong>+{event.points} 分</strong>
+              </div>
+            </article>
+          ))}
+        </div>
+
+        {visibleEvents.length === 0 && (
+          <div className="metal-empty-state">
+            <span>等待有效提交记录</span>
+            <strong>暂无实时解题记录</strong>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
 
 const CTFScreenPage: FC<CTFScreenPageProps> = ({ gameId, demoMode = false }) => {
   const navigate = useNavigate()
@@ -230,7 +396,8 @@ const CTFScreenPage: FC<CTFScreenPageProps> = ({ gameId, demoMode = false }) => 
     return () => window.clearInterval(timer)
   }, [])
 
-  const demoData = useMemo(() => makeDemoScreenData(currentTime), [currentTime])
+  const demoTick = Math.floor((currentTime.getTime() % (90 * 60 * 1000)) / 2800)
+  const demoData = useMemo(() => makeDemoScreenData(currentTime), [demoTick])
   const data: ScreenData = demoMode ? demoData : liveData
   const countdown = useMemo(
     () => getCountdownLabel(currentTime.getTime(), data.startTime, data.endTime),
@@ -244,7 +411,20 @@ const CTFScreenPage: FC<CTFScreenPageProps> = ({ gameId, demoMode = false }) => 
       })),
     [games?.data]
   )
-  const topTeams = useMemo(() => data.teams.slice(0, Math.min(Math.max(data.teams.length, 1), 64)), [data.teams])
+  const scoreTeamSignature = data.teams
+    .slice(0, 64)
+    .map((team) => `${team.id}:${team.rank}:${team.prevRank}:${team.name}:${team.country}:${team.score}:${team.solves}:${team.color}`)
+    .join('|')
+  const scoreTeams = useMemo(
+    () =>
+      data.teams.slice(0, 64).map((team) => ({
+        ...team,
+        lastSolve: '',
+      })),
+    [scoreTeamSignature]
+  )
+  const rankTeams = useMemo(() => scoreTeams.slice(0, 20), [scoreTeams])
+  const topTeams = useMemo(() => scoreTeams.slice(0, Math.min(Math.max(scoreTeams.length, 1), 64)), [scoreTeams])
   const leadingTeam = data.teams[0]
 
   return (
@@ -306,7 +486,7 @@ const CTFScreenPage: FC<CTFScreenPageProps> = ({ gameId, demoMode = false }) => 
       </header>
 
       <section className="metal-screen-stage">
-        <LeaderboardPanel teams={data.teams} />
+        <LeaderboardPanel teams={rankTeams} />
 
         <section className="metal-city-stage">
           <div className="metal-city-hud">

@@ -94,7 +94,7 @@ export const GanttTimeLine: FC<GanttTimeLineProps> = ({ items }) => {
   }, [items, locale])
 
   const hoveredRow = timeline.rows.find((item) => item.id === hoveredId)
-  const nowLabelSide = timeline.nowPercent > 66 ? 'left' : 'right'
+  const nowLabelSide = timeline.nowPercent < 18 ? 'right' : timeline.nowPercent > 82 ? 'left' : 'center'
 
   useEffect(() => {
     const root = rootRef.current
