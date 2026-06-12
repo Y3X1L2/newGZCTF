@@ -28,6 +28,7 @@ public class AwdpAdminController(
     IGameRepository gameRepository,
     AwdpRoundService roundService,
     AwdpInstanceService instanceService,
+    AwdpScoreService scoreService,
     CacheHelper cacheHelper) : ControllerBase
 {
     [HttpGet("Games/{gameId:int}/Services")]
@@ -39,6 +40,20 @@ public class AwdpAdminController(
             return validation.Result;
 
         return Ok(await awdpRepository.GetServiceViewsByGame(gameId, token));
+    }
+
+    [HttpGet("Games/{gameId:int}/Scoreboard")]
+    [ProducesResponseType(typeof(AwdpScoreboardItem[]), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetScoreboard([FromRoute] int gameId, CancellationToken token)
+    {
+        var validation = await ValidateAwdpGame(gameId, token);
+        if (validation.Result is not null)
+            return validation.Result;
+
+        var scoreboard = await gameRepository.GetScoreboard(validation.Game!, token);
+        var ctfScores = scoreboard.Items.Values.ToDictionary(i => i.Id, i => i.CtfScore);
+
+        return Ok(await scoreService.GetScoreboard(gameId, ctfScores, token));
     }
 
     [HttpPost("Games/{gameId:int}/Services")]
@@ -206,6 +221,37 @@ public class AwdpAdminController(
             .CountAsync(p => p.Service.GameId == gameId, token);
 
         return Ok(patches.Select(ToPatchViewModel).ToResponse(total));
+    }
+
+    [HttpGet("Games/{gameId:int}/AttackLogs")]
+    [ProducesResponseType(typeof(ArrayResponse<AwdpAttackLogItem>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAttackLogs([FromRoute] int gameId,
+        [FromQuery][Range(0, 100)] int count = 50, [FromQuery] int skip = 0,
+        CancellationToken token = default)
+    {
+        var validation = await ValidateAwdpGame(gameId, token);
+        if (validation.Result is not null)
+            return validation.Result;
+
+        var query = context.AwdpFlags.AsNoTracking()
+            .Where(f => f.Round.GameId == gameId && f.IsSubmitted && f.SubmittedByTeamId != null);
+
+        var total = await query.CountAsync(token);
+        var logs = await query
+            .OrderByDescending(f => f.FirstSubmittedAt)
+            .Skip(Math.Max(0, skip))
+            .Take(count <= 0 ? 50 : Math.Min(count, 100))
+            .Select(f => new AwdpAttackLogItem
+            {
+                Time = f.FirstSubmittedAt ?? DateTimeOffset.MinValue,
+                AttackerTeam = f.SubmittedByTeam == null ? string.Empty : f.SubmittedByTeam.Name,
+                VictimTeam = f.Team.Name,
+                ServiceName = f.Service.Name,
+                Points = f.Service.AttackPoints
+            })
+            .ToArrayAsync(token);
+
+        return Ok(logs.ToResponse(total));
     }
 
     async Task<(Game? Game, IActionResult? Result)> ValidateAwdpGame(int gameId, CancellationToken token)

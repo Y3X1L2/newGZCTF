@@ -5,7 +5,13 @@ import { useChallengeCategoryLabelMap } from '@Utils/Shared'
 import { OnceSWRConfig } from '@Hooks/useConfig'
 import { getGameStatus, useAdminGame } from '@Hooks/useGame'
 import api, { AnswerResult, EventType, GameEvent, GameType, ParticipationStatus, ScoreboardItem, Submission } from '@Api'
-import { theoryPlayerApi, TheoryScoreboardItemModel } from '../../Api/TheoryApi'
+import {
+  AwdpAttackLogItem,
+  awdpAdminApi,
+  AwdpScoreboardItem,
+  AwdpServiceViewModel,
+} from '../../Api/AwdpApi'
+import { theoryAdminApi, theoryPlayerApi, TheoryPaperDetailModel, TheoryScoreboardItemModel } from '../../Api/TheoryApi'
 
 // ─── Data Types (matching Ctfscreen interfaces) ────────────────────────────────
 
@@ -107,7 +113,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   Hardware: '#00ffcc',
 }
 
-const MAX_EVENTS = 30
+const MAX_EVENTS = 100
 const MAX_SUBMISSIONS = 100
 
 // ─── Helper Functions ──────────────────────────────────────────────────────────
@@ -149,6 +155,15 @@ const generateHeatmapData = (submissions: Submission[], now: number): HeatmapDat
     .sort((a, b) => a.hour.localeCompare(b.hour))
 }
 
+const estimateTheorySolvedCount = (
+  theory: TheoryScoreboardItemModel | undefined,
+  questionCount: number
+) => {
+  if (!theory?.submittedAt || questionCount <= 0) return 0
+  if (theory.maxScore <= 0) return 1
+  return Math.max(0, Math.min(questionCount, Math.round((theory.score / theory.maxScore) * questionCount)))
+}
+
 // ─── Main Data Hook ────────────────────────────────────────────────────────────
 
 export const useCTFScreenData = (numId: number) => {
@@ -156,6 +171,10 @@ export const useCTFScreenData = (numId: number) => {
   const [liveEvents, setLiveEvents] = useState<GameEvent[]>([])
   const [liveSubmissions, setLiveSubmissions] = useState<Submission[]>([])
   const [theoryScoreboard, setTheoryScoreboard] = useState<TheoryScoreboardItemModel[]>([])
+  const [theoryPaper, setTheoryPaper] = useState<TheoryPaperDetailModel | null>(null)
+  const [awdpServices, setAwdpServices] = useState<AwdpServiceViewModel[]>([])
+  const [awdpScoreboard, setAwdpScoreboard] = useState<AwdpScoreboardItem[]>([])
+  const [awdpAttackLogs, setAwdpAttackLogs] = useState<AwdpAttackLogItem[]>([])
   const [prevRankMap, setPrevRankMap] = useState(new Map<number, number>())
   const scoreboardSnapshotRef = useRef(new Map<number, { rank: number; score: number }>())
 
@@ -168,7 +187,11 @@ export const useCTFScreenData = (numId: number) => {
   const canLoadMonitor = numId > 0 && !!game && !isTestMode && statusInfo.status !== GameStatus.Coming
   const canLoadParticipations = numId > 0 && !!game && !isTestMode
   const isTheoryScoreGame = game?.gameType === GameType.Theory || game?.gameType === GameType.Mixed
+  const isAwdpScoreGame = game?.gameType === GameType.AWDP || game?.gameType === GameType.Mixed
   const canLoadTheoryScoreboard = canLoadScoreboard && isTheoryScoreGame
+  const canLoadTheoryMeta = numId > 0 && !!game && !isTestMode && isTheoryScoreGame
+  const canLoadAwdpMeta = numId > 0 && !!game && !isTestMode && isAwdpScoreGame
+  const canLoadAwdpScoreboard = canLoadScoreboard && isAwdpScoreGame
 
   const { data: liveScoreboard, mutate: mutateScoreboard } = api.game.useGameScoreboard(
     numId,
@@ -204,6 +227,27 @@ export const useCTFScreenData = (numId: number) => {
     () => new Map(theoryScoreboard.map((item) => [item.teamId, item])),
     [theoryScoreboard]
   )
+  const awdpScoreMap = useMemo(
+    () => new Map(awdpScoreboard.map((item) => [item.teamId, item])),
+    [awdpScoreboard]
+  )
+  const awdpAttackCountByTeam = useMemo(() => {
+    const map = new Map<string, number>()
+    awdpAttackLogs.forEach((item) => {
+      if (!item.attackerTeam) return
+      map.set(item.attackerTeam, (map.get(item.attackerTeam) ?? 0) + 1)
+    })
+    return map
+  }, [awdpAttackLogs])
+  const awdpLastTimeByTeam = useMemo(() => {
+    const map = new Map<string, number>()
+    awdpAttackLogs.forEach((item) => {
+      if (!item.attackerTeam || !item.time) return
+      map.set(item.attackerTeam, Math.max(map.get(item.attackerTeam) ?? 0, item.time))
+    })
+    return map
+  }, [awdpAttackLogs])
+  const theoryQuestionCount = theoryPaper?.questions?.length ?? 0
   const challengeCategoryMap = useMemo(() => {
     const map = new Map<number, string>()
     Object.entries(scoreboard?.challenges ?? {}).forEach(([categoryKey, challengeList]) => {
@@ -217,11 +261,14 @@ export const useCTFScreenData = (numId: number) => {
   const buildTeamBreakdown = useCallback(
     (
       base: ScoreboardItem | undefined,
-      theory: TheoryScoreboardItemModel | undefined
+      theory: TheoryScoreboardItemModel | undefined,
+      awdp: AwdpScoreboardItem | undefined,
+      awdpAttackCount = 0,
+      theorySolvedCount = 0
     ): TeamCategoryBreakdown[] => {
       const categoryMap = new Map<string, TeamCategoryBreakdown>()
       const addCategory = (category: string, score: number, solved = 1) => {
-        if (score <= 0 && solved <= 0) return
+        if (score === 0 && solved <= 0) return
         const current = categoryMap.get(category) ?? { category, solved: 0, score: 0 }
         current.solved += solved
         current.score += score
@@ -232,12 +279,19 @@ export const useCTFScreenData = (numId: number) => {
         addCategory(challengeCategoryMap.get(challenge.id) ?? 'Other', challenge.score, 1)
       })
 
-      if ((base?.awdScore ?? 0) > 0) {
-        addCategory('AWDP', base?.awdScore ?? 0, 0)
+      if (awdp) {
+        addCategory('AWDP Attack', awdp.attackScore, awdpAttackCount)
+        addCategory('AWDP SLA', awdp.slaScore, 0)
+        addCategory('AWDP Patch', awdp.patchScore, 0)
+        if (awdp.penaltyScore > 0) {
+          addCategory('AWDP Penalty', -awdp.penaltyScore, 0)
+        }
+      } else if ((base?.awdScore ?? 0) > 0) {
+        addCategory('AWDP', base?.awdScore ?? 0, awdpAttackCount)
       }
 
       if ((theory?.score ?? 0) > 0) {
-        addCategory('Theory', theory?.score ?? 0, theory?.submittedAt ? 1 : 0)
+        addCategory('Theory', theory?.score ?? 0, theorySolvedCount)
       }
 
       return [...categoryMap.values()].sort((left, right) => {
@@ -249,13 +303,6 @@ export const useCTFScreenData = (numId: number) => {
   )
   const scoreItems = useMemo<ScreenScoreItem[]>(() => {
     const baseItems = scoreboard?.items ?? []
-
-    if (!isTheoryScoreGame) {
-      return [...baseItems]
-        .sort((left, right) => left.rank - right.rank)
-        .map((item) => ({ ...item, breakdown: buildTeamBreakdown(item, undefined) }))
-    }
-
     const baseByTeam = new Map(baseItems.map((item) => [item.id, item]))
     const participationByTeam = new Map(
       acceptedParticipations
@@ -265,27 +312,41 @@ export const useCTFScreenData = (numId: number) => {
     const teamIds = new Set<number>([
       ...baseByTeam.keys(),
       ...theoryScoreMap.keys(),
+      ...awdpScoreMap.keys(),
       ...participationByTeam.keys(),
     ])
 
     const merged = [...teamIds].map((teamId) => {
       const base = baseByTeam.get(teamId)
       const theory = theoryScoreMap.get(teamId)
+      const awdp = awdpScoreMap.get(teamId)
       const participation = participationByTeam.get(teamId)
       const commonScore = game?.gameType === GameType.Theory ? 0 : base?.score ?? 0
       const theoryScore = theory?.score ?? 0
+      const awdpAttackCount = awdpAttackCountByTeam.get(base?.name ?? awdp?.teamName ?? theory?.teamName ?? '') ?? 0
+      const theorySolvedCount = estimateTheorySolvedCount(theory, theoryQuestionCount)
       const theorySubmittedAt = theory?.submittedAt ?? 0
       const commonSubmittedAt = base?.lastSubmissionTime ?? 0
+      const awdpSubmittedAt = awdpLastTimeByTeam.get(base?.name ?? awdp?.teamName ?? theory?.teamName ?? '') ?? 0
 
       return {
         id: teamId,
-        name: base?.name ?? theory?.teamName ?? participation?.team?.name ?? `Team ${teamId}`,
+        name: base?.name ?? awdp?.teamName ?? theory?.teamName ?? participation?.team?.name ?? `Team ${teamId}`,
         divisionId: base?.divisionId ?? theory?.divisionId ?? participation?.divisionId,
         score: commonScore + theoryScore,
         rank: 0,
-        solvedCount: (game?.gameType === GameType.Theory ? 0 : base?.solvedCount ?? 0) + (theorySubmittedAt ? 1 : 0),
-        lastSubmissionTime: Math.max(commonSubmittedAt, theorySubmittedAt),
-        breakdown: buildTeamBreakdown(game?.gameType === GameType.Theory ? undefined : base, theory),
+        solvedCount:
+          (game?.gameType === GameType.Theory ? 0 : base?.solvedCount ?? 0) +
+          (awdp ? awdpAttackCount : 0) +
+          theorySolvedCount,
+        lastSubmissionTime: Math.max(commonSubmittedAt, theorySubmittedAt, awdpSubmittedAt),
+        breakdown: buildTeamBreakdown(
+          game?.gameType === GameType.Theory ? undefined : base,
+          theory,
+          awdp,
+          awdpAttackCount,
+          theorySolvedCount
+        ),
       }
     })
 
@@ -298,7 +359,17 @@ export const useCTFScreenData = (numId: number) => {
     })
 
     return merged.map((item, index) => ({ ...item, rank: index + 1 }))
-  }, [acceptedParticipations, buildTeamBreakdown, game?.gameType, isTheoryScoreGame, scoreboard?.items, theoryScoreMap])
+  }, [
+    acceptedParticipations,
+    awdpAttackCountByTeam,
+    awdpLastTimeByTeam,
+    awdpScoreMap,
+    buildTeamBreakdown,
+    game?.gameType,
+    scoreboard?.items,
+    theoryQuestionCount,
+    theoryScoreMap,
+  ])
 
   const loadTheoryScoreboard = useCallback(async () => {
     if (!canLoadTheoryScoreboard) {
@@ -313,6 +384,41 @@ export const useCTFScreenData = (numId: number) => {
       setTheoryScoreboard([])
     }
   }, [canLoadTheoryScoreboard, numId])
+
+  const loadTheoryMeta = useCallback(async () => {
+    if (!canLoadTheoryMeta) {
+      setTheoryPaper(null)
+      return
+    }
+
+    try {
+      const response = await theoryAdminApi.getPaper(numId)
+      setTheoryPaper(response.data ?? null)
+    } catch {
+      setTheoryPaper(null)
+    }
+  }, [canLoadTheoryMeta, numId])
+
+  const loadAwdpData = useCallback(async () => {
+    if (!canLoadAwdpMeta) {
+      setAwdpServices([])
+      setAwdpScoreboard([])
+      setAwdpAttackLogs([])
+      return
+    }
+
+    const [servicesResult, scoreboardResult, attackLogsResult] = await Promise.allSettled([
+      awdpAdminApi.getServices(numId),
+      canLoadAwdpScoreboard ? awdpAdminApi.getScoreboard(numId) : Promise.resolve({ data: [] as AwdpScoreboardItem[] }),
+      canLoadAwdpScoreboard ? awdpAdminApi.getAttackLogs(numId, MAX_EVENTS, 0) : Promise.resolve({ data: { data: [] as AwdpAttackLogItem[] } }),
+    ])
+
+    setAwdpServices(servicesResult.status === 'fulfilled' ? servicesResult.value.data ?? [] : [])
+    setAwdpScoreboard(scoreboardResult.status === 'fulfilled' ? scoreboardResult.value.data ?? [] : [])
+    setAwdpAttackLogs(
+      attackLogsResult.status === 'fulfilled' ? attackLogsResult.value.data?.data ?? [] : []
+    )
+  }, [canLoadAwdpMeta, canLoadAwdpScoreboard, numId])
 
   // Clock update
   useEffect(() => {
@@ -342,6 +448,22 @@ export const useCTFScreenData = (numId: number) => {
 
     return () => window.clearInterval(timer)
   }, [canLoadTheoryScoreboard, loadTheoryScoreboard, statusInfo.status])
+
+  useEffect(() => {
+    void loadTheoryMeta()
+  }, [loadTheoryMeta])
+
+  useEffect(() => {
+    void loadAwdpData()
+
+    if (!canLoadAwdpMeta || statusInfo.status !== GameStatus.OnGoing) return undefined
+
+    const timer = window.setInterval(() => {
+      void loadAwdpData()
+    }, 30000)
+
+    return () => window.clearInterval(timer)
+  }, [canLoadAwdpMeta, loadAwdpData, statusInfo.status])
 
   // Track rank changes
   useEffect(() => {
@@ -375,6 +497,15 @@ export const useCTFScreenData = (numId: number) => {
     connection.on('ReceivedGameEvent', (event: GameEvent) => {
       if (event.type === EventType.ContainerStart || event.type === EventType.ContainerDestroy) return
       setLiveEvents(current => [event, ...current].slice(0, MAX_EVENTS))
+      if (
+        event.type === EventType.AwdpFlagSubmit ||
+        event.type === EventType.AwdpPatchResult ||
+        event.type === EventType.AwdpServiceUp ||
+        event.type === EventType.AwdpServiceDown
+      ) {
+        void mutateScoreboard()
+        void loadAwdpData()
+      }
     })
 
     connection.on('ReceivedSubmissions', (submission: Submission) => {
@@ -389,7 +520,7 @@ export const useCTFScreenData = (numId: number) => {
     return () => {
       void connection.stop()
     }
-  }, [isTestMode, mutateScoreboard, numId, statusInfo.status])
+  }, [isTestMode, loadAwdpData, mutateScoreboard, numId, statusInfo.status])
 
   // ─── Derived Data (matching Ctfscreen format) ────────────────────────────────
 
@@ -517,6 +648,25 @@ export const useCTFScreenData = (numId: number) => {
       categoryMap.set(categoryName, current)
     })
 
+    if (isAwdpScoreGame && awdpServices.length > 0) {
+      const awdpAttackCount = awdpAttackLogs.length
+      categoryMap.set('AWDP', {
+        total: awdpServices.length,
+        solved: awdpAttackCount,
+      })
+    }
+
+    if (isTheoryScoreGame && theoryQuestionCount > 0) {
+      const solved = theoryScoreboard.reduce(
+        (sum, item) => sum + estimateTheorySolvedCount(item, theoryQuestionCount),
+        0
+      )
+      categoryMap.set('Theory', {
+        total: theoryQuestionCount,
+        solved: Math.min(theoryQuestionCount, solved),
+      })
+    }
+
     return Array.from(categoryMap.entries())
       .map(([name, data]) => ({
         name,
@@ -527,7 +677,16 @@ export const useCTFScreenData = (numId: number) => {
       }))
       .sort((a, b) => b.solved - a.solved)
       .slice(0, 6)
-  }, [scoreboard?.challenges, challengeCategoryLabelMap])
+  }, [
+    awdpAttackLogs.length,
+    awdpServices.length,
+    challengeCategoryLabelMap,
+    isAwdpScoreGame,
+    isTheoryScoreGame,
+    scoreboard?.challenges,
+    theoryQuestionCount,
+    theoryScoreboard,
+  ])
 
   // Solve events for recent solves feed
   const solveEvents: SolveEvent[] = useMemo(() => {
@@ -544,9 +703,8 @@ export const useCTFScreenData = (numId: number) => {
         }
       })
 
-    return submissionFeed
-      .filter(s => s.status === AnswerResult.Accepted && s.time)
-      .slice(0, 12)
+    const ctfEvents = submissionFeed
+      .filter((s): s is typeof s & { time: number } => s.status === AnswerResult.Accepted && !!s.time)
       .map((submission, index) => {
         const teamIndex = teams.findIndex(t => t.name === submission.team) ?? index
         const categoryKey = Object.entries(scoreboard?.challenges ?? {})
@@ -568,10 +726,31 @@ export const useCTFScreenData = (numId: number) => {
           category: categoryName,
           points: challengeInfo?.score ?? 0,
           time: formatTimeAgo(submission.time, now),
+          sortTime: submission.time,
           isFirst: isFirstBlood,
         }
       })
-  }, [submissionFeed, scoreboard?.challenges, teams, challengeCategoryLabelMap, now])
+
+    const awdpEvents = awdpAttackLogs.map((log, index) => {
+      const teamIndex = teams.findIndex(t => t.name === log.attackerTeam) ?? index
+      return {
+        id: `awdp-${log.time}-${log.attackerTeam}-${log.victimTeam}-${log.serviceName}`,
+        team: log.attackerTeam || 'Unknown',
+        teamColor: TEAM_COLORS[teamIndex % TEAM_COLORS.length],
+        challenge: `${log.serviceName}${log.victimTeam ? ` -> ${log.victimTeam}` : ''}`,
+        category: 'AWDP',
+        points: log.points ?? 0,
+        time: formatTimeAgo(log.time, now),
+        sortTime: log.time,
+        isFirst: false,
+      }
+    })
+
+    return [...ctfEvents, ...awdpEvents]
+      .sort((left, right) => right.sortTime - left.sortTime)
+      .slice(0, 12)
+      .map(({ sortTime, ...event }) => event)
+  }, [awdpAttackLogs, submissionFeed, scoreboard?.challenges, teams, challengeCategoryLabelMap, now])
 
   // Heatmap data
   const heatmapData: HeatmapData[] = useMemo(() => {
@@ -584,7 +763,19 @@ export const useCTFScreenData = (numId: number) => {
     () => scoreItems.reduce((sum, item) => sum + item.solvedCount, 0),
     [scoreItems]
   )
-  const totalChallenges = scoreboard?.challengeCount ?? 0
+  const totalChallenges = useMemo(() => {
+    const ctfCount = game?.gameType === GameType.Theory ? 0 : scoreboard?.challengeCount ?? 0
+    const awdpCount = isAwdpScoreGame ? awdpServices.length : 0
+    const theoryCount = isTheoryScoreGame ? theoryQuestionCount : 0
+    return ctfCount + awdpCount + theoryCount
+  }, [
+    awdpServices.length,
+    game?.gameType,
+    isAwdpScoreGame,
+    isTheoryScoreGame,
+    scoreboard?.challengeCount,
+    theoryQuestionCount,
+  ])
   const eventName = game?.title ?? 'CTF Competition'
   const startTime = useMemo(() => {
     if (!game?.start) return new Date(Date.now() - 3600000)

@@ -144,6 +144,21 @@ export const awdpAdminApi = {
       format: 'json',
       ...params,
     }),
+  getScoreboard: (gameId: number, params: RequestParams = {}) =>
+    api.request<AwdpScoreboardItem[], RequestResponse>({
+      path: `/api/admin/awdp/games/${gameId}/scoreboard`,
+      method: 'GET',
+      format: 'json',
+      ...params,
+    }),
+  getAttackLogs: (gameId: number, count = 100, skip = 0, params: RequestParams = {}) =>
+    api.request<AwdpArrayResponse<AwdpAttackLogItem>, RequestResponse>({
+      path: `/api/admin/awdp/games/${gameId}/attacklogs`,
+      method: 'GET',
+      query: { count, skip },
+      format: 'json',
+      ...params,
+    }),
   createService: (gameId: number, data: AwdpServiceCreateModel, params: RequestParams = {}) =>
     api.request<AwdpServiceViewModel, RequestResponse>({
       path: `/api/admin/awdp/games/${gameId}/services`,

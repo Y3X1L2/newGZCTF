@@ -409,12 +409,20 @@ const SolveFeedPanel: FC<{ events: SolveEvent[] }> = ({ events }) => {
   )
 }
 
-const TeamDetailPanel: FC<{ team: Team }> = ({ team }) => {
+const TeamDetailPanel: FC<{ team: Team; onBack: () => void }> = ({ team, onBack }) => {
   const maxCategoryScore = Math.max(1, ...team.breakdown.map((item) => item.score), 1)
 
   return (
-    <aside className="metal-team-detail-panel">
-      <span className="metal-kicker">Team Detail</span>
+    <section className="metal-screen-panel metal-team-detail-panel">
+      <div className="metal-panel-head metal-team-detail-head">
+        <div>
+          <span className="metal-kicker">Team Detail</span>
+          <h2>队伍详情</h2>
+        </div>
+        <button className="metal-detail-back-button" type="button" onClick={onBack}>
+          返回总览
+        </button>
+      </div>
       <div className="metal-team-detail-title">
         <div>
           <strong>{team.name}</strong>
@@ -452,7 +460,7 @@ const TeamDetailPanel: FC<{ team: Team }> = ({ team }) => {
           <div className="metal-team-breakdown-empty">暂无分类得分记录</div>
         )}
       </div>
-    </aside>
+    </section>
   )
 }
 
@@ -521,12 +529,6 @@ const CTFScreenPage: FC<CTFScreenPageProps> = ({ gameId, demoMode = false }) => 
       <div className="metal-screen-ambient" />
       <div className="metal-screen-grid" />
 
-      {selectedTeam && (
-        <button className="metal-overview-button" type="button" onClick={() => setSelectedTeamId(null)}>
-          返回总览
-        </button>
-      )}
-
       <header className="metal-screen-header">
         <div className="metal-brand-cluster">
           <div className="metal-brand-orb">
@@ -581,7 +583,11 @@ const CTFScreenPage: FC<CTFScreenPageProps> = ({ gameId, demoMode = false }) => 
       </header>
 
       <section className="metal-screen-stage">
-        <LeaderboardPanel teams={rankTeams} />
+        {selectedTeam ? (
+          <TeamDetailPanel team={selectedTeam} onBack={() => setSelectedTeamId(null)} />
+        ) : (
+          <LeaderboardPanel teams={rankTeams} />
+        )}
 
         <section className="metal-city-stage">
           <div className="metal-city-hud">
@@ -597,8 +603,6 @@ const CTFScreenPage: FC<CTFScreenPageProps> = ({ gameId, demoMode = false }) => 
             selectedTeamId={selectedTeamId}
             onSelectTeam={(team) => setSelectedTeamId(team.id)}
           />
-
-          {selectedTeam && <TeamDetailPanel team={selectedTeam} />}
 
           {topTeams.length === 0 && (
             <div className="metal-city-empty">

@@ -57,6 +57,7 @@ const SILVER_EMISSIVE = new THREE.Color(0x111820)
 const DIM_SILVER = new THREE.Color(0x6d7479)
 const SCENE_CENTER = new THREE.Vector3(0, 0, 0)
 const FOCUS_CENTER = new THREE.Vector3(0, 0, 0)
+const FOCUS_LABEL_CENTER = new THREE.Vector3(0, 0, 0)
 const BAR_GEOMETRY = new THREE.BoxGeometry(1, 1, 1, 3, 1, 3)
 const EDGE_GEOMETRY = new THREE.EdgesGeometry(BAR_GEOMETRY)
 const TARGET_COLOR = new THREE.Color()
@@ -448,6 +449,7 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams, selectedTeamId 
   const hostRef = useRef<HTMLDivElement | null>(null)
   const teamsRef = useRef<Team[]>(teams)
   const selectedTeamIdRef = useRef<number | null>(selectedTeamId)
+  const hoveredTeamIdRef = useRef<number | null>(null)
   const onSelectTeamRef = useRef(onSelectTeam)
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
@@ -616,6 +618,14 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams, selectedTeamId 
       const rect = host.getBoundingClientRect()
       mouseRef.current.x = ((event.clientX - rect.left) / Math.max(rect.width, 1)) * 2 - 1
       mouseRef.current.y = -(((event.clientY - rect.top) / Math.max(rect.height, 1)) * 2 - 1)
+
+      pointer.x = mouseRef.current.x
+      pointer.y = mouseRef.current.y
+      bars.updateMatrixWorld(true)
+      raycaster.setFromCamera(pointer, camera)
+      const meshes = [...recordsRef.current.values()].map((record) => record.mesh)
+      const hit = raycaster.intersectObjects(meshes, false)[0]
+      hoveredTeamIdRef.current = (hit?.object.userData.teamId as number | undefined) ?? null
     }
 
     const onPointerDown = (event: PointerEvent) => {
@@ -684,6 +694,7 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams, selectedTeamId 
       for (const record of recordsRef.current.values()) {
         const selectedTeamId = selectedTeamIdRef.current
         const isSelected = selectedTeamId === record.mesh.userData.teamId
+        const isHovered = hoveredTeamIdRef.current === record.mesh.userData.teamId
         const isDimmed = selectedTeamId !== null && !isSelected
         record.group.position.lerp(record.targetPosition, 0.045)
         const nextHeight = ease(record.mesh.scale.y, record.targetHeight, 0.055)
@@ -707,10 +718,14 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams, selectedTeamId 
           0.05
         )
         record.labelMaterial.opacity = isDimmed ? ease(record.labelMaterial.opacity, 0.45, 0.06) : ease(record.labelMaterial.opacity, 1, 0.06)
-        const edgePulse = isSelected ? 0.72 + Math.sin(elapsed * 3.2) * 0.2 : 0
+        const edgePulse = isSelected
+          ? 0.72 + Math.sin(elapsed * 3.2) * 0.2
+          : isHovered
+            ? 0.58 + Math.sin(elapsed * 4.1) * 0.16
+            : 0
         const focusEdgeColor = isGold ? FOCUS_GOLD_EDGE : FOCUS_SILVER_EDGE
-        record.edgeMaterial.color.lerp(isSelected ? focusEdgeColor : record.targetColor, 0.12)
-        record.edgeMaterial.opacity = isSelected
+        record.edgeMaterial.color.lerp(isSelected || isHovered ? focusEdgeColor : record.targetColor, 0.12)
+        record.edgeMaterial.opacity = isSelected || isHovered
           ? edgePulse
           : isDimmed
             ? ease(record.edgeMaterial.opacity, 0.16, 0.05)
@@ -720,23 +735,26 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams, selectedTeamId 
       const selectedRecord = selectedTeamIdRef.current === null ? undefined : recordsRef.current.get(selectedTeamIdRef.current)
       if (selectedRecord) {
         selectedRecord.group.getWorldPosition(FOCUS_CENTER)
+        selectedRecord.label.getWorldPosition(FOCUS_LABEL_CENTER)
         const focusX = FOCUS_CENTER.x
-        const focusY = FOCUS_CENTER.y
         const focusZ = FOCUS_CENTER.z
         const focusHeight = Math.max(1.6, selectedRecord.mesh.scale.y)
-        const orbit = elapsed * 0.32
-        const radius = clamp(5.8 + focusHeight * 0.42 + Math.sin(elapsed * 0.17) * 0.55, 5.8, 9.6)
-        const cameraX = focusX + Math.sin(orbit) * radius
-        const cameraZ = focusZ + Math.cos(orbit) * radius
-        const cameraY = focusY + clamp(3.9 + focusHeight * 0.44 + Math.sin(elapsed * 0.21) * 0.34, 4.2, 8.4)
+        const labelX = FOCUS_LABEL_CENTER.x
+        const labelY = FOCUS_LABEL_CENTER.y
+        const labelZ = FOCUS_LABEL_CENTER.z
+        const orbit = elapsed * 0.26
+        const radius = clamp(8.8 + focusHeight * 0.5 + Math.sin(elapsed * 0.17) * 0.55, 9.2, 13.4)
+        const cameraX = labelX + Math.sin(orbit) * radius
+        const cameraZ = labelZ + Math.cos(orbit) * radius
+        const cameraY = labelY + clamp(1.35 + Math.sin(elapsed * 0.21) * 0.52, 0.9, 2.35)
 
         camera.position.x = ease(camera.position.x, cameraX, 0.035)
         camera.position.y = ease(camera.position.y, cameraY, 0.035)
         camera.position.z = ease(camera.position.z, cameraZ, 0.035)
         FOCUS_CENTER.set(
-          focusX,
-          focusY + clamp(1.1 + focusHeight * 0.52, 1.6, 5.8),
-          focusZ
+          ease(focusX, labelX, 0.72),
+          labelY - 0.12 + Math.sin(elapsed * 0.18) * 0.2,
+          ease(focusZ, labelZ, 0.72)
         )
         camera.lookAt(FOCUS_CENTER)
       } else {
