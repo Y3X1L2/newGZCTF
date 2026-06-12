@@ -1,6 +1,6 @@
 import { ActionIcon, Badge, Group, ScrollArea, SegmentedControl, Table, Text, useMantineTheme } from '@mantine/core'
 import { showNotification } from '@mantine/notifications'
-import { mdiArrowLeftBold, mdiArrowRightBold, mdiCheck, mdiClose } from '@mdi/js'
+import { mdiArrowLeftBold, mdiArrowRightBold, mdiClose } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import * as signalR from '@microsoft/signalr'
 import cx from 'clsx'
@@ -90,11 +90,6 @@ const Logs: FC = () => {
     const startConnection = async () => {
       try {
         await connection.start()
-        showNotification({
-          color: 'teal',
-          message: t('admin.notification.logs.connected'),
-          icon: <Icon path={mdiCheck} size={1} />,
-        })
       } catch (err) {
         console.error(err)
       }
@@ -155,6 +150,7 @@ const Logs: FC = () => {
       head={
         <>
           <SegmentedControl
+            className="yy-admin-logs-filter"
             color={theme.primaryColor}
             value={level}
             bg="transparent"
@@ -164,7 +160,7 @@ const Logs: FC = () => {
               label: role[0],
             }))}
           />
-          <Group justify="right">
+          <Group justify="right" className="yy-admin-logs-pagination">
             <ActionIcon size="lg" disabled={activePage <= 1} onClick={() => setPage(activePage - 1)}>
               <Icon path={mdiArrowLeftBold} size={1} />
             </ActionIcon>
@@ -182,7 +178,7 @@ const Logs: FC = () => {
         </>
       }
     >
-      <YinyuTableShell p="md" w="100%">
+      <YinyuTableShell p="md" w="100%" className="yy-admin-logs-page">
         <ScrollArea viewportRef={viewport} offsetScrollbars scrollbarSize={4} h="calc(100vh - 190px)">
           <Table className={cx(tableClasses.table, tableClasses.fixed)}>
             <Table.Thead>

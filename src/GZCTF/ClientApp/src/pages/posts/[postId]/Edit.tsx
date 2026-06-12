@@ -1,15 +1,4 @@
-import {
-  Button,
-  Group,
-  SimpleGrid,
-  Stack,
-  TagsInput,
-  Text,
-  Textarea,
-  TextInput,
-  Title,
-  useMantineTheme,
-} from '@mantine/core'
+import { Button, Group, SimpleGrid, Stack, TagsInput, Text, Textarea, TextInput, Title } from '@mantine/core'
 import { useModals } from '@mantine/modals'
 import { showNotification } from '@mantine/notifications'
 import { mdiCheck, mdiContentSaveOutline, mdiDeleteOutline, mdiFileCheckOutline } from '@mdi/js'
@@ -26,7 +15,6 @@ import api, { PostEditModel, Role } from '@Api'
 
 const PostEdit: FC = () => {
   const { postId } = useParams()
-  const theme = useMantineTheme()
   const navigate = useNavigate()
 
   const { t } = useTranslation()
@@ -170,10 +158,10 @@ const PostEdit: FC = () => {
   return (
     <WithNavBar minWidth={0} withHeader stickyHeader>
       <WithRole requiredRole={Role.Admin}>
-        <Stack mt={isMobile ? 25 : 30} className="yy-page-frame view-stack">
+        <Stack className="yy-page-frame view-stack yy-post-edit-page">
           <Group justify={isMobile ? 'right' : 'space-between'}>
             {!isMobile && (
-              <Title order={1} c={theme.colors.light[6]}>
+              <Title order={1} className="yy-brand-title">
                 {`> ${postId === 'new' ? t('post.button.new') : t('post.button.edit')}`}
               </Title>
             )}
@@ -185,6 +173,7 @@ const PostEdit: FC = () => {
                     color="red"
                     leftSection={<Icon path={mdiDeleteOutline} size={1} />}
                     variant="outline"
+                    className="yy-post-edit-button yy-post-danger-button"
                     onClick={() =>
                       modals.openConfirmModal({
                         title: t('post.button.delete'),
@@ -205,6 +194,7 @@ const PostEdit: FC = () => {
                   <Button
                     disabled={disabled}
                     leftSection={<Icon path={mdiFileCheckOutline} size={1} />}
+                    className="yy-post-edit-button"
                     onClick={() => {
                       if (hasChanged) {
                         modals.openConfirmModal({
@@ -227,6 +217,7 @@ const PostEdit: FC = () => {
               <Button
                 disabled={disabled}
                 leftSection={<Icon path={mdiContentSaveOutline} size={1} />}
+                className="yy-post-edit-button"
                 onClick={onUpdate}
               >
                 {postId === 'new' ? t('post.button.new') : t('post.button.save')}

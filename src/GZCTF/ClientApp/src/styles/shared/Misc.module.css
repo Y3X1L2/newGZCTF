@@ -167,7 +167,16 @@
   position: fixed;
   bottom: var(--fixed-bottom, 2rem);
   right: var(--fixed-right, 2rem);
-  box-shadow: var(--mantine-shadow-lg);
+  border: 1px solid rgba(107, 238, 177, 0.44);
+  border-radius: 999px;
+  color: #06100b;
+  background:
+    linear-gradient(135deg, rgba(144, 255, 201, 0.98), rgba(82, 229, 164, 0.86)),
+    var(--yy-hex-flow);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0.9rem 2.4rem rgba(0, 0, 0, 0.32),
+    0 0 2rem rgba(107, 238, 177, 0.16);
   z-index: 1000;
 
   @media print {

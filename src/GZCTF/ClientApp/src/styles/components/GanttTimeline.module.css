@@ -4,7 +4,7 @@
   isolation: isolate;
   overflow: hidden;
   width: 100%;
-  padding: clamp(1.05rem, 1.8vw, 1.35rem);
+  padding: clamp(0.92rem, 1.45vw, 1.18rem);
   color: var(--yy-text);
   background:
     linear-gradient(180deg, rgba(0, 0, 0, 0.64), rgba(0, 0, 0, 0.78)),
@@ -89,7 +89,7 @@
   margin: 0;
   color: var(--yy-text);
   font-family: var(--font-display);
-  font-size: clamp(1.55rem, 2.45vw, 2.45rem);
+  font-size: clamp(1.24rem, 1.9vw, 1.86rem);
   font-weight: 760;
   line-height: 0.96;
 }
@@ -115,7 +115,7 @@
 .viewport {
   width: 100%;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: visible;
   padding-bottom: 0.18rem;
   scrollbar-color: rgba(107, 238, 177, 0.34) rgba(255, 255, 255, 0.04);
 }
@@ -127,9 +127,41 @@
 
 .axis {
   position: relative;
-  height: 3.35rem;
+  height: 3.05rem;
   margin-left: clamp(10.2rem, 22vw, 18rem);
-  border-bottom: 1px solid rgba(107, 238, 177, 0.15);
+  border-bottom: 1px solid rgba(107, 238, 177, 0.22);
+  background:
+    linear-gradient(90deg, rgba(107, 238, 177, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size:
+    calc(100% / 7) 100%,
+    calc(100% / 14) 100%;
+}
+
+.axis::after {
+  content: '';
+  position: absolute;
+  left: var(--focus-left);
+  bottom: -1px;
+  width: var(--focus-width);
+  height: 100%;
+  pointer-events: none;
+  border-inline: 1px solid rgba(107, 238, 177, 0.5);
+  background:
+    linear-gradient(180deg, rgba(107, 238, 177, 0.13), rgba(107, 238, 177, 0.025)),
+    var(--yy-hex-flow);
+  background-size: auto, 1rem 0.866rem;
+  opacity: 0;
+  transform: scaleX(0.98);
+  transform-origin: left center;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.shell[data-has-focus] .axis::after {
+  opacity: 1;
+  transform: scaleX(1);
 }
 
 .tick {
@@ -146,7 +178,7 @@
   left: 50%;
   top: 1.7rem;
   width: 1px;
-  height: 1.15rem;
+  height: 1.35rem;
   background: linear-gradient(180deg, rgba(107, 238, 177, 0.35), rgba(107, 238, 177, 0.04));
 }
 
@@ -158,6 +190,56 @@
   font-size: 0.7rem;
   font-weight: 900;
   text-align: center;
+}
+
+.tick[data-focus] {
+  color: rgba(189, 255, 222, 0.94);
+  transform: translateX(-50%) translateY(-0.08rem) scale(1.08);
+}
+
+.tick[data-focus] i {
+  background: linear-gradient(180deg, rgba(107, 238, 177, 0.8), rgba(107, 238, 177, 0.18));
+  box-shadow: 0 0 0.75rem rgba(107, 238, 177, 0.24);
+}
+
+.focusRange {
+  position: absolute;
+  left: var(--focus-left);
+  bottom: calc(100% + 0.28rem);
+  z-index: 6;
+  width: max(var(--focus-width), 13rem);
+  max-width: min(34rem, 88vw);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(0.2rem);
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+
+.focusRange b {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 0.32rem 0.56rem;
+  overflow: hidden;
+  border: 1px solid rgba(107, 238, 177, 0.28);
+  border-radius: 999px;
+  color: rgba(232, 255, 244, 0.96);
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(107, 238, 177, 0.14), transparent 44%),
+    rgba(4, 8, 7, 0.96);
+  box-shadow: 0 0.8rem 1.8rem rgba(0, 0, 0, 0.34);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 860;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell[data-has-focus] .focusRange {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .nowAxis {
@@ -202,6 +284,7 @@
   gap: 0.55rem;
   max-height: clamp(13.4rem, 24vh, 18rem);
   overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 0.24rem;
   scrollbar-color: rgba(107, 238, 177, 0.28) rgba(255, 255, 255, 0.04);
 }
@@ -214,7 +297,7 @@
   display: grid;
   grid-template-columns: clamp(10.2rem, 22vw, 18rem) minmax(34rem, 1fr);
   align-items: center;
-  min-height: clamp(3.2rem, 4.8vw, 3.85rem);
+  min-height: clamp(3rem, 4.4vw, 3.5rem);
   color: inherit;
   text-decoration: none;
   border: 1px solid rgba(107, 238, 177, 0.08);
@@ -230,7 +313,8 @@
     box-shadow 180ms ease;
 }
 
-.timelineRow:hover {
+.timelineRow:hover,
+.timelineRow:focus-visible {
   color: inherit;
   transform: translateY(-1px);
   border-color: rgba(107, 238, 177, 0.32);
@@ -474,7 +558,7 @@
 }
 
 .track {
-  min-height: 3.1rem;
+  min-height: 3rem;
   border-left: 0;
   background:
     linear-gradient(90deg, rgba(107, 238, 177, 0.11) 1px, transparent 1px),
@@ -489,13 +573,17 @@
 .rowBar {
   display: block;
   min-width: 3.9rem;
-  height: 1.9rem;
+  height: 2rem;
   filter: drop-shadow(0 0 0.8rem rgba(107, 238, 177, 0.13));
+  transition:
+    transform 180ms ease,
+    filter 180ms ease,
+    min-width 180ms ease;
 }
 
 .rowBar::before {
-  inset: 0.78rem 0.36rem auto;
-  height: 0.28rem;
+  inset: 0.82rem 0.48rem auto;
+  height: 0.22rem;
   border-radius: 999px;
   background:
     linear-gradient(90deg, color-mix(in srgb, var(--row-color) 58%, rgba(107, 238, 177, 0.3)), rgba(107, 238, 177, 0.64)),
@@ -503,21 +591,12 @@
   background-size:
     auto,
     220% 100%;
-  opacity: 0.95;
+  opacity: 0.98;
   animation: yy-schedule-flow 5.2s ease-in-out infinite;
 }
 
 .rowBar::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 0.42rem;
-  height: 0.42rem;
-  border-radius: 50%;
-  background: rgba(244, 245, 245, 0.82);
-  box-shadow: 0 0 1rem rgba(107, 238, 177, 0.18);
-  transform: translate(-50%, -50%);
+  content: none;
 }
 
 .barLead,
@@ -525,8 +604,8 @@
   position: absolute;
   top: 50%;
   z-index: 2;
-  width: 0.86rem;
-  height: 0.86rem;
+  width: 0.82rem;
+  height: 0.82rem;
   border-radius: 50%;
   border: 1px solid rgba(107, 238, 177, 0.54);
   background:
@@ -534,6 +613,47 @@
     rgba(3, 8, 6, 0.94);
   animation: none;
   transform: translateY(-50%);
+}
+
+.timelineRow:hover .rowBar,
+.timelineRow:focus-visible .rowBar {
+  min-width: 5.6rem;
+  filter: drop-shadow(0 0 1.25rem rgba(107, 238, 177, 0.34));
+  transform: translateY(-50%) scaleY(1.12);
+}
+
+.timeTooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.38rem);
+  z-index: 5;
+  display: block;
+  width: max-content;
+  max-width: min(22rem, 72vw);
+  padding: 0.3rem 0.52rem;
+  border: 1px solid rgba(107, 238, 177, 0.24);
+  border-radius: 999px;
+  color: rgba(232, 255, 244, 0.96);
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(107, 238, 177, 0.14), transparent 44%),
+    rgba(4, 8, 7, 0.94);
+  box-shadow: 0 0.8rem 1.8rem rgba(0, 0, 0, 0.34);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 860;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 0.25rem);
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+
+.timelineRow:hover .timeTooltip,
+.timelineRow:focus-visible .timeTooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 .barLead {

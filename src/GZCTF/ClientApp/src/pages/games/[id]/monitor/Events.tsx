@@ -1,7 +1,6 @@
 import {
   ActionIcon,
   Group,
-  Input,
   ScrollArea,
   Stack,
   Switch,
@@ -37,7 +36,6 @@ import { SwitchLabel } from '@Components/admin/SwitchLabel'
 import { YinyuPanel } from '@Components/yinyu/YinyuUI'
 import { handleAxiosError } from '@Utils/ApiHelper'
 import { useLanguage } from '@Utils/I18n'
-import { useDisplayInputStyles } from '@Utils/ThemeOverride'
 import { useGame } from '@Hooks/useGame'
 import api, { AnswerResult, EventType, GameEvent } from '@Api'
 import tableClasses from '@Styles/Table.module.css'
@@ -145,7 +143,6 @@ const Events: FC = () => {
   const { game } = useGame(numId)
 
   const iconMap = EventTypeIconMap(1.15)
-  const { classes: inputClasses } = useDisplayInputStyles({ fw: 500 })
   const { t } = useTranslation()
   const viewport = useRef<HTMLDivElement>(null)
 
@@ -257,31 +254,25 @@ const Events: FC = () => {
               p="xs"
               cells={18}
               key={`${event.time}@${i}`}
-              className={cx('task-row', {
+              className={cx('yy-monitor-event-card', {
                 [tableClasses.fade]: i === 0 && activePage === 1 && filteredEvents.length > 0,
               })}
             >
-              <Group wrap="nowrap" align="flex-start" justify="right" gap="sm" w="100%">
-                <Icon {...iconMap.get(event.type)!} />
-                <Stack gap={2} w="100%">
-                  <Input
-                    variant="unstyled"
-                    value={formatEvent(t, event)}
-                    readOnly
-                    size="md"
-                    classNames={inputClasses}
-                  />
-                  <Group wrap="nowrap" justify="space-between">
-                    <Group gap="sm" wrap="nowrap">
+              <div className="yy-monitor-event-row">
+                <Icon className="yy-monitor-event-icon" {...iconMap.get(event.type)!} />
+                <div className="yy-monitor-event-body">
+                  <Text className="yy-monitor-event-message">{formatEvent(t, event)}</Text>
+                  <div className="yy-monitor-event-meta">
+                    <div className="yy-monitor-event-actors">
                       <IconBadge path={mdiAccountOutline} content={event.user} />
                       <IconBadge path={mdiAccountGroupOutline} content={event.team} />
-                    </Group>
-                    <Text size="xs" fw={500} className="yy-readable-text">
+                    </div>
+                    <Text size="xs" fw={500} className="yy-readable-text yy-monitor-event-time">
                       {dayjs(event.time).locale(locale).format('SL LTS')}
                     </Text>
-                  </Group>
-                </Stack>
-              </Group>
+                  </div>
+                </div>
+              </div>
             </YinyuPanel>
           ))}
         </Stack>

@@ -2,7 +2,7 @@ import { Text } from '@mantine/core'
 import cx from 'clsx'
 import dayjs, { Dayjs } from 'dayjs'
 import gsap from 'gsap'
-import { CSSProperties, FC, useEffect, useMemo, useRef } from 'react'
+import { CSSProperties, FC, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { BrandMark } from '@Components/yinyu/BrandMark'
@@ -36,6 +36,7 @@ const dateWindow = () => {
 
 export const GanttTimeLine: FC<GanttTimeLineProps> = ({ items }) => {
   const rootRef = useRef<HTMLElement>(null)
+  const [hoveredId, setHoveredId] = useState<number | null>(null)
   const { t } = useTranslation()
   const { locale } = useLanguage()
 
@@ -70,8 +71,13 @@ export const GanttTimeLine: FC<GanttTimeLineProps> = ({ items }) => {
         state,
         startsBefore: rawLeft < 0,
         endsAfter: rawRight > 100,
+        rawLeft,
+        rawRight,
+        visibleRight,
         startLabel: item.start.locale(locale).format('MM/DD HH:mm'),
         endLabel: item.end.locale(locale).format('MM/DD HH:mm'),
+        fullStartLabel: item.start.locale(locale).format('YYYY/MM/DD HH:mm'),
+        fullEndLabel: item.end.locale(locale).format('YYYY/MM/DD HH:mm'),
       }
     })
 
@@ -86,6 +92,8 @@ export const GanttTimeLine: FC<GanttTimeLineProps> = ({ items }) => {
       upcomingCount: rows.filter((row) => row.state === 'upcoming').length,
     }
   }, [items, locale])
+
+  const hoveredRow = timeline.rows.find((item) => item.id === hoveredId)
 
   useEffect(() => {
     const root = rootRef.current
@@ -143,8 +151,11 @@ export const GanttTimeLine: FC<GanttTimeLineProps> = ({ items }) => {
         {
           '--timeline-now': `${timeline.nowPercent}%`,
           '--timeline-breathe': 0,
+          '--focus-left': `${hoveredRow?.left ?? timeline.nowPercent}%`,
+          '--focus-width': `${hoveredRow?.width ?? 0}%`,
         } as CSSProperties
       }
+      data-has-focus={hoveredRow ? true : undefined}
     >
       <header className={classes.header}>
         <div className={classes.heading}>
@@ -164,11 +175,27 @@ export const GanttTimeLine: FC<GanttTimeLineProps> = ({ items }) => {
       <div className={classes.viewport}>
         <div className={classes.axis} aria-hidden="true">
           {timeline.ticks.map((tick) => (
-            <span key={tick.id} className={classes.tick} style={{ '--tick-left': `${tick.left}%` } as CSSProperties}>
+            <span
+              key={tick.id}
+              className={classes.tick}
+              data-focus={
+                hoveredRow && tick.left >= Math.max(0, hoveredRow.rawLeft) && tick.left <= Math.min(100, hoveredRow.rawRight)
+                  ? true
+                  : undefined
+              }
+              style={{ '--tick-left': `${tick.left}%` } as CSSProperties}
+            >
               <i />
               <b>{tick.label}</b>
             </span>
           ))}
+          <span className={classes.focusRange}>
+            {hoveredRow ? (
+              <b>
+                {hoveredRow.fullStartLabel} - {hoveredRow.fullEndLabel}
+              </b>
+            ) : null}
+          </span>
           <span className={classes.nowAxis}>
             <i />
             <b>{timeline.now.locale(locale).format('MM/DD HH:mm')}</b>
@@ -187,6 +214,10 @@ export const GanttTimeLine: FC<GanttTimeLineProps> = ({ items }) => {
                 item.state === 'ended' && classes.ended
               )}
               data-state={item.state}
+              onMouseEnter={() => setHoveredId(item.id)}
+              onMouseLeave={() => setHoveredId((current) => (current === item.id ? null : current))}
+              onFocus={() => setHoveredId(item.id)}
+              onBlur={() => setHoveredId((current) => (current === item.id ? null : current))}
               style={
                 {
                   '--row-left': `${item.left}%`,
@@ -211,9 +242,13 @@ export const GanttTimeLine: FC<GanttTimeLineProps> = ({ items }) => {
               <div className={classes.track}>
                 <span
                   className={classes.rowBar}
+                  aria-label={`${item.textTitle}: ${item.startLabel} - ${item.endLabel}`}
                   data-start-overflow={item.startsBefore || undefined}
                   data-end-overflow={item.endsAfter || undefined}
                 >
+                  <b className={classes.timeTooltip}>
+                    {item.fullStartLabel} - {item.fullEndLabel}
+                  </b>
                   <i className={classes.barLead} />
                   <i className={classes.barCore} />
                   <i className={classes.barTail} />

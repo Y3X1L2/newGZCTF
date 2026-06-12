@@ -3,7 +3,6 @@ import {
   Badge,
   Button,
   Group,
-  Loader,
   Modal,
   Progress,
   Select,
@@ -33,6 +32,7 @@ import {
   YinyuMetricTile,
   YinyuModalBody,
   YinyuPanel,
+  YinyuRouteLoader,
   YinyuTableShell,
 } from '@Components/yinyu/YinyuUI'
 
@@ -468,9 +468,9 @@ export default function ImagesPage() {
 
         <YinyuTableShell p={0}>
           {isLoading ? (
-            <Group justify="center" py="xl">
-              <Loader />
-            </Group>
+            <div className="yy-admin-inline-loader">
+              <YinyuRouteLoader title="环境模板" description="正在读取镜像模板" />
+            </div>
           ) : (
             <Table verticalSpacing="sm" highlightOnHover>
               <Table.Thead>

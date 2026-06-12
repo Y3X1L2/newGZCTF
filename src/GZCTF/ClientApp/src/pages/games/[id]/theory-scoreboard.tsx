@@ -5,7 +5,7 @@ import { useParams } from 'react-router'
 import { Empty } from '@Components/Empty'
 import { WithGameTab } from '@Components/WithGameTab'
 import { WithNavBar } from '@Components/WithNavbar'
-import { YinyuTableShell } from '@Components/yinyu/YinyuUI'
+import { YinyuStatePage, YinyuTableShell } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import { theoryPlayerApi, TheoryScoreboardItemModel } from '../../../Api/TheoryApi'
 
@@ -35,13 +35,22 @@ const TheoryScoreboard: FC = () => {
   }, [numId])
 
   return (
-    <WithNavBar minWidth={0} isLoading={loading || !items} withFooter width="var(--container)">
+    <WithNavBar minWidth={0} width="min(100%, calc(100vw - 7.25rem))">
       <WithGameTab>
-        <YinyuTableShell p="md" className="admin-panel large">
+        {loading && !items ? (
+          <YinyuStatePage tone="neutral" p="xl" className="yy-theory-loading">
+            <Stack gap="xs">
+              <Badge variant="light">Theory</Badge>
+              <Title order={2}>理论榜单加载中</Title>
+              <Text className="yy-readable-text">正在读取队伍得分与最高分成员记录。</Text>
+            </Stack>
+          </YinyuStatePage>
+        ) : null}
+        <YinyuTableShell p="md" className="admin-panel large yy-theory-scoreboard">
           <Stack gap="sm">
-            <Group justify="space-between">
+            <Group justify="space-between" className="yy-theory-scoreboard-head">
               <Title order={3}>理论排行榜</Title>
-              <Text size="sm" c="dimmed">
+              <Text size="sm" className="yy-readable-text">
                 队伍成绩取队内成员最高分
               </Text>
             </Group>

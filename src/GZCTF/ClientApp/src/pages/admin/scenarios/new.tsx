@@ -3,7 +3,6 @@ import {
   Badge,
   Button,
   Group,
-  Loader,
   NumberInput,
   Select,
   Stack,
@@ -19,7 +18,7 @@ import { Icon } from '@mdi/react'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { AdminPage } from '@Components/admin/AdminPage'
-import { YinyuPanel } from '@Components/yinyu/YinyuUI'
+import { YinyuPanel, YinyuRouteLoader } from '@Components/yinyu/YinyuUI'
 
 interface StageData {
   title: string
@@ -211,7 +210,9 @@ export default function ScenarioCreate() {
                 onChange={(e) => setDescription(e.currentTarget.value)}
               />
               {loadingGames ? (
-                <Loader size="sm" mt="md" />
+                <div className="yy-admin-field-loader">
+                  <YinyuRouteLoader title="赛事列表" description="正在读取可关联赛事" />
+                </div>
               ) : (
                 <Select
                   label="所属赛事"
@@ -228,7 +229,11 @@ export default function ScenarioCreate() {
             </Stepper.Step>
 
             <Stepper.Step label="阶段配置">
-              {loadingTemplates && <Loader size="sm" />}
+              {loadingTemplates && (
+                <div className="yy-admin-field-loader">
+                  <YinyuRouteLoader title="环境模板" description="正在读取可用模板" />
+                </div>
+              )}
               {stages.map((stage, i) => (
                 <YinyuPanel key={i} p="md" mt="md">
                   <Group justify="space-between" mb="xs">

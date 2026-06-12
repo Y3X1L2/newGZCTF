@@ -74,7 +74,7 @@ export const ChallengeCard: FC<ChallengeCardProps> = (props: ChallengeCardProps)
                     <Text fw={500} size="sm">
                       {blood?.name}
                     </Text>
-                    <Text fw={500} size="xs" c="dimmed">
+                    <Text fw={500} size="xs" className="yy-readable-text">
                       {dayjs(blood?.submitTimeUtc).locale(locale).format('SLL LTS')}
                     </Text>
                   </Stack>

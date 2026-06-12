@@ -47,7 +47,7 @@ const TheoryQuestionCard: FC<{
   const isMultiple = question.type === TheoryQuestionType.MultipleChoice
 
   return (
-    <YinyuPanel p="md" className="admin-panel">
+    <YinyuPanel p="md" className="admin-panel yy-theory-question-card">
       <Stack gap="sm">
         <Group justify="space-between" align="flex-start">
           <Stack gap={4}>
@@ -72,7 +72,7 @@ const TheoryQuestionCard: FC<{
             value={selected.map(String)}
             onChange={(values) => onChange(values.map(Number).sort((a, b) => a - b))}
           >
-            <Stack gap="xs">
+            <Stack gap="xs" className="yy-theory-option-list">
               {question.options.map((option, index) => (
                 <Checkbox key={index} disabled={disabled} value={String(index)} label={option} />
               ))}
@@ -83,7 +83,7 @@ const TheoryQuestionCard: FC<{
             value={selected[0] !== undefined ? String(selected[0]) : null}
             onChange={(value) => onChange(value === null ? [] : [Number(value)])}
           >
-            <Stack gap="xs">
+            <Stack gap="xs" className="yy-theory-option-list">
               {question.options.map((option, index) => (
                 <Radio key={index} disabled={disabled} value={String(index)} label={option} />
               ))}
@@ -131,7 +131,7 @@ const TheoryPage: FC = () => {
         Object.fromEntries((res.data.answers ?? []).map((answer) => [answer.paperQuestionId, answer.selectedIndexes]))
       )
     } catch (err) {
-      setErrorText('理论试卷尚未发放，或当前账号暂无访问权限。')
+      setErrorText('理论试卷尚未发布，或当前账号暂无访问权限。')
     } finally {
       setLoading(false)
     }
@@ -180,11 +180,21 @@ const TheoryPage: FC = () => {
   const currentAnswered = currentQuestion ? (answers[currentQuestion.id]?.length ?? 0) > 0 : false
 
   return (
-    <WithNavBar minWidth={0} isLoading={loading} withFooter width="var(--container)">
+    <WithNavBar minWidth={0} width="min(100%, calc(100vw - 7.25rem))">
       <WithGameTab>
-        <Stack gap="md">
+        <Stack gap="md" className="yy-theory-page">
+          {loading && !paper ? (
+            <YinyuStatePage tone="neutral" p="xl" className="yy-theory-loading">
+              <Stack gap="xs">
+                <Badge variant="light">Theory</Badge>
+                <Title order={2}>理论赛加载中</Title>
+                <Text className="yy-readable-text">正在读取试卷、答题状态与队伍权限。</Text>
+              </Stack>
+            </YinyuStatePage>
+          ) : null}
+
           {errorText && !paper && (
-            <YinyuStatePage tone="neutral" p="xl">
+            <YinyuStatePage tone="neutral" p="xl" className="yy-theory-loading">
               <Stack gap="xs">
                 <Badge variant="light">Theory</Badge>
                 <Title order={2}>理论赛暂不可用</Title>
@@ -195,8 +205,8 @@ const TheoryPage: FC = () => {
 
           {paper && (
             <>
-              <YinyuPanel p="md" className="admin-panel">
-                <Group justify="space-between" align="flex-start">
+              <YinyuPanel p="md" className="admin-panel yy-theory-header">
+                <Group justify="space-between" align="flex-start" wrap="wrap">
                   <Stack gap={4}>
                     <Title order={3}>{paper.title}</Title>
                     {paper.description && <Text className="yy-readable-text">{paper.description}</Text>}
@@ -214,7 +224,7 @@ const TheoryPage: FC = () => {
                       )}
                     </Group>
                   </Stack>
-                  <Group>
+                  <Group className="yy-theory-actions">
                     <Button
                       variant="outline"
                       disabled={submitted || loading}
@@ -225,6 +235,7 @@ const TheoryPage: FC = () => {
                     </Button>
                     <Button
                       disabled={submitted || loading}
+                      loading={loading}
                       leftSection={<Icon path={mdiSendCheckOutline} size={1} />}
                       onClick={() => setConfirmOpened(true)}
                     >
@@ -234,12 +245,7 @@ const TheoryPage: FC = () => {
                 </Group>
               </YinyuPanel>
 
-              <Modal
-                opened={confirmOpened && !submitted}
-                onClose={() => setConfirmOpened(false)}
-                title="确认提交答卷"
-                centered
-              >
+              <Modal opened={confirmOpened && !submitted} onClose={() => setConfirmOpened(false)} title="确认提交答卷" centered>
                 <YinyuModalBody p="md">
                   <Stack gap="md">
                     <Text size="sm" className="yy-readable-text">
@@ -263,12 +269,12 @@ const TheoryPage: FC = () => {
                 </Alert>
               )}
 
-              <Grid align="flex-start">
+              <Grid align="flex-start" className="yy-theory-workspace">
                 <Grid.Col span={{ base: 12, lg: 9 }}>
                   {currentQuestion && (
                     <Stack gap="md">
-                      <YinyuPanel p="md" className="admin-panel">
-                        <Group justify="space-between" align="center">
+                      <YinyuPanel p="md" className="admin-panel yy-theory-nav-panel">
+                        <Group justify="space-between" align="center" wrap="wrap">
                           <Stack gap={2}>
                             <Text size="sm" className="yy-readable-text">
                               第 {currentIndex + 1} 题 / 共 {questions.length} 题
@@ -313,7 +319,7 @@ const TheoryPage: FC = () => {
                   )}
                 </Grid.Col>
                 <Grid.Col span={{ base: 12, lg: 3 }}>
-                  <YinyuPanel p="md" className="admin-panel" style={{ position: 'sticky', top: '1rem' }}>
+                  <YinyuPanel p="md" className="admin-panel yy-theory-side-panel">
                     <Stack gap="sm">
                       <Group justify="space-between">
                         <Text fw={700}>题目索引</Text>

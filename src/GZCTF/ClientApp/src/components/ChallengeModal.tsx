@@ -122,6 +122,14 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
   const { t } = useTranslation()
   const theme = useMantineTheme()
   const { locale } = useLanguage()
+  const modalClassNames = useMemo(
+    () => ({
+      ...classes,
+      content: `${classes.content} challenge-drawer-draft panel-card`,
+      inner: 'yy-challenge-modal-inner',
+    }),
+    []
+  )
 
   const placeholders = t('challenge.content.flag_placeholders', {
     returnObjects: true,
@@ -164,7 +172,14 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
   )
 
   const content = (
-    <ScrollAreaAutosize mah="52vh" maw="100%" scrollbars="y" scrollbarSize={6} type="scroll">
+    <ScrollAreaAutosize
+      mah="52vh"
+      maw="100%"
+      scrollbars="y"
+      scrollbarSize={6}
+      type="scroll"
+      className="yy-challenge-modal-content"
+    >
       {challenge?.content === undefined ? (
         <ContentPlaceholder />
       ) : (
@@ -329,17 +344,18 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
 
   return (
     <Modal.Root
-      size="42vw"
+      size="min(72rem, calc(100vw - 6rem))"
       {...modalProps}
       onClose={() => {
         setFlag('')
         modalProps.onClose()
       }}
       centered
-      classNames={classes}
+      zIndex={4600}
+      classNames={modalClassNames}
     >
       <Modal.Overlay />
-      <Modal.Content className="challenge-drawer-draft panel-card">
+      <Modal.Content>
         <YinyuHexField cells={42} />
         <Modal.Header>
           <Modal.Title>{title}</Modal.Title>

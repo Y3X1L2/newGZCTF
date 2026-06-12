@@ -1,14 +1,4 @@
-import {
-  Alert,
-  Anchor,
-  Badge,
-  Button,
-  Group,
-  Stack,
-  Text,
-  Title,
-  useMantineTheme,
-} from '@mantine/core'
+import { Alert, Anchor, Badge, Button, Group, Stack, Text, Title, useMantineTheme } from '@mantine/core'
 import { useModals } from '@mantine/modals'
 import { showNotification } from '@mantine/notifications'
 import { mdiAlertCircle, mdiCheck, mdiTimerSand } from '@mdi/js'
@@ -82,19 +72,13 @@ const GameDetail: FC = () => {
   const navigate = useNavigate()
 
   const { game, error, mutate, status } = useGame(numId)
-
   const theme = useMantineTheme()
-
   const { startTime, endTime, finished, started, progress } = getGameStatus(game)
-
   const { locale } = useLanguage()
-
   const { user } = useUser()
   const { teams } = useTeams()
-
   const modals = useModals()
   const isMobile = useIsMobile()
-
   const { t } = useTranslation()
 
   usePageTitle(game?.title)
@@ -148,7 +132,6 @@ const GameDetail: FC = () => {
     }
   }
 
-  // Allow join if game is not finished OR practice mode is enabled
   const isGameOpenForJoin = !finished || game?.practiceMode
   const isTheoryOnly = game?.gameType === GameType.Theory
   const isAwdOnly = game?.gameType === GameType.AWDP
@@ -196,7 +179,7 @@ const GameDetail: FC = () => {
 
   const ControlButtons = (
     <>
-      <Button disabled={!canSubmit} onClick={onJoin}>
+      <Button className="yy-game-action-button" disabled={!canSubmit} onClick={onJoin}>
         {!isGameOpenForJoin
           ? t('game.button.finished')
           : !user
@@ -204,32 +187,45 @@ const GameDetail: FC = () => {
             : GameActionMap.get(status)}
       </Button>
       {started && (
-        <Button component={Link} to={`/games/${numId}/${isTheoryOnly ? 'theory-scoreboard' : 'scoreboard'}`}>
+        <Button
+          className="yy-game-action-button"
+          component={Link}
+          to={`/games/${numId}/${isTheoryOnly ? 'theory-scoreboard' : 'scoreboard'}`}
+        >
           {isTheoryOnly ? '查看理论榜单' : t('game.button.scoreboard')}
         </Button>
       )}
       {(status === ParticipationStatus.Pending || status === ParticipationStatus.Rejected) && (
-        <Button color="red" variant="outline" onClick={onLeave}>
+        <Button className="yy-game-action-button" color="red" variant="outline" onClick={onLeave}>
           {t('game.button.leave')}
         </Button>
       )}
       {status === ParticipationStatus.Accepted && started && !isMobile && (!finished || game?.practiceMode) && (
-        <Button component={Link} to={`/games/${numId}/${isTheoryOnly ? 'theory' : isAwdOnly ? 'awdp' : 'challenges'}`}>
+        <Button
+          className="yy-game-action-button"
+          component={Link}
+          to={`/games/${numId}/${isTheoryOnly ? 'theory' : isAwdOnly ? 'awdp' : 'challenges'}`}
+        >
           {isTheoryOnly ? '进入理论考试' : isAwdOnly ? t('game.tab.awd') : t('game.button.challenges')}
         </Button>
       )}
     </>
   )
 
+  const statusText = started && !finished ? '进行中' : finished ? '已结束' : '未开始'
+
   return (
-    <WithNavBar width="var(--container)" isLoading={!game} minWidth={0}>
+    <WithNavBar width="min(100%, calc(100vw - 7.25rem))" isLoading={!game} minWidth={0}>
       <section className="yy-page-frame yy-game-detail-page">
         <header className="panel-card yy-game-detail-hero">
           <YinyuHexField cells={72} />
           <Stack gap="md" className="yy-game-detail-copy">
-            <Group gap="xs">
-              <YinyuStatusPill tone={started && !finished ? 'success' : finished ? 'neutral' : 'warm'} state={started && !finished ? 'running' : 'open'}>
-                {started && !finished ? '进行中' : finished ? '已结束' : '未开始'}
+            <Group gap="xs" className="yy-game-detail-kicker">
+              <YinyuStatusPill
+                tone={started && !finished ? 'success' : finished ? 'neutral' : 'warm'}
+                state={started && !finished ? 'running' : finished ? 'idle' : 'open'}
+              >
+                {statusText}
               </YinyuStatusPill>
               <Badge variant="outline">
                 {!game || game.limit === 0

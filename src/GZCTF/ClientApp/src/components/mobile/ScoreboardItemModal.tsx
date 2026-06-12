@@ -3,7 +3,6 @@ import {
   Badge,
   Center,
   Group,
-  LoadingOverlay,
   Modal,
   Progress,
   ScrollArea,
@@ -19,7 +18,7 @@ import { useTranslation } from 'react-i18next'
 import { ScoreboardItemModalProps } from '@Components/ScoreboardItemModal'
 import { ScrollingText } from '@Components/ScrollingText'
 import { TeamRadarMap } from '@Components/charts/TeamRadarMap'
-import { YinyuModalBody } from '@Components/yinyu/YinyuUI'
+import { YinyuModalBody, YinyuRouteLoader } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
 import { ChallengeInfo } from '@Api'
 import modalClasses from '@Styles/ScoreboardItemModal.module.css'
@@ -104,10 +103,11 @@ export const MobileScoreboardItemModal: FC<ScoreboardItemModalProps> = React.mem
         <Stack align="center" gap="xs">
           <Stack w="60%" miw="20rem">
             <Center h="14rem">
-              <LoadingOverlay visible={!indicator || !values} />
-              {item && indicator && values && (
+              {!indicator || !values ? (
+                <YinyuRouteLoader title={t('game.tab.scoreboard')} description="正在读取队伍画像" />
+              ) : item ? (
                 <TeamRadarMap indicator={indicator} value={values} name={item?.name ?? ''} />
-              )}
+              ) : null}
             </Center>
             <Group grow ta="center">
               <Stack gap={1}>

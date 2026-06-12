@@ -3,7 +3,6 @@ import {
   Alert,
   Button,
   Group,
-  Loader,
   Modal,
   Select,
   SimpleGrid,
@@ -28,7 +27,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AdminPage } from '@Components/admin/AdminPage'
 import { CleanupButton } from '@Components/admin/CleanupButton'
 import { NodeCard, NodeInfo } from '@Components/admin/NodeCard'
-import { YinyuMetricTile, YinyuModalBody, YinyuPanel, YinyuStatePage } from '@Components/yinyu/YinyuUI'
+import { YinyuMetricTile, YinyuModalBody, YinyuPanel, YinyuRouteLoader, YinyuStatePage } from '@Components/yinyu/YinyuUI'
 
 type StatusFilter = 'all' | 'online' | 'offline' | 'busy' | 'error'
 
@@ -329,9 +328,9 @@ export default function NodesPage() {
         </YinyuPanel>
 
         {isLoading ? (
-          <Group justify="center" py="xl">
-            <Loader />
-          </Group>
+          <YinyuStatePage p="xl" className="yy-admin-inline-state">
+            <YinyuRouteLoader title="节点管理" description="正在读取节点状态" />
+          </YinyuStatePage>
         ) : filteredNodes.length > 0 ? (
           <SimpleGrid cols={{ base: 1, md: 2, xl: 3 }}>
             {filteredNodes.map((node) => (

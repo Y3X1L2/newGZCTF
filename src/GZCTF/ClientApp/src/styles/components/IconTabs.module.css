@@ -6,8 +6,9 @@
   border-radius: var(--yy-radius);
   font-size: var(--mantine-font-size-sm);
   height: auto;
-  padding: var(--mantine-spacing-xs) var(--mantine-spacing-md);
-  font-weight: 500;
+  min-height: 2.95rem;
+  padding: 0.62rem 0.95rem;
+  font-weight: 820;
   box-sizing: border-box;
   cursor: pointer;
   border: 0;
@@ -24,7 +25,7 @@
     padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
   }
 
-  color: var(--yy-muted);
+  color: rgba(244, 245, 245, 0.72);
 
   &:disabled {
     cursor: not-allowed;
@@ -118,11 +119,18 @@
   justify-content: right;
   flex-wrap: nowrap;
   padding: 0.35rem;
+  max-width: 100%;
+  overflow-x: auto;
   border: 1px solid var(--yy-line);
   border-radius: var(--yy-radius);
   background:
     radial-gradient(ellipse at 14% 0%, rgba(107, 238, 177, 0.07), transparent 44%), rgba(255, 255, 255, 0.025);
   backdrop-filter: blur(0.82rem);
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 
   @mixin smaller-than $mantine-breakpoint-xs {
     width: 100%;

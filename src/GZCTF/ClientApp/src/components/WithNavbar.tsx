@@ -1,10 +1,10 @@
-import { AppShell, Box, LoadingOverlay, Stack } from '@mantine/core'
+import { AppShell, Box, Stack } from '@mantine/core'
 import React, { FC } from 'react'
 import { AppHeader } from '@Components/AppHeader'
 import { AppNavbar } from '@Components/AppNavbar'
 import { IconHeader } from '@Components/IconHeader'
 import { WithWiderScreen } from '@Components/WithWiderScreen'
-import { DEFAULT_LOADING_OVERLAY } from '@Utils/Shared'
+import { YinyuRouteTransition } from '@Components/yinyu/YinyuUI'
 import { useIsMobile } from '@Utils/ThemeOverride'
 import classes from '@Styles/AppNavbar.module.css'
 
@@ -46,11 +46,12 @@ export const WithNavBar: FC<WithNavBarProps> = ({
         <AppHeader />
         <AppNavbar />
         <AppShell.Main w="100%" className={classes.shellMain}>
-          <Stack
-            data-mobile={isMobile || undefined}
-            className={classes.main}
-          >
-            <LoadingOverlay visible={isLoading ?? false} overlayProps={DEFAULT_LOADING_OVERLAY} />
+          <Stack data-mobile={isMobile || undefined} className={classes.main}>
+            {isLoading ? (
+              <div className="yy-page-loading-overlay" role="status" aria-live="polite">
+                <YinyuRouteTransition title="YINYU" description="正在读取页面数据" />
+              </div>
+            ) : null}
             {withHeader && <IconHeader px={isMobile ? '2%' : '10%'} sticky={stickyHeader} />}
             <Box
               w={width ?? (isMobile ? '96%' : '80%')}

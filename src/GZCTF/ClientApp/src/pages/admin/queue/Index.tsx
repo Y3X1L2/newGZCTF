@@ -46,8 +46,13 @@ export default function QueuePage() {
   return (
     <AdminPage>
       <Stack data-testid="queue-page" gap="lg" w="100%">
-        <Group justify="space-between" mb="lg" wrap="nowrap">
-          <Title order={2}>部署队列</Title>
+        <Group justify="space-between" mb="lg" wrap="nowrap" className="yy-admin-page-head">
+          <div>
+            <Title order={2}>部署队列</Title>
+            <Text size="sm" className="yy-readable-text">
+              统一查看环境创建、启动、销毁与快照恢复任务。
+            </Text>
+          </div>
           <Group wrap="nowrap" style={{ overflowX: 'auto' }}>
             <Select
               placeholder="筛选状态"
@@ -85,7 +90,7 @@ export default function QueuePage() {
                 {items.length === 0 && (
                   <Table.Tr>
                     <Table.Td colSpan={7} style={{ textAlign: 'center' }}>
-                      <Text c="dimmed">{isLoading ? '加载中...' : '暂无部署请求'}</Text>
+                      <Text className="yy-readable-text">{isLoading ? '加载中...' : '暂无部署请求'}</Text>
                     </Table.Td>
                   </Table.Tr>
                 )}
@@ -140,7 +145,7 @@ export default function QueuePage() {
           </Box>
         </YinyuTableShell>
         {data?.total > 0 && (
-          <Text size="sm" c="dimmed" mt="sm">
+          <Text size="sm" className="yy-readable-text" mt="sm">
             共 {data.total} 条记录
           </Text>
         )}

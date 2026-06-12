@@ -1,11 +1,10 @@
 import { Button, Group, Loader, Stack, Text, ThemeIcon } from '@mantine/core'
 import { showNotification } from '@mantine/notifications'
-import { mdiCheck, mdiDesktopClassic, mdiMonitorScreenshot, mdiClose, mdiAlertCircleOutline } from '@mdi/js'
+import { mdiAlertCircleOutline, mdiCheck, mdiClose, mdiDesktopClassic, mdiMonitorScreenshot } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { FC, useCallback, useEffect, useState } from 'react'
 import { YinyuPanel, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
 import { VmStatusResponse } from '@Api'
-import classes from '@Styles/InstanceEntry.module.css'
 
 interface VmInstanceEntryProps {
   gameId: number
@@ -29,17 +28,18 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
   const [loading, setLoading] = useState(false)
   const [polling, setPolling] = useState(false)
 
-  // Check VM status
   const checkVmStatus = useCallback(async () => {
     try {
       const response = await fetch(`/api/Game/${gameId}/Vm/${challengeId}`, {
         credentials: 'include',
       })
+
       if (response.status === 404) {
         setVmState('none')
         setVmStatus(null)
         return
       }
+
       if (!response.ok) return
 
       const data: VmStatusResponse = await response.json()
@@ -66,19 +66,17 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
     }
   }, [gameId, challengeId])
 
-  // Initial check
   useEffect(() => {
     checkVmStatus()
   }, [checkVmStatus])
 
-  // Poll while creating/running
   useEffect(() => {
     if (!polling) return
+
     const interval = setInterval(checkVmStatus, 5000)
     return () => clearInterval(interval)
   }, [polling, checkVmStatus])
 
-  // Create VM
   const handleCreate = async () => {
     setLoading(true)
     try {
@@ -86,6 +84,7 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
         method: 'POST',
         credentials: 'include',
       })
+
       if (response.ok) {
         setVmState('creating')
         setPolling(true)
@@ -93,7 +92,7 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
         showNotification({
           color: 'teal',
           title: '靶机启动中',
-          message: 'Windows 虚拟机正在创建，请等待 1-3 分钟...',
+          message: 'Windows 虚拟机正在创建，请等待 1-3 分钟。',
           icon: <Icon path={mdiCheck} size={1} />,
         })
       } else {
@@ -101,15 +100,15 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
         showNotification({
           color: 'red',
           title: '启动失败',
-          message: err.title || err.message || '请稍后重试',
+          message: err.title || err.message || '请稍后重试。',
           icon: <Icon path={mdiClose} size={1} />,
         })
       }
-    } catch (err) {
+    } catch {
       showNotification({
         color: 'red',
         title: '网络错误',
-        message: '无法连接服务器',
+        message: '无法连接服务器，请检查网络后重试。',
         icon: <Icon path={mdiClose} size={1} />,
       })
     } finally {
@@ -117,7 +116,6 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
     }
   }
 
-  // Destroy VM
   const handleDestroy = async () => {
     setLoading(true)
     setVmState('destroying')
@@ -126,6 +124,7 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
         method: 'DELETE',
         credentials: 'include',
       })
+
       if (response.ok) {
         setVmState('none')
         setVmStatus(null)
@@ -134,33 +133,37 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
         showNotification({
           color: 'teal',
           title: '靶机已销毁',
-          message: '虚拟机资源已释放',
+          message: '虚拟机资源已释放。',
           icon: <Icon path={mdiCheck} size={1} />,
         })
       } else {
-        setVmState('ready') // revert
+        setVmState('ready')
         showNotification({
           color: 'red',
           title: '销毁失败',
-          message: '请稍后重试',
+          message: '请稍后重试。',
           icon: <Icon path={mdiClose} size={1} />,
         })
       }
     } catch {
       setVmState('ready')
+      showNotification({
+        color: 'red',
+        title: '网络错误',
+        message: '无法连接服务器，请检查网络后重试。',
+        icon: <Icon path={mdiClose} size={1} />,
+      })
     } finally {
       setLoading(false)
     }
   }
 
-  // Open RDP in new tab
   const handleOpenRdp = () => {
     if (vmStatus?.rdpUrl) {
       window.open(vmStatus.rdpUrl, '_blank', 'noopener,noreferrer')
     }
   }
 
-  // State: No VM
   if (vmState === 'none') {
     return (
       <YinyuPanel p="sm" cells={24} className="yy-instance-panel">
@@ -169,8 +172,8 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
             <Text size="sm" fw="bold">
               本题需要启动 Windows 远程靶机
             </Text>
-            <Text size="xs" c="dimmed" fw="bold">
-              点击右侧按钮创建靶机，启动约需 1-3 分钟
+            <Text size="xs" fw="bold" className="yy-readable-text">
+              点击右侧按钮创建靶机，启动约需 1-3 分钟。
             </Text>
           </Stack>
           <Button
@@ -186,7 +189,6 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
     )
   }
 
-  // State: Creating / Running (waiting for IP)
   if (vmState === 'creating' || vmState === 'running') {
     return (
       <YinyuPanel p="sm" cells={24} className="yy-instance-panel">
@@ -201,8 +203,10 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
                 <Text size="sm" fw="bold">
                   {vmState === 'creating' ? '靶机创建中...' : '等待靶机就绪...'}
                 </Text>
-                <Text size="xs" c="dimmed">
-                  {vmState === 'creating' ? '正在克隆镜像并启动虚拟机' : '虚拟机已启动，正在获取网络地址并配置远程桌面'}
+                <Text size="xs" className="yy-readable-text">
+                  {vmState === 'creating'
+                    ? '正在克隆镜像并启动虚拟机。'
+                    : '虚拟机已启动，正在获取网络地址并配置远程桌面。'}
                 </Text>
               </Stack>
             </Group>
@@ -215,7 +219,6 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
     )
   }
 
-  // State: Ready (RDP URL available)
   if (vmState === 'ready') {
     return (
       <YinyuPanel p="sm" cells={28} className="yy-instance-panel">
@@ -230,19 +233,15 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
               </ThemeIcon>
               <Stack gap={0}>
                 <Text size="sm" fw="bold">
-                  靶机就绪
+                  远程桌面已配置
                 </Text>
-                <Text size="xs" c="dimmed">
-                  IP: {vmStatus?.ipAddress ?? '未知'} | 远程桌面已配置
+                <Text size="xs" className="yy-readable-text">
+                  IP: {vmStatus?.ipAddress ?? '未知'} | 可通过 RDP 入口进入靶机
                 </Text>
               </Stack>
             </Group>
             <Group gap="xs" wrap="nowrap">
-              <Button
-                onClick={handleOpenRdp}
-                leftSection={<Icon path={mdiMonitorScreenshot} size={0.9} />}
-                color="teal"
-              >
+              <Button onClick={handleOpenRdp} leftSection={<Icon path={mdiMonitorScreenshot} size={0.9} />} color="teal">
                 打开远程桌面
               </Button>
               <Button color="red" variant="light" onClick={handleDestroy} disabled={loading}>
@@ -255,7 +254,6 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
     )
   }
 
-  // State: Destroying
   if (vmState === 'destroying') {
     return (
       <YinyuPanel p="sm" cells={20} className="yy-instance-panel">
@@ -269,7 +267,6 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
     )
   }
 
-  // State: Error
   return (
     <YinyuPanel p="sm" cells={24} className="yy-instance-panel">
       <Group justify="space-between" wrap="nowrap">
@@ -281,8 +278,8 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
             <Text size="sm" fw="bold" c="red">
               靶机异常
             </Text>
-            <Text size="xs" c="dimmed">
-              虚拟机创建失败或超时，请重新启动
+            <Text size="xs" className="yy-readable-text">
+              虚拟机创建失败或超时，请重新启动。
             </Text>
           </Stack>
         </Group>

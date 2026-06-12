@@ -1,4 +1,4 @@
-﻿import { Button, Center, Group, Modal, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core'
+import { Button, Center, Group, Modal, Stack, Text, TextInput, Title } from '@mantine/core'
 import { showNotification } from '@mantine/notifications'
 import { mdiAccountMultiplePlus, mdiCheck, mdiClose, mdiHumanGreetingVariant } from '@mdi/js'
 import { Icon } from '@mdi/react'
@@ -105,12 +105,17 @@ const Teams: FC = () => {
         <Stack className="yy-page-frame view-stack yy-soft-enter yy-team-page">
           <section className="panel-card yy-team-hero">
             <YinyuHexField cells={34} />
-            <div className="yy-team-hero-copy">
-              <span className="yy-section-kicker">TEAM CENTER</span>
-              <Title order={1} className="yy-brand-title">
-                {heroTitle}
-              </Title>
-              <Text>{heroDesc}</Text>
+            <div className="yy-team-hero-left">
+              <div className="yy-team-hero-copy">
+                <span className="yy-section-kicker">TEAM CENTER</span>
+                <Title order={1} className="yy-brand-title">
+                  {heroTitle}
+                </Title>
+                <Text>{heroDesc}</Text>
+              </div>
+              <Group className="yy-team-actions" justify={isMobile ? 'stretch' : 'left'} grow={isMobile}>
+                {btns}
+              </Group>
             </div>
             <div className="yy-team-hero-stats" aria-label="team status summary">
               <div>
@@ -122,14 +127,11 @@ const Teams: FC = () => {
                 <strong>{teamsOwned?.length ?? '-'}</strong>
               </div>
             </div>
-            <Group className="yy-team-actions" justify={isMobile ? 'stretch' : 'right'} grow={isMobile}>
-              {btns}
-            </Group>
           </section>
 
           {teams && !teamsError && user && !userError ? (
             teams.length > 0 ? (
-              <SimpleGrid cols={isMobile ? 1 : 2} spacing="lg" p={0} w="100%" className="yy-team-grid">
+              <div className="yy-team-grid">
                 {teams.map((team) => (
                   <TeamCard
                     key={team.id ?? team.name}
@@ -138,7 +140,7 @@ const Teams: FC = () => {
                     onEdit={() => onEditTeam(team)}
                   />
                 ))}
-              </SimpleGrid>
+              </div>
             ) : (
               <Center w="100%" mih="48vh" className="state-card panel-card yy-team-empty-state">
                 <YinyuHexField cells={30} />

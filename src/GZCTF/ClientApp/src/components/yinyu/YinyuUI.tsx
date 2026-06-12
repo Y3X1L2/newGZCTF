@@ -12,6 +12,8 @@ export function getYinyuStatusState(value: ReactNode, tone?: YinyuStatusTone): Y
   if (
     text.includes('运行') ||
     text.includes('进行') ||
+    text.includes('创建中') ||
+    text.includes('启动中') ||
     text.includes('running') ||
     text.includes('live') ||
     text.includes('ongoing')
@@ -22,6 +24,8 @@ export function getYinyuStatusState(value: ReactNode, tone?: YinyuStatusTone): Y
   if (
     text.includes('已解') ||
     text.includes('成功') ||
+    text.includes('已提交') ||
+    text.includes('就绪') ||
     text.includes('solved') ||
     text.includes('accepted') ||
     text.includes('ready') ||
@@ -30,7 +34,13 @@ export function getYinyuStatusState(value: ReactNode, tone?: YinyuStatusTone): Y
     return 'solved'
   }
 
-  if (text.includes('开放') || text.includes('open') || text.includes('pending') || text.includes('queued')) {
+  if (
+    text.includes('开放') ||
+    text.includes('未开始') ||
+    text.includes('open') ||
+    text.includes('pending') ||
+    text.includes('queued')
+  ) {
     return 'open'
   }
 
@@ -39,12 +49,19 @@ export function getYinyuStatusState(value: ReactNode, tone?: YinyuStatusTone): Y
     text.includes('failed') ||
     text.includes('stale') ||
     text.includes('异常') ||
+    text.includes('失败') ||
     tone === 'danger'
   ) {
     return 'alert'
   }
 
-  if (text.includes('busy') || text.includes('sync') || text.includes('retry') || text.includes('等待') || tone === 'warm') {
+  if (
+    text.includes('busy') ||
+    text.includes('sync') ||
+    text.includes('retry') ||
+    text.includes('等待') ||
+    tone === 'warm'
+  ) {
     return 'busy'
   }
 
@@ -315,7 +332,7 @@ export function YinyuMetricTile({
 
 export function YinyuRouteLoader({
   title = 'YINYU',
-  description = '\u9875\u9762\u5185\u5bb9\u52a0\u8f7d\u4e2d',
+  description = '正在加载页面内容',
   className,
 }: {
   title?: ReactNode
@@ -335,7 +352,7 @@ export function YinyuRouteLoader({
 
 export function YinyuRouteTransition({
   title = 'YINYU',
-  description = '\u6b63\u5728\u540c\u6b65\u9875\u9762\u4fe1\u53f7',
+  description = '正在读取页面信号',
   cells = 18,
   className,
 }: {
@@ -367,8 +384,8 @@ export function YinyuRouteProgress({ cells = 18, className }: { cells?: number; 
 }
 
 export function YinyuLoadingState({
-  title = '\u5185\u5bb9\u52a0\u8f7d\u4e2d',
-  description = '\u5e73\u53f0\u6b63\u5728\u8bfb\u53d6\u6700\u65b0\u4fe1\u606f',
+  title = '内容加载中',
+  description = '平台正在读取最新信息',
   className,
   cells = 30,
 }: {

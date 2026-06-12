@@ -10,12 +10,12 @@ import { Role } from '@Api'
 
 const Challenges: FC = () => {
   return (
-    <WithNavBar width="var(--container)">
+    <WithNavBar width="min(100%, calc(100vw - 7.25rem))">
       <WithRole requiredRole={Role.User}>
         <WithGameTab>
-          <div className="challenge-layout game-challenge-layout">
+          <div className="challenge-layout game-challenge-layout yy-challenge-workspace">
             <ChallengePanel />
-            <Stack gap="sm" miw="22rem" maw="22rem">
+            <Stack gap="sm" className="yy-challenge-side">
               <TeamRank />
               <GameNoticePanel />
             </Stack>

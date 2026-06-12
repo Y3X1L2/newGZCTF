@@ -1,20 +1,16 @@
-import { generateColors } from '@mantine/colors-generator'
 import {
   Button,
-  ColorInput,
   Divider,
   FileInput,
   Grid,
   Group,
   Text,
-  InputBase,
   NumberInput,
   SimpleGrid,
   Stack,
   Switch,
   TextInput,
   Title,
-  useMantineTheme,
   ActionIcon,
   Tooltip,
 } from '@mantine/core'
@@ -22,10 +18,10 @@ import { mdiCheck, mdiContentSaveOutline, mdiRestore } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ColorPreview } from '@Components/ColorPreview'
 import { LogoBox } from '@Components/LogoBox'
 import { AdminPage } from '@Components/admin/AdminPage'
 import { SwitchLabel } from '@Components/admin/SwitchLabel'
+import { YinyuPanel } from '@Components/yinyu/YinyuUI'
 import { PLATFORM_DESCRIPTION, PLATFORM_SLOGAN, PLATFORM_TITLE } from '@Utils/Brand'
 import { webCryptoAvailable } from '@Utils/Crypto'
 import { getInputNumber, showErrorMsg } from '@Utils/Shared'
@@ -43,20 +39,17 @@ const Configs: FC = () => {
   const [globalConfig, setGlobalConfig] = useState<GlobalConfig | null>()
   const [accountPolicy, setAccountPolicy] = useState<AccountPolicy | null>()
   const [containerPolicy, setContainerPolicy] = useState<ContainerPolicy | null>()
-  const [color, setColor] = useState<string | undefined | null>(globalConfig?.customTheme)
   const [logoFile, setLogoFile] = useState<File | null>(null)
 
   const { t } = useTranslation()
 
   const [saved, setSaved] = useState(true)
-  const theme = useMantineTheme()
 
   useEffect(() => {
     if (configs) {
       setContainerPolicy(configs.containerPolicy)
       setGlobalConfig(configs.globalConfig)
       setAccountPolicy(configs.accountPolicy)
-      setColor(configs.globalConfig?.customTheme)
     }
   }, [configs])
 
@@ -95,39 +88,38 @@ const Configs: FC = () => {
     }
   }
 
-  const colors = color && /^#[0-9A-F]{6}$/i.test(color) ? generateColors(color) : theme.colors.brand
+  const onSave = () => {
+    updateConfig({
+      globalConfig: {
+        ...globalConfig,
+        customTheme: '',
+        footerInfo: '',
+      },
+      accountPolicy,
+      containerPolicy,
+    })
+    setSaved(false)
+    setTimeout(() => {
+      setSaved(true)
+    }, 500)
+  }
 
   return (
     <AdminPage isLoading={!configs}>
-      <Button
-        className={misc.fixedButton}
-        __vars={{
-          '--fixed-right': 'calc(0.05 * (100vw - 70px - 2rem) + 1rem)',
-        }}
-        variant="filled"
-        size="md"
-        leftSection={<Icon path={saved ? mdiContentSaveOutline : mdiCheck} size={1} />}
-        onClick={() => {
-          updateConfig({
-            globalConfig: {
-              ...globalConfig,
-              customTheme: color && /^#[0-9A-F]{6}$/i.test(color) ? color : '',
-            },
-            accountPolicy,
-            containerPolicy,
-          })
-          setSaved(false)
-          setTimeout(() => {
-            setSaved(true)
-          }, 500)
-        }}
-        disabled={!saved || disabled}
-      >
-        {t('admin.button.save')}
-      </Button>
-      <Stack w="100%" gap="md">
-        <Stack gap="sm">
-          <Title order={2}>{t('admin.content.settings.platform.title')}</Title>
+      <Stack w="100%" gap="md" className="yy-admin-settings-page">
+        <YinyuPanel p="md" className="admin-panel yy-settings-panel">
+          <Group justify="space-between" align="center" className="yy-settings-title-row">
+            <Title order={2}>{t('admin.content.settings.platform.title')}</Title>
+            <Button
+              variant="filled"
+              size="md"
+              leftSection={<Icon path={saved ? mdiContentSaveOutline : mdiCheck} size={1} />}
+              onClick={onSave}
+              disabled={!saved || disabled}
+            >
+              {t('admin.button.save')}
+            </Button>
+          </Group>
           <Divider />
           <Grid columns={4} align="center">
             <Grid.Col span={1}>
@@ -201,43 +193,6 @@ const Configs: FC = () => {
                 }}
               />
             </Grid.Col>
-            <Grid.Col span={1}>
-              <ColorInput
-                size="sm"
-                label={t('admin.content.settings.platform.color.label')}
-                description={t('admin.content.settings.platform.color.description')}
-                placeholder={t('common.content.color.custom.placeholder')}
-                disabled={disabled}
-                value={color ?? ''}
-                onChange={setColor}
-              />
-            </Grid.Col>
-            <Grid.Col span={1}>
-              <InputBase
-                label={t('admin.content.settings.platform.color_palette.label')}
-                description={t('admin.content.settings.platform.color_palette.description')}
-                h="100%"
-                variant="unstyled"
-                component={ColorPreview}
-                colors={colors}
-                displayColorsInfo={false}
-                classNames={{
-                  input: misc.flex,
-                }}
-              />
-            </Grid.Col>
-            <Grid.Col span={3}>
-              <TextInput
-                label={t('admin.content.settings.platform.footer.label')}
-                description={t('admin.content.settings.platform.footer.description')}
-                placeholder={t('admin.placeholder.settings.footer')}
-                disabled={disabled}
-                value={globalConfig?.footerInfo ?? ''}
-                onChange={(e) => {
-                  setGlobalConfig({ ...globalConfig, footerInfo: e.currentTarget.value })
-                }}
-              />
-            </Grid.Col>
             <Grid.Col span={1} className={misc.alignCenter}>
               <Switch
                 checked={globalConfig?.apiEncryption ?? false}
@@ -257,8 +212,8 @@ const Configs: FC = () => {
               />
             </Grid.Col>
           </Grid>
-        </Stack>
-        <Stack gap="sm">
+        </YinyuPanel>
+        <YinyuPanel p="md" className="admin-panel yy-settings-panel">
           <Title order={2}>{t('admin.content.settings.account.title')}</Title>
           <Divider />
           <SimpleGrid cols={4}>
@@ -328,8 +283,8 @@ const Configs: FC = () => {
               setAccountPolicy({ ...accountPolicy, emailDomainList: e.currentTarget.value })
             }}
           />
-        </Stack>
-        <Stack gap="sm">
+        </YinyuPanel>
+        <YinyuPanel p="md" className="admin-panel yy-settings-panel">
           <Title order={2}>{t('admin.content.settings.container.title')}</Title>
           <Divider />
           <SimpleGrid cols={4} className={misc.alignCenter}>
@@ -390,7 +345,7 @@ const Configs: FC = () => {
               }
             />
           </SimpleGrid>
-        </Stack>
+        </YinyuPanel>
       </Stack>
     </AdminPage>
   )

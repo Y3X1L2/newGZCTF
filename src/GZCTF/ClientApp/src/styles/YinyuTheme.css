@@ -1,7 +1,7 @@
 /*
  * Real-app bridge for the design-lab visual system.
  * The canonical visual language lives in YinyuDesignLab.css. This file only maps
- * Mantine/YINYU CTF components onto those original classes without changing APIs.
+ * Mantine/YINYU components onto those original classes without changing APIs.
  */
 
 :root {
@@ -105,24 +105,106 @@
     opacity 160ms ease;
 }
 
+.mantine-Button-root::before,
+.mantine-ActionIcon-root::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(112deg, transparent 10%, rgba(107, 238, 177, 0.22) 42%, transparent 70%),
+    var(--yy-hex-flow);
+  background-size:
+    auto,
+    1rem 0.866rem;
+  opacity: 0;
+  transform: translateX(-34%);
+  transition:
+    opacity 180ms ease,
+    transform 260ms ease;
+}
+
+.mantine-Button-root > *,
+.mantine-ActionIcon-root > * {
+  position: relative;
+  z-index: 1;
+}
+
 .mantine-Button-root:hover,
 .mantine-ActionIcon-root:hover {
   transform: translateY(-1px);
 }
 
+.mantine-Button-root:hover::before,
+.mantine-Button-root:focus-visible::before,
+.mantine-ActionIcon-root:hover::before,
+.mantine-ActionIcon-root:focus-visible::before {
+  opacity: 0.72;
+  transform: translateX(22%);
+}
+
 .mantine-Button-root[data-variant='filled'] {
   color: #07100c;
   border-color: rgba(107, 238, 177, 0.62);
-  background: linear-gradient(180deg, #8af5c2, var(--green));
+  background:
+    radial-gradient(ellipse at 32% 0%, rgba(255, 255, 255, 0.34), transparent 48%),
+    linear-gradient(180deg, #8af5c2, var(--green));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 0.8rem 2rem rgba(0, 0, 0, 0.22);
+}
+
+.mantine-Button-root[data-variant='filled'] .mantine-Button-label {
+  color: #07100c;
 }
 
 .mantine-Button-root[data-variant='outline'],
 .mantine-Button-root[data-variant='light'],
 .mantine-Button-root[data-variant='subtle'],
 .mantine-Button-root[data-variant='default'] {
-  color: var(--text);
-  border-color: var(--line);
-  background: rgba(255, 255, 255, 0.045);
+  color: rgba(244, 245, 245, 0.94);
+  border-color: rgba(107, 238, 177, 0.2);
+  background:
+    radial-gradient(ellipse at 18% 0%, rgba(107, 238, 177, 0.065), transparent 48%),
+    rgba(255, 255, 255, 0.045);
+}
+
+.mantine-Button-root[data-variant='outline'] .mantine-Button-label,
+.mantine-Button-root[data-variant='light'] .mantine-Button-label,
+.mantine-Button-root[data-variant='subtle'] .mantine-Button-label,
+.mantine-Button-root[data-variant='default'] .mantine-Button-label {
+  color: inherit;
+}
+
+.mantine-Button-root[data-disabled],
+.mantine-ActionIcon-root[data-disabled],
+.mantine-Button-root:disabled,
+.mantine-ActionIcon-root:disabled {
+  color: rgba(244, 245, 245, 0.42) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.026) !important;
+  opacity: 0.72;
+  transform: none !important;
+}
+
+.mantine-ActionIcon-root {
+  color: rgba(232, 255, 244, 0.92);
+  border: 1px solid rgba(107, 238, 177, 0.18);
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(107, 238, 177, 0.08), transparent 48%),
+    rgba(255, 255, 255, 0.04);
+}
+
+.mantine-ActionIcon-root[data-variant='subtle'],
+.mantine-ActionIcon-root[data-variant='transparent'] {
+  border-color: rgba(107, 238, 177, 0.13);
+  background: rgba(255, 255, 255, 0.026);
+}
+
+.mantine-ActionIcon-root:hover {
+  color: var(--yy-green);
+  border-color: rgba(107, 238, 177, 0.36);
 }
 
 .mantine-Input-input,
@@ -131,10 +213,16 @@
 .mantine-NumberInput-input,
 .mantine-PasswordInput-input,
 .mantine-DateInput-input {
+  color: rgba(244, 245, 245, 0.94);
   border-color: var(--line);
   background:
     radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.05), transparent 52%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.046), rgba(255, 255, 255, 0.012)), rgba(0, 0, 0, 0.2);
+}
+
+.mantine-Input-input::placeholder,
+.mantine-Textarea-input::placeholder {
+  color: rgba(244, 245, 245, 0.44);
 }
 
 .mantine-Input-input:focus,
@@ -193,6 +281,11 @@
   backdrop-filter: blur(0.42rem);
 }
 
+.mantine-LoadingOverlay-loader {
+  color: var(--yy-green);
+  filter: drop-shadow(0 0 1.2rem rgba(107, 238, 177, 0.28));
+}
+
 .route-loader-screen {
   min-height: 100vh;
   background: radial-gradient(ellipse at 50% 18%, rgba(107, 238, 177, 0.1), transparent 26rem), rgba(0, 0, 0, 0.4);
@@ -226,6 +319,30 @@
 .yy-page-frame.view-stack {
   display: grid;
   gap: clamp(0.9rem, 2vw, 1.35rem);
+}
+
+.yy-page-loading-overlay,
+.yy-game-tab-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: clamp(1rem, 3vw, 2rem);
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 22%, rgba(107, 238, 177, 0.1), transparent 30rem),
+    rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(0.36rem);
+}
+
+.yy-page-loading-overlay .yy-route-transition,
+.yy-game-tab-loading .yy-route-transition {
+  width: min(32rem, calc(100vw - 3rem));
+}
+
+.yy-game-tab-loading {
+  min-height: 16rem;
 }
 
 .yy-page-frame *,
@@ -270,6 +387,11 @@
 .mantine-Drawer-content {
   position: relative;
   overflow: hidden;
+  border: 1px solid rgba(107, 238, 177, 0.18);
+  background:
+    radial-gradient(ellipse at 18% 0%, rgba(107, 238, 177, 0.12), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.072), rgba(255, 255, 255, 0.018)),
+    rgba(5, 8, 8, 0.94);
 }
 
 .mantine-Modal-content::before,
@@ -313,7 +435,7 @@
 
 .yy-home-layout.home-layout-draft {
   grid-template-columns: minmax(0, 1fr) minmax(19rem, 0.32fr);
-  align-items: start;
+  align-items: stretch;
   gap: clamp(0.72rem, 1.4vw, 1.05rem);
 }
 
@@ -363,6 +485,48 @@
   white-space: nowrap;
 }
 
+.yy-terminal-typing {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  min-width: clamp(12rem, 20vw, 18rem);
+  min-height: 1.5rem;
+  padding: 0;
+  overflow: hidden;
+  color: rgba(184, 255, 220, 0.88);
+  font-family: 'Cascadia Mono', 'JetBrains Mono', 'Consolas', var(--font-mono);
+  font-size: clamp(0.68rem, 0.82vw, 0.84rem);
+  font-weight: 760;
+  text-shadow: 0 0 1.2rem rgba(107, 238, 177, 0.16);
+  white-space: nowrap;
+}
+
+.yy-terminal-typing b {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font: inherit;
+  text-overflow: clip;
+}
+
+.yy-terminal-typing i {
+  display: inline-block;
+  width: 0.58em;
+  height: 1em;
+  margin-left: 0.12rem;
+  border-right: 1px solid rgba(107, 238, 177, 0.9);
+  opacity: 0.92;
+  transform: translateY(0.12em);
+  animation: yy-terminal-caret 0.92s steps(2, end) infinite;
+}
+
+@keyframes yy-terminal-caret {
+  50% {
+    opacity: 0.18;
+  }
+}
+
 .yy-home-empty .quote-mark {
   color: var(--green);
 }
@@ -386,6 +550,24 @@
 
 .yy-home-layout .post-preview {
   min-height: clamp(10.2rem, 17vh, 12.8rem);
+}
+
+.yy-home-layout .home-feed,
+.yy-home-notice-rail {
+  height: 100%;
+}
+
+.yy-home-notice-rail {
+  display: flex;
+  flex-direction: column;
+}
+
+.yy-home-notice-list {
+  flex: 1 1 auto;
+}
+
+.yy-home-notice-rail .post-preview {
+  width: 100%;
 }
 
 .yy-home-layout .post-preview h4,
@@ -444,8 +626,13 @@
 
 .yy-archive-page .section-head h2,
 .yy-page-frame .section-head h2 {
-  font-size: clamp(2rem, 4vw, 3.4rem);
+  font-size: clamp(1.68rem, 3.1vw, 2.72rem);
   font-weight: 740;
+}
+
+.yy-archive-page .section-head,
+.yy-games-page .section-head {
+  padding-inline: clamp(0.25rem, 0.8vw, 0.65rem);
 }
 
 .yy-admin-shell.admin-shell {
@@ -454,6 +641,7 @@
 }
 
 .yy-admin-shell .admin-main {
+  position: relative;
   display: grid;
   gap: 0.85rem;
   width: 100%;
@@ -1007,8 +1195,16 @@
 .mantine-Text-root[data-dimmed],
 .mantine-Input-description,
 .mantine-Input-error,
-.mantine-Notification-description {
+.mantine-Notification-description,
+.mantine-Text-root,
+.mantine-Code-root {
   color: var(--yy-muted-readable);
+}
+
+.mantine-Title-root,
+.mantine-Text-root strong,
+.mantine-Code-root {
+  color: var(--yy-text);
 }
 
 .mantine-Notification-root {
@@ -1042,6 +1238,15 @@
   font-weight: 850;
 }
 
+.mantine-Notification-icon {
+  background: rgba(107, 238, 177, 0.1);
+  color: var(--yy-green);
+}
+
+.mantine-Notification-closeButton {
+  color: var(--yy-muted-readable);
+}
+
 .mantine-Modal-title,
 .mantine-Drawer-title {
   color: var(--text);
@@ -1052,7 +1257,10 @@
 
 .mantine-Modal-header,
 .mantine-Drawer-header {
-  background: transparent;
+  border-bottom: 1px solid rgba(107, 238, 177, 0.1);
+  background:
+    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.08), transparent 44%),
+    rgba(255, 255, 255, 0.018);
 }
 
 .mantine-Modal-body,
@@ -1064,7 +1272,10 @@
 .mantine-Table-th,
 .mantine-Menu-itemLabel,
 .mantine-Popover-dropdown,
-.mantine-Input-label {
+.mantine-Input-label,
+.mantine-Select-option,
+.mantine-Combobox-option,
+.mantine-Tabs-tab {
   color: var(--yy-muted-readable);
 }
 
@@ -1073,8 +1284,27 @@
 }
 
 .mantine-Table-td strong,
-.mantine-Menu-label {
+.mantine-Menu-label,
+.mantine-Table-td a,
+.mantine-Table-th a {
   color: var(--text);
+}
+
+.mantine-Menu-dropdown,
+.mantine-Popover-dropdown {
+  border: 1px solid rgba(107, 238, 177, 0.16);
+  background:
+    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.1), transparent 42%),
+    rgba(5, 8, 8, 0.96);
+}
+
+.mantine-Menu-item:hover,
+.mantine-Combobox-option:hover,
+.mantine-Combobox-option[data-combobox-selected] {
+  color: var(--yy-text);
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(107, 238, 177, 0.11), transparent 46%),
+    rgba(255, 255, 255, 0.05);
 }
 
 .mantine-Pagination-control {
@@ -1087,6 +1317,33 @@
   color: #07100c;
   border-color: rgba(107, 238, 177, 0.62);
   background: var(--green);
+}
+
+.mantine-Switch-track,
+.mantine-Checkbox-input,
+.mantine-Radio-radio {
+  border-color: rgba(107, 238, 177, 0.24);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.mantine-Switch-track[data-checked],
+.mantine-Checkbox-input:checked,
+.mantine-Radio-radio:checked {
+  border-color: rgba(107, 238, 177, 0.58);
+  background: var(--yy-green);
+}
+
+.mantine-Table-table {
+  color: var(--yy-muted-readable);
+}
+
+.mantine-Table-thead {
+  position: relative;
+  z-index: 1;
+}
+
+.mantine-Table-tr {
+  border-color: rgba(255, 255, 255, 0.055);
 }
 
 .yy-toolbar-button {
@@ -1105,6 +1362,31 @@
 .yy-profile-panel {
   position: relative;
   overflow: hidden;
+}
+
+.yy-profile-panel .mantine-Button-root {
+  min-height: 2.72rem;
+}
+
+.yy-admin-settings-page {
+  position: relative;
+  z-index: 1;
+}
+
+.yy-settings-panel.panel-card {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(107, 238, 177, 0.18);
+  background:
+    radial-gradient(ellipse at 14% 0%, rgba(107, 238, 177, 0.12), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.018)),
+    rgba(7, 10, 10, 0.88);
+  backdrop-filter: blur(0.9rem);
+}
+
+.yy-settings-panel > * {
+  position: relative;
+  z-index: 1;
 }
 
 .auth-form-panel form {
@@ -1210,6 +1492,16 @@
   align-items: center;
 }
 
+.yy-theory-page,
+.yy-theory-scoreboard {
+  width: 100%;
+  min-height: calc(100dvh - 12rem);
+}
+
+.yy-theory-loading.yy-state-page {
+  min-height: clamp(18rem, 42vh, 28rem);
+}
+
 .yy-theory-node {
   width: 3.4rem;
   height: 3rem;
@@ -1292,8 +1584,81 @@
   width: min(980px, calc(100% - 2rem));
 }
 
+.yy-post-detail-page,
+.yy-post-edit-page {
+  display: grid;
+  gap: clamp(0.85rem, 1.6vw, 1.2rem);
+  padding-top: clamp(0.25rem, 1vh, 0.7rem);
+}
+
 .yy-post-panel {
   padding: clamp(1.1rem, 3vw, 2rem);
+}
+
+.yy-post-hero {
+  padding: clamp(1.2rem, 2.4vw, 2.1rem);
+}
+
+.yy-post-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(0.9rem, 1.8vw, 1.4rem);
+  overflow: hidden;
+}
+
+.yy-post-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.yy-post-hero-mark {
+  width: clamp(4.2rem, 6vw, 6rem);
+  height: clamp(4.2rem, 6vw, 6rem);
+}
+
+.yy-post-hero-copy h1,
+.yy-post-edit-page h1 {
+  margin: 0;
+  color: var(--yy-text);
+  font-family: var(--font-display);
+  font-size: clamp(1.72rem, 3.2vw, 3rem);
+  font-weight: 820;
+  line-height: 1.04;
+}
+
+.yy-post-meta {
+  color: var(--yy-muted-readable);
+}
+
+.yy-post-detail-content {
+  color: var(--yy-muted-readable);
+  font-size: clamp(0.95rem, 1.05vw, 1.04rem);
+  line-height: 1.75;
+}
+
+.yy-post-edit-button.mantine-Button-root,
+.fixedButton.mantine-Button-root,
+.mantine-Button-root[class*='fixedButton'] {
+  min-height: 2.9rem;
+  border: 1px solid rgba(107, 238, 177, 0.42);
+  border-radius: 999px;
+  color: #06100b;
+  background:
+    linear-gradient(135deg, rgba(144, 255, 201, 0.98), rgba(82, 229, 164, 0.86)),
+    var(--yy-hex-flow);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0.9rem 2.4rem rgba(0, 0, 0, 0.32),
+    0 0 2rem rgba(107, 238, 177, 0.16);
+}
+
+.yy-post-edit-button.mantine-Button-root .mantine-Button-label,
+.fixedButton.mantine-Button-root .mantine-Button-label,
+.mantine-Button-root[class*='fixedButton'] .mantine-Button-label {
+  color: #06100b;
+  font-weight: 900;
 }
 
 .yy-game-detail-content,

@@ -1,6 +1,6 @@
 import { Stack } from '@mantine/core'
 import { Activity, Bell } from 'lucide-react'
-import { FC } from 'react'
+import { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Empty } from '@Components/Empty'
 import { GameCard, compareGamesForDisplay } from '@Components/GameCard'
@@ -15,6 +15,54 @@ import api, { PostInfoModel } from '@Api'
 
 const HOME_GAME_COUNT = 5
 const HOME_NOTICE_COUNT = 4
+const terminalLines = ['演练赛事在线调度', '平台通知实时归档', '靶场服务安全编排']
+
+const TerminalTyping: FC<{ lines: string[] }> = ({ lines }) => {
+  const [lineIndex, setLineIndex] = useState(0)
+  const [visibleCount, setVisibleCount] = useState(0)
+  const [phase, setPhase] = useState<'typing' | 'hold' | 'deleting'>('typing')
+
+  const currentLine = lines[lineIndex] ?? ''
+
+  useEffect(() => {
+    if (!lines.length) return undefined
+
+    const timeout = window.setTimeout(
+      () => {
+        if (phase === 'typing') {
+          if (visibleCount < currentLine.length) {
+            setVisibleCount((count) => count + 1)
+          } else {
+            setPhase('hold')
+          }
+          return
+        }
+
+        if (phase === 'hold') {
+          setPhase('deleting')
+          return
+        }
+
+        if (visibleCount > 0) {
+          setVisibleCount((count) => count - 1)
+        } else {
+          setLineIndex((index) => (index + 1) % lines.length)
+          setPhase('typing')
+        }
+      },
+      phase === 'hold' ? 1500 : phase === 'typing' ? 62 : 34
+    )
+
+    return () => window.clearTimeout(timeout)
+  }, [currentLine.length, lines.length, phase, visibleCount])
+
+  return (
+    <span className="yy-terminal-typing" aria-live="polite" aria-label="platform terminal slogans">
+      <b>{`> ${currentLine.slice(0, visibleCount)}`}</b>
+      <i aria-hidden="true" />
+    </span>
+  )
+}
 
 const Home: FC = () => {
   const { t } = useTranslation()
@@ -68,7 +116,7 @@ const Home: FC = () => {
         <div className="home-title-row yy-home-title-row">
           <BrandMark />
           <h3>{PLATFORM_BRAND}</h3>
-          <span>&gt; {'\u6f14\u7ec3\u8d5b\u4e8b / \u5e73\u53f0\u901a\u77e5 / \u9776\u573a\u670d\u52a1'}</span>
+          <TerminalTyping lines={terminalLines} />
         </div>
 
         <div className="home-layout-draft yy-home-layout yy-home-event-layout">

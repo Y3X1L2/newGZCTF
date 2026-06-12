@@ -1,4 +1,4 @@
-import { LoadingOverlay, Stack, Title } from '@mantine/core'
+import { Stack, Title } from '@mantine/core'
 import { showNotification } from '@mantine/notifications'
 import {
   mdiChartLine,
@@ -17,8 +17,7 @@ import { useLocation, useNavigate, useParams } from 'react-router'
 import { GameProgress } from '@Components/GameProgress'
 import { IconTabs } from '@Components/IconTabs'
 import { RequireRole } from '@Components/WithRole'
-import { YinyuHeartbeatIcon, YinyuHexField, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
-import { DEFAULT_LOADING_OVERLAY } from '@Utils/Shared'
+import { YinyuHeartbeatIcon, YinyuHexField, YinyuRouteTransition, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
 import { getGameStatus, useGame } from '@Hooks/useGame'
 import { usePageTitle } from '@Hooks/usePageTitle'
 import { useUserRole } from '@Hooks/useUser'
@@ -28,9 +27,7 @@ dayjs.extend(duration)
 
 const GameCountdown: FC<{ game?: DetailedGameInfoModel }> = ({ game }) => {
   const { endTime, progress } = getGameStatus(game)
-
   const [now, setNow] = useState(dayjs())
-
   const { t } = useTranslation()
 
   useEffect(() => {
@@ -42,7 +39,7 @@ const GameCountdown: FC<{ game?: DetailedGameInfoModel }> = ({ game }) => {
   const countdown = dayjs.duration(endTime.diff(now))
 
   return (
-    <div className="route-loader">
+    <div className="route-loader yy-game-countdown">
       <YinyuHexField cells={18} />
       <YinyuStatusPill
         tone={countdown.asSeconds() > 0 ? 'success' : 'neutral'}
@@ -56,7 +53,7 @@ const GameCountdown: FC<{ game?: DetailedGameInfoModel }> = ({ game }) => {
             : t('game.content.game_ended')}
       </YinyuStatusPill>
       <div>
-        <strong>Round clock</strong>
+        <strong>回合时间</strong>
         <GameProgress percentage={progress} py={0} />
       </div>
     </div>
@@ -156,13 +153,8 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
         ]
       : []),
   ]
-  const pagesWithTitles = pages.map((page) => {
-    if (page.path === 'theory') return { ...page, title: '理论考试' }
-    if (page.path === 'theory-scoreboard') return { ...page, title: '理论榜单' }
-    return page
-  })
 
-  const filteredPages = pagesWithTitles
+  const filteredPages = pages
     .filter((p) => RequireRole(p.requireRole, role))
     .filter((p) => !p.requireJoin || game?.status === ParticipationStatus.Accepted)
     .filter((p) => !p.requireJoin || !finished || game?.practiceMode)
@@ -172,6 +164,7 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
     label: p.title,
     icon: <Icon path={p.icon} size={1} />,
   }))
+
   const getTab = (path: string) => {
     const segments = path.split('/').filter(Boolean)
     const gamePathIndex = segments.findIndex(
@@ -220,12 +213,10 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
       }
 
       if (location.pathname.includes('scoreboard')) {
-        // allow access to scoreboard
         return
       }
 
       if (location.pathname.includes('monitor') && RequireRole(Role.Monitor, role)) {
-        // allow access to monitor
         return
       }
 
@@ -248,9 +239,6 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
           })
         }
       } else if (!game.practiceMode && !RequireRole(Role.Monitor, role)) {
-        // not allow access to game after it ends if:
-        // 1. not monitor
-        // 2. not practice mode
         navigate(`/games/${numId}`)
         showNotification({
           id: 'no-access',
@@ -264,17 +252,22 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
 
   return (
     <Stack pos="relative" mt="md" className="yy-game-tab-shell view-stack">
-      <LoadingOverlay visible={!game} overlayProps={DEFAULT_LOADING_OVERLAY} />
+      {!game ? (
+        <div className="yy-game-tab-loading" role="status" aria-live="polite">
+          <YinyuRouteTransition title="YINYU MATCH" description="正在读取演练信息" />
+        </div>
+      ) : null}
       <IconTabs
         active={activeTab}
         onTabChange={onChange}
         tabs={tabs}
+        panesClassName="yy-game-tab-panes"
         aside={
           game && (
-            <>
-              <Title>{game?.title}</Title>
+            <div className="yy-game-tab-aside">
+              <Title order={2}>{game?.title}</Title>
               <GameCountdown game={game} />
-            </>
+            </div>
           )
         }
       />
