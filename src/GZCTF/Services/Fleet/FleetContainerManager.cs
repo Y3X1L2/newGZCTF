@@ -4,6 +4,7 @@ using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Container.Manager;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using DockerManager = GZCTF.Services.Container.Manager.DockerManager;
 using IContainerManager = GZCTF.Services.Container.Manager.IContainerManager;
 using DataContainer = GZCTF.Models.Data.Container;
@@ -62,7 +63,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
                 schedule.Target.Status = TargetStatus.Cancelled;
                 schedule.Target.CompletedAt = DateTimeOffset.UtcNow;
                 schedule.Target.ErrorMessage = "No schedulable fleet node; handled by local Docker fallback";
-                await context.SaveChangesAsync(token);
+                await SaveFleetStateAsync(context, "cancel unscheduled Docker deployment target", token);
             }
 
             _logger.LogWarning("No schedulable fleet node available, falling back to local Docker manager");
@@ -79,7 +80,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             else
                 ReleaseReservedCapacity(node, NodeCapability.Docker);
             CompleteDeploymentTarget(schedule.Target, container, node.HostAddress);
-            await context.SaveChangesAsync(token);
+            await SaveFleetStateAsync(context, "complete scheduled local Docker deployment target", token);
             return container;
         }
 
@@ -117,7 +118,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
                 ReleaseReservedCapacity(node, NodeCapability.Docker);
 
             var fallback = await TryCreateLocalFallback(config, schedule.Target, context, token);
-            await context.SaveChangesAsync(token);
+            await SaveFleetStateAsync(context, "complete local fallback after remote Docker failure", token);
             return fallback;
         }
 
@@ -134,7 +135,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             NodeId = nodeId.Value,
         };
         CompleteDeploymentTarget(schedule.Target, remoteContainer, node!.HostAddress);
-        await context.SaveChangesAsync(token);
+        await SaveFleetStateAsync(context, "complete remote Docker deployment target", token);
         return remoteContainer;
     }
 
@@ -157,7 +158,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             target.Status = TargetStatus.Failed;
             target.CompletedAt = DateTimeOffset.UtcNow;
             target.ErrorMessage = node is null ? "Preferred fleet node not found" : "Preferred fleet node cannot host Docker containers";
-            await context.SaveChangesAsync(token);
+            await SaveFleetStateAsync(context, "fail preferred Docker deployment target", token);
             return null;
         }
 
@@ -172,7 +173,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
                 ReleaseReservedCapacity(node, NodeCapability.Docker);
 
             CompleteDeploymentTarget(target, localContainer, node.HostAddress);
-            await context.SaveChangesAsync(token);
+            await SaveFleetStateAsync(context, "complete preferred local Docker deployment target", token);
             return localContainer;
         }
 
@@ -181,7 +182,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         {
             ReleaseReservedCapacity(node, NodeCapability.Docker);
             FailDeploymentTarget(target, "Agent container creation failed on preferred node");
-            await context.SaveChangesAsync(token);
+            await SaveFleetStateAsync(context, "fail preferred remote Docker deployment target", token);
             return null;
         }
 
@@ -198,7 +199,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             NodeId = node.Id,
         };
         CompleteDeploymentTarget(target, remoteContainer, node.HostAddress);
-        await context.SaveChangesAsync(token);
+        await SaveFleetStateAsync(context, "complete preferred remote Docker deployment target", token);
         return remoteContainer;
     }
 
@@ -235,7 +236,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         if (node is not null)
         {
             ReleaseReservedCapacity(node, NodeCapability.Docker);
-            await context.SaveChangesAsync(token);
+            await SaveFleetStateAsync(context, "release Docker node capacity after destroy", token);
         }
     }
 
@@ -289,6 +290,40 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         target.CompletedAt = DateTimeOffset.UtcNow;
         target.ErrorMessage = "Remote agent failed; completed by local Docker fallback";
         return container;
+    }
+
+    async Task SaveFleetStateAsync(AppDbContext context, string operation, CancellationToken token)
+    {
+        for (var retry = 0; retry < 3; retry++)
+        {
+            try
+            {
+                await context.SaveChangesAsync(token);
+                return;
+            }
+            catch (DbUpdateConcurrencyException ex) when (ex.Entries.Any(e => e.Entity is WorkerNode))
+            {
+                _logger.LogWarning(ex,
+                    "Worker node state changed while trying to {Operation}; saving deployment state without stale node counters.",
+                    operation);
+
+                foreach (var entry in ex.Entries)
+                    ResolveWorkerNodeConcurrencyEntry(entry);
+            }
+        }
+
+        await context.SaveChangesAsync(token);
+    }
+
+    static void ResolveWorkerNodeConcurrencyEntry(EntityEntry entry)
+    {
+        if (entry.Entity is WorkerNode)
+        {
+            entry.State = EntityState.Detached;
+            return;
+        }
+
+        throw new InvalidOperationException("Unexpected non-worker concurrency conflict while saving fleet state.");
     }
 
     static void ReleaseReservedCapacity(WorkerNode node, NodeCapability capability) =>

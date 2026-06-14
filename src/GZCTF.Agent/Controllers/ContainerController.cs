@@ -9,15 +9,28 @@ namespace GZCTF.Agent.Controllers;
 public class ContainerController : ControllerBase
 {
     private readonly DockerService _docker;
+    private readonly ILogger<ContainerController> _logger;
 
-    public ContainerController(DockerService docker) { _docker = docker; }
+    public ContainerController(DockerService docker, ILogger<ContainerController> logger)
+    {
+        _docker = docker;
+        _logger = logger;
+    }
 
     [HttpPost("create")]
     public async Task<IActionResult> Create([FromBody] CreateContainerRequest request, CancellationToken token)
     {
-        var result = await _docker.CreateContainerAsync(request, token);
-        if (result is null) return StatusCode(500, new { message = "Container creation failed" });
-        return Ok(result);
+        try
+        {
+            var result = await _docker.CreateContainerAsync(request, token);
+            if (result is null) return StatusCode(500, new { message = "Container creation failed" });
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Agent container creation failed for image {Image}", request.Image);
+            return StatusCode(500, new { message = ex.Message, type = ex.GetType().Name });
+        }
     }
 
     [HttpDelete("{containerId}")]

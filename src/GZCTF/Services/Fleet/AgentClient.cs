@@ -59,7 +59,9 @@ public class AgentClient
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogWarning("Agent create container failed on node {NodeId}: {Status}", nodeId, response.StatusCode);
+            var responseBody = await response.Content.ReadAsStringAsync(token);
+            _logger.LogWarning("Agent create container failed on node {NodeId}: {Status}. Body: {Body}",
+                nodeId, response.StatusCode, TrimResponseBody(responseBody));
             return null;
         }
 
@@ -168,8 +170,11 @@ public class AgentClient
         var response = await client.PostAsync("/api/images/pull-docker",
             new StringContent(body, Encoding.UTF8, "application/json"), token);
         if (!response.IsSuccessStatusCode)
-            _logger.LogWarning("Agent Docker image pull failed on node {NodeId}: {Status}", nodeId,
-                response.StatusCode);
+        {
+            var responseBody = await response.Content.ReadAsStringAsync(token);
+            _logger.LogWarning("Agent Docker image pull failed on node {NodeId}: {Status}. Body: {Body}",
+                nodeId, response.StatusCode, TrimResponseBody(responseBody));
+        }
     }
 
     public async Task DownloadVmImageAsync(Guid nodeId, int templateId, string hash, CancellationToken token)
@@ -189,8 +194,20 @@ public class AgentClient
         var response = await client.PostAsync("/api/images/download-vm",
             new StringContent(body, Encoding.UTF8, "application/json"), token);
         if (!response.IsSuccessStatusCode)
-            _logger.LogWarning("Agent VM image download failed on node {NodeId}: {Status}", nodeId,
-                response.StatusCode);
+        {
+            var responseBody = await response.Content.ReadAsStringAsync(token);
+            _logger.LogWarning("Agent VM image download failed on node {NodeId}: {Status}. Body: {Body}",
+                nodeId, response.StatusCode, TrimResponseBody(responseBody));
+        }
+    }
+
+    static string TrimResponseBody(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+            return string.Empty;
+
+        body = body.Trim();
+        return body.Length <= 2048 ? body : body[..2048] + "...";
     }
 }
 
