@@ -112,7 +112,6 @@ type SegmentData = Record<string, unknown> & {
   slug: string
   cidr: string
   zoneType: PenetrationZoneType
-  trustLevel: number
   nodeCount: number
 }
 
@@ -342,7 +341,7 @@ const SegmentNode = memo(({ data, selected }: NodeProps<Node<SegmentData>>) => (
           {data.slug} / {data.cidr}
         </Text>
       </Stack>
-      <Badge variant="outline">信任 {data.trustLevel} / {data.nodeCount} 节点</Badge>
+      <Badge variant="outline">{data.nodeCount} 节点</Badge>
     </Group>
   </div>
 ))
@@ -470,7 +469,6 @@ const toFlowNodes = (config: PenetrationConfigModel, templates: ImageTemplateLit
       slug: network.slug,
       cidr: network.cidr || network.previewCidr || '自动分配',
       zoneType: network.zoneType,
-      trustLevel: network.trustLevel,
       nodeCount: nodeCountByNetwork.get(network.id) ?? 0,
     },
     style: { width: network.width || NETWORK_W, height: network.height || NETWORK_H },
@@ -562,6 +560,8 @@ const BuilderInner: FC = () => {
   const [selectedTarget, setSelectedTarget] = useState<SelectedTarget>()
   const [loading, setLoading] = useState(false)
   const [usageOpened, setUsageOpened] = useState(false)
+  const [linkMode, setLinkMode] = useState(false)
+  const [linkSourceNodeId, setLinkSourceNodeId] = useState<number>()
   const [nodes, setNodes, onNodesChangeBase] = useNodesState<Node<SegmentData | AssetData>>([])
   const [edges, setEdges, onEdgesChangeBase] = useEdgesState<Edge>([])
 
@@ -723,16 +723,43 @@ const BuilderInner: FC = () => {
     if (removed.length) updateConfig((current) => ({ ...current, edges: current.edges.filter((edge) => !removed.includes(edge.id)) }))
   }
 
-  const onConnect = (connection: Connection) => {
-    if (!config || !connection.source || !connection.target) return
-    const source = config.nodes.find((node) => node.id === Number(connection.source))
-    const target = config.nodes.find((node) => node.id === Number(connection.target))
+  const addPolicyEdge = (sourceNodeId: number, targetNodeId: number) => {
+    if (!config) return
+    const source = config.nodes.find((node) => node.id === sourceNodeId)
+    const target = config.nodes.find((node) => node.id === targetNodeId)
     if (!source || !target || source.id === target.id) return
     const edge = makeEdge(newId(config.edges), source, target, '访问策略')
     const next = normalizeConfig({ ...config, edges: [...config.edges, edge] })
     setConfig(next)
     setSelectedTarget({ kind: 'edge', id: edge.id })
+    setLinkMode(false)
+    setLinkSourceNodeId(undefined)
     syncFlowWithTemplates(next)
+  }
+
+  const onConnect = (connection: Connection) => {
+    if (!connection.source || !connection.target) return
+    addPolicyEdge(Number(connection.source), Number(connection.target))
+  }
+
+  const onFlowNodeClick = (_: unknown, node: Node<SegmentData | AssetData>) => {
+    if (node.id.startsWith('network-')) {
+      setSelectedTarget({ kind: 'network', id: Number(node.id.replace('network-', '')) })
+      return
+    }
+
+    const nodeId = Number(node.id)
+    if (linkMode) {
+      if (!linkSourceNodeId) {
+        setLinkSourceNodeId(nodeId)
+        setSelectedTarget({ kind: 'node', id: nodeId })
+        return
+      }
+      addPolicyEdge(linkSourceNodeId, nodeId)
+      return
+    }
+
+    setSelectedTarget({ kind: 'node', id: nodeId })
   }
 
   const onNodeDragStop = (_: unknown, dragged: Node<SegmentData | AssetData>) => {
@@ -937,6 +964,22 @@ const BuilderInner: FC = () => {
                 }}>
                   一键生成企业多级内网
                 </Button>
+                <Button
+                  fullWidth
+                  variant={linkMode ? 'filled' : 'light'}
+                  leftSection={<Icon path={mdiLanConnect} size={0.85} />}
+                  onClick={() => {
+                    setLinkMode((value) => !value)
+                    setLinkSourceNodeId(undefined)
+                  }}
+                >
+                  添加访问策略/连线
+                </Button>
+                {linkMode ? (
+                  <Text size="xs" className="yy-pentest-link-hint">
+                    {linkSourceNodeId ? '请选择访问目标资产节点' : '请选择访问起点资产节点'}
+                  </Text>
+                ) : null}
                 <Divider />
                 <Text fw={900}>安全域</Text>
                 <SimpleGrid cols={2}>
@@ -973,7 +1016,7 @@ const BuilderInner: FC = () => {
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
-              onNodeClick={(_, node) => setSelectedTarget(node.id.startsWith('network-') ? { kind: 'network', id: Number(node.id.replace('network-', '')) } : { kind: 'node', id: Number(node.id) })}
+              onNodeClick={onFlowNodeClick}
               onEdgeClick={(_, edge) => setSelectedTarget({ kind: 'edge', id: Number(edge.id) })}
               onNodeDragStop={onNodeDragStop}
               onDrop={onDrop}
@@ -1016,7 +1059,7 @@ const BuilderInner: FC = () => {
                       <TextInput label="名称" value={selectedNetwork.name} onChange={(event) => updateNetwork(selectedNetwork.id, { name: event.currentTarget.value })} />
                       <SimpleGrid cols={2}>
                         <Select label="安全域类型" data={zoneOptions} value={selectedNetwork.zoneType} onChange={(value) => value && updateNetwork(selectedNetwork.id, { zoneType: value as PenetrationZoneType })} />
-                        <NumberInput label="信任等级" min={0} max={100} value={selectedNetwork.trustLevel} onChange={(value) => updateNetwork(selectedNetwork.id, { trustLevel: Number(value || 0) })} />
+                        <TextInput label="节点数量" value={`${config.nodes.filter((node) => node.networkId === selectedNetwork.id).length} 个资产`} readOnly />
                       </SimpleGrid>
                       <SimpleGrid cols={2}>
                         <TextInput label="标识" value={selectedNetwork.slug} onChange={(event) => updateNetwork(selectedNetwork.id, { slug: event.currentTarget.value })} />

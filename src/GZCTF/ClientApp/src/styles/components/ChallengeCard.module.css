@@ -1,7 +1,11 @@
 .root {
   min-height: 9.5rem;
-  border: 1px solid var(--yy-line);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.014)), rgba(9, 10, 10, 0.74);
+  border: 1px solid rgba(126, 255, 194, 0.18);
+  background:
+    linear-gradient(135deg, rgba(13, 28, 23, 0.76), rgba(6, 9, 9, 0.72)),
+    rgba(5, 8, 8, 0.72);
+  backdrop-filter: blur(1rem) saturate(1.22);
+  -webkit-backdrop-filter: blur(1rem) saturate(1.22);
   transform: translateZ(0);
 
   &[data-faded] {
@@ -20,11 +24,18 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(ellipse at 12% 8%, rgba(107, 238, 177, 0.13), transparent 42%), var(--yy-hex-flow);
+  background:
+    radial-gradient(ellipse at 18% 12%, rgba(126, 255, 194, 0.2), transparent 42%),
+    radial-gradient(ellipse at 76% 86%, rgba(57, 205, 139, 0.12), transparent 48%),
+    radial-gradient(ellipse at 96% 18%, rgba(238, 255, 248, 0.07), transparent 36%),
+    linear-gradient(120deg, transparent 12%, rgba(126, 255, 194, 0.07) 44%, transparent 72%);
   background-size:
     auto,
-    1.25rem 1.08rem;
-  opacity: 0.44;
+    auto,
+    auto,
+    auto;
+  opacity: 0.68;
+  filter: blur(0.04rem);
 }
 
 .root::after {

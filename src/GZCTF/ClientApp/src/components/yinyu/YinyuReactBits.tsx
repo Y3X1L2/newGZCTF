@@ -71,7 +71,7 @@ export function YinyuGradientText<T extends ElementType = 'span'>({
 }
 
 const gradientPalettes: Record<GradientTone, string[]> = {
-  brand: ['#F8FFF9', '#6EFFB8', '#D9FFF0', '#A855F7', '#FFFFFF'],
+  brand: ['#F8FFF9', '#79F8BE', '#E2F2EA', '#8E7BE6', '#FFFFFF'],
   signal: ['#D9FFF0', '#69F6B7', '#F7FFFB', '#8DFFD0'],
   ongoing: ['#F4FFF8', '#6EFFB8', '#22F0A0', '#C9FFE7'],
   coming: ['#FFF7C7', '#FFD166', '#FF8F3D', '#FFF0B3'],
@@ -79,7 +79,7 @@ const gradientPalettes: Record<GradientTone, string[]> = {
   danger: ['#FFE8EA', '#FF7A90', '#FF3D68', '#FFD1D8'],
   silver: ['#FFFFFF', '#DCE7E1', '#93A39B', '#F7FFFB'],
   single: ['#DDFBFF', '#38BDF8', '#9BEAFE', '#F8FEFF'],
-  multiple: ['#F5E8FF', '#A855F7', '#D8B4FE', '#FFFFFF'],
+  multiple: ['#F7F0FF', '#9C88E8', '#D9CEFF', '#FFFFFF'],
   judge: ['#FFF6CC', '#FACC15', '#FB923C', '#FFFFFF'],
   score: ['#E9FFF4', '#6EFFB8', '#A7F3D0', '#FFFFFF'],
 }
@@ -1146,7 +1146,7 @@ export function YinyuGameBendsBackground({ className }: { className?: string }) 
     <div className={cx('yy-game-bends-bg', className)} aria-hidden="true">
       <ReactBitsColorBends
         className="yy-game-bends-bg__bends"
-        colors={['#A855F7', '#66F4B4', '#F7FFF9']}
+        colors={['#66F4B4', '#DFFEF0', '#8676D8']}
         speed={0.2}
         frequency={1.0}
         noise={0.15}

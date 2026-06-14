@@ -8,7 +8,8 @@ import { useLanguage } from '@Utils/I18n'
 import { BloodsTypes, PartialIconProps, useChallengeCategoryLabelMap } from '@Utils/Shared'
 import { ChallengeInfo, SubmissionType } from '@Api'
 import classes from '@Styles/ChallengeCard.module.css'
-import { YinyuDataBar, YinyuHexField, YinyuStatusPill } from './yinyu/YinyuUI'
+import { YinyuStatusText } from './yinyu/YinyuReactBits'
+import { YinyuDataBar, YinyuHexField } from './yinyu/YinyuUI'
 
 interface ChallengeCardProps {
   challenge: ChallengeInfo
@@ -33,7 +34,6 @@ export const ChallengeCard: FC<ChallengeCardProps> = (props: ChallengeCardProps)
   }, [challenge.deadline])
 
   const heat = Math.min(100, Math.max(8, (challenge.solved ?? 0) * 8))
-  const state = solved ? 'solved' : isFaded ? 'alert' : 'open'
   const categoryColor = cateData?.colors?.[5] ?? 'rgba(107, 238, 177, 0.88)'
   const categorySoftColor = cateData?.colors?.[8] ?? 'rgba(107, 238, 177, 0.16)'
 
@@ -71,9 +71,9 @@ export const ChallengeCard: FC<ChallengeCardProps> = (props: ChallengeCardProps)
       </div>
       <YinyuDataBar value={heat} />
       <div className="challenge-foot">
-        <YinyuStatusPill tone={solved ? 'success' : isFaded ? 'danger' : 'neutral'} state={state}>
+        <YinyuStatusText tone={solved ? 'success' : isFaded ? 'danger' : 'neutral'} className="yy-challenge-state-text">
           {solved ? '已解出' : isFaded ? '已截止' : '开放'}
-        </YinyuStatusPill>
+        </YinyuStatusText>
         <Group justify="center" gap={7} h={28} wrap="nowrap" className={classes.bloodRack}>
           {BloodsTypes.map((type, index) => {
             const blood = challenge.bloods?.[index]
