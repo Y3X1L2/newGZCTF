@@ -1,7 +1,9 @@
 import {
+  Alert,
   ActionIcon,
   Badge,
   Button,
+  FileInput,
   Group,
   Modal,
   Progress,
@@ -50,6 +52,13 @@ interface ImageTemplate {
   uploadedAt?: string | null
   registryUrl?: string | null
   localFilePath?: string | null
+}
+
+interface DockerRegistryInfo {
+  enabled: boolean
+  address: string
+  namespace: string
+  maxUploadSizeGb: number
 }
 
 const imageTypeLabels: Record<string, string> = {
@@ -172,18 +181,20 @@ function RegisterDockerModal({
       <YinyuModalBody p="md">
         <Stack>
           <TextInput
-            label="镜像名称"
+            label="模板显示名称"
             required
             value={name}
             onChange={(event) => setName(event.currentTarget.value)}
-            placeholder="nginx:latest"
+            placeholder="alpine-test"
+            description="在平台中显示的模板名称"
           />
           <TextInput
-            label="Registry URL"
+            label="Docker 镜像地址"
             required
             value={url}
             onChange={(event) => setUrl(event.currentTarget.value)}
-            placeholder="registry.example.com/myimage:tag"
+            placeholder="docker.io/library/alpine:latest"
+            description="完整镜像引用，例如 docker.io/library/nginx:latest"
           />
           <Select
             label="操作系统"
@@ -203,6 +214,151 @@ function RegisterDockerModal({
           />
           <Button fullWidth leftSection={<Icon path={mdiDocker} size={0.8} />} loading={loading} onClick={handleSubmit}>
             注册
+          </Button>
+        </Stack>
+      </YinyuModalBody>
+    </Modal>
+  )
+}
+
+function UploadDockerArchiveModal({
+  opened,
+  onClose,
+  onDone,
+  registry,
+}: {
+  opened: boolean
+  onClose: () => void
+  onDone: () => void
+  registry?: DockerRegistryInfo
+}) {
+  const [name, setName] = useState('')
+  const [repository, setRepository] = useState('')
+  const [tag, setTag] = useState('latest')
+  const [sourceImage, setSourceImage] = useState('')
+  const [osType, setOsType] = useState<string>('0')
+  const [file, setFile] = useState<File | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async () => {
+    if (!file || !name.trim() || !repository.trim()) return
+    if (!registry?.enabled) {
+      notifications.show({ title: '未配置 Registry', message: '请先在服务器配置内网 Docker Registry 地址', color: 'red' })
+      return
+    }
+
+    setLoading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('name', name.trim())
+      formData.append('repository', repository.trim())
+      formData.append('tag', tag.trim() || 'latest')
+      formData.append('sourceImage', sourceImage.trim())
+      formData.append('osType', osType)
+
+      const res = await fetch('/api/v1/image-templates/upload-docker', { method: 'POST', body: formData })
+      const data = await res.json().catch(() => ({}))
+
+      if (res.ok) {
+        notifications.show({
+          title: '上传成功',
+          message: `镜像已推送到 ${data.registryUrl ?? '内网 Registry'}`,
+          color: 'green',
+        })
+        setName('')
+        setRepository('')
+        setTag('latest')
+        setSourceImage('')
+        setOsType('0')
+        setFile(null)
+        onDone()
+        onClose()
+      } else {
+        notifications.show({ title: '上传失败', message: data.message || '请检查 Docker 镜像包', color: 'red' })
+      }
+    } catch {
+      notifications.show({ title: '上传失败', message: '网络错误', color: 'red' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Modal opened={opened} onClose={onClose} title="上传 Docker 镜像包" radius="sm">
+      <YinyuModalBody p="md">
+        <Stack>
+          {registry?.enabled ? (
+            <Alert color="blue" variant="light">
+              当前内网 Registry：{registry.address}
+              {registry.namespace ? `/${registry.namespace}` : ''}
+            </Alert>
+          ) : (
+            <Alert color="yellow" variant="light">
+              当前服务器未配置内网 Docker Registry，请在 DockerRegistrySettings 中配置 Address 后再上传。
+            </Alert>
+          )}
+          <FileInput
+            label="Docker 镜像包"
+            required
+            value={file}
+            onChange={setFile}
+            accept=".tar,.tar.gz,.tgz"
+            placeholder="选择 docker save 生成的 .tar/.tgz 文件"
+            description="请使用 docker save 导出镜像，上传后平台会推送到内网 Registry。"
+          />
+          <TextInput
+            label="模板显示名称"
+            required
+            value={name}
+            onChange={(event) => setName(event.currentTarget.value)}
+            placeholder="web-flag-demo"
+          />
+          <Group grow>
+            <TextInput
+              label="仓库路径"
+              required
+              value={repository}
+              onChange={(event) => setRepository(event.currentTarget.value)}
+              placeholder="web/flag-demo"
+              description={
+                registry?.enabled
+                  ? `最终地址会自动加上 ${registry.address}${registry.namespace ? `/${registry.namespace}` : ''} 前缀。`
+                  : '最终地址会使用服务器配置的内网 Registry 前缀。'
+              }
+            />
+            <TextInput
+              label="Tag"
+              required
+              value={tag}
+              onChange={(event) => setTag(event.currentTarget.value)}
+              placeholder="v1"
+            />
+          </Group>
+          <TextInput
+            label="源镜像名"
+            value={sourceImage}
+            onChange={(event) => setSourceImage(event.currentTarget.value)}
+            placeholder="留空时自动读取 docker load 输出"
+            description="当镜像包只包含 image ID、没有 tag 时填写，例如 local/web:dev。"
+          />
+          <Select
+            label="操作系统"
+            data={[
+              { value: '0', label: 'Linux' },
+              { value: '1', label: 'Windows' },
+            ]}
+            value={osType}
+            onChange={(value) => setOsType(value ?? '0')}
+          />
+          <Button
+            fullWidth
+            leftSection={<Icon path={mdiArchiveArrowUpOutline} size={0.8} />}
+            loading={loading}
+            disabled={!registry?.enabled}
+            onClick={handleSubmit}
+          >
+            上传并推送
           </Button>
         </Stack>
       </YinyuModalBody>
@@ -289,7 +445,9 @@ function MetricTile({ label, value, tone }: { label: string; value: number; tone
 
 export default function ImagesPage() {
   const { data, isLoading, mutate } = useSWR('/api/v1/image-templates', fetcher)
+  const { data: registry } = useSWR('/api/v1/image-templates/docker-registry', fetcher)
   const [dockerModalOpen, setDockerModalOpen] = useState(false)
+  const [dockerUploadOpen, setDockerUploadOpen] = useState(false)
   const [localModalOpen, setLocalModalOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [query, setQuery] = useState('')
@@ -397,6 +555,13 @@ export default function ImagesPage() {
             </Button>
             <Button
               variant="default"
+              leftSection={<Icon path={mdiArchiveArrowUpOutline} size={0.8} />}
+              onClick={() => setDockerUploadOpen(true)}
+            >
+              上传 Docker 包
+            </Button>
+            <Button
+              variant="default"
               leftSection={<Icon path={mdiFileImportOutline} size={0.8} />}
               onClick={() => setLocalModalOpen(true)}
             >
@@ -408,7 +573,7 @@ export default function ImagesPage() {
               loading={uploading}
               onClick={() => fileInputRef.current?.click()}
             >
-              上传压缩包
+              上传 VM 归档
             </Button>
             <input
               ref={fileInputRef}
@@ -564,6 +729,12 @@ export default function ImagesPage() {
           opened={dockerModalOpen}
           onClose={() => setDockerModalOpen(false)}
           onDone={() => mutate()}
+        />
+        <UploadDockerArchiveModal
+          opened={dockerUploadOpen}
+          onClose={() => setDockerUploadOpen(false)}
+          onDone={() => mutate()}
+          registry={registry as DockerRegistryInfo | undefined}
         />
         <ImportLocalModal opened={localModalOpen} onClose={() => setLocalModalOpen(false)} onDone={() => mutate()} />
       </Stack>

@@ -12,7 +12,7 @@ import {
   TextInput,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { AdminPage } from '@Components/admin/AdminPage'
 import { YinyuPanel } from '@Components/yinyu/YinyuUI'
@@ -20,10 +20,13 @@ import { YinyuPanel } from '@Components/yinyu/YinyuUI'
 interface ImageTemplate {
   id: number
   name: string
-  description: string
+  description?: string | null
   localFilePath?: string
   imagePath?: string
-  osType: number
+  registryUrl?: string | null
+  osType: string | number
+  imageType?: string | number
+  status?: string | number
 }
 
 interface ChallengeEditData {
@@ -61,6 +64,20 @@ const envOptions = [
   { value: ENV_DOCKER, label: 'Linux Docker 容器' },
   { value: ENV_WINDOWS_VM, label: 'Windows 虚拟机 (RDP)' },
 ]
+
+function templateKey(value: string | number | undefined | null) {
+  return String(value ?? '').toLowerCase()
+}
+
+function isReadyTemplate(template: ImageTemplate) {
+  const status = templateKey(template.status)
+  return status === '0' || status === 'ready' || status === ''
+}
+
+function isDockerTemplate(template: ImageTemplate) {
+  const imageType = templateKey(template.imageType)
+  return imageType === '0' || imageType === 'docker'
+}
 
 export default function ChallengeEdit() {
   const { id: gameId, challengeId } = useParams<{ id: string; challengeId: string }>()
@@ -126,6 +143,20 @@ export default function ChallengeEdit() {
     load()
     loadTemplates()
   }, [gameId, challengeId])
+
+  const dockerTemplates = useMemo(
+    () => imageTemplates.filter((template) => isReadyTemplate(template) && isDockerTemplate(template) && template.registryUrl),
+    [imageTemplates]
+  )
+
+  const windowsTemplates = useMemo(
+    () =>
+      imageTemplates.filter((template) => {
+        const osType = templateKey(template.osType)
+        return isReadyTemplate(template) && !isDockerTemplate(template) && (osType === '1' || osType === 'windows')
+      }),
+    [imageTemplates]
+  )
 
   const handleSave = async () => {
     if (!challenge) return
@@ -299,10 +330,30 @@ export default function ChallengeEdit() {
               <Text size="sm" fw={600} c="cyan">
                 容器配置
               </Text>
+              <Select
+                label="已注册 Docker 镜像"
+                placeholder={dockerTemplates.length === 0 ? '暂无就绪 Docker 镜像，请先到环境模板上传或注册' : '选择 Docker 镜像'}
+                data={dockerTemplates.map((template) => ({
+                  value: template.registryUrl ?? '',
+                  label: `${template.name} - ${template.registryUrl}`,
+                }))}
+                value={
+                  dockerTemplates.some((template) => template.registryUrl === challenge.containerImage)
+                    ? challenge.containerImage
+                    : null
+                }
+                onChange={(value) => {
+                  if (value) setChallenge({ ...challenge, containerImage: value })
+                }}
+                searchable
+                clearable
+              />
               <TextInput
-                label="容器镜像"
+                label="容器镜像地址"
                 value={challenge.containerImage}
                 onChange={(e) => setChallenge({ ...challenge, containerImage: e.currentTarget.value })}
+                placeholder="registry.example.internal/ctf/web:tag"
+                description="建议从已注册镜像中选择；这里保存的是 Docker 可直接拉取的完整镜像引用。"
               />
               <Group>
                 <NumberInput
@@ -345,7 +396,7 @@ export default function ChallengeEdit() {
               <Select
                 label="镜像模板"
                 placeholder="选择 Windows 镜像模板..."
-                data={imageTemplates.map((template) => ({
+                data={windowsTemplates.map((template) => ({
                   value: String(template.id),
                   label: `${template.name}${template.description ? ` - ${template.description}` : ''}`,
                 }))}
@@ -355,10 +406,10 @@ export default function ChallengeEdit() {
               {challenge.imageTemplateId && (
                 <Alert color="blue" variant="light">
                   已选择镜像模板 ID: {challenge.imageTemplateId}
-                  {imageTemplates.find((template) => template.id === challenge.imageTemplateId) && (
+                  {windowsTemplates.find((template) => template.id === challenge.imageTemplateId) && (
                     <Text size="xs" mt={4}>
                       路径:{' '}
-                      {imageTemplates.find((template) => template.id === challenge.imageTemplateId)?.localFilePath ??
+                      {windowsTemplates.find((template) => template.id === challenge.imageTemplateId)?.localFilePath ??
                         '未知'}
                     </Text>
                   )}

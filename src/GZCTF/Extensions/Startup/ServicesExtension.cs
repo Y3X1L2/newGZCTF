@@ -40,6 +40,7 @@ internal static class ServicesExtension
             builder.AddConfig<ContainerProvider>();
             builder.AddConfig<KvmSettings>();
             builder.AddConfig<GuacamoleSettings>();
+            builder.AddConfig<DockerRegistrySettings>();
 
             builder.Services.Configure<RegistrySet<RegistryConfig>>(builder.Configuration.GetSection("Registries"));
 
@@ -87,6 +88,7 @@ internal static class ServicesExtension
             builder.Services.AddScoped<IParticipationRepository, ParticipationRepository>();
             builder.Services.AddScoped<IDivisionRepository, DivisionRepository>();
             builder.Services.AddScoped<IAwdpRepository, AwdpRepository>();
+            builder.Services.AddScoped<DockerImageRegistryService>();
 
             builder.Services.AddScoped<AwdpScriptRunner>();
             builder.Services.AddScoped<AwdpInstanceService>();

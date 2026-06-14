@@ -4,6 +4,7 @@ using GZCTF.Services;
 using GZCTF.Services.Vm;
 using GZCTF.Storage;
 using GZCTF.Middlewares;
+using GZCTF.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -22,15 +23,18 @@ public class ImageTemplateController : ControllerBase
     private readonly AppDbContext _context;
     private readonly ImageStorage _storage;
     private readonly IArchiveExtractor _archiveExtractor;
+    private readonly DockerImageRegistryService _dockerRegistry;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ImageTemplateController> _logger;
 
     public ImageTemplateController(AppDbContext context, ImageStorage storage, IArchiveExtractor archiveExtractor,
-        IServiceScopeFactory scopeFactory, ILogger<ImageTemplateController> logger)
+        DockerImageRegistryService dockerRegistry, IServiceScopeFactory scopeFactory,
+        ILogger<ImageTemplateController> logger)
     {
         _context = context;
         _storage = storage;
         _archiveExtractor = archiveExtractor;
+        _dockerRegistry = dockerRegistry;
         _scopeFactory = scopeFactory;
         _logger = logger;
     }
@@ -182,28 +186,29 @@ public class ImageTemplateController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var duplicateExists = await _context.ImageTemplates.AsNoTracking()
-            .AnyAsync(t => t.ImageType == ImageType.Docker &&
-                           (t.Name == request.Name || t.RegistryUrl == request.RegistryUrl), token);
-        if (duplicateExists)
+        var pullTarget = DockerImageReference.ResolvePullTarget(request.Name, request.RegistryUrl);
+        var imageReference = pullTarget.FullImage;
+
+        var existingTemplate = await _context.ImageTemplates
+            .FirstOrDefaultAsync(t => t.ImageType == ImageType.Docker &&
+                                      (t.Name == request.Name || t.RegistryUrl == imageReference), token);
+        if (existingTemplate is not null && existingTemplate.Status != ImageStatus.Error)
             return BadRequest(new { message = "同名或同 Registry URL 的 Docker 模板已存在" });
 
-        var template = new ImageTemplate
-        {
-            Name = request.Name,
-            OSType = request.OSType,
-            ImageType = ImageType.Docker,
-            RegistryUrl = request.RegistryUrl,
-            RegistryAuth = request.RegistryAuth,
-            Status = ImageStatus.Importing,
-            UploadedAt = DateTimeOffset.UtcNow,
-        };
+        var template = existingTemplate ?? new ImageTemplate { ImageType = ImageType.Docker };
+        template.Name = request.Name;
+        template.OSType = request.OSType;
+        template.RegistryUrl = imageReference;
+        template.RegistryAuth = request.RegistryAuth;
+        template.Status = ImageStatus.Importing;
+        template.UploadedAt = DateTimeOffset.UtcNow;
 
-        _context.ImageTemplates.Add(template);
+        if (existingTemplate is null)
+            _context.ImageTemplates.Add(template);
         await _context.SaveChangesAsync(token);
 
-        var imageName = request.Name;
-        var registryUrl = request.RegistryUrl;
+        var imageName = pullTarget.ImageName;
+        var registryUrl = pullTarget.RegistryUrl;
         var registryAuth = request.RegistryAuth;
         var templateId = template.Id;
         _ = Task.Run(async () =>
@@ -213,7 +218,7 @@ public class ImageTemplateController : ControllerBase
             try
             {
                 var orchestrator = scope.ServiceProvider.GetRequiredService<ContainerOrchestrator>();
-                await orchestrator.PullImageFromRegistryAsync(registryUrl ?? "", imageName, registryAuth);
+                await orchestrator.PullImageFromRegistryAsync(registryUrl, imageName, registryAuth);
                 var t = await ctx.ImageTemplates.FindAsync(templateId);
                 if (t is not null)
                 {
@@ -225,11 +230,127 @@ public class ImageTemplateController : ControllerBase
             {
                 var t = await ctx.ImageTemplates.FindAsync(templateId);
                 if (t is not null) { t.Status = ImageStatus.Error; await ctx.SaveChangesAsync(); }
-                _logger.LogWarning(ex, "Failed to pull Docker image: {Name}", imageName);
+                _logger.LogWarning(ex, "Failed to pull Docker image: {Image}", pullTarget.FullImage);
             }
         });
 
         return Ok(new { template.Id, template.Name, template.OSType, template.ImageType });
+    }
+
+    [HttpGet("docker-registry")]
+    [RequireAdmin]
+    public IActionResult GetDockerRegistrySettings()
+    {
+        return Ok(new
+        {
+            enabled = _dockerRegistry.IsConfigured,
+            address = _dockerRegistry.RegistryAddress,
+            @namespace = _dockerRegistry.RegistryNamespace,
+            maxUploadSizeGb = _dockerRegistry.MaxUploadSizeGb
+        });
+    }
+
+    /// <summary>
+    /// Upload a docker save archive and push it to the configured internal registry.
+    /// </summary>
+    [HttpPost("upload-docker")]
+    [RequestSizeLimit(60L * 1024 * 1024 * 1024)]
+    [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = 60L * 1024 * 1024 * 1024)]
+    [RequireAdmin]
+    public async Task<IActionResult> UploadDockerArchive(
+        [FromForm] IFormFile file,
+        [FromForm] string name,
+        [FromForm] string repository,
+        [FromForm] string tag,
+        [FromForm] string? sourceImage,
+        [FromForm] OSType osType,
+        CancellationToken token)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new { message = "No file provided" });
+        if (file.Length > _dockerRegistry.MaxUploadSizeBytes)
+            return BadRequest(new { message = "Docker archive exceeds configured upload size limit" });
+        if (string.IsNullOrWhiteSpace(name))
+            return BadRequest(new { message = "Template display name is required" });
+
+        var fileName = file.FileName.ToLowerInvariant();
+        var ext = Path.GetExtension(fileName);
+        if (fileName.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase))
+            ext = ".tar.gz";
+        else if (fileName.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase))
+            ext = ".tgz";
+
+        if (ext is not ".tar" and not ".tar.gz" and not ".tgz")
+            return BadRequest(new { message = "Unsupported Docker archive format. Allowed: .tar, .tar.gz, .tgz" });
+
+        string targetImage;
+        try
+        {
+            targetImage = _dockerRegistry.BuildInternalImageReference(repository, tag);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
+        var existingTemplate = await _context.ImageTemplates
+            .FirstOrDefaultAsync(t => t.ImageType == ImageType.Docker &&
+                                      (t.Name == name.Trim() || t.RegistryUrl == targetImage), token);
+        if (existingTemplate is not null && existingTemplate.Status != ImageStatus.Error)
+            return BadRequest(new { message = "同名或同 Registry URL 的 Docker 模板已存在" });
+
+        var tempDir = Path.Combine(Path.GetTempPath(), "gzctf_docker_uploads", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var archivePath = Path.Combine(tempDir, $"image{ext}");
+
+        try
+        {
+            await using (var stream = file.OpenReadStream())
+            await using (var fs = System.IO.File.Create(archivePath))
+                await stream.CopyToAsync(fs, token);
+
+            var result = await _dockerRegistry.ImportArchiveAsync(archivePath, repository, tag, sourceImage, token);
+            var template = existingTemplate ?? new ImageTemplate { ImageType = ImageType.Docker };
+            template.Name = name.Trim();
+            template.OSType = osType;
+            template.RegistryUrl = result.FullImage;
+            template.RegistryAuth = null;
+            template.Status = ImageStatus.Ready;
+            template.UploadedAt = DateTimeOffset.UtcNow;
+            template.FileSize = file.Length;
+            template.ImageHash = result.ImageId?.Replace("sha256:", string.Empty, StringComparison.OrdinalIgnoreCase);
+            template.OriginalArchiveName = file.FileName;
+            template.Description = $"Internal registry image loaded from {result.SourceImage}";
+
+            if (existingTemplate is null)
+                _context.ImageTemplates.Add(template);
+            await _context.SaveChangesAsync(token);
+
+            return Ok(new
+            {
+                template.Id,
+                template.Name,
+                template.OSType,
+                template.ImageType,
+                template.FileSize,
+                template.Status,
+                template.RegistryUrl,
+                template.ImageHash
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            return BadRequest(new { message = "Docker image upload was cancelled" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Docker archive upload failed for {TargetImage}", targetImage);
+            return BadRequest(new { message = ex.Message });
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, true); } catch { /* best effort cleanup */ }
+        }
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 using GZCTF.Models.Data;
 using GZCTF.Storage;
+using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Services;
@@ -112,9 +113,10 @@ public class EnvironmentService
 
                         if (template.RegistryUrl is not null)
                         {
-                            var imageName = template.Name.ToValidRFC1123String("img");
+                            var imageTarget =
+                                DockerImageReference.ResolvePullTarget(template.Name, template.RegistryUrl);
                             await _containerOrchestrator.PullImageFromRegistryAsync(
-                                template.RegistryUrl, imageName, template.RegistryAuth);
+                                imageTarget.RegistryUrl, imageTarget.ImageName, template.RegistryAuth);
                         }
 
                         connectionDetails.Add(new EnvironmentConnection

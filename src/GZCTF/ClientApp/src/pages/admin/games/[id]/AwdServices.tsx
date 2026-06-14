@@ -78,6 +78,24 @@ const defaultService = (): Omit<AwdpServiceViewModel, 'id'> => ({
   maxRecoveryCount: 5,
 })
 
+interface DockerImageTemplate {
+  id: number
+  name: string
+  registryUrl?: string | null
+  imageType?: string | number
+  status?: string | number
+}
+
+function templateKey(value: string | number | undefined | null) {
+  return String(value ?? '').toLowerCase()
+}
+
+function isReadyDockerTemplate(template: DockerImageTemplate) {
+  const status = templateKey(template.status)
+  const imageType = templateKey(template.imageType)
+  return (status === '0' || status === 'ready') && (imageType === '0' || imageType === 'docker') && template.registryUrl
+}
+
 const AwdServices: FC = () => {
   const { id } = useParams()
   const gameId = parseInt(id ?? '-1')
@@ -89,6 +107,7 @@ const AwdServices: FC = () => {
   const [status, setStatus] = useState<AwdpGameStatusModel>()
   const [instances, setInstances] = useState<AwdpServiceStatusModel[]>([])
   const [patches, setPatches] = useState<AwdpPatchSubmissionViewModel[]>([])
+  const [dockerTemplates, setDockerTemplates] = useState<DockerImageTemplate[]>([])
   const [loading, setLoading] = useState(false)
   const { t } = useTranslation()
   const awd = (key: string, defaultValue: string, options?: Record<string, unknown>) =>
@@ -144,6 +163,15 @@ const AwdServices: FC = () => {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    fetch('/api/v1/image-templates?imageType=0&pageSize=100')
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => setDockerTemplates((data.items ?? data ?? []).filter(isReadyDockerTemplate)))
+      .catch(() => {
+        setDockerTemplates([])
+      })
+  }, [])
 
   useEffect(() => {
     if (gameId <= 0) return
@@ -399,15 +427,31 @@ const AwdServices: FC = () => {
             </Group>
 
             <Divider label={awd('basic_config', 'Basic config')} labelPosition="left" />
-            <SimpleGrid cols={{ base: 1, md: 3 }}>
+            <SimpleGrid cols={{ base: 1, md: 4 }}>
               <TextInput
                 label={awd('service_name', 'Name')}
                 required
                 value={draft.name}
                 onChange={(e) => setDraft({ ...draft, name: e.currentTarget.value })}
               />
+              <Select
+                label={awd('registered_image', 'Registered image')}
+                placeholder={dockerTemplates.length === 0 ? awd('no_registered_image', 'No ready Docker image') : awd('select_image', 'Select image')}
+                data={dockerTemplates.map((template) => ({
+                  value: template.registryUrl ?? '',
+                  label: `${template.name} - ${template.registryUrl}`,
+                }))}
+                value={
+                  dockerTemplates.some((template) => template.registryUrl === draft.imageName) ? draft.imageName : null
+                }
+                onChange={(value) => {
+                  if (value) setDraft({ ...draft, imageName: value })
+                }}
+                searchable
+                clearable
+              />
               <TextInput
-                label={awd('container_image', 'Image')}
+                label={awd('container_image', 'Image address')}
                 required
                 value={draft.imageName}
                 onChange={(e) => setDraft({ ...draft, imageName: e.currentTarget.value })}
