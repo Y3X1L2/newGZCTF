@@ -21,6 +21,7 @@ import { FC, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router'
 import { WithGameTab } from '@Components/WithGameTab'
 import { WithNavBar } from '@Components/WithNavbar'
+import { YinyuGradientText, YinyuTextType } from '@Components/yinyu/YinyuReactBits'
 import { YinyuHeartbeatIcon, YinyuModalBody, YinyuPanel, YinyuStatePage } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import {
@@ -38,6 +39,9 @@ const questionTypeLabel = (type: TheoryQuestionType) =>
 const questionTypeShort = (type: TheoryQuestionType) =>
   type === TheoryQuestionType.MultipleChoice ? '多' : type === TheoryQuestionType.TrueFalse ? '判' : '单'
 
+const questionTypeTone = (type: TheoryQuestionType) =>
+  type === TheoryQuestionType.MultipleChoice ? 'multiple' : type === TheoryQuestionType.TrueFalse ? 'judge' : 'single'
+
 const TheoryQuestionCard: FC<{
   question: TheoryPlayerQuestionModel
   selected: number[]
@@ -52,12 +56,24 @@ const TheoryQuestionCard: FC<{
         <Group justify="space-between" align="flex-start">
           <Stack gap={6}>
             <Group gap="xs">
-              <Badge variant="light">{questionTypeLabel(question.type)}</Badge>
-              <Badge color="teal" variant="light">
+              <YinyuGradientText tone={questionTypeTone(question.type)} className="yy-theory-meta-gradient">
+                {questionTypeLabel(question.type)}
+              </YinyuGradientText>
+              <YinyuGradientText tone="score" className="yy-theory-meta-gradient">
                 {question.score} 分
-              </Badge>
+              </YinyuGradientText>
             </Group>
-            <Title order={4}>{question.title}</Title>
+            <YinyuTextType
+              key={`${question.id}-${question.title}`}
+              as="h4"
+              text={question.title}
+              loop={false}
+              typingSpeed={20}
+              showCursor
+              cursorCharacter="_"
+              cursorClassName="yy-theory-type-cursor"
+              className="yy-theory-question-title-type"
+            />
           </Stack>
         </Group>
 
@@ -211,16 +227,16 @@ const TheoryPage: FC = () => {
                     <Title order={3}>{paper.title}</Title>
                     {paper.description && <Text className="yy-readable-text">{paper.description}</Text>}
                     <Group gap="xs">
-                      <Badge variant="light">
+                      <YinyuGradientText tone="signal" className="yy-theory-stat-gradient">
                         {answeredCount} / {questions.length} 已作答
-                      </Badge>
-                      <Badge color="teal" variant="light">
+                      </YinyuGradientText>
+                      <YinyuGradientText tone="score" className="yy-theory-stat-gradient">
                         总分 {paper.totalScore}
-                      </Badge>
+                      </YinyuGradientText>
                       {submitted && (
-                        <Badge color="green" variant="light">
+                        <YinyuGradientText tone="ongoing" className="yy-theory-stat-gradient">
                           得分 {paper.score ?? 0} / {paper.totalScore}
-                        </Badge>
+                        </YinyuGradientText>
                       )}
                     </Group>
                   </Stack>
@@ -286,10 +302,12 @@ const TheoryPage: FC = () => {
                               第 {currentIndex + 1} 题 / 共 {questions.length} 题
                             </Text>
                             <Group gap="xs">
-                              <Badge color={currentAnswered ? 'teal' : 'gray'} variant="light">
+                              <YinyuGradientText tone={currentAnswered ? 'ongoing' : 'ended'} className="yy-theory-stat-gradient">
                                 {currentAnswered ? '已作答' : '未作答'}
-                              </Badge>
-                              <Badge variant="light">剩余 {questions.length - currentIndex - 1} 题</Badge>
+                              </YinyuGradientText>
+                              <YinyuGradientText tone="silver" className="yy-theory-stat-gradient">
+                                剩余 {questions.length - currentIndex - 1} 题
+                              </YinyuGradientText>
                             </Group>
                           </Stack>
                           <Group>

@@ -1,5 +1,11 @@
 .card {
   position: relative;
+  --yy-bento-x: 50%;
+  --yy-bento-y: 46%;
+  --yy-bento-active: 0;
+  --yy-bento-rotate-x: 0deg;
+  --yy-bento-rotate-y: 0deg;
+  --yy-bento-lift: 0;
   width: 100%;
   aspect-ratio: 1;
   min-height: 0;
@@ -9,8 +15,9 @@
   border-radius: calc(var(--yy-radius) - 2px);
   cursor: pointer;
   background:
-    radial-gradient(ellipse at 44% 10%, rgba(107, 238, 177, 0.14), transparent 46%),
-    radial-gradient(ellipse at 74% 90%, rgba(107, 238, 177, 0.075), transparent 42%),
+    radial-gradient(ellipse at var(--yy-bento-x) var(--yy-bento-y), rgba(154, 255, 209, 0.12), transparent 44%),
+    radial-gradient(ellipse at 44% 10%, rgba(107, 238, 177, 0.1), transparent 46%),
+    radial-gradient(ellipse at 74% 90%, rgba(224, 239, 232, 0.06), transparent 42%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.064), rgba(255, 255, 255, 0.018)),
     rgba(5, 7, 7, 0.88);
   box-shadow:
@@ -19,19 +26,23 @@
   transition:
     border-color 180ms ease,
     box-shadow 180ms ease,
-    transform 180ms ease,
+    transform 160ms ease,
     filter 180ms ease;
+  transform: perspective(900px) translate3d(0, var(--yy-bento-lift), 0) rotateX(var(--yy-bento-rotate-x))
+    rotateY(var(--yy-bento-rotate-y));
+  transform-style: preserve-3d;
+  will-change: transform;
 }
 
 .card:hover,
 .card:focus-visible {
+  --yy-bento-lift: -0.12rem;
   border-color: rgba(107, 238, 177, 0.54);
   box-shadow:
     inset 0 0 0 1px rgba(107, 238, 177, 0.18),
     0 0 2.2rem rgba(107, 238, 177, 0.14),
     0 1.3rem 2.6rem rgba(0, 0, 0, 0.3);
   filter: saturate(1.05);
-  transform: translateY(-0.12rem);
 }
 
 .card:focus-visible {
@@ -39,11 +50,16 @@
   outline-offset: 3px;
 }
 
-.card::before {
+.card::before,
+.card::after {
   content: '';
   position: absolute;
   inset: 0;
+  z-index: 0;
   pointer-events: none;
+}
+
+.card::before {
   background:
     var(--yy-hex-flow),
     linear-gradient(118deg, transparent 10%, rgba(107, 238, 177, 0.12) 40%, transparent 62%);
@@ -56,6 +72,17 @@
     transform 260ms ease;
 }
 
+.card::after {
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at var(--yy-bento-x) var(--yy-bento-y), rgba(159, 255, 214, 0.34), transparent 34%),
+    radial-gradient(circle at var(--yy-bento-x) var(--yy-bento-y), rgba(255, 255, 255, 0.12), transparent 18%),
+    linear-gradient(135deg, rgba(234, 255, 247, 0.11), transparent 34%, rgba(107, 238, 177, 0.12));
+  opacity: calc(var(--yy-bento-active) * 0.78);
+  mix-blend-mode: screen;
+  transition: opacity 170ms ease;
+}
+
 .card:hover::before,
 .card:focus-visible::before {
   opacity: 0.68;
@@ -64,6 +91,7 @@
 
 .scanGlow {
   position: absolute;
+  z-index: 0;
   inset: auto 4% -36%;
   height: 58%;
   pointer-events: none;
@@ -74,7 +102,7 @@
 
 .content {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   height: 100%;
   min-width: 0;
   text-align: center;

@@ -11,7 +11,7 @@ import { GameProgress } from '@Components/GameProgress'
 import { Markdown } from '@Components/MarkdownRenderer'
 import { WithNavBar } from '@Components/WithNavbar'
 import { BrandMark } from '@Components/yinyu/BrandMark'
-import { YinyuHexField, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
+import { YinyuGridScan, YinyuStatusText } from '@Components/yinyu/YinyuReactBits'
 import { useLanguage } from '@Utils/I18n'
 import { showErrorMsg } from '@Utils/Shared'
 import { useIsMobile } from '@Utils/ThemeOverride'
@@ -213,20 +213,18 @@ const GameDetail: FC = () => {
   )
 
   const statusText = started && !finished ? '进行中' : finished ? '已结束' : '未开始'
+  const hasIntro = Boolean(game?.content?.trim())
 
   return (
     <WithNavBar width="min(100%, calc(100vw - 7.25rem))" isLoading={!game} minWidth={0}>
-      <section className="yy-page-frame yy-game-detail-page">
-        <header className="panel-card yy-game-detail-hero">
-          <YinyuHexField cells={72} />
-          <Stack gap="md" className="yy-game-detail-copy">
+      <section className="yy-page-frame yy-game-detail-page yy-game-entry-page">
+        <header className="panel-card yy-game-detail-hero yy-game-entry-hero">
+          <YinyuGridScan className="yy-game-entry-gridscan" linesColor="#245A46" scanColor="#72F1B8" />
+          <Stack gap="md" className="yy-game-detail-copy yy-game-entry-copy">
             <Group gap="xs" className="yy-game-detail-kicker">
-              <YinyuStatusPill
-                tone={started && !finished ? 'success' : finished ? 'neutral' : 'warm'}
-                state={started && !finished ? 'running' : finished ? 'idle' : 'open'}
-              >
+              <YinyuStatusText tone={started && !finished ? 'success' : finished ? 'neutral' : 'warm'}>
                 {statusText}
-              </YinyuStatusPill>
+              </YinyuStatusText>
               <Badge variant="outline">
                 {!game || game.limit === 0
                   ? t('game.tag.multiplayer')
@@ -237,6 +235,13 @@ const GameDetail: FC = () => {
               {game?.hidden && <Badge variant="outline">{t('game.tag.hidden')}</Badge>}
             </Group>
             <Title order={1}>{game?.title}</Title>
+            <div className="yy-game-detail-emblem" aria-hidden="true" data-has-poster={game?.poster ? 'true' : undefined}>
+              {game?.poster ? (
+                <Image src={game.poster} alt="" fit="contain" className="yy-game-detail-poster" />
+              ) : (
+                <BrandMark className="yy-game-detail-brand" />
+              )}
+            </div>
             <Text className="yy-readable-text">
               <Trans i18nKey="game.content.joined_status" values={{ count: game?.teamCount ?? 0 }} />
             </Text>
@@ -251,44 +256,40 @@ const GameDetail: FC = () => {
               </div>
             </div>
             <GameProgress percentage={progress} />
+            <Stack gap="xs" className="yy-game-detail-alerts">
+              {GetAlert(status, game?.teamName ?? '')}
+              {teamRequire && (
+                <Alert
+                  color="yellow"
+                  icon={<Icon path={mdiAlertCircle} />}
+                  title={t('game.participation.alert.team_required.title')}
+                >
+                  <Trans i18nKey="game.participation.alert.team_required.content">
+                    _
+                    <Anchor component={Link} size="sm" to="/teams">
+                      _
+                    </Anchor>
+                    _
+                  </Trans>
+                </Alert>
+              )}
+              {status === ParticipationStatus.Accepted && !started && (
+                <Alert color="teal" icon={<Icon path={mdiCheck} />} title={t('game.participation.alert.not_started.title')}>
+                  {t('game.participation.alert.not_started.content', {
+                    team: game?.teamName ?? '',
+                  })}
+                  {isMobile && t('game.participation.alert.not_started.mobile')}
+                </Alert>
+              )}
+            </Stack>
+            {hasIntro && (
+              <div className="yy-game-detail-intro">
+                <Markdown source={game?.content ?? ''} />
+              </div>
+            )}
             <Group className="yy-game-detail-actions">{ControlButtons}</Group>
           </Stack>
-          <div className="yy-game-detail-emblem" aria-hidden="true" data-has-poster={game?.poster ? 'true' : undefined}>
-            {game?.poster ? (
-              <Image src={game.poster} alt="" fit="cover" className="yy-game-detail-poster" />
-            ) : (
-              <BrandMark className="yy-game-detail-brand" />
-            )}
-          </div>
         </header>
-        <Stack gap="xs" className="panel-card yy-game-detail-content" p="lg">
-          <YinyuHexField cells={48} />
-          {GetAlert(status, game?.teamName ?? '')}
-          {teamRequire && (
-            <Alert
-              color="yellow"
-              icon={<Icon path={mdiAlertCircle} />}
-              title={t('game.participation.alert.team_required.title')}
-            >
-              <Trans i18nKey="game.participation.alert.team_required.content">
-                _
-                <Anchor component={Link} size="sm" to="/teams">
-                  _
-                </Anchor>
-                _
-              </Trans>
-            </Alert>
-          )}
-          {status === ParticipationStatus.Accepted && !started && (
-            <Alert color="teal" icon={<Icon path={mdiCheck} />} title={t('game.participation.alert.not_started.title')}>
-              {t('game.participation.alert.not_started.content', {
-                team: game?.teamName ?? '',
-              })}
-              {isMobile && t('game.participation.alert.not_started.mobile')}
-            </Alert>
-          )}
-          <Markdown source={game?.content ?? ''} />
-        </Stack>
         <GameJoinModal
           title={t('game.content.join.title')}
           opened={joinModalOpen}

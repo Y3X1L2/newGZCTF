@@ -623,6 +623,9 @@ public class GameRepository(
         var awdpStates = game.GameType is GameType.AWDP or GameType.Mixed
             ? await GetAwdpScoreStates(game.Id, token)
             : new Dictionary<int, AwdpScoreState>();
+        var penetrationStates = game.GameType is GameType.Penetration or GameType.Mixed
+            ? await GetPenetrationScoreStates(game.Id, token)
+            : new Dictionary<int, PenetrationScoreState>();
 
         if (awdpStates.Count > 0)
         {
@@ -633,6 +636,20 @@ public class GameRepository(
                     continue;
 
                 item.AwdScore = state.TotalScore;
+                if (state.LastScoreTime > item.LastSubmissionTime)
+                    item.LastSubmissionTime = state.LastScoreTime;
+            }
+        }
+
+        if (penetrationStates.Count > 0)
+        {
+            var itemsByTeamId = items.Values.ToDictionary(i => i.Id);
+            foreach (var (teamId, state) in penetrationStates)
+            {
+                if (!itemsByTeamId.TryGetValue(teamId, out var item))
+                    continue;
+
+                item.PentestScore = state.TotalScore;
                 if (state.LastScoreTime > item.LastSubmissionTime)
                     item.LastSubmissionTime = state.LastScoreTime;
             }
@@ -692,6 +709,8 @@ public class GameRepository(
                         Items = item.SolvedChallenges
                             .Select(c => new ScoreTimelineEvent(c.SubmitTimeUtc, c.Score))
                             .Concat(awdpStates.GetValueOrDefault(item.Id)?.TimelineEvents ??
+                                    Enumerable.Empty<ScoreTimelineEvent>())
+                            .Concat(penetrationStates.GetValueOrDefault(item.Id)?.TimelineEvents ??
                                     Enumerable.Empty<ScoreTimelineEvent>())
                             .OrderBy(e => e.Time)
                             .Aggregate(new List<TimeLine>(), (acc, e) =>
@@ -877,6 +896,49 @@ public class GameRepository(
             };
 
             GetState(patch.TeamId).Add(delta, patch.SubmittedAt);
+        }
+
+        return states;
+    }
+
+    private sealed class PenetrationScoreState
+    {
+        public int TotalScore { get; private set; }
+        public DateTimeOffset LastScoreTime { get; private set; } = DateTimeOffset.MinValue;
+        public List<ScoreTimelineEvent> TimelineEvents { get; } = [];
+
+        public void Add(int score, DateTimeOffset time)
+        {
+            if (score == 0)
+                return;
+
+            TotalScore += score;
+            TimelineEvents.Add(new ScoreTimelineEvent(time, score));
+            if (time > LastScoreTime)
+                LastScoreTime = time;
+        }
+    }
+
+    private async Task<Dictionary<int, PenetrationScoreState>> GetPenetrationScoreStates(int gameId,
+        CancellationToken token = default)
+    {
+        var firstSolves = await Context.PenetrationSubmissions.AsNoTracking()
+            .Where(s => s.GameId == gameId && s.Status == AnswerResult.Accepted)
+            .GroupBy(s => new { s.TeamId, s.ScoreItemId })
+            .Select(g => g.OrderBy(s => s.SubmittedAt).First())
+            .Select(s => new { s.TeamId, s.Score, s.SubmittedAt })
+            .ToArrayAsync(token);
+
+        Dictionary<int, PenetrationScoreState> states = [];
+        foreach (var solve in firstSolves)
+        {
+            if (!states.TryGetValue(solve.TeamId, out var state))
+            {
+                state = new PenetrationScoreState();
+                states[solve.TeamId] = state;
+            }
+
+            state.Add(solve.Score, solve.SubmittedAt);
         }
 
         return states;

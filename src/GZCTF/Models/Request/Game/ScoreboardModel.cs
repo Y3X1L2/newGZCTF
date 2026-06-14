@@ -226,10 +226,16 @@ public partial class ScoreboardItem
     public int AwdScore { get; set; }
 
     /// <summary>
+    /// Penetration Score
+    /// </summary>
+    [Required]
+    public int PentestScore { get; set; }
+
+    /// <summary>
     /// Total Score
     /// </summary>
     [Required]
-    public int Score => CtfScore + AwdScore;
+    public int Score => CtfScore + AwdScore + PentestScore;
 
     /// <summary>
     /// Rank

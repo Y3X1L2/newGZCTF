@@ -133,6 +133,7 @@ export enum GameType {
   Jeopardy = "Jeopardy",
   AWDP = "AWDP",
   Theory = "Theory",
+  Penetration = "Penetration",
   Mixed = "Mixed",
 }
 
@@ -1711,6 +1712,11 @@ export interface ScoreboardItem {
    * @format int32
    */
   awdScore: number;
+  /**
+   * Penetration Score
+   * @format int32
+   */
+  pentestScore: number;
   /**
    * Total Score
    * @format int32

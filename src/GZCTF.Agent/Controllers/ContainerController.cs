@@ -26,4 +26,11 @@ public class ContainerController : ControllerBase
         await _docker.DestroyContainerAsync(containerId, token);
         return NoContent();
     }
+
+    [HttpDelete("networks/{networkName}")]
+    public async Task<IActionResult> RemoveNetwork(string networkName, CancellationToken token)
+    {
+        await _docker.RemoveNetworkAsync(networkName, token);
+        return NoContent();
+    }
 }

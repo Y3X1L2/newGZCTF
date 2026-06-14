@@ -168,9 +168,9 @@
   color: var(--yy-text);
   font-family: var(--font-display);
   font-size: clamp(1.45rem, 2.15vw, 2.35rem);
-  font-stretch: condensed;
-  font-weight: 840;
-  line-height: 1.08;
+  font-stretch: normal;
+  font-weight: 900;
+  line-height: 1.02;
   overflow-wrap: anywhere;
   text-shadow: var(--yy-title-glow);
 }
@@ -184,6 +184,8 @@
 
 .status {
   flex: 0 0 auto;
+  margin-top: 0.16rem;
+  text-align: right;
 }
 
 .metaGrid {

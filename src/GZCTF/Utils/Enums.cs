@@ -212,7 +212,13 @@ public enum GameType : byte
     /// Mixed mode
     /// </summary>
     [Description("Mixed")]
-    Mixed = 3
+    Mixed = 3,
+
+    /// <summary>
+    /// Penetration mode
+    /// </summary>
+    [Description("Penetration")]
+    Penetration = 4
 }
 
 /// <summary>

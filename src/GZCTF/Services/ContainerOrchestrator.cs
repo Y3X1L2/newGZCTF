@@ -48,9 +48,7 @@ public class ContainerOrchestrator
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
 
-        var fullImage = string.IsNullOrWhiteSpace(registryUrl)
-            ? imageName
-            : $"{registryUrl.TrimEnd('/')}/{imageName}";
+        var fullImage = ResolveDockerImageReference(registryUrl, imageName);
 
         _logger.LogInformation("Pulling Docker image '{Image}' from registry", fullImage);
 
@@ -88,15 +86,32 @@ public class ContainerOrchestrator
         }
     }
 
+    static string ResolveDockerImageReference(string? registryUrl, string imageName)
+    {
+        var image = imageName.Trim();
+        var registry = registryUrl?.Trim().TrimEnd('/');
+
+        if (string.IsNullOrWhiteSpace(registry))
+            return image;
+
+        var lastSlash = registry.LastIndexOf('/');
+        var lastSegment = lastSlash >= 0 ? registry[(lastSlash + 1)..] : registry;
+        var looksLikeFullImage = registry.Contains('@') || lastSegment.Contains(':');
+
+        return looksLikeFullImage ? registry : $"{registry}/{image}";
+    }
+
     /// <summary>
     /// Creates an isolated Docker bridge network for scenario environment isolation.
     /// The network has no external connectivity by default.
     /// </summary>
     /// <param name="networkName">Unique name for the Docker network.</param>
     /// <param name="enableHostPortPublishing">Allows AWDP services on this network to publish ports to the host.</param>
+    /// <param name="subnetCidr">Optional IPv4 subnet assigned to the Docker bridge network.</param>
     /// <returns>The created network ID.</returns>
     /// <exception cref="ContainerOrchestrationException">Thrown when network creation fails.</exception>
-    public async Task<string> CreateIsolatedNetwork(string networkName, bool enableHostPortPublishing = false)
+    public async Task<string> CreateIsolatedNetwork(string networkName, bool enableHostPortPublishing = false,
+        string? subnetCidr = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(networkName);
 
@@ -115,19 +130,27 @@ public class ContainerOrchestrator
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_timeoutSeconds));
 
-            var response = await _client.Networks.CreateNetworkAsync(
-                new NetworksCreateParameters
+            var parameters = new NetworksCreateParameters
+            {
+                Name = networkName,
+                Driver = "bridge",
+                Internal = !enableHostPortPublishing,
+                Attachable = true,
+                Options = new Dictionary<string, string>
                 {
-                    Name = networkName,
-                    Driver = "bridge",
-                    Internal = !enableHostPortPublishing,
-                    Attachable = true,
-                    Options = new Dictionary<string, string>
-                    {
-                        ["com.docker.network.bridge.enable_ip_masquerade"] = "false"
-                    }
-                },
-                cts.Token);
+                    ["com.docker.network.bridge.enable_ip_masquerade"] = "false"
+                }
+            };
+
+            if (!string.IsNullOrWhiteSpace(subnetCidr))
+            {
+                parameters.IPAM = new IPAM
+                {
+                    Config = [new IPAMConfig { Subnet = subnetCidr }]
+                };
+            }
+
+            var response = await _client.Networks.CreateNetworkAsync(parameters, cts.Token);
 
             _logger.LogInformation("Isolated Docker network '{NetworkName}' created (ID: {NetworkId})",
                 networkName, response.ID);

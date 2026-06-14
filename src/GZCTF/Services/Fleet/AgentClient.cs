@@ -44,7 +44,16 @@ public class AgentClient
             config.Image, config.TeamId, config.ChallengeId, config.UserId,
             config.ExposedPort, config.Flag, config.EnableTrafficCapture,
             config.MemoryLimit, config.CPUCount, config.StorageLimit,
-            NetworkMode = config.NetworkMode.ToString()
+            NetworkMode = config.NetworkMode.ToString(),
+            config.NetworkName,
+            config.IPAddress,
+            config.AdditionalNetworkNames,
+            config.NetworkSubnets,
+            config.NetworkAttachments,
+            config.PublishPort,
+            config.EnvironmentVariables,
+            config.StartCommand,
+            config.HealthCheck
         });
         var response = await client.PostAsync("/api/containers/create", new StringContent(body, Encoding.UTF8, "application/json"), token);
 
@@ -70,6 +79,23 @@ public class AgentClient
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Agent destroy container failed on node {NodeId}", nodeId);
+        }
+    }
+
+    public async Task RemoveNetworkAsync(Guid nodeId, string networkName, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null) return;
+
+        var client = BuildClient(node);
+        try
+        {
+            await client.DeleteAsync($"/api/containers/networks/{Uri.EscapeDataString(networkName)}", token);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Agent network removal failed on node {NodeId} for {NetworkName}",
+                nodeId, networkName);
         }
     }
 

@@ -4,7 +4,8 @@ import { ComponentPropsWithoutRef, FC, memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { BrandMark } from '@Components/yinyu/BrandMark'
-import { YinyuHexField, YinyuStatusPill, YinyuStatusTone } from '@Components/yinyu/YinyuUI'
+import { YinyuStatusText } from '@Components/yinyu/YinyuReactBits'
+import { YinyuHexField, YinyuStatusTone } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
 import { getGameStatus, toLimitTag } from '@Hooks/useGame'
 import { BasicGameInfoModel } from '@Api'
@@ -102,9 +103,9 @@ export const GameCard: FC<GameCardProps> = memo(({ game, compact = false, classN
             <span className={classes.kicker}>YINYU EXERCISE</span>
             <h4>{title}</h4>
           </div>
-          <YinyuStatusPill tone={tone} state={gameStatusState(status)} className={classes.status}>
+          <YinyuStatusText tone={tone} className={classes.status}>
             {statusText}
-          </YinyuStatusPill>
+          </YinyuStatusText>
         </Group>
         <Text lineClamp={2} className={cx('yy-readable-text', classes.summary)}>
           {summary || '\u6682\u65e0\u6f14\u7ec3\u7b80\u4ecb\uff0c\u7ba1\u7406\u5458\u53ef\u5728\u8d5b\u4e8b\u7f16\u8f91\u9875\u8865\u5145\u76ee\u6807\u3001\u89c4\u5219\u4e0e\u6ce8\u610f\u4e8b\u9879\u3002'}

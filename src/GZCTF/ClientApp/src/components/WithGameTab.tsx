@@ -6,6 +6,7 @@ import {
   mdiFileDocumentCheckOutline,
   mdiFlagOutline,
   mdiMonitorEye,
+  mdiNetworkOutline,
   mdiSwordCross,
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
@@ -51,7 +52,7 @@ const GameCountdown: FC<{ game?: DetailedGameInfoModel }> = ({ game }) => {
         </strong>
       </div>
       <div className="yy-game-countdown-progress">
-        <span>回合进度</span>
+        <span>赛事进度</span>
         <GameProgress percentage={progress} py={0} />
       </div>
     </div>
@@ -72,16 +73,31 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
 
   const isAwdGame = game?.gameType === GameType.AWDP || game?.gameType === GameType.Mixed
   const isTheoryGame = game?.gameType === GameType.Theory || game?.gameType === GameType.Mixed
+  const isPentestGame = game?.gameType === GameType.Penetration || game?.gameType === GameType.Mixed
   const isTheoryOnly = game?.gameType === GameType.Theory
+  const isPentestOnly = game?.gameType === GameType.Penetration
 
   const pages = [
-    ...(!isTheoryOnly
+    ...(!isTheoryOnly && !isPentestOnly
       ? [
           {
             icon: mdiFlagOutline,
             title: t('game.tab.challenge'),
             path: 'challenges',
             link: 'challenges',
+            requireJoin: true,
+            requireRole: Role.User,
+            requireAwd: false,
+          },
+        ]
+      : []),
+    ...(isPentestGame
+      ? [
+          {
+            icon: mdiNetworkOutline,
+            title: '渗透演练',
+            path: 'pentest',
+            link: 'pentest',
             requireJoin: true,
             requireRole: Role.User,
             requireAwd: false,

@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next'
 import { InstanceEntry } from '@Components/InstanceEntry'
 import { ContentPlaceholder, InlineMarkdown, Markdown } from '@Components/MarkdownRenderer'
 import { VmInstanceEntry } from '@Components/VmInstanceEntry'
+import { YinyuScrambledText } from '@Components/yinyu/YinyuReactBits'
 import { YinyuHeartbeatIcon, YinyuHexField, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
 import { ChallengeCategoryItemProps } from '@Utils/Shared'
@@ -128,15 +129,6 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
     }),
     []
   )
-
-  const placeholders = t('challenge.content.flag_placeholders', {
-    returnObjects: true,
-  }) as string[]
-
-  const [placeholder, setPlaceholder] = useState('')
-  useEffect(() => {
-    setPlaceholder(placeholders[Math.floor(Math.random() * placeholders.length)])
-  }, [challenge])
 
   const deadlineTime = useMemo(() => (challenge?.deadline ? dayjs(challenge.deadline) : null), [challenge?.deadline])
   const [isDeadlinePassed, setIsDeadlinePassed] = useState(() => (deadlineTime ? dayjs().isAfter(deadlineTime) : false))
@@ -325,13 +317,26 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
         }}
       >
         <Group justify="space-between" gap="sm" align="flex-end">
-          <TextInput
-            placeholder={placeholder}
-            value={inputValue}
-            disabled={inputDisabled}
-            onChange={setFlag}
-            classNames={{ root: misc.flexGrow, input: misc.ffmono }}
-          />
+          <div className="yy-flag-input-shell">
+            {!flag && !inputDisabled && (
+              <YinyuScrambledText
+                className="yy-scrambled-flag-placeholder"
+                radius={96}
+                duration={1.1}
+                speed={0.48}
+                scrambleChars="{}[]<>_:/\\"
+              >
+                flag{'{where is you}'}
+              </YinyuScrambledText>
+            )}
+            <TextInput
+              placeholder=""
+              value={inputValue}
+              disabled={inputDisabled}
+              onChange={setFlag}
+              classNames={{ root: misc.flexGrow, input: misc.ffmono }}
+            />
+          </div>
           <Button miw="6rem" type="submit" disabled={inputDisabled}>
             {t('challenge.button.submit_flag')}
           </Button>

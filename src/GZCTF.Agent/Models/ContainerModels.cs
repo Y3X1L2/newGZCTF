@@ -13,6 +13,24 @@ public class CreateContainerRequest
     public int CPUCount { get; set; } = 1;
     public int StorageLimit { get; set; } = 256;
     public string NetworkMode { get; set; } = "Open";
+    public string? NetworkName { get; set; }
+    public string? IPAddress { get; set; }
+    public List<string> AdditionalNetworkNames { get; set; } = [];
+    public Dictionary<string, string> NetworkSubnets { get; set; } = [];
+    public bool PublishPort { get; set; } = true;
+    public Dictionary<string, string> EnvironmentVariables { get; set; } = [];
+    public string? StartCommand { get; set; }
+    public string? HealthCheck { get; set; }
+    public List<ContainerNetworkAttachment> NetworkAttachments { get; set; } = [];
+}
+
+public class ContainerNetworkAttachment
+{
+    public string NetworkName { get; set; } = string.Empty;
+    public string? SubnetCidr { get; set; }
+    public string? IPAddress { get; set; }
+    public bool IsPrimary { get; set; }
+    public bool IsInternal { get; set; }
 }
 
 public class AgentContainerResponse

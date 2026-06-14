@@ -61,4 +61,62 @@ public class ContainerConfig
     /// Custom Docker network name (overrides NetworkMode when set)
     /// </summary>
     public string? NetworkName { get; set; }
+
+    /// <summary>
+    /// Fixed IPv4 address inside the primary custom network.
+    /// </summary>
+    public string? IPAddress { get; set; }
+
+    /// <summary>
+    /// Additional custom Docker network names to connect after creation.
+    /// </summary>
+    public List<string> AdditionalNetworkNames { get; set; } = [];
+
+    /// <summary>
+    /// Optional CIDR subnets for custom Docker networks, keyed by network name.
+    /// </summary>
+    public Dictionary<string, string> NetworkSubnets { get; set; } = [];
+
+    /// <summary>
+    /// Whether the exposed port should be published to the host.
+    /// </summary>
+    public bool PublishPort { get; set; } = true;
+
+    /// <summary>
+    /// Extra container environment variables.
+    /// </summary>
+    public Dictionary<string, string> EnvironmentVariables { get; set; } = [];
+
+    /// <summary>
+    /// Optional command override.
+    /// </summary>
+    public string? StartCommand { get; set; }
+
+    /// <summary>
+    /// Optional shell health check command.
+    /// </summary>
+    public string? HealthCheck { get; set; }
+
+    /// <summary>
+    /// Optional fixed fleet node target. When set, fleet deployment must use this node.
+    /// </summary>
+    public Guid? PreferredNodeId { get; set; }
+
+    /// <summary>
+    /// Explicit network attachments. When present, these supersede NetworkName/IPAddress/AdditionalNetworkNames.
+    /// </summary>
+    public List<ContainerNetworkAttachment> NetworkAttachments { get; set; } = [];
+}
+
+public class ContainerNetworkAttachment
+{
+    public string NetworkName { get; set; } = string.Empty;
+    public string? SubnetCidr { get; set; }
+    public string? IPAddress { get; set; }
+    public bool IsPrimary { get; set; }
+
+    /// <summary>
+    /// Create the Docker bridge as an internal network, preventing direct external routing for inner segments.
+    /// </summary>
+    public bool IsInternal { get; set; }
 }

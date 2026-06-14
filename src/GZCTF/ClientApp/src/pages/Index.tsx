@@ -7,6 +7,7 @@ import { GameCard, compareGamesForDisplay } from '@Components/GameCard'
 import { PostCard } from '@Components/PostCard'
 import { WithNavBar } from '@Components/WithNavbar'
 import { BrandMark } from '@Components/yinyu/BrandMark'
+import { YinyuGradientText } from '@Components/yinyu/YinyuReactBits'
 import { YinyuHeartbeatIcon, YinyuHexField, YinyuRouteLoader, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
 import { PLATFORM_BRAND } from '@Utils/Brand'
 import { showErrorMsg } from '@Utils/Shared'
@@ -115,7 +116,9 @@ const Home: FC = () => {
       <section className="original-home yy-page-frame yy-home-page yy-home-recomposed">
         <div className="home-title-row yy-home-title-row">
           <BrandMark />
-          <h3>{PLATFORM_BRAND}</h3>
+          <h3 className="yy-home-brand-heading">
+            <YinyuGradientText tone="brand">{PLATFORM_BRAND}</YinyuGradientText>
+          </h3>
           <TerminalTyping lines={terminalLines} />
         </div>
 

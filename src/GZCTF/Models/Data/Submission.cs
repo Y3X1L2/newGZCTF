@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 
@@ -45,7 +46,14 @@ public class Submission
     /// Challenge that was submitted
     /// </summary>
     [JsonPropertyName("challenge")]
-    public string ChallengeName => GameChallenge?.Title ?? string.Empty;
+    public string ChallengeName => GameChallenge?.Title ?? DisplayChallengeName ?? string.Empty;
+
+    /// <summary>
+    /// Runtime-only challenge label for non-Jeopardy submission feeds.
+    /// </summary>
+    [NotMapped]
+    [JsonIgnore]
+    public string? DisplayChallengeName { get; set; }
 
     /// <summary>
     /// Type of submission (Flag, Writeup, IP, Credential, Custom)

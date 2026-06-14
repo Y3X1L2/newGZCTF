@@ -43,6 +43,9 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             return await _localManager.CreateContainerAsync(config, token);
         }
 
+        if (config.PreferredNodeId is { } preferredNodeId)
+            return await CreateOnPreferredNodeAsync(config, preferredNodeId, nodeRepo, context, token);
+
         var target = new DeploymentTarget
         {
             Type = TargetType.Docker,
@@ -93,6 +96,16 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             CPUCount = config.CPUCount,
             StorageLimit = config.StorageLimit,
             NetworkMode = config.NetworkMode,
+            NetworkName = config.NetworkName,
+            IPAddress = config.IPAddress,
+            AdditionalNetworkNames = config.AdditionalNetworkNames,
+            NetworkSubnets = config.NetworkSubnets,
+            NetworkAttachments = config.NetworkAttachments,
+            PublishPort = config.PublishPort,
+            EnvironmentVariables = config.EnvironmentVariables,
+            StartCommand = config.StartCommand,
+            HealthCheck = config.HealthCheck,
+            PreferredNodeId = config.PreferredNodeId
         };
         var result = await _agentClient.CreateContainerAsync(nodeId.Value, remoteConfig, token);
 
@@ -125,6 +138,70 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         return remoteContainer;
     }
 
+    async Task<DataContainer?> CreateOnPreferredNodeAsync(ContainerConfig config, Guid nodeId,
+        INodeRepository nodeRepo, AppDbContext context, CancellationToken token)
+    {
+        var node = await nodeRepo.GetNodeByIdAsync(nodeId, token);
+        var target = new DeploymentTarget
+        {
+            Type = TargetType.Docker,
+            Action = TargetAction.Create,
+            TargetNodeId = nodeId,
+            Payload = JsonSerializer.Serialize(config),
+            Status = TargetStatus.Running
+        };
+        context.DeploymentTargets.Add(target);
+
+        if (node is null || !WeightedScheduler.CanHost(node, NodeCapability.Docker))
+        {
+            target.Status = TargetStatus.Failed;
+            target.CompletedAt = DateTimeOffset.UtcNow;
+            target.ErrorMessage = node is null ? "Preferred fleet node not found" : "Preferred fleet node cannot host Docker containers";
+            await context.SaveChangesAsync(token);
+            return null;
+        }
+
+        FleetManager.ReserveCapacity(node, NodeCapability.Docker);
+
+        if (node.IsLocal)
+        {
+            var localContainer = await _localManager.CreateContainerAsync(config, token);
+            if (localContainer is not null)
+                localContainer.NodeId = node.Id;
+            else
+                ReleaseReservedCapacity(node, NodeCapability.Docker);
+
+            CompleteDeploymentTarget(target, localContainer, node.HostAddress);
+            await context.SaveChangesAsync(token);
+            return localContainer;
+        }
+
+        var result = await _agentClient.CreateContainerAsync(node.Id, config, token);
+        if (result is null)
+        {
+            ReleaseReservedCapacity(node, NodeCapability.Docker);
+            FailDeploymentTarget(target, "Agent container creation failed on preferred node");
+            await context.SaveChangesAsync(token);
+            return null;
+        }
+
+        var remoteContainer = new DataContainer
+        {
+            ContainerId = result.ContainerId,
+            Image = config.Image,
+            IP = result.IP,
+            Port = result.Port,
+            PublicIP = node.HostAddress,
+            PublicPort = result.PublicPort,
+            IsProxy = false,
+            Status = ContainerStatus.Running,
+            NodeId = node.Id,
+        };
+        CompleteDeploymentTarget(target, remoteContainer, node.HostAddress);
+        await context.SaveChangesAsync(token);
+        return remoteContainer;
+    }
+
     public async Task DestroyContainerAsync(DataContainer container, CancellationToken token = default)
     {
         if (!container.NodeId.HasValue)
@@ -135,6 +212,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
 
         using var scope = _scopeFactory.CreateScope();
         var nodeRepo = scope.ServiceProvider.GetRequiredService<INodeRepository>();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var node = await nodeRepo.GetNodeByIdAsync(container.NodeId.Value, token);
 
         if (node?.IsLocal == true)
@@ -152,6 +230,12 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
                 _logger.LogWarning(ex, "Agent container destruction failed for {ContainerId}", container.ContainerId);
             }
             container.Status = ContainerStatus.Destroyed;
+        }
+
+        if (node is not null)
+        {
+            ReleaseReservedCapacity(node, NodeCapability.Docker);
+            await context.SaveChangesAsync(token);
         }
     }
 

@@ -1,11 +1,149 @@
 /* Final YINYU visual refinement layer. Keep this after YinyuTheme.css. */
 :root {
   --font-display:
-    'Bahnschrift', 'Bahnschrift SemiCondensed', 'DIN Alternate', 'Segoe UI Variable Display', 'Microsoft YaHei UI',
-    'Noto Sans SC', ui-sans-serif, system-ui, sans-serif;
-  --yy-title-glow: 0 0 2rem rgba(107, 238, 177, 0.13), 0 0.9rem 2.4rem rgba(0, 0, 0, 0.42);
+    'Soft Aurora', 'Lexend', 'Arial Rounded MT Bold', 'Nunito Sans', 'Aptos Display', 'Segoe UI Variable Display',
+    'Microsoft YaHei UI', 'Noto Sans SC', ui-rounded, ui-sans-serif, system-ui, sans-serif;
+  --yy-title-glow: 0 0 2.2rem rgba(116, 255, 194, 0.16), 0 1rem 2.6rem rgba(0, 0, 0, 0.42);
   --yy-hex-border: rgba(118, 255, 189, 0.24);
   --yy-hex-border-hot: rgba(107, 238, 177, 0.72);
+  --yy-gradient-brand: #ffffff 0%, #dffcf0 16%, #70ffc4 32%, #d7dedb 47%, #34d88b 62%, #ecfff7 78%, #9affd2 100%;
+  --yy-gradient-signal: #f5fff9 0%, #9dffd5 22%, #42f49d 48%, #d8fff0 70%, #ffffff 100%;
+  --yy-gradient-silver: #ffffff 0%, #d8e4df 24%, #8fa099 42%, #eef7f3 58%, #7ef2bd 78%, #fbfffd 100%;
+  --yy-gradient-coming: #fff5c8 0%, #f2c95b 26%, #dcffe9 52%, #74efb8 74%, #fff9df 100%;
+  --yy-gradient-ended: #f4faf7 0%, #b7c3be 24%, #7f8d87 46%, #e6efeb 67%, #cfdad5 100%;
+  --yy-gradient-danger: #fff2ec 0%, #ffb091 24%, #ff6d5e 48%, #ffe5d7 72%, #f7fff9 100%;
+}
+
+.yy-react-gradient-text {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: baseline;
+  color: inherit;
+  font: inherit;
+  font-stretch: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  vertical-align: baseline;
+}
+
+.yy-reactbits-gradient-original {
+  display: inline-flex !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  overflow: visible !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  font: inherit !important;
+  font-weight: inherit !important;
+  line-height: inherit !important;
+  cursor: inherit !important;
+  vertical-align: baseline !important;
+}
+
+.yy-reactbits-gradient-original > div:last-child {
+  display: inline-block !important;
+  max-width: 100% !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  -webkit-background-clip: text !important;
+  filter: drop-shadow(0 0 0.82rem rgba(116, 255, 194, 0.2));
+}
+
+.yy-gradient-brand .yy-reactbits-gradient-original > div:last-child {
+  filter:
+    drop-shadow(0 0 1rem rgba(110, 255, 184, 0.28))
+    drop-shadow(0 0 1.35rem rgba(168, 85, 247, 0.14));
+}
+
+.yy-gradient-coming .yy-reactbits-gradient-original > div:last-child {
+  filter: drop-shadow(0 0 0.72rem rgba(255, 209, 102, 0.22));
+}
+
+.yy-gradient-ended .yy-reactbits-gradient-original > div:last-child,
+.yy-gradient-silver .yy-reactbits-gradient-original > div:last-child {
+  filter: drop-shadow(0 0 0.58rem rgba(220, 232, 226, 0.16));
+}
+
+.yy-gradient-danger .yy-reactbits-gradient-original > div:last-child {
+  filter: drop-shadow(0 0 0.7rem rgba(255, 90, 110, 0.24));
+}
+
+.yy-react-gradient-text-inner {
+  display: inline;
+  max-width: 100%;
+  overflow-wrap: inherit;
+  background-image: linear-gradient(112deg, var(--yy-gradient-brand));
+  background-size: 240% 100%;
+  background-position: 0% 50%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 0.7rem rgba(116, 255, 194, 0.16));
+  animation: yy-gradient-text-flow 5.8s cubic-bezier(0.45, 0, 0.2, 1) infinite alternate;
+}
+
+.yy-gradient-signal .yy-react-gradient-text-inner,
+.yy-gradient-ongoing .yy-react-gradient-text-inner {
+  background-image: linear-gradient(108deg, var(--yy-gradient-signal));
+  filter: drop-shadow(0 0 0.62rem rgba(107, 238, 177, 0.2));
+}
+
+.yy-gradient-silver .yy-react-gradient-text-inner {
+  background-image: linear-gradient(112deg, var(--yy-gradient-silver));
+  filter: drop-shadow(0 0 0.48rem rgba(220, 242, 232, 0.13));
+}
+
+.yy-gradient-coming .yy-react-gradient-text-inner {
+  background-image: linear-gradient(110deg, var(--yy-gradient-coming));
+  filter: drop-shadow(0 0 0.5rem rgba(201, 255, 220, 0.14));
+}
+
+.yy-gradient-ended .yy-react-gradient-text-inner {
+  background-image: linear-gradient(112deg, var(--yy-gradient-ended));
+  filter: drop-shadow(0 0 0.42rem rgba(190, 210, 202, 0.12));
+}
+
+.yy-gradient-danger .yy-react-gradient-text-inner {
+  background-image: linear-gradient(112deg, var(--yy-gradient-danger));
+  filter: drop-shadow(0 0 0.54rem rgba(255, 109, 94, 0.18));
+}
+
+.yy-react-status-text {
+  flex: 0 0 auto;
+  min-width: max-content;
+  padding: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.08rem, 1.22vw, 1.36rem);
+  font-weight: 900;
+  line-height: 1.02;
+  white-space: nowrap;
+  text-shadow: 0 0 1.1rem rgba(116, 255, 194, 0.14);
+}
+
+.yy-react-status-text .yy-react-gradient-text-inner {
+  animation-duration: 4.8s;
+}
+
+:where(h1, h2, h3, h4, .mantine-Title-root, .panel-title, .yy-panel-title-strong, .yy-section-kicker) {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-stretch: normal;
+  letter-spacing: 0;
+}
+
+@keyframes yy-gradient-text-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  100% {
+    background-position: 100% 50%;
+  }
 }
 
 .yy-brand-title,
@@ -13,11 +151,15 @@
 .yy-about-heading h1,
 .yy-section-head h1,
 .yy-section-head h2,
+.yy-panel-title-strong,
+.yy-home-panel-heading span,
+.mantine-Title-root,
+.panel-title,
 .heading h3,
 .game-index-card h4 {
   font-family: var(--font-display);
-  font-weight: 820;
-  font-stretch: condensed;
+  font-weight: 900;
+  font-stretch: normal;
   letter-spacing: 0;
   text-shadow: var(--yy-title-glow);
 }
@@ -30,7 +172,20 @@
 }
 
 .yy-home-title-row h3 {
-  font-size: clamp(2.45rem, 4.55vw, 4.85rem);
+  font-size: clamp(3.25rem, 6.15vw, 6.45rem);
+  line-height: 0.92;
+}
+
+.yy-home-title-row.home-title-row,
+.yy-home-title-row {
+  justify-content: flex-start;
+  margin-left: 0;
+  margin-bottom: clamp(0.85rem, 1.7vh, 1.22rem);
+}
+
+.yy-home-title-row .brand-mark {
+  width: clamp(4.65rem, 5.7vw, 6.35rem);
+  height: clamp(4.65rem, 5.7vw, 6.35rem);
 }
 
 .yy-about-stage {
@@ -364,7 +519,8 @@
 }
 
 .yy-home-layout .recent-game-card .yy-status-pill,
-.yy-home-layout .recent-game-card .status-pill {
+.yy-home-layout .recent-game-card .status-pill,
+.yy-home-layout .recent-game-card .yy-react-status-text {
   justify-self: end;
   margin-right: clamp(0.4rem, 1vw, 0.9rem);
   max-width: 100%;
@@ -944,6 +1100,12 @@
   max-width: max-content;
 }
 
+.game-event-row.game-index-card .yy-react-status-text {
+  width: max-content;
+  max-width: max-content;
+  justify-self: end;
+}
+
 .yy-home-event-list .game-event-row.game-index-card.panel-card {
   min-height: clamp(10rem, 12.5vw, 12.6rem);
   grid-template-columns: clamp(12rem, 18vw, 17rem) minmax(0, 1fr) auto;
@@ -1266,6 +1428,264 @@
 .yy-team-action.mantine-Button-root .mantine-Button-inner {
   position: relative;
   z-index: 1;
+}
+
+.yy-team-current {
+  min-width: 0;
+  max-width: min(100%, 44rem);
+}
+
+.yy-team-current-avatar {
+  border: 1px solid rgba(116, 255, 194, 0.32);
+  background: rgba(116, 255, 194, 0.12);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.035),
+    0 0 1.8rem rgba(116, 255, 194, 0.16);
+}
+
+.yy-team-current h2 {
+  margin: 0;
+  color: var(--yy-text);
+  font-size: clamp(1.45rem, 2.35vw, 2.25rem);
+  line-height: 1;
+}
+
+.yy-team-current p {
+  max-width: 42rem;
+  margin-top: 0.38rem;
+  color: rgba(244, 245, 245, 0.68);
+  font-size: clamp(0.86rem, 0.95vw, 0.98rem);
+  line-height: 1.55;
+}
+
+.yy-team-role-badge.mantine-Badge-root {
+  border: 1px solid rgba(111, 255, 190, 0.25);
+  color: rgba(176, 255, 220, 0.96);
+  background:
+    radial-gradient(ellipse at 24% 50%, rgba(116, 255, 194, 0.2), transparent 62%),
+    rgba(8, 27, 22, 0.78);
+}
+
+.yy-team-switcher {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: clamp(0.72rem, 1.1vw, 0.95rem);
+}
+
+.yy-team-switch-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.72rem;
+  min-width: 0;
+  min-height: 4.25rem;
+  padding: 0.72rem 0.82rem;
+  overflow: hidden;
+  border: 1px solid rgba(116, 255, 194, 0.14);
+  border-radius: calc(var(--yy-radius) - 2px);
+  color: var(--yy-text);
+  background:
+    radial-gradient(ellipse at 18% 0%, rgba(116, 255, 194, 0.1), transparent 56%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.014)),
+    rgba(5, 8, 8, 0.78);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 170ms ease,
+    border-color 170ms ease,
+    background 170ms ease,
+    box-shadow 170ms ease;
+}
+
+.yy-team-switch-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(112deg, transparent 12%, rgba(116, 255, 194, 0.16) 44%, transparent 72%);
+  opacity: 0;
+  transform: translateX(-28%);
+  transition:
+    opacity 170ms ease,
+    transform 240ms ease;
+}
+
+.yy-team-switch-card:hover,
+.yy-team-switch-card.is-active {
+  transform: translateY(-1px);
+  border-color: rgba(116, 255, 194, 0.42);
+  background:
+    radial-gradient(ellipse at 18% 0%, rgba(116, 255, 194, 0.18), transparent 56%),
+    rgba(8, 21, 17, 0.86);
+  box-shadow:
+    inset 0 0 0 1px rgba(116, 255, 194, 0.08),
+    0 1rem 2.3rem rgba(0, 0, 0, 0.24);
+}
+
+.yy-team-switch-card:hover::after,
+.yy-team-switch-card.is-active::after {
+  opacity: 1;
+  transform: translateX(18%);
+}
+
+.yy-team-switch-card span {
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.yy-team-switch-card strong,
+.yy-team-switch-card small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.yy-team-switch-card strong {
+  color: var(--yy-text);
+  font-weight: 860;
+}
+
+.yy-team-switch-card small {
+  color: rgba(116, 255, 194, 0.72);
+  font-size: 0.72rem;
+  font-weight: 760;
+}
+
+.yy-team-management-panel.panel-card {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(1rem, 1.7vw, 1.35rem);
+  border-color: rgba(116, 255, 194, 0.16);
+  background:
+    radial-gradient(ellipse at 9% 0%, rgba(116, 255, 194, 0.11), transparent 38%),
+    radial-gradient(ellipse at 96% 0%, rgba(231, 244, 238, 0.06), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.014)),
+    rgba(5, 8, 8, 0.84);
+}
+
+.yy-team-management-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.yy-team-management-panel > .yy-hex-field {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.2;
+}
+
+.yy-team-management-head {
+  gap: clamp(0.9rem, 1.4vw, 1.2rem);
+  margin-bottom: clamp(0.92rem, 1.4vw, 1.18rem);
+}
+
+.yy-team-management-head h2 {
+  margin: 0.1rem 0 0;
+  color: var(--yy-text);
+  font-size: clamp(1.55rem, 2.6vw, 2.35rem);
+  line-height: 1.02;
+}
+
+.yy-team-management-head p {
+  max-width: 54rem;
+  margin-top: 0.32rem;
+  color: rgba(244, 245, 245, 0.68);
+  font-size: clamp(0.88rem, 0.96vw, 1rem);
+  line-height: 1.58;
+}
+
+.yy-team-member-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.68rem;
+  margin-bottom: clamp(0.8rem, 1.3vw, 1rem);
+}
+
+.yy-team-member-summary > div {
+  min-width: 0;
+  padding: 0.72rem 0.82rem;
+  border: 1px solid rgba(116, 255, 194, 0.12);
+  border-radius: calc(var(--yy-radius) - 4px);
+  background:
+    radial-gradient(ellipse at 12% 0%, rgba(116, 255, 194, 0.09), transparent 54%),
+    rgba(255, 255, 255, 0.024);
+}
+
+.yy-team-member-summary span,
+.yy-team-member-summary strong {
+  display: block;
+  min-width: 0;
+}
+
+.yy-team-member-summary span {
+  color: rgba(244, 245, 245, 0.54);
+  font-size: 0.72rem;
+  font-weight: 780;
+}
+
+.yy-team-member-summary strong {
+  margin-top: 0.16rem;
+  overflow: hidden;
+  color: rgba(245, 255, 250, 0.96);
+  font-size: clamp(1rem, 1.3vw, 1.18rem);
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.yy-team-roster-list {
+  display: grid;
+  gap: 0.62rem;
+}
+
+.yy-team-roster-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(0.72rem, 1.1vw, 0.95rem);
+  min-height: 4.65rem;
+  padding: 0.72rem 0.86rem;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: calc(var(--yy-radius) - 4px);
+  background:
+    radial-gradient(ellipse at 6% 50%, rgba(116, 255, 194, 0.07), transparent 44%),
+    rgba(255, 255, 255, 0.018);
+}
+
+.yy-team-roster-row.is-captain {
+  border-color: rgba(116, 255, 194, 0.23);
+  background:
+    radial-gradient(ellipse at 8% 50%, rgba(116, 255, 194, 0.15), transparent 48%),
+    linear-gradient(90deg, rgba(116, 255, 194, 0.055), transparent 42%),
+    rgba(255, 255, 255, 0.022);
+}
+
+.yy-team-roster-user {
+  min-width: 0;
+  display: grid;
+  gap: 0.14rem;
+}
+
+.yy-team-roster-user strong,
+.yy-team-roster-user span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.yy-team-roster-user strong {
+  color: var(--yy-text);
+  font-size: clamp(0.96rem, 1.05vw, 1.06rem);
+  font-weight: 900;
+}
+
+.yy-team-roster-user span {
+  color: rgba(244, 245, 245, 0.58);
+  font-size: 0.82rem;
 }
 
 /* Unified button pass for admin, notification editing and upload-heavy flows. */
@@ -1699,9 +2119,22 @@
 
 /* Final pass for game/detail/theory/admin residual surfaces. */
 .yy-game-tab-shell {
+  isolation: isolate;
   width: 100%;
   min-width: 0;
   margin-top: clamp(0.35rem, 0.9vh, 0.75rem) !important;
+}
+
+.yy-game-tab-shell > .yy-game-tab-veil {
+  position: absolute;
+  inset: -0.8rem -1.4rem;
+  z-index: 0;
+  opacity: 0.72;
+}
+
+.yy-game-tab-shell > *:not(.yy-game-tab-veil) {
+  position: relative;
+  z-index: 1;
 }
 
 .yy-game-tab-shell > .mantine-Group-root:first-of-type {
@@ -1745,12 +2178,33 @@
 }
 
 .yy-game-detail-page {
+  position: relative;
+  isolation: isolate;
   width: 100%;
   min-height: calc(100dvh - 3.5rem);
   display: grid;
   gap: clamp(0.85rem, 1.5vw, 1.2rem);
   align-content: start;
   padding: clamp(0.2rem, 0.9vh, 0.65rem) 0 clamp(1rem, 2vw, 1.5rem);
+}
+
+.yy-react-bits-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.yy-game-detail-page > .yy-react-dark-veil {
+  position: absolute;
+  inset: -1.2rem -2.2rem -1.8rem;
+  z-index: 0;
+  opacity: 0.9;
+}
+
+.yy-game-detail-page > *:not(.yy-react-dark-veil) {
+  position: relative;
+  z-index: 1;
 }
 
 .yy-game-detail-hero.panel-card {
@@ -1764,14 +2218,26 @@
   overflow: hidden;
   border-color: rgba(107, 238, 177, 0.18);
   background:
-    radial-gradient(ellipse at 14% 8%, rgba(107, 238, 177, 0.13), transparent 40%),
+    radial-gradient(ellipse at 14% 8%, rgba(107, 238, 177, 0.12), transparent 40%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.066), rgba(255, 255, 255, 0.017)),
-    rgba(7, 10, 10, 0.88);
+    rgba(7, 10, 10, 0.84);
 }
 
 .yy-game-detail-hero > * {
   position: relative;
   z-index: 1;
+}
+
+.yy-game-detail-hero > .yy-react-grid-scan {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.9;
+  mix-blend-mode: screen;
+}
+
+.yy-game-detail-hero > .yy-react-grid-scan + .yy-hex-field {
+  opacity: 0.34;
 }
 
 .yy-game-detail-copy {
@@ -1792,6 +2258,10 @@
 
 .yy-game-detail-kicker {
   min-height: 2rem;
+}
+
+.yy-game-detail-kicker .yy-react-status-text {
+  font-size: clamp(1.18rem, 1.38vw, 1.55rem);
 }
 
 .yy-game-time-grid {
@@ -1955,6 +2425,185 @@
   background:
     radial-gradient(ellipse at 12% 0%, rgba(107, 238, 177, 0.09), transparent 40%),
     rgba(10, 13, 13, 0.82);
+}
+
+.yy-game-entry-hero.yy-game-detail-hero.panel-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  min-height: min(80dvh, 52rem);
+  padding: clamp(1.45rem, 3vw, 3rem) clamp(1.1rem, 4vw, 4.5rem);
+  border-color: rgba(159, 255, 217, 0.2);
+  background:
+    radial-gradient(ellipse at 50% 18%, rgba(111, 255, 190, 0.12), transparent 38%),
+    radial-gradient(ellipse at 50% 100%, rgba(216, 229, 224, 0.075), transparent 48%),
+    linear-gradient(180deg, rgba(4, 13, 12, 0.9), rgba(2, 5, 5, 0.9));
+}
+
+.yy-game-entry-hero.yy-game-detail-hero.panel-card::before {
+  content: none;
+}
+
+.yy-game-entry-hero > .yy-react-grid-scan {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.96;
+  mix-blend-mode: screen;
+}
+
+.yy-game-entry-hero.yy-game-detail-hero.panel-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 46%, transparent 0 36%, rgba(0, 0, 0, 0.22) 66%, rgba(0, 0, 0, 0.48) 100%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.42), transparent 24% 76%, rgba(0, 0, 0, 0.42));
+}
+
+.yy-game-entry-copy.yy-game-detail-copy {
+  width: min(100%, 74rem);
+  max-width: none;
+  align-items: center;
+  justify-items: center;
+  text-align: center;
+}
+
+.yy-game-entry-copy .yy-game-detail-kicker {
+  justify-content: center;
+}
+
+.yy-game-entry-copy .yy-game-detail-kicker .mantine-Badge-root {
+  border-color: rgba(157, 255, 213, 0.24);
+  color: rgba(230, 255, 245, 0.84);
+  background: rgba(4, 15, 13, 0.38);
+}
+
+.yy-game-entry-copy h1 {
+  order: 2;
+  max-width: min(100%, 58rem);
+  font-size: clamp(3rem, 6.4vw, 7rem);
+  line-height: 0.9;
+}
+
+.yy-game-entry-copy > .yy-readable-text {
+  order: 4;
+  max-width: 42rem;
+  margin-top: clamp(-0.2rem, -0.25vw, 0rem);
+  color: rgba(236, 246, 242, 0.82);
+  font-size: clamp(0.92rem, 1vw, 1.02rem);
+}
+
+.yy-game-entry-copy .yy-game-detail-emblem {
+  order: 3;
+  justify-self: center;
+  width: min(100%, clamp(21rem, 36vw, 42rem));
+  aspect-ratio: 16 / 9;
+  min-height: 0;
+  max-height: none;
+  margin-block: clamp(0.28rem, 1vw, 0.75rem);
+  padding: clamp(0.55rem, 0.9vw, 0.85rem);
+  border-color: rgba(159, 255, 217, 0.2);
+  background:
+    radial-gradient(ellipse at 50% 45%, rgba(120, 255, 198, 0.12), transparent 60%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.014)),
+    rgba(1, 5, 5, 0.56);
+}
+
+.yy-game-entry-copy .yy-game-detail-emblem::before {
+  opacity: 0;
+}
+
+.yy-game-entry-copy .yy-game-detail-emblem[data-has-poster='true'] {
+  width: min(100%, clamp(22rem, 38vw, 46rem));
+  aspect-ratio: 16 / 9;
+  min-height: 0;
+  max-height: none;
+}
+
+.yy-game-entry-copy .yy-game-detail-brand img {
+  height: min(64%, 13rem);
+  max-width: 42%;
+  transform: translate(-50%, -50%);
+}
+
+.yy-game-entry-copy .yy-game-time-grid {
+  order: 5;
+  width: min(100%, 48rem);
+  margin-top: clamp(0.2rem, 0.8vw, 0.6rem);
+}
+
+.yy-game-entry-copy .mantine-Progress-root {
+  order: 6;
+  width: min(100%, 48rem);
+}
+
+.yy-game-detail-intro {
+  order: 7;
+  width: min(100%, 52rem);
+  max-height: min(20vh, 12rem);
+  overflow: auto;
+  padding: clamp(0.75rem, 1.1vw, 0.95rem) clamp(0.85rem, 1.4vw, 1.15rem);
+  border: 1px solid rgba(159, 255, 217, 0.13);
+  border-radius: calc(var(--yy-radius) - 2px);
+  color: rgba(236, 246, 242, 0.78);
+  background: rgba(2, 9, 8, 0.46);
+  text-align: left;
+}
+
+.yy-game-detail-intro,
+.yy-game-detail-intro .markdown-body,
+.yy-game-detail-intro p,
+.yy-game-detail-intro li {
+  font-size: clamp(0.82rem, 0.9vw, 0.94rem);
+  line-height: 1.64;
+}
+
+.yy-game-detail-alerts {
+  order: 8;
+  width: min(100%, 52rem);
+  text-align: left;
+}
+
+.yy-game-entry-copy .yy-game-detail-actions {
+  order: 9;
+  justify-content: center;
+  margin-top: clamp(0.25rem, 0.9vw, 0.7rem);
+}
+
+.yy-game-entry-copy .yy-game-action-button.mantine-Button-root {
+  min-width: clamp(9.5rem, 13vw, 14rem);
+}
+
+@media (max-width: 62em) {
+  .yy-game-entry-hero.yy-game-detail-hero.panel-card {
+    min-height: auto;
+  }
+
+  .yy-game-entry-copy h1 {
+    font-size: clamp(2.55rem, 11vw, 4.75rem);
+  }
+
+  .yy-game-entry-copy .yy-game-detail-emblem,
+  .yy-game-entry-copy .yy-game-detail-emblem[data-has-poster='true'] {
+    width: min(100%, 36rem);
+  }
+}
+
+@media (max-width: 44em) {
+  .yy-game-entry-copy .yy-game-time-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .yy-game-entry-copy .yy-game-detail-actions {
+    align-items: stretch;
+  }
+
+  .yy-game-entry-copy .yy-game-action-button.mantine-Button-root {
+    width: 100%;
+  }
 }
 
 .yy-theory-page {
@@ -3323,5 +3972,1072 @@
   50% {
     opacity: 0.78;
     transform: translate3d(0.18rem, -0.08rem, 0);
+  }
+}
+
+.yy-pentest-admin,
+.yy-pentest-player {
+  width: 100%;
+  min-width: 0;
+}
+
+.yy-pentest-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  grid-template-rows: 4.5rem minmax(0, 1fr);
+  padding: 0.85rem;
+  color: var(--mantine-color-white);
+  background:
+    radial-gradient(circle at 18% 8%, rgba(96, 255, 171, 0.12), transparent 28rem),
+    linear-gradient(135deg, rgba(3, 9, 10, 0.98), rgba(6, 18, 20, 0.98));
+}
+
+.yy-pentest-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid rgba(133, 255, 196, 0.18);
+  border-radius: 10px;
+  background: rgba(4, 14, 15, 0.78);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(14px);
+}
+
+.yy-pentest-studio {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr) minmax(22rem, 27rem);
+  gap: 0.85rem;
+  padding-top: 0.85rem;
+}
+
+.yy-pentest-toolbox,
+.yy-pentest-inspector-full,
+.yy-pentest-canvas-full {
+  min-height: 0;
+  border-color: rgba(133, 255, 196, 0.2) !important;
+  background:
+    linear-gradient(180deg, rgba(8, 22, 22, 0.9), rgba(5, 13, 15, 0.84)),
+    radial-gradient(circle at 20% 0%, rgba(98, 255, 178, 0.09), transparent 16rem) !important;
+  backdrop-filter: blur(16px);
+}
+
+.yy-pentest-canvas-full,
+.yy-pentest-inspector-full,
+.yy-pentest-toolbox {
+  height: calc(100dvh - 6.2rem);
+}
+
+.yy-pentest-help-doc {
+  min-height: calc(100dvh - 5.5rem);
+  border-color: rgba(133, 255, 196, 0.2) !important;
+  background:
+    linear-gradient(180deg, rgba(8, 22, 22, 0.94), rgba(5, 13, 15, 0.9)),
+    radial-gradient(circle at 18% 0%, rgba(98, 255, 178, 0.1), transparent 18rem) !important;
+}
+
+.yy-pentest-help-doc .mantine-Title-root {
+  color: rgba(236, 255, 247, 0.98);
+}
+
+.yy-pentest-help-doc .mantine-Text-root {
+  color: rgba(222, 246, 237, 0.9);
+  line-height: 1.72;
+}
+
+.yy-pentest-help-section {
+  border-color: rgba(133, 255, 196, 0.18) !important;
+  background: rgba(6, 18, 18, 0.74) !important;
+}
+
+.yy-pentest-tool-chip {
+  min-height: 2.35rem;
+  border: 1px solid rgba(119, 255, 187, 0.22);
+  border-radius: 8px;
+  color: rgba(230, 255, 243, 0.92);
+  background: rgba(7, 26, 25, 0.72);
+  font-weight: 800;
+  cursor: grab;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.yy-pentest-tool-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(112, 255, 181, 0.55);
+  background: rgba(18, 58, 48, 0.78);
+}
+
+.yy-pentest-canvas-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(2, 9, 10, 0.52);
+  z-index: 10;
+}
+
+.yy-pentest-error {
+  color: #ffd3d3;
+}
+
+.yy-pentest-workbench {
+  display: grid;
+  grid-template-columns: minmax(16rem, 20rem) minmax(0, 1fr) minmax(18rem, 23rem);
+  gap: 1rem;
+  align-items: start;
+}
+
+.yy-pentest-workbench-left,
+.yy-pentest-workbench-right {
+  position: sticky;
+  top: 5.5rem;
+}
+
+.yy-pentest-work-zone,
+.yy-pentest-work-node,
+.yy-pentest-work-policy {
+  border: 1px solid rgba(125, 255, 190, 0.18);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: rgba(8, 25, 25, 0.72);
+}
+
+.yy-pentest-work-zone,
+.yy-pentest-work-policy {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.yy-pentest-work-policy {
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 800;
+}
+
+.yy-pentest-work-policy span {
+  color: rgba(122, 255, 185, 0.95);
+  font-size: 0.78rem;
+}
+
+.yy-pentest-work-task {
+  min-height: 100%;
+}
+
+.yy-pentest-toolbar {
+  padding: 0.75rem;
+}
+
+.yy-pentest-layout,
+.yy-pentest-builder {
+  display: grid;
+  grid-template-columns: minmax(18rem, 0.78fr) minmax(42rem, 2.2fr) minmax(21rem, 0.98fr);
+  gap: 1rem;
+  align-items: stretch;
+  min-height: min(78vh, 56rem);
+}
+
+.yy-pentest-library,
+.yy-pentest-inspector,
+.yy-pentest-canvas {
+  min-width: 0;
+  contain: layout paint style;
+}
+
+.yy-pentest-canvas {
+  overflow: hidden;
+  min-height: 50rem;
+  border-color: rgba(107, 238, 177, 0.17);
+  position: relative;
+  background:
+    linear-gradient(135deg, rgba(5, 12, 10, 0.92), rgba(8, 14, 12, 0.72)),
+    var(--yy-hex-flow);
+}
+
+.yy-pentest-canvas::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background:
+    radial-gradient(ellipse at 24% 18%, rgba(107, 238, 177, 0.12), transparent 36rem),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.28), transparent 24%, transparent 76%, rgba(0, 0, 0, 0.28));
+}
+
+.yy-pentest-canvas .react-flow__renderer,
+.yy-pentest-canvas .react-flow__panel,
+.yy-pentest-canvas .react-flow__controls,
+.yy-pentest-canvas .react-flow__minimap {
+  z-index: 2;
+}
+
+.yy-pentest-canvas .react-flow {
+  background:
+    radial-gradient(ellipse at 20% 15%, rgba(107, 238, 177, 0.08), transparent 34rem),
+    radial-gradient(ellipse at 80% 70%, rgba(255, 255, 255, 0.035), transparent 28rem),
+    rgba(4, 8, 7, 0.58);
+}
+
+.yy-pentest-canvas .react-flow__controls,
+.yy-pentest-canvas .react-flow__minimap {
+  border: 1px solid rgba(107, 238, 177, 0.18);
+  border-radius: calc(var(--yy-radius) - 4px);
+  overflow: hidden;
+  background: rgba(5, 11, 9, 0.82);
+  color: var(--yy-text);
+}
+
+.yy-pentest-flow-network.react-flow__node {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.yy-pentest-segment-frame {
+  width: 100%;
+  height: 100%;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(107, 238, 177, 0.3);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(18, 42, 33, 0.68), rgba(4, 10, 8, 0.46)),
+    repeating-linear-gradient(0deg, rgba(107, 238, 177, 0.055) 0 1px, transparent 1px 18px),
+    repeating-linear-gradient(90deg, rgba(107, 238, 177, 0.042) 0 1px, transparent 1px 18px);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.024),
+    inset 0 0 3.5rem rgba(107, 238, 177, 0.035),
+    0 1.2rem 3rem rgba(0, 0, 0, 0.24);
+}
+
+.yy-pentest-segment-frame::after {
+  content: '';
+  position: absolute;
+  inset: 3rem 1rem 1rem;
+  pointer-events: none;
+  border-radius: 10px;
+  background:
+    linear-gradient(90deg, rgba(107, 238, 177, 0.08) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(107, 238, 177, 0.08) 1px, transparent 1px);
+  background-size: 16px 16px;
+  mask-image: linear-gradient(to bottom, transparent, black 16%, black 94%, transparent);
+  opacity: 0.5;
+}
+
+.yy-pentest-segment-frame.is-selected {
+  border-color: rgba(107, 238, 177, 0.72);
+  box-shadow:
+    inset 0 0 0 1px rgba(107, 238, 177, 0.18),
+    0 0 2.4rem rgba(107, 238, 177, 0.12),
+    0 1.4rem 3rem rgba(0, 0, 0, 0.32);
+}
+
+.yy-pentest-segment-badge,
+.yy-pentest-node-type {
+  font-family: 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace;
+  letter-spacing: 0.04em;
+}
+
+.yy-pentest-segment-title {
+  color: rgba(235, 255, 244, 0.96);
+  font-size: 1rem;
+}
+
+.yy-pentest-segment-meta {
+  color: var(--yy-muted-readable);
+  font-family: 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace;
+  font-size: 0.78rem;
+}
+
+.yy-pentest-flow-node.react-flow__node {
+  width: 13.625rem;
+  padding: 0;
+  border: 1px solid rgba(107, 238, 177, 0.34);
+  border-radius: calc(var(--yy-radius) - 3px);
+  color: var(--yy-text);
+  background:
+    radial-gradient(ellipse at 18% 18%, rgba(107, 238, 177, 0.17), transparent 64%),
+    var(--yy-hex-flow),
+    rgba(7, 14, 12, 0.92);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.028),
+    0 0.9rem 2rem rgba(0, 0, 0, 0.34);
+}
+
+.yy-pentest-flow-node.react-flow__node.selected,
+.yy-pentest-node-card.is-selected {
+  border-color: rgba(107, 238, 177, 0.72);
+  box-shadow:
+    inset 0 0 0 1px rgba(107, 238, 177, 0.2),
+    0 0 1.7rem rgba(107, 238, 177, 0.16),
+    0 1rem 2.3rem rgba(0, 0, 0, 0.38);
+}
+
+.yy-pentest-node-card {
+  padding: 0.78rem 0.9rem;
+  width: 13.625rem;
+  min-height: 8.2rem;
+  position: relative;
+}
+
+.yy-pentest-node-title {
+  max-width: 8.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.yy-pentest-node-template,
+.yy-pentest-node-meta {
+  margin-top: 0.25rem;
+  color: var(--yy-muted-readable);
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.yy-pentest-node-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.2rem;
+  margin-top: 0.55rem;
+  font-size: 0.72rem;
+  color: rgba(220, 255, 237, 0.78);
+}
+
+.yy-pentest-node-grid span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.yy-pentest-canvas .react-flow__edge-path {
+  stroke: rgba(107, 238, 177, 0.62);
+  stroke-width: 2;
+}
+
+.yy-pentest-canvas .react-flow__edge.selected .react-flow__edge-path {
+  stroke: rgba(170, 255, 207, 0.92);
+  stroke-width: 2.6;
+}
+
+.yy-pentest-handle {
+  width: 0.72rem;
+  height: 0.72rem;
+  border: 1px solid rgba(195, 255, 223, 0.82);
+  background: rgba(78, 240, 156, 0.9);
+  box-shadow: 0 0 1rem rgba(107, 238, 177, 0.34);
+}
+
+.yy-pentest-hidden-handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.yy-pentest-blueprint-card,
+.yy-pentest-preview-box,
+.yy-pentest-network-list-item {
+  border: 1px solid rgba(107, 238, 177, 0.16);
+  border-radius: calc(var(--yy-radius) - 4px);
+  background:
+    radial-gradient(ellipse at 12% 18%, rgba(107, 238, 177, 0.1), transparent 60%),
+    rgba(8, 15, 13, 0.68);
+}
+
+.yy-pentest-blueprint-card,
+.yy-pentest-preview-box {
+  padding: 0.85rem;
+}
+
+.yy-pentest-network-list-item {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.8rem;
+  color: var(--yy-text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.yy-pentest-network-list-item:hover,
+.yy-pentest-network-list-item.is-active {
+  border-color: rgba(107, 238, 177, 0.46);
+  background: rgba(23, 55, 42, 0.52);
+  transform: translateY(-1px);
+}
+
+.yy-pentest-network-list-item span {
+  font-weight: 800;
+}
+
+.yy-pentest-network-list-item small {
+  color: var(--yy-muted-readable);
+  font-family: 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace;
+}
+
+.yy-pentest-network-chip,
+.yy-pentest-score-editor,
+.yy-pentest-entry,
+.yy-pentest-task-card {
+  border-radius: calc(var(--yy-radius) - 3px);
+}
+
+.yy-pentest-player-header {
+  background:
+    radial-gradient(ellipse at 12% 18%, rgba(107, 238, 177, 0.13), transparent 42%),
+    var(--yy-hex-flow),
+    rgba(8, 14, 12, 0.78);
+}
+
+.yy-pentest-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(18rem, 0.78fr) minmax(34rem, 1.7fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.yy-pentest-side-panel {
+  position: sticky;
+  top: 5.75rem;
+}
+
+.yy-pentest-task-chain {
+  min-width: 0;
+}
+
+.yy-pentest-network-section {
+  background:
+    radial-gradient(ellipse at 14% 18%, rgba(107, 238, 177, 0.1), transparent 28rem),
+    var(--yy-hex-flow),
+    rgba(7, 13, 11, 0.74);
+}
+
+.yy-pentest-task-card {
+  min-height: 15rem;
+  background:
+    linear-gradient(135deg, rgba(8, 16, 13, 0.9), rgba(4, 8, 7, 0.82)),
+    var(--yy-hex-flow);
+}
+
+.yy-pentest-task-card .mantine-PasswordInput-input {
+  font-family: 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace;
+}
+
+.yy-pentest-admin .mantine-Table-table {
+  table-layout: auto;
+}
+
+.yy-pentest-admin .mantine-Textarea-description {
+  color: var(--yy-muted-readable);
+}
+
+.yy-pentest-network-chip .mantine-Input-input,
+.yy-pentest-score-editor .mantine-Input-input {
+  min-height: 2.45rem;
+}
+
+@media (max-width: 1200px) {
+  .yy-pentest-layout,
+  .yy-pentest-builder {
+    grid-template-columns: 1fr;
+  }
+
+  .yy-pentest-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .yy-pentest-side-panel {
+    position: static;
+  }
+
+  .yy-pentest-canvas {
+    min-height: 36rem;
+  }
+}
+
+/* ReactBits background integration: use these as real page backplates, not
+   extra translucent decoration over the old honeycomb signal field. */
+.yy-react-color-bends,
+.yy-react-dot-field,
+.yy-game-bends-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.yy-react-color-bends canvas,
+.yy-react-dot-field canvas,
+.yy-react-dot-field svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.yy-game-bends-bg {
+  background:
+    radial-gradient(ellipse at 18% 0%, rgba(111, 255, 190, 0.11), transparent 42%),
+    radial-gradient(ellipse at 88% 78%, rgba(223, 242, 235, 0.08), transparent 46%),
+    linear-gradient(180deg, #020605 0%, #010303 100%);
+}
+
+.yy-game-bends-bg__bends {
+  opacity: 0.82;
+  mix-blend-mode: screen;
+}
+
+.yy-game-bends-bg__dots {
+  opacity: 0.78;
+  mix-blend-mode: screen;
+}
+
+.yy-game-bends-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 18%, transparent 0 34%, rgba(0, 0, 0, 0.14) 68%, rgba(0, 0, 0, 0.42) 100%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.46), transparent 22% 78%, rgba(0, 0, 0, 0.46));
+}
+
+.yy-game-tab-shell.view-stack {
+  position: relative;
+  isolation: isolate;
+}
+
+.yy-game-tab-shell.view-stack::before {
+  content: '';
+  position: absolute;
+  inset: -1.4rem -2.35rem -2.3rem;
+  z-index: 0;
+  border: 1px solid rgba(126, 255, 197, 0.08);
+  border-radius: calc(var(--yy-radius) + 8px);
+  background: #020605;
+  box-shadow: 0 2.5rem 6rem rgba(0, 0, 0, 0.42);
+}
+
+.yy-game-tab-shell.view-stack > .yy-game-tab-veil.yy-game-bends-bg {
+  inset: -1.4rem -2.35rem -2.3rem;
+  z-index: 1;
+  opacity: 1;
+  border-radius: calc(var(--yy-radius) + 8px);
+}
+
+.yy-game-tab-shell.view-stack > *:not(.yy-game-tab-veil) {
+  position: relative;
+  z-index: 2;
+}
+
+.yy-game-entry-page {
+  background: #000;
+  border-radius: calc(var(--yy-radius) + 8px);
+}
+
+.yy-game-entry-page::before {
+  content: '';
+  position: absolute;
+  inset: -1rem -1.4rem;
+  z-index: -1;
+  border-radius: calc(var(--yy-radius) + 12px);
+  background: #000;
+}
+
+.yy-game-entry-hero.yy-game-detail-hero.panel-card {
+  overflow: hidden;
+  background: #020605 !important;
+}
+
+.yy-game-entry-hero > .yy-react-grid-scan {
+  background:
+    radial-gradient(ellipse at 50% 12%, rgba(93, 240, 168, 0.18), transparent 38%),
+    linear-gradient(180deg, #06130e 0%, #020605 56%, #010202 100%);
+  mix-blend-mode: normal;
+}
+
+.yy-game-entry-hero.yy-game-detail-hero.panel-card::after {
+  background:
+    radial-gradient(ellipse at 50% 38%, transparent 0 30%, rgba(0, 0, 0, 0.24) 64%, rgba(0, 0, 0, 0.58) 100%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.5), transparent 24% 76%, rgba(0, 0, 0, 0.5));
+}
+
+.yy-home-recomposed .yy-home-title-row.home-title-row,
+.yy-home-recomposed .yy-home-title-row {
+  width: 100%;
+  max-width: min(100%, 82rem);
+  display: flex !important;
+  justify-content: flex-start !important;
+  align-items: center;
+  gap: clamp(0.9rem, 1.8vw, 1.55rem);
+  margin: clamp(0.35rem, 1vh, 0.72rem) 0 clamp(1rem, 1.85vh, 1.45rem) !important;
+  text-align: left !important;
+}
+
+.yy-home-recomposed .yy-home-title-row h3 {
+  margin: 0;
+  font-size: clamp(4.25rem, 7.6vw, 8.6rem) !important;
+  line-height: 0.86;
+}
+
+.yy-home-recomposed .yy-home-title-row .brand-mark {
+  width: clamp(5.6rem, 6.8vw, 7.6rem);
+  height: clamp(5.6rem, 6.8vw, 7.6rem);
+}
+
+.yy-home-recomposed .yy-terminal-typing {
+  margin-left: auto;
+}
+
+@media (max-width: 68em) {
+  .yy-home-recomposed .yy-home-title-row.home-title-row,
+  .yy-home-recomposed .yy-home-title-row {
+    flex-wrap: wrap;
+  }
+
+  .yy-home-recomposed .yy-terminal-typing {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+/* Final ReactBits replacement pass.
+   These rules intentionally make ReactBits the actual route backplate for game
+   workspaces, scoreboards, theory/AWD/pentest pages, and the admin console. */
+:root {
+  --font-display:
+    'Arial Black', 'Figtree', 'Microsoft YaHei UI', 'Noto Sans SC', 'PingFang SC', 'Segoe UI Variable Display',
+    'Aptos Display', ui-sans-serif, system-ui, sans-serif;
+  --yy-reactbits-base: #020605;
+}
+
+.yy-root-reactbits-bg.yy-game-bends-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 100vh;
+  border-radius: 0;
+  background:
+    radial-gradient(ellipse at 16% 0%, rgba(154, 255, 218, 0.12), transparent 40%),
+    radial-gradient(ellipse at 84% 78%, rgba(221, 238, 231, 0.12), transparent 48%),
+    linear-gradient(180deg, #04100d 0%, #020605 54%, #000 100%);
+}
+
+.yy-root-reactbits-bg .yy-game-bends-bg__bends {
+  z-index: 1;
+  opacity: 0.96;
+  mix-blend-mode: screen;
+}
+
+.yy-root-reactbits-bg .yy-game-bends-bg__dots {
+  z-index: 2;
+  opacity: 0.88;
+  mix-blend-mode: screen;
+}
+
+.yy-root-reactbits-bg.yy-game-bends-bg::after {
+  z-index: 3;
+  background:
+    radial-gradient(ellipse at 50% 18%, transparent 0 34%, rgba(0, 0, 0, 0.12) 68%, rgba(0, 0, 0, 0.4) 100%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.44), transparent 22% 78%, rgba(0, 0, 0, 0.44));
+}
+
+.yy-app-frame,
+.yy-standalone-shell,
+.yy-admin-shell,
+.yy-page-frame,
+.mantine-AppShell-root {
+  position: relative;
+  z-index: 1;
+}
+
+.yy-app-frame .mantine-AppShell-root,
+.yy-app-frame .mantine-AppShell-main,
+.yy-admin-shell.admin-shell,
+.yy-admin-shell .admin-main {
+  background: transparent !important;
+}
+
+.yy-game-tab-shell.view-stack::before {
+  inset: -1.4rem -2.35rem -2.3rem;
+  border-color: rgba(126, 255, 197, 0.14);
+  background:
+    radial-gradient(ellipse at 16% 0%, rgba(109, 245, 177, 0.08), transparent 38%),
+    rgba(1, 9, 7, 0.26);
+  backdrop-filter: blur(0.22rem);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.025),
+    0 2.2rem 5.4rem rgba(0, 0, 0, 0.28);
+}
+
+.yy-game-tab-shell.view-stack > * {
+  position: relative;
+  z-index: 4;
+}
+
+.yy-game-entry-page,
+.yy-game-entry-page::before {
+  background: #000 !important;
+}
+
+.yy-game-entry-hero.yy-game-detail-hero.panel-card {
+  background: #020605 !important;
+}
+
+.yy-game-entry-copy .yy-game-detail-kicker {
+  width: max-content;
+  max-width: 100%;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-inline: auto;
+  text-align: center;
+}
+
+.yy-game-entry-copy .yy-game-detail-kicker .yy-react-status-text {
+  font-size: clamp(1.42rem, 1.8vw, 2.08rem);
+  line-height: 1;
+}
+
+.yy-game-entry-copy .yy-game-detail-kicker .mantine-Badge-root {
+  margin-inline: auto;
+  min-width: 4.8rem;
+  justify-content: center;
+}
+
+.yy-home-recomposed .yy-home-title-row.home-title-row,
+.yy-home-recomposed .yy-home-title-row {
+  max-width: 100%;
+  align-items: center;
+}
+
+.yy-home-recomposed .yy-home-title-row h3.yy-home-brand-heading,
+.yy-home-recomposed .yy-home-title-row h3 {
+  flex: 0 0 auto;
+  font-size: clamp(3.8rem, 6.4vw, 7.05rem) !important;
+  line-height: 0.9;
+  text-align: left;
+}
+
+.yy-home-recomposed .yy-home-title-row .brand-mark {
+  flex: 0 0 auto;
+  width: clamp(4.8rem, 5.9vw, 6.6rem);
+  height: clamp(4.8rem, 5.9vw, 6.6rem);
+}
+
+.yy-section-head h2,
+.yy-section-head-title,
+.yy-brand-title,
+.yy-team-hero .mantine-Title-root,
+.yy-game-entry-copy h1,
+.yy-home-brand-heading,
+.yy-page-frame .mantine-Title-root,
+.yy-admin-shell .mantine-Title-root,
+.game-index-card h4,
+.yy-panel-title-strong,
+.panel-title {
+  font-family: var(--font-display) !important;
+  font-weight: 900 !important;
+  font-stretch: normal;
+  letter-spacing: 0 !important;
+}
+
+.yy-section-head h2,
+.yy-section-head-title,
+.yy-team-hero .yy-brand-title {
+  font-size: clamp(2.05rem, 3.6vw, 3.35rem);
+  line-height: 0.96;
+}
+
+.yy-game-entry-copy h1 {
+  font-size: clamp(3rem, 6.4vw, 7.05rem);
+  line-height: 0.9;
+}
+
+@media (max-width: 68em) {
+  .yy-home-recomposed .yy-home-title-row h3.yy-home-brand-heading,
+  .yy-home-recomposed .yy-home-title-row h3 {
+    font-size: clamp(3.2rem, 13vw, 5.8rem) !important;
+  }
+}
+
+/* ReactBits original component integration. The component internals stay
+   vendor-identical; these rules only provide layout in the non-Tailwind app. */
+.yy-game-bends-bg__bends,
+.yy-game-bends-bg__dots,
+.yy-game-entry-gridscan {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
+.yy-game-bends-bg__bends canvas,
+.yy-game-bends-bg__dots canvas,
+.yy-game-bends-bg__dots svg,
+.yy-game-entry-gridscan canvas {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: block !important;
+  pointer-events: none !important;
+}
+
+.yy-root-reactbits-bg.yy-game-bends-bg {
+  background:
+    radial-gradient(ellipse at 18% 8%, rgba(168, 85, 247, 0.16), transparent 42%),
+    radial-gradient(ellipse at 72% 82%, rgba(102, 244, 180, 0.13), transparent 48%),
+    linear-gradient(180deg, #080511 0%, #030706 56%, #000 100%) !important;
+}
+
+.yy-root-reactbits-bg .yy-game-bends-bg__bends {
+  opacity: 1 !important;
+  mix-blend-mode: screen;
+  filter: saturate(1.22) brightness(1.18);
+}
+
+.yy-root-reactbits-bg .yy-game-bends-bg__dots {
+  opacity: 0.96 !important;
+  mix-blend-mode: screen;
+}
+
+.yy-root-reactbits-bg.yy-game-bends-bg::after {
+  background:
+    radial-gradient(ellipse at 48% 22%, transparent 0 44%, rgba(0, 0, 0, 0.1) 74%, rgba(0, 0, 0, 0.32) 100%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.28), transparent 18% 82%, rgba(0, 0, 0, 0.28)) !important;
+}
+
+.yy-game-entry-gridscan {
+  z-index: 0;
+}
+
+.yy-game-entry-hero > .yy-game-entry-gridscan {
+  background:
+    radial-gradient(ellipse at 50% 16%, rgba(114, 241, 184, 0.14), transparent 40%),
+    linear-gradient(180deg, #020605 0%, #000 100%);
+}
+
+.yy-home-recomposed .yy-home-title-row.home-title-row,
+.yy-home-recomposed .yy-home-title-row {
+  justify-content: flex-start !important;
+  padding-left: clamp(0rem, 1vw, 1.2rem);
+  transform: translateX(-0.4rem);
+}
+
+.yy-home-recomposed .yy-home-title-row h3.yy-home-brand-heading,
+.yy-home-recomposed .yy-home-title-row h3 {
+  font-size: clamp(5.1rem, 7.4vw, 8.4rem) !important;
+  line-height: 0.86 !important;
+  letter-spacing: 0 !important;
+}
+
+.yy-home-brand-heading .yy-reactbits-gradient-original > div:last-child {
+  filter:
+    drop-shadow(0 0 1.1rem rgba(110, 255, 184, 0.32))
+    drop-shadow(0 0 1.6rem rgba(168, 85, 247, 0.18));
+}
+
+.yy-theory-meta-gradient {
+  font-family: var(--font-display);
+  font-size: clamp(0.98rem, 1vw, 1.12rem);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.yy-theory-stat-gradient {
+  font-family: var(--font-display);
+  font-size: clamp(0.96rem, 0.95vw, 1.08rem);
+  font-weight: 900;
+  line-height: 1.05;
+}
+
+.yy-theory-question-title-type {
+  display: block !important;
+  margin: 0;
+  color: #f7fff9;
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 1.45vw, 1.72rem);
+  font-weight: 900;
+  line-height: 1.24;
+  text-shadow: 0 0 1rem rgba(110, 255, 184, 0.12);
+}
+
+.yy-theory-type-cursor {
+  color: #6effb8;
+  text-shadow: 0 0 0.8rem rgba(110, 255, 184, 0.42);
+}
+
+.yy-flag-input-shell {
+  flex: 1 1 18rem;
+  min-width: min(100%, 14rem);
+}
+
+.yy-scrambled-flag-placeholder {
+  margin: 0 0 0.36rem !important;
+  max-width: 100% !important;
+  color: rgba(214, 239, 230, 0.76) !important;
+  font-family: 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace !important;
+  font-size: clamp(0.82rem, 0.86vw, 0.98rem) !important;
+  line-height: 1.1 !important;
+  text-shadow: 0 0 0.8rem rgba(110, 255, 184, 0.16);
+}
+
+.yy-scrambled-flag-placeholder p {
+  margin: 0;
+}
+
+.yy-admin-shell .mantine-Badge-root,
+.yy-admin-shell .yy-status-pill {
+  width: auto !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.yy-admin-shell .yy-status-pill .yy-status-signal,
+.yy-admin-shell .yy-status-pill .yy-status-tail,
+.yy-admin-shell .yy-status-pill svg {
+  display: none !important;
+}
+
+.yy-admin-shell .mantine-Badge-label,
+.yy-admin-shell .yy-status-pill .yy-status-text {
+  display: inline-block !important;
+  font-family: var(--font-display) !important;
+  font-weight: 900 !important;
+  line-height: 1.05 !important;
+  letter-spacing: 0 !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  background-image: linear-gradient(105deg, #f8fff9 0%, #7ef2bd 38%, #d9fff0 62%, #a855f7 100%);
+  background-size: 260% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: yy-gradient-text-flow 5.4s cubic-bezier(0.45, 0, 0.2, 1) infinite alternate;
+  filter: drop-shadow(0 0 0.55rem rgba(110, 255, 184, 0.18));
+}
+
+.yy-admin-shell .yy-status-pill.tone-danger .yy-status-text,
+.yy-admin-shell .mantine-Badge-root[data-color='red'] .mantine-Badge-label {
+  background-image: linear-gradient(105deg, #fff1f3 0%, #ff7a90 42%, #ffd7df 70%, #ffffff 100%);
+}
+
+.yy-admin-shell .yy-status-pill.tone-warm .yy-status-text,
+.yy-admin-shell .mantine-Badge-root[data-color='yellow'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-color='orange'] .mantine-Badge-label {
+  background-image: linear-gradient(105deg, #fff8cc 0%, #ffd166 42%, #ff9f1c 68%, #ffffff 100%);
+}
+
+.yy-admin-shell .yy-status-pill.tone-neutral .yy-status-text,
+.yy-admin-shell .mantine-Badge-root[data-color='gray'] .mantine-Badge-label {
+  background-image: linear-gradient(105deg, #ffffff 0%, #d8dee9 38%, #93a3ad 62%, #f8fafc 100%);
+}
+
+@media (max-width: 68em) {
+  .yy-home-recomposed .yy-home-title-row h3.yy-home-brand-heading,
+  .yy-home-recomposed .yy-home-title-row h3 {
+    font-size: clamp(3.55rem, 15vw, 6.2rem) !important;
+  }
+}
+
+/* Final homepage title lock.
+   Earlier theme passes used a broad `.yy-home-title-row span` rule for the
+   right-side terminal text. That also matched the logo span and gradient text
+   spans, which pushed the whole title cluster back toward the center. */
+.yy-home-page.yy-home-recomposed {
+  justify-items: stretch !important;
+}
+
+.yy-home-page.yy-home-recomposed > .yy-home-title-row.home-title-row,
+.yy-home-page.yy-home-recomposed > .yy-home-title-row {
+  width: 100% !important;
+  max-width: none !important;
+  display: flex !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  gap: clamp(1.05rem, 1.7vw, 1.7rem) !important;
+  margin: clamp(0.1rem, 0.4vh, 0.35rem) 0 clamp(0.9rem, 1.5vh, 1.2rem) !important;
+  padding: 0 !important;
+  transform: none !important;
+  text-align: left !important;
+}
+
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .brand-mark {
+  flex: 0 0 auto !important;
+  width: clamp(5.9rem, 7vw, 8rem) !important;
+  height: clamp(5.9rem, 7vw, 8rem) !important;
+  margin: 0 !important;
+}
+
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading {
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+  text-align: left !important;
+}
+
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading,
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading .yy-react-gradient-text,
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading .yy-reactbits-gradient-original,
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading .yy-reactbits-gradient-original > div,
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading span {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading {
+  font-size: clamp(5.35rem, 7.8vw, 8.8rem) !important;
+  line-height: 0.84 !important;
+}
+
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading .yy-reactbits-gradient-original > div:last-child {
+  filter:
+    drop-shadow(0 0 1.15rem rgba(111, 255, 190, 0.34))
+    drop-shadow(0 0 1.65rem rgba(168, 85, 247, 0.2)) !important;
+}
+
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-terminal-typing {
+  flex: 0 0 auto !important;
+  margin-left: auto !important;
+}
+
+@media (max-width: 68em) {
+  .yy-home-page.yy-home-recomposed > .yy-home-title-row.home-title-row,
+  .yy-home-page.yy-home-recomposed > .yy-home-title-row {
+    flex-wrap: wrap !important;
+  }
+
+  .yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading {
+    font-size: clamp(3.7rem, 15vw, 6.35rem) !important;
+  }
+
+  .yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-terminal-typing {
+    width: 100% !important;
+    margin-left: 0 !important;
   }
 }

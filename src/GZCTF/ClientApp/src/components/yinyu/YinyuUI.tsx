@@ -280,10 +280,10 @@ export function YinyuSectionHead({
   className?: string
 }>) {
   return (
-    <div className={cx('section-head view-reveal', className)}>
+    <div className={cx('section-head yy-section-head view-reveal', className)}>
       <div>
         <span>{eyebrow}</span>
-        <h2>{title}</h2>
+        <h2 className="yy-section-head-title">{title}</h2>
       </div>
       {children}
     </div>

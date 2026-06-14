@@ -4,6 +4,7 @@ using System.Net;
 using GZCTF.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GZCTF.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260613035714_AddPenetrationModeSupport")]
+    partial class AddPenetrationModeSupport
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1602,50 +1605,12 @@ namespace GZCTF.Migrations
                     b.Property<int>("ConfigId")
                         .HasColumnType("integer");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<bool>("IsRouteHint")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("Label")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
-                    b.Property<string>("PolicyAction")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("PortRange")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("Protocol")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<int>("SourceId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("SourceKind")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
                     b.Property<int>("SourceNodeId")
                         .HasColumnType("integer");
-
-                    b.Property<int>("TargetId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("TargetKind")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
 
                     b.Property<int>("TargetNodeId")
                         .HasColumnType("integer");
@@ -1655,47 +1620,6 @@ namespace GZCTF.Migrations
                     b.HasIndex("ConfigId");
 
                     b.ToTable("PenetrationEdges");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationInterface", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<bool>("IsManagement")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsPrimary")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<int>("NetworkId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("NodeId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("OrderIndex")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("StaticIp")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("NetworkId");
-
-                    b.HasIndex("NodeId");
-
-                    b.ToTable("PenetrationInterfaces");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.PenetrationNetwork", b =>
@@ -1710,23 +1634,8 @@ namespace GZCTF.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
-                    b.Property<bool>("Collapsed")
-                        .HasColumnType("boolean");
-
                     b.Property<int>("ConfigId")
                         .HasColumnType("integer");
-
-                    b.Property<string>("DefaultPolicy")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<double>("Height")
-                        .HasColumnType("double precision");
 
                     b.Property<bool>("IsEntry")
                         .HasColumnType("boolean");
@@ -1739,27 +1648,10 @@ namespace GZCTF.Migrations
                     b.Property<int>("OrderIndex")
                         .HasColumnType("integer");
 
-                    b.Property<double>("PositionX")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("PositionY")
-                        .HasColumnType("double precision");
-
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
-
-                    b.Property<int>("TrustLevel")
-                        .HasColumnType("integer");
-
-                    b.Property<double>("Width")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("ZoneType")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
 
                     b.HasKey("Id");
 
@@ -1781,10 +1673,6 @@ namespace GZCTF.Migrations
 
                     b.Property<int>("CpuCount")
                         .HasColumnType("integer");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
 
                     b.Property<string>("EnvironmentVariables")
                         .IsRequired()
@@ -1899,10 +1787,6 @@ namespace GZCTF.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("AdminAccessUrl")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
                     b.Property<Guid?>("ContainerId")
                         .HasColumnType("uuid");
 
@@ -1911,11 +1795,6 @@ namespace GZCTF.Migrations
 
                     b.Property<int>("EnvironmentId")
                         .HasColumnType("integer");
-
-                    b.Property<string>("InterfaceSummary")
-                        .IsRequired()
-                        .HasMaxLength(4096)
-                        .HasColumnType("character varying(4096)");
 
                     b.Property<string>("IpAddress")
                         .IsRequired()
@@ -3746,25 +3625,6 @@ namespace GZCTF.Migrations
                     b.Navigation("Config");
                 });
 
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationInterface", b =>
-                {
-                    b.HasOne("GZCTF.Models.Data.PenetrationNetwork", "Network")
-                        .WithMany("Interfaces")
-                        .HasForeignKey("NetworkId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GZCTF.Models.Data.PenetrationNode", "Node")
-                        .WithMany("Interfaces")
-                        .HasForeignKey("NodeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Network");
-
-                    b.Navigation("Node");
-                });
-
             modelBuilder.Entity("GZCTF.Models.Data.PenetrationNetwork", b =>
                 {
                     b.HasOne("GZCTF.Models.Data.PenetrationConfig", "Config")
@@ -4346,15 +4206,11 @@ namespace GZCTF.Migrations
 
             modelBuilder.Entity("GZCTF.Models.Data.PenetrationNetwork", b =>
                 {
-                    b.Navigation("Interfaces");
-
                     b.Navigation("Nodes");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.PenetrationNode", b =>
                 {
-                    b.Navigation("Interfaces");
-
                     b.Navigation("ScoreItems");
                 });
 

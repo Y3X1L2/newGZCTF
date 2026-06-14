@@ -6,12 +6,13 @@ import { Notifications } from '@mantine/notifications'
 import { FC, Suspense } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
 import { useTranslation } from 'react-i18next'
-import { useRoutes } from 'react-router'
+import { useLocation, useRoutes } from 'react-router'
 import { SWRConfig } from 'swr'
 import routes from '~react-pages'
 import { ErrorFallback } from '@Components/ErrorFallback'
 import { WsrxProvider } from '@Components/WsrxProvider'
 import { SignalField } from '@Components/yinyu/SignalField'
+import { YinyuGameBendsBackground } from '@Components/yinyu/YinyuReactBits'
 import { YinyuRouteLoader } from '@Components/yinyu/YinyuUI'
 import { localCacheProvider } from '@Utils/Cache'
 import { useLanguage } from '@Utils/I18n'
@@ -37,13 +38,23 @@ export const App: FC = () => {
   const { t } = useTranslation()
   const { locale } = useLanguage()
   const { theme } = useCustomTheme()
+  const location = useLocation()
+  const routeElement = useRoutes(routes)
   useBanner()
+
+  const path = location.pathname
+  const isAdminRoute = path.startsWith('/admin')
+  const isGameEntryRoute = /^\/games\/\d+\/?$/.test(path)
+  const isGameWorkspaceRoute = /^\/games\/\d+\/(challenges|scoreboard|theory|theory-scoreboard|awdp|pentest|monitor)(\/|$)/.test(path)
+  const useReactBitsBackdrop = isAdminRoute || isGameWorkspaceRoute
+  const suppressSignalField = useReactBitsBackdrop || isGameEntryRoute
 
   return (
     <MantineProvider defaultColorScheme='dark' forceColorScheme='dark' theme={theme} stylesTransform={emotionTransform}>
       <MantineEmotionProvider>
         <ErrorBoundary FallbackComponent={ErrorFallback}>
-          <SignalField />
+          {useReactBitsBackdrop ? <YinyuGameBendsBackground className='yy-root-reactbits-bg' /> : null}
+          {!suppressSignalField ? <SignalField /> : null}
           <Notifications zIndex={5000} />
           <DatesProvider settings={{ locale }}>
             <ModalsProvider labels={{ confirm: t('common.modal.confirm'), cancel: t('common.modal.cancel') }}>
@@ -56,7 +67,7 @@ export const App: FC = () => {
                 }}
               >
                 <WsrxProvider>
-                  <Suspense fallback={<RouteLoading />}>{useRoutes(routes)}</Suspense>
+                  <Suspense fallback={<RouteLoading />}>{routeElement}</Suspense>
                 </WsrxProvider>
               </SWRConfig>
             </ModalsProvider>

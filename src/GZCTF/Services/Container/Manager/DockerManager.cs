@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Text;
 using Docker.DotNet;
 using Docker.DotNet.Models;
+using GZCTF.Models.Internal;
 using GZCTF.Services.Container.Provider;
 using ContainerStatus = GZCTF.Utils.ContainerStatus;
 
@@ -82,9 +83,11 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator
             return null;
         }
 
-        var parameters = GetCreateContainerParameters(config);
+        var attachments = GetNetworkAttachments(config);
+        var parameters = GetCreateContainerParameters(config, attachments);
+        await EnsureCustomNetworksAsync(config, attachments, token);
 
-        if (_meta.ExposePort)
+        if (_meta.ExposePort && config.PublishPort)
         {
             var exposedPortBindingKey = GetTcpPortKey(config.ExposedPort);
             parameters.ExposedPorts = new Dictionary<string, EmptyStruct> { [exposedPortBindingKey] = new() };
@@ -236,11 +239,43 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator
 
         container.StartedAt = DateTimeOffset.Parse(info.State.StartedAt);
         container.ExpectStopAt = container.StartedAt + TimeSpan.FromHours(2);
-        container.IP = info.NetworkSettings.Networks.FirstOrDefault().Value.IPAddress;
+        var primaryAttachment = attachments.FirstOrDefault(a => a.IsPrimary) ?? attachments.FirstOrDefault();
+        var primaryNetworkName = primaryAttachment?.NetworkName ?? config.NetworkName;
+        container.IP = !string.IsNullOrWhiteSpace(primaryNetworkName) &&
+                       info.NetworkSettings.Networks.TryGetValue(primaryNetworkName, out var primaryNetwork)
+            ? primaryNetwork.IPAddress
+            : info.NetworkSettings.Networks.FirstOrDefault().Value.IPAddress;
         container.Port = config.ExposedPort;
         container.IsProxy = !_meta.ExposePort;
 
-        if (!_meta.ExposePort)
+        foreach (var attachment in attachments
+                     .Where(n => !n.NetworkName.Equals(primaryNetworkName, StringComparison.Ordinal))
+                     .DistinctBy(n => n.NetworkName))
+        {
+            try
+            {
+                await _client.Networks.ConnectNetworkAsync(attachment.NetworkName,
+                    new NetworkConnectParameters
+                    {
+                        Container = container.ContainerId,
+                        EndpointConfig = string.IsNullOrWhiteSpace(attachment.IPAddress)
+                            ? null
+                            : new EndpointSettings
+                            {
+                                IPAMConfig = new EndpointIPAMConfig { IPv4Address = attachment.IPAddress }
+                            }
+                    }, token);
+            }
+            catch (DockerApiException ex) when (ex.StatusCode == HttpStatusCode.Forbidden ||
+                                               ex.StatusCode == HttpStatusCode.NotFound ||
+                                               ex.StatusCode == HttpStatusCode.Conflict)
+            {
+                _logger.LogWarning(ex, "Failed to connect container {ContainerId} to network {NetworkName}",
+                    container.ContainerId, attachment.NetworkName);
+            }
+        }
+
+        if (!_meta.ExposePort || !config.PublishPort)
             return container;
 
         var portString = config.ExposedPort.ToString();
@@ -401,13 +436,16 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator
                 string.IsNullOrWhiteSpace(message) ? "Patch command failed" : message);
     }
 
-    private CreateContainerParameters GetCreateContainerParameters(GZCTF.Models.Internal.ContainerConfig config)
+    private CreateContainerParameters GetCreateContainerParameters(GZCTF.Models.Internal.ContainerConfig config,
+        IReadOnlyList<ContainerNetworkAttachment> attachments)
     {
+        var primaryAttachment = attachments.FirstOrDefault(a => a.IsPrimary) ?? attachments.FirstOrDefault();
+        var primaryNetworkName = primaryAttachment?.NetworkName;
         var hostConfig = new HostConfig
         {
             Memory = config.MemoryLimit * 1024 * 1024,
-            NetworkMode = !string.IsNullOrEmpty(config.NetworkName)
-                ? config.NetworkName
+            NetworkMode = !string.IsNullOrEmpty(primaryNetworkName)
+                ? primaryNetworkName
                 : _meta.NetworkNames[config.NetworkMode]
         };
 
@@ -419,9 +457,31 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator
                 hostConfig.NanoCPUs = config.CPUCount * 100_000_000L;
         }
 
-        return new()
+        var env = config.EnvironmentVariables
+            .Where(kv => !string.IsNullOrWhiteSpace(kv.Key))
+            .Select(kv => $"{kv.Key}={kv.Value}")
+            .ToList();
+
+        env.Add($"GZCTF_TEAM_ID={config.TeamId}");
+        if (config.Flag is not null)
+            env.Add($"GZCTF_FLAG={config.Flag}");
+
+        var createParameters = new CreateContainerParameters
         {
             Image = config.Image,
+            NetworkingConfig = !string.IsNullOrWhiteSpace(primaryNetworkName) &&
+                               !string.IsNullOrWhiteSpace(primaryAttachment?.IPAddress)
+                ? new NetworkingConfig
+                {
+                    EndpointsConfig = new Dictionary<string, EndpointSettings>
+                    {
+                        [primaryNetworkName] = new()
+                        {
+                            IPAMConfig = new EndpointIPAMConfig { IPv4Address = primaryAttachment.IPAddress }
+                        }
+                    }
+                }
+                : null,
             Labels =
                 new Dictionary<string, string>
                 {
@@ -432,11 +492,108 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator
             Name = DockerMetadata.GetName(config),
 
             // Keep the legacy dynamic-flag environment variable names for challenge image compatibility.
-            Env = config.Flag is null
-                ? [$"GZCTF_TEAM_ID={config.TeamId}"]
-                : [$"GZCTF_FLAG={config.Flag}", $"GZCTF_TEAM_ID={config.TeamId}"],
+            Env = env,
             HostConfig = hostConfig
         };
+
+        if (!string.IsNullOrWhiteSpace(config.StartCommand))
+            createParameters.Cmd = ["sh", "-c", config.StartCommand];
+
+        return createParameters;
+    }
+
+    private async Task EnsureCustomNetworksAsync(GZCTF.Models.Internal.ContainerConfig config,
+        IReadOnlyList<ContainerNetworkAttachment> attachments, CancellationToken token)
+    {
+        var customNetworks = attachments.Count > 0
+            ? attachments
+            : GetNetworkAttachments(config);
+
+        foreach (var attachment in customNetworks.DistinctBy(n => n.NetworkName))
+        {
+            try
+            {
+                await _client.Networks.InspectNetworkAsync(attachment.NetworkName, token);
+            }
+            catch (DockerApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            {
+                var parameters = new NetworksCreateParameters
+                {
+                    Name = attachment.NetworkName,
+                    Driver = "bridge",
+                    Attachable = true,
+                    Internal = attachment.IsInternal,
+                    Labels = new Dictionary<string, string> { ["ManagedBy"] = "GZCTF" }
+                };
+
+                var subnet = attachment.SubnetCidr;
+                if (string.IsNullOrWhiteSpace(subnet))
+                    config.NetworkSubnets.TryGetValue(attachment.NetworkName, out subnet);
+
+                if (!string.IsNullOrWhiteSpace(subnet))
+                {
+                    parameters.IPAM = new IPAM
+                    {
+                        Config = [new IPAMConfig { Subnet = subnet }]
+                    };
+                }
+
+                await _client.Networks.CreateNetworkAsync(parameters, token);
+            }
+        }
+    }
+
+    private List<ContainerNetworkAttachment> GetNetworkAttachments(GZCTF.Models.Internal.ContainerConfig config)
+    {
+        if (config.NetworkAttachments.Count > 0)
+        {
+            var normalized = config.NetworkAttachments
+                .Where(n => !string.IsNullOrWhiteSpace(n.NetworkName))
+                .Select(n => new ContainerNetworkAttachment
+                {
+                    NetworkName = n.NetworkName.Trim(),
+                    SubnetCidr = string.IsNullOrWhiteSpace(n.SubnetCidr) ? null : n.SubnetCidr.Trim(),
+                    IPAddress = string.IsNullOrWhiteSpace(n.IPAddress) ? null : n.IPAddress.Trim(),
+                    IsPrimary = n.IsPrimary,
+                    IsInternal = n.IsInternal
+                })
+                .DistinctBy(n => n.NetworkName)
+                .ToList();
+
+            if (normalized.Count > 0)
+            {
+                if (normalized.All(n => !n.IsPrimary))
+                    normalized[0].IsPrimary = true;
+                return normalized.OrderByDescending(n => n.IsPrimary).ToList();
+            }
+        }
+
+        var attachments = new List<ContainerNetworkAttachment>();
+        if (!string.IsNullOrWhiteSpace(config.NetworkName))
+        {
+            attachments.Add(new ContainerNetworkAttachment
+            {
+                NetworkName = config.NetworkName,
+                SubnetCidr = config.NetworkSubnets.GetValueOrDefault(config.NetworkName),
+                IPAddress = config.IPAddress,
+                IsPrimary = true
+            });
+        }
+
+        foreach (var networkName in config.AdditionalNetworkNames.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct())
+        {
+            if (networkName == config.NetworkName)
+                continue;
+
+            attachments.Add(new ContainerNetworkAttachment
+            {
+                NetworkName = networkName,
+                SubnetCidr = config.NetworkSubnets.GetValueOrDefault(networkName),
+                IsPrimary = false
+            });
+        }
+
+        return attachments;
     }
 
     private bool IsWindowsDockerDaemon()

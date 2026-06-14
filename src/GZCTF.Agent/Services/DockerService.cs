@@ -22,16 +22,29 @@ public class DockerService
 
     public async Task<AgentContainerResponse?> CreateContainerAsync(CreateContainerRequest request, CancellationToken token)
     {
-        await EnsureNetworkAsync(token);
+        var attachments = GetNetworkAttachments(request);
+        var primaryAttachment = attachments.First();
+        var primaryNetwork = primaryAttachment.NetworkName;
+
+        foreach (var attachment in attachments)
+            await EnsureNetworkAsync(attachment, token);
 
         var containerName = BuildContainerName(request);
         var portSpec = $"{request.ExposedPort}/tcp";
+        var env = request.EnvironmentVariables
+            .Where(kv => !string.IsNullOrWhiteSpace(kv.Key))
+            .Select(kv => $"{kv.Key}={kv.Value}")
+            .ToList();
+
+        env.Add($"GZCTF_TEAM_ID={request.TeamId}");
+        if (request.Flag is not null)
+            env.Add($"GZCTF_FLAG={request.Flag}");
 
         var createParams = new CreateContainerParameters
         {
             Name = containerName,
             Image = request.Image,
-            Env = new List<string> { $"GZCTF_FLAG={request.Flag}" },
+            Env = env,
             Labels = new Dictionary<string, string>
             {
                 ["ChallengeId"] = request.ChallengeId.ToString(),
@@ -43,17 +56,31 @@ public class DockerService
             {
                 Memory = request.MemoryLimit * 1024L * 1024,
                 CPUPercent = request.CPUCount * 10,
-                PortBindings = new Dictionary<string, IList<PortBinding>>
+                PortBindings = request.PublishPort
+                    ? new Dictionary<string, IList<PortBinding>>
+                    {
+                        [portSpec] = new List<PortBinding> { new() { HostPort = "0" } }
+                    }
+                    : null,
+                NetworkMode = primaryNetwork,
+            },
+            ExposedPorts = request.PublishPort ? new Dictionary<string, EmptyStruct> { [portSpec] = new() } : null,
+            NetworkingConfig = !string.IsNullOrWhiteSpace(primaryAttachment.IPAddress)
+                ? new NetworkingConfig
                 {
-                    [portSpec] = new List<PortBinding> { new() { HostPort = "0" } }
-                },
-                NetworkMode = _config.ChallengeNetwork,
-            },
-            ExposedPorts = new Dictionary<string, EmptyStruct>
-            {
-                [portSpec] = new()
-            },
+                    EndpointsConfig = new Dictionary<string, EndpointSettings>
+                    {
+                        [primaryNetwork] = new()
+                        {
+                            IPAMConfig = new EndpointIPAMConfig { IPv4Address = primaryAttachment.IPAddress }
+                        }
+                    }
+                }
+                : null,
         };
+
+        if (!string.IsNullOrWhiteSpace(request.StartCommand))
+            createParams.Cmd = ["sh", "-c", request.StartCommand];
 
         Docker.DotNet.Models.CreateContainerResponse? createResult;
         try
@@ -71,8 +98,33 @@ public class DockerService
 
         await _client.Containers.StartContainerAsync(createResult.ID, new ContainerStartParameters(), token);
 
+        foreach (var attachment in attachments
+                     .Where(n => !n.NetworkName.Equals(primaryNetwork, StringComparison.Ordinal))
+                     .DistinctBy(n => n.NetworkName))
+        {
+            try
+            {
+                await _client.Networks.ConnectNetworkAsync(attachment.NetworkName,
+                    new NetworkConnectParameters
+                    {
+                        Container = createResult.ID,
+                        EndpointConfig = string.IsNullOrWhiteSpace(attachment.IPAddress)
+                            ? null
+                            : new EndpointSettings
+                            {
+                                IPAMConfig = new EndpointIPAMConfig { IPv4Address = attachment.IPAddress }
+                            }
+                    }, token);
+            }
+            catch (DockerApiException ex) when (ex.StatusCode is System.Net.HttpStatusCode.Conflict)
+            {
+                _logger.LogDebug(ex, "Container {ContainerId} already connected to {NetworkName}",
+                    createResult.ID, attachment.NetworkName);
+            }
+        }
+
         var inspect = await _client.Containers.InspectContainerAsync(createResult.ID, token);
-        var network = inspect.NetworkSettings.Networks.TryGetValue(_config.ChallengeNetwork, out var netVal) ? netVal : null;
+        var network = inspect.NetworkSettings.Networks.TryGetValue(primaryNetwork, out var netVal) ? netVal : null;
         var portBinding = inspect.NetworkSettings.Ports.TryGetValue(portSpec, out var pbVal) ? pbVal?.FirstOrDefault() : null;
 
         return new AgentContainerResponse
@@ -88,6 +140,19 @@ public class DockerService
     {
         try { await _client.Containers.StopContainerAsync(containerId, new ContainerStopParameters { WaitBeforeKillSeconds = 5 }, token); } catch { }
         try { await _client.Containers.RemoveContainerAsync(containerId, new ContainerRemoveParameters { Force = true }, token); } catch { }
+    }
+
+    public async Task RemoveNetworkAsync(string networkName, CancellationToken token)
+    {
+        try
+        {
+            var network = await _client.Networks.InspectNetworkAsync(networkName, token);
+            await _client.Networks.DeleteNetworkAsync(network.ID, token);
+        }
+        catch (DockerApiException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound)
+        {
+            _logger.LogDebug(ex, "Docker network {NetworkName} is already absent", networkName);
+        }
     }
 
     public async Task<int> GetContainerCountAsync(CancellationToken token)
@@ -122,21 +187,87 @@ public class DockerService
             new Progress<JSONMessage>(), token);
     }
 
-    private async Task EnsureNetworkAsync(CancellationToken token)
+    private async Task EnsureNetworkAsync(ContainerNetworkAttachment attachment, CancellationToken token)
     {
         try
         {
-            await _client.Networks.InspectNetworkAsync(_config.ChallengeNetwork, token);
+            await _client.Networks.InspectNetworkAsync(attachment.NetworkName, token);
         }
         catch (DockerApiException)
         {
-            await _client.Networks.CreateNetworkAsync(new NetworksCreateParameters
+            var parameters = new NetworksCreateParameters
             {
-                Name = _config.ChallengeNetwork,
+                Name = attachment.NetworkName,
                 Driver = "bridge",
+                Internal = attachment.IsInternal,
                 Labels = new Dictionary<string, string> { ["ManagedBy"] = "GZCTF" }
-            }, token);
+            };
+
+            if (!string.IsNullOrWhiteSpace(attachment.SubnetCidr))
+            {
+                parameters.IPAM = new IPAM
+                {
+                    Config = [new IPAMConfig { Subnet = attachment.SubnetCidr }]
+                };
+            }
+
+            await _client.Networks.CreateNetworkAsync(parameters, token);
         }
+    }
+
+    private List<ContainerNetworkAttachment> GetNetworkAttachments(CreateContainerRequest request)
+    {
+        if (request.NetworkAttachments.Count > 0)
+        {
+            var normalized = request.NetworkAttachments
+                .Where(n => !string.IsNullOrWhiteSpace(n.NetworkName))
+                .Select(n => new ContainerNetworkAttachment
+                {
+                    NetworkName = n.NetworkName.Trim(),
+                    SubnetCidr = string.IsNullOrWhiteSpace(n.SubnetCidr) ? null : n.SubnetCidr.Trim(),
+                    IPAddress = string.IsNullOrWhiteSpace(n.IPAddress) ? null : n.IPAddress.Trim(),
+                    IsPrimary = n.IsPrimary,
+                    IsInternal = n.IsInternal
+                })
+                .DistinctBy(n => n.NetworkName)
+                .ToList();
+
+            if (normalized.Count > 0)
+            {
+                if (normalized.All(n => !n.IsPrimary))
+                    normalized[0].IsPrimary = true;
+                return normalized.OrderByDescending(n => n.IsPrimary).ToList();
+            }
+        }
+
+        var primaryNetwork = string.IsNullOrWhiteSpace(request.NetworkName)
+            ? _config.ChallengeNetwork
+            : request.NetworkName.Trim();
+        var attachments = new List<ContainerNetworkAttachment>
+        {
+            new()
+            {
+                NetworkName = primaryNetwork,
+                SubnetCidr = request.NetworkSubnets.GetValueOrDefault(primaryNetwork),
+                IPAddress = request.IPAddress,
+                IsPrimary = true
+            }
+        };
+
+        foreach (var networkName in request.AdditionalNetworkNames.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct())
+        {
+            if (networkName == primaryNetwork)
+                continue;
+
+            attachments.Add(new ContainerNetworkAttachment
+            {
+                NetworkName = networkName,
+                SubnetCidr = request.NetworkSubnets.GetValueOrDefault(networkName),
+                IsPrimary = false
+            });
+        }
+
+        return attachments;
     }
 
     public static string BuildContainerName(CreateContainerRequest request)

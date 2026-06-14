@@ -112,6 +112,7 @@ export const GameCreateModal: FC<GameCreateModalProps> = (props) => {
             { value: GameType.Jeopardy, label: 'Jeopardy' },
             { value: GameType.AWDP, label: 'AWDP' },
             { value: GameType.Theory, label: 'Theory' },
+            { value: GameType.Penetration, label: 'Penetration' },
             { value: GameType.Mixed, label: 'Mixed' },
           ]}
           onChange={(value) => value && setGameType(value as GameType)}

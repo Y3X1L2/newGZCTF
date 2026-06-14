@@ -2,8 +2,9 @@ import dayjs from 'dayjs'
 import { FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import { GameFlagGlyph, GameStatus } from '@Components/GameCard'
-import { YinyuHexField, YinyuStatusPill, YinyuStatusTone } from '@Components/yinyu/YinyuUI'
+import { GameFlagGlyph, GameStatus, gameStatusLabel } from '@Components/GameCard'
+import { YinyuStatusText } from '@Components/yinyu/YinyuReactBits'
+import { YinyuHexField, YinyuStatusTone } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
 import { getGameStatus } from '@Hooks/useGame'
 import { BasicGameInfoModel } from '@Api'
@@ -29,12 +30,7 @@ export const RecentGame: FC<RecentGameProps> = ({ game, ...others }) => {
   return (
     <Link {...others} to={`/games/${game.id}`} className="recent-game-card panel-card">
       <YinyuHexField cells={28} />
-      <YinyuStatusPill
-        tone={tone}
-        state={status === GameStatus.OnGoing ? 'running' : status === GameStatus.Coming ? 'open' : 'idle'}
-      >
-        {status}
-      </YinyuStatusPill>
+      <YinyuStatusText tone={tone}>{gameStatusLabel(status)}</YinyuStatusText>
       <GameFlagGlyph tone={tone} />
       <h4>&gt; {title}</h4>
       <dl>

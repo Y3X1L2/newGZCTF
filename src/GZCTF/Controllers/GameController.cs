@@ -468,7 +468,65 @@ public class GameController(
         if (DateTimeOffset.UtcNow < game.StartTimeUtc)
             return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Game_NotStarted)]));
 
-        return Ok(await submissionRepository.GetSubmissions(game, type, count, skip, token));
+        if (game.GameType is not (GameType.Penetration or GameType.Mixed))
+        {
+            var gameSubmissions = await submissionRepository.GetSubmissions(game, type, count, skip, token);
+            return Ok(gameSubmissions);
+        }
+
+        var pageSize = count <= 0 ? 0 : Math.Min(count, 100);
+        var fetchCount = pageSize <= 0 ? 0 : Math.Max(0, skip) + pageSize;
+        var submissions = await submissionRepository.GetSubmissions(game, type, fetchCount, 0, token);
+
+        var penetrationQuery = dbContext.PenetrationSubmissions.AsNoTracking()
+            .Where(s => s.GameId == id);
+        if (type is not null)
+            penetrationQuery = penetrationQuery.Where(s => s.Status == type.Value);
+
+        var penetrationRows = await penetrationQuery
+            .OrderByDescending(s => s.SubmittedAt)
+            .Take(fetchCount <= 0 ? int.MaxValue : fetchCount)
+            .Select(s => new
+            {
+                Submission = s,
+                NodeName = s.ScoreItem.Node.Name,
+                ItemTitle = s.ScoreItem.Title
+            })
+            .ToArrayAsync(token);
+
+        var penetrationSubmissions = penetrationRows
+            .Select(row => new Submission
+            {
+                Answer = row.Submission.Answer,
+                Status = row.Submission.Status,
+                SubmitTimeUtc = row.Submission.SubmittedAt,
+                SubmissionType = ScoringSubmissionType.Flag,
+                Content = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    mode = "Penetration",
+                    nodeName = row.NodeName,
+                    itemTitle = row.ItemTitle
+                }),
+                AttemptNumber = 1,
+                Score = row.Submission.Score,
+                UserId = row.Submission.UserId,
+                User = row.Submission.User,
+                TeamId = row.Submission.TeamId,
+                Team = row.Submission.Team,
+                ParticipationId = row.Submission.ParticipationId,
+                Participation = row.Submission.Participation,
+                GameId = row.Submission.GameId,
+                Game = row.Submission.Game,
+                ChallengeId = 0,
+                DisplayChallengeName = "[渗透] " + row.NodeName + " / " + row.ItemTitle
+            }).ToArray();
+
+        var merged = submissions.Concat(penetrationSubmissions)
+            .OrderByDescending(s => s.SubmitTimeUtc)
+            .Skip(Math.Max(0, skip))
+            .ToArray();
+
+        return Ok(pageSize <= 0 ? merged : merged.Take(pageSize).ToArray());
     }
 
     /// <summary>

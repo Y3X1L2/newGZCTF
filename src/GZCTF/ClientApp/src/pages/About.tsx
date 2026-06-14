@@ -14,6 +14,7 @@ import { FC, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { WithNavBar } from '@Components/WithNavbar'
 import { LogoDistortion } from '@Components/yinyu/grid-distortion/LogoDistortion'
+import { YinyuGradientText } from '@Components/yinyu/YinyuReactBits'
 import { YinyuHexField } from '@Components/yinyu/YinyuUI'
 import { PLATFORM_DESCRIPTION, PLATFORM_SLOGAN, PLATFORM_TITLE } from '@Utils/Brand'
 import { useIsMobile } from '@Utils/ThemeOverride'
@@ -107,8 +108,12 @@ const About: FC = () => {
             <div className="yy-about-heading">
               <span className="yy-section-kicker">PLATFORM PROFILE</span>
               <Title order={1} className="yy-brand-title">
-                <span>{PLATFORM_TITLE}</span>
-                <em>{platformType}</em>
+                <span>
+                  <YinyuGradientText tone="silver">{PLATFORM_TITLE}</YinyuGradientText>
+                </span>
+                <em>
+                  <YinyuGradientText tone="signal">{platformType}</YinyuGradientText>
+                </em>
               </Title>
               <Text className="yy-about-slogan">{PLATFORM_SLOGAN}</Text>
               <Text className="yy-about-description">{PLATFORM_DESCRIPTION}</Text>
