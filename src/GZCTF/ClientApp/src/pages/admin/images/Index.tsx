@@ -39,6 +39,7 @@ import {
 } from '@Components/yinyu/YinyuUI'
 
 const fetcher = (url: string) => fetch(url).then((response) => response.json())
+const IMAGE_TEMPLATE_PAGE_SIZE = 100
 
 interface ImageTemplate {
   id: number
@@ -59,6 +60,27 @@ interface DockerRegistryInfo {
   address: string
   namespace: string
   maxUploadSizeGb: number
+}
+
+async function fetchAllImageTemplates() {
+  const items: ImageTemplate[] = []
+  let page = 1
+  let total = 0
+  let lastResponse: Record<string, unknown> = {}
+
+  while (true) {
+    const data = await fetcher(`/api/v1/image-templates?page=${page}&pageSize=${IMAGE_TEMPLATE_PAGE_SIZE}`)
+    const pageItems = (data?.items ?? []) as ImageTemplate[]
+    total = Number(data?.total ?? items.length + pageItems.length)
+    lastResponse = data ?? {}
+    items.push(...pageItems)
+
+    if (items.length >= total || pageItems.length === 0) {
+      return { ...lastResponse, total, page: 1, pageSize: items.length, items }
+    }
+
+    page += 1
+  }
 }
 
 const imageTypeLabels: Record<string, string> = {
@@ -460,7 +482,7 @@ function MetricTile({ label, value, tone }: { label: string; value: number; tone
 }
 
 export default function ImagesPage() {
-  const { data, isLoading, mutate } = useSWR('/api/v1/image-templates', fetcher)
+  const { data, isLoading, mutate } = useSWR('image-templates-all', fetchAllImageTemplates)
   const { data: registry } = useSWR('/api/v1/image-templates/docker-registry', fetcher)
   const [dockerModalOpen, setDockerModalOpen] = useState(false)
   const [dockerUploadOpen, setDockerUploadOpen] = useState(false)
