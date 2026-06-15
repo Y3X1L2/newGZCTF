@@ -447,6 +447,8 @@ public class DockerConfig
     public string? UserName { get; set; }
     public string? Password { get; set; }
     public string? ChallengeNetwork { get; set; }
+    public int? PublicPortStart { get; set; }
+    public int? PublicPortEnd { get; set; }
 }
 
 public class KubernetesConfig

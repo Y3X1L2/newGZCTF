@@ -2,6 +2,8 @@ using Docker.DotNet;
 using Docker.DotNet.Models;
 using GZCTF.Agent.Models;
 using Microsoft.Extensions.Options;
+using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -59,7 +61,7 @@ public class DockerService
                 PortBindings = request.PublishPort
                     ? new Dictionary<string, IList<PortBinding>>
                     {
-                        [portSpec] = new List<PortBinding> { new() { HostPort = "0" } }
+                        [portSpec] = new List<PortBinding> { new() { HostPort = ResolveHostPortBinding() } }
                     }
                     : null,
                 NetworkMode = primaryNetwork,
@@ -185,6 +187,40 @@ public class DockerService
             new ImagesCreateParameters { FromImage = image },
             authConfig,
             new Progress<JSONMessage>(), token);
+    }
+
+    private string ResolveHostPortBinding()
+    {
+        var start = _config.PublicPortStart;
+        var end = _config.PublicPortEnd;
+
+        if (start is null || end is null || start <= 0 || end < start || end > ushort.MaxValue)
+            return "0";
+
+        for (var port = start.Value; port <= end.Value; port++)
+        {
+            if (IsTcpPortAvailable(port))
+                return port.ToString();
+        }
+
+        _logger.LogWarning(
+            "No available Docker public port in configured range {Start}-{End}; falling back to Docker random port",
+            start, end);
+        return "0";
+    }
+
+    static bool IsTcpPortAvailable(int port)
+    {
+        try
+        {
+            using var listener = new TcpListener(IPAddress.Any, port);
+            listener.Start();
+            return true;
+        }
+        catch (SocketException)
+        {
+            return false;
+        }
     }
 
     private async Task EnsureNetworkAsync(ContainerNetworkAttachment attachment, CancellationToken token)

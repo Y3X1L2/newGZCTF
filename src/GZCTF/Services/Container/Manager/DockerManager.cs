@@ -1,5 +1,6 @@
 using System.Net;
 using System.IO.Compression;
+using System.Net.Sockets;
 using System.Text;
 using Docker.DotNet;
 using Docker.DotNet.Models;
@@ -87,21 +88,9 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator
         var parameters = GetCreateContainerParameters(config, attachments);
         await EnsureCustomNetworksAsync(config, attachments, token);
 
-        if (_meta.ExposePort && config.PublishPort)
-        {
-            var exposedPortBindingKey = GetTcpPortKey(config.ExposedPort);
-            parameters.ExposedPorts = new Dictionary<string, EmptyStruct> { [exposedPortBindingKey] = new() };
-            parameters.HostConfig.PortBindings = new Dictionary<string, IList<PortBinding>>
-            {
-                // let docker choose a random port, do not use "PublishAllPorts" option
-                // reference: https://github.com/moby/moby/blob/master/daemon/libnetwork/portallocator/portallocator.go#L135
-                // function: RequestPortsInRange
-                // comment:
-                //     If portStart and portEnd are 0 it returns
-                //     the first free port in the default ephemeral range.
-                [exposedPortBindingKey] = [new PortBinding { HostPort = "0" }]
-            };
-        }
+        var publishHostPort = _meta.ExposePort && config.PublishPort;
+        if (publishHostPort)
+            ApplyHostPortBinding(parameters, config.ExposedPort);
 
         CreateContainerResponse? containerRes;
         var retry = 0;
@@ -120,6 +109,9 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator
                     config.CPUCount, config.MemoryLimit);
                 return null;
             }
+
+            if (publishHostPort)
+                ApplyHostPortBinding(parameters, config.ExposedPort);
 
             containerRes = await _client.Containers.CreateContainerAsync(parameters, token);
         }
@@ -606,6 +598,50 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "Failed to determine Docker daemon OS type; using Linux-compatible CPU limits.");
+            return false;
+        }
+    }
+
+    private void ApplyHostPortBinding(CreateContainerParameters parameters, int exposedPort)
+    {
+        var exposedPortBindingKey = GetTcpPortKey(exposedPort);
+        parameters.ExposedPorts = new Dictionary<string, EmptyStruct> { [exposedPortBindingKey] = new() };
+        parameters.HostConfig.PortBindings = new Dictionary<string, IList<PortBinding>>
+        {
+            [exposedPortBindingKey] = [new PortBinding { HostPort = ResolveHostPortBinding() }]
+        };
+    }
+
+    private string ResolveHostPortBinding()
+    {
+        var start = _meta.Config.PublicPortStart;
+        var end = _meta.Config.PublicPortEnd;
+
+        if (start is null || end is null || start <= 0 || end < start || end > ushort.MaxValue)
+            return "0";
+
+        for (var port = start.Value; port <= end.Value; port++)
+        {
+            if (IsTcpPortAvailable(port))
+                return port.ToString();
+        }
+
+        _logger.LogWarning(
+            "No available Docker public port in configured range {Start}-{End}; falling back to Docker random port",
+            start, end);
+        return "0";
+    }
+
+    static bool IsTcpPortAvailable(int port)
+    {
+        try
+        {
+            using var listener = new TcpListener(IPAddress.Any, port);
+            listener.Start();
+            return true;
+        }
+        catch (SocketException)
+        {
             return false;
         }
     }

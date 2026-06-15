@@ -14,6 +14,8 @@ public class DockerConfig
     public string Uri { get; set; } = "unix:///var/run/docker.sock";
     public string ChallengeNetwork { get; set; } = "gzctf";
     public string PublicEntry { get; set; } = "localhost";
+    public int? PublicPortStart { get; set; }
+    public int? PublicPortEnd { get; set; }
 }
 
 public class KvmConfig
