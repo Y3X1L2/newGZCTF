@@ -6,7 +6,7 @@
 
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.018)),
-    radial-gradient(ellipse at 24% 0%, rgba(140, 172, 133, 0.08), transparent 16rem), rgba(6, 7, 7, 0.84);
+    radial-gradient(ellipse at 24% 0%, rgba(107, 238, 177, 0.08), transparent 16rem), rgba(6, 7, 7, 0.84);
   backdrop-filter: blur(18px);
 }
 
@@ -14,5 +14,5 @@
   color: var(--yy-muted);
   border: 1px solid var(--yy-line);
   background:
-    radial-gradient(ellipse at 22% 18%, rgba(140, 172, 133, 0.055), transparent 42%), rgba(255, 255, 255, 0.028);
+    radial-gradient(ellipse at 22% 18%, rgba(107, 238, 177, 0.055), transparent 42%), rgba(255, 255, 255, 0.028);
 }

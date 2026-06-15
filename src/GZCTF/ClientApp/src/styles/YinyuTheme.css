@@ -23,7 +23,7 @@
   --yy-hex-flow: conic-gradient(
     from 30deg at 50% 50%,
     transparent 0 13%,
-    rgba(140, 172, 133, 0.08) 14% 16%,
+    rgba(107, 238, 177, 0.08) 14% 16%,
     transparent 17% 30%,
     rgba(245, 245, 247, 0.052) 31% 33%,
     transparent 34% 100%
@@ -113,7 +113,7 @@
   z-index: 0;
   pointer-events: none;
   background:
-    linear-gradient(112deg, transparent 10%, rgba(140, 172, 133, 0.22) 42%, transparent 70%),
+    linear-gradient(112deg, transparent 10%, rgba(107, 238, 177, 0.22) 42%, transparent 70%),
     var(--yy-hex-flow);
   background-size:
     auto,
@@ -146,7 +146,7 @@
 
 .mantine-Button-root[data-variant='filled'] {
   color: #07100c;
-  border-color: rgba(140, 172, 133, 0.62);
+  border-color: rgba(107, 238, 177, 0.62);
   background:
     radial-gradient(ellipse at 32% 0%, rgba(255, 255, 255, 0.34), transparent 48%),
     linear-gradient(180deg, #8af5c2, var(--green));
@@ -164,9 +164,9 @@
 .mantine-Button-root[data-variant='subtle'],
 .mantine-Button-root[data-variant='default'] {
   color: rgba(244, 245, 245, 0.94);
-  border-color: rgba(140, 172, 133, 0.2);
+  border-color: rgba(107, 238, 177, 0.2);
   background:
-    radial-gradient(ellipse at 18% 0%, rgba(140, 172, 133, 0.065), transparent 48%),
+    radial-gradient(ellipse at 18% 0%, rgba(107, 238, 177, 0.065), transparent 48%),
     rgba(255, 255, 255, 0.045);
 }
 
@@ -190,21 +190,21 @@
 
 .mantine-ActionIcon-root {
   color: rgba(232, 255, 244, 0.92);
-  border: 1px solid rgba(140, 172, 133, 0.18);
+  border: 1px solid rgba(107, 238, 177, 0.18);
   background:
-    radial-gradient(ellipse at 30% 20%, rgba(140, 172, 133, 0.08), transparent 48%),
+    radial-gradient(ellipse at 30% 20%, rgba(107, 238, 177, 0.08), transparent 48%),
     rgba(255, 255, 255, 0.04);
 }
 
 .mantine-ActionIcon-root[data-variant='subtle'],
 .mantine-ActionIcon-root[data-variant='transparent'] {
-  border-color: rgba(140, 172, 133, 0.13);
+  border-color: rgba(107, 238, 177, 0.13);
   background: rgba(255, 255, 255, 0.026);
 }
 
 .mantine-ActionIcon-root:hover {
   color: var(--yy-green);
-  border-color: rgba(140, 172, 133, 0.36);
+  border-color: rgba(107, 238, 177, 0.36);
 }
 
 .mantine-Input-input,
@@ -216,7 +216,7 @@
   color: rgba(244, 245, 245, 0.94);
   border-color: var(--line);
   background:
-    radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.05), transparent 52%),
+    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.05), transparent 52%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.046), rgba(255, 255, 255, 0.012)), rgba(0, 0, 0, 0.2);
 }
 
@@ -231,8 +231,8 @@
 .mantine-NumberInput-input:focus,
 .mantine-PasswordInput-input:focus,
 .mantine-DateInput-input:focus {
-  border-color: rgba(140, 172, 133, 0.5);
-  box-shadow: 0 0 0 1px rgba(140, 172, 133, 0.12);
+  border-color: rgba(107, 238, 177, 0.5);
+  box-shadow: 0 0 0 1px rgba(107, 238, 177, 0.12);
 }
 
 .mantine-Table-table {
@@ -242,26 +242,26 @@
 .mantine-Table-th {
   color: var(--muted);
   background:
-    radial-gradient(ellipse at 18% 0%, rgba(140, 172, 133, 0.055), transparent 44%), rgba(255, 255, 255, 0.026);
+    radial-gradient(ellipse at 18% 0%, rgba(107, 238, 177, 0.055), transparent 44%), rgba(255, 255, 255, 0.026);
 }
 
 .mantine-Table-tr:hover {
-  background: linear-gradient(90deg, rgba(140, 172, 133, 0.052), transparent 48%), rgba(255, 255, 255, 0.024);
+  background: linear-gradient(90deg, rgba(107, 238, 177, 0.052), transparent 48%), rgba(255, 255, 255, 0.024);
 }
 
 .mantine-Modal-overlay,
 .mantine-Drawer-overlay {
-  background: radial-gradient(ellipse at 50% 18%, rgba(140, 172, 133, 0.08), transparent 32rem), rgba(0, 0, 0, 0.72);
+  background: radial-gradient(ellipse at 50% 18%, rgba(107, 238, 177, 0.08), transparent 32rem), rgba(0, 0, 0, 0.72);
   backdrop-filter: blur(0.5rem);
 }
 
 .mantine-Badge-root {
   position: relative;
   overflow: hidden;
-  border-color: rgba(140, 172, 133, 0.26);
+  border-color: rgba(107, 238, 177, 0.26);
   background:
     radial-gradient(circle at 18% 50%, rgba(245, 245, 247, 0.1) 0 2px, transparent 2.5px),
-    radial-gradient(circle at 50% 18%, rgba(140, 172, 133, 0.14) 0 2px, transparent 2.5px), rgba(255, 255, 255, 0.035);
+    radial-gradient(circle at 50% 18%, rgba(107, 238, 177, 0.14) 0 2px, transparent 2.5px), rgba(255, 255, 255, 0.035);
   background-size: 1.5rem 1rem;
 }
 
@@ -272,23 +272,23 @@
 
 .mantine-Progress-section {
   background-image:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.2), transparent 34%, rgba(140, 172, 133, 0.28) 66%, transparent),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.2), transparent 34%, rgba(107, 238, 177, 0.28) 66%, transparent),
     var(--yy-hex-flow, var(--signal-flow-soft));
 }
 
 .mantine-LoadingOverlay-overlay {
-  background: radial-gradient(ellipse at 50% 22%, rgba(140, 172, 133, 0.09), transparent 30rem), rgba(0, 0, 0, 0.56);
+  background: radial-gradient(ellipse at 50% 22%, rgba(107, 238, 177, 0.09), transparent 30rem), rgba(0, 0, 0, 0.56);
   backdrop-filter: blur(0.42rem);
 }
 
 .mantine-LoadingOverlay-loader {
   color: var(--yy-green);
-  filter: drop-shadow(0 0 1.2rem rgba(140, 172, 133, 0.28));
+  filter: drop-shadow(0 0 1.2rem rgba(107, 238, 177, 0.28));
 }
 
 .route-loader-screen {
   min-height: 100vh;
-  background: radial-gradient(ellipse at 50% 18%, rgba(140, 172, 133, 0.1), transparent 26rem), rgba(0, 0, 0, 0.4);
+  background: radial-gradient(ellipse at 50% 18%, rgba(107, 238, 177, 0.1), transparent 26rem), rgba(0, 0, 0, 0.4);
 }
 
 .route-loader-screen .route-loader {
@@ -296,7 +296,7 @@
 }
 
 .route-loader-screen svg {
-  filter: drop-shadow(0 1rem 3rem rgba(140, 172, 133, 0.14));
+  filter: drop-shadow(0 1rem 3rem rgba(107, 238, 177, 0.14));
   animation: logo-halo-breathe 3.8s ease-in-out infinite;
 }
 
@@ -371,7 +371,7 @@
   padding: clamp(1rem, 3vw, 2rem);
   pointer-events: none;
   background:
-    radial-gradient(ellipse at 50% 22%, rgba(140, 172, 133, 0.1), transparent 30rem),
+    radial-gradient(ellipse at 50% 22%, rgba(107, 238, 177, 0.1), transparent 30rem),
     rgba(0, 0, 0, 0.42);
   backdrop-filter: blur(0.36rem);
 }
@@ -415,7 +415,7 @@
     radial-gradient(ellipse at 14% 18%, rgba(0, 0, 0, 0.78), transparent 33%),
     radial-gradient(ellipse at 86% 76%, rgba(0, 0, 0, 0.62), transparent 38%),
     radial-gradient(ellipse at 58% 42%, rgba(0, 0, 0, 0.34), transparent 44%);
-  background: linear-gradient(135deg, transparent 24%, rgba(140, 172, 133, 0.04) 36%, transparent 68%);
+  background: linear-gradient(135deg, transparent 24%, rgba(107, 238, 177, 0.04) 36%, transparent 68%);
   background-size: auto;
   transition: opacity 220ms ease;
   will-change: opacity, transform;
@@ -496,9 +496,9 @@
 .mantine-Drawer-content {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(140, 172, 133, 0.18);
+  border: 1px solid rgba(107, 238, 177, 0.18);
   background:
-    radial-gradient(ellipse at 18% 0%, rgba(140, 172, 133, 0.12), transparent 42%),
+    radial-gradient(ellipse at 18% 0%, rgba(107, 238, 177, 0.12), transparent 42%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.072), rgba(255, 255, 255, 0.018)),
     rgba(5, 8, 8, 0.94);
 }
@@ -511,11 +511,11 @@
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse at 14% 18%, rgba(140, 172, 133, 0.12), transparent 32%),
+    radial-gradient(ellipse at 14% 18%, rgba(107, 238, 177, 0.12), transparent 32%),
     conic-gradient(
       from 30deg at 50% 50%,
       transparent 0 13%,
-      rgba(140, 172, 133, 0.045) 14% 16%,
+      rgba(107, 238, 177, 0.045) 14% 16%,
       transparent 17% 30%,
       rgba(245, 245, 247, 0.032) 31% 33%,
       transparent 34% 100%
@@ -607,7 +607,7 @@
   font-family: 'Cascadia Mono', 'JetBrains Mono', 'Consolas', var(--font-mono);
   font-size: clamp(0.68rem, 0.82vw, 0.84rem);
   font-weight: 760;
-  text-shadow: 0 0 1.2rem rgba(140, 172, 133, 0.16);
+  text-shadow: 0 0 1.2rem rgba(107, 238, 177, 0.16);
   white-space: nowrap;
 }
 
@@ -624,7 +624,7 @@
   width: 0.58em;
   height: 1em;
   margin-left: 0.12rem;
-  border-right: 1px solid rgba(140, 172, 133, 0.9);
+  border-right: 1px solid rgba(107, 238, 177, 0.9);
   opacity: 0.92;
   transform: translateY(0.12em);
   animation: yy-terminal-caret 0.92s steps(2, end) infinite;
@@ -650,7 +650,7 @@
 .post-preview .post-brand-mark {
   width: clamp(3.8rem, 6.2vw, 5.6rem);
   height: clamp(3.8rem, 6.2vw, 5.6rem);
-  filter: drop-shadow(0 0.8rem 1.8rem rgba(140, 172, 133, 0.22));
+  filter: drop-shadow(0 0.8rem 1.8rem rgba(107, 238, 177, 0.22));
 }
 
 .yy-home-empty .heartbeat-icon {
@@ -954,8 +954,8 @@
   height: 100%;
   pointer-events: none;
   background:
-    radial-gradient(ellipse at 32% 24%, rgba(140, 172, 133, 0.12), transparent 32%),
-    radial-gradient(ellipse at 72% 78%, rgba(140, 172, 133, 0.08), transparent 34%);
+    radial-gradient(ellipse at 32% 24%, rgba(107, 238, 177, 0.12), transparent 32%),
+    radial-gradient(ellipse at 72% 78%, rgba(107, 238, 177, 0.08), transparent 34%);
   filter: blur(1px);
   opacity: 0.9;
 }
@@ -992,11 +992,11 @@
   clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%);
   border: 0;
   background:
-    radial-gradient(ellipse at 35% 25%, rgba(140, 172, 133, 0.09), transparent 48%),
+    radial-gradient(ellipse at 35% 25%, rgba(107, 238, 177, 0.09), transparent 48%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.016)),
     rgba(5, 6, 6, 0.86);
   box-shadow:
-    inset 0 0 0 1px rgba(140, 172, 133, 0.18),
+    inset 0 0 0 1px rgba(107, 238, 177, 0.18),
     inset 0 0 0 2px rgba(255, 255, 255, 0.022);
   overflow: hidden;
   text-align: center;
@@ -1018,7 +1018,7 @@
 .yy-about-hive-cell::before {
   background:
     var(--yy-hex-flow),
-    radial-gradient(ellipse at 50% 50%, rgba(140, 172, 133, 0.18), transparent 62%);
+    radial-gradient(ellipse at 50% 50%, rgba(107, 238, 177, 0.18), transparent 62%);
   background-size:
     1.05rem 0.91rem,
     auto;
@@ -1029,7 +1029,7 @@
 .yy-about-hive-cell::after {
   inset: 0.45rem;
   clip-path: inherit;
-  background: linear-gradient(135deg, transparent 8%, rgba(140, 172, 133, 0.3) 34%, transparent 58%);
+  background: linear-gradient(135deg, transparent 8%, rgba(107, 238, 177, 0.3) 34%, transparent 58%);
   opacity: 0;
   transform: translateX(-35%);
   transition:
@@ -1051,9 +1051,9 @@
   transform: translateY(-0.25rem) scale(1.018);
   filter: saturate(1.1);
   box-shadow:
-    inset 0 0 0 1px rgba(140, 172, 133, 0.52),
+    inset 0 0 0 1px rgba(107, 238, 177, 0.52),
     inset 0 0 0 2px rgba(255, 255, 255, 0.035),
-    0 0 2.1rem rgba(140, 172, 133, 0.24);
+    0 0 2.1rem rgba(107, 238, 177, 0.24);
   animation: yy-hive-cell-breathe 1.8s ease-in-out infinite;
 }
 
@@ -1070,8 +1070,8 @@
 
 .yy-about-hive-cell.is-accent {
   background:
-    radial-gradient(ellipse at 50% 26%, rgba(140, 172, 133, 0.17), transparent 52%),
-    linear-gradient(180deg, rgba(140, 172, 133, 0.11), rgba(255, 255, 255, 0.018)),
+    radial-gradient(ellipse at 50% 26%, rgba(107, 238, 177, 0.17), transparent 52%),
+    linear-gradient(180deg, rgba(107, 238, 177, 0.11), rgba(255, 255, 255, 0.018)),
     rgba(5, 8, 7, 0.9);
 }
 
@@ -1083,8 +1083,8 @@
   margin-bottom: clamp(0.35rem, 0.7vw, 0.52rem);
   clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
   color: var(--yy-green);
-  background: rgba(140, 172, 133, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(140, 172, 133, 0.16);
+  background: rgba(107, 238, 177, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(107, 238, 177, 0.16);
 }
 
 .yy-about-hive-cell p {
@@ -1113,15 +1113,15 @@
   0%,
   100% {
     box-shadow:
-      inset 0 0 0 1px rgba(140, 172, 133, 0.42),
+      inset 0 0 0 1px rgba(107, 238, 177, 0.42),
       inset 0 0 0 2px rgba(255, 255, 255, 0.035),
-      0 0 1.4rem rgba(140, 172, 133, 0.16);
+      0 0 1.4rem rgba(107, 238, 177, 0.16);
   }
   50% {
     box-shadow:
-      inset 0 0 0 1px rgba(140, 172, 133, 0.72),
+      inset 0 0 0 1px rgba(107, 238, 177, 0.72),
       inset 0 0 0 2px rgba(255, 255, 255, 0.05),
-      0 0 2.8rem rgba(140, 172, 133, 0.3);
+      0 0 2.8rem rgba(107, 238, 177, 0.3);
   }
 }
 
@@ -1167,7 +1167,7 @@
 
 .yy-error-stage {
   background:
-    radial-gradient(ellipse at 50% 18%, rgba(140, 172, 133, 0.09), transparent 34rem),
+    radial-gradient(ellipse at 50% 18%, rgba(107, 238, 177, 0.09), transparent 34rem),
     radial-gradient(ellipse at 18% 82%, rgba(255, 127, 145, 0.075), transparent 26rem);
 }
 
@@ -1283,7 +1283,7 @@
   padding: clamp(0.9rem, 2vw, 1.35rem);
   border-color: rgba(246, 247, 248, 0.11);
   background:
-    radial-gradient(ellipse at 18% 8%, rgba(140, 172, 133, 0.09), transparent 42%),
+    radial-gradient(ellipse at 18% 8%, rgba(107, 238, 177, 0.09), transparent 42%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.058), rgba(255, 255, 255, 0.018)), rgba(8, 10, 10, 0.84);
 }
 
@@ -1318,7 +1318,7 @@
 
 .mantine-Notification-root {
   width: min(28rem, calc(100vw - 1rem));
-  border-color: rgba(140, 172, 133, 0.18);
+  border-color: rgba(107, 238, 177, 0.18);
   overflow: hidden;
 }
 
@@ -1329,7 +1329,7 @@
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse at 16% 18%, rgba(140, 172, 133, 0.14), transparent 38%),
+    radial-gradient(ellipse at 16% 18%, rgba(107, 238, 177, 0.14), transparent 38%),
     var(--yy-hex-flow);
   background-size:
     auto,
@@ -1348,7 +1348,7 @@
 }
 
 .mantine-Notification-icon {
-  background: rgba(140, 172, 133, 0.1);
+  background: rgba(107, 238, 177, 0.1);
   color: var(--yy-green);
 }
 
@@ -1366,9 +1366,9 @@
 
 .mantine-Modal-header,
 .mantine-Drawer-header {
-  border-bottom: 1px solid rgba(140, 172, 133, 0.1);
+  border-bottom: 1px solid rgba(107, 238, 177, 0.1);
   background:
-    radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.08), transparent 44%),
+    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.08), transparent 44%),
     rgba(255, 255, 255, 0.018);
 }
 
@@ -1401,9 +1401,9 @@
 
 .mantine-Menu-dropdown,
 .mantine-Popover-dropdown {
-  border: 1px solid rgba(140, 172, 133, 0.16);
+  border: 1px solid rgba(107, 238, 177, 0.16);
   background:
-    radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.1), transparent 42%),
+    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.1), transparent 42%),
     rgba(5, 8, 8, 0.96);
 }
 
@@ -1412,7 +1412,7 @@
 .mantine-Combobox-option[data-combobox-selected] {
   color: var(--yy-text);
   background:
-    radial-gradient(ellipse at 20% 50%, rgba(140, 172, 133, 0.11), transparent 46%),
+    radial-gradient(ellipse at 20% 50%, rgba(107, 238, 177, 0.11), transparent 46%),
     rgba(255, 255, 255, 0.05);
 }
 
@@ -1424,21 +1424,21 @@
 
 .mantine-Pagination-control[data-active] {
   color: #07100c;
-  border-color: rgba(140, 172, 133, 0.62);
+  border-color: rgba(107, 238, 177, 0.62);
   background: var(--green);
 }
 
 .mantine-Switch-track,
 .mantine-Checkbox-input,
 .mantine-Radio-radio {
-  border-color: rgba(140, 172, 133, 0.24);
+  border-color: rgba(107, 238, 177, 0.24);
   background: rgba(255, 255, 255, 0.04);
 }
 
 .mantine-Switch-track[data-checked],
 .mantine-Checkbox-input:checked,
 .mantine-Radio-radio:checked {
-  border-color: rgba(140, 172, 133, 0.58);
+  border-color: rgba(107, 238, 177, 0.58);
   background: var(--yy-green);
 }
 
@@ -1480,7 +1480,7 @@
   color: color-mix(in srgb, var(--challenge-category-color, var(--yy-green)) 82%, white 18%);
   background:
     radial-gradient(ellipse at 18% 50%, color-mix(in srgb, var(--challenge-category-color, var(--yy-green)) 18%, transparent), transparent 56%),
-    color-mix(in srgb, var(--challenge-category-soft, rgba(140, 172, 133, 0.16)) 58%, transparent);
+    color-mix(in srgb, var(--challenge-category-soft, rgba(107, 238, 177, 0.16)) 58%, transparent);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.035),
     0 0 1rem color-mix(in srgb, var(--challenge-category-color, var(--yy-green)) 10%, transparent);
@@ -1516,9 +1516,9 @@
 .yy-settings-panel.panel-card {
   position: relative;
   overflow: hidden;
-  border-color: rgba(140, 172, 133, 0.18);
+  border-color: rgba(107, 238, 177, 0.18);
   background:
-    radial-gradient(ellipse at 14% 0%, rgba(140, 172, 133, 0.12), transparent 38%),
+    radial-gradient(ellipse at 14% 0%, rgba(107, 238, 177, 0.12), transparent 38%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.018)),
     rgba(7, 10, 10, 0.88);
   backdrop-filter: blur(0.9rem);
@@ -1664,20 +1664,20 @@
   transform: translateY(-1px);
   color: var(--text);
   background:
-    radial-gradient(circle at 50% 38%, rgba(140, 172, 133, 0.22), transparent 46%), rgba(245, 245, 247, 0.095);
+    radial-gradient(circle at 50% 38%, rgba(107, 238, 177, 0.22), transparent 46%), rgba(245, 245, 247, 0.095);
 }
 
 .yy-theory-node[data-answered] {
   color: #07100c;
-  background: radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.38), transparent 42%), rgba(140, 172, 133, 0.78);
+  background: radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.38), transparent 42%), rgba(107, 238, 177, 0.78);
 }
 
 .yy-theory-node[data-active] {
   color: var(--text);
   background: radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.38), transparent 42%), rgba(49, 113, 86, 0.92);
   box-shadow:
-    0 0 0 1px rgba(140, 172, 133, 0.44),
-    0 0 1.2rem rgba(140, 172, 133, 0.18);
+    0 0 0 1px rgba(107, 238, 177, 0.44),
+    0 0 1.2rem rgba(107, 238, 177, 0.18);
 }
 
 .yy-theory-node-number,
@@ -1782,7 +1782,7 @@
 .fixedButton.mantine-Button-root,
 .mantine-Button-root[class*='fixedButton'] {
   min-height: 2.9rem;
-  border: 1px solid rgba(140, 172, 133, 0.42);
+  border: 1px solid rgba(107, 238, 177, 0.42);
   border-radius: 999px;
   color: #06100b;
   background:
@@ -1791,7 +1791,7 @@
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.08),
     0 0.9rem 2.4rem rgba(0, 0, 0, 0.32),
-    0 0 2rem rgba(140, 172, 133, 0.16);
+    0 0 2rem rgba(107, 238, 177, 0.16);
 }
 
 .yy-post-edit-button.mantine-Button-root .mantine-Button-label,

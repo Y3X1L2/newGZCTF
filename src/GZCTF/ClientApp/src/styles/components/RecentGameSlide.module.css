@@ -13,7 +13,7 @@
   overflow: hidden;
   background-blend-mode: normal;
   background-image:
-    radial-gradient(ellipse at 18% 12%, rgba(140, 172, 133, 0.18), transparent 28%),
+    radial-gradient(ellipse at 18% 12%, rgba(107, 238, 177, 0.18), transparent 28%),
     linear-gradient(180deg, rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.75)), var(--yy-hex-flow), var(--slide-image);
   background-size:
     auto,

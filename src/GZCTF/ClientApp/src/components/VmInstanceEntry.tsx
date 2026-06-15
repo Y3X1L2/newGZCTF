@@ -3,7 +3,7 @@ import { showNotification } from '@mantine/notifications'
 import { mdiAlertCircleOutline, mdiCheck, mdiClose, mdiDesktopClassic, mdiMonitorScreenshot } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { FC, useCallback, useEffect, useState } from 'react'
-import { YinyuHeartbeatIcon, YinyuPanel, YinyuRouteLoader, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
+import { YinyuPanel, YinyuRouteLoader, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
 import { VmStatusResponse } from '@Api'
 
 interface VmInstanceEntryProps {
@@ -180,7 +180,7 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
             onClick={handleCreate}
             disabled={disabled || loading}
             leftSection={
-              loading ? <YinyuHeartbeatIcon label="vm starting" /> : <Icon path={mdiDesktopClassic} size={0.9} />
+              loading ? undefined : <Icon path={mdiDesktopClassic} size={0.9} />
             }
           >
             {loading ? '正在启动' : '启动靶机'}
@@ -195,7 +195,7 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
     return (
       <YinyuPanel p="sm" cells={28} className="yy-instance-panel yy-vm-entry-panel">
         <Stack gap="sm" w="100%">
-          <YinyuStatusPill tone="warm" state="running" icon={YinyuHeartbeatIcon}>
+          <YinyuStatusPill tone="warm" state="running">
             {creating ? '靶机创建中' : '等待靶机就绪'}
           </YinyuStatusPill>
           <Group justify="space-between" wrap="nowrap" className="yy-instance-row yy-instance-loading-row">
@@ -275,7 +275,6 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
         <Button
           onClick={handleCreate}
           disabled={loading}
-          leftSection={loading ? <YinyuHeartbeatIcon label="vm restart" /> : undefined}
         >
           {loading ? '正在重启' : '重新启动'}
         </Button>

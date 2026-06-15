@@ -70,7 +70,7 @@
   color: inherit;
   border-color: rgba(185, 173, 209, 0.32);
   box-shadow:
-    inset 0 0 0 1px rgba(167, 199, 160, 0.12),
+    inset 0 0 0 1px rgba(120, 248, 190, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.17),
     0 1.5rem 4.4rem rgba(0, 0, 0, 0.42),
     0 0 2.6rem rgba(158, 144, 187, 0.12);
@@ -150,7 +150,7 @@
 .kicker {
   display: block;
   margin-bottom: 0.26rem;
-  color: rgba(167, 199, 160, 0.84);
+  color: rgba(120, 248, 190, 0.84);
   font-family: var(--font-mono);
   font-size: clamp(0.67rem, 0.78vw, 0.78rem);
   font-weight: 900;
@@ -227,13 +227,13 @@
   width: clamp(2.15rem, 2.8vw, 2.7rem);
   height: clamp(2.15rem, 2.8vw, 2.7rem);
   place-items: center;
-  border: 1px solid rgba(140, 172, 133, 0.18);
+  border: 1px solid rgba(107, 238, 177, 0.18);
   border-radius: 999px;
-  color: rgba(140, 172, 133, 0.8);
+  color: rgba(107, 238, 177, 0.8);
   font-family: var(--font-mono);
   font-size: clamp(1.08rem, 1.2vw, 1.28rem);
   font-weight: 900;
-  background: rgba(140, 172, 133, 0.055);
+  background: rgba(107, 238, 177, 0.055);
   transition:
     transform 180ms ease,
     border-color 180ms ease,
@@ -241,8 +241,8 @@
 }
 
 .root:hover .chevron {
-  border-color: rgba(140, 172, 133, 0.42);
-  background: rgba(140, 172, 133, 0.12);
+  border-color: rgba(107, 238, 177, 0.42);
+  background: rgba(107, 238, 177, 0.12);
   transform: translateX(0.18rem);
 }
 
@@ -302,7 +302,7 @@
   z-index: 2;
   width: 86%;
   height: 86%;
-  filter: drop-shadow(0 0.75rem 1.8rem rgba(140, 172, 133, 0.3));
+  filter: drop-shadow(0 0.75rem 1.8rem rgba(107, 238, 177, 0.3));
 }
 
 @media (max-width: 72em) {

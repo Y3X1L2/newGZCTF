@@ -17,7 +17,7 @@ import duration from 'dayjs/plugin/duration'
 import { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { HandleWsrxError, useWsrx } from '@Components/WsrxProvider'
-import { YinyuHeartbeatIcon, YinyuPanel, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
+import { YinyuPanel, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
 import { getProxyUrl as getProxyEntry } from '@Utils/Shared'
 import { useConfig } from '@Hooks/useConfig'
 import { ClientFlagContext, ContainerPortMappingType } from '@Api'
@@ -199,7 +199,6 @@ export const InstanceEntry: FC<InstanceEntryProps> = (props) => {
           <Button
             onClick={onCreate}
             disabled={disabled}
-            leftSection={disabled ? <YinyuHeartbeatIcon label="instance starting" /> : undefined}
           >
             {t('challenge.button.instance.create')}
           </Button>
@@ -211,7 +210,7 @@ export const InstanceEntry: FC<InstanceEntryProps> = (props) => {
   return (
     <YinyuPanel p="sm" cells={28} className="yy-instance-panel">
       <Stack gap="sm" w="100%">
-        <YinyuStatusPill tone="success" state="running" icon={YinyuHeartbeatIcon} className="yy-instance-countdown-pill">
+        <YinyuStatusPill tone="success" state="running" className="yy-instance-countdown-pill">
           <span className="yy-instance-countdown-label">{t('challenge.content.instance.actions.count_down')}</span>
           <Countdown
             time={context.closeTime}

@@ -3,13 +3,13 @@
   --font-display:
     'Soft Aurora', 'Lexend', 'Arial Rounded MT Bold', 'Nunito Sans', 'Aptos Display', 'Segoe UI Variable Display',
     'Microsoft YaHei UI', 'Noto Sans SC', ui-rounded, ui-sans-serif, system-ui, sans-serif;
-  --yy-title-glow: 0 0 2rem rgba(167, 199, 160, 0.13), 0 1rem 2.6rem rgba(0, 0, 0, 0.44);
-  --yy-hex-border: rgba(167, 199, 160, 0.22);
-  --yy-hex-border-hot: rgba(185, 173, 209, 0.48);
-  --yy-gradient-brand: #ffffff 0%, #dde5df 17%, #a7c7a0 34%, #f4f7f5 50%, #b9add1 66%, #dde5df 82%, #ffffff 100%;
-  --yy-gradient-signal: #f7fff9 0%, #dde5df 18%, #a7c7a0 42%, #8cac85 58%, #f5f8f6 100%;
+  --yy-title-glow: 0 0 2rem rgba(107, 238, 177, 0.2), 0 0 2.3rem rgba(185, 173, 209, 0.12), 0 1rem 2.6rem rgba(0, 0, 0, 0.44);
+  --yy-hex-border: rgba(107, 238, 177, 0.22);
+  --yy-hex-border-hot: rgba(107, 238, 177, 0.72);
+  --yy-gradient-brand: #ffffff 0%, #e4fff2 16%, #78f8be 34%, #f5fffa 50%, #b9add1 66%, #f5fffa 82%, #9affd2 100%;
+  --yy-gradient-signal: #f5fff9 0%, #9dffd5 22%, #42f49d 48%, #d8fff0 70%, #ffffff 100%;
   --yy-gradient-silver: #ffffff 0%, #dde5df 24%, #73837d 43%, #f4f7f5 60%, #b9add1 78%, #ffffff 100%;
-  --yy-gradient-coming: #fff9de 0%, #d8c48a 28%, #f5f0d5 52%, #a7c7a0 74%, #ffffff 100%;
+  --yy-gradient-coming: #fff9de 0%, #d8c48a 28%, #dcffe9 52%, #78f8be 74%, #ffffff 100%;
   --yy-gradient-ended: #f4f7f5 0%, #dde5df 24%, #73837d 48%, #cfd8d2 70%, #ffffff 100%;
   --yy-gradient-danger: #fff1ed 0%, #e7a190 24%, #c8645d 48%, #f6ded8 72%, #ffffff 100%;
 }
@@ -55,7 +55,7 @@
 
 .yy-gradient-brand .yy-reactbits-gradient-original > div:last-child {
   filter:
-    drop-shadow(0 0 1rem rgba(167, 199, 160, 0.28))
+    drop-shadow(0 0 1rem rgba(120, 248, 190, 0.28))
     drop-shadow(0 0 1.15rem rgba(116, 232, 184, 0.1));
 }
 
@@ -90,7 +90,7 @@
 .yy-gradient-signal .yy-react-gradient-text-inner,
 .yy-gradient-ongoing .yy-react-gradient-text-inner {
   background-image: linear-gradient(108deg, var(--yy-gradient-signal));
-  filter: drop-shadow(0 0 0.62rem rgba(140, 172, 133, 0.2));
+  filter: drop-shadow(0 0 0.62rem rgba(107, 238, 177, 0.2));
 }
 
 .yy-gradient-silver .yy-react-gradient-text-inner {
@@ -242,7 +242,7 @@
   padding: calc(var(--about-hex-width) * 0.1) calc(var(--about-hex-width) * 0.18);
   clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
   background:
-    radial-gradient(ellipse at 48% 31%, rgba(140, 172, 133, 0.12), transparent 54%),
+    radial-gradient(ellipse at 48% 31%, rgba(107, 238, 177, 0.12), transparent 54%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.062), rgba(255, 255, 255, 0.013)), rgba(4, 6, 6, 0.9);
   box-shadow:
     inset 0 0 0 1px var(--yy-hex-border),
@@ -257,7 +257,7 @@
 .yy-about-hive-cell::before {
   background:
     var(--yy-hex-flow),
-    radial-gradient(ellipse at 50% 50%, rgba(140, 172, 133, 0.2), transparent 62%);
+    radial-gradient(ellipse at 50% 50%, rgba(107, 238, 177, 0.2), transparent 62%);
   background-size:
     0.92rem 0.8rem,
     auto;
@@ -268,8 +268,8 @@
   inset: 0;
   clip-path: inherit;
   background:
-    linear-gradient(116deg, transparent 18%, rgba(140, 172, 133, 0.2) 42%, transparent 67%),
-    radial-gradient(ellipse at 50% 50%, rgba(140, 172, 133, 0.16), transparent 62%);
+    linear-gradient(116deg, transparent 18%, rgba(107, 238, 177, 0.2) 42%, transparent 67%),
+    radial-gradient(ellipse at 50% 50%, rgba(107, 238, 177, 0.16), transparent 62%);
   opacity: 0;
 }
 
@@ -278,9 +278,9 @@
   transform: translateY(-0.18rem) scale(1.016);
   box-shadow:
     inset 0 0 0 1px var(--yy-hex-border-hot),
-    inset 0 0 0 2px rgba(140, 172, 133, 0.1),
-    0 0 0.9rem rgba(140, 172, 133, 0.2),
-    0 0 2.8rem rgba(140, 172, 133, 0.24),
+    inset 0 0 0 2px rgba(107, 238, 177, 0.1),
+    0 0 0.9rem rgba(107, 238, 177, 0.2),
+    0 0 2.8rem rgba(107, 238, 177, 0.24),
     0 1.2rem 3rem rgba(0, 0, 0, 0.34);
 }
 
@@ -492,7 +492,7 @@
   text-decoration: none;
   clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
   background:
-    radial-gradient(ellipse at 52% 28%, rgba(140, 172, 133, 0.11), transparent 56%),
+    radial-gradient(ellipse at 52% 28%, rgba(107, 238, 177, 0.11), transparent 56%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.058), rgba(255, 255, 255, 0.014)), rgba(4, 6, 6, 0.9);
   box-shadow:
     inset 0 0 0 1px rgba(118, 255, 189, 0.2),
@@ -503,7 +503,7 @@
 .yy-home-layout .recent-game-card.panel-card::before {
   background:
     var(--yy-hex-flow),
-    radial-gradient(ellipse at 50% 35%, rgba(140, 172, 133, 0.15), transparent 62%);
+    radial-gradient(ellipse at 50% 35%, rgba(107, 238, 177, 0.15), transparent 62%);
   background-size:
     0.95rem 0.82rem,
     auto;
@@ -515,8 +515,8 @@
   transform: translateY(-0.16rem) scale(1.01);
   box-shadow:
     inset 0 0 0 1px var(--yy-hex-border-hot),
-    inset 0 0 0 2px rgba(140, 172, 133, 0.08),
-    0 0 2.2rem rgba(140, 172, 133, 0.18),
+    inset 0 0 0 2px rgba(107, 238, 177, 0.08),
+    0 0 2.2rem rgba(107, 238, 177, 0.18),
     0 1.2rem 3rem rgba(0, 0, 0, 0.34);
 }
 
@@ -557,7 +557,7 @@
   justify-self: center;
   margin: 0;
   padding-top: clamp(0.38rem, 0.7vw, 0.54rem);
-  border-top: 1px solid rgba(140, 172, 133, 0.14);
+  border-top: 1px solid rgba(107, 238, 177, 0.14);
 }
 
 .yy-home-layout .recent-game-card dl div {
@@ -606,9 +606,9 @@
   min-height: 540px;
   padding: clamp(0.9rem, 1.4vw, 1.18rem) clamp(0.9rem, 1.4vw, 1.18rem) clamp(1.2rem, 1.8vw, 1.55rem);
   overflow: visible;
-  border-color: rgba(140, 172, 133, 0.17);
+  border-color: rgba(107, 238, 177, 0.17);
   background:
-    radial-gradient(ellipse at 12% 6%, rgba(140, 172, 133, 0.12), transparent 34%),
+    radial-gradient(ellipse at 12% 6%, rgba(107, 238, 177, 0.12), transparent 34%),
     radial-gradient(ellipse at 84% 78%, rgba(245, 245, 247, 0.055), transparent 42%),
     rgba(15, 18, 18, 0.82);
   backdrop-filter: blur(0.82rem);
@@ -623,9 +623,9 @@
 
 .scoreboard-draft.yy-table-shell,
 .scoreboard-draft.panel-card {
-  border-color: rgba(140, 172, 133, 0.16);
+  border-color: rgba(107, 238, 177, 0.16);
   background:
-    radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.1), transparent 38%),
+    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.1), transparent 38%),
     radial-gradient(ellipse at 82% 88%, rgba(245, 245, 247, 0.045), transparent 44%),
     rgba(15, 18, 18, 0.84);
   backdrop-filter: blur(0.86rem);
@@ -645,7 +645,7 @@
 }
 
 .scoreboard-draft .mantine-Pagination-control[data-active] {
-  background: linear-gradient(135deg, rgba(140, 172, 133, 0.9), rgba(111, 143, 114, 0.72));
+  background: linear-gradient(135deg, rgba(107, 238, 177, 0.9), rgba(49, 201, 135, 0.72));
   color: #03100b;
 }
 
@@ -729,7 +729,7 @@
 
 .yy-admin-route-pulse i,
 .yy-admin-transition-overlay .route-progress i {
-  box-shadow: 0 0 0.86rem rgba(140, 172, 133, 0.12);
+  box-shadow: 0 0 0.86rem rgba(107, 238, 177, 0.12);
 }
 
 .yy-game-edit-grid {
@@ -763,7 +763,7 @@
   border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: var(--yy-radius);
   background:
-    radial-gradient(ellipse at 18% 18%, rgba(140, 172, 133, 0.06), transparent 42%),
+    radial-gradient(ellipse at 18% 18%, rgba(107, 238, 177, 0.06), transparent 42%),
     rgba(255, 255, 255, 0.022);
   color: var(--yy-muted-readable);
   font-weight: 820;
@@ -777,11 +777,11 @@
 .yy-game-edit-nav .mantine-Tabs-tab:hover,
 .yy-game-edit-nav .mantine-Tabs-tab[data-active] {
   color: var(--yy-text);
-  border-color: rgba(140, 172, 133, 0.28);
+  border-color: rgba(107, 238, 177, 0.28);
   background:
-    radial-gradient(ellipse at 28% 20%, rgba(140, 172, 133, 0.15), transparent 48%),
+    radial-gradient(ellipse at 28% 20%, rgba(107, 238, 177, 0.15), transparent 48%),
     var(--yy-hex-flow),
-    rgba(140, 172, 133, 0.05);
+    rgba(107, 238, 177, 0.05);
   background-size:
     auto,
     1.08rem 0.94rem,
@@ -806,7 +806,7 @@
 
 .yy-admin-route-stage::before {
   background:
-    linear-gradient(90deg, transparent, rgba(140, 172, 133, 0.18), transparent),
+    linear-gradient(90deg, transparent, rgba(107, 238, 177, 0.18), transparent),
     var(--yy-hex-flow);
   background-size:
     auto,
@@ -818,10 +818,10 @@
 }
 
 .yy-admin-route-stage::after {
-  border: 1px solid rgba(140, 172, 133, 0.16);
+  border: 1px solid rgba(107, 238, 177, 0.16);
   background:
-    radial-gradient(ellipse at 14% 8%, rgba(140, 172, 133, 0.1), transparent 32%),
-    radial-gradient(ellipse at 86% 92%, rgba(140, 172, 133, 0.07), transparent 36%);
+    radial-gradient(ellipse at 14% 8%, rgba(107, 238, 177, 0.1), transparent 32%),
+    radial-gradient(ellipse at 86% 92%, rgba(107, 238, 177, 0.07), transparent 36%);
   opacity: 0;
   animation: yy-admin-route-frame 720ms ease-out both;
 }
@@ -834,16 +834,16 @@
   place-items: center;
   padding: clamp(1rem, 3vw, 2rem);
   background:
-    radial-gradient(ellipse at 50% 28%, rgba(140, 172, 133, 0.11), transparent 28rem),
+    radial-gradient(ellipse at 50% 28%, rgba(107, 238, 177, 0.11), transparent 28rem),
     linear-gradient(180deg, rgba(0, 0, 0, 0.38), rgba(0, 0, 0, 0.64));
   backdrop-filter: blur(0.34rem);
 }
 
 .yy-admin-transition-overlay .route-loader {
   min-width: min(27rem, calc(100vw - 4rem));
-  border-color: rgba(140, 172, 133, 0.24);
+  border-color: rgba(107, 238, 177, 0.24);
   background:
-    radial-gradient(ellipse at 20% 18%, rgba(140, 172, 133, 0.14), transparent 42%),
+    radial-gradient(ellipse at 20% 18%, rgba(107, 238, 177, 0.14), transparent 42%),
     var(--yy-hex-flow),
     rgba(4, 6, 6, 0.82);
   background-size:
@@ -853,7 +853,7 @@
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.035),
     0 1.4rem 4rem rgba(0, 0, 0, 0.42),
-    0 0 2rem rgba(140, 172, 133, 0.14);
+    0 0 2rem rgba(107, 238, 177, 0.14);
 }
 
 .yy-admin-transition-overlay .yy-route-transition {
@@ -971,7 +971,7 @@
   width: 100%;
   height: 1px;
   margin: 0 0 clamp(0.75rem, 1.2vw, 0.95rem);
-  background: linear-gradient(90deg, rgba(140, 172, 133, 0.42), rgba(140, 172, 133, 0.08), transparent);
+  background: linear-gradient(90deg, rgba(107, 238, 177, 0.42), rgba(107, 238, 177, 0.08), transparent);
 }
 
 .yy-games-page .yy-game-event-list {
@@ -1072,7 +1072,7 @@
   border: 1px solid rgba(255, 255, 255, 0.058);
   border-radius: calc(var(--yy-radius) - 3px);
   background:
-    radial-gradient(ellipse at 16% 12%, rgba(140, 172, 133, 0.07), transparent 46%),
+    radial-gradient(ellipse at 16% 12%, rgba(107, 238, 177, 0.07), transparent 46%),
     rgba(255, 255, 255, 0.028);
 }
 
@@ -1278,10 +1278,10 @@
   min-height: clamp(8.8rem, 12vw, 11.4rem);
   padding: clamp(1rem, 1.8vw, 1.55rem);
   overflow: hidden;
-  border-color: rgba(140, 172, 133, 0.18);
+  border-color: rgba(107, 238, 177, 0.18);
   background:
-    radial-gradient(ellipse at 12% 8%, rgba(140, 172, 133, 0.13), transparent 42%),
-    radial-gradient(ellipse at 91% 78%, rgba(140, 172, 133, 0.08), transparent 36%),
+    radial-gradient(ellipse at 12% 8%, rgba(107, 238, 177, 0.13), transparent 42%),
+    radial-gradient(ellipse at 91% 78%, rgba(107, 238, 177, 0.08), transparent 36%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.016)),
     rgba(5, 7, 7, 0.86);
 }
@@ -1351,7 +1351,7 @@
 .yy-team-hero-stats > div {
   min-width: 0;
   padding: 0.72rem 0.82rem;
-  border: 1px solid rgba(140, 172, 133, 0.14);
+  border: 1px solid rgba(107, 238, 177, 0.14);
   border-radius: calc(var(--yy-radius) - 4px);
   background: rgba(255, 255, 255, 0.032);
 }
@@ -1396,7 +1396,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(112deg, transparent 12%, rgba(140, 172, 133, 0.26) 44%, transparent 72%);
+  background: linear-gradient(112deg, transparent 12%, rgba(107, 238, 177, 0.26) 44%, transparent 72%);
   opacity: 0;
   transform: translateX(-45%);
   transition:
@@ -1411,17 +1411,17 @@
 }
 
 .yy-team-action-join.mantine-Button-root {
-  border-color: rgba(140, 172, 133, 0.44) !important;
+  border-color: rgba(107, 238, 177, 0.44) !important;
   background:
-    radial-gradient(ellipse at 24% 20%, rgba(140, 172, 133, 0.12), transparent 50%),
+    radial-gradient(ellipse at 24% 20%, rgba(107, 238, 177, 0.12), transparent 50%),
     rgba(8, 13, 12, 0.78) !important;
 }
 
 .yy-team-action-create.mantine-Button-root {
-  border-color: rgba(140, 172, 133, 0.56) !important;
+  border-color: rgba(107, 238, 177, 0.56) !important;
   background:
     radial-gradient(ellipse at 30% 16%, rgba(255, 255, 255, 0.16), transparent 42%),
-    linear-gradient(135deg, rgba(140, 172, 133, 0.28), rgba(30, 106, 76, 0.74)) !important;
+    linear-gradient(135deg, rgba(107, 238, 177, 0.28), rgba(30, 106, 76, 0.74)) !important;
 }
 
 .yy-team-action.mantine-Button-root .mantine-Button-inner {
@@ -1701,10 +1701,10 @@
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border-color: rgba(140, 172, 133, 0.26) !important;
+  border-color: rgba(107, 238, 177, 0.26) !important;
   color: rgba(244, 245, 245, 0.94) !important;
   background:
-    radial-gradient(ellipse at 20% 0%, rgba(140, 172, 133, 0.1), transparent 48%),
+    radial-gradient(ellipse at 20% 0%, rgba(107, 238, 177, 0.1), transparent 48%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.016)),
     rgba(5, 8, 8, 0.82) !important;
   box-shadow:
@@ -1719,7 +1719,7 @@
 .mantine-Modal-content .mantine-Button-root::before,
 .mantine-Drawer-content .mantine-Button-root::before {
   background:
-    linear-gradient(112deg, transparent 10%, rgba(140, 172, 133, 0.22) 42%, transparent 70%),
+    linear-gradient(112deg, transparent 10%, rgba(107, 238, 177, 0.22) 42%, transparent 70%),
     var(--yy-hex-flow);
   background-size:
     auto,
@@ -1743,7 +1743,7 @@
 .mantine-Modal-content .mantine-Button-root[data-variant='filled'],
 .mantine-Drawer-content .mantine-Button-root[data-variant='filled'],
 .mantine-Button-root[class*='fixedButton'] {
-  border-color: rgba(140, 172, 133, 0.52) !important;
+  border-color: rgba(107, 238, 177, 0.52) !important;
   color: #06100b !important;
   background:
     radial-gradient(ellipse at 28% 0%, rgba(255, 255, 255, 0.34), transparent 46%),
@@ -1777,7 +1777,7 @@
 .mantine-Drawer-content .mantine-Button-root[data-variant='outline'] {
   color: rgba(198, 255, 226, 0.94) !important;
   background:
-    radial-gradient(ellipse at 24% 0%, rgba(140, 172, 133, 0.075), transparent 48%),
+    radial-gradient(ellipse at 24% 0%, rgba(107, 238, 177, 0.075), transparent 48%),
     rgba(255, 255, 255, 0.032) !important;
 }
 
@@ -1838,10 +1838,10 @@
 .yy-admin-page-head {
   align-items: flex-start;
   padding: clamp(0.92rem, 1.35vw, 1.18rem);
-  border: 1px solid rgba(140, 172, 133, 0.14);
+  border: 1px solid rgba(107, 238, 177, 0.14);
   border-radius: var(--yy-radius);
   background:
-    radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.1), transparent 42%),
+    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.1), transparent 42%),
     rgba(255, 255, 255, 0.026);
 }
 
@@ -1880,10 +1880,10 @@
   min-height: 0;
   padding: clamp(0.88rem, 1.35vw, 1.18rem) !important;
   overflow: visible;
-  border-color: rgba(140, 172, 133, 0.18);
+  border-color: rgba(107, 238, 177, 0.18);
   background:
-    radial-gradient(ellipse at 12% 0%, rgba(140, 172, 133, 0.12), transparent 36rem),
-    radial-gradient(ellipse at 88% 100%, rgba(140, 172, 133, 0.08), transparent 32rem),
+    radial-gradient(ellipse at 12% 0%, rgba(107, 238, 177, 0.12), transparent 36rem),
+    radial-gradient(ellipse at 88% 100%, rgba(107, 238, 177, 0.08), transparent 32rem),
     linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.014)),
     rgba(7, 10, 10, 0.86);
   box-shadow:
@@ -1904,7 +1904,7 @@
 .yy-admin-nodes-filter {
   min-height: 0;
   padding: clamp(0.18rem, 0.5vw, 0.34rem) clamp(0.18rem, 0.5vw, 0.34rem) clamp(0.7rem, 1vw, 0.92rem);
-  border-bottom: 1px solid rgba(140, 172, 133, 0.12);
+  border-bottom: 1px solid rgba(107, 238, 177, 0.12);
 }
 
 .yy-admin-nodes-filter .mantine-InputWrapper-root {
@@ -1925,7 +1925,7 @@
 .yy-admin-node-grid .panel-card {
   height: 100%;
   background:
-    radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.1), transparent 42%),
+    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.1), transparent 42%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.056), rgba(255, 255, 255, 0.014)),
     rgba(8, 11, 11, 0.78);
 }
@@ -1935,10 +1935,10 @@
   display: grid;
   place-items: center;
   padding: clamp(1rem, 2vw, 1.45rem);
-  border: 1px solid rgba(140, 172, 133, 0.1);
+  border: 1px solid rgba(107, 238, 177, 0.1);
   border-radius: var(--yy-radius);
   background:
-    radial-gradient(ellipse at 50% 0%, rgba(140, 172, 133, 0.08), transparent 52%),
+    radial-gradient(ellipse at 50% 0%, rgba(107, 238, 177, 0.08), transparent 52%),
     rgba(255, 255, 255, 0.018);
 }
 
@@ -1960,9 +1960,9 @@
 .yy-profile-panel.panel-card {
   width: min(100%, 58rem);
   padding: clamp(1.05rem, 2.2vw, 1.85rem);
-  border-color: rgba(140, 172, 133, 0.18);
+  border-color: rgba(107, 238, 177, 0.18);
   background:
-    radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.12), transparent 42%),
+    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.12), transparent 42%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.064), rgba(255, 255, 255, 0.018)),
     rgba(5, 8, 8, 0.88);
 }
@@ -2140,10 +2140,10 @@
   align-items: stretch;
   gap: clamp(0.72rem, 1.2vw, 1rem);
   padding: clamp(0.55rem, 1vw, 0.78rem);
-  border: 1px solid rgba(140, 172, 133, 0.12);
+  border: 1px solid rgba(107, 238, 177, 0.12);
   border-radius: var(--yy-radius);
   background:
-    radial-gradient(ellipse at 14% 0%, rgba(140, 172, 133, 0.08), transparent 44%),
+    radial-gradient(ellipse at 14% 0%, rgba(107, 238, 177, 0.08), transparent 44%),
     rgba(255, 255, 255, 0.018);
 }
 
@@ -2215,9 +2215,9 @@
   min-height: clamp(19rem, 34vh, 26rem);
   padding: clamp(1.25rem, 2.5vw, 2.2rem);
   overflow: hidden;
-  border-color: rgba(140, 172, 133, 0.18);
+  border-color: rgba(107, 238, 177, 0.18);
   background:
-    radial-gradient(ellipse at 14% 8%, rgba(140, 172, 133, 0.12), transparent 40%),
+    radial-gradient(ellipse at 14% 8%, rgba(107, 238, 177, 0.12), transparent 40%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.066), rgba(255, 255, 255, 0.017)),
     rgba(7, 10, 10, 0.84);
 }
@@ -2273,10 +2273,10 @@
 .yy-game-time-grid > div {
   min-width: 0;
   padding: 0.72rem 0.82rem;
-  border: 1px solid rgba(140, 172, 133, 0.12);
+  border: 1px solid rgba(107, 238, 177, 0.12);
   border-radius: calc(var(--yy-radius) - 2px);
   background:
-    radial-gradient(ellipse at 20% 0%, rgba(140, 172, 133, 0.07), transparent 44%),
+    radial-gradient(ellipse at 20% 0%, rgba(107, 238, 177, 0.07), transparent 44%),
     rgba(255, 255, 255, 0.026);
 }
 
@@ -2308,13 +2308,13 @@
 .yy-game-action-button.mantine-Button-root {
   min-height: 2.9rem;
   min-width: clamp(8.5rem, 12vw, 12.5rem);
-  border: 1px solid rgba(140, 172, 133, 0.34) !important;
+  border: 1px solid rgba(107, 238, 177, 0.34) !important;
   border-radius: 999px;
   color: rgba(244, 245, 245, 0.96) !important;
   font-weight: 860;
   letter-spacing: 0.01em;
   background:
-    radial-gradient(ellipse at 22% 0%, rgba(140, 172, 133, 0.13), transparent 48%),
+    radial-gradient(ellipse at 22% 0%, rgba(107, 238, 177, 0.13), transparent 48%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
     rgba(5, 8, 8, 0.82) !important;
   box-shadow:
@@ -2324,9 +2324,9 @@
 
 .yy-game-action-button.mantine-Button-root:not(:disabled):hover {
   transform: translateY(-1px);
-  border-color: rgba(140, 172, 133, 0.58) !important;
+  border-color: rgba(107, 238, 177, 0.58) !important;
   background:
-    radial-gradient(ellipse at 28% 0%, rgba(140, 172, 133, 0.2), transparent 48%),
+    radial-gradient(ellipse at 28% 0%, rgba(107, 238, 177, 0.2), transparent 48%),
     var(--yy-hex-flow),
     rgba(8, 18, 14, 0.86) !important;
   background-size:
@@ -2350,10 +2350,10 @@
   padding: clamp(0.75rem, 1.2vw, 1rem);
   margin-inline: auto;
   overflow: hidden;
-  border: 1px solid rgba(140, 172, 133, 0.14);
+  border: 1px solid rgba(107, 238, 177, 0.14);
   border-radius: calc(var(--yy-radius) + 2px);
   background:
-    radial-gradient(ellipse at 50% 50%, rgba(140, 172, 133, 0.11), transparent 54%),
+    radial-gradient(ellipse at 50% 50%, rgba(107, 238, 177, 0.11), transparent 54%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.058), rgba(255, 255, 255, 0.016)),
     rgba(4, 7, 7, 0.42);
   box-shadow:
@@ -2377,7 +2377,7 @@
   aspect-ratio: auto;
   padding: clamp(0.55rem, 0.9vw, 0.85rem);
   background:
-    radial-gradient(ellipse at 50% 45%, rgba(140, 172, 133, 0.12), transparent 62%),
+    radial-gradient(ellipse at 50% 45%, rgba(107, 238, 177, 0.12), transparent 62%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.018)),
     rgba(4, 7, 7, 0.56);
 }
@@ -2419,9 +2419,9 @@
 .yy-game-detail-content.panel-card {
   min-height: clamp(14rem, 24vh, 24rem);
   color: var(--yy-muted-readable);
-  border-color: rgba(140, 172, 133, 0.14);
+  border-color: rgba(107, 238, 177, 0.14);
   background:
-    radial-gradient(ellipse at 12% 0%, rgba(140, 172, 133, 0.09), transparent 40%),
+    radial-gradient(ellipse at 12% 0%, rgba(107, 238, 177, 0.09), transparent 40%),
     rgba(10, 13, 13, 0.82);
 }
 
@@ -2621,9 +2621,9 @@
 .yy-theory-question-card.panel-card,
 .yy-theory-side-panel.panel-card,
 .yy-theory-scoreboard.panel-card {
-  border-color: rgba(140, 172, 133, 0.16);
+  border-color: rgba(107, 238, 177, 0.16);
   background:
-    radial-gradient(ellipse at 14% 0%, rgba(140, 172, 133, 0.11), transparent 42%),
+    radial-gradient(ellipse at 14% 0%, rgba(107, 238, 177, 0.11), transparent 42%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.064), rgba(255, 255, 255, 0.018)),
     rgba(8, 11, 11, 0.86);
 }
@@ -2694,7 +2694,7 @@
 .yy-theory-option-list .mantine-Radio-root {
   min-height: 2.74rem;
   padding: 0.58rem 0.72rem;
-  border: 1px solid rgba(140, 172, 133, 0.09);
+  border: 1px solid rgba(107, 238, 177, 0.09);
   border-radius: calc(var(--yy-radius) - 2px);
   background: rgba(255, 255, 255, 0.024);
 }
@@ -2712,14 +2712,14 @@
   gap: 0.42rem;
   padding-block: 0.38rem;
   padding-inline: 0.58rem 0.9rem;
-  border-color: rgba(140, 172, 133, 0.46);
+  border-color: rgba(107, 238, 177, 0.46);
   color: var(--yy-green);
   background:
-    radial-gradient(ellipse at 18% 50%, rgba(140, 172, 133, 0.18), transparent 48%),
-    rgba(140, 172, 133, 0.12);
+    radial-gradient(ellipse at 18% 50%, rgba(107, 238, 177, 0.18), transparent 48%),
+    rgba(107, 238, 177, 0.12);
   box-shadow:
-    inset 0 0 0 1px rgba(140, 172, 133, 0.06),
-    0 0 1.3rem rgba(140, 172, 133, 0.1);
+    inset 0 0 0 1px rgba(107, 238, 177, 0.06),
+    0 0 1.3rem rgba(107, 238, 177, 0.1);
 }
 
 .yy-instance-countdown-pill .yy-status-text {
@@ -2742,7 +2742,7 @@
   font-size: 0.96rem;
   font-weight: 950;
   letter-spacing: 0.04em;
-  text-shadow: 0 0 0.8rem rgba(140, 172, 133, 0.42);
+  text-shadow: 0 0 0.8rem rgba(107, 238, 177, 0.42);
   white-space: nowrap;
 }
 
@@ -2763,9 +2763,9 @@
   width: min(34rem, 100%);
   min-height: 3.55rem;
   padding: 0.52rem 0.72rem;
-  border-color: rgba(140, 172, 133, 0.16);
+  border-color: rgba(107, 238, 177, 0.16);
   background:
-    radial-gradient(ellipse at 16% 20%, rgba(140, 172, 133, 0.1), transparent 44%),
+    radial-gradient(ellipse at 16% 20%, rgba(107, 238, 177, 0.1), transparent 44%),
     rgba(255, 255, 255, 0.026);
 }
 
@@ -2804,7 +2804,7 @@
 
 .yy-theory-scoreboard-head {
   padding-bottom: 0.35rem;
-  border-bottom: 1px solid rgba(140, 172, 133, 0.12);
+  border-bottom: 1px solid rgba(107, 238, 177, 0.12);
 }
 
 .yy-theory-loading.yy-state-page {
@@ -2832,13 +2832,13 @@
 }
 
 .mantine-Switch-track[data-checked] {
-  border-color: rgba(140, 172, 133, 0.8) !important;
+  border-color: rgba(107, 238, 177, 0.8) !important;
   background:
     radial-gradient(ellipse at 72% 50%, rgba(255, 255, 255, 0.34), transparent 42%),
     linear-gradient(135deg, rgba(137, 255, 199, 0.98), rgba(60, 215, 145, 0.9)) !important;
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.16),
-    0 0 1.2rem rgba(140, 172, 133, 0.2) !important;
+    0 0 1.2rem rgba(107, 238, 177, 0.2) !important;
 }
 
 .mantine-Switch-thumb[data-checked],
@@ -2857,22 +2857,22 @@
 
 .yy-admin-logs-page.panel-card {
   min-height: calc(100dvh - 11.5rem);
-  border-color: rgba(140, 172, 133, 0.16);
+  border-color: rgba(107, 238, 177, 0.16);
   background:
-    radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.11), transparent 42%),
+    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.11), transparent 42%),
     rgba(8, 11, 11, 0.86);
 }
 
 .yy-admin-logs-page .mantine-ScrollArea-root {
-  border: 1px solid rgba(140, 172, 133, 0.08);
+  border: 1px solid rgba(107, 238, 177, 0.08);
   border-radius: var(--yy-radius);
   background: rgba(255, 255, 255, 0.018);
 }
 
 .yy-admin-logs-filter {
-  border: 1px solid rgba(140, 172, 133, 0.16);
+  border: 1px solid rgba(107, 238, 177, 0.16);
   background:
-    radial-gradient(ellipse at 18% 50%, rgba(140, 172, 133, 0.08), transparent 44%),
+    radial-gradient(ellipse at 18% 50%, rgba(107, 238, 177, 0.08), transparent 44%),
     rgba(255, 255, 255, 0.026) !important;
 }
 
@@ -2882,9 +2882,9 @@
 }
 
 .yy-admin-logs-filter .mantine-SegmentedControl-indicator {
-  border: 1px solid rgba(140, 172, 133, 0.42);
+  border: 1px solid rgba(107, 238, 177, 0.42);
   background:
-    linear-gradient(135deg, rgba(140, 172, 133, 0.3), rgba(140, 172, 133, 0.12)),
+    linear-gradient(135deg, rgba(107, 238, 177, 0.3), rgba(107, 238, 177, 0.12)),
     var(--yy-hex-flow) !important;
 }
 
@@ -2900,11 +2900,11 @@
 
 .mantine-Notification-root,
 .mantine-Notifications-notification {
-  border: 1px solid rgba(140, 172, 133, 0.2) !important;
+  border: 1px solid rgba(107, 238, 177, 0.2) !important;
   border-radius: var(--yy-radius) !important;
   color: var(--yy-text) !important;
   background:
-    radial-gradient(ellipse at 15% 0%, rgba(140, 172, 133, 0.16), transparent 42%),
+    radial-gradient(ellipse at 15% 0%, rgba(107, 238, 177, 0.16), transparent 42%),
     var(--yy-hex-flow),
     rgba(5, 8, 8, 0.94) !important;
   background-size:
@@ -2925,7 +2925,7 @@
 
 .mantine-Notification-icon {
   color: var(--yy-green) !important;
-  background: rgba(140, 172, 133, 0.12) !important;
+  background: rgba(107, 238, 177, 0.12) !important;
 }
 
 @media (max-width: 72em) {
@@ -3033,7 +3033,7 @@
   font-weight: 920;
   line-height: 1.05;
   white-space: nowrap;
-  text-shadow: 0 0 1rem rgba(140, 172, 133, 0.12);
+  text-shadow: 0 0 1rem rgba(107, 238, 177, 0.12);
 }
 
 .yy-game-countdown-progress {
@@ -3075,13 +3075,13 @@
 .mantine-Switch-root[data-checked='true'] .mantine-Switch-track,
 .mantine-Switch-input[data-checked='true'] + .mantine-Switch-track,
 .mantine-Switch-input:checked + .mantine-Switch-track {
-  border-color: rgba(140, 172, 133, 0.86) !important;
+  border-color: rgba(107, 238, 177, 0.86) !important;
   background:
     radial-gradient(ellipse at 76% 50%, rgba(255, 255, 255, 0.38), transparent 42%),
     linear-gradient(135deg, rgba(148, 255, 206, 0.98), rgba(56, 223, 147, 0.94)) !important;
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.2),
-    0 0 1.35rem rgba(140, 172, 133, 0.34) !important;
+    0 0 1.35rem rgba(107, 238, 177, 0.34) !important;
 }
 
 .mantine-Switch-root[data-checked='true'] .mantine-Switch-thumb,
@@ -3125,9 +3125,9 @@
   gap: 0.58rem;
   align-content: start;
   padding: clamp(0.7rem, 1vw, 0.92rem) !important;
-  border-color: rgba(140, 172, 133, 0.16);
+  border-color: rgba(107, 238, 177, 0.16);
   background:
-    radial-gradient(ellipse at 18% 0%, rgba(140, 172, 133, 0.12), transparent 42%),
+    radial-gradient(ellipse at 18% 0%, rgba(107, 238, 177, 0.12), transparent 42%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.064), rgba(255, 255, 255, 0.018)),
     rgba(8, 11, 11, 0.88);
 }
@@ -3137,7 +3137,7 @@
   min-height: 3.05rem;
   padding-inline: 0.92rem;
   justify-content: flex-start;
-  border-color: rgba(140, 172, 133, 0.5) !important;
+  border-color: rgba(107, 238, 177, 0.5) !important;
   border-radius: calc(var(--yy-radius) - 2px) !important;
   color: #06100b !important;
   background:
@@ -3145,7 +3145,7 @@
     linear-gradient(135deg, rgba(126, 251, 194, 0.95), rgba(34, 187, 128, 0.86)) !important;
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.13),
-    0 0 1.2rem rgba(140, 172, 133, 0.14) !important;
+    0 0 1.2rem rgba(107, 238, 177, 0.14) !important;
 }
 
 .yy-monitor-download.mantine-Button-root svg,
@@ -3190,7 +3190,7 @@
   display: flex;
   align-items: center;
   padding-inline: 0.92rem;
-  border: 1px solid rgba(140, 172, 133, 0.14);
+  border: 1px solid rgba(107, 238, 177, 0.14);
   border-radius: calc(var(--yy-radius) - 2px);
   color: rgba(219, 240, 230, 0.82);
   font: inherit;
@@ -3198,7 +3198,7 @@
   font-weight: 850;
   text-align: left;
   background:
-    radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.06), transparent 44%),
+    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.06), transparent 44%),
     rgba(255, 255, 255, 0.026);
   cursor: pointer;
   transition:
@@ -3219,9 +3219,9 @@
 
 .yy-monitor-nav-button:not([data-active]):hover {
   transform: translateX(0.12rem);
-  border-color: rgba(140, 172, 133, 0.34);
+  border-color: rgba(107, 238, 177, 0.34);
   background:
-    radial-gradient(ellipse at 20% 0%, rgba(140, 172, 133, 0.13), transparent 46%),
+    radial-gradient(ellipse at 20% 0%, rgba(107, 238, 177, 0.13), transparent 46%),
     var(--yy-hex-flow),
     rgba(255, 255, 255, 0.04);
   background-size:
@@ -3232,7 +3232,7 @@
 
 .yy-monitor-nav-button[data-active] {
   color: #06100b;
-  border-color: rgba(140, 172, 133, 0.62);
+  border-color: rgba(107, 238, 177, 0.62);
   background:
     radial-gradient(ellipse at 24% 0%, rgba(255, 255, 255, 0.28), transparent 42%),
     linear-gradient(135deg, rgba(126, 251, 194, 0.92), rgba(53, 202, 137, 0.78)) !important;
@@ -3253,10 +3253,10 @@
 
 .yy-monitor-content > .mantine-Group-root:first-child {
   padding: 0.72rem 0.85rem;
-  border: 1px solid rgba(140, 172, 133, 0.12);
+  border: 1px solid rgba(107, 238, 177, 0.12);
   border-radius: var(--yy-radius);
   background:
-    radial-gradient(ellipse at 14% 0%, rgba(140, 172, 133, 0.08), transparent 44%),
+    radial-gradient(ellipse at 14% 0%, rgba(107, 238, 177, 0.08), transparent 44%),
     rgba(255, 255, 255, 0.022);
 }
 
@@ -3390,9 +3390,9 @@
   align-items: stretch;
   gap: 0.66rem;
   box-sizing: border-box;
-  border-color: rgba(140, 172, 133, 0.16);
+  border-color: rgba(107, 238, 177, 0.16);
   background:
-    radial-gradient(ellipse at 18% 0%, rgba(167, 199, 160, 0.16), transparent 42%),
+    radial-gradient(ellipse at 18% 0%, rgba(120, 248, 190, 0.16), transparent 42%),
     radial-gradient(ellipse at 76% 86%, rgba(57, 205, 139, 0.08), transparent 48%),
     linear-gradient(135deg, rgba(13, 28, 23, 0.72), rgba(4, 7, 7, 0.78)),
     rgba(8, 11, 11, 0.82);
@@ -3416,10 +3416,10 @@
   width: 100%;
   min-height: 3.05rem;
   padding: 0.58rem 0.66rem;
-  border: 1px solid rgba(140, 172, 133, 0.12);
+  border: 1px solid rgba(107, 238, 177, 0.12);
   border-radius: calc(var(--yy-radius) - 2px);
   background:
-    radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.08), transparent 44%),
+    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.08), transparent 44%),
     rgba(255, 255, 255, 0.026);
 }
 
@@ -3455,13 +3455,13 @@
   align-items: center;
   gap: 0.72rem;
   padding: 0.62rem 0.72rem;
-  border: 1px solid rgba(140, 172, 133, 0.14);
+  border: 1px solid rgba(107, 238, 177, 0.14);
   border-radius: calc(var(--yy-radius) - 2px);
   color: rgba(220, 240, 231, 0.84);
   font: inherit;
   text-align: left;
   background:
-    radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.06), transparent 44%),
+    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.06), transparent 44%),
     rgba(255, 255, 255, 0.026);
   cursor: pointer;
   transition:
@@ -3489,9 +3489,9 @@
 
 .yy-challenge-filter-button:hover {
   transform: translateX(0.1rem);
-  border-color: rgba(140, 172, 133, 0.34);
+  border-color: rgba(107, 238, 177, 0.34);
   background:
-    radial-gradient(ellipse at 20% 0%, rgba(140, 172, 133, 0.12), transparent 46%),
+    radial-gradient(ellipse at 20% 0%, rgba(107, 238, 177, 0.12), transparent 46%),
     var(--yy-hex-flow),
     rgba(255, 255, 255, 0.04);
   background-size:
@@ -3502,7 +3502,7 @@
 
 .yy-challenge-filter-button[data-active] {
   color: #06100b;
-  border-color: rgba(140, 172, 133, 0.62);
+  border-color: rgba(107, 238, 177, 0.62);
   background:
     radial-gradient(ellipse at 24% 0%, rgba(255, 255, 255, 0.28), transparent 42%),
     linear-gradient(135deg, rgba(126, 251, 194, 0.92), rgba(53, 202, 137, 0.8)) !important;
@@ -3520,10 +3520,10 @@
   min-width: 0;
   min-height: calc(100dvh - 10.5rem);
   padding: 0;
-  border: 1px solid rgba(140, 172, 133, 0.13);
+  border: 1px solid rgba(107, 238, 177, 0.13);
   border-radius: var(--yy-radius);
   background:
-    radial-gradient(ellipse at 20% 0%, rgba(167, 199, 160, 0.12), transparent 42%),
+    radial-gradient(ellipse at 20% 0%, rgba(120, 248, 190, 0.12), transparent 42%),
     radial-gradient(ellipse at 72% 92%, rgba(57, 205, 139, 0.08), transparent 48%),
     linear-gradient(135deg, rgba(10, 24, 20, 0.62), rgba(4, 7, 7, 0.78)),
     rgba(255, 255, 255, 0.012);
@@ -3553,9 +3553,9 @@
   min-width: 0;
   min-height: calc(100dvh - 10.5rem);
   overflow: hidden;
-  border-color: rgba(140, 172, 133, 0.16);
+  border-color: rgba(107, 238, 177, 0.16);
   background:
-    radial-gradient(ellipse at 18% 0%, rgba(140, 172, 133, 0.12), transparent 42%),
+    radial-gradient(ellipse at 18% 0%, rgba(107, 238, 177, 0.12), transparent 42%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.016)),
     rgba(8, 11, 11, 0.82);
 }
@@ -3604,10 +3604,10 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.38rem;
   padding: 0.34rem;
-  border: 1px solid rgba(140, 172, 133, 0.14);
+  border: 1px solid rgba(107, 238, 177, 0.14);
   border-radius: calc(var(--yy-radius) - 2px);
   background:
-    radial-gradient(ellipse at 16% 0%, rgba(167, 199, 160, 0.12), transparent 44%),
+    radial-gradient(ellipse at 16% 0%, rgba(120, 248, 190, 0.12), transparent 44%),
     linear-gradient(135deg, rgba(15, 35, 28, 0.54), rgba(6, 10, 10, 0.42)),
     rgba(255, 255, 255, 0.02);
   backdrop-filter: blur(0.86rem) saturate(1.14);
@@ -3643,10 +3643,10 @@
 
 .yy-notice-filter-button:not([data-active]):hover {
   transform: translateY(-1px);
-  border-color: rgba(140, 172, 133, 0.22);
+  border-color: rgba(107, 238, 177, 0.22);
   color: rgba(235, 247, 241, 0.92);
   background:
-    radial-gradient(ellipse at 20% 0%, rgba(140, 172, 133, 0.1), transparent 46%),
+    radial-gradient(ellipse at 20% 0%, rgba(107, 238, 177, 0.1), transparent 46%),
     var(--yy-hex-flow),
     rgba(255, 255, 255, 0.026);
   background-size:
@@ -3656,14 +3656,14 @@
 }
 
 .yy-notice-filter-button[data-active] {
-  border-color: rgba(140, 172, 133, 0.52);
+  border-color: rgba(107, 238, 177, 0.52);
   color: #06100b;
   background:
     radial-gradient(ellipse at 28% 0%, rgba(255, 255, 255, 0.32), transparent 46%),
     linear-gradient(135deg, rgba(130, 246, 194, 0.92), rgba(54, 204, 139, 0.78)) !important;
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.12),
-    0 0 1rem rgba(140, 172, 133, 0.16);
+    0 0 1rem rgba(107, 238, 177, 0.16);
   font-weight: 920;
 }
 
@@ -3688,9 +3688,9 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-color: rgba(140, 172, 133, 0.22);
+  border-color: rgba(107, 238, 177, 0.22);
   background:
-    radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.12), transparent 42%),
+    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.12), transparent 42%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.068), rgba(255, 255, 255, 0.018)),
     rgba(5, 8, 8, 0.94);
   box-shadow:
@@ -3757,7 +3757,7 @@
 }
 
 .challenge-drawer-draft .mantine-Divider-root {
-  border-color: rgba(140, 172, 133, 0.14);
+  border-color: rgba(107, 238, 177, 0.14);
 }
 
 .challenge-drawer-draft form .mantine-Group-root {
@@ -3856,8 +3856,8 @@
 .yy-games-page .panel-card::after {
   inset: 1px;
   background:
-    linear-gradient(112deg, transparent 12%, rgba(140, 172, 133, 0.18) 42%, transparent 70%),
-    radial-gradient(ellipse at 82% 0%, rgba(140, 172, 133, 0.1), transparent 40%);
+    linear-gradient(112deg, transparent 12%, rgba(107, 238, 177, 0.18) 42%, transparent 70%),
+    radial-gradient(ellipse at 82% 0%, rgba(107, 238, 177, 0.1), transparent 40%);
   opacity: 0;
   transform: translate3d(-18%, 0, 0);
   transition:
@@ -3956,9 +3956,9 @@
 .yy-home-event-list .game-index-card.game-event-row.panel-card:hover,
 .yy-game-event-list .game-index-card.game-event-row.panel-card:hover {
   box-shadow:
-    inset 0 0 0 1px rgba(140, 172, 133, 0.14),
+    inset 0 0 0 1px rgba(107, 238, 177, 0.14),
     0 1.1rem 2.8rem rgba(0, 0, 0, 0.32),
-    0 0 1.6rem rgba(140, 172, 133, 0.1);
+    0 0 1.6rem rgba(107, 238, 177, 0.1);
 }
 
 .yy-home-event-list .game-index-card.game-event-row [class*='poster'],
@@ -4079,10 +4079,10 @@
 .yy-pentest-link-hint {
   margin-top: -0.35rem;
   padding: 0.46rem 0.62rem;
-  border: 1px solid rgba(140, 172, 133, 0.18);
+  border: 1px solid rgba(107, 238, 177, 0.18);
   border-radius: 0.45rem;
   color: rgba(210, 248, 229, 0.9) !important;
-  background: rgba(140, 172, 133, 0.06);
+  background: rgba(107, 238, 177, 0.06);
 }
 
 .yy-pentest-canvas-loading {
@@ -4165,7 +4165,7 @@
 .yy-pentest-canvas {
   overflow: hidden;
   min-height: 50rem;
-  border-color: rgba(140, 172, 133, 0.17);
+  border-color: rgba(107, 238, 177, 0.17);
   position: relative;
   background:
     linear-gradient(135deg, rgba(5, 12, 10, 0.92), rgba(8, 14, 12, 0.72)),
@@ -4179,7 +4179,7 @@
   pointer-events: none;
   z-index: 1;
   background:
-    radial-gradient(ellipse at 24% 18%, rgba(140, 172, 133, 0.12), transparent 36rem),
+    radial-gradient(ellipse at 24% 18%, rgba(107, 238, 177, 0.12), transparent 36rem),
     linear-gradient(90deg, rgba(0, 0, 0, 0.28), transparent 24%, transparent 76%, rgba(0, 0, 0, 0.28));
 }
 
@@ -4192,14 +4192,14 @@
 
 .yy-pentest-canvas .react-flow {
   background:
-    radial-gradient(ellipse at 20% 15%, rgba(140, 172, 133, 0.08), transparent 34rem),
+    radial-gradient(ellipse at 20% 15%, rgba(107, 238, 177, 0.08), transparent 34rem),
     radial-gradient(ellipse at 80% 70%, rgba(255, 255, 255, 0.035), transparent 28rem),
     rgba(4, 8, 7, 0.58);
 }
 
 .yy-pentest-canvas .react-flow__controls,
 .yy-pentest-canvas .react-flow__minimap {
-  border: 1px solid rgba(140, 172, 133, 0.18);
+  border: 1px solid rgba(107, 238, 177, 0.18);
   border-radius: calc(var(--yy-radius) - 4px);
   overflow: hidden;
   background: rgba(5, 11, 9, 0.82);
@@ -4216,15 +4216,15 @@
   width: 100%;
   height: 100%;
   padding: 1rem 1.1rem;
-  border: 1px solid rgba(140, 172, 133, 0.3);
+  border: 1px solid rgba(107, 238, 177, 0.3);
   border-radius: 14px;
   background:
     linear-gradient(135deg, rgba(18, 42, 33, 0.68), rgba(4, 10, 8, 0.46)),
-    repeating-linear-gradient(0deg, rgba(140, 172, 133, 0.055) 0 1px, transparent 1px 18px),
-    repeating-linear-gradient(90deg, rgba(140, 172, 133, 0.042) 0 1px, transparent 1px 18px);
+    repeating-linear-gradient(0deg, rgba(107, 238, 177, 0.055) 0 1px, transparent 1px 18px),
+    repeating-linear-gradient(90deg, rgba(107, 238, 177, 0.042) 0 1px, transparent 1px 18px);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.024),
-    inset 0 0 3.5rem rgba(140, 172, 133, 0.035),
+    inset 0 0 3.5rem rgba(107, 238, 177, 0.035),
     0 1.2rem 3rem rgba(0, 0, 0, 0.24);
 }
 
@@ -4235,18 +4235,18 @@
   pointer-events: none;
   border-radius: 10px;
   background:
-    linear-gradient(90deg, rgba(140, 172, 133, 0.08) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(140, 172, 133, 0.08) 1px, transparent 1px);
+    linear-gradient(90deg, rgba(107, 238, 177, 0.08) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(107, 238, 177, 0.08) 1px, transparent 1px);
   background-size: 16px 16px;
   mask-image: linear-gradient(to bottom, transparent, black 16%, black 94%, transparent);
   opacity: 0.5;
 }
 
 .yy-pentest-segment-frame.is-selected {
-  border-color: rgba(140, 172, 133, 0.72);
+  border-color: rgba(107, 238, 177, 0.72);
   box-shadow:
-    inset 0 0 0 1px rgba(140, 172, 133, 0.18),
-    0 0 2.4rem rgba(140, 172, 133, 0.12),
+    inset 0 0 0 1px rgba(107, 238, 177, 0.18),
+    0 0 2.4rem rgba(107, 238, 177, 0.12),
     0 1.4rem 3rem rgba(0, 0, 0, 0.32);
 }
 
@@ -4270,11 +4270,11 @@
 .yy-pentest-flow-node.react-flow__node {
   width: 13.625rem;
   padding: 0;
-  border: 1px solid rgba(140, 172, 133, 0.34);
+  border: 1px solid rgba(107, 238, 177, 0.34);
   border-radius: calc(var(--yy-radius) - 3px);
   color: var(--yy-text);
   background:
-    radial-gradient(ellipse at 18% 18%, rgba(140, 172, 133, 0.17), transparent 64%),
+    radial-gradient(ellipse at 18% 18%, rgba(107, 238, 177, 0.17), transparent 64%),
     var(--yy-hex-flow),
     rgba(7, 14, 12, 0.92);
   box-shadow:
@@ -4284,10 +4284,10 @@
 
 .yy-pentest-flow-node.react-flow__node.selected,
 .yy-pentest-node-card.is-selected {
-  border-color: rgba(140, 172, 133, 0.72);
+  border-color: rgba(107, 238, 177, 0.72);
   box-shadow:
-    inset 0 0 0 1px rgba(140, 172, 133, 0.2),
-    0 0 1.7rem rgba(140, 172, 133, 0.16),
+    inset 0 0 0 1px rgba(107, 238, 177, 0.2),
+    0 0 1.7rem rgba(107, 238, 177, 0.16),
     0 1rem 2.3rem rgba(0, 0, 0, 0.38);
 }
 
@@ -4331,7 +4331,7 @@
 }
 
 .yy-pentest-canvas .react-flow__edge-path {
-  stroke: rgba(140, 172, 133, 0.62);
+  stroke: rgba(107, 238, 177, 0.62);
   stroke-width: 2;
 }
 
@@ -4345,7 +4345,7 @@
   height: 0.72rem;
   border: 1px solid rgba(195, 255, 223, 0.82);
   background: rgba(78, 240, 156, 0.9);
-  box-shadow: 0 0 1rem rgba(140, 172, 133, 0.34);
+  box-shadow: 0 0 1rem rgba(107, 238, 177, 0.34);
 }
 
 .yy-pentest-hidden-handle {
@@ -4356,10 +4356,10 @@
 .yy-pentest-blueprint-card,
 .yy-pentest-preview-box,
 .yy-pentest-network-list-item {
-  border: 1px solid rgba(140, 172, 133, 0.16);
+  border: 1px solid rgba(107, 238, 177, 0.16);
   border-radius: calc(var(--yy-radius) - 4px);
   background:
-    radial-gradient(ellipse at 12% 18%, rgba(140, 172, 133, 0.1), transparent 60%),
+    radial-gradient(ellipse at 12% 18%, rgba(107, 238, 177, 0.1), transparent 60%),
     rgba(8, 15, 13, 0.68);
 }
 
@@ -4385,7 +4385,7 @@
 
 .yy-pentest-network-list-item:hover,
 .yy-pentest-network-list-item.is-active {
-  border-color: rgba(140, 172, 133, 0.46);
+  border-color: rgba(107, 238, 177, 0.46);
   background: rgba(23, 55, 42, 0.52);
   transform: translateY(-1px);
 }
@@ -4820,8 +4820,8 @@
 
 .yy-root-reactbits-bg.yy-game-bends-bg {
   background:
-    radial-gradient(ellipse at 18% 8%, rgba(140, 172, 133, 0.1), transparent 42%),
-    radial-gradient(ellipse at 72% 82%, rgba(167, 199, 160, 0.13), transparent 48%),
+    radial-gradient(ellipse at 18% 8%, rgba(107, 238, 177, 0.1), transparent 42%),
+    radial-gradient(ellipse at 72% 82%, rgba(120, 248, 190, 0.13), transparent 48%),
     linear-gradient(180deg, #080511 0%, #030706 56%, #000 100%) !important;
 }
 
@@ -4848,7 +4848,7 @@
 
 .yy-game-entry-hero > .yy-game-entry-gridscan {
   background:
-    radial-gradient(ellipse at 50% 16%, rgba(167, 199, 160, 0.14), transparent 40%),
+    radial-gradient(ellipse at 50% 16%, rgba(120, 248, 190, 0.14), transparent 40%),
     linear-gradient(180deg, #020605 0%, #000 100%);
 }
 
@@ -4869,7 +4869,7 @@
 
 .yy-home-brand-heading .yy-reactbits-gradient-original > div:last-child {
   filter:
-    drop-shadow(0 0 1.1rem rgba(167, 199, 160, 0.32))
+    drop-shadow(0 0 1.1rem rgba(120, 248, 190, 0.32))
     drop-shadow(0 0 1.2rem rgba(116, 232, 184, 0.1));
 }
 
@@ -4895,12 +4895,12 @@
   font-size: clamp(1.25rem, 1.45vw, 1.72rem);
   font-weight: 900;
   line-height: 1.24;
-  text-shadow: 0 0 1rem rgba(167, 199, 160, 0.12);
+  text-shadow: 0 0 1rem rgba(120, 248, 190, 0.12);
 }
 
 .yy-theory-type-cursor {
-  color: #a7c7a0;
-  text-shadow: 0 0 0.8rem rgba(167, 199, 160, 0.42);
+  color: #78f8be;
+  text-shadow: 0 0 0.8rem rgba(120, 248, 190, 0.42);
 }
 
 .yy-flag-input-shell {
@@ -4915,7 +4915,7 @@
   font-family: 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace !important;
   font-size: clamp(0.82rem, 0.86vw, 0.98rem) !important;
   line-height: 1.1 !important;
-  text-shadow: 0 0 0.8rem rgba(167, 199, 160, 0.16);
+  text-shadow: 0 0 0.8rem rgba(120, 248, 190, 0.16);
 }
 
 .yy-scrambled-flag-placeholder p {
@@ -4951,12 +4951,12 @@
   letter-spacing: 0 !important;
   color: transparent !important;
   -webkit-text-fill-color: transparent !important;
-  background-image: linear-gradient(105deg, #f8fff9 0%, #a7c7a0 38%, #d9fff0 66%, #a7c7a0 100%);
+  background-image: linear-gradient(105deg, #f8fff9 0%, #78f8be 38%, #d9fff0 66%, #78f8be 100%);
   background-size: 260% 100%;
   background-clip: text;
   -webkit-background-clip: text;
   animation: yy-gradient-text-flow 5.4s cubic-bezier(0.45, 0, 0.2, 1) infinite alternate;
-  filter: drop-shadow(0 0 0.55rem rgba(167, 199, 160, 0.18));
+  filter: drop-shadow(0 0 0.55rem rgba(120, 248, 190, 0.18));
 }
 
 .yy-admin-shell .yy-status-pill.tone-danger .yy-status-text,
@@ -5094,7 +5094,7 @@
 .challenge-drawer-draft {
   border-color: rgba(218, 255, 240, 0.14) !important;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.082), rgba(255, 255, 255, 0.018) 42%, rgba(140, 172, 133, 0.052)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.082), rgba(255, 255, 255, 0.018) 42%, rgba(107, 238, 177, 0.052)),
     rgba(3, 9, 8, 0.38) !important;
   backdrop-filter: blur(1.45rem) saturate(1.28) !important;
   -webkit-backdrop-filter: blur(1.45rem) saturate(1.28) !important;
@@ -5115,9 +5115,9 @@
 .challenge-card::before,
 .challenge-drawer-draft::before {
   background:
-    radial-gradient(ellipse at 18% 8%, rgba(140, 172, 133, 0.22), transparent 36%),
+    radial-gradient(ellipse at 18% 8%, rgba(107, 238, 177, 0.22), transparent 36%),
     radial-gradient(ellipse at 82% 86%, rgba(211, 255, 238, 0.08), transparent 44%),
-    linear-gradient(105deg, transparent 14%, rgba(140, 172, 133, 0.12) 44%, transparent 74%) !important;
+    linear-gradient(105deg, transparent 14%, rgba(107, 238, 177, 0.12) 44%, transparent 74%) !important;
   background-size: auto !important;
   background-position: center !important;
   filter: blur(0.48rem) !important;
@@ -5138,7 +5138,7 @@
 .challenge-drawer-draft::after {
   background:
     linear-gradient(110deg, transparent 18%, rgba(255, 255, 255, 0.14) 42%, transparent 68%),
-    radial-gradient(ellipse at 68% 0%, rgba(140, 172, 133, 0.13), transparent 42%) !important;
+    radial-gradient(ellipse at 68% 0%, rgba(107, 238, 177, 0.13), transparent 42%) !important;
   background-size: auto !important;
   mask-image: none !important;
   filter: blur(0) !important;
@@ -5167,9 +5167,9 @@
   opacity: 0.62 !important;
   padding: 0 !important;
   background:
-    radial-gradient(ellipse at 18% 12%, rgba(140, 172, 133, 0.26), transparent 32%),
+    radial-gradient(ellipse at 18% 12%, rgba(107, 238, 177, 0.26), transparent 32%),
     radial-gradient(ellipse at 84% 84%, rgba(209, 255, 237, 0.1), transparent 42%),
-    linear-gradient(75deg, transparent 4%, rgba(140, 172, 133, 0.1) 24%, rgba(255, 255, 255, 0.055) 38%, transparent 58%) !important;
+    linear-gradient(75deg, transparent 4%, rgba(107, 238, 177, 0.1) 24%, rgba(255, 255, 255, 0.055) 38%, transparent 58%) !important;
   background-size: auto !important;
   background-position: center !important;
   filter: blur(0.9rem) saturate(1.22) !important;
@@ -5196,8 +5196,8 @@
 .yy-game-event-list .game-index-card.game-event-row.panel-card {
   border-color: rgba(218, 255, 240, 0.18) !important;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.032) 42%, rgba(140, 172, 133, 0.064)),
-    radial-gradient(ellipse at 20% 8%, rgba(140, 172, 133, 0.18), transparent 48%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.032) 42%, rgba(107, 238, 177, 0.064)),
+    radial-gradient(ellipse at 20% 8%, rgba(107, 238, 177, 0.18), transparent 48%),
     rgba(4, 10, 9, 0.24) !important;
   backdrop-filter: blur(2.15rem) saturate(1.42) brightness(1.04) !important;
   -webkit-backdrop-filter: blur(2.15rem) saturate(1.42) brightness(1.04) !important;
@@ -5212,10 +5212,10 @@
 .yy-game-event-list .game-index-card.game-event-row.panel-card:hover {
   border-color: rgba(218, 255, 240, 0.34) !important;
   box-shadow:
-    inset 0 0 0 1px rgba(140, 172, 133, 0.16),
+    inset 0 0 0 1px rgba(107, 238, 177, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.2),
     0 1.5rem 4.4rem rgba(0, 0, 0, 0.4),
-    0 0 2.8rem rgba(140, 172, 133, 0.16) !important;
+    0 0 2.8rem rgba(107, 238, 177, 0.16) !important;
 }
 
 .yy-flag-input-shell {
@@ -5249,51 +5249,42 @@
   white-space: nowrap;
 }
 
-/* Mineral crystal palette pass.
-   Keep the ReactBits/layout work above, but rebalance color away from bright
-   neon green into graphite, sage glass, lavender mist, and soft metal edges. */
+/* Single YINYU green palette pass.
+   Keep the ReactBits/layout work above, but remove the alternate palette branch
+   and restore the clearer green + lavender title language. */
 :root {
-  --yy-mineral-bg-0: #050706;
-  --yy-mineral-bg-1: #0b0f0d;
-  --yy-mineral-bg-2: #121512;
-  --yy-mineral-sage: #8cac85;
-  --yy-mineral-sage-soft: #a7c7a0;
-  --yy-mineral-lavender: #9e90bb;
-  --yy-mineral-lavender-soft: #b9add1;
-  --yy-mineral-metal: #73837d;
-  --yy-mineral-silver: #dde5df;
-  --yy-title-glow: 0 0 1.65rem rgba(167, 199, 160, 0.14), 0 0 2.4rem rgba(158, 144, 187, 0.08),
+  --yy-title-glow: 0 0 2.15rem rgba(107, 238, 177, 0.24), 0 0 2.25rem rgba(185, 173, 209, 0.14),
     0 1rem 2.8rem rgba(0, 0, 0, 0.46);
-  --yy-hex-border: rgba(221, 229, 223, 0.16);
-  --yy-hex-border-hot: rgba(185, 173, 209, 0.42);
-  --yy-green: var(--yy-mineral-sage-soft);
-  --yy-muted-readable: rgba(221, 229, 223, 0.76);
-  --yy-gradient-brand: #ffffff 0%, #dde5df 17%, #a7c7a0 36%, #f4f7f5 52%, #b9add1 68%, #dde5df 84%, #ffffff 100%;
-  --yy-gradient-signal: #f8fff9 0%, #dfe8dd 18%, #a7c7a0 42%, #8cac85 62%, #f7faf8 100%;
-  --yy-gradient-silver: #ffffff 0%, #dde5df 24%, #73837d 45%, #f3f7f5 62%, #b9add1 80%, #ffffff 100%;
-  --yy-gradient-coming: #fff9df 0%, #d8c48a 30%, #f7f1d4 54%, #a7c7a0 76%, #ffffff 100%;
-  --yy-gradient-ended: #f5f8f6 0%, #dde5df 26%, #73837d 52%, #cbd5cf 74%, #ffffff 100%;
-  --yy-gradient-danger: #fff1ed 0%, #e7a190 26%, #c8645d 52%, #f6ded8 78%, #ffffff 100%;
+  --yy-hex-border: rgba(107, 238, 177, 0.18);
+  --yy-hex-border-hot: rgba(107, 238, 177, 0.58);
+  --yy-green: #6beeb1;
+  --yy-muted-readable: rgba(230, 248, 241, 0.78);
+  --yy-gradient-brand: #ffffff 0%, #e4fff2 16%, #78f8be 34%, #f7fffb 52%, #b9add1 68%, #f4fff9 84%, #9affd2 100%;
+  --yy-gradient-signal: #f5fff9 0%, #9dffd5 22%, #42f49d 48%, #d8fff0 70%, #ffffff 100%;
+  --yy-gradient-silver: #ffffff 0%, #d8e4df 24%, #8fa099 42%, #eef7f3 58%, #7ef2bd 78%, #fbfffd 100%;
+  --yy-gradient-coming: #fff5c8 0%, #f2c95b 26%, #dcffe9 52%, #74efb8 74%, #fff9df 100%;
+  --yy-gradient-ended: #f4faf7 0%, #b7c3be 24%, #7f8d87 46%, #e6efeb 67%, #cfdad5 100%;
+  --yy-gradient-danger: #fff2ec 0%, #ffb091 24%, #ff6d5e 48%, #ffe5d7 72%, #f7fff9 100%;
 }
 
 .yy-root-reactbits-bg.yy-game-bends-bg {
   background:
-    radial-gradient(ellipse at 18% 6%, rgba(158, 144, 187, 0.102), transparent 42%),
-    radial-gradient(ellipse at 78% 82%, rgba(88, 118, 96, 0.15), transparent 48%),
-    radial-gradient(ellipse at 50% 36%, rgba(185, 173, 209, 0.045), transparent 54%),
-    linear-gradient(180deg, #050706 0%, #0b0f0d 56%, #030403 100%) !important;
+    radial-gradient(ellipse at 18% 6%, rgba(185, 173, 209, 0.12), transparent 42%),
+    radial-gradient(ellipse at 78% 82%, rgba(107, 238, 177, 0.16), transparent 48%),
+    radial-gradient(ellipse at 50% 36%, rgba(120, 248, 190, 0.07), transparent 54%),
+    linear-gradient(180deg, #04100d 0%, #020605 56%, #000 100%) !important;
 }
 
 .yy-root-reactbits-bg .yy-game-bends-bg__bends {
-  opacity: 0.86 !important;
+  opacity: 0.92 !important;
   mix-blend-mode: screen;
-  filter: saturate(0.92) brightness(0.88) contrast(1.04);
+  filter: saturate(1.08) brightness(1.03) contrast(1.04);
 }
 
 .yy-root-reactbits-bg .yy-game-bends-bg__dots {
-  opacity: 0.62 !important;
+  opacity: 0.78 !important;
   mix-blend-mode: screen;
-  filter: saturate(0.88) brightness(0.92);
+  filter: saturate(1.05) brightness(0.98);
 }
 
 .yy-root-reactbits-bg.yy-game-bends-bg::after {
@@ -5304,26 +5295,26 @@
 
 .yy-game-entry-hero > .yy-game-entry-gridscan {
   background:
-    radial-gradient(ellipse at 50% 16%, rgba(185, 173, 209, 0.105), transparent 40%),
-    radial-gradient(ellipse at 64% 72%, rgba(140, 172, 133, 0.11), transparent 46%),
-    linear-gradient(180deg, #0b0f0d 0%, #050706 100%) !important;
+    radial-gradient(ellipse at 50% 16%, rgba(185, 173, 209, 0.12), transparent 40%),
+    radial-gradient(ellipse at 64% 72%, rgba(107, 238, 177, 0.12), transparent 46%),
+    linear-gradient(180deg, #04100d 0%, #020605 100%) !important;
 }
 
 .yy-react-gradient-text-inner {
-  filter: drop-shadow(0 0 0.58rem rgba(167, 199, 160, 0.14));
+  filter: drop-shadow(0 0 0.72rem rgba(107, 238, 177, 0.18));
 }
 
 .yy-gradient-brand .yy-reactbits-gradient-original > div:last-child,
 .yy-home-brand-heading .yy-reactbits-gradient-original > div:last-child,
 .yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading .yy-reactbits-gradient-original > div:last-child {
   filter:
-    drop-shadow(0 0 0.88rem rgba(167, 199, 160, 0.2))
-    drop-shadow(0 0 1.2rem rgba(158, 144, 187, 0.11)) !important;
+    drop-shadow(0 0 0.95rem rgba(107, 238, 177, 0.26))
+    drop-shadow(0 0 1.25rem rgba(185, 173, 209, 0.16)) !important;
 }
 
 .yy-gradient-signal .yy-react-gradient-text-inner,
 .yy-gradient-ongoing .yy-react-gradient-text-inner {
-  filter: drop-shadow(0 0 0.5rem rgba(140, 172, 133, 0.2));
+  filter: drop-shadow(0 0 0.6rem rgba(107, 238, 177, 0.24));
 }
 
 .yy-gradient-ended .yy-react-gradient-text-inner,
@@ -5332,8 +5323,8 @@
 }
 
 .yy-theory-type-cursor {
-  color: var(--yy-mineral-sage-soft) !important;
-  text-shadow: 0 0 0.75rem rgba(167, 199, 160, 0.28) !important;
+  color: var(--yy-green) !important;
+  text-shadow: 0 0 0.75rem rgba(107, 238, 177, 0.32) !important;
 }
 
 .yy-scrambled-flag-placeholder {
@@ -5343,8 +5334,8 @@
 
 .yy-admin-shell .mantine-Badge-label,
 .yy-admin-shell .yy-status-pill .yy-status-text {
-  background-image: linear-gradient(105deg, #ffffff 0%, #dde5df 26%, #a7c7a0 52%, #f5f8f6 76%, #b9add1 100%) !important;
-  filter: drop-shadow(0 0 0.46rem rgba(167, 199, 160, 0.14)) !important;
+  background-image: linear-gradient(105deg, #ffffff 0%, #d9fff0 26%, #78f8be 52%, #f5fffa 76%, #b9add1 100%) !important;
+  filter: drop-shadow(0 0 0.5rem rgba(107, 238, 177, 0.17)) !important;
 }
 
 .yy-admin-shell .yy-status-pill.tone-danger .yy-status-text,
@@ -5382,7 +5373,7 @@
   border-color: rgba(221, 229, 223, 0.135) !important;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.072), rgba(255, 255, 255, 0.018) 42%, rgba(158, 144, 187, 0.036)),
-    radial-gradient(ellipse at 18% 8%, rgba(140, 172, 133, 0.075), transparent 50%),
+    radial-gradient(ellipse at 18% 8%, rgba(107, 238, 177, 0.075), transparent 50%),
     rgba(11, 15, 13, 0.44) !important;
   backdrop-filter: blur(1.55rem) saturate(1.1) brightness(0.92) !important;
   -webkit-backdrop-filter: blur(1.55rem) saturate(1.1) brightness(0.92) !important;
@@ -5403,7 +5394,7 @@
 .challenge-card::before,
 .challenge-drawer-draft::before {
   background:
-    radial-gradient(ellipse at 18% 8%, rgba(167, 199, 160, 0.13), transparent 38%),
+    radial-gradient(ellipse at 18% 8%, rgba(120, 248, 190, 0.13), transparent 38%),
     radial-gradient(ellipse at 84% 82%, rgba(185, 173, 209, 0.105), transparent 46%),
     linear-gradient(108deg, transparent 16%, rgba(221, 229, 223, 0.065) 44%, transparent 74%) !important;
   filter: blur(0.58rem) saturate(0.95) !important;
@@ -5446,9 +5437,9 @@
 .hex-field.yy-color-bends-field {
   opacity: 0.52 !important;
   background:
-    radial-gradient(ellipse at 18% 12%, rgba(167, 199, 160, 0.15), transparent 34%),
+    radial-gradient(ellipse at 18% 12%, rgba(120, 248, 190, 0.15), transparent 34%),
     radial-gradient(ellipse at 84% 84%, rgba(185, 173, 209, 0.095), transparent 44%),
-    linear-gradient(75deg, transparent 4%, rgba(140, 172, 133, 0.065) 24%, rgba(221, 229, 223, 0.045) 40%, transparent 60%) !important;
+    linear-gradient(75deg, transparent 4%, rgba(107, 238, 177, 0.065) 24%, rgba(221, 229, 223, 0.045) 40%, transparent 60%) !important;
   filter: blur(1rem) saturate(0.9) brightness(0.94) !important;
 }
 
@@ -5466,7 +5457,7 @@
   border-color: rgba(221, 229, 223, 0.18) !important;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.088), rgba(255, 255, 255, 0.024) 42%, rgba(158, 144, 187, 0.04)),
-    radial-gradient(ellipse at 20% 8%, rgba(140, 172, 133, 0.12), transparent 48%),
+    radial-gradient(ellipse at 20% 8%, rgba(107, 238, 177, 0.12), transparent 48%),
     rgba(11, 15, 13, 0.34) !important;
   backdrop-filter: blur(2.15rem) saturate(1.12) brightness(0.94) !important;
   -webkit-backdrop-filter: blur(2.15rem) saturate(1.12) brightness(0.94) !important;
@@ -5481,7 +5472,7 @@
 .yy-game-event-list .game-index-card.game-event-row.panel-card:hover {
   border-color: rgba(185, 173, 209, 0.32) !important;
   box-shadow:
-    inset 0 0 0 1px rgba(167, 199, 160, 0.12),
+    inset 0 0 0 1px rgba(120, 248, 190, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.17),
     0 1.5rem 4.4rem rgba(0, 0, 0, 0.42),
     0 0 2.6rem rgba(158, 144, 187, 0.12) !important;
@@ -5593,7 +5584,7 @@
       rgba(255, 255, 255, calc(0.06 * var(--yy-bento-intensity))) 308deg,
       transparent 360deg
     ),
-    radial-gradient(ellipse at 18% 8%, rgba(167, 199, 160, 0.13), transparent 38%),
+    radial-gradient(ellipse at 18% 8%, rgba(120, 248, 190, 0.13), transparent 38%),
     radial-gradient(ellipse at 84% 82%, rgba(185, 173, 209, 0.105), transparent 46%) !important;
   opacity: calc(0.46 + 0.44 * var(--yy-bento-intensity)) !important;
   filter: blur(calc(0.52rem + 0.12rem * var(--yy-bento-intensity))) saturate(calc(0.98 + 0.58 * var(--yy-bento-intensity)))
@@ -5895,38 +5886,6 @@ tr.yy-bento-tone-active td {
 }
 
 
-/* Runtime visual theme switch.
-   Default classic keeps the current main-branch baseline; crystal enables the
-   newer mineral/ReactBits/Bento material response without permanently covering
-   the base theme. */
-.yy-theme-toggle {
-  position: fixed !important;
-  left: max(1rem, env(safe-area-inset-left)) !important;
-  bottom: max(1rem, env(safe-area-inset-bottom)) !important;
-  z-index: 5200 !important;
-  width: 2.75rem !important;
-  height: 2.75rem !important;
-  color: rgba(244, 245, 245, 0.9) !important;
-  border-color: rgba(140, 172, 133, 0.24) !important;
-  background:
-    radial-gradient(ellipse at 28% 18%, rgba(140, 172, 133, 0.11), transparent 56%),
-    rgba(5, 7, 6, 0.72) !important;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.035),
-    0 0.8rem 2.4rem rgba(0, 0, 0, 0.34) !important;
-  backdrop-filter: blur(0.92rem) saturate(1.18) !important;
-  -webkit-backdrop-filter: blur(0.92rem) saturate(1.18) !important;
-}
-
-.yy-theme-toggle[data-active='true'] {
-  color: #f8fff9 !important;
-  border-color: rgba(185, 173, 209, 0.38) !important;
-  background:
-    radial-gradient(ellipse at 28% 18%, rgba(185, 173, 209, 0.16), transparent 52%),
-    radial-gradient(ellipse at 78% 82%, rgba(140, 172, 133, 0.14), transparent 54%),
-    rgba(5, 7, 6, 0.76) !important;
-}
-
 .yy-flag-input-shell {
   position: relative !important;
   isolation: isolate;
@@ -6003,147 +5962,6 @@ tr.yy-bento-tone-active td {
   }
 }
 
-:root[data-yy-theme='classic'] {
-  --yy-title-glow: 0 0 2.2rem rgba(116, 255, 194, 0.16), 0 1rem 2.6rem rgba(0, 0, 0, 0.42);
-  --yy-hex-border: rgba(118, 255, 189, 0.24);
-  --yy-hex-border-hot: rgba(107, 238, 177, 0.72);
-  --yy-green: var(--green);
-  --yy-muted-readable: rgba(244, 245, 245, 0.76);
-  --yy-gradient-brand: #ffffff 0%, #e4fff2 16%, #78f8be 34%, #dfeee8 50%, #8e7be6 66%, #f5fffa 82%, #9affd2 100%;
-  --yy-gradient-signal: #f5fff9 0%, #9dffd5 22%, #42f49d 48%, #d8fff0 70%, #ffffff 100%;
-  --yy-gradient-silver: #ffffff 0%, #d8e4df 24%, #8fa099 42%, #eef7f3 58%, #7ef2bd 78%, #fbfffd 100%;
-  --yy-gradient-coming: #fff5c8 0%, #f2c95b 26%, #dcffe9 52%, #74efb8 74%, #fff9df 100%;
-  --yy-gradient-ended: #f4faf7 0%, #b7c3be 24%, #7f8d87 46%, #e6efeb 67%, #cfdad5 100%;
-  --yy-gradient-danger: #fff2ec 0%, #ffb091 24%, #ff6d5e 48%, #ffe5d7 72%, #f7fff9 100%;
-}
-
-:root[data-yy-theme='classic'] .yy-root-reactbits-bg.yy-game-bends-bg {
-  display: block !important;
-}
-
-:root[data-yy-theme='classic'] .yy-react-gradient-text-inner {
-  filter: drop-shadow(0 0 0.7rem rgba(116, 255, 194, 0.16)) !important;
-}
-
-:root[data-yy-theme='classic'] .yy-gradient-brand .yy-reactbits-gradient-original > div:last-child,
-:root[data-yy-theme='classic'] .yy-home-brand-heading .yy-reactbits-gradient-original > div:last-child,
-:root[data-yy-theme='classic'] .yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading .yy-reactbits-gradient-original > div:last-child {
-  filter:
-    drop-shadow(0 0 1rem rgba(110, 255, 184, 0.28))
-    drop-shadow(0 0 1.15rem rgba(134, 118, 216, 0.1)) !important;
-}
-
-:root[data-yy-theme='classic'] .yy-gradient-signal .yy-react-gradient-text-inner,
-:root[data-yy-theme='classic'] .yy-gradient-ongoing .yy-react-gradient-text-inner {
-  filter: drop-shadow(0 0 0.62rem rgba(107, 238, 177, 0.2)) !important;
-}
-
-:root[data-yy-theme='classic'] .panel-card,
-:root[data-yy-theme='classic'] .yy-panel-card,
-:root[data-yy-theme='classic'] .yy-table-shell,
-:root[data-yy-theme='classic'] .yy-form-section,
-:root[data-yy-theme='classic'] .yy-modal-shell,
-:root[data-yy-theme='classic'] .yy-drawer-body,
-:root[data-yy-theme='classic'] .yy-confirm-panel,
-:root[data-yy-theme='classic'] .game-index-card,
-:root[data-yy-theme='classic'] .recent-game-card,
-:root[data-yy-theme='classic'] .post-preview,
-:root[data-yy-theme='classic'] .admin-panel,
-:root[data-yy-theme='classic'] .metric-tile,
-:root[data-yy-theme='classic'] .state-card,
-:root[data-yy-theme='classic'] .challenge-card,
-:root[data-yy-theme='classic'] .challenge-drawer-draft {
-  border-color: var(--yy-line) !important;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.058), rgba(255, 255, 255, 0.018)),
-    var(--yy-surface-1) !important;
-  backdrop-filter: blur(14px) !important;
-  -webkit-backdrop-filter: blur(14px) !important;
-  box-shadow:
-    0 1.25rem 3.6rem rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
-  filter: none !important;
-}
-
-:root[data-yy-theme='classic'] .panel-card::before,
-:root[data-yy-theme='classic'] .yy-panel-card::before,
-:root[data-yy-theme='classic'] .game-index-card::before,
-:root[data-yy-theme='classic'] .recent-game-card::before,
-:root[data-yy-theme='classic'] .post-preview::before,
-:root[data-yy-theme='classic'] .admin-panel::before,
-:root[data-yy-theme='classic'] .metric-tile::before,
-:root[data-yy-theme='classic'] .state-card::before,
-:root[data-yy-theme='classic'] .challenge-card::before,
-:root[data-yy-theme='classic'] .challenge-drawer-draft::before {
-  background:
-    var(--yy-hex-flow),
-    radial-gradient(ellipse at 50% 50%, rgba(107, 238, 177, 0.2), transparent 62%) !important;
-  background-size:
-    0.92rem 0.8rem,
-    auto !important;
-  filter: none !important;
-  mix-blend-mode: normal !important;
-  opacity: 0.3 !important;
-  animation: inherit !important;
-}
-
-:root[data-yy-theme='classic'] .panel-card::after,
-:root[data-yy-theme='classic'] .yy-panel-card::after,
-:root[data-yy-theme='classic'] .game-index-card::after,
-:root[data-yy-theme='classic'] .recent-game-card::after,
-:root[data-yy-theme='classic'] .post-preview::after,
-:root[data-yy-theme='classic'] .admin-panel::after,
-:root[data-yy-theme='classic'] .metric-tile::after,
-:root[data-yy-theme='classic'] .state-card::after,
-:root[data-yy-theme='classic'] .challenge-card::after,
-:root[data-yy-theme='classic'] .challenge-drawer-draft::after {
-  background:
-    linear-gradient(116deg, transparent 18%, rgba(107, 238, 177, 0.2) 42%, transparent 67%),
-    radial-gradient(ellipse at 50% 50%, rgba(107, 238, 177, 0.16), transparent 62%) !important;
-  filter: none !important;
-  opacity: 0 !important;
-  animation: inherit !important;
-}
-
-:root[data-yy-theme='classic'] .yy-hex-field.yy-color-bends-field,
-:root[data-yy-theme='classic'] .hex-field.yy-color-bends-field {
-  opacity: 0.72 !important;
-  background: var(--yy-hex-flow) !important;
-  background-size: 0.92rem 0.8rem !important;
-  filter: none !important;
-  mix-blend-mode: normal !important;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.66), transparent 90%) !important;
-}
-
-:root[data-yy-theme='classic'] .game-index-card.game-event-row.panel-card,
-:root[data-yy-theme='classic'] .yy-home-event-list .game-index-card.game-event-row.panel-card,
-:root[data-yy-theme='classic'] .yy-game-event-list .game-index-card.game-event-row.panel-card {
-  border-color: rgba(107, 238, 177, 0.16) !important;
-  background:
-    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.1), transparent 38%),
-    radial-gradient(ellipse at 82% 88%, rgba(245, 245, 247, 0.045), transparent 44%),
-    rgba(15, 18, 18, 0.84) !important;
-  backdrop-filter: blur(0.86rem) !important;
-  -webkit-backdrop-filter: blur(0.86rem) !important;
-}
-
-:root[data-yy-theme='classic'] .game-index-card.game-event-row.panel-card:hover,
-:root[data-yy-theme='classic'] .yy-home-event-list .game-index-card.game-event-row.panel-card:hover,
-:root[data-yy-theme='classic'] .yy-game-event-list .game-index-card.game-event-row.panel-card:hover {
-  border-color: var(--yy-hex-border-hot) !important;
-  box-shadow:
-    inset 0 0 0 1px var(--yy-hex-border-hot),
-    inset 0 0 0 2px rgba(107, 238, 177, 0.08),
-    0 0 2.2rem rgba(107, 238, 177, 0.18),
-    0 1.2rem 3rem rgba(0, 0, 0, 0.34) !important;
-}
-
-:root[data-yy-theme='classic'] .yy-admin-shell .mantine-Badge-label,
-:root[data-yy-theme='classic'] .yy-admin-shell .yy-status-pill .yy-status-text {
-  background-image: linear-gradient(105deg, #f8fff9 0%, #7ef2bd 38%, #d9fff0 66%, #8d82d8 100%) !important;
-  filter: drop-shadow(0 0 0.55rem rgba(110, 255, 184, 0.18)) !important;
-}
-
 /* Card material cleanup.
    Cards should read as glass surfaces, not particle/noise panels. This final
    pass removes the dotted honeycomb/noise layers from shared cards and turns
@@ -6181,16 +5999,16 @@ tr.yy-bento-tone-active td {
 .yy-theory-question-card,
 .yy-theory-side-panel,
 .yy-theory-scoreboard {
-  border-color: rgba(221, 229, 223, 0.14) !important;
+  border-color: rgba(107, 238, 177, 0.14) !important;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.018) 46%, rgba(185, 173, 209, 0.028)),
-    rgba(8, 11, 10, 0.46) !important;
-  backdrop-filter: blur(1.45rem) saturate(1.14) brightness(0.96) !important;
-  -webkit-backdrop-filter: blur(1.45rem) saturate(1.14) brightness(0.96) !important;
+    linear-gradient(135deg, rgba(255, 255, 255, 0.086), rgba(255, 255, 255, 0.022) 44%, rgba(107, 238, 177, 0.03)),
+    rgba(5, 12, 10, 0.48) !important;
+  backdrop-filter: blur(1.65rem) saturate(1.22) brightness(1.02) !important;
+  -webkit-backdrop-filter: blur(1.65rem) saturate(1.22) brightness(1.02) !important;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.038),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    0 1rem 2.8rem rgba(0, 0, 0, 0.34) !important;
+    inset 0 0 0 1px rgba(255, 255, 255, 0.046),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1rem 2.8rem rgba(0, 0, 0, 0.35) !important;
 }
 
 .panel-card::before,
@@ -6273,15 +6091,15 @@ tr.yy-bento-tone-active td {
 .yy-magic-bento-card:hover,
 .yy-team-switch-card:hover,
 .yy-team-switch-card.is-active {
-  border-color: rgba(167, 199, 160, 0.26) !important;
+  border-color: rgba(107, 238, 177, 0.3) !important;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.088), rgba(255, 255, 255, 0.024) 46%, rgba(167, 199, 160, 0.04)),
-    rgba(8, 12, 10, 0.52) !important;
+    linear-gradient(135deg, rgba(255, 255, 255, 0.105), rgba(255, 255, 255, 0.028) 46%, rgba(107, 238, 177, 0.055)),
+    rgba(5, 13, 10, 0.56) !important;
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.046),
     inset 0 1px 0 rgba(255, 255, 255, 0.12),
     0 1.18rem 3.05rem rgba(0, 0, 0, 0.38),
-    0 0 1.6rem rgba(167, 199, 160, 0.08) !important;
+    0 0 1.6rem rgba(107, 238, 177, 0.1) !important;
 }
 
 /* Final semantic badge palette.
@@ -6383,4 +6201,220 @@ tr.yy-bento-tone-active td {
 .yy-status-pill[data-semantic='not-found'] .yy-status-text {
   background-image: linear-gradient(105deg, #ffffff 0%, #dde5df 36%, #8c9b95 64%, #f7faf8 100%) !important;
   filter: drop-shadow(0 0 0.42rem rgba(221, 229, 223, 0.14)) !important;
+}
+
+/* Single-theme final pass: no visual-theme switch, no noisy card skins. */
+.admin-tab-card,
+.panel-card,
+.yy-panel-card,
+.yy-table-shell,
+.yy-form-section,
+.yy-modal-shell,
+.yy-modal-body,
+.yy-drawer-body,
+.yy-confirm-panel,
+.game-index-card,
+.recent-game-card,
+.post-preview,
+.admin-panel,
+.metric-tile,
+.state-card,
+.challenge-card,
+.challenge-drawer-draft,
+.yy-magic-bento-card,
+.yy-team-switch-card,
+.yy-pentest-node-card,
+.yy-pentest-blueprint-card,
+.yy-pentest-task-card,
+.yy-monitor-event-card,
+.yy-score-timeline-panel,
+.yy-game-detail-emblem,
+.yy-team-hero-stats > div,
+.yy-pentest-player-header,
+.yy-pentest-network-section,
+.yy-theory-header,
+.yy-theory-nav-panel,
+.yy-theory-question-card,
+.yy-theory-side-panel,
+.yy-theory-scoreboard {
+  border-color: rgba(107, 238, 177, 0.145) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.024) 44%, rgba(107, 238, 177, 0.034)),
+    rgba(4, 10, 8, 0.5) !important;
+  backdrop-filter: blur(1.65rem) saturate(1.24) brightness(1.02) !important;
+  -webkit-backdrop-filter: blur(1.65rem) saturate(1.24) brightness(1.02) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.046),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1rem 2.8rem rgba(0, 0, 0, 0.34) !important;
+}
+
+.admin-tab-card::before,
+.admin-tab-card::after,
+.panel-card::before,
+.panel-card::after,
+.yy-panel-card::before,
+.yy-panel-card::after,
+.yy-table-shell::before,
+.yy-table-shell::after,
+.yy-form-section::before,
+.yy-form-section::after,
+.yy-modal-shell::before,
+.yy-modal-shell::after,
+.yy-modal-body::before,
+.yy-modal-body::after,
+.yy-drawer-body::before,
+.yy-drawer-body::after,
+.yy-confirm-panel::before,
+.yy-confirm-panel::after,
+.game-index-card::before,
+.game-index-card::after,
+.recent-game-card::before,
+.recent-game-card::after,
+.post-preview::before,
+.post-preview::after,
+.admin-panel::before,
+.admin-panel::after,
+.metric-tile::before,
+.metric-tile::after,
+.state-card::before,
+.state-card::after,
+.challenge-card::before,
+.challenge-card::after,
+.challenge-drawer-draft::before,
+.challenge-drawer-draft::after,
+.yy-magic-bento-card::before,
+.yy-magic-bento-card::after,
+.yy-team-switch-card::before,
+.yy-team-switch-card::after,
+.yy-pentest-node-card::before,
+.yy-pentest-node-card::after,
+.yy-pentest-blueprint-card::before,
+.yy-pentest-blueprint-card::after,
+.yy-pentest-task-card::before,
+.yy-pentest-task-card::after {
+  background: none !important;
+  background-image: none !important;
+  mask-image: none !important;
+  -webkit-mask-image: none !important;
+  filter: none !important;
+  mix-blend-mode: normal !important;
+  opacity: 0 !important;
+  animation: none !important;
+}
+
+.admin-tab-card > .yy-hex-field,
+.admin-tab-card > .hex-field,
+.panel-card > .yy-hex-field,
+.panel-card > .hex-field,
+.yy-panel-card > .yy-hex-field,
+.yy-panel-card > .hex-field,
+.game-index-card > .yy-hex-field,
+.game-index-card > .hex-field,
+.recent-game-card > .yy-hex-field,
+.recent-game-card > .hex-field,
+.post-preview > .yy-hex-field,
+.post-preview > .hex-field,
+.challenge-card > .yy-hex-field,
+.challenge-card > .hex-field,
+.admin-panel > .yy-hex-field,
+.admin-panel > .hex-field,
+.state-card > .yy-hex-field,
+.state-card > .hex-field {
+  display: none !important;
+}
+
+.admin-tab-card:hover,
+.admin-tab-card.is-active,
+.panel-card:hover,
+.panel-card.is-active,
+.game-index-card:hover,
+.recent-game-card:hover,
+.post-preview:hover,
+.challenge-card:hover,
+.challenge-card.is-active,
+.yy-magic-bento-card:hover,
+.yy-team-switch-card:hover,
+.yy-team-switch-card.is-active {
+  border-color: rgba(107, 238, 177, 0.32) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.112), rgba(255, 255, 255, 0.03) 44%, rgba(107, 238, 177, 0.058)),
+    rgba(4, 12, 9, 0.58) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.052),
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    0 1.15rem 3rem rgba(0, 0, 0, 0.38),
+    0 0 1.55rem rgba(107, 238, 177, 0.12) !important;
+}
+
+.yy-admin-tab-grid .admin-tab-card {
+  min-height: 4.75rem !important;
+  padding: 0.82rem 0.9rem !important;
+}
+
+.yy-admin-tab-grid .admin-tab-card strong {
+  font-size: clamp(1.04rem, 1.08vw, 1.2rem) !important;
+  line-height: 1.12 !important;
+}
+
+.yy-admin-tab-grid .admin-tab-card svg {
+  width: 1.22rem !important;
+  height: 1.22rem !important;
+}
+
+.yy-root-reactbits-bg.yy-game-bends-bg {
+  background:
+    radial-gradient(ellipse at 16% 4%, rgba(185, 173, 209, 0.12), transparent 42%),
+    radial-gradient(ellipse at 78% 82%, rgba(107, 238, 177, 0.15), transparent 48%),
+    linear-gradient(180deg, #04100d 0%, #020605 58%, #000 100%) !important;
+}
+
+.yy-root-reactbits-bg .yy-game-bends-bg__bends {
+  opacity: 0.93 !important;
+  filter: saturate(1.08) brightness(1.02) contrast(1.04) !important;
+}
+
+.yy-root-reactbits-bg .yy-game-bends-bg__dots {
+  opacity: 0.76 !important;
+  filter: saturate(1.06) brightness(0.96) !important;
+}
+
+.yy-instance-panel .yy-status-pill {
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  color: inherit !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.yy-instance-panel .yy-status-signal,
+.yy-instance-panel .yy-status-tail,
+.yy-instance-panel .yy-status-pill > svg,
+.yy-instance-panel .heartbeat-icon,
+.yy-instance-loader.route-loader .heartbeat-icon {
+  display: none !important;
+}
+
+.yy-instance-panel .yy-status-text,
+.yy-instance-loader.route-loader strong,
+.yy-instance-loader.route-loader span:first-of-type {
+  background-image: linear-gradient(105deg, #ffffff 0%, #9dffd5 32%, #42f49d 58%, #b9add1 88%, #ffffff 100%) !important;
+  background-size: 220% 100% !important;
+  background-clip: text !important;
+  -webkit-background-clip: text !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  filter: drop-shadow(0 0 0.55rem rgba(107, 238, 177, 0.22)) !important;
+}
+
+.yy-instance-loader.route-loader {
+  border-color: rgba(107, 238, 177, 0.14) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.018)),
+    rgba(4, 10, 8, 0.42) !important;
+  backdrop-filter: blur(1rem) saturate(1.18) !important;
+  -webkit-backdrop-filter: blur(1rem) saturate(1.18) !important;
 }

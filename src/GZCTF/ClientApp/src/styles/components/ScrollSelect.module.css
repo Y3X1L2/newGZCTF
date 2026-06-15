@@ -9,17 +9,17 @@
   border: 1px solid transparent;
 
   &:hover {
-    border-color: rgba(140, 172, 133, 0.16);
+    border-color: rgba(107, 238, 177, 0.16);
     background:
-      radial-gradient(ellipse at 16% 50%, rgba(140, 172, 133, 0.07), transparent 44%), rgba(255, 255, 255, 0.035);
+      radial-gradient(ellipse at 16% 50%, rgba(107, 238, 177, 0.07), transparent 44%), rgba(255, 255, 255, 0.035);
   }
 
   &[data-active] {
     color: var(--yy-green);
-    border-color: rgba(140, 172, 133, 0.28);
+    border-color: rgba(107, 238, 177, 0.28);
     background:
-      radial-gradient(ellipse at 16% 50%, rgba(140, 172, 133, 0.12), transparent 44%), var(--yy-hex-flow),
-      rgba(140, 172, 133, 0.05);
+      radial-gradient(ellipse at 16% 50%, rgba(107, 238, 177, 0.12), transparent 44%), var(--yy-hex-flow),
+      rgba(107, 238, 177, 0.05);
     background-size:
       auto,
       1.08rem 0.94rem,

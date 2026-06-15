@@ -2,7 +2,7 @@
   font-weight: 700;
   color: var(--yy-text);
   border: 1px solid var(--yy-line);
-  background: radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.08), transparent 42%), rgba(8, 9, 10, 0.94);
+  background: radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.08), transparent 42%), rgba(8, 9, 10, 0.94);
   box-shadow: 0 1rem 2.6rem rgba(0, 0, 0, 0.34);
   backdrop-filter: blur(0.72rem);
 }

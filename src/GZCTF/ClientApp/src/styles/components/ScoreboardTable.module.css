@@ -21,7 +21,7 @@
 
   & tbody tr:hover td {
     background:
-      radial-gradient(ellipse at 18% 50%, rgba(140, 172, 133, 0.086), transparent 36%), rgba(255, 255, 255, 0.06);
+      radial-gradient(ellipse at 18% 50%, rgba(107, 238, 177, 0.086), transparent 36%), rgba(255, 255, 255, 0.06);
   }
 }
 
@@ -40,7 +40,7 @@
   font-weight: bold;
   color: var(--yy-text);
   background:
-    radial-gradient(ellipse at 18% 0%, rgba(140, 172, 133, 0.08), transparent 42%), rgba(255, 255, 255, 0.045);
+    radial-gradient(ellipse at 18% 0%, rgba(107, 238, 177, 0.08), transparent 42%), rgba(255, 255, 255, 0.045);
 }
 
 .mono {
@@ -73,17 +73,17 @@
   z-index: 20;
   border: 1px solid var(--yy-line);
   border-radius: var(--yy-radius);
-  background: radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.12), transparent 42%), rgba(15, 18, 18, 0.9);
+  background: radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.12), transparent 42%), rgba(15, 18, 18, 0.9);
   backdrop-filter: blur(0.7rem);
 }
 
 .bloodLegendItem {
-  --blood-core: linear-gradient(145deg, rgba(226, 242, 236, 0.55), rgba(140, 172, 133, 0.22));
+  --blood-core: linear-gradient(145deg, rgba(226, 242, 236, 0.55), rgba(107, 238, 177, 0.22));
   --blood-line: rgba(213, 233, 225, 0.55);
-  --blood-glow: rgba(140, 172, 133, 0.12);
+  --blood-glow: rgba(107, 238, 177, 0.12);
   min-height: 1.9rem;
   padding: 0.12rem 0.42rem 0.12rem 0.14rem;
-  border: 1px solid rgba(140, 172, 133, 0.1);
+  border: 1px solid rgba(107, 238, 177, 0.1);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.026);
 }
@@ -95,13 +95,13 @@
 }
 
 .bloodLegendItem[data-tier='2'] {
-  --blood-core: linear-gradient(145deg, rgba(226, 241, 236, 0.96), rgba(140, 172, 133, 0.34));
+  --blood-core: linear-gradient(145deg, rgba(226, 241, 236, 0.96), rgba(107, 238, 177, 0.34));
   --blood-line: rgba(228, 244, 238, 0.76);
   --blood-glow: rgba(207, 235, 224, 0.2);
 }
 
 .bloodLegendItem[data-tier='3'] {
-  --blood-core: linear-gradient(145deg, rgba(220, 161, 91, 0.94), rgba(140, 172, 133, 0.28));
+  --blood-core: linear-gradient(145deg, rgba(220, 161, 91, 0.94), rgba(107, 238, 177, 0.28));
   --blood-line: rgba(233, 182, 112, 0.78);
   --blood-glow: rgba(220, 161, 91, 0.2);
 }
@@ -172,7 +172,7 @@
   &:hover {
     cursor: pointer;
     background:
-      radial-gradient(ellipse at 16% 50%, rgba(140, 172, 133, 0.075), transparent 40%), rgba(255, 255, 255, 0.035);
+      radial-gradient(ellipse at 16% 50%, rgba(107, 238, 177, 0.075), transparent 40%), rgba(255, 255, 255, 0.035);
   }
 }
 

@@ -7,7 +7,7 @@
   padding: calc(var(--mantine-spacing-xl) * 2.4) 0 calc(var(--mantine-spacing-xl) * 1.6);
 
   background:
-    radial-gradient(ellipse at 18% 18%, rgba(140, 172, 133, 0.11), transparent 30rem),
+    radial-gradient(ellipse at 18% 18%, rgba(107, 238, 177, 0.11), transparent 30rem),
     linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.012)), rgba(0, 0, 0, 0.2);
   border-bottom: 1px solid var(--yy-line);
   overflow: hidden;
@@ -18,7 +18,7 @@
     inset: 0;
     pointer-events: none;
     background:
-      radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.14), transparent 30rem),
+      radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.14), transparent 30rem),
       radial-gradient(ellipse at 88% 16%, rgba(245, 245, 247, 0.045), transparent 28rem), var(--yy-hex-flow);
     background-size:
       auto,
@@ -54,7 +54,7 @@
     position: absolute;
     inset: auto 0 0 0;
     height: 2px;
-    background: linear-gradient(90deg, transparent, rgba(140, 172, 133, 0.5), rgba(245, 245, 247, 0.18), transparent);
+    background: linear-gradient(90deg, transparent, rgba(107, 238, 177, 0.5), rgba(245, 245, 247, 0.18), transparent);
     opacity: 0.8;
   }
 
@@ -101,7 +101,7 @@
   width: 40vw;
   border: 1px solid var(--yy-line);
   background:
-    radial-gradient(ellipse at 50% 35%, rgba(140, 172, 133, 0.14), transparent 50%), var(--yy-hex-flow),
+    radial-gradient(ellipse at 50% 35%, rgba(107, 238, 177, 0.14), transparent 50%), var(--yy-hex-flow),
     rgba(255, 255, 255, 0.025);
   background-size:
     auto,
@@ -115,7 +115,7 @@
     inset: 0;
     pointer-events: none;
     background:
-      radial-gradient(ellipse at 20% 18%, rgba(140, 172, 133, 0.18), transparent 36%),
+      radial-gradient(ellipse at 20% 18%, rgba(107, 238, 177, 0.18), transparent 36%),
       linear-gradient(180deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.5)), var(--yy-hex-flow);
     background-size:
       auto,

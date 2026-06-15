@@ -71,17 +71,17 @@ export function YinyuGradientText<T extends ElementType = 'span'>({
 }
 
 const gradientPalettes: Record<GradientTone, string[]> = {
-  brand: ['#F9FCF8', '#DDE5DF', '#A7C7A0', '#B9ADD1', '#FFFFFF'],
-  signal: ['#F7FFF9', '#A7C7A0', '#8CAC85', '#DDE5DF'],
-  ongoing: ['#F7FFF8', '#A7C7A0', '#8CAC85', '#E6EFE8'],
-  coming: ['#FFF9DE', '#D8C48A', '#A7C7A0', '#FFFFFF'],
+  brand: ['#FFFFFF', '#E8FFF4', '#78F8BE', '#B9ADD1', '#FFFFFF'],
+  signal: ['#F7FFF9', '#9DFFD5', '#42F49D', '#E4FFF2'],
+  ongoing: ['#F7FFF8', '#9DFFD5', '#42F49D', '#E8FFF4'],
+  coming: ['#FFF9DE', '#D8C48A', '#78F8BE', '#FFFFFF'],
   ended: ['#F4F7F5', '#DDE5DF', '#73837D', '#FFFFFF'],
   danger: ['#FFF1ED', '#E7A190', '#C8645D', '#F6DED8'],
   silver: ['#FFFFFF', '#DDE5DF', '#73837D', '#B9ADD1', '#F7FAF8'],
-  single: ['#F3FBF8', '#A7C7A0', '#DDE5DF', '#FFFFFF'],
+  single: ['#F3FBF8', '#78F8BE', '#DDE5DF', '#FFFFFF'],
   multiple: ['#F7F4FF', '#B9ADD1', '#DDE5DF', '#FFFFFF'],
-  judge: ['#FFF8DA', '#D8C48A', '#A7C7A0', '#FFFFFF'],
-  score: ['#F4FFF7', '#A7C7A0', '#8CAC85', '#FFFFFF'],
+  judge: ['#FFF8DA', '#D8C48A', '#78F8BE', '#FFFFFF'],
+  score: ['#F4FFF7', '#9DFFD5', '#42F49D', '#FFFFFF'],
 }
 
 export function YinyuStatusText({
@@ -668,7 +668,7 @@ export function YinyuColorBends({
   style,
   rotation = 90,
   speed = 0.2,
-  color = '#8CAC85',
+  color = '#6BEEB1',
   colors,
   transparent = true,
   autoRotate = 0,
@@ -822,7 +822,7 @@ export function YinyuColorBends({
     const palette =
       colors && colors.length > 0
         ? colors
-        : [color, '#DDE5DF', '#121512', '#9E90BB', '#A7C7A0'].filter(Boolean)
+        : [color, '#DDE5DF', '#121512', '#9E90BB', '#78F8BE'].filter(Boolean)
     const colorVectors = palette.slice(0, MAX_COLOR_BENDS_COLORS).map((hex) => srgbVector(hex))
     for (let i = 0; i < MAX_COLOR_BENDS_COLORS; i += 1) {
       const vec = (material.uniforms.uColors.value as THREE.Vector3[])[i]
@@ -891,7 +891,7 @@ export const YinyuDotField = memo(function YinyuDotField({
   glowRadius = 160,
   sparkle = false,
   waveAmplitude = 0,
-  gradientFrom = 'rgba(140, 172, 133, 0.26)',
+  gradientFrom = 'rgba(107, 238, 177, 0.26)',
   gradientTo = 'rgba(221, 229, 223, 0.18)',
   glowColor = 'rgba(158, 144, 187, 0.28)',
   className,
@@ -1148,7 +1148,7 @@ export function YinyuGameBendsBackground({ className }: { className?: string }) 
     <div className={cx('yy-game-bends-bg', className)} aria-hidden="true">
       <ReactBitsColorBends
         className="yy-game-bends-bg__bends"
-        colors={['#8CAC85', '#9E90BB', '#DDE5DF', '#73837D', '#0B0F0D']}
+        colors={['#6BEEB1', '#B9ADD1', '#42F49D', '#8E7BE6', '#06100D']}
         speed={0.2}
         frequency={1}
         noise={0.15}
@@ -1173,9 +1173,9 @@ export function YinyuGameBendsBackground({ className }: { className?: string }) 
         glowRadius={160}
         sparkle={false}
         waveAmplitude={0}
-        gradientFrom="rgba(140, 172, 133, 0.24)"
-        gradientTo="rgba(221, 229, 223, 0.16)"
-        glowColor="rgba(158, 144, 187, 0.22)"
+        gradientFrom="rgba(185, 173, 209, 0.26)"
+        gradientTo="rgba(185, 173, 209, 0.14)"
+        glowColor="rgba(107, 238, 177, 0.24)"
       />
     </div>
   )
