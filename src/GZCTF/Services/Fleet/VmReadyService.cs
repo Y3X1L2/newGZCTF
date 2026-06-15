@@ -76,6 +76,8 @@ public class VmReadyService : BackgroundService
                 {
                     _logger.LogWarning("VM {VmName} timed out waiting for IP (created {Ago} ago)",
                         vm.VmName, DateTimeOffset.UtcNow - vm.CreatedAt);
+                    var fleetVm = scope.ServiceProvider.GetRequiredService<FleetVmService>();
+                    await fleetVm.DestroyVmAsync(vm, token);
                     vm.Status = VmInstanceStatus.Error;
                     await dbContext.SaveChangesAsync(token);
                     continue;

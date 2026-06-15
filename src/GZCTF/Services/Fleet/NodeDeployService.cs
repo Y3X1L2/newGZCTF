@@ -43,7 +43,8 @@ public class NodeDeployService
         node.HostAddress = hostAddress;
         node.AuthToken = NullIfWhiteSpace(node.AuthToken)
                          ?? Convert.ToBase64String(Guid.NewGuid().ToByteArray());
-        node.Capabilities = NodeCapability.None;
+        if (createdNode)
+            node.Capabilities = NodeCapability.None;
         node.Status = NodeStatus.Unknown;
         node.LastHeartbeat = null;
 
@@ -66,7 +67,7 @@ public class NodeDeployService
             await Task.Run(() => ssh.Connect(), token);
             sudo = DetectPrivilegePrefix(ssh);
 
-            RunChecked(ssh, BuildBootstrapScript(), "Bootstrap node dependencies");
+            RunChecked(ssh, BuildBootstrapScript(GetInternalDockerRegistry()), "Bootstrap node dependencies");
 
             var caps = DetectCapabilities(ssh, sudo);
 
@@ -81,8 +82,11 @@ public class NodeDeployService
                 };
             }
 
+            await _context.WorkerNodes
+                .Where(n => n.Id == node.Id)
+                .ExecuteUpdateAsync(updates => updates
+                    .SetProperty(n => n.Capabilities, caps), token);
             node.Capabilities = caps;
-            await _context.SaveChangesAsync(token);
 
             var serverUrl = ResolveServerUrl(_config, serverUrlOverride);
             var dotnetRoot = DetectDotnetRoot(ssh);
@@ -214,8 +218,26 @@ public class NodeDeployService
                && host != "[::]";
     }
 
-    internal static string BuildBootstrapScript() => """
+    internal string? GetInternalDockerRegistry()
+    {
+        var address = _config["DockerRegistrySettings:Address"];
+        if (string.IsNullOrWhiteSpace(address))
+            return null;
+
+        var value = address.Trim().TrimEnd('/');
+        if (value.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            value = value["http://".Length..];
+        else if (value.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            value = value["https://".Length..];
+
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    internal static string BuildBootstrapScript(string? internalDockerRegistry = null) =>
+        $$"""
 set -euo pipefail
+
+INTERNAL_DOCKER_REGISTRY={{BashQuote(internalDockerRegistry ?? string.Empty)}}
 
 need_cmd() {
   command -v "$1" >/dev/null 2>&1
@@ -282,41 +304,78 @@ install_apt_pkg_fallback() {
 
 install_base() {
   case "$pm" in
-    apt) install_pkgs ca-certificates curl wget gnupg lsb-release iproute2 procps tar gzip coreutils ;;
-    dnf|yum) install_pkgs ca-certificates curl wget gnupg2 iproute procps-ng tar gzip coreutils ;;
-    zypper) install_pkgs ca-certificates curl wget gpg2 iproute2 procps tar gzip coreutils ;;
-    pacman) install_pkgs ca-certificates curl wget gnupg iproute2 procps-ng tar gzip coreutils ;;
+    apt) install_pkgs ca-certificates curl wget gnupg lsb-release iproute2 procps tar gzip coreutils python3 ;;
+    dnf|yum) install_pkgs ca-certificates curl wget gnupg2 iproute procps-ng tar gzip coreutils python3 ;;
+    zypper) install_pkgs ca-certificates curl wget gpg2 iproute2 procps tar gzip coreutils python3 ;;
+    pacman) install_pkgs ca-certificates curl wget gnupg iproute2 procps-ng tar gzip coreutils python ;;
   esac
 }
 
+install_docker_from_get_script() {
+  curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+  run_sudo sh /tmp/get-docker.sh
+  rm -f /tmp/get-docker.sh
+}
+
+install_docker_from_official_apt() {
+  . /etc/os-release 2>/dev/null || true
+  distro="${ID:-ubuntu}"
+  codename="${VERSION_CODENAME:-}"
+
+  if [ -z "$codename" ] && need_cmd lsb_release; then
+    codename="$(lsb_release -cs)"
+  fi
+
+  case "$distro" in
+    ubuntu|debian) ;;
+    *) return 1 ;;
+  esac
+
+  [ -n "$codename" ] || return 1
+
+  install_pkgs ca-certificates curl gnupg
+  run_sudo install -m 0755 -d /etc/apt/keyrings
+  curl -fsSL "https://download.docker.com/linux/${distro}/gpg" -o /tmp/docker.asc
+  run_sudo install -m 0644 /tmp/docker.asc /etc/apt/keyrings/docker.asc
+  rm -f /tmp/docker.asc
+  arch="$(dpkg --print-architecture)"
+  echo "deb [arch=${arch} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/${distro} ${codename} stable" | \
+    run_sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+  run_sudo apt-get update -y
+  run_sudo apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io
+  try_install_pkgs docker-buildx-plugin docker-compose-plugin docker-model-plugin || true
+}
+
 install_docker() {
-  if need_cmd docker && docker info >/dev/null 2>&1; then
+  if need_cmd docker && run_sudo docker info >/dev/null 2>&1; then
     return
   fi
 
   case "$pm" in
     apt)
       if ! need_cmd docker; then
-        install_pkgs docker.io docker-compose-plugin || {
-          curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
-          run_sudo sh /tmp/get-docker.sh
-          rm -f /tmp/get-docker.sh
-        }
+        install_pkgs docker.io || install_docker_from_official_apt || install_docker_from_get_script
       fi
+      try_install_pkgs docker-compose-plugin docker-buildx-plugin docker-model-plugin || true
       ;;
     dnf|yum)
-      try_install_pkgs docker docker-cli containerd docker-compose-plugin || \
-        try_install_pkgs moby-engine docker-compose-plugin || {
-          curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
-          run_sudo sh /tmp/get-docker.sh
-          rm -f /tmp/get-docker.sh
-        }
+      if ! need_cmd docker; then
+        try_install_pkgs docker docker-cli containerd || \
+          try_install_pkgs moby-engine || install_docker_from_get_script
+      fi
+      try_install_pkgs docker-compose-plugin docker-buildx-plugin docker-model-plugin || true
       ;;
     zypper)
-      install_pkgs docker docker-compose
+      if ! need_cmd docker; then
+        install_pkgs docker
+      fi
+      try_install_pkgs docker-compose || true
       ;;
     pacman)
-      install_pkgs docker docker-compose
+      if ! need_cmd docker; then
+        install_pkgs docker
+      fi
+      try_install_pkgs docker-compose || true
       ;;
   esac
 
@@ -327,8 +386,69 @@ install_docker() {
     run_sudo service docker start >/dev/null 2>&1 || true
   fi
 
-  if ! docker info >/dev/null 2>&1; then
+  if ! run_sudo docker info >/dev/null 2>&1; then
     echo "Docker installed but daemon is not healthy." >&2
+    exit 3
+  fi
+}
+
+configure_docker_registry() {
+  registry="${INTERNAL_DOCKER_REGISTRY:-}"
+  if [ -z "$registry" ] || ! need_cmd docker; then
+    return
+  fi
+
+  run_sudo mkdir -p /etc/docker
+  if [ -f /etc/docker/daemon.json ]; then
+    run_sudo cp -a /etc/docker/daemon.json "/etc/docker/daemon.json.bak.$(date +%Y%m%d%H%M%S)" || true
+  fi
+
+  tmp="/tmp/gzctf-docker-daemon-$$.json"
+  if need_cmd python3; then
+    run_sudo python3 - "$registry" <<'PY' > "$tmp"
+import json
+import os
+import sys
+
+path = "/etc/docker/daemon.json"
+registry = sys.argv[1].strip()
+data = {}
+
+try:
+    if os.path.exists(path) and os.path.getsize(path) > 0:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+except Exception:
+    data = {}
+
+registries = data.get("insecure-registries")
+if not isinstance(registries, list):
+    registries = []
+if registry and registry not in registries:
+    registries.append(registry)
+data["insecure-registries"] = registries
+
+print(json.dumps(data, indent=2, ensure_ascii=False))
+PY
+  else
+    cat > "$tmp" <<EOF
+{
+  "insecure-registries": ["$registry"]
+}
+EOF
+  fi
+
+  run_sudo install -m 0644 "$tmp" /etc/docker/daemon.json
+  rm -f "$tmp"
+
+  if need_cmd systemctl; then
+    run_sudo systemctl restart docker >/dev/null 2>&1 || true
+  elif need_cmd service; then
+    run_sudo service docker restart >/dev/null 2>&1 || true
+  fi
+
+  if ! run_sudo docker info >/dev/null 2>&1; then
+    echo "Docker daemon is not healthy after registry configuration." >&2
     exit 3
   fi
 }
@@ -403,10 +523,12 @@ install_dotnet_runtime() {
 
 install_base
 install_docker
+configure_docker_registry
 install_kvm
 install_dotnet_runtime
 
 echo "Docker: $(docker --version 2>/dev/null || echo unavailable)"
+echo "Docker registry: ${INTERNAL_DOCKER_REGISTRY:-not configured}"
 echo "Virsh: $(virsh --version 2>/dev/null || echo unavailable)"
 echo "Dotnet: $(dotnet --version 2>/dev/null || echo unavailable)"
 """;
@@ -416,7 +538,7 @@ echo "Dotnet: $(dotnet --version 2>/dev/null || echo unavailable)"
         var caps = NodeCapability.None;
 
         var dockerCheck = ssh.RunCommand($$"""
-bash -lc 'if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then echo DOCKER_OK; else echo NO_DOCKER; fi'
+bash -lc 'if command -v docker >/dev/null 2>&1 && {{sudo}} docker info >/dev/null 2>&1; then echo DOCKER_OK; else echo NO_DOCKER; fi'
 """);
         if (dockerCheck.Result.Contains("DOCKER_OK"))
             caps |= NodeCapability.Docker;
@@ -531,6 +653,7 @@ exit 1
             return null;
 
         return liveNode.Status == NodeStatus.Online
+               && liveNode.Capabilities != NodeCapability.None
                && liveNode.LastHeartbeat.HasValue
                && liveNode.LastHeartbeat.Value >= deployStartedAt
             ? liveNode

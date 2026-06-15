@@ -57,8 +57,11 @@ public class GameController(
     IParticipationRepository participationRepository,
     GamePhaseService gamePhaseService,
     IOptionsSnapshot<ContainerPolicy> containerPolicy,
+    IOptionsSnapshot<KvmSettings> kvmSettings,
     IStringLocalizer<Program> localizer) : ControllerBase
 {
+    const int MinimumWindowsVmMemoryMb = 1024;
+
     /// <summary>
     /// Get the recent games
     /// </summary>
@@ -1321,6 +1324,20 @@ public class GameController(
         // Route to VM if challenge uses Windows VM
         if (instance.Challenge.Environment == EnvironmentType.WindowsVM)
         {
+            var existingVm = await dbContext.VmInstances
+                .Where(v => v.ChallengeId == challengeId
+                            && v.UserId == context.User!.Id
+                            && v.Status != VmInstanceStatus.Destroyed
+                            && v.Status != VmInstanceStatus.Error)
+                .OrderByDescending(v => v.CreatedAt)
+                .FirstOrDefaultAsync(token);
+
+            if (existingVm is not null)
+                return Ok(new { status = existingVm.Status.ToString(), vmInstanceId = existingVm.Id });
+
+            var vmMemory = ResolveWindowsVmMemory(instance.Challenge.MemoryLimit);
+            var vmCpu = ResolveWindowsVmCpu(instance.Challenge.CPUCount);
+
             var vmInstance = new VmInstance
             {
                 ChallengeId = challengeId,
@@ -1340,7 +1357,7 @@ public class GameController(
                 : null;
             var templatePath = imageTemplate?.LocalFilePath;
             var result = await fleetVm.CreateVmAsync(vmInstance, instance.Challenge.ImageTemplateId, templatePath,
-                instance.Challenge.MemoryLimit, instance.Challenge.CPUCount, instance.FlagContext?.Flag, token);
+                vmMemory, vmCpu, instance.FlagContext?.Flag, token);
 
             if (result is null)
             {
@@ -1381,6 +1398,26 @@ public class GameController(
             _ => throw new UnreachableException()
         };
     }
+
+    int? ResolveWindowsVmMemory(int? memoryLimit)
+    {
+        var defaultMemory = kvmSettings.Value.DefaultVmMemoryMb > 0 ? kvmSettings.Value.DefaultVmMemoryMb : 2048;
+
+        if (memoryLimit is null)
+            return null;
+
+        if (memoryLimit < MinimumWindowsVmMemoryMb)
+        {
+            logger.LogWarning(
+                "Ignoring Windows VM memory limit {Memory}MB below minimum {Minimum}MB; using KVM default {Default}MB",
+                memoryLimit, MinimumWindowsVmMemoryMb, defaultMemory);
+            return null;
+        }
+
+        return memoryLimit;
+    }
+
+    static int? ResolveWindowsVmCpu(int? cpuCount) => cpuCount is >= 1 ? cpuCount : null;
 
     /// <summary>
     /// Extends container lifetime

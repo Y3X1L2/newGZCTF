@@ -1,7 +1,9 @@
 import {
+  Anchor,
   Alert,
   Badge,
   Button,
+  FileButton,
   Group,
   NumberInput,
   Select,
@@ -12,12 +14,23 @@ import {
   TextInput,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
+import {
+  mdiDatabasePlusOutline,
+  mdiFileUploadOutline,
+  mdiLinkVariantPlus,
+  mdiPaperclip,
+  mdiTrashCanOutline,
+} from '@mdi/js'
+import { Icon } from '@mdi/react'
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router'
 import { AdminPage } from '@Components/admin/AdminPage'
 import { AttachmentRemoteEditModal } from '@Components/admin/AttachmentRemoteEditModal'
 import { AttachmentUploadModal } from '@Components/admin/AttachmentUploadModal'
 import { YinyuPanel } from '@Components/yinyu/YinyuUI'
+import { HunamizeSize, showErrorMsg } from '@Utils/Shared'
+import api, { ChallengeType, FileType } from '@Api'
 
 interface ImageTemplate {
   id: number
@@ -55,6 +68,14 @@ interface ChallengeEditData {
   hints: string[]
   acceptedCount: number
   flags: { id: number; flag: string; orderIndex?: number; scoreMode?: string }[]
+  attachment?: ChallengeAttachment | null
+}
+
+interface ChallengeAttachment {
+  id?: number
+  type?: FileType | string
+  url?: string | null
+  fileSize?: number | null
 }
 
 const ENV_NONE = 'None'
@@ -92,6 +113,9 @@ export default function ChallengeEdit() {
   const [imageTemplates, setImageTemplates] = useState<ImageTemplate[]>([])
   const [uploadOpened, setUploadOpened] = useState(false)
   const [remoteOpened, setRemoteOpened] = useState(false)
+  const [attachmentSaving, setAttachmentSaving] = useState(false)
+  const [remoteAttachmentUrl, setRemoteAttachmentUrl] = useState('')
+  const { t } = useTranslation()
 
   const load = async () => {
     setLoading(true)
@@ -110,6 +134,7 @@ export default function ChallengeEdit() {
           imageTemplateId: c.imageTemplateId ?? null,
           flags: c.flags ?? [],
           hints: c.hints ?? [],
+          attachment: c.attachment ?? null,
           containerImage: c.containerImage ?? '',
           memoryLimit: c.memoryLimit ?? 64,
           cpuCount: c.cpuCount ?? 1,
@@ -149,7 +174,10 @@ export default function ChallengeEdit() {
   }, [gameId, challengeId])
 
   const dockerTemplates = useMemo(
-    () => imageTemplates.filter((template) => isReadyTemplate(template) && isDockerTemplate(template) && template.registryUrl),
+    () =>
+      imageTemplates.filter(
+        (template) => isReadyTemplate(template) && isDockerTemplate(template) && template.registryUrl
+      ),
     [imageTemplates]
   )
 
@@ -223,6 +251,75 @@ export default function ChallengeEdit() {
     }
   }
 
+  const refreshAttachment = async () => {
+    await load()
+  }
+
+  const attachmentUrl = challenge?.attachment?.url ?? null
+  const attachmentName = attachmentUrl ? decodeURIComponent(attachmentUrl.split('/').pop() ?? 'attachment') : null
+  const isRemoteAttachment = challenge?.attachment?.type === FileType.Remote
+
+  const handleUploadStaticAttachment = async (file: File | null) => {
+    if (!file || !gameId || !challengeId) return
+
+    setAttachmentSaving(true)
+    try {
+      const data = await api.assets.assetsUpload({ files: [file] })
+      const uploaded = data.data?.[0]
+      if (!uploaded?.hash) throw new Error('Attachment upload returned no file hash')
+
+      await api.edit.editUpdateAttachment(Number(gameId), Number(challengeId), {
+        attachmentType: FileType.Local,
+        fileHash: uploaded.hash,
+      })
+
+      notifications.show({ title: '附件已绑定', message: file.name, color: 'green' })
+      await refreshAttachment()
+    } catch (err) {
+      showErrorMsg(err, t)
+    } finally {
+      setAttachmentSaving(false)
+    }
+  }
+
+  const handleSaveRemoteAttachment = async () => {
+    if (!remoteAttachmentUrl.trim() || !gameId || !challengeId) return
+
+    setAttachmentSaving(true)
+    try {
+      await api.edit.editUpdateAttachment(Number(gameId), Number(challengeId), {
+        attachmentType: FileType.Remote,
+        remoteUrl: remoteAttachmentUrl.trim(),
+      })
+
+      notifications.show({ title: '远程附件已绑定', message: remoteAttachmentUrl.trim(), color: 'green' })
+      setRemoteAttachmentUrl('')
+      await refreshAttachment()
+    } catch (err) {
+      showErrorMsg(err, t)
+    } finally {
+      setAttachmentSaving(false)
+    }
+  }
+
+  const handleClearAttachment = async () => {
+    if (!gameId || !challengeId) return
+
+    setAttachmentSaving(true)
+    try {
+      await api.edit.editUpdateAttachment(Number(gameId), Number(challengeId), {
+        attachmentType: FileType.None,
+      })
+
+      notifications.show({ title: '附件已清除', message: '当前题目不再绑定附件', color: 'green' })
+      await refreshAttachment()
+    } catch (err) {
+      showErrorMsg(err, t)
+    } finally {
+      setAttachmentSaving(false)
+    }
+  }
+
   const handleToggle = async (enabled: boolean) => {
     if (!challenge) return
 
@@ -271,6 +368,8 @@ export default function ChallengeEdit() {
   const envType = challenge.environment ?? ENV_NONE
   const isContainer = envType === ENV_DOCKER
   const isWindowsVM = envType === ENV_WINDOWS_VM
+  const isDynamicAttachment = challenge.type === ChallengeType.DynamicAttachment
+  const isStaticAttachment = challenge.type === ChallengeType.StaticAttachment
   const envLabel = envOptions.find((option) => option.value === envType)?.label ?? '未知'
 
   return (
@@ -279,12 +378,6 @@ export default function ChallengeEdit() {
         <Group>
           <Button variant="default" onClick={() => navigate(`/admin/games/${gameId}/challenges`)}>
             返回题目列表
-          </Button>
-          <Button variant="default" onClick={() => setUploadOpened(true)}>
-            上传附件
-          </Button>
-          <Button variant="default" onClick={() => setRemoteOpened(true)}>
-            远程附件
           </Button>
           <Switch
             label={challenge.isEnabled ? '已启用' : '已禁用'}
@@ -354,7 +447,9 @@ export default function ChallengeEdit() {
               </Text>
               <Select
                 label="已注册 Docker 镜像"
-                placeholder={dockerTemplates.length === 0 ? '暂无就绪 Docker 镜像，请先到环境模板上传或注册' : '选择 Docker 镜像'}
+                placeholder={
+                  dockerTemplates.length === 0 ? '暂无就绪 Docker 镜像，请先到环境模板上传或注册' : '选择 Docker 镜像'
+                }
                 data={dockerTemplates.map((template) => ({
                   value: template.registryUrl ?? '',
                   label: `${template.name} - ${template.registryUrl}`,
@@ -463,6 +558,104 @@ export default function ChallengeEdit() {
             <Alert color="gray" variant="light" mt="md">
               附件题模式：无需环境配置，仅通过附件和 Flag 评判。
             </Alert>
+          )}
+        </YinyuPanel>
+
+        <YinyuPanel p="md">
+          <Text fw={700} mb="sm">
+            {isDynamicAttachment ? '动态附件池' : '题目附件'}
+          </Text>
+
+          {isDynamicAttachment ? (
+            <Stack gap="sm">
+              <Text size="sm" className="yy-readable-text">
+                动态附件会按队伍分发，适合每队获得不同附件和不同 Flag 的题目。批量上传时文件名会作为对应 Flag。
+              </Text>
+              <Group>
+                <Button
+                  variant="default"
+                  leftSection={<Icon path={mdiDatabasePlusOutline} size={1} />}
+                  onClick={() => setUploadOpened(true)}
+                >
+                  批量上传本地附件
+                </Button>
+                <Button
+                  variant="default"
+                  leftSection={<Icon path={mdiLinkVariantPlus} size={1} />}
+                  onClick={() => setRemoteOpened(true)}
+                >
+                  批量添加远程附件
+                </Button>
+                <Badge color="cyan" className="yy-semantic-badge" data-semantic="neutral">
+                  已配置 {challenge.flags?.length ?? 0} 个附件 Flag
+                </Badge>
+              </Group>
+            </Stack>
+          ) : (
+            <Stack gap="sm">
+              {attachmentUrl ? (
+                <Alert color="green" variant="light">
+                  <Group justify="space-between" align="center" wrap="wrap">
+                    <Stack gap={2}>
+                      <Text fw={700}>{isRemoteAttachment ? '远程附件' : '本地附件'}</Text>
+                      <Anchor href={attachmentUrl} target="_blank" rel="noreferrer">
+                        {attachmentName ?? attachmentUrl}
+                      </Anchor>
+                      {challenge.attachment?.fileSize ? (
+                        <Text size="xs" className="yy-readable-text">
+                          {HunamizeSize(challenge.attachment.fileSize)}
+                        </Text>
+                      ) : null}
+                    </Stack>
+                    <Button
+                      color="red"
+                      variant="light"
+                      loading={attachmentSaving}
+                      leftSection={<Icon path={mdiTrashCanOutline} size={1} />}
+                      onClick={handleClearAttachment}
+                    >
+                      清除附件
+                    </Button>
+                  </Group>
+                </Alert>
+              ) : (
+                <Alert color={isStaticAttachment ? 'orange' : 'gray'} variant="light">
+                  {isStaticAttachment
+                    ? '当前是纯附件题，建议在发布前绑定题目附件。'
+                    : '当前未绑定题目附件。容器题可按需上传源码包、说明文档或工具包。'}
+                </Alert>
+              )}
+
+              <Group align="flex-end" wrap="wrap">
+                <FileButton onChange={handleUploadStaticAttachment}>
+                  {(props) => (
+                    <Button
+                      {...props}
+                      loading={attachmentSaving}
+                      leftSection={<Icon path={mdiFileUploadOutline} size={1} />}
+                    >
+                      上传并绑定本地附件
+                    </Button>
+                  )}
+                </FileButton>
+                <TextInput
+                  label="远程附件 URL"
+                  placeholder="https://example.com/attachment.zip"
+                  value={remoteAttachmentUrl}
+                  onChange={(e) => setRemoteAttachmentUrl(e.currentTarget.value)}
+                  style={{ flex: 1, minWidth: '18rem' }}
+                />
+                <Button
+                  variant="default"
+                  loading={attachmentSaving}
+                  disabled={!remoteAttachmentUrl.trim()}
+                  leftSection={<Icon path={mdiPaperclip} size={1} />}
+                  onClick={handleSaveRemoteAttachment}
+                >
+                  绑定远程附件
+                </Button>
+              </Group>
+            </Stack>
           )}
         </YinyuPanel>
 

@@ -81,11 +81,46 @@ public class NodesController : ControllerBase
     [RequireAdmin]
     public async Task<IActionResult> Deregister(Guid id)
     {
+        var token = HttpContext.RequestAborted;
         var node = await _nodeRepo.GetNodeByIdAsync(id, HttpContext.RequestAborted);
         if (node is null) return NotFound();
         if (node.IsLocal) return BadRequest(new { message = "Cannot deregister local node" });
+
+        await using var transaction = await _context.Database.BeginTransactionAsync(token);
+
+        var now = DateTimeOffset.UtcNow;
+        await _context.DeploymentTargets
+            .Where(t => t.TargetNodeId == id
+                        && (t.Status == TargetStatus.Pending || t.Status == TargetStatus.Running))
+            .ExecuteUpdateAsync(updates => updates
+                .SetProperty(t => t.Status, TargetStatus.Cancelled)
+                .SetProperty(t => t.CompletedAt, (DateTimeOffset?)now)
+                .SetProperty(t => t.ErrorMessage, "Target node was deregistered."), token);
+
+        await _context.DeploymentTargets
+            .Where(t => t.TargetNodeId == id)
+            .ExecuteUpdateAsync(updates => updates
+                .SetProperty(t => t.TargetNodeId, (Guid?)null), token);
+
+        await _context.Containers
+            .Where(c => c.NodeId == id)
+            .ExecuteUpdateAsync(updates => updates
+                .SetProperty(c => c.NodeId, (Guid?)null), token);
+
+        await _context.VmInstances
+            .Where(v => v.NodeId == id)
+            .ExecuteUpdateAsync(updates => updates
+                .SetProperty(v => v.NodeId, (Guid?)null), token);
+
+        await _context.PenetrationTeamEnvironments
+            .Where(e => e.NodeId == id)
+            .ExecuteUpdateAsync(updates => updates
+                .SetProperty(e => e.NodeId, (Guid?)null), token);
+
         _context.WorkerNodes.Remove(node);
-        await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync(token);
+        await transaction.CommitAsync(token);
+
         return NoContent();
     }
 
