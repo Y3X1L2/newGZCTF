@@ -10,16 +10,17 @@
   overflow: hidden;
   color: inherit;
   text-decoration: none;
-  border: 1px solid rgba(151, 255, 208, 0.22);
+  border: 1px solid rgba(221, 229, 223, 0.18);
   background:
-    linear-gradient(135deg, rgba(18, 36, 30, 0.68), rgba(6, 10, 10, 0.5)),
-    rgba(5, 9, 8, 0.48);
-  backdrop-filter: blur(1.35rem) saturate(1.35);
-  -webkit-backdrop-filter: blur(1.35rem) saturate(1.35);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.024) 42%, rgba(158, 144, 187, 0.04)),
+    radial-gradient(ellipse at 20% 8%, rgba(140, 172, 133, 0.12), transparent 48%),
+    rgba(11, 15, 13, 0.34);
+  backdrop-filter: blur(2.1rem) saturate(1.12) brightness(0.94);
+  -webkit-backdrop-filter: blur(2.1rem) saturate(1.12) brightness(0.94);
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.045),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 1.2rem 3.2rem rgba(0, 0, 0, 0.34);
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 1.15rem 3.4rem rgba(0, 0, 0, 0.36);
   transform: translateZ(0);
   transition:
     transform 180ms ease,
@@ -39,17 +40,11 @@
 
 .root::before {
   background:
-    radial-gradient(ellipse at 18% 14%, rgba(126, 255, 194, 0.22), transparent 38%),
-    radial-gradient(ellipse at 62% 76%, rgba(57, 205, 139, 0.13), transparent 46%),
-    radial-gradient(ellipse at 92% 20%, rgba(238, 255, 248, 0.08), transparent 34%),
-    linear-gradient(120deg, transparent, rgba(126, 255, 194, 0.06), transparent);
-  background-size:
-    auto,
-    auto,
-    auto,
-    auto;
-  opacity: 0.58;
-  filter: blur(0.08rem);
+    radial-gradient(ellipse at 22% 18%, rgba(167, 199, 160, 0.16), transparent 34%),
+    radial-gradient(ellipse at 78% 84%, rgba(185, 173, 209, 0.1), transparent 42%),
+    linear-gradient(105deg, transparent 18%, rgba(221, 229, 223, 0.07) 44%, transparent 72%);
+  opacity: 0.46;
+  filter: blur(0.52rem) saturate(0.95);
   transition:
     opacity 180ms ease,
     transform 280ms ease;
@@ -59,9 +54,9 @@
   inset: 1px;
   border-radius: inherit;
   background:
-    linear-gradient(110deg, transparent 16%, rgba(151, 255, 208, 0.18) 43%, transparent 68%),
-    radial-gradient(ellipse at 84% 0%, rgba(126, 255, 194, 0.16), transparent 42%);
-  opacity: 0.16;
+    linear-gradient(110deg, transparent 16%, rgba(221, 229, 223, 0.15) 43%, transparent 68%),
+    radial-gradient(ellipse at 84% 0%, rgba(185, 173, 209, 0.12), transparent 42%);
+  opacity: 0.17;
   transform: translateX(-18%);
   transition:
     opacity 180ms ease,
@@ -79,12 +74,12 @@
 
 .root:hover {
   color: inherit;
-  border-color: rgba(151, 255, 208, 0.46);
+  border-color: rgba(185, 173, 209, 0.32);
   box-shadow:
-    inset 0 0 0 1px rgba(126, 255, 194, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.11),
-    0 1.5rem 4.2rem rgba(0, 0, 0, 0.38),
-    0 0 2.6rem rgba(126, 255, 194, 0.14);
+    inset 0 0 0 1px rgba(167, 199, 160, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.17),
+    0 1.5rem 4.4rem rgba(0, 0, 0, 0.42),
+    0 0 2.6rem rgba(158, 144, 187, 0.12);
   transform: translateY(-0.12rem);
 }
 
@@ -102,20 +97,16 @@
   position: relative;
   min-height: 100%;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(221, 229, 223, 0.15);
   border-radius: calc(var(--yy-radius) - 2px);
   background:
-    radial-gradient(ellipse at 50% 22%, rgba(126, 255, 194, 0.16), transparent 50%),
-    linear-gradient(135deg, rgba(23, 48, 39, 0.48), rgba(1, 5, 5, 0.38)),
-    rgba(0, 0, 0, 0.3);
-  background-size:
-    auto,
-    auto,
-    auto;
-  backdrop-filter: blur(0.82rem) saturate(1.18);
-  -webkit-backdrop-filter: blur(0.82rem) saturate(1.18);
+    radial-gradient(ellipse at 50% 20%, rgba(140, 172, 133, 0.13), transparent 50%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.064), rgba(11, 15, 13, 0.2)),
+    rgba(255, 255, 255, 0.026);
+  backdrop-filter: blur(1.3rem) saturate(1.22);
+  -webkit-backdrop-filter: blur(1.3rem) saturate(1.22);
   box-shadow:
-    inset 0 0 0 1px rgba(107, 238, 177, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.07),
     0 0.9rem 2rem rgba(0, 0, 0, 0.22);
 }
 
@@ -166,7 +157,7 @@
 .kicker {
   display: block;
   margin-bottom: 0.26rem;
-  color: rgba(107, 238, 177, 0.78);
+  color: rgba(167, 199, 160, 0.84);
   font-family: var(--font-mono);
   font-size: clamp(0.67rem, 0.78vw, 0.78rem);
   font-weight: 900;
@@ -209,11 +200,13 @@
 .metaGrid div {
   min-width: 0;
   padding: 0.52rem 0.62rem;
-  border: 1px solid rgba(255, 255, 255, 0.058);
+  border: 1px solid rgba(221, 229, 223, 0.105);
   border-radius: calc(var(--yy-radius) - 3px);
   background:
-    radial-gradient(ellipse at 16% 12%, rgba(107, 238, 177, 0.07), transparent 46%),
-    rgba(255, 255, 255, 0.028);
+    radial-gradient(ellipse at 16% 12%, rgba(140, 172, 133, 0.085), transparent 46%),
+    rgba(255, 255, 255, 0.036);
+  backdrop-filter: blur(0.7rem);
+  -webkit-backdrop-filter: blur(0.7rem);
 }
 
 .metaGrid dt,
@@ -243,13 +236,13 @@
   width: clamp(2.15rem, 2.8vw, 2.7rem);
   height: clamp(2.15rem, 2.8vw, 2.7rem);
   place-items: center;
-  border: 1px solid rgba(107, 238, 177, 0.18);
+  border: 1px solid rgba(140, 172, 133, 0.18);
   border-radius: 999px;
-  color: rgba(107, 238, 177, 0.8);
+  color: rgba(140, 172, 133, 0.8);
   font-family: var(--font-mono);
   font-size: clamp(1.08rem, 1.2vw, 1.28rem);
   font-weight: 900;
-  background: rgba(107, 238, 177, 0.055);
+  background: rgba(140, 172, 133, 0.055);
   transition:
     transform 180ms ease,
     border-color 180ms ease,
@@ -257,8 +250,8 @@
 }
 
 .root:hover .chevron {
-  border-color: rgba(107, 238, 177, 0.42);
-  background: rgba(107, 238, 177, 0.12);
+  border-color: rgba(140, 172, 133, 0.42);
+  background: rgba(140, 172, 133, 0.12);
   transform: translateX(0.18rem);
 }
 
@@ -318,7 +311,7 @@
   z-index: 2;
   width: 86%;
   height: 86%;
-  filter: drop-shadow(0 0.75rem 1.8rem rgba(107, 238, 177, 0.3));
+  filter: drop-shadow(0 0.75rem 1.8rem rgba(140, 172, 133, 0.3));
 }
 
 @media (max-width: 72em) {

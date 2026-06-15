@@ -9,7 +9,7 @@
   color: var(--yy-muted);
   border: 1px solid transparent;
   background:
-    radial-gradient(ellipse at 20% 20%, rgba(107, 238, 177, 0.06), transparent 42%), rgba(255, 255, 255, 0.018);
+    radial-gradient(ellipse at 20% 20%, rgba(140, 172, 133, 0.06), transparent 42%), rgba(255, 255, 255, 0.018);
   transition:
     transform 150ms ease,
     color 150ms ease,
@@ -19,9 +19,9 @@
   @mixin dark {
     &:hover {
       color: var(--yy-text);
-      border-color: rgba(107, 238, 177, 0.18);
+      border-color: rgba(140, 172, 133, 0.18);
       background:
-        radial-gradient(ellipse at 35% 20%, rgba(107, 238, 177, 0.12), transparent 48%), var(--yy-hex-flow),
+        radial-gradient(ellipse at 35% 20%, rgba(140, 172, 133, 0.12), transparent 48%), var(--yy-hex-flow),
         rgba(255, 255, 255, 0.036);
       background-size:
         auto,
@@ -32,17 +32,17 @@
 
     &[data-active] {
       color: var(--yy-green);
-      border-color: rgba(107, 238, 177, 0.36);
+      border-color: rgba(140, 172, 133, 0.36);
       background:
-        radial-gradient(ellipse at 50% 24%, rgba(107, 238, 177, 0.19), transparent 48%), var(--yy-hex-flow),
-        rgba(107, 238, 177, 0.055);
+        radial-gradient(ellipse at 50% 24%, rgba(140, 172, 133, 0.19), transparent 48%), var(--yy-hex-flow),
+        rgba(140, 172, 133, 0.055);
       background-size:
         auto,
         1.1rem 0.95rem,
         auto;
       box-shadow:
         inset 0 0 0 1px rgba(255, 255, 255, 0.035),
-        0 0.8rem 1.8rem rgba(107, 238, 177, 0.07);
+        0 0.8rem 1.8rem rgba(140, 172, 133, 0.07);
     }
   }
 
@@ -73,7 +73,7 @@
   box-shadow: 0 1.25rem 4rem rgba(0, 0, 0, 0.32);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.012)),
-    radial-gradient(ellipse at 50% 4%, rgba(107, 238, 177, 0.075), transparent 20rem), rgba(6, 7, 7, 0.76);
+    radial-gradient(ellipse at 50% 4%, rgba(140, 172, 133, 0.075), transparent 20rem), rgba(6, 7, 7, 0.76);
   backdrop-filter: blur(18px);
 
   @media (max-width: $mantine-breakpoint-xs) {
@@ -92,7 +92,7 @@
 
 .navbar::before {
   background:
-    radial-gradient(ellipse at 50% 7%, rgba(107, 238, 177, 0.16), transparent 12rem),
+    radial-gradient(ellipse at 50% 7%, rgba(140, 172, 133, 0.16), transparent 12rem),
     var(--yy-hex-flow);
   background-size:
     auto,
@@ -103,7 +103,7 @@
 .navbar::after {
   inset: auto 0 0;
   height: 34%;
-  background: linear-gradient(180deg, transparent, rgba(107, 238, 177, 0.055));
+  background: linear-gradient(180deg, transparent, rgba(140, 172, 133, 0.055));
 }
 
 .tooltip {
@@ -149,7 +149,7 @@
   position: relative;
   display: grid;
   place-items: center;
-  filter: drop-shadow(0 0.72rem 1.4rem rgba(107, 238, 177, 0.16));
+  filter: drop-shadow(0 0.72rem 1.4rem rgba(140, 172, 133, 0.16));
   padding: 0;
 }
 
@@ -218,7 +218,7 @@
   height: clamp(19rem, 42vh, 30rem);
   pointer-events: none;
   background:
-    radial-gradient(ellipse at 50% 82%, rgba(107, 238, 177, 0.06), transparent 46%),
+    radial-gradient(ellipse at 50% 82%, rgba(140, 172, 133, 0.06), transparent 46%),
     linear-gradient(
       180deg,
       rgba(0, 0, 0, 0) 0%,

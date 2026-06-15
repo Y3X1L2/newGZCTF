@@ -326,7 +326,7 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
                 speed={0.48}
                 scrambleChars="{}[]<>_:/\\"
               >
-                flag{'{where is you}'}
+                flag{'{where are you}'}
               </YinyuScrambledText>
             )}
             <TextInput
@@ -334,7 +334,7 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
               value={inputValue}
               disabled={inputDisabled}
               onChange={setFlag}
-              classNames={{ root: misc.flexGrow, input: misc.ffmono }}
+              classNames={{ root: `${misc.flexGrow} yy-flag-text-input-root`, input: `${misc.ffmono} yy-flag-text-input` }}
             />
           </div>
           <Button miw="6rem" type="submit" disabled={inputDisabled}>

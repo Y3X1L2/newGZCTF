@@ -35,7 +35,7 @@
       right: 0;
       bottom: 0;
       left: 0;
-      background: radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.05), transparent 42%), var(--yy-hex-flow);
+      background: radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.05), transparent 42%), var(--yy-hex-flow);
       background-size:
         auto,
         1.3rem 1.13rem;

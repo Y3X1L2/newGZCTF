@@ -9,13 +9,14 @@ import { WithNavBar } from '@Components/WithNavbar'
 import { BrandMark } from '@Components/yinyu/BrandMark'
 import { YinyuGradientText } from '@Components/yinyu/YinyuReactBits'
 import { YinyuHeartbeatIcon, YinyuHexField, YinyuRouteLoader, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
-import { PLATFORM_BRAND } from '@Utils/Brand'
+import { PLATFORM_TITLE } from '@Utils/Brand'
 import { showErrorMsg } from '@Utils/Shared'
 import { usePageTitle } from '@Hooks/usePageTitle'
 import api, { PostInfoModel } from '@Api'
 
 const HOME_GAME_COUNT = 5
 const HOME_NOTICE_COUNT = 4
+const platformType = '安全综合演练平台'
 const terminalLines = ['演练赛事在线调度', '平台通知实时归档', '靶场服务安全编排']
 
 const TerminalTyping: FC<{ lines: string[] }> = ({ lines }) => {
@@ -116,9 +117,14 @@ const Home: FC = () => {
       <section className="original-home yy-page-frame yy-home-page yy-home-recomposed">
         <div className="home-title-row yy-home-title-row">
           <BrandMark />
-          <h3 className="yy-home-brand-heading">
-            <YinyuGradientText tone="brand">{PLATFORM_BRAND}</YinyuGradientText>
-          </h3>
+          <h1 className="yy-brand-title yy-home-brand-heading">
+            <span>
+              <YinyuGradientText tone="silver">{PLATFORM_TITLE}</YinyuGradientText>
+            </span>
+            <em>
+              <YinyuGradientText tone="signal">{platformType}</YinyuGradientText>
+            </em>
+          </h1>
           <TerminalTyping lines={terminalLines} />
         </div>
 

@@ -9,7 +9,7 @@
   border: 1px solid var(--yy-line);
   border-radius: var(--yy-radius);
   background:
-    radial-gradient(ellipse at 50% 18%, rgba(107, 238, 177, 0.1), transparent 42%),
+    radial-gradient(ellipse at 50% 18%, rgba(140, 172, 133, 0.1), transparent 42%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.058), rgba(255, 255, 255, 0.018)), rgba(8, 9, 10, 0.72);
   box-shadow: var(--yy-shadow);
 }

@@ -402,7 +402,7 @@ const Awd: FC = () => {
                               isSelf
                                 ? {
                                     background:
-                                      'radial-gradient(ellipse at 16% 50%, rgba(107, 238, 177, 0.075), transparent 42%), rgba(107, 238, 177, 0.045)',
+                                      'radial-gradient(ellipse at 16% 50%, rgba(140, 172, 133, 0.075), transparent 42%), rgba(140, 172, 133, 0.045)',
                                   }
                                 : undefined
                             }
@@ -520,7 +520,7 @@ const Awd: FC = () => {
                                 isSelf
                                   ? {
                                       background:
-                                        'radial-gradient(ellipse at 16% 50%, rgba(107, 238, 177, 0.075), transparent 42%), rgba(107, 238, 177, 0.045)',
+                                        'radial-gradient(ellipse at 16% 50%, rgba(140, 172, 133, 0.075), transparent 42%), rgba(140, 172, 133, 0.045)',
                                     }
                                   : undefined
                               }

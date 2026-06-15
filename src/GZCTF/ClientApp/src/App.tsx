@@ -13,6 +13,8 @@ import { ErrorFallback } from '@Components/ErrorFallback'
 import { WsrxProvider } from '@Components/WsrxProvider'
 import { SignalField } from '@Components/yinyu/SignalField'
 import { YinyuGameBendsBackground } from '@Components/yinyu/YinyuReactBits'
+import { YinyuPointerGlow } from '@Components/yinyu/YinyuPointerGlow'
+import { useYinyuVisualTheme, YinyuThemeToggle } from '@Components/yinyu/YinyuThemeToggle'
 import { YinyuRouteLoader } from '@Components/yinyu/YinyuUI'
 import { localCacheProvider } from '@Utils/Cache'
 import { useLanguage } from '@Utils/I18n'
@@ -38,6 +40,7 @@ export const App: FC = () => {
   const { t } = useTranslation()
   const { locale } = useLanguage()
   const { theme } = useCustomTheme()
+  const [visualTheme, setVisualTheme] = useYinyuVisualTheme()
   const location = useLocation()
   const routeElement = useRoutes(routes)
   useBanner()
@@ -46,6 +49,7 @@ export const App: FC = () => {
   const isAdminRoute = path.startsWith('/admin')
   const isGameEntryRoute = /^\/games\/\d+\/?$/.test(path)
   const isGameWorkspaceRoute = /^\/games\/\d+\/(challenges|scoreboard|theory|theory-scoreboard|awdp|pentest|monitor)(\/|$)/.test(path)
+  const isCrystalTheme = visualTheme === 'crystal'
   const useReactBitsBackdrop = isAdminRoute || isGameWorkspaceRoute
   const suppressSignalField = useReactBitsBackdrop || isGameEntryRoute
 
@@ -55,6 +59,8 @@ export const App: FC = () => {
         <ErrorBoundary FallbackComponent={ErrorFallback}>
           {useReactBitsBackdrop ? <YinyuGameBendsBackground className='yy-root-reactbits-bg' /> : null}
           {!suppressSignalField ? <SignalField /> : null}
+          {isCrystalTheme ? <YinyuPointerGlow /> : null}
+          <YinyuThemeToggle theme={visualTheme} onChange={setVisualTheme} />
           <Notifications zIndex={5000} />
           <DatesProvider settings={{ locale }}>
             <ModalsProvider labels={{ confirm: t('common.modal.confirm'), cancel: t('common.modal.cancel') }}>

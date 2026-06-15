@@ -27,9 +27,14 @@ import { useEditChallenge } from '@Hooks/useEdit'
 import api, { FileType } from '@Api'
 import uploadClasses from '@Styles/Upload.module.css'
 
-export const AttachmentUploadModal: FC<ModalProps> = (props) => {
-  const { id, chalId } = useParams()
-  const [numId, numCId] = [parseInt(id ?? '-1'), parseInt(chalId ?? '-1')]
+interface AttachmentUploadModalProps extends ModalProps {
+  onUploaded?: () => void
+}
+
+export const AttachmentUploadModal: FC<AttachmentUploadModalProps> = (props) => {
+  const { onClose, onUploaded, ...modalProps } = props
+  const { id, chalId, challengeId } = useParams()
+  const [numId, numCId] = [parseInt(id ?? '-1'), parseInt(chalId ?? challengeId ?? '-1')]
   const uploadFileName = `DYN_ATTACHMENT_${numCId}`
   const [disabled, setDisabled] = useState(false)
 
@@ -88,7 +93,8 @@ export const AttachmentUploadModal: FC<ModalProps> = (props) => {
         })
         setFiles([])
         mutate()
-        props.onClose()
+        onUploaded?.()
+        onClose()
       }
     } catch (err) {
       showErrorMsg(err, t)
@@ -98,7 +104,7 @@ export const AttachmentUploadModal: FC<ModalProps> = (props) => {
   }
 
   return (
-    <Modal {...props}>
+    <Modal {...modalProps} onClose={onClose}>
       <YinyuModalBody>
         <Stack>
           <Text size="sm">

@@ -7,7 +7,7 @@
   padding-bottom: var(--mantine-spacing-xs);
   border-bottom: 1px solid var(--yy-line);
   background:
-    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.08), transparent 44%), rgba(255, 255, 255, 0.018);
+    radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.08), transparent 44%), rgba(255, 255, 255, 0.018);
 }
 
 .body {
@@ -22,7 +22,7 @@
   max-height: calc(50vh + 300px);
   border: 1px solid var(--yy-line);
   background:
-    radial-gradient(ellipse at 12% 8%, rgba(107, 238, 177, 0.08), transparent 38%),
+    radial-gradient(ellipse at 12% 8%, rgba(140, 172, 133, 0.08), transparent 38%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.058), rgba(255, 255, 255, 0.018)), rgba(8, 9, 10, 0.92);
 }
 
@@ -32,7 +32,7 @@
   position: sticky;
   background:
     linear-gradient(180deg, rgba(5, 6, 6, 0.54), rgba(5, 6, 6, 0.94)),
-    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.075), transparent 42%);
+    radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.075), transparent 42%);
   bottom: 0;
   width: 100%;
   z-index: 400;

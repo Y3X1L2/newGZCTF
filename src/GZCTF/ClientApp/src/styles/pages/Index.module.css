@@ -46,7 +46,7 @@
   border-radius: var(--yy-radius);
   border: 1px solid var(--yy-line);
   background:
-    radial-gradient(ellipse at 12% 16%, rgba(107, 238, 177, 0.09), transparent 34%),
+    radial-gradient(ellipse at 12% 16%, rgba(140, 172, 133, 0.09), transparent 34%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.018)), rgba(8, 9, 10, 0.76);
   backdrop-filter: blur(1rem);
 }
@@ -69,7 +69,7 @@
   border-radius: inherit;
   background:
     radial-gradient(ellipse at 86% 18%, rgba(245, 245, 247, 0.055), transparent 34%),
-    radial-gradient(ellipse at 18% 74%, rgba(107, 238, 177, 0.08), transparent 36%);
+    radial-gradient(ellipse at 18% 74%, rgba(140, 172, 133, 0.08), transparent 36%);
   opacity: 0.5;
 }
 

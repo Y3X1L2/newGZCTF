@@ -178,6 +178,7 @@ export const GanttTimeLine: FC<GanttTimeLineProps> = ({ items }) => {
               key={item.id}
               to={`/games/${item.id}`}
               className={cx(
+                'yy-schedule-row',
                 classes.timelineRow,
                 item.state === 'active' && classes.active,
                 item.state === 'upcoming' && classes.upcoming,

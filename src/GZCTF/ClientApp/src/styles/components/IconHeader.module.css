@@ -8,7 +8,7 @@
   position: relative;
   background:
     linear-gradient(180deg, rgba(5, 6, 6, 0.92), rgba(5, 6, 6, 0.54) 72%, rgba(5, 6, 6, 0)),
-    radial-gradient(ellipse at 20% 0%, rgba(107, 238, 177, 0.07), transparent 28rem);
+    radial-gradient(ellipse at 20% 0%, rgba(140, 172, 133, 0.07), transparent 28rem);
   backdrop-filter: blur(0.9rem);
   border-bottom: 1px solid rgba(246, 247, 248, 0.055);
 

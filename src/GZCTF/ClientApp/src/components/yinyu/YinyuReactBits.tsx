@@ -71,17 +71,17 @@ export function YinyuGradientText<T extends ElementType = 'span'>({
 }
 
 const gradientPalettes: Record<GradientTone, string[]> = {
-  brand: ['#F8FFF9', '#79F8BE', '#E2F2EA', '#8E7BE6', '#FFFFFF'],
-  signal: ['#D9FFF0', '#69F6B7', '#F7FFFB', '#8DFFD0'],
-  ongoing: ['#F4FFF8', '#6EFFB8', '#22F0A0', '#C9FFE7'],
-  coming: ['#FFF7C7', '#FFD166', '#FF8F3D', '#FFF0B3'],
-  ended: ['#F8FAFC', '#D8DEE9', '#9AA7B7', '#FFFFFF'],
-  danger: ['#FFE8EA', '#FF7A90', '#FF3D68', '#FFD1D8'],
-  silver: ['#FFFFFF', '#DCE7E1', '#93A39B', '#F7FFFB'],
-  single: ['#DDFBFF', '#38BDF8', '#9BEAFE', '#F8FEFF'],
-  multiple: ['#F7F0FF', '#9C88E8', '#D9CEFF', '#FFFFFF'],
-  judge: ['#FFF6CC', '#FACC15', '#FB923C', '#FFFFFF'],
-  score: ['#E9FFF4', '#6EFFB8', '#A7F3D0', '#FFFFFF'],
+  brand: ['#F9FCF8', '#DDE5DF', '#A7C7A0', '#B9ADD1', '#FFFFFF'],
+  signal: ['#F7FFF9', '#A7C7A0', '#8CAC85', '#DDE5DF'],
+  ongoing: ['#F7FFF8', '#A7C7A0', '#8CAC85', '#E6EFE8'],
+  coming: ['#FFF9DE', '#D8C48A', '#A7C7A0', '#FFFFFF'],
+  ended: ['#F4F7F5', '#DDE5DF', '#73837D', '#FFFFFF'],
+  danger: ['#FFF1ED', '#E7A190', '#C8645D', '#F6DED8'],
+  silver: ['#FFFFFF', '#DDE5DF', '#73837D', '#B9ADD1', '#F7FAF8'],
+  single: ['#F3FBF8', '#A7C7A0', '#DDE5DF', '#FFFFFF'],
+  multiple: ['#F7F4FF', '#B9ADD1', '#DDE5DF', '#FFFFFF'],
+  judge: ['#FFF8DA', '#D8C48A', '#A7C7A0', '#FFFFFF'],
+  score: ['#F4FFF7', '#A7C7A0', '#8CAC85', '#FFFFFF'],
 }
 
 export function YinyuStatusText({
@@ -166,14 +166,16 @@ void main() {
   float scan = pow(0.5 + 0.5 * sin((p.x * 1.8 + p.y * 2.4 + uTime * 0.32) * 3.14159), 3.0);
   float vignette = smoothstep(1.34, 0.18, length(p));
 
-  vec3 ink = vec3(0.012, 0.021, 0.019);
-  vec3 deepGreen = vec3(0.018, 0.135, 0.092);
-  vec3 mint = vec3(0.395, 0.930, 0.660);
-  vec3 silver = vec3(0.800, 0.875, 0.835);
+  vec3 ink = vec3(0.020, 0.028, 0.024);
+  vec3 deepGreen = vec3(0.082, 0.106, 0.074);
+  vec3 mint = vec3(0.655, 0.780, 0.627);
+  vec3 silver = vec3(0.866, 0.898, 0.874);
+  vec3 lavender = vec3(0.620, 0.565, 0.733);
 
   vec3 color = ink;
   color += deepGreen * (0.52 * ribbon + 0.18 * veilB);
-  color += mint * (0.13 * scan * ribbon + 0.08 * veilA);
+  color += mint * (0.1 * scan * ribbon + 0.06 * veilA);
+  color += lavender * (0.05 * scan * veilB + 0.025 * ribbon);
   color += silver * (0.035 * pow(veilB, 4.0));
   color *= vignette;
 
@@ -666,7 +668,7 @@ export function YinyuColorBends({
   style,
   rotation = 90,
   speed = 0.2,
-  color = '#62f3b2',
+  color = '#8CAC85',
   colors,
   transparent = true,
   autoRotate = 0,
@@ -677,8 +679,8 @@ export function YinyuColorBends({
   parallax = 0.5,
   noise = 0.15,
   iterations = 1,
-  intensity = 1.3,
-  bandWidth = 0.14,
+  intensity = 1.5,
+  bandWidth = 6,
   fadeTop = 0.75,
   resolutionScale = 0.88,
 }: YinyuColorBendsProps) {
@@ -820,7 +822,7 @@ export function YinyuColorBends({
     const palette =
       colors && colors.length > 0
         ? colors
-        : [color, '#d9f5e8', '#11392d', '#74f7bd', '#eef7f2'].filter(Boolean)
+        : [color, '#DDE5DF', '#121512', '#9E90BB', '#A7C7A0'].filter(Boolean)
     const colorVectors = palette.slice(0, MAX_COLOR_BENDS_COLORS).map((hex) => srgbVector(hex))
     for (let i = 0; i < MAX_COLOR_BENDS_COLORS; i += 1) {
       const vec = (material.uniforms.uColors.value as THREE.Vector3[])[i]
@@ -889,9 +891,9 @@ export const YinyuDotField = memo(function YinyuDotField({
   glowRadius = 160,
   sparkle = false,
   waveAmplitude = 0,
-  gradientFrom = 'rgba(130, 255, 200, 0.28)',
-  gradientTo = 'rgba(221, 244, 235, 0.18)',
-  glowColor = 'rgba(107, 238, 177, 0.42)',
+  gradientFrom = 'rgba(140, 172, 133, 0.26)',
+  gradientTo = 'rgba(221, 229, 223, 0.18)',
+  glowColor = 'rgba(158, 144, 187, 0.28)',
   className,
   ...rest
 }: YinyuDotFieldProps) {
@@ -1146,17 +1148,19 @@ export function YinyuGameBendsBackground({ className }: { className?: string }) 
     <div className={cx('yy-game-bends-bg', className)} aria-hidden="true">
       <ReactBitsColorBends
         className="yy-game-bends-bg__bends"
-        colors={['#66F4B4', '#DFFEF0', '#8676D8']}
+        colors={['#8CAC85', '#9E90BB', '#DDE5DF', '#73837D', '#0B0F0D']}
         speed={0.2}
-        frequency={1.0}
+        frequency={1}
         noise={0.15}
-        bandWidth={0.14}
+        bandWidth={6}
         rotation={90}
+        autoRotate={0}
+        scale={1}
         iterations={1}
-        intensity={1.3}
+        intensity={1.5}
         warpStrength={1}
-        mouseInfluence={0.72}
-        parallax={0.35}
+        mouseInfluence={1}
+        parallax={0.5}
       />
       <ReactBitsDotField
         className="yy-game-bends-bg__dots"
@@ -1169,9 +1173,9 @@ export function YinyuGameBendsBackground({ className }: { className?: string }) 
         glowRadius={160}
         sparkle={false}
         waveAmplitude={0}
-        gradientFrom="rgba(210, 238, 228, 0.24)"
-        gradientTo="rgba(79, 240, 170, 0.18)"
-        glowColor="rgba(107, 238, 177, 0.36)"
+        gradientFrom="rgba(140, 172, 133, 0.24)"
+        gradientTo="rgba(221, 229, 223, 0.16)"
+        glowColor="rgba(158, 144, 187, 0.22)"
       />
     </div>
   )
@@ -1234,8 +1238,8 @@ function LegacyYinyuGridScan(props: CanvasEffectProps) {
       uTilt: { value: 0 },
       uYaw: { value: 0 },
       uLineThickness: { value: 1.0 },
-      uLinesColor: { value: srgbColor('#2f6b55') },
-      uScanColor: { value: srgbColor('#b8ffe4') },
+      uLinesColor: { value: srgbColor('#73837D') },
+      uScanColor: { value: srgbColor('#B9ADD1') },
       uGridScale: { value: 0.105 },
       uLineStyle: { value: 0 },
       uLineJitter: { value: 0.075 },

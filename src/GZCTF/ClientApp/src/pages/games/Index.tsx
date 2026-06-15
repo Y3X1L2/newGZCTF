@@ -31,7 +31,7 @@ const Games: FC = () => {
       const { startTime, endTime, status } = getGameStatus(game)
       const colorHex =
         status === GameStatus.OnGoing
-          ? 'rgba(107, 238, 177, 0.92)'
+          ? 'rgba(140, 172, 133, 0.92)'
           : status === GameStatus.Coming
             ? 'rgba(246, 198, 97, 0.82)'
             : 'rgba(150, 164, 180, 0.64)'

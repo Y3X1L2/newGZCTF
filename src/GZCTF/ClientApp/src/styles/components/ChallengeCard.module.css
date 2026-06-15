@@ -1,6 +1,6 @@
 .root {
   min-height: 9.5rem;
-  border: 1px solid rgba(126, 255, 194, 0.18);
+  border: 1px solid rgba(167, 199, 160, 0.18);
   background:
     linear-gradient(135deg, rgba(13, 28, 23, 0.76), rgba(6, 9, 9, 0.72)),
     rgba(5, 8, 8, 0.72);
@@ -25,10 +25,10 @@
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse at 18% 12%, rgba(126, 255, 194, 0.2), transparent 42%),
+    radial-gradient(ellipse at 18% 12%, rgba(167, 199, 160, 0.2), transparent 42%),
     radial-gradient(ellipse at 76% 86%, rgba(57, 205, 139, 0.12), transparent 48%),
     radial-gradient(ellipse at 96% 18%, rgba(238, 255, 248, 0.07), transparent 36%),
-    linear-gradient(120deg, transparent 12%, rgba(126, 255, 194, 0.07) 44%, transparent 72%);
+    linear-gradient(120deg, transparent 12%, rgba(167, 199, 160, 0.07) 44%, transparent 72%);
   background-size:
     auto,
     auto,
@@ -44,12 +44,12 @@
   inset: auto 0 0 0;
   height: 2px;
   pointer-events: none;
-  background: linear-gradient(90deg, transparent, rgba(107, 238, 177, 0.5), rgba(245, 245, 247, 0.2), transparent);
+  background: linear-gradient(90deg, transparent, rgba(140, 172, 133, 0.5), rgba(245, 245, 247, 0.2), transparent);
   opacity: 0.42;
 }
 
 .root:hover {
-  border-color: rgba(107, 238, 177, 0.28);
+  border-color: rgba(140, 172, 133, 0.28);
 }
 
 .root:hover::before {
@@ -66,9 +66,9 @@
   right: 0.45rem;
   padding: calc(0.25 * var(--mantine-spacing-xs));
   clip-path: polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0 50%);
-  background: rgba(107, 238, 177, 0.78);
+  background: rgba(140, 172, 133, 0.78);
   color: #06100c;
-  box-shadow: 0 0 1.2rem rgba(107, 238, 177, 0.18);
+  box-shadow: 0 0 1.2rem rgba(140, 172, 133, 0.18);
   animation: solved-hex 2.8s ease-in-out infinite;
 }
 
@@ -89,7 +89,7 @@
 .bloodMedal {
   --medal-core: rgba(118, 134, 126, 0.55);
   --medal-line: rgba(205, 222, 214, 0.22);
-  --medal-glow: rgba(107, 238, 177, 0.08);
+  --medal-glow: rgba(140, 172, 133, 0.08);
 
   width: 2.05rem;
   height: 1.74rem;
@@ -176,14 +176,14 @@
 }
 
 .bloodMedal[data-tier='2'][data-active] {
-  --medal-core: linear-gradient(145deg, rgba(220, 235, 230, 0.9), rgba(107, 238, 177, 0.28));
+  --medal-core: linear-gradient(145deg, rgba(220, 235, 230, 0.9), rgba(140, 172, 133, 0.28));
   --medal-line: rgba(224, 240, 235, 0.7);
   --medal-glow: rgba(205, 230, 220, 0.2);
   color: #08110b;
 }
 
 .bloodMedal[data-tier='3'][data-active] {
-  --medal-core: linear-gradient(145deg, rgba(207, 157, 92, 0.92), rgba(107, 238, 177, 0.22));
+  --medal-core: linear-gradient(145deg, rgba(207, 157, 92, 0.92), rgba(140, 172, 133, 0.22));
   --medal-line: rgba(231, 177, 106, 0.72);
   --medal-glow: rgba(207, 157, 92, 0.2);
   color: #0c1109;

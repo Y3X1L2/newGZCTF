@@ -11,9 +11,14 @@ import { useEditChallenge } from '@Hooks/useEdit'
 import api, { FileType, FlagCreateModel } from '@Api'
 import misc from '@Styles/Misc.module.css'
 
-export const AttachmentRemoteEditModal: FC<ModalProps> = (props) => {
-  const { id, chalId } = useParams()
-  const [numId, numCId] = [parseInt(id ?? '-1'), parseInt(chalId ?? '-1')]
+interface AttachmentRemoteEditModalProps extends ModalProps {
+  onUploaded?: () => void
+}
+
+export const AttachmentRemoteEditModal: FC<AttachmentRemoteEditModalProps> = (props) => {
+  const { onClose, onUploaded, ...modalProps } = props
+  const { id, chalId, challengeId } = useParams()
+  const [numId, numCId] = [parseInt(id ?? '-1'), parseInt(chalId ?? challengeId ?? '-1')]
 
   const [disabled, setDisabled] = useState(false)
 
@@ -53,7 +58,8 @@ export const AttachmentRemoteEditModal: FC<ModalProps> = (props) => {
       })
       setText('')
       mutate()
-      props.onClose()
+      onUploaded?.()
+      onClose()
     } catch (e) {
       showErrorMsg(e, t)
     } finally {
@@ -62,7 +68,7 @@ export const AttachmentRemoteEditModal: FC<ModalProps> = (props) => {
   }
 
   return (
-    <Modal {...props}>
+    <Modal {...modalProps} onClose={onClose}>
       <YinyuModalBody>
         <Stack>
           <Text>

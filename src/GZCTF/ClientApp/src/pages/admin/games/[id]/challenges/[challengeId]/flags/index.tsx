@@ -3,6 +3,8 @@ import { notifications } from '@mantine/notifications'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { AdminPage } from '@Components/admin/AdminPage'
+import { AttachmentRemoteEditModal } from '@Components/admin/AttachmentRemoteEditModal'
+import { AttachmentUploadModal } from '@Components/admin/AttachmentUploadModal'
 import { YinyuModalBody, YinyuPanel } from '@Components/yinyu/YinyuUI'
 import { AnswerType, FlagScoreMode } from '@Api'
 
@@ -49,6 +51,8 @@ export default function FlagsEdit() {
   const [draft, setDraft] = useState(emptyFlagDraft())
   const [editingFlag, setEditingFlag] = useState<FlagInfo | null>(null)
   const [editDraft, setEditDraft] = useState(emptyFlagDraft())
+  const [uploadOpened, setUploadOpened] = useState(false)
+  const [remoteOpened, setRemoteOpened] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -152,6 +156,12 @@ export default function FlagsEdit() {
           </Button>
           <Button variant="default" onClick={() => navigate(`/admin/games/${gameId}/challenges`)}>
             返回题目列表
+          </Button>
+          <Button variant="default" onClick={() => setUploadOpened(true)}>
+            上传附件
+          </Button>
+          <Button variant="default" onClick={() => setRemoteOpened(true)}>
+            远程附件
           </Button>
         </Group>
       }
@@ -322,6 +332,20 @@ export default function FlagsEdit() {
           </YinyuModalBody>
         </Modal>
       </YinyuPanel>
+      <AttachmentUploadModal
+        title="上传附件"
+        size="38rem"
+        opened={uploadOpened}
+        onClose={() => setUploadOpened(false)}
+        onUploaded={load}
+      />
+      <AttachmentRemoteEditModal
+        title="远程附件"
+        size="38rem"
+        opened={remoteOpened}
+        onClose={() => setRemoteOpened(false)}
+        onUploaded={load}
+      />
     </AdminPage>
   )
 }

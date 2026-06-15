@@ -1,7 +1,7 @@
 .tooltip {
   color: var(--yy-text);
   border: 1px solid var(--yy-line);
-  background: radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.08), transparent 42%), rgba(8, 9, 10, 0.92);
+  background: radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.08), transparent 42%), rgba(8, 9, 10, 0.92);
 }
 
 .card {
@@ -15,7 +15,7 @@
   inset: 0;
   pointer-events: none;
   border-radius: inherit;
-  background: radial-gradient(ellipse at 16% 18%, rgba(107, 238, 177, 0.09), transparent 34%), var(--yy-hex-flow);
+  background: radial-gradient(ellipse at 16% 18%, rgba(140, 172, 133, 0.09), transparent 34%), var(--yy-hex-flow);
   background-size:
     auto,
     1.2rem 1.04rem;

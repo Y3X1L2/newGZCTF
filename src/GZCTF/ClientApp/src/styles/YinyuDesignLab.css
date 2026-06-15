@@ -1,19 +1,19 @@
 :root {
   color-scheme: dark;
-  --bg: #050606;
-  --surface-0: rgba(8, 9, 10, 0.72);
-  --surface-1: rgba(15, 17, 18, 0.78);
-  --surface-2: rgba(21, 23, 25, 0.84);
-  --surface-3: #171a1c;
-  --line: rgba(246, 247, 248, 0.095);
-  --line-strong: rgba(246, 247, 248, 0.18);
-  --text: #f4f5f5;
-  --muted: rgba(244, 245, 245, 0.66);
-  --quiet: rgba(244, 245, 245, 0.42);
-  --green: #6beeb1;
-  --green-2: #32f08c;
-  --green-soft: rgba(107, 238, 177, 0.12);
-  --green-line: rgba(107, 238, 177, 0.34);
+  --bg: #050706;
+  --surface-0: rgba(11, 15, 13, 0.74);
+  --surface-1: rgba(18, 21, 18, 0.8);
+  --surface-2: rgba(24, 28, 24, 0.86);
+  --surface-3: #171c18;
+  --line: rgba(221, 229, 223, 0.105);
+  --line-strong: rgba(221, 229, 223, 0.2);
+  --text: #f4f7f5;
+  --muted: rgba(221, 229, 223, 0.68);
+  --quiet: rgba(221, 229, 223, 0.42);
+  --green: #a7c7a0;
+  --green-2: #8cac85;
+  --green-soft: rgba(140, 172, 133, 0.13);
+  --green-line: rgba(167, 199, 160, 0.34);
   --warm: #e8d08d;
   --warm-soft: rgba(232, 208, 141, 0.1);
   --danger: #ff7f91;
@@ -22,9 +22,9 @@
   --shadow: 0 28px 88px rgba(0, 0, 0, 0.36);
   --radius: 8px;
   --container: min(1500px, calc(100% - 2rem));
-  --signal-flow: rgba(107, 238, 177, 0.24);
-  --signal-flow-soft: rgba(107, 238, 177, 0.085);
-  --signal-white: rgba(245, 245, 247, 0.13);
+  --signal-flow: rgba(167, 199, 160, 0.22);
+  --signal-flow-soft: rgba(158, 144, 187, 0.075);
+  --signal-white: rgba(221, 229, 223, 0.13);
   --font-display:
     'Space Grotesk', 'Inter Tight', Inter, 'Segoe UI', 'Microsoft YaHei', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
@@ -75,8 +75,8 @@ a {
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(circle at 70% 8%, rgba(107, 238, 177, 0.045), transparent 24rem),
-    linear-gradient(180deg, #050505 0%, #030404 48%, #060707 100%);
+    radial-gradient(circle at 70% 8%, rgba(158, 144, 187, 0.045), transparent 24rem),
+    linear-gradient(180deg, #050706 0%, #070908 48%, #0b0f0d 100%);
 }
 
 .app-shell::before {
@@ -87,14 +87,14 @@ a {
   pointer-events: none;
   background:
     radial-gradient(circle at 50% 13%, rgba(245, 245, 247, 0.018) 0 1.2px, transparent 1.8px),
-    radial-gradient(circle at 6% 38%, rgba(107, 238, 177, 0.014) 0 1.1px, transparent 1.7px),
+    radial-gradient(circle at 6% 38%, rgba(140, 172, 133, 0.014) 0 1.1px, transparent 1.7px),
     radial-gradient(circle at 94% 38%, rgba(245, 245, 247, 0.012) 0 1.1px, transparent 1.7px),
     conic-gradient(
       from 30deg at 50% 50%,
       transparent 0 13%,
       rgba(245, 245, 247, 0.008) 14% 16%,
       transparent 17% 30%,
-      rgba(107, 238, 177, 0.006) 31% 33%,
+      rgba(158, 144, 187, 0.006) 31% 33%,
       transparent 34% 100%
     );
   background-size:
@@ -159,7 +159,7 @@ a {
   pointer-events: none;
   user-select: none;
   transform: translateZ(0);
-  filter: drop-shadow(0 0 10px rgba(107, 238, 177, 0.18));
+  filter: drop-shadow(0 0 10px rgba(140, 172, 133, 0.18));
 }
 
 .brand-mark.is-mono img {
@@ -232,16 +232,16 @@ a {
   padding: 1px;
   border-radius: inherit;
   background:
-    radial-gradient(circle at 18% 22%, rgba(107, 238, 177, 0.42), transparent 18%),
+    radial-gradient(circle at 18% 22%, rgba(140, 172, 133, 0.42), transparent 18%),
     radial-gradient(circle at 78% 72%, rgba(245, 245, 247, 0.24), transparent 20%),
     conic-gradient(
       from 30deg,
       transparent 0 18%,
-      rgba(107, 238, 177, 0.36) 24%,
+      rgba(140, 172, 133, 0.36) 24%,
       rgba(245, 245, 247, 0.18) 31%,
       transparent 42% 100%
     ),
-    linear-gradient(180deg, rgba(245, 245, 247, 0.11), rgba(107, 238, 177, 0.14));
+    linear-gradient(180deg, rgba(245, 245, 247, 0.11), rgba(140, 172, 133, 0.14));
   background-size:
     190% 190%,
     180% 180%,
@@ -329,7 +329,7 @@ a {
 .primary-button {
   min-height: 2.72rem;
   padding: 0.72rem 0.95rem;
-  border-color: rgba(107, 238, 177, 0.62);
+  border-color: rgba(140, 172, 133, 0.62);
   color: #07100c;
   background: linear-gradient(180deg, #8af5c2, var(--green));
   cursor: pointer;
@@ -408,13 +408,13 @@ a {
   pointer-events: none;
   border-radius: inherit;
   background:
-    radial-gradient(ellipse at 14% 18%, rgba(107, 238, 177, 0.15), transparent 30%),
+    radial-gradient(ellipse at 14% 18%, rgba(140, 172, 133, 0.15), transparent 30%),
     radial-gradient(ellipse at 84% 72%, rgba(245, 245, 247, 0.08), transparent 32%),
-    radial-gradient(ellipse at 46% 38%, rgba(107, 238, 177, 0.055), transparent 42%),
+    radial-gradient(ellipse at 46% 38%, rgba(140, 172, 133, 0.055), transparent 42%),
     conic-gradient(
       from 30deg at 50% 50%,
       transparent 0 13%,
-      rgba(107, 238, 177, 0.055) 14% 16%,
+      rgba(140, 172, 133, 0.055) 14% 16%,
       transparent 17% 30%,
       rgba(245, 245, 247, 0.035) 31% 33%,
       transparent 34% 100%
@@ -444,7 +444,7 @@ a {
   border-radius: inherit;
   background:
     radial-gradient(circle at 50% 14%, rgba(245, 245, 247, 0.07) 0 2px, transparent 2.6px),
-    radial-gradient(circle at 0% 64%, rgba(107, 238, 177, 0.075) 0 2px, transparent 2.6px),
+    radial-gradient(circle at 0% 64%, rgba(140, 172, 133, 0.075) 0 2px, transparent 2.6px),
     radial-gradient(circle at 100% 64%, rgba(245, 245, 247, 0.055) 0 2px, transparent 2.6px);
   background-size: 18px 16px;
   mask-image:
@@ -567,7 +567,7 @@ a {
 }
 
 .metric-success {
-  border-color: rgba(107, 238, 177, 0.18);
+  border-color: rgba(140, 172, 133, 0.18);
 }
 
 .metric-warm {
@@ -681,9 +681,9 @@ a {
   gap: 0.65rem;
   margin-top: auto;
   padding: 0.62rem;
-  border: 1px solid rgba(107, 238, 177, 0.22);
+  border: 1px solid rgba(140, 172, 133, 0.22);
   border-radius: var(--radius);
-  background: rgba(107, 238, 177, 0.08);
+  background: rgba(140, 172, 133, 0.08);
 }
 
 .submission-console span {
@@ -766,12 +766,12 @@ a {
 .task-row:hover,
 .component-row:hover,
 .compact-item:hover {
-  background: linear-gradient(90deg, rgba(107, 238, 177, 0.052), transparent 48%), rgba(255, 255, 255, 0.024);
+  background: linear-gradient(90deg, rgba(140, 172, 133, 0.052), transparent 48%), rgba(255, 255, 255, 0.024);
 }
 
 .score-row.is-leader {
   color: var(--text);
-  background: rgba(107, 238, 177, 0.08);
+  background: rgba(140, 172, 133, 0.08);
 }
 
 .data-row strong,
@@ -887,9 +887,9 @@ a {
 .status-pill::before {
   background:
     radial-gradient(circle at 18% 50%, rgba(245, 245, 247, 0.12) 0 2px, transparent 2.5px),
-    radial-gradient(circle at 50% 18%, rgba(107, 238, 177, 0.16) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 50% 18%, rgba(140, 172, 133, 0.16) 0 2px, transparent 2.5px),
     radial-gradient(circle at 82% 52%, rgba(245, 245, 247, 0.1) 0 2px, transparent 2.5px),
-    radial-gradient(ellipse at var(--pill-shift) 50%, rgba(107, 238, 177, 0.18), transparent 42%);
+    radial-gradient(ellipse at var(--pill-shift) 50%, rgba(140, 172, 133, 0.18), transparent 42%);
   background-position:
     0 0,
     8px 3px,
@@ -904,7 +904,7 @@ a {
 }
 
 .status-pill::after {
-  background: radial-gradient(circle, rgba(107, 238, 177, 0.48), transparent 23%);
+  background: radial-gradient(circle, rgba(140, 172, 133, 0.48), transparent 23%);
   background-size: 160% 100%;
   background-position: -30% 50%;
   opacity: 0;
@@ -941,8 +941,8 @@ a {
 }
 
 .state-running {
-  border-color: rgba(107, 238, 177, 0.42);
-  box-shadow: inset 0 0 0 1px rgba(107, 238, 177, 0.06);
+  border-color: rgba(140, 172, 133, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(140, 172, 133, 0.06);
 }
 
 .state-running::before {
@@ -1048,7 +1048,7 @@ a {
   stroke-width: 2;
   stroke-dasharray: 18 74;
   stroke-dashoffset: 0;
-  filter: drop-shadow(0 0 6px rgba(107, 238, 177, 0.28));
+  filter: drop-shadow(0 0 6px rgba(140, 172, 133, 0.28));
   animation: heartbeat-dash 1.18s infinite linear;
 }
 
@@ -1114,7 +1114,7 @@ a {
 .challenge-card:hover,
 .challenge-card.is-active {
   border-color: var(--green-line);
-  background: linear-gradient(180deg, rgba(107, 238, 177, 0.046), rgba(255, 255, 255, 0.014)), var(--surface-2);
+  background: linear-gradient(180deg, rgba(140, 172, 133, 0.046), rgba(255, 255, 255, 0.014)), var(--surface-2);
 }
 
 .challenge-card strong {
@@ -1209,7 +1209,7 @@ a {
   padding: 0.5rem;
   border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 6px;
-  background: radial-gradient(ellipse at 16% 18%, rgba(107, 238, 177, 0.055), transparent 42%), rgba(0, 0, 0, 0.12);
+  background: radial-gradient(ellipse at 16% 18%, rgba(140, 172, 133, 0.055), transparent 42%), rgba(0, 0, 0, 0.12);
 }
 
 .service-cells i {
@@ -1226,7 +1226,7 @@ a {
 }
 
 .service-cells i.live {
-  background: radial-gradient(circle at 50% 36%, rgba(255, 255, 255, 0.38), transparent 42%), rgba(107, 238, 177, 0.78);
+  background: radial-gradient(circle at 50% 36%, rgba(255, 255, 255, 0.38), transparent 42%), rgba(140, 172, 133, 0.78);
   opacity: 0.82;
 }
 
@@ -1241,7 +1241,7 @@ a {
 }
 
 .service-cells i.patch {
-  outline: 1px solid rgba(107, 238, 177, 0.34);
+  outline: 1px solid rgba(140, 172, 133, 0.34);
   outline-offset: 2px;
 }
 
@@ -1270,12 +1270,12 @@ a {
 }
 
 .service-legend i.live {
-  background: rgba(107, 238, 177, 0.78);
+  background: rgba(140, 172, 133, 0.78);
 }
 
 .service-legend i.patch {
-  background: rgba(107, 238, 177, 0.32);
-  outline: 1px solid rgba(107, 238, 177, 0.42);
+  background: rgba(140, 172, 133, 0.32);
+  outline: 1px solid rgba(140, 172, 133, 0.42);
   outline-offset: 2px;
 }
 
@@ -1344,7 +1344,7 @@ a {
 .rail-button.is-active {
   border-color: var(--line);
   color: var(--green);
-  background: linear-gradient(180deg, rgba(107, 238, 177, 0.08), rgba(255, 255, 255, 0.018)), rgba(0, 0, 0, 0.14);
+  background: linear-gradient(180deg, rgba(140, 172, 133, 0.08), rgba(255, 255, 255, 0.018)), rgba(0, 0, 0, 0.14);
 }
 
 .admin-main {
@@ -1428,7 +1428,7 @@ a {
 
 .node-dot.healthy {
   background: var(--green);
-  box-shadow: 0 0 18px rgba(107, 238, 177, 0.4);
+  box-shadow: 0 0 18px rgba(140, 172, 133, 0.4);
 }
 
 .node-dot.busy {
@@ -1602,7 +1602,7 @@ a {
   place-items: center;
   border-radius: 999px;
   color: var(--green);
-  background: rgba(107, 238, 177, 0.12);
+  background: rgba(140, 172, 133, 0.12);
   font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
   font-weight: 900;
 }
@@ -1649,7 +1649,7 @@ a {
 }
 
 .glyph-success {
-  color: rgba(107, 238, 177, 0.54);
+  color: rgba(140, 172, 133, 0.54);
 }
 
 .recent-game-card dl {
@@ -1722,12 +1722,12 @@ a {
 
 .phase-step.done {
   color: var(--muted);
-  border-color: rgba(107, 238, 177, 0.16);
+  border-color: rgba(140, 172, 133, 0.16);
 }
 
 .phase-step.active {
   color: var(--green);
-  background: linear-gradient(120deg, rgba(107, 238, 177, 0.12), transparent 60%), rgba(0, 0, 0, 0.18);
+  background: linear-gradient(120deg, rgba(140, 172, 133, 0.12), transparent 60%), rgba(0, 0, 0, 0.18);
 }
 
 .game-detail-actions {
@@ -1824,10 +1824,10 @@ a {
   display: block;
   border-radius: 999px;
   background:
-    radial-gradient(circle at 10% 50%, rgba(107, 238, 177, 0.32) 0 3px, transparent 3.6px),
+    radial-gradient(circle at 10% 50%, rgba(140, 172, 133, 0.32) 0 3px, transparent 3.6px),
     radial-gradient(circle at 44% 50%, rgba(245, 245, 247, 0.13) 0 3px, transparent 3.6px),
-    radial-gradient(circle at 78% 50%, rgba(107, 238, 177, 0.22) 0 3px, transparent 3.6px),
-    linear-gradient(90deg, rgba(245, 245, 247, 0.04), rgba(107, 238, 177, 0.08), rgba(245, 245, 247, 0.035));
+    radial-gradient(circle at 78% 50%, rgba(140, 172, 133, 0.22) 0 3px, transparent 3.6px),
+    linear-gradient(90deg, rgba(245, 245, 247, 0.04), rgba(140, 172, 133, 0.08), rgba(245, 245, 247, 0.035));
   background-size:
     46px 100%,
     58px 100%,
@@ -1928,7 +1928,7 @@ a {
   border: 1px solid rgba(255, 255, 255, 0.082);
   border-radius: 7px;
   background:
-    radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.06), transparent 52%),
+    radial-gradient(ellipse at 16% 0%, rgba(140, 172, 133, 0.06), transparent 52%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.046), rgba(255, 255, 255, 0.012)), rgba(0, 0, 0, 0.2);
 }
 
@@ -1954,7 +1954,7 @@ a {
     radial-gradient(circle at 0.5rem 50%, rgba(245, 245, 247, 0.58) 0 2px, transparent 2.8px),
     radial-gradient(circle at 1.25rem 50%, rgba(245, 245, 247, 0.46) 0 2px, transparent 2.8px),
     radial-gradient(circle at 2rem 50%, rgba(245, 245, 247, 0.38) 0 2px, transparent 2.8px),
-    linear-gradient(90deg, rgba(107, 238, 177, 0.2), transparent 44%), rgba(245, 245, 247, 0.055);
+    linear-gradient(90deg, rgba(140, 172, 133, 0.2), transparent 44%), rgba(245, 245, 247, 0.055);
   background-size:
     auto,
     auto,
@@ -1984,10 +1984,10 @@ a {
   width: 0.82rem;
   aspect-ratio: 1;
   display: inline-block;
-  border: 1px solid rgba(107, 238, 177, 0.34);
+  border: 1px solid rgba(140, 172, 133, 0.34);
   border-radius: 3px;
   background:
-    radial-gradient(circle at 50% 50%, rgba(107, 238, 177, 0.38) 0 2px, transparent 2.7px), rgba(107, 238, 177, 0.08);
+    radial-gradient(circle at 50% 50%, rgba(140, 172, 133, 0.38) 0 2px, transparent 2.7px), rgba(140, 172, 133, 0.08);
 }
 
 .auth-options-row strong {
@@ -2086,7 +2086,7 @@ a {
   margin-top: auto;
   border: 1px solid rgba(255, 255, 255, 0.065);
   border-radius: 6px;
-  background: radial-gradient(ellipse at 18% 18%, rgba(107, 238, 177, 0.08), transparent 42%), rgba(0, 0, 0, 0.16);
+  background: radial-gradient(ellipse at 18% 18%, rgba(140, 172, 133, 0.08), transparent 42%), rgba(0, 0, 0, 0.16);
   padding: 0.72rem;
 }
 
@@ -2106,7 +2106,7 @@ a {
   aspect-ratio: 0.88;
   display: block;
   clip-path: polygon(50% 0, 94% 25%, 94% 75%, 50% 100%, 6% 75%, 6% 25%);
-  background: rgba(107, 238, 177, 0.58);
+  background: rgba(140, 172, 133, 0.58);
   opacity: 0.32;
   animation: route-hex-flow 2.8s var(--route-delay, 0s) infinite ease-in-out;
 }

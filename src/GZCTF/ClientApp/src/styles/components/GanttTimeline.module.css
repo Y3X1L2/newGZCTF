@@ -11,7 +11,7 @@
   color: var(--yy-text);
   background:
     linear-gradient(180deg, rgba(0, 0, 0, 0.64), rgba(0, 0, 0, 0.78)),
-    radial-gradient(ellipse at 12% 10%, rgba(107, 238, 177, calc(0.08 + var(--timeline-breathe) * 0.04)), transparent 26rem),
+    radial-gradient(ellipse at 12% 10%, rgba(140, 172, 133, calc(0.08 + var(--timeline-breathe) * 0.04)), transparent 26rem),
     radial-gradient(ellipse at 88% 84%, rgba(245, 245, 247, 0.035), transparent 30rem),
     var(--yy-hex-flow),
     rgba(2, 3, 3, 0.92);
@@ -20,7 +20,7 @@
     auto,
     1.28rem 1.1rem,
     auto;
-  border: 1px solid rgba(107, 238, 177, 0.15);
+  border: 1px solid rgba(140, 172, 133, 0.15);
   border-radius: var(--yy-radius);
   box-shadow:
     0 1.4rem 4rem rgba(0, 0, 0, 0.48),
@@ -38,7 +38,7 @@
 
 .shell::before {
   background:
-    linear-gradient(90deg, transparent, rgba(107, 238, 177, 0.08), transparent),
+    linear-gradient(90deg, transparent, rgba(140, 172, 133, 0.08), transparent),
     repeating-linear-gradient(120deg, rgba(255, 255, 255, 0.026) 0 1px, transparent 1px 3.6rem);
   opacity: 0.28;
   transform: translateX(0);
@@ -47,8 +47,8 @@
 .shell::after {
   inset: auto 6% 0 6%;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(107, 238, 177, 0.4), transparent);
-  box-shadow: 0 0 1.7rem rgba(107, 238, 177, 0.18);
+  background: linear-gradient(90deg, transparent, rgba(140, 172, 133, 0.4), transparent);
+  box-shadow: 0 0 1.7rem rgba(140, 172, 133, 0.18);
 }
 
 .shell > * {
@@ -75,7 +75,7 @@
   width: clamp(3.25rem, 5vw, 4.8rem);
   height: clamp(3.25rem, 5vw, 4.8rem);
   flex: 0 0 auto;
-  filter: drop-shadow(0 0.8rem 1.7rem rgba(107, 238, 177, 0.24));
+  filter: drop-shadow(0 0.8rem 1.7rem rgba(140, 172, 133, 0.24));
 }
 
 .heading span {
@@ -120,7 +120,7 @@
   overflow-x: visible;
   overflow-y: visible;
   padding-bottom: clamp(0.5rem, 0.95vw, 0.8rem);
-  scrollbar-color: rgba(107, 238, 177, 0.34) rgba(255, 255, 255, 0.04);
+  scrollbar-color: rgba(140, 172, 133, 0.34) rgba(255, 255, 255, 0.04);
   scrollbar-gutter: stable;
   overscroll-behavior: auto;
   contain: layout style;
@@ -138,9 +138,9 @@
   height: 3.05rem;
   margin-left: var(--timeline-meta-width);
   overflow: visible;
-  border-bottom: 1px solid rgba(107, 238, 177, 0.22);
+  border-bottom: 1px solid rgba(140, 172, 133, 0.22);
   background:
-    linear-gradient(90deg, rgba(107, 238, 177, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(140, 172, 133, 0.12) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
   background-size:
     calc(100% / 7) 100%,
@@ -155,9 +155,9 @@
   width: var(--focus-width);
   height: 100%;
   pointer-events: none;
-  border-inline: 1px solid rgba(107, 238, 177, 0.5);
+  border-inline: 1px solid rgba(140, 172, 133, 0.5);
   background:
-    linear-gradient(180deg, rgba(107, 238, 177, 0.13), rgba(107, 238, 177, 0.025)),
+    linear-gradient(180deg, rgba(140, 172, 133, 0.13), rgba(140, 172, 133, 0.025)),
     var(--yy-hex-flow);
   background-size: auto, 1rem 0.866rem;
   opacity: 0;
@@ -188,7 +188,7 @@
   top: 1.7rem;
   width: 1px;
   height: 1.35rem;
-  background: linear-gradient(180deg, rgba(107, 238, 177, 0.35), rgba(107, 238, 177, 0.04));
+  background: linear-gradient(180deg, rgba(140, 172, 133, 0.35), rgba(140, 172, 133, 0.04));
 }
 
 .tick b {
@@ -207,8 +207,8 @@
 }
 
 .tick[data-focus] i {
-  background: linear-gradient(180deg, rgba(107, 238, 177, 0.8), rgba(107, 238, 177, 0.18));
-  box-shadow: 0 0 0.75rem rgba(107, 238, 177, 0.24);
+  background: linear-gradient(180deg, rgba(140, 172, 133, 0.8), rgba(140, 172, 133, 0.18));
+  box-shadow: 0 0 0.75rem rgba(140, 172, 133, 0.24);
 }
 
 .nowAxis {
@@ -221,13 +221,13 @@
   background: linear-gradient(
     180deg,
     transparent 0,
-    rgba(107, 238, 177, 0.18) 8%,
-    rgba(107, 238, 177, 0.78) 42%,
-    rgba(107, 238, 177, 0.78) 58%,
-    rgba(107, 238, 177, 0.18) 92%,
+    rgba(140, 172, 133, 0.18) 8%,
+    rgba(140, 172, 133, 0.78) 42%,
+    rgba(140, 172, 133, 0.78) 58%,
+    rgba(140, 172, 133, 0.18) 92%,
     transparent 100%
   );
-  filter: drop-shadow(0 0 0.7rem rgba(107, 238, 177, 0.24));
+  filter: drop-shadow(0 0 0.7rem rgba(140, 172, 133, 0.24));
 }
 
 .nowAxis i {
@@ -241,8 +241,8 @@
     radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.5), transparent 45%),
     var(--yy-green);
   box-shadow:
-    0 0 0 0.25rem rgba(107, 238, 177, 0.09),
-    0 0 1.4rem rgba(107, 238, 177, 0.42);
+    0 0 0 0.25rem rgba(140, 172, 133, 0.09),
+    0 0 1.4rem rgba(140, 172, 133, 0.42);
 }
 
 .nowAxis b {
@@ -261,7 +261,7 @@
   text-align: center;
   text-overflow: ellipsis;
   text-shadow:
-    0 0 0.85rem rgba(107, 238, 177, 0.34),
+    0 0 0.85rem rgba(140, 172, 133, 0.34),
     0 0 0.25rem rgba(0, 0, 0, 0.85);
   white-space: nowrap;
   transform: translateX(-50%);
@@ -294,7 +294,7 @@
   z-index: -1;
   pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(107, 238, 177, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(140, 172, 133, 0.07) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
   background-size:
     calc(100% / 7) 100%,
@@ -306,7 +306,7 @@
   --row-left: 0%;
   --row-width: 12%;
   --tooltip-left: 50%;
-  --row-color: rgba(107, 238, 177, 0.75);
+  --row-color: rgba(140, 172, 133, 0.75);
   position: relative;
   contain: layout style;
   display: grid;
@@ -329,10 +329,10 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  border: 1px solid rgba(107, 238, 177, 0.08);
+  border: 1px solid rgba(140, 172, 133, 0.08);
   background:
     linear-gradient(90deg, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.18)),
-    radial-gradient(ellipse at 12% 50%, rgba(107, 238, 177, 0.075), transparent 40%),
+    radial-gradient(ellipse at 12% 50%, rgba(140, 172, 133, 0.075), transparent 40%),
     rgba(255, 255, 255, 0.028);
   clip-path: polygon(0.9rem 0, calc(100% - 0.9rem) 0, 100% 50%, calc(100% - 0.9rem) 100%, 0.9rem 100%, 0 50%);
   transition:
@@ -351,15 +351,15 @@
   color: inherit;
   transform: translate3d(0, -1px, 0);
   box-shadow:
-    0 0 0 1px rgba(107, 238, 177, 0.08),
+    0 0 0 1px rgba(140, 172, 133, 0.08),
     0 1rem 2.8rem rgba(0, 0, 0, 0.28);
 }
 
 .timelineRow:hover::before,
 .timelineRow:focus-visible::before {
-  border-color: rgba(107, 238, 177, 0.32);
+  border-color: rgba(140, 172, 133, 0.32);
   background:
-    radial-gradient(ellipse at 15% 50%, rgba(107, 238, 177, 0.16), transparent 42%),
+    radial-gradient(ellipse at 15% 50%, rgba(140, 172, 133, 0.16), transparent 42%),
     var(--yy-hex-flow),
     rgba(255, 255, 255, 0.03);
   background-size:
@@ -390,9 +390,9 @@
   position: absolute;
   inset: -0.2rem;
   clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
-  border: 1px solid rgba(107, 238, 177, 0.2);
+  border: 1px solid rgba(140, 172, 133, 0.2);
   background:
-    radial-gradient(ellipse at 45% 35%, rgba(107, 238, 177, 0.13), transparent 54%),
+    radial-gradient(ellipse at 45% 35%, rgba(140, 172, 133, 0.13), transparent 54%),
     rgba(255, 255, 255, 0.026);
 }
 
@@ -412,7 +412,7 @@
   height: 0.5rem;
   border-radius: 50%;
   background: var(--yy-green);
-  box-shadow: 0 0 1.1rem rgba(107, 238, 177, 0.52);
+  box-shadow: 0 0 1.1rem rgba(140, 172, 133, 0.52);
   opacity: 0.58;
 }
 
@@ -450,7 +450,7 @@
   height: 100%;
   min-height: clamp(3.35rem, 4.2vw, 3.8rem);
   margin-right: 1rem;
-  border-left: 1px solid rgba(107, 238, 177, 0.1);
+  border-left: 1px solid rgba(140, 172, 133, 0.1);
   background: transparent;
   overflow: visible;
 }
@@ -466,7 +466,7 @@
   min-width: 4.6rem;
   height: 1.55rem;
   transform: translateY(-50%);
-  filter: drop-shadow(0 0 0.9rem rgba(107, 238, 177, 0.16));
+  filter: drop-shadow(0 0 0.9rem rgba(140, 172, 133, 0.16));
 }
 
 .rowBar::before {
@@ -485,7 +485,7 @@
   z-index: 1;
   height: 100%;
   background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.18), transparent 34%, rgba(107, 238, 177, 0.28) 70%, transparent),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.18), transparent 34%, rgba(140, 172, 133, 0.28) 70%, transparent),
     var(--yy-hex-flow),
     color-mix(in srgb, var(--row-color) 48%, rgba(0, 0, 0, 0.45));
   background-size:
@@ -513,13 +513,13 @@
 }
 
 .active .rowBar {
-  filter: drop-shadow(0 0 1.25rem rgba(107, 238, 177, 0.32));
+  filter: drop-shadow(0 0 1.25rem rgba(140, 172, 133, 0.32));
 }
 
 .active .barLead,
 .active .barCore,
 .active .barTail {
-  background-color: color-mix(in srgb, var(--row-color) 62%, rgba(107, 238, 177, 0.38));
+  background-color: color-mix(in srgb, var(--row-color) 62%, rgba(140, 172, 133, 0.38));
 }
 
 .upcoming {
@@ -609,7 +609,7 @@
 /* Meaningful schedule track: thin duration line with start/end nodes. */
 .shell::before {
   background:
-    linear-gradient(90deg, transparent, rgba(107, 238, 177, 0.065), transparent),
+    linear-gradient(90deg, transparent, rgba(140, 172, 133, 0.065), transparent),
     var(--yy-hex-flow);
   background-size:
     auto,
@@ -640,7 +640,7 @@
   height: 0.22rem;
   border-radius: 999px;
   background:
-    linear-gradient(90deg, color-mix(in srgb, var(--row-color) 58%, rgba(107, 238, 177, 0.3)), rgba(107, 238, 177, 0.64)),
+    linear-gradient(90deg, color-mix(in srgb, var(--row-color) 58%, rgba(140, 172, 133, 0.3)), rgba(140, 172, 133, 0.64)),
     linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.36), transparent);
   background-size:
     auto,
@@ -665,9 +665,9 @@
   width: 0.82rem;
   height: 0.82rem;
   border-radius: 50%;
-  border: 1px solid rgba(107, 238, 177, 0.54);
+  border: 1px solid rgba(140, 172, 133, 0.54);
   background:
-    radial-gradient(circle at 50% 50%, rgba(107, 238, 177, 0.86) 0 0.18rem, transparent 0.2rem),
+    radial-gradient(circle at 50% 50%, rgba(140, 172, 133, 0.86) 0 0.18rem, transparent 0.2rem),
     rgba(3, 8, 6, 0.94);
   animation: none;
   transform: translateY(-50%);
@@ -689,11 +689,11 @@
   max-width: min(32rem, calc(100vw - 4rem));
   padding: 0.34rem 0.62rem;
   overflow: hidden;
-  border: 1px solid rgba(107, 238, 177, 0.24);
+  border: 1px solid rgba(140, 172, 133, 0.24);
   border-radius: 999px;
   color: rgba(232, 255, 244, 0.96);
   background:
-    radial-gradient(ellipse at 20% 20%, rgba(107, 238, 177, 0.14), transparent 44%),
+    radial-gradient(ellipse at 20% 20%, rgba(140, 172, 133, 0.14), transparent 44%),
     rgba(4, 8, 7, 0.94);
   box-shadow: 0 0.8rem 1.8rem rgba(0, 0, 0, 0.34);
   font-family: var(--font-mono);
@@ -747,10 +747,10 @@
 
 .active .barLead,
 .active .barTail {
-  border-color: rgba(107, 238, 177, 0.82);
+  border-color: rgba(140, 172, 133, 0.82);
   box-shadow:
-    0 0 0 0.34rem rgba(107, 238, 177, 0.08),
-    0 0 1.2rem rgba(107, 238, 177, 0.42);
+    0 0 0 0.34rem rgba(140, 172, 133, 0.08),
+    0 0 1.2rem rgba(140, 172, 133, 0.42);
 }
 
 .ended .rowBar {

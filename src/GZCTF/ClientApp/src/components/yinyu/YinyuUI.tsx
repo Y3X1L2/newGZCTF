@@ -110,7 +110,11 @@ export function YinyuStatusPill({
 
 export function YinyuHexField({ cells = 42 }: { cells?: number }) {
   return (
-    <span className="hex-field yy-hex-field" style={{ '--yy-hex-density': cells } as CSSProperties} aria-hidden="true" />
+    <span
+      className="hex-field yy-hex-field yy-color-bends-field"
+      style={{ '--yy-hex-density': cells } as CSSProperties}
+      aria-hidden="true"
+    />
   )
 }
 
