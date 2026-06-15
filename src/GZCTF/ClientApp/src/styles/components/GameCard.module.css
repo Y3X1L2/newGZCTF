@@ -13,8 +13,7 @@
   border: 1px solid rgba(221, 229, 223, 0.18);
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.024) 42%, rgba(158, 144, 187, 0.04)),
-    radial-gradient(ellipse at 20% 8%, rgba(140, 172, 133, 0.12), transparent 48%),
-    rgba(11, 15, 13, 0.34);
+    rgba(11, 15, 13, 0.46);
   backdrop-filter: blur(2.1rem) saturate(1.12) brightness(0.94);
   -webkit-backdrop-filter: blur(2.1rem) saturate(1.12) brightness(0.94);
   box-shadow:
@@ -39,12 +38,9 @@
 }
 
 .root::before {
-  background:
-    radial-gradient(ellipse at 22% 18%, rgba(167, 199, 160, 0.16), transparent 34%),
-    radial-gradient(ellipse at 78% 84%, rgba(185, 173, 209, 0.1), transparent 42%),
-    linear-gradient(105deg, transparent 18%, rgba(221, 229, 223, 0.07) 44%, transparent 72%);
-  opacity: 0.46;
-  filter: blur(0.52rem) saturate(0.95);
+  background: linear-gradient(105deg, transparent 14%, rgba(221, 229, 223, 0.09) 46%, transparent 76%);
+  opacity: 0.28;
+  filter: none;
   transition:
     opacity 180ms ease,
     transform 280ms ease;
@@ -53,10 +49,8 @@
 .root::after {
   inset: 1px;
   border-radius: inherit;
-  background:
-    linear-gradient(110deg, transparent 16%, rgba(221, 229, 223, 0.15) 43%, transparent 68%),
-    radial-gradient(ellipse at 84% 0%, rgba(185, 173, 209, 0.12), transparent 42%);
-  opacity: 0.17;
+  background: linear-gradient(110deg, transparent 16%, rgba(221, 229, 223, 0.13) 43%, transparent 68%);
+  opacity: 0.12;
   transform: translateX(-18%);
   transition:
     opacity 180ms ease,
@@ -100,7 +94,6 @@
   border: 1px solid rgba(221, 229, 223, 0.15);
   border-radius: calc(var(--yy-radius) - 2px);
   background:
-    radial-gradient(ellipse at 50% 20%, rgba(140, 172, 133, 0.13), transparent 50%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.064), rgba(11, 15, 13, 0.2)),
     rgba(255, 255, 255, 0.026);
   backdrop-filter: blur(1.3rem) saturate(1.22);
@@ -202,9 +195,7 @@
   padding: 0.52rem 0.62rem;
   border: 1px solid rgba(221, 229, 223, 0.105);
   border-radius: calc(var(--yy-radius) - 3px);
-  background:
-    radial-gradient(ellipse at 16% 12%, rgba(140, 172, 133, 0.085), transparent 46%),
-    rgba(255, 255, 255, 0.036);
+  background: rgba(255, 255, 255, 0.038);
   backdrop-filter: blur(0.7rem);
   -webkit-backdrop-filter: blur(0.7rem);
 }

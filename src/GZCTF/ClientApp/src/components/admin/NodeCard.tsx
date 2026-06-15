@@ -28,17 +28,20 @@ export interface NodeInfo {
   agentPort: number
 }
 
-const statusMap: Record<string, { label: string; color: string; tone: YinyuStatusTone; state: YinyuStatusState }> = {
-  '0': { label: '未知', color: 'gray', tone: 'neutral', state: 'idle' },
-  unknown: { label: '未知', color: 'gray', tone: 'neutral', state: 'idle' },
-  '1': { label: '在线', color: 'teal', tone: 'success', state: 'running' },
-  online: { label: '在线', color: 'teal', tone: 'success', state: 'running' },
-  '2': { label: '离线', color: 'red', tone: 'danger', state: 'alert' },
-  offline: { label: '离线', color: 'red', tone: 'danger', state: 'alert' },
-  '3': { label: '繁忙', color: 'orange', tone: 'warm', state: 'busy' },
-  busy: { label: '繁忙', color: 'orange', tone: 'warm', state: 'busy' },
-  '4': { label: '异常', color: 'red', tone: 'danger', state: 'alert' },
-  error: { label: '异常', color: 'red', tone: 'danger', state: 'alert' },
+const statusMap: Record<
+  string,
+  { label: string; color: string; tone: YinyuStatusTone; state: YinyuStatusState; semantic: string }
+> = {
+  '0': { label: '未知', color: 'gray', tone: 'neutral', state: 'idle', semantic: 'unknown' },
+  unknown: { label: '未知', color: 'gray', tone: 'neutral', state: 'idle', semantic: 'unknown' },
+  '1': { label: '在线', color: 'green', tone: 'success', state: 'running', semantic: 'online' },
+  online: { label: '在线', color: 'green', tone: 'success', state: 'running', semantic: 'online' },
+  '2': { label: '离线', color: 'red', tone: 'danger', state: 'alert', semantic: 'offline' },
+  offline: { label: '离线', color: 'red', tone: 'danger', state: 'alert', semantic: 'offline' },
+  '3': { label: '繁忙', color: 'violet', tone: 'warm', state: 'busy', semantic: 'busy' },
+  busy: { label: '繁忙', color: 'violet', tone: 'warm', state: 'busy', semantic: 'busy' },
+  '4': { label: '异常', color: 'red', tone: 'danger', state: 'alert', semantic: 'error' },
+  error: { label: '异常', color: 'red', tone: 'danger', state: 'alert', semantic: 'error' },
 }
 
 function normalizeKey(value: string | number | undefined) {
@@ -62,6 +65,13 @@ function capabilityLabels(value: string | number | undefined) {
   if (key.includes('kvm') || key === '2') return ['KVM']
   if (key === '3') return ['Docker', 'KVM']
   return [String(value)]
+}
+
+function capabilityMeta(item: string) {
+  const key = item.toLowerCase()
+  if (key === 'docker') return { color: 'teal', semantic: 'docker' }
+  if (key === 'kvm') return { color: 'violet', semantic: 'kvm' }
+  return { color: 'gray', semantic: 'neutral' }
 }
 
 function pressureColor(value: number) {
@@ -114,6 +124,7 @@ export function NodeCard({
     color: 'gray',
     tone: 'neutral' as const,
     state: 'idle' as const,
+    semantic: 'unknown',
   }
   const heartbeat = node.lastHeartbeat ? dayjs(node.lastHeartbeat) : null
   const heartbeatText = heartbeat?.isValid() ? heartbeat.fromNow() : '无心跳'
@@ -142,7 +153,7 @@ export function NodeCard({
                 {node.name || node.hostAddress}
               </Text>
               {node.isLocal && (
-                <Badge size="sm" variant="light" color="blue">
+                <Badge size="sm" variant="light" color="blue" className="yy-semantic-badge" data-semantic="local">
                   本地
                 </Badge>
               )}
@@ -155,7 +166,7 @@ export function NodeCard({
             </Group>
           </Stack>
           <Group gap={6} wrap="nowrap">
-            <YinyuStatusPill tone={status.tone} state={status.state}>
+            <YinyuStatusPill tone={status.tone} state={status.state} data-semantic={status.semantic}>
               {status.label}
             </YinyuStatusPill>
             {rightSection}
@@ -163,11 +174,21 @@ export function NodeCard({
         </Group>
 
         <Group gap="xs">
-          {capabilityLabels(node.capabilities).map((item) => (
-            <Badge key={item} size="sm" variant="outline" color={item === 'None' ? 'gray' : 'indigo'}>
-              {item}
-            </Badge>
-          ))}
+          {capabilityLabels(node.capabilities).map((item) => {
+            const meta = capabilityMeta(item)
+            return (
+              <Badge
+                key={item}
+                size="sm"
+                variant="outline"
+                color={meta.color}
+                className="yy-semantic-badge"
+                data-semantic={meta.semantic}
+              >
+                {item}
+              </Badge>
+            )
+          })}
         </Group>
 
         <Group grow align="center">

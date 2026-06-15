@@ -15,11 +15,10 @@
   border-radius: calc(var(--yy-radius) - 2px);
   cursor: pointer;
   background:
-    radial-gradient(ellipse at var(--yy-bento-x) var(--yy-bento-y), rgba(154, 255, 209, 0.12), transparent 44%),
-    radial-gradient(ellipse at 44% 10%, rgba(140, 172, 133, 0.1), transparent 46%),
-    radial-gradient(ellipse at 74% 90%, rgba(224, 239, 232, 0.06), transparent 42%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.064), rgba(255, 255, 255, 0.018)),
-    rgba(5, 7, 7, 0.88);
+    rgba(5, 7, 7, 0.46);
+  backdrop-filter: blur(1.35rem) saturate(1.16);
+  -webkit-backdrop-filter: blur(1.35rem) saturate(1.16);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.026),
     0 1.1rem 2.3rem rgba(0, 0, 0, 0.24);
@@ -60,13 +59,9 @@
 }
 
 .card::before {
-  background:
-    var(--yy-hex-flow),
-    linear-gradient(118deg, transparent 10%, rgba(140, 172, 133, 0.12) 40%, transparent 62%);
-  background-size:
-    1rem 0.866rem,
-    auto;
-  opacity: 0.35;
+  background: linear-gradient(118deg, transparent 10%, rgba(140, 172, 133, 0.1) 42%, transparent 68%);
+  background-size: auto;
+  opacity: 0.18;
   transition:
     opacity 180ms ease,
     transform 260ms ease;
@@ -75,8 +70,6 @@
 .card::after {
   border-radius: inherit;
   background:
-    radial-gradient(circle at var(--yy-bento-x) var(--yy-bento-y), rgba(159, 255, 214, 0.34), transparent 34%),
-    radial-gradient(circle at var(--yy-bento-x) var(--yy-bento-y), rgba(255, 255, 255, 0.12), transparent 18%),
     linear-gradient(135deg, rgba(234, 255, 247, 0.11), transparent 34%, rgba(140, 172, 133, 0.12));
   opacity: calc(var(--yy-bento-active) * 0.78);
   mix-blend-mode: screen;
@@ -85,7 +78,7 @@
 
 .card:hover::before,
 .card:focus-visible::before {
-  opacity: 0.68;
+  opacity: 0.34;
   transform: translateX(0.45rem);
 }
 
@@ -116,9 +109,7 @@
   height: clamp(4rem, 5.2vw, 5rem);
   border: 1px solid rgba(140, 172, 133, 0.28);
   border-radius: 999px;
-  background:
-    radial-gradient(circle at 50% 35%, rgba(140, 172, 133, 0.18), transparent 58%),
-    rgba(255, 255, 255, 0.035);
+  background: rgba(255, 255, 255, 0.04);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 

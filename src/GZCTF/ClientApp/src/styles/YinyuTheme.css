@@ -415,16 +415,8 @@
     radial-gradient(ellipse at 14% 18%, rgba(0, 0, 0, 0.78), transparent 33%),
     radial-gradient(ellipse at 86% 76%, rgba(0, 0, 0, 0.62), transparent 38%),
     radial-gradient(ellipse at 58% 42%, rgba(0, 0, 0, 0.34), transparent 44%);
-  background:
-    radial-gradient(ellipse at 14% 18%, rgba(245, 245, 247, 0.08), transparent 2px),
-    radial-gradient(ellipse at 86% 76%, rgba(245, 245, 247, 0.06), transparent 2px),
-    radial-gradient(ellipse at 58% 42%, rgba(140, 172, 133, 0.08), transparent 2px),
-    linear-gradient(135deg, transparent 24%, rgba(140, 172, 133, 0.05) 25%, transparent 26% 74%, rgba(245, 245, 247, 0.03) 75%, transparent 76%);
-  background-size:
-    7.5rem 6.5rem,
-    8.2rem 7.1rem,
-    9.6rem 8.2rem,
-    18px 16px;
+  background: linear-gradient(135deg, transparent 24%, rgba(140, 172, 133, 0.04) 36%, transparent 68%);
+  background-size: auto;
   transition: opacity 220ms ease;
   will-change: opacity, transform;
 }

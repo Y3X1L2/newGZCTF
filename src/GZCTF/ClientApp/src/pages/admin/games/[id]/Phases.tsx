@@ -34,7 +34,11 @@ export default function PhasesPage() {
                   <Table.Td>{new Date(phase.startTime).toLocaleString()}</Table.Td>
                   <Table.Td>{new Date(phase.endTime).toLocaleString()}</Table.Td>
                   <Table.Td>
-                    <Badge color={phase.ctfEnabled ? 'green' : 'red'} className="yy-status-badge">
+                    <Badge
+                      color={phase.ctfEnabled ? 'green' : 'red'}
+                      className="yy-status-badge yy-semantic-badge"
+                      data-semantic={phase.ctfEnabled ? 'success' : 'failed'}
+                    >
                       {phase.ctfEnabled ? '开' : '关'}
                     </Badge>
                   </Table.Td>

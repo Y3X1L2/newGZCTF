@@ -291,10 +291,22 @@ export default function ChallengeEdit() {
             checked={challenge.isEnabled}
             onChange={(e) => handleToggle(e.currentTarget.checked)}
           />
-          <Badge color="blue">{challenge.category}</Badge>
-          <Badge color="grape">{challenge.type}</Badge>
-          <Badge color={isWindowsVM ? 'orange' : isContainer ? 'cyan' : 'gray'}>{envLabel}</Badge>
-          <Badge color="green">Accepted: {challenge.acceptedCount}</Badge>
+          <Badge color="blue" className="yy-semantic-badge" data-semantic="category">
+            {challenge.category}
+          </Badge>
+          <Badge color="grape" className="yy-semantic-badge" data-semantic="type">
+            {challenge.type}
+          </Badge>
+          <Badge
+            color={isWindowsVM ? 'blue' : isContainer ? 'teal' : 'gray'}
+            className="yy-semantic-badge"
+            data-semantic={isWindowsVM ? 'windows' : isContainer ? 'docker' : 'neutral'}
+          >
+            {envLabel}
+          </Badge>
+          <Badge color="green" className="yy-semantic-badge" data-semantic="success">
+            Accepted: {challenge.acceptedCount}
+          </Badge>
         </Group>
       }
     >

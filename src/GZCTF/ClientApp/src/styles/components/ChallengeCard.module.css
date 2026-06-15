@@ -24,18 +24,10 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background:
-    radial-gradient(ellipse at 18% 12%, rgba(167, 199, 160, 0.2), transparent 42%),
-    radial-gradient(ellipse at 76% 86%, rgba(57, 205, 139, 0.12), transparent 48%),
-    radial-gradient(ellipse at 96% 18%, rgba(238, 255, 248, 0.07), transparent 36%),
-    linear-gradient(120deg, transparent 12%, rgba(167, 199, 160, 0.07) 44%, transparent 72%);
-  background-size:
-    auto,
-    auto,
-    auto,
-    auto;
-  opacity: 0.68;
-  filter: blur(0.04rem);
+  background: linear-gradient(120deg, transparent 12%, rgba(167, 199, 160, 0.075) 44%, transparent 72%);
+  background-size: auto;
+  opacity: 0.3;
+  filter: none;
 }
 
 .root::after {

@@ -27,7 +27,7 @@ import dayjs from 'dayjs'
 import { FC, useEffect, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router'
-import { GameColorMap } from '@Components/GameCard'
+import { GameColorMap, GameStatus } from '@Components/GameCard'
 import { AdminPage } from '@Components/admin/AdminPage'
 import { GameCreateModal } from '@Components/admin/GameCreateModal'
 import { YinyuTableShell } from '@Components/yinyu/YinyuUI'
@@ -211,6 +211,8 @@ const Games: FC = () => {
                 games.map((game) => {
                   const { startTime, endTime, status } = getGameStatus(game)
                   const color = GameColorMap.get(status)
+                  const semantic =
+                    status === GameStatus.OnGoing ? 'ongoing' : status === GameStatus.Coming ? 'coming' : 'ended'
 
                   return (
                     <Table.Tr key={game.id}>
@@ -232,16 +234,18 @@ const Games: FC = () => {
                               {game.title}
                             </Text>
                           </Group>
-                          <Badge color={color}>{status}</Badge>
+                          <Badge color={color} className="yy-semantic-badge" data-semantic={semantic}>
+                            {status}
+                          </Badge>
                         </Group>
                       </Table.Td>
                       <Table.Td>
                         <Group wrap="nowrap" gap="xs">
-                          <Badge size="sm" color={color} variant="dot">
+                          <Badge size="sm" color={color} variant="dot" className="yy-semantic-badge" data-semantic={semantic}>
                             {dayjs(startTime).format('YYYY-MM-DD HH:mm')}
                           </Badge>
                           <Icon path={mdiChevronTripleRight} size={1} />
-                          <Badge size="sm" color={color} variant="dot">
+                          <Badge size="sm" color={color} variant="dot" className="yy-semantic-badge" data-semantic={semantic}>
                             {dayjs(endTime).format('YYYY-MM-DD HH:mm')}
                           </Badge>
                         </Group>

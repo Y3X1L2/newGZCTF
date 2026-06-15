@@ -229,7 +229,12 @@ const Teams: FC = () => {
                               }}
                             />
                           </Group>
-                          <Badge size="md" color={team.locked ? 'yellow' : 'gray'}>
+                          <Badge
+                            size="md"
+                            color={team.locked ? 'red' : 'green'}
+                            className="yy-semantic-badge"
+                            data-semantic={team.locked ? 'locked' : 'unlocked'}
+                          >
                             {team.locked ? t('admin.content.teams.locked') : t('admin.content.teams.unlocked')}
                           </Badge>
                         </Group>
@@ -284,7 +289,7 @@ const Teams: FC = () => {
 
                           <ActionIconWithConfirm
                             iconPath={team.locked ? mdiLockOpenVariantOutline : mdiLockOutline}
-                            color={team.locked ? 'gray' : 'yellow'}
+                            color={team.locked ? 'green' : 'red'}
                             message={t('admin.content.teams.lock', {
                               name: team.name,
                               action: team.locked ? t('admin.button.teams.do_unlock') : t('admin.button.teams.do_lock'),

@@ -79,13 +79,13 @@ const osTypeLabels: Record<string, string> = {
   windows: 'Windows',
 }
 
-const statusConfig: Record<string, { label: string; color: string }> = {
-  '0': { label: '就绪', color: 'teal' },
-  ready: { label: '就绪', color: 'teal' },
-  '1': { label: '导入中', color: 'yellow' },
-  importing: { label: '导入中', color: 'yellow' },
-  '2': { label: '异常', color: 'red' },
-  error: { label: '异常', color: 'red' },
+const statusConfig: Record<string, { label: string; color: string; semantic: string }> = {
+  '0': { label: '就绪', color: 'green', semantic: 'ready' },
+  ready: { label: '就绪', color: 'green', semantic: 'ready' },
+  '1': { label: '导入中', color: 'violet', semantic: 'importing' },
+  importing: { label: '导入中', color: 'violet', semantic: 'importing' },
+  '2': { label: '异常', color: 'red', semantic: 'error' },
+  error: { label: '异常', color: 'red', semantic: 'error' },
 }
 
 function normalizeKey(value: string | number | undefined | null) {
@@ -97,7 +97,23 @@ function labelFor(map: Record<string, string>, value: string | number | undefine
 }
 
 function statusFor(value: string | number | undefined | null) {
-  return statusConfig[normalizeKey(value)] ?? { label: String(value ?? '未知'), color: 'gray' }
+  return statusConfig[normalizeKey(value)] ?? { label: String(value ?? '未知'), color: 'gray', semantic: 'unknown' }
+}
+
+function osSemantic(value: string | number | undefined | null) {
+  const key = normalizeKey(value)
+  if (key === '1' || key === 'windows') return 'windows'
+  if (key === '0' || key === 'linux') return 'linux'
+  return 'neutral'
+}
+
+function imageTypeSemantic(value: string | number | undefined | null) {
+  const key = normalizeKey(value)
+  if (key === '0' || key === 'docker') return 'docker'
+  if (key === '1' || key === 'qcow2') return 'vm-qcow2'
+  if (key === '2' || key === 'ova') return 'vm-ova'
+  if (key === '3' || key === 'vmdk') return 'vm-vmdk'
+  return 'neutral'
 }
 
 function formatSize(bytes: number) {
@@ -684,18 +700,39 @@ export default function ImagesPage() {
                           )}
                         </Stack>
                       </Table.Td>
-                      <Table.Td>{labelFor(imageTypeLabels, img.imageType)}</Table.Td>
                       <Table.Td>
-                        <Badge variant="light">{labelFor(osTypeLabels, img.osType)}</Badge>
+                        <Badge
+                          variant="light"
+                          color={imageTypeSemantic(img.imageType) === 'docker' ? 'teal' : 'violet'}
+                          className="yy-semantic-badge"
+                          data-semantic={imageTypeSemantic(img.imageType)}
+                        >
+                          {labelFor(imageTypeLabels, img.imageType)}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge
+                          variant="light"
+                          color={osSemantic(img.osType) === 'windows' ? 'blue' : 'lime'}
+                          className="yy-semantic-badge"
+                          data-semantic={osSemantic(img.osType)}
+                        >
+                          {labelFor(osTypeLabels, img.osType)}
+                        </Badge>
                       </Table.Td>
                       <Table.Td>{formatSize(img.fileSize)}</Table.Td>
                       <Table.Td>
                         <Stack gap={4}>
-                          <Badge color={status.color} variant="light" className="yy-status-badge">
+                          <Badge
+                            color={status.color}
+                            variant="light"
+                            className="yy-status-badge yy-semantic-badge"
+                            data-semantic={status.semantic}
+                          >
                             {status.label}
                           </Badge>
                           {normalizeKey(img.status) === '1' || normalizeKey(img.status) === 'importing' ? (
-                            <Progress value={66} color="yellow" size={3} radius="xs" animated />
+                            <Progress value={66} color="violet" size={3} radius="xs" animated />
                           ) : null}
                         </Stack>
                       </Table.Td>

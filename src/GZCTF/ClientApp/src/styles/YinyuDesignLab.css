@@ -407,28 +407,9 @@ a {
   z-index: 0;
   pointer-events: none;
   border-radius: inherit;
-  background:
-    radial-gradient(ellipse at 14% 18%, rgba(140, 172, 133, 0.15), transparent 30%),
-    radial-gradient(ellipse at 84% 72%, rgba(245, 245, 247, 0.08), transparent 32%),
-    radial-gradient(ellipse at 46% 38%, rgba(140, 172, 133, 0.055), transparent 42%),
-    conic-gradient(
-      from 30deg at 50% 50%,
-      transparent 0 13%,
-      rgba(140, 172, 133, 0.055) 14% 16%,
-      transparent 17% 30%,
-      rgba(245, 245, 247, 0.035) 31% 33%,
-      transparent 34% 100%
-    );
-  background-size:
-    180% 180%,
-    190% 190%,
-    230% 230%,
-    18px 16px;
-  background-position:
-    0% 0%,
-    100% 100%,
-    0% 50%,
-    0 0;
+  background: linear-gradient(112deg, transparent 14%, rgba(245, 245, 247, 0.08) 46%, transparent 74%);
+  background-size: auto;
+  background-position: center;
   mix-blend-mode: screen;
   opacity: 0;
   transition: opacity 260ms ease;
@@ -442,14 +423,9 @@ a {
   z-index: 0;
   pointer-events: none;
   border-radius: inherit;
-  background:
-    radial-gradient(circle at 50% 14%, rgba(245, 245, 247, 0.07) 0 2px, transparent 2.6px),
-    radial-gradient(circle at 0% 64%, rgba(140, 172, 133, 0.075) 0 2px, transparent 2.6px),
-    radial-gradient(circle at 100% 64%, rgba(245, 245, 247, 0.055) 0 2px, transparent 2.6px);
-  background-size: 18px 16px;
-  mask-image:
-    radial-gradient(ellipse at var(--pulse-x, 54%) var(--pulse-y, 34%), rgba(0, 0, 0, 0.66), transparent 58%),
-    linear-gradient(120deg, transparent 0 10%, rgba(0, 0, 0, 0.28) 44%, transparent 78%);
+  background: linear-gradient(112deg, transparent 18%, rgba(245, 245, 247, 0.1) 44%, transparent 72%);
+  background-size: auto;
+  mask-image: none;
   opacity: 0;
   transform: translate3d(0, 0, 0);
   transition: opacity 260ms ease;

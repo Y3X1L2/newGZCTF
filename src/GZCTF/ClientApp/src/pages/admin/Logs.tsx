@@ -24,6 +24,29 @@ enum LogLevel {
   All = 'All',
 }
 
+function taskStatusSemantic(status?: TaskStatus | null) {
+  switch (status) {
+    case TaskStatus.Success:
+      return 'success'
+    case TaskStatus.Failed:
+    case TaskStatus.Denied:
+    case TaskStatus.Unhealthy:
+      return 'failed'
+    case TaskStatus.Pending:
+      return 'pending'
+    case TaskStatus.Degraded:
+      return 'warning'
+    case TaskStatus.NotFound:
+      return 'not-found'
+    case TaskStatus.Duplicate:
+      return 'duplicate'
+    case TaskStatus.Exit:
+      return 'canceled'
+    default:
+      return 'unknown'
+  }
+}
+
 const Logs: FC = () => {
   const [level, setLevel] = useState(LogLevel.Info)
   const [activePage, setPage] = useState(1)
@@ -136,7 +159,12 @@ const Logs: FC = () => {
         </Table.Td>
         <Table.Td ff="monospace">
           {item.status && (
-            <Badge size="sm" color={TaskStatusColorMap.get(item.status as TaskStatus) ?? 'gray'}>
+            <Badge
+              size="sm"
+              color={TaskStatusColorMap.get(item.status as TaskStatus) ?? 'gray'}
+              className="yy-semantic-badge"
+              data-semantic={taskStatusSemantic(item.status as TaskStatus)}
+            >
               {item.status}
             </Badge>
           )}

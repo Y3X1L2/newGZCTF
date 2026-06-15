@@ -25,9 +25,9 @@ import { useUser } from '@Hooks/useUser'
 import api, { AdminUserInfoModel, Role, UserInfoModel } from '@Api'
 
 export const RoleColorMap = new Map<Role, string>([
-  [Role.Admin, 'blue'],
-  [Role.User, 'green'],
-  [Role.Monitor, 'yellow'],
+  [Role.Admin, 'violet'],
+  [Role.User, 'teal'],
+  [Role.Monitor, 'cyan'],
   [Role.Banned, 'red'],
 ])
 

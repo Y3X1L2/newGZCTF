@@ -152,7 +152,8 @@ export default function ScenarioList() {
                       <Badge
                         color={scenario.isEnabled ? 'green' : 'yellow'}
                         variant="light"
-                        className="yy-status-badge"
+                        className="yy-status-badge yy-semantic-badge"
+                        data-semantic={scenario.isEnabled ? 'ready' : 'pending'}
                       >
                         {scenario.isEnabled ? '已发布' : scenario.status}
                       </Badge>

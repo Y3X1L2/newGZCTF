@@ -11,12 +11,12 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 const typeLabels: Record<number, string> = { 0: 'Docker', 1: 'VM' }
 const actionLabels: Record<number, string> = { 0: '创建', 1: '启动', 2: '销毁', 3: '快照恢复' }
-const statusConfig: Record<number, { label: string; color: string }> = {
-  0: { label: '等待中', color: 'yellow' },
-  1: { label: '执行中', color: 'blue' },
-  2: { label: '已完成', color: 'green' },
-  3: { label: '失败', color: 'red' },
-  4: { label: '已取消', color: 'gray' },
+const statusConfig: Record<number, { label: string; color: string; semantic: string }> = {
+  0: { label: '等待中', color: 'violet', semantic: 'pending' },
+  1: { label: '执行中', color: 'blue', semantic: 'running' },
+  2: { label: '已完成', color: 'green', semantic: 'success' },
+  3: { label: '失败', color: 'red', semantic: 'failed' },
+  4: { label: '已取消', color: 'gray', semantic: 'canceled' },
 }
 
 export default function QueuePage() {
@@ -95,7 +95,7 @@ export default function QueuePage() {
                   </Table.Tr>
                 )}
                 {items.map((item: any) => {
-                  const st = statusConfig[item.status] ?? { label: 'Unknown', color: 'gray' }
+                  const st = statusConfig[item.status] ?? { label: 'Unknown', color: 'gray', semantic: 'unknown' }
                   const canCancel = item.status === 0 || item.status === 1
                   return (
                     <Table.Tr key={item.id}>
@@ -114,7 +114,7 @@ export default function QueuePage() {
                       <Table.Td>{typeLabels[item.type] ?? item.type}</Table.Td>
                       <Table.Td>{actionLabels[item.action] ?? item.action}</Table.Td>
                       <Table.Td>
-                        <Badge color={st.color} size="sm">
+                        <Badge color={st.color} size="sm" className="yy-semantic-badge" data-semantic={st.semantic}>
                           {st.label}
                         </Badge>
                       </Table.Td>

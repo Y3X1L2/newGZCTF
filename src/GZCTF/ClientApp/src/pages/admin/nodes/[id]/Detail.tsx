@@ -88,7 +88,12 @@ export default function NodeDetailPage() {
                 地址: {node.hostAddress}
               </Text>
             </Stack>
-            <Badge size="lg" color={node.status === 'Online' ? 'green' : 'red'} className="yy-status-badge">
+            <Badge
+              size="lg"
+              color={node.status === 'Online' ? 'green' : 'red'}
+              className="yy-status-badge yy-semantic-badge"
+              data-semantic={node.status === 'Online' ? 'online' : 'offline'}
+            >
               {node.status}
             </Badge>
           </Group>

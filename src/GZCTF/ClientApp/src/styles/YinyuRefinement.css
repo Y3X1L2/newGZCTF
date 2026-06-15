@@ -1353,10 +1353,7 @@
   padding: 0.72rem 0.82rem;
   border: 1px solid rgba(140, 172, 133, 0.14);
   border-radius: calc(var(--yy-radius) - 4px);
-  background:
-    var(--yy-hex-flow),
-    rgba(255, 255, 255, 0.026);
-  background-size: 1rem 0.866rem, auto;
+  background: rgba(255, 255, 255, 0.032);
 }
 
 .yy-team-hero-stats span {
@@ -2369,9 +2366,8 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: var(--yy-hex-flow);
-  background-size: 1.12rem 0.97rem;
-  opacity: 0.16;
+  background: none;
+  opacity: 0;
 }
 
 .yy-game-detail-emblem[data-has-poster='true'] {
@@ -3843,14 +3839,8 @@
 
 .yy-home-page .panel-card::before,
 .yy-games-page .panel-card::before {
-  background:
-    radial-gradient(ellipse at 16% 12%, rgba(140, 172, 133, 0.14), transparent 34%),
-    radial-gradient(ellipse at 86% 82%, rgba(245, 245, 247, 0.06), transparent 38%),
-    var(--yy-hex-flow);
-  background-size:
-    auto,
-    auto,
-    1.1rem 0.95rem;
+  background: linear-gradient(112deg, transparent 16%, rgba(221, 229, 223, 0.08) 46%, transparent 76%);
+  background-size: auto;
   background-position:
     0 0,
     100% 100%,
@@ -4418,8 +4408,7 @@
 
 .yy-pentest-player-header {
   background:
-    radial-gradient(ellipse at 12% 18%, rgba(140, 172, 133, 0.13), transparent 42%),
-    var(--yy-hex-flow),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.058), rgba(255, 255, 255, 0.014)),
     rgba(8, 14, 12, 0.78);
 }
 
@@ -4441,16 +4430,15 @@
 
 .yy-pentest-network-section {
   background:
-    radial-gradient(ellipse at 14% 18%, rgba(140, 172, 133, 0.1), transparent 28rem),
-    var(--yy-hex-flow),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.056), rgba(255, 255, 255, 0.014)),
     rgba(7, 13, 11, 0.74);
 }
 
 .yy-pentest-task-card {
   min-height: 15rem;
   background:
-    linear-gradient(135deg, rgba(8, 16, 13, 0.9), rgba(4, 8, 7, 0.82)),
-    var(--yy-hex-flow);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.058), rgba(255, 255, 255, 0.014)),
+    rgba(7, 13, 11, 0.62);
 }
 
 .yy-pentest-task-card .mantine-PasswordInput-input {
@@ -6154,4 +6142,245 @@ tr.yy-bento-tone-active td {
 :root[data-yy-theme='classic'] .yy-admin-shell .yy-status-pill .yy-status-text {
   background-image: linear-gradient(105deg, #f8fff9 0%, #7ef2bd 38%, #d9fff0 66%, #8d82d8 100%) !important;
   filter: drop-shadow(0 0 0.55rem rgba(110, 255, 184, 0.18)) !important;
+}
+
+/* Card material cleanup.
+   Cards should read as glass surfaces, not particle/noise panels. This final
+   pass removes the dotted honeycomb/noise layers from shared cards and turns
+   formerly opaque card blocks into the same frosted material language. */
+.panel-card,
+.yy-panel-card,
+.yy-table-shell,
+.yy-form-section,
+.yy-modal-shell,
+.yy-drawer-body,
+.yy-confirm-panel,
+.game-index-card,
+.game-index-card.panel-card,
+.recent-game-card,
+.post-preview,
+.admin-panel,
+.metric-tile,
+.state-card,
+.challenge-card,
+.challenge-card.panel-card,
+.challenge-drawer-draft,
+.yy-magic-bento-card,
+.yy-team-switch-card,
+.yy-pentest-node-card,
+.yy-pentest-blueprint-card,
+.yy-pentest-task-card,
+.yy-monitor-event-card,
+.yy-score-timeline-panel,
+.yy-game-detail-emblem,
+.yy-team-hero-stats > div,
+.yy-pentest-player-header,
+.yy-pentest-network-section,
+.yy-theory-header,
+.yy-theory-nav-panel,
+.yy-theory-question-card,
+.yy-theory-side-panel,
+.yy-theory-scoreboard {
+  border-color: rgba(221, 229, 223, 0.14) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.018) 46%, rgba(185, 173, 209, 0.028)),
+    rgba(8, 11, 10, 0.46) !important;
+  backdrop-filter: blur(1.45rem) saturate(1.14) brightness(0.96) !important;
+  -webkit-backdrop-filter: blur(1.45rem) saturate(1.14) brightness(0.96) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.038),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 1rem 2.8rem rgba(0, 0, 0, 0.34) !important;
+}
+
+.panel-card::before,
+.panel-card::after,
+.yy-panel-card::before,
+.yy-panel-card::after,
+.yy-table-shell::before,
+.yy-table-shell::after,
+.yy-form-section::before,
+.yy-form-section::after,
+.yy-modal-shell::before,
+.yy-modal-shell::after,
+.yy-drawer-body::before,
+.yy-drawer-body::after,
+.yy-confirm-panel::before,
+.yy-confirm-panel::after,
+.game-index-card::before,
+.game-index-card::after,
+.recent-game-card::before,
+.recent-game-card::after,
+.post-preview::before,
+.post-preview::after,
+.admin-panel::before,
+.admin-panel::after,
+.metric-tile::before,
+.metric-tile::after,
+.state-card::before,
+.state-card::after,
+.challenge-card::before,
+.challenge-card::after,
+.challenge-drawer-draft::before,
+.challenge-drawer-draft::after,
+.yy-magic-bento-card::before,
+.yy-magic-bento-card::after,
+.yy-team-switch-card::before,
+.yy-team-switch-card::after,
+.yy-pentest-node-card::before,
+.yy-pentest-node-card::after,
+.yy-pentest-blueprint-card::before,
+.yy-pentest-blueprint-card::after,
+.yy-pentest-task-card::before,
+.yy-pentest-task-card::after {
+  background: none !important;
+  background-image: none !important;
+  background-size: auto !important;
+  mask-image: none !important;
+  -webkit-mask-image: none !important;
+  filter: none !important;
+  mix-blend-mode: normal !important;
+  opacity: 0 !important;
+  animation: none !important;
+}
+
+.panel-card > .yy-hex-field,
+.panel-card > .hex-field,
+.yy-panel-card > .yy-hex-field,
+.yy-panel-card > .hex-field,
+.game-index-card > .yy-hex-field,
+.game-index-card > .hex-field,
+.recent-game-card > .yy-hex-field,
+.recent-game-card > .hex-field,
+.post-preview > .yy-hex-field,
+.post-preview > .hex-field,
+.challenge-card > .yy-hex-field,
+.challenge-card > .hex-field,
+.admin-panel > .yy-hex-field,
+.admin-panel > .hex-field,
+.state-card > .yy-hex-field,
+.state-card > .hex-field {
+  display: none !important;
+}
+
+.panel-card:hover,
+.panel-card.is-active,
+.game-index-card:hover,
+.recent-game-card:hover,
+.post-preview:hover,
+.challenge-card:hover,
+.challenge-card.is-active,
+.yy-magic-bento-card:hover,
+.yy-team-switch-card:hover,
+.yy-team-switch-card.is-active {
+  border-color: rgba(167, 199, 160, 0.26) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.088), rgba(255, 255, 255, 0.024) 46%, rgba(167, 199, 160, 0.04)),
+    rgba(8, 12, 10, 0.52) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.046),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1.18rem 3.05rem rgba(0, 0, 0, 0.38),
+    0 0 1.6rem rgba(167, 199, 160, 0.08) !important;
+}
+
+/* Final semantic badge palette.
+   Admin tables use text badges heavily, so every status/category must remain
+   visually distinct after the global gradient-text treatment. */
+.yy-admin-shell .mantine-Badge-root[data-color='green'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-color='teal'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-color='lime'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='success'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='ready'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='online'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='unlocked'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='role-user'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='linux'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='docker'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='type-single'] .mantine-Badge-label,
+.yy-status-pill[data-semantic='success'] .yy-status-text,
+.yy-status-pill[data-semantic='ready'] .yy-status-text,
+.yy-status-pill[data-semantic='online'] .yy-status-text,
+.yy-status-pill[data-semantic='unlocked'] .yy-status-text,
+.yy-status-pill[data-semantic='linux'] .yy-status-text,
+.yy-status-pill[data-semantic='docker'] .yy-status-text {
+  background-image: linear-gradient(105deg, #f6fff9 0%, #9edda7 34%, #62b886 62%, #eafff0 100%) !important;
+  filter: drop-shadow(0 0 0.5rem rgba(115, 207, 144, 0.2)) !important;
+}
+
+.yy-admin-shell .mantine-Badge-root[data-color='blue'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-color='cyan'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='windows'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='running'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='local'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='role-monitor'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='type-multiple'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='category'] .mantine-Badge-label,
+.yy-status-pill[data-semantic='windows'] .yy-status-text,
+.yy-status-pill[data-semantic='running'] .yy-status-text,
+.yy-status-pill[data-semantic='local'] .yy-status-text {
+  background-image: linear-gradient(105deg, #f1fbff 0%, #8fd7ff 34%, #4e95ff 62%, #e8f8ff 100%) !important;
+  filter: drop-shadow(0 0 0.5rem rgba(92, 157, 255, 0.22)) !important;
+}
+
+.yy-admin-shell .mantine-Badge-root[data-color='violet'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-color='grape'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-color='indigo'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='pending'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='importing'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='busy'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='kvm'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='vm-qcow2'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='vm-ova'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='vm-vmdk'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='role-admin'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='type-judge'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='type'] .mantine-Badge-label,
+.yy-status-pill[data-semantic='pending'] .yy-status-text,
+.yy-status-pill[data-semantic='importing'] .yy-status-text,
+.yy-status-pill[data-semantic='busy'] .yy-status-text,
+.yy-status-pill[data-semantic='kvm'] .yy-status-text {
+  background-image: linear-gradient(105deg, #fbf8ff 0%, #cdbef1 32%, #9f89d9 62%, #f5f0ff 100%) !important;
+  filter: drop-shadow(0 0 0.54rem rgba(169, 137, 217, 0.24)) !important;
+}
+
+.yy-admin-shell .mantine-Badge-root[data-color='yellow'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-color='orange'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='warning'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='coming'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='duplicate'] .mantine-Badge-label,
+.yy-status-pill[data-semantic='warning'] .yy-status-text,
+.yy-status-pill[data-semantic='coming'] .yy-status-text,
+.yy-status-pill[data-semantic='duplicate'] .yy-status-text {
+  background-image: linear-gradient(105deg, #fffaf0 0%, #e6cc83 34%, #d9984e 62%, #fff7df 100%) !important;
+  filter: drop-shadow(0 0 0.5rem rgba(217, 152, 78, 0.2)) !important;
+}
+
+.yy-admin-shell .mantine-Badge-root[data-color='red'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='failed'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='error'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='offline'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='locked'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='role-banned'] .mantine-Badge-label,
+.yy-status-pill[data-semantic='failed'] .yy-status-text,
+.yy-status-pill[data-semantic='error'] .yy-status-text,
+.yy-status-pill[data-semantic='offline'] .yy-status-text,
+.yy-status-pill[data-semantic='locked'] .yy-status-text {
+  background-image: linear-gradient(105deg, #fff3f0 0%, #f39b8f 34%, #d95e58 62%, #ffe8e2 100%) !important;
+  filter: drop-shadow(0 0 0.54rem rgba(217, 94, 88, 0.24)) !important;
+}
+
+.yy-admin-shell .mantine-Badge-root[data-color='gray'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='neutral'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='unknown'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='canceled'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='ended'] .mantine-Badge-label,
+.yy-admin-shell .mantine-Badge-root[data-semantic='not-found'] .mantine-Badge-label,
+.yy-status-pill[data-semantic='neutral'] .yy-status-text,
+.yy-status-pill[data-semantic='unknown'] .yy-status-text,
+.yy-status-pill[data-semantic='canceled'] .yy-status-text,
+.yy-status-pill[data-semantic='ended'] .yy-status-text,
+.yy-status-pill[data-semantic='not-found'] .yy-status-text {
+  background-image: linear-gradient(105deg, #ffffff 0%, #dde5df 36%, #8c9b95 64%, #f7faf8 100%) !important;
+  filter: drop-shadow(0 0 0.42rem rgba(221, 229, 223, 0.14)) !important;
 }

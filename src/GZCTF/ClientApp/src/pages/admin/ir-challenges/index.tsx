@@ -153,7 +153,12 @@ export default function IRChallengeList() {
                     </Table.Td>
                     <Table.Td>{challenge.gameTitle ?? `赛事 #${challenge.gameId}`}</Table.Td>
                     <Table.Td>
-                      <Badge color={challenge.osType === 'Windows' ? 'blue' : 'green'} variant="light">
+                      <Badge
+                        color={challenge.osType === 'Windows' ? 'blue' : 'lime'}
+                        variant="light"
+                        className="yy-semantic-badge"
+                        data-semantic={challenge.osType === 'Windows' ? 'windows' : 'linux'}
+                      >
                         {challenge.osType}
                       </Badge>
                     </Table.Td>
@@ -162,7 +167,8 @@ export default function IRChallengeList() {
                       <Badge
                         color={challenge.isEnabled ? 'green' : 'yellow'}
                         variant="light"
-                        className="yy-status-badge"
+                        className="yy-status-badge yy-semantic-badge"
+                        data-semantic={challenge.isEnabled ? 'ready' : 'pending'}
                       >
                         {challenge.isEnabled ? '已发布' : '草稿'}
                       </Badge>

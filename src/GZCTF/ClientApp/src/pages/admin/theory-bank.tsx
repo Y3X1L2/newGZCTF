@@ -61,6 +61,9 @@ const normalizeBankName = (bankName?: string | null) => {
 const questionTypeLabel = (type: TheoryQuestionType) =>
   type === TheoryQuestionType.MultipleChoice ? '多选题' : type === TheoryQuestionType.TrueFalse ? '判断题' : '单选题'
 
+const questionTypeSemantic = (type: TheoryQuestionType) =>
+  type === TheoryQuestionType.MultipleChoice ? 'type-multiple' : type === TheoryQuestionType.TrueFalse ? 'type-judge' : 'type-single'
+
 const emptyQuestion = (): TheoryQuestionEditModel => ({
   type: TheoryQuestionType.SingleChoice,
   bankName: DEFAULT_BANK_NAME,
@@ -516,13 +519,13 @@ const TheoryBank: FC = () => {
               onChange={(value) => setBankFilter(value ?? 'All')}
               searchable
             />
-            <Badge size="lg" variant="light" color="teal">
+            <Badge size="lg" variant="light" color="teal" className="yy-semantic-badge" data-semantic="type-single">
               单选 {typeStats[TheoryQuestionType.SingleChoice]}
             </Badge>
-            <Badge size="lg" variant="light" color="blue">
+            <Badge size="lg" variant="light" color="blue" className="yy-semantic-badge" data-semantic="type-multiple">
               多选 {typeStats[TheoryQuestionType.MultipleChoice]}
             </Badge>
-            <Badge size="lg" variant="light" color="grape">
+            <Badge size="lg" variant="light" color="grape" className="yy-semantic-badge" data-semantic="type-judge">
               判断 {typeStats[TheoryQuestionType.TrueFalse]}
             </Badge>
           </SimpleGrid>
@@ -545,7 +548,20 @@ const TheoryBank: FC = () => {
                 {filteredQuestions.map((question) => (
                   <Table.Tr key={question.id}>
                     <Table.Td>
-                      <Badge variant="light">{questionTypeLabel(question.type)}</Badge>
+                      <Badge
+                        variant="light"
+                        color={
+                          question.type === TheoryQuestionType.MultipleChoice
+                            ? 'blue'
+                            : question.type === TheoryQuestionType.TrueFalse
+                              ? 'grape'
+                              : 'teal'
+                        }
+                        className="yy-semantic-badge"
+                        data-semantic={questionTypeSemantic(question.type)}
+                      >
+                        {questionTypeLabel(question.type)}
+                      </Badge>
                     </Table.Td>
                     <Table.Td>{normalizeBankName(question.bankName)}</Table.Td>
                     <Table.Td>

@@ -268,7 +268,12 @@ const Users: FC = () => {
                             {user.userName}
                           </Text>
                         </Group>
-                        <Badge size="sm" color={RoleColorMap.get(user.role ?? Role.User)}>
+                        <Badge
+                          size="sm"
+                          color={RoleColorMap.get(user.role ?? Role.User)}
+                          className="yy-semantic-badge"
+                          data-semantic={`role-${String(user.role ?? Role.User).toLowerCase()}`}
+                        >
                           {user.role}
                         </Badge>
                       </Group>

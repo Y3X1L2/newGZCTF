@@ -570,13 +570,13 @@ export const useBonusLabels = (bonus: BloodBonus) => {
 export const TaskStatusColorMap = new Map<TaskStatus | null, string>([
   [TaskStatus.Success, 'green'],
   [TaskStatus.Failed, 'red'],
-  [TaskStatus.Pending, 'yellow'],
-  [TaskStatus.Denied, 'alert'],
+  [TaskStatus.Pending, 'violet'],
+  [TaskStatus.Denied, 'red'],
   [TaskStatus.Exit, 'gray'],
-  [TaskStatus.NotFound, 'violet'],
+  [TaskStatus.NotFound, 'blue'],
   [TaskStatus.Duplicate, 'lime'],
   [TaskStatus.Degraded, 'orange'],
-  [TaskStatus.Unhealthy, 'alert'],
+  [TaskStatus.Unhealthy, 'red'],
   [null, 'gray'],
 ])
 

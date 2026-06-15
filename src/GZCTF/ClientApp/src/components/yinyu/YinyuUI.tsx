@@ -1,10 +1,17 @@
 import { Box, BoxProps } from '@mantine/core'
 import cx from 'clsx'
 import { CircleDot } from 'lucide-react'
-import { ComponentType, CSSProperties, PropsWithChildren, ReactNode } from 'react'
+import { ComponentPropsWithoutRef, ComponentType, CSSProperties, PropsWithChildren, ReactNode } from 'react'
 
 export type YinyuStatusTone = 'success' | 'warm' | 'danger' | 'neutral'
 export type YinyuStatusState = 'running' | 'solved' | 'open' | 'busy' | 'alert' | 'idle'
+type YinyuStatusPillProps = PropsWithChildren<{
+  tone?: YinyuStatusTone
+  state?: YinyuStatusState
+  icon?: ComponentType<{ size?: number; label?: string }>
+  className?: string
+}> &
+  Omit<ComponentPropsWithoutRef<'span'>, 'children'>
 
 export function getYinyuStatusState(value: ReactNode, tone?: YinyuStatusTone): YinyuStatusState {
   const text = String(value ?? '').toLowerCase()
@@ -85,16 +92,12 @@ export function YinyuStatusPill({
   state,
   icon: Icon = CircleDot,
   className,
-}: PropsWithChildren<{
-  tone?: YinyuStatusTone
-  state?: YinyuStatusState
-  icon?: ComponentType<{ size?: number; label?: string }>
-  className?: string
-}>) {
+  ...props
+}: YinyuStatusPillProps) {
   const motionState = state || getYinyuStatusState(children, tone)
 
   return (
-    <span className={cx('status-pill yy-status-pill', `tone-${tone}`, `state-${motionState}`, className)}>
+    <span className={cx('status-pill yy-status-pill', `tone-${tone}`, `state-${motionState}`, className)} {...props}>
       <span className="status-signal yy-status-signal" aria-hidden="true">
         <i />
         <i />

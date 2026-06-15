@@ -12,7 +12,15 @@ import { showErrorMsg } from '@Utils/Shared'
 import { theoryAdminApi, TheoryAnswerSheetStatus, TheoryResultsModel } from '../../../../Api/TheoryApi'
 
 const statusBadge = (status: TheoryAnswerSheetStatus) =>
-  status === TheoryAnswerSheetStatus.Submitted ? <Badge color="teal">已提交</Badge> : <Badge color="yellow">草稿</Badge>
+  status === TheoryAnswerSheetStatus.Submitted ? (
+    <Badge color="teal" className="yy-semantic-badge" data-semantic="success">
+      已提交
+    </Badge>
+  ) : (
+    <Badge color="violet" className="yy-semantic-badge" data-semantic="pending">
+      草稿
+    </Badge>
+  )
 
 const TheoryResults: FC = () => {
   const { id } = useParams()
