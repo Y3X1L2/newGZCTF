@@ -123,22 +123,22 @@ const ScreenControl: FC = () => {
               {game?.title ?? '安全综合演练大屏'}
             </Title>
             <Text className={classes.heroDescription}>
-              大屏采用 16:9 全屏布局，聚合赛事排行、实时解题日志与动态分数场景。正式入口读取当前赛事数据，演示入口用于现场调试屏幕、投影和录制效果。
+              正式入口用于现场主屏展示当前比赛数据；演示入口用于投屏、录制和设备联调，不写入任何赛事记录。
             </Text>
           </div>
 
           <div className={classes.heroMeta}>
             <div className={classes.heroMetaItem}>
-              <span>展示规格</span>
-              <strong>16:9 全屏</strong>
+              <span>当前比赛</span>
+              <strong>{game?.title ?? `赛事 #${numId}`}</strong>
             </div>
             <div className={classes.heroMetaItem}>
-              <span>视觉基调</span>
-              <strong>银色金属态势</strong>
+              <span>正式入口</span>
+              <strong>实时赛事数据</strong>
             </div>
             <div className={classes.heroMetaItem}>
-              <span>数据来源</span>
-              <strong>赛事计分榜</strong>
+              <span>使用建议</span>
+              <strong>独立窗口全屏</strong>
             </div>
           </div>
         </section>

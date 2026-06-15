@@ -7,6 +7,7 @@ import { TFunction } from 'i18next'
 import { FC, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router'
+import { BloodMedal, bloodTierFromNoticeType } from '@Components/BloodMedal'
 import { Empty } from '@Components/Empty'
 import { InlineMarkdown } from '@Components/MarkdownRenderer'
 import { YinyuHexField } from '@Components/yinyu/YinyuUI'
@@ -183,22 +184,28 @@ export const GameNoticePanel: FC = () => {
         {filteredNotices.length ? (
           <ScrollArea offsetScrollbars scrollbarSize={0} h={PANEL_HEIGHT}>
             <List size="sm" spacing={3} classNames={{ itemWrapper: misc.alignNormal }}>
-              {filteredNotices.map((notice) => (
-                <List.Item key={notice.id} icon={<Icon {...iconMap.get(notice.type)!} />}>
-                  <Stack gap={1}>
-                    <Text fz="xs" fw="bold" className="yy-readable-text">
-                      {dayjs(notice.time).locale(locale).format('SLL LTS')}
-                    </Text>
-                    {notice.type === NoticeType.Normal ? (
-                      <InlineMarkdown fz="sm" fw={500} className="yy-readable-text" source={formatNotice(t, notice)} />
-                    ) : (
-                      <Text fz="sm" fw={500} className={`${typoClasses.inline} yy-readable-text`}>
-                        {formatNotice(t, notice)}
+              {filteredNotices.map((notice) => {
+                const bloodTier = bloodTierFromNoticeType(notice.type)
+                return (
+                  <List.Item
+                    key={notice.id}
+                    icon={bloodTier ? <BloodMedal tier={bloodTier} size="xs" active /> : <Icon {...iconMap.get(notice.type)!} />}
+                  >
+                    <Stack gap={1}>
+                      <Text fz="xs" fw="bold" className="yy-readable-text">
+                        {dayjs(notice.time).locale(locale).format('SLL LTS')}
                       </Text>
-                    )}
-                  </Stack>
-                </List.Item>
-              ))}
+                      {notice.type === NoticeType.Normal ? (
+                        <InlineMarkdown fz="sm" fw={500} className="yy-readable-text" source={formatNotice(t, notice)} />
+                      ) : (
+                        <Text fz="sm" fw={500} className={`${typoClasses.inline} yy-readable-text`}>
+                          {formatNotice(t, notice)}
+                        </Text>
+                      )}
+                    </Stack>
+                  </List.Item>
+                )
+              })}
             </List>
           </ScrollArea>
         ) : (

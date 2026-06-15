@@ -54,13 +54,13 @@ const Games: FC = () => {
       <section className="yy-page-frame view-stack yy-archive-page yy-games-page">
         <YinyuSectionHead eyebrow="EXERCISE INDEX" title={t('game.title.index')}>
           <YinyuStatusPill tone="neutral" state="open">
-            {games?.total ?? 0} \u573a\u6f14\u7ec3
+            {games?.total ?? 0} 场演练
           </YinyuStatusPill>
         </YinyuSectionHead>
         {recents.length > 0 ? <GanttTimeLine items={recents} /> : null}
         {!displayedGames ? (
           <article className="state-card panel-card yy-list-loading">
-            <YinyuRouteLoader title={t('game.title.index')} description="\u6b63\u5728\u52a0\u8f7d\u8d5b\u4e8b\u5217\u8868" />
+            <YinyuRouteLoader title={t('game.title.index')} description="正在加载赛事列表" />
           </article>
         ) : displayedGames.length > 0 ? (
           <div className="yy-game-event-list">
@@ -70,7 +70,7 @@ const Games: FC = () => {
           </div>
         ) : (
           <article className="state-card panel-card">
-            <Empty description="\u6682\u65e0\u8d5b\u4e8b" />
+            <Empty description="暂无赛事" />
           </article>
         )}
         {pageCount > 0 && (

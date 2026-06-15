@@ -17,7 +17,7 @@ import {
 import { showNotification } from '@mantine/notifications'
 import { mdiArrowLeftBold, mdiArrowRightBold, mdiCheck, mdiContentSaveOutline, mdiSendCheckOutline } from '@mdi/js'
 import { Icon } from '@mdi/react'
-import { FC, useEffect, useMemo, useState } from 'react'
+import { CSSProperties, FC, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { WithGameTab } from '@Components/WithGameTab'
 import { WithNavBar } from '@Components/WithNavbar'
@@ -49,6 +49,32 @@ const TheoryQuestionCard: FC<{
   onChange: (selected: number[]) => void
 }> = ({ question, selected, disabled, onChange }) => {
   const isMultiple = question.type === TheoryQuestionType.MultipleChoice
+  const titleBoxRef = useRef<HTMLDivElement>(null)
+  const titleMeasureRef = useRef<HTMLSpanElement>(null)
+  const [titleScale, setTitleScale] = useState(1)
+
+  useLayoutEffect(() => {
+    const updateTitleScale = () => {
+      const box = titleBoxRef.current
+      const measure = titleMeasureRef.current
+      if (!box || !measure) return
+
+      const maxWidth = Math.max(160, box.clientWidth * 0.75)
+      const naturalWidth = measure.scrollWidth
+      let next = 1
+
+      while (naturalWidth * next > maxWidth && next > 0.62) {
+        next -= 0.035
+      }
+
+      setTitleScale(Number(next.toFixed(3)))
+    }
+
+    updateTitleScale()
+    const observer = new ResizeObserver(updateTitleScale)
+    if (titleBoxRef.current) observer.observe(titleBoxRef.current)
+    return () => observer.disconnect()
+  }, [question.id, question.title])
 
   return (
     <YinyuPanel p="md" className="yy-theory-question-card">
@@ -63,17 +89,23 @@ const TheoryQuestionCard: FC<{
                 {question.score} 分
               </YinyuGradientText>
             </Group>
-            <YinyuTextType
-              key={`${question.id}-${question.title}`}
-              as="h4"
-              text={question.title}
-              loop={false}
-              typingSpeed={20}
-              showCursor
-              cursorCharacter="_"
-              cursorClassName="yy-theory-type-cursor"
-              className="yy-theory-question-title-type"
-            />
+            <div className="yy-theory-title-fit-box" ref={titleBoxRef}>
+              <span ref={titleMeasureRef} className="yy-theory-title-measure" aria-hidden="true">
+                {question.title}
+              </span>
+              <YinyuTextType
+                key={`${question.id}-${question.title}`}
+                as="h4"
+                text={question.title}
+                loop={false}
+                typingSpeed={20}
+                showCursor
+                cursorCharacter="_"
+                cursorClassName="yy-theory-type-cursor"
+                className="yy-theory-question-title-type"
+                style={{ '--yy-theory-title-scale': titleScale } as CSSProperties}
+              />
+            </div>
           </Stack>
         </Group>
 
@@ -332,6 +364,7 @@ const TheoryPage: FC = () => {
                       </YinyuPanel>
 
                       <TheoryQuestionCard
+                        key={currentQuestion.id}
                         question={currentQuestion}
                         selected={answers[currentQuestion.id] ?? []}
                         disabled={submitted || loading}

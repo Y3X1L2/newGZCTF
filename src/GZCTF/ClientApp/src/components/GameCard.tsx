@@ -41,9 +41,9 @@ export function gameStatusState(status: GameStatus) {
 }
 
 export function gameStatusLabel(status: GameStatus) {
-  if (status === GameStatus.OnGoing) return '\u8fdb\u884c\u4e2d'
-  if (status === GameStatus.Coming) return '\u5f85\u5f00\u59cb'
-  return '\u5df2\u7ed3\u675f'
+  if (status === GameStatus.OnGoing) return '进行中'
+  if (status === GameStatus.Coming) return '待开始'
+  return '已结束'
 }
 
 export function compareGamesForDisplay(a: BasicGameInfoModel, b: BasicGameInfoModel) {
@@ -108,23 +108,23 @@ export const GameCard: FC<GameCardProps> = memo(({ game, compact = false, classN
           </YinyuStatusText>
         </Group>
         <Text lineClamp={2} className={cx('yy-readable-text', classes.summary)}>
-          {summary || '\u6682\u65e0\u6f14\u7ec3\u7b80\u4ecb\uff0c\u7ba1\u7406\u5458\u53ef\u5728\u8d5b\u4e8b\u7f16\u8f91\u9875\u8865\u5145\u76ee\u6807\u3001\u89c4\u5219\u4e0e\u6ce8\u610f\u4e8b\u9879\u3002'}
+          {summary || '暂无演练简介，管理员可在赛事编辑页补充目标、规则与注意事项。'}
         </Text>
         <dl className={classes.metaGrid}>
           <div>
-            <dt>{'\u6a21\u5f0f'}</dt>
+            <dt>{'模式'}</dt>
             <dd>{toLimitTag(t, limit)}</dd>
           </div>
           <div>
-            <dt>{'\u5468\u671f'}</dt>
+            <dt>{'周期'}</dt>
             <dd>{t('game.content.duration', { hours: duration })}</dd>
           </div>
           <div>
-            <dt>{'\u5f00\u59cb'}</dt>
+            <dt>{'开始'}</dt>
             <dd>{startTime.locale(locale).format('L LT')}</dd>
           </div>
           <div>
-            <dt>{'\u7ed3\u675f'}</dt>
+            <dt>{'结束'}</dt>
             <dd>{endTime.locale(locale).format('L LT')}</dd>
           </div>
         </dl>

@@ -15,6 +15,7 @@ import {
 import dayjs from 'dayjs'
 import { FC, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { BloodMedal } from '@Components/BloodMedal'
 import { MemberContributionPie } from '@Components/charts/MemberContributionPie'
 import { MemberContributionPieProps } from '@Components/charts/MemberContributionPie'
 import { TeamRadarMap, TeamRadarMapProps } from '@Components/charts/TeamRadarMap'
@@ -228,8 +229,9 @@ export const ScoreboardItemModal: FC<ScoreboardItemModalProps> = (props) => {
                             <Table.Td ff="monospace" fz="sm">
                               {chal.score}
                               {info.score && chal.score! > info.score && chal.type && BloodsTypes.includes(chal.type) && (
-                                <Text size="sm" className="yy-readable-text" span>
-                                  {`(${bloodBonusMap.get(chal.type)?.descr})`}
+                                <Text size="sm" className="yy-readable-text yy-scoreboard-blood-bonus" span>
+                                  <BloodMedal type={chal.type} size="xs" active />
+                                  {bloodBonusMap.get(chal.type)?.descr}
                                 </Text>
                               )}
                             </Table.Td>

@@ -459,6 +459,7 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams, selectedTeamId 
   const beamsRef = useRef<BeamRecord[]>([])
   const animationRef = useRef<number | null>(null)
   const mouseRef = useRef({ x: 0, y: 0 })
+  const viewRef = useRef({ pitchOffset: 0, zoom: 1 })
   const rotationSpeedRef = useRef(0.08)
   const targetCameraRef = useRef<CameraTarget>({ x: 0, zFocus: 0, y: 9, z: 19, lookAtY: 1.8 })
   const envMapRef = useRef<THREE.CubeTexture | null>(null)
@@ -519,6 +520,15 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams, selectedTeamId 
     barsRef.current = bars
     const raycaster = new THREE.Raycaster()
     const pointer = new THREE.Vector2()
+    const dragState = {
+      active: false,
+      moved: false,
+      pointerId: -1,
+      startX: 0,
+      startY: 0,
+      lastX: 0,
+      lastY: 0,
+    }
 
     const ambient = new THREE.HemisphereLight(0xffffff, 0x2a2d30, 4.1)
     scene.add(ambient)
@@ -614,35 +624,88 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams, selectedTeamId 
       })
     }
 
-    const onPointerMove = (event: PointerEvent) => {
+    const updatePointer = (event: PointerEvent) => {
       const rect = host.getBoundingClientRect()
       mouseRef.current.x = ((event.clientX - rect.left) / Math.max(rect.width, 1)) * 2 - 1
       mouseRef.current.y = -(((event.clientY - rect.top) / Math.max(rect.height, 1)) * 2 - 1)
 
       pointer.x = mouseRef.current.x
       pointer.y = mouseRef.current.y
+    }
+
+    const pickTeam = () => {
       bars.updateMatrixWorld(true)
       raycaster.setFromCamera(pointer, camera)
       const meshes = [...recordsRef.current.values()].map((record) => record.mesh)
       const hit = raycaster.intersectObjects(meshes, false)[0]
-      hoveredTeamIdRef.current = (hit?.object.userData.teamId as number | undefined) ?? null
+      return (hit?.object.userData.teamId as number | undefined) ?? null
+    }
+
+    const onPointerMove = (event: PointerEvent) => {
+      updatePointer(event)
+
+      if (dragState.active && event.pointerId === dragState.pointerId) {
+        const dx = event.clientX - dragState.lastX
+        const dy = event.clientY - dragState.lastY
+        const totalMove = Math.hypot(event.clientX - dragState.startX, event.clientY - dragState.startY)
+
+        if (totalMove > 4) dragState.moved = true
+        if (dragState.moved) {
+          city.rotation.y += dx * 0.007
+          viewRef.current.pitchOffset = clamp(viewRef.current.pitchOffset + dy * 0.0024, -0.16, 0.2)
+          hoveredTeamIdRef.current = null
+        }
+
+        dragState.lastX = event.clientX
+        dragState.lastY = event.clientY
+        return
+      }
+
+      hoveredTeamIdRef.current = pickTeam()
     }
 
     const onPointerDown = (event: PointerEvent) => {
-      if (!onSelectTeamRef.current) return
-      const rect = host.getBoundingClientRect()
-      pointer.x = ((event.clientX - rect.left) / Math.max(rect.width, 1)) * 2 - 1
-      pointer.y = -(((event.clientY - rect.top) / Math.max(rect.height, 1)) * 2 - 1)
-      bars.updateMatrixWorld(true)
-      raycaster.setFromCamera(pointer, camera)
+      if (event.button !== 0) return
+      updatePointer(event)
+      dragState.active = true
+      dragState.moved = false
+      dragState.pointerId = event.pointerId
+      dragState.startX = event.clientX
+      dragState.startY = event.clientY
+      dragState.lastX = event.clientX
+      dragState.lastY = event.clientY
+      host.setPointerCapture?.(event.pointerId)
+    }
 
-      const meshes = [...recordsRef.current.values()].map((record) => record.mesh)
-      const hit = raycaster.intersectObjects(meshes, false)[0]
-      const teamId = hit?.object.userData.teamId as number | undefined
+    const onPointerUp = (event: PointerEvent) => {
+      if (!dragState.active || event.pointerId !== dragState.pointerId) return
+      updatePointer(event)
+      const selectTeam = !dragState.moved ? onSelectTeamRef.current : undefined
+      dragState.active = false
+      dragState.moved = false
+      dragState.pointerId = -1
+      host.releasePointerCapture?.(event.pointerId)
+
+      if (!selectTeam) return
+      const teamId = pickTeam()
       if (!teamId) return
 
       const team = teamsRef.current.find((item) => item.id === teamId)
-      if (team) onSelectTeamRef.current(team)
+      if (team) selectTeam(team)
+    }
+
+    const onPointerCancel = (event: PointerEvent) => {
+      if (!dragState.active || event.pointerId !== dragState.pointerId) return
+      dragState.active = false
+      dragState.moved = false
+      dragState.pointerId = -1
+      host.releasePointerCapture?.(event.pointerId)
+    }
+
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault()
+      const delta = clamp(event.deltaY, -180, 180)
+      viewRef.current.zoom = clamp(viewRef.current.zoom + delta * 0.0012, 0.68, 1.62)
     }
 
     const resize = () => {
@@ -656,6 +719,9 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams, selectedTeamId 
 
     host.addEventListener('pointermove', onPointerMove, { passive: true })
     host.addEventListener('pointerdown', onPointerDown, { passive: true })
+    host.addEventListener('pointerup', onPointerUp, { passive: true })
+    host.addEventListener('pointercancel', onPointerCancel, { passive: true })
+    host.addEventListener('wheel', onWheel, { passive: false })
     const resizeObserver = new ResizeObserver(resize)
     resizeObserver.observe(host)
     resize()
@@ -667,14 +733,15 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams, selectedTeamId 
       const mouse = mouseRef.current
 
       const selectedTeamId = selectedTeamIdRef.current
+      const view = viewRef.current
       const targetSpeed = selectedTeamId === null
         ? 0.075 + Math.sin(elapsed * 0.29) * 0.026 + mouse.x * 0.012
         : 0.018 + Math.sin(elapsed * 0.23) * 0.006
       rotationSpeedRef.current = ease(rotationSpeedRef.current, targetSpeed, 0.018)
       city.rotation.y += rotationSpeedRef.current * delta
       const targetTilt = selectedTeamId === null
-        ? clamp(0.32 + Math.sin(elapsed * 0.22) * 0.055 + mouse.y * 0.085, 0.2, 0.56)
-        : clamp(0.24 + Math.sin(elapsed * 0.2) * 0.028, 0.2, 0.34)
+        ? clamp(0.32 + Math.sin(elapsed * 0.22) * 0.055 + mouse.y * 0.085 + view.pitchOffset, 0.16, 0.62)
+        : clamp(0.24 + Math.sin(elapsed * 0.2) * 0.028 + view.pitchOffset * 0.42, 0.18, 0.42)
       city.rotation.x = ease(city.rotation.x, targetTilt, 0.035)
 
       particles.rotation.y += delta * 0.035
@@ -743,10 +810,10 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams, selectedTeamId 
         const labelY = FOCUS_LABEL_CENTER.y
         const labelZ = FOCUS_LABEL_CENTER.z
         const orbit = elapsed * 0.26
-        const radius = clamp(8.8 + focusHeight * 0.5 + Math.sin(elapsed * 0.17) * 0.55, 9.2, 13.4)
+        const radius = clamp(8.8 + focusHeight * 0.5 + Math.sin(elapsed * 0.17) * 0.55, 9.2, 13.4) * view.zoom
         const cameraX = labelX + Math.sin(orbit) * radius
         const cameraZ = labelZ + Math.cos(orbit) * radius
-        const cameraY = labelY + clamp(1.35 + Math.sin(elapsed * 0.21) * 0.52, 0.9, 2.35)
+        const cameraY = labelY + clamp(1.35 + Math.sin(elapsed * 0.21) * 0.52, 0.9, 2.35) * clamp(view.zoom, 0.82, 1.34)
 
         camera.position.x = ease(camera.position.x, cameraX, 0.035)
         camera.position.y = ease(camera.position.y, cameraY, 0.035)
@@ -759,8 +826,8 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams, selectedTeamId 
         camera.lookAt(FOCUS_CENTER)
       } else {
         const dolly = Math.sin(elapsed * 0.18) * 2.1 + Math.sin(elapsed * 0.07) * 1.15
-        camera.position.y = ease(camera.position.y, targetCameraRef.current.y + Math.sin(elapsed * 0.12) * 0.8, 0.025)
-        camera.position.z = ease(camera.position.z, targetCameraRef.current.z + dolly, 0.025)
+        camera.position.y = ease(camera.position.y, targetCameraRef.current.y * clamp(view.zoom, 0.78, 1.34) + Math.sin(elapsed * 0.12) * 0.8, 0.025)
+        camera.position.z = ease(camera.position.z, (targetCameraRef.current.z + dolly) * view.zoom, 0.025)
         camera.position.x = ease(camera.position.x, targetCameraRef.current.x + mouse.x * 0.5, 0.025)
         SCENE_CENTER.set(
           targetCameraRef.current.x * 0.28 + Math.sin(elapsed * 0.16) * 0.42,
@@ -782,6 +849,9 @@ export const MetalScoreCity: FC<MetalScoreCityProps> = ({ teams, selectedTeamId 
       resizeObserver.disconnect()
       host.removeEventListener('pointermove', onPointerMove)
       host.removeEventListener('pointerdown', onPointerDown)
+      host.removeEventListener('pointerup', onPointerUp)
+      host.removeEventListener('pointercancel', onPointerCancel)
+      host.removeEventListener('wheel', onWheel)
       recordsRef.current.forEach(disposeRecord)
       recordsRef.current.clear()
       beamsRef.current.forEach((beam) => beam.mesh.material.dispose())

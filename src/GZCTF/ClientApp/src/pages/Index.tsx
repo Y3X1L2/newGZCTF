@@ -132,15 +132,15 @@ const Home: FC = () => {
           <main className="home-feed yy-home-event-board">
             <div className="panel-title yy-panel-title-strong yy-home-panel-heading">
               <Activity size={24} />
-              <span>{'\u6f14\u7ec3\u8d5b\u4e8b'}</span>
+              <span>{'演练赛事'}</span>
               <YinyuStatusPill tone="neutral" state="open">
-                {games?.total ?? 0} {'\u573a'}
+                {games?.total ?? 0} {'场'}
               </YinyuStatusPill>
             </div>
             <Stack gap="md" className="yy-home-event-list">
               {!displayedGames ? (
                 <article className="state-card panel-card yy-list-loading">
-                  <YinyuRouteLoader title="\u6f14\u7ec3\u8d5b\u4e8b" description="\u6b63\u5728\u52a0\u8f7d\u8d5b\u4e8b\u5217\u8868" />
+                  <YinyuRouteLoader title="演练赛事" description="正在加载赛事列表" />
                 </article>
               ) : displayedGames.length > 0 ? (
                 displayedGames.map((game) => <GameCard key={game.id} game={game} compact />)
@@ -151,8 +151,8 @@ const Home: FC = () => {
                     <YinyuHeartbeatIcon label="exercise heartbeat" />
                   </div>
                   <div>
-                    <h4>{'\u6682\u65e0\u6f14\u7ec3\u8d5b\u4e8b'}</h4>
-                    <p>{'\u65b0\u7684\u5b89\u5168\u6f14\u7ec3\u3001\u7406\u8bba\u8bad\u7ec3\u4e0e\u653b\u9632\u4efb\u52a1\u53d1\u5e03\u540e\u4f1a\u4f18\u5148\u5728\u8fd9\u91cc\u5c55\u793a\u3002'}</p>
+                    <h4>{'暂无演练赛事'}</h4>
+                    <p>{'新的安全演练、理论训练与攻防任务发布后会优先在这里展示。'}</p>
                   </div>
                 </article>
               )}
@@ -162,9 +162,9 @@ const Home: FC = () => {
           <aside className="recent-games-draft yy-home-notice-rail">
             <div className="panel-title yy-panel-title-strong yy-home-panel-heading">
               <Bell size={22} />
-              <span>{'\u5e73\u53f0\u901a\u77e5'}</span>
+              <span>{'平台通知'}</span>
               <YinyuStatusPill tone="neutral" state="open">
-                {posts?.length ?? 0} {'\u6761'}
+                {posts?.length ?? 0} {'条'}
               </YinyuStatusPill>
             </div>
             <div className="yy-home-notice-divider" aria-hidden="true" />
@@ -181,8 +181,8 @@ const Home: FC = () => {
                   <YinyuHeartbeatIcon label="notice heartbeat" />
                 </div>
                 <div>
-                  <h4>{posts ? '\u6682\u65e0\u5e73\u53f0\u901a\u77e5' : '\u901a\u77e5\u52a0\u8f7d\u4e2d'}</h4>
-                  <p>{'\u5e73\u53f0\u7ef4\u62a4\u3001\u8d5b\u4e8b\u5b89\u6392\u3001\u89c4\u5219\u8c03\u6574\u4e0e\u91cd\u8981\u6d88\u606f\u4f1a\u5728\u8fd9\u91cc\u53d1\u5e03\u3002'}</p>
+                  <h4>{posts ? '暂无平台通知' : '通知加载中'}</h4>
+                  <p>{'平台维护、赛事安排、规则调整与重要消息会在这里发布。'}</p>
                 </div>
               </article>
             )}

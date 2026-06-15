@@ -16,7 +16,7 @@ import { useLocalStorage } from '@mantine/hooks'
 import { mdiFileUploadOutline, mdiFlagOutline, mdiPuzzle } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import dayjs from 'dayjs'
-import { FC, useEffect, useState } from 'react'
+import { FC, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useParams } from 'react-router'
 import { ChallengeCard } from '@Components/ChallengeCard'
@@ -24,10 +24,13 @@ import { Empty } from '@Components/Empty'
 import { GameChallengeModal } from '@Components/GameChallengeModal'
 import { WriteupSubmitModal } from '@Components/WriteupSubmitModal'
 import { YinyuHexField } from '@Components/yinyu/YinyuUI'
-import { useChallengeCategoryLabelMap, SubmissionTypeIconMap } from '@Utils/Shared'
+import { useChallengeCategoryLabelMap } from '@Utils/Shared'
 import { useGame, useGameTeamInfo } from '@Hooks/useGame'
 import { ChallengeInfo, ChallengeCategory, SubmissionType } from '@Api'
 import classes from '@Styles/ChallengePanel.module.css'
+
+const hasInstanceEntry = (chal: ChallengeInfo) =>
+  Boolean((chal as ChallengeInfo & { context?: { instanceEntry?: string | null } }).context?.instanceEntry)
 
 export const ChallengePanel: FC = () => {
   const { hash } = useLocation()
@@ -47,7 +50,7 @@ export const ChallengePanel: FC = () => {
     getInitialValueInEffect: false,
   })
 
-  const allChallenges = Object.values(challenges ?? {}).flat()
+  const allChallenges = useMemo(() => Object.values(challenges ?? {}).flat(), [challenges])
 
   const currentChallenges =
     challenges &&
@@ -58,10 +61,36 @@ export const ChallengePanel: FC = () => {
 
   const [challenge, setChallenge] = useState<ChallengeInfo | null>(null)
   const [detailOpened, setDetailOpened] = useState(false)
-  const { iconMap, colorMap } = SubmissionTypeIconMap(0.8)
   const [writeupSubmitOpened, setWriteupSubmitOpened] = useState(false)
   const challengeCategoryLabelMap = useChallengeCategoryLabelMap()
   const { t } = useTranslation()
+  const [activeInstanceChallengeIds, setActiveInstanceChallengeIds] = useState<Set<number>>(() => new Set())
+
+  const markInstanceActive = useCallback((challengeId: number) => {
+    setActiveInstanceChallengeIds((current) => {
+      if (current.has(challengeId)) return current
+      const next = new Set(current)
+      next.add(challengeId)
+      return next
+    })
+  }, [])
+
+  const markInstanceInactive = useCallback((challengeId: number) => {
+    setActiveInstanceChallengeIds((current) => {
+      if (!current.has(challengeId)) return current
+      const next = new Set(current)
+      next.delete(challengeId)
+      return next
+    })
+  }, [])
+
+  const markSelectedInstanceActive = useCallback(() => {
+    if (challenge?.id) markInstanceActive(challenge.id)
+  }, [challenge?.id, markInstanceActive])
+
+  const markSelectedInstanceInactive = useCallback(() => {
+    if (challenge?.id) markInstanceInactive(challenge.id)
+  }, [challenge?.id, markInstanceInactive])
 
   useEffect(() => {
     const challId = hash.slice(1).split('-')[0]
@@ -76,7 +105,35 @@ export const ChallengePanel: FC = () => {
         setDetailOpened(true)
       }
     }
-  }, [hash, challenge, allChallenges])
+  }, [hash, challenge?.id, allChallenges])
+
+  useEffect(() => {
+    if (!challenges) return
+    const challengeIds = new Set(allChallenges.map((chal) => chal.id))
+    const runningIds = new Set(
+      allChallenges
+        .filter(hasInstanceEntry)
+        .map((chal) => chal.id)
+    )
+
+    setActiveInstanceChallengeIds((current) => {
+      const next = new Set(current)
+      let changed = false
+      for (const id of runningIds) {
+        if (!next.has(id)) {
+          next.add(id)
+          changed = true
+        }
+      }
+      for (const id of current) {
+        if (challengeIds.has(id) && !runningIds.has(id)) {
+          next.delete(id)
+          changed = true
+        }
+      }
+      return changed ? next : current
+    })
+  }, [challenges, allChallenges])
 
   // skeleton for loading
   if (!challenges) {
@@ -240,8 +297,6 @@ export const ChallengePanel: FC = () => {
                 <ChallengeCard
                   key={chal.id}
                   challenge={chal}
-                  iconMap={iconMap}
-                  colorMap={colorMap}
                   onClick={() => {
                     setChallenge(chal)
                     setDetailOpened(true)
@@ -250,6 +305,7 @@ export const ChallengePanel: FC = () => {
                   }}
                   solved={solved}
                   teamId={teamInfo?.rank?.id}
+                  instanceActive={activeInstanceChallengeIds.has(chal.id)}
                 />
               )
             })}
@@ -292,6 +348,8 @@ export const ChallengePanel: FC = () => {
           title={challenge?.title ?? ''}
           score={challenge?.score ?? 0}
           challengeId={challenge.id}
+          onInstanceActive={markSelectedInstanceActive}
+          onInstanceInactive={markSelectedInstanceInactive}
         />
       )}
     </>

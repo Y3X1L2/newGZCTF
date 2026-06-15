@@ -4076,6 +4076,44 @@
   background: rgba(18, 58, 48, 0.78);
 }
 
+.yy-pentest-flow-steps {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.65rem;
+  border: 1px solid rgba(107, 238, 177, 0.16);
+  border-radius: 0.6rem;
+  background: linear-gradient(135deg, rgba(4, 18, 18, 0.74), rgba(18, 34, 32, 0.5));
+}
+
+.yy-pentest-flow-step {
+  display: grid;
+  grid-template-columns: 1.35rem 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgba(224, 252, 240, 0.9);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.yy-pentest-flow-step b {
+  display: grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  color: #07120f;
+  background: linear-gradient(135deg, #9dffd5, #42f49d);
+  box-shadow: 0 0 14px rgba(66, 244, 157, 0.24);
+}
+
+.yy-pentest-flow-note {
+  padding: 0.56rem 0.65rem;
+  border-left: 2px solid rgba(185, 173, 209, 0.7);
+  border-radius: 0.45rem;
+  color: rgba(222, 246, 237, 0.82) !important;
+  background: rgba(185, 173, 209, 0.07);
+}
+
 .yy-pentest-link-hint {
   margin-top: -0.35rem;
   padding: 0.46rem 0.62rem;
@@ -6417,4 +6455,278 @@ tr.yy-bento-tone-active td {
     rgba(4, 10, 8, 0.42) !important;
   backdrop-filter: blur(1rem) saturate(1.18) !important;
   -webkit-backdrop-filter: blur(1rem) saturate(1.18) !important;
+}
+
+.yy-public-account-entry.mantine-ActionIcon-root {
+  position: fixed;
+  top: clamp(0.8rem, 1.5vw, 1.2rem);
+  right: clamp(0.9rem, 1.7vw, 1.35rem);
+  z-index: 4200;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 0.86rem;
+  color: #ff8d8d;
+  border-color: rgba(255, 91, 91, 0.62);
+  background:
+    linear-gradient(180deg, rgba(255, 92, 92, 0.15), rgba(255, 255, 255, 0.025)),
+    rgba(16, 4, 5, 0.78);
+  box-shadow:
+    0 1rem 2.6rem rgba(0, 0, 0, 0.34),
+    0 0 1.15rem rgba(255, 91, 91, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(1rem) saturate(1.18);
+  -webkit-backdrop-filter: blur(1rem) saturate(1.18);
+}
+
+.yy-public-account-entry.mantine-ActionIcon-root[data-authenticated] {
+  color: #8effc8;
+  border-color: rgba(107, 238, 177, 0.58);
+  background:
+    linear-gradient(180deg, rgba(107, 238, 177, 0.14), rgba(255, 255, 255, 0.028)),
+    rgba(3, 12, 9, 0.8);
+  box-shadow:
+    0 1rem 2.6rem rgba(0, 0, 0, 0.34),
+    0 0 1.15rem rgba(107, 238, 177, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.yy-public-account-entry.mantine-ActionIcon-root[data-has-avatar] {
+  padding: 0.28rem;
+}
+
+.yy-public-account-entry .mantine-Avatar-root {
+  width: 100%;
+  height: 100%;
+  border-radius: 0.68rem;
+}
+
+.yy-terminal-typing {
+  margin-right: clamp(4.2rem, 6vw, 6.2rem);
+}
+
+.route-loader-screen {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 18%, rgba(107, 238, 177, 0.11), transparent 28rem),
+    linear-gradient(180deg, rgba(4, 7, 6, 0.72), rgba(0, 0, 0, 0.88));
+}
+
+.route-loader,
+.yy-page-loading-overlay .route-loader,
+.yy-game-tab-loading .route-loader {
+  position: relative;
+  overflow: hidden;
+  min-height: 4.25rem;
+  padding: 0.82rem 1rem;
+  border: 1px solid rgba(107, 238, 177, 0.18);
+  border-radius: 0.92rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.022)),
+    rgba(5, 10, 9, 0.82);
+  box-shadow:
+    0 1.2rem 3rem rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(1rem) saturate(1.18);
+  -webkit-backdrop-filter: blur(1rem) saturate(1.18);
+}
+
+.route-loader::before,
+.route-loader::after {
+  display: none !important;
+}
+
+.yy-page-loading-overlay,
+.yy-game-tab-loading {
+  background:
+    radial-gradient(ellipse at 50% 22%, rgba(107, 238, 177, 0.09), transparent 30rem),
+    rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(0.48rem);
+}
+
+.yy-blood-medal {
+  display: inline-grid;
+  place-items: center;
+  width: 2.7rem;
+  height: 3.25rem;
+  flex: 0 0 auto;
+  color: inherit;
+  filter: saturate(1.08);
+  transform: translateZ(0);
+  transition:
+    transform 160ms ease,
+    filter 160ms ease,
+    opacity 160ms ease;
+}
+
+.yy-blood-medal[data-size='xs'] {
+  width: 1.72rem;
+  height: 2.08rem;
+}
+
+.yy-blood-medal[data-size='sm'] {
+  width: 2.14rem;
+  height: 2.58rem;
+}
+
+.yy-blood-medal:not([data-active]) {
+  opacity: 0.52;
+  filter: saturate(0.58) brightness(0.78);
+}
+
+.yy-blood-medal[data-own] {
+  transform: translateY(-1px) scale(1.08);
+  filter: saturate(1.18) brightness(1.06);
+}
+
+.yy-blood-medal:hover {
+  transform: translateY(-2px) scale(1.06);
+  opacity: 1;
+}
+
+.yy-blood-medal svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.yy-scoreboard-blood-bonus {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: 0.35rem;
+}
+
+.challenge-card[data-instance-active] {
+  border: 1px solid transparent !important;
+  background:
+    linear-gradient(135deg, rgba(7, 19, 15, 0.88), rgba(5, 9, 10, 0.82)) padding-box,
+    linear-gradient(
+        120deg,
+        rgba(66, 244, 157, 0.95),
+        rgba(130, 255, 205, 0.96),
+        rgba(180, 157, 231, 0.72),
+        rgba(60, 228, 174, 0.96),
+        rgba(66, 244, 157, 0.95)
+      )
+      border-box !important;
+  background-size:
+    auto,
+    320% 320% !important;
+  background-position:
+    center,
+    0% 50% !important;
+  box-shadow:
+    0 0 0 1px rgba(107, 238, 177, 0.1),
+    0 0 1.7rem rgba(107, 238, 177, 0.16),
+    0 0 2.4rem rgba(180, 157, 231, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.055) !important;
+  animation: yy-instance-aurora-border 4.8s linear infinite;
+}
+
+.challenge-card[data-instance-active]::before,
+.challenge-card[data-instance-active]::after {
+  opacity: 0.32 !important;
+}
+
+.challenge-card[data-instance-active] > .yy-hex-field,
+.challenge-card[data-instance-active] > .hex-field {
+  opacity: 0 !important;
+}
+
+@keyframes yy-instance-aurora-border {
+  0% {
+    background-position:
+      center,
+      0% 50%;
+  }
+  50% {
+    background-position:
+      center,
+      100% 50%;
+  }
+  100% {
+    background-position:
+      center,
+      0% 50%;
+  }
+}
+
+.challenge-category.yy-challenge-category-token {
+  border-color: color-mix(in srgb, var(--challenge-category-color, var(--yy-green)) 34%, transparent) !important;
+  background: color-mix(in srgb, var(--challenge-category-soft, rgba(107, 238, 177, 0.12)) 48%, rgba(6, 11, 10, 0.68)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.045),
+    0 0 0 1px rgba(255, 255, 255, 0.018) !important;
+  text-shadow: none !important;
+}
+
+.challenge-category.yy-challenge-category-token::after {
+  display: none !important;
+}
+
+.yy-theory-title-fit-box {
+  position: relative;
+  width: min(100%, 74vw);
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.yy-theory-title-measure {
+  position: absolute;
+  inset: 0 auto auto 0;
+  visibility: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 1.45vw, 1.72rem);
+  font-weight: 900;
+  line-height: 1.24;
+}
+
+.yy-theory-question-title-type {
+  --yy-theory-title-base: clamp(1.25rem, 1.45vw, 1.72rem);
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap !important;
+  text-overflow: ellipsis;
+  font-size: calc(var(--yy-theory-title-base) * var(--yy-theory-title-scale, 1)) !important;
+}
+
+.yy-theory-question-title-type > span {
+  white-space: nowrap !important;
+}
+
+body:has(.yy-theory-page) .mantine-AppShell-main {
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+.yy-game-tab-shell:has(.yy-theory-page) {
+  height: calc(100dvh - 2.35rem);
+  overflow: hidden;
+}
+
+.yy-game-tab-shell:has(.yy-theory-page) .yy-game-tab-panes.mode-switch {
+  flex: 0 0 auto;
+}
+
+.yy-theory-page {
+  max-height: calc(100dvh - 8.4rem);
+  overflow: hidden;
+}
+
+.yy-theory-workspace {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.yy-theory-main-column,
+.yy-theory-side-panel.panel-card {
+  max-height: calc(100dvh - 16rem);
+  overflow: auto;
+  scrollbar-width: thin;
 }

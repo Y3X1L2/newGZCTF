@@ -308,7 +308,11 @@ public class PenetrationService(
         var ok = 0;
         foreach (var (part, index) in participations.Select((p, i) => (p, i)))
         {
-            var result = await DeployTeam(config, part.TeamId, index, false, null, token);
+            var existing = await LoadTeamEnvironment(gameId, part.TeamId, token);
+            if (existing is not null)
+                await DestroyEnvironment(existing, token);
+
+            var result = await DeployTeam(config, part.TeamId, index, existing is not null, existing, token);
             if (result.Success)
                 ok++;
         }
@@ -1015,6 +1019,46 @@ public class PenetrationService(
         }
 
         var interfaces = GetEffectiveInterfaces(config);
+        var sampleNetworkNames = BuildNetworkPreviewKeys(config);
+        var sampleSubnetsByName = BuildNetworkSubnets(config, 0, sampleNetworkNames);
+        var sampleSubnetByNetworkId = config.Networks.ToDictionary(
+            n => n.Id,
+            n => sampleSubnetsByName.GetValueOrDefault(sampleNetworkNames[n.Id]) ?? string.Empty);
+
+        if (TryParseCidr(AllocateSubnet(config.BaseCidr, config.TeamSubnetPrefix, 0), out var sampleTeamNetwork,
+                out var sampleTeamPrefix))
+        {
+            var parsedNetworks = new List<(PenetrationNetwork Network, uint Address, int Prefix)>();
+
+            foreach (var network in config.Networks)
+            {
+                var subnet = sampleSubnetByNetworkId.GetValueOrDefault(network.Id);
+                if (string.IsNullOrWhiteSpace(subnet) || !TryParseCidr(subnet, out var networkAddress, out var networkPrefix))
+                    continue;
+
+                parsedNetworks.Add((network, networkAddress, networkPrefix));
+
+                if (!ContainsCidr(sampleTeamNetwork, sampleTeamPrefix, networkAddress, networkPrefix))
+                    result.Errors.Add($"安全域“{network.Name}”的 CIDR 必须位于样例队伍网段内。");
+
+                var interfaceCount = interfaces.Count(i => i.Network.Id == network.Id);
+                var capacity = UsableDockerHostCapacity(networkPrefix);
+                if ((uint)interfaceCount > capacity)
+                    result.Errors.Add($"安全域“{network.Name}”可用容器 IP 不足：当前需要 {interfaceCount} 个，CIDR {subnet} 约可用 {capacity} 个。");
+            }
+
+            for (var i = 0; i < parsedNetworks.Count; i++)
+            {
+                for (var j = i + 1; j < parsedNetworks.Count; j++)
+                {
+                    var left = parsedNetworks[i];
+                    var right = parsedNetworks[j];
+                    if (CidrRangesOverlap(left.Address, left.Prefix, right.Address, right.Prefix))
+                        result.Errors.Add($"安全域“{left.Network.Name}”和“{right.Network.Name}”的 CIDR 存在重叠。");
+                }
+            }
+        }
+
         var staticIpByNetwork = new Dictionary<int, HashSet<string>>();
 
         foreach (var node in config.Nodes)
@@ -1054,6 +1098,11 @@ public class PenetrationService(
                     continue;
                 }
 
+                if (sampleSubnetByNetworkId.TryGetValue(item.Network.Id, out var sampleSubnet) &&
+                    TryParseCidr(sampleSubnet, out var sampleNetwork, out var samplePrefix) &&
+                    !ContainsAddress(sampleNetwork, samplePrefix, staticIp))
+                    result.Errors.Add($"节点“{item.Node.Name}”网卡“{item.Name}”的固定 IP 必须位于安全域“{item.Network.Name}”样例 CIDR 内。");
+
                 if (!staticIpByNetwork.TryGetValue(item.Network.Id, out var usedIps))
                 {
                     usedIps = new HashSet<string>(StringComparer.Ordinal);
@@ -1067,6 +1116,16 @@ public class PenetrationService(
 
         foreach (var edge in config.Edges)
         {
+            var sourceExists = edge.SourceKind == PenetrationPolicyScope.Network
+                ? config.Networks.Any(n => n.Id == edge.SourceId)
+                : config.Nodes.Any(n => n.Id == edge.SourceId || n.Id == edge.SourceNodeId);
+            var targetExists = edge.TargetKind == PenetrationPolicyScope.Network
+                ? config.Networks.Any(n => n.Id == edge.TargetId)
+                : config.Nodes.Any(n => n.Id == edge.TargetId || n.Id == edge.TargetNodeId);
+
+            if (!sourceExists || !targetExists)
+                result.Errors.Add($"访问策略“{edge.Label ?? edge.Id.ToString()}”引用了不存在的源或目标。");
+
             if (edge.PolicyAction == PenetrationPolicyAction.Allow && edge.IsRouteHint &&
                 edge.SourceKind == PenetrationPolicyScope.Node && edge.TargetKind == PenetrationPolicyScope.Node)
             {
@@ -1076,6 +1135,9 @@ public class PenetrationService(
                     result.Errors.Add($"访问策略“{edge.Label ?? edge.Id.ToString()}”引用了不存在的节点。");
             }
         }
+
+        if (config.Edges.Count > 0)
+            result.Warnings.Add("访问策略会进入部署计划、选手拓扑和任务链；当前运行期隔离由安全域 Docker 网络与多网卡边界实现，尚未生成端口级 ACL。");
 
         result.Valid = result.Errors.Count == 0;
         return result;
@@ -1161,8 +1223,7 @@ public class PenetrationService(
     async Task<RuntimePlan> BuildRuntimePlan(PenetrationConfig config, int teamIndex, int teamId,
         CancellationToken token)
     {
-        var networkNames = config.Networks.ToDictionary(n => n.Id,
-            n => $"pentest-g{config.GameId}-t{teamId}-{n.Slug}-{config.PublishedVersion}");
+        var networkNames = config.Networks.ToDictionary(n => n.Id, n => BuildRuntimeNetworkName(config, teamId, n));
         var networkSubnets = BuildNetworkSubnets(config, teamIndex, networkNames);
         var networks = config.Networks.OrderBy(n => n.OrderIndex).Select(n => new RuntimeNetworkPlan(
             n,
@@ -1310,7 +1371,7 @@ public class PenetrationService(
 
     static PenetrationConfigModel ToModel(PenetrationConfig config)
     {
-        var networkNames = config.Networks.ToDictionary(n => n.Id, n => n.Slug);
+        var networkNames = BuildNetworkPreviewKeys(config);
         var networkPreview = BuildNetworkSubnets(config, 0, networkNames)
             .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal);
         var effectiveInterfaces = GetEffectiveInterfaces(config).ToList();
@@ -1342,7 +1403,7 @@ public class PenetrationService(
                 Width = n.Width <= 0 ? 560 : n.Width,
                 Height = n.Height <= 0 ? 390 : n.Height,
                 Collapsed = n.Collapsed,
-                PreviewCidr = networkPreview.GetValueOrDefault(n.Slug) ?? n.Cidr
+                PreviewCidr = networkPreview.GetValueOrDefault(networkNames[n.Id]) ?? n.Cidr
             }).ToList(),
             Nodes = config.Nodes.OrderBy(n => n.OrderIndex).Select(n =>
             {
@@ -1431,7 +1492,7 @@ public class PenetrationService(
     static Dictionary<string, string> BuildPreviewInterfaceIps(PenetrationConfig config,
         IReadOnlyCollection<EffectiveInterface> interfaces)
     {
-        var networkNames = config.Networks.ToDictionary(n => n.Id, n => n.Slug);
+        var networkNames = BuildNetworkPreviewKeys(config);
         var subnets = BuildNetworkSubnets(config, 0, networkNames);
         return AllocateInterfaceIps(config, interfaces, 0, networkNames, subnets)
             .ToDictionary(kv => kv.Key.Key, kv => kv.Value);
@@ -1507,20 +1568,42 @@ public class PenetrationService(
     {
         var result = new Dictionary<EffectiveInterface, string>();
         var counters = interfaces.GroupBy(i => i.Network.Id).ToDictionary(g => g.Key, _ => 2u);
+        var usedByNetwork = interfaces.GroupBy(i => i.Network.Id)
+            .ToDictionary(g => g.Key, _ => new HashSet<string>(StringComparer.Ordinal));
+        var ordered = interfaces.OrderBy(i => i.Network.OrderIndex).ThenBy(i => i.Node.OrderIndex).ThenBy(i => i.OrderIndex)
+            .ToArray();
 
-        foreach (var item in interfaces.OrderBy(i => i.Network.OrderIndex).ThenBy(i => i.Node.OrderIndex).ThenBy(i => i.OrderIndex))
+        foreach (var item in ordered)
         {
             if (!string.IsNullOrWhiteSpace(item.StaticIp) && IPAddress.TryParse(item.StaticIp, out var staticIp))
             {
-                result[item] = ShiftStaticIp(config, item.Network.Id, staticIp, teamIndex, networkNames);
-                continue;
+                var shifted = ShiftStaticIp(config, item.Network.Id, staticIp, teamIndex, networkNames);
+                result[item] = shifted;
+                usedByNetwork[item.Network.Id].Add(shifted);
             }
+        }
+
+        foreach (var item in ordered)
+        {
+            if (result.ContainsKey(item))
+                continue;
 
             var networkName = networkNames[item.Network.Id];
             var subnet = networkSubnets[networkName];
-            TryParseCidr(subnet, out var network, out _);
+            TryParseCidr(subnet, out var network, out var prefix);
+            var (_, end) = CidrRange(network, prefix);
             var offset = counters[item.Network.Id]++;
-            result[item] = FromUInt(network + offset).ToString();
+            var candidate = network + offset;
+
+            while ((ulong)candidate < end && usedByNetwork[item.Network.Id].Contains(FromUInt(candidate).ToString()))
+            {
+                offset = counters[item.Network.Id]++;
+                candidate = network + offset;
+            }
+
+            var ip = FromUInt(candidate).ToString();
+            result[item] = ip;
+            usedByNetwork[item.Network.Id].Add(ip);
         }
 
         return result;
@@ -1734,6 +1817,44 @@ public class PenetrationService(
         return true;
     }
 
+    static (ulong Start, ulong End) CidrRange(uint network, int prefix)
+    {
+        var size = prefix >= 32 ? 1UL : 1UL << (32 - prefix);
+        var mask = prefix == 0 ? 0u : uint.MaxValue << (32 - prefix);
+        var start = (ulong)(network & mask);
+        return (start, start + size - 1);
+    }
+
+    static bool ContainsCidr(uint outerNetwork, int outerPrefix, uint innerNetwork, int innerPrefix)
+    {
+        var outer = CidrRange(outerNetwork, outerPrefix);
+        var inner = CidrRange(innerNetwork, innerPrefix);
+        return inner.Start >= outer.Start && inner.End <= outer.End;
+    }
+
+    static bool ContainsAddress(uint network, int prefix, IPAddress address)
+    {
+        var range = CidrRange(network, prefix);
+        var value = (ulong)ToUInt(address);
+        return value >= range.Start && value <= range.End;
+    }
+
+    static bool CidrRangesOverlap(uint leftNetwork, int leftPrefix, uint rightNetwork, int rightPrefix)
+    {
+        var left = CidrRange(leftNetwork, leftPrefix);
+        var right = CidrRange(rightNetwork, rightPrefix);
+        return left.Start <= right.End && right.Start <= left.End;
+    }
+
+    static uint UsableDockerHostCapacity(int prefix)
+    {
+        if (prefix >= 31)
+            return 0;
+
+        var size = 1UL << (32 - prefix);
+        return size <= 3 ? 0 : (uint)(size - 3);
+    }
+
     static string AllocateSubnet(string baseCidr, int prefix, int index)
     {
         if (!TryParseCidr(baseCidr, out var network, out var basePrefix))
@@ -1842,6 +1963,12 @@ public class PenetrationService(
 
     static bool IsInternalNetwork(PenetrationNetwork network) =>
         network.ZoneType != PenetrationZoneType.Public && !network.IsEntry;
+
+    static Dictionary<int, string> BuildNetworkPreviewKeys(PenetrationConfig config) =>
+        config.Networks.ToDictionary(n => n.Id, n => $"preview-{n.Id}");
+
+    static string BuildRuntimeNetworkName(PenetrationConfig config, int teamId, PenetrationNetwork network) =>
+        $"pentest-g{config.GameId}-t{teamId}-n{network.Id}-{network.Slug}-{config.PublishedVersion}";
 
     sealed record RuntimePlan(List<RuntimeNetworkPlan> Networks, List<RuntimeNodePlan> Nodes);
 

@@ -4,13 +4,29 @@ import { GameStatus } from '@Components/GameCard'
 import { useChallengeCategoryLabelMap } from '@Utils/Shared'
 import { OnceSWRConfig } from '@Hooks/useConfig'
 import { getGameStatus, useAdminGame } from '@Hooks/useGame'
-import api, { AnswerResult, EventType, GameEvent, GameType, ParticipationStatus, ScoreboardItem, Submission } from '@Api'
+import api, {
+  AnswerResult,
+  ChallengeInfo,
+  ChallengeInfoModel,
+  EventType,
+  GameEvent,
+  GameType,
+  ParticipationStatus,
+  ScoreboardItem,
+  Submission,
+} from '@Api'
 import {
   AwdpAttackLogItem,
   awdpAdminApi,
   AwdpScoreboardItem,
   AwdpServiceViewModel,
 } from '../../Api/AwdpApi'
+import {
+  penetrationAdminApi,
+  PenetrationScoreboardItemModel,
+  PenetrationScoreItemModel,
+  PenetrationSubmissionLogModel,
+} from '../../Api/PenetrationApi'
 import { theoryAdminApi, theoryPlayerApi, TheoryPaperDetailModel, TheoryScoreboardItemModel } from '../../Api/TheoryApi'
 
 // ─── Data Types (matching Ctfscreen interfaces) ────────────────────────────────
@@ -44,6 +60,70 @@ interface ScreenScoreItem {
   lastSubmissionTime?: number
   breakdown: TeamCategoryBreakdown[]
 }
+
+type ScreenChallenge = Pick<ChallengeInfo, 'id' | 'title' | 'category' | 'score' | 'solved' | 'bloods'>
+
+const toArray = <T,>(value?: T[] | Record<string, T> | null): T[] => {
+  if (!value) return []
+  return Array.isArray(value) ? value : Object.values(value)
+}
+
+const buildChallengeMetaMap = (
+  scoreboardChallenges: Record<string, ChallengeInfo[]> | undefined,
+  editChallenges: ChallengeInfoModel[] | undefined
+) => {
+  const grouped = new Map<string, ScreenChallenge[]>()
+  const byId = new Map<number, ScreenChallenge>()
+
+  const append = (challenge: ScreenChallenge) => {
+    const categoryKey = String(challenge.category ?? 'Misc')
+    const list = grouped.get(categoryKey) ?? []
+    list.push(challenge)
+    grouped.set(categoryKey, list)
+    byId.set(challenge.id, challenge)
+  }
+
+  editChallenges
+    ?.filter((challenge) => challenge.isEnabled !== false && typeof challenge.id === 'number')
+    .forEach((challenge) => {
+      append({
+        id: challenge.id!,
+        title: challenge.title,
+        category: challenge.category ?? 'Misc',
+        score: challenge.score ?? challenge.originalScore ?? 0,
+        solved: 0,
+        bloods: [],
+      } as ScreenChallenge)
+    })
+
+  Object.values(scoreboardChallenges ?? {})
+    .flat()
+    .forEach((challenge) => {
+      const previous = byId.get(challenge.id)
+      const next: ScreenChallenge = { ...previous, ...challenge }
+      if (previous) {
+        const previousCategory = String(previous.category ?? 'Misc')
+        grouped.set(
+          previousCategory,
+          (grouped.get(previousCategory) ?? []).filter((item) => item.id !== previous.id)
+        )
+      }
+      append(next)
+    })
+
+  grouped.forEach((list, category) => {
+    grouped.set(
+      category,
+      list
+        .filter((challenge, index, source) => source.findIndex((item) => item.id === challenge.id) === index)
+        .sort((left, right) => left.title.localeCompare(right.title))
+    )
+  })
+
+  return grouped
+}
+
+const solveScoreKey = (team?: string | null, challenge?: string | null) => `${team ?? ''}::${challenge ?? ''}`
 
 export interface Category {
   name: string
@@ -175,6 +255,9 @@ export const useCTFScreenData = (numId: number) => {
   const [awdpServices, setAwdpServices] = useState<AwdpServiceViewModel[]>([])
   const [awdpScoreboard, setAwdpScoreboard] = useState<AwdpScoreboardItem[]>([])
   const [awdpAttackLogs, setAwdpAttackLogs] = useState<AwdpAttackLogItem[]>([])
+  const [pentestScoreboard, setPentestScoreboard] = useState<PenetrationScoreboardItemModel[]>([])
+  const [pentestSubmissions, setPentestSubmissions] = useState<PenetrationSubmissionLogModel[]>([])
+  const [pentestScoreItems, setPentestScoreItems] = useState<PenetrationScoreItemModel[]>([])
   const [prevRankMap, setPrevRankMap] = useState(new Map<number, number>())
   const scoreboardSnapshotRef = useRef(new Map<number, { rank: number; score: number }>())
 
@@ -186,12 +269,17 @@ export const useCTFScreenData = (numId: number) => {
   const canLoadScoreboard = numId > 0 && !!game && !isTestMode && statusInfo.status !== GameStatus.Coming
   const canLoadMonitor = numId > 0 && !!game && !isTestMode && statusInfo.status !== GameStatus.Coming
   const canLoadParticipations = numId > 0 && !!game && !isTestMode
+  const isCtfScoreGame =
+    game?.gameType === GameType.Jeopardy || game?.gameType === GameType.AWDP || game?.gameType === GameType.Mixed
   const isTheoryScoreGame = game?.gameType === GameType.Theory || game?.gameType === GameType.Mixed
   const isAwdpScoreGame = game?.gameType === GameType.AWDP || game?.gameType === GameType.Mixed
+  const isPentestScoreGame = game?.gameType === GameType.Penetration || game?.gameType === GameType.Mixed
+  const canLoadCtfMeta = numId > 0 && !!game && !isTestMode && isCtfScoreGame
   const canLoadTheoryScoreboard = canLoadScoreboard && isTheoryScoreGame
   const canLoadTheoryMeta = numId > 0 && !!game && !isTestMode && isTheoryScoreGame
   const canLoadAwdpMeta = numId > 0 && !!game && !isTestMode && isAwdpScoreGame
   const canLoadAwdpScoreboard = canLoadScoreboard && isAwdpScoreGame
+  const canLoadPentestScoreboard = canLoadScoreboard && isPentestScoreGame
 
   const { data: liveScoreboard, mutate: mutateScoreboard } = api.game.useGameScoreboard(
     numId,
@@ -202,6 +290,7 @@ export const useCTFScreenData = (numId: number) => {
     canLoadScoreboard
   )
   const { data: liveParticipations } = api.game.useGameParticipations(numId, OnceSWRConfig, canLoadParticipations)
+  const { data: ctfChallengeMeta } = api.edit.useEditGetGameChallenges(numId, OnceSWRConfig, canLoadCtfMeta)
   const { data: initialEvents } = api.game.useGameEvents(
     numId,
     { hideContainer: true, count: MAX_EVENTS },
@@ -219,6 +308,11 @@ export const useCTFScreenData = (numId: number) => {
   const participations = liveParticipations
   const eventFeed = liveEvents
   const submissionFeed = liveSubmissions
+  const screenChallengeMap = useMemo(
+    () => buildChallengeMetaMap(scoreboard?.challenges, ctfChallengeMeta),
+    [ctfChallengeMeta, scoreboard?.challenges]
+  )
+  const screenChallenges = useMemo(() => [...screenChallengeMap.values()].flat(), [screenChallengeMap])
   const acceptedParticipations = useMemo(
     () => (participations ?? []).filter((item) => item.status === ParticipationStatus.Accepted),
     [participations]
@@ -230,6 +324,10 @@ export const useCTFScreenData = (numId: number) => {
   const awdpScoreMap = useMemo(
     () => new Map(awdpScoreboard.map((item) => [item.teamId, item])),
     [awdpScoreboard]
+  )
+  const pentestScoreMap = useMemo(
+    () => new Map(pentestScoreboard.map((item) => [item.teamId, item])),
+    [pentestScoreboard]
   )
   const awdpAttackCountByTeam = useMemo(() => {
     const map = new Map<string, number>()
@@ -250,21 +348,23 @@ export const useCTFScreenData = (numId: number) => {
   const theoryQuestionCount = theoryPaper?.questions?.length ?? 0
   const challengeCategoryMap = useMemo(() => {
     const map = new Map<number, string>()
-    Object.entries(scoreboard?.challenges ?? {}).forEach(([categoryKey, challengeList]) => {
+    screenChallengeMap.forEach((challengeList, categoryKey) => {
       const categoryName = challengeCategoryLabelMap.get(categoryKey as never)?.desrc ?? categoryKey
       challengeList.forEach((challenge) => {
         map.set(challenge.id, categoryName)
       })
     })
     return map
-  }, [challengeCategoryLabelMap, scoreboard?.challenges])
+  }, [challengeCategoryLabelMap, screenChallengeMap])
   const buildTeamBreakdown = useCallback(
     (
       base: ScoreboardItem | undefined,
       theory: TheoryScoreboardItemModel | undefined,
       awdp: AwdpScoreboardItem | undefined,
+      pentest: PenetrationScoreboardItemModel | undefined,
       awdpAttackCount = 0,
-      theorySolvedCount = 0
+      theorySolvedCount = 0,
+      pentestSolvedCount = 0
     ): TeamCategoryBreakdown[] => {
       const categoryMap = new Map<string, TeamCategoryBreakdown>()
       const addCategory = (category: string, score: number, solved = 1) => {
@@ -294,6 +394,12 @@ export const useCTFScreenData = (numId: number) => {
         addCategory('Theory', theory?.score ?? 0, theorySolvedCount)
       }
 
+      if ((pentest?.score ?? 0) > 0) {
+        addCategory('Penetration', pentest?.score ?? 0, pentestSolvedCount)
+      } else if ((base?.pentestScore ?? 0) > 0) {
+        addCategory('Penetration', base?.pentestScore ?? 0, pentestSolvedCount)
+      }
+
       return [...categoryMap.values()].sort((left, right) => {
         if (right.score !== left.score) return right.score - left.score
         return left.category.localeCompare(right.category)
@@ -302,7 +408,7 @@ export const useCTFScreenData = (numId: number) => {
     [challengeCategoryMap]
   )
   const scoreItems = useMemo<ScreenScoreItem[]>(() => {
-    const baseItems = scoreboard?.items ?? []
+    const baseItems = toArray(scoreboard?.items)
     const baseByTeam = new Map(baseItems.map((item) => [item.id, item]))
     const participationByTeam = new Map(
       acceptedParticipations
@@ -313,6 +419,7 @@ export const useCTFScreenData = (numId: number) => {
       ...baseByTeam.keys(),
       ...theoryScoreMap.keys(),
       ...awdpScoreMap.keys(),
+      ...pentestScoreMap.keys(),
       ...participationByTeam.keys(),
     ])
 
@@ -320,32 +427,45 @@ export const useCTFScreenData = (numId: number) => {
       const base = baseByTeam.get(teamId)
       const theory = theoryScoreMap.get(teamId)
       const awdp = awdpScoreMap.get(teamId)
+      const pentest = pentestScoreMap.get(teamId)
       const participation = participationByTeam.get(teamId)
-      const commonScore = game?.gameType === GameType.Theory ? 0 : base?.score ?? 0
       const theoryScore = theory?.score ?? 0
-      const awdpAttackCount = awdpAttackCountByTeam.get(base?.name ?? awdp?.teamName ?? theory?.teamName ?? '') ?? 0
+      const fallbackCtfScore = game?.gameType === GameType.Theory ? 0 : (base?.ctfScore ?? awdp?.ctfScore ?? 0)
+      const fallbackScore =
+        fallbackCtfScore +
+        theoryScore +
+        (awdp?.awdpScore ?? 0) +
+        (pentest?.score ?? 0)
+      const totalScore = base?.score !== undefined ? base.score + theoryScore : fallbackScore
+      const teamName = base?.name ?? awdp?.teamName ?? theory?.teamName ?? pentest?.teamName ?? participation?.team?.name ?? `Team ${teamId}`
+      const awdpAttackCount = awdpAttackCountByTeam.get(teamName) ?? 0
       const theorySolvedCount = estimateTheorySolvedCount(theory, theoryQuestionCount)
+      const pentestSolvedCount = pentest?.solvedCount ?? 0
       const theorySubmittedAt = theory?.submittedAt ?? 0
       const commonSubmittedAt = base?.lastSubmissionTime ?? 0
-      const awdpSubmittedAt = awdpLastTimeByTeam.get(base?.name ?? awdp?.teamName ?? theory?.teamName ?? '') ?? 0
+      const awdpSubmittedAt = awdpLastTimeByTeam.get(teamName) ?? 0
+      const pentestSubmittedAt = pentest?.lastSubmissionTime ?? 0
 
       return {
         id: teamId,
-        name: base?.name ?? awdp?.teamName ?? theory?.teamName ?? participation?.team?.name ?? `Team ${teamId}`,
+        name: teamName,
         divisionId: base?.divisionId ?? theory?.divisionId ?? participation?.divisionId,
-        score: commonScore + theoryScore,
+        score: totalScore,
         rank: 0,
         solvedCount:
-          (game?.gameType === GameType.Theory ? 0 : base?.solvedCount ?? 0) +
+          (base?.solvedCount ?? 0) +
           (awdp ? awdpAttackCount : 0) +
-          theorySolvedCount,
-        lastSubmissionTime: Math.max(commonSubmittedAt, theorySubmittedAt, awdpSubmittedAt),
+          theorySolvedCount +
+          pentestSolvedCount,
+        lastSubmissionTime: Math.max(commonSubmittedAt, theorySubmittedAt, awdpSubmittedAt, pentestSubmittedAt),
         breakdown: buildTeamBreakdown(
           game?.gameType === GameType.Theory ? undefined : base,
           theory,
           awdp,
+          pentest,
           awdpAttackCount,
-          theorySolvedCount
+          theorySolvedCount,
+          pentestSolvedCount
         ),
       }
     })
@@ -366,6 +486,7 @@ export const useCTFScreenData = (numId: number) => {
     awdpScoreMap,
     buildTeamBreakdown,
     game?.gameType,
+    pentestScoreMap,
     scoreboard?.items,
     theoryQuestionCount,
     theoryScoreMap,
@@ -420,6 +541,31 @@ export const useCTFScreenData = (numId: number) => {
     )
   }, [canLoadAwdpMeta, canLoadAwdpScoreboard, numId])
 
+  const loadPentestData = useCallback(async () => {
+    if (!canLoadPentestScoreboard) {
+      setPentestScoreboard([])
+      setPentestSubmissions([])
+      setPentestScoreItems([])
+      return
+    }
+
+    const [scoreboardResult, submissionsResult, configResult] = await Promise.allSettled([
+      penetrationAdminApi.getScoreboard(numId),
+      penetrationAdminApi.getSubmissions(numId, MAX_SUBMISSIONS, 0),
+      penetrationAdminApi.getConfig(numId),
+    ])
+
+    setPentestScoreboard(scoreboardResult.status === 'fulfilled' ? scoreboardResult.value.data ?? [] : [])
+    setPentestSubmissions(
+      submissionsResult.status === 'fulfilled' ? submissionsResult.value.data?.data ?? [] : []
+    )
+    setPentestScoreItems(
+      configResult.status === 'fulfilled'
+        ? (configResult.value.data?.nodes ?? []).flatMap((node) => node.scoreItems ?? []).filter((item) => item.isVisible)
+        : []
+    )
+  }, [canLoadPentestScoreboard, numId])
+
   // Clock update
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
@@ -464,6 +610,18 @@ export const useCTFScreenData = (numId: number) => {
 
     return () => window.clearInterval(timer)
   }, [canLoadAwdpMeta, loadAwdpData, statusInfo.status])
+
+  useEffect(() => {
+    void loadPentestData()
+
+    if (!canLoadPentestScoreboard || statusInfo.status !== GameStatus.OnGoing) return undefined
+
+    const timer = window.setInterval(() => {
+      void loadPentestData()
+    }, 30000)
+
+    return () => window.clearInterval(timer)
+  }, [canLoadPentestScoreboard, loadPentestData, statusInfo.status])
 
   // Track rank changes
   useEffect(() => {
@@ -563,7 +721,7 @@ export const useCTFScreenData = (numId: number) => {
 
       // Use scoreboard items to get each team's current total score
       const teamTotals = new Map<string, number>()
-      for (const item of (scoreboard?.items ?? [])) {
+      for (const item of toArray(scoreboard?.items)) {
         teamTotals.set(item.name, item.score)
       }
 
@@ -637,10 +795,9 @@ export const useCTFScreenData = (numId: number) => {
 
   // Categories for stats
   const categories: Category[] = useMemo(() => {
-    const challenges = scoreboard?.challenges ?? {}
     const categoryMap = new Map<string, { total: number; solved: number }>()
 
-    Object.entries(challenges).forEach(([categoryKey, challengeList]) => {
+    screenChallengeMap.forEach((challengeList, categoryKey) => {
       const categoryName = challengeCategoryLabelMap.get(categoryKey as never)?.desrc ?? categoryKey
       const current = categoryMap.get(categoryName) ?? { total: 0, solved: 0 }
       current.total += challengeList.length
@@ -654,6 +811,31 @@ export const useCTFScreenData = (numId: number) => {
         total: awdpServices.length,
         solved: awdpAttackCount,
       })
+    }
+
+    if (isPentestScoreGame && (pentestScoreItems.length > 0 || pentestSubmissions.length > 0)) {
+      if (pentestScoreItems.length > 0) {
+        const solvedKeys = new Set(
+          pentestSubmissions
+            .filter((item) => item.status === AnswerResult.Accepted)
+            .map((item) => `${item.category}:${item.itemTitle}`)
+        )
+        const pentestCategoryMap = new Map<string, { total: number; solved: number }>()
+        pentestScoreItems.forEach((item) => {
+          const current = pentestCategoryMap.get(item.category) ?? { total: 0, solved: 0 }
+          current.total += 1
+          if (solvedKeys.has(`${item.category}:${item.title}`)) current.solved += 1
+          pentestCategoryMap.set(item.category, current)
+        })
+        pentestCategoryMap.forEach((data, category) => {
+          categoryMap.set(category || 'Penetration', data)
+        })
+      } else {
+        categoryMap.set('Penetration', {
+          total: Math.max(1, pentestSubmissions.length),
+          solved: pentestSubmissions.filter((item) => item.status === AnswerResult.Accepted).length,
+        })
+      }
     }
 
     if (isTheoryScoreGame && theoryQuestionCount > 0) {
@@ -683,7 +865,10 @@ export const useCTFScreenData = (numId: number) => {
     challengeCategoryLabelMap,
     isAwdpScoreGame,
     isTheoryScoreGame,
-    scoreboard?.challenges,
+    isPentestScoreGame,
+    pentestScoreItems,
+    pentestSubmissions,
+    screenChallengeMap,
     theoryQuestionCount,
     theoryScoreboard,
   ])
@@ -692,9 +877,18 @@ export const useCTFScreenData = (numId: number) => {
   const solveEvents: SolveEvent[] = useMemo(() => {
     // Get first bloods from challenges
     const firstBloods = new Map<string, { team: string; time: number }>()
-    Object.values(scoreboard?.challenges ?? {})
-      .flat()
-      .forEach(challenge => {
+    const challengeByTitle = new Map(screenChallenges.map((challenge) => [challenge.title, challenge]))
+    const solvedScoreByTeamChallenge = new Map<string, number>()
+
+    toArray(scoreboard?.items).forEach((team) => {
+      team.solvedChallenges?.forEach((solved) => {
+        const challenge = screenChallenges.find((item) => item.id === solved.id)
+        if (!challenge) return
+        solvedScoreByTeamChallenge.set(solveScoreKey(team.name, challenge.title), solved.score)
+      })
+    })
+
+    screenChallenges.forEach(challenge => {
         if (challenge.bloods?.[0]) {
           firstBloods.set(challenge.title, {
             team: challenge.bloods[0].name,
@@ -707,13 +901,11 @@ export const useCTFScreenData = (numId: number) => {
       .filter((s): s is typeof s & { time: number } => s.status === AnswerResult.Accepted && !!s.time)
       .map((submission, index) => {
         const teamIndex = teams.findIndex(t => t.name === submission.team) ?? index
-        const categoryKey = Object.entries(scoreboard?.challenges ?? {})
-          .find(([_, challenges]) => challenges.some(c => c.title === submission.challenge))
-          ?.[0] ?? 'Misc'
+        const challengeInfo = challengeByTitle.get(submission.challenge ?? '')
+        const categoryKey = challengeInfo?.category ?? 'Misc'
         const categoryName = challengeCategoryLabelMap.get(categoryKey as never)?.desrc ?? categoryKey
-        const challengeInfo = Object.values(scoreboard?.challenges ?? {})
-          .flat()
-          .find(c => c.title === submission.challenge)
+        const submittedScore = (submission as Submission & { score?: number }).score
+        const solvedScore = solvedScoreByTeamChallenge.get(solveScoreKey(submission.team, submission.challenge))
 
         const firstBlood = firstBloods.get(submission.challenge ?? '')
         const isFirstBlood = firstBlood?.team === submission.team && firstBlood?.time === submission.time
@@ -724,7 +916,7 @@ export const useCTFScreenData = (numId: number) => {
           teamColor: TEAM_COLORS[teamIndex % TEAM_COLORS.length],
           challenge: submission.challenge ?? 'Unknown',
           category: categoryName,
-          points: challengeInfo?.score ?? 0,
+          points: submittedScore ?? solvedScore ?? challengeInfo?.score ?? 0,
           time: formatTimeAgo(submission.time, now),
           sortTime: submission.time,
           isFirst: isFirstBlood,
@@ -746,11 +938,28 @@ export const useCTFScreenData = (numId: number) => {
       }
     })
 
-    return [...ctfEvents, ...awdpEvents]
+    const pentestEvents = pentestSubmissions
+      .filter((log) => log.status === AnswerResult.Accepted)
+      .map((log, index) => {
+        const teamIndex = teams.findIndex(t => t.name === log.teamName) ?? index
+        return {
+          id: `pentest-${log.id}-${log.time}-${log.teamName}`,
+          team: log.teamName || 'Unknown',
+          teamColor: TEAM_COLORS[teamIndex % TEAM_COLORS.length],
+          challenge: `${log.nodeName} / ${log.itemTitle}`,
+          category: log.category || 'Penetration',
+          points: log.score ?? 0,
+          time: formatTimeAgo(log.time, now),
+          sortTime: log.time,
+          isFirst: false,
+        }
+      })
+
+    return [...ctfEvents, ...awdpEvents, ...pentestEvents]
       .sort((left, right) => right.sortTime - left.sortTime)
       .slice(0, 12)
       .map(({ sortTime, ...event }) => event)
-  }, [awdpAttackLogs, submissionFeed, scoreboard?.challenges, teams, challengeCategoryLabelMap, now])
+  }, [awdpAttackLogs, pentestSubmissions, scoreboard?.items, screenChallenges, submissionFeed, teams, challengeCategoryLabelMap, now])
 
   // Heatmap data
   const heatmapData: HeatmapData[] = useMemo(() => {
@@ -764,15 +973,23 @@ export const useCTFScreenData = (numId: number) => {
     [scoreItems]
   )
   const totalChallenges = useMemo(() => {
-    const ctfCount = game?.gameType === GameType.Theory ? 0 : scoreboard?.challengeCount ?? 0
+    const ctfCount = isCtfScoreGame ? screenChallenges.length || scoreboard?.challengeCount || 0 : 0
     const awdpCount = isAwdpScoreGame ? awdpServices.length : 0
     const theoryCount = isTheoryScoreGame ? theoryQuestionCount : 0
-    return ctfCount + awdpCount + theoryCount
+    const pentestCount = isPentestScoreGame
+      ? pentestScoreItems.length || Math.max(0, new Set(pentestSubmissions.map((item) => item.itemTitle)).size)
+      : 0
+    return ctfCount + awdpCount + theoryCount + pentestCount
   }, [
     awdpServices.length,
     game?.gameType,
+    isCtfScoreGame,
     isAwdpScoreGame,
+    isPentestScoreGame,
     isTheoryScoreGame,
+    pentestScoreItems.length,
+    pentestSubmissions,
+    screenChallenges.length,
     scoreboard?.challengeCount,
     theoryQuestionCount,
   ])
@@ -788,11 +1005,10 @@ export const useCTFScreenData = (numId: number) => {
 
   // Additional stats for heatmap panel
   const totalBlood = useMemo(() => {
-    return Object.values(scoreboard?.challenges ?? {})
-      .flat()
+    return screenChallenges
       .filter(c => c.bloods?.length > 0)
       .length
-  }, [scoreboard?.challenges])
+  }, [screenChallenges])
 
   const avgScore = useMemo(() => {
     if (scoreItems.length === 0) return 0

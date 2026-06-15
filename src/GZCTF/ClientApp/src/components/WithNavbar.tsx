@@ -3,10 +3,12 @@ import React, { FC } from 'react'
 import { AppHeader } from '@Components/AppHeader'
 import { AppNavbar } from '@Components/AppNavbar'
 import { IconHeader } from '@Components/IconHeader'
+import { PublicAccountEntry } from '@Components/PublicAccountEntry'
 import { WithWiderScreen } from '@Components/WithWiderScreen'
 import { YinyuRouteTransition } from '@Components/yinyu/YinyuUI'
 import { useIsMobile } from '@Utils/ThemeOverride'
 import classes from '@Styles/AppNavbar.module.css'
+import { useLocation } from 'react-router'
 
 interface WithNavBarProps extends React.PropsWithChildren {
   width?: string
@@ -28,6 +30,13 @@ export const WithNavBar: FC<WithNavBarProps> = ({
   stickyHeader = false,
 }) => {
   const isMobile = useIsMobile()
+  const location = useLocation()
+  const showPublicAccount =
+    location.pathname === '/' ||
+    location.pathname.startsWith('/posts') ||
+    location.pathname === '/games' ||
+    location.pathname.startsWith('/teams') ||
+    location.pathname.startsWith('/about')
 
   return (
     <WithWiderScreen minWidth={minWidth}>
@@ -46,6 +55,7 @@ export const WithNavBar: FC<WithNavBarProps> = ({
         <AppHeader />
         <AppNavbar />
         <AppShell.Main w="100%" className={classes.shellMain}>
+          {showPublicAccount && !isMobile ? <PublicAccountEntry /> : null}
           <Stack data-mobile={isMobile || undefined} className={classes.main}>
             {isLoading ? (
               <div className="yy-page-loading-overlay" role="status" aria-live="polite">

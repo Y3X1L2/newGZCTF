@@ -6,7 +6,6 @@ import {
   MenuDivider,
   Popover,
   Stack,
-  Tooltip,
 } from '@mantine/core'
 import {
   mdiAccountCircleOutline,
@@ -48,23 +47,26 @@ export interface NavbarLinkProps {
   link?: string
   onClick?: () => void
   isActive?: boolean
+  drawerActive?: boolean
+  onHover?: () => void
 }
 
 const NavbarLink: FC<NavbarLinkProps> = (props: NavbarLinkProps) => {
   const { t } = useTranslation()
 
   return (
-    <Tooltip label={t(props.label)} classNames={classes} position="right">
-      <ActionIcon
-        onClick={props.onClick}
-        component={Link}
-        to={props.link ?? '#'}
-        data-active={props.isActive || undefined}
-        className={cx(classes.link, 'rail-button')}
-      >
-        <Icon path={props.icon} size={1} />
-      </ActionIcon>
-    </Tooltip>
+    <ActionIcon
+      onClick={props.onClick}
+      onPointerEnter={props.onHover}
+      component={Link}
+      to={props.link ?? '#'}
+      data-active={props.isActive || undefined}
+      data-drawer={props.drawerActive || undefined}
+      className={cx(classes.link, classes.navLink, 'rail-button')}
+    >
+      <Icon path={props.icon} size={1} />
+      <span className={classes.drawerLabel}>{t(props.label)}</span>
+    </ActionIcon>
   )
 }
 
@@ -95,6 +97,7 @@ export const AppNavbar: FC = () => {
     )?.label
 
   const [active, setActive] = useState(getLabel(location.pathname) ?? '')
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null)
 
   useEffect(() => {
     if (location.pathname === '/') {
@@ -104,9 +107,17 @@ export const AppNavbar: FC = () => {
     }
   }, [location.pathname])
 
-  const links = items
+  const visibleItems = items
     .filter((m) => !m.admin || user?.role === Role.Admin)
-    .map((link) => <NavbarLink key={link.label} {...link} isActive={link.label === active} />)
+  const links = visibleItems.map((link, index) => (
+    <NavbarLink
+      key={link.label}
+      {...link}
+      isActive={link.label === active}
+      drawerActive={hoverIndex !== null && Math.abs(index - hoverIndex) <= 1}
+      onHover={() => setHoverIndex(index)}
+    />
+  ))
 
   const loggedIn = user && !error
 
@@ -116,7 +127,9 @@ export const AppNavbar: FC = () => {
         <LogoBox size="58px" className={classes.logo} component={Link} to="/" />
       </AppShell.Section>
 
-      <AppShell.Section className={classes.section}>{links}</AppShell.Section>
+      <AppShell.Section className={classes.section} onPointerLeave={() => setHoverIndex(null)}>
+        {links}
+      </AppShell.Section>
 
       <AppShell.Section className={cx(classes.section, classes.utilitySection, misc.justifyEnd)}>
         <Stack w="100%" align="center" justify="center" gap={5}>

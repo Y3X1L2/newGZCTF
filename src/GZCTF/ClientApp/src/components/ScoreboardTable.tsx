@@ -23,6 +23,7 @@ import dayjs from 'dayjs'
 import React, { FC, useEffect, useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router'
+import { BloodMedal, bloodTierFromSubmissionType } from '@Components/BloodMedal'
 import { ScoreboardItemModal } from '@Components/ScoreboardItemModal'
 import { ScrollingText } from '@Components/ScrollingText'
 import { YinyuTableShell } from '@Components/yinyu/YinyuUI'
@@ -213,9 +214,11 @@ const TableRow: FC<{
           challenges[key].map((item) => {
             const chal = solved?.find((c) => c.id === item.id)
             const isZeroScore = chal && chal.type === SubmissionType.Normal && (chal.score ?? 0) === 0
-            const icon = isZeroScore ? zeroScoreIcon : iconMap.get(chal?.type ?? SubmissionType.Unaccepted)
+            const type = chal?.type ?? SubmissionType.Unaccepted
+            const bloodTier = bloodTierFromSubmissionType(type)
+            const icon = isZeroScore ? zeroScoreIcon : iconMap.get(type)
 
-            if (!icon) return <Table.Td key={item.id} className={classes.mono} />
+            if (!icon && !bloodTier) return <Table.Td key={item.id} className={classes.mono} />
 
             const cate = challengeCategoryLabelMap.get(item.category as ChallengeCategory) ?? {
               desrc: item.category,
@@ -244,7 +247,7 @@ const TableRow: FC<{
                   }
                 >
                   <Center>
-                    <Icon {...icon} />
+                    {bloodTier ? <BloodMedal tier={bloodTier} size="xs" active /> : <Icon {...icon!} />}
                   </Center>
                 </Tooltip>
               </Table.Td>
@@ -256,8 +259,6 @@ const TableRow: FC<{
 })
 
 const ITEM_COUNT_PER_PAGE = 30
-
-const bloodTierLabel = (index: number) => (index === 0 ? '一血' : index === 1 ? '二血' : '三血')
 
 export interface ScoreboardProps {
   divisionId: number | null
@@ -406,10 +407,7 @@ export const ScoreboardTable: FC<ScoreboardProps> = ({ divisionId, setDivisionId
                   {BloodsTypes.map((type, idx) => (
                     <Tooltip key={idx} label={bloodData.get(type)?.name} transitionProps={{ transition: 'pop' }}>
                       <Group justify="left" gap={7} className={classes.bloodLegendItem} data-tier={idx + 1}>
-                        <span className={classes.bloodLegendBadge}>
-                          <span>{idx + 1}</span>
-                          <em>{bloodTierLabel(idx)}</em>
-                        </span>
+                        <BloodMedal type={type} size="sm" active />
                         <Text className={classes.bloodLegendText}>{bloodData.get(type)?.descr}</Text>
                       </Group>
                     </Tooltip>

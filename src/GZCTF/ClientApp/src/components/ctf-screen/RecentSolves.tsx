@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Zap, Lock, Globe, Binary, Search, Cpu, FlaskConical } from "lucide-react";
+import { BloodMedal } from "@Components/BloodMedal";
 
 export interface SolveEvent {
   id: string;
@@ -90,17 +91,8 @@ export function RecentSolves({ events }: RecentSolvesProps) {
 
               {/* First Blood badge */}
               {event.isFirst && (
-                <div className="absolute top-2 right-3 text-xs px-1.5 py-0.5"
-                  style={{
-                    background: "rgba(255,215,0,0.15)",
-                    border: "1px solid rgba(255,215,0,0.4)",
-                    color: "#ffd700",
-                    fontFamily: "'Courier New', monospace",
-                    fontSize: "9px",
-                    letterSpacing: "0.1em",
-                    boxShadow: "0 0 8px rgba(255,215,0,0.3)"
-                  }}>
-                  FIRST BLOOD
+                <div className="absolute top-2 right-3">
+                  <BloodMedal tier={1} size="xs" active />
                 </div>
               )}
 

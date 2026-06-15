@@ -22,11 +22,25 @@ interface GameChallengeModalProps extends ModalProps {
   score: number
   challengeId: number
   status?: SubmissionType
+  onInstanceActive?: () => void
+  onInstanceInactive?: () => void
 }
 
 export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
-  const { gameId, gameTitle, gameEnded, practiceMode, challengeId, cateData, status, title, score, ...modalProps } =
-    props
+  const {
+    gameId,
+    gameTitle,
+    gameEnded,
+    practiceMode,
+    challengeId,
+    cateData,
+    status,
+    title,
+    score,
+    onInstanceActive,
+    onInstanceInactive,
+    ...modalProps
+  } = props
 
   const { data: challenge, mutate } = api.game.useGameGetChallenge(gameId, challengeId, {
     refreshInterval: 120 * 1000,
@@ -41,6 +55,15 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
 
   const isDynamic =
     challenge?.type === ChallengeType.StaticContainer || challenge?.type === ChallengeType.DynamicContainer
+
+  useEffect(() => {
+    if (!isDynamic || !challenge) return
+    if (challenge.context?.instanceEntry) {
+      onInstanceActive?.()
+    } else {
+      onInstanceInactive?.()
+    }
+  }, [challenge, isDynamic, onInstanceActive, onInstanceInactive])
 
   useEffect(() => {
     if ((challenge?.flags?.length ?? 0) > 1 && activeFlagId === null) {
@@ -58,6 +81,7 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
   const onCreate = async () => {
     if (!challengeId || disabled) return
     setDisabled(true)
+    onInstanceActive?.()
 
     try {
       const res = await api.game.gameCreateContainer(gameId, challengeId)
@@ -79,6 +103,7 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
         icon: <Icon path={mdiCheck} size={1} />,
       })
     } catch (e) {
+      onInstanceInactive?.()
       showErrorMsg(e, t)
     } finally {
       setDisabled(false)
@@ -87,7 +112,10 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
 
   const requestDestroy = async () => {
     try {
-      if (!challenge?.context?.instanceEntry) return
+      if (!challenge?.context?.instanceEntry) {
+        onInstanceInactive?.()
+        return true
+      }
 
       await api.game.gameDeleteContainer(gameId, challengeId)
       mutate(
@@ -107,8 +135,11 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
         message: t('challenge.notification.instance.destroyed.message'),
         icon: <Icon path={mdiCheck} size={1} />,
       })
+      onInstanceInactive?.()
+      return true
     } catch (e) {
       showErrorMsg(e, t)
+      return false
     }
   }
 

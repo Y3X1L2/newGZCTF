@@ -11,7 +11,7 @@ interface TeamCardProps {
   onEdit: () => void
 }
 
-const actionLabel = '\u67e5\u770b\u961f\u4f0d\u8be6\u60c5'
+const actionLabel = '查看队伍详情'
 
 export const TeamCard: FC<TeamCardProps> = memo((props) => {
   const { team, onEdit } = props

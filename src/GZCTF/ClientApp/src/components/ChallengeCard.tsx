@@ -4,9 +4,10 @@ import dayjs from 'dayjs'
 import { ChevronRight } from 'lucide-react'
 import { CSSProperties, FC, useMemo } from 'react'
 import { Trans } from 'react-i18next'
+import { BloodMedal, bloodTierLabel } from '@Components/BloodMedal'
 import { useLanguage } from '@Utils/I18n'
-import { BloodsTypes, PartialIconProps, useChallengeCategoryLabelMap } from '@Utils/Shared'
-import { ChallengeInfo, SubmissionType } from '@Api'
+import { BloodsTypes, useChallengeCategoryLabelMap } from '@Utils/Shared'
+import { ChallengeInfo } from '@Api'
 import classes from '@Styles/ChallengeCard.module.css'
 import { YinyuStatusText } from './yinyu/YinyuReactBits'
 import { YinyuDataBar, YinyuHexField } from './yinyu/YinyuUI'
@@ -15,15 +16,12 @@ interface ChallengeCardProps {
   challenge: ChallengeInfo
   solved?: boolean
   onClick?: () => void
-  iconMap: Map<SubmissionType, PartialIconProps | undefined>
-  colorMap: Map<SubmissionType, string | undefined>
   teamId?: number
+  instanceActive?: boolean
 }
 
-const bloodLabel = (index: number) => (index === 0 ? '一血' : index === 1 ? '二血' : '三血')
-
 export const ChallengeCard: FC<ChallengeCardProps> = (props: ChallengeCardProps) => {
-  const { challenge, solved, onClick, teamId } = props
+  const { challenge, solved, onClick, teamId, instanceActive } = props
   const challengeCategoryLabelMap = useChallengeCategoryLabelMap()
   const cateData = challengeCategoryLabelMap.get(challenge.category!)
   const { locale } = useLanguage()
@@ -43,6 +41,7 @@ export const ChallengeCard: FC<ChallengeCardProps> = (props: ChallengeCardProps)
       type="button"
       className={cx('challenge-card panel-card', solved && 'is-active')}
       data-faded={solved || isFaded || undefined}
+      data-instance-active={instanceActive || undefined}
     >
       <YinyuHexField cells={28} />
       <span
@@ -77,7 +76,8 @@ export const ChallengeCard: FC<ChallengeCardProps> = (props: ChallengeCardProps)
         <Group justify="center" gap={7} h={28} wrap="nowrap" className={classes.bloodRack}>
           {BloodsTypes.map((type, index) => {
             const blood = challenge.bloods?.[index]
-            const label = bloodLabel(index)
+            const tier = (index + 1) as 1 | 2 | 3
+            const label = bloodTierLabel(tier)
 
             return (
               <Tooltip.Floating
@@ -97,16 +97,7 @@ export const ChallengeCard: FC<ChallengeCardProps> = (props: ChallengeCardProps)
                   </Stack>
                 }
               >
-                <span
-                  className={classes.bloodMedal}
-                  data-tier={index + 1}
-                  data-active={!!blood || undefined}
-                  data-own={teamId === blood?.id || undefined}
-                  aria-label={label}
-                >
-                  <span>{index + 1}</span>
-                  <em>{label}</em>
-                </span>
+                <BloodMedal tier={tier} active={!!blood} own={teamId === blood?.id} size="sm" className={classes.bloodMedal} />
               </Tooltip.Floating>
             )
           })}

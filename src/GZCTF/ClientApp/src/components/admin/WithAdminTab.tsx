@@ -30,12 +30,12 @@ export const WithAdminTab: FC<AdminTabProps> = ({ head, headProps, isLoading, ch
 
   const pages = [
     { icon: mdiFlagOutline, title: t('admin.tab.games.index'), path: 'games' },
-    { icon: mdiBookOpenPageVariantOutline, title: '\u9898\u5e93\u7ba1\u7406', path: 'theory-bank' },
+    { icon: mdiBookOpenPageVariantOutline, title: '题库管理', path: 'theory-bank' },
     { icon: mdiAccountGroupOutline, title: t('admin.tab.teams'), path: 'teams' },
     { icon: mdiAccountCogOutline, title: t('admin.tab.users'), path: 'users' },
-    { icon: mdiImageOutline, title: '\u73af\u5883\u6a21\u677f', path: 'images' },
-    { icon: mdiServerNetwork, title: '\u8282\u70b9\u7ba1\u7406', path: 'nodes' },
-    { icon: mdiClipboardListOutline, title: '\u90e8\u7f72\u961f\u5217', path: 'queue' },
+    { icon: mdiImageOutline, title: '环境模板', path: 'images' },
+    { icon: mdiServerNetwork, title: '节点管理', path: 'nodes' },
+    { icon: mdiClipboardListOutline, title: '部署队列', path: 'queue' },
     { icon: mdiFileDocumentOutline, title: t('admin.tab.logs'), path: 'logs' },
     { icon: mdiSitemapOutline, title: t('admin.tab.settings'), path: 'settings' },
   ]
@@ -66,7 +66,7 @@ export const WithAdminTab: FC<AdminTabProps> = ({ head, headProps, isLoading, ch
     <div className="admin-shell yy-admin-shell">
       <section className="admin-main">
         <ScrollArea type="hover" offsetScrollbars scrollbarSize={4} className="yy-admin-tab-scroll">
-          <div className="admin-tab-grid yy-admin-tab-grid" aria-label="\u7ba1\u7406\u5bfc\u822a">
+          <div className="admin-tab-grid yy-admin-tab-grid" aria-label="管理导航">
             {pages.map((page, index) => (
               <Tooltip key={page.path} label={page.title} position="bottom">
                 <button
@@ -102,7 +102,7 @@ export const WithAdminTab: FC<AdminTabProps> = ({ head, headProps, isLoading, ch
         </div>
         {isLoading ? (
           <div className="yy-admin-transition-overlay" role="status" aria-live="polite">
-            <YinyuRouteTransition title="YINYU ADMIN" description="\u6b63\u5728\u8bfb\u53d6\u7ba1\u7406\u6570\u636e" />
+            <YinyuRouteTransition title="YINYU ADMIN" description="正在读取管理数据" />
           </div>
         ) : null}
       </section>

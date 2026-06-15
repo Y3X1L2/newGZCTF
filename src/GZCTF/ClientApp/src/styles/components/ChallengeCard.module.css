@@ -79,131 +79,21 @@
 }
 
 .bloodMedal {
-  --medal-core: rgba(118, 134, 126, 0.55);
-  --medal-line: rgba(205, 222, 214, 0.22);
-  --medal-glow: rgba(107, 238, 177, 0.08);
-
-  width: 2.05rem;
-  height: 1.74rem;
-  position: relative;
-  display: inline-grid;
-  place-items: center;
-  clip-path: polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0 50%);
-  color: rgba(226, 238, 232, 0.72);
-  background:
-    radial-gradient(circle at 50% 34%, rgba(255, 255, 255, 0.16), transparent 36%),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.06), transparent 48%),
-    var(--medal-core);
-  box-shadow:
-    inset 0 0 0 1px var(--medal-line),
-    0 0 0 1px rgba(255, 255, 255, 0.03),
-    0 0 0.95rem var(--medal-glow);
-  opacity: 0.56;
+  display: inline-flex;
+  width: auto;
+  height: auto;
+  color: inherit;
+  background: transparent;
+  box-shadow: none;
+  opacity: 1;
+  transform: none;
   transition:
     transform 150ms ease,
-    opacity 150ms ease,
-    filter 150ms ease,
-    box-shadow 150ms ease;
-}
-
-.bloodMedal::before {
-  content: '';
-  position: absolute;
-  inset: 0.16rem;
-  clip-path: inherit;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  opacity: 0.6;
-}
-
-.bloodMedal::after {
-  content: '';
-  position: absolute;
-  inset: -28% 18%;
-  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.18), transparent);
-  opacity: 0;
-  transform: translateY(24%);
-}
-
-.bloodMedal > span {
-  position: relative;
-  z-index: 1;
-  font-family: var(--font-mono);
-  font-size: 0.74rem;
-  font-weight: 950;
-  line-height: 1;
-  transform: translateY(-0.08rem);
-}
-
-.bloodMedal > em {
-  position: absolute;
-  z-index: 1;
-  bottom: 0.28rem;
-  left: 50%;
-  transform: translateX(-50%);
-  color: currentColor;
-  font-family: var(--font-display);
-  font-size: 0.42rem;
-  font-style: normal;
-  font-weight: 900;
-  line-height: 1;
-  opacity: 0.78;
-  white-space: nowrap;
-}
-
-.bloodMedal[data-active] {
-  opacity: 1;
-  filter: saturate(1.14);
-}
-
-.bloodMedal[data-active]::after {
-  opacity: 0.72;
-  animation: blood-scan 2.4s ease-in-out infinite;
-}
-
-.bloodMedal[data-tier='1'][data-active] {
-  --medal-core: linear-gradient(145deg, rgba(255, 228, 111, 0.96), rgba(78, 196, 130, 0.42));
-  --medal-line: rgba(255, 229, 137, 0.82);
-  --medal-glow: rgba(255, 217, 90, 0.28);
-  color: #08110b;
-}
-
-.bloodMedal[data-tier='2'][data-active] {
-  --medal-core: linear-gradient(145deg, rgba(220, 235, 230, 0.9), rgba(107, 238, 177, 0.28));
-  --medal-line: rgba(224, 240, 235, 0.7);
-  --medal-glow: rgba(205, 230, 220, 0.2);
-  color: #08110b;
-}
-
-.bloodMedal[data-tier='3'][data-active] {
-  --medal-core: linear-gradient(145deg, rgba(207, 157, 92, 0.92), rgba(107, 238, 177, 0.22));
-  --medal-line: rgba(231, 177, 106, 0.72);
-  --medal-glow: rgba(207, 157, 92, 0.2);
-  color: #0c1109;
-}
-
-.bloodMedal[data-own] {
-  transform: translateY(-1px) scale(1.08);
-  box-shadow:
-    inset 0 0 0 1px var(--medal-line),
-    0 0 0 1px rgba(255, 255, 255, 0.16),
-    0 0 1.35rem var(--medal-glow),
-    0 0.4rem 1rem rgba(0, 0, 0, 0.28);
+    filter 150ms ease;
 }
 
 .bloodMedal:hover {
-  transform: translateY(-2px) scale(1.07);
-  opacity: 1;
-}
-
-@keyframes blood-scan {
-  0%,
-  100% {
-    transform: translateY(26%);
-  }
-
-  50% {
-    transform: translateY(-26%);
-  }
+  transform: translateY(-1px);
 }
 
 @keyframes solved-hex {
@@ -214,4 +104,9 @@
   50% {
     transform: translateY(-1px) scale(1);
   }
+}
+
+.bloodMedal::before,
+.bloodMedal::after {
+  display: none;
 }

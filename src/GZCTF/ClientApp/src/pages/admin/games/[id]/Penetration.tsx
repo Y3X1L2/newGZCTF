@@ -545,6 +545,62 @@ const withFlowLayout = (config: PenetrationConfigModel, flowNodes: Node<SegmentD
     }),
   })
 
+const findSavedByIndex = <T extends { id: number }>(before: T[], after: T[], id: number) => {
+  const index = before.findIndex((item) => item.id === id)
+  return index >= 0 ? after[index] : undefined
+}
+
+const remapSelectedTarget = (
+  target: SelectedTarget,
+  before: PenetrationConfigModel,
+  after: PenetrationConfigModel
+): SelectedTarget => {
+  if (!target) return undefined
+
+  if (target.kind === 'network') {
+    if (after.networks.some((network) => network.id === target.id)) return target
+    const source = before.networks.find((network) => network.id === target.id)
+    const match =
+      (source &&
+        after.networks.find(
+          (network) =>
+            network.orderIndex === source.orderIndex &&
+            (network.slug === source.slug || network.name === source.name)
+        )) ||
+      findSavedByIndex(before.networks, after.networks, target.id)
+    return match ? { kind: 'network', id: match.id } : undefined
+  }
+
+  if (target.kind === 'node') {
+    if (after.nodes.some((node) => node.id === target.id)) return target
+    const source = before.nodes.find((node) => node.id === target.id)
+    const match =
+      (source &&
+        after.nodes.find(
+          (node) =>
+            node.orderIndex === source.orderIndex &&
+            node.name === source.name &&
+            node.nodeType === source.nodeType
+        )) ||
+      findSavedByIndex(before.nodes, after.nodes, target.id)
+    return match ? { kind: 'node', id: match.id } : undefined
+  }
+
+  if (after.edges.some((edge) => edge.id === target.id)) return target
+  const source = before.edges.find((edge) => edge.id === target.id)
+  const match =
+    (source &&
+      after.edges.find(
+        (edge) =>
+          edge.label === source.label &&
+          edge.protocol === source.protocol &&
+          edge.portRange === source.portRange &&
+          edge.policyAction === source.policyAction
+      )) ||
+    findSavedByIndex(before.edges, after.edges, target.id)
+  return match ? { kind: 'edge', id: match.id } : undefined
+}
+
 const BuilderInner: FC = () => {
   const { id } = useParams()
   const gameId = parseInt(id ?? '-1')
@@ -666,27 +722,35 @@ const BuilderInner: FC = () => {
       edges: current.edges.map((edge) => (edge.id === id ? { ...edge, ...patch } : edge)),
     }))
 
-  const save = async () => {
-    if (!config) return
-    setLoading(true)
+  const save = async (silent = false, manageLoading = true) => {
+    if (!config) return undefined
+    if (manageLoading) setLoading(true)
     try {
-      const res = await penetrationAdminApi.saveConfig(gameId, normalizeConfig(withFlowLayout(config, nodes)))
-      setConfig(normalizeConfig(res.data))
-      syncFlowWithTemplates(res.data)
+      const outgoing = normalizeConfig(withFlowLayout(config, nodes))
+      const res = await penetrationAdminApi.saveConfig(gameId, outgoing)
+      const saved = normalizeConfig(res.data)
+      setConfig(saved)
+      setSelectedTarget(remapSelectedTarget(selectedTarget, outgoing, saved))
+      syncFlowWithTemplates(saved)
       const planRes = await penetrationAdminApi.plan(gameId)
       setPlan(planRes.data)
-      showNotification({ color: 'teal', message: '渗透编排已保存', icon: <Icon path={mdiCheck} size={1} /> })
+      if (!silent) showNotification({ color: 'teal', message: '渗透编排已保存', icon: <Icon path={mdiCheck} size={1} /> })
+      return saved
     } catch (err) {
       showErrorMsg(err, (key) => key)
+      return undefined
     } finally {
-      setLoading(false)
+      if (manageLoading) setLoading(false)
     }
   }
 
   const runAction = async (kind: 'validate' | 'plan' | 'publish' | 'deploy' | 'stop') => {
     setLoading(true)
     try {
-      if (kind !== 'plan') await save()
+      if (kind !== 'stop') {
+        const saved = await save(true, false)
+        if (!saved) return
+      }
       if (kind === 'validate' || kind === 'plan') {
         const res = await penetrationAdminApi.plan(gameId)
         setPlan(res.data)
@@ -912,21 +976,31 @@ const BuilderInner: FC = () => {
           <Button variant="light" leftSection={<Icon path={mdiHelpCircleOutline} size={0.85} />} onClick={() => setUsageOpened(true)}>
             使用说明
           </Button>
-          <Button leftSection={<Icon path={mdiContentSaveOutline} size={0.85} />} onClick={save}>
-            保存
-          </Button>
-          <Button variant="light" leftSection={<Icon path={mdiVectorLine} size={0.85} />} onClick={() => runAction('validate')}>
-            校验/计划
-          </Button>
-          <Button variant="light" leftSection={<Icon path={mdiPublish} size={0.85} />} onClick={() => runAction('publish')}>
-            发布
-          </Button>
-          <Button leftSection={<Icon path={mdiAccessPointNetwork} size={0.85} />} onClick={() => runAction('deploy')}>
-            部署
-          </Button>
-          <Button color="red" variant="light" leftSection={<Icon path={mdiStop} size={0.85} />} onClick={() => runAction('stop')}>
-            停止
-          </Button>
+          <Tooltip label="保存当前画布、属性和网卡配置，并刷新右侧部署计划">
+            <Button leftSection={<Icon path={mdiContentSaveOutline} size={0.85} />} onClick={() => void save()}>
+              保存
+            </Button>
+          </Tooltip>
+          <Tooltip label="保存当前画布后，检查 CIDR、模板、IP、容量和部署预览">
+            <Button variant="light" leftSection={<Icon path={mdiVectorLine} size={0.85} />} onClick={() => runAction('validate')}>
+              校验/计划
+            </Button>
+          </Tooltip>
+          <Tooltip label="校验通过后发布一个可部署的拓扑版本">
+            <Button variant="light" leftSection={<Icon path={mdiPublish} size={0.85} />} onClick={() => runAction('publish')}>
+              发布
+            </Button>
+          </Tooltip>
+          <Tooltip label="按已发布版本为全部参赛队伍创建隔离网络和容器">
+            <Button leftSection={<Icon path={mdiAccessPointNetwork} size={0.85} />} onClick={() => runAction('deploy')}>
+              部署
+            </Button>
+          </Tooltip>
+          <Tooltip label="停止并清理已部署的渗透环境">
+            <Button color="red" variant="light" leftSection={<Icon path={mdiStop} size={0.85} />} onClick={() => runAction('stop')}>
+              停止
+            </Button>
+          </Tooltip>
         </Group>
       </div>
 
@@ -956,6 +1030,17 @@ const BuilderInner: FC = () => {
                     拖拽安全域和资产到画布。安全域决定隔离网段，资产网卡决定真实连通关系。
                   </Text>
                 </Stack>
+                <div className="yy-pentest-flow-steps">
+                  {['生成/拖拽拓扑', '配置模板与网卡', '连线表达访问路径', '保存并校验计划', '发布部署后观测'].map((step, index) => (
+                    <div className="yy-pentest-flow-step" key={step}>
+                      <b>{index + 1}</b>
+                      <span>{step}</span>
+                    </div>
+                  ))}
+                </div>
+                <Text size="xs" className="yy-pentest-flow-note">
+                  校验/计划会先保存当前画布，并预览每队 Docker 网络、网卡 IP、入口端口和 Flag 注入结果。连线用于表达允许路径和任务链；真实隔离由安全域 Docker 网络和多网卡边界执行。
+                </Text>
                 <Button fullWidth leftSection={<Icon path={mdiAutoFix} size={0.85} />} onClick={() => {
                   const next = buildEnterpriseBlueprint(gameId, templates, config)
                   setConfig(next)
@@ -1199,6 +1284,33 @@ const BuilderInner: FC = () => {
                             <Table.Tbody>{plan.nodes.map((node) => <Table.Tr key={node.nodeId}><Table.Td>{node.nodeName}</Table.Td><Table.Td>{node.interfaces.map((item) => `${item.name}:${item.ipAddress}${item.isInternal ? '(内网)' : ''}`).join(' / ')}</Table.Td></Table.Tr>)}</Table.Tbody>
                           </Table>
                         </YinyuTableShell>
+                        <YinyuTableShell p="xs">
+                          <Table>
+                            <Table.Thead><Table.Tr><Table.Th>访问路径</Table.Th><Table.Th>来源</Table.Th><Table.Th>目标</Table.Th><Table.Th>协议/端口</Table.Th></Table.Tr></Table.Thead>
+                            <Table.Tbody>
+                              {plan.policies.length > 0 ? plan.policies.map((policy) => (
+                                <Table.Tr key={policy.policyId}>
+                                  <Table.Td>{policy.label}</Table.Td>
+                                  <Table.Td>{policy.source}</Table.Td>
+                                  <Table.Td>{policy.target}</Table.Td>
+                                  <Table.Td>{policy.protocol.toUpperCase()} / {policy.portRange}</Table.Td>
+                                </Table.Tr>
+                              )) : (
+                                <Table.Tr><Table.Td colSpan={4}>暂无访问路径。至少连接两个资产节点，用于表达任务链和跳板关系。</Table.Td></Table.Tr>
+                              )}
+                            </Table.Tbody>
+                          </Table>
+                        </YinyuTableShell>
+                        <YinyuPanel p="sm" className="yy-pentest-preview-box">
+                          <Text fw={900} mb={6}>部署执行顺序</Text>
+                          <Stack gap={4}>
+                            {plan.deploymentSteps.map((step, index) => (
+                              <Text size="sm" className="yy-readable-text" key={step}>
+                                {index + 1}. {step}
+                              </Text>
+                            ))}
+                          </Stack>
+                        </YinyuPanel>
                       </>
                     ) : <Text className="yy-readable-text">暂无部署计划。</Text>}
                   </Stack>

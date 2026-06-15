@@ -30,7 +30,7 @@ import './styles/YinyuRefinement.css'
 
 const RouteLoading = () => (
   <Center h='100vh' w='100vw' className='route-loader-screen'>
-    <YinyuRouteLoader title='YINYU' description={'\u6b63\u5728\u8f7d\u5165\u6f14\u7ec3\u4fe1\u53f7\u4e0e\u9875\u9762\u72b6\u6001'} />
+    <YinyuRouteLoader title='YINYU' description={'正在载入演练信号与页面状态'} />
   </Center>
 )
 

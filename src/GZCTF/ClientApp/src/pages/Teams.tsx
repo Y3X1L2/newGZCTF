@@ -15,14 +15,14 @@ import { usePageTitle } from '@Hooks/usePageTitle'
 import { useTeams, useUser } from '@Hooks/useUser'
 import api, { Role, TeamInfoModel } from '@Api'
 
-const heroTitle = '\u961f\u4f0d\u7ba1\u7406'
-const heroDesc = '\u67e5\u770b\u6211\u7684\u53c2\u8d5b\u961f\u4f0d\u3001\u961f\u5458\u8eab\u4efd\u3001\u961f\u957f\u6743\u9650\u4e0e\u9080\u8bf7\u52a0\u5165\u72b6\u6001\u3002'
-const ownedLabel = '\u6211\u521b\u5efa\u7684\u961f\u4f0d'
-const allTeamsLabel = '\u5df2\u52a0\u5165\u961f\u4f0d'
-const loadingDescription = '\u6b63\u5728\u8bfb\u53d6\u961f\u4f0d\u4fe1\u606f'
-const memberSectionTitle = '\u961f\u4f0d\u7ba1\u7406'
-const captainLabel = '\u961f\u957f'
-const memberLabel = '\u961f\u5458'
+const heroTitle = '队伍管理'
+const heroDesc = '查看我的参赛队伍、队员身份、队长权限与邀请加入状态。'
+const ownedLabel = '我创建的队伍'
+const allTeamsLabel = '已加入队伍'
+const loadingDescription = '正在读取队伍信息'
+const memberSectionTitle = '队伍管理'
+const captainLabel = '队长'
+const memberLabel = '队员'
 
 const Teams: FC = () => {
   const { user, error: userError } = useUser()
@@ -151,7 +151,7 @@ const Teams: FC = () => {
                         {selectedIsCaptain ? captainLabel : memberLabel}
                       </Badge>
                     </Group>
-                    <Text>{selectedTeam.bio || '\u6682\u65e0\u961f\u4f0d\u7b80\u4ecb'}</Text>
+                    <Text>{selectedTeam.bio || '暂无队伍简介'}</Text>
                   </div>
                 </Group>
               )}
@@ -166,11 +166,11 @@ const Teams: FC = () => {
                 <strong>{teamsOwned?.length ?? '-'}</strong>
               </div>
               <div>
-                <span>{'\u5f53\u524d\u961f\u5458'}</span>
+                <span>{'当前队员'}</span>
                 <strong>{selectedMembers.length || '-'}</strong>
               </div>
               <div>
-                <span>{'\u961f\u957f'}</span>
+                <span>{'队长'}</span>
                 <strong>{selectedCaptain?.userName ?? '-'}</strong>
               </div>
             </div>
@@ -208,7 +208,7 @@ const Teams: FC = () => {
                     <div>
                       <span className="yy-section-kicker">ROSTER</span>
                       <Title order={2}>{memberSectionTitle}</Title>
-                      <Text>{'\u6309\u961f\u957f\u548c\u961f\u5458\u533a\u5206\u5c55\u793a\u6210\u5458\u3002\u961f\u957f\u53ef\u8fdb\u5165\u8be6\u60c5\u7ef4\u62a4\u961f\u4f0d\u4fe1\u606f\u4e0e\u6210\u5458\u6743\u9650\u3002'}</Text>
+                      <Text>{'按队长和队员区分展示成员。队长可进入详情维护队伍信息与成员权限。'}</Text>
                     </div>
                     <Group className="yy-team-actions" justify={isMobile ? 'stretch' : 'right'} grow={isMobile}>
                       {btns}
@@ -218,7 +218,7 @@ const Teams: FC = () => {
                           className="yy-team-action yy-team-action-create"
                           onClick={() => onEditTeam(selectedTeam)}
                         >
-                          {selectedIsCaptain ? t('team.button.edit') : '\u67e5\u770b\u8be6\u60c5'}
+                          {selectedIsCaptain ? t('team.button.edit') : '查看详情'}
                         </Button>
                       )}
                     </Group>
@@ -226,19 +226,19 @@ const Teams: FC = () => {
 
                   <div className="yy-team-member-summary">
                     <div>
-                      <span>{'\u6211\u7684\u8eab\u4efd'}</span>
+                      <span>{'我的身份'}</span>
                       <strong>{selectedIsCaptain ? captainLabel : memberLabel}</strong>
                     </div>
                     <div>
-                      <span>{'\u5f53\u524d\u961f\u4f0d'}</span>
+                      <span>{'当前队伍'}</span>
                       <strong>{selectedTeam?.name ?? '-'}</strong>
                     </div>
                     <div>
-                      <span>{'\u5168\u90e8\u961f\u5458'}</span>
+                      <span>{'全部队员'}</span>
                       <strong>{selectedMembers.length}</strong>
                     </div>
                     <div>
-                      <span>{'\u6211\u7684\u603b\u961f\u5458\u6863\u6848'}</span>
+                      <span>{'我的总队员档案'}</span>
                       <strong>{totalMembers}</strong>
                     </div>
                   </div>
@@ -251,7 +251,7 @@ const Teams: FC = () => {
                         </Avatar>
                         <div className="yy-team-roster-user">
                           <strong>{member.userName ?? 'user'}</strong>
-                          <span>{member.bio || '\u6682\u65e0\u4e2a\u4eba\u7b80\u4ecb'}</span>
+                          <span>{member.bio || '暂无个人简介'}</span>
                         </div>
                         <Badge className="yy-team-role-badge" leftSection={<Icon path={member.captain ? mdiCrown : mdiAccountGroup} size={0.78} />}>
                           {member.captain ? captainLabel : memberLabel}
