@@ -1,35 +1,28 @@
 import {
   ActionIcon,
   AppShell,
-  Avatar,
-  Menu,
-  MenuDivider,
   Popover,
   Stack,
 } from '@mantine/core'
 import {
-  mdiAccountCircleOutline,
   mdiAccountGroupOutline,
-  mdiCached,
+  mdiBookOpenPageVariantOutline,
   mdiFlagOutline,
   mdiHomeVariantOutline,
   mdiInformationOutline,
-  mdiLogin,
-  mdiLogout,
   mdiNoteTextOutline,
   mdiWrenchOutline,
   mdiTransitConnectionVariant,
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import cx from 'clsx'
-import React, { FC, useEffect, useState } from 'react'
+import React, { FC, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router'
 import { LogoBox } from '@Components/LogoBox'
 import { WsrxManager } from '@Components/WsrxManager'
-import { clearLocalCache } from '@Utils/Cache'
 import { useConfig } from '@Hooks/useConfig'
-import { useLogOut, useUser } from '@Hooks/useUser'
+import { useUser } from '@Hooks/useUser'
 import { ContainerPortMappingType, Role } from '@Api'
 import classes from '@Styles/AppNavbar.module.css'
 import misc from '@Styles/Misc.module.css'
@@ -48,7 +41,7 @@ export interface NavbarLinkProps {
   onClick?: () => void
   isActive?: boolean
   drawerActive?: boolean
-  onHover?: () => void
+  navIndex?: number
 }
 
 const NavbarLink: FC<NavbarLinkProps> = (props: NavbarLinkProps) => {
@@ -57,14 +50,17 @@ const NavbarLink: FC<NavbarLinkProps> = (props: NavbarLinkProps) => {
   return (
     <ActionIcon
       onClick={props.onClick}
-      onPointerEnter={props.onHover}
       component={Link}
       to={props.link ?? '#'}
+      aria-label={t(props.label)}
+      data-nav-index={props.navIndex}
       data-active={props.isActive || undefined}
       data-drawer={props.drawerActive || undefined}
       className={cx(classes.link, classes.navLink, 'rail-button')}
     >
-      <Icon path={props.icon} size={1} />
+      <span className={classes.navIcon}>
+        <Icon path={props.icon} size={1} />
+      </span>
       <span className={classes.drawerLabel}>{t(props.label)}</span>
     </ActionIcon>
   )
@@ -73,10 +69,8 @@ const NavbarLink: FC<NavbarLinkProps> = (props: NavbarLinkProps) => {
 export const AppNavbar: FC = () => {
   const location = useLocation()
 
-  const logout = useLogOut()
-  const { user, error } = useUser()
+  const { user } = useUser()
   const { config } = useConfig()
-  const { t } = useTranslation()
 
   const items: NavbarItem[] = [
     { icon: mdiHomeVariantOutline, label: 'common.tab.home', link: '/' },
@@ -84,7 +78,12 @@ export const AppNavbar: FC = () => {
     { icon: mdiFlagOutline, label: 'common.tab.game', link: '/games' },
     { icon: mdiAccountGroupOutline, label: 'common.tab.team', link: '/teams' },
     { icon: mdiInformationOutline, label: 'common.tab.about', link: '/about' },
-    { icon: mdiWrenchOutline, label: 'common.tab.admin', link: '/admin/games', admin: true },
+    {
+      icon: user?.role === Role.Student || user?.role === Role.User ? mdiBookOpenPageVariantOutline : mdiWrenchOutline,
+      label: user?.role === Role.Student || user?.role === Role.User ? '培训模块' : 'common.tab.admin',
+      link: user?.role === Role.Student || user?.role === Role.User ? '/training' : '/admin/games',
+      admin: true,
+    },
   ]
 
   const getLabel = (path: string) =>
@@ -98,6 +97,7 @@ export const AppNavbar: FC = () => {
 
   const [active, setActive] = useState(getLabel(location.pathname) ?? '')
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
+  const hoverFrameRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (location.pathname === '/') {
@@ -108,18 +108,67 @@ export const AppNavbar: FC = () => {
   }, [location.pathname])
 
   const visibleItems = items
-    .filter((m) => !m.admin || user?.role === Role.Admin)
+    .filter((m) => !m.admin || !!user)
+
+  useEffect(() => {
+    const updateNearbyItem = (pointerX: number, pointerY: number) => {
+      const buttons = Array.from(
+        document.querySelectorAll<HTMLElement>(`.${classes.navItemSection} [data-nav-index]`)
+      )
+      let nextIndex: number | null = null
+      let nearestDistance = Number.POSITIVE_INFINITY
+
+      for (const button of buttons) {
+        const rect = button.getBoundingClientRect()
+        const centerY = rect.top + rect.height / 2
+        const yDistance = Math.abs(pointerY - centerY)
+        const isInsideHotX = pointerX >= rect.left - 36 && pointerX <= rect.right + 168
+
+        if (!isInsideHotX || yDistance > 68) {
+          continue
+        }
+
+        if (yDistance < nearestDistance) {
+          nearestDistance = yDistance
+          nextIndex = Number(button.dataset.navIndex)
+        }
+      }
+
+      setHoverIndex((index) => (index === nextIndex ? index : nextIndex))
+    }
+
+    const onPointerMove = (event: PointerEvent) => {
+      if (hoverFrameRef.current) {
+        window.cancelAnimationFrame(hoverFrameRef.current)
+      }
+
+      hoverFrameRef.current = window.requestAnimationFrame(() => {
+        hoverFrameRef.current = null
+        updateNearbyItem(event.clientX, event.clientY)
+      })
+    }
+
+    window.addEventListener('pointermove', onPointerMove, { passive: true })
+
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove)
+
+      if (hoverFrameRef.current) {
+        window.cancelAnimationFrame(hoverFrameRef.current)
+        hoverFrameRef.current = null
+      }
+    }
+  }, [visibleItems.length])
+
   const links = visibleItems.map((link, index) => (
     <NavbarLink
       key={link.label}
       {...link}
       isActive={link.label === active}
       drawerActive={hoverIndex !== null && Math.abs(index - hoverIndex) <= 1}
-      onHover={() => setHoverIndex(index)}
+      navIndex={index}
     />
   ))
-
-  const loggedIn = user && !error
 
   return (
     <AppShell.Navbar className={classes.navbar}>
@@ -127,7 +176,7 @@ export const AppNavbar: FC = () => {
         <LogoBox size="58px" className={classes.logo} component={Link} to="/" />
       </AppShell.Section>
 
-      <AppShell.Section className={classes.section} onPointerLeave={() => setHoverIndex(null)}>
+      <AppShell.Section className={cx(classes.section, classes.navItemSection)}>
         {links}
       </AppShell.Section>
 
@@ -147,51 +196,6 @@ export const AppNavbar: FC = () => {
             </Popover>
           )}
 
-          {/* User Info */}
-          <Menu position="right-end" offset={24}>
-            <Menu.Target>
-              <ActionIcon className={cx(classes.link, 'rail-button')}>
-                {user?.avatar ? (
-                  <Avatar alt="avatar" src={user?.avatar} radius="md" size="md">
-                    {user.userName?.slice(0, 1) ?? 'U'}
-                  </Avatar>
-                ) : (
-                  <Icon path={mdiAccountCircleOutline} size={1} />
-                )}
-              </ActionIcon>
-            </Menu.Target>
-            <Menu.Dropdown>
-              {loggedIn && (
-                <>
-                  <Menu.Label>{user?.userName}</Menu.Label>
-                  <Menu.Item
-                    component={Link}
-                    to="/account/profile"
-                    leftSection={<Icon path={mdiAccountCircleOutline} size={1} />}
-                  >
-                    {t('common.tab.account.profile')}
-                  </Menu.Item>
-                </>
-              )}
-              <Menu.Item onClick={clearLocalCache} leftSection={<Icon path={mdiCached} size={1} />}>
-                {t('common.tab.account.clean_cache')}
-              </Menu.Item>
-              <MenuDivider />
-              {loggedIn ? (
-                <Menu.Item color="red" onClick={logout} leftSection={<Icon path={mdiLogout} size={1} />}>
-                  {t('common.tab.account.logout')}
-                </Menu.Item>
-              ) : (
-                <Menu.Item
-                  component={Link}
-                  to={`/account/login?from=${location.pathname}`}
-                  leftSection={<Icon path={mdiLogin} size={1} />}
-                >
-                  {t('common.tab.account.login')}
-                </Menu.Item>
-              )}
-            </Menu.Dropdown>
-          </Menu>
         </Stack>
       </AppShell.Section>
     </AppShell.Navbar>

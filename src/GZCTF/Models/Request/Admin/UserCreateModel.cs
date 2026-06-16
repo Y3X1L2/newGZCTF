@@ -62,6 +62,16 @@ public class UserCreateModel
         ErrorMessageResourceType = typeof(Resources.Program))]
     public string? TeamName { get; set; }
 
+    /// <summary>
+    /// Role assigned to the user
+    /// </summary>
+    public Role? AssignedRole { get; set; }
+
+    /// <summary>
+    /// Student groups to join after creation
+    /// </summary>
+    public List<int>? StudentGroupIds { get; set; }
+
     internal UserInfo ToUserInfo() =>
         new()
         {
@@ -70,6 +80,7 @@ public class UserCreateModel
             RealName = RealName ?? "",
             StdNumber = StdNumber ?? "",
             PhoneNumber = Phone,
+            Role = AssignedRole ?? Utils.Role.Student,
             EmailConfirmed = true
         };
 }

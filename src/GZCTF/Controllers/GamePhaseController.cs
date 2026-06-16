@@ -25,7 +25,7 @@ public class GamePhaseController : ControllerBase
     }
 
     [HttpPost("{gameId:int}")]
-    [RequireAdmin]
+    [RequireTeacher]
     public async Task<IActionResult> Create(int gameId, [FromBody] GamePhase phase)
     {
         phase.GameId = gameId;
@@ -35,7 +35,7 @@ public class GamePhaseController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
-    [RequireAdmin]
+    [RequireTeacher]
     public async Task<IActionResult> Update(int id, [FromBody] GamePhase updated)
     {
         var phase = await _context.GamePhases.FindAsync(id);
@@ -49,7 +49,7 @@ public class GamePhaseController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
-    [RequireAdmin]
+    [RequireTeacher]
     public async Task<IActionResult> Delete(int id)
     {
         var phase = await _context.GamePhases.FindAsync(id);

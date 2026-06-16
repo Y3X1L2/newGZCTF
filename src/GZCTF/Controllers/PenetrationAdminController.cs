@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace GZCTF.Controllers;
 
-[RequireAdmin]
+[RequireTeacher]
 [ApiController]
 [Route("api/admin/pentest")]
 [Produces(MediaTypeNames.Application.Json)]

@@ -80,7 +80,7 @@ public class AssetsController(
     /// <response code="400">Failed to upload file(s)</response>
     /// <response code="401">Unauthorized user</response>
     /// <response code="403">Access denied</response>
-    [RequireAdmin]
+    [RequireTeacher]
     [HttpPost("api/[controller]")]
     [ProducesResponseType(typeof(List<LocalFile>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status400BadRequest)]
@@ -122,7 +122,7 @@ public class AssetsController(
     /// <response code="400">Failed to delete file</response>
     /// <response code="401">Unauthorized user</response>
     /// <response code="403">Access denied</response>
-    [RequireAdmin]
+    [RequireTeacher]
     [HttpDelete("api/[controller]/{hash:length(64)}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

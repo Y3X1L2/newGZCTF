@@ -6,6 +6,7 @@ import {
   Group,
   Modal,
   ModalProps,
+  MultiSelect,
   Radio,
   SimpleGrid,
   Stack,
@@ -23,13 +24,50 @@ import { YinyuModalBody } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import { useUser } from '@Hooks/useUser'
 import api, { AdminUserInfoModel, Role, UserInfoModel } from '@Api'
+import { StudentGroupBriefModel, trainingAdminApi } from '@Utils/TrainingApi'
 
 export const RoleColorMap = new Map<Role, string>([
+  [Role.SuperAdmin, 'grape'],
   [Role.Admin, 'violet'],
+  [Role.Teacher, 'cyan'],
+  [Role.Student, 'teal'],
   [Role.User, 'teal'],
   [Role.Monitor, 'cyan'],
   [Role.Banned, 'red'],
 ])
+
+const getAssignableRoles = (role?: Role | null) => {
+  switch (role) {
+    case Role.SuperAdmin:
+      return [Role.Student, Role.Teacher, Role.Admin, Role.SuperAdmin, Role.Banned]
+    case Role.Admin:
+      return [Role.Student, Role.Teacher, Role.Banned]
+    case Role.Teacher:
+    case Role.Monitor:
+      return [Role.Student]
+    default:
+      return []
+  }
+}
+
+export const roleDisplayName = (role?: Role | null) => {
+  switch (role) {
+    case Role.SuperAdmin:
+      return '超级管理员'
+    case Role.Admin:
+      return '管理员'
+    case Role.Teacher:
+    case Role.Monitor:
+      return '老师'
+    case Role.Student:
+    case Role.User:
+      return '学生'
+    case Role.Banned:
+      return '禁用'
+    default:
+      return '未知'
+  }
+}
 
 interface UserEditModalProps extends ModalProps {
   user: UserInfoModel
@@ -42,13 +80,29 @@ export const UserEditModal: FC<UserEditModalProps> = (props) => {
 
   const [disabled, setDisabled] = useState(false)
   const [profile, setProfile] = useState<AdminUserInfoModel>({})
+  const [groups, setGroups] = useState<StudentGroupBriefModel[]>([])
 
   const { t } = useTranslation()
   const isSelf = self?.userId === user.id
+  const roleOptions = getAssignableRoles(self?.role)
+  const editingStudent = (profile.role ?? user.role) === Role.Student || (profile.role ?? user.role) === Role.User
 
   useEffect(() => {
-    setProfile({ ...user })
+    setProfile({ ...user, studentGroupIds: user.studentGroups?.map((group) => group.id!).filter(Boolean) ?? [] })
   }, [user])
+
+  useEffect(() => {
+    const loadGroups = async () => {
+      try {
+        const res = await trainingAdminApi.groups()
+        setGroups(res.data)
+      } catch (e) {
+        showErrorMsg(e, t)
+      }
+    }
+
+    if (modalProps.opened) void loadGroups()
+  }, [modalProps.opened])
 
   const onChangeProfile = async () => {
     if (!user.id) return
@@ -102,21 +156,38 @@ export const UserEditModal: FC<UserEditModalProps> = (props) => {
             }}
           >
             <Group grow mt="xs">
-              {Object.keys(Role).map((role) => (
+              {roleOptions.map((role) => (
                 <Radio
                   key={role}
                   value={role}
                   label={
                     <Text size="sm" fw="bold">
-                      {role}
+                      {roleDisplayName(role)}
                     </Text>
                   }
-                  color={RoleColorMap.get(role as Role)}
+                  color={RoleColorMap.get(role)}
                   disabled={disabled || isSelf}
                 />
               ))}
             </Group>
           </Radio.Group>
+          {editingStudent ? (
+            <MultiSelect
+              label="培训分组"
+              placeholder="选择学生所属分组"
+              searchable
+              clearable
+              data={groups.map((group) => ({ value: group.id.toString(), label: group.name }))}
+              value={(profile.studentGroupIds ?? []).map(String)}
+              onChange={(values) =>
+                setProfile({
+                  ...profile,
+                  studentGroupIds: values.map(Number).filter((id) => Number.isInteger(id) && id > 0),
+                })
+              }
+              disabled={disabled}
+            />
+          ) : null}
           <SimpleGrid cols={2}>
             <TextInput
               label={t('account.label.email')}

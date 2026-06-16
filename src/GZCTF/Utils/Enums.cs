@@ -16,19 +16,34 @@ public enum Role : byte
     Banned = 0,
 
     /// <summary>
-    /// Regular user role
+    /// Student role
     /// </summary>
-    User = 1,
+    Student = 1,
 
     /// <summary>
-    /// Monitor role, can query submission logs
+    /// Teacher role
     /// </summary>
-    Monitor = 2,
+    Teacher = 2,
 
     /// <summary>
     /// Admin role, can view system logs
     /// </summary>
-    Admin = 3
+    Admin = 3,
+
+    /// <summary>
+    /// Super administrator role
+    /// </summary>
+    SuperAdmin = 4,
+
+    /// <summary>
+    /// Legacy regular user role
+    /// </summary>
+    User = Student,
+
+    /// <summary>
+    /// Legacy monitor role
+    /// </summary>
+    Monitor = Teacher
 }
 
 /// <summary>
@@ -258,6 +273,78 @@ public enum TheoryAnswerSheetStatus : byte
     /// Final answer sheet submitted
     /// </summary>
     Submitted = 1
+}
+
+/// <summary>
+/// Training content family
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<TrainingType>))]
+public enum TrainingType : byte
+{
+    Ctf = 0,
+    Theory = 1
+}
+
+/// <summary>
+/// Training article format
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<TrainingArticleContentType>))]
+public enum TrainingArticleContentType : byte
+{
+    Markdown = 0,
+    Html = 1
+}
+
+/// <summary>
+/// Training visibility scope
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<TrainingVisibilityType>))]
+public enum TrainingVisibilityType : byte
+{
+    GroupOnly = 0,
+    AllStudents = 1
+}
+
+/// <summary>
+/// Student training module progress status
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<TrainingModuleProgressStatus>))]
+public enum TrainingModuleProgressStatus : byte
+{
+    NotStarted = 0,
+    Reading = 1,
+    Practicing = 2,
+    Completed = 3
+}
+
+/// <summary>
+/// Theory training paper generation mode
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<TheoryTrainingMode>))]
+public enum TheoryTrainingMode : byte
+{
+    Random = 0,
+    Manual = 1
+}
+
+/// <summary>
+/// Training theory session status
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<TheoryTrainingSessionStatus>))]
+public enum TheoryTrainingSessionStatus : byte
+{
+    Draft = 0,
+    Submitted = 1
+}
+
+/// <summary>
+/// Student group manager role
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<StudentGroupManagerRole>))]
+public enum StudentGroupManagerRole : byte
+{
+    Owner = 0,
+    Assistant = 1
 }
 
 /// <summary>

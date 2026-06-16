@@ -71,6 +71,26 @@ public class TeamRepository(AppDbContext context) : RepositoryBase(context), ITe
         return query.OrderBy(t => t.Id).Take(30).ToArrayAsync(token);
     }
 
+    public Task<TeamJoinRequest?> GetPendingJoinRequest(int teamId, Guid userId, CancellationToken token = default) =>
+        Context.TeamJoinRequests
+            .FirstOrDefaultAsync(r =>
+                r.TeamId == teamId && r.UserId == userId && r.Status == TeamJoinRequestStatus.Pending, token);
+
+    public Task<TeamJoinRequest?> GetJoinRequest(int requestId, CancellationToken token = default) =>
+        Context.TeamJoinRequests.FirstOrDefaultAsync(r => r.Id == requestId, token);
+
+    public Task<TeamJoinRequest[]> GetPendingJoinRequests(int teamId, CancellationToken token = default) =>
+        Context.TeamJoinRequests
+            .Where(r => r.TeamId == teamId && r.Status == TeamJoinRequestStatus.Pending)
+            .OrderBy(r => r.CreatedAtUtc)
+            .ToArrayAsync(token);
+
+    public async Task AddJoinRequest(TeamJoinRequest request, CancellationToken token = default)
+    {
+        await Context.TeamJoinRequests.AddAsync(request, token);
+        await SaveAsync(token);
+    }
+
     public Task Transfer(Team team, UserInfo user, CancellationToken token = default)
     {
         team.Captain = user;

@@ -87,16 +87,23 @@ public static class ContextHelper
     public static Task<bool> HasAdmin(HttpContext context) => HasPrivilege(context, Role.Admin);
 
     /// <summary>
-    /// Checks if the current request has <see cref="Role.Monitor" /> privileges.
+    /// Checks if the current request has <see cref="Role.Teacher" /> privileges.
     /// </summary>
     /// <param name="context">The request context.</param>
     /// <returns></returns>
-    public static Task<bool> HasMonitor(HttpContext context) => HasPrivilege(context, Role.Monitor);
+    public static Task<bool> HasMonitor(HttpContext context) => HasPrivilege(context, Role.Teacher);
 
     /// <summary>
-    /// Checks if the current request has <see cref="Role.User" /> privileges.
+    /// Checks if the current request has <see cref="Role.Teacher" /> privileges.
     /// </summary>
     /// <param name="context">The request context.</param>
     /// <returns></returns>
-    public static Task<bool> HasUser(HttpContext context) => HasPrivilege(context, Role.User);
+    public static Task<bool> HasTeacher(HttpContext context) => HasPrivilege(context, Role.Teacher);
+
+    /// <summary>
+    /// Checks if the current request has <see cref="Role.Student" /> privileges.
+    /// </summary>
+    /// <param name="context">The request context.</param>
+    /// <returns></returns>
+    public static Task<bool> HasUser(HttpContext context) => HasPrivilege(context, Role.Student);
 }

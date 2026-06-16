@@ -72,6 +72,11 @@ public class UserInfoModel
     /// </summary>
     public bool? EmailConfirmed { get; set; }
 
+    /// <summary>
+    /// Training student groups
+    /// </summary>
+    public List<UserStudentGroupModel> StudentGroups { get; set; } = [];
+
     internal static UserInfoModel FromUserInfo(UserInfo user) =>
         new()
         {
@@ -89,4 +94,11 @@ public class UserInfoModel
             RegisterTimeUtc = user.RegisterTimeUtc,
             EmailConfirmed = user.EmailConfirmed
         };
+}
+
+public class UserStudentGroupModel
+{
+    public int Id { get; set; }
+
+    public string Name { get; set; } = string.Empty;
 }

@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Controllers;
 
-[RequireAdmin]
+[RequireTeacher]
 [ApiController]
 [Route("api/admin/theory")]
 [Produces(MediaTypeNames.Application.Json)]

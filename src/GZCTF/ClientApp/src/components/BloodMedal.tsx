@@ -1,5 +1,4 @@
 import cx from 'clsx'
-import { useId } from 'react'
 import { NoticeType, SubmissionType } from '@Api'
 
 export type BloodTier = 1 | 2 | 3
@@ -10,11 +9,11 @@ const tierLabels: Record<BloodTier, string> = {
   3: '三血',
 }
 
-const tierPalettes: Record<BloodTier | 'empty', { edge: string; core: string; shine: string; text: string }> = {
-  1: { edge: '#fff1a6', core: '#f2c84b', shine: '#fff7cf', text: '#261900' },
-  2: { edge: '#f4fbff', core: '#c7d4db', shine: '#ffffff', text: '#11191b' },
-  3: { edge: '#f2b174', core: '#c17434', shine: '#ffdfb8', text: '#231207' },
-  empty: { edge: '#697974', core: '#283431', shine: '#c6d8d0', text: '#cadbd3' },
+const tierPalettes: Record<BloodTier | 'empty', { back: string; face: string; icon: string; text: string }> = {
+  1: { back: '#b88412', face: '#f1c84f', icon: '#ffffff', text: '#2a1900' },
+  2: { back: '#8d9ca7', face: '#d7e1e7', icon: '#ffffff', text: '#142028' },
+  3: { back: '#9d5226', face: '#d18746', icon: '#ffffff', text: '#241006' },
+  empty: { back: '#3c4945', face: '#667771', icon: '#d2dfda', text: '#d2dfda' },
 }
 
 export const bloodTierLabel = (tier: BloodTier) => tierLabels[tier]
@@ -51,7 +50,6 @@ export function BloodMedal({
   const resolvedTier =
     tier ?? bloodTierFromSubmissionType(type as SubmissionType | null) ?? bloodTierFromNoticeType(type as NoticeType | null) ?? 1
   const palette = active ? tierPalettes[resolvedTier] : tierPalettes.empty
-  const uid = useId().replace(/:/g, '')
   const label = active ? tierLabels[resolvedTier] : `暂无${tierLabels[resolvedTier]}`
 
   return (
@@ -64,60 +62,33 @@ export function BloodMedal({
       aria-label={label}
       title={label}
     >
-      <svg viewBox="0 0 64 78" role="img" aria-hidden="true" focusable="false">
-        <defs>
-          <linearGradient id={`yy-medal-ribbon-${uid}`} x1="12" y1="5" x2="52" y2="35" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor={palette.shine} stopOpacity={active ? 0.78 : 0.24} />
-            <stop offset="0.42" stopColor={palette.core} stopOpacity={active ? 0.95 : 0.46} />
-            <stop offset="1" stopColor={palette.edge} stopOpacity={active ? 0.72 : 0.3} />
-          </linearGradient>
-          <radialGradient id={`yy-medal-face-${uid}`} cx="30%" cy="22%" r="78%">
-            <stop offset="0" stopColor={palette.shine} stopOpacity={active ? 0.96 : 0.36} />
-            <stop offset="0.38" stopColor={palette.core} stopOpacity={active ? 0.98 : 0.48} />
-            <stop offset="1" stopColor={palette.edge} stopOpacity={active ? 0.9 : 0.34} />
-          </radialGradient>
-          <linearGradient id={`yy-medal-sheen-${uid}`} x1="12" y1="20" x2="48" y2="68" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#ffffff" stopOpacity={active ? 0.58 : 0.16} />
-            <stop offset="0.5" stopColor="#ffffff" stopOpacity="0" />
-            <stop offset="1" stopColor="#ffffff" stopOpacity={active ? 0.24 : 0.06} />
-          </linearGradient>
-          <filter id={`yy-medal-shadow-${uid}`} x="-40%" y="-30%" width="180%" height="180%">
-            <feDropShadow dx="0" dy="4" stdDeviation="4" floodColor={palette.core} floodOpacity={active ? 0.38 : 0.12} />
-            <feDropShadow dx="0" dy="9" stdDeviation="7" floodColor="#000000" floodOpacity="0.32" />
-          </filter>
-        </defs>
-        <g filter={`url(#yy-medal-shadow-${uid})`}>
-          <path d="M18 4h28l-6.4 23.2H24.4L18 4Z" fill={`url(#yy-medal-ribbon-${uid})`} opacity={active ? 0.94 : 0.46} />
-          <path d="M23 4h18l-4 20H27L23 4Z" fill="#ffffff" opacity={active ? 0.12 : 0.04} />
-          <circle cx="32" cy="48" r="24" fill={`url(#yy-medal-face-${uid})`} />
-          <circle cx="32" cy="48" r="20" fill="none" stroke={palette.edge} strokeOpacity={active ? 0.74 : 0.28} strokeWidth="2" />
-          <path d="M18 38c5.8-9.2 22.6-12.2 31.6-2.2C40.4 33.8 29.2 38.2 18 38Z" fill="#ffffff" opacity={active ? 0.2 : 0.06} />
-          <path d="M17 64c10.5-2.5 23.2 0.8 31.2-10.8C45.8 67.2 26.2 74.5 17 64Z" fill={`url(#yy-medal-sheen-${uid})`} />
-        </g>
+      <svg viewBox="0 0 1034 1024" role="img" aria-hidden="true" focusable="false">
+        <path
+          d="M765.305 169.589 499.425 98.448C360.735 61.081 218.453 143.719 181.086 282.408l-68.985 258.695c-37.367 138.689 45.272 280.971 183.961 318.338l265.88 71.141c138.689 37.367 281.69-45.272 318.338-183.961l68.986-258.694c37.367-138.689-45.272-280.971-183.961-318.338z"
+          fill={palette.back}
+          opacity={active ? 0.45 : 0.24}
+        />
+        <path
+          d="M667.576 142.282H408.881c-135.096 0-244.323 109.227-244.323 244.323v251.509c0 135.096 109.227 244.322 244.323 244.322h258.695c135.096 0 244.323-109.226 244.323-244.322V386.605c0-135.096-109.227-244.323-244.323-244.323z"
+          fill={palette.face}
+          opacity={active ? 1 : 0.46}
+        />
+        <path
+          d="M536.073 443.374c10.779 0 21.558 1.437 31.618 2.874L478.585 290.313c-2.156-2.874-5.03-5.03-9.342-5.03H327.68c-3.593 0-7.186 2.156-8.623 5.03-2.156 2.874-2.156 7.186 0 10.06L425.409 486.49c28.744-27.307 67.548-43.116 110.664-43.116zm0 37.367c-71.141 0-127.91 57.488-127.91 127.91 0 71.141 57.488 127.91 127.91 127.91 71.141 0 127.91-57.488 127.91-127.91s-57.488-127.91-127.91-127.91zm217.735-191.147c-2.156-2.874-5.03-5.03-8.623-5.03H602.184c-3.593 0-7.186 2.156-9.342 5.03l-34.493 61.081 83.358 145.156 112.101-195.458c1.437-3.593 1.437-7.186 0-10.779z"
+          fill={palette.icon}
+          opacity={active ? 0.95 : 0.42}
+        />
         <text
-          x="32"
-          y="51"
+          x="536"
+          y="640"
           textAnchor="middle"
           dominantBaseline="middle"
           fill={palette.text}
           fontFamily="JetBrains Mono, Fira Code, Consolas, monospace"
-          fontSize="20"
+          fontSize="210"
           fontWeight="900"
         >
           {resolvedTier}
-        </text>
-        <text
-          x="32"
-          y="63"
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill={palette.text}
-          fontFamily="Noto Sans SC, Microsoft YaHei, sans-serif"
-          fontSize="7"
-          fontWeight="900"
-          opacity={active ? 0.88 : 0.56}
-        >
-          {tierLabels[resolvedTier]}
         </text>
       </svg>
     </span>

@@ -60,4 +60,9 @@ public class AdminUserInfoModel
     /// User role
     /// </summary>
     public Role? Role { get; set; }
+
+    /// <summary>
+    /// Student groups to sync
+    /// </summary>
+    public List<int>? StudentGroupIds { get; set; }
 }

@@ -1,26 +1,41 @@
 import {
+  ActionIcon,
   Avatar,
   Badge,
   Button,
   Center,
+  FileButton,
   Group,
   Modal,
+  PasswordInput,
   Select,
   Stack,
   Text,
+  Textarea,
   TextInput,
   Title,
+  Tooltip,
 } from '@mantine/core'
+import { useClipboard } from '@mantine/hooks'
+import { useModals } from '@mantine/modals'
 import { showNotification } from '@mantine/notifications'
 import {
   mdiAccountGroup,
+  mdiAccountCheck,
+  mdiAccountCancel,
   mdiAccountMultiplePlus,
+  mdiAccountSwitch,
   mdiChartTimelineVariant,
   mdiCheck,
   mdiClose,
+  mdiContentCopy,
   mdiCrown,
   mdiHumanGreetingVariant,
-  mdiPencil,
+  mdiImageEdit,
+  mdiMagnify,
+  mdiRefresh,
+  mdiSend,
+  mdiTrashCanOutline,
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import dayjs from 'dayjs'
@@ -29,7 +44,6 @@ import { FC, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EchartsContainer } from '@Components/charts/EchartsContainer'
 import { TeamCreateModal } from '@Components/TeamCreateModal'
-import { TeamEditModal } from '@Components/TeamEditModal'
 import { WithNavBar } from '@Components/WithNavbar'
 import { WithRole } from '@Components/WithRole'
 import { YinyuHeartbeatIcon, YinyuLoadingState, YinyuModalBody } from '@Components/yinyu/YinyuUI'
@@ -39,17 +53,69 @@ import { useIsMobile } from '@Utils/ThemeOverride'
 import { OnceSWRConfig } from '@Hooks/useConfig'
 import { usePageTitle } from '@Hooks/usePageTitle'
 import { useTeams, useUser } from '@Hooks/useUser'
-import api, { BasicGameInfoModel, Role, TeamInfoModel, TimeLine, TopTimeLine } from '@Api'
+import api, { BasicGameInfoModel, ContentType, Role, TeamInfoModel, TeamUserInfoModel, TimeLine, TopTimeLine } from '@Api'
 
 const codePattern = /:\d+:[0-9a-f]{32}$/
+
+interface TeamJoinRequestModel {
+  id: number
+  teamId: number
+  teamName?: string | null
+  user: TeamUserInfoModel
+  message?: string | null
+  status: 'Pending' | 'Accepted' | 'Rejected'
+  createdAtUtc: number | string
+  reviewedAtUtc?: number | string | null
+}
 
 interface TeamScoreCurveProps {
   team?: TeamInfoModel
 }
 
+const searchJoinTeams = async (hint: string) => {
+  const response = await api.request<TeamInfoModel[], unknown>({
+    path: '/api/team/search',
+    method: 'GET',
+    query: { hint },
+    format: 'json',
+  })
+
+  return response.data
+}
+
+const createJoinRequest = async (teamId: number, message: string) =>
+  api.request<TeamJoinRequestModel, unknown>({
+    path: `/api/team/${teamId}/requests`,
+    method: 'POST',
+    body: { message },
+    type: ContentType.Json,
+    format: 'json',
+  })
+
+const getJoinRequests = async (teamId: number) => {
+  const response = await api.request<TeamJoinRequestModel[], unknown>({
+    path: `/api/team/${teamId}/requests`,
+    method: 'GET',
+    format: 'json',
+  })
+
+  return response.data
+}
+
+const reviewJoinRequest = async (teamId: number, requestId: number, accepted: boolean) => {
+  const response = await api.request<TeamInfoModel, unknown>({
+    path: `/api/team/${teamId}/requests/${requestId}`,
+    method: 'POST',
+    body: { accepted },
+    type: ContentType.Json,
+    format: 'json',
+  })
+
+  return response.data
+}
+
 const findTeamTimeline = (timelines: TopTimeLine[] | undefined, team?: TeamInfoModel) => {
-  if (!team) return undefined
-  const teamName = team.name?.trim()
+  const teamName = team?.name?.trim()
   if (!teamName) return undefined
   return timelines?.find((item) => item.name === teamName)
 }
@@ -78,7 +144,7 @@ const TeamScoreCurve: FC<TeamScoreCurveProps> = ({ team }) => {
     () =>
       gameList.map((game: BasicGameInfoModel) => ({
         value: String(game.id),
-        label: game.title ?? `赛事 #${game.id}`,
+        label: game.title ?? `比赛 #${game.id}`,
       })),
     [gameList]
   )
@@ -208,7 +274,7 @@ const TeamScoreCurve: FC<TeamScoreCurveProps> = ({ team }) => {
         <EchartsContainer
           option={option}
           opts={{ renderer: 'svg', locale }}
-          style={{ width: '100%', height: '360px', display: 'flex' }}
+          style={{ width: '100%', height: 'clamp(220px, 28vh, 300px)', display: 'flex' }}
         />
       ) : (
         <Center className="yy-team-score-empty">
@@ -230,12 +296,21 @@ const Teams: FC = () => {
   const { teams, mutate: mutateTeams, error: teamsError } = useTeams()
   const [joinOpened, setJoinOpened] = useState(false)
   const [joinTeamCode, setJoinTeamCode] = useState('')
+  const [joinSearch, setJoinSearch] = useState('')
+  const [joinMessage, setJoinMessage] = useState('')
+  const [joinResults, setJoinResults] = useState<TeamInfoModel[]>([])
+  const [joinLoading, setJoinLoading] = useState(false)
   const [createOpened, setCreateOpened] = useState(false)
-  const [editOpened, setEditOpened] = useState(false)
-  const [editTeam, setEditTeam] = useState<TeamInfoModel | null>(null)
   const [selectedTeamId, setSelectedTeamId] = useState<number | undefined>()
+  const [teamDraft, setTeamDraft] = useState({ name: '', bio: '' })
+  const [inviteCode, setInviteCode] = useState('')
+  const [pendingRequests, setPendingRequests] = useState<TeamJoinRequestModel[]>([])
+  const [requestsLoading, setRequestsLoading] = useState(false)
+  const [working, setWorking] = useState(false)
   const isMobile = useIsMobile()
   const { t } = useTranslation()
+  const clipboard = useClipboard({ timeout: 1400 })
+  const modals = useModals()
 
   usePageTitle(t('team.title.index'))
 
@@ -267,6 +342,56 @@ const Teams: FC = () => {
     }
   }, [selectedTeamId, teams])
 
+  useEffect(() => {
+    setTeamDraft({
+      name: selectedTeam?.name ?? '',
+      bio: selectedTeam?.bio ?? '',
+    })
+    setInviteCode('')
+    setPendingRequests([])
+  }, [selectedTeam?.id, selectedTeam?.name, selectedTeam?.bio])
+
+  useEffect(() => {
+    if (!selectedTeam?.id || !selectedIsCaptain) {
+      setInviteCode('')
+      setPendingRequests([])
+      return
+    }
+
+    let ignore = false
+    const loadCaptainData = async () => {
+      setRequestsLoading(true)
+
+      try {
+        const [invite, requests] = await Promise.all([
+          api.team.teamInviteCode(selectedTeam.id!),
+          getJoinRequests(selectedTeam.id!),
+        ])
+
+        if (ignore) return
+        setInviteCode(invite.data)
+        setPendingRequests(requests)
+      } catch (e) {
+        if (!ignore) showErrorMsg(e, t)
+      } finally {
+        if (!ignore) setRequestsLoading(false)
+      }
+    }
+
+    void loadCaptainData()
+
+    return () => {
+      ignore = true
+    }
+  }, [selectedIsCaptain, selectedTeam?.id, t])
+
+  const updateSelectedTeam = (nextTeam: TeamInfoModel) => {
+    void mutateTeams(
+      teams?.map((team) => (team.id === nextTeam.id ? nextTeam : team)),
+      { revalidate: false }
+    )
+  }
+
   const onJoinTeam = async () => {
     if (!codePattern.test(joinTeamCode)) {
       showNotification({
@@ -295,13 +420,160 @@ const Teams: FC = () => {
     }
   }
 
-  const openEditTeam = (team: TeamInfoModel) => {
-    setEditTeam(team)
-    setEditOpened(true)
+  const onSearchJoinTeams = async () => {
+    if (!joinSearch.trim()) return
+
+    setJoinLoading(true)
+
+    try {
+      const results = await searchJoinTeams(joinSearch.trim())
+      setJoinResults(results)
+    } catch (e) {
+      showErrorMsg(e, t)
+    } finally {
+      setJoinLoading(false)
+    }
+  }
+
+  const onCreateJoinRequest = async (team: TeamInfoModel) => {
+    if (!team.id) return
+
+    setJoinLoading(true)
+
+    try {
+      await createJoinRequest(team.id, joinMessage)
+      showNotification({
+        color: 'teal',
+        title: '入队申请已提交',
+        message: '请等待队长处理申请。',
+        icon: <Icon path={mdiCheck} size={1} />,
+      })
+      setJoinMessage('')
+      setJoinOpened(false)
+    } catch (e) {
+      showErrorMsg(e, t)
+    } finally {
+      setJoinLoading(false)
+    }
+  }
+
+  const onSaveTeam = async () => {
+    if (!selectedTeam?.id || !selectedIsCaptain) return
+
+    setWorking(true)
+
+    try {
+      const response = await api.team.teamUpdateTeam(selectedTeam.id, teamDraft)
+      updateSelectedTeam(response.data)
+      showNotification({
+        color: 'teal',
+        message: t('team.notification.updated'),
+        icon: <Icon path={mdiCheck} size={1} />,
+      })
+    } catch (e) {
+      showErrorMsg(e, t)
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const onRefreshInviteCode = async () => {
+    if (!selectedTeam?.id || !selectedIsCaptain) return
+
+    setWorking(true)
+
+    try {
+      const response = await api.team.teamUpdateInviteToken(selectedTeam.id)
+      setInviteCode(response.data)
+      showNotification({
+        color: 'teal',
+        message: t('team.notification.invite_code.updated'),
+        icon: <Icon path={mdiCheck} size={1} />,
+      })
+    } catch (e) {
+      showErrorMsg(e, t)
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const onUploadAvatar = async (file: File | null) => {
+    if (!file || !selectedTeam?.id || !selectedIsCaptain) return
+
+    setWorking(true)
+
+    try {
+      const response = await api.team.teamAvatar(selectedTeam.id, { file })
+      updateSelectedTeam({ ...selectedTeam, avatar: response.data })
+      showNotification({
+        color: 'teal',
+        message: t('common.avatar.uploaded'),
+        icon: <Icon path={mdiCheck} size={1} />,
+      })
+    } catch (e) {
+      showErrorMsg(e, t)
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const onKickMember = async (member: TeamUserInfoModel) => {
+    if (!selectedTeam?.id || !member.id || !selectedIsCaptain) return
+
+    try {
+      const response = await api.team.teamKickUser(selectedTeam.id, member.id)
+      updateSelectedTeam(response.data)
+      showNotification({
+        color: 'teal',
+        title: t('team.notification.kick.success'),
+        message: t('team.notification.updated'),
+        icon: <Icon path={mdiCheck} size={1} />,
+      })
+    } catch (e) {
+      showErrorMsg(e, t)
+    }
+  }
+
+  const onTransferCaptain = async (member: TeamUserInfoModel) => {
+    if (!selectedTeam?.id || !member.id || !selectedIsCaptain) return
+
+    try {
+      const response = await api.team.teamTransfer(selectedTeam.id, { newCaptainId: member.id })
+      updateSelectedTeam(response.data)
+      showNotification({
+        color: 'teal',
+        title: t('team.notification.transfer.success'),
+        message: t('team.notification.updated'),
+        icon: <Icon path={mdiCheck} size={1} />,
+      })
+    } catch (e) {
+      showErrorMsg(e, t)
+    }
+  }
+
+  const onReviewRequest = async (request: TeamJoinRequestModel, accepted: boolean) => {
+    if (!selectedTeam?.id || !selectedIsCaptain) return
+
+    setWorking(true)
+
+    try {
+      const nextTeam = await reviewJoinRequest(selectedTeam.id, request.id, accepted)
+      updateSelectedTeam(nextTeam)
+      setPendingRequests((current) => current.filter((item) => item.id !== request.id))
+      showNotification({
+        color: accepted ? 'teal' : 'orange',
+        message: accepted ? '已同意入队申请' : '已拒绝入队申请',
+        icon: <Icon path={accepted ? mdiCheck : mdiClose} size={1} />,
+      })
+    } catch (e) {
+      showErrorMsg(e, t)
+    } finally {
+      setWorking(false)
+    }
   }
 
   return (
-    <WithNavBar minWidth={0} width="var(--container)">
+    <WithNavBar minWidth={0} width="calc(100vw - 7.2rem)">
       <WithRole requiredRole={Role.User}>
         <Stack className="yy-page-frame view-stack yy-soft-enter yy-team-page yy-team-workspace">
           {teams && !teamsError && user && !userError ? (
@@ -368,86 +640,255 @@ const Teams: FC = () => {
                 </aside>
 
                 <main className="yy-team-main">
-                  <section className="panel-card yy-team-detail-panel">
+                  <section className="panel-card yy-team-detail-panel yy-team-profile-panel">
                     <Group justify="space-between" align="flex-start" gap="md" className="yy-team-section-head">
                       <div>
                         <span className="yy-section-kicker">TEAM PROFILE</span>
                         <Title order={2}>{selectedTeam?.name ?? '队伍信息'}</Title>
                         <Text size="sm" className="yy-readable-text">
-                          {selectedIsCaptain ? '你是该队伍队长，可以维护队伍信息。' : '你是该队伍成员，可以查看队伍信息。'}
+                          {selectedIsCaptain ? '你是该队伍队长，可以维护队伍信息与成员。' : '你是该队伍成员，可以查看队伍资料与成员信息。'}
                         </Text>
                       </div>
-                      {selectedTeam && (
-                        <Button
-                          leftSection={<Icon path={mdiPencil} size={1} />}
-                          className="yy-team-action yy-team-action-create"
-                          variant={selectedIsCaptain ? 'filled' : 'outline'}
-                          onClick={() => openEditTeam(selectedTeam)}
-                        >
-                          {selectedIsCaptain ? t('team.button.edit') : '查看详情'}
-                        </Button>
-                      )}
                     </Group>
 
-                    <div className="yy-team-profile-grid">
-                      <div className="yy-team-current yy-team-current-compact">
-                        <Avatar
-                          src={selectedTeam?.avatar}
-                          alt={selectedTeam?.name ?? 'team'}
-                          radius="xl"
-                          size={72}
-                          className="yy-team-current-avatar"
+                    <div className="yy-team-profile-layout">
+                      <aside className="yy-team-profile-identity">
+                        {selectedIsCaptain ? (
+                          <TextInput
+                            label="队伍名称"
+                            value={teamDraft.name}
+                            onChange={(event) => setTeamDraft((current) => ({ ...current, name: event.currentTarget.value }))}
+                            className="yy-team-inline-input"
+                          />
+                        ) : (
+                          <Title order={3}>{selectedTeam?.name ?? 'team'}</Title>
+                        )}
+                        <div className="yy-team-avatar-edit-shell">
+                          <Avatar
+                            src={selectedTeam?.avatar}
+                            alt={selectedTeam?.name ?? 'team'}
+                            radius="xl"
+                            size={132}
+                            className="yy-team-current-avatar"
+                          >
+                            {selectedTeam?.name?.slice(0, 1) ?? 'T'}
+                          </Avatar>
+                          {selectedIsCaptain ? (
+                            <FileButton onChange={onUploadAvatar} accept="image/png,image/jpeg,image/webp,image/gif">
+                              {(props) => (
+                                <ActionIcon
+                                  {...props}
+                                  className="yy-team-avatar-edit-button"
+                                  variant="filled"
+                                  loading={working}
+                                  aria-label="更换队伍头像"
+                                >
+                                  <Icon path={mdiImageEdit} size={0.85} />
+                                </ActionIcon>
+                              )}
+                            </FileButton>
+                          ) : null}
+                        </div>
+                        <Badge
+                          className="yy-team-role-badge"
+                          leftSection={<Icon path={selectedIsCaptain ? mdiCrown : mdiAccountGroup} size={0.8} />}
                         >
-                          {selectedTeam?.name?.slice(0, 1) ?? 'T'}
-                        </Avatar>
-                        <div>
-                          <Group gap="xs" wrap="wrap">
-                            <Title order={3}>{selectedTeam?.name ?? 'team'}</Title>
-                            <Badge
-                              className="yy-team-role-badge"
-                              leftSection={<Icon path={selectedIsCaptain ? mdiCrown : mdiAccountGroup} size={0.8} />}
-                            >
-                              {selectedIsCaptain ? '队长' : '队员'}
-                            </Badge>
-                          </Group>
-                          <Text>{selectedTeam?.bio || '暂无队伍简介'}</Text>
-                        </div>
-                      </div>
+                          {selectedIsCaptain ? '队长' : '队员'}
+                        </Badge>
+                        {selectedIsCaptain ? (
+                          <Button
+                            fullWidth
+                            className="yy-team-action yy-team-action-create"
+                            variant="filled"
+                            loading={working}
+                            onClick={onSaveTeam}
+                          >
+                            保存资料
+                          </Button>
+                        ) : null}
+                      </aside>
 
-                      <div className="yy-team-member-summary yy-team-member-summary-compact">
-                        <div>
-                          <span>队长</span>
-                          <strong>{selectedCaptain?.userName ?? '-'}</strong>
+                      <section className="yy-team-members-panel">
+                        <Group justify="space-between" align="center" className="yy-team-subhead">
+                          <div>
+                            <span className="yy-section-kicker">MEMBERS</span>
+                            <Title order={3}>队伍成员</Title>
+                          </div>
+                          <Badge className="yy-team-role-badge">{selectedMembers.length} 人</Badge>
+                        </Group>
+                        <div className="yy-team-roster-list yy-team-roster-grid">
+                          {selectedMembers.map((member) => (
+                            <article
+                              key={member.id ?? member.userName}
+                              className={`yy-team-roster-row ${member.captain ? 'is-captain' : ''}`}
+                            >
+                              <Avatar src={member.avatar} alt={member.userName ?? 'user'} radius="xl" size={50}>
+                                {member.userName?.slice(0, 1) ?? 'U'}
+                              </Avatar>
+                              <div className="yy-team-roster-user">
+                                <strong>{member.userName ?? 'user'}</strong>
+                                <span>{member.bio || '暂无个人简介'}</span>
+                              </div>
+                              <Badge
+                                className="yy-team-role-badge"
+                                leftSection={<Icon path={member.captain ? mdiCrown : mdiAccountGroup} size={0.78} />}
+                              >
+                                {member.captain ? '队长' : '队员'}
+                              </Badge>
+                              {selectedIsCaptain && !member.captain ? (
+                                <Group gap={5} wrap="nowrap" className="yy-team-roster-actions">
+                                  <Tooltip label="转让队长">
+                                    <ActionIcon
+                                      variant="light"
+                                      color="yellow"
+                                      onClick={() => {
+                                        modals.openConfirmModal({
+                                          title: '转让队长',
+                                          children: (
+                                            <Text size="sm">
+                                              确认将 {selectedTeam?.name ?? '当前队伍'} 的队长转让给 {member.userName ?? '该成员'}？
+                                            </Text>
+                                          ),
+                                          confirmProps: { color: 'orange' },
+                                          zIndex: 10000,
+                                          onConfirm: () => void onTransferCaptain(member),
+                                        })
+                                      }}
+                                    >
+                                      <Icon path={mdiAccountSwitch} size={0.78} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                  <Tooltip label="剔除队员">
+                                    <ActionIcon
+                                      variant="light"
+                                      color="red"
+                                      onClick={() => {
+                                        modals.openConfirmModal({
+                                          title: '剔除队员',
+                                          children: <Text size="sm">确认将 {member.userName ?? '该成员'} 移出队伍？</Text>,
+                                          confirmProps: { color: 'red' },
+                                          zIndex: 10000,
+                                          onConfirm: () => void onKickMember(member),
+                                        })
+                                      }}
+                                    >
+                                      <Icon path={mdiTrashCanOutline} size={0.78} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                </Group>
+                              ) : null}
+                            </article>
+                          ))}
                         </div>
-                        <div>
-                          <span>成员</span>
-                          <strong>{selectedMembers.length}</strong>
-                        </div>
-                        <div>
-                          <span>我创建的队伍</span>
-                          <strong>{teamsOwned.length}</strong>
-                        </div>
-                      </div>
+                        {selectedIsCaptain ? (
+                          <section className="yy-team-requests-panel">
+                            <Group justify="space-between" align="center" className="yy-team-subhead">
+                              <div>
+                                <span className="yy-section-kicker">JOIN REQUESTS</span>
+                                <Title order={3}>入队申请</Title>
+                              </div>
+                              <Badge className="yy-team-role-badge">{pendingRequests.length}</Badge>
+                            </Group>
+                            {requestsLoading ? (
+                              <Text size="sm" className="yy-readable-text">
+                                正在读取入队申请...
+                              </Text>
+                            ) : pendingRequests.length > 0 ? (
+                              <div className="yy-team-request-list">
+                                {pendingRequests.map((request) => (
+                                  <article className="yy-team-request-row" key={request.id}>
+                                    <Avatar src={request.user.avatar} alt={request.user.userName ?? 'user'} radius="xl" size={38}>
+                                      {request.user.userName?.slice(0, 1) ?? 'U'}
+                                    </Avatar>
+                                    <div className="yy-team-roster-user">
+                                      <strong>{request.user.userName ?? 'user'}</strong>
+                                      <span>{request.message || request.user.bio || '申请加入队伍'}</span>
+                                    </div>
+                                    <Group gap={5} wrap="nowrap">
+                                      <ActionIcon
+                                        variant="light"
+                                        color="teal"
+                                        loading={working}
+                                        aria-label="同意入队"
+                                        onClick={() => void onReviewRequest(request, true)}
+                                      >
+                                        <Icon path={mdiAccountCheck} size={0.8} />
+                                      </ActionIcon>
+                                      <ActionIcon
+                                        variant="light"
+                                        color="red"
+                                        loading={working}
+                                        aria-label="拒绝入队"
+                                        onClick={() => void onReviewRequest(request, false)}
+                                      >
+                                        <Icon path={mdiAccountCancel} size={0.8} />
+                                      </ActionIcon>
+                                    </Group>
+                                  </article>
+                                ))}
+                              </div>
+                            ) : (
+                              <Text size="sm" className="yy-readable-text">
+                                暂无待处理入队申请。
+                              </Text>
+                            )}
+                          </section>
+                        ) : null}
+                      </section>
                     </div>
 
-                    <div className="yy-team-roster-list yy-team-roster-grid">
-                      {selectedMembers.map((member) => (
-                        <article key={member.id ?? member.userName} className={`yy-team-roster-row ${member.captain ? 'is-captain' : ''}`}>
-                          <Avatar src={member.avatar} alt={member.userName ?? 'user'} radius="xl" size={50}>
-                            {member.userName?.slice(0, 1) ?? 'U'}
-                          </Avatar>
-                          <div className="yy-team-roster-user">
-                            <strong>{member.userName ?? 'user'}</strong>
-                            <span>{member.bio || '暂无个人简介'}</span>
-                          </div>
-                          <Badge
-                            className="yy-team-role-badge"
-                            leftSection={<Icon path={member.captain ? mdiCrown : mdiAccountGroup} size={0.78} />}
-                          >
-                            {member.captain ? '队长' : '队员'}
-                          </Badge>
-                        </article>
-                      ))}
+                    <div className="yy-team-info-strip">
+                      <article>
+                        <span>队伍签名</span>
+                        {selectedIsCaptain ? (
+                          <Textarea
+                            value={teamDraft.bio}
+                            placeholder="填写队伍签名"
+                            autosize
+                            minRows={2}
+                            maxRows={3}
+                            onChange={(event) => setTeamDraft((current) => ({ ...current, bio: event.currentTarget.value }))}
+                            className="yy-team-inline-input"
+                          />
+                        ) : (
+                          <strong>{selectedTeam?.bio || '暂无队伍签名'}</strong>
+                        )}
+                      </article>
+                      <article>
+                        <span>队长</span>
+                        <strong>{selectedCaptain?.userName ?? '-'}</strong>
+                      </article>
+                      <article>
+                        <span>邀请码</span>
+                        {selectedIsCaptain ? (
+                          <Group gap="xs" wrap="nowrap" className="yy-team-invite-control">
+                            <PasswordInput value={inviteCode} readOnly className="yy-team-inline-input" />
+                            <ActionIcon
+                              variant="light"
+                              aria-label="复制邀请码"
+                              onClick={() => {
+                                clipboard.copy(inviteCode)
+                                showNotification({
+                                  color: 'teal',
+                                  message: t('team.notification.invite_code.copied'),
+                                  icon: <Icon path={mdiCheck} size={1} />,
+                                })
+                              }}
+                            >
+                              <Icon path={mdiContentCopy} size={0.82} />
+                            </ActionIcon>
+                            <ActionIcon variant="light" loading={working} aria-label="刷新邀请码" onClick={onRefreshInviteCode}>
+                              <Icon path={mdiRefresh} size={0.82} />
+                            </ActionIcon>
+                          </Group>
+                        ) : (
+                          <strong>仅队长可查看</strong>
+                        )}
+                      </article>
+                      <article>
+                        <span>入队申请</span>
+                        <strong>{selectedIsCaptain ? `${pendingRequests.length} 个待处理申请` : '由队长统一处理'}</strong>
+                      </article>
                     </div>
                   </section>
 
@@ -490,20 +931,97 @@ const Teams: FC = () => {
           )}
         </Stack>
 
-        <Modal opened={joinOpened} title={t('team.button.join')} onClose={() => setJoinOpened(false)}>
+        <Modal
+          opened={joinOpened}
+          title={t('team.button.join')}
+          size="lg"
+          onClose={() => {
+            setJoinOpened(false)
+            setJoinResults([])
+            setJoinSearch('')
+            setJoinMessage('')
+          }}
+        >
           <YinyuModalBody>
-            <Text size="sm">{t('team.content.join')}</Text>
-            <TextInput
-              label={t('team.label.invite_code')}
-              type="text"
-              placeholder="team:0:01234567890123456789012345678901"
-              w="100%"
-              value={joinTeamCode}
-              onChange={(event) => setJoinTeamCode(event.currentTarget.value)}
-            />
-            <Button fullWidth variant="outline" className="yy-team-action yy-team-action-join" onClick={onJoinTeam}>
-              {t('team.button.join')}
-            </Button>
+            <section className="yy-team-join-section">
+              <Text fw={900}>邀请码加入</Text>
+              <Text size="sm" className="yy-readable-text">
+                已获得队长邀请码时，可以直接加入队伍。
+              </Text>
+              <TextInput
+                label={t('team.label.invite_code')}
+                type="text"
+                placeholder="team:0:01234567890123456789012345678901"
+                w="100%"
+                value={joinTeamCode}
+                onChange={(event) => setJoinTeamCode(event.currentTarget.value)}
+              />
+              <Button fullWidth variant="outline" className="yy-team-action yy-team-action-join" onClick={onJoinTeam}>
+                {t('team.button.join')}
+              </Button>
+            </section>
+
+            <section className="yy-team-join-section">
+              <Text fw={900}>申请加入队伍</Text>
+              <Text size="sm" className="yy-readable-text">
+                未获得邀请码时，可以搜索队伍并提交入队申请，由队长审核。
+              </Text>
+              <Group align="flex-end" gap="sm" wrap="nowrap">
+                <TextInput
+                  label="搜索队伍"
+                  placeholder="输入队伍名称或 ID"
+                  value={joinSearch}
+                  onChange={(event) => setJoinSearch(event.currentTarget.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') void onSearchJoinTeams()
+                  }}
+                  leftSection={<Icon path={mdiMagnify} size={0.86} />}
+                  className="yy-team-join-search"
+                />
+                <Button
+                  className="yy-team-action yy-team-action-create"
+                  loading={joinLoading}
+                  onClick={onSearchJoinTeams}
+                >
+                  搜索
+                </Button>
+              </Group>
+              <Textarea
+                label="申请说明"
+                placeholder="简要说明身份或参赛意向"
+                value={joinMessage}
+                autosize
+                minRows={2}
+                maxRows={3}
+                onChange={(event) => setJoinMessage(event.currentTarget.value)}
+              />
+              <div className="yy-team-join-results">
+                {joinResults.map((team) => {
+                  const joined = teams?.some((item) => item.id === team.id)
+
+                  return (
+                    <article className="yy-team-request-row" key={team.id ?? team.name}>
+                      <Avatar src={team.avatar} alt={team.name ?? 'team'} radius="xl" size={40}>
+                        {team.name?.slice(0, 1) ?? 'T'}
+                      </Avatar>
+                      <div className="yy-team-roster-user">
+                        <strong>{team.name ?? 'team'}</strong>
+                        <span>{team.bio || `${team.members?.length ?? 0} 名成员`}</span>
+                      </div>
+                      <Button
+                        size="xs"
+                        leftSection={<Icon path={mdiSend} size={0.76} />}
+                        disabled={joined}
+                        loading={joinLoading}
+                        onClick={() => void onCreateJoinRequest(team)}
+                      >
+                        {joined ? '已加入' : '提交申请'}
+                      </Button>
+                    </article>
+                  )
+                })}
+              </div>
+            </section>
           </YinyuModalBody>
         </Modal>
 
@@ -515,13 +1033,6 @@ const Teams: FC = () => {
           mutate={mutateTeams}
         />
 
-        <TeamEditModal
-          opened={editOpened}
-          title={t('team.button.edit')}
-          onClose={() => setEditOpened(false)}
-          team={editTeam}
-          isCaptain={editTeam?.members?.some((member) => member?.captain && member.id === user?.userId) ?? false}
-        />
       </WithRole>
     </WithNavBar>
   )

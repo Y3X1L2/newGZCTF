@@ -85,6 +85,8 @@ internal static class ServicesExtension
             builder.Services.AddScoped<ISubmissionRepository, SubmissionRepository>();
             builder.Services.AddScoped<IGameInstanceRepository, GameInstanceRepository>();
             builder.Services.AddScoped<IGameChallengeRepository, GameChallengeRepository>();
+            builder.Services.AddScoped<IExerciseInstanceRepository, ExerciseInstanceRepository>();
+            builder.Services.AddScoped<IExerciseChallengeRepository, ExerciseChallengeRepository>();
             builder.Services.AddScoped<IParticipationRepository, ParticipationRepository>();
             builder.Services.AddScoped<IDivisionRepository, DivisionRepository>();
             builder.Services.AddScoped<IAwdpRepository, AwdpRepository>();
