@@ -80,9 +80,11 @@ export const ChallengeCard: FC<ChallengeCardProps> = (props: ChallengeCardProps)
             const label = bloodTierLabel(tier)
 
             return (
-              <Tooltip.Floating
+              <Tooltip
                 key={type}
                 position="bottom"
+                withArrow
+                withinPortal
                 multiline
                 label={
                   <Stack gap={0}>
@@ -98,7 +100,7 @@ export const ChallengeCard: FC<ChallengeCardProps> = (props: ChallengeCardProps)
                 }
               >
                 <BloodMedal tier={tier} active={!!blood} own={teamId === blood?.id} size="sm" className={classes.bloodMedal} />
-              </Tooltip.Floating>
+              </Tooltip>
             )
           })}
         </Group>

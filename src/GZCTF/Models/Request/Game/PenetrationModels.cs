@@ -124,6 +124,8 @@ public class PenetrationPlanModel
     public int GameId { get; set; }
     public int TeamCount { get; set; }
     public string SampleTeamPrefix { get; set; } = string.Empty;
+    public int RuntimePolicyRuleCount { get; set; }
+    public string PolicyEnforcementMode { get; set; } = string.Empty;
     public PenetrationValidationModel Validation { get; set; } = new();
     public List<PenetrationPlanNetworkModel> Networks { get; set; } = [];
     public List<PenetrationPlanNodeModel> Nodes { get; set; } = [];
@@ -179,6 +181,9 @@ public class PenetrationPlanPolicyModel
     public string PortRange { get; set; } = "any";
     public PenetrationPolicyAction Action { get; set; }
     public bool IsRouteHint { get; set; }
+    public bool RuntimeEnforced { get; set; }
+    public string EnforcementMode { get; set; } = string.Empty;
+    public List<string> ResolvedRules { get; set; } = [];
 }
 
 public class PenetrationPlanFlagModel

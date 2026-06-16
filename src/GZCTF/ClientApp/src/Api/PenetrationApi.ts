@@ -175,6 +175,8 @@ export interface PenetrationPlanModel {
   gameId: number
   teamCount: number
   sampleTeamPrefix: string
+  runtimePolicyRuleCount: number
+  policyEnforcementMode: string
   validation: PenetrationValidationModel
   networks: PenetrationPlanNetworkModel[]
   nodes: PenetrationPlanNodeModel[]
@@ -226,6 +228,9 @@ export interface PenetrationPlanPolicyModel {
   portRange: string
   action: PenetrationPolicyAction
   isRouteHint: boolean
+  runtimeEnforced: boolean
+  enforcementMode: string
+  resolvedRules: string[]
 }
 
 export interface PenetrationPlanFlagModel {

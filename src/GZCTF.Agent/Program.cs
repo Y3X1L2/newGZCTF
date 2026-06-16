@@ -9,6 +9,7 @@ builder.Services.Configure<DockerConfig>(builder.Configuration.GetSection("Docke
 builder.Services.Configure<KvmConfig>(builder.Configuration.GetSection("Kvm"));
 
 builder.Services.AddSingleton<DockerService>();
+builder.Services.AddSingleton<HostNetworkPolicyService>();
 builder.Services.AddSingleton<KvmService>();
 builder.Services.AddHostedService<HeartbeatWorker>();
 

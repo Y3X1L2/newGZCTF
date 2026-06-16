@@ -9,11 +9,14 @@ namespace GZCTF.Agent.Controllers;
 public class ContainerController : ControllerBase
 {
     private readonly DockerService _docker;
+    private readonly HostNetworkPolicyService _networkPolicy;
     private readonly ILogger<ContainerController> _logger;
 
-    public ContainerController(DockerService docker, ILogger<ContainerController> logger)
+    public ContainerController(DockerService docker, HostNetworkPolicyService networkPolicy,
+        ILogger<ContainerController> logger)
     {
         _docker = docker;
+        _networkPolicy = networkPolicy;
         _logger = logger;
     }
 
@@ -45,5 +48,19 @@ public class ContainerController : ControllerBase
     {
         await _docker.RemoveNetworkAsync(networkName, token);
         return NoContent();
+    }
+
+    [HttpPost("policies/apply")]
+    public async Task<IActionResult> ApplyPolicy([FromBody] NetworkPolicySetRequest request, CancellationToken token)
+    {
+        var result = await _networkPolicy.ApplyAsync(request, token);
+        return result.Success ? Ok(new { message = result.Message }) : StatusCode(500, new { message = result.Message });
+    }
+
+    [HttpDelete("policies/{setName}")]
+    public async Task<IActionResult> RemovePolicy(string setName, CancellationToken token)
+    {
+        var result = await _networkPolicy.RemoveAsync(setName, token);
+        return result.Success ? NoContent() : StatusCode(500, new { message = result.Message });
     }
 }

@@ -31,6 +31,7 @@ public class ContainerNetworkAttachment
     public string? IPAddress { get; set; }
     public bool IsPrimary { get; set; }
     public bool IsInternal { get; set; }
+    public bool EnableInterContainerCommunication { get; set; } = true;
 }
 
 public class AgentContainerResponse
@@ -39,4 +40,20 @@ public class AgentContainerResponse
     public string IP { get; set; } = string.Empty;
     public int Port { get; set; }
     public int PublicPort { get; set; }
+}
+
+public class NetworkPolicySetRequest
+{
+    public string SetName { get; set; } = string.Empty;
+    public List<NetworkPolicyRuleRequest> Rules { get; set; } = [];
+}
+
+public class NetworkPolicyRuleRequest
+{
+    public string Source { get; set; } = string.Empty;
+    public string Target { get; set; } = string.Empty;
+    public string Protocol { get; set; } = "any";
+    public string PortRange { get; set; } = "any";
+    public bool Allow { get; set; }
+    public string Comment { get; set; } = string.Empty;
 }

@@ -391,8 +391,8 @@ const PenetrationUsageGuide: FC = () => (
             <Text>2. 从左侧拖入安全域或资产节点，节点拖入某个安全域后会自动绑定主网卡。</Text>
             <Text>3. 点击安全域配置名称、标识、样例 CIDR、默认策略和说明；未填写 CIDR 时由平台自动分配。</Text>
             <Text>4. 点击资产节点选择环境模板、服务端口、资源限制、网卡、环境变量和得分项。</Text>
-            <Text>5. 在节点之间连线，表达访问路径、跳板关系或放行策略，再到“计划”页校验 IPAM 和部署结果。</Text>
-            <Text>6. 校验通过后依次保存、发布、部署；部署后可在“运行”页查看队伍环境、后台入口、提交日志和重建操作。</Text>
+            <Text>5. 在节点之间连线，表达访问路径、跳板关系或放行/拒绝策略，再到“计划”页查看 IPAM、端口、Flag 和运行期访问控制规则。</Text>
+            <Text>6. 校验通过后依次保存、发布、部署；部署后可在“运行”页查看队伍环境、后台入口、提交日志、策略状态和重建操作。</Text>
           </Stack>
         </YinyuPanel>
 
@@ -1039,7 +1039,7 @@ const BuilderInner: FC = () => {
                   ))}
                 </div>
                 <Text size="xs" className="yy-pentest-flow-note">
-                  校验/计划会先保存当前画布，并预览每队 Docker 网络、网卡 IP、入口端口和 Flag 注入结果。连线用于表达允许路径和任务链；真实隔离由安全域 Docker 网络和多网卡边界执行。
+                  校验/计划会先保存当前画布，并预览每队 Docker 网络、网卡 IP、入口端口、访问控制规则和 Flag 注入结果。连线会解析为运行期主机侧访问策略，同时作为选手拓扑任务链。
                 </Text>
                 <Button fullWidth leftSection={<Icon path={mdiAutoFix} size={0.85} />} onClick={() => {
                   const next = buildEnterpriseBlueprint(gameId, templates, config)
@@ -1266,6 +1266,9 @@ const BuilderInner: FC = () => {
                         <YinyuPanel p="sm" className="yy-pentest-preview-box">
                           <Group justify="space-between"><Text fw={900}>样例队伍网段</Text><Badge variant="light">{plan.sampleTeamPrefix}</Badge></Group>
                           <Text size="sm" className="yy-readable-text">参赛队伍：{plan.teamCount}，安全域：{plan.networks.length}，资产：{plan.nodes.length}</Text>
+                          <Text size="sm" className="yy-readable-text">
+                            访问控制：{plan.policyEnforcementMode}，样例队伍将生成 {plan.runtimePolicyRuleCount} 条运行期规则
+                          </Text>
                         </YinyuPanel>
                         {[...(plan.validation.errors ?? []), ...(plan.validation.warnings ?? [])].map((message, index) => (
                           <Text key={`${message}-${index}`} className={plan.validation.errors.includes(message) ? 'yy-pentest-error' : 'yy-readable-text'} size="sm">
@@ -1286,7 +1289,7 @@ const BuilderInner: FC = () => {
                         </YinyuTableShell>
                         <YinyuTableShell p="xs">
                           <Table>
-                            <Table.Thead><Table.Tr><Table.Th>访问路径</Table.Th><Table.Th>来源</Table.Th><Table.Th>目标</Table.Th><Table.Th>协议/端口</Table.Th></Table.Tr></Table.Thead>
+                            <Table.Thead><Table.Tr><Table.Th>访问路径</Table.Th><Table.Th>来源</Table.Th><Table.Th>目标</Table.Th><Table.Th>协议/端口</Table.Th><Table.Th>运行期解析</Table.Th></Table.Tr></Table.Thead>
                             <Table.Tbody>
                               {plan.policies.length > 0 ? plan.policies.map((policy) => (
                                 <Table.Tr key={policy.policyId}>
@@ -1294,9 +1297,19 @@ const BuilderInner: FC = () => {
                                   <Table.Td>{policy.source}</Table.Td>
                                   <Table.Td>{policy.target}</Table.Td>
                                   <Table.Td>{policy.protocol.toUpperCase()} / {policy.portRange}</Table.Td>
+                                  <Table.Td>
+                                    <Stack gap={3}>
+                                      {(policy.resolvedRules ?? []).slice(0, 4).map((rule) => (
+                                        <Text size="xs" className="yy-readable-text" key={rule}>{rule}</Text>
+                                      ))}
+                                      {(policy.resolvedRules?.length ?? 0) > 4 && (
+                                        <Text size="xs" className="yy-readable-text">另有 {(policy.resolvedRules?.length ?? 0) - 4} 条规则</Text>
+                                      )}
+                                    </Stack>
+                                  </Table.Td>
                                 </Table.Tr>
                               )) : (
-                                <Table.Tr><Table.Td colSpan={4}>暂无访问路径。至少连接两个资产节点，用于表达任务链和跳板关系。</Table.Td></Table.Tr>
+                                <Table.Tr><Table.Td colSpan={5}>暂无访问路径。至少连接两个资产节点，用于表达任务链和跳板关系。</Table.Td></Table.Tr>
                               )}
                             </Table.Tbody>
                           </Table>

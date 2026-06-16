@@ -236,6 +236,11 @@ public class DockerService
                 Name = attachment.NetworkName,
                 Driver = "bridge",
                 Internal = attachment.IsInternal,
+                Options = new Dictionary<string, string>
+                {
+                    ["com.docker.network.bridge.enable_icc"] =
+                        attachment.EnableInterContainerCommunication ? "true" : "false"
+                },
                 Labels = new Dictionary<string, string> { ["ManagedBy"] = "GZCTF" }
             };
 
@@ -263,7 +268,8 @@ public class DockerService
                     SubnetCidr = string.IsNullOrWhiteSpace(n.SubnetCidr) ? null : n.SubnetCidr.Trim(),
                     IPAddress = string.IsNullOrWhiteSpace(n.IPAddress) ? null : n.IPAddress.Trim(),
                     IsPrimary = n.IsPrimary,
-                    IsInternal = n.IsInternal
+                    IsInternal = n.IsInternal,
+                    EnableInterContainerCommunication = n.EnableInterContainerCommunication
                 })
                 .DistinctBy(n => n.NetworkName)
                 .ToList();

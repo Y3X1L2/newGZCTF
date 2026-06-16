@@ -101,6 +101,53 @@ public class AgentClient
         }
     }
 
+    public async Task<ContainerNetworkPolicyResult> ApplyNetworkPolicyAsync(Guid nodeId,
+        ContainerNetworkPolicySet policySet, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null)
+            return ContainerNetworkPolicyResult.Failed("Worker 节点不存在。");
+
+        var client = BuildClient(node);
+        var body = JsonSerializer.Serialize(policySet);
+        var response = await client.PostAsync("/api/containers/policies/apply",
+            new StringContent(body, Encoding.UTF8, "application/json"), token);
+
+        if (response.IsSuccessStatusCode)
+            return ContainerNetworkPolicyResult.Success("远端访问控制规则已下发。");
+
+        var responseBody = await response.Content.ReadAsStringAsync(token);
+        _logger.LogWarning("Agent apply network policy failed on node {NodeId}: {Status}. Body: {Body}",
+            nodeId, response.StatusCode, TrimResponseBody(responseBody));
+        return ContainerNetworkPolicyResult.Failed(TrimResponseBody(responseBody));
+    }
+
+    public async Task<ContainerNetworkPolicyResult> RemoveNetworkPolicyAsync(Guid nodeId, string setName,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null)
+            return ContainerNetworkPolicyResult.Success("Worker 节点不存在，跳过访问控制清理。");
+
+        var client = BuildClient(node);
+        try
+        {
+            var response = await client.DeleteAsync($"/api/containers/policies/{Uri.EscapeDataString(setName)}", token);
+            if (response.IsSuccessStatusCode)
+                return ContainerNetworkPolicyResult.Success("远端访问控制规则已清理。");
+
+            var responseBody = await response.Content.ReadAsStringAsync(token);
+            _logger.LogWarning("Agent remove network policy failed on node {NodeId}: {Status}. Body: {Body}",
+                nodeId, response.StatusCode, TrimResponseBody(responseBody));
+            return ContainerNetworkPolicyResult.Failed(TrimResponseBody(responseBody));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Agent network policy removal failed on node {NodeId} for {SetName}", nodeId, setName);
+            return ContainerNetworkPolicyResult.Failed(ex.Message);
+        }
+    }
+
     public async Task<AgentCreateVmResponse?> CreateVmAsync(Guid nodeId, AgentCreateVmRequest request, CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);

@@ -889,6 +889,19 @@ public class PenetrationService(
             }
         }
 
+        if (success)
+        {
+            var policySet = BuildRuntimePolicySet(config, plan, teamId);
+            var policyResult = await ApplyRuntimePolicy(environment.NodeId, policySet, token);
+            if (!policyResult.Succeeded)
+            {
+                success = false;
+                failureMessages.Add(policyResult.IsSupported
+                    ? $"运行期访问策略下发失败：{policyResult.Message}"
+                    : $"当前 Worker 不支持运行期访问策略：{policyResult.Message}");
+            }
+        }
+
         if (!success)
         {
             environment.LastError = failureMessages.Count == 0
@@ -912,6 +925,17 @@ public class PenetrationService(
 
     async Task DestroyEnvironment(PenetrationTeamEnvironment environment, CancellationToken token)
     {
+        try
+        {
+            await RemoveRuntimePolicy(environment.NodeId,
+                BuildPolicySetName(environment.GameId, environment.TeamId, environment.PublishedVersion), token);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to remove penetration network policy for game {GameId}, team {TeamId}",
+                environment.GameId, environment.TeamId);
+        }
+
         var networkNames = new HashSet<string>(StringComparer.Ordinal);
         foreach (var runtime in environment.RuntimeNodes)
         {
@@ -976,6 +1000,53 @@ public class PenetrationService(
         var orchestrator = serviceProvider.GetService<ContainerOrchestrator>();
         if (orchestrator is not null)
             await orchestrator.RemoveNetwork(networkName);
+    }
+
+    async Task<ContainerNetworkPolicyResult> ApplyRuntimePolicy(Guid? nodeId, ContainerNetworkPolicySet policySet,
+        CancellationToken token)
+    {
+        if (policySet.Rules.Count == 0)
+            return ContainerNetworkPolicyResult.Success("没有需要下发的访问控制规则。");
+
+        if (nodeId is { } workerId)
+        {
+            var worker = await context.WorkerNodes.AsNoTracking().FirstOrDefaultAsync(n => n.Id == workerId, token);
+            if (worker is { IsLocal: false })
+            {
+                var agentClient = serviceProvider.GetService<AgentClient>();
+                return agentClient is null
+                    ? ContainerNetworkPolicyResult.Failed("AgentClient 未注册，无法向远端 Worker 下发访问策略。")
+                    : await agentClient.ApplyNetworkPolicyAsync(workerId, policySet, token);
+            }
+        }
+
+        var localPolicy = serviceProvider.GetService<DockerHostNetworkPolicyService>();
+        return localPolicy is null
+            ? ContainerNetworkPolicyResult.Failed("本机访问策略服务未注册。")
+            : await localPolicy.ApplyAsync(policySet, token);
+    }
+
+    async Task<ContainerNetworkPolicyResult> RemoveRuntimePolicy(Guid? nodeId, string setName, CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(setName))
+            return ContainerNetworkPolicyResult.Success("策略集为空。");
+
+        if (nodeId is { } workerId)
+        {
+            var worker = await context.WorkerNodes.AsNoTracking().FirstOrDefaultAsync(n => n.Id == workerId, token);
+            if (worker is { IsLocal: false })
+            {
+                var agentClient = serviceProvider.GetService<AgentClient>();
+                return agentClient is null
+                    ? ContainerNetworkPolicyResult.Success("AgentClient 未注册，跳过远端访问策略清理。")
+                    : await agentClient.RemoveNetworkPolicyAsync(workerId, setName, token);
+            }
+        }
+
+        var localPolicy = serviceProvider.GetService<DockerHostNetworkPolicyService>();
+        return localPolicy is null
+            ? ContainerNetworkPolicyResult.Success("本机访问策略服务未注册，跳过清理。")
+            : await localPolicy.RemoveAsync(setName, token);
     }
 
     async Task<PenetrationValidationModel> ValidateConfig(PenetrationConfig config, CancellationToken token)
@@ -1136,8 +1207,17 @@ public class PenetrationService(
             }
         }
 
-        if (config.Edges.Count > 0)
-            result.Warnings.Add("访问策略会进入部署计划、选手拓扑和任务链；当前运行期隔离由安全域 Docker 网络与多网卡边界实现，尚未生成端口级 ACL。");
+        foreach (var edge in config.Edges)
+        {
+            if (!IsValidPolicyPortRange(edge.PortRange))
+                result.Errors.Add($"访问策略“{edge.Label ?? edge.Id.ToString()}”的端口范围不正确，请使用 any、单端口、端口段或逗号分隔端口。");
+
+            if (edge.Protocol == PenetrationProtocol.Icmp && HasPolicyPort(edge.PortRange))
+                result.Errors.Add($"访问策略“{edge.Label ?? edge.Id.ToString()}”使用 ICMP 时不能配置端口。");
+        }
+
+        if (config.Edges.Count == 0)
+            result.Warnings.Add("当前没有访问路径。部署后会按安全域默认策略隔离网络，但选手拓扑缺少明确的任务/跳板指引。");
 
         result.Valid = result.Errors.Count == 0;
         return result;
@@ -1148,11 +1228,16 @@ public class PenetrationService(
     {
         var validation = await ValidateConfig(config, token);
         var runtime = await BuildRuntimePlan(config, teamIndex, teamId, token);
+        var policySet = BuildRuntimePolicySet(config, runtime, teamId);
         return new PenetrationPlanModel
         {
             GameId = config.GameId,
             TeamCount = teamCount,
             SampleTeamPrefix = AllocateSubnet(config.BaseCidr, config.TeamSubnetPrefix, teamIndex),
+            RuntimePolicyRuleCount = policySet.Rules.Count,
+            PolicyEnforcementMode = policySet.Rules.Count > 0
+                ? "Docker 主机 DOCKER-USER 链访问控制"
+                : "仅创建 Docker 网络，无需额外访问控制规则",
             Validation = validation,
             Networks = runtime.Networks.Select(n => new PenetrationPlanNetworkModel
             {
@@ -1196,7 +1281,12 @@ public class PenetrationService(
                 Protocol = e.Protocol,
                 PortRange = e.PortRange,
                 Action = e.PolicyAction,
-                IsRouteHint = e.IsRouteHint
+                IsRouteHint = e.IsRouteHint,
+                RuntimeEnforced = true,
+                EnforcementMode = "主机防火墙",
+                ResolvedRules = BuildExplicitPolicyRules(config, runtime, e)
+                    .Select(DescribePolicyRule)
+                    .ToList()
             }).ToList(),
             Flags = config.Nodes.SelectMany(n => n.ScoreItems.Select(i => new PenetrationPlanFlagModel
             {
@@ -1214,6 +1304,7 @@ public class PenetrationService(
                 "为每支队伍分配独立队伍网段。",
                 "按安全域创建 Docker bridge 网络并写入 IPAM 子网，非入口安全域默认创建为内网隔离网络。",
                 "按节点网卡配置创建容器主网卡和附加网卡。",
+                "解析访问路径和安全域默认策略，下发 Docker 主机侧访问控制规则。",
                 "注入动态 Flag、环境变量和资源限制。",
                 "生成入口端口、后台管理入口、运行节点和提交日志。"
             ]
@@ -1257,7 +1348,8 @@ public class PenetrationService(
             SubnetCidr = i.Cidr,
             IPAddress = i.IpAddress,
             IsPrimary = i.IsPrimary,
-            IsInternal = IsInternalNetwork(i.Network)
+            IsInternal = IsInternalNetwork(i.Network),
+            EnableInterContainerCommunication = i.Network.DefaultPolicy == PenetrationDefaultPolicy.AllowInternal
         }).ToList();
         var primary = nodePlan.PrimaryInterface;
 
@@ -1284,6 +1376,197 @@ public class PenetrationService(
             HealthCheck = nodePlan.Node.HealthCheck,
             PreferredNodeId = workerId
         };
+    }
+
+    ContainerNetworkPolicySet BuildRuntimePolicySet(PenetrationConfig config, RuntimePlan runtime, int teamId)
+    {
+        var explicitDeny = config.Edges
+            .Where(e => e.PolicyAction == PenetrationPolicyAction.Deny)
+            .OrderBy(e => e.Id)
+            .SelectMany(e => BuildExplicitPolicyRules(config, runtime, e));
+        var explicitAllow = config.Edges
+            .Where(e => e.PolicyAction == PenetrationPolicyAction.Allow)
+            .OrderBy(e => e.Id)
+            .SelectMany(e => BuildExplicitPolicyRules(config, runtime, e));
+        var defaultDeny = BuildDefaultDenyRules(runtime);
+
+        var rules = explicitDeny.Concat(explicitAllow).Concat(defaultDeny)
+            .Where(r => !string.IsNullOrWhiteSpace(r.Source) && !string.IsNullOrWhiteSpace(r.Target))
+            .DistinctBy(r => $"{r.Source}|{r.Target}|{r.Protocol}|{r.PortRange}|{r.Allow}")
+            .ToList();
+
+        return new ContainerNetworkPolicySet
+        {
+            SetName = BuildPolicySetName(config.GameId, teamId, config.PublishedVersion),
+            Rules = rules
+        };
+    }
+
+    List<ContainerNetworkPolicyRule> BuildExplicitPolicyRules(PenetrationConfig config, RuntimePlan runtime,
+        PenetrationEdge edge)
+    {
+        var sourceId = edge.SourceKind == PenetrationPolicyScope.Network
+            ? edge.SourceId
+            : edge.SourceId > 0 ? edge.SourceId : edge.SourceNodeId;
+        var targetId = edge.TargetKind == PenetrationPolicyScope.Network
+            ? edge.TargetId
+            : edge.TargetId > 0 ? edge.TargetId : edge.TargetNodeId;
+
+        var sourcePreferred = ResolvePreferredPolicyNetworks(runtime, edge.SourceKind, sourceId, edge.TargetKind, targetId);
+        var targetPreferred = ResolvePreferredPolicyNetworks(runtime, edge.TargetKind, targetId, edge.SourceKind, sourceId);
+        var sources = ResolvePolicyEndpoints(runtime, edge.SourceKind, sourceId, sourcePreferred);
+        var targets = ResolvePolicyEndpoints(runtime, edge.TargetKind, targetId, targetPreferred);
+
+        var rules = new List<ContainerNetworkPolicyRule>();
+        foreach (var source in sources)
+        foreach (var target in targets)
+        {
+            if (source.Address.Equals(target.Address, StringComparison.Ordinal))
+                continue;
+
+            rules.Add(new ContainerNetworkPolicyRule
+            {
+                Source = source.Address,
+                Target = target.Address,
+                Protocol = NormalizePolicyProtocol(edge.Protocol),
+                PortRange = NormalizePolicyPortRange(edge.PortRange),
+                Allow = edge.PolicyAction == PenetrationPolicyAction.Allow,
+                Comment = $"policy:{edge.Id}:{edge.PolicyAction}:{edge.Label ?? "access"}"
+            });
+        }
+
+        return rules;
+    }
+
+    static IEnumerable<ContainerNetworkPolicyRule> BuildDefaultDenyRules(RuntimePlan runtime)
+    {
+        foreach (var source in runtime.Networks)
+        foreach (var target in runtime.Networks)
+        {
+            var sameNetwork = source.Network.Id == target.Network.Id;
+            if (sameNetwork && source.Network.DefaultPolicy != PenetrationDefaultPolicy.DenyAll)
+                continue;
+
+            yield return new ContainerNetworkPolicyRule
+            {
+                Source = source.Cidr,
+                Target = target.Cidr,
+                Protocol = "any",
+                PortRange = "any",
+                Allow = false,
+                Comment = sameNetwork
+                    ? $"default-deny:{source.Network.Id}"
+                    : $"cross-zone-deny:{source.Network.Id}-{target.Network.Id}"
+            };
+        }
+    }
+
+    static HashSet<int> ResolvePreferredPolicyNetworks(RuntimePlan runtime, PenetrationPolicyScope selfKind, int selfId,
+        PenetrationPolicyScope otherKind, int otherId)
+    {
+        var result = new HashSet<int>();
+        if (selfKind == PenetrationPolicyScope.Network)
+        {
+            result.Add(selfId);
+            return result;
+        }
+
+        var self = runtime.Nodes.FirstOrDefault(n => n.Node.Id == selfId);
+        if (self is null)
+            return result;
+
+        if (otherKind == PenetrationPolicyScope.Network)
+        {
+            if (self.Interfaces.Any(i => i.Network.Id == otherId))
+                result.Add(otherId);
+            return result;
+        }
+
+        var other = runtime.Nodes.FirstOrDefault(n => n.Node.Id == otherId);
+        if (other is null)
+            return result;
+
+        foreach (var networkId in self.Interfaces.Select(i => i.Network.Id)
+                     .Intersect(other.Interfaces.Select(i => i.Network.Id)))
+            result.Add(networkId);
+
+        return result;
+    }
+
+    static List<PolicyEndpoint> ResolvePolicyEndpoints(RuntimePlan runtime, PenetrationPolicyScope kind, int id,
+        IReadOnlySet<int> preferredNetworks)
+    {
+        if (kind == PenetrationPolicyScope.Network)
+        {
+            var network = runtime.Networks.FirstOrDefault(n => n.Network.Id == id);
+            return network is null ? [] : [new PolicyEndpoint(network.Cidr, network.Network.Name)];
+        }
+
+        var node = runtime.Nodes.FirstOrDefault(n => n.Node.Id == id);
+        if (node is null)
+            return [];
+
+        var interfaces = preferredNetworks.Count > 0
+            ? node.Interfaces.Where(i => preferredNetworks.Contains(i.Network.Id)).ToList()
+            : node.Interfaces;
+
+        if (interfaces.Count == 0)
+            interfaces = node.Interfaces;
+
+        return interfaces
+            .Select(i => new PolicyEndpoint(i.IpAddress, $"{node.Node.Name}/{i.InterfaceName}"))
+            .ToList();
+    }
+
+    static string DescribePolicyRule(ContainerNetworkPolicyRule rule) =>
+        $"{(rule.Allow ? "允许" : "拒绝")} {rule.Source} -> {rule.Target} {rule.Protocol}/{rule.PortRange}";
+
+    static string BuildPolicySetName(int gameId, int teamId, int version) =>
+        $"pentest-g{gameId}-t{teamId}-v{version}";
+
+    static string NormalizePolicyProtocol(PenetrationProtocol protocol) =>
+        protocol switch
+        {
+            PenetrationProtocol.Tcp => "tcp",
+            PenetrationProtocol.Udp => "udp",
+            PenetrationProtocol.Icmp => "icmp",
+            _ => "any"
+        };
+
+    static string NormalizePolicyPortRange(string? portRange) =>
+        HasPolicyPort(portRange) ? portRange!.Trim().Replace('-', ':') : "any";
+
+    static bool HasPolicyPort(string? portRange) =>
+        !string.IsNullOrWhiteSpace(portRange) &&
+        !portRange.Equals("any", StringComparison.OrdinalIgnoreCase) &&
+        portRange.Trim() != "*";
+
+    static bool IsValidPolicyPortRange(string? portRange)
+    {
+        if (!HasPolicyPort(portRange))
+            return true;
+
+        var parts = portRange!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length is 0 or > 15)
+            return false;
+
+        foreach (var part in parts)
+        {
+            var range = part.Split(['-', ':'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (range.Length is 0 or > 2)
+                return false;
+
+            if (!int.TryParse(range[0], out var start) || start is < 1 or > 65535)
+                return false;
+
+            if (range.Length == 1)
+                continue;
+
+            if (!int.TryParse(range[1], out var end) || end is < 1 or > 65535 || end < start)
+                return false;
+        }
+
+        return true;
     }
 
     async Task<WorkerNode?> SelectWorkerNode(int requiredContainers, CancellationToken token)
@@ -1973,6 +2256,8 @@ public class PenetrationService(
     sealed record RuntimePlan(List<RuntimeNetworkPlan> Networks, List<RuntimeNodePlan> Nodes);
 
     sealed record RuntimeNetworkPlan(PenetrationNetwork Network, string NetworkName, string Cidr);
+
+    sealed record PolicyEndpoint(string Address, string Name);
 
     sealed record RuntimeNodePlan(
         PenetrationNode Node,

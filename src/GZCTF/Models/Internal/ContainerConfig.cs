@@ -119,4 +119,9 @@ public class ContainerNetworkAttachment
     /// Create the Docker bridge as an internal network, preventing direct external routing for inner segments.
     /// </summary>
     public bool IsInternal { get; set; }
+
+    /// <summary>
+    /// Allow direct container-to-container communication inside this bridge network.
+    /// </summary>
+    public bool EnableInterContainerCommunication { get; set; } = true;
 }

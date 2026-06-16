@@ -1,21 +1,14 @@
 import {
   ActionIcon,
   AppShell,
-  Avatar,
-  Menu,
-  MenuDivider,
   Popover,
   Stack,
 } from '@mantine/core'
 import {
-  mdiAccountCircleOutline,
   mdiAccountGroupOutline,
-  mdiCached,
   mdiFlagOutline,
   mdiHomeVariantOutline,
   mdiInformationOutline,
-  mdiLogin,
-  mdiLogout,
   mdiNoteTextOutline,
   mdiWrenchOutline,
   mdiTransitConnectionVariant,
@@ -27,9 +20,8 @@ import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router'
 import { LogoBox } from '@Components/LogoBox'
 import { WsrxManager } from '@Components/WsrxManager'
-import { clearLocalCache } from '@Utils/Cache'
 import { useConfig } from '@Hooks/useConfig'
-import { useLogOut, useUser } from '@Hooks/useUser'
+import { useUser } from '@Hooks/useUser'
 import { ContainerPortMappingType, Role } from '@Api'
 import classes from '@Styles/AppNavbar.module.css'
 import misc from '@Styles/Misc.module.css'
@@ -73,10 +65,8 @@ const NavbarLink: FC<NavbarLinkProps> = (props: NavbarLinkProps) => {
 export const AppNavbar: FC = () => {
   const location = useLocation()
 
-  const logout = useLogOut()
-  const { user, error } = useUser()
+  const { user } = useUser()
   const { config } = useConfig()
-  const { t } = useTranslation()
 
   const items: NavbarItem[] = [
     { icon: mdiHomeVariantOutline, label: 'common.tab.home', link: '/' },
@@ -119,8 +109,6 @@ export const AppNavbar: FC = () => {
     />
   ))
 
-  const loggedIn = user && !error
-
   return (
     <AppShell.Navbar className={classes.navbar}>
       <AppShell.Section className={classes.brandSection}>
@@ -146,52 +134,6 @@ export const AppNavbar: FC = () => {
               </Popover.Dropdown>
             </Popover>
           )}
-
-          {/* User Info */}
-          <Menu position="right-end" offset={24}>
-            <Menu.Target>
-              <ActionIcon className={cx(classes.link, 'rail-button')}>
-                {user?.avatar ? (
-                  <Avatar alt="avatar" src={user?.avatar} radius="md" size="md">
-                    {user.userName?.slice(0, 1) ?? 'U'}
-                  </Avatar>
-                ) : (
-                  <Icon path={mdiAccountCircleOutline} size={1} />
-                )}
-              </ActionIcon>
-            </Menu.Target>
-            <Menu.Dropdown>
-              {loggedIn && (
-                <>
-                  <Menu.Label>{user?.userName}</Menu.Label>
-                  <Menu.Item
-                    component={Link}
-                    to="/account/profile"
-                    leftSection={<Icon path={mdiAccountCircleOutline} size={1} />}
-                  >
-                    {t('common.tab.account.profile')}
-                  </Menu.Item>
-                </>
-              )}
-              <Menu.Item onClick={clearLocalCache} leftSection={<Icon path={mdiCached} size={1} />}>
-                {t('common.tab.account.clean_cache')}
-              </Menu.Item>
-              <MenuDivider />
-              {loggedIn ? (
-                <Menu.Item color="red" onClick={logout} leftSection={<Icon path={mdiLogout} size={1} />}>
-                  {t('common.tab.account.logout')}
-                </Menu.Item>
-              ) : (
-                <Menu.Item
-                  component={Link}
-                  to={`/account/login?from=${location.pathname}`}
-                  leftSection={<Icon path={mdiLogin} size={1} />}
-                >
-                  {t('common.tab.account.login')}
-                </Menu.Item>
-              )}
-            </Menu.Dropdown>
-          </Menu>
         </Stack>
       </AppShell.Section>
     </AppShell.Navbar>
