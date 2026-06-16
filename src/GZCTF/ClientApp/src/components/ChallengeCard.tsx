@@ -2,7 +2,7 @@ import { Code, Group, Stack, Text, Tooltip } from '@mantine/core'
 import cx from 'clsx'
 import dayjs from 'dayjs'
 import { ChevronRight } from 'lucide-react'
-import { CSSProperties, FC, useMemo } from 'react'
+import { CSSProperties, memo, useMemo } from 'react'
 import { Trans } from 'react-i18next'
 import { BloodMedal, bloodTierLabel } from '@Components/BloodMedal'
 import { useLanguage } from '@Utils/I18n'
@@ -10,7 +10,7 @@ import { BloodsTypes, useChallengeCategoryLabelMap } from '@Utils/Shared'
 import { ChallengeInfo } from '@Api'
 import classes from '@Styles/ChallengeCard.module.css'
 import { YinyuStatusText } from './yinyu/YinyuReactBits'
-import { YinyuDataBar, YinyuHexField } from './yinyu/YinyuUI'
+import { YinyuDataBar } from './yinyu/YinyuUI'
 
 interface ChallengeCardProps {
   challenge: ChallengeInfo
@@ -20,7 +20,7 @@ interface ChallengeCardProps {
   instanceActive?: boolean
 }
 
-export const ChallengeCard: FC<ChallengeCardProps> = (props: ChallengeCardProps) => {
+export const ChallengeCard = memo(function ChallengeCard(props: ChallengeCardProps) {
   const { challenge, solved, onClick, teamId, instanceActive } = props
   const challengeCategoryLabelMap = useChallengeCategoryLabelMap()
   const cateData = challengeCategoryLabelMap.get(challenge.category!)
@@ -43,7 +43,6 @@ export const ChallengeCard: FC<ChallengeCardProps> = (props: ChallengeCardProps)
       data-faded={solved || isFaded || undefined}
       data-instance-active={instanceActive || undefined}
     >
-      <YinyuHexField cells={28} />
       <span
         className="challenge-category yy-challenge-category-token"
         style={
@@ -80,9 +79,11 @@ export const ChallengeCard: FC<ChallengeCardProps> = (props: ChallengeCardProps)
             const label = bloodTierLabel(tier)
 
             return (
-              <Tooltip.Floating
+              <Tooltip
                 key={type}
                 position="bottom"
+                withArrow
+                withinPortal
                 multiline
                 label={
                   <Stack gap={0}>
@@ -97,8 +98,10 @@ export const ChallengeCard: FC<ChallengeCardProps> = (props: ChallengeCardProps)
                   </Stack>
                 }
               >
-                <BloodMedal tier={tier} active={!!blood} own={teamId === blood?.id} size="sm" className={classes.bloodMedal} />
-              </Tooltip.Floating>
+                <span className={classes.bloodMedalTarget}>
+                  <BloodMedal tier={tier} active={!!blood} own={teamId === blood?.id} size="sm" className={classes.bloodMedal} />
+                </span>
+              </Tooltip>
             )
           })}
         </Group>
@@ -106,4 +109,4 @@ export const ChallengeCard: FC<ChallengeCardProps> = (props: ChallengeCardProps)
       </div>
     </button>
   )
-}
+})

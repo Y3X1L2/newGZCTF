@@ -78,6 +78,11 @@
   background: rgba(255, 255, 255, 0.018);
 }
 
+.bloodMedalTarget {
+  display: inline-flex;
+  line-height: 0;
+}
+
 .bloodMedal {
   display: inline-flex;
   width: auto;

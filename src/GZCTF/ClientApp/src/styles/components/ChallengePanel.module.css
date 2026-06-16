@@ -52,4 +52,6 @@
   flex-grow: 1;
   border-left: 1px solid rgba(246, 247, 248, 0.055);
   padding-left: var(--mantine-spacing-xs);
+  contain: layout paint;
+  overscroll-behavior: contain;
 }

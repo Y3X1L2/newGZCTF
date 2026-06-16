@@ -42,7 +42,7 @@ export const ChallengePanel: FC = () => {
 
   const { game } = useGame(numId)
 
-  const categories = Object.keys(challenges ?? {})
+  const categories = useMemo(() => Object.keys(challenges ?? {}), [challenges])
   const [activeTab, setActiveTab] = useState<ChallengeCategory | 'All'>('All')
   const [hideSolved, setHideSolved] = useLocalStorage({
     key: 'hide-solved',
@@ -51,13 +51,18 @@ export const ChallengePanel: FC = () => {
   })
 
   const allChallenges = useMemo(() => Object.values(challenges ?? {}).flat(), [challenges])
+  const solvedChallengeMap = useMemo(
+    () => new Map(teamInfo?.rank?.solvedChallenges?.map((c) => [c.id, c.type]) ?? []),
+    [teamInfo?.rank?.solvedChallenges]
+  )
+  const solvedChallengeIds = useMemo(() => new Set(solvedChallengeMap.keys()), [solvedChallengeMap])
 
-  const currentChallenges =
-    challenges &&
-    (activeTab !== 'All' ? (challenges[activeTab] ?? []) : allChallenges).filter(
-      (chal) =>
-        !hideSolved || (teamInfo && teamInfo.rank?.solvedChallenges?.find((c) => c.id === chal.id)) === undefined
-    )
+  const currentChallenges = useMemo(() => {
+    if (!challenges) return undefined
+
+    const source = activeTab !== 'All' ? (challenges[activeTab] ?? []) : allChallenges
+    return source.filter((chal) => !hideSolved || !solvedChallengeIds.has(chal.id))
+  }, [activeTab, allChallenges, challenges, hideSolved, solvedChallengeIds])
 
   const [challenge, setChallenge] = useState<ChallengeInfo | null>(null)
   const [detailOpened, setDetailOpened] = useState(false)
@@ -290,7 +295,7 @@ export const ChallengePanel: FC = () => {
             cols={{ base: 3, w18: 4, w24: 6, w30: 8, w36: 10, w42: 12, w48: 14 }}
           >
             {currentChallenges?.map((chal) => {
-              const status = teamInfo?.rank?.solvedChallenges?.find((c) => c.id === chal.id)?.type
+              const status = solvedChallengeMap.get(chal.id)
               const solved = status !== SubmissionType.Unaccepted && status !== undefined
 
               return (

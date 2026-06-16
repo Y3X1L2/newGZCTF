@@ -11,7 +11,20 @@ internal static class AppExtensions
     {
         OnPrepareResponse = ctx =>
         {
-            ctx.Context.Response.GetTypedHeaders().CacheControl = new()
+            var headers = ctx.Context.Response.GetTypedHeaders();
+            if (Path.GetExtension(ctx.File.Name).Equals(".html", StringComparison.OrdinalIgnoreCase))
+            {
+                headers.CacheControl = new()
+                {
+                    NoCache = true,
+                    NoStore = true,
+                    MustRevalidate = true,
+                    MaxAge = TimeSpan.Zero
+                };
+                return;
+            }
+
+            headers.CacheControl = new()
             {
                 Public = true,
                 MaxAge = TimeSpan.FromDays(7)

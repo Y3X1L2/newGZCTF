@@ -188,6 +188,11 @@ public static class HandlerExtension
         if (context.Request.Method != HttpMethods.Get && context.Request.Method != HttpMethods.Head)
             return Results.StatusCode(StatusCodes.Status405MethodNotAllowed);
 
+        var path = context.Request.Path.Value;
+        if (!string.IsNullOrEmpty(path) &&
+            (path.StartsWith("/static/", StringComparison.OrdinalIgnoreCase) || Path.HasExtension(path)))
+            return Results.NotFound();
+
         var content = await cacheHelper.GetStringAsync(CacheKey.Index, token);
 
         if (content is null)

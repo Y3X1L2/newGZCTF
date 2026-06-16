@@ -91,7 +91,11 @@ public class NodeDeployService
             var serverUrl = ResolveServerUrl(_config, serverUrlOverride);
             var dotnetRoot = DetectDotnetRoot(ssh);
 
-            var configJson = BuildAgentConfigJson(serverUrl, node);
+            var configJson = BuildAgentConfigJson(serverUrl, node,
+                _config["ContainerProvider:PublicEntry"],
+                _config.GetValue<int?>("ContainerProvider:DockerConfig:PublicPortStart"),
+                _config.GetValue<int?>("ContainerProvider:DockerConfig:PublicPortEnd"),
+                _config["ContainerProvider:DockerConfig:ChallengeNetwork"]);
             WriteRemoteFile(ssh, sudo, "/etc/gzctf-agent/appsettings.json", configJson,
                 "Write agent configuration");
             remoteInstallStarted = true;
@@ -552,7 +556,8 @@ bash -lc 'if command -v virsh >/dev/null 2>&1 && {{sudo}} virsh -c qemu:///syste
         return caps;
     }
 
-    internal static string BuildAgentConfigJson(string serverUrl, WorkerNode node) =>
+    internal static string BuildAgentConfigJson(string serverUrl, WorkerNode node, string? publicEntry = null,
+        int? publicPortStart = null, int? publicPortEnd = null, string? challengeNetwork = null) =>
         JsonSerializer.Serialize(new
         {
             Agent = new
@@ -562,6 +567,13 @@ bash -lc 'if command -v virsh >/dev/null 2>&1 && {{sudo}} virsh -c qemu:///syste
                 node.AuthToken,
                 ListenPort = node.AgentPort,
                 HeartbeatIntervalSeconds = 30
+            },
+            Docker = new
+            {
+                PublicEntry = publicEntry,
+                PublicPortStart = publicPortStart,
+                PublicPortEnd = publicPortEnd,
+                ChallengeNetwork = string.IsNullOrWhiteSpace(challengeNetwork) ? "gzctf" : challengeNetwork
             }
         }, new JsonSerializerOptions { WriteIndented = true });
 

@@ -64,7 +64,7 @@ const DotField = memo(({
     if (!canvas) return;
     const ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
     let resizeTimer: ReturnType<typeof setTimeout>;
 
     function resize() {
