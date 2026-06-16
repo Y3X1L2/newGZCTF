@@ -5036,9 +5036,9 @@
   display: flex !important;
   justify-content: flex-start !important;
   align-items: center !important;
-  gap: clamp(1.05rem, 1.7vw, 1.7rem) !important;
+  gap: clamp(0.95rem, 1.45vw, 1.35rem) !important;
   margin: clamp(0.1rem, 0.4vh, 0.35rem) 0 clamp(0.9rem, 1.5vh, 1.2rem) !important;
-  padding: 0 !important;
+  padding: 0 4.6rem 0 clamp(1.1rem, 2.4vw, 2.6rem) !important;
   transform: none !important;
   text-align: left !important;
 }
@@ -5056,12 +5056,23 @@
   text-align: left !important;
 }
 
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy {
+  display: flex !important;
+  min-width: 0 !important;
+  flex: 0 1 auto !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  gap: clamp(0.26rem, 0.5vw, 0.42rem) !important;
+}
+
 .yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading,
-.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading .yy-react-gradient-text,
-.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading .yy-reactbits-gradient-original,
-.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading .yy-reactbits-gradient-original > div,
-.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading span,
-.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading em {
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-home-brand-heading,
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-home-brand-heading .yy-react-gradient-text,
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-home-brand-heading .yy-reactbits-gradient-original,
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-home-brand-heading .yy-reactbits-gradient-original > div,
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-home-brand-heading span,
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-home-brand-heading em {
   font-size: inherit !important;
   line-height: inherit !important;
   font-family: inherit !important;
@@ -5070,46 +5081,53 @@
   margin-right: 0 !important;
 }
 
-.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading {
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-home-brand-heading {
   display: flex !important;
-  flex-wrap: wrap !important;
+  flex-wrap: nowrap !important;
   align-items: baseline !important;
   gap: clamp(0.5rem, 0.95vw, 0.9rem) !important;
-  font-size: clamp(3.45rem, 4.55vw, 5.8rem) !important;
+  max-width: 100% !important;
+  overflow: visible !important;
+  font-size: clamp(2.95rem, 4.15vw, 5.25rem) !important;
   line-height: 0.88 !important;
+  white-space: nowrap !important;
 }
 
-.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading em {
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-home-brand-heading em {
   display: inline-block !important;
   font-style: normal !important;
   font-size: 0.58em !important;
   line-height: 1 !important;
+  white-space: nowrap !important;
 }
 
-.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading .yy-reactbits-gradient-original > div:last-child {
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-home-brand-heading .yy-reactbits-gradient-original > div:last-child {
   filter:
     drop-shadow(0 0 1.15rem rgba(111, 255, 190, 0.34))
     drop-shadow(0 0 1.2rem rgba(116, 232, 184, 0.1)) !important;
 }
 
-.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-terminal-typing {
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-terminal-typing {
   flex: 0 0 auto !important;
-  margin-left: auto !important;
+  justify-content: flex-start !important;
+  min-width: clamp(12rem, 21vw, 19rem) !important;
+  margin: 0 !important;
 }
 
 @media (max-width: 68em) {
   .yy-home-page.yy-home-recomposed > .yy-home-title-row.home-title-row,
   .yy-home-page.yy-home-recomposed > .yy-home-title-row {
-    flex-wrap: wrap !important;
+    flex-wrap: nowrap !important;
+    padding-right: 0 !important;
+    padding-left: 0 !important;
   }
 
-  .yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading {
-    font-size: clamp(2.65rem, 12vw, 4.9rem) !important;
+  .yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-home-brand-heading {
+    font-size: clamp(2.25rem, 9.5vw, 4.1rem) !important;
   }
 
-  .yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-terminal-typing {
-    width: 100% !important;
-    margin-left: 0 !important;
+  .yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-terminal-typing {
+    width: auto !important;
   }
 }
 
@@ -6500,8 +6518,12 @@ tr.yy-bento-tone-active td {
   border-radius: 0.68rem;
 }
 
+.yy-public-account-entry.mantine-ActionIcon-root[data-home] {
+  top: clamp(2.35rem, 4.4vw, 4.25rem);
+}
+
 .yy-terminal-typing {
-  margin-right: clamp(4.2rem, 6vw, 6.2rem);
+  margin-right: 0;
 }
 
 .route-loader-screen {
@@ -6729,4 +6751,149 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
   max-height: calc(100dvh - 16rem);
   overflow: auto;
   scrollbar-width: thin;
+}
+
+/* Homepage and archive navigation polish.
+   The desktop rail expands over the page instead of resizing it, so public
+   pages keep a stable visual center while still exposing text labels on demand. */
+.yy-page-frame.yy-home-page {
+  width: min(100%, 1400px) !important;
+}
+
+.yy-page-frame.yy-games-page {
+  width: min(1500px, calc(100vw - clamp(1rem, 2vw, 2rem))) !important;
+}
+
+.yy-page-frame.yy-games-page {
+  display: grid !important;
+  justify-items: center !important;
+}
+
+.yy-page-frame.yy-games-page > * {
+  width: min(100%, 1180px) !important;
+}
+
+.yy-game-event-list {
+  width: min(100%, 1180px) !important;
+  margin-inline: auto !important;
+}
+
+.yy-home-event-board .game-index-card.is-compact,
+.yy-game-event-list .game-index-card {
+  grid-template-columns: clamp(8.8rem, 12vw, 12.6rem) minmax(0, 1fr) auto !important;
+}
+
+.yy-home-event-board .game-index-card.is-compact .posterImage,
+.yy-home-event-board .game-index-card.is-compact .posterFallback,
+.yy-game-event-list .game-index-card .posterImage,
+.yy-game-event-list .game-index-card .posterFallback {
+  min-height: clamp(8.8rem, 11vw, 11.4rem) !important;
+}
+
+.yy-home-page.yy-home-recomposed > .yy-home-title-row.home-title-row,
+.yy-home-page.yy-home-recomposed > .yy-home-title-row {
+  width: min(100%, 1400px) !important;
+  margin-inline: auto !important;
+  gap: clamp(0.68rem, 1vw, 1rem) !important;
+  padding: 0 clamp(4.6rem, 7vw, 6.5rem) 0 0 !important;
+  flex-wrap: nowrap !important;
+}
+
+.yy-home-page.yy-home-recomposed > .yy-home-layout.yy-home-event-layout {
+  width: min(100%, 1400px) !important;
+  margin-inline: auto !important;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.28fr) !important;
+}
+
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy {
+  display: flex !important;
+  min-width: 0 !important;
+  flex: 0 1 auto !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  gap: clamp(0.26rem, 0.46vw, 0.42rem) !important;
+}
+
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-home-brand-heading {
+  display: flex !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  flex-wrap: nowrap !important;
+  align-items: baseline !important;
+  gap: clamp(0.5rem, 0.9vw, 0.9rem) !important;
+  overflow: visible !important;
+  font-size: clamp(2.95rem, 4.25vw, 5.25rem) !important;
+  line-height: 0.9 !important;
+  white-space: nowrap !important;
+}
+
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-home-brand-heading > span,
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-home-brand-heading > em,
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-home-brand-heading .yy-react-gradient-text,
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-home-brand-heading .yy-reactbits-gradient-original,
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-home-brand-heading .yy-reactbits-gradient-original > div {
+  font: inherit !important;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  line-height: inherit !important;
+  letter-spacing: inherit !important;
+  white-space: nowrap !important;
+}
+
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-home-brand-heading > em {
+  display: inline-flex !important;
+  font-style: normal !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+}
+
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-terminal-typing {
+  justify-content: flex-start !important;
+  min-width: clamp(12rem, 22vw, 19rem) !important;
+  margin: 0 !important;
+}
+
+.yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-brand-heading {
+  display: none !important;
+}
+
+.yy-home-event-board .game-index-card.is-compact {
+  min-height: clamp(9rem, 11.5vw, 11.4rem) !important;
+}
+
+.yy-home-event-board .game-index-card.is-compact h4,
+.yy-game-event-list .game-index-card h4 {
+  font-size: clamp(1.12rem, 1.55vw, 1.72rem) !important;
+}
+
+.yy-home-event-board .game-index-card.is-compact .yy-readable-text,
+.yy-game-event-list .game-index-card .yy-readable-text {
+  font-size: clamp(0.84rem, 0.88vw, 0.96rem) !important;
+  line-height: 1.48 !important;
+}
+
+.yy-home-notice-rail {
+  min-width: 0 !important;
+}
+
+@media (max-width: 68em) {
+  .yy-page-frame.yy-home-page,
+  .yy-page-frame.yy-games-page {
+    width: min(100%, calc(100vw - 1rem)) !important;
+  }
+
+  .yy-home-page.yy-home-recomposed > .yy-home-title-row.home-title-row,
+  .yy-home-page.yy-home-recomposed > .yy-home-title-row {
+    padding-inline: 0 !important;
+  }
+
+  .yy-home-page.yy-home-recomposed > .yy-home-title-row > .brand-mark {
+    width: clamp(3.6rem, 12vw, 4.45rem) !important;
+    height: clamp(3.6rem, 12vw, 4.45rem) !important;
+  }
+
+  .yy-home-page.yy-home-recomposed > .yy-home-title-row > .yy-home-title-copy > .yy-home-brand-heading {
+    font-size: clamp(1.48rem, 6.2vw, 2.65rem) !important;
+  }
 }

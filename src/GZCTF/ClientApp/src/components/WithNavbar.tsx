@@ -45,7 +45,7 @@ export const WithNavBar: FC<WithNavBarProps> = ({
         className="yy-app-frame"
         header={{ height: 60, collapsed: !isMobile }}
         navbar={{
-          width: 78,
+          width: 218,
           breakpoint: 'sm',
           collapsed: {
             mobile: true,
@@ -55,7 +55,7 @@ export const WithNavBar: FC<WithNavBarProps> = ({
         <AppHeader />
         <AppNavbar />
         <AppShell.Main w="100%" className={classes.shellMain}>
-          {showPublicAccount && !isMobile ? <PublicAccountEntry /> : null}
+          {showPublicAccount && !isMobile ? <PublicAccountEntry home={location.pathname === '/'} /> : null}
           <Stack data-mobile={isMobile || undefined} className={classes.main}>
             {isLoading ? (
               <div className="yy-page-loading-overlay" role="status" aria-live="polite">

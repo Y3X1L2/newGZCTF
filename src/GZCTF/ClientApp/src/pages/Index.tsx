@@ -2,7 +2,6 @@ import { Stack } from '@mantine/core'
 import { Activity, Bell } from 'lucide-react'
 import { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Empty } from '@Components/Empty'
 import { GameCard, compareGamesForDisplay } from '@Components/GameCard'
 import { PostCard } from '@Components/PostCard'
 import { WithNavBar } from '@Components/WithNavbar'
@@ -113,19 +112,21 @@ const Home: FC = () => {
   usePageTitle()
 
   return (
-    <WithNavBar minWidth={0} width="var(--container)">
+    <WithNavBar minWidth={0} width="calc(100vw - 218px)">
       <section className="original-home yy-page-frame yy-home-page yy-home-recomposed">
         <div className="home-title-row yy-home-title-row">
           <BrandMark />
-          <h1 className="yy-brand-title yy-home-brand-heading">
-            <span>
-              <YinyuGradientText tone="silver">{PLATFORM_TITLE}</YinyuGradientText>
-            </span>
-            <em>
-              <YinyuGradientText tone="signal">{platformType}</YinyuGradientText>
-            </em>
-          </h1>
-          <TerminalTyping lines={terminalLines} />
+          <div className="yy-home-title-copy">
+            <h1 className="yy-brand-title yy-home-brand-heading">
+              <span>
+                <YinyuGradientText tone="silver">{PLATFORM_TITLE}</YinyuGradientText>
+              </span>
+              <em>
+                <YinyuGradientText tone="signal">{platformType}</YinyuGradientText>
+              </em>
+            </h1>
+            <TerminalTyping lines={terminalLines} />
+          </div>
         </div>
 
         <div className="home-layout-draft yy-home-layout yy-home-event-layout">
