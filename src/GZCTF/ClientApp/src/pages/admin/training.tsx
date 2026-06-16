@@ -67,6 +67,27 @@ const emptyModule = (direction?: TrainingDirectionModel): TrainingModuleEditMode
   order: 0,
 })
 
+const getDescendantModuleIds = (modules: TrainingModuleModel[], moduleId: number | null) => {
+  if (!moduleId) return new Set<number>()
+
+  const childrenByParent = new Map<number, number[]>()
+  for (const module of modules) {
+    if (!module.parentId) continue
+    childrenByParent.set(module.parentId, [...(childrenByParent.get(module.parentId) ?? []), module.id])
+  }
+
+  const descendants = new Set<number>()
+  const stack = [...(childrenByParent.get(moduleId) ?? [])]
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current || descendants.has(current)) continue
+    descendants.add(current)
+    stack.push(...(childrenByParent.get(current) ?? []))
+  }
+
+  return descendants
+}
+
 const TrainingAdminPage: FC = () => {
   const [groups, setGroups] = useState<StudentGroupBriefModel[]>([])
   const [directions, setDirections] = useState<TrainingDirectionModel[]>([])
@@ -117,6 +138,10 @@ const TrainingAdminPage: FC = () => {
     () => modules.filter((module) => !activeDirectionId || module.directionId === activeDirectionId),
     [modules, activeDirectionId]
   )
+  const invalidParentModuleIds = useMemo(
+    () => getDescendantModuleIds(modules, activeModuleId),
+    [modules, activeModuleId]
+  )
   const parentModuleOptions = useMemo(
     () =>
       modules
@@ -124,13 +149,14 @@ const TrainingAdminPage: FC = () => {
           (module) =>
             module.directionId === moduleDraft.directionId &&
             module.type === moduleDraft.type &&
-            module.id !== activeModuleId
+            module.id !== activeModuleId &&
+            !invalidParentModuleIds.has(module.id)
         )
         .map((module) => ({
           value: module.id.toString(),
           label: `${module.parentId ? '└ ' : ''}${module.title}`,
         })),
-    [modules, moduleDraft.directionId, moduleDraft.type, activeModuleId]
+    [modules, moduleDraft.directionId, moduleDraft.type, activeModuleId, invalidParentModuleIds]
   )
   const canPublishAllStudents = user?.role === Role.Admin || user?.role === Role.SuperAdmin
   const dockerTemplateOptions = useMemo(
@@ -254,12 +280,21 @@ const TrainingAdminPage: FC = () => {
 
   const saveModule = async () => {
     if (!moduleDraft.title.trim() || !moduleDraft.directionId) return
+    const normalizedParentId =
+      moduleDraft.parentId && moduleDraft.parentId !== activeModuleId && !invalidParentModuleIds.has(moduleDraft.parentId)
+        ? moduleDraft.parentId
+        : null
+    const payload = {
+      ...moduleDraft,
+      parentId: normalizedParentId,
+    }
+
     try {
       let id = activeModuleId
       if (id) {
-        await trainingAdminApi.updateModule(id, moduleDraft)
+        await trainingAdminApi.updateModule(id, payload)
       } else {
-        const res = await trainingAdminApi.createModule(moduleDraft)
+        const res = await trainingAdminApi.createModule(payload)
         id = res.data.id
         setActiveModuleId(id)
       }

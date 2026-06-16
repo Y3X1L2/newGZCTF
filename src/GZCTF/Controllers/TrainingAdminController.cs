@@ -57,7 +57,7 @@ public class TrainingAdminController(
         if (direction.Type != model.Type)
             return new RequestResponse("培训模块类型必须与所属方向一致。");
 
-        if (model.ParentId == moduleId)
+        if (moduleId.HasValue && model.ParentId == moduleId.Value)
             return new RequestResponse("父级模块不能选择自身。");
 
         if (model.ParentId.HasValue)
