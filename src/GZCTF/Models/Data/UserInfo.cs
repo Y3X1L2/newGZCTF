@@ -21,7 +21,7 @@ public partial class UserInfo : IdentityUser<Guid>
     /// User role
     /// </summary>
     [ProtectedPersonalData]
-    public Role Role { get; set; } = Role.User;
+    public Role Role { get; set; } = Role.Student;
 
     /// <summary>
     /// User's recent IP address

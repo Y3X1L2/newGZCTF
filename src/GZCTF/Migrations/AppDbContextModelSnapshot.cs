@@ -2291,6 +2291,101 @@ namespace GZCTF.Migrations
                     b.ToTable("Stages");
                 });
 
+            modelBuilder.Entity("GZCTF.Models.Data.StudentGroup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("Name");
+
+                    b.ToTable("StudentGroups");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.StudentGroupManager", b =>
+                {
+                    b.Property<int>("GroupId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ManagerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AddedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RoleInGroup")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("GroupId", "ManagerId");
+
+                    b.HasIndex("AddedById");
+
+                    b.HasIndex("ManagerId");
+
+                    b.ToTable("StudentGroupManagers");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.StudentGroupMember", b =>
+                {
+                    b.Property<int>("GroupId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AddedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("JoinedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("GroupId", "StudentId");
+
+                    b.HasIndex("AddedById");
+
+                    b.HasIndex("StudentId");
+
+                    b.ToTable("StudentGroupMembers");
+                });
+
             modelBuilder.Entity("GZCTF.Models.Data.Submission", b =>
                 {
                     b.Property<int>("Id")
@@ -2416,6 +2511,49 @@ namespace GZCTF.Migrations
                     b.HasIndex("CaptainId");
 
                     b.ToTable("Teams");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TeamJoinRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReviewedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("TeamId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewedById");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("TeamId", "UserId", "Status");
+
+                    b.ToTable("TeamJoinRequests");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.TheoryAnswerSheet", b =>
@@ -2641,6 +2779,207 @@ namespace GZCTF.Migrations
                     b.ToTable("TheorySubmissionAnswers");
                 });
 
+            modelBuilder.Entity("GZCTF.Models.Data.TheoryTrainingPlan", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AllowRetake")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("BankName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("ModuleId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PassRate")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("QuestionCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("QuestionTypes")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("ShowCorrectAnswerAfterSubmit")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("ModuleId")
+                        .IsUnique();
+
+                    b.HasIndex("UpdatedById");
+
+                    b.ToTable("TheoryTrainingPlans");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TheoryTrainingPlanQuestion", b =>
+                {
+                    b.Property<int>("PlanId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SourceQuestionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("integer");
+
+                    b.HasKey("PlanId", "SourceQuestionId");
+
+                    b.HasIndex("SourceQuestionId");
+
+                    b.ToTable("TheoryTrainingPlanQuestions");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TheoryTrainingSession", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CorrectCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("MaxScore")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ModuleId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PlanId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset?>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("TotalCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ModuleId");
+
+                    b.HasIndex("PlanId");
+
+                    b.HasIndex("UserId", "ModuleId");
+
+                    b.HasIndex("UserId", "Status");
+
+                    b.ToTable("TheoryTrainingSessions");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TheoryTrainingSessionQuestion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AnswerIndexes")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool?>("IsCorrect")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Options")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SelectedIndexes")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("SessionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SourceQuestionId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId");
+
+                    b.ToTable("TheoryTrainingSessionQuestions");
+                });
+
             modelBuilder.Entity("GZCTF.Models.Data.TimeSlot", b =>
                 {
                     b.Property<int>("Id")
@@ -2669,6 +3008,348 @@ namespace GZCTF.Migrations
                     b.HasIndex("ScenarioId");
 
                     b.ToTable("TimeSlots");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TrainingArticleProgress", b =>
+                {
+                    b.Property<int>("ModuleId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("LastReadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ReadPercent")
+                        .HasColumnType("integer");
+
+                    b.HasKey("ModuleId", "UserId");
+
+                    b.HasIndex("UserId", "CompletedAt");
+
+                    b.ToTable("TrainingArticleProgresses");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TrainingCtfSubmission", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("ExerciseChallengeId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("FlagId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("IpAddress")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("ModuleId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SubmittedAnswerHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExerciseChallengeId");
+
+                    b.HasIndex("FlagId");
+
+                    b.HasIndex("UserId", "SubmittedAt");
+
+                    b.HasIndex("ModuleId", "ExerciseChallengeId", "UserId");
+
+                    b.ToTable("TrainingCtfSubmissions");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TrainingDirection", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Icon")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("Type", "Order");
+
+                    b.ToTable("TrainingDirections");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TrainingModule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ArticleContent")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ArticleContentType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("CompletionRule")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("CoverFileHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("DirectionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("EnvironmentTemplateId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ParentId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("EnvironmentTemplateId");
+
+                    b.HasIndex("ParentId");
+
+                    b.HasIndex("UpdatedById");
+
+                    b.HasIndex("Type", "IsPublished");
+
+                    b.HasIndex("DirectionId", "ParentId", "Order");
+
+                    b.ToTable("TrainingModules");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TrainingModuleChallenge", b =>
+                {
+                    b.Property<int>("ModuleId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ExerciseChallengeId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DisplayTitle")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<bool>("IsRequired")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.HasKey("ModuleId", "ExerciseChallengeId");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("ExerciseChallengeId");
+
+                    b.ToTable("TrainingModuleChallenges");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TrainingModuleProgress", b =>
+                {
+                    b.Property<int>("ModuleId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ChallengeSolvedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ChallengeTotalCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int?>("TheoryBestPassRate")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("TheoryBestScore")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("ModuleId", "UserId");
+
+                    b.HasIndex("UpdatedAt");
+
+                    b.HasIndex("UserId", "Status");
+
+                    b.ToTable("TrainingModuleProgresses");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TrainingModuleVisibility", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("GroupId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ModuleId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("VisibilityType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("GroupId");
+
+                    b.HasIndex("ModuleId", "VisibilityType", "GroupId")
+                        .IsUnique();
+
+                    b.ToTable("TrainingModuleVisibilities");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.UserInfo", b =>
@@ -3984,6 +4665,68 @@ namespace GZCTF.Migrations
                     b.Navigation("Scenario");
                 });
 
+            modelBuilder.Entity("GZCTF.Models.Data.StudentGroup", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.UserInfo", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("CreatedBy");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.StudentGroupManager", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.UserInfo", "AddedBy")
+                        .WithMany()
+                        .HasForeignKey("AddedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GZCTF.Models.Data.StudentGroup", "Group")
+                        .WithMany("Managers")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.UserInfo", "Manager")
+                        .WithMany()
+                        .HasForeignKey("ManagerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AddedBy");
+
+                    b.Navigation("Group");
+
+                    b.Navigation("Manager");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.StudentGroupMember", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.UserInfo", "AddedBy")
+                        .WithMany()
+                        .HasForeignKey("AddedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GZCTF.Models.Data.StudentGroup", "Group")
+                        .WithMany("Members")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.UserInfo", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AddedBy");
+
+                    b.Navigation("Group");
+
+                    b.Navigation("Student");
+                });
+
             modelBuilder.Entity("GZCTF.Models.Data.Submission", b =>
                 {
                     b.HasOne("GZCTF.Models.Data.GameChallenge", "GameChallenge")
@@ -4049,6 +4792,32 @@ namespace GZCTF.Migrations
                         .IsRequired();
 
                     b.Navigation("Captain");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TeamJoinRequest", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.UserInfo", "ReviewedBy")
+                        .WithMany()
+                        .HasForeignKey("ReviewedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GZCTF.Models.Data.Team", "Team")
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.UserInfo", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ReviewedBy");
+
+                    b.Navigation("Team");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.TheoryAnswerSheet", b =>
@@ -4134,6 +4903,88 @@ namespace GZCTF.Migrations
                     b.Navigation("PaperQuestion");
                 });
 
+            modelBuilder.Entity("GZCTF.Models.Data.TheoryTrainingPlan", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.UserInfo", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GZCTF.Models.Data.TrainingModule", "Module")
+                        .WithOne("TheoryPlan")
+                        .HasForeignKey("GZCTF.Models.Data.TheoryTrainingPlan", "ModuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.UserInfo", "UpdatedBy")
+                        .WithMany()
+                        .HasForeignKey("UpdatedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("CreatedBy");
+
+                    b.Navigation("Module");
+
+                    b.Navigation("UpdatedBy");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TheoryTrainingPlanQuestion", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.TheoryTrainingPlan", "Plan")
+                        .WithMany("Questions")
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.TheoryQuestionBankItem", "SourceQuestion")
+                        .WithMany()
+                        .HasForeignKey("SourceQuestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Plan");
+
+                    b.Navigation("SourceQuestion");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TheoryTrainingSession", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.TrainingModule", "Module")
+                        .WithMany()
+                        .HasForeignKey("ModuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.TheoryTrainingPlan", "Plan")
+                        .WithMany()
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.UserInfo", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Module");
+
+                    b.Navigation("Plan");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TheoryTrainingSessionQuestion", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.TheoryTrainingSession", "Session")
+                        .WithMany("Questions")
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Session");
+                });
+
             modelBuilder.Entity("GZCTF.Models.Data.TimeSlot", b =>
                 {
                     b.HasOne("GZCTF.Models.Data.GameChallenge", "Scenario")
@@ -4143,6 +4994,178 @@ namespace GZCTF.Migrations
                         .IsRequired();
 
                     b.Navigation("Scenario");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TrainingArticleProgress", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.TrainingModule", "Module")
+                        .WithMany()
+                        .HasForeignKey("ModuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.UserInfo", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Module");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TrainingCtfSubmission", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.ExerciseChallenge", "ExerciseChallenge")
+                        .WithMany()
+                        .HasForeignKey("ExerciseChallengeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.FlagContext", "Flag")
+                        .WithMany()
+                        .HasForeignKey("FlagId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GZCTF.Models.Data.TrainingModule", "Module")
+                        .WithMany()
+                        .HasForeignKey("ModuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.UserInfo", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ExerciseChallenge");
+
+                    b.Navigation("Flag");
+
+                    b.Navigation("Module");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TrainingDirection", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.UserInfo", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("CreatedBy");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TrainingModule", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.UserInfo", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GZCTF.Models.Data.TrainingDirection", "Direction")
+                        .WithMany("Modules")
+                        .HasForeignKey("DirectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.ImageTemplate", "EnvironmentTemplate")
+                        .WithMany()
+                        .HasForeignKey("EnvironmentTemplateId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GZCTF.Models.Data.TrainingModule", "Parent")
+                        .WithMany("Children")
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("GZCTF.Models.Data.UserInfo", "UpdatedBy")
+                        .WithMany()
+                        .HasForeignKey("UpdatedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("CreatedBy");
+
+                    b.Navigation("Direction");
+
+                    b.Navigation("EnvironmentTemplate");
+
+                    b.Navigation("Parent");
+
+                    b.Navigation("UpdatedBy");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TrainingModuleChallenge", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.UserInfo", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GZCTF.Models.Data.ExerciseChallenge", "ExerciseChallenge")
+                        .WithMany()
+                        .HasForeignKey("ExerciseChallengeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.TrainingModule", "Module")
+                        .WithMany("Challenges")
+                        .HasForeignKey("ModuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CreatedBy");
+
+                    b.Navigation("ExerciseChallenge");
+
+                    b.Navigation("Module");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TrainingModuleProgress", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.TrainingModule", "Module")
+                        .WithMany()
+                        .HasForeignKey("ModuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.UserInfo", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Module");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TrainingModuleVisibility", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.UserInfo", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GZCTF.Models.Data.StudentGroup", "Group")
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("GZCTF.Models.Data.TrainingModule", "Module")
+                        .WithMany("Visibilities")
+                        .HasForeignKey("ModuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CreatedBy");
+
+                    b.Navigation("Group");
+
+                    b.Navigation("Module");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.UserParticipation", b =>
@@ -4363,6 +5386,13 @@ namespace GZCTF.Migrations
                     b.Navigation("RuntimeNodes");
                 });
 
+            modelBuilder.Entity("GZCTF.Models.Data.StudentGroup", b =>
+                {
+                    b.Navigation("Managers");
+
+                    b.Navigation("Members");
+                });
+
             modelBuilder.Entity("GZCTF.Models.Data.Team", b =>
                 {
                     b.Navigation("Participations");
@@ -4376,6 +5406,32 @@ namespace GZCTF.Migrations
             modelBuilder.Entity("GZCTF.Models.Data.TheoryPaper", b =>
                 {
                     b.Navigation("Questions");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TheoryTrainingPlan", b =>
+                {
+                    b.Navigation("Questions");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TheoryTrainingSession", b =>
+                {
+                    b.Navigation("Questions");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TrainingDirection", b =>
+                {
+                    b.Navigation("Modules");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TrainingModule", b =>
+                {
+                    b.Navigation("Challenges");
+
+                    b.Navigation("Children");
+
+                    b.Navigation("TheoryPlan");
+
+                    b.Navigation("Visibilities");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.UserInfo", b =>

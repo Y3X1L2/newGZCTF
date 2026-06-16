@@ -58,6 +58,80 @@
   min-height: clamp(20rem, 42vh, 34rem);
 }
 
+.topScrollBar {
+  display: none;
+  align-items: center;
+  width: 100%;
+  min-height: 1.35rem;
+  margin: 0 0 0.42rem;
+  padding: 0.16rem 0.24rem;
+  border: 1px solid rgba(107, 238, 177, 0.14);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018)),
+    rgba(8, 12, 12, 0.62);
+  backdrop-filter: blur(0.7rem);
+}
+
+.topScrollBar[data-visible='true'] {
+  display: flex;
+}
+
+.topScrollBar input {
+  appearance: none;
+  width: 100%;
+  height: 0.8rem;
+  cursor: grab;
+  background: transparent;
+}
+
+.topScrollBar input:active {
+  cursor: grabbing;
+}
+
+.topScrollBar input::-webkit-slider-runnable-track {
+  height: 0.26rem;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgba(107, 238, 177, 0.45), rgba(134, 255, 203, 0.2)),
+    rgba(255, 255, 255, 0.09);
+}
+
+.topScrollBar input::-webkit-slider-thumb {
+  appearance: none;
+  width: 2.8rem;
+  height: 0.82rem;
+  margin-top: -0.28rem;
+  border: 1px solid rgba(157, 255, 213, 0.55);
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgba(107, 238, 177, 0.92), rgba(143, 122, 255, 0.58));
+  box-shadow:
+    0 0 0.9rem rgba(107, 238, 177, 0.24),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+.topScrollBar input::-moz-range-track {
+  height: 0.26rem;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgba(107, 238, 177, 0.45), rgba(134, 255, 203, 0.2)),
+    rgba(255, 255, 255, 0.09);
+}
+
+.topScrollBar input::-moz-range-thumb {
+  width: 2.8rem;
+  height: 0.82rem;
+  border: 1px solid rgba(157, 255, 213, 0.55);
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgba(107, 238, 177, 0.92), rgba(143, 122, 255, 0.58));
+  box-shadow:
+    0 0 0.9rem rgba(107, 238, 177, 0.24),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+.scoreboardScrollContainer,
 .tableStage :global(.mantine-TableScrollContainer-scrollContainer) {
   max-height: clamp(18rem, 40vh, 31rem);
   overflow: auto;

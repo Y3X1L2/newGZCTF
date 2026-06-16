@@ -922,12 +922,14 @@ public class GameRepository(
     private async Task<Dictionary<int, PenetrationScoreState>> GetPenetrationScoreStates(int gameId,
         CancellationToken token = default)
     {
-        var firstSolves = await Context.PenetrationSubmissions.AsNoTracking()
+        var acceptedSolves = await Context.PenetrationSubmissions.AsNoTracking()
             .Where(s => s.GameId == gameId && s.Status == AnswerResult.Accepted)
-            .GroupBy(s => new { s.TeamId, s.ScoreItemId })
-            .Select(g => g.OrderBy(s => s.SubmittedAt).First())
-            .Select(s => new { s.TeamId, s.Score, s.SubmittedAt })
+            .Select(s => new { s.TeamId, s.ScoreItemId, s.Score, s.SubmittedAt })
             .ToArrayAsync(token);
+
+        var firstSolves = acceptedSolves
+            .GroupBy(s => new { s.TeamId, s.ScoreItemId })
+            .Select(g => g.OrderBy(s => s.SubmittedAt).First());
 
         Dictionary<int, PenetrationScoreState> states = [];
         foreach (var solve in firstSolves)

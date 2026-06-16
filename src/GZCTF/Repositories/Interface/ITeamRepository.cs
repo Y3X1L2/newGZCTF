@@ -46,6 +46,39 @@ public interface ITeamRepository : IRepository
     public Task<Team[]> SearchTeams(string hint, CancellationToken token = default);
 
     /// <summary>
+    /// Get a pending join request from the specified user to the specified team
+    /// </summary>
+    /// <param name="teamId"></param>
+    /// <param name="userId"></param>
+    /// <param name="token"></param>
+    /// <returns></returns>
+    public Task<TeamJoinRequest?> GetPendingJoinRequest(int teamId, Guid userId, CancellationToken token = default);
+
+    /// <summary>
+    /// Get a join request by ID
+    /// </summary>
+    /// <param name="requestId"></param>
+    /// <param name="token"></param>
+    /// <returns></returns>
+    public Task<TeamJoinRequest?> GetJoinRequest(int requestId, CancellationToken token = default);
+
+    /// <summary>
+    /// Get pending join requests for a team
+    /// </summary>
+    /// <param name="teamId"></param>
+    /// <param name="token"></param>
+    /// <returns></returns>
+    public Task<TeamJoinRequest[]> GetPendingJoinRequests(int teamId, CancellationToken token = default);
+
+    /// <summary>
+    /// Add a new join request
+    /// </summary>
+    /// <param name="request"></param>
+    /// <param name="token"></param>
+    /// <returns></returns>
+    public Task AddJoinRequest(TeamJoinRequest request, CancellationToken token = default);
+
+    /// <summary>
     /// Get a list of teams with pagination, with member information
     /// </summary>
     /// <param name="count"></param>

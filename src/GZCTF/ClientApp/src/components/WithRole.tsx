@@ -10,9 +10,12 @@ interface WithRoleProps {
 }
 
 export const RoleMap = new Map<Role, number>([
+  [Role.SuperAdmin, 4],
   [Role.Admin, 3],
-  [Role.Monitor, 1],
-  [Role.User, 0],
+  [Role.Teacher, 2],
+  [Role.Monitor, 2],
+  [Role.Student, 1],
+  [Role.User, 1],
   [Role.Banned, -1],
 ])
 

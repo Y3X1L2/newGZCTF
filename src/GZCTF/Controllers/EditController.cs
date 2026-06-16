@@ -19,7 +19,7 @@ namespace GZCTF.Controllers;
 /// <summary>
 /// Data Modification APIs
 /// </summary>
-[RequireAdmin]
+[RequireTeacher]
 [ApiController]
 [Route("api/[controller]")]
 [Produces(MediaTypeNames.Application.Json)]
@@ -52,6 +52,7 @@ public class EditController(
     /// <param name="token"></param>
     /// <response code="200">Successfully added post</response>
     [HttpPost("Posts")]
+    [RequireAdmin]
     [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
     public async Task<IActionResult> AddPost([FromBody] PostEditModel model, CancellationToken token)
     {
@@ -72,6 +73,7 @@ public class EditController(
     /// <response code="200">Successfully updated post</response>
     /// <response code="404">Post not found</response>
     [HttpPut("Posts/{id}")]
+    [RequireAdmin]
     [ProducesResponseType(typeof(PostDetailModel), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdatePost(string id, [FromBody] PostEditModel model, CancellationToken token)
@@ -100,6 +102,7 @@ public class EditController(
     /// <response code="200">Successfully deleted post</response>
     /// <response code="404">Post not found</response>
     [HttpDelete("Posts/{id}")]
+    [RequireAdmin]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeletePost(string id, CancellationToken token)

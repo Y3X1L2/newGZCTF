@@ -60,6 +60,9 @@ public class ExerciseInstanceRepository(
 
         var instance = await Context.ExerciseInstances
             .Include(i => i.FlagContext)
+            .Include(i => i.Container)
+            .Include(i => i.Exercise)
+            .ThenInclude(e => e.Flags)
             .Where(e => e.ExerciseId == exerciseId && e.UserId == user.Id)
             .SingleOrDefaultAsync(token);
 
@@ -84,16 +87,39 @@ public class ExerciseInstanceRepository(
 
         try
         {
-            // dynamic flag dispatch
-            if (instance.Exercise.Type == ChallengeType.DynamicContainer)
-                instance.FlagContext = new()
-                {
-                    Exercise = exercise,
-                    // tiny probability will produce the same FLAG,
-                    // but this will not affect the correctness of the answer
-                    Flag = exercise.GenerateDynamicFlag(),
-                    IsOccupied = true
-                };
+            switch (instance.Exercise.Type)
+            {
+                case ChallengeType.DynamicContainer:
+                    instance.FlagContext = new()
+                    {
+                        Exercise = exercise,
+                        // tiny probability will produce the same FLAG,
+                        // but this will not affect the correctness of the answer
+                        Flag = exercise.GenerateDynamicFlag(),
+                        IsOccupied = true
+                    };
+                    break;
+                case ChallengeType.DynamicAttachment:
+                    var flags = await Context.FlagContexts
+                        .Where(e => e.Exercise == exercise && !e.IsOccupied)
+                        .ToListAsync(token);
+
+                    if (flags.Count == 0)
+                    {
+                        logger.SystemLog(
+                            StaticLocalizer[nameof(Resources.Program.InstanceRepository_DynamicFlagsNotEnough),
+                                exercise.Title,
+                                exercise.Id], TaskStatus.Failed,
+                            LogLevel.Warning);
+                        await transaction.RollbackAsync(token);
+                        return null;
+                    }
+
+                    var pos = Random.Shared.Next(flags.Count);
+                    flags[pos].IsOccupied = true;
+                    instance.FlagId = flags[pos].Id;
+                    break;
+            }
 
             // instance.FlagContext is null by default
             // static flag does not need to be dispatched
@@ -191,31 +217,84 @@ public class ExerciseInstanceRepository(
         return new TaskResult<Container>(TaskStatus.Success, instance.Container);
     }
 
-    public async Task<AnswerResult> VerifyAnswer(UserInfo user, ExerciseInstance instance, string answer,
+    public async Task<(AnswerResult Status, int? FlagId)> VerifyAnswer(UserInfo user, ExerciseInstance instance, string answer,
+        int? flagId = null,
         CancellationToken token = default)
     {
-        if (instance.Exercise.Type == ChallengeType.DynamicContainer)
+        await using var transaction = await Context.Database.BeginTransactionAsync(token);
+
+        var exercise = await Context.ExerciseChallenges
+            .AsNoTracking()
+            .Select(c => new { c.Id, c.Type })
+            .SingleAsync(c => c.Id == instance.ExerciseId, token);
+
+        FlagContext? targetFlag;
+        if (exercise.Type == ChallengeType.DynamicContainer && instance.FlagContext is not null)
         {
-            if (instance.FlagContext is null)
-                return AnswerResult.NotFound;
-
-            if (instance.FlagContext.Flag != answer)
-                return AnswerResult.WrongAnswer;
-
-            await MarkSolved(instance, token);
-            await UnlockExercises(user, token);
-            return AnswerResult.Accepted;
+            targetFlag = instance.FlagContext;
+        }
+        else if (exercise.Type == ChallengeType.DynamicAttachment && instance.FlagId.HasValue)
+        {
+            targetFlag = await Context.FlagContexts
+                .FirstOrDefaultAsync(f => f.Id == instance.FlagId.Value && f.ExerciseId == instance.ExerciseId, token);
+        }
+        else if (flagId.HasValue)
+        {
+            targetFlag = await Context.FlagContexts
+                .FirstOrDefaultAsync(f => f.Id == flagId.Value && f.ExerciseId == instance.ExerciseId, token);
+        }
+        else
+        {
+            targetFlag = await Context.FlagContexts
+                .Where(f => f.ExerciseId == instance.ExerciseId)
+                .OrderBy(f => f.OrderIndex)
+                .FirstOrDefaultAsync(token);
         }
 
-        if (await Context.FlagContexts.AsNoTracking()
-                .AnyAsync(f => f.ExerciseId == instance.ExerciseId && f.Flag == answer, token))
+        if (targetFlag is null)
         {
-            await MarkSolved(instance, token);
-            await UnlockExercises(user, token);
-            return AnswerResult.Accepted;
+            await transaction.RollbackAsync(token);
+            return (AnswerResult.NotFound, null);
         }
 
-        return AnswerResult.WrongAnswer;
+        if (targetFlag.MaxAttempts > 0)
+        {
+            var attemptCount = await Context.TrainingCtfSubmissions.CountAsync(s =>
+                s.UserId == user.Id &&
+                s.ExerciseChallengeId == instance.ExerciseId &&
+                s.FlagId == targetFlag.Id, token);
+            if (attemptCount >= targetFlag.MaxAttempts)
+            {
+                await transaction.RollbackAsync(token);
+                return (AnswerResult.WrongAnswer, targetFlag.Id);
+            }
+        }
+
+        var isCorrect = targetFlag.AnswerType switch
+        {
+            AnswerType.File => string.Equals(answer.ToSHA256String(), targetFlag.AttachmentHash,
+                StringComparison.OrdinalIgnoreCase),
+            _ => string.Equals(targetFlag.Flag, answer, StringComparison.Ordinal)
+        };
+
+        if (!isCorrect)
+        {
+            await transaction.CommitAsync(token);
+            return (AnswerResult.WrongAnswer, targetFlag.Id);
+        }
+
+        if (instance.SolveTimeUtc <= DateTimeOffset.FromUnixTimeSeconds(0))
+            instance.SolveTimeUtc = DateTimeOffset.UtcNow;
+
+        await foreach (var id in FetchNewChallenges(user, token))
+        {
+            var newInst = new ExerciseInstance { ExerciseId = id, UserId = user.Id, IsLoaded = false };
+            Context.ExerciseInstances.Add(newInst);
+        }
+
+        await SaveAsync(token);
+        await transaction.CommitAsync(token);
+        return (AnswerResult.Accepted, targetFlag.Id);
     }
 
     private Task<bool> IsExerciseAvailable(CancellationToken token = default) =>
@@ -255,11 +334,12 @@ public class ExerciseInstanceRepository(
     internal ConfiguredCancelableAsyncEnumerable<int> FetchNewChallenges(UserInfo user,
         CancellationToken token = default)
         => Context.ExerciseChallenges.Where(chal =>
-                chal.IsEnabled && Context.ExerciseInstances.All(i =>
-                    i.UserId == user.Id && i.ExerciseId != chal.Id) &&
-                Context.ExerciseDependencies.All(dep =>
-                    dep.TargetId == chal.Id &&
-                    Context.ExerciseInstances.Any(e =>
+                chal.IsEnabled && !Context.ExerciseInstances.Any(i =>
+                    i.UserId == user.Id && i.ExerciseId == chal.Id) &&
+                Context.ExerciseDependencies
+                    .Where(dep => dep.TargetId == chal.Id)
+                    .All(dep => Context.ExerciseInstances.Any(e =>
+                        e.UserId == user.Id &&
                         e.SolveTimeUtc > DateTimeOffset.FromUnixTimeSeconds(0) &&
                         e.ExerciseId == dep.SourceId
                     ))).Select(e => e.Id).AsAsyncEnumerable()

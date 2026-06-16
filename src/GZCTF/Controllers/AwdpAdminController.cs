@@ -15,7 +15,7 @@ namespace GZCTF.Controllers;
 /// <summary>
 /// AWDP administration APIs
 /// </summary>
-[RequireAdmin]
+[RequireTeacher]
 [ApiController]
 [Route("api/admin/awdp")]
 [Produces(MediaTypeNames.Application.Json)]

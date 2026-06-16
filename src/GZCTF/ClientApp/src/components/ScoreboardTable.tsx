@@ -20,7 +20,7 @@ import { mdiAccountGroup, mdiMagnify, mdiFlagOutline, mdiHelpCircleOutline } fro
 import { Icon } from '@mdi/react'
 import cx from 'clsx'
 import dayjs from 'dayjs'
-import React, { FC, useEffect, useState, useMemo } from 'react'
+import React, { FC, useEffect, useRef, useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router'
 import { BloodMedal, bloodTierFromSubmissionType } from '@Components/BloodMedal'
@@ -274,6 +274,9 @@ export const ScoreboardTable: FC<ScoreboardProps> = ({ divisionId, setDivisionId
 
   const [keyword, setKeyword] = useState('')
   const [debouncedKeyword] = useDebouncedValue(keyword, 400)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const [scrollRatio, setScrollRatio] = useState(0)
+  const [canScrollX, setCanScrollX] = useState(false)
 
   const { scoreboard } = useGameScoreboard(numId)
 
@@ -339,6 +342,38 @@ export const ScoreboardTable: FC<ScoreboardProps> = ({ divisionId, setDivisionId
   const bloodData = useBonusLabels(bloodBonus)
   const hasDivisionFilter = divisionOptions.length > 0
 
+  const syncScrollMetrics = () => {
+    const el = scrollRef.current
+    if (!el) return
+
+    const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth)
+    setCanScrollX(maxScroll > 2)
+    setScrollRatio(maxScroll > 0 ? Math.round((el.scrollLeft / maxScroll) * 1000) / 10 : 0)
+  }
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+
+    syncScrollMetrics()
+
+    const resizeObserver = new ResizeObserver(syncScrollMetrics)
+    resizeObserver.observe(el)
+    if (el.firstElementChild) resizeObserver.observe(el.firstElementChild)
+
+    return () => resizeObserver.disconnect()
+  }, [scoreboard?.challenges, currentItems?.length])
+
+  const onTopScrollbarChange = (value: string) => {
+    const el = scrollRef.current
+    if (!el) return
+
+    const ratio = Number(value)
+    const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth)
+    el.scrollLeft = (maxScroll * ratio) / 100
+    setScrollRatio(ratio)
+  }
+
   return (
     <YinyuTableShell p="md" className="scoreboard-draft">
       <Stack gap="xs">
@@ -372,12 +407,18 @@ export const ScoreboardTable: FC<ScoreboardProps> = ({ divisionId, setDivisionId
           </Grid.Col>
         </Grid>
         <Box pos="relative" className={classes.tableStage}>
-          <Table.ScrollContainer
-            minWidth="100%"
-            classNames={{
-              scrollContainer: misc.noScrollBars,
-            }}
-          >
+          <div className={classes.topScrollBar} data-visible={canScrollX || undefined}>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={0.1}
+              value={scrollRatio}
+              aria-label="横向拖动排行榜"
+              onChange={(event) => onTopScrollbarChange(event.currentTarget.value)}
+            />
+          </div>
+          <div ref={scrollRef} className={cx(classes.scoreboardScrollContainer, misc.noScrollBars)} onScroll={syncScrollMetrics}>
             <Table className={classes.table}>
               <TableHeader {...scoreboard?.challenges} />
               <Table.Tbody>
@@ -399,7 +440,7 @@ export const ScoreboardTable: FC<ScoreboardProps> = ({ divisionId, setDivisionId
                   ))}
               </Table.Tbody>
             </Table>
-          </Table.ScrollContainer>
+          </div>
           <Box className={classes.legend}>
             <Stack gap="xs">
               <Tooltip.Group>

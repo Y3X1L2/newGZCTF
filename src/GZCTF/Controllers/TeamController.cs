@@ -73,6 +73,26 @@ public partial class TeamController(
     }
 
     /// <summary>
+    /// Search teams for join request
+    /// </summary>
+    /// <remarks>
+    /// Search visible teams by team name or ID, requires User permission
+    /// </remarks>
+    /// <param name="hint">Team name or ID</param>
+    /// <param name="token"></param>
+    [HttpGet("Search")]
+    [RequireUser]
+    [ProducesResponseType(typeof(TeamInfoModel[]), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Search([FromQuery] string hint, CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(hint))
+            return Ok(Array.Empty<TeamInfoModel>());
+
+        var teams = await teamRepository.SearchTeams(hint.Trim(), token);
+        return Ok(teams.Select(t => TeamInfoModel.FromTeam(t)));
+    }
+
+    /// <summary>
     /// Create team
     /// </summary>
     /// <remarks>
@@ -152,6 +172,143 @@ public partial class TeamController(
         await teamRepository.SaveAsync(token);
 
         return Ok(TeamInfoModel.FromTeam(team));
+    }
+
+    /// <summary>
+    /// Create a team join request
+    /// </summary>
+    /// <remarks>
+    /// Users can request to join a team. The team captain reviews the request.
+    /// </remarks>
+    /// <param name="id">Team ID</param>
+    /// <param name="model"></param>
+    /// <param name="token"></param>
+    [RequireUser]
+    [HttpPost("{id:int}/Requests")]
+    [ProducesResponseType(typeof(TeamJoinRequestModel), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> CreateJoinRequest([FromRoute] int id, [FromBody] TeamJoinRequestCreateModel model,
+        CancellationToken token)
+    {
+        var user = await userManager.GetUserAsync(User);
+        var team = await teamRepository.GetTeamById(id, token);
+
+        if (team is null)
+            return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Team_NotFound)]));
+
+        if (team.Members.Any(m => m.Id == user!.Id))
+            return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.User_AlreadyInTeam)]));
+
+        var pending = await teamRepository.GetPendingJoinRequest(id, user!.Id, token);
+        if (pending is not null)
+            return BadRequest(new RequestResponse("你已经提交过入队申请，请等待队长处理。"));
+
+        var request = new TeamJoinRequest
+        {
+            Team = team,
+            User = user!,
+            Message = model.Message?.Trim()
+        };
+
+        await teamRepository.AddJoinRequest(request, token);
+
+        return Ok(TeamJoinRequestModel.FromRequest(request));
+    }
+
+    /// <summary>
+    /// Get pending join requests
+    /// </summary>
+    /// <remarks>
+    /// Team captain can view pending join requests.
+    /// </remarks>
+    /// <param name="id">Team ID</param>
+    /// <param name="token"></param>
+    [RequireUser]
+    [HttpGet("{id:int}/Requests")]
+    [ProducesResponseType(typeof(TeamJoinRequestModel[]), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetJoinRequests([FromRoute] int id, CancellationToken token)
+    {
+        var user = await userManager.GetUserAsync(User);
+        var team = await teamRepository.GetTeamById(id, token);
+
+        if (team is null)
+            return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Team_NotFound)]));
+
+        if (team.CaptainId != user!.Id)
+            return RequestResponse.Result(localizer[nameof(Resources.Program.Auth_AccessForbidden)],
+                StatusCodes.Status403Forbidden);
+
+        var requests = await teamRepository.GetPendingJoinRequests(id, token);
+        return Ok(requests.Select(TeamJoinRequestModel.FromRequest));
+    }
+
+    /// <summary>
+    /// Review a join request
+    /// </summary>
+    /// <remarks>
+    /// Team captain can accept or reject a pending join request.
+    /// </remarks>
+    /// <param name="id">Team ID</param>
+    /// <param name="requestId">Join request ID</param>
+    /// <param name="model"></param>
+    /// <param name="token"></param>
+    [RequireUser]
+    [HttpPost("{id:int}/Requests/{requestId:int}")]
+    [ProducesResponseType(typeof(TeamInfoModel), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> ReviewJoinRequest([FromRoute] int id, [FromRoute] int requestId,
+        [FromBody] TeamJoinRequestReviewModel model, CancellationToken token)
+    {
+        var user = await userManager.GetUserAsync(User);
+        var trans = await teamRepository.BeginTransactionAsync(token);
+
+        try
+        {
+            var team = await teamRepository.GetTeamById(id, token);
+
+            if (team is null)
+                return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Team_NotFound)]));
+
+            if (team.CaptainId != user!.Id)
+                return RequestResponse.Result(localizer[nameof(Resources.Program.Auth_AccessForbidden)],
+                    StatusCodes.Status403Forbidden);
+
+            if (team.Locked && await teamRepository.AnyActiveGame(team, token))
+                return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Team_Locked)]));
+
+            var request = await teamRepository.GetJoinRequest(requestId, token);
+            if (request is null || request.TeamId != id || request.Status != TeamJoinRequestStatus.Pending)
+                return BadRequest(new RequestResponse("入队申请不存在或已处理。"));
+
+            if (model.Accepted)
+            {
+                if (team.Members.All(m => m.Id != request.UserId))
+                    team.Members.Add(request.User);
+
+                request.Status = TeamJoinRequestStatus.Accepted;
+            }
+            else
+            {
+                request.Status = TeamJoinRequestStatus.Rejected;
+            }
+
+            request.ReviewedAtUtc = DateTimeOffset.UtcNow;
+            request.ReviewedBy = user;
+
+            await teamRepository.SaveAsync(token);
+            await trans.CommitAsync(token);
+
+            return Ok(TeamInfoModel.FromTeam(team));
+        }
+        catch
+        {
+            await trans.RollbackAsync(token);
+            throw;
+        }
     }
 
     /// <summary>

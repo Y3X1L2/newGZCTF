@@ -7,15 +7,19 @@ import {
   mdiFileDocumentOutline,
   mdiFlagOutline,
   mdiImageOutline,
+  mdiSchoolOutline,
   mdiServerNetwork,
   mdiSitemapOutline,
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
-import React, { FC, useEffect, useState } from 'react'
+import React, { FC, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router'
-import { YinyuHexField, YinyuRouteProgress, YinyuRouteTransition } from '@Components/yinyu/YinyuUI'
+import { RequireRole } from '@Components/WithRole'
+import { YinyuHexField } from '@Components/yinyu/YinyuUI'
 import { usePageTitle } from '@Hooks/usePageTitle'
+import { useUserRole } from '@Hooks/useUser'
+import { Role } from '@Api'
 
 export interface AdminTabProps extends React.PropsWithChildren {
   head?: React.ReactNode
@@ -23,22 +27,36 @@ export interface AdminTabProps extends React.PropsWithChildren {
   headProps?: GroupProps
 }
 
-export const WithAdminTab: FC<AdminTabProps> = ({ head, headProps, isLoading, children }) => {
+interface AdminNavPage {
+  icon: string
+  title: string
+  path: string
+  requiredRole: Role
+}
+
+export const WithAdminTab: FC<AdminTabProps> = ({ head, headProps, children }) => {
   const navigate = useNavigate()
   const location = useLocation()
   const { t } = useTranslation()
+  const { role } = useUserRole()
 
-  const pages = [
-    { icon: mdiFlagOutline, title: t('admin.tab.games.index'), path: 'games' },
-    { icon: mdiBookOpenPageVariantOutline, title: '题库管理', path: 'theory-bank' },
-    { icon: mdiAccountGroupOutline, title: t('admin.tab.teams'), path: 'teams' },
-    { icon: mdiAccountCogOutline, title: t('admin.tab.users'), path: 'users' },
-    { icon: mdiImageOutline, title: '环境模板', path: 'images' },
-    { icon: mdiServerNetwork, title: '节点管理', path: 'nodes' },
-    { icon: mdiClipboardListOutline, title: '部署队列', path: 'queue' },
-    { icon: mdiFileDocumentOutline, title: t('admin.tab.logs'), path: 'logs' },
-    { icon: mdiSitemapOutline, title: t('admin.tab.settings'), path: 'settings' },
-  ]
+  const allPages = useMemo<AdminNavPage[]>(
+    () => [
+      { icon: mdiFlagOutline, title: t('admin.tab.games.index'), path: 'games', requiredRole: Role.Teacher },
+      { icon: mdiBookOpenPageVariantOutline, title: '题库管理', path: 'theory-bank', requiredRole: Role.Teacher },
+      { icon: mdiImageOutline, title: '环境模板', path: 'images', requiredRole: Role.Teacher },
+      { icon: mdiSchoolOutline, title: '培训管理', path: 'training', requiredRole: Role.Teacher },
+      { icon: mdiAccountCogOutline, title: t('admin.tab.users'), path: 'users', requiredRole: Role.Teacher },
+      { icon: mdiAccountGroupOutline, title: t('admin.tab.teams'), path: 'teams', requiredRole: Role.Admin },
+      { icon: mdiServerNetwork, title: '节点管理', path: 'nodes', requiredRole: Role.Admin },
+      { icon: mdiClipboardListOutline, title: '部署队列', path: 'queue', requiredRole: Role.Admin },
+      { icon: mdiFileDocumentOutline, title: t('admin.tab.logs'), path: 'logs', requiredRole: Role.Admin },
+      { icon: mdiSitemapOutline, title: t('admin.tab.settings'), path: 'settings', requiredRole: Role.Admin },
+    ],
+    [t]
+  )
+
+  const pages = useMemo(() => allPages.filter((page) => RequireRole(page.requiredRole, role)), [allPages, role])
 
   const getTab = (path: string) => pages.findIndex((page) => path.startsWith(`/admin/${page.path}`))
   const tabIndex = getTab(location.pathname)
@@ -50,17 +68,19 @@ export const WithAdminTab: FC<AdminTabProps> = ({ head, headProps, isLoading, ch
   }
 
   useEffect(() => {
+    if (pages.length === 0) return
+
     const tab = getTab(location.pathname)
     if (tab >= 0) {
       setActiveTab(tab)
     } else {
-      navigate(`/admin/${pages[0].path}`)
+      navigate(`/admin/${pages[0].path}`, { replace: true })
     }
-  }, [location])
+  }, [location.pathname, pages.length])
 
   const activePage = pages[Math.max(0, tabIndex)] ?? pages[0]
 
-  usePageTitle(activePage.title)
+  usePageTitle(activePage?.title ?? t('admin.tab.games.index'))
 
   return (
     <div className="admin-shell yy-admin-shell">
@@ -96,15 +116,9 @@ export const WithAdminTab: FC<AdminTabProps> = ({ head, headProps, isLoading, ch
             {head}
           </Group>
         ) : null}
-        <div key={activePage.path} className="yy-admin-route-stage">
-          <YinyuRouteProgress className="yy-admin-route-pulse" />
+        <div key={activePage?.path ?? 'admin'} className="yy-admin-route-stage">
           {children}
         </div>
-        {isLoading ? (
-          <div className="yy-admin-transition-overlay" role="status" aria-live="polite">
-            <YinyuRouteTransition title="YINYU ADMIN" description="正在读取管理数据" />
-          </div>
-        ) : null}
       </section>
     </div>
   )

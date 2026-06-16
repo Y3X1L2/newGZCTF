@@ -77,7 +77,7 @@ public static class PrelaunchHelper
                     {
                         UserName = "Admin",
                         Email = "admin@example.invalid",
-                        Role = Role.Admin,
+                        Role = Role.SuperAdmin,
                         EmailConfirmed = true,
                         RegisterTimeUtc = DateTimeOffset.UtcNow
                     };
@@ -88,6 +88,25 @@ public static class PrelaunchHelper
                             StaticLocalizer[nameof(Resources.Program.Init_AdminCreationFailed),
                                 result.Errors.FirstOrDefault()?.Description ?? "null"], TaskStatus.Failed,
                             LogLevel.Debug);
+                }
+            }
+
+            var hasSuperAdmin = await context.Users.AnyAsync(u => u.Role == Role.SuperAdmin);
+            if (!hasSuperAdmin)
+            {
+                var firstAdmin = await context.Users
+                    .Where(u => u.Role == Role.Admin)
+                    .OrderBy(u => u.RegisterTimeUtc)
+                    .ThenBy(u => u.Id)
+                    .FirstOrDefaultAsync();
+
+                if (firstAdmin is not null)
+                {
+                    firstAdmin.Role = Role.SuperAdmin;
+                    await context.SaveChangesAsync();
+                    logger.SystemLog(
+                        $"Promoted user {firstAdmin.UserName ?? firstAdmin.Id.ToString()} to SuperAdmin for role compatibility.",
+                        TaskStatus.Success, LogLevel.Information);
                 }
             }
 

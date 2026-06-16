@@ -22,13 +22,14 @@ namespace GZCTF.Controllers;
 /// <summary>
 /// Administration APIs
 /// </summary>
-[RequireAdmin]
+[RequireTeacher]
 [ApiController]
 [Route("api/[controller]")]
 [Produces(MediaTypeNames.Application.Json)]
 [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status401Unauthorized)]
 [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status403Forbidden)]
 public class AdminController(
+    AppDbContext context,
     UserManager<UserInfo> userManager,
     ILogger<AdminController> logger,
     IBlobStorage storage,
@@ -53,6 +54,7 @@ public class AdminController(
     /// <response code="401">Unauthorized user</response>
     /// <response code="403">Forbidden</response>
     [HttpGet("Config")]
+    [RequireAdmin]
     [ProducesResponseType(typeof(ConfigEditModel), StatusCodes.Status200OK)]
     public IActionResult GetConfigs()
     {
@@ -79,6 +81,7 @@ public class AdminController(
     /// <response code="401">Unauthorized user</response>
     /// <response code="403">Forbidden</response>
     [HttpPut("Config")]
+    [RequireAdmin]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateConfigs([FromBody] ConfigEditModel model, CancellationToken token)
     {
@@ -111,6 +114,7 @@ public class AdminController(
     /// <response code="401">Unauthorized user</response>
     /// <response code="403">Forbidden</response>
     [HttpPost("Config/Logo")]
+    [RequireAdmin]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateLogo(IFormFile file, CancellationToken token)
     {
@@ -154,6 +158,7 @@ public class AdminController(
     /// <response code="401">Unauthorized user</response>
     /// <response code="403">Forbidden</response>
     [HttpDelete("Config/Logo")]
+    [RequireAdmin]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> ResetLogo(CancellationToken token)
     {
@@ -203,11 +208,36 @@ public class AdminController(
     [HttpGet("Users")]
     [ProducesResponseType(typeof(ArrayResponse<UserInfoModel>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Users([FromQuery][Range(0, 500)] int count = 100, [FromQuery] int skip = 0,
-        CancellationToken token = default) =>
-        Ok((await userManager.Users.OrderBy(e => e.Id).Skip(skip).Take(count)
-                .Select(u => UserInfoModel.FromUserInfo(u))
-                .ToArrayAsync(token))
-            .ToResponse(await userManager.Users.CountAsync(token)));
+        [FromQuery] Role? role = null, [FromQuery] int? groupId = null, [FromQuery] string? keyword = null,
+        CancellationToken token = default)
+    {
+        var actor = await userManager.GetUserAsync(User);
+        if (actor is null)
+            return Unauthorized();
+
+        var query = FilterVisibleUsers(actor, userManager.Users, groupId);
+
+        if (role.HasValue)
+            query = query.Where(u => u.Role == role.Value);
+
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var lowered = keyword.Trim().ToLower();
+            query = query.Where(item =>
+                item.UserName!.ToLower().Contains(lowered) ||
+                item.StdNumber.ToLower().Contains(lowered) ||
+                item.Email!.ToLower().Contains(lowered) ||
+                item.PhoneNumber!.ToLower().Contains(lowered) ||
+                item.Id.ToString().ToLower().Contains(lowered) ||
+                item.RealName.ToLower().Contains(lowered));
+        }
+
+        var total = await query.CountAsync(token);
+        var users = await query.OrderBy(e => e.Id).Skip(skip).Take(count).ToArrayAsync(token);
+        var groups = await GetUserGroups(users.Select(u => u.Id).ToArray(), token);
+
+        return Ok(users.Select(u => FillUserGroups(UserInfoModel.FromUserInfo(u), groups)).ToArray().ToResponse(total));
+    }
 
     /// <summary>
     /// Add users in batch
@@ -233,30 +263,40 @@ public class AdminController(
             foreach (var user in model)
             {
                 var userInfo = user.ToUserInfo();
+                var requestedRole = user.AssignedRole ?? Role.Student;
+                if (!RolePolicy.CanAssignRole(currentUser!.Role, requestedRole))
+                    return Forbid();
+
+                userInfo.Role = requestedRole;
+                var studentGroupIds = await ResolveStudentGroupsForCreatedUser(currentUser!, requestedRole, user.StudentGroupIds, token);
                 var result = await userManager.CreateAsync(userInfo, user.Password);
 
-                if (result.Succeeded)
+                if (!result.Succeeded)
                 {
-                    users.Add((userInfo, user.TeamName));
-                    continue;
+                    userInfo = result.Errors.FirstOrDefault()?.Code switch
+                    {
+                        "DuplicateEmail" => await userManager.FindByEmailAsync(user.Email),
+                        "DuplicateUserName" => await userManager.FindByNameAsync(user.UserName),
+                        _ => null
+                    };
+
+                    if (userInfo is null)
+                    {
+                        await trans.RollbackAsync(token);
+                        return HandleIdentityError(result.Errors);
+                    }
+
+                    userInfo.UpdateUserInfo(user);
+                    var code = await userManager.GeneratePasswordResetTokenAsync(userInfo);
+                    await userManager.ResetPasswordAsync(userInfo, code, user.Password);
                 }
 
-                userInfo = result.Errors.FirstOrDefault()?.Code switch
-                {
-                    "DuplicateEmail" => await userManager.FindByEmailAsync(user.Email),
-                    "DuplicateUserName" => await userManager.FindByNameAsync(user.UserName),
-                    _ => null
-                };
-
-                if (userInfo is null)
+                if (!await CanSyncStudentGroups(currentUser!, userInfo, studentGroupIds, token))
                 {
                     await trans.RollbackAsync(token);
-                    return HandleIdentityError(result.Errors);
+                    return Forbid();
                 }
-
-                userInfo.UpdateUserInfo(user);
-                var code = await userManager.GeneratePasswordResetTokenAsync(userInfo);
-                await userManager.ResetPasswordAsync(userInfo, code, user.Password);
+                await SyncStudentGroups(currentUser!, userInfo, studentGroupIds, token);
 
                 users.Add((userInfo, user.TeamName));
             }
@@ -307,8 +347,12 @@ public class AdminController(
     [ProducesResponseType(typeof(ArrayResponse<UserInfoModel>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchUsers([FromQuery] string hint, CancellationToken token = default)
     {
+        var actor = await userManager.GetUserAsync(User);
+        if (actor is null)
+            return Unauthorized();
+
         var loweredHint = hint.ToLower();
-        var data = await userManager.Users.Where(item =>
+        var data = await FilterVisibleUsers(actor, userManager.Users).Where(item =>
             item.UserName!.ToLower().Contains(loweredHint) ||
             item.StdNumber.ToLower().Contains(loweredHint) ||
             item.Email!.ToLower().Contains(loweredHint) ||
@@ -317,7 +361,9 @@ public class AdminController(
             item.RealName.ToLower().Contains(loweredHint)
         ).OrderBy(e => e.Id).Take(30).ToArrayAsync(token);
 
-        return Ok(data.Select(UserInfoModel.FromUserInfo).ToResponse());
+        var groups = await GetUserGroups(data.Select(u => u.Id).ToArray(), token);
+
+        return Ok(data.Select(u => FillUserGroups(UserInfoModel.FromUserInfo(u), groups)).ToResponse());
     }
 
     /// <summary>
@@ -330,6 +376,7 @@ public class AdminController(
     /// <response code="401">Unauthorized user</response>
     /// <response code="403">Forbidden</response>
     [HttpGet("Teams")]
+    [RequireAdmin]
     [ProducesResponseType(typeof(ArrayResponse<TeamInfoModel>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Teams([FromQuery][Range(0, 500)] int count = 100, [FromQuery] int skip = 0,
         CancellationToken token = default) =>
@@ -346,6 +393,7 @@ public class AdminController(
     /// <response code="401">Unauthorized user</response>
     /// <response code="403">Forbidden</response>
     [HttpPost("Teams/Search")]
+    [RequireAdmin]
     [ProducesResponseType(typeof(ArrayResponse<TeamInfoModel>), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchTeams([FromQuery] string hint, CancellationToken token = default) =>
         Ok((await teamRepository.SearchTeams(hint, token))
@@ -363,6 +411,7 @@ public class AdminController(
     /// <response code="403">Forbidden</response>
     /// <response code="404">Team not found</response>
     [HttpPut("Teams/{id:int}")]
+    [RequireAdmin]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateTeam([FromRoute] int id, [FromBody] AdminTeamModel model,
@@ -400,6 +449,23 @@ public class AdminController(
             return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Admin_UserNotFound)],
                 StatusCodes.Status404NotFound));
 
+        var actor = await userManager.GetUserAsync(User);
+        if (actor is null)
+            return Unauthorized();
+
+        if (!RolePolicy.CanManageRole(actor.Role, user.Role))
+            return Forbid();
+
+        if (model.Role.HasValue && !RolePolicy.CanAssignRole(actor.Role, model.Role.Value))
+            return Forbid();
+
+        if (user.Role == Role.SuperAdmin && model.Role.HasValue && model.Role.Value != Role.SuperAdmin &&
+            await userManager.Users.CountAsync(u => u.Role == Role.SuperAdmin) <= 1)
+            return BadRequest(new RequestResponse("不能降级最后一个超级管理员。"));
+
+        if (model.StudentGroupIds is not null && !await CanSyncStudentGroups(actor, user, model.StudentGroupIds, HttpContext.RequestAborted))
+            return Forbid();
+
         if (model.UserName is not null && model.UserName != user.UserName)
         {
             var result = await userManager.SetUserNameAsync(user, model.UserName);
@@ -418,6 +484,11 @@ public class AdminController(
 
         user.UpdateUserInfo(model);
         await userManager.UpdateAsync(user);
+        if (model.StudentGroupIds is not null)
+        {
+            await SyncStudentGroups(actor, user, model.StudentGroupIds, HttpContext.RequestAborted);
+            await context.SaveChangesAsync(HttpContext.RequestAborted);
+        }
 
         return Ok();
     }
@@ -442,6 +513,13 @@ public class AdminController(
         if (user is null)
             return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Admin_UserNotFound)],
                 StatusCodes.Status404NotFound));
+
+        var actor = await userManager.GetUserAsync(User);
+        if (actor is null)
+            return Unauthorized();
+
+        if (!RolePolicy.CanManageRole(actor.Role, user.Role))
+            return Forbid();
 
         var pwd = Codec.RandomPassword(16);
         var code = await userManager.GeneratePasswordResetTokenAsync(user);
@@ -476,6 +554,16 @@ public class AdminController(
             return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Admin_UserNotFound)],
                 StatusCodes.Status404NotFound));
 
+        var actor = await userManager.GetUserAsync(User);
+        if (actor is null)
+            return Unauthorized();
+
+        if (!RolePolicy.CanManageRole(actor.Role, user.Role))
+            return Forbid();
+
+        if (user.Role == Role.SuperAdmin && await userManager.Users.CountAsync(u => u.Role == Role.SuperAdmin, token) <= 1)
+            return BadRequest(new RequestResponse("不能删除最后一个超级管理员。"));
+
         if (await teamRepository.CheckIsCaptain(user, token))
             return BadRequest(
                 new RequestResponse(localizer[nameof(Resources.Program.Admin_CaptainDeletionNotAllowed)]));
@@ -496,6 +584,7 @@ public class AdminController(
     /// <response code="403">Forbidden</response>
     /// <response code="404">User not found</response>
     [HttpDelete("Teams/{id:int}")]
+    [RequireAdmin]
     [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteTeam(int id, CancellationToken token = default)
@@ -531,6 +620,13 @@ public class AdminController(
             return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Admin_UserNotFound)],
                 StatusCodes.Status404NotFound));
 
+        var actor = await userManager.GetUserAsync(User);
+        if (actor is null)
+            return Unauthorized();
+
+        if (!RolePolicy.CanViewRole(actor.Role, user.Role))
+            return Forbid();
+
         return Ok(ProfileUserInfoModel.FromUserInfo(user));
     }
 
@@ -544,6 +640,7 @@ public class AdminController(
     /// <response code="401">Unauthorized user</response>
     /// <response code="403">Forbidden</response>
     [HttpGet("Logs")]
+    [RequireAdmin]
     [ProducesResponseType(typeof(LogMessageModel[]), StatusCodes.Status200OK)]
     public async Task<IActionResult> Logs([FromQuery] string? level = "All",
         [FromQuery][Range(0, 1000)] int count = 50,
@@ -561,6 +658,7 @@ public class AdminController(
     /// <response code="403">Forbidden</response>
     /// <response code="404">Participation object not found</response>
     [HttpPut("Participation/{id:int}")]
+    [RequireAdmin]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Participation(int id, [FromBody] ParticipationEditModel model,
@@ -593,6 +691,7 @@ public class AdminController(
     /// <response code="403">Forbidden</response>
     /// <response code="404">Game not found</response>
     [HttpGet("Writeups/{id:int}")]
+    [RequireAdmin]
     [ProducesResponseType(typeof(WriteupInfoModel), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Writeups(int id, CancellationToken token = default)
@@ -617,6 +716,7 @@ public class AdminController(
     /// <response code="403">Forbidden</response>
     /// <response code="404">Game not found</response>
     [HttpGet("Writeups/{id:int}/All")]
+    [RequireAdmin]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DownloadAllWriteups(int id, CancellationToken token = default)
@@ -643,6 +743,7 @@ public class AdminController(
     /// <response code="401">Unauthorized user</response>
     /// <response code="403">Forbidden</response>
     [HttpGet("Instances")]
+    [RequireAdmin]
     [ProducesResponseType(typeof(ArrayResponse<ContainerInstanceModel>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Instances(CancellationToken token = default) =>
         Ok(new ArrayResponse<ContainerInstanceModel>(await containerRepository.GetContainerInstances(token)));
@@ -659,6 +760,7 @@ public class AdminController(
     /// <response code="403">Forbidden</response>
     /// <response code="404">Container instance not found</response>
     [HttpDelete("Instances/{id:guid}")]
+    [RequireAdmin]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
@@ -688,6 +790,7 @@ public class AdminController(
     /// <response code="401">Unauthorized user</response>
     /// <response code="403">Forbidden</response>
     [HttpGet("Files")]
+    [RequireAdmin]
     [ProducesResponseType(typeof(ArrayResponse<LocalFile>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Files([FromQuery][Range(0, 500)] int count = 50, [FromQuery] int skip = 0,
         CancellationToken token = default) =>
@@ -696,4 +799,144 @@ public class AdminController(
     private IActionResult HandleIdentityError(IEnumerable<IdentityError> errors) =>
         BadRequest(new RequestResponse(errors.FirstOrDefault()?.Description ??
                                        localizer[nameof(Resources.Program.Identity_UnknownError)]));
+
+    private IQueryable<UserInfo> FilterVisibleUsers(UserInfo actor, IQueryable<UserInfo> query, int? groupId = null)
+    {
+        var roles = RolePolicy.ViewableRoles(actor.Role);
+        query = query.Where(u => roles.Contains(u.Role));
+
+        if (actor.Role < Role.Admin)
+        {
+            var visibleStudentIds = context.StudentGroupMembers
+                .Where(m => context.StudentGroupManagers.Any(gm => gm.GroupId == m.GroupId && gm.ManagerId == actor.Id))
+                .Select(m => m.StudentId);
+            query = query.Where(u => visibleStudentIds.Contains(u.Id));
+        }
+
+        if (groupId.HasValue)
+        {
+            query = query.Where(u => context.StudentGroupMembers.Any(m => m.GroupId == groupId.Value && m.StudentId == u.Id));
+        }
+
+        return query;
+    }
+
+    private async Task<bool> CanManageStudentGroup(UserInfo actor, int groupId, CancellationToken token) =>
+        actor.Role >= Role.Admin ||
+        await context.StudentGroupManagers.AnyAsync(m => m.GroupId == groupId && m.ManagerId == actor.Id, token);
+
+    private async Task<bool> CanSyncStudentGroups(UserInfo actor, UserInfo target, List<int>? groupIds, CancellationToken token)
+    {
+        if (target.Role != Role.Student || groupIds is null)
+            return true;
+
+        foreach (var groupId in groupIds.Distinct())
+            if (!await CanManageStudentGroup(actor, groupId, token))
+                return false;
+
+        return true;
+    }
+
+    private async Task<List<int>?> ResolveStudentGroupsForCreatedUser(
+        UserInfo actor,
+        Role requestedRole,
+        List<int>? groupIds,
+        CancellationToken token)
+    {
+        if (requestedRole != Role.Student || actor.Role >= Role.Admin || groupIds is { Count: > 0 })
+            return groupIds;
+
+        var group = await context.StudentGroups
+            .Include(g => g.Managers)
+            .FirstOrDefaultAsync(g => g.CreatedById == actor.Id && g.Name == "我的默认分组" && !g.IsArchived, token);
+
+        if (group is null)
+        {
+            group = new StudentGroup
+            {
+                Name = "我的默认分组",
+                Description = "系统为老师创建学生时自动维护的默认培训分组。",
+                CreatedById = actor.Id,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+            group.Managers.Add(new StudentGroupManager
+            {
+                Group = group,
+                ManagerId = actor.Id,
+                RoleInGroup = StudentGroupManagerRole.Owner,
+                AddedById = actor.Id
+            });
+            context.StudentGroups.Add(group);
+            await context.SaveChangesAsync(token);
+        }
+        else if (group.Managers.All(m => m.ManagerId != actor.Id))
+        {
+            context.StudentGroupManagers.Add(new StudentGroupManager
+            {
+                GroupId = group.Id,
+                ManagerId = actor.Id,
+                RoleInGroup = StudentGroupManagerRole.Owner,
+                AddedById = actor.Id
+            });
+            await context.SaveChangesAsync(token);
+        }
+
+        return [group.Id];
+    }
+
+    private async Task SyncStudentGroups(UserInfo actor, UserInfo target, List<int>? groupIds, CancellationToken token)
+    {
+        if (target.Role != Role.Student || groupIds is null)
+            return;
+
+        var targetIds = groupIds.Distinct().ToArray();
+
+        var memberships = await context.StudentGroupMembers
+            .Where(m => m.StudentId == target.Id)
+            .ToArrayAsync(token);
+        var manageableIds = actor.Role >= Role.Admin
+            ? memberships.Select(m => m.GroupId).ToHashSet()
+            : await context.StudentGroupManagers
+                .Where(gm => gm.ManagerId == actor.Id && memberships.Select(m => m.GroupId).Contains(gm.GroupId))
+                .Select(gm => gm.GroupId)
+                .ToHashSetAsync(token);
+        var removable = actor.Role >= Role.Admin
+            ? memberships
+            : memberships.Where(m => manageableIds.Contains(m.GroupId)).ToArray();
+
+        context.StudentGroupMembers.RemoveRange(removable.Where(m => !targetIds.Contains(m.GroupId)));
+
+        var existingIds = memberships.Select(m => m.GroupId).ToHashSet();
+        foreach (var groupId in targetIds.Where(groupId => !existingIds.Contains(groupId)))
+        {
+            context.StudentGroupMembers.Add(new StudentGroupMember
+            {
+                GroupId = groupId,
+                StudentId = target.Id,
+                AddedById = actor.Id
+            });
+        }
+    }
+
+    private async Task<Dictionary<Guid, List<UserStudentGroupModel>>> GetUserGroups(Guid[] userIds, CancellationToken token)
+    {
+        var memberships = await context.StudentGroupMembers
+            .Include(m => m.Group)
+            .Where(m => userIds.Contains(m.StudentId))
+            .ToArrayAsync(token);
+
+        return memberships
+            .GroupBy(m => m.StudentId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(m => new UserStudentGroupModel { Id = m.GroupId, Name = m.Group.Name }).ToList());
+    }
+
+    private static UserInfoModel FillUserGroups(UserInfoModel model, Dictionary<Guid, List<UserStudentGroupModel>> groups)
+    {
+        if (model.Id is { } id && groups.TryGetValue(id, out var userGroups))
+            model.StudentGroups = userGroups;
+
+        return model;
+    }
 }

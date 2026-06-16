@@ -43,7 +43,7 @@ public class ImageTemplateController : ControllerBase
     /// Upload a VM disk image file.
     /// </summary>
     [HttpPost]
-    [RequireAdmin]
+    [RequireTeacher]
     [RequestSizeLimit(60L * 1024 * 1024 * 1024)]
     public async Task<IActionResult> Upload(IFormFile file)
     {
@@ -136,7 +136,7 @@ public class ImageTemplateController : ControllerBase
     /// Import VM image from local filesystem path.
     /// </summary>
     [HttpPost("import-local")]
-    [RequireAdmin]
+    [RequireTeacher]
     public async Task<IActionResult> ImportFromLocal([FromBody] LocalImportRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.LocalPath))
@@ -180,7 +180,7 @@ public class ImageTemplateController : ControllerBase
     /// Register a Docker image template from a registry URL.
     /// </summary>
     [HttpPost("register-docker")]
-    [RequireAdmin]
+    [RequireTeacher]
     public async Task<IActionResult> RegisterDocker([FromBody] DockerRegisterRequest request, CancellationToken token)
     {
         if (!ModelState.IsValid)
@@ -238,7 +238,7 @@ public class ImageTemplateController : ControllerBase
     }
 
     [HttpGet("docker-registry")]
-    [RequireAdmin]
+    [RequireTeacher]
     public IActionResult GetDockerRegistrySettings()
     {
         return Ok(new
@@ -256,7 +256,7 @@ public class ImageTemplateController : ControllerBase
     [HttpPost("upload-docker")]
     [RequestSizeLimit(60L * 1024 * 1024 * 1024)]
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = 60L * 1024 * 1024 * 1024)]
-    [RequireAdmin]
+    [RequireTeacher]
     public async Task<IActionResult> UploadDockerArchive(
         [FromForm] IFormFile file,
         [FromForm] string name,
@@ -358,7 +358,7 @@ public class ImageTemplateController : ControllerBase
     /// </summary>
     [HttpPost("upload")]
     [RequestSizeLimit(60L * 1024 * 1024 * 1024)] // 60GB
-    [RequireAdmin]
+    [RequireTeacher]
     public async Task<IActionResult> UploadArchive(IFormFile file, CancellationToken token)
     {
         if (file is null || file.Length == 0)
@@ -407,7 +407,7 @@ public class ImageTemplateController : ControllerBase
     /// Delete an image template and its stored file.
     /// </summary>
     [HttpDelete("{id:int}")]
-    [RequireAdmin]
+    [RequireTeacher]
     public async Task<IActionResult> Delete(int id)
     {
         var template = await _context.ImageTemplates.FindAsync(id);

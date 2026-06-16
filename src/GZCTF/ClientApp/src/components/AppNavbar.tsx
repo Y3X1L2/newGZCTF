@@ -6,8 +6,7 @@ import {
 } from '@mantine/core'
 import {
   mdiAccountGroupOutline,
-  mdiChevronLeft,
-  mdiChevronRight,
+  mdiBookOpenPageVariantOutline,
   mdiFlagOutline,
   mdiHomeVariantOutline,
   mdiInformationOutline,
@@ -17,7 +16,7 @@ import {
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import cx from 'clsx'
-import React, { FC, useEffect, useState } from 'react'
+import React, { FC, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router'
 import { LogoBox } from '@Components/LogoBox'
@@ -28,13 +27,12 @@ import { ContainerPortMappingType, Role } from '@Api'
 import classes from '@Styles/AppNavbar.module.css'
 import misc from '@Styles/Misc.module.css'
 
-const navbarExpandedKey = 'gzctf:navbar-expanded'
-
 interface NavbarItem {
   icon: string
   label: string
   link: string
-  admin?: boolean
+  auth?: boolean
+  teacher?: boolean
 }
 
 export interface NavbarLinkProps {
@@ -43,7 +41,8 @@ export interface NavbarLinkProps {
   link?: string
   onClick?: () => void
   isActive?: boolean
-  expanded?: boolean
+  drawerActive?: boolean
+  navIndex?: number
 }
 
 const NavbarLink: FC<NavbarLinkProps> = (props: NavbarLinkProps) => {
@@ -55,12 +54,15 @@ const NavbarLink: FC<NavbarLinkProps> = (props: NavbarLinkProps) => {
       component={Link}
       to={props.link ?? '#'}
       aria-label={t(props.label)}
+      data-nav-index={props.navIndex}
       data-active={props.isActive || undefined}
-      data-expanded={props.expanded || undefined}
+      data-drawer={props.drawerActive || undefined}
       className={cx(classes.link, classes.navLink, 'rail-button')}
     >
-      <Icon path={props.icon} size={1} />
-      <span className={classes.navLabel}>{t(props.label)}</span>
+      <span className={classes.navIcon}>
+        <Icon path={props.icon} size={1} />
+      </span>
+      <span className={classes.drawerLabel}>{t(props.label)}</span>
     </ActionIcon>
   )
 }
@@ -70,14 +72,20 @@ export const AppNavbar: FC = () => {
 
   const { user } = useUser()
   const { config } = useConfig()
+  const isTeacherOrAbove =
+    user?.role === Role.Teacher ||
+    user?.role === Role.Monitor ||
+    user?.role === Role.Admin ||
+    user?.role === Role.SuperAdmin
 
   const items: NavbarItem[] = [
     { icon: mdiHomeVariantOutline, label: 'common.tab.home', link: '/' },
     { icon: mdiNoteTextOutline, label: 'common.tab.post', link: '/posts' },
     { icon: mdiFlagOutline, label: 'common.tab.game', link: '/games' },
     { icon: mdiAccountGroupOutline, label: 'common.tab.team', link: '/teams' },
+    { icon: mdiBookOpenPageVariantOutline, label: '培训课程', link: '/training', auth: true },
     { icon: mdiInformationOutline, label: 'common.tab.about', link: '/about' },
-    { icon: mdiWrenchOutline, label: 'common.tab.admin', link: '/admin/games', admin: true },
+    { icon: mdiWrenchOutline, label: 'common.tab.admin', link: '/admin/games', teacher: true },
   ]
 
   const getLabel = (path: string) =>
@@ -90,10 +98,8 @@ export const AppNavbar: FC = () => {
     )?.label
 
   const [active, setActive] = useState(getLabel(location.pathname) ?? '')
-  const [expanded, setExpanded] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return window.localStorage.getItem(navbarExpandedKey) === 'true'
-  })
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null)
+  const hoverFrameRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (location.pathname === '/') {
@@ -103,28 +109,77 @@ export const AppNavbar: FC = () => {
     }
   }, [location.pathname])
 
-  useEffect(() => {
-    window.localStorage.setItem(navbarExpandedKey, String(expanded))
-  }, [expanded])
-
   const visibleItems = items
-    .filter((m) => !m.admin || user?.role === Role.Admin)
-  const links = visibleItems.map((link) => (
+    .filter((m) => !m.auth || !!user)
+    .filter((m) => !m.teacher || isTeacherOrAbove)
+
+  useEffect(() => {
+    const updateNearbyItem = (pointerX: number, pointerY: number) => {
+      const buttons = Array.from(
+        document.querySelectorAll<HTMLElement>(`.${classes.navItemSection} [data-nav-index]`)
+      )
+      let nextIndex: number | null = null
+      let nearestDistance = Number.POSITIVE_INFINITY
+
+      for (const button of buttons) {
+        const rect = button.getBoundingClientRect()
+        const centerY = rect.top + rect.height / 2
+        const yDistance = Math.abs(pointerY - centerY)
+        const isInsideHotX = pointerX >= rect.left - 36 && pointerX <= rect.right + 168
+
+        if (!isInsideHotX || yDistance > 68) {
+          continue
+        }
+
+        if (yDistance < nearestDistance) {
+          nearestDistance = yDistance
+          nextIndex = Number(button.dataset.navIndex)
+        }
+      }
+
+      setHoverIndex((index) => (index === nextIndex ? index : nextIndex))
+    }
+
+    const onPointerMove = (event: PointerEvent) => {
+      if (hoverFrameRef.current) {
+        window.cancelAnimationFrame(hoverFrameRef.current)
+      }
+
+      hoverFrameRef.current = window.requestAnimationFrame(() => {
+        hoverFrameRef.current = null
+        updateNearbyItem(event.clientX, event.clientY)
+      })
+    }
+
+    window.addEventListener('pointermove', onPointerMove, { passive: true })
+
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove)
+
+      if (hoverFrameRef.current) {
+        window.cancelAnimationFrame(hoverFrameRef.current)
+        hoverFrameRef.current = null
+      }
+    }
+  }, [visibleItems.length])
+
+  const links = visibleItems.map((link, index) => (
     <NavbarLink
       key={link.label}
       {...link}
       isActive={link.label === active}
-      expanded={expanded}
+      drawerActive={hoverIndex !== null && Math.abs(index - hoverIndex) <= 1}
+      navIndex={index}
     />
   ))
 
   return (
-    <AppShell.Navbar className={classes.navbar} data-expanded={expanded || undefined}>
+    <AppShell.Navbar className={classes.navbar}>
       <AppShell.Section className={classes.brandSection}>
         <LogoBox size="58px" className={classes.logo} component={Link} to="/" />
       </AppShell.Section>
 
-      <AppShell.Section className={classes.section}>
+      <AppShell.Section className={cx(classes.section, classes.navItemSection)}>
         {links}
       </AppShell.Section>
 
@@ -134,13 +189,8 @@ export const AppNavbar: FC = () => {
           {config.portMapping === ContainerPortMappingType.PlatformProxy && (
             <Popover position="right" offset={24} width={320}>
               <Popover.Target>
-                <ActionIcon
-                  aria-label="平台代理服务"
-                  className={cx(classes.link, classes.navLink, 'rail-button')}
-                  data-expanded={expanded || undefined}
-                >
+                <ActionIcon className={cx(classes.link, 'rail-button')}>
                   <Icon path={mdiTransitConnectionVariant} size={1} />
-                  <span className={classes.navLabel}>{'代理服务'}</span>
                 </ActionIcon>
               </Popover.Target>
               <Popover.Dropdown>
@@ -148,15 +198,7 @@ export const AppNavbar: FC = () => {
               </Popover.Dropdown>
             </Popover>
           )}
-          <ActionIcon
-            aria-label={expanded ? '收起侧边栏' : '展开侧边栏'}
-            className={cx(classes.link, classes.navLink, 'rail-button')}
-            data-expanded={expanded || undefined}
-            onClick={() => setExpanded((value) => !value)}
-          >
-            <Icon path={expanded ? mdiChevronLeft : mdiChevronRight} size={0.92} />
-            <span className={classes.navLabel}>{expanded ? '收起侧栏' : '展开侧栏'}</span>
-          </ActionIcon>
+
         </Stack>
       </AppShell.Section>
     </AppShell.Navbar>

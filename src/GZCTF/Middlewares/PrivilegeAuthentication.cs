@@ -58,7 +58,7 @@ public class RequirePrivilegeAttribute(Role privilege, bool allowToken = false) 
         if (user.Role >= privilege)
             return;
 
-        if (privilege > Role.User)
+        if (privilege > Role.Student)
             logger.Log(
                 StaticLocalizer[nameof(Resources.Program.Auth_PathAccessForbidden),
                     context.HttpContext.Request.Path], user,
@@ -72,17 +72,32 @@ public class RequirePrivilegeAttribute(Role privilege, bool allowToken = false) 
 /// <summary>
 /// User required
 /// </summary>
-public class RequireUserAttribute() : RequirePrivilegeAttribute(Role.User);
+public class RequireUserAttribute() : RequirePrivilegeAttribute(Role.Student);
+
+/// <summary>
+/// Student role required
+/// </summary>
+public class RequireStudentAttribute() : RequirePrivilegeAttribute(Role.Student);
 
 /// <summary>
 /// Monitor role required
 /// </summary>
-public class RequireMonitorAttribute() : RequirePrivilegeAttribute(Role.Monitor);
+public class RequireMonitorAttribute() : RequirePrivilegeAttribute(Role.Teacher);
+
+/// <summary>
+/// Teacher role required
+/// </summary>
+public class RequireTeacherAttribute() : RequirePrivilegeAttribute(Role.Teacher);
 
 /// <summary>
 /// Admin privilege required
 /// </summary>
 public class RequireAdminAttribute() : RequirePrivilegeAttribute(Role.Admin);
+
+/// <summary>
+/// Super administrator privilege required
+/// </summary>
+public class RequireSuperAdminAttribute() : RequirePrivilegeAttribute(Role.SuperAdmin);
 
 /// <summary>
 /// Admin privilege required, but allow token authentication

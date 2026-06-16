@@ -63,49 +63,94 @@
 .navLink {
   position: relative;
   overflow: hidden !important;
-  flex: 0 0 auto;
-  gap: 0;
-  justify-content: center !important;
-  text-align: left;
+  isolation: isolate;
+  transform: translateZ(0);
+  will-change: transform, color, border-color, background;
 }
 
-.navLabel {
-  display: block;
-  max-width: 0;
-  overflow: hidden;
-  color: rgba(238, 255, 247, 0.94);
-  font-size: 0.86rem;
-  font-weight: 860;
+.drawerLabel {
+  position: absolute;
+  inset: 0;
+  left: 0;
+  top: 50%;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0 0.32rem;
+  border: 0;
+  border-radius: inherit;
+  color: rgba(238, 255, 247, 0.96);
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  font-size: 0.72rem;
+  font-weight: 900;
   line-height: 1;
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  transform: translateX(-0.32rem);
+  transform: translate(-112%, -50%);
+  transform-origin: left center;
+  will-change: transform, opacity;
   transition:
-    max-width 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    opacity 150ms ease,
-    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    opacity 160ms ease,
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.link[data-expanded] .navLabel {
-  max-width: 9rem;
-  opacity: 1;
+.drawerLabel::before {
+  display: none;
+}
+
+.navIcon {
+  position: relative;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  line-height: 0;
   transform: translateX(0);
+  opacity: 1;
+  will-change: transform, opacity;
+  transition:
+    opacity 160ms ease,
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.link[data-drawer] .drawerLabel {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+
+.link[data-drawer] .navIcon {
+  opacity: 0;
+  transform: translateX(132%);
+}
+
+.link[data-drawer] {
+  color: rgba(223, 255, 242, 0.98);
+  border-color: rgba(107, 238, 177, 0.32);
+  background:
+    radial-gradient(ellipse at 50% 32%, rgba(107, 238, 177, 0.18), transparent 58%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.076), rgba(255, 255, 255, 0.018)),
+    rgba(7, 18, 14, 0.34);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 0.85rem 1.8rem rgba(107, 238, 177, 0.065);
 }
 
 .navbar {
-  --yy-navbar-collapsed-width: 78px;
-  --yy-navbar-expanded-width: 218px;
-
   position: fixed;
   isolation: isolate;
-  overflow: hidden;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.58rem;
-  width: var(--yy-navbar-collapsed-width) !important;
-  min-width: var(--yy-navbar-collapsed-width) !important;
   padding: 0.72rem 0.54rem 0.9rem;
   border: none;
   box-shadow: 0 1.25rem 4rem rgba(0, 0, 0, 0.32);
@@ -113,22 +158,10 @@
     linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.012)),
     radial-gradient(ellipse at 50% 4%, rgba(107, 238, 177, 0.075), transparent 20rem), rgba(6, 7, 7, 0.76);
   backdrop-filter: blur(18px);
-  transition:
-    width 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    min-width 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 180ms ease;
 
   @media (max-width: $mantine-breakpoint-xs) {
     display: none;
   }
-}
-
-.navbar[data-expanded] {
-  width: var(--yy-navbar-expanded-width) !important;
-  min-width: var(--yy-navbar-expanded-width) !important;
-  box-shadow:
-    1rem 0 3.4rem rgba(0, 0, 0, 0.34),
-    0 0 2.2rem rgba(107, 238, 177, 0.055);
 }
 
 .navbar::before,
@@ -179,59 +212,18 @@
   z-index: 1;
 }
 
-.navbar[data-expanded] .section {
-  align-items: stretch;
-}
-
-.navbar[data-expanded] .navLink {
-  width: 100% !important;
-  padding: 0 0.78rem;
-  justify-content: flex-start !important;
-  justify-items: flex-start !important;
-}
-
-.navbar[data-expanded] .navLink :global(.mantine-ActionIcon-icon) {
-  width: 100%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0.78rem;
-}
-
-.navbar[data-expanded] .navLink svg,
-.navLink svg {
-  flex: 0 0 auto;
-  margin-left: 0;
-}
-
-.navbar[data-expanded] .navLink svg {
-  position: static !important;
-  margin-inline: 0 !important;
-  transform: none !important;
-}
-
-.navbar[data-expanded] .navLink .navLabel {
-  position: static !important;
-  flex: 0 1 auto;
-  margin-inline: 0 !important;
-  transform: none !important;
+.navItemSection {
+  isolation: isolate;
 }
 
 .brandSection {
   width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.46rem;
+  display: grid;
+  place-items: center;
   flex: 0 0 auto;
   padding: 0 0 0.28rem;
   position: relative;
   z-index: 1;
-}
-
-.navbar[data-expanded] .brandSection {
-  justify-content: center;
 }
 
 .utilitySection {

@@ -202,11 +202,10 @@ export const useGameScreenData = (numId: number) => {
   const scoreboardRefreshRef = useRef(0)
 
   const { game } = useAdminGame(numId)
-  const isTestMode = game?.isTest ?? false
   const statusInfo = getGameStatus(game)
-  const canLoadScoreboard = numId > 0 && !!game && !isTestMode && statusInfo.status !== GameStatus.Coming
-  const canLoadMonitor = numId > 0 && !!game && !isTestMode && statusInfo.status !== GameStatus.Coming
-  const canLoadParticipations = numId > 0 && !!game && !isTestMode
+  const canLoadScoreboard = numId > 0 && !!game && statusInfo.status !== GameStatus.Coming
+  const canLoadMonitor = numId > 0 && !!game && statusInfo.status !== GameStatus.Coming
+  const canLoadParticipations = numId > 0 && !!game
 
   const { data: liveScoreboard, mutate: mutateScoreboard } = api.game.useGameScoreboard(
     numId,
@@ -244,17 +243,15 @@ export const useGameScreenData = (numId: number) => {
     scoreboardSnapshotRef.current = new Map()
     setRankDeltaMap(new Map())
     setScoreDeltaMap(new Map())
-  }, [isTestMode, numId])
+  }, [numId])
 
   useEffect(() => {
-    if (isTestMode) return
     if (initialEvents) setLiveEvents(trimList(initialEvents, MAX_EVENTS))
-  }, [initialEvents, isTestMode])
+  }, [initialEvents])
 
   useEffect(() => {
-    if (isTestMode) return
     if (initialSubmissions) setLiveSubmissions(trimList(initialSubmissions, MAX_SUBMISSIONS))
-  }, [initialSubmissions, isTestMode])
+  }, [initialSubmissions])
 
   useEffect(() => {
     if (!scoreboard?.items) return
@@ -276,7 +273,7 @@ export const useGameScreenData = (numId: number) => {
   }, [scoreboard?.items, scoreboard?.updateTimeUtc])
 
   useEffect(() => {
-    if (isTestMode || statusInfo.status !== GameStatus.OnGoing || numId <= 0) return
+    if (statusInfo.status !== GameStatus.OnGoing || numId <= 0) return
 
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(`/hub/monitor?game=${numId}`)
@@ -308,7 +305,7 @@ export const useGameScreenData = (numId: number) => {
     return () => {
       void connection.stop()
     }
-  }, [isTestMode, mutateScoreboard, numId, statusInfo.status])
+  }, [mutateScoreboard, numId, statusInfo.status])
 
   const acceptedParticipations = useMemo(
     () => (participations ?? []).filter((item) => item.status === ParticipationStatus.Accepted),
@@ -843,7 +840,6 @@ export const useGameScreenData = (numId: number) => {
   return {
     game,
     now,
-    isTestMode,
     scoreboard,
     phaseLabel,
     countdownLabel,

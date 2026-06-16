@@ -203,9 +203,12 @@ export enum TaskStatus {
 /** User role enumeration */
 export enum Role {
   Banned = "Banned",
+  Student = "Student",
+  Teacher = "Teacher",
   User = "User",
   Monitor = "Monitor",
   Admin = "Admin",
+  SuperAdmin = "SuperAdmin",
 }
 
 /** Login response status */
@@ -543,6 +546,16 @@ export interface UserInfoModel {
   role?: Role | null;
   /** Is email confirmed (can log in) */
   emailConfirmed?: boolean | null;
+  /** Training student groups */
+  studentGroups?: UserStudentGroupModel[];
+}
+
+export interface UserStudentGroupModel {
+  /**
+   * @format int32
+   */
+  id?: number;
+  name?: string | null;
 }
 
 /** Batch user creation (Admin) */
@@ -584,6 +597,10 @@ export interface UserCreateModel {
    * @maxLength 20
    */
   teamName?: string | null;
+  /** Role assigned to the user */
+  assignedRole?: Role | null;
+  /** Student groups to join after creation */
+  studentGroupIds?: number[] | null;
 }
 
 /** List response */
@@ -691,6 +708,8 @@ export interface AdminUserInfoModel {
   emailConfirmed?: boolean | null;
   /** User role */
   role?: Role | null;
+  /** Student groups to sync */
+  studentGroupIds?: number[] | null;
 }
 
 /** Log information (Admin) */
@@ -3428,6 +3447,12 @@ export class Api<
          * @default 0
          */
         skip?: number;
+        role?: Role;
+        /**
+         * @format int32
+         */
+        groupId?: number;
+        keyword?: string;
       },
       params: RequestParams = {},
     ) =>
@@ -3460,6 +3485,12 @@ export class Api<
          * @default 0
          */
         skip?: number;
+        role?: Role;
+        /**
+         * @format int32
+         */
+        groupId?: number;
+        keyword?: string;
       },
       options?: SWRConfiguration,
       doFetch: boolean = true,
@@ -3491,6 +3522,12 @@ export class Api<
          * @default 0
          */
         skip?: number;
+        role?: Role;
+        /**
+         * @format int32
+         */
+        groupId?: number;
+        keyword?: string;
       },
       data?:
         | ArrayResponseOfUserInfoModel

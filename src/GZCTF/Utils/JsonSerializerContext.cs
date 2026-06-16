@@ -7,6 +7,7 @@ using GZCTF.Models.Request.Admin;
 using GZCTF.Models.Request.Edit;
 using GZCTF.Models.Request.Game;
 using GZCTF.Models.Request.Info;
+using GZCTF.Models.Request.Training;
 using GZCTF.Services.Container.Provider;
 using Namotion.Reflection;
 using NJsonSchema;
@@ -31,6 +32,36 @@ namespace GZCTF.Utils;
 [JsonSerializable(typeof(ConfigEditModel))]
 [JsonSerializable(typeof(ArrayResponse<UserInfoModel>))]
 [JsonSerializable(typeof(ArrayResponse<TeamInfoModel>))]
+[JsonSerializable(typeof(TeamJoinRequestCreateModel))]
+[JsonSerializable(typeof(TeamJoinRequestReviewModel))]
+[JsonSerializable(typeof(TeamJoinRequestModel))]
+[JsonSerializable(typeof(TeamJoinRequestModel[]))]
+[JsonSerializable(typeof(StudentGroupEditModel))]
+[JsonSerializable(typeof(StudentGroupMemberEditModel))]
+[JsonSerializable(typeof(StudentGroupManagerEditModel))]
+[JsonSerializable(typeof(StudentGroupBriefModel))]
+[JsonSerializable(typeof(StudentGroupBriefModel[]))]
+[JsonSerializable(typeof(StudentGroupDetailModel))]
+[JsonSerializable(typeof(TrainingDirectionEditModel))]
+[JsonSerializable(typeof(TrainingDirectionModel))]
+[JsonSerializable(typeof(TrainingDirectionModel[]))]
+[JsonSerializable(typeof(TrainingModuleEditModel))]
+[JsonSerializable(typeof(TrainingModuleModel))]
+[JsonSerializable(typeof(TrainingModuleModel[]))]
+[JsonSerializable(typeof(TrainingModuleVisibilityEditModel[]))]
+[JsonSerializable(typeof(TrainingOverviewModel))]
+[JsonSerializable(typeof(TrainingCtfChallengeDetailModel))]
+[JsonSerializable(typeof(FlagStepInfo))]
+[JsonSerializable(typeof(TrainingModuleChallengeModel[]))]
+[JsonSerializable(typeof(TrainingSubmitResultModel))]
+[JsonSerializable(typeof(TheoryTrainingPlanEditModel))]
+[JsonSerializable(typeof(TheoryTrainingPlanModel))]
+[JsonSerializable(typeof(TheoryTrainingSessionSubmitModel))]
+[JsonSerializable(typeof(TheoryTrainingSessionModel))]
+[JsonSerializable(typeof(TrainingGroupStatsModel))]
+[JsonSerializable(typeof(TrainingGroupStatsModel[]))]
+[JsonSerializable(typeof(TrainingStudentProgressModel))]
+[JsonSerializable(typeof(TrainingStudentProgressModel[]))]
 [JsonSerializable(typeof(LogMessageModel[]))]
 [JsonSerializable(typeof(WriteupInfoModel[]))]
 [JsonSerializable(typeof(ArrayResponse<ContainerInstanceModel>))]
