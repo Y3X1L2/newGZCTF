@@ -17,7 +17,6 @@ import React, { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { AdminPage } from '@Components/admin/AdminPage'
-import { YinyuRouteProgress, YinyuRouteTransition } from '@Components/yinyu/YinyuUI'
 import { useAdminGame } from '@Hooks/useGame'
 import api, { GameType } from '@Api'
 import misc from '@Styles/Misc.module.css'
@@ -30,7 +29,7 @@ export interface GameEditTabProps extends React.PropsWithChildren {
   backUrl?: string
 }
 
-export const WithGameEditTab: FC<GameEditTabProps> = ({ children, isLoading, contentPos, head, backUrl, ...others }) => {
+export const WithGameEditTab: FC<GameEditTabProps> = ({ children, contentPos, head, backUrl, ...others }) => {
   const navigate = useNavigate()
   const location = useLocation()
   const { id } = useParams()
@@ -71,7 +70,6 @@ export const WithGameEditTab: FC<GameEditTabProps> = ({ children, isLoading, con
   const getTab = (path: string) => pages.find((page) => path.includes(page.path))
 
   const [activeTab, setActiveTab] = useState(getTab(location.pathname)?.path ?? pages[0].path)
-  const activeEditPage = pages.find((page) => page.path === activeTab) ?? pages[0]
 
   useEffect(() => {
     if (!game) return
@@ -125,14 +123,8 @@ export const WithGameEditTab: FC<GameEditTabProps> = ({ children, isLoading, con
         </Tabs>
         <Stack pos="relative" className="panel-card admin-panel large yy-game-edit-panel">
           <div key={activeTab} className="yy-admin-route-stage yy-game-edit-route-stage">
-            <YinyuRouteProgress className="yy-admin-route-pulse" />
             {children}
           </div>
-          {isLoading ? (
-            <div className="yy-admin-transition-overlay" role="status" aria-live="polite">
-              <YinyuRouteTransition title={activeEditPage.title} description="正在加载赛事配置" />
-            </div>
-          ) : null}
         </Stack>
       </div>
     </AdminPage>

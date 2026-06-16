@@ -649,7 +649,7 @@
   color: #03100b;
 }
 
-/* Admin route transition: design-lab signal sweep instead of the legacy plain fade. */
+/* Admin route surfaces. Route transition overlays were removed to avoid stale loading dots. */
 .yy-admin-shell .admin-main,
 .yy-game-edit-panel {
   position: relative;
@@ -661,7 +661,7 @@
 .yy-game-edit-nav,
 .yy-game-edit-panel > .mantine-Stack-root,
 .yy-game-edit-panel > form,
-.yy-game-edit-panel > div:not(.yy-admin-transition-overlay) {
+.yy-game-edit-panel > div {
   position: relative;
   z-index: 3;
 }
@@ -699,37 +699,11 @@
   position: relative;
   min-width: 0;
   isolation: isolate;
-  animation: yy-admin-route-enter 440ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.yy-admin-route-stage > :not(.yy-admin-route-pulse) {
+.yy-admin-route-stage > * {
   position: relative;
-  z-index: 3;
-}
-
-.yy-admin-route-stage > .yy-admin-route-pulse {
-  position: absolute;
-  inset: 0.5rem auto auto 0.7rem;
-  z-index: 0;
-  width: min(12rem, calc(100% - 1.4rem));
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(-0.18rem);
-  animation: yy-admin-route-transition 920ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.yy-admin-transition-overlay .route-loader {
-  min-height: 3.18rem;
-}
-
-.yy-admin-route-pulse,
-.yy-admin-transition-overlay .route-progress {
-  grid-template-columns: repeat(18, minmax(0, 0.48rem));
-}
-
-.yy-admin-route-pulse i,
-.yy-admin-transition-overlay .route-progress i {
-  box-shadow: 0 0 0.86rem rgba(107, 238, 177, 0.12);
+  z-index: 1;
 }
 
 .yy-game-edit-grid {
@@ -792,149 +766,6 @@
 @media (max-width: 64em) {
   .yy-game-edit-grid {
     grid-template-columns: 1fr;
-  }
-}
-
-.yy-admin-route-stage::before,
-.yy-admin-route-stage::after {
-  content: '';
-  position: absolute;
-  inset: -0.25rem;
-  z-index: 0;
-  pointer-events: none;
-}
-
-.yy-admin-route-stage::before {
-  background:
-    linear-gradient(90deg, transparent, rgba(107, 238, 177, 0.18), transparent),
-    var(--yy-hex-flow);
-  background-size:
-    auto,
-    1.05rem 0.91rem;
-  opacity: 0;
-  transform: translateX(-112%);
-  animation: yy-admin-route-sweep 680ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  mix-blend-mode: screen;
-}
-
-.yy-admin-route-stage::after {
-  border: 1px solid rgba(107, 238, 177, 0.16);
-  background:
-    radial-gradient(ellipse at 14% 8%, rgba(107, 238, 177, 0.1), transparent 32%),
-    radial-gradient(ellipse at 86% 92%, rgba(107, 238, 177, 0.07), transparent 36%);
-  opacity: 0;
-  animation: yy-admin-route-frame 720ms ease-out both;
-}
-
-.yy-admin-transition-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 30;
-  display: grid;
-  place-items: center;
-  padding: clamp(1rem, 3vw, 2rem);
-  background:
-    radial-gradient(ellipse at 50% 28%, rgba(107, 238, 177, 0.11), transparent 28rem),
-    linear-gradient(180deg, rgba(0, 0, 0, 0.38), rgba(0, 0, 0, 0.64));
-  backdrop-filter: blur(0.34rem);
-}
-
-.yy-admin-transition-overlay .route-loader {
-  min-width: min(27rem, calc(100vw - 4rem));
-  border-color: rgba(107, 238, 177, 0.24);
-  background:
-    radial-gradient(ellipse at 20% 18%, rgba(107, 238, 177, 0.14), transparent 42%),
-    var(--yy-hex-flow),
-    rgba(4, 6, 6, 0.82);
-  background-size:
-    auto,
-    1rem 0.866rem,
-    auto;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.035),
-    0 1.4rem 4rem rgba(0, 0, 0, 0.42),
-    0 0 2rem rgba(107, 238, 177, 0.14);
-}
-
-.yy-admin-transition-overlay .yy-route-transition {
-  width: min(27rem, calc(100vw - 4rem));
-}
-
-@keyframes yy-admin-route-enter {
-  0% {
-    opacity: 0.66;
-    filter: saturate(0.82) brightness(0.9);
-  }
-  58% {
-    opacity: 1;
-    filter: saturate(1.06) brightness(1.05);
-  }
-  100% {
-    opacity: 1;
-    filter: none;
-  }
-}
-
-@keyframes yy-admin-route-transition {
-  0% {
-    opacity: 0;
-    transform: translateY(-0.32rem);
-  }
-  12% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  68% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-0.16rem);
-  }
-}
-
-@keyframes yy-admin-route-sweep {
-  0% {
-    opacity: 0;
-    transform: translateX(-112%);
-  }
-  24% {
-    opacity: 0.72;
-  }
-  72% {
-    opacity: 0.42;
-  }
-  100% {
-    opacity: 0;
-    transform: translateX(112%);
-  }
-}
-
-@keyframes yy-admin-route-frame {
-  0% {
-    opacity: 0;
-    transform: scaleX(0.985);
-  }
-  35% {
-    opacity: 0.55;
-  }
-  100% {
-    opacity: 0;
-    transform: scaleX(1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .yy-admin-route-stage,
-  .yy-admin-route-stage::before,
-  .yy-admin-route-stage::after,
-  .yy-admin-route-stage > .yy-admin-route-pulse {
-    animation: none !important;
-  }
-
-  .yy-admin-route-stage > .yy-admin-route-pulse {
-    display: none;
   }
 }
 
@@ -6729,4 +6560,132 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
   max-height: calc(100dvh - 16rem);
   overflow: auto;
   scrollbar-width: thin;
+}
+
+/* Team workspace: user-facing team center with local team list and single-team score curve. */
+.yy-team-workspace {
+  width: min(100%, var(--container));
+}
+
+.yy-team-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(18rem, 22rem) minmax(0, 1fr);
+  gap: clamp(1rem, 1.7vw, 1.45rem);
+  align-items: start;
+}
+
+.yy-team-sidebar.panel-card,
+.yy-team-detail-panel.panel-card,
+.yy-team-score-panel.panel-card {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(107, 238, 177, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.072), rgba(255, 255, 255, 0.028)),
+    rgba(7, 10, 10, 0.74);
+  backdrop-filter: blur(1rem);
+}
+
+.yy-team-sidebar {
+  display: grid;
+  gap: 1rem;
+  padding: clamp(1rem, 1.6vw, 1.35rem);
+  min-height: min(42rem, calc(100dvh - 8rem));
+}
+
+.yy-team-sidebar-head {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.yy-team-sidebar-head .yy-brand-title {
+  margin: 0;
+  font-size: clamp(2.4rem, 4vw, 4.2rem);
+  line-height: 0.92;
+}
+
+.yy-team-sidebar-actions {
+  display: grid;
+  gap: 0.62rem;
+}
+
+.yy-team-sidebar-list {
+  display: grid;
+  align-content: start;
+  gap: 0.62rem;
+}
+
+.yy-team-sidebar-list .yy-team-switch-card {
+  width: 100%;
+}
+
+.yy-team-main {
+  display: grid;
+  gap: clamp(1rem, 1.6vw, 1.35rem);
+  min-width: 0;
+}
+
+.yy-team-detail-panel,
+.yy-team-score-panel {
+  padding: clamp(1rem, 1.55vw, 1.45rem);
+}
+
+.yy-team-section-head {
+  margin-bottom: 1rem;
+}
+
+.yy-team-section-head h2 {
+  margin: 0.12rem 0 0;
+  font-size: clamp(1.45rem, 2vw, 2.15rem);
+}
+
+.yy-team-profile-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(16rem, 0.75fr);
+  gap: 0.95rem;
+  align-items: stretch;
+}
+
+.yy-team-current-compact {
+  margin: 0;
+  padding: 0.95rem;
+  border: 1px solid rgba(107, 238, 177, 0.13);
+  border-radius: var(--yy-radius-lg);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.yy-team-current-compact h3 {
+  margin: 0;
+}
+
+.yy-team-member-summary-compact {
+  grid-template-columns: 1fr;
+  margin: 0;
+}
+
+.yy-team-roster-grid {
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  margin-top: 1rem;
+}
+
+.yy-team-score-select {
+  min-width: min(18rem, 100%);
+}
+
+.yy-team-score-empty {
+  min-height: 20rem;
+  border: 1px dashed rgba(107, 238, 177, 0.18);
+  border-radius: var(--yy-radius-lg);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+@media (max-width: 72em) {
+  .yy-team-workspace-grid,
+  .yy-team-profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .yy-team-sidebar {
+    min-height: auto;
+  }
 }

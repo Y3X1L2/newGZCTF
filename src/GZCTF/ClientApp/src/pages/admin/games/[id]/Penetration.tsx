@@ -732,7 +732,7 @@ const BuilderInner: FC = () => {
       setConfig(saved)
       setSelectedTarget(remapSelectedTarget(selectedTarget, outgoing, saved))
       syncFlowWithTemplates(saved)
-      const planRes = await penetrationAdminApi.plan(gameId)
+      const planRes = await penetrationAdminApi.plan(gameId, saved)
       setPlan(planRes.data)
       if (!silent) showNotification({ color: 'teal', message: '渗透编排已保存', icon: <Icon path={mdiCheck} size={1} /> })
       return saved
@@ -747,12 +747,13 @@ const BuilderInner: FC = () => {
   const runAction = async (kind: 'validate' | 'plan' | 'publish' | 'deploy' | 'stop') => {
     setLoading(true)
     try {
+      let saved: PenetrationConfigModel | undefined
       if (kind !== 'stop') {
-        const saved = await save(true, false)
+        saved = await save(true, false)
         if (!saved) return
       }
       if (kind === 'validate' || kind === 'plan') {
-        const res = await penetrationAdminApi.plan(gameId)
+        const res = await penetrationAdminApi.plan(gameId, saved)
         setPlan(res.data)
         showNotification({
           color: res.data.validation.valid ? 'teal' : 'yellow',

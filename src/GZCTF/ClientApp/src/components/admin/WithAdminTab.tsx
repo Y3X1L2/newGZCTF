@@ -14,7 +14,7 @@ import { Icon } from '@mdi/react'
 import React, { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router'
-import { YinyuHexField, YinyuRouteProgress, YinyuRouteTransition } from '@Components/yinyu/YinyuUI'
+import { YinyuHexField } from '@Components/yinyu/YinyuUI'
 import { usePageTitle } from '@Hooks/usePageTitle'
 
 export interface AdminTabProps extends React.PropsWithChildren {
@@ -23,7 +23,7 @@ export interface AdminTabProps extends React.PropsWithChildren {
   headProps?: GroupProps
 }
 
-export const WithAdminTab: FC<AdminTabProps> = ({ head, headProps, isLoading, children }) => {
+export const WithAdminTab: FC<AdminTabProps> = ({ head, headProps, children }) => {
   const navigate = useNavigate()
   const location = useLocation()
   const { t } = useTranslation()
@@ -97,14 +97,8 @@ export const WithAdminTab: FC<AdminTabProps> = ({ head, headProps, isLoading, ch
           </Group>
         ) : null}
         <div key={activePage.path} className="yy-admin-route-stage">
-          <YinyuRouteProgress className="yy-admin-route-pulse" />
           {children}
         </div>
-        {isLoading ? (
-          <div className="yy-admin-transition-overlay" role="status" aria-live="polite">
-            <YinyuRouteTransition title="YINYU ADMIN" description="正在读取管理数据" />
-          </div>
-        ) : null}
       </section>
     </div>
   )

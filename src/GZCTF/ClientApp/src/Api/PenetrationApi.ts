@@ -407,17 +407,21 @@ export const penetrationAdminApi = {
       format: 'json',
       ...params,
     }),
-  validate: (gameId: number, params: RequestParams = {}) =>
+  validate: (gameId: number, data?: PenetrationConfigModel, params: RequestParams = {}) =>
     request<PenetrationValidationModel, RequestResponse>({
       path: `/api/admin/pentest/games/${gameId}/validate`,
       method: 'POST',
+      body: data,
+      type: data ? json : undefined,
       format: 'json',
       ...params,
     }),
-  plan: (gameId: number, params: RequestParams = {}) =>
+  plan: (gameId: number, data?: PenetrationConfigModel, params: RequestParams = {}) =>
     request<PenetrationPlanModel, RequestResponse>({
       path: `/api/admin/pentest/games/${gameId}/plan`,
       method: 'POST',
+      body: data,
+      type: data ? json : undefined,
       format: 'json',
       ...params,
     }),

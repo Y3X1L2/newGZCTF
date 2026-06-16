@@ -5,6 +5,7 @@ using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace GZCTF.Controllers;
 
@@ -33,33 +34,47 @@ public class PenetrationAdminController(
     [HttpPut("games/{gameId:int}")]
     [ProducesResponseType(typeof(PenetrationConfigModel), StatusCodes.Status200OK)]
     public async Task<IActionResult> SaveConfig([FromRoute] int gameId,
-        [FromBody] PenetrationConfigModel model, CancellationToken token)
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] PenetrationConfigModel? model,
+        CancellationToken token)
     {
         var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
         if (validation.Result is not null)
             return validation.Result;
+
+        if (model is null)
+            return BadRequest(new RequestResponse("渗透编排配置不能为空。"));
 
         return Ok(await penetrationService.SaveConfig(gameId, model, token));
     }
 
     [HttpPost("games/{gameId:int}/validate")]
     [ProducesResponseType(typeof(PenetrationValidationModel), StatusCodes.Status200OK)]
-    public async Task<IActionResult> Validate([FromRoute] int gameId, CancellationToken token)
+    public async Task<IActionResult> Validate([FromRoute] int gameId,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] PenetrationConfigModel? model,
+        CancellationToken token)
     {
         var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
         if (validation.Result is not null)
             return validation.Result;
+
+        if (model is not null)
+            await penetrationService.SaveConfig(gameId, model, token);
 
         return Ok(await penetrationService.Validate(gameId, token));
     }
 
     [HttpPost("games/{gameId:int}/plan")]
     [ProducesResponseType(typeof(PenetrationPlanModel), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetPlan([FromRoute] int gameId, CancellationToken token)
+    public async Task<IActionResult> GetPlan([FromRoute] int gameId,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] PenetrationConfigModel? model,
+        CancellationToken token)
     {
         var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
         if (validation.Result is not null)
             return validation.Result;
+
+        if (model is not null)
+            await penetrationService.SaveConfig(gameId, model, token);
 
         return Ok(await penetrationService.GetPlan(gameId, token));
     }

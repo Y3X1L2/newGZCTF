@@ -264,20 +264,19 @@ export const useCTFScreenData = (numId: number) => {
   const challengeCategoryLabelMap = useChallengeCategoryLabelMap()
 
   const { game } = useAdminGame(numId)
-  const isTestMode = game?.isTest ?? false
   const statusInfo = getGameStatus(game)
-  const canLoadScoreboard = numId > 0 && !!game && !isTestMode && statusInfo.status !== GameStatus.Coming
-  const canLoadMonitor = numId > 0 && !!game && !isTestMode && statusInfo.status !== GameStatus.Coming
-  const canLoadParticipations = numId > 0 && !!game && !isTestMode
+  const canLoadScoreboard = numId > 0 && !!game && statusInfo.status !== GameStatus.Coming
+  const canLoadMonitor = numId > 0 && !!game && statusInfo.status !== GameStatus.Coming
+  const canLoadParticipations = numId > 0 && !!game
   const isCtfScoreGame =
     game?.gameType === GameType.Jeopardy || game?.gameType === GameType.AWDP || game?.gameType === GameType.Mixed
   const isTheoryScoreGame = game?.gameType === GameType.Theory || game?.gameType === GameType.Mixed
   const isAwdpScoreGame = game?.gameType === GameType.AWDP || game?.gameType === GameType.Mixed
   const isPentestScoreGame = game?.gameType === GameType.Penetration || game?.gameType === GameType.Mixed
-  const canLoadCtfMeta = numId > 0 && !!game && !isTestMode && isCtfScoreGame
+  const canLoadCtfMeta = numId > 0 && !!game && isCtfScoreGame
   const canLoadTheoryScoreboard = canLoadScoreboard && isTheoryScoreGame
-  const canLoadTheoryMeta = numId > 0 && !!game && !isTestMode && isTheoryScoreGame
-  const canLoadAwdpMeta = numId > 0 && !!game && !isTestMode && isAwdpScoreGame
+  const canLoadTheoryMeta = numId > 0 && !!game && isTheoryScoreGame
+  const canLoadAwdpMeta = numId > 0 && !!game && isAwdpScoreGame
   const canLoadAwdpScoreboard = canLoadScoreboard && isAwdpScoreGame
   const canLoadPentestScoreboard = canLoadScoreboard && isPentestScoreGame
 
@@ -574,14 +573,12 @@ export const useCTFScreenData = (numId: number) => {
 
   // Initialize events and submissions
   useEffect(() => {
-    if (isTestMode) return
     if (initialEvents) setLiveEvents(initialEvents.slice(0, MAX_EVENTS))
-  }, [initialEvents, isTestMode])
+  }, [initialEvents])
 
   useEffect(() => {
-    if (isTestMode) return
     if (initialSubmissions) setLiveSubmissions(initialSubmissions.slice(0, MAX_SUBMISSIONS))
-  }, [initialSubmissions, isTestMode])
+  }, [initialSubmissions])
 
   useEffect(() => {
     void loadTheoryScoreboard()
@@ -639,9 +636,9 @@ export const useCTFScreenData = (numId: number) => {
     setPrevRankMap(nextPrevRank)
   }, [scoreItems, scoreboard?.updateTimeUtc])
 
-  // SignalR connection (only for non-test mode and ongoing games)
+  // SignalR connection for ongoing games.
   useEffect(() => {
-    if (isTestMode || statusInfo.status !== GameStatus.OnGoing || numId <= 0) return
+    if (statusInfo.status !== GameStatus.OnGoing || numId <= 0) return
 
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(`/hub/monitor?game=${numId}`)
@@ -678,7 +675,7 @@ export const useCTFScreenData = (numId: number) => {
     return () => {
       void connection.stop()
     }
-  }, [isTestMode, loadAwdpData, mutateScoreboard, numId, statusInfo.status])
+  }, [loadAwdpData, mutateScoreboard, numId, statusInfo.status])
 
   // ─── Derived Data (matching Ctfscreen format) ────────────────────────────────
 
