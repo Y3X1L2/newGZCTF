@@ -646,6 +646,13 @@ export const trainingCourseApi = {
       query: { chapterId },
     }),
 
+  extendContainer: (courseId: number, challengeId: number, chapterId?: number | null) =>
+    request<ContainerInfoModel, unknown>({
+      path: `/api/training/courses/${courseId}/challenges/${challengeId}/container/extend`,
+      method: 'POST',
+      query: { chapterId },
+    }),
+
   destroyContainer: (courseId: number, challengeId: number, chapterId?: number | null) =>
     request<void, unknown>({
       path: `/api/training/courses/${courseId}/challenges/${challengeId}/container`,

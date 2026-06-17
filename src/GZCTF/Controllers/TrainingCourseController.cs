@@ -1,5 +1,6 @@
 using GZCTF.Middlewares;
 using GZCTF.Models;
+using GZCTF.Models.Internal;
 using GZCTF.Models.Request.Game;
 using GZCTF.Models.Request.Training;
 using GZCTF.Repositories.Interface;
@@ -7,6 +8,7 @@ using GZCTF.Services.Config;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace GZCTF.Controllers;
 
@@ -19,6 +21,7 @@ public class TrainingCourseController(
     IExerciseInstanceRepository exerciseInstanceRepository,
     IContainerRepository containerRepository,
     IConfigService configService,
+    IOptionsSnapshot<ContainerPolicy> containerPolicy,
     ILogger<TrainingCourseController> logger) : ControllerBase
 {
     private async Task<UserInfo> CurrentUser() =>
@@ -512,6 +515,38 @@ public class TrainingCourseController(
 
         logger.Log($"创建课程容器：{course.Title} / {instance.Exercise.Title}", user, TaskStatus.Success);
         return Ok(ContainerInfoModel.FromContainer(result.Result));
+    }
+
+    [HttpPost("{courseId:int}/challenges/{challengeId:int}/container/extend")]
+    [ProducesResponseType(typeof(ContainerInfoModel), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ExtendContainer(
+        [FromRoute] int courseId,
+        [FromRoute] int challengeId,
+        [FromQuery] int? chapterId = null,
+        CancellationToken token = default)
+    {
+        var user = await CurrentUser();
+        var course = await CourseQuery().SingleOrDefaultAsync(c => c.Id == courseId, token);
+        if (course is null)
+            return NotFound();
+        if (!await CanLearnCourse(user, course, token))
+            return Forbid();
+
+        var instance = await GetOrCreateCourseInstance(user, course, challengeId, chapterId, token);
+        if (instance is null || !instance.Exercise.IsEnabled)
+            return NotFound(new RequestResponse("课程题目不存在或未启用。", StatusCodes.Status404NotFound));
+        if (!instance.Exercise.Type.IsContainer())
+            return BadRequest(new RequestResponse("该课程题目不需要启动容器。"));
+        if (instance.Container is null)
+            return BadRequest(new RequestResponse("课程容器尚未启动。"));
+        if (instance.Container.ExpectStopAt - DateTimeOffset.UtcNow >
+            TimeSpan.FromMinutes(containerPolicy.Value.RenewalWindow))
+            return BadRequest(new RequestResponse("当前还未进入实例续期窗口。"));
+
+        await containerRepository.ExtendLifetime(instance.Container,
+            TimeSpan.FromMinutes(containerPolicy.Value.ExtensionDuration), token);
+
+        return Ok(ContainerInfoModel.FromContainer(instance.Container));
     }
 
     [HttpDelete("{courseId:int}/challenges/{challengeId:int}/container")]

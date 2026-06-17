@@ -2,25 +2,26 @@ import {
   Badge,
   Button,
   Group,
+  SimpleGrid,
   Stack,
   Text,
   TextInput,
   Title,
-  Anchor,
-  SimpleGrid,
 } from '@mantine/core'
 import { showNotification } from '@mantine/notifications'
 import { mdiArrowLeft, mdiCheck, mdiConsoleNetworkOutline, mdiOpenInNew, mdiSend } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import React, { FC, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
+import { InstanceEntry } from '@Components/InstanceEntry'
 import { Markdown } from '@Components/MarkdownRenderer'
 import { WithNavBar } from '@Components/WithNavbar'
 import { YinyuPanel, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
-import { AnswerResult, ContainerInfoModel } from '@Api'
+import { AnswerResult, ChallengeType, ClientFlagContext, ContainerInfoModel, EnvironmentType } from '@Api'
 import { showErrorMsg } from '@Utils/Shared'
 import { useTranslation } from 'react-i18next'
 import {
+  TrainingCourseChallengeModel,
   TrainingCourseChapterModel,
   TrainingCourseModel,
   TrainingCourseVideoProvider,
@@ -37,6 +38,22 @@ const headingsFromMarkdown = (source: string) =>
       title: match![2].replace(/[#*_`]/g, '').trim(),
     }))
     .slice(0, 18)
+
+const isContainerChallenge = (challenge: TrainingCourseChallengeModel) =>
+  (challenge.type === ChallengeType.StaticContainer || challenge.type === ChallengeType.DynamicContainer) &&
+  challenge.environment !== EnvironmentType.WindowsVM
+
+const containerInfoToClientContext = (container?: ContainerInfoModel): ClientFlagContext => ({
+  instanceEntry: container?.entry || null,
+  closeTime: container?.expectStopAt ?? null,
+})
+
+const clientContextToContainerInfo = (context: ClientFlagContext): ContainerInfoModel => ({
+  entry: context.instanceEntry ?? '',
+  expectStopAt: context.closeTime ?? undefined,
+  startedAt: undefined,
+  status: undefined,
+})
 
 const ChapterDetail: FC = () => {
   const { courseId, chapterId } = useParams()
@@ -63,6 +80,25 @@ const ChapterDetail: FC = () => {
       ])
       setCourse(courseRes.data)
       setChapter(chapterRes.data)
+
+      const challengeEntries = await Promise.all(
+        chapterRes.data.challenges.filter(isContainerChallenge).map(async (challenge) => {
+          try {
+            const detail = await trainingCourseApi.challenge(courseNum, challenge.exerciseChallengeId, chapterNum)
+            return [challenge.exerciseChallengeId, clientContextToContainerInfo(detail.data.context)] as const
+          } catch {
+            return null
+          }
+        })
+      )
+
+      setContainers(
+        Object.fromEntries(
+          challengeEntries.filter(
+            (entry): entry is readonly [number, ContainerInfoModel] => !!entry && !!entry[1].entry
+          )
+        )
+      )
     } catch (e) {
       showErrorMsg(e, t)
     }
@@ -72,6 +108,31 @@ const ChapterDetail: FC = () => {
     try {
       const res = await trainingCourseApi.createContainer(courseNum, challengeId, chapterNum)
       setContainers((current) => ({ ...current, [challengeId]: res.data }))
+      showNotification({ color: 'teal', message: '实例已创建' })
+    } catch (e) {
+      showErrorMsg(e, t)
+    }
+  }
+
+  const extendContainer = async (challengeId: number) => {
+    try {
+      const res = await trainingCourseApi.extendContainer(courseNum, challengeId, chapterNum)
+      setContainers((current) => ({ ...current, [challengeId]: res.data }))
+      showNotification({ color: 'teal', message: '实例时间已延长' })
+    } catch (e) {
+      showErrorMsg(e, t)
+    }
+  }
+
+  const destroyContainer = async (challengeId: number) => {
+    try {
+      await trainingCourseApi.destroyContainer(courseNum, challengeId, chapterNum)
+      setContainers((current) => {
+        const next = { ...current }
+        delete next[challengeId]
+        return next
+      })
+      showNotification({ color: 'teal', message: '实例已销毁' })
     } catch (e) {
       showErrorMsg(e, t)
     }
@@ -182,31 +243,35 @@ const ChapterDetail: FC = () => {
                   const container = containers[challenge.exerciseChallengeId]
                   return (
                     <YinyuPanel key={challenge.exerciseChallengeId} p="md" className="yy-course-lab-card">
-                      <Group justify="space-between" align="flex-start">
+                      <Stack gap="sm">
                         <Stack gap={4}>
                           <Group gap="xs">
                             <Badge color={challenge.solved ? 'green' : 'teal'}>{challenge.solved ? '已完成' : challenge.category}</Badge>
                             <Badge variant="light">{challenge.type}</Badge>
                           </Group>
                           <Title order={4}>{challenge.displayTitle || challenge.title}</Title>
-                          {container?.entry ? (
-                            <Anchor href={container.entry} target="_blank">
-                              {container.entry}
-                            </Anchor>
-                          ) : null}
                         </Stack>
-                        <Button onClick={() => createContainer(challenge.exerciseChallengeId)}>创建实例</Button>
-                      </Group>
+                        {isContainerChallenge(challenge) ? (
+                          <InstanceEntry
+                            label={`${challenge.displayTitle || challenge.title} @ ${course.title}`}
+                            context={containerInfoToClientContext(container)}
+                            onCreate={() => createContainer(challenge.exerciseChallengeId)}
+                            onExtend={() => extendContainer(challenge.exerciseChallengeId)}
+                            onDestroy={() => destroyContainer(challenge.exerciseChallengeId)}
+                          />
+                        ) : null}
+                      </Stack>
                       <Group mt="sm">
                         <TextInput
                           placeholder="flag{...}"
                           value={answers[challenge.exerciseChallengeId] ?? ''}
-                          onChange={(event) =>
+                          onChange={(event) => {
+                            const value = event.currentTarget.value
                             setAnswers((current) => ({
                               ...current,
-                              [challenge.exerciseChallengeId]: event.currentTarget.value,
+                              [challenge.exerciseChallengeId]: value,
                             }))
-                          }
+                          }}
                           style={{ flex: 1 }}
                         />
                         <Button rightSection={<Icon path={mdiSend} size={0.82} />} onClick={() => submitFlag(challenge.exerciseChallengeId)}>
