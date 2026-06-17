@@ -8,7 +8,7 @@ import {
   Title,
 } from '@mantine/core'
 import { showNotification } from '@mantine/notifications'
-import { mdiArrowLeft, mdiCheck, mdiConsoleNetworkOutline, mdiOpenInNew, mdiSend } from '@mdi/js'
+import { mdiArrowLeft, mdiCheck, mdiConsoleNetworkOutline, mdiDownloadOutline, mdiOpenInNew, mdiSend } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import React, { FC, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
@@ -23,6 +23,7 @@ import { showErrorMsg } from '@Utils/Shared'
 import { useTranslation } from 'react-i18next'
 import {
   TrainingCourseChallengeModel,
+  TrainingCourseChallengeDetailModel,
   TrainingCourseChapterModel,
   TrainingCourseModel,
   TrainingCourseVideoProvider,
@@ -62,6 +63,7 @@ const ChapterDetail: FC = () => {
   const chapterNum = Number(chapterId)
   const [course, setCourse] = useState<TrainingCourseModel | null>(null)
   const [chapter, setChapter] = useState<TrainingCourseChapterModel | null>(null)
+  const [challengeDetails, setChallengeDetails] = useState<Record<number, TrainingCourseChallengeDetailModel>>({})
   const [containers, setContainers] = useState<Record<number, ContainerInfoModel>>({})
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const { t } = useTranslation()
@@ -82,22 +84,27 @@ const ChapterDetail: FC = () => {
       setCourse(courseRes.data)
       setChapter(chapterRes.data)
 
-      const challengeEntries = await Promise.all(
-        chapterRes.data.challenges.filter(isContainerChallenge).map(async (challenge) => {
+      const detailEntries = await Promise.all(
+        chapterRes.data.challenges.map(async (challenge) => {
           try {
             const detail = await trainingCourseApi.challenge(courseNum, challenge.exerciseChallengeId, chapterNum)
-            return [challenge.exerciseChallengeId, clientContextToContainerInfo(detail.data.context)] as const
+            return [challenge.exerciseChallengeId, detail.data] as const
           } catch {
             return null
           }
         })
       )
 
+      const details = Object.fromEntries(
+        detailEntries.filter((entry): entry is readonly [number, TrainingCourseChallengeDetailModel] => !!entry)
+      )
+      setChallengeDetails(details)
+
       setContainers(
         Object.fromEntries(
-          challengeEntries.filter(
-            (entry): entry is readonly [number, ContainerInfoModel] => !!entry && !!entry[1].entry
-          )
+          Object.entries(details)
+            .map(([challengeId, detail]) => [Number(challengeId), clientContextToContainerInfo(detail.context)] as const)
+            .filter((entry): entry is readonly [number, ContainerInfoModel] => !!entry[1].entry)
         )
       )
     } catch (e) {
@@ -248,6 +255,8 @@ const ChapterDetail: FC = () => {
               <Stack gap="sm">
                 {chapter.challenges.map((challenge) => {
                   const container = containers[challenge.exerciseChallengeId]
+                  const detail = challengeDetails[challenge.exerciseChallengeId]
+                  const attachmentUrl = detail?.context?.url
                   return (
                     <YinyuPanel key={challenge.exerciseChallengeId} p="md" className="yy-course-lab-card yy-training-lab-card">
                       <Stack gap="sm">
@@ -258,6 +267,24 @@ const ChapterDetail: FC = () => {
                               max={3}
                             />
                             <Title order={4}>{challenge.displayTitle || challenge.title}</Title>
+                            {attachmentUrl ? (
+                              <Button
+                                component="a"
+                                href={attachmentUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                variant="light"
+                                size="xs"
+                                w="fit-content"
+                                leftSection={<Icon path={mdiDownloadOutline} size={0.75} />}
+                              >
+                                下载附件
+                              </Button>
+                            ) : challenge.hasAttachment ? (
+                              <Text size="xs" c="dimmed">
+                                附件正在加载或暂不可用
+                              </Text>
+                            ) : null}
                           </Stack>
                           <TrainingStatusText tone={challenge.solved ? 'ongoing' : 'silver'}>
                             {challenge.solved ? '已完成' : '待完成'}
@@ -294,6 +321,47 @@ const ChapterDetail: FC = () => {
                   )
                 })}
               </Stack>
+            </YinyuPanel>
+          ) : null}
+
+          {chapter.theoryPaper ? (
+            <YinyuPanel p="lg">
+              <Group justify="space-between" align="center">
+                <Stack gap={4}>
+                  <Group gap="xs">
+                    <TrainingStatusText tone={chapter.theoryPaper.passed ? 'ongoing' : 'brand'}>
+                      {chapter.theoryPaper.passed ? '已通过' : chapter.theoryPaper.status ? '已开始' : '课后测试'}
+                    </TrainingStatusText>
+                    <TrainingTagLine
+                      tags={[
+                        `${chapter.theoryPaper.questionCount} 题`,
+                        `${chapter.theoryPaper.totalScore} 分`,
+                        `及格线 ${chapter.theoryPaper.passRate}%`,
+                      ]}
+                      max={3}
+                    />
+                  </Group>
+                  <Title order={3}>{chapter.theoryPaper.title}</Title>
+                  <Text c="dimmed" size="sm">
+                    {chapter.theoryPaper.score !== null && chapter.theoryPaper.score !== undefined
+                      ? `当前得分：${chapter.theoryPaper.score}/${chapter.theoryPaper.totalScore}`
+                      : '完成课后测试后，章节进度会自动刷新。'}
+                  </Text>
+                </Stack>
+                {chapter.theoryPaper.isPublished ? (
+                  <Button component={Link} to={`/training/courses/${course.id}/chapters/${chapter.id}/theory`}>
+                    进入测试
+                  </Button>
+                ) : course.canEdit ? (
+                  <Button
+                    component={Link}
+                    to={`/training/courses/${course.id}/chapters/${chapter.id}/theory-edit`}
+                    variant="light"
+                  >
+                    配置测试
+                  </Button>
+                ) : null}
+              </Group>
             </YinyuPanel>
           ) : null}
 

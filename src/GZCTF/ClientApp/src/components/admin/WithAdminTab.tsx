@@ -7,7 +7,6 @@ import {
   mdiFileDocumentOutline,
   mdiFlagOutline,
   mdiImageOutline,
-  mdiSchoolOutline,
   mdiServerNetwork,
   mdiSitemapOutline,
 } from '@mdi/js'
@@ -45,7 +44,6 @@ export const WithAdminTab: FC<AdminTabProps> = ({ head, headProps, children }) =
       { icon: mdiFlagOutline, title: t('admin.tab.games.index'), path: 'games', requiredRole: Role.Teacher },
       { icon: mdiBookOpenPageVariantOutline, title: '题库管理', path: 'theory-bank', requiredRole: Role.Teacher },
       { icon: mdiImageOutline, title: '环境模板', path: 'images', requiredRole: Role.Teacher },
-      { icon: mdiSchoolOutline, title: '培训管理', path: 'training', requiredRole: Role.Teacher },
       { icon: mdiAccountCogOutline, title: t('admin.tab.users'), path: 'users', requiredRole: Role.Teacher },
       { icon: mdiAccountGroupOutline, title: t('admin.tab.teams'), path: 'teams', requiredRole: Role.Admin },
       { icon: mdiServerNetwork, title: '节点管理', path: 'nodes', requiredRole: Role.Admin },

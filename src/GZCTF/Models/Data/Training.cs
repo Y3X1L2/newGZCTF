@@ -467,6 +467,10 @@ public class TrainingCourse
     public List<TrainingCourseResource> Resources { get; set; } = [];
 
     public List<TrainingCourseChallenge> Challenges { get; set; } = [];
+
+    public List<TrainingCourseTheoryQuestion> TheoryQuestions { get; set; } = [];
+
+    public List<TrainingCourseChapterTheoryPaper> TheoryPapers { get; set; } = [];
 }
 
 [PrimaryKey(nameof(CourseId), nameof(TeacherId))]
@@ -582,6 +586,194 @@ public class TrainingCourseChapter
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public List<TrainingCourseChapterChallenge> Challenges { get; set; } = [];
+
+    public TrainingCourseChapterTheoryPaper? TheoryPaper { get; set; }
+}
+
+[Index(nameof(CourseId), nameof(Type), nameof(BankName))]
+public class TrainingCourseTheoryQuestion
+{
+    [Key]
+    public int Id { get; set; }
+
+    public int CourseId { get; set; }
+
+    [JsonIgnore]
+    public TrainingCourse Course { get; set; } = null!;
+
+    public TheoryQuestionType Type { get; set; }
+
+    [Required]
+    [MaxLength(128)]
+    public string BankName { get; set; } = "Default";
+
+    [Required]
+    public string Title { get; set; } = string.Empty;
+
+    public string Content { get; set; } = string.Empty;
+
+    public List<string> Options { get; set; } = [];
+
+    public List<int> AnswerIndexes { get; set; } = [];
+
+    public Guid? CreatedById { get; set; }
+
+    [JsonIgnore]
+    public UserInfo? CreatedBy { get; set; }
+
+    public Guid? UpdatedById { get; set; }
+
+    [JsonIgnore]
+    public UserInfo? UpdatedBy { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+[Index(nameof(CourseId))]
+[Index(nameof(ChapterId), IsUnique = true)]
+public class TrainingCourseChapterTheoryPaper
+{
+    [Key]
+    public int Id { get; set; }
+
+    public int CourseId { get; set; }
+
+    [JsonIgnore]
+    public TrainingCourse Course { get; set; } = null!;
+
+    public int ChapterId { get; set; }
+
+    [JsonIgnore]
+    public TrainingCourseChapter Chapter { get; set; } = null!;
+
+    [Required]
+    [MaxLength(128)]
+    public string Title { get; set; } = string.Empty;
+
+    public string Description { get; set; } = string.Empty;
+
+    public int PassRate { get; set; } = 60;
+
+    public bool IsPublished { get; set; }
+
+    public DateTimeOffset? PublishedAt { get; set; }
+
+    public Guid? UpdatedById { get; set; }
+
+    [JsonIgnore]
+    public UserInfo? UpdatedBy { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public int TotalScore => Questions.Sum(q => q.Score);
+
+    public List<TrainingCourseChapterTheoryQuestion> Questions { get; set; } = [];
+}
+
+[Index(nameof(PaperId))]
+[Index(nameof(SourceQuestionId))]
+public class TrainingCourseChapterTheoryQuestion
+{
+    [Key]
+    public int Id { get; set; }
+
+    public int PaperId { get; set; }
+
+    [JsonIgnore]
+    public TrainingCourseChapterTheoryPaper Paper { get; set; } = null!;
+
+    public int? SourceQuestionId { get; set; }
+
+    [JsonIgnore]
+    public TrainingCourseTheoryQuestion? SourceQuestion { get; set; }
+
+    public TheoryQuestionType Type { get; set; }
+
+    [Required]
+    public string Title { get; set; } = string.Empty;
+
+    public string Content { get; set; } = string.Empty;
+
+    public List<string> Options { get; set; } = [];
+
+    public List<int> AnswerIndexes { get; set; } = [];
+
+    public int Score { get; set; } = 1;
+
+    public int Order { get; set; }
+}
+
+[Index(nameof(CourseId))]
+[Index(nameof(ChapterId))]
+[Index(nameof(UserId), nameof(ChapterId), IsUnique = true)]
+public class TrainingCourseChapterTheorySheet
+{
+    [Key]
+    public int Id { get; set; }
+
+    public int CourseId { get; set; }
+
+    [JsonIgnore]
+    public TrainingCourse Course { get; set; } = null!;
+
+    public int ChapterId { get; set; }
+
+    [JsonIgnore]
+    public TrainingCourseChapter Chapter { get; set; } = null!;
+
+    public int PaperId { get; set; }
+
+    [JsonIgnore]
+    public TrainingCourseChapterTheoryPaper Paper { get; set; } = null!;
+
+    public Guid UserId { get; set; }
+
+    [JsonIgnore]
+    public UserInfo User { get; set; } = null!;
+
+    public TheoryAnswerSheetStatus Status { get; set; } = TheoryAnswerSheetStatus.Draft;
+
+    public int Score { get; set; }
+
+    public int MaxScore { get; set; }
+
+    public bool Passed { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public DateTimeOffset? SubmittedAt { get; set; }
+
+    public List<TrainingCourseChapterTheoryAnswer> Answers { get; set; } = [];
+}
+
+[Index(nameof(SheetId))]
+[Index(nameof(PaperQuestionId))]
+public class TrainingCourseChapterTheoryAnswer
+{
+    [Key]
+    public int Id { get; set; }
+
+    public int SheetId { get; set; }
+
+    [JsonIgnore]
+    public TrainingCourseChapterTheorySheet Sheet { get; set; } = null!;
+
+    public int PaperQuestionId { get; set; }
+
+    [JsonIgnore]
+    public TrainingCourseChapterTheoryQuestion PaperQuestion { get; set; } = null!;
+
+    public List<int> SelectedIndexes { get; set; } = [];
+
+    public bool? IsCorrect { get; set; }
+
+    public int Score { get; set; }
 }
 
 [Index(nameof(CourseId), nameof(Order))]

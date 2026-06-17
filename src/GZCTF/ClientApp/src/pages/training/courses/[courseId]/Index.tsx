@@ -44,9 +44,10 @@ import {
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import React, { FC, useEffect, useMemo, useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { Markdown } from '@Components/MarkdownRenderer'
 import { WithNavBar } from '@Components/WithNavbar'
+import { CourseTheoryBankPanel } from '@Components/training/CourseTheoryBankPanel'
 import {
   TrainingStatusText,
   TrainingTagLine,
@@ -57,11 +58,12 @@ import {
 } from '@Components/training/TrainingCourseUI'
 import { YinyuGameBendsBackground } from '@Components/yinyu/YinyuReactBits'
 import { YinyuPanel } from '@Components/yinyu/YinyuUI'
-import api, { ChallengeCategory, ChallengeType, EnvironmentType, NetworkMode } from '@Api'
+import api, { ChallengeCategory, ChallengeType, EnvironmentType, FileType, NetworkMode } from '@Api'
 import { showErrorMsg } from '@Utils/Shared'
 import { useTranslation } from 'react-i18next'
 import {
   TrainingCourseChallengeCreateModel,
+  TrainingCourseChallengeEditDetailModel,
   TrainingCourseDockerRegistryModel,
   TrainingCourseDockerRegisterModel,
   TrainingCourseEditModel,
@@ -117,6 +119,9 @@ const emptyChallengeDraft = (): TrainingCourseChallengeCreateModel => ({
   order: 1,
   isRequired: true,
   displayTitle: null,
+  attachmentType: FileType.None,
+  attachmentFileHash: null,
+  attachmentRemoteUrl: null,
 })
 
 const emptyDockerRegisterDraft = (): TrainingCourseDockerRegisterModel => ({
@@ -172,7 +177,7 @@ const challengeCategoryOptions = Object.values(ChallengeCategory).map((value) =>
 const challengeTypeOptions = Object.values(ChallengeType).map((value) => ({ value, label: value }))
 const environmentOptions = Object.values(EnvironmentType).map((value) => ({ value, label: value }))
 const networkModeOptions = Object.values(NetworkMode).map((value) => ({ value, label: value }))
-const courseTabValues = ['intro', 'chapters', 'resources', 'students', 'environments', 'challenges']
+const courseTabValues = ['intro', 'chapters', 'resources', 'students', 'environments', 'challenges', 'theory-bank', 'homework']
 
 const formatSize = (bytes: number) => {
   if (!Number.isFinite(bytes) || bytes <= 0) return '-'
@@ -189,6 +194,7 @@ const formatSize = (bytes: number) => {
 const CourseDetail: FC = () => {
   const { courseId } = useParams()
   const location = useLocation()
+  const navigate = useNavigate()
   const id = Number(courseId)
   const [course, setCourse] = useState<TrainingCourseModel | null>(null)
   const [enrollments, setEnrollments] = useState<Awaited<ReturnType<typeof trainingCourseAdminApi.enrollments>>['data']>([])
@@ -200,6 +206,9 @@ const CourseDetail: FC = () => {
   const [vmUploadOpened, setVmUploadOpened] = useState(false)
   const [localImportOpened, setLocalImportOpened] = useState(false)
   const [challengeOpened, setChallengeOpened] = useState(false)
+  const [editingChallengeId, setEditingChallengeId] = useState<number | null>(null)
+  const [editingChallengeDetail, setEditingChallengeDetail] = useState<TrainingCourseChallengeEditDetailModel | null>(null)
+  const [challengeAttachmentFile, setChallengeAttachmentFile] = useState<File | null>(null)
   const [courseDraft, setCourseDraft] = useState<TrainingCourseEditModel>(emptyCourseDraft())
   const [resourceDraft, setResourceDraft] = useState<TrainingCourseResourceEditModel>(emptyResourceDraft())
   const [challengeDraft, setChallengeDraft] = useState<TrainingCourseChallengeCreateModel>(emptyChallengeDraft())
@@ -464,23 +473,91 @@ const CourseDetail: FC = () => {
     }
   }
 
-  const createCourseChallenge = async () => {
+  const openCreateCourseChallenge = () => {
+    setEditingChallengeId(null)
+    setEditingChallengeDetail(null)
+    setChallengeAttachmentFile(null)
+    setChallengeDraft({
+      ...emptyChallengeDraft(),
+      order: (course?.challenges?.length ?? 0) + 1,
+    })
+    setChallengeOpened(true)
+  }
+
+  const openEditCourseChallenge = async (exerciseChallengeId: number) => {
+    if (!course) return
+    setSaving(true)
+    try {
+      const res = await trainingCourseAdminApi.challengeEditDetail(course.id, exerciseChallengeId)
+      setEditingChallengeId(exerciseChallengeId)
+      setEditingChallengeDetail(res.data)
+      setChallengeAttachmentFile(null)
+      setChallengeDraft({
+        ...emptyChallengeDraft(),
+        ...res.data,
+        attachmentType: res.data.attachmentType ?? FileType.None,
+        attachmentFileHash: res.data.attachmentFileHash ?? null,
+        attachmentRemoteUrl: res.data.attachmentRemoteUrl ?? null,
+      })
+      setChallengeOpened(true)
+    } catch (e) {
+      showErrorMsg(e, t)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const closeChallengeEditor = () => {
+    setChallengeOpened(false)
+    setEditingChallengeId(null)
+    setEditingChallengeDetail(null)
+    setChallengeAttachmentFile(null)
+    setChallengeDraft(emptyChallengeDraft())
+  }
+
+  const saveCourseChallenge = async () => {
     if (!course || !challengeDraft.title.trim()) return
     setSaving(true)
     try {
-      await trainingCourseAdminApi.createChallenge(course.id, {
+      const attachmentFileHash =
+        challengeDraft.attachmentType === FileType.Local && challengeAttachmentFile
+          ? await uploadOne(challengeAttachmentFile)
+          : challengeDraft.attachmentFileHash
+      const payload: TrainingCourseChallengeCreateModel = {
         ...challengeDraft,
-        title: challengeDraft.title.trim(),
-        content: challengeDraft.content,
-        containerImage: challengeDraft.containerImage?.trim() || null,
-        flagTemplate: challengeDraft.flagTemplate?.trim() || null,
-        staticFlag: challengeDraft.staticFlag?.trim() || null,
-        displayTitle: challengeDraft.displayTitle?.trim() || null,
-        order: challengeDraft.order || (course.challenges?.length ?? 0) + 1,
-      })
-      showNotification({ color: 'teal', message: '课程题目已创建。' })
-      setChallengeDraft(emptyChallengeDraft())
-      setChallengeOpened(false)
+        attachmentType: challengeDraft.attachmentType ?? FileType.None,
+        attachmentFileHash: challengeDraft.attachmentType === FileType.Local ? attachmentFileHash : null,
+        attachmentRemoteUrl:
+          challengeDraft.attachmentType === FileType.Remote ? challengeDraft.attachmentRemoteUrl?.trim() || null : null,
+      }
+
+      if (editingChallengeId) {
+        await trainingCourseAdminApi.updateChallenge(course.id, editingChallengeId, {
+          ...payload,
+          title: payload.title.trim(),
+          content: payload.content,
+          containerImage: payload.containerImage?.trim() || null,
+          flagTemplate: payload.flagTemplate?.trim() || null,
+          staticFlag: payload.staticFlag?.trim() || null,
+          displayTitle: payload.displayTitle?.trim() || null,
+          order: payload.order || 1,
+        })
+        showNotification({ color: 'teal', message: '课程题目已更新。' })
+      } else {
+        await trainingCourseAdminApi.createChallenge(course.id, {
+          ...payload,
+          title: payload.title.trim(),
+          content: payload.content,
+          containerImage: payload.containerImage?.trim() || null,
+          flagTemplate: payload.flagTemplate?.trim() || null,
+          staticFlag: payload.staticFlag?.trim() || null,
+          displayTitle: payload.displayTitle?.trim() || null,
+          order: payload.order || (course.challenges?.length ?? 0) + 1,
+        })
+        showNotification({ color: 'teal', message: '课程题目已创建。' })
+      }
+
+      closeChallengeEditor()
       await load()
     } catch (e) {
       showErrorMsg(e, t)
@@ -489,14 +566,36 @@ const CourseDetail: FC = () => {
     }
   }
 
+  const handleTabChange = (value: string | null) => {
+    const next = value && courseTabValues.includes(value) ? value : 'intro'
+    setActiveTab(next)
+
+    const params = new URLSearchParams(location.search)
+    if (next === 'intro') {
+      params.delete('tab')
+    } else {
+      params.set('tab', next)
+    }
+
+    const search = params.toString()
+    navigate(
+      {
+        pathname: location.pathname,
+        search: search ? `?${search}` : '',
+      },
+      { replace: true }
+    )
+  }
+
   useEffect(() => {
     void load()
   }, [courseId])
 
   useEffect(() => {
     const tab = new URLSearchParams(location.search).get('tab')
-    if (tab && courseTabValues.includes(tab) && tab !== activeTab) setActiveTab(tab)
-  }, [activeTab, location.search])
+    const next = tab && courseTabValues.includes(tab) ? tab : 'intro'
+    setActiveTab((current) => (current === next ? current : next))
+  }, [location.search])
 
   useEffect(() => {
     if (studentPage > studentPageCount) setStudentPage(studentPageCount)
@@ -590,7 +689,7 @@ const CourseDetail: FC = () => {
           </div>
         </YinyuPanel>
 
-        <Tabs value={activeTab} onChange={setActiveTab} className="yy-course-tabs yy-training-detail-tabs">
+        <Tabs value={activeTab} onChange={handleTabChange} className="yy-course-tabs yy-training-detail-tabs">
           <div className="yy-training-detail-grid">
             <main className="yy-training-detail-main">
               <Tabs.List>
@@ -600,6 +699,8 @@ const CourseDetail: FC = () => {
                 {course.canManageEnrollments ? <Tabs.Tab value="students">学员管理</Tabs.Tab> : null}
                 {course.canEdit ? <Tabs.Tab value="environments">环境模板</Tabs.Tab> : null}
                 {course.canEdit ? <Tabs.Tab value="challenges">题目管理</Tabs.Tab> : null}
+                {course.canEdit ? <Tabs.Tab value="theory-bank">理论题库</Tabs.Tab> : null}
+                {course.canEdit ? <Tabs.Tab value="homework">课后练习</Tabs.Tab> : null}
               </Tabs.List>
 
           <Tabs.Panel value="intro" pt="md">
@@ -889,7 +990,7 @@ const CourseDetail: FC = () => {
             <YinyuPanel p="lg">
               <Group justify="space-between" mb="md">
                 <Title order={3}>题目管理</Title>
-                <Button leftSection={<Icon path={mdiPlus} size={0.82} />} onClick={() => setChallengeOpened(true)}>
+                <Button leftSection={<Icon path={mdiPlus} size={0.82} />} onClick={openCreateCourseChallenge}>
                   创建课程题目
                 </Button>
               </Group>
@@ -905,22 +1006,95 @@ const CourseDetail: FC = () => {
                         <Text size="xs" c="dimmed">
                           #{challenge.exerciseChallengeId} / {challenge.category} / {challenge.type}
                         </Text>
+                        {challenge.hasAttachment ? (
+                          <Badge variant="light" color="indigo">
+                            附件：{challenge.attachmentFileName || '已绑定'}
+                          </Badge>
+                        ) : null}
                       </Stack>
-                      <ActionIcon
-                        color="red"
-                        onClick={() =>
-                          trainingCourseAdminApi
-                            .removeChallenge(course.id, challenge.exerciseChallengeId)
-                            .then(load)
-                            .catch((e) => showErrorMsg(e, t))
-                        }
-                      >
-                        <Icon path={mdiTrashCanOutline} size={0.86} />
-                      </ActionIcon>
+                      <Group gap={6} wrap="nowrap">
+                        <ActionIcon variant="light" onClick={() => openEditCourseChallenge(challenge.exerciseChallengeId)}>
+                          <Icon path={mdiPencilOutline} size={0.86} />
+                        </ActionIcon>
+                        <ActionIcon
+                          color="red"
+                          onClick={() =>
+                            trainingCourseAdminApi
+                              .removeChallenge(course.id, challenge.exerciseChallengeId)
+                              .then(load)
+                              .catch((e) => showErrorMsg(e, t))
+                          }
+                        >
+                          <Icon path={mdiTrashCanOutline} size={0.86} />
+                        </ActionIcon>
+                      </Group>
                     </Group>
                   </YinyuPanel>
                 ))}
               </SimpleGrid>
+            </YinyuPanel>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="theory-bank" pt="md">
+            <CourseTheoryBankPanel courseId={course.id} />
+          </Tabs.Panel>
+
+          <Tabs.Panel value="homework" pt="md">
+            <YinyuPanel p="lg">
+              <Group justify="space-between" mb="md">
+                <Stack gap={2}>
+                  <Title order={3}>课后练习</Title>
+                  <Text size="sm" c="dimmed">
+                    每个章节最多绑定一套理论测试，题目来源于当前课程题库。
+                  </Text>
+                </Stack>
+              </Group>
+              <Stack gap="sm">
+                {orderedChapters.map((chapter) => {
+                  const theory = chapter.theoryPaper
+                  return (
+                    <YinyuPanel key={chapter.id} p="md" className="yy-course-row-card">
+                      <Group justify="space-between" align="center">
+                        <Stack gap={4}>
+                          <Group gap="xs">
+                            <Badge variant="light" color={chapter.isPublished ? 'teal' : 'gray'}>
+                              {chapter.isPublished ? '已发布章节' : '未发布章节'}
+                            </Badge>
+                            {theory ? (
+                              <Badge variant="light" color={theory.isPublished ? 'green' : 'yellow'}>
+                                {theory.isPublished ? '测试已发放' : '测试草稿'}
+                              </Badge>
+                            ) : (
+                              <Badge variant="light" color="gray">
+                                未配置测试
+                              </Badge>
+                            )}
+                          </Group>
+                          <Text fw={900}>{chapter.title}</Text>
+                          <Text size="sm" c="dimmed">
+                            {theory
+                              ? `${theory.questionCount} 题 / ${theory.totalScore} 分 / 及格线 ${theory.passRate}%`
+                              : '可从课程题库中指定题目或随机抽题生成课后测试。'}
+                          </Text>
+                        </Stack>
+                        <Button
+                          component={Link}
+                          to={`/training/courses/${course.id}/chapters/${chapter.id}/theory-edit`}
+                          variant="light"
+                          leftSection={<Icon path={mdiPencilOutline} size={0.82} />}
+                        >
+                          配置测试
+                        </Button>
+                      </Group>
+                    </YinyuPanel>
+                  )
+                })}
+                {orderedChapters.length === 0 ? (
+                  <Text c="dimmed" ta="center" py="lg">
+                    还没有章节，先创建章节后再配置课后测试。
+                  </Text>
+                ) : null}
+              </Stack>
             </YinyuPanel>
           </Tabs.Panel>
             </main>
@@ -1242,8 +1416,17 @@ const CourseDetail: FC = () => {
         </Stack>
       </Modal>
 
-      <Modal opened={challengeOpened} onClose={() => setChallengeOpened(false)} title="创建课程题目" size="xl">
-        <Stack>
+      <Modal
+        opened={challengeOpened}
+        onClose={closeChallengeEditor}
+        title={editingChallengeId ? '编辑课程题目' : '创建课程题目'}
+        size="min(96vw, 1180px)"
+        classNames={{
+          content: 'yy-course-challenge-modal-content',
+          body: 'yy-course-challenge-modal-body',
+        }}
+      >
+        <Stack className="yy-course-challenge-editor" gap="md">
           <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
             <TextInput
               label="题目名称"
@@ -1304,6 +1487,74 @@ const CourseDetail: FC = () => {
             value={challengeDraft.content}
             onChange={(e) => setChallengeDraft({ ...challengeDraft, content: e.currentTarget.value })}
           />
+
+          <YinyuPanel p="md">
+            <Stack gap="sm">
+              <Group justify="space-between" align="flex-start">
+                <Stack gap={2}>
+                  <Text fw={900}>附件</Text>
+                  <Text size="sm" c="dimmed">
+                    支持本地附件或外链附件，学生在章节题目区域可下载或打开。可用于纯附件题，也可绑定到容器题。
+                  </Text>
+                </Stack>
+                {editingChallengeDetail?.attachmentUrl ? (
+                  <Button
+                    component="a"
+                    href={editingChallengeDetail.attachmentUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    variant="light"
+                    leftSection={<Icon path={mdiDownloadOutline} size={0.82} />}
+                  >
+                    当前附件
+                  </Button>
+                ) : null}
+              </Group>
+              <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+                <Select
+                  label="附件类型"
+                  value={challengeDraft.attachmentType ?? FileType.None}
+                  data={[
+                    { value: FileType.None, label: '无附件' },
+                    { value: FileType.Local, label: '本地上传' },
+                    { value: FileType.Remote, label: '外链附件' },
+                  ]}
+                  onChange={(value) =>
+                    setChallengeDraft({
+                      ...challengeDraft,
+                      attachmentType: (value as FileType) ?? FileType.None,
+                      attachmentFileHash: value === FileType.Local ? challengeDraft.attachmentFileHash ?? null : null,
+                      attachmentRemoteUrl: value === FileType.Remote ? challengeDraft.attachmentRemoteUrl ?? null : null,
+                    })
+                  }
+                />
+                {challengeDraft.attachmentType === FileType.Local ? (
+                  <FileInput
+                    label="上传附件"
+                    value={challengeAttachmentFile}
+                    onChange={setChallengeAttachmentFile}
+                    placeholder={editingChallengeDetail?.attachmentFileName || '选择附件文件'}
+                  />
+                ) : challengeDraft.attachmentType === FileType.Remote ? (
+                  <TextInput
+                    label="附件外链"
+                    value={challengeDraft.attachmentRemoteUrl ?? ''}
+                    onChange={(event) =>
+                      setChallengeDraft({ ...challengeDraft, attachmentRemoteUrl: event.currentTarget.value })
+                    }
+                    placeholder="https://example.com/attachment.zip"
+                  />
+                ) : (
+                  <TextInput label="附件状态" value="不绑定附件" disabled />
+                )}
+              </SimpleGrid>
+              {challengeDraft.attachmentType === FileType.Local && editingChallengeDetail?.attachmentFileName && !challengeAttachmentFile ? (
+                <Text size="xs" c="dimmed">
+                  当前本地附件：{editingChallengeDetail.attachmentFileName}
+                </Text>
+              ) : null}
+            </Stack>
+          </YinyuPanel>
 
           {challengeDraft.environment === EnvironmentType.Docker ? (
             <Select
@@ -1392,9 +1643,9 @@ const CourseDetail: FC = () => {
             onChange={(e) => setChallengeDraft({ ...challengeDraft, isRequired: e.currentTarget.checked })}
           />
 
-          <Group justify="flex-end">
-            <Button loading={saving} leftSection={<Icon path={mdiContentSaveOutline} size={0.82} />} onClick={createCourseChallenge}>
-              创建题目
+          <Group justify="flex-end" className="yy-course-challenge-editor-actions">
+            <Button loading={saving} leftSection={<Icon path={mdiContentSaveOutline} size={0.82} />} onClick={saveCourseChallenge}>
+              {editingChallengeId ? '保存题目' : '创建题目'}
             </Button>
           </Group>
         </Stack>

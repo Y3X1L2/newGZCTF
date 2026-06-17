@@ -7124,6 +7124,81 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
   background: #000;
 }
 
+.yy-course-challenge-modal-content {
+  width: min(96vw, 1180px) !important;
+  max-height: 92dvh;
+  overflow: hidden;
+}
+
+.yy-course-challenge-modal-body {
+  max-height: calc(92dvh - 4.8rem);
+  overflow-y: auto;
+  padding-bottom: 0 !important;
+  scrollbar-gutter: stable;
+}
+
+.yy-course-challenge-editor {
+  min-width: 0;
+  padding-bottom: 0.35rem;
+}
+
+.yy-course-challenge-editor-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  padding-block: 1rem 0.35rem;
+  border-top: 1px solid rgba(107, 238, 177, 0.12);
+  background:
+    linear-gradient(180deg, rgba(5, 12, 10, 0), rgba(5, 12, 10, 0.95) 35%),
+    rgba(5, 12, 10, 0.92);
+  backdrop-filter: blur(1rem);
+}
+
+.yy-theory-json-import-modal-content {
+  width: min(96vw, 1120px) !important;
+  max-height: 92dvh;
+  overflow: hidden;
+}
+
+.yy-theory-json-import-modal-body {
+  max-height: calc(92dvh - 4.8rem);
+  overflow-y: auto;
+  padding-bottom: 0 !important;
+  scrollbar-gutter: stable;
+}
+
+.yy-theory-json-import-input textarea {
+  max-height: min(52vh, 34rem);
+  overflow: auto !important;
+  font-family: var(--mantine-font-family-monospace);
+  line-height: 1.58;
+  white-space: pre;
+}
+
+.yy-theory-json-import-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  padding-block: 1rem 0.35rem;
+  border-top: 1px solid rgba(107, 238, 177, 0.12);
+  background:
+    linear-gradient(180deg, rgba(5, 12, 10, 0), rgba(5, 12, 10, 0.95) 35%),
+    rgba(5, 12, 10, 0.92);
+  backdrop-filter: blur(1rem);
+}
+
+.yy-training-theory-edit-page {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.yy-training-theory-edit-grid {
+  width: 100%;
+  max-width: 100%;
+  margin-inline: 0;
+}
+
 @media (max-width: 74em) {
   .yy-course-chapter-page {
     grid-template-columns: 1fr !important;

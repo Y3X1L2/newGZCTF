@@ -83,7 +83,7 @@ export const AppNavbar: FC = () => {
     { icon: mdiNoteTextOutline, label: 'common.tab.post', link: '/posts' },
     { icon: mdiFlagOutline, label: 'common.tab.game', link: '/games' },
     { icon: mdiAccountGroupOutline, label: 'common.tab.team', link: '/teams' },
-    { icon: mdiBookOpenPageVariantOutline, label: '培训课程', link: '/training', auth: true },
+    { icon: mdiBookOpenPageVariantOutline, label: '培训', link: '/training', auth: true },
     { icon: mdiInformationOutline, label: 'common.tab.about', link: '/about' },
     { icon: mdiWrenchOutline, label: 'common.tab.admin', link: '/admin/games', teacher: true },
   ]

@@ -1,5 +1,8 @@
 using GZCTF.Middlewares;
+using GZCTF.Models.Request.Edit;
+using GZCTF.Models.Request.Game;
 using GZCTF.Models.Request.Training;
+using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Vm;
@@ -19,7 +22,9 @@ public class TrainingCourseAdminController(
     UserManager<UserInfo> userManager,
     ImageStorage imageStorage,
     IArchiveExtractor archiveExtractor,
+    IBlobRepository blobRepository,
     DockerImageRegistryService dockerRegistry,
+    TheoryExamService theoryService,
     ContainerOrchestrator containerOrchestrator,
     ILogger<TrainingCourseAdminController> logger) : ControllerBase
 {
@@ -37,7 +42,9 @@ public class TrainingCourseAdminController(
             .Include(c => c.Resources)
             .ThenInclude(r => r.LocalFile)
             .Include(c => c.Challenges)
-            .ThenInclude(ch => ch.ExerciseChallenge);
+            .ThenInclude(ch => ch.ExerciseChallenge)
+            .ThenInclude(ch => ch.Attachment)
+            .ThenInclude(a => a!.LocalFile);
 
     private async Task<bool> CanEditCourse(UserInfo actor, int courseId, CancellationToken token) =>
         actor.Role >= Role.Admin ||
@@ -64,6 +71,180 @@ public class TrainingCourseAdminController(
         string.IsNullOrWhiteSpace(hash)
             ? null
             : await context.Files.SingleOrDefaultAsync(f => f.Hash == hash.Trim(), token);
+
+    private async Task<Attachment?> ResolveAttachment(
+        FileType attachmentType,
+        string? fileHash,
+        string? remoteUrl,
+        CancellationToken token)
+    {
+        return attachmentType switch
+        {
+            FileType.None => null,
+            FileType.Local => await ResolveFile(fileHash, token) is { } file
+                ? new Attachment { Type = FileType.Local, LocalFileId = file.Id, LocalFile = file }
+                : throw new InvalidOperationException("附件文件不存在。"),
+            FileType.Remote => !string.IsNullOrWhiteSpace(remoteUrl)
+                ? new Attachment { Type = FileType.Remote, RemoteUrl = remoteUrl.Trim() }
+                : throw new InvalidOperationException("外链附件需要填写 URL。"),
+            _ => throw new InvalidOperationException("不支持的附件类型。")
+        };
+    }
+
+    private async Task<IActionResult?> ValidateCourseChallengeModel(
+        int courseId,
+        TrainingCourseChallengeCreateModel model,
+        CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(model.Title))
+            return BadRequest(new RequestResponse("题目名称不能为空。"));
+        if (model.Type == ChallengeType.DynamicAttachment)
+            return BadRequest(new RequestResponse("课程题目暂不支持动态附件，请使用静态附件或容器题目。"));
+        if (model.Type.IsContainer() && model.Environment == EnvironmentType.Docker &&
+            string.IsNullOrWhiteSpace(model.ContainerImage))
+            return BadRequest(new RequestResponse("Docker 容器题目需要配置镜像。"));
+        if (model.Environment == EnvironmentType.WindowsVM && !model.ImageTemplateId.HasValue)
+            return BadRequest(new RequestResponse("Windows 靶机题目需要选择课程内 VM 模板。"));
+        if (model.AttachmentType == FileType.Local && string.IsNullOrWhiteSpace(model.AttachmentFileHash))
+            return BadRequest(new RequestResponse("本地附件需要先上传文件。"));
+        if (model.AttachmentType == FileType.Remote && string.IsNullOrWhiteSpace(model.AttachmentRemoteUrl))
+            return BadRequest(new RequestResponse("外链附件需要填写 URL。"));
+
+        if (!string.IsNullOrWhiteSpace(model.AttachmentFileHash) &&
+            await ResolveFile(model.AttachmentFileHash, token) is null)
+            return BadRequest(new RequestResponse("附件文件不存在。"));
+
+        if (model.ImageTemplateId.HasValue)
+        {
+            var ownsTemplate = await context.ImageTemplates.AnyAsync(t =>
+                t.Id == model.ImageTemplateId.Value && t.TrainingCourseId == courseId, token);
+            if (!ownsTemplate)
+                return BadRequest(new RequestResponse("只能使用当前课程的环境模板。"));
+        }
+
+        if (model.ChapterId.HasValue)
+        {
+            var chapterExists = await context.TrainingCourseChapters
+                .AnyAsync(c => c.Id == model.ChapterId.Value && c.CourseId == courseId, token);
+            if (!chapterExists)
+                return BadRequest(new RequestResponse("课程章节不存在。"));
+        }
+
+        return null;
+    }
+
+    private async Task ApplyCourseChallengeModel(
+        int courseId,
+        TrainingCourseChallenge link,
+        ExerciseChallenge exercise,
+        TrainingCourseChallengeCreateModel model,
+        CancellationToken token)
+    {
+        var exerciseType = model.Environment == EnvironmentType.WindowsVM && model.ImageTemplateId.HasValue
+            ? ChallengeType.StaticContainer
+            : model.Type;
+
+        exercise.Title = model.Title.Trim();
+        exercise.Content = model.Content;
+        exercise.Category = model.Category;
+        exercise.Type = exerciseType;
+        exercise.Environment = model.Environment;
+        exercise.ImageTemplateId = model.ImageTemplateId;
+        exercise.ContainerImage = model.ContainerImage?.Trim();
+        exercise.MemoryLimit = model.MemoryLimit;
+        exercise.CPUCount = model.CPUCount;
+        exercise.StorageLimit = model.StorageLimit;
+        exercise.ExposePort = model.ExposePort;
+        exercise.NetworkMode = model.NetworkMode;
+        exercise.FlagTemplate = model.FlagTemplate;
+        exercise.SubmissionLimit = model.SubmissionLimit;
+        exercise.IsEnabled = true;
+        exercise.TrainingCourseId = courseId;
+
+        link.Order = model.Order;
+        link.IsRequired = model.IsRequired;
+        link.DisplayTitle = string.IsNullOrWhiteSpace(model.DisplayTitle) ? null : model.DisplayTitle.Trim();
+
+        await ReplaceCourseChallengeAttachment(exercise, model, token);
+        SyncCourseChallengeStaticFlag(exercise, model);
+    }
+
+    private async Task ReplaceCourseChallengeAttachment(
+        ExerciseChallenge exercise,
+        TrainingCourseChallengeCreateModel model,
+        CancellationToken token)
+    {
+        var attachment = await ResolveAttachment(
+            model.AttachmentType,
+            model.AttachmentFileHash,
+            model.AttachmentRemoteUrl,
+            token);
+
+        if (IsSameAttachment(exercise.Attachment, attachment))
+            return;
+
+        await blobRepository.DeleteAttachment(exercise.Attachment, token);
+        exercise.Attachment = attachment;
+    }
+
+    private static bool IsSameAttachment(Attachment? current, Attachment? next) =>
+        (current, next) switch
+        {
+            (null, null) => true,
+            ({ Type: FileType.None }, null) => true,
+            (null, { Type: FileType.None }) => true,
+            ({ Type: FileType.Local } left, { Type: FileType.Local } right) =>
+                left.LocalFileId.HasValue && left.LocalFileId == right.LocalFileId,
+            ({ Type: FileType.Remote } left, { Type: FileType.Remote } right) =>
+                string.Equals(left.RemoteUrl?.Trim(), right.RemoteUrl?.Trim(), StringComparison.Ordinal),
+            _ => false
+        };
+
+    private static void SyncCourseChallengeStaticFlag(ExerciseChallenge exercise, TrainingCourseChallengeCreateModel model)
+    {
+        if (exercise.Type.IsDynamic())
+        {
+            exercise.Flags.Clear();
+            return;
+        }
+
+        var flag = model.StaticFlag?.Trim();
+        exercise.Flags.Clear();
+
+        if (string.IsNullOrWhiteSpace(flag))
+            return;
+
+        exercise.Flags.Add(new FlagContext
+        {
+            Flag = flag,
+            OrderIndex = 0,
+            ScoreMode = FlagScoreMode.InheritDecay,
+            AnswerType = AnswerType.Flag
+        });
+    }
+
+    private async Task SetCourseChallengeChapterLink(
+        int courseId,
+        int exerciseChallengeId,
+        int? chapterId,
+        int order,
+        CancellationToken token)
+    {
+        await context.TrainingCourseChapterChallenges
+            .Where(c => c.CourseId == courseId && c.ExerciseChallengeId == exerciseChallengeId)
+            .ExecuteDeleteAsync(token);
+
+        if (!chapterId.HasValue)
+            return;
+
+        context.TrainingCourseChapterChallenges.Add(new TrainingCourseChapterChallenge
+        {
+            CourseId = courseId,
+            ChapterId = chapterId.Value,
+            ExerciseChallengeId = exerciseChallengeId,
+            Order = order
+        });
+    }
 
     private async Task QueueCourseDockerPull(ImageTemplate template, string registryUrl, string imageName,
         string? registryAuth)
@@ -565,6 +746,256 @@ public class TrainingCourseAdminController(
         resource.IsVisible = model.IsVisible;
     }
 
+    [HttpGet("{courseId:int}/theory-questions")]
+    [ProducesResponseType(typeof(TrainingCourseTheoryQuestionModel[]), StatusCodes.Status200OK)]
+    public async Task<IActionResult> TheoryQuestions(
+        [FromRoute] int courseId,
+        [FromQuery] string? keyword = null,
+        [FromQuery] TheoryQuestionType? type = null,
+        [FromQuery] string? bankName = null,
+        [FromQuery] int count = 1000,
+        CancellationToken token = default)
+    {
+        var actor = await CurrentUser();
+        if (!await CanEditCourse(actor, courseId, token))
+            return NotFound();
+
+        var query = context.TrainingCourseTheoryQuestions.AsNoTracking().Where(q => q.CourseId == courseId);
+        if (type.HasValue)
+            query = query.Where(q => q.Type == type.Value);
+        if (!string.IsNullOrWhiteSpace(bankName))
+            query = query.Where(q => q.BankName == bankName.Trim());
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var key = keyword.Trim();
+            query = query.Where(q => q.Title.Contains(key) || q.Content.Contains(key) || q.BankName.Contains(key));
+        }
+
+        var questions = await query
+            .OrderBy(q => q.Type)
+            .ThenBy(q => q.BankName)
+            .ThenByDescending(q => q.UpdatedAt)
+            .Take(Math.Clamp(count, 1, 5000))
+            .ToArrayAsync(token);
+
+        return Ok(questions.Select(TrainingCourseTheoryQuestionModel.FromQuestion).ToArray());
+    }
+
+    [HttpPost("{courseId:int}/theory-questions")]
+    [ProducesResponseType(typeof(TrainingCourseTheoryQuestionModel), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CreateTheoryQuestion(
+        [FromRoute] int courseId,
+        [FromBody] TheoryQuestionEditModel model,
+        CancellationToken token = default)
+    {
+        var actor = await CurrentUser();
+        if (!await CanEditCourse(actor, courseId, token))
+            return NotFound();
+        if (theoryService.NormalizeAndValidate(model) is { } error)
+            return BadRequest(new RequestResponse(error));
+
+        var question = new TrainingCourseTheoryQuestion
+        {
+            CourseId = courseId,
+            Type = model.Type,
+            BankName = model.BankName,
+            Title = model.Title,
+            Content = model.Content,
+            Options = model.Options,
+            AnswerIndexes = model.AnswerIndexes,
+            CreatedById = actor.Id,
+            UpdatedById = actor.Id
+        };
+
+        context.TrainingCourseTheoryQuestions.Add(question);
+        await context.SaveChangesAsync(token);
+        return Ok(TrainingCourseTheoryQuestionModel.FromQuestion(question));
+    }
+
+    [HttpPut("{courseId:int}/theory-questions/{questionId:int}")]
+    [ProducesResponseType(typeof(TrainingCourseTheoryQuestionModel), StatusCodes.Status200OK)]
+    public async Task<IActionResult> UpdateTheoryQuestion(
+        [FromRoute] int courseId,
+        [FromRoute] int questionId,
+        [FromBody] TheoryQuestionEditModel model,
+        CancellationToken token = default)
+    {
+        var actor = await CurrentUser();
+        if (!await CanEditCourse(actor, courseId, token))
+            return NotFound();
+        if (theoryService.NormalizeAndValidate(model) is { } error)
+            return BadRequest(new RequestResponse(error));
+
+        var question = await context.TrainingCourseTheoryQuestions
+            .SingleOrDefaultAsync(q => q.Id == questionId && q.CourseId == courseId, token);
+        if (question is null)
+            return NotFound();
+
+        question.Type = model.Type;
+        question.BankName = model.BankName;
+        question.Title = model.Title;
+        question.Content = model.Content;
+        question.Options = model.Options;
+        question.AnswerIndexes = model.AnswerIndexes;
+        question.UpdatedById = actor.Id;
+        question.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await context.SaveChangesAsync(token);
+        return Ok(TrainingCourseTheoryQuestionModel.FromQuestion(question));
+    }
+
+    [HttpDelete("{courseId:int}/theory-questions/{questionId:int}")]
+    public async Task<IActionResult> DeleteTheoryQuestion(
+        [FromRoute] int courseId,
+        [FromRoute] int questionId,
+        CancellationToken token = default)
+    {
+        var actor = await CurrentUser();
+        if (!await CanEditCourse(actor, courseId, token))
+            return NotFound();
+
+        var inUse = await context.TrainingCourseChapterTheoryQuestions
+            .AnyAsync(q => q.SourceQuestionId == questionId, token);
+        if (inUse)
+            return BadRequest(new RequestResponse("该题已被章节测试引用，不能直接删除。"));
+
+        var question = await context.TrainingCourseTheoryQuestions
+            .SingleOrDefaultAsync(q => q.Id == questionId && q.CourseId == courseId, token);
+        if (question is null)
+            return NotFound();
+
+        context.TrainingCourseTheoryQuestions.Remove(question);
+        await context.SaveChangesAsync(token);
+        return Ok();
+    }
+
+    [HttpGet("{courseId:int}/theory-papers")]
+    [ProducesResponseType(typeof(TrainingCourseChapterTheorySummaryModel[]), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ChapterTheoryPapers([FromRoute] int courseId, CancellationToken token = default)
+    {
+        var actor = await CurrentUser();
+        if (!await CanEditCourse(actor, courseId, token))
+            return NotFound();
+
+        var papers = await context.TrainingCourseChapterTheoryPapers
+            .Include(p => p.Questions)
+            .Where(p => p.CourseId == courseId)
+            .OrderBy(p => p.Chapter.Order)
+            .ThenBy(p => p.ChapterId)
+            .ToArrayAsync(token);
+
+        return Ok(papers.Select(p => TrainingCourseChapterTheorySummaryModel.FromPaper(p)).ToArray());
+    }
+
+    [HttpGet("{courseId:int}/chapters/{chapterId:int}/theory-paper")]
+    [ProducesResponseType(typeof(TrainingCourseChapterTheoryPaperDetailModel), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ChapterTheoryPaper(
+        [FromRoute] int courseId,
+        [FromRoute] int chapterId,
+        CancellationToken token = default)
+    {
+        var actor = await CurrentUser();
+        if (!await CanEditCourse(actor, courseId, token))
+            return NotFound();
+
+        var chapter = await context.TrainingCourseChapters
+            .SingleOrDefaultAsync(c => c.Id == chapterId && c.CourseId == courseId, token);
+        if (chapter is null)
+            return NotFound();
+
+        var paper = await context.TrainingCourseChapterTheoryPapers
+            .Include(p => p.Questions)
+            .SingleOrDefaultAsync(p => p.CourseId == courseId && p.ChapterId == chapterId, token);
+
+        return Ok(paper is null
+            ? TrainingCourseChapterTheoryPaperDetailModel.Empty(courseId, chapter)
+            : TrainingCourseChapterTheoryPaperDetailModel.FromPaper(paper));
+    }
+
+    [HttpPut("{courseId:int}/chapters/{chapterId:int}/theory-paper")]
+    [ProducesResponseType(typeof(TrainingCourseChapterTheoryPaperDetailModel), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SaveChapterTheoryPaper(
+        [FromRoute] int courseId,
+        [FromRoute] int chapterId,
+        [FromBody] TrainingCourseChapterTheoryPaperEditModel model,
+        CancellationToken token = default)
+    {
+        var actor = await CurrentUser();
+        if (!await CanEditCourse(actor, courseId, token))
+            return NotFound();
+        if (string.IsNullOrWhiteSpace(model.Title))
+            return BadRequest(new RequestResponse("测试标题不能为空。"));
+        if (model.IsPublished && model.Questions.Count == 0)
+            return BadRequest(new RequestResponse("发布课后测试前至少需要添加一道题。"));
+
+        var chapter = await context.TrainingCourseChapters
+            .SingleOrDefaultAsync(c => c.Id == chapterId && c.CourseId == courseId, token);
+        if (chapter is null)
+            return NotFound();
+
+        var sourceIds = model.Questions
+            .Where(q => q.SourceQuestionId.HasValue)
+            .Select(q => q.SourceQuestionId!.Value)
+            .Distinct()
+            .ToArray();
+        if (sourceIds.Length > 0)
+        {
+            var existingIds = await context.TrainingCourseTheoryQuestions
+                .Where(q => q.CourseId == courseId && sourceIds.Contains(q.Id))
+                .Select(q => q.Id)
+                .ToArrayAsync(token);
+            if (existingIds.Length != sourceIds.Length)
+                return BadRequest(new RequestResponse("测试题目只能引用当前课程题库。"));
+        }
+
+        foreach (var question in model.Questions)
+        {
+            if (theoryService.NormalizeAndValidate(question, question.Score) is { } error)
+                return BadRequest(new RequestResponse(error));
+        }
+
+        var paper = await context.TrainingCourseChapterTheoryPapers
+            .Include(p => p.Questions)
+            .SingleOrDefaultAsync(p => p.CourseId == courseId && p.ChapterId == chapterId, token);
+
+        paper ??= new TrainingCourseChapterTheoryPaper
+        {
+            CourseId = courseId,
+            ChapterId = chapterId,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        paper.Title = model.Title.Trim();
+        paper.Description = model.Description.Trim();
+        paper.PassRate = Math.Clamp(model.PassRate, 1, 100);
+        paper.IsPublished = model.IsPublished;
+        paper.PublishedAt = model.IsPublished ? paper.PublishedAt ?? DateTimeOffset.UtcNow : null;
+        paper.UpdatedById = actor.Id;
+        paper.UpdatedAt = DateTimeOffset.UtcNow;
+
+        context.TrainingCourseChapterTheoryQuestions.RemoveRange(paper.Questions);
+        paper.Questions = model.Questions
+            .OrderBy(q => q.Order > 0 ? q.Order : int.MaxValue)
+            .Select((q, index) => new TrainingCourseChapterTheoryQuestion
+            {
+                SourceQuestionId = q.SourceQuestionId,
+                Type = q.Type,
+                Title = q.Title.Trim(),
+                Content = q.Content.Trim(),
+                Options = q.Options,
+                AnswerIndexes = TheoryExamService.NormalizeIndexes(q.AnswerIndexes),
+                Score = q.Score,
+                Order = q.Order > 0 ? q.Order : index + 1
+            })
+            .ToList();
+
+        if (paper.Id == 0)
+            context.TrainingCourseChapterTheoryPapers.Add(paper);
+
+        await context.SaveChangesAsync(token);
+        return Ok(TrainingCourseChapterTheoryPaperDetailModel.FromPaper(paper));
+    }
+
     [HttpGet("{courseId:int}/image-templates")]
     [ProducesResponseType(typeof(TrainingCourseImageTemplateModel[]), StatusCodes.Status200OK)]
     public async Task<IActionResult> ImageTemplates([FromRoute] int courseId, CancellationToken token = default)
@@ -892,99 +1323,105 @@ public class TrainingCourseAdminController(
         var actor = await CurrentUser();
         if (!await CanEditCourse(actor, courseId, token))
             return NotFound();
-        if (string.IsNullOrWhiteSpace(model.Title))
-            return BadRequest(new RequestResponse("题目名称不能为空。"));
-        if (model.Type.IsContainer() && string.IsNullOrWhiteSpace(model.ContainerImage))
-            return BadRequest(new RequestResponse("容器题目需要配置 Docker 镜像。"));
-        if (model.Environment == EnvironmentType.WindowsVM && !model.ImageTemplateId.HasValue)
-            return BadRequest(new RequestResponse("Windows 靶机题目需要选择课程内 VM 模板。"));
-
-        if (model.ImageTemplateId.HasValue)
-        {
-            var ownsTemplate = await context.ImageTemplates.AnyAsync(t =>
-                t.Id == model.ImageTemplateId.Value && t.TrainingCourseId == courseId, token);
-            if (!ownsTemplate)
-                return BadRequest(new RequestResponse("只能使用当前课程的环境模板。"));
-        }
+        if (await ValidateCourseChallengeModel(courseId, model, token) is { } validation)
+            return validation;
 
         var order = model.Order > 0
             ? model.Order
             : await context.TrainingCourseChallenges
                 .Where(c => c.CourseId == courseId)
                 .MaxAsync(c => (int?)c.Order, token) + 1 ?? 1;
+        model.Order = order;
 
         await using var transaction = await context.Database.BeginTransactionAsync(token);
 
-        var exerciseType = model.Environment == EnvironmentType.WindowsVM && model.ImageTemplateId.HasValue
-            ? ChallengeType.StaticContainer
-            : model.Type;
-
-        var exercise = new ExerciseChallenge
-        {
-            Title = model.Title.Trim(),
-            Content = model.Content,
-            Category = model.Category,
-            Type = exerciseType,
-            Environment = model.Environment,
-            ImageTemplateId = model.ImageTemplateId,
-            ContainerImage = model.ContainerImage?.Trim(),
-            MemoryLimit = model.MemoryLimit,
-            CPUCount = model.CPUCount,
-            StorageLimit = model.StorageLimit,
-            ExposePort = model.ExposePort,
-            NetworkMode = model.NetworkMode,
-            FlagTemplate = model.FlagTemplate,
-            SubmissionLimit = model.SubmissionLimit,
-            IsEnabled = true,
-            TrainingCourseId = courseId
-        };
-
-        if (!string.IsNullOrWhiteSpace(model.StaticFlag) && !exercise.Type.IsDynamic())
-        {
-            exercise.Flags.Add(new FlagContext
-            {
-                Flag = model.StaticFlag.Trim(),
-                OrderIndex = 0,
-                ScoreMode = FlagScoreMode.InheritDecay,
-                AnswerType = AnswerType.Flag
-            });
-        }
-
-        context.ExerciseChallenges.Add(exercise);
-        await context.SaveChangesAsync(token);
-
+        var exercise = new ExerciseChallenge();
         var link = new TrainingCourseChallenge
         {
             CourseId = courseId,
-            ExerciseChallengeId = exercise.Id,
             ExerciseChallenge = exercise,
-            Order = order,
-            IsRequired = model.IsRequired,
-            DisplayTitle = string.IsNullOrWhiteSpace(model.DisplayTitle) ? null : model.DisplayTitle.Trim(),
             CreatedById = actor.Id
         };
+
+        await ApplyCourseChallengeModel(courseId, link, exercise, model, token);
+        context.ExerciseChallenges.Add(exercise);
         context.TrainingCourseChallenges.Add(link);
+        await context.SaveChangesAsync(token);
 
-        if (model.ChapterId.HasValue)
-        {
-            var chapterExists = await context.TrainingCourseChapters
-                .AnyAsync(c => c.Id == model.ChapterId.Value && c.CourseId == courseId, token);
-            if (!chapterExists)
-                return BadRequest(new RequestResponse("课程章节不存在。"));
-
-            context.TrainingCourseChapterChallenges.Add(new TrainingCourseChapterChallenge
-            {
-                CourseId = courseId,
-                ChapterId = model.ChapterId.Value,
-                ExerciseChallengeId = exercise.Id,
-                Order = order
-            });
-        }
+        await SetCourseChallengeChapterLink(courseId, exercise.Id, model.ChapterId, order, token);
 
         await context.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
 
         return Ok(TrainingCourseChallengeModel.FromChallenge(link, model.ChapterId));
+    }
+
+    [HttpGet("{courseId:int}/challenges/{exerciseChallengeId:int}/edit")]
+    [ProducesResponseType(typeof(TrainingCourseChallengeEditDetailModel), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CourseChallengeEditDetail(
+        [FromRoute] int courseId,
+        [FromRoute] int exerciseChallengeId,
+        CancellationToken token = default)
+    {
+        var actor = await CurrentUser();
+        if (!await CanEditCourse(actor, courseId, token))
+            return NotFound();
+
+        var link = await context.TrainingCourseChallenges
+            .Include(c => c.ExerciseChallenge)
+            .ThenInclude(c => c.Flags)
+            .Include(c => c.ExerciseChallenge)
+            .ThenInclude(c => c.Attachment)
+            .ThenInclude(a => a!.LocalFile)
+            .SingleOrDefaultAsync(c => c.CourseId == courseId && c.ExerciseChallengeId == exerciseChallengeId, token);
+        if (link is null || link.ExerciseChallenge.TrainingCourseId != courseId)
+            return NotFound();
+
+        var chapterId = await context.TrainingCourseChapterChallenges
+            .Where(c => c.CourseId == courseId && c.ExerciseChallengeId == exerciseChallengeId)
+            .OrderBy(c => c.Order)
+            .Select(c => (int?)c.ChapterId)
+            .FirstOrDefaultAsync(token);
+        var submissionCount = await context.TrainingCourseSubmissions.CountAsync(s =>
+            s.CourseId == courseId && s.ExerciseChallengeId == exerciseChallengeId, token);
+
+        return Ok(TrainingCourseChallengeEditDetailModel.FromChallenge(link, chapterId, submissionCount));
+    }
+
+    [HttpPut("{courseId:int}/challenges/{exerciseChallengeId:int}")]
+    [ProducesResponseType(typeof(TrainingCourseChallengeEditDetailModel), StatusCodes.Status200OK)]
+    public async Task<IActionResult> UpdateCourseChallenge(
+        [FromRoute] int courseId,
+        [FromRoute] int exerciseChallengeId,
+        [FromBody] TrainingCourseChallengeUpdateModel model,
+        CancellationToken token = default)
+    {
+        var actor = await CurrentUser();
+        if (!await CanEditCourse(actor, courseId, token))
+            return NotFound();
+        if (await ValidateCourseChallengeModel(courseId, model, token) is { } validation)
+            return validation;
+
+        var link = await context.TrainingCourseChallenges
+            .Include(c => c.ExerciseChallenge)
+            .ThenInclude(c => c.Flags)
+            .Include(c => c.ExerciseChallenge)
+            .ThenInclude(c => c.Attachment)
+            .ThenInclude(a => a!.LocalFile)
+            .SingleOrDefaultAsync(c => c.CourseId == courseId && c.ExerciseChallengeId == exerciseChallengeId, token);
+        if (link is null || link.ExerciseChallenge.TrainingCourseId != courseId)
+            return NotFound();
+
+        model.Order = model.Order > 0 ? model.Order : link.Order;
+        await using var transaction = await context.Database.BeginTransactionAsync(token);
+
+        await ApplyCourseChallengeModel(courseId, link, link.ExerciseChallenge, model, token);
+        await context.SaveChangesAsync(token);
+        await SetCourseChallengeChapterLink(courseId, exerciseChallengeId, model.ChapterId, model.Order, token);
+        await context.SaveChangesAsync(token);
+        await transaction.CommitAsync(token);
+
+        return await CourseChallengeEditDetail(courseId, exerciseChallengeId, token);
     }
 
     [HttpPost("{courseId:int}/challenges")]
@@ -1023,32 +1460,11 @@ public class TrainingCourseAdminController(
         link.IsRequired = model.IsRequired;
         link.DisplayTitle = model.DisplayTitle;
 
-        if (model.ChapterId.HasValue)
-        {
-            var chapterExists = await context.TrainingCourseChapters
-                .AnyAsync(c => c.Id == model.ChapterId.Value && c.CourseId == courseId, token);
-            if (!chapterExists)
-                return BadRequest(new RequestResponse("课程章节不存在。"));
+        if (model.ChapterId.HasValue &&
+            !await context.TrainingCourseChapters.AnyAsync(c => c.Id == model.ChapterId.Value && c.CourseId == courseId, token))
+            return BadRequest(new RequestResponse("????????"));
 
-            var chapterLink = await context.TrainingCourseChapterChallenges.SingleOrDefaultAsync(c =>
-                c.ChapterId == model.ChapterId.Value &&
-                c.CourseId == courseId &&
-                c.ExerciseChallengeId == model.ExerciseChallengeId, token);
-            if (chapterLink is null)
-            {
-                context.TrainingCourseChapterChallenges.Add(new TrainingCourseChapterChallenge
-                {
-                    ChapterId = model.ChapterId.Value,
-                    CourseId = courseId,
-                    ExerciseChallengeId = model.ExerciseChallengeId,
-                    Order = model.Order
-                });
-            }
-            else
-            {
-                chapterLink.Order = model.Order;
-            }
-        }
+        await SetCourseChallengeChapterLink(courseId, model.ExerciseChallengeId, model.ChapterId, model.Order, token);
 
         await context.SaveChangesAsync(token);
         return Ok();
@@ -1065,6 +1481,8 @@ public class TrainingCourseAdminController(
             return NotFound();
 
         var challenge = await context.ExerciseChallenges
+            .Include(c => c.Attachment)
+            .ThenInclude(a => a!.LocalFile)
             .SingleOrDefaultAsync(c => c.Id == exerciseChallengeId, token);
         var linkExists = await context.TrainingCourseChallenges
             .AnyAsync(c => c.CourseId == courseId && c.ExerciseChallengeId == exerciseChallengeId, token);
@@ -1073,6 +1491,7 @@ public class TrainingCourseAdminController(
 
         if (challenge?.TrainingCourseId == courseId)
         {
+            await blobRepository.DeleteAttachment(challenge.Attachment, token);
             await context.TrainingCourseSubmissions
                 .Where(s => s.CourseId == courseId && s.ExerciseChallengeId == exerciseChallengeId)
                 .ExecuteDeleteAsync(token);

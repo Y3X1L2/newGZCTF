@@ -5,10 +5,18 @@ import api, {
   ContainerInfoModel,
   ContentType,
   EnvironmentType,
+  FileType,
   FlagSubmitModel,
   NetworkMode,
   Role,
 } from '@Api'
+import {
+  TheoryAnswerModel,
+  TheoryAnswerSheetEditModel,
+  TheoryAnswerSheetStatus,
+  TheoryQuestionEditModel,
+  TheoryQuestionType,
+} from '../Api/TheoryApi'
 
 export enum TrainingType {
   Ctf = 'Ctf',
@@ -348,6 +356,8 @@ export interface TrainingCourseChallengeModel {
   isRequired: boolean
   solved: boolean
   displayTitle?: string | null
+  hasAttachment?: boolean
+  attachmentFileName?: string | null
 }
 
 export interface TrainingCourseChapterModel {
@@ -366,6 +376,7 @@ export interface TrainingCourseChapterModel {
   progressStatus?: TrainingCourseProgressStatus | null
   completedAt?: number | null
   challenges: TrainingCourseChallengeModel[]
+  theoryPaper?: TrainingCourseChapterTheorySummaryModel | null
 }
 
 export interface TrainingCourseModel extends TrainingCourseEditModel {
@@ -477,6 +488,91 @@ export interface TrainingCourseChallengeCreateModel {
   order: number
   isRequired: boolean
   displayTitle?: string | null
+  attachmentType?: FileType
+  attachmentFileHash?: string | null
+  attachmentRemoteUrl?: string | null
+}
+
+export interface TrainingCourseChallengeEditDetailModel extends TrainingCourseChallengeCreateModel {
+  exerciseChallengeId: number
+  attachmentUrl?: string | null
+  attachmentFileName?: string | null
+  attachmentFileSize?: number | null
+  submissionCount: number
+  hasSubmittedAnswers: boolean
+}
+
+export interface TrainingCourseTheoryQuestionModel extends TheoryQuestionEditModel {
+  id: number
+  courseId: number
+  createdAt: number
+  updatedAt: number
+}
+
+export interface TrainingCourseTheoryPaperQuestionEditModel extends TheoryQuestionEditModel {
+  id?: number
+  sourceQuestionId?: number | null
+  score: number
+  order: number
+}
+
+export interface TrainingCourseChapterTheoryPaperEditModel {
+  title: string
+  description: string
+  passRate: number
+  isPublished: boolean
+  questions: TrainingCourseTheoryPaperQuestionEditModel[]
+}
+
+export interface TrainingCourseChapterTheorySummaryModel {
+  id: number
+  courseId: number
+  chapterId: number
+  title: string
+  isPublished: boolean
+  questionCount: number
+  totalScore: number
+  passRate: number
+  status?: TheoryAnswerSheetStatus | null
+  score?: number | null
+  passed?: boolean | null
+  submittedAt?: number | null
+}
+
+export interface TrainingCourseChapterTheoryPaperDetailModel extends TrainingCourseChapterTheoryPaperEditModel {
+  id: number
+  courseId: number
+  chapterId: number
+  publishedAt?: number | null
+  updatedAt?: number
+  totalScore: number
+}
+
+export interface TrainingCourseChapterTheoryPlayerQuestionModel {
+  id: number
+  type: TheoryQuestionType
+  title: string
+  content: string
+  options: string[]
+  score: number
+  order: number
+}
+
+export interface TrainingCourseChapterTheoryPlayerPaperModel {
+  paperId: number
+  courseId: number
+  chapterId: number
+  title: string
+  description: string
+  totalScore: number
+  passRate: number
+  status?: TheoryAnswerSheetStatus | null
+  score?: number | null
+  passed?: boolean | null
+  submittedAt?: number | null
+  updatedAt?: number | null
+  questions: TrainingCourseChapterTheoryPlayerQuestionModel[]
+  answers: TheoryAnswerModel[]
 }
 
 export interface TrainingCourseDockerRegistryModel {
@@ -713,6 +809,28 @@ export const trainingCourseApi = {
       path: `/api/training/courses/${courseId}/challenges/${challengeId}/submit`,
       method: 'POST',
       query: { chapterId },
+      body: data,
+      type: ContentType.Json,
+    }),
+
+  chapterTheory: (courseId: number, chapterId: number) =>
+    request<TrainingCourseChapterTheoryPlayerPaperModel, unknown>({
+      path: `/api/training/courses/${courseId}/chapters/${chapterId}/theory`,
+      method: 'GET',
+    }),
+
+  saveChapterTheoryDraft: (courseId: number, chapterId: number, data: TheoryAnswerSheetEditModel) =>
+    request<TrainingCourseChapterTheoryPlayerPaperModel, unknown>({
+      path: `/api/training/courses/${courseId}/chapters/${chapterId}/theory/draft`,
+      method: 'PUT',
+      body: data,
+      type: ContentType.Json,
+    }),
+
+  submitChapterTheory: (courseId: number, chapterId: number, data: TheoryAnswerSheetEditModel) =>
+    request<TrainingCourseChapterTheoryPlayerPaperModel, unknown>({
+      path: `/api/training/courses/${courseId}/chapters/${chapterId}/theory/submit`,
+      method: 'POST',
       body: data,
       type: ContentType.Json,
     }),
@@ -990,6 +1108,20 @@ export const trainingCourseAdminApi = {
       type: ContentType.Json,
     }),
 
+  challengeEditDetail: (courseId: number, exerciseChallengeId: number) =>
+    request<TrainingCourseChallengeEditDetailModel, unknown>({
+      path: `/api/admin/training/courses/${courseId}/challenges/${exerciseChallengeId}/edit`,
+      method: 'GET',
+    }),
+
+  updateChallenge: (courseId: number, exerciseChallengeId: number, data: TrainingCourseChallengeCreateModel) =>
+    request<TrainingCourseChallengeEditDetailModel, unknown>({
+      path: `/api/admin/training/courses/${courseId}/challenges/${exerciseChallengeId}`,
+      method: 'PUT',
+      body: data,
+      type: ContentType.Json,
+    }),
+
   removeChallenge: (courseId: number, exerciseChallengeId: number) =>
     request<void, unknown>({
       path: `/api/admin/training/courses/${courseId}/challenges/${exerciseChallengeId}`,
@@ -1036,5 +1168,54 @@ export const trainingCourseAdminApi = {
     request<void, unknown>({
       path: `/api/admin/training/courses/${courseId}/image-templates/${templateId}`,
       method: 'DELETE',
+    }),
+
+  theoryQuestions: (courseId: number, query?: { keyword?: string; type?: TheoryQuestionType; bankName?: string; count?: number }) =>
+    request<TrainingCourseTheoryQuestionModel[], unknown>({
+      path: `/api/admin/training/courses/${courseId}/theory-questions`,
+      method: 'GET',
+      query,
+    }),
+
+  createTheoryQuestion: (courseId: number, data: TheoryQuestionEditModel) =>
+    request<TrainingCourseTheoryQuestionModel, unknown>({
+      path: `/api/admin/training/courses/${courseId}/theory-questions`,
+      method: 'POST',
+      body: data,
+      type: ContentType.Json,
+    }),
+
+  updateTheoryQuestion: (courseId: number, questionId: number, data: TheoryQuestionEditModel) =>
+    request<TrainingCourseTheoryQuestionModel, unknown>({
+      path: `/api/admin/training/courses/${courseId}/theory-questions/${questionId}`,
+      method: 'PUT',
+      body: data,
+      type: ContentType.Json,
+    }),
+
+  deleteTheoryQuestion: (courseId: number, questionId: number) =>
+    request<void, unknown>({
+      path: `/api/admin/training/courses/${courseId}/theory-questions/${questionId}`,
+      method: 'DELETE',
+    }),
+
+  theoryPapers: (courseId: number) =>
+    request<TrainingCourseChapterTheorySummaryModel[], unknown>({
+      path: `/api/admin/training/courses/${courseId}/theory-papers`,
+      method: 'GET',
+    }),
+
+  chapterTheoryPaper: (courseId: number, chapterId: number) =>
+    request<TrainingCourseChapterTheoryPaperDetailModel, unknown>({
+      path: `/api/admin/training/courses/${courseId}/chapters/${chapterId}/theory-paper`,
+      method: 'GET',
+    }),
+
+  saveChapterTheoryPaper: (courseId: number, chapterId: number, data: TrainingCourseChapterTheoryPaperEditModel) =>
+    request<TrainingCourseChapterTheoryPaperDetailModel, unknown>({
+      path: `/api/admin/training/courses/${courseId}/chapters/${chapterId}/theory-paper`,
+      method: 'PUT',
+      body: data,
+      type: ContentType.Json,
     }),
 }

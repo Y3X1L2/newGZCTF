@@ -101,6 +101,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TrainingCourseProgress> TrainingCourseProgresses { get; set; } = null!;
     public DbSet<TrainingCheckIn> TrainingCheckIns { get; set; } = null!;
     public DbSet<TrainingChapterProgress> TrainingChapterProgresses { get; set; } = null!;
+    public DbSet<TrainingCourseTheoryQuestion> TrainingCourseTheoryQuestions { get; set; } = null!;
+    public DbSet<TrainingCourseChapterTheoryPaper> TrainingCourseChapterTheoryPapers { get; set; } = null!;
+    public DbSet<TrainingCourseChapterTheoryQuestion> TrainingCourseChapterTheoryQuestions { get; set; } = null!;
+    public DbSet<TrainingCourseChapterTheorySheet> TrainingCourseChapterTheorySheets { get; set; } = null!;
+    public DbSet<TrainingCourseChapterTheoryAnswer> TrainingCourseChapterTheoryAnswers { get; set; } = null!;
 
     private static ValueConverter<T?, string> GetJsonConverter<T>() where T : class, new() =>
         new(
@@ -1190,6 +1195,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .WithOne(e => e.Course)
                 .HasForeignKey(e => e.CourseId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(e => e.TheoryQuestions)
+                .WithOne(e => e.Course)
+                .HasForeignKey(e => e.CourseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(e => e.TheoryPapers)
+                .WithOne(e => e.Course)
+                .HasForeignKey(e => e.CourseId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<TrainingCourseTeacher>(entity =>
@@ -1255,6 +1270,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .WithMany()
                 .HasForeignKey(e => e.UpdatedById)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.TheoryPaper)
+                .WithOne(e => e.Chapter)
+                .HasForeignKey<TrainingCourseChapterTheoryPaper>(e => e.ChapterId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<TrainingCourseResource>(entity =>
@@ -1371,6 +1391,113 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
             entity.HasOne(e => e.User)
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TrainingCourseTheoryQuestion>(entity =>
+        {
+            entity.Property(e => e.Type)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.Property(e => e.Options)
+                .HasConversion(listConverter)
+                .Metadata
+                .SetValueComparer(listComparer);
+
+            entity.Property(e => e.AnswerIndexes)
+                .HasConversion(intListConverter)
+                .Metadata
+                .SetValueComparer(intListComparer);
+
+            entity.HasOne(e => e.CreatedBy)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedById)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.UpdatedBy)
+                .WithMany()
+                .HasForeignKey(e => e.UpdatedById)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<TrainingCourseChapterTheoryPaper>(entity =>
+        {
+            entity.HasOne(e => e.UpdatedBy)
+                .WithMany()
+                .HasForeignKey(e => e.UpdatedById)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasMany(e => e.Questions)
+                .WithOne(e => e.Paper)
+                .HasForeignKey(e => e.PaperId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TrainingCourseChapterTheoryQuestion>(entity =>
+        {
+            entity.Property(e => e.Type)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.Property(e => e.Options)
+                .HasConversion(listConverter)
+                .Metadata
+                .SetValueComparer(listComparer);
+
+            entity.Property(e => e.AnswerIndexes)
+                .HasConversion(intListConverter)
+                .Metadata
+                .SetValueComparer(intListComparer);
+
+            entity.HasOne(e => e.SourceQuestion)
+                .WithMany()
+                .HasForeignKey(e => e.SourceQuestionId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<TrainingCourseChapterTheorySheet>(entity =>
+        {
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.HasOne(e => e.Course)
+                .WithMany()
+                .HasForeignKey(e => e.CourseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Chapter)
+                .WithMany()
+                .HasForeignKey(e => e.ChapterId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Paper)
+                .WithMany()
+                .HasForeignKey(e => e.PaperId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(e => e.Answers)
+                .WithOne(e => e.Sheet)
+                .HasForeignKey(e => e.SheetId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TrainingCourseChapterTheoryAnswer>(entity =>
+        {
+            entity.Property(e => e.SelectedIndexes)
+                .HasConversion(intListConverter)
+                .Metadata
+                .SetValueComparer(intListComparer);
+
+            entity.HasOne(e => e.PaperQuestion)
+                .WithMany()
+                .HasForeignKey(e => e.PaperQuestionId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

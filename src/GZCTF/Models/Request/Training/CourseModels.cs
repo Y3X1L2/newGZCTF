@@ -109,7 +109,17 @@ public class TrainingCourseChallengeEditModel
 
     [MaxLength(128)]
     public string? DisplayTitle { get; set; }
+
+    public FileType AttachmentType { get; set; } = FileType.None;
+
+    [MaxLength(Limits.FileHashLength)]
+    public string? AttachmentFileHash { get; set; }
+
+    [MaxLength(1024)]
+    public string? AttachmentRemoteUrl { get; set; }
 }
+
+public class TrainingCourseChallengeUpdateModel : TrainingCourseChallengeCreateModel;
 
 public class TrainingCourseImageTemplateAttachModel
 {
@@ -187,6 +197,14 @@ public class TrainingCourseChallengeCreateModel
 
     [MaxLength(128)]
     public string? DisplayTitle { get; set; }
+
+    public FileType AttachmentType { get; set; } = FileType.None;
+
+    [MaxLength(Limits.FileHashLength)]
+    public string? AttachmentFileHash { get; set; }
+
+    [MaxLength(1024)]
+    public string? AttachmentRemoteUrl { get; set; }
 }
 
 public class TrainingCourseTeacherModel
@@ -335,6 +353,10 @@ public class TrainingCourseChallengeModel
 
     public string? DisplayTitle { get; set; }
 
+    public bool HasAttachment { get; set; }
+
+    public string? AttachmentFileName { get; set; }
+
     public static TrainingCourseChallengeModel FromChallenge(
         TrainingCourseChallenge challenge,
         int? chapterId = null,
@@ -350,7 +372,315 @@ public class TrainingCourseChallengeModel
             Order = challenge.Order,
             IsRequired = challenge.IsRequired,
             Solved = solved,
-            DisplayTitle = challenge.DisplayTitle
+            DisplayTitle = challenge.DisplayTitle,
+            HasAttachment = challenge.ExerciseChallenge.Attachment is not null,
+            AttachmentFileName = challenge.ExerciseChallenge.Attachment?.LocalFile?.Name
+        };
+}
+
+public class TrainingCourseChallengeEditDetailModel : TrainingCourseChallengeCreateModel
+{
+    public int ExerciseChallengeId { get; set; }
+
+    public string? AttachmentUrl { get; set; }
+
+    public string? AttachmentFileName { get; set; }
+
+    public long? AttachmentFileSize { get; set; }
+
+    public int SubmissionCount { get; set; }
+
+    public bool HasSubmittedAnswers => SubmissionCount > 0;
+
+    public static TrainingCourseChallengeEditDetailModel FromChallenge(
+        TrainingCourseChallenge link,
+        int? chapterId,
+        int submissionCount)
+    {
+        var challenge = link.ExerciseChallenge;
+        var staticFlag = challenge.Type.IsDynamic()
+            ? null
+            : challenge.Flags.OrderBy(f => f.OrderIndex).FirstOrDefault()?.Flag;
+
+        return new TrainingCourseChallengeEditDetailModel
+        {
+            ExerciseChallengeId = link.ExerciseChallengeId,
+            Title = challenge.Title,
+            Content = challenge.Content,
+            Category = challenge.Category,
+            Type = challenge.Type,
+            Environment = challenge.Environment,
+            ImageTemplateId = challenge.ImageTemplateId,
+            ContainerImage = challenge.ContainerImage,
+            MemoryLimit = challenge.MemoryLimit,
+            CPUCount = challenge.CPUCount,
+            StorageLimit = challenge.StorageLimit,
+            ExposePort = challenge.ExposePort,
+            NetworkMode = challenge.NetworkMode,
+            FlagTemplate = challenge.FlagTemplate,
+            StaticFlag = staticFlag,
+            SubmissionLimit = challenge.SubmissionLimit,
+            ChapterId = chapterId,
+            Order = link.Order,
+            IsRequired = link.IsRequired,
+            DisplayTitle = link.DisplayTitle,
+            AttachmentType = challenge.Attachment?.Type ?? FileType.None,
+            AttachmentFileHash = challenge.Attachment?.LocalFile?.Hash,
+            AttachmentRemoteUrl = challenge.Attachment?.RemoteUrl,
+            AttachmentUrl = challenge.Attachment?.Url,
+            AttachmentFileName = challenge.Attachment?.LocalFile?.Name,
+            AttachmentFileSize = challenge.Attachment?.FileSize,
+            SubmissionCount = submissionCount
+        };
+    }
+}
+
+public class TrainingCourseTheoryQuestionModel : TheoryQuestionEditModel
+{
+    public int Id { get; set; }
+
+    public int CourseId { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
+
+    public DateTimeOffset UpdatedAt { get; set; }
+
+    public static TrainingCourseTheoryQuestionModel FromQuestion(TrainingCourseTheoryQuestion question) =>
+        new()
+        {
+            Id = question.Id,
+            CourseId = question.CourseId,
+            Type = question.Type,
+            BankName = question.BankName,
+            Title = question.Title,
+            Content = question.Content,
+            Options = question.Options,
+            AnswerIndexes = question.AnswerIndexes,
+            CreatedAt = question.CreatedAt,
+            UpdatedAt = question.UpdatedAt
+        };
+}
+
+public class TrainingCourseTheoryPaperQuestionEditModel : TheoryQuestionEditModel
+{
+    public int Id { get; set; }
+
+    public int? SourceQuestionId { get; set; }
+
+    [Range(1, int.MaxValue)]
+    public int Score { get; set; } = 1;
+
+    public int Order { get; set; }
+}
+
+public class TrainingCourseChapterTheoryPaperEditModel
+{
+    [Required]
+    [MaxLength(128)]
+    public string Title { get; set; } = string.Empty;
+
+    public string Description { get; set; } = string.Empty;
+
+    [Range(1, 100)]
+    public int PassRate { get; set; } = 60;
+
+    public bool IsPublished { get; set; }
+
+    public List<TrainingCourseTheoryPaperQuestionEditModel> Questions { get; set; } = [];
+}
+
+public class TrainingCourseChapterTheorySummaryModel
+{
+    public int Id { get; set; }
+
+    public int CourseId { get; set; }
+
+    public int ChapterId { get; set; }
+
+    public string Title { get; set; } = string.Empty;
+
+    public bool IsPublished { get; set; }
+
+    public int QuestionCount { get; set; }
+
+    public int TotalScore { get; set; }
+
+    public int PassRate { get; set; }
+
+    public TheoryAnswerSheetStatus? Status { get; set; }
+
+    public int? Score { get; set; }
+
+    public bool? Passed { get; set; }
+
+    public DateTimeOffset? SubmittedAt { get; set; }
+
+    public static TrainingCourseChapterTheorySummaryModel FromPaper(
+        TrainingCourseChapterTheoryPaper paper,
+        TrainingCourseChapterTheorySheet? sheet = null) =>
+        new()
+        {
+            Id = paper.Id,
+            CourseId = paper.CourseId,
+            ChapterId = paper.ChapterId,
+            Title = paper.Title,
+            IsPublished = paper.IsPublished,
+            QuestionCount = paper.Questions.Count,
+            TotalScore = paper.Questions.Sum(q => q.Score),
+            PassRate = paper.PassRate,
+            Status = sheet?.Status,
+            Score = sheet?.Status == TheoryAnswerSheetStatus.Submitted ? sheet.Score : null,
+            Passed = sheet?.Status == TheoryAnswerSheetStatus.Submitted ? sheet.Passed : null,
+            SubmittedAt = sheet?.SubmittedAt
+        };
+}
+
+public class TrainingCourseChapterTheoryPaperDetailModel : TrainingCourseChapterTheoryPaperEditModel
+{
+    public int Id { get; set; }
+
+    public int CourseId { get; set; }
+
+    public int ChapterId { get; set; }
+
+    public DateTimeOffset? PublishedAt { get; set; }
+
+    public DateTimeOffset UpdatedAt { get; set; }
+
+    public int TotalScore { get; set; }
+
+    public static TrainingCourseChapterTheoryPaperDetailModel Empty(int courseId, TrainingCourseChapter chapter) =>
+        new()
+        {
+            CourseId = courseId,
+            ChapterId = chapter.Id,
+            Title = $"{chapter.Title} 课后测试",
+            Description = string.Empty,
+            PassRate = 60,
+            IsPublished = false,
+            Questions = [],
+            TotalScore = 0
+        };
+
+    public static TrainingCourseChapterTheoryPaperDetailModel FromPaper(TrainingCourseChapterTheoryPaper paper) =>
+        new()
+        {
+            Id = paper.Id,
+            CourseId = paper.CourseId,
+            ChapterId = paper.ChapterId,
+            Title = paper.Title,
+            Description = paper.Description,
+            PassRate = paper.PassRate,
+            IsPublished = paper.IsPublished,
+            PublishedAt = paper.PublishedAt,
+            UpdatedAt = paper.UpdatedAt,
+            TotalScore = paper.Questions.Sum(q => q.Score),
+            Questions = paper.Questions
+                .OrderBy(q => q.Order)
+                .Select(q => new TrainingCourseTheoryPaperQuestionEditModel
+                {
+                    Id = q.Id,
+                    SourceQuestionId = q.SourceQuestionId,
+                    Type = q.Type,
+                    BankName = string.Empty,
+                    Title = q.Title,
+                    Content = q.Content,
+                    Options = q.Options,
+                    AnswerIndexes = q.AnswerIndexes,
+                    Score = q.Score,
+                    Order = q.Order
+                })
+                .ToList()
+        };
+}
+
+public class TrainingCourseChapterTheoryPlayerQuestionModel
+{
+    public int Id { get; set; }
+
+    public TheoryQuestionType Type { get; set; }
+
+    public string Title { get; set; } = string.Empty;
+
+    public string Content { get; set; } = string.Empty;
+
+    public List<string> Options { get; set; } = [];
+
+    public int Score { get; set; }
+
+    public int Order { get; set; }
+
+    public static TrainingCourseChapterTheoryPlayerQuestionModel FromQuestion(TrainingCourseChapterTheoryQuestion question) =>
+        new()
+        {
+            Id = question.Id,
+            Type = question.Type,
+            Title = question.Title,
+            Content = question.Content,
+            Options = question.Options,
+            Score = question.Score,
+            Order = question.Order
+        };
+}
+
+public class TrainingCourseChapterTheoryPlayerPaperModel
+{
+    public int PaperId { get; set; }
+
+    public int CourseId { get; set; }
+
+    public int ChapterId { get; set; }
+
+    public string Title { get; set; } = string.Empty;
+
+    public string Description { get; set; } = string.Empty;
+
+    public int TotalScore { get; set; }
+
+    public int PassRate { get; set; }
+
+    public TheoryAnswerSheetStatus? Status { get; set; }
+
+    public int? Score { get; set; }
+
+    public bool? Passed { get; set; }
+
+    public DateTimeOffset? SubmittedAt { get; set; }
+
+    public DateTimeOffset? UpdatedAt { get; set; }
+
+    public List<TrainingCourseChapterTheoryPlayerQuestionModel> Questions { get; set; } = [];
+
+    public List<TheoryAnswerModel> Answers { get; set; } = [];
+
+    public static TrainingCourseChapterTheoryPlayerPaperModel FromPaper(
+        TrainingCourseChapterTheoryPaper paper,
+        TrainingCourseChapterTheorySheet? sheet) =>
+        new()
+        {
+            PaperId = paper.Id,
+            CourseId = paper.CourseId,
+            ChapterId = paper.ChapterId,
+            Title = paper.Title,
+            Description = paper.Description,
+            TotalScore = paper.Questions.Sum(q => q.Score),
+            PassRate = paper.PassRate,
+            Status = sheet?.Status,
+            Score = sheet?.Status == TheoryAnswerSheetStatus.Submitted ? sheet.Score : null,
+            Passed = sheet?.Status == TheoryAnswerSheetStatus.Submitted ? sheet.Passed : null,
+            SubmittedAt = sheet?.SubmittedAt,
+            UpdatedAt = sheet?.UpdatedAt,
+            Questions = paper.Questions
+                .OrderBy(q => q.Order)
+                .Select(TrainingCourseChapterTheoryPlayerQuestionModel.FromQuestion)
+                .ToList(),
+            Answers = sheet?.Answers
+                .Select(a => new TheoryAnswerModel
+                {
+                    PaperQuestionId = a.PaperQuestionId,
+                    SelectedIndexes = a.SelectedIndexes
+                })
+                .ToList() ?? []
         };
 }
 
@@ -427,11 +757,14 @@ public class TrainingCourseChapterModel
 
     public List<TrainingCourseChallengeModel> Challenges { get; set; } = [];
 
+    public TrainingCourseChapterTheorySummaryModel? TheoryPaper { get; set; }
+
     public static TrainingCourseChapterModel FromChapter(
         TrainingCourseChapter chapter,
         TrainingChapterProgress? progress = null,
         IEnumerable<TrainingCourseChallengeModel>? challenges = null,
-        bool revealContent = true) =>
+        bool revealContent = true,
+        TrainingCourseChapterTheorySummaryModel? theoryPaper = null) =>
         new()
         {
             Id = chapter.Id,
@@ -448,7 +781,8 @@ public class TrainingCourseChapterModel
             IsPublished = chapter.IsPublished,
             ProgressStatus = progress?.Status,
             CompletedAt = progress?.CompletedAt,
-            Challenges = challenges?.ToList() ?? []
+            Challenges = challenges?.ToList() ?? [],
+            TheoryPaper = theoryPaper
         };
 }
 
