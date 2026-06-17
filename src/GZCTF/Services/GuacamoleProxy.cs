@@ -54,13 +54,17 @@ public class GuacamoleProxy
     /// <param name="vmName">Display name for the connection (typically the VM name).</param>
     /// <param name="host">Target host IP address or hostname running the RDP service.</param>
     /// <param name="port">Target RDP port (usually 3389).</param>
+    /// <param name="username">Per-instance RDP username.</param>
+    /// <param name="password">Per-instance RDP password.</param>
     /// <returns>A tuple of (connectionId, token) for constructing the browser URL.</returns>
     /// <exception cref="GuacamoleApiException">Thrown when the Guacamole API call fails.</exception>
     public async Task<(string ConnectionId, string Token)> CreateConnectionAsync(
-        string vmName, string host, int port)
+        string vmName, string host, int port, string username, string password)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(vmName);
         ArgumentException.ThrowIfNullOrWhiteSpace(host);
+        ArgumentException.ThrowIfNullOrWhiteSpace(username);
+        ArgumentException.ThrowIfNullOrWhiteSpace(password);
 
         _logger.LogInformation("Creating Guacamole RDP connection for '{VmName}' at {Host}:{Port}",
             vmName, host, port);
@@ -74,8 +78,8 @@ public class GuacamoleProxy
             {
                 hostname = host,
                 port,
-                username = "player",
-                password = "password",
+                username,
+                password,
                 ignoreCert = "true",
                 security = "any",
                 enableWallpaper = "false",

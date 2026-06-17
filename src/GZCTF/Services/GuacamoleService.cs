@@ -59,34 +59,8 @@ public class GuacamoleService
                 return _cachedToken;
             }
 
-            try
-            {
-                var content = new FormUrlEncodedContent(new Dictionary<string, string>
-                {
-                    ["username"] = "guacadmin",
-                    ["password"] = "guacadmin"
-                });
-
-                var response = await _httpClient.PostAsync(
-                    $"{_settings.GuacamoleApiUrl}/tokens", content, token);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    _logger.LogError("Guacamole auth failed: {Status}", response.StatusCode);
-                    return null;
-                }
-
-                var json = await response.Content.ReadAsStringAsync(token);
-                using var doc = JsonDocument.Parse(json);
-                _cachedToken = doc.RootElement.GetProperty("authToken").GetString();
-                _tokenExpiry = DateTimeOffset.UtcNow.AddMinutes(50); // tokens last ~60min
-                return _cachedToken;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to authenticate with Guacamole");
-                return null;
-            }
+            _logger.LogError("GuacamoleAuthToken is not configured; refusing to use default Guacamole credentials.");
+            return null;
         }
         finally
         {
@@ -101,10 +75,16 @@ public class GuacamoleService
         string connectionName,
         string vmIp,
         int rdpPort = 3389,
-        string username = "player",
-        string password = "qwer1234!",
+        string? username = null,
+        string? password = null,
         CancellationToken token = default)
     {
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+        {
+            _logger.LogError("Cannot create Guacamole RDP connection for {Ip}: RDP credentials are missing.", vmIp);
+            return null;
+        }
+
         var authToken = await GetAuthTokenAsync(token);
         if (authToken is null) return null;
 

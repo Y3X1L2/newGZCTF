@@ -58,6 +58,9 @@ public class AwdpScriptRunner(ILogger<AwdpScriptRunner> logger)
         try
         {
             var startInfo = BuildStartInfo(command, tempDir, service, instance, flag);
+            if (startInfo is null)
+                return new(-1, string.Empty, "Invalid AWDP script entrypoint", false);
+
             using var process = Process.Start(startInfo);
 
             if (process is null)
@@ -96,16 +99,18 @@ public class AwdpScriptRunner(ILogger<AwdpScriptRunner> logger)
         }
     }
 
-    static ProcessStartInfo BuildStartInfo(string command, string tempDir, AwdpService service,
+    static ProcessStartInfo? BuildStartInfo(string command, string tempDir, AwdpService service,
         AwdpServiceInstance instance, string flag)
     {
         var container = instance.Container;
         var host = container?.PublicIP ?? container?.IP ?? string.Empty;
         var port = (container?.PublicPort ?? container?.Port ?? service.ExposePort).ToString();
 
-        var startInfo = OperatingSystem.IsWindows()
-            ? new ProcessStartInfo("cmd.exe", $"/c {command}")
-            : new ProcessStartInfo("/bin/sh", $"-c \"{command.Replace("\"", "\\\"")}\"");
+        if (!TryParseEntrypoint(command, out var executable, out var scriptFile))
+            return null;
+
+        var startInfo = new ProcessStartInfo(executable);
+        startInfo.ArgumentList.Add(scriptFile);
 
         startInfo.WorkingDirectory = tempDir;
         startInfo.RedirectStandardOutput = true;
@@ -121,6 +126,26 @@ public class AwdpScriptRunner(ILogger<AwdpScriptRunner> logger)
         startInfo.Environment["AWDP_TEAM_ID"] = instance.TeamId.ToString();
 
         return startInfo;
+    }
+
+    static bool TryParseEntrypoint(string command, out string executable, out string scriptFile)
+    {
+        executable = string.Empty;
+        scriptFile = string.Empty;
+
+        var parts = command.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts is not [{ } python, { } file])
+            return false;
+
+        if (python is not "python3" and not "python")
+            return false;
+
+        if (file is not "script.py" and not "checker.py" and not "exp.py")
+            return false;
+
+        executable = python;
+        scriptFile = file;
+        return true;
     }
 
     static CheckerStatus ParseCheckerStatus(string stdout)

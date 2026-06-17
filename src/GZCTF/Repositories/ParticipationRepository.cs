@@ -13,13 +13,13 @@ public class ParticipationRepository(
 {
     public async Task<bool> EnsureInstances(Participation part, Game game, CancellationToken token = default)
     {
-        var newInstances = Context.GameChallenges
+        var newInstances = await Context.GameChallenges
             .Where(c => c.GameId == game.Id && c.IsEnabled && !Context.Set<GameInstance>()
                 .Where(gi => gi.ParticipationId == part.Id)
                 .Select(gi => gi.ChallengeId).Contains(c.Id)
             )
             .Select(c => new GameInstance { ParticipationId = part.Id, ChallengeId = c.Id })
-            .ToList();
+            .ToListAsync(token);
 
         if (newInstances.Count == 0)
             return false;

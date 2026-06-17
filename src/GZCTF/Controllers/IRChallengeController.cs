@@ -420,8 +420,13 @@ public class IRChallengeController : ControllerBase
                 // Get IP and set up Guacamole
                 var vmIp = await _vmManager.GetIpAddress(vmName);
                 var vncPort = await _vmManager.GetVncPort(vmName);
+                var rdpUsername = _config["IRSettings:RdpUsername"];
+                var rdpPassword = _config["IRSettings:RdpPassword"];
+                if (string.IsNullOrWhiteSpace(rdpUsername) || string.IsNullOrWhiteSpace(rdpPassword))
+                    throw new InvalidOperationException("IRSettings:RdpUsername and IRSettings:RdpPassword must be configured before creating Windows IR access.");
+
                 var (connectionId, guacToken) = await _guacamoleProxy.CreateConnectionAsync(
-                    vmName, vmIp ?? "127.0.0.1", vncPort ?? 5900);
+                    vmName, vmIp ?? "127.0.0.1", vncPort ?? 5900, rdpUsername, rdpPassword);
 
                 // Store access details
                 var accessDetails = new Dictionary<string, object?>
@@ -431,6 +436,7 @@ public class IRChallengeController : ControllerBase
                     ["VmName"] = vmName,
                     ["VmIp"] = vmIp,
                     ["AccessUrl"] = _guacamoleProxy.GetConnectionUrl(connectionId, guacToken),
+                    ["RdpUsername"] = rdpUsername,
                     ["OsType"] = "Windows"
                 };
 
@@ -502,8 +508,12 @@ public class IRChallengeController : ControllerBase
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetInstance(Guid instanceId, CancellationToken token)
     {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+            return Unauthorized(new RequestResponse("User not found", StatusCodes.Status401Unauthorized));
+
         var instance = await _context.IRInstances
-            .FirstOrDefaultAsync(i => i.Id == instanceId, token);
+            .FirstOrDefaultAsync(i => i.Id == instanceId && i.UserId == user.Id, token);
 
         if (instance is null)
             return NotFound(new RequestResponse("IR instance not found", StatusCodes.Status404NotFound));
@@ -530,8 +540,12 @@ public class IRChallengeController : ControllerBase
         [FromBody] CheckpointSubmitModel model,
         CancellationToken token)
     {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+            return Unauthorized(new RequestResponse("User not found", StatusCodes.Status401Unauthorized));
+
         var instance = await _context.IRInstances
-            .FirstOrDefaultAsync(i => i.Id == instanceId, token);
+            .FirstOrDefaultAsync(i => i.Id == instanceId && i.UserId == user.Id, token);
 
         if (instance is null)
             return NotFound(new RequestResponse("IR instance not found", StatusCodes.Status404NotFound));
@@ -656,8 +670,12 @@ public class IRChallengeController : ControllerBase
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ResetInstance(Guid instanceId, CancellationToken token)
     {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+            return Unauthorized(new RequestResponse("User not found", StatusCodes.Status401Unauthorized));
+
         var instance = await _context.IRInstances
-            .FirstOrDefaultAsync(i => i.Id == instanceId, token);
+            .FirstOrDefaultAsync(i => i.Id == instanceId && i.UserId == user.Id, token);
 
         if (instance is null)
             return NotFound(new RequestResponse("IR instance not found", StatusCodes.Status404NotFound));

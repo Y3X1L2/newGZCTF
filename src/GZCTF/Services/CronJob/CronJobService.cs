@@ -88,7 +88,7 @@ public class CronJobService(IDistributedCache cache, IServiceScopeFactory provid
             AddJob(method.CreateDelegate<CronJob>());
         }
 
-        _timer = new Timer(_ => Task.Run(Execute),
+        _timer = new Timer(_ => _ = Task.Run(Execute),
             null, TimeSpan.FromSeconds(60 - DateTime.UtcNow.Second), TimeSpan.FromMinutes(1));
 
         logger.SystemLog(StaticLocalizer[nameof(Resources.Program.CronJob_Started)],
@@ -135,7 +135,7 @@ public class CronJobService(IDistributedCache cache, IServiceScopeFactory provid
     {
         var delay = Random.Shared.Next(30, 120);
 
-        _timer = new Timer(async void (_) =>
+        _timer = new Timer(_ => _ = Task.Run(async () =>
         {
             try
             {
@@ -151,7 +151,7 @@ public class CronJobService(IDistributedCache cache, IServiceScopeFactory provid
                         "WatchDog", e.Message],
                     TaskStatus.Failed, LogLevel.Warning);
             }
-        }, null, TimeSpan.FromSeconds(delay), TimeSpan.FromMinutes(5));
+        }), null, TimeSpan.FromSeconds(delay), TimeSpan.FromMinutes(5));
 
         logger.SystemLog(StaticLocalizer[nameof(Resources.Program.CronJob_LaunchedWatchDog)],
             TaskStatus.Pending, LogLevel.Debug);
@@ -159,38 +159,46 @@ public class CronJobService(IDistributedCache cache, IServiceScopeFactory provid
 
     private async Task Execute()
     {
-        var now = DateTime.UtcNow;
-        var last = now - TimeSpan.FromSeconds(30);
-        List<Task> handles = [];
-
-        await cache.RefreshAsync(CacheKey.CronJobLock);
-
-        lock (_jobs)
+        try
         {
-            foreach (var (job, entry) in _jobs)
+            var now = DateTime.UtcNow;
+            var last = now - TimeSpan.FromSeconds(30);
+            List<Task> handles = [];
+
+            await cache.RefreshAsync(CacheKey.CronJobLock);
+
+            lock (_jobs)
             {
-                if (entry.Expression.GetNextOccurrence(last) is not { } next ||
-                    Math.Abs((next - now).TotalSeconds) > 30D)
-                    continue;
-
-                handles.Add(Task.Run(async () =>
+                foreach (var (job, entry) in _jobs)
                 {
-                    await using var scope = provider.CreateAsyncScope();
+                    if (entry.Expression.GetNextOccurrence(last) is not { } next ||
+                        Math.Abs((next - now).TotalSeconds) > 30D)
+                        continue;
 
-                    try
+                    handles.Add(Task.Run(async () =>
                     {
-                        await entry.Job(scope, logger);
-                    }
-                    catch (Exception e)
-                    {
-                        logger.SystemLog(
-                            StaticLocalizer[nameof(Resources.Program.CronJob_ExecuteFailed), job, e.Message],
-                            TaskStatus.Failed, LogLevel.Warning);
-                    }
-                }));
+                        await using var scope = provider.CreateAsyncScope();
+
+                        try
+                        {
+                            await entry.Job(scope, logger);
+                        }
+                        catch (Exception e)
+                        {
+                            logger.SystemLog(
+                                StaticLocalizer[nameof(Resources.Program.CronJob_ExecuteFailed), job, e.Message],
+                                TaskStatus.Failed, LogLevel.Warning);
+                        }
+                    }));
+                }
             }
-        }
 
-        await Task.WhenAll(handles);
+            await Task.WhenAll(handles);
+        }
+        catch (Exception e)
+        {
+            logger.SystemLog(StaticLocalizer[nameof(Resources.Program.CronJob_ExecuteFailed), "Scheduler", e.Message],
+                TaskStatus.Failed, LogLevel.Warning);
+        }
     }
 }

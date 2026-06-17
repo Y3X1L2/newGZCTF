@@ -6,7 +6,7 @@
 /// </summary>
 public sealed class AsyncManualResetEvent
 {
-    private volatile TaskCompletionSource<bool> _tcs = new();
+    private volatile TaskCompletionSource<bool> _tcs = NewSource();
 
     /// <summary>
     /// Wait for the event to be signaled
@@ -52,9 +52,7 @@ public sealed class AsyncManualResetEvent
     public void Set()
     {
         var tcs = _tcs;
-        Task.Factory.StartNew(s => ((TaskCompletionSource<bool>)s!).TrySetResult(true),
-            tcs, CancellationToken.None, TaskCreationOptions.PreferFairness, TaskScheduler.Default);
-        tcs.Task.Wait();
+        tcs.TrySetResult(true);
     }
 
     /// <summary>
@@ -62,7 +60,7 @@ public sealed class AsyncManualResetEvent
     /// </summary>
     public void Reset()
     {
-        var newTcs = new TaskCompletionSource<bool>();
+        var newTcs = NewSource();
         while (true)
         {
             var tcs = _tcs;
@@ -71,4 +69,7 @@ public sealed class AsyncManualResetEvent
                 return;
         }
     }
+
+    static TaskCompletionSource<bool> NewSource() =>
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
 }

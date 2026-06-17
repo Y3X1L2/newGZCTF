@@ -160,9 +160,10 @@ public class ArchiveExtractor : IArchiveExtractor
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        var process = Process.Start(psi);
+        using var process = Process.Start(psi);
         if (process is null)
             return false;
+
         await process.WaitForExitAsync(token);
         return process.ExitCode == 0;
     }

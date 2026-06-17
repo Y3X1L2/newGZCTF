@@ -86,6 +86,8 @@ public class AwdpInstanceService(
         foreach (var networkName in instances.Select(i => i.NetworkName).Where(n => !string.IsNullOrWhiteSpace(n))
                      .Distinct())
             await TryRemoveNetwork(networkName);
+
+        ClearInstanceLocks(instances);
     }
 
     public async Task DestroyInstancesForService(int serviceId, CancellationToken token = default)
@@ -108,6 +110,8 @@ public class AwdpInstanceService(
         foreach (var networkName in instances.Select(i => i.NetworkName).Where(n => !string.IsNullOrWhiteSpace(n))
                      .Distinct())
             await TryRemoveNetwork(networkName);
+
+        ClearInstanceLocks(instances);
     }
 
     public Task<(bool Success, string Message)> ResetInstance(int instanceId, string? newFlag = null,
@@ -147,6 +151,15 @@ public class AwdpInstanceService(
         finally
         {
             gate.Release();
+        }
+    }
+
+    static void ClearInstanceLocks(IEnumerable<AwdpServiceInstance> instances)
+    {
+        foreach (var instance in instances)
+        {
+            if (InstanceLocks.TryRemove(instance.Id, out var gate))
+                gate.Dispose();
         }
     }
 

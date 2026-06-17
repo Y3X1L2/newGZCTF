@@ -21,20 +21,27 @@ public abstract class RepositoryBase(AppDbContext context) : IRepository
     {
         var saved = false;
         var retry = 0;
+        DbUpdateConcurrencyException? lastException = null;
+
         while (!saved && retry++ < 3)
         {
             try
             {
                 await Context.SaveChangesAsync(token);
                 saved = true;
+                lastException = null;
             }
             catch (DbUpdateConcurrencyException ex)
             {
+                lastException = ex;
                 // FIXME: detect change
                 foreach (var entry in ex.Entries)
                     await entry.ReloadAsync(token);
             }
         }
+
+        if (!saved && lastException is not null)
+            throw lastException;
     }
 
     public void Add(object item) => Context.Add(item);

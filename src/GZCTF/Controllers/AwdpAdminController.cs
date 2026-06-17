@@ -65,6 +65,9 @@ public class AwdpAdminController(
         if (validation.Result is not null)
             return validation.Result;
 
+        if (await ValidateScriptPrivilege(model, null, token) is { } privilegeError)
+            return privilegeError;
+
         if (ValidateServiceModel(model) is { } error)
             return BadRequest(new RequestResponse(error));
 
@@ -97,6 +100,9 @@ public class AwdpAdminController(
         var validation = await ValidateAwdpGame(service.GameId, token);
         if (validation.Result is not null)
             return validation.Result;
+
+        if (await ValidateScriptPrivilege(model, service, token) is { } privilegeError)
+            return privilegeError;
 
         if (ValidateServiceModel(model) is { } error)
             return BadRequest(new RequestResponse(error));
@@ -134,6 +140,7 @@ public class AwdpAdminController(
     }
 
     [HttpPost("Games/{gameId:int}/Start")]
+    [RequireAdmin]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> StartGame([FromRoute] int gameId, CancellationToken token)
     {
@@ -147,6 +154,7 @@ public class AwdpAdminController(
     }
 
     [HttpPost("Games/{gameId:int}/Stop")]
+    [RequireAdmin]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> StopGame([FromRoute] int gameId, CancellationToken token)
     {
@@ -339,7 +347,51 @@ public class AwdpAdminController(
             (model.ExpEntrypoint?.Length ?? 0) > Limits.MaxEntrypointLength)
             return "Checker and Exp entrypoints are too long.";
 
+        if (!IsAllowedPythonEntrypoint(model.CheckerEntrypoint, "checker.py") ||
+            !IsAllowedPythonEntrypoint(model.ExpEntrypoint, "exp.py"))
+            return "AWDP script entrypoints must be in the form: python3 checker.py or python3 exp.py.";
+
         return null;
+    }
+
+    async Task<IActionResult?> ValidateScriptPrivilege(AwdpServiceCreateModel model, AwdpService? existing,
+        CancellationToken token)
+    {
+        if (!ChangesScriptExecution(model, existing))
+            return null;
+
+        if (await ContextHelper.HasAdmin(HttpContext))
+            return null;
+
+        return Forbid();
+    }
+
+    static bool ChangesScriptExecution(AwdpServiceCreateModel model, AwdpService? existing)
+    {
+        if (existing is null)
+            return !string.IsNullOrWhiteSpace(model.CheckerScript) ||
+                   !string.IsNullOrWhiteSpace(model.ExpScript) ||
+                   !string.IsNullOrWhiteSpace(model.CheckerEntrypoint) && model.CheckerEntrypoint.Trim() != "python3 checker.py" ||
+                   !string.IsNullOrWhiteSpace(model.ExpEntrypoint) && model.ExpEntrypoint.Trim() != "python3 exp.py";
+
+        return NormalizeScript(model.CheckerScript) != NormalizeScript(existing.CheckerScript) ||
+               NormalizeScript(model.ExpScript) != NormalizeScript(existing.ExpScript) ||
+               NormalizeEntrypoint(model.CheckerEntrypoint, "python3 checker.py") !=
+               NormalizeEntrypoint(existing.CheckerEntrypoint, "python3 checker.py") ||
+               NormalizeEntrypoint(model.ExpEntrypoint, "python3 exp.py") !=
+               NormalizeEntrypoint(existing.ExpEntrypoint, "python3 exp.py");
+    }
+
+    static string? NormalizeScript(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
+
+    static string NormalizeEntrypoint(string? value, string fallback) =>
+        string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+
+    static bool IsAllowedPythonEntrypoint(string? value, string fileName)
+    {
+        var entrypoint = NormalizeEntrypoint(value, $"python3 {fileName}");
+        return entrypoint == $"python3 {fileName}" || entrypoint == $"python {fileName}";
     }
 
     static void ApplyServiceModel(AwdpService service, AwdpServiceCreateModel model)
