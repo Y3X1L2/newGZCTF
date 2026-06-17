@@ -28,7 +28,6 @@ import {
   TrainingCheckInCard,
   TrainingCourseCard,
   TrainingEmptyState,
-  TrainingOverviewPanel,
   TrainingProgressSummary,
   TrainingStatusText,
   trainingCourseProgress,
@@ -214,7 +213,7 @@ const Training: FC = () => {
                 <TrainingStatusText tone="ongoing">{recent.length}/{Math.min(3, showcase.length || 3)}</TrainingStatusText>
               </Group>
               {recent.length ? (
-                <SimpleGrid cols={{ base: 1, md: 2, xl: Math.min(3, Math.max(1, recent.length)) }} spacing="md">
+                <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="md">
                   {recent.map((course) => (
                     <TrainingCourseCard key={course.id} course={course} featured actionLabel={canCreate ? '管理课程' : '继续学习'} />
                   ))}
@@ -240,7 +239,7 @@ const Training: FC = () => {
                   </Text>
                 </Stack>
               </Group>
-              <SimpleGrid cols={{ base: 1, md: 2, xl: 3 }} spacing="md" className="yy-training-course-grid">
+              <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="md" className="yy-training-course-grid">
                 {(canCreate ? teachingCourses : todoCourses).slice(0, 6).map((course) => (
                   <TrainingCourseCard key={course.id} course={course} compact actionLabel={canCreate ? '编辑课程' : '继续'} />
                 ))}
@@ -266,7 +265,7 @@ const Training: FC = () => {
                   </Text>
                 </Stack>
               </Group>
-              <SimpleGrid cols={{ base: 1, md: 2, xl: 3 }} spacing="md" className="yy-training-course-grid">
+              <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="md" className="yy-training-course-grid">
                 {courses.map((course) => (
                   <TrainingCourseCard key={course.id} course={course} />
                 ))}
@@ -276,10 +275,6 @@ const Training: FC = () => {
               ) : null}
             </section>
           </main>
-
-          <aside className="yy-training-insight">
-            <TrainingOverviewPanel overview={overview} todoCourses={todoCourses} />
-          </aside>
         </section>
       </Box>
 

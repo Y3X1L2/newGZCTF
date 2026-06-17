@@ -121,6 +121,15 @@ export const TrainingCourseCard: FC<{
   return (
     <Link className="yy-course-link" to={`/training/courses/${course.id}`}>
       <YinyuPanel className={clsx('yy-training-course-card', featured && 'is-featured', compact && 'is-compact')} p={0}>
+        <div
+          className="yy-training-course-cover"
+          style={course.coverUrl ? { backgroundImage: `url(${course.coverUrl})` } : undefined}
+        >
+          <TrainingStatusText tone={status.tone} className="yy-training-course-status-badge">
+            {status.label}
+          </TrainingStatusText>
+        </div>
+
         <Stack gap={compact ? 8 : 'sm'} className="yy-training-course-content">
           <Group justify="space-between" align="flex-start" gap="sm" wrap="nowrap">
             <Stack gap={4} miw={0}>
@@ -129,12 +138,9 @@ export const TrainingCourseCard: FC<{
                 {course.title}
               </Title>
             </Stack>
-            <TrainingStatusText tone={status.tone} vertical>
-              {status.label}
-            </TrainingStatusText>
           </Group>
 
-          <Text size={compact ? 'sm' : 'md'} lineClamp={featured ? 3 : 2} className="yy-training-readable">
+          <Text size={compact ? 'sm' : 'md'} lineClamp={2} className="yy-training-readable yy-training-course-summary">
             {course.summary || '教师尚未填写课程摘要。可以在课程编辑中补充学习目标、适合人群和完成要求。'}
           </Text>
 
@@ -332,7 +338,7 @@ export const TrainingCheckInCard: FC<{
         <Text fw={950}>平台签到</Text>
       </Group>
       <Text size="sm" className="yy-training-readable">
-        连续学习会在概览中形成日期图谱，老师也能据此判断培训活跃度。
+        连续学习会形成日期图谱，方便快速判断近期的培训活跃度。
       </Text>
       <div className="yy-training-checkin-mini">
         <span>
@@ -344,6 +350,12 @@ export const TrainingCheckInCard: FC<{
           <em>连续</em>
         </span>
       </div>
+      <Stack gap={6}>
+        <Text size="xs" fw={900} className="yy-training-muted">
+          学习活跃趋势
+        </Text>
+        <TrainingActivityHeatmap activity={overview?.activity ?? []} />
+      </Stack>
       <Button variant={overview?.checkedInToday ? 'light' : 'filled'} loading={checking} disabled={overview?.checkedInToday} onClick={onCheckIn}>
         {overview?.checkedInToday ? '今日已签到' : '立即签到'}
       </Button>

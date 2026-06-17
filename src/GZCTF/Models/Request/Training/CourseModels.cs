@@ -234,7 +234,18 @@ public class TrainingCourseEnrollmentModel
 
     public DateTimeOffset? ReviewedAt { get; set; }
 
-    public static TrainingCourseEnrollmentModel FromEnrollment(TrainingCourseEnrollment enrollment) =>
+    public int CompletedChapterCount { get; set; }
+
+    public int TotalChapterCount { get; set; }
+
+    public TrainingCourseProgressStatus? ProgressStatus { get; set; }
+
+    public DateTimeOffset? ProgressUpdatedAt { get; set; }
+
+    public static TrainingCourseEnrollmentModel FromEnrollment(
+        TrainingCourseEnrollment enrollment,
+        TrainingCourseProgress? progress = null,
+        int totalChapterCount = 0) =>
         new()
         {
             CourseId = enrollment.CourseId,
@@ -246,7 +257,11 @@ public class TrainingCourseEnrollmentModel
             ApplyReason = enrollment.ApplyReason,
             ReviewComment = enrollment.ReviewComment,
             RequestedAt = enrollment.RequestedAt,
-            ReviewedAt = enrollment.ReviewedAt
+            ReviewedAt = enrollment.ReviewedAt,
+            CompletedChapterCount = progress?.CompletedChapterCount ?? 0,
+            TotalChapterCount = progress?.TotalChapterCount ?? totalChapterCount,
+            ProgressStatus = progress?.Status,
+            ProgressUpdatedAt = progress?.UpdatedAt
         };
 }
 

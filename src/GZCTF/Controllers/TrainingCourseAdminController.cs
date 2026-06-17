@@ -265,7 +265,18 @@ public class TrainingCourseAdminController(
             .ThenByDescending(e => e.RequestedAt)
             .ToArrayAsync(token);
 
-        return Ok(enrollments.Select(TrainingCourseEnrollmentModel.FromEnrollment).ToArray());
+        var totalChapterCount = await context.TrainingCourseChapters
+            .CountAsync(c => c.CourseId == courseId && c.IsPublished, token);
+        var progresses = await context.TrainingCourseProgresses
+            .Where(p => p.CourseId == courseId)
+            .ToDictionaryAsync(p => p.UserId, token);
+
+        return Ok(enrollments
+            .Select(e => TrainingCourseEnrollmentModel.FromEnrollment(
+                e,
+                progresses.GetValueOrDefault(e.UserId),
+                totalChapterCount))
+            .ToArray());
     }
 
     [HttpPut("{courseId:int}/enrollments/{userId:guid}")]

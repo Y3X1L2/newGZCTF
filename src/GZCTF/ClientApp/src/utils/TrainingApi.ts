@@ -316,6 +316,10 @@ export interface TrainingCourseEnrollmentModel {
   reviewComment: string
   requestedAt: number
   reviewedAt?: number | null
+  completedChapterCount: number
+  totalChapterCount: number
+  progressStatus?: TrainingCourseProgressStatus | null
+  progressUpdatedAt?: number | null
 }
 
 export interface TrainingCourseResourceModel {

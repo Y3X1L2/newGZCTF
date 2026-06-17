@@ -7144,25 +7144,56 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
   width: 100%;
   min-height: calc(100dvh - 1.25rem);
   padding: clamp(0.9rem, 1.25vw, 1.35rem);
-  overflow: hidden;
-  border-radius: var(--yy-radius-lg);
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+}
+
+html:has(.yy-training-page),
+body:has(.yy-training-page),
+#root:has(.yy-training-page) {
+  min-height: 100%;
+  background: #020605 !important;
+}
+
+body:has(.yy-training-page)::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
   background:
-    radial-gradient(ellipse at 12% 0%, rgba(107, 238, 177, 0.12), transparent 38%),
-    radial-gradient(ellipse at 92% 92%, rgba(185, 173, 209, 0.1), transparent 42%),
+    radial-gradient(ellipse at 11% 0%, rgba(107, 238, 177, 0.17), transparent 42%),
+    radial-gradient(ellipse at 96% 18%, rgba(185, 173, 209, 0.13), transparent 44%),
+    radial-gradient(ellipse at 78% 88%, rgba(66, 244, 157, 0.12), transparent 42%),
     #020605;
 }
 
-.yy-app-frame:has(.yy-training-page) .yy-root-reactbits-bg,
-body:has(.yy-training-page) .yy-root-reactbits-bg,
+.yy-root-reactbits-bg.yy-game-bends-bg:has(~ .yy-app-frame .yy-training-page),
+body:has(.yy-training-page) > .yy-root-reactbits-bg.yy-game-bends-bg {
+  display: block !important;
+}
+
+.yy-app-frame:has(.yy-training-page),
+.yy-app-frame:has(.yy-training-page) .mantine-AppShell-root,
+.yy-app-frame:has(.yy-training-page) .mantine-AppShell-main {
+  background: transparent !important;
+}
+
 body:has(.yy-training-page) .signal-field {
   display: none !important;
 }
 
 .yy-training-bg {
-  position: absolute !important;
-  inset: 0 !important;
-  z-index: 0 !important;
-  opacity: 0.82;
+  display: none !important;
+}
+
+.yy-training-bg,
+.yy-training-bg > *,
+.yy-training-bg canvas,
+.yy-training-bg svg {
+  min-width: 100vw !important;
+  min-height: 100dvh !important;
 }
 
 .yy-training-page > *:not(.yy-training-bg) {
@@ -7170,9 +7201,14 @@ body:has(.yy-training-page) .signal-field {
   z-index: 2;
 }
 
+.yy-training-page .yy-hex-field,
+.yy-training-page .hex-field {
+  display: none !important;
+}
+
 .yy-training-shell {
   display: grid;
-  grid-template-columns: minmax(13.5rem, 16rem) minmax(0, 1fr) minmax(18rem, 23rem);
+  grid-template-columns: minmax(13.5rem, 16rem) minmax(0, 1fr);
   gap: clamp(0.9rem, 1.25vw, 1.35rem);
   align-items: start;
   width: 100%;
@@ -7348,8 +7384,10 @@ body:has(.yy-training-page) .signal-field {
 
 .yy-training-course-card.panel-card {
   display: grid;
+  grid-template-rows: 6.9rem minmax(0, 1fr);
   height: 100%;
-  min-height: 19rem;
+  min-height: 19.25rem;
+  max-height: 19.25rem;
   overflow: hidden;
   border-color: rgba(221, 229, 223, 0.16);
   background:
@@ -7374,19 +7412,69 @@ body:has(.yy-training-page) .signal-field {
 }
 
 .yy-training-course-card.is-featured {
-  min-height: 20rem;
+  min-height: 19.25rem;
+  max-height: 19.25rem;
 }
 
 .yy-training-course-card.is-compact {
-  min-height: 17.25rem;
+  min-height: 19.25rem;
+  max-height: 19.25rem;
+}
+
+.yy-training-course-cover {
+  position: relative;
+  min-height: 6.9rem;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 18% 0%, rgba(107, 238, 177, 0.22), transparent 54%),
+    linear-gradient(135deg, rgba(12, 25, 20, 0.96), rgba(43, 37, 58, 0.82));
+  background-position: center;
+  background-size: cover;
+}
+
+.yy-training-course-cover::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 45%;
+  background: linear-gradient(180deg, transparent, rgba(4, 10, 8, 0.72));
+}
+
+.yy-training-course-status-badge {
+  position: absolute;
+  z-index: 2;
+  top: 0.78rem;
+  right: 0.78rem;
+  padding: 0.32rem 0.58rem;
+  border: 1px solid rgba(221, 229, 223, 0.12);
+  border-radius: 999px;
+  background: rgba(4, 10, 8, 0.68);
+  backdrop-filter: blur(1rem);
 }
 
 .yy-training-course-content {
   position: relative;
   z-index: 2;
+  display: flex !important;
+  flex-direction: column;
   min-width: 0;
-  min-height: inherit;
-  padding: clamp(1rem, 1.25vw, 1.35rem);
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  padding: clamp(0.82rem, 1vw, 1rem);
+}
+
+.yy-training-course-card .mantine-Title-root {
+  font-size: clamp(1.18rem, 1.25vw, 1.52rem);
+  line-height: 1.12;
+  letter-spacing: 0;
+}
+
+.yy-training-course-summary {
+  min-height: 2.85rem;
+  max-height: 2.85rem;
+  overflow: hidden;
+  line-height: 1.42;
 }
 
 .yy-training-status-text {
@@ -7569,7 +7657,7 @@ body:has(.yy-training-page) .signal-field {
 
 .yy-training-detail-grid {
   display: grid;
-  grid-template-columns: minmax(13.5rem, 16rem) minmax(0, 1fr) minmax(16rem, 20rem);
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
   gap: clamp(0.9rem, 1.25vw, 1.35rem);
   align-items: start;
   margin-top: clamp(0.95rem, 1.25vw, 1.35rem);
@@ -7704,14 +7792,90 @@ body:has(.yy-training-page) .signal-field {
 }
 
 .yy-course-detail-hero.panel-card {
-  min-height: clamp(18rem, 32vh, 27rem);
+  min-height: 0;
+}
+
+.yy-course-detail-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(16rem, 28rem) minmax(0, 1fr);
+  gap: clamp(1rem, 1.45vw, 1.6rem);
+  align-items: stretch;
+  min-width: 0;
+}
+
+.yy-course-detail-cover {
+  display: grid;
+  place-items: center;
+  min-height: clamp(14rem, 28vh, 22rem);
+  overflow: hidden;
+  border: 1px solid rgba(221, 229, 223, 0.13);
+  border-radius: var(--yy-radius);
+  color: rgba(235, 255, 246, 0.74);
+  font-size: 0.82rem;
+  font-weight: 950;
+  letter-spacing: 0.16em;
+  background:
+    radial-gradient(ellipse at 22% 0%, rgba(107, 238, 177, 0.22), transparent 54%),
+    linear-gradient(135deg, rgba(8, 18, 15, 0.96), rgba(45, 39, 62, 0.84));
+  background-position: center;
+  background-size: cover;
+}
+
+.yy-course-detail-hero-body {
+  min-width: 0;
+}
+
+.yy-training-student-progress-list {
+  min-width: 0;
+}
+
+.yy-training-student-progress-row {
+  display: grid;
+  gap: 0.58rem;
+  min-width: 0;
+  padding: 0.74rem;
+  border: 1px solid rgba(221, 229, 223, 0.11);
+  border-radius: var(--yy-radius);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.yy-training-chapter-editor-page {
+  display: grid;
+  gap: clamp(0.9rem, 1.25vw, 1.35rem);
+}
+
+.yy-training-chapter-editor-hero.panel-card,
+.yy-training-chapter-editor-form.panel-card,
+.yy-training-chapter-editor-preview.panel-card {
+  border-color: rgba(221, 229, 223, 0.14);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.072), rgba(255, 255, 255, 0.018)),
+    rgba(5, 12, 10, 0.56);
+  backdrop-filter: blur(1.45rem);
+}
+
+.yy-training-chapter-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(22rem, 0.9fr) minmax(0, 1.1fr);
+  gap: clamp(0.9rem, 1.25vw, 1.35rem);
+  align-items: start;
+  min-width: 0;
+}
+
+.yy-training-chapter-editor-preview.panel-card {
+  position: sticky;
+  top: 4.25rem;
+  max-height: calc(100dvh - 6rem);
+  overflow: auto;
 }
 
 @media (max-width: 92em) {
   .yy-training-shell,
   .yy-training-detail-grid,
   .yy-course-chapter-page.yy-training-page,
-  .yy-training-course-editor-grid {
+  .yy-training-course-editor-grid,
+  .yy-training-chapter-editor-grid,
+  .yy-course-detail-hero-grid {
     grid-template-columns: 1fr;
   }
 
@@ -7721,6 +7885,7 @@ body:has(.yy-training-page) .signal-field {
   .yy-training-detail-aside,
   .yy-course-chapter-side,
   .yy-course-toc,
+  .yy-training-chapter-editor-preview.panel-card,
   .yy-training-detail-tabs .mantine-Tabs-list {
     position: static;
   }

@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
 
   const TARGET = env.VITE_BACKEND_URL ?? 'http://localhost:8080'
   const current = new Date()
+  const buildId = (env.VITE_APP_BUILD_TIMESTAMP ?? current.toISOString()).replace(/[^0-9A-Za-z]+/g, '').slice(0, 14)
 
   const BANNER =
     `/* YINYU CTF Platform @${env.VITE_APP_GIT_NAME ?? 'unknown'}\n *\n` +
@@ -48,9 +49,9 @@ export default defineConfig(({ mode }) => {
       rolldownOptions: {
         output: {
           hashCharacters: 'base36',
-          chunkFileNames: 'static/[hash].js',
-          assetFileNames: 'static/[hash].[ext]',
-          entryFileNames: 'static/[name].[hash].js',
+          chunkFileNames: `static/[name].${buildId}.[hash].js`,
+          assetFileNames: `static/[name].${buildId}.[hash].[ext]`,
+          entryFileNames: `static/[name].${buildId}.[hash].js`,
         },
       },
     },
