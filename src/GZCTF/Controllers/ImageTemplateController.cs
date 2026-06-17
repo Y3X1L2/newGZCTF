@@ -85,7 +85,8 @@ public class ImageTemplateController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
-        var query = _context.ImageTemplates.AsQueryable();
+        var query = _context.ImageTemplates
+            .Where(t => t.TrainingCourseId == null);
 
         if (osType.HasValue)
             query = query.Where(t => t.OSType == osType.Value);

@@ -318,6 +318,82 @@ public enum TrainingModuleProgressStatus : byte
 }
 
 /// <summary>
+/// Training course lifecycle status
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<TrainingCourseStatus>))]
+public enum TrainingCourseStatus : byte
+{
+    Draft = 0,
+    Published = 1,
+    Archived = 2
+}
+
+/// <summary>
+/// Training course enrollment policy
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<TrainingCourseEnrollmentPolicy>))]
+public enum TrainingCourseEnrollmentPolicy : byte
+{
+    TeacherApproval = 0,
+    AutoApprove = 1
+}
+
+/// <summary>
+/// Training course enrollment status
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<TrainingCourseEnrollmentStatus>))]
+public enum TrainingCourseEnrollmentStatus : byte
+{
+    Pending = 0,
+    Approved = 1,
+    Rejected = 2,
+    Cancelled = 3
+}
+
+/// <summary>
+/// Training course teacher role
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<TrainingCourseTeacherRole>))]
+public enum TrainingCourseTeacherRole : byte
+{
+    Owner = 0,
+    Teacher = 1
+}
+
+/// <summary>
+/// Training course resource type
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<TrainingCourseResourceType>))]
+public enum TrainingCourseResourceType : byte
+{
+    File = 0,
+    Link = 1,
+    Video = 2
+}
+
+/// <summary>
+/// Training course video provider
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<TrainingCourseVideoProvider>))]
+public enum TrainingCourseVideoProvider : byte
+{
+    None = 0,
+    LocalFile = 1,
+    ExternalUrl = 2
+}
+
+/// <summary>
+/// Training course learning progress status
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<TrainingCourseProgressStatus>))]
+public enum TrainingCourseProgressStatus : byte
+{
+    NotStarted = 0,
+    Learning = 1,
+    Completed = 2
+}
+
+/// <summary>
 /// Theory training paper generation mode
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<TheoryTrainingMode>))]

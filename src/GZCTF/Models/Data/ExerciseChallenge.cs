@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace GZCTF.Models.Data;
 
 public class ExerciseChallenge : Challenge
@@ -16,6 +18,14 @@ public class ExerciseChallenge : Challenge
     /// Additional tags for the exercise challenge
     /// </summary>
     public List<string>? Tags { get; set; } = [];
+
+    /// <summary>
+    /// Owning training course. Null means global exercise challenge.
+    /// </summary>
+    public int? TrainingCourseId { get; set; }
+
+    [JsonIgnore]
+    public TrainingCourse? TrainingCourse { get; set; }
 
     #region Db Relationship
 

@@ -1,5 +1,6 @@
 import { AppShell, Box, Stack } from '@mantine/core'
 import React, { FC } from 'react'
+import { useLocation } from 'react-router'
 import { AppHeader } from '@Components/AppHeader'
 import { AppNavbar } from '@Components/AppNavbar'
 import { IconHeader } from '@Components/IconHeader'
@@ -8,7 +9,6 @@ import { WithWiderScreen } from '@Components/WithWiderScreen'
 import { YinyuRouteTransition } from '@Components/yinyu/YinyuUI'
 import { useIsMobile } from '@Utils/ThemeOverride'
 import classes from '@Styles/AppNavbar.module.css'
-import { useLocation } from 'react-router'
 
 interface WithNavBarProps extends React.PropsWithChildren {
   width?: string
@@ -45,7 +45,7 @@ export const WithNavBar: FC<WithNavBarProps> = ({
         className="yy-app-frame"
         header={{ height: 60, collapsed: !isMobile }}
         navbar={{
-          width: 218,
+          width: 78,
           breakpoint: 'sm',
           collapsed: {
             mobile: true,
@@ -55,7 +55,7 @@ export const WithNavBar: FC<WithNavBarProps> = ({
         <AppHeader />
         <AppNavbar />
         <AppShell.Main w="100%" className={classes.shellMain}>
-          {showPublicAccount && !isMobile ? <PublicAccountEntry home={location.pathname === '/'} /> : null}
+          {showPublicAccount && !isMobile ? <PublicAccountEntry /> : null}
           <Stack data-mobile={isMobile || undefined} className={classes.main}>
             {isLoading ? (
               <div className="yy-page-loading-overlay" role="status" aria-live="polite">

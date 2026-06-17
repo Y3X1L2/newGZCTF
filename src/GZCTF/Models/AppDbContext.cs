@@ -90,6 +90,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TheoryTrainingSessionQuestion> TheoryTrainingSessionQuestions { get; set; } = null!;
     public DbSet<TrainingArticleProgress> TrainingArticleProgresses { get; set; } = null!;
     public DbSet<TrainingModuleProgress> TrainingModuleProgresses { get; set; } = null!;
+    public DbSet<TrainingCourse> TrainingCourses { get; set; } = null!;
+    public DbSet<TrainingCourseTeacher> TrainingCourseTeachers { get; set; } = null!;
+    public DbSet<TrainingCourseEnrollment> TrainingCourseEnrollments { get; set; } = null!;
+    public DbSet<TrainingCourseChapter> TrainingCourseChapters { get; set; } = null!;
+    public DbSet<TrainingCourseResource> TrainingCourseResources { get; set; } = null!;
+    public DbSet<TrainingCourseChallenge> TrainingCourseChallenges { get; set; } = null!;
+    public DbSet<TrainingCourseChapterChallenge> TrainingCourseChapterChallenges { get; set; } = null!;
+    public DbSet<TrainingCourseSubmission> TrainingCourseSubmissions { get; set; } = null!;
+    public DbSet<TrainingCourseProgress> TrainingCourseProgresses { get; set; } = null!;
+    public DbSet<TrainingChapterProgress> TrainingChapterProgresses { get; set; } = null!;
 
     private static ValueConverter<T?, string> GetJsonConverter<T>() where T : class, new() =>
         new(
@@ -430,6 +440,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .HasForeignKey(e => e.TestContainerId)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            entity.HasOne(e => e.TrainingCourse)
+                .WithMany()
+                .HasForeignKey(e => e.TrainingCourseId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             entity.HasMany(e => e.Dependencies)
                 .WithMany()
                 .UsingEntity<ExerciseDependency>(
@@ -692,6 +707,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
         {
             entity.HasIndex(e => e.Name);
             entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.TrainingCourseId);
+
+            entity.HasOne(e => e.TrainingCourse)
+                .WithMany()
+                .HasForeignKey(e => e.TrainingCourseId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<PenetrationConfig>(entity =>
@@ -1111,6 +1132,231 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
             entity.HasOne(e => e.Module)
                 .WithMany()
                 .HasForeignKey(e => e.ModuleId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TrainingCourse>(entity =>
+        {
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.Property(e => e.EnrollmentPolicy)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.Property(e => e.Tags)
+                .HasConversion(listConverter)
+                .Metadata
+                .SetValueComparer(listComparer);
+
+            entity.HasOne(e => e.CreatedBy)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedById)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.UpdatedBy)
+                .WithMany()
+                .HasForeignKey(e => e.UpdatedById)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasMany(e => e.Teachers)
+                .WithOne(e => e.Course)
+                .HasForeignKey(e => e.CourseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(e => e.Enrollments)
+                .WithOne(e => e.Course)
+                .HasForeignKey(e => e.CourseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(e => e.Chapters)
+                .WithOne(e => e.Course)
+                .HasForeignKey(e => e.CourseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(e => e.Resources)
+                .WithOne(e => e.Course)
+                .HasForeignKey(e => e.CourseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(e => e.Challenges)
+                .WithOne(e => e.Course)
+                .HasForeignKey(e => e.CourseId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TrainingCourseTeacher>(entity =>
+        {
+            entity.Property(e => e.Role)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.HasOne(e => e.Teacher)
+                .WithMany()
+                .HasForeignKey(e => e.TeacherId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.AssignedBy)
+                .WithMany()
+                .HasForeignKey(e => e.AssignedById)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<TrainingCourseEnrollment>(entity =>
+        {
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.ReviewedBy)
+                .WithMany()
+                .HasForeignKey(e => e.ReviewedById)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<TrainingCourseChapter>(entity =>
+        {
+            entity.Property(e => e.ContentType)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.Property(e => e.VideoProvider)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.HasOne(e => e.Parent)
+                .WithMany(e => e.Children)
+                .HasForeignKey(e => e.ParentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.VideoFile)
+                .WithMany()
+                .HasForeignKey(e => e.VideoFileId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.CreatedBy)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedById)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.UpdatedBy)
+                .WithMany()
+                .HasForeignKey(e => e.UpdatedById)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<TrainingCourseResource>(entity =>
+        {
+            entity.Property(e => e.Type)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.HasOne(e => e.LocalFile)
+                .WithMany()
+                .HasForeignKey(e => e.LocalFileId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.CreatedBy)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedById)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<TrainingCourseChallenge>(entity =>
+        {
+            entity.HasOne(e => e.ExerciseChallenge)
+                .WithMany()
+                .HasForeignKey(e => e.ExerciseChallengeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.CreatedBy)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedById)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<TrainingCourseChapterChallenge>(entity =>
+        {
+            entity.HasOne(e => e.Chapter)
+                .WithMany(e => e.Challenges)
+                .HasForeignKey(e => e.ChapterId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.CourseChallenge)
+                .WithMany()
+                .HasForeignKey(e => new { e.CourseId, e.ExerciseChallengeId })
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TrainingCourseSubmission>(entity =>
+        {
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.HasOne(e => e.Course)
+                .WithMany()
+                .HasForeignKey(e => e.CourseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Chapter)
+                .WithMany()
+                .HasForeignKey(e => e.ChapterId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.ExerciseChallenge)
+                .WithMany()
+                .HasForeignKey(e => e.ExerciseChallengeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Flag)
+                .WithMany()
+                .HasForeignKey(e => e.FlagId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<TrainingCourseProgress>(entity =>
+        {
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.HasOne(e => e.Course)
+                .WithMany()
+                .HasForeignKey(e => e.CourseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TrainingChapterProgress>(entity =>
+        {
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.HasOne(e => e.Chapter)
+                .WithMany()
+                .HasForeignKey(e => e.ChapterId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasOne(e => e.User)

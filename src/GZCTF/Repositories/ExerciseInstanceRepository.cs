@@ -39,7 +39,8 @@ public class ExerciseInstanceRepository(
         var result = new List<ExerciseInstance>();
 
         await foreach (var id in Context.ExerciseChallenges
-                           .Where(e => e.IsEnabled && Context.ExerciseDependencies.All(d => d.TargetId != e.Id))
+                           .Where(e => e.IsEnabled && e.TrainingCourseId == null &&
+                                       Context.ExerciseDependencies.All(d => d.TargetId != e.Id))
                            .Select(e => e.Id).AsAsyncEnumerable().WithCancellation(token))
         {
             var newInst = new ExerciseInstance { ExerciseId = id, UserId = user.Id, IsLoaded = false };
@@ -301,7 +302,7 @@ public class ExerciseInstanceRepository(
         cacheHelper.GetOrCreateAsync(logger, CacheKey.ExerciseAvailable, entry =>
         {
             entry.SlidingExpiration = TimeSpan.FromHours(24);
-            return Context.ExerciseChallenges.AnyAsync(e => e.IsEnabled, token);
+            return Context.ExerciseChallenges.AnyAsync(e => e.IsEnabled && e.TrainingCourseId == null, token);
         }, token: token);
 
     internal async Task MarkSolved(ExerciseInstance instance, CancellationToken token = default)
@@ -334,7 +335,7 @@ public class ExerciseInstanceRepository(
     internal ConfiguredCancelableAsyncEnumerable<int> FetchNewChallenges(UserInfo user,
         CancellationToken token = default)
         => Context.ExerciseChallenges.Where(chal =>
-                chal.IsEnabled && !Context.ExerciseInstances.Any(i =>
+                chal.IsEnabled && chal.TrainingCourseId == null && !Context.ExerciseInstances.Any(i =>
                     i.UserId == user.Id && i.ExerciseId == chal.Id) &&
                 Context.ExerciseDependencies
                     .Where(dep => dep.TargetId == chal.Id)

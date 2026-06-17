@@ -1,0 +1,606 @@
+using System.ComponentModel.DataAnnotations;
+using GZCTF.Models.Request.Game;
+
+namespace GZCTF.Models.Request.Training;
+
+public class TrainingCourseEditModel
+{
+    [Required]
+    [MaxLength(128)]
+    public string Title { get; set; } = string.Empty;
+
+    [MaxLength(128)]
+    public string Slug { get; set; } = string.Empty;
+
+    [MaxLength(512)]
+    public string Summary { get; set; } = string.Empty;
+
+    public string Description { get; set; } = string.Empty;
+
+    [MaxLength(Limits.FileHashLength)]
+    public string? CoverFileHash { get; set; }
+
+    public List<string> Tags { get; set; } = [];
+
+    public TrainingCourseEnrollmentPolicy EnrollmentPolicy { get; set; } =
+        TrainingCourseEnrollmentPolicy.TeacherApproval;
+}
+
+public class TrainingCourseEnrollmentApplyModel
+{
+    [MaxLength(512)]
+    public string ApplyReason { get; set; } = string.Empty;
+}
+
+public class TrainingCourseEnrollmentReviewModel
+{
+    public TrainingCourseEnrollmentStatus Status { get; set; } = TrainingCourseEnrollmentStatus.Approved;
+
+    [MaxLength(512)]
+    public string ReviewComment { get; set; } = string.Empty;
+}
+
+public class TrainingCourseTeacherEditModel
+{
+    public Guid TeacherId { get; set; }
+
+    public TrainingCourseTeacherRole Role { get; set; } = TrainingCourseTeacherRole.Teacher;
+}
+
+public class TrainingCourseChapterEditModel
+{
+    public int? ParentId { get; set; }
+
+    [Required]
+    [MaxLength(128)]
+    public string Title { get; set; } = string.Empty;
+
+    [MaxLength(512)]
+    public string Summary { get; set; } = string.Empty;
+
+    public string Content { get; set; } = string.Empty;
+
+    public TrainingArticleContentType ContentType { get; set; } = TrainingArticleContentType.Markdown;
+
+    public TrainingCourseVideoProvider VideoProvider { get; set; } = TrainingCourseVideoProvider.None;
+
+    [MaxLength(1024)]
+    public string? VideoUrl { get; set; }
+
+    [MaxLength(Limits.FileHashLength)]
+    public string? VideoFileHash { get; set; }
+
+    public int Order { get; set; }
+
+    public bool IsPublished { get; set; } = true;
+}
+
+public class TrainingCourseResourceEditModel
+{
+    [Required]
+    [MaxLength(128)]
+    public string Title { get; set; } = string.Empty;
+
+    [MaxLength(512)]
+    public string Description { get; set; } = string.Empty;
+
+    public TrainingCourseResourceType Type { get; set; } = TrainingCourseResourceType.File;
+
+    [MaxLength(1024)]
+    public string? ExternalUrl { get; set; }
+
+    [MaxLength(Limits.FileHashLength)]
+    public string? LocalFileHash { get; set; }
+
+    public int Order { get; set; }
+
+    public bool IsVisible { get; set; } = true;
+}
+
+public class TrainingCourseChallengeEditModel
+{
+    public int ExerciseChallengeId { get; set; }
+
+    public int? ChapterId { get; set; }
+
+    public int Order { get; set; }
+
+    public bool IsRequired { get; set; } = true;
+
+    [MaxLength(128)]
+    public string? DisplayTitle { get; set; }
+}
+
+public class TrainingCourseImageTemplateAttachModel
+{
+    public int TemplateId { get; set; }
+}
+
+public class TrainingCourseDockerRegisterModel
+{
+    [Required]
+    [MaxLength(256)]
+    public string Name { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(512)]
+    public string RegistryUrl { get; set; } = string.Empty;
+
+    public OSType OSType { get; set; } = OSType.Linux;
+
+    [MaxLength(512)]
+    public string? RegistryAuth { get; set; }
+}
+
+public class TrainingCourseLocalImageImportModel
+{
+    [Required]
+    [MaxLength(1024)]
+    public string LocalPath { get; set; } = string.Empty;
+
+    [MaxLength(256)]
+    public string? DisplayName { get; set; }
+}
+
+public class TrainingCourseChallengeCreateModel
+{
+    [Required]
+    [MaxLength(128)]
+    public string Title { get; set; } = string.Empty;
+
+    public string Content { get; set; } = string.Empty;
+
+    public ChallengeCategory Category { get; set; } = ChallengeCategory.Misc;
+
+    public ChallengeType Type { get; set; } = ChallengeType.StaticAttachment;
+
+    public EnvironmentType Environment { get; set; } = EnvironmentType.None;
+
+    public int? ImageTemplateId { get; set; }
+
+    [MaxLength(512)]
+    public string? ContainerImage { get; set; }
+
+    public int? MemoryLimit { get; set; } = 64;
+
+    public int? CPUCount { get; set; } = 1;
+
+    public int? StorageLimit { get; set; } = 256;
+
+    public int? ExposePort { get; set; } = 80;
+
+    public NetworkMode? NetworkMode { get; set; } = Utils.NetworkMode.Open;
+
+    [MaxLength(Limits.MaxFlagTemplateLength)]
+    public string? FlagTemplate { get; set; }
+
+    [MaxLength(Limits.MaxFlagLength)]
+    public string? StaticFlag { get; set; }
+
+    public int SubmissionLimit { get; set; }
+
+    public int? ChapterId { get; set; }
+
+    public int Order { get; set; }
+
+    public bool IsRequired { get; set; } = true;
+
+    [MaxLength(128)]
+    public string? DisplayTitle { get; set; }
+}
+
+public class TrainingCourseTeacherModel
+{
+    public Guid TeacherId { get; set; }
+
+    public string UserName { get; set; } = string.Empty;
+
+    public string RealName { get; set; } = string.Empty;
+
+    public TrainingCourseTeacherRole Role { get; set; }
+
+    public DateTimeOffset AssignedAt { get; set; }
+
+    public static TrainingCourseTeacherModel FromTeacher(TrainingCourseTeacher teacher) =>
+        new()
+        {
+            TeacherId = teacher.TeacherId,
+            UserName = teacher.Teacher.UserName ?? string.Empty,
+            RealName = teacher.Teacher.RealName,
+            Role = teacher.Role,
+            AssignedAt = teacher.AssignedAt
+        };
+}
+
+public class TrainingCourseEnrollmentModel
+{
+    public int CourseId { get; set; }
+
+    public Guid UserId { get; set; }
+
+    public string UserName { get; set; } = string.Empty;
+
+    public string RealName { get; set; } = string.Empty;
+
+    public string StdNumber { get; set; } = string.Empty;
+
+    public TrainingCourseEnrollmentStatus Status { get; set; }
+
+    public string ApplyReason { get; set; } = string.Empty;
+
+    public string ReviewComment { get; set; } = string.Empty;
+
+    public DateTimeOffset RequestedAt { get; set; }
+
+    public DateTimeOffset? ReviewedAt { get; set; }
+
+    public static TrainingCourseEnrollmentModel FromEnrollment(TrainingCourseEnrollment enrollment) =>
+        new()
+        {
+            CourseId = enrollment.CourseId,
+            UserId = enrollment.UserId,
+            UserName = enrollment.User.UserName ?? string.Empty,
+            RealName = enrollment.User.RealName,
+            StdNumber = enrollment.User.StdNumber,
+            Status = enrollment.Status,
+            ApplyReason = enrollment.ApplyReason,
+            ReviewComment = enrollment.ReviewComment,
+            RequestedAt = enrollment.RequestedAt,
+            ReviewedAt = enrollment.ReviewedAt
+        };
+}
+
+public class TrainingCourseResourceModel
+{
+    public int Id { get; set; }
+
+    public int CourseId { get; set; }
+
+    public string Title { get; set; } = string.Empty;
+
+    public string Description { get; set; } = string.Empty;
+
+    public TrainingCourseResourceType Type { get; set; }
+
+    public string? ExternalUrl { get; set; }
+
+    public string? FileName { get; set; }
+
+    public long? FileSize { get; set; }
+
+    public string? DownloadUrl { get; set; }
+
+    public int Order { get; set; }
+
+    public bool IsVisible { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
+
+    public static TrainingCourseResourceModel FromResource(TrainingCourseResource resource, bool revealDownload) =>
+        new()
+        {
+            Id = resource.Id,
+            CourseId = resource.CourseId,
+            Title = resource.Title,
+            Description = resource.Description,
+            Type = resource.Type,
+            ExternalUrl = revealDownload ? resource.ExternalUrl : null,
+            FileName = resource.LocalFile?.Name,
+            FileSize = resource.LocalFile?.FileSize,
+            DownloadUrl = revealDownload
+                ? resource.Type == TrainingCourseResourceType.File
+                    ? resource.LocalFile?.Url()
+                    : resource.ExternalUrl
+                : null,
+            Order = resource.Order,
+            IsVisible = resource.IsVisible,
+            CreatedAt = resource.CreatedAt
+        };
+}
+
+public class TrainingCourseChallengeModel
+{
+    public int ExerciseChallengeId { get; set; }
+
+    public int? ChapterId { get; set; }
+
+    public string Title { get; set; } = string.Empty;
+
+    public ChallengeCategory Category { get; set; }
+
+    public ChallengeType Type { get; set; }
+
+    public EnvironmentType Environment { get; set; }
+
+    public int Order { get; set; }
+
+    public bool IsRequired { get; set; }
+
+    public bool Solved { get; set; }
+
+    public string? DisplayTitle { get; set; }
+
+    public static TrainingCourseChallengeModel FromChallenge(
+        TrainingCourseChallenge challenge,
+        int? chapterId = null,
+        bool solved = false) =>
+        new()
+        {
+            ExerciseChallengeId = challenge.ExerciseChallengeId,
+            ChapterId = chapterId,
+            Title = challenge.ExerciseChallenge.Title,
+            Category = challenge.ExerciseChallenge.Category,
+            Type = challenge.ExerciseChallenge.Type,
+            Environment = challenge.ExerciseChallenge.Environment,
+            Order = challenge.Order,
+            IsRequired = challenge.IsRequired,
+            Solved = solved,
+            DisplayTitle = challenge.DisplayTitle
+        };
+}
+
+public class TrainingCourseImageTemplateModel
+{
+    public int Id { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public OSType OSType { get; set; }
+
+    public ImageType ImageType { get; set; }
+
+    public ImageStatus Status { get; set; }
+
+    public long FileSize { get; set; }
+
+    public string? Description { get; set; }
+
+    public string? ImageHash { get; set; }
+
+    public string? RegistryUrl { get; set; }
+
+    public DateTimeOffset UploadedAt { get; set; }
+
+    public int? TrainingCourseId { get; set; }
+
+    public static TrainingCourseImageTemplateModel FromTemplate(ImageTemplate template) =>
+        new()
+        {
+            Id = template.Id,
+            Name = template.Name,
+            OSType = template.OSType,
+            ImageType = template.ImageType,
+            Status = template.Status,
+            FileSize = template.FileSize,
+            Description = template.Description,
+            ImageHash = template.ImageHash,
+            RegistryUrl = template.RegistryUrl,
+            UploadedAt = template.UploadedAt,
+            TrainingCourseId = template.TrainingCourseId
+        };
+}
+
+public class TrainingCourseChapterModel
+{
+    public int Id { get; set; }
+
+    public int CourseId { get; set; }
+
+    public int? ParentId { get; set; }
+
+    public string Title { get; set; } = string.Empty;
+
+    public string Summary { get; set; } = string.Empty;
+
+    public string Content { get; set; } = string.Empty;
+
+    public TrainingArticleContentType ContentType { get; set; }
+
+    public TrainingCourseVideoProvider VideoProvider { get; set; }
+
+    public string? VideoUrl { get; set; }
+
+    public string? VideoFileUrl { get; set; }
+
+    public int Order { get; set; }
+
+    public bool IsPublished { get; set; }
+
+    public TrainingCourseProgressStatus? ProgressStatus { get; set; }
+
+    public DateTimeOffset? CompletedAt { get; set; }
+
+    public List<TrainingCourseChallengeModel> Challenges { get; set; } = [];
+
+    public static TrainingCourseChapterModel FromChapter(
+        TrainingCourseChapter chapter,
+        TrainingChapterProgress? progress = null,
+        IEnumerable<TrainingCourseChallengeModel>? challenges = null,
+        bool revealContent = true) =>
+        new()
+        {
+            Id = chapter.Id,
+            CourseId = chapter.CourseId,
+            ParentId = chapter.ParentId,
+            Title = chapter.Title,
+            Summary = chapter.Summary,
+            Content = revealContent ? chapter.Content : string.Empty,
+            ContentType = chapter.ContentType,
+            VideoProvider = chapter.VideoProvider,
+            VideoUrl = revealContent ? chapter.VideoUrl : null,
+            VideoFileUrl = revealContent ? chapter.VideoFile?.Url() : null,
+            Order = chapter.Order,
+            IsPublished = chapter.IsPublished,
+            ProgressStatus = progress?.Status,
+            CompletedAt = progress?.CompletedAt,
+            Challenges = challenges?.ToList() ?? []
+        };
+}
+
+public class TrainingCourseModel
+{
+    public int Id { get; set; }
+
+    public string Title { get; set; } = string.Empty;
+
+    public string Slug { get; set; } = string.Empty;
+
+    public string Summary { get; set; } = string.Empty;
+
+    public string Description { get; set; } = string.Empty;
+
+    public string? CoverFileHash { get; set; }
+
+    public string? CoverUrl => string.IsNullOrWhiteSpace(CoverFileHash) ? null : $"/assets/{CoverFileHash}/cover";
+
+    public List<string> Tags { get; set; } = [];
+
+    public TrainingCourseStatus Status { get; set; }
+
+    public TrainingCourseEnrollmentPolicy EnrollmentPolicy { get; set; }
+
+    public TrainingCourseEnrollmentStatus? EnrollmentStatus { get; set; }
+
+    public bool CanLearn { get; set; }
+
+    public bool CanEdit { get; set; }
+
+    public bool CanManageTeachers { get; set; }
+
+    public bool CanManageEnrollments { get; set; }
+
+    public int ChapterCount { get; set; }
+
+    public int ResourceCount { get; set; }
+
+    public int EnrollmentCount { get; set; }
+
+    public int CompletedChapterCount { get; set; }
+
+    public int TotalChapterCount { get; set; }
+
+    public TrainingCourseProgressStatus? ProgressStatus { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
+
+    public DateTimeOffset UpdatedAt { get; set; }
+
+    public List<TrainingCourseTeacherModel> Teachers { get; set; } = [];
+
+    public List<TrainingCourseChapterModel> Chapters { get; set; } = [];
+
+    public List<TrainingCourseResourceModel> Resources { get; set; } = [];
+
+    public List<TrainingCourseChallengeModel> Challenges { get; set; } = [];
+
+    public static TrainingCourseModel FromCourse(
+        TrainingCourse course,
+        TrainingCourseEnrollment? enrollment = null,
+        TrainingCourseProgress? progress = null,
+        bool canLearn = false,
+        bool canEdit = false,
+        bool canManageTeachers = false,
+        bool canManageEnrollments = false,
+        bool includeDetail = false) =>
+        new()
+        {
+            Id = course.Id,
+            Title = course.Title,
+            Slug = course.Slug,
+            Summary = course.Summary,
+            Description = includeDetail || canLearn || canEdit ? course.Description : course.Summary,
+            CoverFileHash = course.CoverFileHash,
+            Tags = course.Tags,
+            Status = course.Status,
+            EnrollmentPolicy = course.EnrollmentPolicy,
+            EnrollmentStatus = enrollment?.Status,
+            CanLearn = canLearn,
+            CanEdit = canEdit,
+            CanManageTeachers = canManageTeachers,
+            CanManageEnrollments = canManageEnrollments,
+            ChapterCount = course.Chapters.Count(c => c.IsPublished || canEdit),
+            ResourceCount = course.Resources.Count(r => r.IsVisible || canEdit),
+            EnrollmentCount = course.Enrollments.Count(e => e.Status == TrainingCourseEnrollmentStatus.Approved),
+            CompletedChapterCount = progress?.CompletedChapterCount ?? 0,
+            TotalChapterCount = progress?.TotalChapterCount ?? course.Chapters.Count(c => c.IsPublished),
+            ProgressStatus = progress?.Status,
+            CreatedAt = course.CreatedAt,
+            UpdatedAt = course.UpdatedAt,
+            Teachers = course.Teachers
+                .OrderBy(t => t.Role)
+                .ThenBy(t => t.Teacher.UserName)
+                .Select(TrainingCourseTeacherModel.FromTeacher)
+                .ToList(),
+            Chapters = includeDetail
+                ? course.Chapters
+                    .Where(c => c.IsPublished || canEdit)
+                    .OrderBy(c => c.Order)
+                    .ThenBy(c => c.Id)
+                    .Select(c => TrainingCourseChapterModel.FromChapter(c, revealContent: canLearn || canEdit))
+                    .ToList()
+                : [],
+            Resources = includeDetail
+                ? course.Resources
+                    .Where(r => r.IsVisible || canEdit)
+                    .OrderBy(r => r.Order)
+                    .ThenBy(r => r.Id)
+                    .Select(r => TrainingCourseResourceModel.FromResource(r, canLearn || canEdit))
+                    .ToList()
+                : [],
+            Challenges = includeDetail
+                ? course.Challenges
+                    .OrderBy(c => c.Order)
+                    .ThenBy(c => c.ExerciseChallengeId)
+                    .Select(c => TrainingCourseChallengeModel.FromChallenge(c))
+                    .ToList()
+                : []
+        };
+}
+
+public class TrainingCourseSubmitResultModel
+{
+    public long SubmissionId { get; set; }
+
+    public AnswerResult Status { get; set; }
+
+    public bool ChapterCompleted { get; set; }
+
+    public bool CourseCompleted { get; set; }
+}
+
+public class TrainingCourseChallengeDetailModel : TrainingCtfChallengeDetailModel
+{
+    public int CourseId { get; set; }
+
+    public int? ChapterId { get; set; }
+
+    public static TrainingCourseChallengeDetailModel FromInstance(
+        int courseId,
+        int? chapterId,
+        ExerciseInstance instance,
+        int attempts,
+        bool solved)
+    {
+        var baseModel = TrainingCtfChallengeDetailModel.FromInstance(courseId, instance, attempts, solved);
+        return new TrainingCourseChallengeDetailModel
+        {
+            CourseId = courseId,
+            ChapterId = chapterId,
+            Id = baseModel.Id,
+            ModuleId = courseId,
+            Title = baseModel.Title,
+            Content = baseModel.Content,
+            Category = baseModel.Category,
+            Type = baseModel.Type,
+            Environment = baseModel.Environment,
+            Hints = baseModel.Hints,
+            Difficulty = baseModel.Difficulty,
+            Tags = baseModel.Tags,
+            Solved = baseModel.Solved,
+            Attempts = baseModel.Attempts,
+            Limit = baseModel.Limit,
+            Flags = baseModel.Flags,
+            Context = baseModel.Context
+        };
+    }
+}

@@ -6981,3 +6981,156 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
 .yy-training-child-item strong {
   font-size: 0.86rem;
 }
+
+.yy-course-home,
+.yy-course-detail,
+.yy-course-chapter-page {
+  width: 100%;
+}
+
+.yy-course-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.yy-course-hero.panel-card,
+.yy-course-detail-hero.panel-card,
+.yy-course-card.panel-card {
+  position: relative;
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.088), rgba(255, 255, 255, 0.024) 42%, rgba(158, 144, 187, 0.04)),
+    radial-gradient(ellipse at 20% 8%, rgba(107, 238, 177, 0.12), transparent 48%),
+    rgba(11, 15, 13, 0.42);
+  background-position: center;
+  background-size: cover;
+  border-color: rgba(221, 229, 223, 0.18);
+  backdrop-filter: blur(1.6rem) saturate(1.12);
+}
+
+.yy-course-hero.panel-card::after,
+.yy-course-detail-hero.panel-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(90deg, rgba(3, 7, 6, 0.92), rgba(3, 7, 6, 0.64) 54%, rgba(3, 7, 6, 0.25)),
+    radial-gradient(ellipse at 24% 22%, rgba(107, 238, 177, 0.16), transparent 48%);
+  pointer-events: none;
+}
+
+.yy-course-hero.panel-card > *,
+.yy-course-detail-hero.panel-card > * {
+  position: relative;
+  z-index: 3;
+}
+
+.yy-course-hero.panel-card {
+  min-height: clamp(17rem, 26vh, 24rem);
+  display: flex;
+  align-items: flex-end;
+}
+
+.yy-course-card.panel-card {
+  display: grid;
+  grid-template-rows: 10rem minmax(0, 1fr);
+  min-height: 22rem;
+  padding: 0 !important;
+}
+
+.yy-course-card-cover {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  min-height: 10rem;
+  padding: 0.78rem;
+  background:
+    radial-gradient(ellipse at 22% 20%, rgba(107, 238, 177, 0.22), transparent 54%),
+    linear-gradient(135deg, rgba(107, 238, 177, 0.12), rgba(185, 173, 209, 0.1)),
+    rgba(5, 10, 9, 0.76);
+  background-position: center;
+  background-size: cover;
+}
+
+.yy-course-card-cover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent, rgba(3, 7, 6, 0.72));
+}
+
+.yy-course-card-cover .mantine-Badge-root {
+  position: relative;
+  z-index: 2;
+}
+
+.yy-course-card-body {
+  padding: 0.95rem;
+}
+
+.yy-course-row-card.panel-card,
+.yy-course-lab-card.panel-card {
+  border-color: rgba(221, 229, 223, 0.14);
+  background:
+    radial-gradient(ellipse at 18% 12%, rgba(107, 238, 177, 0.08), transparent 44%),
+    rgba(255, 255, 255, 0.035);
+}
+
+.yy-course-tabs .mantine-Tabs-list {
+  gap: 0.38rem;
+  border-bottom-color: rgba(221, 229, 223, 0.14);
+}
+
+.yy-course-tabs .mantine-Tabs-tab {
+  border-radius: calc(var(--yy-radius) - 4px) calc(var(--yy-radius) - 4px) 0 0;
+  color: rgba(244, 245, 245, 0.74);
+  font-weight: 820;
+}
+
+.yy-course-tabs .mantine-Tabs-tab[data-active] {
+  color: #eafff4;
+  background: rgba(107, 238, 177, 0.1);
+  border-color: rgba(107, 238, 177, 0.24);
+}
+
+.yy-course-chapter-page {
+  grid-template-columns: minmax(16rem, 2.1fr) minmax(0, 7.2fr) minmax(14rem, 2.1fr) !important;
+  align-items: start;
+}
+
+.yy-course-chapter-side,
+.yy-course-toc {
+  position: sticky;
+  top: 5rem;
+}
+
+.yy-course-chapter-main {
+  min-width: 0;
+}
+
+.yy-course-markdown.panel-card {
+  line-height: 1.78;
+}
+
+.yy-course-video {
+  width: 100%;
+  max-height: min(62vh, 34rem);
+  border-radius: var(--yy-radius);
+  background: #000;
+}
+
+@media (max-width: 74em) {
+  .yy-course-chapter-page {
+    grid-template-columns: 1fr !important;
+  }
+
+  .yy-course-chapter-side,
+  .yy-course-toc {
+    position: static;
+  }
+}

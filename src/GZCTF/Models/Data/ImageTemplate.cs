@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace GZCTF.Models.Data;
 
@@ -104,4 +105,12 @@ public class ImageTemplate
     /// </summary>
     [MaxLength(256)]
     public string? OriginalArchiveName { get; set; }
+
+    /// <summary>
+    /// Owning training course. Null means global template.
+    /// </summary>
+    public int? TrainingCourseId { get; set; }
+
+    [JsonIgnore]
+    public TrainingCourse? TrainingCourse { get; set; }
 }

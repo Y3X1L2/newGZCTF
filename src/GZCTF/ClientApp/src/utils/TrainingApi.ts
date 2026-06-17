@@ -6,6 +6,7 @@ import api, {
   ContentType,
   EnvironmentType,
   FlagSubmitModel,
+  NetworkMode,
   Role,
 } from '@Api'
 
@@ -23,6 +24,47 @@ export enum TrainingModuleProgressStatus {
   NotStarted = 'NotStarted',
   Reading = 'Reading',
   Practicing = 'Practicing',
+  Completed = 'Completed',
+}
+
+export enum TrainingCourseStatus {
+  Draft = 'Draft',
+  Published = 'Published',
+  Archived = 'Archived',
+}
+
+export enum TrainingCourseEnrollmentPolicy {
+  TeacherApproval = 'TeacherApproval',
+  AutoApprove = 'AutoApprove',
+}
+
+export enum TrainingCourseEnrollmentStatus {
+  Pending = 'Pending',
+  Approved = 'Approved',
+  Rejected = 'Rejected',
+  Cancelled = 'Cancelled',
+}
+
+export enum TrainingCourseTeacherRole {
+  Owner = 'Owner',
+  Teacher = 'Teacher',
+}
+
+export enum TrainingCourseResourceType {
+  File = 'File',
+  Link = 'Link',
+  Video = 'Video',
+}
+
+export enum TrainingCourseVideoProvider {
+  None = 'None',
+  LocalFile = 'LocalFile',
+  ExternalUrl = 'ExternalUrl',
+}
+
+export enum TrainingCourseProgressStatus {
+  NotStarted = 'NotStarted',
+  Learning = 'Learning',
   Completed = 'Completed',
 }
 
@@ -245,6 +287,213 @@ export interface TrainingOverviewModel {
   completionRate: number
 }
 
+export interface TrainingCourseEditModel {
+  title: string
+  slug: string
+  summary: string
+  description: string
+  coverFileHash?: string | null
+  tags: string[]
+  enrollmentPolicy: TrainingCourseEnrollmentPolicy
+}
+
+export interface TrainingCourseTeacherModel {
+  teacherId: string
+  userName: string
+  realName: string
+  role: TrainingCourseTeacherRole
+  assignedAt: number
+}
+
+export interface TrainingCourseEnrollmentModel {
+  courseId: number
+  userId: string
+  userName: string
+  realName: string
+  stdNumber: string
+  status: TrainingCourseEnrollmentStatus
+  applyReason: string
+  reviewComment: string
+  requestedAt: number
+  reviewedAt?: number | null
+}
+
+export interface TrainingCourseResourceModel {
+  id: number
+  courseId: number
+  title: string
+  description: string
+  type: TrainingCourseResourceType
+  externalUrl?: string | null
+  fileName?: string | null
+  fileSize?: number | null
+  downloadUrl?: string | null
+  order: number
+  isVisible: boolean
+  createdAt: number
+}
+
+export interface TrainingCourseChallengeModel {
+  exerciseChallengeId: number
+  chapterId?: number | null
+  title: string
+  category: ChallengeCategory
+  type: ChallengeType
+  environment: EnvironmentType
+  order: number
+  isRequired: boolean
+  solved: boolean
+  displayTitle?: string | null
+}
+
+export interface TrainingCourseChapterModel {
+  id: number
+  courseId: number
+  parentId?: number | null
+  title: string
+  summary: string
+  content: string
+  contentType: 'Markdown' | 'Html'
+  videoProvider: TrainingCourseVideoProvider
+  videoUrl?: string | null
+  videoFileUrl?: string | null
+  order: number
+  isPublished: boolean
+  progressStatus?: TrainingCourseProgressStatus | null
+  completedAt?: number | null
+  challenges: TrainingCourseChallengeModel[]
+}
+
+export interface TrainingCourseModel extends TrainingCourseEditModel {
+  id: number
+  coverUrl?: string | null
+  status: TrainingCourseStatus
+  enrollmentStatus?: TrainingCourseEnrollmentStatus | null
+  canLearn: boolean
+  canEdit: boolean
+  canManageTeachers: boolean
+  canManageEnrollments: boolean
+  chapterCount: number
+  resourceCount: number
+  enrollmentCount: number
+  completedChapterCount: number
+  totalChapterCount: number
+  progressStatus?: TrainingCourseProgressStatus | null
+  createdAt: number
+  updatedAt: number
+  teachers: TrainingCourseTeacherModel[]
+  chapters: TrainingCourseChapterModel[]
+  resources: TrainingCourseResourceModel[]
+  challenges: TrainingCourseChallengeModel[]
+}
+
+export interface TrainingCourseEnrollmentApplyModel {
+  applyReason: string
+}
+
+export interface TrainingCourseEnrollmentReviewModel {
+  status: TrainingCourseEnrollmentStatus
+  reviewComment: string
+}
+
+export interface TrainingCourseChapterEditModel {
+  parentId?: number | null
+  title: string
+  summary: string
+  content: string
+  contentType: 'Markdown' | 'Html'
+  videoProvider: TrainingCourseVideoProvider
+  videoUrl?: string | null
+  videoFileHash?: string | null
+  order: number
+  isPublished: boolean
+}
+
+export interface TrainingCourseResourceEditModel {
+  title: string
+  description: string
+  type: TrainingCourseResourceType
+  externalUrl?: string | null
+  localFileHash?: string | null
+  order: number
+  isVisible: boolean
+}
+
+export interface TrainingCourseChallengeEditModel {
+  exerciseChallengeId: number
+  chapterId?: number | null
+  order: number
+  isRequired: boolean
+  displayTitle?: string | null
+}
+
+export interface TrainingCourseImageTemplateModel {
+  id: number
+  name: string
+  osType: string | number
+  imageType: string | number
+  status: string | number
+  fileSize: number
+  description?: string | null
+  imageHash?: string | null
+  registryUrl?: string | null
+  uploadedAt: number
+  trainingCourseId?: number | null
+}
+
+export interface TrainingCourseDockerRegisterModel {
+  name: string
+  registryUrl: string
+  osType: string | number
+  registryAuth?: string | null
+}
+
+export interface TrainingCourseLocalImageImportModel {
+  localPath: string
+  displayName?: string | null
+}
+
+export interface TrainingCourseChallengeCreateModel {
+  title: string
+  content: string
+  category: ChallengeCategory
+  type: ChallengeType
+  environment: EnvironmentType
+  imageTemplateId?: number | null
+  containerImage?: string | null
+  memoryLimit?: number | null
+  cpuCount?: number | null
+  storageLimit?: number | null
+  exposePort?: number | null
+  networkMode?: NetworkMode | null
+  flagTemplate?: string | null
+  staticFlag?: string | null
+  submissionLimit: number
+  chapterId?: number | null
+  order: number
+  isRequired: boolean
+  displayTitle?: string | null
+}
+
+export interface TrainingCourseDockerRegistryModel {
+  enabled: boolean
+  address: string
+  namespace: string
+  maxUploadSizeGb: number
+}
+
+export interface TrainingCourseSubmitResultModel {
+  submissionId: number
+  status: AnswerResult
+  chapterCompleted: boolean
+  courseCompleted: boolean
+}
+
+export interface TrainingCourseChallengeDetailModel extends TrainingCtfChallengeDetailModel {
+  courseId: number
+  chapterId?: number | null
+}
+
 const request = api.request
 
 export const roleLabel = (role?: Role | null) => {
@@ -339,6 +588,76 @@ export const trainingApi = {
     request<TheoryTrainingSessionModel, unknown>({
       path: `/api/training/theory/sessions/${sessionId}/submit`,
       method: 'POST',
+      body: data,
+      type: ContentType.Json,
+    }),
+}
+
+export const trainingCourseApi = {
+  courses: () =>
+    request<TrainingCourseModel[], unknown>({
+      path: '/api/training/courses',
+      method: 'GET',
+    }),
+
+  course: (courseId: number) =>
+    request<TrainingCourseModel, unknown>({
+      path: `/api/training/courses/${courseId}`,
+      method: 'GET',
+    }),
+
+  enroll: (courseId: number, data: TrainingCourseEnrollmentApplyModel) =>
+    request<TrainingCourseEnrollmentModel, unknown>({
+      path: `/api/training/courses/${courseId}/enroll`,
+      method: 'POST',
+      body: data,
+      type: ContentType.Json,
+    }),
+
+  cancelEnroll: (courseId: number) =>
+    request<void, unknown>({
+      path: `/api/training/courses/${courseId}/enroll`,
+      method: 'DELETE',
+    }),
+
+  chapter: (courseId: number, chapterId: number) =>
+    request<TrainingCourseChapterModel, unknown>({
+      path: `/api/training/courses/${courseId}/chapters/${chapterId}`,
+      method: 'GET',
+    }),
+
+  completeChapter: (courseId: number, chapterId: number) =>
+    request<void, unknown>({
+      path: `/api/training/courses/${courseId}/chapters/${chapterId}/complete`,
+      method: 'POST',
+    }),
+
+  challenge: (courseId: number, challengeId: number, chapterId?: number | null) =>
+    request<TrainingCourseChallengeDetailModel, unknown>({
+      path: `/api/training/courses/${courseId}/challenges/${challengeId}`,
+      method: 'GET',
+      query: { chapterId },
+    }),
+
+  createContainer: (courseId: number, challengeId: number, chapterId?: number | null) =>
+    request<ContainerInfoModel, unknown>({
+      path: `/api/training/courses/${courseId}/challenges/${challengeId}/container`,
+      method: 'POST',
+      query: { chapterId },
+    }),
+
+  destroyContainer: (courseId: number, challengeId: number, chapterId?: number | null) =>
+    request<void, unknown>({
+      path: `/api/training/courses/${courseId}/challenges/${challengeId}/container`,
+      method: 'DELETE',
+      query: { chapterId },
+    }),
+
+  submitFlag: (courseId: number, challengeId: number, data: FlagSubmitModel, chapterId?: number | null) =>
+    request<TrainingCourseSubmitResultModel, unknown>({
+      path: `/api/training/courses/${courseId}/challenges/${challengeId}/submit`,
+      method: 'POST',
+      query: { chapterId },
       body: data,
       type: ContentType.Json,
     }),
@@ -478,5 +797,189 @@ export const trainingAdminApi = {
     request<TrainingGroupStatsModel, unknown>({
       path: `/api/admin/training/stats/groups/${groupId}`,
       method: 'GET',
+    }),
+}
+
+export const trainingCourseAdminApi = {
+  courses: () =>
+    request<TrainingCourseModel[], unknown>({
+      path: '/api/admin/training/courses',
+      method: 'GET',
+    }),
+
+  course: (courseId: number) =>
+    request<TrainingCourseModel, unknown>({
+      path: `/api/admin/training/courses/${courseId}`,
+      method: 'GET',
+    }),
+
+  createCourse: (data: TrainingCourseEditModel) =>
+    request<TrainingCourseModel, unknown>({
+      path: '/api/admin/training/courses',
+      method: 'POST',
+      body: data,
+      type: ContentType.Json,
+    }),
+
+  updateCourse: (courseId: number, data: TrainingCourseEditModel) =>
+    request<void, unknown>({
+      path: `/api/admin/training/courses/${courseId}`,
+      method: 'PUT',
+      body: data,
+      type: ContentType.Json,
+    }),
+
+  publish: (courseId: number) =>
+    request<void, unknown>({
+      path: `/api/admin/training/courses/${courseId}/publish`,
+      method: 'POST',
+    }),
+
+  archive: (courseId: number) =>
+    request<void, unknown>({
+      path: `/api/admin/training/courses/${courseId}/archive`,
+      method: 'POST',
+    }),
+
+  draft: (courseId: number) =>
+    request<void, unknown>({
+      path: `/api/admin/training/courses/${courseId}/draft`,
+      method: 'POST',
+    }),
+
+  enrollments: (courseId: number) =>
+    request<TrainingCourseEnrollmentModel[], unknown>({
+      path: `/api/admin/training/courses/${courseId}/enrollments`,
+      method: 'GET',
+    }),
+
+  reviewEnrollment: (courseId: number, userId: string, data: TrainingCourseEnrollmentReviewModel) =>
+    request<void, unknown>({
+      path: `/api/admin/training/courses/${courseId}/enrollments/${userId}`,
+      method: 'PUT',
+      body: data,
+      type: ContentType.Json,
+    }),
+
+  addTeacher: (courseId: number, data: { teacherId: string; role: TrainingCourseTeacherRole }) =>
+    request<void, unknown>({
+      path: `/api/admin/training/courses/${courseId}/teachers`,
+      method: 'POST',
+      body: data,
+      type: ContentType.Json,
+    }),
+
+  removeTeacher: (courseId: number, teacherId: string) =>
+    request<void, unknown>({
+      path: `/api/admin/training/courses/${courseId}/teachers/${teacherId}`,
+      method: 'DELETE',
+    }),
+
+  createChapter: (courseId: number, data: TrainingCourseChapterEditModel) =>
+    request<TrainingCourseChapterModel, unknown>({
+      path: `/api/admin/training/courses/${courseId}/chapters`,
+      method: 'POST',
+      body: data,
+      type: ContentType.Json,
+    }),
+
+  updateChapter: (courseId: number, chapterId: number, data: TrainingCourseChapterEditModel) =>
+    request<void, unknown>({
+      path: `/api/admin/training/courses/${courseId}/chapters/${chapterId}`,
+      method: 'PUT',
+      body: data,
+      type: ContentType.Json,
+    }),
+
+  deleteChapter: (courseId: number, chapterId: number) =>
+    request<void, unknown>({
+      path: `/api/admin/training/courses/${courseId}/chapters/${chapterId}`,
+      method: 'DELETE',
+    }),
+
+  createResource: (courseId: number, data: TrainingCourseResourceEditModel) =>
+    request<TrainingCourseResourceModel, unknown>({
+      path: `/api/admin/training/courses/${courseId}/resources`,
+      method: 'POST',
+      body: data,
+      type: ContentType.Json,
+    }),
+
+  updateResource: (courseId: number, resourceId: number, data: TrainingCourseResourceEditModel) =>
+    request<void, unknown>({
+      path: `/api/admin/training/courses/${courseId}/resources/${resourceId}`,
+      method: 'PUT',
+      body: data,
+      type: ContentType.Json,
+    }),
+
+  deleteResource: (courseId: number, resourceId: number) =>
+    request<void, unknown>({
+      path: `/api/admin/training/courses/${courseId}/resources/${resourceId}`,
+      method: 'DELETE',
+    }),
+
+  addChallenge: (courseId: number, data: TrainingCourseChallengeEditModel) =>
+    request<void, unknown>({
+      path: `/api/admin/training/courses/${courseId}/challenges`,
+      method: 'POST',
+      body: data,
+      type: ContentType.Json,
+    }),
+
+  createChallenge: (courseId: number, data: TrainingCourseChallengeCreateModel) =>
+    request<TrainingCourseChallengeModel, unknown>({
+      path: `/api/admin/training/courses/${courseId}/challenges/create`,
+      method: 'POST',
+      body: data,
+      type: ContentType.Json,
+    }),
+
+  removeChallenge: (courseId: number, exerciseChallengeId: number) =>
+    request<void, unknown>({
+      path: `/api/admin/training/courses/${courseId}/challenges/${exerciseChallengeId}`,
+      method: 'DELETE',
+    }),
+
+  imageTemplates: (courseId: number) =>
+    request<TrainingCourseImageTemplateModel[], unknown>({
+      path: `/api/admin/training/courses/${courseId}/image-templates`,
+      method: 'GET',
+    }),
+
+  dockerRegistry: (courseId: number) =>
+    request<TrainingCourseDockerRegistryModel, unknown>({
+      path: `/api/admin/training/courses/${courseId}/image-templates/docker-registry`,
+      method: 'GET',
+    }),
+
+  registerDockerTemplate: (courseId: number, data: TrainingCourseDockerRegisterModel) =>
+    request<TrainingCourseImageTemplateModel, unknown>({
+      path: `/api/admin/training/courses/${courseId}/image-templates/register-docker`,
+      method: 'POST',
+      body: data,
+      type: ContentType.Json,
+    }),
+
+  importLocalTemplate: (courseId: number, data: TrainingCourseLocalImageImportModel) =>
+    request<TrainingCourseImageTemplateModel, unknown>({
+      path: `/api/admin/training/courses/${courseId}/image-templates/import-local`,
+      method: 'POST',
+      body: data,
+      type: ContentType.Json,
+    }),
+
+  attachImageTemplate: (courseId: number, templateId: number) =>
+    request<void, unknown>({
+      path: `/api/admin/training/courses/${courseId}/image-templates`,
+      method: 'POST',
+      body: { templateId },
+      type: ContentType.Json,
+    }),
+
+  detachImageTemplate: (courseId: number, templateId: number) =>
+    request<void, unknown>({
+      path: `/api/admin/training/courses/${courseId}/image-templates/${templateId}`,
+      method: 'DELETE',
     }),
 }

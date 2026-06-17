@@ -366,6 +366,8 @@ public class TrainingAdminController(
         var challenge = await context.ExerciseChallenges.SingleOrDefaultAsync(c => c.Id == model.ExerciseChallengeId, token);
         if (challenge is null)
             return BadRequest(new RequestResponse("培训题目不存在。"));
+        if (challenge.TrainingCourseId.HasValue)
+            return BadRequest(new RequestResponse("课程专属题目不能绑定到旧培训模块。"));
 
         var exists = await context.TrainingModuleChallenges.AnyAsync(c =>
             c.ModuleId == moduleId && c.ExerciseChallengeId == model.ExerciseChallengeId, token);

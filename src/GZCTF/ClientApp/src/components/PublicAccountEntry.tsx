@@ -12,11 +12,7 @@ import { Link, useLocation } from 'react-router'
 import { clearLocalCache } from '@Utils/Cache'
 import { useLogOut, useUser } from '@Hooks/useUser'
 
-interface PublicAccountEntryProps {
-  home?: boolean
-}
-
-export const PublicAccountEntry: FC<PublicAccountEntryProps> = ({ home = false }) => {
+export const PublicAccountEntry: FC = () => {
   const { user, error } = useUser()
   const logout = useLogOut()
   const location = useLocation()
@@ -38,7 +34,6 @@ export const PublicAccountEntry: FC<PublicAccountEntryProps> = ({ home = false }
         to={`/account/login?from=${location.pathname}`}
         aria-label={t('common.tab.account.login')}
         className="yy-public-account-entry"
-        data-home={home || undefined}
       >
         {avatar}
       </ActionIcon>
@@ -51,7 +46,6 @@ export const PublicAccountEntry: FC<PublicAccountEntryProps> = ({ home = false }
         <ActionIcon
           aria-label={t('common.tab.account.profile')}
           className="yy-public-account-entry"
-          data-home={home || undefined}
           data-authenticated="true"
           data-has-avatar={!!user?.avatar || undefined}
         >

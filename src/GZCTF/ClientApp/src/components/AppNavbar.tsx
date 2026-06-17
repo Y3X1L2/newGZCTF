@@ -11,8 +11,8 @@ import {
   mdiHomeVariantOutline,
   mdiInformationOutline,
   mdiNoteTextOutline,
-  mdiWrenchOutline,
   mdiTransitConnectionVariant,
+  mdiWrenchOutline,
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import cx from 'clsx'
@@ -185,7 +185,6 @@ export const AppNavbar: FC = () => {
 
       <AppShell.Section className={cx(classes.section, classes.utilitySection, misc.justifyEnd)}>
         <Stack w="100%" align="center" justify="center" gap={5}>
-          {/* WebSocket Reflector X Integration */}
           {config.portMapping === ContainerPortMappingType.PlatformProxy && (
             <Popover position="right" offset={24} width={320}>
               <Popover.Target>
@@ -198,7 +197,6 @@ export const AppNavbar: FC = () => {
               </Popover.Dropdown>
             </Popover>
           )}
-
         </Stack>
       </AppShell.Section>
     </AppShell.Navbar>

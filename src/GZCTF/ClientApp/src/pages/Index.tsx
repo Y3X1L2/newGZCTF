@@ -112,21 +112,19 @@ const Home: FC = () => {
   usePageTitle()
 
   return (
-    <WithNavBar minWidth={0} width="calc(100vw - 218px)">
+    <WithNavBar minWidth={0} width="var(--container)">
       <section className="original-home yy-page-frame yy-home-page yy-home-recomposed">
         <div className="home-title-row yy-home-title-row">
           <BrandMark />
-          <div className="yy-home-title-copy">
-            <h1 className="yy-brand-title yy-home-brand-heading">
-              <span>
-                <YinyuGradientText tone="silver">{PLATFORM_TITLE}</YinyuGradientText>
-              </span>
-              <em>
-                <YinyuGradientText tone="signal">{platformType}</YinyuGradientText>
-              </em>
-            </h1>
-            <TerminalTyping lines={terminalLines} />
-          </div>
+          <h1 className="yy-brand-title yy-home-brand-heading">
+            <span>
+              <YinyuGradientText tone="silver">{PLATFORM_TITLE}</YinyuGradientText>
+            </span>
+            <em>
+              <YinyuGradientText tone="signal">{platformType}</YinyuGradientText>
+            </em>
+          </h1>
+          <TerminalTyping lines={terminalLines} />
         </div>
 
         <div className="home-layout-draft yy-home-layout yy-home-event-layout">
