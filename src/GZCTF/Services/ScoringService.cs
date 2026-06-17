@@ -26,6 +26,7 @@ public class ScoringService
     public async Task<int> CalculateTotalScoreAsync(int challengeId, Guid userId)
     {
         var rules = await _context.ScoringRules
+            .AsNoTracking()
             .Where(r => r.ChallengeId == challengeId)
             .ToListAsync();
 
@@ -36,6 +37,7 @@ public class ScoringService
         }
 
         var submissions = await _context.Submissions
+            .AsNoTracking()
             .Where(s => s.ChallengeId == challengeId && s.UserId == userId)
             .ToListAsync();
 

@@ -133,22 +133,17 @@ public class SubmissionController : ControllerBase
 
         if (status == AnswerResult.Accepted)
         {
-            var existingSolve = await _context.FirstSolves
-                .FirstOrDefaultAsync(fs => fs.ParticipationId == request.ParticipationId
-                                        && fs.ChallengeId == request.ChallengeId, token);
-
-            if (existingSolve is null)
-            {
-                await _context.FirstSolves.AddAsync(new FirstSolve
-                {
-                    ParticipationId = request.ParticipationId,
-                    ChallengeId = request.ChallengeId,
-                    SubmissionId = submission.Id
-                }, token);
-            }
+            await using var transaction = await _context.Database.BeginTransactionAsync(token);
+            submission.FlagId ??= await ResolveFlagContextIdAsync(submission, token);
+            if (submission.FlagId is { } flagId)
+                await AddFirstSolveIfNeededAsync(request.ParticipationId, request.ChallengeId, flagId, submission, token);
+            await _context.SaveChangesAsync(token);
+            await transaction.CommitAsync(token);
         }
-
-        await _context.SaveChangesAsync(token);
+        else
+        {
+            await _context.SaveChangesAsync(token);
+        }
 
         _logger.LogInformation(
             "Submission {SubmissionId} created: Type={Type}, Status={Status}, Score={Score}, User={UserId}, Challenge={ChallengeId}",
@@ -384,22 +379,17 @@ public class SubmissionController : ControllerBase
 
         if (submission.Status == AnswerResult.Accepted)
         {
-            var existingSolve = await _context.FirstSolves
-                .FirstOrDefaultAsync(fs => fs.ParticipationId == submission.ParticipationId
-                                        && fs.ChallengeId == submission.ChallengeId, token);
-
-            if (existingSolve is null)
-            {
-                await _context.FirstSolves.AddAsync(new FirstSolve
-                {
-                    ParticipationId = submission.ParticipationId,
-                    ChallengeId = submission.ChallengeId,
-                    SubmissionId = submission.Id
-                }, token);
-            }
+            await using var transaction = await _context.Database.BeginTransactionAsync(token);
+            submission.FlagId ??= await ResolveFlagContextIdAsync(submission, token);
+            if (submission.FlagId is { } flagId)
+                await AddFirstSolveIfNeededAsync(submission.ParticipationId, submission.ChallengeId, flagId, submission, token);
+            await _context.SaveChangesAsync(token);
+            await transaction.CommitAsync(token);
         }
-
-        await _context.SaveChangesAsync(token);
+        else
+        {
+            await _context.SaveChangesAsync(token);
+        }
 
         _logger.LogInformation(
             "Submission {SubmissionId} reviewed: Accepted={Accepted}, Score={Score}, Reviewer={ReviewerId}",
@@ -565,6 +555,43 @@ public class SubmissionController : ControllerBase
             ScoreDecay.Linear => Math.Max(0, baseScore - attemptIndex * 10),
             _ => baseScore
         };
+    }
+
+    private Task<int?> ResolveFlagContextIdAsync(Submission submission, CancellationToken token)
+    {
+        if (submission.SubmissionType != ScoringSubmissionType.Flag)
+            return Task.FromResult<int?>(null);
+
+        return _context.FlagContexts
+            .AsNoTracking()
+            .Where(f => f.ChallengeId == submission.ChallengeId && f.Flag == submission.Answer)
+            .Select(f => (int?)f.Id)
+            .FirstOrDefaultAsync(token);
+    }
+
+    private async Task AddFirstSolveIfNeededAsync(int participationId, int challengeId, int flagId,
+        Submission submission, CancellationToken token)
+    {
+        var lockKey = (long)HashCode.Combine(participationId, challengeId, flagId);
+        await _context.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock({0})",
+            [lockKey],
+            cancellationToken: token);
+
+        var existingSolve = await _context.FirstSolves
+            .AnyAsync(fs => fs.ParticipationId == participationId
+                            && fs.ChallengeId == challengeId
+                            && fs.FlagId == flagId, token);
+
+        if (existingSolve)
+            return;
+
+        await _context.FirstSolves.AddAsync(new FirstSolve
+        {
+            ParticipationId = participationId,
+            ChallengeId = challengeId,
+            FlagId = flagId,
+            Submission = submission
+        }, token);
     }
 
     /// <summary>

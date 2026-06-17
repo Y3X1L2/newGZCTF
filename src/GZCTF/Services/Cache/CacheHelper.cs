@@ -24,11 +24,12 @@ public class CacheHelper(
         MemoryCacheEntryOptions? memoryCacheOptions = null,
         CancellationToken token = default)
     {
-        var value = await memoryCache.GetOrCreateAsync<TResult>(key,
-            _ => GetOrCreateFromDistributedCacheAsync(logger, key, func, token),
-            memoryCacheOptions ?? CommonMemoryCacheOptions);
+        if (memoryCache.TryGetValue(key, out TResult? cached) && cached is not null)
+            return cached;
 
-        return value ?? await GetOrCreateFromDistributedCacheAsync(logger, key, func, token);
+        var value = await GetOrCreateFromDistributedCacheAsync(logger, key, func, token);
+        memoryCache.Set(key, value, memoryCacheOptions ?? CommonMemoryCacheOptions);
+        return value;
     }
 
     /// <summary>
@@ -85,6 +86,7 @@ public class CacheHelper(
         // so we use memory cache to reduce the pressure on distributed cache.
         AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(5),
     };
+    private static readonly TimeSpan LockWaitTimeout = TimeSpan.FromSeconds(30);
 
     private async Task<TResult> GetOrCreateFromDistributedCacheAsync<TResult, TLogger>(
         ILogger<TLogger> logger,
@@ -161,7 +163,8 @@ public class CacheHelper(
         if (lockValue is null)
             return null;
 
-        while (lockValue is not null)
+        var deadline = DateTimeOffset.UtcNow + LockWaitTimeout;
+        while (lockValue is not null && DateTimeOffset.UtcNow < deadline)
         {
             await Task.Delay(100, token);
             lockValue = await distributedCache.GetAsync(lockKey, token);

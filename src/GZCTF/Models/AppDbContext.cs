@@ -293,6 +293,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
             entity.Property(e => e.Status)
                 .HasConversion<int>();
 
+            entity.HasIndex(e => e.GameId);
+            entity.HasIndex(e => e.TeamId);
+            entity.HasIndex(e => new { e.GameId, e.Status });
+
             entity.HasMany(e => e.Instances).WithOne();
 
             entity.HasMany(e => e.Submissions)
@@ -475,6 +479,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .OnDelete(DeleteBehavior.SetNull);
 
             entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.ChallengeId);
+            entity.HasIndex(e => e.GameId);
+            entity.HasIndex(e => e.ParticipationId);
+            entity.HasIndex(e => e.SubmissionType);
+            entity.HasIndex(e => new { e.ChallengeId, e.UserId, e.SubmissionType });
+            entity.HasIndex(e => new { e.ParticipationId, e.ChallengeId });
 
             entity.Navigation(e => e.Team).AutoInclude();
             entity.Navigation(e => e.User).AutoInclude();
@@ -557,6 +567,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
         builder.Entity<FirstSolve>(entity =>
         {
             entity.HasKey(e => new { e.ParticipationId, e.ChallengeId, e.FlagId });
+            entity.HasIndex(e => new { e.ParticipationId, e.ChallengeId });
 
             entity.HasOne(e => e.Submission)
                 .WithMany()

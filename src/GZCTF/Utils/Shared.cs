@@ -10,11 +10,19 @@ namespace GZCTF.Utils;
 
 public static class ChannelService
 {
+    private const int DefaultChannelCapacity = 16_384;
+
     extension(IServiceCollection services)
     {
         internal void AddChannel<T>()
         {
-            var channel = Channel.CreateUnbounded<T>();
+            var channel = Channel.CreateBounded<T>(new BoundedChannelOptions(DefaultChannelCapacity)
+            {
+                FullMode = BoundedChannelFullMode.Wait,
+                SingleReader = false,
+                SingleWriter = false,
+                AllowSynchronousContinuations = false,
+            });
             services.AddSingleton(channel);
             services.AddSingleton(channel.Reader);
             services.AddSingleton(channel.Writer);

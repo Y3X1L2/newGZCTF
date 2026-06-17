@@ -140,9 +140,6 @@ public class RedisDistributedLock : IDistributedLockService, IDisposable
             _disposed = true;
             _semaphore.Release();
             _logger.LogDebug("Local fallback lock released for '{Key}'", _key);
-
-            if (_semaphore.CurrentCount > 0)
-                LocalLocks.TryRemove(new KeyValuePair<string, SemaphoreSlim>(_key, _semaphore));
         }
     }
 }
