@@ -1,8 +1,7 @@
 import {
-  Badge,
   Button,
+  Box,
   Group,
-  SimpleGrid,
   Stack,
   Text,
   TextInput,
@@ -16,7 +15,9 @@ import { Link, useParams } from 'react-router'
 import { InstanceEntry } from '@Components/InstanceEntry'
 import { Markdown } from '@Components/MarkdownRenderer'
 import { WithNavBar } from '@Components/WithNavbar'
-import { YinyuPanel, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
+import { TrainingStatusText, TrainingTagLine } from '@Components/training/TrainingCourseUI'
+import { YinyuGameBendsBackground } from '@Components/yinyu/YinyuReactBits'
+import { YinyuPanel } from '@Components/yinyu/YinyuUI'
 import { AnswerResult, ChallengeType, ClientFlagContext, ContainerInfoModel, EnvironmentType } from '@Api'
 import { showErrorMsg } from '@Utils/Shared'
 import { useTranslation } from 'react-i18next'
@@ -176,46 +177,44 @@ const ChapterDetail: FC = () => {
   }
 
   return (
-    <WithNavBar width="min(118rem, calc(100vw - 4rem))">
-      <SimpleGrid cols={{ base: 1, lg: 12 }} spacing="md" className="yy-course-chapter-page">
+    <WithNavBar width="min(132rem, calc(100vw - 2.5rem))">
+      <Box className="yy-training-page yy-course-chapter-page">
+        <YinyuGameBendsBackground className="yy-training-bg" />
         <YinyuPanel p="md" className="yy-course-chapter-side">
           <Stack gap="sm">
             <Button component={Link} to={`/training/courses/${course.id}`} variant="subtle" leftSection={<Icon path={mdiArrowLeft} size={0.85} />}>
               {course.title}
             </Button>
-            {orderedChapters.map((item) => (
-              <Button
+            {orderedChapters.map((item, index) => (
+              <Link
                 key={item.id}
-                component={Link}
                 to={`/training/courses/${course.id}/chapters/${item.id}`}
-                variant={item.id === chapter.id ? 'light' : 'subtle'}
-                justify="flex-start"
-                fullWidth
+                className={`yy-training-chapter-link ${item.id === chapter.id ? 'is-active' : ''}`}
               >
-                {item.title}
-              </Button>
+                <span>{index + 1}</span>
+                <strong>{item.title}</strong>
+                <em>{item.completedAt ? '已完成' : item.id === chapter.id ? '学习中' : '章节'}</em>
+              </Link>
             ))}
           </Stack>
         </YinyuPanel>
 
         <Stack gap="md" className="yy-course-chapter-main">
-          <YinyuPanel p="xl">
+          <YinyuPanel p="xl" className="yy-training-chapter-hero">
             <Stack gap="xs">
-              <Group gap="xs">
-                <YinyuStatusPill tone={chapter.completedAt ? 'success' : 'neutral'}>
+              <Group gap="md">
+                <TrainingStatusText tone={chapter.completedAt ? 'ongoing' : 'brand'}>
                   {chapter.completedAt ? '已完成' : '学习中'}
-                </YinyuStatusPill>
-                <Badge variant="light" color="teal">
-                  {course.title}
-                </Badge>
+                </TrainingStatusText>
+                <TrainingTagLine tags={[course.title]} max={1} />
               </Group>
               <Title order={1}>{chapter.title}</Title>
-              <Text c="dimmed">{chapter.summary}</Text>
+              <Text c="dimmed">{chapter.summary || '本章节暂未填写摘要，请按正文内容完成学习任务。'}</Text>
             </Stack>
           </YinyuPanel>
 
           {chapter.videoProvider !== TrainingCourseVideoProvider.None ? (
-            <YinyuPanel p="md">
+            <YinyuPanel p="md" className="yy-training-video-panel">
               {chapter.videoProvider === TrainingCourseVideoProvider.ExternalUrl && chapter.videoUrl ? (
                 <Button component="a" href={chapter.videoUrl} target="_blank" rightSection={<Icon path={mdiOpenInNew} size={0.85} />}>
                   打开视频
@@ -233,24 +232,37 @@ const ChapterDetail: FC = () => {
           </YinyuPanel>
 
           {chapter.challenges.length ? (
-            <YinyuPanel p="lg">
-              <Group gap="xs" mb="md">
-                <Icon path={mdiConsoleNetworkOutline} size={1} />
-                <Title order={3}>实验题目</Title>
+            <YinyuPanel p="lg" className="yy-training-lab-section">
+              <Group justify="space-between" align="flex-end" mb="md">
+                <Stack gap={2}>
+                  <Group gap="xs">
+                    <Icon path={mdiConsoleNetworkOutline} size={1} />
+                    <Title order={3}>章节实验</Title>
+                  </Group>
+                  <Text size="sm" c="dimmed">
+                    实验题直接嵌入章节末尾。创建容器后在当前页面复制入口、提交 Flag，正确后会同步章节进度。
+                  </Text>
+                </Stack>
+                <TrainingStatusText tone="ongoing">{chapter.challenges.filter((item) => item.solved).length}/{chapter.challenges.length}</TrainingStatusText>
               </Group>
               <Stack gap="sm">
                 {chapter.challenges.map((challenge) => {
                   const container = containers[challenge.exerciseChallengeId]
                   return (
-                    <YinyuPanel key={challenge.exerciseChallengeId} p="md" className="yy-course-lab-card">
+                    <YinyuPanel key={challenge.exerciseChallengeId} p="md" className="yy-course-lab-card yy-training-lab-card">
                       <Stack gap="sm">
-                        <Stack gap={4}>
-                          <Group gap="xs">
-                            <Badge color={challenge.solved ? 'green' : 'teal'}>{challenge.solved ? '已完成' : challenge.category}</Badge>
-                            <Badge variant="light">{challenge.type}</Badge>
-                          </Group>
-                          <Title order={4}>{challenge.displayTitle || challenge.title}</Title>
-                        </Stack>
+                        <Group justify="space-between" align="flex-start" gap="md">
+                          <Stack gap={4} miw={0}>
+                            <TrainingTagLine
+                              tags={[challenge.category, challenge.type, challenge.isRequired ? '必做' : '选做']}
+                              max={3}
+                            />
+                            <Title order={4}>{challenge.displayTitle || challenge.title}</Title>
+                          </Stack>
+                          <TrainingStatusText tone={challenge.solved ? 'ongoing' : 'silver'}>
+                            {challenge.solved ? '已完成' : '待完成'}
+                          </TrainingStatusText>
+                        </Group>
                         {isContainerChallenge(challenge) ? (
                           <InstanceEntry
                             label={`${challenge.displayTitle || challenge.title} @ ${course.title}`}
@@ -260,24 +272,24 @@ const ChapterDetail: FC = () => {
                             onDestroy={() => destroyContainer(challenge.exerciseChallengeId)}
                           />
                         ) : null}
+                        <Group>
+                          <TextInput
+                            placeholder="flag{...}"
+                            value={answers[challenge.exerciseChallengeId] ?? ''}
+                            onChange={(event) => {
+                              const value = event.currentTarget.value
+                              setAnswers((current) => ({
+                                ...current,
+                                [challenge.exerciseChallengeId]: value,
+                              }))
+                            }}
+                            style={{ flex: 1 }}
+                          />
+                          <Button rightSection={<Icon path={mdiSend} size={0.82} />} onClick={() => submitFlag(challenge.exerciseChallengeId)}>
+                            提交
+                          </Button>
+                        </Group>
                       </Stack>
-                      <Group mt="sm">
-                        <TextInput
-                          placeholder="flag{...}"
-                          value={answers[challenge.exerciseChallengeId] ?? ''}
-                          onChange={(event) => {
-                            const value = event.currentTarget.value
-                            setAnswers((current) => ({
-                              ...current,
-                              [challenge.exerciseChallengeId]: value,
-                            }))
-                          }}
-                          style={{ flex: 1 }}
-                        />
-                        <Button rightSection={<Icon path={mdiSend} size={0.82} />} onClick={() => submitFlag(challenge.exerciseChallengeId)}>
-                          提交
-                        </Button>
-                      </Group>
                     </YinyuPanel>
                   )
                 })}
@@ -290,7 +302,7 @@ const ChapterDetail: FC = () => {
               <Stack gap={2}>
                 <Title order={3}>章节完成</Title>
                 <Text c="dimmed" size="sm">
-                  {chapter.challenges.length ? '完成本章节关联题目后会自动标记。' : '普通章节可手动标记完成。'}
+                  {chapter.challenges.length ? '完成本章节必做实验后会自动标记。普通阅读章节也可以手动标记完成。' : '普通章节可手动标记完成。'}
                 </Text>
               </Stack>
               <Button leftSection={<Icon path={mdiCheck} size={0.85} />} onClick={complete}>
@@ -316,7 +328,7 @@ const ChapterDetail: FC = () => {
             )}
           </Stack>
         </YinyuPanel>
-      </SimpleGrid>
+      </Box>
     </WithNavBar>
   )
 }

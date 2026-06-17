@@ -556,3 +556,58 @@ public class TrainingGroupStatsModel
 
     public List<TrainingStudentProgressModel> Students { get; set; } = [];
 }
+
+public class TrainingCheckInModel
+{
+    public DateOnly Date { get; set; }
+
+    public DateTimeOffset CheckedAt { get; set; }
+
+    public bool IsToday { get; set; }
+}
+
+public class TrainingActivityPointModel
+{
+    public DateOnly Date { get; set; }
+
+    public int StudyActions { get; set; }
+
+    public int CompletedChapters { get; set; }
+
+    public int AcceptedChallenges { get; set; }
+
+    public bool CheckedIn { get; set; }
+}
+
+public class TrainingPersonalOverviewModel
+{
+    public int VisibleCourseCount { get; set; }
+
+    public int JoinedCourseCount { get; set; }
+
+    public int CompletedCourseCount { get; set; }
+
+    public int AverageProgress { get; set; }
+
+    public int CompletedChapterCount { get; set; }
+
+    public int TotalChapterCount { get; set; }
+
+    public int CtfSolvedChallenges { get; set; }
+
+    public int CtfTotalChallenges { get; set; }
+
+    public int TheoryCompletedModules { get; set; }
+
+    public int TheoryTotalModules { get; set; }
+
+    public int CheckInDays { get; set; }
+
+    public int CurrentCheckInStreak { get; set; }
+
+    public bool CheckedInToday { get; set; }
+
+    public List<TrainingCheckInModel> CheckIns { get; set; } = [];
+
+    public List<TrainingActivityPointModel> Activity { get; set; } = [];
+}

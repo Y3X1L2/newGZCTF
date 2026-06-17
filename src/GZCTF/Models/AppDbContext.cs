@@ -99,6 +99,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TrainingCourseChapterChallenge> TrainingCourseChapterChallenges { get; set; } = null!;
     public DbSet<TrainingCourseSubmission> TrainingCourseSubmissions { get; set; } = null!;
     public DbSet<TrainingCourseProgress> TrainingCourseProgresses { get; set; } = null!;
+    public DbSet<TrainingCheckIn> TrainingCheckIns { get; set; } = null!;
     public DbSet<TrainingChapterProgress> TrainingChapterProgresses { get; set; } = null!;
 
     private static ValueConverter<T?, string> GetJsonConverter<T>() where T : class, new() =>
@@ -1342,6 +1343,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .HasForeignKey(e => e.CourseId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TrainingCheckIn>(entity =>
+        {
             entity.HasOne(e => e.User)
                 .WithMany()
                 .HasForeignKey(e => e.UserId)

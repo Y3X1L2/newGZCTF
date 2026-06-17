@@ -742,6 +742,20 @@ public class TrainingCourseProgress
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+[PrimaryKey(nameof(UserId), nameof(CheckInDate))]
+[Index(nameof(UserId), nameof(CheckedAt))]
+public class TrainingCheckIn
+{
+    public Guid UserId { get; set; }
+
+    [JsonIgnore]
+    public UserInfo User { get; set; } = null!;
+
+    public DateOnly CheckInDate { get; set; }
+
+    public DateTimeOffset CheckedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 [PrimaryKey(nameof(ChapterId), nameof(UserId))]
 [Index(nameof(UserId), nameof(CompletedAt))]
 public class TrainingChapterProgress

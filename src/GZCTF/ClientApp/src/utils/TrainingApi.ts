@@ -494,6 +494,38 @@ export interface TrainingCourseChallengeDetailModel extends TrainingCtfChallenge
   chapterId?: number | null
 }
 
+export interface TrainingCheckInModel {
+  date: string
+  checkedAt: number
+  isToday: boolean
+}
+
+export interface TrainingActivityPointModel {
+  date: string
+  studyActions: number
+  completedChapters: number
+  acceptedChallenges: number
+  checkedIn: boolean
+}
+
+export interface TrainingPersonalOverviewModel {
+  visibleCourseCount: number
+  joinedCourseCount: number
+  completedCourseCount: number
+  averageProgress: number
+  completedChapterCount: number
+  totalChapterCount: number
+  ctfSolvedChallenges: number
+  ctfTotalChallenges: number
+  theoryCompletedModules: number
+  theoryTotalModules: number
+  checkInDays: number
+  currentCheckInStreak: number
+  checkedInToday: boolean
+  checkIns: TrainingCheckInModel[]
+  activity: TrainingActivityPointModel[]
+}
+
 const request = api.request
 
 export const roleLabel = (role?: Role | null) => {
@@ -598,6 +630,18 @@ export const trainingCourseApi = {
     request<TrainingCourseModel[], unknown>({
       path: '/api/training/courses',
       method: 'GET',
+    }),
+
+  overview: () =>
+    request<TrainingPersonalOverviewModel, unknown>({
+      path: '/api/training/courses/overview',
+      method: 'GET',
+    }),
+
+  checkIn: () =>
+    request<TrainingPersonalOverviewModel, unknown>({
+      path: '/api/training/courses/check-in',
+      method: 'POST',
     }),
 
   course: (courseId: number) =>

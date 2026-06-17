@@ -7134,3 +7134,615 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
     position: static;
   }
 }
+
+/* Training platform v2: learning-platform layout, shared with student course
+   center, course detail, and chapter reading. Keep this after legacy training
+   rules so the new productized layout wins without touching unrelated pages. */
+.yy-training-page {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  min-height: calc(100dvh - 1.25rem);
+  padding: clamp(0.9rem, 1.25vw, 1.35rem);
+  overflow: hidden;
+  border-radius: var(--yy-radius-lg);
+  background:
+    radial-gradient(ellipse at 12% 0%, rgba(107, 238, 177, 0.12), transparent 38%),
+    radial-gradient(ellipse at 92% 92%, rgba(185, 173, 209, 0.1), transparent 42%),
+    #020605;
+}
+
+.yy-app-frame:has(.yy-training-page) .yy-root-reactbits-bg,
+body:has(.yy-training-page) .yy-root-reactbits-bg,
+body:has(.yy-training-page) .signal-field {
+  display: none !important;
+}
+
+.yy-training-bg {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+  opacity: 0.82;
+}
+
+.yy-training-page > *:not(.yy-training-bg) {
+  position: relative;
+  z-index: 2;
+}
+
+.yy-training-shell {
+  display: grid;
+  grid-template-columns: minmax(13.5rem, 16rem) minmax(0, 1fr) minmax(18rem, 23rem);
+  gap: clamp(0.9rem, 1.25vw, 1.35rem);
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+}
+
+.yy-training-sidebar,
+.yy-training-insight,
+.yy-training-detail-side,
+.yy-training-detail-aside,
+.yy-course-chapter-side,
+.yy-course-toc {
+  position: sticky;
+  top: 5rem;
+  min-width: 0;
+}
+
+.yy-training-main,
+.yy-training-detail-main,
+.yy-course-chapter-main {
+  min-width: 0;
+}
+
+.yy-course-home {
+  margin-inline: auto;
+}
+
+.yy-training-nav-list {
+  display: grid;
+  gap: 0.52rem;
+}
+
+.yy-training-nav-list a,
+.yy-training-task-row,
+.yy-training-chapter-link {
+  display: grid;
+  align-items: center;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.yy-training-nav-list a {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.62rem;
+  padding: 0.72rem 0.82rem;
+  border: 1px solid rgba(221, 229, 223, 0.12);
+  border-radius: var(--yy-radius);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.018)),
+    rgba(5, 12, 10, 0.42);
+  backdrop-filter: blur(1.2rem);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.yy-training-nav-list a:hover,
+.yy-training-chapter-link:hover,
+.yy-training-chapter-link.is-active,
+.yy-training-task-row:hover {
+  border-color: rgba(107, 238, 177, 0.34);
+  background:
+    radial-gradient(ellipse at 18% 12%, rgba(107, 238, 177, 0.14), transparent 48%),
+    linear-gradient(135deg, rgba(107, 238, 177, 0.08), rgba(185, 173, 209, 0.05)),
+    rgba(5, 12, 10, 0.58);
+  transform: translateY(-1px);
+}
+
+.yy-training-nav-list a span,
+.yy-training-task-row strong,
+.yy-training-chapter-link strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.yy-training-nav-list a span {
+  font-weight: 900;
+}
+
+.yy-training-nav-list a b {
+  color: rgba(234, 255, 246, 0.88);
+  font-size: 0.78rem;
+}
+
+.yy-training-checkin-card.panel-card,
+.yy-training-insight-card.panel-card,
+.yy-training-empty-state.panel-card,
+.yy-training-metric-tile,
+.yy-training-course-card.panel-card,
+.yy-training-chapter-link,
+.yy-training-task-row {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.035),
+    inset 0 1px 0 rgba(255, 255, 255, 0.095),
+    0 1rem 2.6rem rgba(0, 0, 0, 0.22);
+}
+
+.yy-training-hero-head {
+  margin-bottom: clamp(0.9rem, 1.2vw, 1.25rem);
+}
+
+.yy-training-hero-head h1,
+.yy-training-course-detail-hero h1,
+.yy-training-chapter-hero h1 {
+  font-size: clamp(2.5rem, 4.2vw, 4.85rem);
+  line-height: 0.92;
+}
+
+.yy-training-readable,
+.yy-training-page .mantine-Text-root[data-c='dimmed'] {
+  color: rgba(231, 255, 244, 0.76) !important;
+}
+
+.yy-training-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(0.68rem, 1vw, 0.95rem);
+  margin-bottom: clamp(0.95rem, 1.35vw, 1.45rem);
+}
+
+.yy-training-metric-tile {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.68rem;
+  align-items: center;
+  min-width: 0;
+  padding: 0.82rem 0.9rem;
+  border: 1px solid rgba(221, 229, 223, 0.12);
+  border-radius: var(--yy-radius);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.018)),
+    rgba(5, 12, 10, 0.46);
+  backdrop-filter: blur(1.2rem);
+}
+
+.yy-training-metric-icon.is-ongoing {
+  color: #78f8be;
+  background: rgba(107, 238, 177, 0.13);
+}
+
+.yy-training-metric-icon.is-brand {
+  color: #b9add1;
+  background: rgba(185, 173, 209, 0.13);
+}
+
+.yy-training-metric-icon.is-coming {
+  color: #f1dc8f;
+  background: rgba(241, 220, 143, 0.13);
+}
+
+.yy-training-metric-icon.is-silver {
+  color: rgba(238, 246, 242, 0.8);
+  background: rgba(221, 229, 223, 0.1);
+}
+
+.yy-training-metric-value {
+  color: rgba(248, 255, 252, 0.96);
+  font-size: clamp(1.15rem, 1.65vw, 1.72rem);
+  line-height: 1.02;
+}
+
+.yy-training-section {
+  margin-top: clamp(1rem, 1.45vw, 1.65rem);
+}
+
+.yy-training-course-grid {
+  align-items: stretch;
+}
+
+.yy-training-course-card.panel-card {
+  display: grid;
+  height: 100%;
+  min-height: 19rem;
+  overflow: hidden;
+  border-color: rgba(221, 229, 223, 0.16);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.078), rgba(255, 255, 255, 0.022) 45%, rgba(185, 173, 209, 0.04)),
+    radial-gradient(ellipse at 18% 0%, rgba(107, 238, 177, 0.11), transparent 48%),
+    rgba(5, 12, 10, 0.58);
+  backdrop-filter: blur(1.55rem) saturate(1.08);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.yy-training-course-card.panel-card:hover {
+  border-color: rgba(107, 238, 177, 0.34);
+  box-shadow:
+    inset 0 0 0 1px rgba(120, 248, 190, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1.2rem 3rem rgba(0, 0, 0, 0.28),
+    0 0 2rem rgba(107, 238, 177, 0.08);
+  transform: translateY(-2px);
+}
+
+.yy-training-course-card.is-featured {
+  min-height: 20rem;
+}
+
+.yy-training-course-card.is-compact {
+  min-height: 17.25rem;
+}
+
+.yy-training-course-content {
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+  min-height: inherit;
+  padding: clamp(1rem, 1.25vw, 1.35rem);
+}
+
+.yy-training-status-text {
+  display: inline-grid;
+  place-items: center;
+  font-size: clamp(1.08rem, 1.18vw, 1.42rem);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.yy-training-status-text.is-vertical {
+  writing-mode: vertical-rl;
+  letter-spacing: 0.08em;
+  min-width: 1.35rem;
+}
+
+.yy-training-tag-line {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 0.32rem;
+  align-items: center;
+  max-width: 100%;
+  color: rgba(205, 255, 232, 0.74);
+  font-size: 0.78rem;
+  font-weight: 950;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.yy-training-tag-line > span:not(.yy-training-tag-separator) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.yy-training-tag-separator {
+  color: rgba(185, 173, 209, 0.68);
+}
+
+.yy-training-course-meta {
+  min-width: 0;
+}
+
+.yy-training-course-meta-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.yy-training-course-meta-grid span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.34rem;
+  min-width: 0;
+  color: rgba(232, 255, 244, 0.68);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.yy-training-course-meta-grid b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.yy-training-course-progress {
+  min-width: 0;
+}
+
+.yy-training-task-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.72rem;
+  padding: 0.72rem;
+  border: 1px solid rgba(221, 229, 223, 0.105);
+  border-radius: var(--yy-radius);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.yy-training-task-row span {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+.yy-training-checkin-mini,
+.yy-training-checkin-stats,
+.yy-training-overview-rings {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.yy-training-checkin-mini {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.yy-training-checkin-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.yy-training-checkin-mini span,
+.yy-training-checkin-stats span {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+  padding: 0.62rem;
+  border: 1px solid rgba(221, 229, 223, 0.11);
+  border-radius: var(--yy-radius-sm);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.yy-training-checkin-mini b,
+.yy-training-checkin-stats b {
+  color: rgba(247, 255, 251, 0.96);
+  font-size: 1.08rem;
+  line-height: 1;
+}
+
+.yy-training-checkin-mini em,
+.yy-training-checkin-stats em,
+.yy-training-overview-rings span {
+  color: rgba(225, 248, 238, 0.66);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.yy-training-overview-rings {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.yy-training-overview-rings > div {
+  display: grid;
+  place-items: center;
+  gap: 0.32rem;
+  min-width: 0;
+  min-height: 5.7rem;
+  padding: 0.7rem 0.45rem;
+  border: 1px solid rgba(221, 229, 223, 0.12);
+  border-radius: var(--yy-radius);
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(107, 238, 177, 0.12), transparent 55%),
+    rgba(255, 255, 255, 0.035);
+}
+
+.yy-training-heatmap {
+  display: grid;
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+  gap: 0.26rem;
+}
+
+.yy-training-heatmap span {
+  aspect-ratio: 1;
+  min-width: 0.52rem;
+  border: 1px solid rgba(221, 229, 223, 0.06);
+  border-radius: 0.22rem;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.yy-training-heatmap .is-level-1 {
+  background: rgba(107, 238, 177, 0.18);
+}
+
+.yy-training-heatmap .is-level-2 {
+  background: rgba(107, 238, 177, 0.3);
+}
+
+.yy-training-heatmap .is-level-3 {
+  background: linear-gradient(135deg, rgba(107, 238, 177, 0.42), rgba(185, 173, 209, 0.24));
+}
+
+.yy-training-heatmap .is-level-4 {
+  background: linear-gradient(135deg, rgba(120, 248, 190, 0.72), rgba(185, 173, 209, 0.38));
+  box-shadow: 0 0 0.8rem rgba(107, 238, 177, 0.18);
+}
+
+.yy-training-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(13.5rem, 16rem) minmax(0, 1fr) minmax(16rem, 20rem);
+  gap: clamp(0.9rem, 1.25vw, 1.35rem);
+  align-items: start;
+  margin-top: clamp(0.95rem, 1.25vw, 1.35rem);
+  min-width: 0;
+}
+
+.yy-training-detail-tabs .mantine-Tabs-list {
+  position: sticky;
+  top: 4.25rem;
+  z-index: 8;
+  padding: 0.28rem;
+  border: 1px solid rgba(221, 229, 223, 0.12);
+  border-radius: var(--yy-radius);
+  background: rgba(4, 10, 8, 0.72);
+  backdrop-filter: blur(1.2rem);
+}
+
+.yy-training-chapter-link {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.62rem;
+  padding: 0.68rem 0.72rem;
+  border: 1px solid rgba(221, 229, 223, 0.105);
+  border-radius: var(--yy-radius);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.yy-training-chapter-link span {
+  display: grid;
+  place-items: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 999px;
+  color: rgba(235, 255, 247, 0.9);
+  font-size: 0.78rem;
+  font-weight: 950;
+  background: rgba(107, 238, 177, 0.12);
+}
+
+.yy-training-chapter-link em {
+  grid-column: 2;
+  color: rgba(232, 255, 244, 0.5);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 820;
+}
+
+.yy-course-chapter-page.yy-training-page {
+  display: grid;
+  grid-template-columns: minmax(13.5rem, 17rem) minmax(0, 1fr) minmax(14rem, 18rem) !important;
+  gap: clamp(0.9rem, 1.2vw, 1.35rem);
+  align-items: start;
+  min-height: calc(100dvh - 1.25rem);
+}
+
+.yy-training-chapter-hero.panel-card,
+.yy-training-lab-section.panel-card,
+.yy-training-video-panel.panel-card {
+  border-color: rgba(221, 229, 223, 0.14);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.072), rgba(255, 255, 255, 0.018)),
+    rgba(5, 12, 10, 0.56);
+  backdrop-filter: blur(1.45rem);
+}
+
+.yy-course-markdown.panel-card {
+  max-width: 100%;
+  color: rgba(243, 255, 249, 0.91);
+  border-color: rgba(221, 229, 223, 0.13);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.068), rgba(255, 255, 255, 0.018)),
+    rgba(5, 12, 10, 0.58);
+  backdrop-filter: blur(1.45rem);
+}
+
+.yy-course-markdown :where(p, li) {
+  color: rgba(232, 255, 244, 0.76);
+}
+
+.yy-training-lab-card.panel-card {
+  border-color: rgba(107, 238, 177, 0.16);
+  background:
+    radial-gradient(ellipse at 14% 0%, rgba(107, 238, 177, 0.105), transparent 48%),
+    rgba(255, 255, 255, 0.035);
+}
+
+.yy-training-editor-workspace.panel-card {
+  min-height: calc(100dvh - 16rem);
+}
+
+.yy-training-course-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(16rem, 21rem) minmax(14rem, 18rem) minmax(0, 1fr);
+  gap: clamp(0.85rem, 1.1vw, 1.2rem);
+  align-items: start;
+  min-width: 0;
+}
+
+.yy-training-editor-side,
+.yy-training-editor-main {
+  min-width: 0;
+}
+
+.yy-training-editor-side {
+  padding: 0.85rem;
+  border: 1px solid rgba(221, 229, 223, 0.12);
+  border-radius: var(--yy-radius);
+  background: rgba(4, 10, 8, 0.48);
+  backdrop-filter: blur(1.2rem);
+}
+
+.yy-training-editor-main {
+  padding: 0.85rem;
+  border: 1px solid rgba(107, 238, 177, 0.14);
+  border-radius: var(--yy-radius);
+  background:
+    radial-gradient(ellipse at 10% 0%, rgba(107, 238, 177, 0.08), transparent 46%),
+    rgba(4, 10, 8, 0.45);
+  backdrop-filter: blur(1.2rem);
+}
+
+.yy-training-editor-markdown-input textarea {
+  min-height: clamp(24rem, 46vh, 38rem);
+  font-family: var(--mantine-font-family-monospace);
+  line-height: 1.62;
+}
+
+.yy-training-editor-preview.panel-card {
+  max-height: 30rem;
+  overflow: auto;
+  border-color: rgba(221, 229, 223, 0.12);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.yy-course-detail-hero.panel-card {
+  min-height: clamp(18rem, 32vh, 27rem);
+}
+
+@media (max-width: 92em) {
+  .yy-training-shell,
+  .yy-training-detail-grid,
+  .yy-course-chapter-page.yy-training-page,
+  .yy-training-course-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .yy-training-sidebar,
+  .yy-training-insight,
+  .yy-training-detail-side,
+  .yy-training-detail-aside,
+  .yy-course-chapter-side,
+  .yy-course-toc,
+  .yy-training-detail-tabs .mantine-Tabs-list {
+    position: static;
+  }
+
+  .yy-training-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 48em) {
+  .yy-training-page {
+    padding: 0.75rem;
+    border-radius: var(--yy-radius);
+  }
+
+  .yy-training-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .yy-training-hero-head,
+  .yy-training-course-detail-hero > .mantine-Group-root {
+    align-items: stretch !important;
+    flex-direction: column;
+  }
+}

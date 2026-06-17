@@ -46,7 +46,17 @@ import React, { FC, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { Markdown } from '@Components/MarkdownRenderer'
 import { WithNavBar } from '@Components/WithNavbar'
-import { YinyuPanel, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
+import {
+  TrainingEmptyState,
+  TrainingStatusText,
+  TrainingTagLine,
+  trainingCourseProgress,
+  trainingCourseStatus,
+  trainingTags,
+  trainingTeacherNames,
+} from '@Components/training/TrainingCourseUI'
+import { YinyuGameBendsBackground } from '@Components/yinyu/YinyuReactBits'
+import { YinyuPanel } from '@Components/yinyu/YinyuUI'
 import api, { ChallengeCategory, ChallengeType, EnvironmentType, NetworkMode } from '@Api'
 import { showErrorMsg } from '@Utils/Shared'
 import { useTranslation } from 'react-i18next'
@@ -183,20 +193,12 @@ const formatSize = (bytes: number) => {
   return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`
 }
 
-const statusText = (course: TrainingCourseModel) => {
-  if (course.status === TrainingCourseStatus.Draft) return '草稿'
-  if (course.status === TrainingCourseStatus.Archived) return '已归档'
-  if (course.canLearn) return '已加入'
-  if (course.enrollmentStatus === TrainingCourseEnrollmentStatus.Pending) return '待审核'
-  if (course.enrollmentStatus === TrainingCourseEnrollmentStatus.Rejected) return '未通过'
-  return '可报名'
-}
-
 const CourseDetail: FC = () => {
   const { courseId } = useParams()
   const id = Number(courseId)
   const [course, setCourse] = useState<TrainingCourseModel | null>(null)
   const [enrollments, setEnrollments] = useState<Awaited<ReturnType<typeof trainingCourseAdminApi.enrollments>>['data']>([])
+  const [activeTab, setActiveTab] = useState<string | null>('intro')
   const [editOpened, setEditOpened] = useState(false)
   const [chapterOpened, setChapterOpened] = useState(false)
   const [resourceOpened, setResourceOpened] = useState(false)
@@ -207,6 +209,8 @@ const CourseDetail: FC = () => {
   const [challengeOpened, setChallengeOpened] = useState(false)
   const [courseDraft, setCourseDraft] = useState<TrainingCourseEditModel>(emptyCourseDraft())
   const [chapterDraft, setChapterDraft] = useState<TrainingCourseChapterEditModel>(emptyChapterDraft())
+  const [editorChapterId, setEditorChapterId] = useState<number | null>(null)
+  const [editorChapterDraft, setEditorChapterDraft] = useState<TrainingCourseChapterEditModel>(emptyChapterDraft())
   const [resourceDraft, setResourceDraft] = useState<TrainingCourseResourceEditModel>(emptyResourceDraft())
   const [challengeDraft, setChallengeDraft] = useState<TrainingCourseChallengeCreateModel>(emptyChallengeDraft())
   const [dockerRegisterDraft, setDockerRegisterDraft] = useState<TrainingCourseDockerRegisterModel>(emptyDockerRegisterDraft())
@@ -231,6 +235,10 @@ const CourseDetail: FC = () => {
     () => [...(course?.chapters ?? [])].sort((a, b) => a.order - b.order || a.id - b.id),
     [course?.chapters]
   )
+  const editorChapter = useMemo(
+    () => orderedChapters.find((chapter) => chapter.id === editorChapterId) ?? orderedChapters[0] ?? null,
+    [editorChapterId, orderedChapters]
+  )
   const filteredTemplates = useMemo(() => {
     const keyword = templateQuery.trim().toLowerCase()
     if (!keyword) return courseTemplates
@@ -249,6 +257,8 @@ const CourseDetail: FC = () => {
     () => courseTemplates.filter((template) => isWindowsTemplate(template) && isReadyTemplate(template)),
     [courseTemplates]
   )
+  const courseStatus = course ? trainingCourseStatus(course) : null
+  const progressPercent = course ? trainingCourseProgress(course) : 0
 
   const load = async () => {
     if (!Number.isFinite(id)) return
@@ -301,12 +311,13 @@ const CourseDetail: FC = () => {
     }
   }
 
-  const saveCourse = async () => {
+  const persistCourse = async (closeModal: boolean) => {
     if (!course) return
     setSaving(true)
     try {
       await trainingCourseAdminApi.updateCourse(course.id, courseDraft)
-      setEditOpened(false)
+      if (closeModal) setEditOpened(false)
+      showNotification({ color: 'teal', message: '课程信息已保存。' })
       await load()
     } catch (e) {
       showErrorMsg(e, t)
@@ -315,6 +326,8 @@ const CourseDetail: FC = () => {
     }
   }
 
+  const saveCourse = async () => persistCourse(true)
+
   const saveChapter = async () => {
     if (!course || !chapterDraft.title.trim()) return
     setSaving(true)
@@ -322,6 +335,20 @@ const CourseDetail: FC = () => {
       await trainingCourseAdminApi.createChapter(course.id, chapterDraft)
       setChapterOpened(false)
       setChapterDraft(emptyChapterDraft())
+      await load()
+    } catch (e) {
+      showErrorMsg(e, t)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const saveEditorChapter = async () => {
+    if (!course || !editorChapter || !editorChapterDraft.title.trim()) return
+    setSaving(true)
+    try {
+      await trainingCourseAdminApi.updateChapter(course.id, editorChapter.id, editorChapterDraft)
+      showNotification({ color: 'teal', message: '章节已保存。' })
       await load()
     } catch (e) {
       showErrorMsg(e, t)
@@ -502,6 +529,29 @@ const CourseDetail: FC = () => {
     void load()
   }, [courseId])
 
+  useEffect(() => {
+    if (!course) return
+    const selected = editorChapter
+    if (!selected) {
+      setEditorChapterId(null)
+      setEditorChapterDraft(emptyChapterDraft())
+      return
+    }
+    if (selected.id !== editorChapterId) setEditorChapterId(selected.id)
+    setEditorChapterDraft({
+      parentId: selected.parentId ?? null,
+      title: selected.title,
+      summary: selected.summary,
+      content: selected.content,
+      contentType: selected.contentType,
+      videoProvider: selected.videoProvider,
+      videoUrl: selected.videoUrl ?? null,
+      videoFileHash: null,
+      order: selected.order,
+      isPublished: selected.isPublished,
+    })
+  }, [course?.id, editorChapter?.id])
+
   if (!course) {
     return (
       <WithNavBar isLoading width="min(112rem, calc(100vw - 4rem))">
@@ -511,72 +561,107 @@ const CourseDetail: FC = () => {
   }
 
   return (
-    <WithNavBar width="min(112rem, calc(100vw - 4rem))">
-      <Stack gap="lg" className="yy-course-detail">
+    <WithNavBar width="min(100%, calc(100vw - 7.25rem))" minWidth={0}>
+      <Box className="yy-training-page yy-course-detail">
+        <YinyuGameBendsBackground className="yy-training-bg" />
         <Button component={Link} to="/training" variant="subtle" leftSection={<Icon path={mdiArrowLeft} size={0.85} />}>
           培训课程
         </Button>
 
         <YinyuPanel
           p="xl"
-          className="yy-course-detail-hero"
+          className="yy-course-detail-hero yy-training-course-detail-hero"
           style={course.coverUrl ? { backgroundImage: `url(${course.coverUrl})` } : undefined}
         >
-          <Stack gap="md">
-            <Group gap="xs">
-              <YinyuStatusPill tone={canLearn ? 'success' : 'neutral'}>{statusText(course)}</YinyuStatusPill>
-              {course.tags.map((tag) => (
-                <Badge key={tag} variant="light" color="teal">
-                  {tag}
-                </Badge>
-              ))}
-            </Group>
-            <Title order={1}>{course.title}</Title>
-            <Text c="dimmed" maw="62rem">
-              {course.summary || '暂无课程摘要'}
-            </Text>
-            <Group justify="space-between">
-              <Text size="sm">{course.teachers.map((teacher) => teacher.realName || teacher.userName).join(' / ')}</Text>
-              <Group>
-                {!canLearn && course.status === TrainingCourseStatus.Published ? <Button onClick={enroll}>报名课程</Button> : null}
-                {course.canEdit ? (
-                  <>
-                    <Button variant="light" leftSection={<Icon path={mdiPencilOutline} size={0.82} />} onClick={() => setEditOpened(true)}>
-                      编辑课程
-                    </Button>
-                    {course.status !== TrainingCourseStatus.Published ? (
-                      <Button
-                        leftSection={<Icon path={mdiPublish} size={0.82} />}
-                        onClick={() => trainingCourseAdminApi.publish(course.id).then(load).catch((e) => showErrorMsg(e, t))}
-                      >
-                        发布
-                      </Button>
-                    ) : (
-                      <Button
-                        color="orange"
-                        variant="light"
-                        leftSection={<Icon path={mdiArchiveOutline} size={0.82} />}
-                        onClick={() => trainingCourseAdminApi.archive(course.id).then(load).catch((e) => showErrorMsg(e, t))}
-                      >
-                        归档
-                      </Button>
-                    )}
-                  </>
-                ) : null}
+          <Group justify="space-between" align="flex-end" gap="xl">
+            <Stack gap="md" maw="72rem">
+              <Group gap="md">
+                {courseStatus ? <TrainingStatusText tone={courseStatus.tone}>{courseStatus.label}</TrainingStatusText> : null}
+                <TrainingTagLine tags={trainingTags(course)} max={5} />
               </Group>
-            </Group>
-          </Stack>
+              <Stack gap="xs">
+                <Title order={1}>{course.title}</Title>
+                <Text c="dimmed" maw="62rem">
+                  {course.summary || '暂无课程摘要，教师可以在课程编辑中补充学习目标、适合人群和完成要求。'}
+                </Text>
+              </Stack>
+              <Group gap="xl">
+                <Text size="sm" c="dimmed">
+                  授课：{trainingTeacherNames(course)}
+                </Text>
+                <Text size="sm" c="dimmed">
+                  章节：{course.completedChapterCount}/{course.totalChapterCount || course.chapterCount}
+                </Text>
+                <Text size="sm" c="dimmed">
+                  资源：{course.resourceCount} 份
+                </Text>
+              </Group>
+            </Stack>
+            <Stack gap="sm" className="yy-training-hero-actions">
+              <TrainingStatusText tone="ongoing">{progressPercent}%</TrainingStatusText>
+              {!canLearn && course.status === TrainingCourseStatus.Published ? <Button onClick={enroll}>报名课程</Button> : null}
+              {course.canEdit ? (
+                <Group gap="xs">
+                  <Button
+                    variant="light"
+                    leftSection={<Icon path={mdiPencilOutline} size={0.82} />}
+                    onClick={() => setActiveTab('workspace')}
+                  >
+                    编辑工作台
+                  </Button>
+                  {course.status !== TrainingCourseStatus.Published ? (
+                    <Button
+                      leftSection={<Icon path={mdiPublish} size={0.82} />}
+                      onClick={() => trainingCourseAdminApi.publish(course.id).then(load).catch((e) => showErrorMsg(e, t))}
+                    >
+                      发布
+                    </Button>
+                  ) : (
+                    <Button
+                      color="orange"
+                      variant="light"
+                      leftSection={<Icon path={mdiArchiveOutline} size={0.82} />}
+                      onClick={() => trainingCourseAdminApi.archive(course.id).then(load).catch((e) => showErrorMsg(e, t))}
+                    >
+                      归档
+                    </Button>
+                  )}
+                </Group>
+              ) : null}
+            </Stack>
+          </Group>
         </YinyuPanel>
 
-        <Tabs defaultValue="intro" className="yy-course-tabs">
-          <Tabs.List>
-            <Tabs.Tab value="intro">课程介绍</Tabs.Tab>
-            <Tabs.Tab value="chapters">课程列表</Tabs.Tab>
-            <Tabs.Tab value="resources">课程资源</Tabs.Tab>
-            {course.canManageEnrollments ? <Tabs.Tab value="students">学员管理</Tabs.Tab> : null}
-            {course.canEdit ? <Tabs.Tab value="environments">环境模板</Tabs.Tab> : null}
-            {course.canEdit ? <Tabs.Tab value="challenges">题目管理</Tabs.Tab> : null}
-          </Tabs.List>
+        <Tabs value={activeTab} onChange={setActiveTab} className="yy-course-tabs yy-training-detail-tabs">
+          <div className="yy-training-detail-grid">
+            <aside className="yy-training-detail-side">
+              <YinyuPanel p="md">
+                <Stack gap="sm">
+                  <Title order={4}>章节路径</Title>
+                  <Stack gap={6}>
+                    {orderedChapters.map((chapter, index) => (
+                      <Link key={chapter.id} to={`/training/courses/${course.id}/chapters/${chapter.id}`} className="yy-training-chapter-link">
+                        <span>{index + 1}</span>
+                        <strong>{chapter.title}</strong>
+                        <em>{chapter.isPublished ? '已发布' : '未发布'}</em>
+                      </Link>
+                    ))}
+                    {orderedChapters.length === 0 ? <Text c="dimmed" size="sm">暂无章节</Text> : null}
+                  </Stack>
+                </Stack>
+              </YinyuPanel>
+            </aside>
+
+            <main className="yy-training-detail-main">
+              <Tabs.List>
+                <Tabs.Tab value="intro">课程介绍</Tabs.Tab>
+                <Tabs.Tab value="chapters">课程列表</Tabs.Tab>
+                <Tabs.Tab value="resources">课程资源</Tabs.Tab>
+                {course.canManageEnrollments ? <Tabs.Tab value="students">学员管理</Tabs.Tab> : null}
+                {course.canEdit ? <Tabs.Tab value="workspace">编辑工作台</Tabs.Tab> : null}
+                {course.canEdit ? <Tabs.Tab value="environments">环境模板</Tabs.Tab> : null}
+                {course.canEdit ? <Tabs.Tab value="challenges">题目管理</Tabs.Tab> : null}
+              </Tabs.List>
 
           <Tabs.Panel value="intro" pt="md">
             <YinyuPanel p="lg">
@@ -732,6 +817,156 @@ const CourseDetail: FC = () => {
             </YinyuPanel>
           </Tabs.Panel>
 
+          <Tabs.Panel value="workspace" pt="md">
+            <YinyuPanel p="lg" className="yy-training-editor-workspace">
+              <Stack gap="lg">
+                <Group justify="space-between" align="flex-end">
+                  <Stack gap={2}>
+                    <Text className="yy-section-kicker">Editor</Text>
+                    <Title order={3}>课程编辑工作台</Title>
+                    <Text size="sm" c="dimmed">
+                      课程信息、章节正文和预览集中在同一页面完成，适合编写 Markdown、嵌入视频 iframe 或维护实验前置说明。
+                    </Text>
+                  </Stack>
+                  <Group gap="xs">
+                    <FileButton
+                      onChange={(file) =>
+                        uploadOne(file).then((hash) => {
+                          if (hash) setCourseDraft((current) => ({ ...current, coverFileHash: hash }))
+                        })
+                      }
+                      accept="image/png,image/jpeg,image/webp"
+                    >
+                      {(props) => <Button {...props} variant="light">上传课程海报</Button>}
+                    </FileButton>
+                    <Button loading={saving} leftSection={<Icon path={mdiContentSaveOutline} size={0.82} />} onClick={() => persistCourse(false)}>
+                      保存课程信息
+                    </Button>
+                  </Group>
+                </Group>
+
+                <div className="yy-training-course-editor-grid">
+                  <Stack gap="sm" className="yy-training-editor-side">
+                    <TextInput
+                      label="课程名称"
+                      value={courseDraft.title}
+                      onChange={(e) => setCourseDraft({ ...courseDraft, title: e.currentTarget.value })}
+                    />
+                    <TextInput
+                      label="课程标签"
+                      value={courseDraft.tags.join('，')}
+                      onChange={(e) =>
+                        setCourseDraft({
+                          ...courseDraft,
+                          tags: e.currentTarget.value
+                            .split(/[，,]/)
+                            .map((tag) => tag.trim())
+                            .filter(Boolean),
+                        })
+                      }
+                    />
+                    <Textarea
+                      label="课程摘要"
+                      minRows={4}
+                      value={courseDraft.summary}
+                      onChange={(e) => setCourseDraft({ ...courseDraft, summary: e.currentTarget.value })}
+                    />
+                    <Textarea
+                      label="课程介绍 Markdown"
+                      minRows={10}
+                      value={courseDraft.description}
+                      onChange={(e) => setCourseDraft({ ...courseDraft, description: e.currentTarget.value })}
+                    />
+                  </Stack>
+
+                  <Stack gap="sm" className="yy-training-editor-side">
+                    <Group justify="space-between">
+                      <Title order={4}>章节树</Title>
+                      <Button size="xs" variant="light" leftSection={<Icon path={mdiPlus} size={0.72} />} onClick={() => setChapterOpened(true)}>
+                        新章节
+                      </Button>
+                    </Group>
+                    <Stack gap={6}>
+                      {orderedChapters.map((chapter, index) => (
+                        <button
+                          key={chapter.id}
+                          type="button"
+                          className={`yy-training-list-item ${chapter.id === editorChapter?.id ? 'is-active' : ''}`}
+                          onClick={() => setEditorChapterId(chapter.id)}
+                        >
+                          <strong>{index + 1}. {chapter.title}</strong>
+                          <span>{chapter.isPublished ? '已发布' : '草稿'} / {chapter.challenges.length} 个实验</span>
+                        </button>
+                      ))}
+                      {orderedChapters.length === 0 ? <Text size="sm" c="dimmed">暂无章节，先创建一个章节。</Text> : null}
+                    </Stack>
+                  </Stack>
+
+                  <Stack gap="sm" className="yy-training-editor-main">
+                    {editorChapter ? (
+                      <>
+                        <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
+                          <TextInput
+                            label="章节标题"
+                            value={editorChapterDraft.title}
+                            onChange={(e) => setEditorChapterDraft({ ...editorChapterDraft, title: e.currentTarget.value })}
+                          />
+                          <TextInput
+                            label="视频 iframe / 外链"
+                            value={editorChapterDraft.videoUrl ?? ''}
+                            onChange={(e) =>
+                              setEditorChapterDraft({
+                                ...editorChapterDraft,
+                                videoProvider: e.currentTarget.value ? TrainingCourseVideoProvider.ExternalUrl : TrainingCourseVideoProvider.None,
+                                videoUrl: e.currentTarget.value || null,
+                              })
+                            }
+                          />
+                        </SimpleGrid>
+                        <Textarea
+                          label="章节摘要"
+                          minRows={2}
+                          value={editorChapterDraft.summary}
+                          onChange={(e) => setEditorChapterDraft({ ...editorChapterDraft, summary: e.currentTarget.value })}
+                        />
+                        <Textarea
+                          label="章节正文 Markdown"
+                          className="yy-training-editor-markdown-input"
+                          minRows={18}
+                          value={editorChapterDraft.content}
+                          onChange={(e) => setEditorChapterDraft({ ...editorChapterDraft, content: e.currentTarget.value })}
+                        />
+                        <Group justify="space-between">
+                          <Group grow>
+                            <NumberInput
+                              label="排序"
+                              value={editorChapterDraft.order}
+                              onChange={(value) => setEditorChapterDraft({ ...editorChapterDraft, order: Number(value) || 1 })}
+                            />
+                            <Switch
+                              label="发布章节"
+                              checked={editorChapterDraft.isPublished}
+                              onChange={(e) => setEditorChapterDraft({ ...editorChapterDraft, isPublished: e.currentTarget.checked })}
+                            />
+                          </Group>
+                          <Button loading={saving} leftSection={<Icon path={mdiContentSaveOutline} size={0.82} />} onClick={saveEditorChapter}>
+                            保存章节
+                          </Button>
+                        </Group>
+                        <YinyuPanel p="md" className="yy-training-editor-preview">
+                          <Text className="yy-section-kicker">Preview</Text>
+                          <Markdown source={editorChapterDraft.content || '暂无章节内容。'} />
+                        </YinyuPanel>
+                      </>
+                    ) : (
+                      <TrainingEmptyState title="还没有章节" description="创建章节后，这里会提供大面积正文编辑器和实时预览。" />
+                    )}
+                  </Stack>
+                </div>
+              </Stack>
+            </YinyuPanel>
+          </Tabs.Panel>
+
           <Tabs.Panel value="environments" pt="md">
             <YinyuPanel p="lg">
               <Group justify="space-between" mb="md">
@@ -883,8 +1118,38 @@ const CourseDetail: FC = () => {
               </SimpleGrid>
             </YinyuPanel>
           </Tabs.Panel>
+            </main>
+
+            <aside className="yy-training-detail-aside">
+              <YinyuPanel p="lg">
+                <Stack gap="md">
+                  <Stack gap={2}>
+                    <Text className="yy-section-kicker">Progress</Text>
+                    <Title order={3}>学习状态</Title>
+                  </Stack>
+                  <Box className="yy-training-course-progress">
+                    <Group justify="space-between" mb={5}>
+                      <Text size="xs" c="dimmed" fw={800}>课程进度</Text>
+                      <Text size="xs" fw={950}>{course.completedChapterCount}/{course.totalChapterCount || course.chapterCount}</Text>
+                    </Group>
+                    <Progress value={progressPercent} radius="xl" size="sm" color="teal" />
+                  </Box>
+                  <Text size="sm" c="dimmed">
+                    {canLearn
+                      ? '你可以进入已发布章节学习正文、观看视频，并在章节末尾完成实验题。'
+                      : '报名并通过老师审核后，可以进入章节和实验内容。'}
+                  </Text>
+                  {course.canManageEnrollments ? (
+                    <Text size="sm" c="dimmed">
+                      学员申请 {enrollments.length} 条，可在“学员管理”中审核。
+                    </Text>
+                  ) : null}
+                </Stack>
+              </YinyuPanel>
+            </aside>
+          </div>
         </Tabs>
-      </Stack>
+      </Box>
 
       <Modal opened={editOpened} onClose={() => setEditOpened(false)} title="编辑课程" size="lg">
         <Stack>

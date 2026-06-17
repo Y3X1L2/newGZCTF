@@ -27,6 +27,9 @@ public class TrainingCourseController(
     private async Task<UserInfo> CurrentUser() =>
         await userManager.GetUserAsync(User) ?? throw new InvalidOperationException("Current user is missing.");
 
+    private static DateOnly Today() =>
+        DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(8)).DateTime);
+
     private IQueryable<TrainingCourse> CourseQuery() =>
         context.TrainingCourses
             .Include(c => c.Teachers)
@@ -62,6 +65,135 @@ public class TrainingCourseController(
                    e.CourseId == course.Id &&
                    e.UserId == actor.Id &&
                    e.Status == TrainingCourseEnrollmentStatus.Approved, token);
+    }
+
+    private IQueryable<TrainingCourse> VisibleCourseQuery(UserInfo user) =>
+        CourseQuery()
+            .Where(c => c.Status == TrainingCourseStatus.Published ||
+                        user.Role >= Role.Admin ||
+                        c.Teachers.Any(t => t.TeacherId == user.Id));
+
+    private async Task<TrainingPersonalOverviewModel> BuildOverview(UserInfo user, CancellationToken token)
+    {
+        var courses = await VisibleCourseQuery(user).ToArrayAsync(token);
+        var groupIds = context.StudentGroupMembers
+            .Where(m => m.StudentId == user.Id)
+            .Select(m => m.GroupId);
+        var editableCourseIds = await context.TrainingCourseTeachers
+            .Where(t => t.TeacherId == user.Id)
+            .Select(t => t.CourseId)
+            .ToArrayAsync(token);
+        var learnableCourseIds = courses
+            .Where(c => user.Role >= Role.Admin ||
+                        editableCourseIds.Contains(c.Id) ||
+                        c.Enrollments.Any(e => e.UserId == user.Id && e.Status == TrainingCourseEnrollmentStatus.Approved))
+            .Select(c => c.Id)
+            .ToArray();
+
+        var progresses = await context.TrainingCourseProgresses
+            .Where(p => p.UserId == user.Id && learnableCourseIds.Contains(p.CourseId))
+            .ToArrayAsync(token);
+        var chapterProgresses = await context.TrainingChapterProgresses
+            .Where(p => p.UserId == user.Id && learnableCourseIds.Contains(p.CourseId))
+            .ToArrayAsync(token);
+        var submissions = await context.TrainingCourseSubmissions
+            .Where(s => s.UserId == user.Id && learnableCourseIds.Contains(s.CourseId))
+            .ToArrayAsync(token);
+        var moduleProgresses = await context.TrainingModuleProgresses
+            .Include(p => p.Module)
+            .Where(p => p.UserId == user.Id)
+            .ToArrayAsync(token);
+        var visibleTheoryTotal = await context.TrainingModules.CountAsync(m =>
+            m.IsPublished &&
+            m.Type == TrainingType.Theory &&
+            m.Direction.IsEnabled &&
+            (user.Role >= Role.Teacher ||
+             m.Visibilities.Any(v =>
+                 v.VisibilityType == TrainingVisibilityType.AllStudents ||
+                 v.GroupId.HasValue && groupIds.Contains(v.GroupId.Value))), token);
+        var since = Today().AddDays(-41);
+        var checkIns = await context.TrainingCheckIns
+            .Where(c => c.UserId == user.Id && c.CheckInDate >= since)
+            .OrderBy(c => c.CheckInDate)
+            .ToArrayAsync(token);
+
+        var totalChapters = courses
+            .Where(c => learnableCourseIds.Contains(c.Id))
+            .SelectMany(c => c.Chapters)
+            .Count(c => c.IsPublished);
+        var completedChapters = chapterProgresses
+            .Count(p => p.Status == TrainingCourseProgressStatus.Completed);
+        var ctfTotal = courses
+            .Where(c => learnableCourseIds.Contains(c.Id))
+            .Sum(c => c.Challenges.Count);
+        var ctfSolved = submissions
+            .Where(s => s.Status == AnswerResult.Accepted)
+            .Select(s => new { s.CourseId, s.ExerciseChallengeId })
+            .Distinct()
+            .Count();
+
+        var checkedDates = checkIns.Select(c => c.CheckInDate).ToHashSet();
+        var today = Today();
+        var streak = 0;
+        for (var cursor = today; checkedDates.Contains(cursor); cursor = cursor.AddDays(-1))
+            streak++;
+
+        var activity = Enumerable.Range(0, 42)
+            .Select(offset =>
+            {
+                var date = since.AddDays(offset);
+                var dayStart = new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(8))
+                    .UtcDateTime;
+                var dayEnd = new DateTimeOffset(date.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(8))
+                    .UtcDateTime;
+                return new TrainingActivityPointModel
+                {
+                    Date = date,
+                    CheckedIn = checkedDates.Contains(date),
+                    CompletedChapters = chapterProgresses.Count(p =>
+                        p.CompletedAt is not null &&
+                        p.CompletedAt.Value.UtcDateTime >= dayStart &&
+                        p.CompletedAt.Value.UtcDateTime < dayEnd),
+                    AcceptedChallenges = submissions.Count(s =>
+                        s.Status == AnswerResult.Accepted &&
+                        s.SubmittedAt.UtcDateTime >= dayStart &&
+                        s.SubmittedAt.UtcDateTime < dayEnd),
+                    StudyActions = chapterProgresses.Count(p =>
+                        p.UpdatedAt.UtcDateTime >= dayStart &&
+                        p.UpdatedAt.UtcDateTime < dayEnd) +
+                        submissions.Count(s =>
+                            s.SubmittedAt.UtcDateTime >= dayStart &&
+                            s.SubmittedAt.UtcDateTime < dayEnd)
+                };
+            })
+            .ToList();
+
+        return new TrainingPersonalOverviewModel
+        {
+            VisibleCourseCount = courses.Length,
+            JoinedCourseCount = learnableCourseIds.Length,
+            CompletedCourseCount = progresses.Count(p => p.Status == TrainingCourseProgressStatus.Completed),
+            AverageProgress = totalChapters == 0 ? 0 : (int)Math.Round(completedChapters * 100.0 / totalChapters),
+            CompletedChapterCount = completedChapters,
+            TotalChapterCount = totalChapters,
+            CtfSolvedChallenges = ctfSolved,
+            CtfTotalChallenges = ctfTotal,
+            TheoryCompletedModules = moduleProgresses.Count(p =>
+                p.Module.Type == TrainingType.Theory && p.Status == TrainingModuleProgressStatus.Completed),
+            TheoryTotalModules = visibleTheoryTotal,
+            CheckInDays = await context.TrainingCheckIns.CountAsync(c => c.UserId == user.Id, token),
+            CurrentCheckInStreak = streak,
+            CheckedInToday = checkedDates.Contains(today),
+            CheckIns = checkIns
+                .Select(c => new TrainingCheckInModel
+                {
+                    Date = c.CheckInDate,
+                    CheckedAt = c.CheckedAt,
+                    IsToday = c.CheckInDate == today
+                })
+                .ToList(),
+            Activity = activity
+        };
     }
 
     private async Task<TrainingCourseProgress> EnsureCourseProgress(
@@ -231,10 +363,7 @@ public class TrainingCourseController(
     public async Task<IActionResult> Courses(CancellationToken token = default)
     {
         var user = await CurrentUser();
-        var query = CourseQuery()
-            .Where(c => c.Status == TrainingCourseStatus.Published ||
-                        user.Role >= Role.Admin ||
-                        c.Teachers.Any(t => t.TeacherId == user.Id));
+        var query = VisibleCourseQuery(user);
 
         var courses = await query.OrderByDescending(c => c.UpdatedAt).ToArrayAsync(token);
         var courseIds = courses.Select(c => c.Id).ToArray();
@@ -261,6 +390,36 @@ public class TrainingCourseController(
         }
 
         return Ok(models.ToArray());
+    }
+
+    [HttpGet("overview")]
+    [ProducesResponseType(typeof(TrainingPersonalOverviewModel), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Overview(CancellationToken token = default)
+    {
+        var user = await CurrentUser();
+        return Ok(await BuildOverview(user, token));
+    }
+
+    [HttpPost("check-in")]
+    [ProducesResponseType(typeof(TrainingPersonalOverviewModel), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CheckIn(CancellationToken token = default)
+    {
+        var user = await CurrentUser();
+        var today = Today();
+        var checkIn = await context.TrainingCheckIns
+            .SingleOrDefaultAsync(c => c.UserId == user.Id && c.CheckInDate == today, token);
+        if (checkIn is null)
+        {
+            context.TrainingCheckIns.Add(new TrainingCheckIn
+            {
+                UserId = user.Id,
+                CheckInDate = today,
+                CheckedAt = DateTimeOffset.UtcNow
+            });
+            await context.SaveChangesAsync(token);
+        }
+
+        return Ok(await BuildOverview(user, token));
     }
 
     [HttpGet("{courseId:int}")]

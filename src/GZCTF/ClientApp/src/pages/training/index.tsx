@@ -1,10 +1,8 @@
 import {
-  Badge,
   Box,
   Button,
   Group,
   Modal,
-  Progress,
   SimpleGrid,
   Stack,
   Text,
@@ -13,24 +11,38 @@ import {
   Title,
 } from '@mantine/core'
 import { showNotification } from '@mantine/notifications'
-import { mdiArrowRight, mdiBookOpenPageVariantOutline, mdiPlus } from '@mdi/js'
+import {
+  mdiBookOpenPageVariantOutline,
+  mdiChartTimelineVariant,
+  mdiPlus,
+  mdiSchoolOutline,
+  mdiShieldSearch,
+} from '@mdi/js'
 import { Icon } from '@mdi/react'
 import React, { FC, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router'
 import { WithNavBar } from '@Components/WithNavbar'
 import { RequireRole } from '@Components/WithRole'
-import { YinyuPanel, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
+import {
+  TrainingCheckInCard,
+  TrainingCourseCard,
+  TrainingEmptyState,
+  TrainingOverviewPanel,
+  TrainingProgressSummary,
+  TrainingStatusText,
+  trainingCourseProgress,
+  trainingTags,
+} from '@Components/training/TrainingCourseUI'
+import { YinyuGameBendsBackground } from '@Components/yinyu/YinyuReactBits'
 import { useUser } from '@Hooks/useUser'
 import { Role } from '@Api'
 import { showErrorMsg } from '@Utils/Shared'
 import {
   TrainingCourseEditModel,
   TrainingCourseEnrollmentPolicy,
-  TrainingCourseEnrollmentStatus,
   TrainingCourseModel,
-  TrainingCourseProgressStatus,
-  TrainingCourseStatus,
+  TrainingPersonalOverviewModel,
   trainingCourseAdminApi,
   trainingCourseApi,
 } from '@Utils/TrainingApi'
@@ -45,81 +57,54 @@ const emptyCourseDraft = (): TrainingCourseEditModel => ({
   enrollmentPolicy: TrainingCourseEnrollmentPolicy.TeacherApproval,
 })
 
-const courseStatusLabel = (course: TrainingCourseModel) => {
-  if (course.status === TrainingCourseStatus.Draft) return '草稿'
-  if (course.status === TrainingCourseStatus.Archived) return '已归档'
-  if (course.canLearn) return '可学习'
-  if (course.enrollmentStatus === TrainingCourseEnrollmentStatus.Pending) return '待审核'
-  if (course.enrollmentStatus === TrainingCourseEnrollmentStatus.Rejected) return '未通过'
-  return '可报名'
-}
-
-const progressValue = (course: TrainingCourseModel) => {
-  if (!course.totalChapterCount) return course.progressStatus === TrainingCourseProgressStatus.Completed ? 100 : 0
-  return Math.round((course.completedChapterCount / course.totalChapterCount) * 100)
-}
-
-const CourseCard: FC<{ course: TrainingCourseModel; compact?: boolean }> = ({ course, compact = false }) => (
-  <Link className="yy-course-link" to={`/training/courses/${course.id}`}>
-    <YinyuPanel className="yy-course-card" p="md">
-      <Box
-        className="yy-course-card-cover"
-        style={course.coverUrl ? { backgroundImage: `url(${course.coverUrl})` } : undefined}
-      >
-        <Badge className="yy-gradient-status">{courseStatusLabel(course)}</Badge>
-      </Box>
-      <Stack gap={compact ? 6 : 'xs'} className="yy-course-card-body">
-        <Group gap={6}>
-          {(course.tags.length ? course.tags.slice(0, compact ? 2 : 4) : ['课程']).map((tag) => (
-            <Badge key={tag} variant="light" color="teal">
-              {tag}
-            </Badge>
-          ))}
-        </Group>
-        <Title order={compact ? 4 : 3}>{course.title}</Title>
-        <Text size="sm" c="dimmed" lineClamp={compact ? 2 : 3}>
-          {course.summary || '暂无课程摘要'}
-        </Text>
-        <Group justify="space-between" mt="xs">
-          <Text size="xs" c="dimmed">
-            {course.teachers.map((t) => t.realName || t.userName).join(' / ') || '未设置老师'}
-          </Text>
-          <Text size="xs" fw={900}>
-            {course.completedChapterCount}/{course.totalChapterCount || course.chapterCount}
-          </Text>
-        </Group>
-        <Progress value={progressValue(course)} radius="xl" color="teal" />
-      </Stack>
-    </YinyuPanel>
-  </Link>
-)
+const courseMatches = (course: TrainingCourseModel, keywords: RegExp) =>
+  trainingTags(course).some((tag) => keywords.test(tag)) || keywords.test(course.title)
 
 const Training: FC = () => {
   const [courses, setCourses] = useState<TrainingCourseModel[]>([])
+  const [overview, setOverview] = useState<TrainingPersonalOverviewModel | null>(null)
   const [createOpened, setCreateOpened] = useState(false)
   const [draft, setDraft] = useState<TrainingCourseEditModel>(emptyCourseDraft())
   const [saving, setSaving] = useState(false)
+  const [checking, setChecking] = useState(false)
   const { user } = useUser()
   const { t } = useTranslation()
   const navigate = useNavigate()
   const canCreate = RequireRole(Role.Teacher, user?.role)
 
-  const highlighted = courses.slice(0, 4)
   const teachingCourses = useMemo(() => courses.filter((course) => course.canEdit), [courses])
   const learningCourses = useMemo(
     () =>
       courses
         .filter((course) => course.canLearn || course.progressStatus)
-        .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
-        .slice(0, 3),
+        .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)),
     [courses]
   )
-  const recent = canCreate ? teachingCourses.slice(0, 3) : learningCourses
+  const recent = useMemo(
+    () => (canCreate ? teachingCourses : learningCourses).slice(0, 3),
+    [canCreate, learningCourses, teachingCourses]
+  )
+  const ctfCourses = useMemo(
+    () => courses.filter((course) => courseMatches(course, /ctf|web|misc|crypto|pwn|reverse|渗透|攻防/i)),
+    [courses]
+  )
+  const theoryCourses = useMemo(
+    () => courses.filter((course) => courseMatches(course, /理论|theory|考试|测验|基础/i)),
+    [courses]
+  )
+  const todoCourses = useMemo(
+    () => learningCourses.filter((course) => trainingCourseProgress(course) < 100).slice(0, 5),
+    [learningCourses]
+  )
 
   const load = async () => {
     try {
-      const res = await trainingCourseApi.courses()
-      setCourses(res.data)
+      const [courseRes, overviewRes] = await Promise.all([
+        trainingCourseApi.courses(),
+        trainingCourseApi.overview(),
+      ])
+      setCourses(courseRes.data)
+      setOverview(overviewRes.data)
     } catch (e) {
       showErrorMsg(e, t)
     }
@@ -131,6 +116,7 @@ const Training: FC = () => {
     try {
       const res = await trainingCourseAdminApi.createCourse({
         ...draft,
+        title: draft.title.trim(),
         tags: draft.tags.length ? draft.tags : ['培训'],
       })
       showNotification({ color: 'green', title: '课程已创建', message: draft.title.trim() })
@@ -144,93 +130,160 @@ const Training: FC = () => {
     }
   }
 
+  const checkIn = async () => {
+    setChecking(true)
+    try {
+      const res = await trainingCourseApi.checkIn()
+      setOverview(res.data)
+      showNotification({ color: 'green', title: '签到完成', message: '今天的学习记录已写入概览。' })
+    } catch (e) {
+      showErrorMsg(e, t)
+    } finally {
+      setChecking(false)
+    }
+  }
+
   useEffect(() => {
     void load()
   }, [])
 
+  const showcase = canCreate ? teachingCourses : learningCourses
+
   return (
-    <WithNavBar width="min(118rem, calc(100vw - 4rem))">
-      <Stack gap="lg" className="yy-course-home">
-        <Group justify="space-between" align="flex-end">
-          <Stack gap={4}>
-            <Text className="yy-section-kicker">隐域网安</Text>
-            <Title order={1}>培训课程</Title>
-          </Stack>
-          {canCreate ? (
-            <Button leftSection={<Icon path={mdiPlus} size={0.85} />} onClick={() => setCreateOpened(true)}>
-              创建课程
-            </Button>
-          ) : null}
-        </Group>
+    <WithNavBar width="min(100%, calc(100vw - 7.25rem))" minWidth={0}>
+      <Box className="yy-training-page yy-course-home">
+        <YinyuGameBendsBackground className="yy-training-bg" />
+        <section className="yy-training-shell">
+          <aside className="yy-training-sidebar">
+            <Stack gap="md">
+              <Stack gap={4}>
+                <Text className="yy-section-kicker">Training</Text>
+                <Title order={2}>学习导航</Title>
+              </Stack>
+              <nav className="yy-training-nav-list" aria-label="培训导航">
+                <a href="#continue">
+                  <Icon path={mdiBookOpenPageVariantOutline} size={0.9} />
+                  <span>{canCreate ? '教学入口' : '继续学习'}</span>
+                  <b>{recent.length}</b>
+                </a>
+                <a href="#ctf">
+                  <Icon path={mdiShieldSearch} size={0.9} />
+                  <span>CTF 培训</span>
+                  <b>{ctfCourses.length}</b>
+                </a>
+                <a href="#theory">
+                  <Icon path={mdiSchoolOutline} size={0.9} />
+                  <span>理论培训</span>
+                  <b>{theoryCourses.length}</b>
+                </a>
+                <a href="#all">
+                  <Icon path={mdiChartTimelineVariant} size={0.9} />
+                  <span>全部课程</span>
+                  <b>{courses.length}</b>
+                </a>
+              </nav>
+              <TrainingCheckInCard overview={overview} checking={checking} onCheckIn={checkIn} />
+            </Stack>
+          </aside>
 
-        <SimpleGrid cols={{ base: 1, lg: highlighted.length > 1 ? 2 : 1 }} spacing="md">
-          {(highlighted.length ? highlighted : courses).slice(0, 2).map((course) => (
-            <Link key={course.id} className="yy-course-link" to={`/training/courses/${course.id}`}>
-              <YinyuPanel
-                className="yy-course-hero"
-                p="xl"
-                style={course.coverUrl ? { backgroundImage: `url(${course.coverUrl})` } : undefined}
-              >
-                <Stack gap="sm">
-                  <Group gap="xs">
-                    <YinyuStatusPill tone={course.canLearn ? 'success' : 'neutral'}>{courseStatusLabel(course)}</YinyuStatusPill>
-                    {course.tags.slice(0, 3).map((tag) => (
-                      <Badge key={tag} variant="light" color="teal">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </Group>
-                  <Title order={2}>{course.title}</Title>
-                  <Text c="dimmed" lineClamp={2}>
-                    {course.summary || '暂无课程摘要'}
-                  </Text>
-                  <Group justify="space-between">
-                    <Text size="sm">{course.teachers.map((teacher) => teacher.realName || teacher.userName).join(' / ')}</Text>
-                    <Button variant="light" rightSection={<Icon path={mdiArrowRight} size={0.82} />}>
-                      进入课程
-                    </Button>
-                  </Group>
-                </Stack>
-              </YinyuPanel>
-            </Link>
-          ))}
-        </SimpleGrid>
-
-        <YinyuPanel p="lg">
-          <Group justify="space-between" mb="md">
-            <Group gap="xs">
-              <Icon path={mdiBookOpenPageVariantOutline} size={1} />
-              <Title order={3}>{canCreate ? '我教授的课程' : '最近学习课程'}</Title>
+          <main className="yy-training-main">
+            <Group justify="space-between" align="flex-end" className="yy-training-hero-head">
+              <Stack gap={6}>
+                <Title order={1}>培训课程</Title>
+                <Text className="yy-training-readable" maw="62rem">
+                  按课程路径学习知识点，在章节末尾直接完成容器实验和 Flag 提交。老师可以从同一入口维护课程、章节、资源、实验与报名审核。
+                </Text>
+              </Stack>
+              {canCreate ? (
+                <Button leftSection={<Icon path={mdiPlus} size={0.85} />} onClick={() => setCreateOpened(true)}>
+                  创建课程
+                </Button>
+              ) : null}
             </Group>
-            <Text size="sm" c="dimmed">
-              {recent.length}/3
-            </Text>
-          </Group>
-          <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md">
-            {recent.length ? (
-              recent.map((course) => <CourseCard key={course.id} course={course} compact />)
-            ) : (
-              <Text c="dimmed">暂无课程</Text>
-            )}
-          </SimpleGrid>
-        </YinyuPanel>
 
-        <YinyuPanel p="lg">
-          <Group justify="space-between" mb="md">
-            <Title order={3}>全部课程</Title>
-            <Text size="sm" c="dimmed">
-              {courses.length} 门
-            </Text>
-          </Group>
-          <SimpleGrid cols={{ base: 1, md: 2, xl: 3 }} spacing="md">
-            {courses.map((course) => (
-              <CourseCard key={course.id} course={course} />
-            ))}
-          </SimpleGrid>
-        </YinyuPanel>
-      </Stack>
+            <TrainingProgressSummary courses={courses} overview={overview} canCreate={canCreate} />
 
-      <Modal opened={createOpened} onClose={() => setCreateOpened(false)} title="创建课程" centered>
+            <section id="continue" className="yy-training-section">
+              <Group justify="space-between" mb="md" align="flex-end">
+                <Stack gap={0}>
+                  <Title order={3}>{canCreate ? '教学入口' : '继续学习'}</Title>
+                  <Text size="sm" className="yy-training-readable">
+                    {canCreate ? '快速进入你负责的课程建设、章节维护和授课内容。' : '优先展示你最近学习或已经加入的课程。'}
+                  </Text>
+                </Stack>
+                <TrainingStatusText tone="ongoing">{recent.length}/{Math.min(3, showcase.length || 3)}</TrainingStatusText>
+              </Group>
+              {recent.length ? (
+                <SimpleGrid cols={{ base: 1, md: 2, xl: Math.min(3, Math.max(1, recent.length)) }} spacing="md">
+                  {recent.map((course) => (
+                    <TrainingCourseCard key={course.id} course={course} featured actionLabel={canCreate ? '管理课程' : '继续学习'} />
+                  ))}
+                </SimpleGrid>
+              ) : (
+                <TrainingEmptyState
+                  title={canCreate ? '还没有授课课程' : '还没有开始学习'}
+                  description={
+                    canCreate
+                      ? '创建第一门课程后，可以继续配置章节、资源、实验和报名审核。'
+                      : '报名通过或被老师分配课程后，会在这里显示继续学习入口。'
+                  }
+                />
+              )}
+            </section>
+
+            <section id="ctf" className="yy-training-section">
+              <Group justify="space-between" mb="md">
+                <Stack gap={0}>
+                  <Title order={3}>{canCreate ? '我教授的课程' : '今日待完成'}</Title>
+                  <Text size="sm" className="yy-training-readable">
+                    {canCreate ? '用于课程建设、章节维护和学员管理。' : '根据已加入课程的完成进度生成。'}
+                  </Text>
+                </Stack>
+              </Group>
+              <SimpleGrid cols={{ base: 1, md: 2, xl: 3 }} spacing="md" className="yy-training-course-grid">
+                {(canCreate ? teachingCourses : todoCourses).slice(0, 6).map((course) => (
+                  <TrainingCourseCard key={course.id} course={course} compact actionLabel={canCreate ? '编辑课程' : '继续'} />
+                ))}
+              </SimpleGrid>
+              {(canCreate ? teachingCourses : todoCourses).length === 0 ? (
+                <TrainingEmptyState
+                  title={canCreate ? '暂无授课课程' : '暂无待完成课程'}
+                  description={
+                    canCreate
+                      ? '可以从右上角创建课程，或让管理员将你加入课程教师列表。'
+                      : '完成进度会在加入课程后自动显示。'
+                  }
+                />
+              ) : null}
+            </section>
+
+            <section id="all" className="yy-training-section">
+              <Group justify="space-between" mb="md">
+                <Stack gap={0}>
+                  <Title order={3}>全部课程</Title>
+                  <Text size="sm" className="yy-training-readable">
+                    共 {courses.length} 门课程，包含已加入、待审核、可报名和教师可管理课程。
+                  </Text>
+                </Stack>
+              </Group>
+              <SimpleGrid cols={{ base: 1, md: 2, xl: 3 }} spacing="md" className="yy-training-course-grid">
+                {courses.map((course) => (
+                  <TrainingCourseCard key={course.id} course={course} />
+                ))}
+              </SimpleGrid>
+              {courses.length === 0 ? (
+                <TrainingEmptyState title="暂无课程" description="老师创建并发布课程后，学生会在这里看到可学习或可报名的内容。" />
+              ) : null}
+            </section>
+          </main>
+
+          <aside className="yy-training-insight">
+            <TrainingOverviewPanel overview={overview} todoCourses={todoCourses} />
+          </aside>
+        </section>
+      </Box>
+
+      <Modal opened={createOpened} onClose={() => setCreateOpened(false)} title="创建课程" centered size="lg">
         <Stack>
           <TextInput
             label="课程名称"
@@ -239,12 +292,12 @@ const Training: FC = () => {
           />
           <TextInput
             label="课程标签"
-            value={draft.tags.join('，')}
+            value={draft.tags.join('；')}
             onChange={(event) =>
               setDraft({
                 ...draft,
                 tags: event.currentTarget.value
-                  .split(/[，,]/)
+                  .split(/[；;,]/)
                   .map((tag) => tag.trim())
                   .filter(Boolean),
               })
@@ -257,8 +310,8 @@ const Training: FC = () => {
             onChange={(event) => setDraft({ ...draft, summary: event.currentTarget.value })}
           />
           <Textarea
-            label="课程介绍"
-            minRows={5}
+            label="课程介绍 Markdown"
+            minRows={6}
             value={draft.description}
             onChange={(event) => setDraft({ ...draft, description: event.currentTarget.value })}
           />
