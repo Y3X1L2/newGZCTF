@@ -159,7 +159,9 @@ public class ExerciseInstanceRepository(
         if (containerLimit > 0)
         {
             var running = await Context.ExerciseInstances
-                .Where(i => i.User == user && i.Container != null)
+                .Include(i => i.Exercise)
+                .Include(i => i.Container)
+                .Where(i => i.UserId == user.Id && i.ContainerId != null)
                 .OrderBy(i => i.Container!.StartedAt)
                 .ToListAsync(token);
 
@@ -171,7 +173,7 @@ public class ExerciseInstanceRepository(
                         user.UserName!, first.Exercise.Title,
                         first.Container!.LogId],
                     user, TaskStatus.Success);
-                await containerRepository.DestroyContainer(running.First().Container!, token);
+                await containerRepository.DestroyContainer(first.Container!, token);
             }
         }
 
