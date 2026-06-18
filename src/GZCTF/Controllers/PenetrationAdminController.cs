@@ -44,7 +44,14 @@ public class PenetrationAdminController(
         if (model is null)
             return BadRequest(new RequestResponse("渗透编排配置不能为空。"));
 
-        return Ok(await penetrationService.SaveConfig(gameId, model, token));
+        try
+        {
+            return Ok(await penetrationService.SaveConfig(gameId, model, token));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new RequestResponse(ex.Message));
+        }
     }
 
     [HttpPost("games/{gameId:int}/validate")]
@@ -57,10 +64,9 @@ public class PenetrationAdminController(
         if (validation.Result is not null)
             return validation.Result;
 
-        if (model is not null)
-            await penetrationService.SaveConfig(gameId, model, token);
-
-        return Ok(await penetrationService.Validate(gameId, token));
+        return Ok(model is null
+            ? await penetrationService.Validate(gameId, token)
+            : await penetrationService.ValidateModel(gameId, model, token));
     }
 
     [HttpPost("games/{gameId:int}/plan")]
@@ -73,10 +79,9 @@ public class PenetrationAdminController(
         if (validation.Result is not null)
             return validation.Result;
 
-        if (model is not null)
-            await penetrationService.SaveConfig(gameId, model, token);
-
-        return Ok(await penetrationService.GetPlan(gameId, token));
+        return Ok(model is null
+            ? await penetrationService.GetPlan(gameId, token)
+            : await penetrationService.GetPlan(gameId, model, token));
     }
 
     [HttpPost("games/{gameId:int}/publish")]

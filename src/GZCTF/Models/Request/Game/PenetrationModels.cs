@@ -21,6 +21,7 @@ public class PenetrationConfigModel
 public class PenetrationNetworkModel
 {
     public int Id { get; set; }
+    public string TopologyKey { get; set; } = string.Empty;
     [Required] public string Name { get; set; } = string.Empty;
     public string Slug { get; set; } = string.Empty;
     public string? Cidr { get; set; }
@@ -41,6 +42,7 @@ public class PenetrationNetworkModel
 public class PenetrationNodeModel
 {
     public int Id { get; set; }
+    public string TopologyKey { get; set; } = string.Empty;
     public int NetworkId { get; set; }
     [Required] public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
@@ -69,6 +71,7 @@ public class PenetrationNodeModel
 public class PenetrationInterfaceModel
 {
     public int Id { get; set; }
+    public string TopologyKey { get; set; } = string.Empty;
     public int NodeId { get; set; }
     public int NetworkId { get; set; }
     public string Name { get; set; } = "eth0";
@@ -82,6 +85,7 @@ public class PenetrationInterfaceModel
 public class PenetrationEdgeModel
 {
     public int Id { get; set; }
+    public string TopologyKey { get; set; } = string.Empty;
     public int SourceNodeId { get; set; }
     public int TargetNodeId { get; set; }
     public PenetrationPolicyScope SourceKind { get; set; } = PenetrationPolicyScope.Node;
@@ -99,6 +103,7 @@ public class PenetrationEdgeModel
 public class PenetrationScoreItemModel
 {
     public int Id { get; set; }
+    public string TopologyKey { get; set; } = string.Empty;
     [Required] public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string Category { get; set; } = "General";

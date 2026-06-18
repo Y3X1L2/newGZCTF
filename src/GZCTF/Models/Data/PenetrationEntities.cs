@@ -83,6 +83,28 @@ public enum PenetrationRuntimeStatus : byte
     Failed = 3
 }
 
+[Index(nameof(GameId), nameof(PublishedVersion), IsUnique = true)]
+public class PenetrationPublishedSnapshot
+{
+    [Key]
+    public int Id { get; set; }
+
+    public int GameId { get; set; }
+
+    public int PublishedVersion { get; set; }
+
+    [MaxLength(128)]
+    public string SnapshotHash { get; set; } = string.Empty;
+
+    public string SnapshotJson { get; set; } = string.Empty;
+
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public Guid? CreatedBy { get; set; }
+
+    public Game Game { get; set; } = null!;
+}
+
 [Index(nameof(GameId), IsUnique = true)]
 public class PenetrationConfig
 {
@@ -126,6 +148,9 @@ public class PenetrationNetwork
     public int Id { get; set; }
 
     public int ConfigId { get; set; }
+
+    [Required, MaxLength(64)]
+    public string TopologyKey { get; set; } = string.Empty;
 
     [Required, MaxLength(128)]
     public string Name { get; set; } = string.Empty;
@@ -174,6 +199,9 @@ public class PenetrationNode
     public int Id { get; set; }
 
     public int ConfigId { get; set; }
+
+    [Required, MaxLength(64)]
+    public string TopologyKey { get; set; } = string.Empty;
 
     public int NetworkId { get; set; }
 
@@ -246,6 +274,9 @@ public class PenetrationInterface
     public int NetworkId { get; set; }
 
     [Required, MaxLength(64)]
+    public string TopologyKey { get; set; } = string.Empty;
+
+    [Required, MaxLength(64)]
     public string Name { get; set; } = "eth0";
 
     [MaxLength(64)]
@@ -269,6 +300,9 @@ public class PenetrationEdge
     public int Id { get; set; }
 
     public int ConfigId { get; set; }
+
+    [Required, MaxLength(64)]
+    public string TopologyKey { get; set; } = string.Empty;
 
     public int SourceNodeId { get; set; }
 
@@ -307,6 +341,9 @@ public class PenetrationScoreItem
     public int Id { get; set; }
 
     public int NodeId { get; set; }
+
+    [Required, MaxLength(64)]
+    public string TopologyKey { get; set; } = string.Empty;
 
     [Required, MaxLength(128)]
     public string Title { get; set; } = string.Empty;
@@ -390,6 +427,9 @@ public class PenetrationRuntimeNode
 
     public int TopologyNodeId { get; set; }
 
+    [MaxLength(64)]
+    public string TopologyNodeKey { get; set; } = string.Empty;
+
     public Guid? ContainerId { get; set; }
 
     [MaxLength(128)]
@@ -432,6 +472,11 @@ public class PenetrationSubmission
     public Guid UserId { get; set; }
 
     public int ScoreItemId { get; set; }
+
+    public int PublishedVersion { get; set; }
+
+    [MaxLength(64)]
+    public string ScoreItemTopologyKey { get; set; } = string.Empty;
 
     [MaxLength(Limits.MaxFlagLength)]
     public string Answer { get; set; } = string.Empty;

@@ -3,7 +3,7 @@ import { mdiChip, mdiDatabaseOutline, mdiLan, mdiServerNetwork, mdiTimerOutline 
 import { Icon } from '@mdi/react'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
-import { ReactNode } from 'react'
+import { KeyboardEvent, ReactNode } from 'react'
 import { YinyuPanel, YinyuStatusPill, YinyuStatusState, YinyuStatusTone } from '@Components/yinyu/YinyuUI'
 
 dayjs.extend(relativeTime)
@@ -114,10 +114,14 @@ export function NodeCard({
   node,
   onToggleSchedulable,
   rightSection,
+  selected,
+  onSelect,
 }: {
   node: NodeInfo
   onToggleSchedulable?: (id: string, val: boolean) => void
   rightSection?: ReactNode
+  selected?: boolean
+  onSelect?: (node: NodeInfo) => void
 }) {
   const status = statusMap[normalizeKey(node.status)] ?? {
     label: String(node.status ?? '未知'),
@@ -135,17 +139,33 @@ export function NodeCard({
   const vmUsage = ratio(node.currentVms, node.maxVms)
   const portUsage = ratio(node.usedPorts ?? 0, node.totalPorts ?? 0)
 
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!onSelect) return
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      onSelect(node)
+    }
+  }
+
   return (
-    <YinyuPanel
-      p="md"
-      cells={42}
-      data-testid={`node-card-${node.id}`}
-      style={{
-        borderTop: `3px solid var(--mantine-color-${status.color}-6)`,
-        opacity: isOffline ? 0.78 : 1,
-      }}
+    <div
+      role={onSelect ? 'button' : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      onClick={() => onSelect?.(node)}
+      onKeyDown={handleKeyDown}
+      style={{ cursor: onSelect ? 'pointer' : undefined }}
     >
-      <Stack gap="sm">
+      <YinyuPanel
+        p="md"
+        cells={42}
+        data-testid={`node-card-${node.id}`}
+        className={selected ? 'yy-admin-node-card-selected' : undefined}
+        style={{
+          borderTop: `3px solid var(--mantine-color-${status.color}-6)`,
+          opacity: isOffline ? 0.78 : 1,
+        }}
+      >
+        <Stack gap="sm">
         <Group justify="space-between" align="flex-start" wrap="nowrap">
           <Stack gap={2} style={{ minWidth: 0 }}>
             <Group gap={6} wrap="nowrap">
@@ -264,7 +284,8 @@ export function NodeCard({
             onChange={(e) => onToggleSchedulable?.(node.id, e.currentTarget.checked)}
           />
         </Group>
-      </Stack>
-    </YinyuPanel>
+        </Stack>
+      </YinyuPanel>
+    </div>
   )
 }

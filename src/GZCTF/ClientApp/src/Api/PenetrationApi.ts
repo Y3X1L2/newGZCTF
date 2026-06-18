@@ -78,6 +78,7 @@ export interface PenetrationConfigModel {
 
 export interface PenetrationNetworkModel {
   id: number
+  topologyKey: string
   name: string
   slug: string
   cidr?: string | null
@@ -97,6 +98,7 @@ export interface PenetrationNetworkModel {
 
 export interface PenetrationNodeModel {
   id: number
+  topologyKey: string
   networkId: number
   name: string
   description?: string | null
@@ -124,6 +126,7 @@ export interface PenetrationNodeModel {
 
 export interface PenetrationInterfaceModel {
   id: number
+  topologyKey: string
   nodeId: number
   networkId: number
   name: string
@@ -136,6 +139,7 @@ export interface PenetrationInterfaceModel {
 
 export interface PenetrationEdgeModel {
   id: number
+  topologyKey: string
   sourceNodeId: number
   targetNodeId: number
   sourceKind: PenetrationPolicyScope
@@ -152,6 +156,7 @@ export interface PenetrationEdgeModel {
 
 export interface PenetrationScoreItemModel {
   id: number
+  topologyKey: string
   title: string
   description?: string | null
   category: string

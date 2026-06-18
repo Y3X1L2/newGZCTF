@@ -70,6 +70,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<AwdpResetRecord> AwdpResetRecords { get; set; } = null!;
     public DbSet<AwdpRecoveryRecord> AwdpRecoveryRecords { get; set; } = null!;
     public DbSet<PenetrationConfig> PenetrationConfigs { get; set; } = null!;
+    public DbSet<PenetrationPublishedSnapshot> PenetrationPublishedSnapshots { get; set; } = null!;
     public DbSet<PenetrationNetwork> PenetrationNetworks { get; set; } = null!;
     public DbSet<PenetrationNode> PenetrationNodes { get; set; } = null!;
     public DbSet<PenetrationInterface> PenetrationInterfaces { get; set; } = null!;
@@ -733,8 +734,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        builder.Entity<PenetrationPublishedSnapshot>(entity =>
+        {
+            entity.HasOne(e => e.Game)
+                .WithMany()
+                .HasForeignKey(e => e.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         builder.Entity<PenetrationNetwork>(entity =>
         {
+            entity.HasIndex(e => new { e.ConfigId, e.TopologyKey }).IsUnique();
+
             entity.Property(e => e.ZoneType)
                 .HasConversion<string>()
                 .HasMaxLength(32);
@@ -751,6 +762,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
 
         builder.Entity<PenetrationNode>(entity =>
         {
+            entity.HasIndex(e => new { e.ConfigId, e.TopologyKey }).IsUnique();
+
             entity.Property(e => e.NodeType)
                 .HasConversion<string>()
                 .HasMaxLength(32);
@@ -773,6 +786,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
 
         builder.Entity<PenetrationInterface>(entity =>
         {
+            entity.HasIndex(e => new { e.NodeId, e.TopologyKey }).IsUnique();
+
             entity.HasOne(e => e.Node)
                 .WithMany(e => e.Interfaces)
                 .HasForeignKey(e => e.NodeId)
@@ -786,6 +801,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
 
         builder.Entity<PenetrationEdge>(entity =>
         {
+            entity.HasIndex(e => new { e.ConfigId, e.TopologyKey }).IsUnique();
+
             entity.Property(e => e.SourceKind)
                 .HasConversion<string>()
                 .HasMaxLength(32);
@@ -810,6 +827,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
 
         builder.Entity<PenetrationScoreItem>(entity =>
         {
+            entity.HasIndex(e => new { e.NodeId, e.TopologyKey }).IsUnique();
+
             entity.HasOne(e => e.Node)
                 .WithMany(e => e.ScoreItems)
                 .HasForeignKey(e => e.NodeId)
@@ -860,6 +879,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
             entity.Property(e => e.Status)
                 .HasConversion<string>()
                 .HasMaxLength(32);
+
+            entity.HasIndex(e => new { e.GameId, e.TeamId, e.PublishedVersion, e.ScoreItemTopologyKey });
 
             entity.HasOne(e => e.Game)
                 .WithMany()

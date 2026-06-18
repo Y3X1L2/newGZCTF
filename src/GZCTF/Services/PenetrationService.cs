@@ -35,6 +35,7 @@ public class PenetrationService(
         config = new PenetrationConfig { GameId = game.Id, Game = game };
         config.Networks.Add(new PenetrationNetwork
         {
+            TopologyKey = EnsureTopologyKey(null, "network", -1),
             Name = "公网入口区",
             Slug = "public",
             ZoneType = PenetrationZoneType.Public,
@@ -56,187 +57,37 @@ public class PenetrationService(
     public async Task<PenetrationConfigModel> SaveConfig(int gameId, PenetrationConfigModel model,
         CancellationToken token = default)
     {
+        var incomingValidation = await ValidateModel(gameId, model, token);
+        if (incomingValidation.Errors.Count > 0)
+            throw new InvalidOperationException(string.Join('\n', incomingValidation.Errors));
+
+        await using var transaction = await context.Database.BeginTransactionAsync(token);
+
         var game = await context.Games.FindAsync([gameId], token)
                    ?? throw new InvalidOperationException("Game not found.");
-
         var config = await LoadConfig(gameId, token);
         if (config is null)
         {
             config = new PenetrationConfig { GameId = gameId, Game = game };
             context.PenetrationConfigs.Add(config);
+            await context.SaveChangesAsync(token);
         }
 
-        config.BaseCidr = string.IsNullOrWhiteSpace(model.BaseCidr) ? "10.60.0.0/12" : model.BaseCidr.Trim();
-        config.TeamSubnetPrefix = model.TeamSubnetPrefix is >= 16 and <= 28 ? model.TeamSubnetPrefix : 24;
-        config.NetworkSubnetPrefix = model.NetworkSubnetPrefix is >= 24 and <= 30 ? model.NetworkSubnetPrefix : 28;
-        config.MaxResetCount = Math.Clamp(model.MaxResetCount, 0, 100);
-        config.Status = config.PublishedVersion > 0 ? PenetrationDeploymentStatus.Published : PenetrationDeploymentStatus.Draft;
-        config.UpdatedAt = DateTimeOffset.UtcNow;
+        var referencedNodeKeys = await context.PenetrationRuntimeNodes.AsNoTracking()
+            .Where(r => r.Environment.GameId == gameId && r.TopologyNodeKey != string.Empty)
+            .Select(r => r.TopologyNodeKey)
+            .ToHashSetAsync(token);
+        var submittedScoreItemIds = await context.PenetrationSubmissions.AsNoTracking()
+            .Where(s => s.GameId == gameId)
+            .Select(s => s.ScoreItemId)
+            .ToHashSetAsync(token);
 
-        context.PenetrationEdges.RemoveRange(config.Edges);
-        context.PenetrationInterfaces.RemoveRange(config.Nodes.SelectMany(n => n.Interfaces));
-        context.PenetrationNodes.RemoveRange(config.Nodes);
-        context.PenetrationNetworks.RemoveRange(config.Networks);
+        var maps = ApplyModelToTrackedConfig(config, model, referencedNodeKeys, submittedScoreItemIds);
         await context.SaveChangesAsync(token);
-
-        if (model.Networks.Count == 0)
-            model.Networks.Add(DefaultNetworkModel(-1, 0));
-
-        var networkMap = new Dictionary<int, PenetrationNetwork>();
-        foreach (var networkModel in model.Networks.OrderBy(n => n.OrderIndex))
-        {
-            var network = new PenetrationNetwork
-            {
-                ConfigId = config.Id,
-                Name = Clean(networkModel.Name, "未命名网段"),
-                Slug = Slugify(string.IsNullOrWhiteSpace(networkModel.Slug) ? networkModel.Name : networkModel.Slug),
-                Cidr = CleanNullable(networkModel.Cidr),
-                ZoneType = networkModel.ZoneType,
-                TrustLevel = Math.Clamp(networkModel.TrustLevel, 0, 100),
-                Description = CleanNullable(networkModel.Description),
-                DefaultPolicy = networkModel.DefaultPolicy,
-                IsEntry = networkModel.IsEntry,
-                OrderIndex = networkModel.OrderIndex,
-                PositionX = networkModel.PositionX,
-                PositionY = networkModel.PositionY,
-                Width = Math.Clamp(networkModel.Width <= 0 ? 560 : networkModel.Width, 360, 1800),
-                Height = Math.Clamp(networkModel.Height <= 0 ? 390 : networkModel.Height, 260, 1200),
-                Collapsed = networkModel.Collapsed
-            };
-            config.Networks.Add(network);
-            networkMap[networkModel.Id] = network;
-        }
-
+        RemapPrerequisites(config, maps.ScoreKeyByModelId);
+        AddEdgesToConfig(config, model, maps);
         await context.SaveChangesAsync(token);
-
-        var modelInterfaces = model.Interfaces.Count > 0
-            ? model.Interfaces
-            : model.Nodes.SelectMany(n => n.Interfaces).ToList();
-        var nodeMap = new Dictionary<int, PenetrationNode>();
-
-        foreach (var nodeModel in model.Nodes.OrderBy(n => n.OrderIndex))
-        {
-            var primaryNetworkId = ResolvePrimaryNetworkId(nodeModel, modelInterfaces, networkMap);
-            var network = networkMap.GetValueOrDefault(primaryNetworkId) ?? config.Networks.OrderBy(n => n.OrderIndex).First();
-
-            var node = new PenetrationNode
-            {
-                ConfigId = config.Id,
-                NetworkId = network.Id,
-                Name = Clean(nodeModel.Name, "未命名节点"),
-                Description = CleanNullable(nodeModel.Description),
-                NodeType = nodeModel.NodeType,
-                ImageTemplateId = nodeModel.ImageTemplateId,
-                ImageName = CleanNullable(nodeModel.ImageName),
-                CpuCount = Math.Clamp(nodeModel.CpuCount, 1, 128),
-                MemoryLimit = Math.Clamp(nodeModel.MemoryLimit, 64, 262144),
-                StorageLimit = Math.Clamp(nodeModel.StorageLimit, 64, 1048576),
-                ExposePort = Math.Clamp(nodeModel.ExposePort, 1, 65535),
-                IsEntry = nodeModel.IsEntry,
-                PublishPort = nodeModel.PublishPort || nodeModel.IsEntry,
-                StaticIp = CleanNullable(nodeModel.StaticIp),
-                EnvironmentVariables = JsonSerializer.Serialize(nodeModel.EnvironmentVariables ?? [], JsonOptions),
-                StartCommand = CleanNullable(nodeModel.StartCommand),
-                HealthCheck = CleanNullable(nodeModel.HealthCheck),
-                ReservedAdRole = CleanNullable(nodeModel.ReservedAdRole),
-                PositionX = nodeModel.PositionX,
-                PositionY = nodeModel.PositionY,
-                OrderIndex = nodeModel.OrderIndex
-            };
-
-            foreach (var itemModel in nodeModel.ScoreItems.OrderBy(i => i.OrderIndex))
-            {
-                node.ScoreItems.Add(new PenetrationScoreItem
-                {
-                    Title = Clean(itemModel.Title, "未命名得分项"),
-                    Description = CleanNullable(itemModel.Description),
-                    Category = Clean(itemModel.Category, "General"),
-                    Score = Math.Max(0, itemModel.Score),
-                    IsDynamic = itemModel.IsDynamic,
-                    StaticFlag = CleanNullable(itemModel.StaticFlag),
-                    FlagTemplate = CleanNullable(itemModel.FlagTemplate),
-                    MaxAttempts = Math.Clamp(itemModel.MaxAttempts, 0, 1000),
-                    IsVisible = itemModel.IsVisible,
-                    PrerequisiteItemIds = JsonSerializer.Serialize(itemModel.PrerequisiteItemIds ?? [], JsonOptions),
-                    OrderIndex = itemModel.OrderIndex
-                });
-            }
-
-            config.Nodes.Add(node);
-            nodeMap[nodeModel.Id] = node;
-        }
-
-        await context.SaveChangesAsync(token);
-
-        foreach (var nodeModel in model.Nodes.OrderBy(n => n.OrderIndex))
-        {
-            if (!nodeMap.TryGetValue(nodeModel.Id, out var node))
-                continue;
-
-            var interfaces = BuildModelInterfaces(nodeModel, modelInterfaces, networkMap.Keys.ToHashSet());
-            foreach (var interfaceModel in interfaces.OrderBy(i => i.OrderIndex))
-            {
-                var targetNetworkModelId = networkMap.ContainsKey(interfaceModel.NetworkId)
-                    ? interfaceModel.NetworkId
-                    : nodeModel.NetworkId;
-                if (!networkMap.TryGetValue(targetNetworkModelId, out var network))
-                    network = config.Networks.OrderBy(n => n.OrderIndex).First();
-
-                node.Interfaces.Add(new PenetrationInterface
-                {
-                    NodeId = node.Id,
-                    NetworkId = network.Id,
-                    Name = Clean(interfaceModel.Name, $"eth{interfaceModel.OrderIndex}"),
-                    StaticIp = CleanNullable(interfaceModel.StaticIp),
-                    IsPrimary = interfaceModel.IsPrimary,
-                    IsManagement = interfaceModel.IsManagement,
-                    OrderIndex = interfaceModel.OrderIndex
-                });
-            }
-        }
-
-        await context.SaveChangesAsync(token);
-
-        foreach (var edgeModel in model.Edges)
-        {
-            var sourceModelId = edgeModel.SourceId > 0 ? edgeModel.SourceId : edgeModel.SourceNodeId;
-            var targetModelId = edgeModel.TargetId > 0 ? edgeModel.TargetId : edgeModel.TargetNodeId;
-            var sourceNode = edgeModel.SourceKind == PenetrationPolicyScope.Node
-                ? nodeMap.GetValueOrDefault(sourceModelId)
-                : null;
-            var targetNode = edgeModel.TargetKind == PenetrationPolicyScope.Node
-                ? nodeMap.GetValueOrDefault(targetModelId)
-                : null;
-
-            var sourceId = edgeModel.SourceKind == PenetrationPolicyScope.Network
-                ? networkMap.GetValueOrDefault(sourceModelId)?.Id ?? 0
-                : sourceNode?.Id ?? 0;
-            var targetId = edgeModel.TargetKind == PenetrationPolicyScope.Network
-                ? networkMap.GetValueOrDefault(targetModelId)?.Id ?? 0
-                : targetNode?.Id ?? 0;
-
-            if (sourceId <= 0 || targetId <= 0 || sourceId == targetId)
-                continue;
-
-            config.Edges.Add(new PenetrationEdge
-            {
-                ConfigId = config.Id,
-                SourceNodeId = sourceNode?.Id ?? 0,
-                TargetNodeId = targetNode?.Id ?? 0,
-                SourceKind = edgeModel.SourceKind,
-                SourceId = sourceId,
-                TargetKind = edgeModel.TargetKind,
-                TargetId = targetId,
-                Protocol = edgeModel.Protocol,
-                PortRange = Clean(edgeModel.PortRange, "any"),
-                PolicyAction = edgeModel.PolicyAction,
-                IsRouteHint = edgeModel.IsRouteHint,
-                Label = CleanNullable(edgeModel.Label),
-                Description = CleanNullable(edgeModel.Description)
-            });
-        }
-
-        await context.SaveChangesAsync(token);
+        await transaction.CommitAsync(token);
         return ToModel((await LoadConfig(gameId, token))!);
     }
 
@@ -246,6 +97,13 @@ public class PenetrationService(
         return config is null
             ? new PenetrationValidationModel { Valid = false, Errors = ["渗透编排配置不存在。"] }
             : await ValidateConfig(config, token);
+    }
+
+    public async Task<PenetrationValidationModel> ValidateModel(int gameId, PenetrationConfigModel model,
+        CancellationToken token = default)
+    {
+        var config = await BuildTransientConfig(gameId, model, token);
+        return await ValidateConfig(config, token);
     }
 
     public async Task<PenetrationPlanModel> GetPlan(int gameId, CancellationToken token = default)
@@ -263,32 +121,51 @@ public class PenetrationService(
         return await BuildPlan(config, teamIndex: 0, teamId: 0, teamCount, token);
     }
 
+    public async Task<PenetrationPlanModel> GetPlan(int gameId, PenetrationConfigModel model,
+        CancellationToken token = default)
+    {
+        var config = await BuildTransientConfig(gameId, model, token);
+        var teamCount = await context.Participations.AsNoTracking()
+            .CountAsync(p => p.GameId == gameId && p.Status == ParticipationStatus.Accepted, token);
+        return await BuildPlan(config, teamIndex: 0, teamId: 0, teamCount, token);
+    }
+
     public async Task<PenetrationConfigModel> Publish(int gameId, CancellationToken token = default)
     {
         var validation = await Validate(gameId, token);
         if (!validation.Valid)
             throw new InvalidOperationException(string.Join('\n', validation.Errors));
 
+        await using var transaction = await context.Database.BeginTransactionAsync(token);
         var config = (await LoadConfig(gameId, token))!;
-        config.PublishedVersion++;
+        var publishedVersion = config.PublishedVersion + 1;
+        config.PublishedVersion = publishedVersion;
         config.Status = PenetrationDeploymentStatus.Published;
         config.PublishedAt = DateTimeOffset.UtcNow;
         config.UpdatedAt = DateTimeOffset.UtcNow;
+        var snapshot = CreatePublishedSnapshot(config, publishedVersion);
+        await context.PenetrationPublishedSnapshots.AddAsync(snapshot, token);
         await context.SaveChangesAsync(token);
+        await transaction.CommitAsync(token);
         return ToModel(config);
     }
 
     public async Task<(bool Success, string Message)> DeployGame(int gameId, CancellationToken token = default)
     {
-        var config = await LoadConfig(gameId, token);
-        if (config is null || config.PublishedVersion <= 0)
+        var savedConfig = await LoadConfig(gameId, token);
+        if (savedConfig is null || savedConfig.PublishedVersion <= 0)
             return (false, "请先发布渗透编排版本。");
+
+        var config = await LoadPublishedConfig(gameId, savedConfig.PublishedVersion, token);
+        if (config is null)
+            return (false, $"发布版本 v{savedConfig.PublishedVersion} 快照不存在，请重新发布后再部署。");
 
         var validation = await ValidateConfig(config, token);
         if (!validation.Valid)
             return (false, string.Join('\n', validation.Errors));
 
-        config.Status = PenetrationDeploymentStatus.Deploying;
+        savedConfig.Status = PenetrationDeploymentStatus.Deploying;
+        savedConfig.UpdatedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(token);
 
         var participations = await context.Participations.AsNoTracking()
@@ -299,8 +176,8 @@ public class PenetrationService(
         var capacity = await CheckFleetCapacity(config.Nodes.Count, participations.Length, token);
         if (!capacity.Success)
         {
-            config.Status = PenetrationDeploymentStatus.Failed;
-            config.UpdatedAt = DateTimeOffset.UtcNow;
+            savedConfig.Status = PenetrationDeploymentStatus.Failed;
+            savedConfig.UpdatedAt = DateTimeOffset.UtcNow;
             await context.SaveChangesAsync(token);
             return (false, capacity.Message);
         }
@@ -317,11 +194,11 @@ public class PenetrationService(
                 ok++;
         }
 
-        config.Status = ok == participations.Length
+        savedConfig.Status = ok == participations.Length
             ? PenetrationDeploymentStatus.Running
             : ok == 0 ? PenetrationDeploymentStatus.Failed : PenetrationDeploymentStatus.Partial;
-        config.DeployedAt = DateTimeOffset.UtcNow;
-        config.UpdatedAt = DateTimeOffset.UtcNow;
+        savedConfig.DeployedAt = DateTimeOffset.UtcNow;
+        savedConfig.UpdatedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(token);
         return (ok > 0 || participations.Length == 0, $"已部署 {ok}/{participations.Length} 支队伍环境。");
     }
@@ -329,8 +206,8 @@ public class PenetrationService(
     public async Task<(bool Success, string Message)> RebuildTeam(int gameId, int teamId, bool byAdmin, Guid? userId,
         CancellationToken token = default)
     {
-        var config = await LoadConfig(gameId, token);
-        if (config is null || config.PublishedVersion <= 0)
+        var savedConfig = await LoadConfig(gameId, token);
+        if (savedConfig is null || savedConfig.PublishedVersion <= 0)
             return (false, "渗透编排尚未发布。");
 
         var teamIds = await context.Participations.AsNoTracking()
@@ -343,6 +220,13 @@ public class PenetrationService(
             return (false, "队伍未通过比赛审核。");
 
         var environment = await LoadTeamEnvironment(gameId, teamId, token);
+        var targetVersion = environment?.PublishedVersion > 0
+            ? environment.PublishedVersion
+            : savedConfig.PublishedVersion;
+        var config = await LoadPublishedConfig(gameId, targetVersion, token);
+        if (config is null)
+            return (false, $"发布版本 v{targetVersion} 快照不存在，无法重建环境。");
+
         if (!byAdmin && environment is not null && environment.ResetCount >= config.MaxResetCount)
             return (false, "环境重置次数已用完。");
 
@@ -398,24 +282,39 @@ public class PenetrationService(
 
     public async Task<PenetrationWorkspaceModel?> GetWorkspace(int gameId, int teamId, CancellationToken token = default)
     {
-        var config = await LoadConfig(gameId, token);
         var environment = await LoadTeamEnvironment(gameId, teamId, token);
-        if (config is null || environment is null)
+        if (environment is null)
+            return null;
+
+        var config = await LoadPublishedConfig(gameId, environment.PublishedVersion, token);
+        if (config is null)
             return null;
 
         var solved = await context.PenetrationSubmissions.AsNoTracking()
-            .Where(s => s.GameId == gameId && s.TeamId == teamId && s.Status == AnswerResult.Accepted)
-            .Select(s => s.ScoreItemId)
+            .Where(s => s.GameId == gameId &&
+                        s.TeamId == teamId &&
+                        s.PublishedVersion == environment.PublishedVersion &&
+                        s.Status == AnswerResult.Accepted)
+            .Select(s => s.ScoreItemTopologyKey)
             .ToHashSetAsync(token);
 
         var attempts = await context.PenetrationSubmissions.AsNoTracking()
-            .Where(s => s.GameId == gameId && s.TeamId == teamId)
-            .GroupBy(s => s.ScoreItemId)
-            .Select(g => new { ScoreItemId = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(g => g.ScoreItemId, g => g.Count, token);
+            .Where(s => s.GameId == gameId &&
+                        s.TeamId == teamId &&
+                        s.PublishedVersion == environment.PublishedVersion)
+            .GroupBy(s => s.ScoreItemTopologyKey)
+            .Select(g => new { ScoreItemTopologyKey = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(g => g.ScoreItemTopologyKey, g => g.Count, token);
 
-        var runtimeByNode = environment.RuntimeNodes.ToDictionary(r => r.TopologyNodeId);
-        var runtimeInterfaces = environment.RuntimeNodes.ToDictionary(r => r.TopologyNodeId, r => ReadRuntimeInterfaces(r));
+        var runtimeByNode = environment.RuntimeNodes
+            .Where(r => !string.IsNullOrWhiteSpace(r.TopologyNodeKey))
+            .ToDictionary(r => r.TopologyNodeKey, StringComparer.Ordinal);
+        var runtimeInterfaces = environment.RuntimeNodes
+            .Where(r => !string.IsNullOrWhiteSpace(r.TopologyNodeKey))
+            .ToDictionary(r => r.TopologyNodeKey, r => ReadRuntimeInterfaces(r), StringComparer.Ordinal);
+        var teamIndex = await GetAcceptedTeamIndex(gameId, teamId, token);
+        var networkNames = config.Networks.ToDictionary(n => n.Id, n => BuildRuntimeNetworkName(config, teamId, n));
+        var networkCidrs = BuildNetworkSubnets(config, teamIndex, networkNames);
 
         return new PenetrationWorkspaceModel
         {
@@ -426,15 +325,20 @@ public class PenetrationService(
             ResetCount = environment.ResetCount,
             MaxResetCount = config.MaxResetCount,
             EntryPoints = environment.RuntimeNodes
-                .Where(r => r.TopologyNode.IsEntry || r.TopologyNode.PublishPort)
-                .Where(r => r.Container?.PublicPort is > 0)
-                .Select(r => new PenetrationEntryPointModel
+                .Select(r => new
                 {
-                    NodeId = r.TopologyNodeId,
-                    NodeName = r.TopologyNode.Name,
-                    Host = r.Container?.PublicIP ?? r.Container?.IP ?? r.IpAddress,
-                    Port = r.Container?.PublicPort ?? 0,
-                    ExposePort = r.TopologyNode.ExposePort
+                    Runtime = r,
+                    Node = config.Nodes.FirstOrDefault(n => n.TopologyKey == r.TopologyNodeKey)
+                })
+                .Where(x => x.Node is not null && (x.Node.IsEntry || x.Node.PublishPort))
+                .Where(x => x.Runtime.Container?.PublicPort is > 0)
+                .Select(x => new PenetrationEntryPointModel
+                {
+                    NodeId = x.Node!.Id,
+                    NodeName = x.Node.Name,
+                    Host = x.Runtime.Container?.PublicIP ?? x.Runtime.Container?.IP ?? x.Runtime.IpAddress,
+                    Port = x.Runtime.Container?.PublicPort ?? 0,
+                    ExposePort = x.Node.ExposePort
                 }).ToList(),
             Networks = config.Networks.OrderBy(n => n.OrderIndex).Select(n => new PenetrationWorkspaceNetworkModel
             {
@@ -445,7 +349,7 @@ public class PenetrationService(
                 TrustLevel = n.TrustLevel,
                 OrderIndex = n.OrderIndex,
                 IsEntry = n.IsEntry,
-                Cidr = environment.NetworkPrefix,
+                Cidr = networkCidrs.GetValueOrDefault(networkNames[n.Id]) ?? environment.NetworkPrefix,
                 PositionX = n.PositionX,
                 PositionY = n.PositionY,
                 Width = n.Width,
@@ -453,8 +357,8 @@ public class PenetrationService(
             }).ToList(),
             Nodes = config.Nodes.OrderBy(n => n.OrderIndex).Select(n =>
             {
-                runtimeByNode.TryGetValue(n.Id, out var runtime);
-                runtimeInterfaces.TryGetValue(n.Id, out var runtimeInterfaceList);
+                runtimeByNode.TryGetValue(n.TopologyKey, out var runtime);
+                runtimeInterfaces.TryGetValue(n.TopologyKey, out var runtimeInterfaceList);
                 return new PenetrationWorkspaceNodeModel
                 {
                     Id = n.Id,
@@ -476,8 +380,8 @@ public class PenetrationService(
                             Description = i.Description,
                             Category = i.Category,
                             Score = i.Score,
-                            Solved = solved.Contains(i.Id),
-                            Attempts = attempts.GetValueOrDefault(i.Id),
+                            Solved = solved.Contains(i.TopologyKey),
+                            Attempts = attempts.GetValueOrDefault(i.TopologyKey),
                             MaxAttempts = i.MaxAttempts,
                             PrerequisiteItemIds = DeserializeIntList(i.PrerequisiteItemIds)
                         }).ToList()
@@ -500,21 +404,28 @@ public class PenetrationService(
     public async Task<PenetrationSubmitResultModel> Submit(int gameId, int teamId, int participationId, Guid userId,
         PenetrationSubmitModel model, CancellationToken token = default)
     {
-        var item = await context.PenetrationScoreItems
-            .Include(i => i.Node).ThenInclude(n => n.Config)
-            .FirstOrDefaultAsync(i => i.Id == model.ScoreItemId && i.Node.Config.GameId == gameId, token);
+        var environment = await LoadTeamEnvironment(gameId, teamId, token);
+        if (environment is null || environment.Status != PenetrationRuntimeStatus.Running)
+            return new PenetrationSubmitResultModel { Accepted = false, Message = "本队渗透环境尚未运行。" };
+
+        var config = await LoadPublishedConfig(gameId, environment.PublishedVersion, token);
+        if (config is null)
+            return new PenetrationSubmitResultModel { Accepted = false, Message = "当前运行版本快照不存在，请联系管理员重建环境。" };
+
+        var item = config.Nodes.SelectMany(n => n.ScoreItems)
+            .FirstOrDefault(i => i.Id == model.ScoreItemId);
         if (item is null)
             return new PenetrationSubmitResultModel { Accepted = false, Message = "得分项不存在。" };
 
         if (!item.IsVisible)
             return new PenetrationSubmitResultModel { Accepted = false, Message = "该得分项当前不可提交。" };
 
-        var environment = await LoadTeamEnvironment(gameId, teamId, token);
-        if (environment is null || environment.Status != PenetrationRuntimeStatus.Running)
-            return new PenetrationSubmitResultModel { Accepted = false, Message = "本队渗透环境尚未运行。" };
-
         var alreadySolved = await context.PenetrationSubmissions.AnyAsync(s =>
-            s.GameId == gameId && s.TeamId == teamId && s.ScoreItemId == item.Id && s.Status == AnswerResult.Accepted,
+            s.GameId == gameId &&
+            s.TeamId == teamId &&
+            s.PublishedVersion == environment.PublishedVersion &&
+            s.ScoreItemTopologyKey == item.TopologyKey &&
+            s.Status == AnswerResult.Accepted,
             token);
         if (alreadySolved)
             return new PenetrationSubmitResultModel { Accepted = false, Message = "该得分项已完成。" };
@@ -523,7 +434,10 @@ public class PenetrationService(
         if (prerequisites.Count > 0)
         {
             var solvedPrerequisites = await context.PenetrationSubmissions.AsNoTracking()
-                .Where(s => s.GameId == gameId && s.TeamId == teamId && s.Status == AnswerResult.Accepted &&
+                .Where(s => s.GameId == gameId &&
+                            s.TeamId == teamId &&
+                            s.PublishedVersion == environment.PublishedVersion &&
+                            s.Status == AnswerResult.Accepted &&
                             prerequisites.Contains(s.ScoreItemId))
                 .Select(s => s.ScoreItemId)
                 .Distinct()
@@ -534,11 +448,15 @@ public class PenetrationService(
         }
 
         var attemptCount = await context.PenetrationSubmissions.CountAsync(s =>
-            s.GameId == gameId && s.TeamId == teamId && s.ScoreItemId == item.Id, token);
+            s.GameId == gameId &&
+            s.TeamId == teamId &&
+            s.PublishedVersion == environment.PublishedVersion &&
+            s.ScoreItemTopologyKey == item.TopologyKey,
+            token);
         if (item.MaxAttempts > 0 && attemptCount >= item.MaxAttempts)
             return new PenetrationSubmitResultModel { Accepted = false, Message = "提交次数已达到上限。" };
 
-        var expected = BuildFlag(item, gameId, teamId, item.Node.Config.PublishedVersion);
+        var expected = BuildFlag(item, gameId, teamId, environment.PublishedVersion);
         var accepted = string.Equals(model.Flag.Trim(), expected, StringComparison.Ordinal);
         var submission = new PenetrationSubmission
         {
@@ -547,6 +465,8 @@ public class PenetrationService(
             ParticipationId = participationId,
             UserId = userId,
             ScoreItemId = item.Id,
+            PublishedVersion = environment.PublishedVersion,
+            ScoreItemTopologyKey = item.TopologyKey,
             Answer = model.Flag.Trim(),
             Status = accepted ? AnswerResult.Accepted : AnswerResult.WrongAnswer,
             Score = accepted ? item.Score : 0,
@@ -644,21 +564,31 @@ public class PenetrationService(
         var rows = await query.OrderBy(r => r.Environment.Team.Name)
             .ThenBy(r => r.TopologyNode.OrderIndex)
             .ToArrayAsync(token);
+        var snapshotByVersion = new Dictionary<int, PenetrationConfig>();
 
-        return rows.Select(r =>
+        var result = new List<PenetrationAdminAccessModel>(rows.Length);
+        foreach (var r in rows)
         {
+            if (!snapshotByVersion.TryGetValue(r.Environment.PublishedVersion, out var snapshot))
+            {
+                snapshot = await LoadPublishedConfig(gameId, r.Environment.PublishedVersion, token)
+                           ?? new PenetrationConfig();
+                snapshotByVersion[r.Environment.PublishedVersion] = snapshot;
+            }
+
+            var node = snapshot.Nodes.FirstOrDefault(n => n.TopologyKey == r.TopologyNodeKey);
             var host = r.Container?.PublicIP ?? r.Container?.IP;
             var url = r.AdminAccessUrl;
             if (string.IsNullOrWhiteSpace(url) && r.PublicPort is > 0 && !string.IsNullOrWhiteSpace(host))
                 url = $"http://{host}:{r.PublicPort}";
 
-            return new PenetrationAdminAccessModel
+            result.Add(new PenetrationAdminAccessModel
             {
                 RuntimeNodeId = r.Id,
                 TeamId = r.Environment.TeamId,
                 TeamName = r.Environment.Team.Name,
-                NodeId = r.TopologyNodeId,
-                NodeName = r.TopologyNode.Name,
+                NodeId = node?.Id ?? r.TopologyNodeId,
+                NodeName = node?.Name ?? r.TopologyNode.Name,
                 Status = r.Status,
                 WorkerNodeName = r.Environment.Node?.Name ?? "本地节点",
                 ContainerId = r.Container?.ContainerId ?? string.Empty,
@@ -667,20 +597,39 @@ public class PenetrationService(
                 Host = host,
                 PublicPort = r.PublicPort,
                 Url = url,
-                ExposePort = r.TopologyNode.ExposePort
-            };
-        }).ToArray();
+                ExposePort = node?.ExposePort ?? r.TopologyNode.ExposePort
+            });
+        }
+
+        return result.ToArray();
     }
 
     public async Task<Dictionary<int, PenetrationScoreState>> GetScoreStates(int gameId,
         CancellationToken token = default)
     {
-        var solves = await context.PenetrationSubmissions.AsNoTracking()
+        var accepted = await context.PenetrationSubmissions.AsNoTracking()
             .Where(s => s.GameId == gameId && s.Status == AnswerResult.Accepted)
-            .GroupBy(s => new { s.TeamId, s.ScoreItemId })
-            .Select(g => g.OrderBy(s => s.SubmittedAt).First())
-            .Select(s => new { s.TeamId, s.Score, s.SubmittedAt })
+            .Select(s => new
+            {
+                s.TeamId,
+                s.PublishedVersion,
+                s.ScoreItemTopologyKey,
+                s.ScoreItemId,
+                s.Score,
+                s.SubmittedAt
+            })
             .ToArrayAsync(token);
+
+        var solves = accepted
+            .GroupBy(s => new
+            {
+                s.TeamId,
+                ScoreIdentity = s.PublishedVersion > 0 && !string.IsNullOrWhiteSpace(s.ScoreItemTopologyKey)
+                    ? $"{s.PublishedVersion}:{s.ScoreItemTopologyKey}"
+                    : $"legacy:{s.ScoreItemId}"
+            })
+            .Select(g => g.OrderBy(s => s.SubmittedAt).First())
+            .ToArray();
 
         Dictionary<int, PenetrationScoreState> states = [];
         foreach (var solve in solves)
@@ -703,25 +652,60 @@ public class PenetrationService(
         var query = context.PenetrationSubmissions.AsNoTracking()
             .Where(s => s.GameId == gameId);
         var total = await query.CountAsync(token);
-        var items = await query
+        var rows = await query
             .OrderByDescending(s => s.SubmittedAt)
             .Skip(Math.Max(0, skip))
             .Take(count <= 0 ? 50 : Math.Min(count, 100))
-            .Select(s => new PenetrationSubmissionLogModel
+            .Select(s => new
+            {
+                s.Id,
+                s.SubmittedAt,
+                s.TeamId,
+                TeamName = s.Team.Name,
+                UserName = s.User.UserName ?? string.Empty,
+                CurrentNodeName = s.ScoreItem.Node.Name,
+                CurrentItemTitle = s.ScoreItem.Title,
+                CurrentCategory = s.ScoreItem.Category,
+                s.PublishedVersion,
+                s.ScoreItemTopologyKey,
+                s.Score,
+                s.Status
+            }).ToArrayAsync(token);
+
+        var snapshotByVersion = new Dictionary<int, PenetrationConfig>();
+        var items = new List<PenetrationSubmissionLogModel>(rows.Length);
+        foreach (var s in rows)
+        {
+            PenetrationScoreItem? item = null;
+            if (s.PublishedVersion > 0 && !string.IsNullOrWhiteSpace(s.ScoreItemTopologyKey))
+            {
+                if (!snapshotByVersion.TryGetValue(s.PublishedVersion, out var snapshot))
+                {
+                    snapshot = await LoadPublishedConfig(gameId, s.PublishedVersion, token)
+                               ?? new PenetrationConfig();
+                    snapshotByVersion[s.PublishedVersion] = snapshot;
+                }
+
+                item = snapshot.Nodes.SelectMany(n => n.ScoreItems)
+                    .FirstOrDefault(i => i.TopologyKey == s.ScoreItemTopologyKey);
+            }
+
+            items.Add(new PenetrationSubmissionLogModel
             {
                 Id = s.Id,
                 Time = s.SubmittedAt,
                 TeamId = s.TeamId,
-                TeamName = s.Team.Name,
-                UserName = s.User.UserName ?? string.Empty,
-                NodeName = s.ScoreItem.Node.Name,
-                ItemTitle = s.ScoreItem.Title,
-                Category = s.ScoreItem.Category,
+                TeamName = s.TeamName,
+                UserName = s.UserName,
+                NodeName = item?.Node.Name ?? s.CurrentNodeName,
+                ItemTitle = item?.Title ?? s.CurrentItemTitle,
+                Category = item?.Category ?? s.CurrentCategory,
                 Score = s.Score,
                 Status = s.Status
-            }).ToArrayAsync(token);
+            });
+        }
 
-        return items.ToResponse(total);
+        return items.ToArray().ToResponse(total);
     }
 
     async Task PublishSubmissionSideEffects(PenetrationSubmission submission, PenetrationScoreItem item, Guid userId,
@@ -760,9 +744,12 @@ public class PenetrationService(
             {
                 mode = "Penetration",
                 nodeId = item.NodeId,
+                nodeTopologyKey = item.Node.TopologyKey,
                 nodeName = item.Node.Name,
                 scoreItemId = item.Id,
+                scoreItemTopologyKey = item.TopologyKey,
                 itemTitle = item.Title,
+                publishedVersion = submission.PublishedVersion,
                 item.Category
             }, JsonOptions),
             AttemptNumber = 1,
@@ -848,6 +835,7 @@ public class PenetrationService(
                 {
                     EnvironmentId = environment.Id,
                     TopologyNodeId = nodePlan.Node.Id,
+                    TopologyNodeKey = nodePlan.Node.TopologyKey,
                     NetworkName = nodePlan.PrimaryInterface?.NetworkName ?? string.Empty,
                     IpAddress = nodePlan.PrimaryInterface?.IpAddress ?? string.Empty,
                     InterfaceSummary = JsonSerializer.Serialize(nodePlan.Interfaces, JsonOptions),
@@ -871,6 +859,7 @@ public class PenetrationService(
             {
                 EnvironmentId = environment.Id,
                 TopologyNodeId = nodePlan.Node.Id,
+                TopologyNodeKey = nodePlan.Node.TopologyKey,
                 ContainerId = container.Id,
                 NetworkName = nodePlan.PrimaryInterface?.NetworkName ?? string.Empty,
                 IpAddress = nodePlan.PrimaryInterface?.IpAddress ?? container.IP,
@@ -908,6 +897,545 @@ public class PenetrationService(
         environment.UpdatedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(token);
         return (true, rebuild ? "渗透环境已重建。" : "渗透环境已部署。");
+    }
+
+    async Task<PenetrationConfig> BuildTransientConfig(int gameId, PenetrationConfigModel model,
+        CancellationToken token)
+    {
+        var game = await context.Games.AsNoTracking().FirstOrDefaultAsync(g => g.Id == gameId, token)
+                   ?? throw new InvalidOperationException("Game not found.");
+        var saved = await LoadConfig(gameId, token);
+        var config = new PenetrationConfig
+        {
+            Id = saved?.Id ?? -gameId,
+            GameId = gameId,
+            Game = game,
+            PublishedVersion = model.PublishedVersion > 0 ? model.PublishedVersion : saved?.PublishedVersion ?? 0,
+            Status = saved?.Status ?? PenetrationDeploymentStatus.Draft,
+            PublishedAt = saved?.PublishedAt,
+            DeployedAt = saved?.DeployedAt
+        };
+        ApplyModelToConfig(config, model, preserveModelIds: true, includeEdges: true);
+        return config;
+    }
+
+    static TopologyModelMaps ApplyModelToConfig(PenetrationConfig config, PenetrationConfigModel model,
+        bool preserveModelIds, bool includeEdges)
+    {
+        config.BaseCidr = string.IsNullOrWhiteSpace(model.BaseCidr) ? "10.60.0.0/12" : model.BaseCidr.Trim();
+        config.TeamSubnetPrefix = model.TeamSubnetPrefix is >= 16 and <= 28 ? model.TeamSubnetPrefix : 24;
+        config.NetworkSubnetPrefix = model.NetworkSubnetPrefix is >= 24 and <= 30 ? model.NetworkSubnetPrefix : 28;
+        config.MaxResetCount = Math.Clamp(model.MaxResetCount, 0, 100);
+        config.Status = config.PublishedVersion > 0 ? PenetrationDeploymentStatus.Published : PenetrationDeploymentStatus.Draft;
+        config.UpdatedAt = DateTimeOffset.UtcNow;
+
+        config.Edges.Clear();
+        foreach (var node in config.Nodes)
+        {
+            node.Interfaces.Clear();
+            node.ScoreItems.Clear();
+        }
+        config.Nodes.Clear();
+        config.Networks.Clear();
+
+        if (model.Networks.Count == 0)
+            model.Networks.Add(DefaultNetworkModel(-1, 0));
+
+        var networkMap = new Dictionary<int, PenetrationNetwork>();
+        var networkKeyMap = new Dictionary<string, PenetrationNetwork>(StringComparer.Ordinal);
+        foreach (var networkModel in model.Networks.OrderBy(n => n.OrderIndex))
+        {
+            var network = new PenetrationNetwork
+            {
+                Id = preserveModelIds ? networkModel.Id : 0,
+                ConfigId = config.Id,
+                Config = config,
+                TopologyKey = EnsureTopologyKey(networkModel.TopologyKey, "network", networkModel.Id),
+                Name = Clean(networkModel.Name, "未命名网段"),
+                Slug = Slugify(string.IsNullOrWhiteSpace(networkModel.Slug) ? networkModel.Name : networkModel.Slug),
+                Cidr = CleanNullable(networkModel.Cidr),
+                ZoneType = networkModel.ZoneType,
+                TrustLevel = Math.Clamp(networkModel.TrustLevel, 0, 100),
+                Description = CleanNullable(networkModel.Description),
+                DefaultPolicy = networkModel.DefaultPolicy,
+                IsEntry = networkModel.IsEntry,
+                OrderIndex = networkModel.OrderIndex,
+                PositionX = networkModel.PositionX,
+                PositionY = networkModel.PositionY,
+                Width = Math.Clamp(networkModel.Width <= 0 ? 560 : networkModel.Width, 360, 1800),
+                Height = Math.Clamp(networkModel.Height <= 0 ? 390 : networkModel.Height, 260, 1200),
+                Collapsed = networkModel.Collapsed
+            };
+            config.Networks.Add(network);
+            networkMap[networkModel.Id] = network;
+            networkKeyMap[network.TopologyKey] = network;
+        }
+
+        var modelInterfaces = model.Interfaces.Count > 0
+            ? model.Interfaces
+            : model.Nodes.SelectMany(n => n.Interfaces).ToList();
+        var nodeMap = new Dictionary<int, PenetrationNode>();
+        var nodeKeyMap = new Dictionary<string, PenetrationNode>(StringComparer.Ordinal);
+        var scoreKeyByModelId = new Dictionary<int, string>();
+
+        foreach (var nodeModel in model.Nodes.OrderBy(n => n.OrderIndex))
+        {
+            var primaryNetworkId = ResolvePrimaryNetworkId(nodeModel, modelInterfaces, networkMap);
+            var network = networkMap.GetValueOrDefault(primaryNetworkId) ?? config.Networks.OrderBy(n => n.OrderIndex).First();
+
+            var node = new PenetrationNode
+            {
+                Id = preserveModelIds ? nodeModel.Id : 0,
+                ConfigId = config.Id,
+                Config = config,
+                NetworkId = network.Id,
+                Network = network,
+                TopologyKey = EnsureTopologyKey(nodeModel.TopologyKey, "node", nodeModel.Id),
+                Name = Clean(nodeModel.Name, "未命名节点"),
+                Description = CleanNullable(nodeModel.Description),
+                NodeType = nodeModel.NodeType,
+                ImageTemplateId = nodeModel.ImageTemplateId,
+                ImageName = CleanNullable(nodeModel.ImageName),
+                CpuCount = Math.Clamp(nodeModel.CpuCount, 1, 128),
+                MemoryLimit = Math.Clamp(nodeModel.MemoryLimit, 64, 262144),
+                StorageLimit = Math.Clamp(nodeModel.StorageLimit, 64, 1048576),
+                ExposePort = Math.Clamp(nodeModel.ExposePort, 1, 65535),
+                IsEntry = nodeModel.IsEntry,
+                PublishPort = nodeModel.PublishPort || nodeModel.IsEntry,
+                StaticIp = CleanNullable(nodeModel.StaticIp),
+                EnvironmentVariables = JsonSerializer.Serialize(nodeModel.EnvironmentVariables ?? [], JsonOptions),
+                StartCommand = CleanNullable(nodeModel.StartCommand),
+                HealthCheck = CleanNullable(nodeModel.HealthCheck),
+                ReservedAdRole = CleanNullable(nodeModel.ReservedAdRole),
+                PositionX = nodeModel.PositionX,
+                PositionY = nodeModel.PositionY,
+                OrderIndex = nodeModel.OrderIndex
+            };
+
+            foreach (var itemModel in nodeModel.ScoreItems.OrderBy(i => i.OrderIndex))
+            {
+                var scoreItem = new PenetrationScoreItem
+                {
+                    Id = preserveModelIds ? itemModel.Id : 0,
+                    Node = node,
+                    NodeId = node.Id,
+                    TopologyKey = EnsureTopologyKey(itemModel.TopologyKey, "score", itemModel.Id),
+                    Title = Clean(itemModel.Title, "未命名得分项"),
+                    Description = CleanNullable(itemModel.Description),
+                    Category = Clean(itemModel.Category, "General"),
+                    Score = Math.Max(0, itemModel.Score),
+                    IsDynamic = itemModel.IsDynamic,
+                    StaticFlag = CleanNullable(itemModel.StaticFlag),
+                    FlagTemplate = CleanNullable(itemModel.FlagTemplate),
+                    MaxAttempts = Math.Clamp(itemModel.MaxAttempts, 0, 1000),
+                    IsVisible = itemModel.IsVisible,
+                    PrerequisiteItemIds = JsonSerializer.Serialize(itemModel.PrerequisiteItemIds ?? [], JsonOptions),
+                    OrderIndex = itemModel.OrderIndex
+                };
+                node.ScoreItems.Add(scoreItem);
+                scoreKeyByModelId[itemModel.Id] = scoreItem.TopologyKey;
+            }
+
+            config.Nodes.Add(node);
+            network.Nodes.Add(node);
+            nodeMap[nodeModel.Id] = node;
+            nodeKeyMap[node.TopologyKey] = node;
+        }
+
+        foreach (var nodeModel in model.Nodes.OrderBy(n => n.OrderIndex))
+        {
+            if (!nodeMap.TryGetValue(nodeModel.Id, out var node))
+                continue;
+
+            var interfaces = BuildModelInterfaces(nodeModel, modelInterfaces, networkMap.Keys.ToHashSet());
+            foreach (var interfaceModel in interfaces.OrderBy(i => i.OrderIndex))
+            {
+                var targetNetworkModelId = networkMap.ContainsKey(interfaceModel.NetworkId)
+                    ? interfaceModel.NetworkId
+                    : nodeModel.NetworkId;
+                if (!networkMap.TryGetValue(targetNetworkModelId, out var network))
+                    network = config.Networks.OrderBy(n => n.OrderIndex).First();
+
+                var iface = new PenetrationInterface
+                {
+                    Id = preserveModelIds ? interfaceModel.Id : 0,
+                    Node = node,
+                    NodeId = node.Id,
+                    Network = network,
+                    NetworkId = network.Id,
+                    TopologyKey = EnsureTopologyKey(interfaceModel.TopologyKey, "interface", interfaceModel.Id),
+                    Name = Clean(interfaceModel.Name, $"eth{interfaceModel.OrderIndex}"),
+                    StaticIp = CleanNullable(interfaceModel.StaticIp),
+                    IsPrimary = interfaceModel.IsPrimary,
+                    IsManagement = interfaceModel.IsManagement,
+                    OrderIndex = interfaceModel.OrderIndex
+                };
+                node.Interfaces.Add(iface);
+                network.Interfaces.Add(iface);
+            }
+        }
+
+        var maps = new TopologyModelMaps(networkMap, nodeMap, scoreKeyByModelId, preserveModelIds);
+        if (includeEdges)
+        {
+            RemapPrerequisites(config, scoreKeyByModelId);
+            AddEdgesToConfig(config, model, maps);
+        }
+
+        return maps;
+    }
+
+    static TopologyModelMaps ApplyModelToTrackedConfig(PenetrationConfig config, PenetrationConfigModel model,
+        HashSet<string> referencedNodeKeys, HashSet<int> submittedScoreItemIds)
+    {
+        if (model.Networks.Count == 0)
+            model.Networks.Add(DefaultNetworkModel(-1, 0));
+
+        config.BaseCidr = string.IsNullOrWhiteSpace(model.BaseCidr) ? "10.60.0.0/12" : model.BaseCidr.Trim();
+        config.TeamSubnetPrefix = model.TeamSubnetPrefix is >= 16 and <= 28 ? model.TeamSubnetPrefix : 24;
+        config.NetworkSubnetPrefix = model.NetworkSubnetPrefix is >= 24 and <= 30 ? model.NetworkSubnetPrefix : 28;
+        config.MaxResetCount = Math.Clamp(model.MaxResetCount, 0, 100);
+        config.Status = config.PublishedVersion > 0 ? PenetrationDeploymentStatus.Published : PenetrationDeploymentStatus.Draft;
+        config.UpdatedAt = DateTimeOffset.UtcNow;
+
+        var incomingNetworkKeys = model.Networks
+            .Select(n => EnsureTopologyKey(n.TopologyKey, "network", n.Id))
+            .ToHashSet(StringComparer.Ordinal);
+        var incomingNodeKeys = model.Nodes
+            .Select(n => EnsureTopologyKey(n.TopologyKey, "node", n.Id))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var blockedDeletedNode = config.Nodes.FirstOrDefault(n =>
+            referencedNodeKeys.Contains(n.TopologyKey) && !incomingNodeKeys.Contains(n.TopologyKey));
+        if (blockedDeletedNode is not null)
+            throw new InvalidOperationException($"节点“{blockedDeletedNode.Name}”已被运行环境引用，请先停止并清理环境后再删除。");
+
+        var blockedDeletedNetwork = config.Networks.FirstOrDefault(n =>
+            n.Nodes.Any(node => referencedNodeKeys.Contains(node.TopologyKey)) && !incomingNetworkKeys.Contains(n.TopologyKey));
+        if (blockedDeletedNetwork is not null)
+            throw new InvalidOperationException($"安全域“{blockedDeletedNetwork.Name}”包含运行中的节点，请先停止并清理环境后再删除。");
+
+        var existingNetworks = config.Networks.ToDictionary(n => n.TopologyKey, StringComparer.Ordinal);
+        var existingNodes = config.Nodes.ToDictionary(n => n.TopologyKey, StringComparer.Ordinal);
+
+        contextRemoveEdges(config);
+        contextRemoveInterfaces(config);
+
+        var removableNodes = config.Nodes.Where(n => !incomingNodeKeys.Contains(n.TopologyKey)).ToList();
+        var blockedScore = removableNodes
+            .SelectMany(n => n.ScoreItems)
+            .FirstOrDefault(i => submittedScoreItemIds.Contains(i.Id));
+        if (blockedScore is not null)
+            throw new InvalidOperationException($"得分项“{blockedScore.Title}”已有提交记录，请先停止并归档环境后再删除。");
+
+        foreach (var node in removableNodes)
+            config.Nodes.Remove(node);
+
+        foreach (var network in config.Networks.Where(n => !incomingNetworkKeys.Contains(n.TopologyKey)).ToList())
+            config.Networks.Remove(network);
+
+        var networkMap = new Dictionary<int, PenetrationNetwork>();
+        foreach (var networkModel in model.Networks.OrderBy(n => n.OrderIndex))
+        {
+            var key = EnsureTopologyKey(networkModel.TopologyKey, "network", networkModel.Id);
+            if (!existingNetworks.TryGetValue(key, out var network))
+            {
+                network = new PenetrationNetwork { Config = config, ConfigId = config.Id, TopologyKey = key };
+                config.Networks.Add(network);
+            }
+
+            network.Name = Clean(networkModel.Name, "未命名网段");
+            network.Slug = Slugify(string.IsNullOrWhiteSpace(networkModel.Slug) ? networkModel.Name : networkModel.Slug);
+            network.Cidr = CleanNullable(networkModel.Cidr);
+            network.ZoneType = networkModel.ZoneType;
+            network.TrustLevel = Math.Clamp(networkModel.TrustLevel, 0, 100);
+            network.Description = CleanNullable(networkModel.Description);
+            network.DefaultPolicy = networkModel.DefaultPolicy;
+            network.IsEntry = networkModel.IsEntry;
+            network.OrderIndex = networkModel.OrderIndex;
+            network.PositionX = networkModel.PositionX;
+            network.PositionY = networkModel.PositionY;
+            network.Width = Math.Clamp(networkModel.Width <= 0 ? 560 : networkModel.Width, 360, 1800);
+            network.Height = Math.Clamp(networkModel.Height <= 0 ? 390 : networkModel.Height, 260, 1200);
+            network.Collapsed = networkModel.Collapsed;
+            networkMap[networkModel.Id] = network;
+        }
+
+        var modelInterfaces = model.Interfaces.Count > 0
+            ? model.Interfaces
+            : model.Nodes.SelectMany(n => n.Interfaces).ToList();
+        var nodeMap = new Dictionary<int, PenetrationNode>();
+        var scoreKeyByModelId = new Dictionary<int, string>();
+
+        foreach (var nodeModel in model.Nodes.OrderBy(n => n.OrderIndex))
+        {
+            var key = EnsureTopologyKey(nodeModel.TopologyKey, "node", nodeModel.Id);
+            var primaryNetworkId = ResolvePrimaryNetworkId(nodeModel, modelInterfaces, networkMap);
+            var network = networkMap.GetValueOrDefault(primaryNetworkId) ?? config.Networks.OrderBy(n => n.OrderIndex).First();
+
+            if (!existingNodes.TryGetValue(key, out var node))
+            {
+                node = new PenetrationNode { Config = config, ConfigId = config.Id, TopologyKey = key };
+                config.Nodes.Add(node);
+            }
+
+            node.Network = network;
+            node.NetworkId = network.Id;
+            node.Name = Clean(nodeModel.Name, "未命名节点");
+            node.Description = CleanNullable(nodeModel.Description);
+            node.NodeType = nodeModel.NodeType;
+            node.ImageTemplateId = nodeModel.ImageTemplateId;
+            node.ImageName = CleanNullable(nodeModel.ImageName);
+            node.CpuCount = Math.Clamp(nodeModel.CpuCount, 1, 128);
+            node.MemoryLimit = Math.Clamp(nodeModel.MemoryLimit, 64, 262144);
+            node.StorageLimit = Math.Clamp(nodeModel.StorageLimit, 64, 1048576);
+            node.ExposePort = Math.Clamp(nodeModel.ExposePort, 1, 65535);
+            node.IsEntry = nodeModel.IsEntry;
+            node.PublishPort = nodeModel.PublishPort || nodeModel.IsEntry;
+            node.StaticIp = CleanNullable(nodeModel.StaticIp);
+            node.EnvironmentVariables = JsonSerializer.Serialize(nodeModel.EnvironmentVariables ?? [], JsonOptions);
+            node.StartCommand = CleanNullable(nodeModel.StartCommand);
+            node.HealthCheck = CleanNullable(nodeModel.HealthCheck);
+            node.ReservedAdRole = CleanNullable(nodeModel.ReservedAdRole);
+            node.PositionX = nodeModel.PositionX;
+            node.PositionY = nodeModel.PositionY;
+            node.OrderIndex = nodeModel.OrderIndex;
+
+            var existingScores = node.ScoreItems.ToDictionary(i => i.TopologyKey, StringComparer.Ordinal);
+            var incomingScoreKeys = nodeModel.ScoreItems
+                .Select(i => EnsureTopologyKey(i.TopologyKey, "score", i.Id))
+                .ToHashSet(StringComparer.Ordinal);
+            var removedRuntimeScore = node.ScoreItems.FirstOrDefault(i =>
+                referencedNodeKeys.Contains(node.TopologyKey) && !incomingScoreKeys.Contains(i.TopologyKey));
+            if (removedRuntimeScore is not null)
+                throw new InvalidOperationException($"得分项“{removedRuntimeScore.Title}”属于已部署节点，请先停止并清理环境后再删除。");
+
+            var removedSubmittedScore = node.ScoreItems.FirstOrDefault(i =>
+                submittedScoreItemIds.Contains(i.Id) && !incomingScoreKeys.Contains(i.TopologyKey));
+            if (removedSubmittedScore is not null)
+                throw new InvalidOperationException($"得分项“{removedSubmittedScore.Title}”已有提交记录，请先归档环境后再删除。");
+
+            foreach (var score in node.ScoreItems.Where(i => !incomingScoreKeys.Contains(i.TopologyKey)).ToList())
+                node.ScoreItems.Remove(score);
+
+            foreach (var itemModel in nodeModel.ScoreItems.OrderBy(i => i.OrderIndex))
+            {
+                var scoreKey = EnsureTopologyKey(itemModel.TopologyKey, "score", itemModel.Id);
+                if (!existingScores.TryGetValue(scoreKey, out var scoreItem))
+                {
+                    scoreItem = new PenetrationScoreItem { Node = node, NodeId = node.Id, TopologyKey = scoreKey };
+                    node.ScoreItems.Add(scoreItem);
+                }
+
+                scoreItem.Title = Clean(itemModel.Title, "未命名得分项");
+                scoreItem.Description = CleanNullable(itemModel.Description);
+                scoreItem.Category = Clean(itemModel.Category, "General");
+                scoreItem.Score = Math.Max(0, itemModel.Score);
+                scoreItem.IsDynamic = itemModel.IsDynamic;
+                scoreItem.StaticFlag = CleanNullable(itemModel.StaticFlag);
+                scoreItem.FlagTemplate = CleanNullable(itemModel.FlagTemplate);
+                scoreItem.MaxAttempts = Math.Clamp(itemModel.MaxAttempts, 0, 1000);
+                scoreItem.IsVisible = itemModel.IsVisible;
+                scoreItem.PrerequisiteItemIds = JsonSerializer.Serialize(itemModel.PrerequisiteItemIds ?? [], JsonOptions);
+                scoreItem.OrderIndex = itemModel.OrderIndex;
+                scoreKeyByModelId[itemModel.Id] = scoreItem.TopologyKey;
+            }
+
+            nodeMap[nodeModel.Id] = node;
+        }
+
+        foreach (var nodeModel in model.Nodes.OrderBy(n => n.OrderIndex))
+        {
+            if (!nodeMap.TryGetValue(nodeModel.Id, out var node))
+                continue;
+
+            var interfaces = BuildModelInterfaces(nodeModel, modelInterfaces, networkMap.Keys.ToHashSet());
+            foreach (var interfaceModel in interfaces.OrderBy(i => i.OrderIndex))
+            {
+                var targetNetworkModelId = networkMap.ContainsKey(interfaceModel.NetworkId)
+                    ? interfaceModel.NetworkId
+                    : nodeModel.NetworkId;
+                if (!networkMap.TryGetValue(targetNetworkModelId, out var network))
+                    network = config.Networks.OrderBy(n => n.OrderIndex).First();
+
+                node.Interfaces.Add(new PenetrationInterface
+                {
+                    Node = node,
+                    NodeId = node.Id,
+                    Network = network,
+                    NetworkId = network.Id,
+                    TopologyKey = EnsureTopologyKey(interfaceModel.TopologyKey, "interface", interfaceModel.Id),
+                    Name = Clean(interfaceModel.Name, $"eth{interfaceModel.OrderIndex}"),
+                    StaticIp = CleanNullable(interfaceModel.StaticIp),
+                    IsPrimary = interfaceModel.IsPrimary,
+                    IsManagement = interfaceModel.IsManagement,
+                    OrderIndex = interfaceModel.OrderIndex
+                });
+            }
+        }
+
+        return new TopologyModelMaps(networkMap, nodeMap, scoreKeyByModelId, false);
+
+        static void contextRemoveEdges(PenetrationConfig config)
+        {
+            config.Edges.Clear();
+        }
+
+        static void contextRemoveInterfaces(PenetrationConfig config)
+        {
+            foreach (var node in config.Nodes)
+                node.Interfaces.Clear();
+        }
+    }
+
+    static void AddEdgesToConfig(PenetrationConfig config, PenetrationConfigModel model, TopologyModelMaps maps)
+    {
+        foreach (var edgeModel in model.Edges)
+        {
+            var sourceModelId = edgeModel.SourceId > 0 ? edgeModel.SourceId : edgeModel.SourceNodeId;
+            var targetModelId = edgeModel.TargetId > 0 ? edgeModel.TargetId : edgeModel.TargetNodeId;
+            var sourceNode = edgeModel.SourceKind == PenetrationPolicyScope.Node
+                ? maps.NodeMap.GetValueOrDefault(sourceModelId)
+                : null;
+            var targetNode = edgeModel.TargetKind == PenetrationPolicyScope.Node
+                ? maps.NodeMap.GetValueOrDefault(targetModelId)
+                : null;
+
+            var sourceId = edgeModel.SourceKind == PenetrationPolicyScope.Network
+                ? maps.NetworkMap.GetValueOrDefault(sourceModelId)?.Id ?? 0
+                : sourceNode?.Id ?? 0;
+            var targetId = edgeModel.TargetKind == PenetrationPolicyScope.Network
+                ? maps.NetworkMap.GetValueOrDefault(targetModelId)?.Id ?? 0
+                : targetNode?.Id ?? 0;
+
+            if (sourceId == targetId)
+                continue;
+
+            if (!maps.PreserveModelIds && (sourceId <= 0 || targetId <= 0))
+                continue;
+
+            config.Edges.Add(new PenetrationEdge
+            {
+                Id = maps.PreserveModelIds ? edgeModel.Id : 0,
+                ConfigId = config.Id,
+                Config = config,
+                TopologyKey = EnsureTopologyKey(edgeModel.TopologyKey, "edge", edgeModel.Id),
+                SourceNodeId = sourceNode?.Id ?? 0,
+                TargetNodeId = targetNode?.Id ?? 0,
+                SourceKind = edgeModel.SourceKind,
+                SourceId = sourceId,
+                TargetKind = edgeModel.TargetKind,
+                TargetId = targetId,
+                Protocol = edgeModel.Protocol,
+                PortRange = Clean(edgeModel.PortRange, "any"),
+                PolicyAction = edgeModel.PolicyAction,
+                IsRouteHint = edgeModel.IsRouteHint,
+                Label = CleanNullable(edgeModel.Label),
+                Description = CleanNullable(edgeModel.Description)
+            });
+        }
+    }
+
+    static void RemapPrerequisites(PenetrationConfig config, Dictionary<int, string> scoreKeyByModelId)
+    {
+        var savedIdByKey = config.Nodes
+            .SelectMany(n => n.ScoreItems)
+            .Where(i => i.Id > 0)
+            .ToDictionary(i => i.TopologyKey, i => i.Id, StringComparer.Ordinal);
+
+        foreach (var item in config.Nodes.SelectMany(n => n.ScoreItems))
+        {
+            var prerequisites = DeserializeIntList(item.PrerequisiteItemIds);
+            if (prerequisites.Count == 0)
+                continue;
+
+            var remapped = prerequisites
+                .Select(id => scoreKeyByModelId.GetValueOrDefault(id))
+                .Where(key => !string.IsNullOrWhiteSpace(key))
+                .Select(key => savedIdByKey.GetValueOrDefault(key!))
+                .Where(id => id > 0)
+                .Distinct()
+                .ToList();
+
+            item.PrerequisiteItemIds = JsonSerializer.Serialize(remapped, JsonOptions);
+        }
+    }
+
+    static string EnsureTopologyKey(string? key, string prefix, int legacyId)
+    {
+        var normalized = CleanNullable(key);
+        if (!string.IsNullOrWhiteSpace(normalized))
+            return normalized.Length <= 64 ? normalized : normalized[..64];
+
+        return legacyId > 0
+            ? $"legacy-{prefix}-{legacyId}"
+            : $"{prefix}-{Guid.NewGuid():N}";
+    }
+
+    static PenetrationPublishedSnapshot CreatePublishedSnapshot(PenetrationConfig config, int publishedVersion)
+    {
+        var snapshotModel = ToModel(config);
+        snapshotModel.PublishedVersion = publishedVersion;
+        snapshotModel.Status = PenetrationDeploymentStatus.Published;
+        var json = JsonSerializer.Serialize(snapshotModel, JsonOptions);
+        return new PenetrationPublishedSnapshot
+        {
+            GameId = config.GameId,
+            PublishedVersion = publishedVersion,
+            SnapshotJson = json,
+            SnapshotHash = json.ToSHA256String(),
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+    }
+
+    async Task<PenetrationConfig?> LoadPublishedConfig(int gameId, int publishedVersion, CancellationToken token)
+    {
+        if (publishedVersion <= 0)
+            return null;
+
+        var snapshot = await context.PenetrationPublishedSnapshots.AsNoTracking()
+            .Where(s => s.GameId == gameId && s.PublishedVersion == publishedVersion)
+            .Select(s => s.SnapshotJson)
+            .FirstOrDefaultAsync(token);
+        if (string.IsNullOrWhiteSpace(snapshot))
+        {
+            logger.LogError(
+                "Penetration published snapshot missing for game {GameId} version {PublishedVersion}.",
+                gameId, publishedVersion);
+            return null;
+        }
+
+        PenetrationConfigModel? model;
+        try
+        {
+            model = JsonSerializer.Deserialize<PenetrationConfigModel>(snapshot, JsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            logger.LogWarning(ex,
+                "Failed to deserialize penetration published snapshot for game {GameId} version {PublishedVersion}.",
+                gameId, publishedVersion);
+            return null;
+        }
+
+        if (model is null)
+            return null;
+
+        model.GameId = gameId;
+        model.PublishedVersion = publishedVersion;
+        model.Status = PenetrationDeploymentStatus.Published;
+        return await BuildTransientConfig(gameId, model, token);
+    }
+
+    async Task<int> GetAcceptedTeamIndex(int gameId, int teamId, CancellationToken token)
+    {
+        var teamIds = await context.Participations.AsNoTracking()
+            .Where(p => p.GameId == gameId && p.Status == ParticipationStatus.Accepted)
+            .OrderBy(p => p.TeamId)
+            .Select(p => p.TeamId)
+            .ToArrayAsync(token);
+        var index = Array.IndexOf(teamIds, teamId);
+        return Math.Max(0, index);
     }
 
     async Task DestroyEnvironment(PenetrationTeamEnvironment environment, CancellationToken token)
@@ -995,6 +1523,7 @@ public class PenetrationService(
             result.Errors.Add("至少需要一个安全域。");
         else
         {
+            AddDuplicateKeyErrors(result, "安全域", config.Networks.Select(n => (n.Name, n.TopologyKey)));
             var maxSegments = 1 << Math.Max(0, config.NetworkSubnetPrefix - config.TeamSubnetPrefix);
             if (config.Networks.Count > maxSegments)
                 result.Errors.Add($"当前队伍网段最多可切分 {maxSegments} 个安全域，请调整前缀或减少安全域数量。");
@@ -1002,9 +1531,13 @@ public class PenetrationService(
 
         if (config.Nodes.Count == 0)
             result.Errors.Add("至少需要一个资产节点。");
+        else
+            AddDuplicateKeyErrors(result, "资产节点", config.Nodes.Select(n => (n.Name, n.TopologyKey)));
 
         if (config.Nodes.All(n => !n.IsEntry && !n.PublishPort))
             result.Errors.Add("至少需要一个入口节点或公开端口节点。");
+
+        AddDuplicateKeyErrors(result, "访问策略", config.Edges.Select(e => (e.Label ?? $"策略 {e.Id}", e.TopologyKey)));
 
         var templateIds = config.Nodes.Where(n => n.ImageTemplateId.HasValue).Select(n => n.ImageTemplateId!.Value)
             .Distinct().ToArray();
@@ -1063,6 +1596,11 @@ public class PenetrationService(
 
         foreach (var node in config.Nodes)
         {
+            AddDuplicateKeyErrors(result, $"节点“{node.Name}”的得分项",
+                node.ScoreItems.Select(i => (i.Title, i.TopologyKey)));
+            AddDuplicateKeyErrors(result, $"节点“{node.Name}”的网卡",
+                node.Interfaces.Select(i => (i.Name, i.TopologyKey)));
+
             if (node.NodeType == PenetrationNodeType.DomainControllerReserved)
                 result.Warnings.Add($"节点“{node.Name}”是 AD 预留节点，本版不会自动编排 Windows 域控。");
 
@@ -1141,6 +1679,19 @@ public class PenetrationService(
 
         result.Valid = result.Errors.Count == 0;
         return result;
+    }
+
+    static void AddDuplicateKeyErrors(PenetrationValidationModel result, string scope,
+        IEnumerable<(string Name, string TopologyKey)> items)
+    {
+        foreach (var group in items
+                     .Where(i => !string.IsNullOrWhiteSpace(i.TopologyKey))
+                     .GroupBy(i => i.TopologyKey, StringComparer.Ordinal)
+                     .Where(g => g.Count() > 1))
+        {
+            var names = string.Join("、", group.Select(i => i.Name).Take(4));
+            result.Errors.Add($"{scope}存在重复拓扑标识“{group.Key}”：{names}。");
+        }
     }
 
     async Task<PenetrationPlanModel> BuildPlan(PenetrationConfig config, int teamIndex, int teamId, int teamCount,
@@ -1389,6 +1940,7 @@ public class PenetrationService(
             Networks = config.Networks.OrderBy(n => n.OrderIndex).Select((n, index) => new PenetrationNetworkModel
             {
                 Id = n.Id,
+                TopologyKey = n.TopologyKey,
                 Name = n.Name,
                 Slug = n.Slug,
                 Cidr = n.Cidr,
@@ -1415,6 +1967,7 @@ public class PenetrationService(
                 return new PenetrationNodeModel
                 {
                     Id = n.Id,
+                    TopologyKey = n.TopologyKey,
                     NetworkId = primary?.NetworkId ?? n.NetworkId,
                     Name = n.Name,
                     Description = n.Description,
@@ -1440,6 +1993,7 @@ public class PenetrationService(
                     ScoreItems = n.ScoreItems.OrderBy(i => i.OrderIndex).Select(i => new PenetrationScoreItemModel
                     {
                         Id = i.Id,
+                        TopologyKey = i.TopologyKey,
                         Title = i.Title,
                         Description = i.Description,
                         Category = i.Category,
@@ -1460,6 +2014,7 @@ public class PenetrationService(
             Edges = config.Edges.Select(e => new PenetrationEdgeModel
             {
                 Id = e.Id,
+                TopologyKey = e.TopologyKey,
                 SourceNodeId = e.SourceNodeId,
                 TargetNodeId = e.TargetNodeId,
                 SourceKind = e.SourceKind,
@@ -1479,6 +2034,7 @@ public class PenetrationService(
     static PenetrationInterfaceModel ToInterfaceModel(EffectiveInterface item, string? previewIp) => new()
     {
         Id = item.InterfaceId,
+        TopologyKey = item.TopologyKey,
         NodeId = item.Node.Id,
         NetworkId = item.Network.Id,
         Name = item.Name,
@@ -1535,6 +2091,7 @@ public class PenetrationService(
                 var network = node.Network ?? config.Networks.First(n => n.Id == node.NetworkId);
                 items.Add(new EffectiveInterface(
                     -(node.Id * 1000 + 1),
+                    $"{node.TopologyKey}:eth0",
                     node,
                     network,
                     "eth0",
@@ -1550,6 +2107,7 @@ public class PenetrationService(
 
             items.AddRange(nodeInterfaces.Select(i => new EffectiveInterface(
                 i.Id,
+                i.TopologyKey,
                 node,
                 i.Network,
                 i.Name,
@@ -1769,7 +2327,9 @@ public class PenetrationService(
         if (!item.IsDynamic)
             return item.StaticFlag ?? string.Empty;
 
-        var token = $"{gameId}:{teamId}:{item.NodeId}:{item.Id}:{version}".ToSHA256String()[..16];
+        var nodeKey = string.IsNullOrWhiteSpace(item.Node?.TopologyKey) ? item.NodeId.ToString() : item.Node.TopologyKey;
+        var scoreKey = string.IsNullOrWhiteSpace(item.TopologyKey) ? item.Id.ToString() : item.TopologyKey;
+        var token = $"{gameId}:{teamId}:{nodeKey}:{scoreKey}:{version}".ToSHA256String()[..16];
         var template = string.IsNullOrWhiteSpace(item.FlagTemplate) ? "flag{[TEAM_HASH]}" : item.FlagTemplate;
         return template.Replace("[TEAM_HASH]", token, StringComparison.OrdinalIgnoreCase)
             .Replace("[TOKEN]", token, StringComparison.OrdinalIgnoreCase);
@@ -1931,6 +2491,7 @@ public class PenetrationService(
     static PenetrationNetworkModel DefaultNetworkModel(int id, int orderIndex) => new()
     {
         Id = id,
+        TopologyKey = EnsureTopologyKey(null, "network", id),
         Name = "公网入口区",
         Slug = "public",
         ZoneType = PenetrationZoneType.Public,
@@ -1969,6 +2530,12 @@ public class PenetrationService(
 
     static string BuildRuntimeNetworkName(PenetrationConfig config, int teamId, PenetrationNetwork network) =>
         $"pentest-g{config.GameId}-t{teamId}-n{network.Id}-{network.Slug}-{config.PublishedVersion}";
+
+    sealed record TopologyModelMaps(
+        Dictionary<int, PenetrationNetwork> NetworkMap,
+        Dictionary<int, PenetrationNode> NodeMap,
+        Dictionary<int, string> ScoreKeyByModelId,
+        bool PreserveModelIds);
 
     sealed record RuntimePlan(List<RuntimeNetworkPlan> Networks, List<RuntimeNodePlan> Nodes);
 
@@ -2011,6 +2578,7 @@ public class PenetrationService(
 
     sealed record EffectiveInterface(
         int InterfaceId,
+        string TopologyKey,
         PenetrationNode Node,
         PenetrationNetwork Network,
         string Name,

@@ -153,18 +153,47 @@ const protocolOptions = Object.values(PenetrationProtocol).map((value) => ({ val
 
 const flowNetworkId = (id: number) => `network-${id}`
 const newId = (items: { id: number }[]) => Math.min(-1, ...items.map((item) => item.id)) - 1
+const newTopologyKey = (prefix: string, id?: number) =>
+  `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}-${Math.abs(id ?? 0)}`
 const enumKey = (value: string | number | undefined | null) => String(value ?? '').toLowerCase()
 const isReadyLinuxDockerTemplate = (template: ImageTemplateLite) =>
   (enumKey(template.osType) === '0' || enumKey(template.osType) === 'linux') &&
   (enumKey(template.imageType) === '0' || enumKey(template.imageType) === 'docker') &&
   (enumKey(template.status) === '0' || enumKey(template.status) === 'ready')
-const normalizeConfig = (config: PenetrationConfigModel): PenetrationConfigModel => ({
-  ...config,
-  interfaces: config.nodes.flatMap((node) => node.interfaces.map((item) => ({ ...item, nodeId: node.id }))),
-})
+const normalizeConfig = (config: PenetrationConfigModel): PenetrationConfigModel => {
+  const networks = config.networks.map((network) => ({
+    ...network,
+    topologyKey: network.topologyKey || newTopologyKey('network', network.id),
+  }))
+  const nodes = config.nodes.map((node) => ({
+    ...node,
+    topologyKey: node.topologyKey || newTopologyKey('node', node.id),
+    interfaces: node.interfaces.map((item) => ({
+      ...item,
+      topologyKey: item.topologyKey || newTopologyKey('interface', item.id),
+      nodeId: node.id,
+    })),
+    scoreItems: node.scoreItems.map((item) => ({
+      ...item,
+      topologyKey: item.topologyKey || newTopologyKey('score', item.id),
+    })),
+  }))
+
+  return {
+    ...config,
+    networks,
+    nodes,
+    interfaces: nodes.flatMap((node) => node.interfaces.map((item) => ({ ...item, nodeId: node.id }))),
+    edges: config.edges.map((edge) => ({
+      ...edge,
+      topologyKey: edge.topologyKey || newTopologyKey('edge', edge.id),
+    })),
+  }
+}
 
 const defaultNetwork = (id: number, orderIndex: number, zoneType = PenetrationZoneType.Custom): PenetrationNetworkModel => ({
   id,
+  topologyKey: newTopologyKey('network', id),
   name: zoneType === PenetrationZoneType.Public ? '公网入口区' : `${zoneLabels[zoneType]} ${orderIndex + 1}`,
   slug: zoneType.toLowerCase(),
   cidr: '',
@@ -183,6 +212,7 @@ const defaultNetwork = (id: number, orderIndex: number, zoneType = PenetrationZo
 
 const defaultScoreItem = (orderIndex: number): PenetrationScoreItemModel => ({
   id: -Date.now() - orderIndex,
+  topologyKey: newTopologyKey('score'),
   title: `得分项 ${orderIndex + 1}`,
   description: '',
   category: '综合',
@@ -205,6 +235,7 @@ const defaultNode = (
   const isEntry = nodeType === PenetrationNodeType.Entry
   return {
     id,
+    topologyKey: newTopologyKey('node', id),
     networkId: network.id,
     name: isEntry ? '外网入口服务' : nodeTypeLabels[nodeType],
     description: '',
@@ -229,6 +260,7 @@ const defaultNode = (
     interfaces: [
       {
         id: -Date.now() - orderIndex,
+        topologyKey: newTopologyKey('interface'),
         nodeId: id,
         networkId: network.id,
         name: 'eth0',
@@ -282,9 +314,9 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
       positionX: 60,
       positionY: 110,
       interfaces: [
-        { id: -501, nodeId: -202, networkId: networks[1].id, name: 'eth0', isPrimary: true, isManagement: false, orderIndex: 0 },
-        { id: -502, nodeId: -202, networkId: networks[2].id, name: 'eth1', isPrimary: false, isManagement: false, orderIndex: 1 },
-        { id: -503, nodeId: -202, networkId: networks[4].id, name: 'eth2', isPrimary: false, isManagement: true, orderIndex: 2 },
+        { id: -501, topologyKey: newTopologyKey('interface', -501), nodeId: -202, networkId: networks[1].id, name: 'eth0', isPrimary: true, isManagement: false, orderIndex: 0 },
+        { id: -502, topologyKey: newTopologyKey('interface', -502), nodeId: -202, networkId: networks[2].id, name: 'eth1', isPrimary: false, isManagement: false, orderIndex: 1 },
+        { id: -503, topologyKey: newTopologyKey('interface', -503), nodeId: -202, networkId: networks[4].id, name: 'eth2', isPrimary: false, isManagement: true, orderIndex: 2 },
       ],
     }),
     withTemplate({ ...defaultNode(-203, networks[1], 2, PenetrationNodeType.Web), name: '废弃 Web 服务', positionX: 314, positionY: 238, publishPort: true, exposePort: 63000 }),
@@ -310,6 +342,7 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
 
 const makeEdge = (id: number, source: PenetrationNodeModel, target: PenetrationNodeModel, label: string, portRange = 'any'): PenetrationEdgeModel => ({
   id,
+  topologyKey: newTopologyKey('edge', id),
   sourceNodeId: source.id,
   targetNodeId: target.id,
   sourceKind: PenetrationPolicyScope.Node,
@@ -550,6 +583,15 @@ const findSavedByIndex = <T extends { id: number }>(before: T[], after: T[], id:
   return index >= 0 ? after[index] : undefined
 }
 
+const findSavedByTopologyKey = <T extends { id: number; topologyKey?: string }>(
+  before: T[],
+  after: T[],
+  id: number
+) => {
+  const source = before.find((item) => item.id === id)
+  return source?.topologyKey ? after.find((item) => item.topologyKey === source.topologyKey) : undefined
+}
+
 const remapSelectedTarget = (
   target: SelectedTarget,
   before: PenetrationConfigModel,
@@ -561,6 +603,7 @@ const remapSelectedTarget = (
     if (after.networks.some((network) => network.id === target.id)) return target
     const source = before.networks.find((network) => network.id === target.id)
     const match =
+      findSavedByTopologyKey(before.networks, after.networks, target.id) ||
       (source &&
         after.networks.find(
           (network) =>
@@ -575,6 +618,7 @@ const remapSelectedTarget = (
     if (after.nodes.some((node) => node.id === target.id)) return target
     const source = before.nodes.find((node) => node.id === target.id)
     const match =
+      findSavedByTopologyKey(before.nodes, after.nodes, target.id) ||
       (source &&
         after.nodes.find(
           (node) =>
@@ -589,6 +633,7 @@ const remapSelectedTarget = (
   if (after.edges.some((edge) => edge.id === target.id)) return target
   const source = before.edges.find((edge) => edge.id === target.id)
   const match =
+    findSavedByTopologyKey(before.edges, after.edges, target.id) ||
     (source &&
       after.edges.find(
         (edge) =>
@@ -1197,7 +1242,7 @@ const BuilderInner: FC = () => {
                           </SimpleGrid>
                         </YinyuPanel>
                       ))}
-                      <Button variant="light" leftSection={<Icon path={mdiPlus} size={0.8} />} onClick={() => updateNode(selectedNode.id, { interfaces: [...selectedNode.interfaces, { id: newId(selectedNode.interfaces), nodeId: selectedNode.id, networkId: selectedNode.networkId, name: `eth${selectedNode.interfaces.length}`, staticIp: '', isPrimary: false, isManagement: false, orderIndex: selectedNode.interfaces.length }] })}>
+                      <Button variant="light" leftSection={<Icon path={mdiPlus} size={0.8} />} onClick={() => updateNode(selectedNode.id, { interfaces: [...selectedNode.interfaces, { id: newId(selectedNode.interfaces), topologyKey: newTopologyKey('interface'), nodeId: selectedNode.id, networkId: selectedNode.networkId, name: `eth${selectedNode.interfaces.length}`, staticIp: '', isPrimary: false, isManagement: false, orderIndex: selectedNode.interfaces.length }] })}>
                         添加网卡
                       </Button>
                       <Divider label="得分项" />

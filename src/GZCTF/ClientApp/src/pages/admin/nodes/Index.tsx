@@ -4,6 +4,7 @@ import {
   Button,
   Group,
   Modal,
+  Pagination,
   Select,
   SimpleGrid,
   Stack,
@@ -15,21 +16,78 @@ import {
 import { notifications } from '@mantine/notifications'
 import {
   mdiCheckboxMarkedCircleOutline,
+  mdiClockOutline,
+  mdiConsoleNetworkOutline,
   mdiDeleteOutline,
+  mdiDocker,
+  mdiHistory,
   mdiMagnify,
+  mdiOpenInNew,
   mdiPlus,
   mdiProgressWrench,
   mdiRefresh,
   mdiServerNetwork,
+  mdiShieldSearch,
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
+import dayjs from 'dayjs'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AdminPage } from '@Components/admin/AdminPage'
 import { CleanupButton } from '@Components/admin/CleanupButton'
 import { NodeCard, NodeInfo } from '@Components/admin/NodeCard'
-import { YinyuMetricTile, YinyuModalBody, YinyuPanel, YinyuRouteLoader } from '@Components/yinyu/YinyuUI'
+import {
+  YinyuMetricTile,
+  YinyuModalBody,
+  YinyuPanel,
+  YinyuRouteLoader,
+  YinyuStatusPill,
+  YinyuStatusTone,
+} from '@Components/yinyu/YinyuUI'
+import { YinyuStatusText } from '@Components/yinyu/YinyuReactBits'
 
 type StatusFilter = 'all' | 'online' | 'offline' | 'busy' | 'error'
+type ResourceTypeFilter = 'all' | 'container' | 'vm'
+type ResourceStatusFilter = 'all' | 'active' | 'history'
+
+interface NodeResourceItem {
+  kind: 'container' | 'vm'
+  id: string
+  name: string
+  status: string
+  isActive: boolean
+  startedAt: string
+  expectedStopAt?: string | null
+  stoppedAt?: string | null
+  duration: string
+  image?: string | null
+  runtimeId?: string | null
+  entry?: string | null
+  ip?: string | null
+  port?: number | null
+  gameId?: number | null
+  gameTitle?: string | null
+  challengeId?: number | null
+  challengeTitle?: string | null
+  challengeCategory?: string | null
+  teamId?: number | null
+  teamName?: string | null
+  userId?: string | null
+  userName?: string | null
+  providerName?: string | null
+  osType?: string | null
+}
+
+interface NodeResourceListResponse {
+  nodeId: string
+  nodeName: string
+  page: number
+  pageSize: number
+  total: number
+  runningCount: number
+  containerCount: number
+  vmCount: number
+  items: NodeResourceItem[]
+}
 
 const statusKeys: Record<string, StatusFilter> = {
   '1': 'online',
@@ -197,12 +255,305 @@ function MetricTile({ label, value, tone }: { label: string; value: number; tone
   return <YinyuMetricTile label={label} value={value} detail={tone} tone={toneMap[tone] ?? 'neutral'} />
 }
 
+function resourceStatusTone(item: NodeResourceItem): YinyuStatusTone {
+  const status = item.status.toLowerCase()
+  if (item.isActive && (status.includes('running') || status.includes('creating') || status.includes('pending'))) {
+    return 'success'
+  }
+  if (status.includes('error') || status.includes('failed')) return 'danger'
+  if (status.includes('destroyed') || status.includes('stopped')) return 'neutral'
+  return 'warm'
+}
+
+function resourceStatusLabel(item: NodeResourceItem) {
+  const status = item.status.toLowerCase()
+  if (status.includes('running')) return '运行中'
+  if (status.includes('creating') || status.includes('pending')) return '开启中'
+  if (status.includes('destroyed')) return '已销毁'
+  if (status.includes('stopped')) return '已停止'
+  if (status.includes('error')) return '异常'
+  return item.status
+}
+
+function formatTime(value?: string | null) {
+  if (!value) return '-'
+  const time = dayjs(value)
+  return time.isValid() ? time.format('YYYY-MM-DD HH:mm:ss') : '-'
+}
+
+function resourceEntry(item: NodeResourceItem) {
+  if (item.entry) return item.entry
+  if (item.ip && item.port) return `${item.ip}:${item.port}`
+  return item.ip ?? '-'
+}
+
+function ResourceMeta({ label, value }: { label: string; value?: string | number | null }) {
+  return (
+    <Stack gap={2} className="yy-node-resource-meta">
+      <Text size="xs" className="yy-readable-text">
+        {label}
+      </Text>
+      <Text size="sm" fw={700} truncate title={value == null ? undefined : String(value)}>
+        {value == null || value === '' ? '-' : value}
+      </Text>
+    </Stack>
+  )
+}
+
+function NodeResourceRow({
+  item,
+  disabled,
+  onDestroy,
+}: {
+  item: NodeResourceItem
+  disabled: boolean
+  onDestroy: (item: NodeResourceItem) => void
+}) {
+  const tone = resourceStatusTone(item)
+  const kindLabel = item.kind === 'container' ? '容器' : '虚拟机'
+  const canDestroy = item.isActive
+
+  return (
+    <article className="yy-node-resource-row" data-active={item.isActive}>
+      <Group justify="space-between" align="flex-start" gap="md" wrap="nowrap" className="yy-node-resource-row-main">
+        <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
+          <div className="yy-node-resource-kind" data-kind={item.kind}>
+            <Icon path={item.kind === 'container' ? mdiDocker : mdiConsoleNetworkOutline} size={0.95} />
+          </div>
+          <Stack gap={4} style={{ minWidth: 0 }}>
+            <Group gap="xs" wrap="nowrap">
+              <Text fw={800} truncate title={item.name}>
+                {item.name}
+              </Text>
+              <YinyuStatusText tone={tone} className="yy-node-resource-status-text">
+                {resourceStatusLabel(item)}
+              </YinyuStatusText>
+            </Group>
+            <Group gap="xs" wrap="wrap">
+              <YinyuStatusPill tone={item.kind === 'container' ? 'success' : 'warm'} state="open">
+                {kindLabel}
+              </YinyuStatusPill>
+              {item.challengeCategory && (
+                <Text size="xs" className="yy-node-resource-token">
+                  {item.challengeCategory}
+                </Text>
+              )}
+              {item.osType && (
+                <Text size="xs" className="yy-node-resource-token">
+                  {item.osType}
+                </Text>
+              )}
+            </Group>
+          </Stack>
+        </Group>
+        <Group gap="xs" wrap="nowrap">
+          {item.entry && item.entry.startsWith('http') && (
+            <Tooltip label="打开入口">
+              <ActionIcon component="a" href={item.entry} target="_blank" rel="noreferrer" variant="subtle">
+                <Icon path={mdiOpenInNew} size={0.78} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+          <Tooltip label={canDestroy ? '销毁实例' : '历史实例不可销毁'}>
+            <ActionIcon color="red" variant="subtle" disabled={!canDestroy || disabled} onClick={() => onDestroy(item)}>
+              <Icon path={mdiDeleteOutline} size={0.82} />
+            </ActionIcon>
+          </Tooltip>
+        </Group>
+      </Group>
+
+      <SimpleGrid cols={{ base: 2, md: 4, xl: 6 }} spacing="sm" className="yy-node-resource-grid">
+        <ResourceMeta label="开启者" value={item.teamName ?? item.userName ?? '平台调度'} />
+        <ResourceMeta label="开启时间" value={formatTime(item.startedAt)} />
+        <ResourceMeta label="持续时间" value={item.duration} />
+        <ResourceMeta label="开放地址" value={resourceEntry(item)} />
+        <ResourceMeta label="比赛/题目" value={[item.gameTitle, item.challengeTitle].filter(Boolean).join(' / ')} />
+        <ResourceMeta label="运行标识" value={item.runtimeId} />
+      </SimpleGrid>
+    </article>
+  )
+}
+
+function NodeResourcePanel({
+  node,
+  version,
+}: {
+  node: NodeInfo | null
+  version: number
+}) {
+  const [data, setData] = useState<NodeResourceListResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [disabled, setDisabled] = useState(false)
+  const [type, setType] = useState<ResourceTypeFilter>('all')
+  const [status, setStatus] = useState<ResourceStatusFilter>('all')
+  const [page, setPage] = useState(1)
+  const pageSize = 8
+
+  const loadResources = useCallback(async () => {
+    if (!node) return
+    setLoading(true)
+    try {
+      const params = new URLSearchParams({
+        type,
+        status,
+        page: String(page),
+        pageSize: String(pageSize),
+      })
+      const res = await fetch(`/api/v1/nodes/${node.id}/resources?${params}`)
+      if (res.ok) {
+        setData(await res.json())
+      } else {
+        notifications.show({ title: '资源读取失败', message: '无法获取该节点的运行资源', color: 'red' })
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [node, page, status, type])
+
+  useEffect(() => {
+    setPage(1)
+  }, [node?.id, status, type])
+
+  useEffect(() => {
+    loadResources()
+  }, [loadResources, version])
+
+  const destroyResource = async (item: NodeResourceItem) => {
+    if (!confirm(`确定销毁 ${item.kind === 'container' ? '容器' : '虚拟机'} "${item.name}" 吗？`)) return
+
+    setDisabled(true)
+    try {
+      const endpoint =
+        item.kind === 'container' ? `/api/admin/instances/${item.id}` : `/api/v1/nodes/vms/${item.id}/admin`
+      const res = await fetch(endpoint, { method: 'DELETE' })
+      if (res.ok) {
+        notifications.show({ title: '销毁任务已执行', message: `${item.name} 已进入清理流程`, color: 'green' })
+        loadResources()
+      } else {
+        const body = await res.json().catch(() => ({}))
+        notifications.show({ title: '销毁失败', message: body.message || '请检查实例状态和节点连通性', color: 'red' })
+      }
+    } catch {
+      notifications.show({ title: '销毁失败', message: '网络错误', color: 'red' })
+    } finally {
+      setDisabled(false)
+    }
+  }
+
+  if (!node) {
+    return (
+      <YinyuPanel p="lg" className="admin-panel yy-node-resource-panel" cells={48}>
+        <Stack align="center" gap="xs" py="xl">
+          <Icon path={mdiShieldSearch} size={1.5} />
+          <Text fw={800}>选择一个节点查看运行资源</Text>
+          <Text size="sm" className="yy-readable-text" ta="center">
+            点击上方节点卡片后，这里会按容器和虚拟机分类展示当前运行实例与可追溯历史记录。
+          </Text>
+        </Stack>
+      </YinyuPanel>
+    )
+  }
+
+  const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize))
+
+  return (
+    <YinyuPanel p="md" className="admin-panel yy-node-resource-panel" cells={64}>
+      <Stack gap="md">
+        <Group justify="space-between" align="flex-start" gap="md">
+          <Stack gap={4}>
+            <Group gap="xs">
+              <Title order={3}>{node.name || node.hostAddress}</Title>
+              <YinyuStatusText tone="success">资源溯源</YinyuStatusText>
+            </Group>
+            <Text size="sm" className="yy-readable-text">
+              当前运行资源优先展示，历史记录按开启时间倒序分页。容器销毁后若底层记录已被物理清理，将不再出现在历史列表中。
+            </Text>
+          </Stack>
+          <Group gap="xs">
+            <Button variant="default" leftSection={<Icon path={mdiRefresh} size={0.78} />} onClick={loadResources}>
+              刷新资源
+            </Button>
+          </Group>
+        </Group>
+
+        <SimpleGrid cols={{ base: 2, md: 4 }}>
+          <YinyuMetricTile label="运行中" value={data?.runningCount ?? 0} detail="active" tone="success" />
+          <YinyuMetricTile label="容器记录" value={data?.containerCount ?? 0} detail="docker" tone="neutral" />
+          <YinyuMetricTile label="虚拟机记录" value={data?.vmCount ?? 0} detail="kvm" tone="warm" />
+          <YinyuMetricTile label="全部记录" value={data?.total ?? 0} detail="paged" tone="neutral" />
+        </SimpleGrid>
+
+        <Group justify="space-between" align="end" className="yy-node-resource-toolbar">
+          <Group gap="sm">
+            <Select
+              label="资源类型"
+              value={type}
+              onChange={(value) => setType((value as ResourceTypeFilter | null) ?? 'all')}
+              data={[
+                { value: 'all', label: '全部资源' },
+                { value: 'container', label: '容器' },
+                { value: 'vm', label: '虚拟机' },
+              ]}
+              w={150}
+            />
+            <Select
+              label="记录状态"
+              value={status}
+              onChange={(value) => setStatus((value as ResourceStatusFilter | null) ?? 'all')}
+              data={[
+                { value: 'all', label: '全部记录' },
+                { value: 'active', label: '当前开启' },
+                { value: 'history', label: '历史记录' },
+              ]}
+              w={150}
+            />
+          </Group>
+          <Group gap={6} className="yy-readable-text">
+            <Icon path={mdiHistory} size={0.72} />
+            <Text size="xs">第 {page} 页 / 共 {totalPages} 页</Text>
+          </Group>
+        </Group>
+
+        {loading ? (
+          <div className="yy-admin-nodes-state">
+            <YinyuRouteLoader title="资源溯源" description="正在读取节点实例" />
+          </div>
+        ) : data && data.items.length > 0 ? (
+          <Stack gap="sm">
+            {data.items.map((item) => (
+              <NodeResourceRow key={`${item.kind}-${item.id}`} item={item} disabled={disabled} onDestroy={destroyResource} />
+            ))}
+          </Stack>
+        ) : (
+          <div className="yy-admin-nodes-state">
+            <Stack align="center" gap="xs">
+              <Icon path={mdiClockOutline} size={1.2} />
+              <Text fw={800}>暂无资源记录</Text>
+              <Text size="sm" className="yy-readable-text">
+                当前筛选条件下没有容器或虚拟机记录。
+              </Text>
+            </Stack>
+          </div>
+        )}
+
+        {data && data.total > pageSize && (
+          <Group justify="flex-end">
+            <Pagination value={page} onChange={setPage} total={totalPages} size="sm" />
+          </Group>
+        )}
+      </Stack>
+    </YinyuPanel>
+  )
+}
+
 export default function NodesPage() {
   const [nodes, setNodes] = useState<NodeInfo[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<StatusFilter>('all')
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  const [resourceVersion, setResourceVersion] = useState(0)
 
   const loadNodes = useCallback(async () => {
     try {
@@ -239,6 +590,22 @@ export default function NodesPage() {
     })
   }, [filter, nodes, query])
 
+  const selectedNode = useMemo(
+    () => nodes.find((node) => node.id === selectedNodeId) ?? filteredNodes[0] ?? null,
+    [filteredNodes, nodes, selectedNodeId]
+  )
+
+  useEffect(() => {
+    if (!selectedNodeId && filteredNodes.length > 0) {
+      setSelectedNodeId(filteredNodes[0].id)
+      return
+    }
+
+    if (selectedNodeId && !nodes.some((node) => node.id === selectedNodeId)) {
+      setSelectedNodeId(filteredNodes[0]?.id ?? null)
+    }
+  }, [filteredNodes, nodes, selectedNodeId])
+
   const toggleSchedulable = async (nodeId: string, value: boolean) => {
     try {
       const res = await fetch(`/api/v1/nodes/${nodeId}`, {
@@ -264,6 +631,7 @@ export default function NodesPage() {
       const res = await fetch(`/api/v1/nodes/${id}`, { method: 'DELETE' })
       if (res.ok) {
         notifications.show({ title: '删除成功', message: `节点 ${name} 已移除`, color: 'green' })
+        if (selectedNodeId === id) setSelectedNodeId(null)
         loadNodes()
       } else {
         const data = await res.json().catch(() => ({}))
@@ -338,6 +706,11 @@ export default function NodesPage() {
                     key={node.id}
                     node={node}
                     onToggleSchedulable={toggleSchedulable}
+                    selected={selectedNode?.id === node.id}
+                    onSelect={(item) => {
+                      setSelectedNodeId(item.id)
+                      setResourceVersion((value) => value + 1)
+                    }}
                     rightSection={
                       !node.isLocal && (
                         <Tooltip label="删除节点">
@@ -345,7 +718,10 @@ export default function NodesPage() {
                             color="red"
                             variant="subtle"
                             size="sm"
-                            onClick={() => handleDeleteNode(node.id, node.name || node.hostAddress)}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              handleDeleteNode(node.id, node.name || node.hostAddress)
+                            }}
                           >
                             <Icon path={mdiDeleteOutline} size={0.82} />
                           </ActionIcon>
@@ -367,6 +743,8 @@ export default function NodesPage() {
             )}
           </Stack>
         </YinyuPanel>
+
+        <NodeResourcePanel node={selectedNode} version={resourceVersion} />
 
         <AddNodeModal opened={modalOpen} onClose={() => setModalOpen(false)} onAdded={loadNodes} />
       </Stack>

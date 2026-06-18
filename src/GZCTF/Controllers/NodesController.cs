@@ -3,6 +3,7 @@ using System.Net.Mime;
 using System.Security.Claims;
 using GZCTF.Middlewares;
 using GZCTF.Models.Data;
+using GZCTF.Models.Request.Admin;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Fleet;
 using Microsoft.AspNetCore.Authorization;
@@ -74,6 +75,92 @@ public class NodesController : ControllerBase
             UnschedulableReasons = GetUnschedulableReasons(node),
             UnschedulableByCapability = GetUnschedulableByCapability(node),
             SchedulableCapabilities = GetSchedulableCapabilities(node)
+        });
+    }
+
+    [HttpGet("{id:guid}/resources")]
+    [RequireAdmin]
+    public async Task<IActionResult> Resources(
+        Guid id,
+        [FromQuery] string type = "all",
+        [FromQuery] string status = "all",
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 12)
+    {
+        var token = HttpContext.RequestAborted;
+        var node = await _context.WorkerNodes.AsNoTracking().FirstOrDefaultAsync(n => n.Id == id, token);
+        if (node is null) return NotFound();
+
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 50);
+
+        var normalizedType = type.Trim().ToLowerInvariant();
+        var normalizedStatus = status.Trim().ToLowerInvariant();
+        var includeContainers = normalizedType is "all" or "container" or "containers";
+        var includeVms = normalizedType is "all" or "vm" or "vms";
+
+        var resources = new List<NodeResourceItemModel>();
+
+        if (includeContainers)
+        {
+            var containers = await _context.Containers.AsNoTracking()
+                .Where(c => c.NodeId == id)
+                .Include(c => c.GameInstance).ThenInclude(i => i!.Challenge).ThenInclude(c => c.Game)
+                .Include(c => c.GameInstance).ThenInclude(i => i!.Participation).ThenInclude(p => p.Team)
+                .ToListAsync(token);
+
+            resources.AddRange(containers.Select(ToNodeContainerResource));
+        }
+
+        if (includeVms)
+        {
+            var vms = await _context.VmInstances.AsNoTracking()
+                .Where(v => v.NodeId == id)
+                .Include(v => v.Challenge).ThenInclude(c => c!.Game)
+                .ToListAsync(token);
+
+            var vmUserIds = vms.Select(v => v.UserId).Distinct().ToArray();
+            var users = await _context.Users.AsNoTracking()
+                .Where(u => vmUserIds.Contains(u.Id))
+                .Select(u => new { u.Id, u.UserName })
+                .ToDictionaryAsync(u => u.Id, u => u.UserName, token);
+            var teamRows = await _context.UserParticipations.AsNoTracking()
+                .Where(m => vmUserIds.Contains(m.UserId))
+                .Include(m => m.Team)
+                .OrderByDescending(m => m.GameId)
+                .ToListAsync(token);
+            var teamsByUser = teamRows
+                .GroupBy(m => m.UserId)
+                .ToDictionary(g => g.Key, g => g.First().Team);
+
+            resources.AddRange(vms.Select(vm => ToNodeVmResource(vm, users, teamsByUser)));
+        }
+
+        if (normalizedStatus == "active")
+            resources = resources.Where(r => r.IsActive).ToList();
+        else if (normalizedStatus == "history")
+            resources = resources.Where(r => !r.IsActive).ToList();
+
+        var ordered = resources
+            .OrderByDescending(r => r.IsActive)
+            .ThenByDescending(r => r.StartedAt)
+            .ThenBy(r => r.Kind)
+            .ToList();
+
+        var total = ordered.Count;
+        var items = ordered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+        return Ok(new NodeResourceListResponse
+        {
+            NodeId = node.Id,
+            NodeName = node.Name,
+            Page = page,
+            PageSize = pageSize,
+            Total = total,
+            RunningCount = resources.Count(r => r.IsActive),
+            ContainerCount = resources.Count(r => r.Kind == "container"),
+            VmCount = resources.Count(r => r.Kind == "vm"),
+            Items = items
         });
     }
 
@@ -185,6 +272,20 @@ public class NodesController : ControllerBase
         return NoContent();
     }
 
+    [HttpDelete("vms/{instanceId:guid}/admin")]
+    [RequireAdmin]
+    public async Task<IActionResult> DestroyVmAsAdmin(Guid instanceId)
+    {
+        var vm = await _context.VmInstances
+            .FirstOrDefaultAsync(v => v.Id == instanceId, HttpContext.RequestAborted);
+        if (vm is null) return NotFound();
+
+        var fleetVm = HttpContext.RequestServices.GetRequiredService<FleetVmService>();
+        await fleetVm.DestroyVmAsync(vm, HttpContext.RequestAborted);
+        await _context.SaveChangesAsync();
+        return NoContent();
+    }
+
     [HttpGet("/api/agent/download")]
     [AllowAnonymous]
     public IActionResult DownloadAgent()
@@ -226,6 +327,96 @@ public class NodesController : ControllerBase
             WeightedScheduler.CanHost(node, NodeCapability.Kvm) ? nameof(NodeCapability.Kvm) : null
         }.OfType<string>()
     ];
+
+    static NodeResourceItemModel ToNodeContainerResource(Container container)
+    {
+        var instance = container.GameInstance;
+        var challenge = instance?.Challenge;
+        var participation = instance?.Participation;
+        var team = participation?.Team;
+        var status = container.Status.ToString();
+        var active = container.Status is ContainerStatus.Pending or ContainerStatus.Running;
+
+        return new NodeResourceItemModel
+        {
+            Kind = "container",
+            Id = container.Id,
+            Name = challenge?.Title ?? container.Image.Split('/').LastOrDefault() ?? "Container",
+            Status = status,
+            IsActive = active,
+            StartedAt = container.StartedAt,
+            ExpectedStopAt = active ? container.ExpectStopAt : null,
+            StoppedAt = active ? null : container.ExpectStopAt,
+            Duration = FormatDuration(container.StartedAt, active ? DateTimeOffset.UtcNow : container.ExpectStopAt),
+            Image = container.Image,
+            RuntimeId = ShortenRuntimeId(container.ContainerId),
+            Entry = container.Entry,
+            Ip = container.PublicIP ?? container.IP,
+            Port = container.PublicPort ?? container.Port,
+            GameId = challenge?.GameId,
+            GameTitle = challenge?.Game.Title,
+            ChallengeId = challenge?.Id,
+            ChallengeTitle = challenge?.Title,
+            ChallengeCategory = challenge?.Category.ToString(),
+            TeamId = team?.Id,
+            TeamName = team?.Name
+        };
+    }
+
+    static NodeResourceItemModel ToNodeVmResource(VmInstance vm,
+        IReadOnlyDictionary<Guid, string?> users,
+        IReadOnlyDictionary<Guid, Team> teamsByUser)
+    {
+        var challenge = vm.Challenge;
+        teamsByUser.TryGetValue(vm.UserId, out var ownerTeam);
+        users.TryGetValue(vm.UserId, out var userName);
+        var active = vm.Status is VmInstanceStatus.Creating or VmInstanceStatus.Running;
+
+        return new NodeResourceItemModel
+        {
+            Kind = "vm",
+            Id = vm.Id,
+            Name = vm.VmName,
+            Status = vm.Status.ToString(),
+            IsActive = active,
+            StartedAt = vm.CreatedAt,
+            ExpectedStopAt = null,
+            StoppedAt = vm.DestroyedAt,
+            Duration = FormatDuration(vm.CreatedAt, vm.DestroyedAt ?? DateTimeOffset.UtcNow),
+            RuntimeId = vm.VmName,
+            Entry = vm.RdpUrl,
+            Ip = vm.IpAddress,
+            GameId = challenge?.GameId,
+            GameTitle = challenge?.Game.Title,
+            ChallengeId = challenge?.Id,
+            ChallengeTitle = challenge?.Title,
+            ChallengeCategory = challenge?.Category.ToString(),
+            TeamId = ownerTeam?.Id,
+            TeamName = ownerTeam?.Name,
+            UserId = vm.UserId,
+            UserName = userName,
+            ProviderName = vm.ProviderName,
+            OsType = vm.OSType.ToString()
+        };
+    }
+
+    static string ShortenRuntimeId(string id) =>
+        string.IsNullOrWhiteSpace(id) || id.Length <= 12 ? id : id[..12];
+
+    static string FormatDuration(DateTimeOffset start, DateTimeOffset end)
+    {
+        var span = end - start;
+        if (span < TimeSpan.Zero)
+            span = TimeSpan.Zero;
+
+        if (span.TotalDays >= 1)
+            return $"{(int)span.TotalDays}天 {span.Hours}小时";
+        if (span.TotalHours >= 1)
+            return $"{(int)span.TotalHours}小时 {span.Minutes}分钟";
+        if (span.TotalMinutes >= 1)
+            return $"{(int)span.TotalMinutes}分钟";
+        return $"{Math.Max(0, (int)span.TotalSeconds)}秒";
+    }
 }
 
 [ApiController]

@@ -1660,9 +1660,17 @@ namespace GZCTF.Migrations
                     b.Property<int>("TargetNodeId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("TopologyKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ConfigId");
+
+                    b.HasIndex("ConfigId", "TopologyKey")
+                        .IsUnique();
 
                     b.ToTable("PenetrationEdges");
                 });
@@ -1699,11 +1707,19 @@ namespace GZCTF.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("TopologyKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("NetworkId");
 
                     b.HasIndex("NodeId");
+
+                    b.HasIndex("NodeId", "TopologyKey")
+                        .IsUnique();
 
                     b.ToTable("PenetrationInterfaces");
                 });
@@ -1760,6 +1776,11 @@ namespace GZCTF.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
+                    b.Property<string>("TopologyKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<int>("TrustLevel")
                         .HasColumnType("integer");
 
@@ -1774,6 +1795,9 @@ namespace GZCTF.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ConfigId");
+
+                    b.HasIndex("ConfigId", "TopologyKey")
+                        .IsUnique();
 
                     b.ToTable("PenetrationNetworks");
                 });
@@ -1861,6 +1885,11 @@ namespace GZCTF.Migrations
                     b.Property<int>("StorageLimit")
                         .HasColumnType("integer");
 
+                    b.Property<string>("TopologyKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ConfigId");
@@ -1869,7 +1898,47 @@ namespace GZCTF.Migrations
 
                     b.HasIndex("NetworkId");
 
+                    b.HasIndex("ConfigId", "TopologyKey")
+                        .IsUnique();
+
                     b.ToTable("PenetrationNodes");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.PenetrationPublishedSnapshot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("GameId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PublishedVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SnapshotHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GameId", "PublishedVersion")
+                        .IsUnique();
+
+                    b.ToTable("PenetrationPublishedSnapshots");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.PenetrationResetRecord", b =>
@@ -1948,6 +2017,11 @@ namespace GZCTF.Migrations
                     b.Property<int>("TopologyNodeId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("TopologyNodeKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ContainerId");
@@ -2012,9 +2086,17 @@ namespace GZCTF.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
+                    b.Property<string>("TopologyKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("NodeId");
+
+                    b.HasIndex("NodeId", "TopologyKey")
+                        .IsUnique();
 
                     b.ToTable("PenetrationScoreItems");
                 });
@@ -2038,11 +2120,19 @@ namespace GZCTF.Migrations
                     b.Property<int>("ParticipationId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("PublishedVersion")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Score")
                         .HasColumnType("integer");
 
                     b.Property<int>("ScoreItemId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("ScoreItemTopologyKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -2069,6 +2159,8 @@ namespace GZCTF.Migrations
                     b.HasIndex("UserId");
 
                     b.HasIndex("GameId", "TeamId", "ScoreItemId");
+
+                    b.HasIndex("GameId", "TeamId", "PublishedVersion", "ScoreItemTopologyKey");
 
                     b.ToTable("PenetrationSubmissions");
                 });
@@ -5244,6 +5336,17 @@ namespace GZCTF.Migrations
                     b.Navigation("ImageTemplate");
 
                     b.Navigation("Network");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.PenetrationPublishedSnapshot", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.Game", "Game")
+                        .WithMany()
+                        .HasForeignKey("GameId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Game");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.PenetrationResetRecord", b =>
