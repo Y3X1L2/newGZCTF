@@ -98,9 +98,34 @@ public class ContainerConfig
     public string? HealthCheck { get; set; }
 
     /// <summary>
+    /// Use host/agent managed penetration fabric instead of Docker network attachments.
+    /// </summary>
+    public bool UsePenetrationFabric { get; set; }
+
+    /// <summary>
+    /// Grant NET_ADMIN so platform-generated runtime routes can be installed.
+    /// </summary>
+    public bool EnableNetworkAdmin { get; set; }
+
+    /// <summary>
+    /// Remove the default route after startup so runtime reachability is controlled by explicit routes.
+    /// </summary>
+    public bool RemoveDefaultRoute { get; set; }
+
+    /// <summary>
+    /// Enable IPv4 forwarding for route nodes.
+    /// </summary>
+    public bool EnableIpForwarding { get; set; }
+
+    /// <summary>
     /// Optional fixed fleet node target. When set, fleet deployment must use this node.
     /// </summary>
     public Guid? PreferredNodeId { get; set; }
+
+    /// <summary>
+    /// Internal scheduler hint: capacity has already been reserved by a higher-level batch deployment.
+    /// </summary>
+    public bool FleetCapacityReserved { get; set; }
 
     /// <summary>
     /// Explicit network attachments. When present, these supersede NetworkName/IPAddress/AdditionalNetworkNames.

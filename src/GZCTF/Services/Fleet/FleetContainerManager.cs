@@ -11,7 +11,7 @@ using DataContainer = GZCTF.Models.Data.Container;
 
 namespace GZCTF.Services.Fleet;
 
-public class FleetContainerManager : IContainerManager, IContainerPatchApplicator
+public class FleetContainerManager : IContainerManager, IContainerPatchApplicator, IContainerCommandExecutor, IPenetrationFabricManager
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly AgentClient _agentClient;
@@ -71,6 +71,8 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         }
 
         var node = schedule.Node ?? await nodeRepo.GetNodeByIdAsync(nodeId.Value, token);
+        if (schedule.Target is not null)
+            schedule.Target.Status = TargetStatus.Creating;
 
         if (node?.IsLocal == true)
         {
@@ -106,7 +108,12 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             EnvironmentVariables = config.EnvironmentVariables,
             StartCommand = config.StartCommand,
             HealthCheck = config.HealthCheck,
-            PreferredNodeId = config.PreferredNodeId
+            UsePenetrationFabric = config.UsePenetrationFabric,
+            EnableNetworkAdmin = config.EnableNetworkAdmin,
+            RemoveDefaultRoute = config.RemoveDefaultRoute,
+            EnableIpForwarding = config.EnableIpForwarding,
+            PreferredNodeId = config.PreferredNodeId,
+            FleetCapacityReserved = config.FleetCapacityReserved
         };
         var result = await _agentClient.CreateContainerAsync(nodeId.Value, remoteConfig, token);
 
@@ -149,11 +156,15 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             Action = TargetAction.Create,
             TargetNodeId = nodeId,
             Payload = JsonSerializer.Serialize(config),
-            Status = TargetStatus.Running
+            Status = TargetStatus.Creating
         };
         context.DeploymentTargets.Add(target);
 
-        if (node is null || !WeightedScheduler.CanHost(node, NodeCapability.Docker))
+        var canUseNode = config.FleetCapacityReserved
+            ? CanUseReservedDockerCapacity(node)
+            : node is not null && WeightedScheduler.CanHost(node, NodeCapability.Docker);
+
+        if (!canUseNode)
         {
             target.Status = TargetStatus.Failed;
             target.CompletedAt = DateTimeOffset.UtcNow;
@@ -162,25 +173,29 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             return null;
         }
 
-        FleetManager.ReserveCapacity(node, NodeCapability.Docker);
+        var selectedNode = node!;
 
-        if (node.IsLocal)
+        if (!config.FleetCapacityReserved)
+            FleetManager.ReserveCapacity(selectedNode, NodeCapability.Docker);
+
+        if (selectedNode.IsLocal)
         {
             var localContainer = await _localManager.CreateContainerAsync(config, token);
             if (localContainer is not null)
-                localContainer.NodeId = node.Id;
-            else
-                ReleaseReservedCapacity(node, NodeCapability.Docker);
+                localContainer.NodeId = selectedNode.Id;
+            else if (!config.FleetCapacityReserved)
+                ReleaseReservedCapacity(selectedNode, NodeCapability.Docker);
 
-            CompleteDeploymentTarget(target, localContainer, node.HostAddress);
+            CompleteDeploymentTarget(target, localContainer, selectedNode.HostAddress);
             await SaveFleetStateAsync(context, "complete preferred local Docker deployment target", token);
             return localContainer;
         }
 
-        var result = await _agentClient.CreateContainerAsync(node.Id, config, token);
+        var result = await _agentClient.CreateContainerAsync(selectedNode.Id, config, token);
         if (result is null)
         {
-            ReleaseReservedCapacity(node, NodeCapability.Docker);
+            if (!config.FleetCapacityReserved)
+                ReleaseReservedCapacity(selectedNode, NodeCapability.Docker);
             FailDeploymentTarget(target, "Agent container creation failed on preferred node");
             await SaveFleetStateAsync(context, "fail preferred remote Docker deployment target", token);
             return null;
@@ -192,13 +207,13 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             Image = config.Image,
             IP = result.IP,
             Port = result.Port,
-            PublicIP = node.HostAddress,
+            PublicIP = selectedNode.HostAddress,
             PublicPort = result.PublicPort,
             IsProxy = false,
             Status = ContainerStatus.Running,
-            NodeId = node.Id,
+            NodeId = selectedNode.Id,
         };
-        CompleteDeploymentTarget(target, remoteContainer, node.HostAddress);
+        CompleteDeploymentTarget(target, remoteContainer, selectedNode.HostAddress);
         await SaveFleetStateAsync(context, "complete preferred remote Docker deployment target", token);
         return remoteContainer;
     }
@@ -222,18 +237,11 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         }
         else
         {
-            try
-            {
-                await _agentClient.DestroyContainerAsync(container.NodeId.Value, container.ContainerId, token);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Agent container destruction failed for {ContainerId}", container.ContainerId);
-            }
+            await _agentClient.DestroyContainerAsync(container.NodeId.Value, container.ContainerId, token);
             container.Status = ContainerStatus.Destroyed;
         }
 
-        if (node is not null)
+        if (node is not null && container.Status == ContainerStatus.Destroyed)
         {
             ReleaseReservedCapacity(node, NodeCapability.Docker);
             await SaveFleetStateAsync(context, "release Docker node capacity after destroy", token);
@@ -253,6 +261,123 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         return node?.IsLocal == true
             ? await _localManager.ApplyPatchAsync(container, archive, token)
             : ContainerPatchApplyResult.Unsupported("Remote fleet node patch application is not supported");
+    }
+
+    public bool IsSupported => true;
+
+    public async Task<ContainerCommandResult> ExecuteAsync(DataContainer container, IReadOnlyList<string> command,
+        TimeSpan timeout, CancellationToken token = default)
+    {
+        if (!container.NodeId.HasValue)
+            return await _localManager.ExecuteAsync(container, command, timeout, token);
+
+        using var scope = _scopeFactory.CreateScope();
+        var nodeRepo = scope.ServiceProvider.GetRequiredService<INodeRepository>();
+        var node = await nodeRepo.GetNodeByIdAsync(container.NodeId.Value, token);
+
+        if (node?.IsLocal == true)
+            return await _localManager.ExecuteAsync(container, command, timeout, token);
+
+        var result = await _agentClient.ExecuteContainerCommandAsync(container.NodeId.Value, container.ContainerId,
+            command, (int)Math.Ceiling(timeout.TotalSeconds), token);
+        return new ContainerCommandResult(result.IsSupported, result.Succeeded, result.TimedOut,
+            result.ExitCode, result.Message);
+    }
+
+    public async Task<PenetrationFabricResult> CreateNetworkAsync(string networkName, string cidr,
+        CancellationToken token = default)
+    {
+        return PenetrationFabricResult.Unsupported(
+            "Fleet fabric network creation requires a runtime container context; call AttachInterfaceAsync after containers are scheduled.");
+    }
+
+    public async Task<PenetrationFabricResult> AttachInterfaceAsync(DataContainer container,
+        PenetrationFabricInterfaceSpec spec, CancellationToken token = default)
+    {
+        var node = await ResolveContainerNode(container, token);
+        if (node is null)
+            return PenetrationFabricResult.Unsupported("容器没有可解析的 Fleet 节点，不能配置 fabric 网卡。");
+
+        if (node.IsLocal)
+        {
+            var create = await _localManager.CreateNetworkAsync(spec.NetworkName, spec.NetworkCidr, token);
+            return create.Succeeded
+                ? await _localManager.AttachInterfaceAsync(container, spec, token)
+                : create;
+        }
+
+        var network = await _agentClient.CreateFabricNetworkAsync(node.Id, spec.NetworkName, spec.NetworkCidr, token);
+        return network.Succeeded
+            ? await _agentClient.AttachFabricInterfaceAsync(node.Id, container.ContainerId, spec, token)
+            : network;
+    }
+
+    public async Task<PenetrationFabricResult> EnableForwardingAsync(DataContainer container,
+        CancellationToken token = default)
+    {
+        var node = await ResolveContainerNode(container, token);
+        if (node is null)
+            return PenetrationFabricResult.Unsupported("容器没有可解析的 Fleet 节点，不能开启 fabric 转发。");
+
+        return node.IsLocal
+            ? await _localManager.EnableForwardingAsync(container, token)
+            : await _agentClient.EnableFabricForwardingAsync(node.Id, container.ContainerId, token);
+    }
+
+    public async Task<PenetrationFabricResult> ApplyRouteAsync(DataContainer container, string targetCidr,
+        string gatewayIp, CancellationToken token = default)
+    {
+        var node = await ResolveContainerNode(container, token);
+        if (node is null)
+            return PenetrationFabricResult.Unsupported("容器没有可解析的 Fleet 节点，不能写入 fabric 路由。");
+
+        return node.IsLocal
+            ? await _localManager.ApplyRouteAsync(container, targetCidr, gatewayIp, token)
+            : await _agentClient.ApplyFabricRouteAsync(node.Id, container.ContainerId, targetCidr, gatewayIp, token);
+    }
+
+    public async Task<PenetrationFabricResult> ProbeAsync(DataContainer container, string targetIp,
+        CancellationToken token = default)
+    {
+        var node = await ResolveContainerNode(container, token);
+        if (node is null)
+            return PenetrationFabricResult.Unsupported("容器没有可解析的 Fleet 节点，不能执行 fabric 探测。");
+
+        return node.IsLocal
+            ? await _localManager.ProbeAsync(container, targetIp, token)
+            : await _agentClient.ProbeFabricAsync(node.Id, container.ContainerId, targetIp, token);
+    }
+
+    public async Task<PenetrationFabricResult> RemoveNetworkAsync(string networkName, CancellationToken token = default)
+    {
+        var removed = false;
+        using var scope = _scopeFactory.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var nodes = await context.WorkerNodes.AsNoTracking()
+            .Where(n => n.Status == NodeStatus.Online)
+            .ToListAsync(token);
+
+        foreach (var node in nodes)
+        {
+            var result = node.IsLocal
+                ? await _localManager.RemoveNetworkAsync(networkName, token)
+                : await _agentClient.RemoveFabricNetworkAsync(node.Id, networkName, token);
+            removed |= result.Succeeded || !result.IsSupported;
+        }
+
+        return removed
+            ? PenetrationFabricResult.Success("fabric network cleanup attempted")
+            : PenetrationFabricResult.Unsupported("没有可用节点执行 fabric 网络清理。");
+    }
+
+    async Task<WorkerNode?> ResolveContainerNode(DataContainer container, CancellationToken token)
+    {
+        if (!container.NodeId.HasValue)
+            return null;
+
+        using var scope = _scopeFactory.CreateScope();
+        var nodeRepo = scope.ServiceProvider.GetRequiredService<INodeRepository>();
+        return await nodeRepo.GetNodeByIdAsync(container.NodeId.Value, token);
     }
 
     async Task<DataContainer?> TryCreateLocalFallback(ContainerConfig config, DeploymentTarget? target,
@@ -356,5 +481,15 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         target.Status = TargetStatus.Failed;
         target.CompletedAt = DateTimeOffset.UtcNow;
         target.ErrorMessage = message;
+    }
+
+    static bool CanUseReservedDockerCapacity(WorkerNode? node)
+    {
+        if (node is null)
+            return false;
+
+        return node.GetEffectiveStatus(DateTimeOffset.UtcNow) == NodeStatus.Online
+            && node.IsSchedulable
+            && (node.Capabilities & NodeCapability.Docker) == NodeCapability.Docker;
     }
 }

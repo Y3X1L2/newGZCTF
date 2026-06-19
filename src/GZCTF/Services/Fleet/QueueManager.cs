@@ -58,12 +58,12 @@ public class QueueManager
             }
 
             target.TargetNodeId = node.Id;
-            target.Status = TargetStatus.Running;
+            target.Status = TargetStatus.Assigned;
             target.ErrorMessage = null;
-            FleetManager.ReserveCapacity(node, required);
             processed++;
 
-            _logger.LogInformation("Queued deployment {Id} ({Type}) assigned to node {NodeId}",
+            _logger.LogInformation(
+                "Queued deployment {Id} ({Type}) assigned to node {NodeId}; creation is deferred to a target-specific worker.",
                 target.Id, target.Type, node.Id);
         }
 

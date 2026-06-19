@@ -4,6 +4,7 @@ using System.Text.Json;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
+using GZCTF.Services.Container.Manager;
 
 namespace GZCTF.Services.Fleet;
 
@@ -53,7 +54,11 @@ public class AgentClient
             config.PublishPort,
             config.EnvironmentVariables,
             config.StartCommand,
-            config.HealthCheck
+            config.HealthCheck,
+            config.UsePenetrationFabric,
+            config.EnableNetworkAdmin,
+            config.RemoveDefaultRoute,
+            config.EnableIpForwarding
         });
         var response = await client.PostAsync("/api/containers/create", new StringContent(body, Encoding.UTF8, "application/json"), token);
 
@@ -71,34 +76,170 @@ public class AgentClient
     public async Task DestroyContainerAsync(Guid nodeId, string containerId, CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
-        if (node is null) return;
+        if (node is null)
+            throw new InvalidOperationException($"Fleet node {nodeId} was not found.");
 
         var client = BuildClient(node);
-        try
+        var response = await client.DeleteAsync($"/api/containers/{Uri.EscapeDataString(containerId)}", token);
+        if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
         {
-            await client.DeleteAsync($"/api/containers/{containerId}", token);
+            var responseBody = await response.Content.ReadAsStringAsync(token);
+            throw new InvalidOperationException(
+                $"Agent container deletion failed on node {nodeId}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
         }
-        catch (Exception ex)
+    }
+
+    public async Task<AgentCommandResult> ExecuteContainerCommandAsync(Guid nodeId, string containerId,
+        IReadOnlyList<string> command, int timeoutSeconds, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null)
+            return AgentCommandResult.Unsupported($"Fleet node {nodeId} was not found.");
+
+        var client = BuildClient(node);
+        var body = JsonSerializer.Serialize(new
         {
-            _logger.LogWarning(ex, "Agent destroy container failed on node {NodeId}", nodeId);
+            command,
+            timeoutSeconds = Math.Clamp(timeoutSeconds, 1, 60)
+        });
+        var response = await client.PostAsync($"/api/containers/{Uri.EscapeDataString(containerId)}/exec",
+            new StringContent(body, Encoding.UTF8, "application/json"), token);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync(token);
+            return AgentCommandResult.Failed(null,
+                $"Agent command failed: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
         }
+
+        var result = await response.Content.ReadFromJsonAsync<AgentCommandResult>(token);
+        return result ?? AgentCommandResult.Failed(null, "Agent returned an empty command result.");
     }
 
     public async Task RemoveNetworkAsync(Guid nodeId, string networkName, CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
-        if (node is null) return;
+        if (node is null)
+            throw new InvalidOperationException($"Fleet node {nodeId} was not found.");
 
         var client = BuildClient(node);
-        try
+        var response = await client.DeleteAsync($"/api/containers/networks/{Uri.EscapeDataString(networkName)}", token);
+        if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
         {
-            await client.DeleteAsync($"/api/containers/networks/{Uri.EscapeDataString(networkName)}", token);
+            var responseBody = await response.Content.ReadAsStringAsync(token);
+            throw new InvalidOperationException(
+                $"Agent network deletion failed on node {nodeId}, network {networkName}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
         }
-        catch (Exception ex)
+    }
+
+    public async Task<PenetrationFabricResult> CreateFabricNetworkAsync(Guid nodeId, string networkName, string cidr,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null)
+            return PenetrationFabricResult.Unsupported($"Fleet node {nodeId} was not found.");
+
+        var client = BuildClient(node);
+        return await PostFabricAsync(client, "/api/containers/fabric/networks",
+            new { networkName, cidr }, token);
+    }
+
+    public async Task<PenetrationFabricResult> AttachFabricInterfaceAsync(Guid nodeId, string containerId,
+        PenetrationFabricInterfaceSpec spec, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null)
+            return PenetrationFabricResult.Unsupported($"Fleet node {nodeId} was not found.");
+
+        var client = BuildClient(node);
+        return await PostFabricAsync(client,
+            $"/api/containers/{Uri.EscapeDataString(containerId)}/fabric/interfaces",
+            new
+            {
+                spec.NetworkName,
+                NetworkCidr = spec.NetworkCidr,
+                spec.HostInterfaceName,
+                spec.ContainerInterfaceName,
+                spec.IpAddress,
+                spec.PrefixLength,
+                spec.IsPrimary,
+                spec.RemoveDefaultRoute
+            }, token);
+    }
+
+    public async Task<PenetrationFabricResult> EnableFabricForwardingAsync(Guid nodeId, string containerId,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null)
+            return PenetrationFabricResult.Unsupported($"Fleet node {nodeId} was not found.");
+
+        var client = BuildClient(node);
+        return await PostFabricAsync(client,
+            $"/api/containers/{Uri.EscapeDataString(containerId)}/fabric/forwarding",
+            new { }, token);
+    }
+
+    public async Task<PenetrationFabricResult> ApplyFabricRouteAsync(Guid nodeId, string containerId,
+        string targetCidr, string gatewayIp, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null)
+            return PenetrationFabricResult.Unsupported($"Fleet node {nodeId} was not found.");
+
+        var client = BuildClient(node);
+        return await PostFabricAsync(client,
+            $"/api/containers/{Uri.EscapeDataString(containerId)}/fabric/routes",
+            new { targetCidr, gatewayIp }, token);
+    }
+
+    public async Task<PenetrationFabricResult> ProbeFabricAsync(Guid nodeId, string containerId, string targetIp,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null)
+            return PenetrationFabricResult.Unsupported($"Fleet node {nodeId} was not found.");
+
+        var client = BuildClient(node);
+        return await PostFabricAsync(client,
+            $"/api/containers/{Uri.EscapeDataString(containerId)}/fabric/probe",
+            new { targetIp }, token);
+    }
+
+    public async Task<PenetrationFabricResult> RemoveFabricNetworkAsync(Guid nodeId, string networkName,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null)
+            return PenetrationFabricResult.Unsupported($"Fleet node {nodeId} was not found.");
+
+        var client = BuildClient(node);
+        var response = await client.DeleteAsync($"/api/containers/fabric/networks/{Uri.EscapeDataString(networkName)}", token);
+        if (!response.IsSuccessStatusCode)
         {
-            _logger.LogWarning(ex, "Agent network removal failed on node {NodeId} for {NetworkName}",
-                nodeId, networkName);
+            var responseBody = await response.Content.ReadAsStringAsync(token);
+            return PenetrationFabricResult.Failed(null,
+                $"Agent fabric network deletion failed: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
         }
+
+        var result = await response.Content.ReadFromJsonAsync<PenetrationFabricResult>(token);
+        return result ?? PenetrationFabricResult.Failed(null, "Agent returned an empty fabric result.");
+    }
+
+    static async Task<PenetrationFabricResult> PostFabricAsync(HttpClient client, string path, object body,
+        CancellationToken token)
+    {
+        var response = await client.PostAsync(path,
+            new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json"), token);
+        if (!response.IsSuccessStatusCode)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync(token);
+            return PenetrationFabricResult.Failed(null,
+                $"Agent fabric command failed: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<PenetrationFabricResult>(token);
+        return result ?? PenetrationFabricResult.Failed(null, "Agent returned an empty fabric result.");
     }
 
     public async Task<AgentCreateVmResponse?> CreateVmAsync(Guid nodeId, AgentCreateVmRequest request, CancellationToken token)
@@ -122,16 +263,16 @@ public class AgentClient
     public async Task DestroyVmAsync(Guid nodeId, string vmName, CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
-        if (node is null) return;
+        if (node is null)
+            throw new InvalidOperationException($"Fleet node {nodeId} was not found.");
 
         var client = BuildClient(node);
-        try
+        var response = await client.DeleteAsync($"/api/vms/{Uri.EscapeDataString(vmName)}", token);
+        if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
         {
-            await client.DeleteAsync($"/api/vms/{vmName}", token);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Agent destroy VM failed on node {NodeId}", nodeId);
+            var responseBody = await response.Content.ReadAsStringAsync(token);
+            throw new InvalidOperationException(
+                $"Agent VM deletion failed on node {nodeId}, VM {vmName}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
         }
     }
 
@@ -233,6 +374,30 @@ public class AgentCreateVmResponse
     public string VmName { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string? VncAddress { get; set; }
+}
+
+public class AgentCommandResult
+{
+    public bool IsSupported { get; set; } = true;
+    public bool Succeeded { get; set; }
+    public bool TimedOut { get; set; }
+    public long? ExitCode { get; set; }
+    public string? Message { get; set; }
+
+    public static AgentCommandResult Failed(long? exitCode, string? message) => new()
+    {
+        Succeeded = false,
+        TimedOut = false,
+        ExitCode = exitCode,
+        Message = message
+    };
+
+    public static AgentCommandResult Unsupported(string? message) => new()
+    {
+        IsSupported = false,
+        Succeeded = false,
+        Message = message
+    };
 }
 
 public class AgentVmIpResponse

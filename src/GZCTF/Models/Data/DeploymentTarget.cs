@@ -26,4 +26,13 @@ public class DeploymentTarget
 
 public enum TargetType : byte { Docker = 0, Vm = 1 }
 public enum TargetAction : byte { Create = 0, Start = 1, Destroy = 2, SnapshotRevert = 3 }
-public enum TargetStatus : byte { Pending = 0, Running = 1, Completed = 2, Failed = 3, Cancelled = 4 }
+public enum TargetStatus : byte
+{
+    Pending = 0,
+    Running = 1,
+    Completed = 2,
+    Failed = 3,
+    Cancelled = 4,
+    Assigned = 5,
+    Creating = 6
+}

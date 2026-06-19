@@ -4,6 +4,7 @@ using System.Net;
 using GZCTF.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GZCTF.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260619060822_AddPenetrationRuntimeRoutes")]
+    partial class AddPenetrationRuntimeRoutes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -115,11 +118,6 @@ namespace GZCTF.Migrations
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
-
-                    b.Property<int>("TeamIndex")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
 
                     b.Property<int>("TeamId")
                         .HasColumnType("integer");
@@ -1926,14 +1924,6 @@ namespace GZCTF.Migrations
                     b.Property<int>("OrderIndex")
                         .HasColumnType("integer");
 
-                    b.Property<string>("PlayerAlias")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("PlayerDescription")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
                     b.Property<double>("PositionX")
                         .HasColumnType("double precision");
 
@@ -2214,11 +2204,6 @@ namespace GZCTF.Migrations
 
                     b.Property<bool>("IsVisible")
                         .HasColumnType("boolean");
-
-                    b.Property<bool>("IsCheckpoint")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
 
                     b.Property<int>("MaxAttempts")
                         .HasColumnType("integer");

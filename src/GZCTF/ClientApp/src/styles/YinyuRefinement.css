@@ -4011,6 +4011,274 @@
   min-height: 100%;
 }
 
+.yy-pentest-attack-layout {
+  display: grid;
+  grid-template-columns: minmax(15rem, 18rem) minmax(0, 1.35fr) minmax(20rem, 0.85fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.yy-pentest-attack-side,
+.yy-pentest-attack-detail {
+  min-width: 0;
+}
+
+.yy-pentest-attack-map {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.yy-pentest-fog-map {
+  position: relative;
+  min-height: 32rem;
+  overflow: hidden;
+  padding: 0.25rem 0.25rem 0.65rem;
+  border: 1px solid rgba(107, 238, 177, 0.08);
+  border-radius: calc(var(--yy-radius) - 3px);
+  background:
+    radial-gradient(ellipse at 50% 48%, rgba(0, 0, 0, 0.26), transparent 58%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.025), transparent);
+  cursor: grab;
+  scrollbar-color: rgba(107, 238, 177, 0.45) rgba(255, 255, 255, 0.05);
+}
+
+.yy-pentest-fog-map:active {
+  cursor: grabbing;
+}
+
+.yy-pentest-fog-board {
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(13rem, 1fr);
+  gap: 1rem;
+  min-width: max-content;
+  padding: 0.7rem;
+  transform-origin: 0 0;
+  transition: transform 120ms ease-out;
+}
+
+.yy-pentest-fog-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.yy-pentest-depth-label {
+  font-family: 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace;
+  text-transform: uppercase;
+}
+
+.yy-pentest-fog-node {
+  width: 100%;
+  min-height: 5.2rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.72rem;
+  padding: 0.9rem;
+  border: 1px solid rgba(107, 238, 177, 0.18);
+  border-radius: calc(var(--yy-radius) - 3px);
+  color: rgba(235, 255, 245, 0.96);
+  text-align: left;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(107, 238, 177, 0.12), transparent 55%),
+    linear-gradient(135deg, rgba(9, 25, 22, 0.86), rgba(4, 9, 8, 0.72));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.025);
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, opacity 160ms ease;
+}
+
+.yy-pentest-fog-node:hover,
+.yy-pentest-fog-node:focus-visible,
+.yy-pentest-fog-node[data-active='true'] {
+  border-color: rgba(107, 238, 177, 0.72);
+  transform: translateY(-1px);
+  outline: none;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(107, 238, 177, 0.24), transparent 58%),
+    linear-gradient(135deg, rgba(13, 42, 35, 0.92), rgba(6, 14, 13, 0.78));
+}
+
+.yy-pentest-fog-node[data-state='Hidden'] {
+  cursor: default;
+  color: rgba(210, 220, 216, 0.56);
+  border-color: rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.34), transparent 70%),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 10px),
+    rgba(2, 5, 5, 0.84);
+  opacity: 0.76;
+}
+
+.yy-pentest-fog-node[data-state='Revealed'] {
+  border-color: rgba(207, 190, 130, 0.34);
+}
+
+.yy-pentest-fog-node[data-state='Completed'] {
+  border-color: rgba(107, 238, 177, 0.82);
+  box-shadow:
+    inset 0 0 0 1px rgba(107, 238, 177, 0.15),
+    0 0 1.8rem rgba(107, 238, 177, 0.08);
+}
+
+.yy-pentest-fog-node-icon {
+  width: 2.2rem;
+  height: 2.2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(107, 238, 177, 0.1);
+  color: rgba(139, 255, 197, 0.96);
+}
+
+.yy-pentest-fog-node-main {
+  min-width: 0;
+  display: grid;
+  gap: 0.18rem;
+}
+
+.yy-pentest-fog-node-main strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.96rem;
+}
+
+.yy-pentest-fog-node-main small,
+.yy-pentest-fog-node-progress {
+  color: var(--yy-muted-readable);
+  font-size: 0.76rem;
+  font-family: 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace;
+}
+
+.yy-pentest-fog-node-progress {
+  padding: 0.2rem 0.42rem;
+  border-radius: 999px;
+  background: rgba(107, 238, 177, 0.08);
+}
+
+.yy-pentest-fog-legend {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.yy-pentest-node-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.yy-pentest-node-summary span {
+  padding: 0.6rem;
+  border: 1px solid rgba(107, 238, 177, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(235, 255, 245, 0.94);
+  font-weight: 800;
+  text-align: center;
+}
+
+.yy-pentest-progress .mantine-Progress-section {
+  background: linear-gradient(90deg, #42f49d, #78f8be, #b9a7ff);
+}
+
+.yy-pentest-mini-map {
+  position: absolute;
+  right: 0.85rem;
+  bottom: 0.85rem;
+  display: flex;
+  align-items: end;
+  gap: 0.22rem;
+  padding: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(1, 7, 6, 0.74);
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+}
+
+.yy-pentest-mini-map i {
+  width: 0.36rem;
+  min-height: 0.42rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(107, 238, 177, 0.82), rgba(185, 167, 255, 0.42));
+}
+
+.yy-pentest-path-strip {
+  display: flex;
+  gap: 0.55rem;
+  overflow-x: auto;
+  padding: 0.15rem 0.05rem 0.35rem;
+  scrollbar-color: rgba(107, 238, 177, 0.45) rgba(255, 255, 255, 0.05);
+}
+
+.yy-pentest-path-chip {
+  flex: 0 0 auto;
+  display: inline-grid;
+  grid-template-columns: auto auto auto;
+  align-items: center;
+  gap: 0.45rem;
+  max-width: min(32rem, 82vw);
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgba(107, 238, 177, 0.18);
+  border-radius: 999px;
+  color: rgba(235, 255, 245, 0.94);
+  background:
+    linear-gradient(135deg, rgba(9, 24, 20, 0.76), rgba(9, 12, 14, 0.62)),
+    radial-gradient(circle at 12% 0%, rgba(107, 238, 177, 0.12), transparent 55%);
+  backdrop-filter: blur(14px);
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+.yy-pentest-path-chip:hover,
+.yy-pentest-path-chip:focus-visible {
+  transform: translateY(-1px);
+  outline: none;
+  border-color: rgba(107, 238, 177, 0.64);
+  background:
+    linear-gradient(135deg, rgba(13, 38, 31, 0.84), rgba(14, 13, 20, 0.66)),
+    radial-gradient(circle at 15% 0%, rgba(120, 248, 190, 0.2), transparent 58%);
+}
+
+.yy-pentest-path-chip span,
+.yy-pentest-path-chip strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+}
+
+.yy-pentest-path-chip i {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgba(185, 167, 255, 0.92);
+  font-size: 0.72rem;
+  font-style: normal;
+}
+
+.yy-pentest-path-chip i::before,
+.yy-pentest-path-chip i::after {
+  content: '';
+  width: 1.1rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(107, 238, 177, 0.72));
+}
+
+.yy-pentest-path-chip i::after {
+  background: linear-gradient(90deg, rgba(185, 167, 255, 0.72), transparent);
+}
+
+.yy-pentest-path-chip[data-state='Accessible'] {
+  border-color: rgba(107, 238, 177, 0.42);
+}
+
 .yy-pentest-toolbar {
   padding: 0.75rem;
 }
@@ -4335,6 +4603,22 @@
 
   .yy-pentest-workspace-grid {
     grid-template-columns: 1fr;
+  }
+
+  .yy-pentest-attack-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .yy-pentest-fog-map {
+    min-height: 0;
+    overflow-x: auto;
+  }
+
+  .yy-pentest-fog-board {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    grid-template-columns: 1fr;
+    min-width: 100%;
   }
 
   .yy-pentest-side-panel {

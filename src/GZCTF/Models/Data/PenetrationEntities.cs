@@ -65,6 +65,24 @@ public enum PenetrationPolicyAction : byte
     Deny = 1
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter<PenetrationEnforcementMode>))]
+public enum PenetrationEnforcementMode : byte
+{
+    HintOnly = 0,
+    RuntimeRoute = 1,
+    Both = 2
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter<PenetrationRouteStatus>))]
+public enum PenetrationRouteStatus : byte
+{
+    HintOnly = 0,
+    RoutePlanned = 1,
+    RouteApplied = 2,
+    RouteFailed = 3,
+    Unsupported = 4
+}
+
 [JsonConverter(typeof(JsonStringEnumConverter<PenetrationProtocol>))]
 public enum PenetrationProtocol : byte
 {
@@ -80,7 +98,21 @@ public enum PenetrationRuntimeStatus : byte
     Pending = 0,
     Running = 1,
     Stopped = 2,
-    Failed = 3
+    Failed = 3,
+    CreatingNetworks = 4,
+    CreatingContainers = 5,
+    CleanupPending = 6,
+    Orphaned = 7,
+    ManualCleanupRequired = 8
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter<PenetrationDeploymentEventLevel>))]
+public enum PenetrationDeploymentEventLevel : byte
+{
+    Info = 0,
+    Success = 1,
+    Warning = 2,
+    Error = 3
 }
 
 [Index(nameof(GameId), nameof(PublishedVersion), IsUnique = true)]
@@ -211,6 +243,12 @@ public class PenetrationNode
     [MaxLength(512)]
     public string? Description { get; set; }
 
+    [MaxLength(128)]
+    public string? PlayerAlias { get; set; }
+
+    [MaxLength(512)]
+    public string? PlayerDescription { get; set; }
+
     public PenetrationNodeType NodeType { get; set; } = PenetrationNodeType.Internal;
 
     public int? ImageTemplateId { get; set; }
@@ -229,6 +267,8 @@ public class PenetrationNode
     public bool IsEntry { get; set; }
 
     public bool PublishPort { get; set; }
+
+    public bool AllowRouting { get; set; }
 
     [MaxLength(64)]
     public string? StaticIp { get; set; }
@@ -325,6 +365,10 @@ public class PenetrationEdge
 
     public bool IsRouteHint { get; set; } = true;
 
+    public PenetrationEnforcementMode EnforcementMode { get; set; } = PenetrationEnforcementMode.HintOnly;
+
+    public int Priority { get; set; } = 100;
+
     [MaxLength(128)]
     public string? Label { get; set; }
 
@@ -368,6 +412,8 @@ public class PenetrationScoreItem
 
     public bool IsVisible { get; set; } = true;
 
+    public bool IsCheckpoint { get; set; }
+
     [MaxLength(512)]
     public string PrerequisiteItemIds { get; set; } = "[]";
 
@@ -392,6 +438,8 @@ public class PenetrationTeamEnvironment
     [MaxLength(128)]
     public string NetworkPrefix { get; set; } = string.Empty;
 
+    public int TeamIndex { get; set; }
+
     public int PublishedVersion { get; set; }
 
     public PenetrationRuntimeStatus Status { get; set; } = PenetrationRuntimeStatus.Pending;
@@ -405,6 +453,12 @@ public class PenetrationTeamEnvironment
     [MaxLength(1024)]
     public string? LastError { get; set; }
 
+    public int CleanupRetryCount { get; set; }
+
+    public DateTimeOffset? NextCleanupAt { get; set; }
+
+    public DateTimeOffset? LastCleanupAttemptAt { get; set; }
+
     public Game Game { get; set; } = null!;
 
     public Team Team { get; set; } = null!;
@@ -413,6 +467,39 @@ public class PenetrationTeamEnvironment
     public WorkerNode? Node { get; set; }
 
     public List<PenetrationRuntimeNode> RuntimeNodes { get; set; } = [];
+
+    public List<PenetrationDeploymentEvent> DeploymentEvents { get; set; } = [];
+
+    public List<PenetrationRuntimeRoute> RuntimeRoutes { get; set; } = [];
+}
+
+[Index(nameof(EnvironmentId), nameof(CreatedAt))]
+public class PenetrationDeploymentEvent
+{
+    [Key]
+    public int Id { get; set; }
+
+    public int EnvironmentId { get; set; }
+
+    [MaxLength(64)]
+    public string Stage { get; set; } = string.Empty;
+
+    public PenetrationDeploymentEventLevel Level { get; set; } = PenetrationDeploymentEventLevel.Info;
+
+    [MaxLength(256)]
+    public string Message { get; set; } = string.Empty;
+
+    [MaxLength(128)]
+    public string? NodeName { get; set; }
+
+    [MaxLength(1024)]
+    public string? Detail { get; set; }
+
+    public Guid? UserId { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public PenetrationTeamEnvironment Environment { get; set; } = null!;
 }
 
 [Index(nameof(EnvironmentId))]
@@ -455,6 +542,59 @@ public class PenetrationRuntimeNode
     public PenetrationNode TopologyNode { get; set; } = null!;
 
     public Container? Container { get; set; }
+}
+
+[Index(nameof(EnvironmentId))]
+[Index(nameof(EdgeTopologyKey))]
+public class PenetrationRuntimeRoute
+{
+    [Key]
+    public int Id { get; set; }
+
+    public int EnvironmentId { get; set; }
+
+    [MaxLength(64)]
+    public string EdgeTopologyKey { get; set; } = string.Empty;
+
+    [MaxLength(128)]
+    public string Label { get; set; } = string.Empty;
+
+    public PenetrationEnforcementMode EnforcementMode { get; set; } = PenetrationEnforcementMode.HintOnly;
+
+    public PenetrationRouteStatus Status { get; set; } = PenetrationRouteStatus.RoutePlanned;
+
+    [MaxLength(128)]
+    public string? RouteNodeKey { get; set; }
+
+    [MaxLength(128)]
+    public string? RouteNodeName { get; set; }
+
+    [MaxLength(128)]
+    public string? SourceNetworkName { get; set; }
+
+    [MaxLength(128)]
+    public string? TargetNetworkName { get; set; }
+
+    [MaxLength(64)]
+    public string? SourceCidr { get; set; }
+
+    [MaxLength(64)]
+    public string? TargetCidr { get; set; }
+
+    [MaxLength(64)]
+    public string? GatewayIp { get; set; }
+
+    [MaxLength(1024)]
+    public string? CommandSummary { get; set; }
+
+    [MaxLength(1024)]
+    public string? Message { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public DateTimeOffset? AppliedAt { get; set; }
+
+    public PenetrationTeamEnvironment Environment { get; set; } = null!;
 }
 
 [Index(nameof(GameId), nameof(TeamId), nameof(ScoreItemId))]

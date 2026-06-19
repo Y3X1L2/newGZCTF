@@ -7,7 +7,7 @@ using k8s.Models;
 
 namespace GZCTF.Services.Container.Manager;
 
-public class KubernetesManager : IContainerManager, IContainerPatchApplicator
+public class KubernetesManager : IContainerManager, IContainerPatchApplicator, IContainerCommandExecutor, IPenetrationFabricManager
 {
     private readonly Kubernetes _client;
     private readonly ILogger<KubernetesManager> _logger;
@@ -242,4 +242,33 @@ public class KubernetesManager : IContainerManager, IContainerPatchApplicator
     public Task<ContainerPatchApplyResult> ApplyPatchAsync(Models.Data.Container container, Stream archive,
         CancellationToken token = default) =>
         Task.FromResult(ContainerPatchApplyResult.Unsupported("Kubernetes container patch application is not supported"));
+
+    public Task<ContainerCommandResult> ExecuteAsync(Models.Data.Container container, IReadOnlyList<string> command,
+        TimeSpan timeout, CancellationToken token = default) =>
+        Task.FromResult(ContainerCommandResult.Unsupported("Kubernetes container command execution is not supported"));
+
+    public bool IsSupported => false;
+
+    public Task<PenetrationFabricResult> CreateNetworkAsync(string networkName, string cidr,
+        CancellationToken token = default) =>
+        Task.FromResult(PenetrationFabricResult.Unsupported("Kubernetes penetration fabric is not supported"));
+
+    public Task<PenetrationFabricResult> AttachInterfaceAsync(Models.Data.Container container,
+        PenetrationFabricInterfaceSpec spec, CancellationToken token = default) =>
+        Task.FromResult(PenetrationFabricResult.Unsupported("Kubernetes penetration fabric is not supported"));
+
+    public Task<PenetrationFabricResult> EnableForwardingAsync(Models.Data.Container container,
+        CancellationToken token = default) =>
+        Task.FromResult(PenetrationFabricResult.Unsupported("Kubernetes penetration fabric is not supported"));
+
+    public Task<PenetrationFabricResult> ApplyRouteAsync(Models.Data.Container container, string targetCidr,
+        string gatewayIp, CancellationToken token = default) =>
+        Task.FromResult(PenetrationFabricResult.Unsupported("Kubernetes penetration fabric is not supported"));
+
+    public Task<PenetrationFabricResult> ProbeAsync(Models.Data.Container container, string targetIp,
+        CancellationToken token = default) =>
+        Task.FromResult(PenetrationFabricResult.Unsupported("Kubernetes penetration fabric is not supported"));
+
+    public Task<PenetrationFabricResult> RemoveNetworkAsync(string networkName, CancellationToken token = default) =>
+        Task.FromResult(PenetrationFabricResult.Unsupported("Kubernetes penetration fabric is not supported"));
 }

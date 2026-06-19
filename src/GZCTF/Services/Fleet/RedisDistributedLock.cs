@@ -13,17 +13,22 @@ public class RedisDistributedLock : IDistributedLockService, IDisposable
 {
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> LocalLocks = new();
     private static readonly TimeSpan DefaultWaitTimeout = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan DefaultLockExpiry = TimeSpan.FromSeconds(45);
+    private static readonly TimeSpan DefaultLockExpiry = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan MinimumLockExpiry = TimeSpan.FromSeconds(30);
     private static readonly LuaScript ReleaseScript = LuaScript.Prepare(
         "if redis.call('get', @key) == @token then return redis.call('del', @key) else return 0 end");
 
     private readonly ILogger<RedisDistributedLock> _logger;
     private readonly IConnectionMultiplexer? _redis;
     private readonly IDatabase? _database;
+    private readonly TimeSpan _lockExpiry;
 
     public RedisDistributedLock(IConfiguration config, ILogger<RedisDistributedLock> logger)
     {
         _logger = logger;
+        _lockExpiry = TimeSpan.FromSeconds(Math.Max(
+            MinimumLockExpiry.TotalSeconds,
+            config.GetValue("Fleet:DistributedLockExpirySeconds", (int)DefaultLockExpiry.TotalSeconds)));
         var connectionString = config.GetConnectionString("RedisCache");
 
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -56,10 +61,10 @@ public class RedisDistributedLock : IDistributedLockService, IDisposable
 
         while (DateTimeOffset.UtcNow <= deadline)
         {
-            if (await _database.LockTakeAsync(lockKey, token, DefaultLockExpiry))
+            if (await _database.LockTakeAsync(lockKey, token, _lockExpiry))
             {
                 _logger.LogDebug("Redis lock acquired for '{Key}'", key);
-                return new RedisLockReleaser(_database, lockKey, token, _logger);
+                return new RedisLockReleaser(_database, lockKey, token, _lockExpiry, _logger);
             }
 
             await Task.Delay(TimeSpan.FromMilliseconds(100));
@@ -89,15 +94,20 @@ public class RedisDistributedLock : IDistributedLockService, IDisposable
         private readonly IDatabase _database;
         private readonly RedisKey _key;
         private readonly RedisValue _token;
+        private readonly TimeSpan _expiry;
         private readonly ILogger _logger;
+        private readonly CancellationTokenSource _renewalCts = new();
+        private readonly Task _renewalTask;
         private bool _disposed;
 
-        public RedisLockReleaser(IDatabase database, RedisKey key, RedisValue token, ILogger logger)
+        public RedisLockReleaser(IDatabase database, RedisKey key, RedisValue token, TimeSpan expiry, ILogger logger)
         {
             _database = database;
             _key = key;
             _token = token;
+            _expiry = expiry;
             _logger = logger;
+            _renewalTask = Task.Run(RenewUntilDisposedAsync);
         }
 
         public void Dispose()
@@ -106,6 +116,7 @@ public class RedisDistributedLock : IDistributedLockService, IDisposable
                 return;
 
             _disposed = true;
+            _renewalCts.Cancel();
             try
             {
                 _database.ScriptEvaluate(ReleaseScript, new { key = _key, token = _token });
@@ -114,6 +125,39 @@ public class RedisDistributedLock : IDistributedLockService, IDisposable
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to release Redis lock for '{Key}'", _key);
+            }
+            finally
+            {
+                _renewalTask.ContinueWith(_ => _renewalCts.Dispose(), CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            }
+        }
+
+        async Task RenewUntilDisposedAsync()
+        {
+            var interval = TimeSpan.FromMilliseconds(Math.Max(1000, _expiry.TotalMilliseconds / 3));
+
+            try
+            {
+                using var timer = new PeriodicTimer(interval);
+                while (await timer.WaitForNextTickAsync(_renewalCts.Token))
+                {
+                    var renewed = await _database.LockExtendAsync(_key, _token, _expiry);
+                    if (!renewed)
+                    {
+                        _logger.LogWarning("Redis lock renewal failed for '{Key}'. The lock may have expired or been stolen.",
+                            _key);
+                        return;
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (_renewalCts.IsCancellationRequested)
+            {
+                // Expected on dispose.
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Redis lock renewal loop stopped for '{Key}'", _key);
             }
         }
     }

@@ -77,7 +77,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<PenetrationEdge> PenetrationEdges { get; set; } = null!;
     public DbSet<PenetrationScoreItem> PenetrationScoreItems { get; set; } = null!;
     public DbSet<PenetrationTeamEnvironment> PenetrationTeamEnvironments { get; set; } = null!;
+    public DbSet<PenetrationDeploymentEvent> PenetrationDeploymentEvents { get; set; } = null!;
     public DbSet<PenetrationRuntimeNode> PenetrationRuntimeNodes { get; set; } = null!;
+    public DbSet<PenetrationRuntimeRoute> PenetrationRuntimeRoutes { get; set; } = null!;
     public DbSet<PenetrationSubmission> PenetrationSubmissions { get; set; } = null!;
     public DbSet<PenetrationResetRecord> PenetrationResetRecords { get; set; } = null!;
     public DbSet<TrainingDirection> TrainingDirections { get; set; } = null!;
@@ -819,6 +821,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .HasConversion<string>()
                 .HasMaxLength(32);
 
+            entity.Property(e => e.EnforcementMode)
+                .HasConversion<string>()
+                .HasMaxLength(32)
+                .HasDefaultValue(PenetrationEnforcementMode.HintOnly);
+
+            entity.Property(e => e.Priority)
+                .HasDefaultValue(100);
+
             entity.HasOne(e => e.Config)
                 .WithMany(e => e.Edges)
                 .HasForeignKey(e => e.ConfigId)
@@ -828,6 +838,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
         builder.Entity<PenetrationScoreItem>(entity =>
         {
             entity.HasIndex(e => new { e.NodeId, e.TopologyKey }).IsUnique();
+
+            entity.Property(e => e.IsCheckpoint)
+                .HasDefaultValue(false);
 
             entity.HasOne(e => e.Node)
                 .WithMany(e => e.ScoreItems)
@@ -852,6 +865,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        builder.Entity<PenetrationDeploymentEvent>(entity =>
+        {
+            entity.Property(e => e.Level)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.HasOne(e => e.Environment)
+                .WithMany(e => e.DeploymentEvents)
+                .HasForeignKey(e => e.EnvironmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         builder.Entity<PenetrationRuntimeNode>(entity =>
         {
             entity.Property(e => e.Status)
@@ -872,6 +897,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .WithMany()
                 .HasForeignKey(e => e.ContainerId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<PenetrationRuntimeRoute>(entity =>
+        {
+            entity.Property(e => e.EnforcementMode)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.HasOne(e => e.Environment)
+                .WithMany(e => e.RuntimeRoutes)
+                .HasForeignKey(e => e.EnvironmentId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<PenetrationSubmission>(entity =>

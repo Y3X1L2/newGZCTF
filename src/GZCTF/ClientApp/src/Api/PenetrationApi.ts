@@ -48,6 +48,20 @@ export enum PenetrationPolicyAction {
   Deny = 'Deny',
 }
 
+export enum PenetrationEnforcementMode {
+  HintOnly = 'HintOnly',
+  RuntimeRoute = 'RuntimeRoute',
+  Both = 'Both',
+}
+
+export enum PenetrationRouteStatus {
+  HintOnly = 'HintOnly',
+  RoutePlanned = 'RoutePlanned',
+  RouteApplied = 'RouteApplied',
+  RouteFailed = 'RouteFailed',
+  Unsupported = 'Unsupported',
+}
+
 export enum PenetrationProtocol {
   Tcp = 'Tcp',
   Udp = 'Udp',
@@ -60,6 +74,18 @@ export enum PenetrationRuntimeStatus {
   Running = 'Running',
   Stopped = 'Stopped',
   Failed = 'Failed',
+  CreatingNetworks = 'CreatingNetworks',
+  CreatingContainers = 'CreatingContainers',
+  CleanupPending = 'CleanupPending',
+  Orphaned = 'Orphaned',
+  ManualCleanupRequired = 'ManualCleanupRequired',
+}
+
+export enum PenetrationDeploymentEventLevel {
+  Info = 'Info',
+  Success = 'Success',
+  Warning = 'Warning',
+  Error = 'Error',
 }
 
 export interface PenetrationConfigModel {
@@ -102,6 +128,8 @@ export interface PenetrationNodeModel {
   networkId: number
   name: string
   description?: string | null
+  playerAlias?: string | null
+  playerDescription?: string | null
   nodeType: PenetrationNodeType
   imageTemplateId?: number | null
   imageName?: string | null
@@ -111,6 +139,7 @@ export interface PenetrationNodeModel {
   exposePort: number
   isEntry: boolean
   publishPort: boolean
+  allowRouting: boolean
   staticIp?: string | null
   environmentVariables: Record<string, string>
   startCommand?: string | null
@@ -150,6 +179,8 @@ export interface PenetrationEdgeModel {
   portRange: string
   policyAction: PenetrationPolicyAction
   isRouteHint: boolean
+  enforcementMode: PenetrationEnforcementMode
+  priority: number
   label?: string | null
   description?: string | null
 }
@@ -166,6 +197,7 @@ export interface PenetrationScoreItemModel {
   flagTemplate?: string | null
   maxAttempts: number
   isVisible: boolean
+  isCheckpoint: boolean
   prerequisiteItemIds: number[]
   orderIndex: number
 }
@@ -231,6 +263,15 @@ export interface PenetrationPlanPolicyModel {
   portRange: string
   action: PenetrationPolicyAction
   isRouteHint: boolean
+  enforcementMode: PenetrationEnforcementMode
+  routeStatus: PenetrationRouteStatus
+  runtimeSummary: string
+  routeNodeName?: string | null
+  sourceNetworkName?: string | null
+  targetNetworkName?: string | null
+  gatewayIp?: string | null
+  compileMessage?: string | null
+  isExecutable: boolean
 }
 
 export interface PenetrationPlanFlagModel {
@@ -255,6 +296,7 @@ export interface PenetrationWorkspaceModel {
   networks: PenetrationWorkspaceNetworkModel[]
   nodes: PenetrationWorkspaceNodeModel[]
   policies: PenetrationWorkspacePolicyModel[]
+  attackGraph: PenetrationAttackGraphModel
 }
 
 export interface PenetrationWorkspaceNetworkModel {
@@ -288,6 +330,7 @@ export interface PenetrationTeamEnvironmentModel {
   workerNodeId?: string | null
   workerNodeName?: string | null
   networkPrefix: string
+  teamIndex: number
   publishedVersion: number
   status: PenetrationRuntimeStatus
   resetCount: number
@@ -295,6 +338,65 @@ export interface PenetrationTeamEnvironmentModel {
   createdAt: number
   updatedAt?: number | null
   lastError?: string | null
+  cleanupRetryCount: number
+  nextCleanupAt?: number | null
+  lastCleanupAttemptAt?: number | null
+  events: PenetrationDeploymentEventModel[]
+  runtimeNodes: PenetrationRuntimeNodeModel[]
+  runtimeRoutes: PenetrationRuntimeRouteModel[]
+}
+
+export interface PenetrationRuntimeNodeModel {
+  runtimeNodeId: number
+  topologyNodeId: number
+  topologyNodeKey: string
+  nodeName: string
+  networkName: string
+  ipAddress: string
+  adminAccessUrl?: string | null
+  publicPort?: number | null
+  status: PenetrationRuntimeStatus
+  createdAt: number
+  containerGuid?: string | null
+  containerId?: string | null
+  containerStatus?: string | null
+  image?: string | null
+  publicHost?: string | null
+  interfaceSummary: string
+}
+
+export interface PenetrationRuntimeRouteModel {
+  id: number
+  edgeTopologyKey: string
+  label: string
+  enforcementMode: PenetrationEnforcementMode
+  status: PenetrationRouteStatus
+  routeNodeKey?: string | null
+  routeNodeName?: string | null
+  sourceNetworkName?: string | null
+  targetNetworkName?: string | null
+  sourceCidr?: string | null
+  targetCidr?: string | null
+  gatewayIp?: string | null
+  commandSummary?: string | null
+  message?: string | null
+  isExecutable: boolean
+  createdAt: number
+  appliedAt?: number | null
+}
+
+export interface PenetrationDeploymentEventModel {
+  id: number
+  environmentId: number
+  teamId: number
+  teamName: string
+  stage: string
+  level: PenetrationDeploymentEventLevel
+  message: string
+  nodeName?: string | null
+  detail?: string | null
+  userId?: string | null
+  createdAt: number
 }
 
 export interface PenetrationAdminAccessModel {
@@ -325,11 +427,13 @@ export interface PenetrationEntryPointModel {
 export interface PenetrationWorkspaceNodeModel {
   id: number
   networkId: number
+  topologyKey: string
   name: string
   description?: string | null
   nodeType: PenetrationNodeType
   ipAddress?: string | null
   isEntry: boolean
+  fogState: PenetrationFogState
   runtimeStatus: PenetrationRuntimeStatus
   positionX: number
   positionY: number
@@ -339,6 +443,7 @@ export interface PenetrationWorkspaceNodeModel {
 
 export interface PenetrationWorkspaceScoreItemModel {
   id: number
+  topologyKey: string
   title: string
   description?: string | null
   category: string
@@ -346,13 +451,81 @@ export interface PenetrationWorkspaceScoreItemModel {
   solved: boolean
   attempts: number
   maxAttempts: number
+  isCheckpoint: boolean
   prerequisiteItemIds: number[]
+  prerequisiteItemKeys: string[]
+}
+
+export enum PenetrationFogState {
+  Hidden = 'Hidden',
+  Revealed = 'Revealed',
+  Accessible = 'Accessible',
+  Completed = 'Completed',
+}
+
+export interface PenetrationAttackGraphModel {
+  gameId: number
+  teamId: number
+  publishedVersion: number
+  totalNodeCount: number
+  visibleNodeCount: number
+  completedNodeCount: number
+  totalScoreItemCount: number
+  solvedScoreItemCount: number
+  nodes: PenetrationAttackNodeModel[]
+  edges: PenetrationAttackEdgeModel[]
+}
+
+export interface PenetrationAttackNodeModel {
+  id: number
+  topologyKey: string
+  displayName: string
+  description?: string | null
+  depth: number
+  status: PenetrationFogState
+  scoreSummary: PenetrationAttackScoreSummaryModel
+  positionX: number
+  positionY: number
+  isEntry: boolean
+  isCheckpointCompleted: boolean
+  runtimeStatus: PenetrationRuntimeStatus
+}
+
+export interface PenetrationAttackScoreSummaryModel {
+  total: number
+  solved: number
+  checkpointTotal: number
+  checkpointSolved: number
+  totalScore: number
+  solvedScore: number
+}
+
+export interface PenetrationAttackEdgeModel {
+  id: number
+  sourceNodeKey: string
+  targetNodeKey: string
+  status: PenetrationFogState
+  label: string
 }
 
 export interface PenetrationSubmitResultModel {
   accepted: boolean
   score: number
   message: string
+  attackGraphChanged: boolean
+  unlockedNodeCount: number
+}
+
+export interface PenetrationAttackGraphUpdateModel {
+  gameId: number
+  teamId: number
+  publishedVersion: number
+  accepted: boolean
+  graphChanged: boolean
+  completedNodeCount: number
+  visibleNodeCount: number
+  unlockedNodeCount: number
+  time: number
 }
 
 export interface PenetrationScoreboardItemModel {
@@ -437,9 +610,17 @@ export const penetrationAdminApi = {
       format: 'json',
       ...params,
     }),
-  deploy: (gameId: number, params: RequestParams = {}) =>
+  deploy: (gameId: number, force = false, params: RequestParams = {}) =>
     request<RequestResponse, RequestResponse>({
       path: `/api/admin/pentest/games/${gameId}/deploy`,
+      method: 'POST',
+      query: { force },
+      format: 'json',
+      ...params,
+    }),
+  cancelDeploy: (gameId: number, params: RequestParams = {}) =>
+    request<RequestResponse, RequestResponse>({
+      path: `/api/admin/pentest/games/${gameId}/deploy/cancel`,
       method: 'POST',
       format: 'json',
       ...params,
@@ -458,12 +639,26 @@ export const penetrationAdminApi = {
       format: 'json',
       ...params,
     }),
+  cleanupTeam: (gameId: number, teamId: number, params: RequestParams = {}) =>
+    request<RequestResponse, RequestResponse>({
+      path: `/api/admin/pentest/games/${gameId}/teams/${teamId}/cleanup`,
+      method: 'POST',
+      format: 'json',
+      ...params,
+    }),
   getAccess: (gameId: number, teamId?: number, params: RequestParams = {}) =>
     request<PenetrationAdminAccessModel[], RequestResponse>({
       path: teamId
         ? `/api/admin/pentest/games/${gameId}/teams/${teamId}/access`
         : `/api/admin/pentest/games/${gameId}/access`,
       method: 'GET',
+      format: 'json',
+      ...params,
+    }),
+  rebuildTeamByRuntimeNode: (runtimeNodeId: number, params: RequestParams = {}) =>
+    request<RequestResponse, RequestResponse>({
+      path: `/api/admin/pentest/runtime-nodes/${runtimeNodeId}/rebuild-team`,
+      method: 'POST',
       format: 'json',
       ...params,
     }),
@@ -488,6 +683,14 @@ export const penetrationAdminApi = {
       format: 'json',
       ...params,
     }),
+  getDeploymentEvents: (gameId: number, count = 50, skip = 0, environmentId?: number, params: RequestParams = {}) =>
+    request<PenetrationArrayResponse<PenetrationDeploymentEventModel>, RequestResponse>({
+      path: `/api/admin/pentest/games/${gameId}/deployment-events`,
+      method: 'GET',
+      query: { count, skip, environmentId },
+      format: 'json',
+      ...params,
+    }),
   getSubmissions: (gameId: number, count = 50, skip = 0, params: RequestParams = {}) =>
     request<PenetrationArrayResponse<PenetrationSubmissionLogModel>, RequestResponse>({
       path: `/api/admin/pentest/games/${gameId}/submissions`,
@@ -502,6 +705,13 @@ export const penetrationPlayerApi = {
   getWorkspace: (gameId: number, params: RequestParams = {}) =>
     request<PenetrationWorkspaceModel, RequestResponse>({
       path: `/api/pentest/games/${gameId}/workspace`,
+      method: 'GET',
+      format: 'json',
+      ...params,
+    }),
+  getAttackGraph: (gameId: number, params: RequestParams = {}) =>
+    request<PenetrationAttackGraphModel, RequestResponse>({
+      path: `/api/pentest/games/${gameId}/attack-graph`,
       method: 'GET',
       format: 'json',
       ...params,

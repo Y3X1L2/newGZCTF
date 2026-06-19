@@ -41,6 +41,21 @@ public class PenetrationPlayerController(
     }
 
     [RequireUser]
+    [HttpGet("games/{gameId:int}/attack-graph")]
+    [ProducesResponseType(typeof(PenetrationAttackGraphModel), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAttackGraph([FromRoute] int gameId, CancellationToken token)
+    {
+        var ctx = await GetContextInfo(gameId, token: token);
+        if (ctx.Result is not null)
+            return ctx.Result;
+
+        var graph = await penetrationService.GetAttackGraph(gameId, ctx.Participation!.TeamId, token);
+        return graph is null
+            ? NotFound(new RequestResponse("Penetration environment is not deployed.", StatusCodes.Status404NotFound))
+            : Ok(graph);
+    }
+
+    [RequireUser]
     [HttpPost("games/{gameId:int}/submit")]
     [EnableRateLimiting(nameof(RateLimiter.LimitPolicy.Submit))]
     [ProducesResponseType(typeof(PenetrationSubmitResultModel), StatusCodes.Status200OK)]

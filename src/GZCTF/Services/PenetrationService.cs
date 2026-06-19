@@ -1,13 +1,21 @@
 using System.Net;
+using System.Net.Sockets;
+using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using GZCTF.Extensions;
+using GZCTF.Hubs;
+using GZCTF.Hubs.Clients;
 using GZCTF.Models.Internal;
 using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Cache;
+using GZCTF.Services.Concurrency;
 using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
 using DataContainer = GZCTF.Models.Data.Container;
 
 namespace GZCTF.Services;
@@ -15,13 +23,25 @@ namespace GZCTF.Services;
 public class PenetrationService(
     AppDbContext context,
     IContainerManager containerManager,
+    IPenetrationFabricManager penetrationFabricManager,
     IServiceProvider serviceProvider,
+    PenetrationAttackGraphService penetrationAttackGraphService,
     CacheHelper cacheHelper,
     ISubmissionRepository submissionRepository,
     IGameEventRepository gameEventRepository,
+    IHubContext<UserHub, IUserClient> userHub,
+    IDistributedLockService lockService,
     ILogger<PenetrationService> logger)
 {
     static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    static readonly TimeSpan DeployLockTimeout = TimeSpan.FromSeconds(2);
+    static readonly ConcurrentDictionary<int, CancellationTokenSource> DeploymentCancellations = new();
+    static readonly TimeSpan[] CleanupBackoff =
+    [
+        TimeSpan.FromMinutes(1),
+        TimeSpan.FromMinutes(5),
+        TimeSpan.FromMinutes(15)
+    ];
 
     public async Task<PenetrationConfigModel> GetOrCreateConfig(int gameId, CancellationToken token = default)
     {
@@ -150,11 +170,50 @@ public class PenetrationService(
         return ToModel(config);
     }
 
-    public async Task<(bool Success, string Message)> DeployGame(int gameId, CancellationToken token = default)
+    public async Task<(bool Success, string Message)> DeployGame(int gameId, bool forceRebuild = false,
+        CancellationToken token = default)
+    {
+        try
+        {
+            using var deployLock = await lockService.AcquireAsync(BuildDeployLockKey(gameId), DeployLockTimeout);
+            using var deploymentCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+            if (!DeploymentCancellations.TryAdd(gameId, deploymentCts))
+                return (false, "该比赛已有渗透部署任务正在执行，请稍后再试。");
+
+            try
+            {
+                return await DeployGameCore(gameId, forceRebuild, deploymentCts.Token);
+            }
+            finally
+            {
+                DeploymentCancellations.TryRemove(gameId, out _);
+            }
+        }
+        catch (TimeoutException)
+        {
+            return (false, "该比赛已有渗透部署、停止或重建任务正在执行，请稍后再试。");
+        }
+    }
+
+    public Task<(bool Success, string Message)> CancelDeployment(int gameId, CancellationToken token = default)
+    {
+        if (DeploymentCancellations.TryGetValue(gameId, out var cts))
+        {
+            cts.Cancel();
+            return Task.FromResult((true, "已请求取消当前渗透部署任务；进行中的队伍会进入清理链路，未开始队伍不会部署。"));
+        }
+
+        return Task.FromResult((false, "当前没有正在执行的渗透部署任务。"));
+    }
+
+    async Task<(bool Success, string Message)> DeployGameCore(int gameId, bool forceRebuild, CancellationToken token)
     {
         var savedConfig = await LoadConfig(gameId, token);
         if (savedConfig is null || savedConfig.PublishedVersion <= 0)
             return (false, "请先发布渗透编排版本。");
+
+        if (savedConfig.Status == PenetrationDeploymentStatus.Deploying)
+            return (false, "该比赛已有渗透部署任务正在执行，请稍后再试。");
 
         var config = await LoadPublishedConfig(gameId, savedConfig.PublishedVersion, token);
         if (config is null)
@@ -173,7 +232,21 @@ public class PenetrationService(
             .OrderBy(p => p.TeamId)
             .ToArrayAsync(token);
 
-        var capacity = await CheckFleetCapacity(config.Nodes.Count, participations.Length, token);
+        var deploymentTargets = new List<(Participation Participation, int TeamIndex, PenetrationTeamEnvironment? Existing)>();
+        var skipped = 0;
+        foreach (var (part, index) in participations.Select((p, i) => (p, i)))
+        {
+            var existing = await LoadTeamEnvironment(gameId, part.TeamId, token);
+            if (!forceRebuild && existing is not null && IsEnvironmentRunningVersion(existing, config))
+            {
+                skipped++;
+                continue;
+            }
+
+            deploymentTargets.Add((part, index, existing));
+        }
+
+        var capacity = await CheckFleetCapacity(config.Nodes.Count, deploymentTargets.Count, token);
         if (!capacity.Success)
         {
             savedConfig.Status = PenetrationDeploymentStatus.Failed;
@@ -183,28 +256,161 @@ public class PenetrationService(
         }
 
         var ok = 0;
-        foreach (var (part, index) in participations.Select((p, i) => (p, i)))
+        var failed = 0;
+        var cancelled = 0;
+        var parallelOptions = new ParallelOptions
         {
-            var existing = await LoadTeamEnvironment(gameId, part.TeamId, token);
-            if (existing is not null)
-                await DestroyEnvironment(existing, token);
+            CancellationToken = token,
+            MaxDegreeOfParallelism = ResolveDeploymentParallelism()
+        };
 
-            var result = await DeployTeam(config, part.TeamId, index, existing is not null, existing, token);
-            if (result.Success)
-                ok++;
+        try
+        {
+            await Parallel.ForEachAsync(deploymentTargets, parallelOptions, async (target, itemToken) =>
+            {
+                var result = await DeployTeamInIsolatedScope(
+                    gameId,
+                    savedConfig.PublishedVersion,
+                    target.Participation.TeamId,
+                    target.TeamIndex,
+                    target.Existing is not null,
+                    itemToken);
+
+                if (result.Cancelled)
+                    Interlocked.Increment(ref cancelled);
+                else if (result.Success)
+                    Interlocked.Increment(ref ok);
+                else
+                    Interlocked.Increment(ref failed);
+            });
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            cancelled += deploymentTargets.Count - ok - failed - cancelled;
         }
 
-        savedConfig.Status = ok == participations.Length
+        var running = ok + skipped;
+        savedConfig.Status = token.IsCancellationRequested
+            ? running > 0 ? PenetrationDeploymentStatus.Partial : PenetrationDeploymentStatus.Failed
+            : running == participations.Length
             ? PenetrationDeploymentStatus.Running
-            : ok == 0 ? PenetrationDeploymentStatus.Failed : PenetrationDeploymentStatus.Partial;
+            : running == 0 ? PenetrationDeploymentStatus.Failed : PenetrationDeploymentStatus.Partial;
         savedConfig.DeployedAt = DateTimeOffset.UtcNow;
         savedConfig.UpdatedAt = DateTimeOffset.UtcNow;
-        await context.SaveChangesAsync(token);
-        return (ok > 0 || participations.Length == 0, $"已部署 {ok}/{participations.Length} 支队伍环境。");
+        await context.SaveChangesAsync(CancellationToken.None);
+        var message = token.IsCancellationRequested
+            ? $"部署已取消：已运行 {running}/{participations.Length} 支队伍，新部署 {ok} 支，跳过 {skipped} 支，失败 {failed} 支，取消 {cancelled} 支。"
+            : $"已运行 {running}/{participations.Length} 支队伍环境，新部署 {ok} 支，跳过 {skipped} 支，失败 {failed} 支。";
+        return (running > 0 || participations.Length == 0, message);
+    }
+
+    async Task<TeamDeploymentResult> DeployTeamInIsolatedScope(int gameId, int publishedVersion, int teamId,
+        int teamIndex, bool rebuild, CancellationToken token)
+    {
+        try
+        {
+            await using var scope = serviceProvider.CreateAsyncScope();
+            var scopedService = scope.ServiceProvider.GetRequiredService<PenetrationService>();
+            return await scopedService.DeployTeamByPublishedVersion(gameId, publishedVersion, teamId, teamIndex,
+                rebuild, token);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            await CleanupCancelledDeploymentScope(gameId, teamId, publishedVersion);
+            return TeamDeploymentResult.CancelledResult;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Penetration deployment failed for game {GameId}, team {TeamId}. Continuing with other teams.",
+                gameId, teamId);
+            return TeamDeploymentResult.Failed(ex.Message);
+        }
+    }
+
+    async Task CleanupCancelledDeploymentScope(int gameId, int teamId, int publishedVersion)
+    {
+        try
+        {
+            await using var scope = serviceProvider.CreateAsyncScope();
+            var scopedService = scope.ServiceProvider.GetRequiredService<PenetrationService>();
+            await scopedService.CleanupCancelledDeployment(gameId, teamId, publishedVersion);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Failed to run compensation cleanup for cancelled penetration deployment, game {GameId}, team {TeamId}.",
+                gameId, teamId);
+        }
+    }
+
+    async Task CleanupCancelledDeployment(int gameId, int teamId, int publishedVersion)
+    {
+        using var cleanupCts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        var environment = await LoadTeamEnvironment(gameId, teamId, cleanupCts.Token);
+        if (environment is null || environment.PublishedVersion != publishedVersion)
+            return;
+
+        if (environment.Status is PenetrationRuntimeStatus.Running or PenetrationRuntimeStatus.Stopped)
+            return;
+
+        environment.LastError = "部署任务已取消，系统正在清理该队伍的半创建资源。";
+        AddDeploymentEvent(environment, "cancel", PenetrationDeploymentEventLevel.Warning,
+            "部署任务已取消，开始补偿清理已创建的容器和网络。");
+        await context.SaveChangesAsync(cleanupCts.Token);
+
+        var cleanup = await DestroyEnvironment(environment, cleanupCts.Token);
+        if (!cleanup.Success)
+            logger.LogWarning(
+                "Cancelled penetration deployment cleanup left residual resources for game {GameId}, team {TeamId}: {Message}",
+                gameId, teamId, cleanup.Message);
+    }
+
+    async Task<TeamDeploymentResult> DeployTeamByPublishedVersion(int gameId, int publishedVersion, int teamId,
+        int teamIndex, bool rebuild, CancellationToken token)
+    {
+        var config = await LoadPublishedConfig(gameId, publishedVersion, token);
+        if (config is null)
+            return TeamDeploymentResult.Failed($"发布版本 v{publishedVersion} 快照不存在，无法部署队伍环境。");
+
+        try
+        {
+            var existing = await LoadTeamEnvironment(gameId, teamId, token);
+            if (existing is not null)
+            {
+                using var destroyCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+                var destroyed = await DestroyEnvironment(existing, destroyCts.Token);
+                if (!destroyed.Success)
+                    return TeamDeploymentResult.Failed(destroyed.Message);
+            }
+
+            token.ThrowIfCancellationRequested();
+            var deploy = await DeployTeam(config, teamId, teamIndex, rebuild, existing, token);
+            return deploy.Success ? TeamDeploymentResult.SuccessResult : TeamDeploymentResult.Failed(deploy.Message);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            await CleanupCancelledDeploymentScope(gameId, teamId, publishedVersion);
+            return TeamDeploymentResult.CancelledResult;
+        }
     }
 
     public async Task<(bool Success, string Message)> RebuildTeam(int gameId, int teamId, bool byAdmin, Guid? userId,
         CancellationToken token = default)
+    {
+        try
+        {
+            using var deployLock = await lockService.AcquireAsync(BuildDeployLockKey(gameId), DeployLockTimeout);
+            return await RebuildTeamCore(gameId, teamId, byAdmin, userId, token);
+        }
+        catch (TimeoutException)
+        {
+            return (false, "该比赛已有渗透部署、停止或重建任务正在执行，请稍后再试。");
+        }
+    }
+
+    async Task<(bool Success, string Message)> RebuildTeamCore(int gameId, int teamId, bool byAdmin, Guid? userId,
+        CancellationToken token)
     {
         var savedConfig = await LoadConfig(gameId, token);
         if (savedConfig is null || savedConfig.PublishedVersion <= 0)
@@ -215,11 +421,14 @@ public class PenetrationService(
             .OrderBy(p => p.TeamId)
             .Select(p => p.TeamId)
             .ToArrayAsync(token);
-        var index = Array.IndexOf(teamIds, teamId);
-        if (index < 0)
+        var acceptedIndex = Array.IndexOf(teamIds, teamId);
+        if (acceptedIndex < 0)
             return (false, "队伍未通过比赛审核。");
 
         var environment = await LoadTeamEnvironment(gameId, teamId, token);
+        var index = environment is not null && (environment.TeamIndex > 0 || !string.IsNullOrWhiteSpace(environment.NetworkPrefix))
+            ? environment.TeamIndex
+            : acceptedIndex;
         var targetVersion = environment?.PublishedVersion > 0
             ? environment.PublishedVersion
             : savedConfig.PublishedVersion;
@@ -231,7 +440,11 @@ public class PenetrationService(
             return (false, "环境重置次数已用完。");
 
         if (environment is not null)
-            await DestroyEnvironment(environment, token);
+        {
+            var destroyed = await DestroyEnvironment(environment, token);
+            if (!destroyed.Success)
+                return (false, $"旧环境清理失败，已进入待清理状态：{destroyed.Message}");
+        }
 
         if (environment is not null && !byAdmin)
         {
@@ -259,25 +472,112 @@ public class PenetrationService(
         return await RebuildTeam(runtime.Environment.GameId, runtime.Environment.TeamId, true, null, token);
     }
 
+    public Task<(bool Success, string Message)> RebuildTeamByRuntimeNode(int runtimeNodeId,
+        CancellationToken token = default) => RestartRuntimeNode(runtimeNodeId, token);
+
+    public async Task<(bool Success, string Message)> CleanupTeamEnvironment(int gameId, int teamId,
+        CancellationToken token = default)
+    {
+        try
+        {
+            using var deployLock = await lockService.AcquireAsync(BuildDeployLockKey(gameId), DeployLockTimeout);
+            var environment = await LoadTeamEnvironment(gameId, teamId, token);
+            if (environment is null)
+                return (true, "该队伍没有渗透环境需要清理。");
+
+            var result = await DestroyEnvironment(environment, token);
+            return result.Success
+                ? (true, "队伍渗透环境残留资源已清理。")
+                : (false, $"残留资源仍未清理完成：{result.Message}");
+        }
+        catch (TimeoutException)
+        {
+            return (false, "该比赛已有渗透部署、停止或重建任务正在执行，请稍后再试。");
+        }
+    }
+
     public async Task<(bool Success, string Message)> StopGame(int gameId, CancellationToken token = default)
+    {
+        try
+        {
+            using var deployLock = await lockService.AcquireAsync(BuildDeployLockKey(gameId), DeployLockTimeout);
+            return await StopGameCore(gameId, token);
+        }
+        catch (TimeoutException)
+        {
+            return (false, "该比赛已有渗透部署、停止或重建任务正在执行，请稍后再试。");
+        }
+    }
+
+    async Task<(bool Success, string Message)> StopGameCore(int gameId, CancellationToken token)
     {
         var environments = await context.PenetrationTeamEnvironments
             .Include(e => e.RuntimeNodes).ThenInclude(r => r.Container)
             .Where(e => e.GameId == gameId)
             .ToArrayAsync(token);
 
+        var failed = 0;
         foreach (var environment in environments)
-            await DestroyEnvironment(environment, token);
+        {
+            var result = await DestroyEnvironment(environment, token);
+            if (!result.Success)
+                failed++;
+        }
 
         var config = await context.PenetrationConfigs.FirstOrDefaultAsync(c => c.GameId == gameId, token);
         if (config is not null)
         {
-            config.Status = PenetrationDeploymentStatus.Stopped;
+            config.Status = failed == 0 ? PenetrationDeploymentStatus.Stopped : PenetrationDeploymentStatus.Partial;
             config.UpdatedAt = DateTimeOffset.UtcNow;
         }
 
         await context.SaveChangesAsync(token);
-        return (true, "渗透环境已停止。");
+        return (failed == 0,
+            failed == 0 ? "渗透环境已停止。" : $"部分渗透环境清理失败，{failed} 支队伍已进入待清理状态。");
+    }
+
+    public async Task<int> CleanupPendingEnvironments(CancellationToken token = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var environments = await context.PenetrationTeamEnvironments
+            .Include(e => e.RuntimeNodes).ThenInclude(r => r.Container)
+            .Include(e => e.DeploymentEvents)
+            .Where(e =>
+                (e.Status == PenetrationRuntimeStatus.CleanupPending ||
+                 e.Status == PenetrationRuntimeStatus.Orphaned) &&
+                (e.NextCleanupAt == null || e.NextCleanupAt <= now))
+            .OrderBy(e => e.UpdatedAt)
+            .Take(20)
+            .ToArrayAsync(token);
+
+        var cleaned = 0;
+        foreach (var environment in environments)
+        {
+            var retryCountBeforeAttempt = environment.CleanupRetryCount;
+            try
+            {
+                using var deployLock = await lockService.AcquireAsync(BuildDeployLockKey(environment.GameId),
+                    TimeSpan.FromSeconds(1));
+                var result = await DestroyEnvironment(environment, token);
+                if (result.Success)
+                    cleaned++;
+            }
+            catch (TimeoutException)
+            {
+                continue;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to run penetration cleanup for environment {EnvironmentId}",
+                    environment.Id);
+                if (context.Entry(environment).State != EntityState.Detached &&
+                    environment.CleanupRetryCount == retryCountBeforeAttempt)
+                    MarkEnvironmentCleanupPending(environment, [$"补偿清理任务失败：{ex.Message}"]);
+                await context.SaveChangesAsync(token);
+            }
+        }
+
+        return cleaned;
     }
 
     public async Task<PenetrationWorkspaceModel?> GetWorkspace(int gameId, int teamId, CancellationToken token = default)
@@ -306,16 +606,20 @@ public class PenetrationService(
             .Select(g => new { ScoreItemTopologyKey = g.Key, Count = g.Count() })
             .ToDictionaryAsync(g => g.ScoreItemTopologyKey, g => g.Count, token);
 
+        var attackGraph = penetrationAttackGraphService.GetOrBuild(config, environment, solved);
+        var attackNodeByKey = attackGraph.Nodes
+            .Where(n => n.Status != PenetrationFogState.Hidden)
+            .ToDictionary(n => n.TopologyKey, StringComparer.Ordinal);
+        var accessibleNodeKeys = attackGraph.Nodes
+            .Where(n => n.Status is PenetrationFogState.Accessible or PenetrationFogState.Completed)
+            .Select(n => n.TopologyKey)
+            .ToHashSet(StringComparer.Ordinal);
         var runtimeByNode = environment.RuntimeNodes
             .Where(r => !string.IsNullOrWhiteSpace(r.TopologyNodeKey))
             .ToDictionary(r => r.TopologyNodeKey, StringComparer.Ordinal);
         var runtimeInterfaces = environment.RuntimeNodes
             .Where(r => !string.IsNullOrWhiteSpace(r.TopologyNodeKey))
             .ToDictionary(r => r.TopologyNodeKey, r => ReadRuntimeInterfaces(r), StringComparer.Ordinal);
-        var teamIndex = await GetAcceptedTeamIndex(gameId, teamId, token);
-        var networkNames = config.Networks.ToDictionary(n => n.Id, n => BuildRuntimeNetworkName(config, teamId, n));
-        var networkCidrs = BuildNetworkSubnets(config, teamIndex, networkNames);
-
         return new PenetrationWorkspaceModel
         {
             GameId = gameId,
@@ -335,47 +639,42 @@ public class PenetrationService(
                 .Select(x => new PenetrationEntryPointModel
                 {
                     NodeId = x.Node!.Id,
-                    NodeName = x.Node.Name,
+                    NodeName = string.IsNullOrWhiteSpace(x.Node.PlayerAlias) ? x.Node.Name : x.Node.PlayerAlias!,
                     Host = x.Runtime.Container?.PublicIP ?? x.Runtime.Container?.IP ?? x.Runtime.IpAddress,
                     Port = x.Runtime.Container?.PublicPort ?? 0,
                     ExposePort = x.Node.ExposePort
                 }).ToList(),
-            Networks = config.Networks.OrderBy(n => n.OrderIndex).Select(n => new PenetrationWorkspaceNetworkModel
+            Networks = [],
+            Nodes = config.Nodes
+                .Where(n => attackNodeByKey.ContainsKey(n.TopologyKey))
+                .OrderBy(n => n.OrderIndex)
+                .Select(n =>
             {
-                Id = n.Id,
-                Name = n.Name,
-                Slug = n.Slug,
-                ZoneType = n.ZoneType,
-                TrustLevel = n.TrustLevel,
-                OrderIndex = n.OrderIndex,
-                IsEntry = n.IsEntry,
-                Cidr = networkCidrs.GetValueOrDefault(networkNames[n.Id]) ?? environment.NetworkPrefix,
-                PositionX = n.PositionX,
-                PositionY = n.PositionY,
-                Width = n.Width,
-                Height = n.Height
-            }).ToList(),
-            Nodes = config.Nodes.OrderBy(n => n.OrderIndex).Select(n =>
-            {
+                var graphNode = attackNodeByKey[n.TopologyKey];
+                var canOperate = accessibleNodeKeys.Contains(n.TopologyKey);
                 runtimeByNode.TryGetValue(n.TopologyKey, out var runtime);
                 runtimeInterfaces.TryGetValue(n.TopologyKey, out var runtimeInterfaceList);
                 return new PenetrationWorkspaceNodeModel
                 {
                     Id = n.Id,
-                    NetworkId = n.NetworkId,
-                    Name = n.Name,
-                    Description = n.Description,
+                    NetworkId = 0,
+                    TopologyKey = n.TopologyKey,
+                    Name = graphNode.DisplayName,
+                    Description = graphNode.Description,
                     NodeType = n.NodeType,
-                    IpAddress = runtime?.IpAddress,
+                    IpAddress = n.IsEntry ? runtime?.IpAddress : null,
                     IsEntry = n.IsEntry,
+                    FogState = graphNode.Status,
                     RuntimeStatus = runtime?.Status ?? PenetrationRuntimeStatus.Pending,
                     PositionX = n.PositionX,
                     PositionY = n.PositionY,
-                    Interfaces = BuildWorkspaceInterfaces(n, runtimeInterfaceList ?? []),
-                    ScoreItems = n.ScoreItems.Where(i => i.IsVisible).OrderBy(i => i.OrderIndex).Select(i =>
+                    Interfaces = n.IsEntry ? BuildWorkspaceInterfaces(n, runtimeInterfaceList ?? []) : [],
+                    ScoreItems = canOperate
+                        ? n.ScoreItems.Where(i => i.IsVisible).OrderBy(i => i.OrderIndex).Select(i =>
                         new PenetrationWorkspaceScoreItemModel
                         {
                             Id = i.Id,
+                            TopologyKey = i.TopologyKey,
                             Title = i.Title,
                             Description = i.Description,
                             Category = i.Category,
@@ -383,11 +682,24 @@ public class PenetrationService(
                             Solved = solved.Contains(i.TopologyKey),
                             Attempts = attempts.GetValueOrDefault(i.TopologyKey),
                             MaxAttempts = i.MaxAttempts,
-                            PrerequisiteItemIds = DeserializeIntList(i.PrerequisiteItemIds)
+                            IsCheckpoint = i.IsCheckpoint,
+                            PrerequisiteItemIds = DeserializeIntList(i.PrerequisiteItemIds),
+                            PrerequisiteItemKeys = ResolvePrerequisiteKeys(config, i)
                         }).ToList()
+                        : []
                 };
             }).ToList(),
             Policies = config.Edges.Where(e => e.SourceNodeId > 0 && e.TargetNodeId > 0)
+                .Where(e => e.PolicyAction == PenetrationPolicyAction.Allow && e.IsRouteHint)
+                .Where(e =>
+                {
+                    var source = config.Nodes.FirstOrDefault(n => n.Id == e.SourceNodeId);
+                    var target = config.Nodes.FirstOrDefault(n => n.Id == e.TargetNodeId);
+                    return source is not null &&
+                           target is not null &&
+                           attackNodeByKey.ContainsKey(source.TopologyKey) &&
+                           attackNodeByKey.ContainsKey(target.TopologyKey);
+                })
                 .OrderBy(e => e.Id)
                 .Select(e => new PenetrationWorkspacePolicyModel
                 {
@@ -397,8 +709,24 @@ public class PenetrationService(
                     TargetNodeId = e.TargetNodeId,
                     Protocol = e.Protocol,
                     PortRange = e.PortRange
-                }).ToList()
+                }).ToList(),
+            AttackGraph = attackGraph
         };
+    }
+
+    public async Task<PenetrationAttackGraphModel?> GetAttackGraph(int gameId, int teamId,
+        CancellationToken token = default)
+    {
+        var environment = await LoadTeamEnvironment(gameId, teamId, token);
+        if (environment is null)
+            return null;
+
+        var config = await LoadPublishedConfig(gameId, environment.PublishedVersion, token);
+        if (config is null)
+            return null;
+
+        var solved = await GetSolvedScoreItemKeys(gameId, teamId, environment.PublishedVersion, token);
+        return penetrationAttackGraphService.GetOrBuild(config, environment, solved);
     }
 
     public async Task<PenetrationSubmitResultModel> Submit(int gameId, int teamId, int participationId, Guid userId,
@@ -420,6 +748,13 @@ public class PenetrationService(
         if (!item.IsVisible)
             return new PenetrationSubmitResultModel { Accepted = false, Message = "该得分项当前不可提交。" };
 
+        var solvedScoreItemKeys = await GetSolvedScoreItemKeys(gameId, teamId, environment.PublishedVersion, token);
+
+        var attackGraphBefore = penetrationAttackGraphService.Build(config, environment, solvedScoreItemKeys);
+        var node = config.Nodes.FirstOrDefault(n => n.ScoreItems.Any(i => i.TopologyKey == item.TopologyKey));
+        if (node is null || !IsAttackNodeOperable(attackGraphBefore, node.TopologyKey))
+            return new PenetrationSubmitResultModel { Accepted = false, Message = "该任务尚未解锁，请先完成前置攻击路径。" };
+
         var alreadySolved = await context.PenetrationSubmissions.AnyAsync(s =>
             s.GameId == gameId &&
             s.TeamId == teamId &&
@@ -430,20 +765,20 @@ public class PenetrationService(
         if (alreadySolved)
             return new PenetrationSubmitResultModel { Accepted = false, Message = "该得分项已完成。" };
 
-        var prerequisites = DeserializeIntList(item.PrerequisiteItemIds);
-        if (prerequisites.Count > 0)
+        var prerequisiteKeys = ResolvePrerequisiteKeys(config, item);
+        if (prerequisiteKeys.Count > 0)
         {
             var solvedPrerequisites = await context.PenetrationSubmissions.AsNoTracking()
                 .Where(s => s.GameId == gameId &&
                             s.TeamId == teamId &&
                             s.PublishedVersion == environment.PublishedVersion &&
                             s.Status == AnswerResult.Accepted &&
-                            prerequisites.Contains(s.ScoreItemId))
-                .Select(s => s.ScoreItemId)
+                            prerequisiteKeys.Contains(s.ScoreItemTopologyKey))
+                .Select(s => s.ScoreItemTopologyKey)
                 .Distinct()
                 .CountAsync(token);
 
-            if (solvedPrerequisites < prerequisites.Count)
+            if (solvedPrerequisites < prerequisiteKeys.Count)
                 return new PenetrationSubmitResultModel { Accepted = false, Message = "请先完成前置得分项。" };
         }
 
@@ -458,13 +793,17 @@ public class PenetrationService(
 
         var expected = BuildFlag(item, gameId, teamId, environment.PublishedVersion);
         var accepted = string.Equals(model.Flag.Trim(), expected, StringComparison.Ordinal);
+        var currentScoreItemId = await context.PenetrationScoreItems.AsNoTracking()
+            .Where(i => i.Node.Config.GameId == gameId && i.TopologyKey == item.TopologyKey)
+            .Select(i => (int?)i.Id)
+            .FirstOrDefaultAsync(token);
         var submission = new PenetrationSubmission
         {
             GameId = gameId,
             TeamId = teamId,
             ParticipationId = participationId,
             UserId = userId,
-            ScoreItemId = item.Id,
+            ScoreItemId = currentScoreItemId ?? item.Id,
             PublishedVersion = environment.PublishedVersion,
             ScoreItemTopologyKey = item.TopologyKey,
             Answer = model.Flag.Trim(),
@@ -481,11 +820,32 @@ public class PenetrationService(
 
         await PublishSubmissionSideEffects(submission, item, userId, token);
 
+        var attackGraphChanged = false;
+        var unlockedNodeCount = 0;
+        if (accepted)
+        {
+            var nextSolvedScoreItemKeys = solvedScoreItemKeys.ToHashSet(StringComparer.Ordinal);
+            nextSolvedScoreItemKeys.Add(item.TopologyKey);
+            var attackGraphAfter = penetrationAttackGraphService.Build(config, environment, nextSolvedScoreItemKeys);
+            var visibleBefore = attackGraphBefore.Nodes
+                .Where(n => n.Status != PenetrationFogState.Hidden)
+                .Select(n => n.TopologyKey)
+                .ToHashSet(StringComparer.Ordinal);
+            unlockedNodeCount = attackGraphAfter.Nodes.Count(n =>
+                n.Status != PenetrationFogState.Hidden && !visibleBefore.Contains(n.TopologyKey));
+            attackGraphChanged = HasAttackGraphSummaryChanged(attackGraphBefore, attackGraphAfter);
+
+            await PublishAttackGraphUpdate(gameId, teamId, environment.PublishedVersion, attackGraphAfter,
+                unlockedNodeCount, attackGraphChanged, token);
+        }
+
         return new PenetrationSubmitResultModel
         {
             Accepted = accepted,
             Score = submission.Score,
-            Message = accepted ? "Flag 正确。" : "Flag 错误。"
+            Message = accepted ? "Flag 正确。" : "Flag 错误。",
+            AttackGraphChanged = attackGraphChanged,
+            UnlockedNodeCount = unlockedNodeCount
         };
     }
 
@@ -523,28 +883,134 @@ public class PenetrationService(
     public async Task<PenetrationTeamEnvironmentModel[]> GetTeamEnvironments(int gameId,
         CancellationToken token = default)
     {
-        return await context.PenetrationTeamEnvironments.AsNoTracking()
+        var rows = await context.PenetrationTeamEnvironments.AsNoTracking()
             .Where(e => e.GameId == gameId)
             .Include(e => e.Team)
             .Include(e => e.Node)
-            .Include(e => e.RuntimeNodes)
+            .Include(e => e.RuntimeNodes).ThenInclude(r => r.TopologyNode)
+            .Include(e => e.RuntimeNodes).ThenInclude(r => r.Container)
+            .Include(e => e.RuntimeRoutes)
+            .Include(e => e.DeploymentEvents)
             .OrderBy(e => e.Team.Name)
-            .Select(e => new PenetrationTeamEnvironmentModel
+            .ToArrayAsync(token);
+
+        return rows.Select(e => new PenetrationTeamEnvironmentModel
+        {
+            EnvironmentId = e.Id,
+            TeamId = e.TeamId,
+            TeamName = e.Team.Name,
+            WorkerNodeId = e.NodeId,
+            WorkerNodeName = e.Node == null ? null : e.Node.Name,
+            NetworkPrefix = e.NetworkPrefix,
+            TeamIndex = e.TeamIndex,
+            PublishedVersion = e.PublishedVersion,
+            Status = e.Status,
+            ResetCount = e.ResetCount,
+            RuntimeNodeCount = e.RuntimeNodes.Count,
+            CreatedAt = e.CreatedAt,
+            UpdatedAt = e.UpdatedAt,
+            LastError = e.LastError,
+            CleanupRetryCount = e.CleanupRetryCount,
+            NextCleanupAt = e.NextCleanupAt,
+            LastCleanupAttemptAt = e.LastCleanupAttemptAt,
+            RuntimeNodes = e.RuntimeNodes
+                .OrderBy(r => r.TopologyNode.OrderIndex)
+                .Select(r => new PenetrationRuntimeNodeModel
+                {
+                    RuntimeNodeId = r.Id,
+                    TopologyNodeId = r.TopologyNodeId,
+                    TopologyNodeKey = r.TopologyNodeKey,
+                    NodeName = r.TopologyNode.Name,
+                    NetworkName = r.NetworkName,
+                    IpAddress = r.IpAddress,
+                    AdminAccessUrl = r.AdminAccessUrl,
+                    PublicPort = r.PublicPort,
+                    Status = r.Status,
+                    CreatedAt = r.CreatedAt,
+                    ContainerGuid = r.ContainerId,
+                    ContainerId = r.Container == null ? null : r.Container.ContainerId,
+                    ContainerStatus = r.Container?.Status,
+                    Image = r.Container?.Image,
+                    PublicHost = r.Container?.PublicIP,
+                    InterfaceSummary = r.InterfaceSummary
+                }).ToList(),
+            RuntimeRoutes = e.RuntimeRoutes
+                .OrderBy(r => r.Id)
+                .Select(r => new PenetrationRuntimeRouteModel
+                {
+                    Id = r.Id,
+                    EdgeTopologyKey = r.EdgeTopologyKey,
+                    Label = r.Label,
+                    EnforcementMode = r.EnforcementMode,
+                    Status = r.Status,
+                    RouteNodeKey = r.RouteNodeKey,
+                    RouteNodeName = r.RouteNodeName,
+                    SourceNetworkName = r.SourceNetworkName,
+                    TargetNetworkName = r.TargetNetworkName,
+                    SourceCidr = r.SourceCidr,
+                    TargetCidr = r.TargetCidr,
+                    GatewayIp = r.GatewayIp,
+                    CommandSummary = r.CommandSummary,
+                    Message = r.Message,
+                    IsExecutable = r.Status is PenetrationRouteStatus.RoutePlanned or PenetrationRouteStatus.RouteApplied,
+                    CreatedAt = r.CreatedAt,
+                    AppliedAt = r.AppliedAt
+                }).ToList(),
+            Events = e.DeploymentEvents
+                .OrderByDescending(ev => ev.CreatedAt)
+                .Take(20)
+                .Select(ev => new PenetrationDeploymentEventModel
+                {
+                    Id = ev.Id,
+                    EnvironmentId = e.Id,
+                    TeamId = e.TeamId,
+                    TeamName = e.Team.Name,
+                    Stage = ev.Stage,
+                    Level = ev.Level,
+                    Message = ev.Message,
+                    NodeName = ev.NodeName,
+                    Detail = ev.Detail,
+                    UserId = ev.UserId,
+                    CreatedAt = ev.CreatedAt
+                }).ToList()
+        }).ToArray();
+    }
+
+    public async Task<ArrayResponse<PenetrationDeploymentEventModel>> GetDeploymentEvents(int gameId,
+        int count = 50, int skip = 0, int? environmentId = null, CancellationToken token = default)
+    {
+        count = count <= 0 ? 50 : Math.Min(count, 200);
+        skip = Math.Max(0, skip);
+
+        var query = context.PenetrationDeploymentEvents.AsNoTracking()
+            .Where(ev => ev.Environment.GameId == gameId);
+
+        if (environmentId is > 0)
+            query = query.Where(ev => ev.EnvironmentId == environmentId);
+
+        var total = await query.CountAsync(token);
+        var events = await query
+            .OrderByDescending(ev => ev.CreatedAt)
+            .ThenByDescending(ev => ev.Id)
+            .Skip(skip)
+            .Take(count)
+            .Select(ev => new PenetrationDeploymentEventModel
             {
-                EnvironmentId = e.Id,
-                TeamId = e.TeamId,
-                TeamName = e.Team.Name,
-                WorkerNodeId = e.NodeId,
-                WorkerNodeName = e.Node == null ? null : e.Node.Name,
-                NetworkPrefix = e.NetworkPrefix,
-                PublishedVersion = e.PublishedVersion,
-                Status = e.Status,
-                ResetCount = e.ResetCount,
-                RuntimeNodeCount = e.RuntimeNodes.Count,
-                CreatedAt = e.CreatedAt,
-                UpdatedAt = e.UpdatedAt,
-                LastError = e.LastError
-            }).ToArrayAsync(token);
+                Id = ev.Id,
+                EnvironmentId = ev.EnvironmentId,
+                TeamId = ev.Environment.TeamId,
+                TeamName = ev.Environment.Team.Name,
+                Stage = ev.Stage,
+                Level = ev.Level,
+                Message = ev.Message,
+                NodeName = ev.NodeName,
+                Detail = ev.Detail,
+                UserId = ev.UserId,
+                CreatedAt = ev.CreatedAt
+            })
+            .ToArrayAsync(token);
+
+        return events.ToResponse(total);
     }
 
     public async Task<PenetrationAdminAccessModel[]> GetAdminAccess(int gameId, int teamId,
@@ -791,112 +1257,332 @@ public class PenetrationService(
         }
     }
 
+    async Task<HashSet<string>> GetSolvedScoreItemKeys(int gameId, int teamId, int publishedVersion,
+        CancellationToken token) =>
+        await context.PenetrationSubmissions.AsNoTracking()
+            .Where(s => s.GameId == gameId &&
+                        s.TeamId == teamId &&
+                        s.PublishedVersion == publishedVersion &&
+                        s.Status == AnswerResult.Accepted)
+            .Select(s => s.ScoreItemTopologyKey)
+            .ToHashSetAsync(token);
+
+    static bool IsAttackNodeOperable(PenetrationAttackGraphModel graph, string topologyKey) =>
+        graph.Nodes.Any(n => n.TopologyKey == topologyKey &&
+                             n.Status is PenetrationFogState.Accessible or PenetrationFogState.Completed);
+
+    static List<string> ResolvePrerequisiteKeys(PenetrationConfig config, PenetrationScoreItem item)
+    {
+        var prerequisites = DeserializeIntList(item.PrerequisiteItemIds);
+        if (prerequisites.Count == 0)
+            return [];
+
+        var keyById = config.Nodes
+            .SelectMany(n => n.ScoreItems)
+            .Where(i => i.Id > 0 && !string.IsNullOrWhiteSpace(i.TopologyKey))
+            .GroupBy(i => i.Id)
+            .ToDictionary(g => g.Key, g => g.First().TopologyKey);
+
+        return prerequisites
+            .Select(id => keyById.GetValueOrDefault(id))
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .Distinct(StringComparer.Ordinal)
+            .ToList()!;
+    }
+
+    static bool HasAttackGraphSummaryChanged(PenetrationAttackGraphModel before, PenetrationAttackGraphModel after) =>
+        before.VisibleNodeCount != after.VisibleNodeCount ||
+        before.CompletedNodeCount != after.CompletedNodeCount ||
+        before.SolvedScoreItemCount != after.SolvedScoreItemCount ||
+        before.Edges.Count != after.Edges.Count ||
+        before.Nodes.Any(beforeNode =>
+            after.Nodes.FirstOrDefault(afterNode => afterNode.TopologyKey == beforeNode.TopologyKey) is { } afterNode &&
+            (beforeNode.Status != afterNode.Status ||
+             beforeNode.ScoreSummary.Solved != afterNode.ScoreSummary.Solved ||
+             beforeNode.ScoreSummary.CheckpointSolved != afterNode.ScoreSummary.CheckpointSolved));
+
+    async Task PublishAttackGraphUpdate(int gameId, int teamId, int publishedVersion,
+        PenetrationAttackGraphModel attackGraph, int unlockedNodeCount, bool graphChanged, CancellationToken token)
+    {
+        try
+        {
+            await userHub.Clients.Group(UserHub.PenetrationTeamGroupName(gameId, teamId))
+                .ReceivedPenetrationAttackGraphUpdate(new PenetrationAttackGraphUpdateModel
+                {
+                    GameId = gameId,
+                    TeamId = teamId,
+                    PublishedVersion = publishedVersion,
+                    Accepted = true,
+                    GraphChanged = graphChanged,
+                    CompletedNodeCount = attackGraph.CompletedNodeCount,
+                    VisibleNodeCount = attackGraph.VisibleNodeCount,
+                    UnlockedNodeCount = unlockedNodeCount,
+                    Time = DateTimeOffset.UtcNow
+                });
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Failed to push penetration attack graph update for game {GameId}, team {TeamId}.",
+                gameId, teamId);
+        }
+    }
+
     async Task<(bool Success, string Message)> DeployTeam(PenetrationConfig config, int teamId, int teamIndex,
         bool rebuild, PenetrationTeamEnvironment? existing, CancellationToken token)
     {
-        var worker = await SelectWorkerNode(config.Nodes.Count, token);
+        var worker = await ReserveWorkerNodeCapacity(config.Nodes.Count, token);
         if (worker is null)
             return (false, "没有足够容量的 Docker 节点。");
 
+        var reservedSlotsNotBackedByContainer = config.Nodes.Count;
         var environment = existing ?? await LoadTeamEnvironment(config.GameId, teamId, token);
-        if (environment is null)
+        try
         {
-            environment = new PenetrationTeamEnvironment
+            if (environment is null)
             {
-                GameId = config.GameId,
-                TeamId = teamId,
-                CreatedAt = DateTimeOffset.UtcNow
-            };
-            context.PenetrationTeamEnvironments.Add(environment);
-        }
-
-        environment.NodeId = worker.Id;
-        environment.PublishedVersion = config.PublishedVersion;
-        environment.NetworkPrefix = AllocateSubnet(config.BaseCidr, config.TeamSubnetPrefix, teamIndex);
-        environment.Status = PenetrationRuntimeStatus.Pending;
-        environment.UpdatedAt = DateTimeOffset.UtcNow;
-        environment.LastError = null;
-        await context.SaveChangesAsync(token);
-
-        var plan = await BuildRuntimePlan(config, teamIndex, teamId, token);
-        var success = true;
-        var failureMessages = new List<string>();
-
-        foreach (var nodePlan in plan.Nodes)
-        {
-            var containerConfig = BuildContainerConfig(nodePlan, teamId, worker.Id);
-            var container = await containerManager.CreateContainerAsync(containerConfig, token);
-
-            if (container is null)
-            {
-                success = false;
-                failureMessages.Add($"节点“{nodePlan.Node.Name}”容器创建失败。");
-                await context.PenetrationRuntimeNodes.AddAsync(new PenetrationRuntimeNode
+                environment = new PenetrationTeamEnvironment
                 {
-                    EnvironmentId = environment.Id,
-                    TopologyNodeId = nodePlan.Node.Id,
-                    TopologyNodeKey = nodePlan.Node.TopologyKey,
-                    NetworkName = nodePlan.PrimaryInterface?.NetworkName ?? string.Empty,
-                    IpAddress = nodePlan.PrimaryInterface?.IpAddress ?? string.Empty,
-                    InterfaceSummary = JsonSerializer.Serialize(nodePlan.Interfaces, JsonOptions),
-                    Status = PenetrationRuntimeStatus.Failed
-                }, token);
-                continue;
+                    GameId = config.GameId,
+                    TeamId = teamId,
+                    CreatedAt = DateTimeOffset.UtcNow
+                };
+                context.PenetrationTeamEnvironments.Add(environment);
             }
 
-            if (container.Id == Guid.Empty)
-                container.Id = Guid.CreateVersion7();
-            container.NodeId = worker.Id;
-            await context.Containers.AddAsync(container, token);
-            await context.SaveChangesAsync(token);
-
-            var publicHost = container.PublicIP ?? container.IP;
-            var adminUrl = nodePlan.Node.PublishPort || nodePlan.Node.IsEntry
-                ? BuildAdminUrl(publicHost, container.PublicPort ?? 0, nodePlan.Node.ExposePort)
-                : null;
-
-            await context.PenetrationRuntimeNodes.AddAsync(new PenetrationRuntimeNode
-            {
-                EnvironmentId = environment.Id,
-                TopologyNodeId = nodePlan.Node.Id,
-                TopologyNodeKey = nodePlan.Node.TopologyKey,
-                ContainerId = container.Id,
-                NetworkName = nodePlan.PrimaryInterface?.NetworkName ?? string.Empty,
-                IpAddress = nodePlan.PrimaryInterface?.IpAddress ?? container.IP,
-                InterfaceSummary = JsonSerializer.Serialize(nodePlan.Interfaces, JsonOptions),
-                PublicPort = container.PublicPort,
-                AdminAccessUrl = adminUrl,
-                Status = container.Status == ContainerStatus.Running
-                    ? PenetrationRuntimeStatus.Running
-                    : PenetrationRuntimeStatus.Failed
-            }, token);
-
-            if (container.Status != ContainerStatus.Running)
-            {
-                success = false;
-                failureMessages.Add($"节点“{nodePlan.Node.Name}”未进入运行状态。");
-            }
-        }
-
-        if (!success)
-        {
-            environment.LastError = failureMessages.Count == 0
-                ? "部分节点部署失败。"
-                : string.Join('\n', failureMessages);
-            await context.SaveChangesAsync(token);
-            await DestroyEnvironment(environment, token);
-            environment.Status = PenetrationRuntimeStatus.Failed;
-            environment.LastError = $"{environment.LastError}\n已清理残留资源。";
+            environment.NodeId = worker.Id;
+            environment.TeamIndex = teamIndex;
+            environment.PublishedVersion = config.PublishedVersion;
+            environment.NetworkPrefix = AllocateSubnet(config.BaseCidr, config.TeamSubnetPrefix, teamIndex);
+            environment.Status = PenetrationRuntimeStatus.CreatingNetworks;
             environment.UpdatedAt = DateTimeOffset.UtcNow;
+            environment.LastError = null;
+            environment.CleanupRetryCount = 0;
+            environment.NextCleanupAt = null;
+            environment.LastCleanupAttemptAt = null;
+            AddDeploymentEvent(environment, "allocate", PenetrationDeploymentEventLevel.Info,
+                $"已分配队伍网段 {environment.NetworkPrefix}，目标节点：{worker.Name}。");
             await context.SaveChangesAsync(token);
-            return (false, "队伍环境部署失败，已清理残留资源。");
-        }
 
-        environment.Status = PenetrationRuntimeStatus.Running;
-        environment.LastError = null;
-        environment.UpdatedAt = DateTimeOffset.UtcNow;
-        await context.SaveChangesAsync(token);
-        return (true, rebuild ? "渗透环境已重建。" : "渗透环境已部署。");
+            RuntimePlan plan;
+            try
+            {
+                plan = await BuildRuntimePlan(config, teamIndex, teamId, token);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex,
+                    "Failed to build penetration runtime plan for game {GameId}, team {TeamId}.",
+                    config.GameId, teamId);
+                ReleaseReservedDockerCapacity(worker, reservedSlotsNotBackedByContainer);
+                reservedSlotsNotBackedByContainer = 0;
+                await context.SaveChangesAsync(token);
+                environment.Status = PenetrationRuntimeStatus.Failed;
+                environment.LastError = $"部署计划生成失败：{ex.Message}";
+                environment.UpdatedAt = DateTimeOffset.UtcNow;
+                AddDeploymentEvent(environment, "plan", PenetrationDeploymentEventLevel.Error,
+                    $"部署计划生成失败：{ex.Message}");
+                await context.SaveChangesAsync(token);
+                return (false, "部署计划生成失败，请检查镜像模板、网段和节点配置。");
+            }
+
+            foreach (var network in plan.Networks)
+                AddDeploymentEvent(environment, "network", PenetrationDeploymentEventLevel.Success,
+                    $"网络 {network.NetworkName} 计划就绪：{network.Cidr}{(network.IsInternal ? "，fabric 二层隔离" : IsInternalNetwork(network.Network) ? "，将由 RuntimeRoute 显式路由控制可达性" : "，入口可达")}。");
+
+            foreach (var route in plan.Routes)
+            {
+                var level = route.Status == PenetrationRouteStatus.RoutePlanned
+                    ? PenetrationDeploymentEventLevel.Info
+                    : route.Status == PenetrationRouteStatus.HintOnly
+                        ? PenetrationDeploymentEventLevel.Info
+                        : PenetrationDeploymentEventLevel.Warning;
+                AddDeploymentEvent(environment, "route-plan", level,
+                    $"{route.Label}：{route.Message}", route.RouteNode?.Name,
+                    route.CommandSummary);
+            }
+
+            var success = true;
+            var failureMessages = new List<string>();
+            environment.Status = PenetrationRuntimeStatus.CreatingContainers;
+            environment.UpdatedAt = DateTimeOffset.UtcNow;
+            AddDeploymentEvent(environment, "container", PenetrationDeploymentEventLevel.Info,
+                $"开始创建 {plan.Nodes.Count} 个资产容器。");
+            await context.SaveChangesAsync(token);
+
+            try
+            {
+                foreach (var nodePlan in plan.Nodes)
+                {
+                    token.ThrowIfCancellationRequested();
+                    AddDeploymentEvent(environment, "container", PenetrationDeploymentEventLevel.Info,
+                        $"开始创建资产“{nodePlan.Node.Name}”。", nodePlan.Node.Name);
+                    var containerConfig = BuildContainerConfig(nodePlan, teamId, worker.Id);
+                    containerConfig.FleetCapacityReserved = true;
+                    var container = await containerManager.CreateContainerAsync(containerConfig, CancellationToken.None);
+
+                    if (container is null)
+                    {
+                        ReleaseReservedDockerCapacity(worker, 1);
+                        reservedSlotsNotBackedByContainer--;
+                        await context.SaveChangesAsync(CancellationToken.None);
+                        success = false;
+                        failureMessages.Add($"节点“{nodePlan.Node.Name}”容器创建失败。");
+                        AddDeploymentEvent(environment, "container", PenetrationDeploymentEventLevel.Error,
+                            "容器创建失败，请检查镜像、节点容量、网络和 Agent 状态。", nodePlan.Node.Name);
+                        await context.PenetrationRuntimeNodes.AddAsync(new PenetrationRuntimeNode
+                        {
+                            EnvironmentId = environment.Id,
+                            TopologyNodeId = nodePlan.Node.Id,
+                            TopologyNodeKey = nodePlan.Node.TopologyKey,
+                            NetworkName = nodePlan.PrimaryInterface?.NetworkName ?? string.Empty,
+                            IpAddress = nodePlan.PrimaryInterface?.IpAddress ?? string.Empty,
+                            InterfaceSummary = JsonSerializer.Serialize(nodePlan.Interfaces, JsonOptions),
+                            Status = PenetrationRuntimeStatus.Failed
+                        }, CancellationToken.None);
+                        await context.SaveChangesAsync(CancellationToken.None);
+                        continue;
+                    }
+
+                    reservedSlotsNotBackedByContainer--;
+                    if (container.Id == Guid.Empty)
+                        container.Id = Guid.CreateVersion7();
+                    container.NodeId = worker.Id;
+                    await context.Containers.AddAsync(container, CancellationToken.None);
+                    await context.SaveChangesAsync(CancellationToken.None);
+
+                    var publicHost = container.PublicIP ?? container.IP;
+                    var adminUrl = nodePlan.Node.PublishPort || nodePlan.Node.IsEntry
+                        ? BuildAdminUrl(publicHost, container.PublicPort ?? 0, nodePlan.Node.ExposePort)
+                        : null;
+
+                    var fabric = await AttachRuntimeFabricInterfaces(environment, nodePlan, container, token);
+                    if (!fabric.Success)
+                    {
+                        success = false;
+                        failureMessages.Add($"节点“{nodePlan.Node.Name}”fabric 网卡配置失败：{fabric.Message}");
+                        AddDeploymentEvent(environment, "fabric", PenetrationDeploymentEventLevel.Error,
+                            fabric.Message, nodePlan.Node.Name);
+                    }
+
+                    var runtimeStatus = container.Status == ContainerStatus.Running && fabric.Success
+                        ? PenetrationRuntimeStatus.Running
+                        : PenetrationRuntimeStatus.Failed;
+                    await context.PenetrationRuntimeNodes.AddAsync(new PenetrationRuntimeNode
+                    {
+                        EnvironmentId = environment.Id,
+                        TopologyNodeId = nodePlan.Node.Id,
+                        TopologyNodeKey = nodePlan.Node.TopologyKey,
+                        ContainerId = container.Id,
+                        NetworkName = nodePlan.PrimaryInterface?.NetworkName ?? string.Empty,
+                        IpAddress = nodePlan.PrimaryInterface?.IpAddress ?? container.IP,
+                        InterfaceSummary = JsonSerializer.Serialize(nodePlan.Interfaces, JsonOptions),
+                        PublicPort = container.PublicPort,
+                        AdminAccessUrl = adminUrl,
+                        Status = runtimeStatus
+                    }, CancellationToken.None);
+                    await context.SaveChangesAsync(CancellationToken.None);
+
+                    if (container.Status != ContainerStatus.Running)
+                    {
+                        success = false;
+                        failureMessages.Add($"节点“{nodePlan.Node.Name}”未进入运行状态。");
+                        AddDeploymentEvent(environment, "health", PenetrationDeploymentEventLevel.Error,
+                            $"容器状态为 {container.Status}，未通过基础运行状态检查。", nodePlan.Node.Name);
+                    }
+                    else
+                    {
+                        var health = await ProbeRuntimeNode(nodePlan, container, token);
+                        if (!health.Success)
+                        {
+                            success = false;
+                            failureMessages.Add($"节点“{nodePlan.Node.Name}”健康检查失败：{health.Message}");
+                            AddDeploymentEvent(environment, "health", PenetrationDeploymentEventLevel.Error,
+                                health.Message, nodePlan.Node.Name);
+                        }
+                        else
+                        {
+                            AddDeploymentEvent(environment, "health", PenetrationDeploymentEventLevel.Success,
+                                health.Message, nodePlan.Node.Name);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex,
+                    "Unexpected penetration container creation failure for game {GameId}, team {TeamId}.",
+                    config.GameId, teamId);
+                if (reservedSlotsNotBackedByContainer > 0)
+                {
+                    ReleaseReservedDockerCapacity(worker, reservedSlotsNotBackedByContainer);
+                    reservedSlotsNotBackedByContainer = 0;
+                    await context.SaveChangesAsync(CancellationToken.None);
+                }
+
+                success = false;
+                failureMessages.Add($"容器创建阶段异常：{ex.Message}");
+                AddDeploymentEvent(environment, "container", PenetrationDeploymentEventLevel.Error,
+                    $"容器创建阶段异常：{ex.Message}");
+            }
+
+            if (success)
+            {
+                var routeResult = await ApplyRuntimeRoutes(environment, plan, token);
+                if (!routeResult.Success)
+                {
+                    success = false;
+                    failureMessages.Add(routeResult.Message);
+                }
+            }
+
+            if (!success)
+            {
+                environment.LastError = failureMessages.Count == 0
+                    ? "部分节点部署失败。"
+                    : string.Join('\n', failureMessages);
+                await context.SaveChangesAsync(token);
+                var cleanup = await DestroyEnvironment(environment, CancellationToken.None);
+                if (cleanup.Success)
+                    environment.Status = PenetrationRuntimeStatus.Failed;
+                environment.LastError = cleanup.Success
+                    ? $"{environment.LastError}\n已清理残留资源。"
+                    : $"{environment.LastError}\n清理残留资源失败：{cleanup.Message}";
+                if (!cleanup.Success && environment.Status is PenetrationRuntimeStatus.Stopped or PenetrationRuntimeStatus.Running)
+                    environment.Status = PenetrationRuntimeStatus.CleanupPending;
+                environment.UpdatedAt = DateTimeOffset.UtcNow;
+                AddDeploymentEvent(environment, "cleanup", cleanup.Success
+                        ? PenetrationDeploymentEventLevel.Warning
+                        : PenetrationDeploymentEventLevel.Error,
+                    cleanup.Success ? "部署失败后的残留资源已清理。" : $"部署失败且残留资源清理未完成：{cleanup.Message}");
+                await context.SaveChangesAsync(token);
+                return (false, cleanup.Success
+                    ? "队伍环境部署失败，已清理残留资源。"
+                    : "队伍环境部署失败，残留资源已进入待清理状态。");
+            }
+
+            environment.Status = PenetrationRuntimeStatus.Running;
+            environment.LastError = null;
+            environment.UpdatedAt = DateTimeOffset.UtcNow;
+            AddDeploymentEvent(environment, "complete", PenetrationDeploymentEventLevel.Success,
+                $"队伍环境部署完成，发布版本 v{config.PublishedVersion} 已运行。");
+            await context.SaveChangesAsync(token);
+            return (true, rebuild ? "渗透环境已重建。" : "渗透环境已部署。");
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            if (reservedSlotsNotBackedByContainer > 0)
+            {
+                ReleaseReservedDockerCapacity(worker, reservedSlotsNotBackedByContainer);
+                await context.SaveChangesAsync(CancellationToken.None);
+            }
+
+            throw;
+        }
     }
 
     async Task<PenetrationConfig> BuildTransientConfig(int gameId, PenetrationConfigModel model,
@@ -993,6 +1679,8 @@ public class PenetrationService(
                 TopologyKey = EnsureTopologyKey(nodeModel.TopologyKey, "node", nodeModel.Id),
                 Name = Clean(nodeModel.Name, "未命名节点"),
                 Description = CleanNullable(nodeModel.Description),
+                PlayerAlias = CleanNullable(nodeModel.PlayerAlias),
+                PlayerDescription = CleanNullable(nodeModel.PlayerDescription),
                 NodeType = nodeModel.NodeType,
                 ImageTemplateId = nodeModel.ImageTemplateId,
                 ImageName = CleanNullable(nodeModel.ImageName),
@@ -1002,6 +1690,7 @@ public class PenetrationService(
                 ExposePort = Math.Clamp(nodeModel.ExposePort, 1, 65535),
                 IsEntry = nodeModel.IsEntry,
                 PublishPort = nodeModel.PublishPort || nodeModel.IsEntry,
+                AllowRouting = nodeModel.AllowRouting,
                 StaticIp = CleanNullable(nodeModel.StaticIp),
                 EnvironmentVariables = JsonSerializer.Serialize(nodeModel.EnvironmentVariables ?? [], JsonOptions),
                 StartCommand = CleanNullable(nodeModel.StartCommand),
@@ -1029,6 +1718,7 @@ public class PenetrationService(
                     FlagTemplate = CleanNullable(itemModel.FlagTemplate),
                     MaxAttempts = Math.Clamp(itemModel.MaxAttempts, 0, 1000),
                     IsVisible = itemModel.IsVisible,
+                    IsCheckpoint = itemModel.IsCheckpoint,
                     PrerequisiteItemIds = JsonSerializer.Serialize(itemModel.PrerequisiteItemIds ?? [], JsonOptions),
                     OrderIndex = itemModel.OrderIndex
                 };
@@ -1118,9 +1808,6 @@ public class PenetrationService(
         var existingNetworks = config.Networks.ToDictionary(n => n.TopologyKey, StringComparer.Ordinal);
         var existingNodes = config.Nodes.ToDictionary(n => n.TopologyKey, StringComparer.Ordinal);
 
-        contextRemoveEdges(config);
-        contextRemoveInterfaces(config);
-
         var removableNodes = config.Nodes.Where(n => !incomingNodeKeys.Contains(n.TopologyKey)).ToList();
         var blockedScore = removableNodes
             .SelectMany(n => n.ScoreItems)
@@ -1129,7 +1816,10 @@ public class PenetrationService(
             throw new InvalidOperationException($"得分项“{blockedScore.Title}”已有提交记录，请先停止并归档环境后再删除。");
 
         foreach (var node in removableNodes)
+        {
+            node.Network.Nodes.Remove(node);
             config.Nodes.Remove(node);
+        }
 
         foreach (var network in config.Networks.Where(n => !incomingNetworkKeys.Contains(n.TopologyKey)).ToList())
             config.Networks.Remove(network);
@@ -1179,10 +1869,15 @@ public class PenetrationService(
                 config.Nodes.Add(node);
             }
 
+            if (node.Network is not null && node.Network.Id != network.Id)
+                node.Network.Nodes.Remove(node);
+
             node.Network = network;
             node.NetworkId = network.Id;
             node.Name = Clean(nodeModel.Name, "未命名节点");
             node.Description = CleanNullable(nodeModel.Description);
+            node.PlayerAlias = CleanNullable(nodeModel.PlayerAlias);
+            node.PlayerDescription = CleanNullable(nodeModel.PlayerDescription);
             node.NodeType = nodeModel.NodeType;
             node.ImageTemplateId = nodeModel.ImageTemplateId;
             node.ImageName = CleanNullable(nodeModel.ImageName);
@@ -1192,6 +1887,7 @@ public class PenetrationService(
             node.ExposePort = Math.Clamp(nodeModel.ExposePort, 1, 65535);
             node.IsEntry = nodeModel.IsEntry;
             node.PublishPort = nodeModel.PublishPort || nodeModel.IsEntry;
+            node.AllowRouting = nodeModel.AllowRouting;
             node.StaticIp = CleanNullable(nodeModel.StaticIp);
             node.EnvironmentVariables = JsonSerializer.Serialize(nodeModel.EnvironmentVariables ?? [], JsonOptions);
             node.StartCommand = CleanNullable(nodeModel.StartCommand);
@@ -1200,6 +1896,9 @@ public class PenetrationService(
             node.PositionX = nodeModel.PositionX;
             node.PositionY = nodeModel.PositionY;
             node.OrderIndex = nodeModel.OrderIndex;
+
+            if (!network.Nodes.Contains(node))
+                network.Nodes.Add(node);
 
             var existingScores = node.ScoreItems.ToDictionary(i => i.TopologyKey, StringComparer.Ordinal);
             var incomingScoreKeys = nodeModel.ScoreItems
@@ -1236,6 +1935,7 @@ public class PenetrationService(
                 scoreItem.FlagTemplate = CleanNullable(itemModel.FlagTemplate);
                 scoreItem.MaxAttempts = Math.Clamp(itemModel.MaxAttempts, 0, 1000);
                 scoreItem.IsVisible = itemModel.IsVisible;
+                scoreItem.IsCheckpoint = itemModel.IsCheckpoint;
                 scoreItem.PrerequisiteItemIds = JsonSerializer.Serialize(itemModel.PrerequisiteItemIds ?? [], JsonOptions);
                 scoreItem.OrderIndex = itemModel.OrderIndex;
                 scoreKeyByModelId[itemModel.Id] = scoreItem.TopologyKey;
@@ -1250,6 +1950,17 @@ public class PenetrationService(
                 continue;
 
             var interfaces = BuildModelInterfaces(nodeModel, modelInterfaces, networkMap.Keys.ToHashSet());
+            var incomingInterfaceKeys = interfaces
+                .Select(i => EnsureTopologyKey(i.TopologyKey, "interface", i.Id))
+                .ToHashSet(StringComparer.Ordinal);
+            var existingInterfaces = node.Interfaces.ToDictionary(i => i.TopologyKey, StringComparer.Ordinal);
+
+            foreach (var iface in node.Interfaces.Where(i => !incomingInterfaceKeys.Contains(i.TopologyKey)).ToList())
+            {
+                iface.Network?.Interfaces.Remove(iface);
+                node.Interfaces.Remove(iface);
+            }
+
             foreach (var interfaceModel in interfaces.OrderBy(i => i.OrderIndex))
             {
                 var targetNetworkModelId = networkMap.ContainsKey(interfaceModel.NetworkId)
@@ -1258,38 +1969,49 @@ public class PenetrationService(
                 if (!networkMap.TryGetValue(targetNetworkModelId, out var network))
                     network = config.Networks.OrderBy(n => n.OrderIndex).First();
 
-                node.Interfaces.Add(new PenetrationInterface
+                var interfaceKey = EnsureTopologyKey(interfaceModel.TopologyKey, "interface", interfaceModel.Id);
+                if (!existingInterfaces.TryGetValue(interfaceKey, out var iface))
                 {
-                    Node = node,
-                    NodeId = node.Id,
-                    Network = network,
-                    NetworkId = network.Id,
-                    TopologyKey = EnsureTopologyKey(interfaceModel.TopologyKey, "interface", interfaceModel.Id),
-                    Name = Clean(interfaceModel.Name, $"eth{interfaceModel.OrderIndex}"),
-                    StaticIp = CleanNullable(interfaceModel.StaticIp),
-                    IsPrimary = interfaceModel.IsPrimary,
-                    IsManagement = interfaceModel.IsManagement,
-                    OrderIndex = interfaceModel.OrderIndex
-                });
+                    iface = new PenetrationInterface
+                    {
+                        Node = node,
+                        NodeId = node.Id,
+                        TopologyKey = interfaceKey
+                    };
+                    node.Interfaces.Add(iface);
+                }
+
+                if (iface.Network is not null && iface.Network.Id != network.Id)
+                    iface.Network?.Interfaces.Remove(iface);
+
+                iface.Node = node;
+                iface.NodeId = node.Id;
+                iface.Network = network;
+                iface.NetworkId = network.Id;
+                iface.Name = Clean(interfaceModel.Name, $"eth{interfaceModel.OrderIndex}");
+                iface.StaticIp = CleanNullable(interfaceModel.StaticIp);
+                iface.IsPrimary = interfaceModel.IsPrimary;
+                iface.IsManagement = interfaceModel.IsManagement;
+                iface.OrderIndex = interfaceModel.OrderIndex;
+
+                if (!network.Interfaces.Contains(iface))
+                    network.Interfaces.Add(iface);
             }
         }
 
         return new TopologyModelMaps(networkMap, nodeMap, scoreKeyByModelId, false);
-
-        static void contextRemoveEdges(PenetrationConfig config)
-        {
-            config.Edges.Clear();
-        }
-
-        static void contextRemoveInterfaces(PenetrationConfig config)
-        {
-            foreach (var node in config.Nodes)
-                node.Interfaces.Clear();
-        }
     }
 
     static void AddEdgesToConfig(PenetrationConfig config, PenetrationConfigModel model, TopologyModelMaps maps)
     {
+        var incomingEdgeKeys = model.Edges
+            .Select(e => EnsureTopologyKey(e.TopologyKey, "edge", e.Id))
+            .ToHashSet(StringComparer.Ordinal);
+        var existingEdges = config.Edges.ToDictionary(e => e.TopologyKey, StringComparer.Ordinal);
+
+        foreach (var edge in config.Edges.Where(e => !incomingEdgeKeys.Contains(e.TopologyKey)).ToList())
+            config.Edges.Remove(edge);
+
         foreach (var edgeModel in model.Edges)
         {
             var sourceModelId = edgeModel.SourceId > 0 ? edgeModel.SourceId : edgeModel.SourceNodeId;
@@ -1314,25 +2036,38 @@ public class PenetrationService(
             if (!maps.PreserveModelIds && (sourceId <= 0 || targetId <= 0))
                 continue;
 
-            config.Edges.Add(new PenetrationEdge
+            var edgeKey = EnsureTopologyKey(edgeModel.TopologyKey, "edge", edgeModel.Id);
+            if (!existingEdges.TryGetValue(edgeKey, out var edge))
             {
-                Id = maps.PreserveModelIds ? edgeModel.Id : 0,
-                ConfigId = config.Id,
-                Config = config,
-                TopologyKey = EnsureTopologyKey(edgeModel.TopologyKey, "edge", edgeModel.Id),
-                SourceNodeId = sourceNode?.Id ?? 0,
-                TargetNodeId = targetNode?.Id ?? 0,
-                SourceKind = edgeModel.SourceKind,
-                SourceId = sourceId,
-                TargetKind = edgeModel.TargetKind,
-                TargetId = targetId,
-                Protocol = edgeModel.Protocol,
-                PortRange = Clean(edgeModel.PortRange, "any"),
-                PolicyAction = edgeModel.PolicyAction,
-                IsRouteHint = edgeModel.IsRouteHint,
-                Label = CleanNullable(edgeModel.Label),
-                Description = CleanNullable(edgeModel.Description)
-            });
+                edge = new PenetrationEdge
+                {
+                    ConfigId = config.Id,
+                    Config = config,
+                    TopologyKey = edgeKey
+                };
+
+                if (maps.PreserveModelIds)
+                    edge.Id = edgeModel.Id;
+
+                config.Edges.Add(edge);
+            }
+
+            edge.ConfigId = config.Id;
+            edge.Config = config;
+            edge.SourceNodeId = sourceNode?.Id ?? 0;
+            edge.TargetNodeId = targetNode?.Id ?? 0;
+            edge.SourceKind = edgeModel.SourceKind;
+            edge.SourceId = sourceId;
+            edge.TargetKind = edgeModel.TargetKind;
+            edge.TargetId = targetId;
+            edge.Protocol = edgeModel.Protocol;
+            edge.PortRange = Clean(edgeModel.PortRange, "any");
+            edge.PolicyAction = edgeModel.PolicyAction;
+            edge.IsRouteHint = edgeModel.IsRouteHint;
+            edge.EnforcementMode = edgeModel.EnforcementMode;
+            edge.Priority = Math.Clamp(edgeModel.Priority, 0, 10000);
+            edge.Label = CleanNullable(edgeModel.Label);
+            edge.Description = CleanNullable(edgeModel.Description);
         }
     }
 
@@ -1438,9 +2173,16 @@ public class PenetrationService(
         return Math.Max(0, index);
     }
 
-    async Task DestroyEnvironment(PenetrationTeamEnvironment environment, CancellationToken token)
+    async Task<(bool Success, string Message)> DestroyEnvironment(PenetrationTeamEnvironment environment,
+        CancellationToken token)
     {
         var networkNames = new HashSet<string>(StringComparer.Ordinal);
+        var errors = new List<string>();
+        environment.Status = PenetrationRuntimeStatus.CleanupPending;
+        environment.UpdatedAt = DateTimeOffset.UtcNow;
+        environment.LastCleanupAttemptAt = DateTimeOffset.UtcNow;
+        await context.SaveChangesAsync(token);
+
         foreach (var runtime in environment.RuntimeNodes)
         {
             if (!string.IsNullOrWhiteSpace(runtime.NetworkName))
@@ -1454,39 +2196,90 @@ public class PenetrationService(
             {
                 try
                 {
+                    AddDeploymentEvent(environment, "cleanup", PenetrationDeploymentEventLevel.Info,
+                        $"开始销毁容器 {ShortContainerId(runtime.Container.ContainerId)}。", runtime.TopologyNode?.Name);
                     await containerManager.DestroyContainerAsync(runtime.Container, token);
-                    context.Containers.Remove(runtime.Container);
+                    if (runtime.Container.Status != ContainerStatus.Destroyed)
+                    {
+                        runtime.Status = PenetrationRuntimeStatus.Orphaned;
+                        errors.Add($"容器 {runtime.Container.ContainerId} 销毁后状态仍为 {runtime.Container.Status}。");
+                        AddDeploymentEvent(environment, "cleanup", PenetrationDeploymentEventLevel.Error,
+                            $"容器销毁未确认，当前状态：{runtime.Container.Status}。", runtime.TopologyNode?.Name,
+                            runtime.Container.ContainerId);
+                    }
+                    else
+                    {
+                        context.Containers.Remove(runtime.Container);
+                        runtime.ContainerId = null;
+                        runtime.Status = PenetrationRuntimeStatus.Stopped;
+                        AddDeploymentEvent(environment, "cleanup", PenetrationDeploymentEventLevel.Success,
+                            "容器已销毁。", runtime.TopologyNode?.Name);
+                    }
                 }
                 catch (Exception ex)
                 {
                     logger.LogWarning(ex, "Failed to destroy penetration container {ContainerId}", runtime.ContainerId);
+                    runtime.Status = PenetrationRuntimeStatus.Orphaned;
+                    errors.Add($"容器 {runtime.Container.ContainerId} 销毁失败：{ex.Message}");
+                    AddDeploymentEvent(environment, "cleanup", PenetrationDeploymentEventLevel.Error,
+                        $"容器销毁失败：{ex.Message}", runtime.TopologyNode?.Name,
+                        runtime.Container.ContainerId);
                 }
             }
-
-            runtime.ContainerId = null;
-            runtime.Status = PenetrationRuntimeStatus.Stopped;
+            else
+            {
+                runtime.ContainerId = null;
+                runtime.Status = PenetrationRuntimeStatus.Stopped;
+            }
         }
-
-        context.PenetrationRuntimeNodes.RemoveRange(environment.RuntimeNodes);
-        environment.Status = PenetrationRuntimeStatus.Stopped;
-        environment.UpdatedAt = DateTimeOffset.UtcNow;
-        await context.SaveChangesAsync(token);
 
         foreach (var networkName in networkNames)
         {
             try
             {
+                AddDeploymentEvent(environment, "cleanup", PenetrationDeploymentEventLevel.Info,
+                    $"开始清理网络 {networkName}。");
                 await RemoveRuntimeNetwork(environment.NodeId, networkName, token);
+                AddDeploymentEvent(environment, "cleanup", PenetrationDeploymentEventLevel.Success,
+                    $"网络 {networkName} 已清理。");
             }
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "Failed to remove penetration network {NetworkName}", networkName);
+                errors.Add($"网络 {networkName} 清理失败：{ex.Message}");
+                AddDeploymentEvent(environment, "cleanup", PenetrationDeploymentEventLevel.Error,
+                    $"网络 {networkName} 清理失败：{ex.Message}", detail: networkName);
             }
         }
+
+        if (errors.Count > 0)
+        {
+            MarkEnvironmentCleanupPending(environment, errors);
+            await context.SaveChangesAsync(token);
+            return (false, string.Join('\n', errors));
+        }
+
+        context.PenetrationRuntimeRoutes.RemoveRange(environment.RuntimeRoutes);
+        context.PenetrationRuntimeNodes.RemoveRange(environment.RuntimeNodes);
+        environment.Status = PenetrationRuntimeStatus.Stopped;
+        environment.UpdatedAt = DateTimeOffset.UtcNow;
+        environment.LastError = null;
+        environment.CleanupRetryCount = 0;
+        environment.NextCleanupAt = null;
+        AddDeploymentEvent(environment, "cleanup", PenetrationDeploymentEventLevel.Success, "环境资源已全部清理。");
+        await context.SaveChangesAsync(token);
+        return (true, "环境资源已清理。");
     }
 
     async Task RemoveRuntimeNetwork(Guid? nodeId, string networkName, CancellationToken token)
     {
+        var fabric = await penetrationFabricManager.RemoveNetworkAsync(networkName, token);
+        if (fabric is { IsSupported: true, Succeeded: false })
+            throw new InvalidOperationException(NormalizeFabricError(fabric.Message,
+                $"fabric 网络 {networkName} 清理失败。"));
+        if (fabric.IsSupported)
+            return;
+
         if (nodeId is { } workerId)
         {
             var worker = await context.WorkerNodes.AsNoTracking().FirstOrDefaultAsync(n => n.Id == workerId, token);
@@ -1504,6 +2297,60 @@ public class PenetrationService(
         var orchestrator = serviceProvider.GetService<ContainerOrchestrator>();
         if (orchestrator is not null)
             await orchestrator.RemoveNetwork(networkName);
+    }
+
+    static bool IsEnvironmentRunningVersion(PenetrationTeamEnvironment environment, PenetrationConfig config)
+    {
+        if (environment.Status != PenetrationRuntimeStatus.Running ||
+            environment.PublishedVersion != config.PublishedVersion ||
+            environment.RuntimeNodes.Count != config.Nodes.Count)
+            return false;
+
+        var runningNodeKeys = environment.RuntimeNodes
+            .Where(r => r.Status == PenetrationRuntimeStatus.Running && !string.IsNullOrWhiteSpace(r.TopologyNodeKey))
+            .Select(r => r.TopologyNodeKey)
+            .ToHashSet(StringComparer.Ordinal);
+
+        return config.Nodes.All(n => runningNodeKeys.Contains(n.TopologyKey));
+    }
+
+    static string BuildDeployLockKey(int gameId) => $"pentest:deploy:{gameId}";
+
+    static void MarkEnvironmentCleanupPending(PenetrationTeamEnvironment environment, List<string> errors)
+    {
+        environment.CleanupRetryCount++;
+        environment.LastError = string.Join('\n', errors.Take(8));
+        environment.UpdatedAt = DateTimeOffset.UtcNow;
+        environment.LastCleanupAttemptAt = DateTimeOffset.UtcNow;
+        environment.NextCleanupAt = environment.CleanupRetryCount > CleanupBackoff.Length
+            ? null
+            : DateTimeOffset.UtcNow + CleanupBackoff[environment.CleanupRetryCount - 1];
+        environment.Status = environment.CleanupRetryCount > CleanupBackoff.Length
+            ? PenetrationRuntimeStatus.ManualCleanupRequired
+            : PenetrationRuntimeStatus.CleanupPending;
+    }
+
+    static void AddDeploymentEvent(PenetrationTeamEnvironment environment, string stage,
+        PenetrationDeploymentEventLevel level, string message, string? nodeName = null, string? detail = null)
+    {
+        environment.DeploymentEvents.Add(new PenetrationDeploymentEvent
+        {
+            Environment = environment,
+            Stage = Truncate(stage, 64),
+            Level = level,
+            Message = Truncate(message, 256),
+            NodeName = TruncateNullable(nodeName, 128),
+            Detail = TruncateNullable(detail, 1024),
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+    }
+
+    static string ShortContainerId(string? containerId)
+    {
+        if (string.IsNullOrWhiteSpace(containerId))
+            return "unknown";
+
+        return containerId.Length <= 12 ? containerId : containerId[..12];
     }
 
     async Task<PenetrationValidationModel> ValidateConfig(PenetrationConfig config, CancellationToken token)
@@ -1527,12 +2374,25 @@ public class PenetrationService(
             var maxSegments = 1 << Math.Max(0, config.NetworkSubnetPrefix - config.TeamSubnetPrefix);
             if (config.Networks.Count > maxSegments)
                 result.Errors.Add($"当前队伍网段最多可切分 {maxSegments} 个安全域，请调整前缀或减少安全域数量。");
+            foreach (var network in config.Networks)
+            {
+                if (network.OrderIndex < 0)
+                    result.Errors.Add($"安全域“{network.Name}”的排序序号不能小于 0。");
+                else if (network.OrderIndex >= maxSegments && string.IsNullOrWhiteSpace(network.Cidr))
+                    result.Errors.Add($"安全域“{network.Name}”的排序序号 {network.OrderIndex} 超出队伍网段可切分范围（0-{maxSegments - 1}），会导致 CIDR 越界。");
+            }
         }
 
         if (config.Nodes.Count == 0)
             result.Errors.Add("至少需要一个资产节点。");
         else
+        {
             AddDuplicateKeyErrors(result, "资产节点", config.Nodes.Select(n => (n.Name, n.TopologyKey)));
+            AddDuplicateKeyErrors(result, "得分项", config.Nodes.SelectMany(n =>
+                n.ScoreItems.Select(i => ($"{n.Name}/{i.Title}", i.TopologyKey))));
+            AddDuplicateKeyErrors(result, "网卡", config.Nodes.SelectMany(n =>
+                n.Interfaces.Select(i => ($"{n.Name}/{i.Name}", i.TopologyKey))));
+        }
 
         if (config.Nodes.All(n => !n.IsEntry && !n.PublishPort))
             result.Errors.Add("至少需要一个入口节点或公开端口节点。");
@@ -1664,6 +2524,9 @@ public class PenetrationService(
             if (!sourceExists || !targetExists)
                 result.Errors.Add($"访问策略“{edge.Label ?? edge.Id.ToString()}”引用了不存在的源或目标。");
 
+            if (RequiresRuntimeRoute(edge) && edge.PolicyAction == PenetrationPolicyAction.Deny)
+                result.Warnings.Add($"访问策略“{edge.Label ?? edge.Id.ToString()}”为 Deny：首版不会生成可达路由，也不会执行端口级阻断。");
+
             if (edge.PolicyAction == PenetrationPolicyAction.Allow && edge.IsRouteHint &&
                 edge.SourceKind == PenetrationPolicyScope.Node && edge.TargetKind == PenetrationPolicyScope.Node)
             {
@@ -1674,8 +2537,24 @@ public class PenetrationService(
             }
         }
 
+        // Validation uses team index 0 as a deterministic IPAM sample. Runtime deployment
+        // recomputes the same shape per team, so warnings here are topology-level signals.
+        var runtimeInterfaces = BuildRuntimeInterfaces(config, 0, sampleNetworkNames, sampleSubnetsByName);
+        var runtimeRoutes = CompileRuntimeRoutes(config, runtimeInterfaces);
+        foreach (var unsupported in runtimeRoutes.Where(r =>
+                     RequiresRuntimeRoute(r.Edge) && r.Edge.PolicyAction == PenetrationPolicyAction.Allow &&
+                     r.Status == PenetrationRouteStatus.Unsupported))
+            result.Errors.Add($"访问策略“{unsupported.Label}”无法执行为网络级路由：{unsupported.Message}");
+
+        foreach (var duplicate in runtimeRoutes
+                     .Where(r => r.Status == PenetrationRouteStatus.HintOnly &&
+                                 r.Message.Contains("同一安全域路径已由", StringComparison.Ordinal))
+                     .Take(6))
+            result.Warnings.Add(
+                $"访问策略“{duplicate.Label}”覆盖了已有运行期安全域路径：{duplicate.Message}");
+
         if (config.Edges.Count > 0)
-            result.Warnings.Add("访问策略会进入部署计划、选手拓扑和任务链；当前运行期隔离由安全域 Docker 网络与多网卡边界实现，尚未生成端口级 ACL。");
+            result.Warnings.Add("访问策略会进入部署计划、选手拓扑和任务链；RuntimeRoute/Both 会生成网络级显式路由。首版为保证回包和探测会写入反向路由，呈现网段级连通，不做单向 ACL、协议/端口级防火墙。");
 
         result.Valid = result.Errors.Count == 0;
         return result;
@@ -1713,7 +2592,7 @@ public class PenetrationService(
                 ZoneType = n.Network.ZoneType,
                 Cidr = n.Cidr,
                 DefaultPolicy = n.Network.DefaultPolicy,
-                IsInternal = IsInternalNetwork(n.Network)
+                IsInternal = n.IsInternal
             }).ToList(),
             Nodes = runtime.Nodes.Select(n => new PenetrationPlanNodeModel
             {
@@ -1735,19 +2614,32 @@ public class PenetrationService(
                     IpAddress = i.IpAddress,
                     IsPrimary = i.IsPrimary,
                     IsManagement = i.IsManagement,
-                    IsInternal = IsInternalNetwork(i.Network)
+                    IsInternal = runtime.Networks.FirstOrDefault(n => n.Network.Id == i.Network.Id)?.IsInternal ?? IsInternalNetwork(i.Network)
                 }).ToList()
             }).ToList(),
-            Policies = config.Edges.OrderBy(e => e.Id).Select(e => new PenetrationPlanPolicyModel
+            Policies = runtime.Routes.OrderBy(r => r.Edge.Priority).ThenBy(r => r.Edge.Id).Select(r => new PenetrationPlanPolicyModel
             {
-                PolicyId = e.Id,
-                Label = string.IsNullOrWhiteSpace(e.Label) ? "访问路径" : e.Label,
-                Source = ResolvePolicyName(config, e.SourceKind, e.SourceId, e.SourceNodeId),
-                Target = ResolvePolicyName(config, e.TargetKind, e.TargetId, e.TargetNodeId),
-                Protocol = e.Protocol,
-                PortRange = e.PortRange,
-                Action = e.PolicyAction,
-                IsRouteHint = e.IsRouteHint
+                PolicyId = r.Edge.Id,
+                Label = r.Label,
+                Source = ResolvePolicyName(config, r.Edge.SourceKind, r.Edge.SourceId, r.Edge.SourceNodeId),
+                Target = ResolvePolicyName(config, r.Edge.TargetKind, r.Edge.TargetId, r.Edge.TargetNodeId),
+                Protocol = r.Edge.Protocol,
+                PortRange = r.Edge.PortRange,
+                Action = r.Edge.PolicyAction,
+                IsRouteHint = r.Edge.IsRouteHint,
+                EnforcementMode = r.Edge.EnforcementMode,
+                RouteStatus = r.Status,
+                RuntimeSummary = r.Status == PenetrationRouteStatus.RoutePlanned
+                    ? "将部署网络级显式路由"
+                    : r.Status == PenetrationRouteStatus.HintOnly
+                        ? "仅作为题目提示/拓扑路径"
+                        : "首版无法执行为网络级路由",
+                RouteNodeName = r.RouteNode?.Name,
+                SourceNetworkName = r.SourceInterface?.Network.Name,
+                TargetNetworkName = r.TargetInterface?.Network.Name,
+                GatewayIp = r.SourceRouteInterface?.IpAddress,
+                CompileMessage = r.Message,
+                IsExecutable = r.IsExecutable
             }).ToList(),
             Flags = config.Nodes.SelectMany(n => n.ScoreItems.Select(i => new PenetrationPlanFlagModel
             {
@@ -1763,8 +2655,9 @@ public class PenetrationService(
             DeploymentSteps =
             [
                 "为每支队伍分配独立队伍网段。",
-                "按安全域创建 Docker bridge 网络并写入 IPAM 子网，非入口安全域默认创建为内网隔离网络。",
-                "按节点网卡配置创建容器主网卡和附加网卡。",
+                "按安全域创建平台管理的 Linux bridge/veth fabric；普通内网节点使用 Docker network none，入口/发布节点保留管理网。",
+                "按节点网卡把 veth 接入容器网络命名空间并配置固定 IP/CIDR。",
+                "对 RuntimeRoute/Both 策略编译并应用网络级显式路由；首版为保证回包会写入反向路由，协议和端口字段只作为路径摘要，不做运行期阻断。",
                 "注入动态 Flag、环境变量和资源限制。",
                 "生成入口端口、后台管理入口、运行节点和提交日志。"
             ]
@@ -1776,13 +2669,27 @@ public class PenetrationService(
     {
         var networkNames = config.Networks.ToDictionary(n => n.Id, n => BuildRuntimeNetworkName(config, teamId, n));
         var networkSubnets = BuildNetworkSubnets(config, teamIndex, networkNames);
+        var runtimeInterfaces = BuildRuntimeInterfaces(config, teamIndex, networkNames, networkSubnets);
+        var routePlans = CompileRuntimeRoutes(config, runtimeInterfaces);
+        var routedNetworkIds = routePlans
+            .Where(r => r.Status == PenetrationRouteStatus.RoutePlanned)
+            .SelectMany(r => new[] { r.SourceInterface?.Network.Id, r.TargetInterface?.Network.Id })
+            .OfType<int>()
+            .ToHashSet();
         var networks = config.Networks.OrderBy(n => n.OrderIndex).Select(n => new RuntimeNetworkPlan(
             n,
             networkNames[n.Id],
-            networkSubnets.GetValueOrDefault(networkNames[n.Id]) ?? AllocateSubnet(config.BaseCidr, config.NetworkSubnetPrefix, n.OrderIndex)
+            networkSubnets.GetValueOrDefault(networkNames[n.Id]) ?? AllocateSubnet(config.BaseCidr, config.NetworkSubnetPrefix, n.OrderIndex),
+            IsInternalNetwork(n) && !routedNetworkIds.Contains(n.Id)
         )).ToList();
-
-        var runtimeInterfaces = BuildRuntimeInterfaces(config, teamIndex, networkNames, networkSubnets);
+        var routeNodeKeys = routePlans
+            .Where(r => r.Status == PenetrationRouteStatus.RoutePlanned && r.RouteNode is not null)
+            .Select(r => r.RouteNode!.TopologyKey)
+            .ToHashSet(StringComparer.Ordinal);
+        var routedEndpointKeys = routePlans
+            .Where(r => r.Status == PenetrationRouteStatus.RoutePlanned)
+            .SelectMany(r => r.EndpointNodeKeys)
+            .ToHashSet(StringComparer.Ordinal);
         var nodes = new List<RuntimeNodePlan>();
         foreach (var node in config.Nodes.OrderBy(n => n.OrderIndex))
         {
@@ -1792,10 +2699,17 @@ public class PenetrationService(
                 .OrderByDescending(i => i.IsPrimary)
                 .ThenBy(i => i.OrderIndex)
                 .ToList();
-            nodes.Add(new RuntimeNodePlan(node, image, interfaces, flagMap));
+            nodes.Add(new RuntimeNodePlan(
+                node,
+                image,
+                interfaces,
+                flagMap,
+                networks.ToDictionary(n => n.Network.Id, n => n.IsInternal),
+                routeNodeKeys.Contains(node.TopologyKey),
+                routeNodeKeys.Contains(node.TopologyKey) || routedEndpointKeys.Contains(node.TopologyKey)));
         }
 
-        return new RuntimePlan(networks, nodes);
+        return new RuntimePlan(networks, nodes, routePlans);
     }
 
     ContainerConfig BuildContainerConfig(RuntimeNodePlan nodePlan, int teamId, Guid workerId)
@@ -1808,10 +2722,11 @@ public class PenetrationService(
             SubnetCidr = i.Cidr,
             IPAddress = i.IpAddress,
             IsPrimary = i.IsPrimary,
-            IsInternal = IsInternalNetwork(i.Network)
+            IsInternal = nodePlan.RuntimeNetworks.GetValueOrDefault(i.Network.Id, IsInternalNetwork(i.Network))
         }).ToList();
         var primary = nodePlan.PrimaryInterface;
 
+        var removeDefaultRoute = ShouldRemoveDefaultRoute(nodePlan);
         return new ContainerConfig
         {
             Image = nodePlan.Image,
@@ -1833,23 +2748,545 @@ public class PenetrationService(
             EnvironmentVariables = envVars,
             StartCommand = nodePlan.Node.StartCommand,
             HealthCheck = nodePlan.Node.HealthCheck,
+            UsePenetrationFabric = true,
+            EnableNetworkAdmin = false,
+            RemoveDefaultRoute = removeDefaultRoute,
+            EnableIpForwarding = false,
             PreferredNodeId = workerId
         };
     }
 
-    async Task<WorkerNode?> SelectWorkerNode(int requiredContainers, CancellationToken token)
+    static bool ShouldRemoveDefaultRoute(RuntimeNodePlan nodePlan) =>
+        !nodePlan.Node.PublishPort &&
+        !nodePlan.Node.IsEntry &&
+        nodePlan.Interfaces.Any(i =>
+            IsInternalNetwork(i.Network) &&
+            !nodePlan.RuntimeNetworks.GetValueOrDefault(i.Network.Id, IsInternalNetwork(i.Network)));
+
+    List<RuntimeRoutePlan> CompileRuntimeRoutes(PenetrationConfig config, IReadOnlyList<RuntimeInterfacePlan> interfaces)
     {
+        var plans = new List<RuntimeRoutePlan>();
+        var interfacesByNode = interfaces.GroupBy(i => i.Node.Id).ToDictionary(g => g.Key, g => g.ToList());
+        var interfacesByNetwork = interfaces.GroupBy(i => i.Network.Id).ToDictionary(g => g.Key, g => g.ToList());
+
+        foreach (var edge in config.Edges.OrderBy(e => e.Priority).ThenBy(e => e.Id))
+        {
+            var label = string.IsNullOrWhiteSpace(edge.Label) ? "访问路径" : edge.Label;
+            if (!RequiresRuntimeRoute(edge))
+            {
+                plans.Add(RuntimeRoutePlan.Hint(edge, label, "该策略仅用于题目拓扑、提示和迷雾解锁，不改变运行期网络可达性。"));
+                continue;
+            }
+
+            if (edge.PolicyAction != PenetrationPolicyAction.Allow)
+            {
+                plans.Add(RuntimeRoutePlan.Hint(edge, label,
+                    "Deny 在首版表示不生成可达路由；平台不承诺端口级或包级阻断。"));
+                continue;
+            }
+
+            var sourceNetworks = ResolvePolicyNetworks(config, interfacesByNode, edge.SourceKind, edge.SourceId, edge.SourceNodeId);
+            var targetNetworks = ResolvePolicyNetworks(config, interfacesByNode, edge.TargetKind, edge.TargetId, edge.TargetNodeId);
+            if (sourceNetworks.Count == 0 || targetNetworks.Count == 0)
+            {
+                plans.Add(RuntimeRoutePlan.Unsupported(edge, label, "源或目标没有可解析的安全域网卡。"));
+                continue;
+            }
+
+            var distinctPairs = sourceNetworks
+                .SelectMany(source => targetNetworks.Select(target => (Source: source, Target: target)))
+                .Where(pair => pair.Source.Network.Id != pair.Target.Network.Id)
+                .DistinctBy(pair => $"{pair.Source.Network.Id}:{pair.Target.Network.Id}")
+                .ToList();
+
+            if (distinctPairs.Count == 0)
+            {
+                plans.Add(RuntimeRoutePlan.Hint(edge, label, "源和目标位于同一安全域，Docker 网络内天然可达，无需生成显式路由。"));
+                continue;
+            }
+
+            var edgePlannedPairs = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var pair in distinctPairs)
+            {
+                var pairKey = BuildRuntimeRoutePairKey(pair.Source.Network.Id, pair.Target.Network.Id);
+                if (!edgePlannedPairs.Add(pairKey))
+                    continue;
+
+                var existingExecutable = plans
+                    .Where(p => p.IsExecutable)
+                    .FirstOrDefault(p => p.PairKey == pairKey);
+                if (existingExecutable is not null)
+                {
+                    plans.Add(RuntimeRoutePlan.Hint(edge, label,
+                        $"同一安全域路径已由更高优先级策略“{existingExecutable.Label}”生成网络级路由，本策略仅保留为题目提示和审计记录。"));
+                    continue;
+                }
+
+                var routeNode = FindRouteNode(config, interfacesByNode, pair.Source.Network.Id, pair.Target.Network.Id);
+                if (routeNode is null)
+                {
+                    plans.Add(RuntimeRoutePlan.Unsupported(edge, label,
+                        $"无法连接“{pair.Source.Network.Name}”到“{pair.Target.Network.Name}”：缺少同时连接两个安全域且允许路由的跳板/防火墙节点。"));
+                    continue;
+                }
+
+                if (!interfacesByNode.TryGetValue(routeNode.Id, out var routeInterfaces))
+                {
+                    plans.Add(RuntimeRoutePlan.Unsupported(edge, label, $"路由节点“{routeNode.Name}”没有运行期网卡。"));
+                    continue;
+                }
+
+                var sourceRouteInterface = SelectRouteInterface(routeInterfaces, pair.Source.Network.Id);
+                var targetRouteInterface = SelectRouteInterface(routeInterfaces, pair.Target.Network.Id);
+                var sourceEndpointNodes = ResolveEndpointNodes(edge.SourceKind, edge.SourceId, edge.SourceNodeId,
+                    interfacesByNetwork.GetValueOrDefault(pair.Source.Network.Id) ?? [], routeNode.Id);
+                var targetEndpointNodes = ResolveEndpointNodes(edge.TargetKind, edge.TargetId, edge.TargetNodeId,
+                    interfacesByNetwork.GetValueOrDefault(pair.Target.Network.Id) ?? [], routeNode.Id);
+
+                if (sourceEndpointNodes.Count == 0 || targetEndpointNodes.Count == 0)
+                {
+                    plans.Add(RuntimeRoutePlan.Unsupported(edge, label,
+                        $"无法连接“{pair.Source.Network.Name}”到“{pair.Target.Network.Name}”：源或目标安全域缺少除路由节点以外的可探测端点。"));
+                    continue;
+                }
+
+                var commandSummary =
+                    $"源端点: ip route replace {targetRouteInterface.Cidr} via {sourceRouteInterface.IpAddress}; 路由节点: sysctl net.ipv4.ip_forward=1; 目标端点: ip route replace {sourceRouteInterface.Cidr} via {targetRouteInterface.IpAddress}";
+                plans.Add(new RuntimeRoutePlan(
+                    edge,
+                    label,
+                    PenetrationRouteStatus.RoutePlanned,
+                    routeNode,
+                    pair.Source,
+                    pair.Target,
+                    sourceRouteInterface,
+                    targetRouteInterface,
+                    sourceEndpointNodes,
+                    targetEndpointNodes,
+                    commandSummary,
+                    $"将通过“{routeNode.Name}”启用“{pair.Source.Network.Name}”与“{pair.Target.Network.Name}”的网络级可达性；首版会写入反向路由保证回包，协议/端口仅作为说明，不做运行期阻断。"));
+            }
+        }
+
+        return plans;
+    }
+
+    static bool RequiresRuntimeRoute(PenetrationEdge edge) =>
+        edge.EnforcementMode is PenetrationEnforcementMode.RuntimeRoute or PenetrationEnforcementMode.Both;
+
+    static string BuildRuntimeRoutePairKey(int sourceNetworkId, int targetNetworkId) =>
+        sourceNetworkId <= targetNetworkId
+            ? $"{sourceNetworkId}:{targetNetworkId}"
+            : $"{targetNetworkId}:{sourceNetworkId}";
+
+    static List<RuntimeInterfacePlan> ResolvePolicyNetworks(PenetrationConfig config,
+        Dictionary<int, List<RuntimeInterfacePlan>> interfacesByNode, PenetrationPolicyScope kind, int id,
+        int fallbackNodeId)
+    {
+        if (kind == PenetrationPolicyScope.Network)
+            return config.Nodes
+                .Where(n => n.NetworkId == id)
+                .SelectMany(n => interfacesByNode.GetValueOrDefault(n.Id) ?? [])
+                .Where(i => i.Network.Id == id)
+                .DistinctBy(i => i.Network.Id)
+                .ToList();
+
+        var nodeId = id > 0 ? id : fallbackNodeId;
+        return interfacesByNode.GetValueOrDefault(nodeId)?.DistinctBy(i => i.Network.Id).ToList() ?? [];
+    }
+
+    static PenetrationNode? FindRouteNode(PenetrationConfig config,
+        Dictionary<int, List<RuntimeInterfacePlan>> interfacesByNode, int sourceNetworkId, int targetNetworkId)
+    {
+        return config.Nodes
+            .Where(n => IsRouteCapableNode(n))
+            .Select(n => new
+            {
+                Node = n,
+                Interfaces = interfacesByNode.GetValueOrDefault(n.Id) ?? []
+            })
+            .Where(x => x.Interfaces.Any(i => i.Network.Id == sourceNetworkId) &&
+                        x.Interfaces.Any(i => i.Network.Id == targetNetworkId))
+            .OrderByDescending(x => x.Node.AllowRouting)
+            .ThenBy(x => x.Node.OrderIndex)
+            .Select(x => x.Node)
+            .FirstOrDefault();
+    }
+
+    static RuntimeInterfacePlan SelectRouteInterface(IEnumerable<RuntimeInterfacePlan> interfaces, int networkId) =>
+        interfaces
+            .Where(i => i.Network.Id == networkId)
+            .OrderByDescending(i => i.IsPrimary)
+            .ThenByDescending(i => i.IsManagement)
+            .ThenBy(i => i.OrderIndex)
+            .First();
+
+    static bool IsRouteCapableNode(PenetrationNode node) =>
+        node.AllowRouting || node.NodeType is PenetrationNodeType.JumpHost or PenetrationNodeType.Bastion or PenetrationNodeType.FirewallRouter;
+
+    static List<RuntimeInterfacePlan> ResolveEndpointNodes(PenetrationPolicyScope kind, int id, int fallbackNodeId,
+        IReadOnlyList<RuntimeInterfacePlan> networkInterfaces, int routeNodeId)
+    {
+        if (kind == PenetrationPolicyScope.Node)
+        {
+            var nodeId = id > 0 ? id : fallbackNodeId;
+            return networkInterfaces.Where(i => i.Node.Id == nodeId)
+                .DistinctBy(i => i.Node.Id)
+                .ToList();
+        }
+
+        return networkInterfaces.Where(i => i.Node.Id != routeNodeId)
+            .DistinctBy(i => i.Node.Id)
+            .ToList();
+    }
+
+    async Task<(bool Success, string Message)> ApplyRuntimeRoutes(PenetrationTeamEnvironment environment,
+        RuntimePlan plan, CancellationToken token)
+    {
+        var runtimeByKey = environment.RuntimeNodes
+            .Where(r => !string.IsNullOrWhiteSpace(r.TopologyNodeKey))
+            .ToDictionary(r => r.TopologyNodeKey, StringComparer.Ordinal);
+        var errors = new List<string>();
+        var nextRuntimeRoutes = new List<PenetrationRuntimeRoute>(plan.Routes.Count);
+        var appliedRoutes = new List<RuntimeRoutePlan>();
+
+        foreach (var route in plan.Routes)
+        {
+            var runtimeRoute = new PenetrationRuntimeRoute
+            {
+                Environment = environment,
+                EdgeTopologyKey = route.Edge.TopologyKey,
+                Label = Truncate(route.Label, 128),
+                EnforcementMode = route.Edge.EnforcementMode,
+                Status = route.Status,
+                RouteNodeKey = route.RouteNode?.TopologyKey,
+                RouteNodeName = TruncateNullable(route.RouteNode?.Name, 128),
+                SourceNetworkName = TruncateNullable(route.SourceInterface?.NetworkName, 128),
+                TargetNetworkName = TruncateNullable(route.TargetInterface?.NetworkName, 128),
+                SourceCidr = TruncateNullable(route.SourceInterface?.Cidr, 64),
+                TargetCidr = TruncateNullable(route.TargetInterface?.Cidr, 64),
+                GatewayIp = TruncateNullable(route.SourceRouteInterface?.IpAddress, 64),
+                CommandSummary = TruncateNullable(route.CommandSummary, 1024),
+                Message = TruncateNullable(route.Message, 1024),
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+            nextRuntimeRoutes.Add(runtimeRoute);
+
+            if (route.Status != PenetrationRouteStatus.RoutePlanned)
+                continue;
+
+            try
+            {
+                await ApplyRoutePlan(environment, route, runtimeByKey, token);
+                appliedRoutes.Add(route);
+                runtimeRoute.Status = PenetrationRouteStatus.RouteApplied;
+                runtimeRoute.AppliedAt = DateTimeOffset.UtcNow;
+                runtimeRoute.Message = "网络级显式路由已应用；协议/端口字段仅作为路径说明。";
+                AddDeploymentEvent(environment, "route-apply", PenetrationDeploymentEventLevel.Success,
+                    $"访问策略“{route.Label}”的网络级路由已应用。", route.RouteNode?.Name,
+                    route.CommandSummary);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                runtimeRoute.Status = PenetrationRouteStatus.RouteFailed;
+                var message = NormalizeFabricError(ex.Message, "运行期网络级路由应用失败。");
+                runtimeRoute.Message = Truncate(message, 1024);
+                errors.Add($"访问策略“{route.Label}”路由应用失败：{message}");
+                AddDeploymentEvent(environment, "route-apply", PenetrationDeploymentEventLevel.Error,
+                    $"访问策略“{route.Label}”路由应用失败：{message}", route.RouteNode?.Name,
+                    route.CommandSummary);
+            }
+        }
+
+        if (errors.Count > 0 && appliedRoutes.Count > 0)
+        {
+            var summary = string.Join("；", appliedRoutes.Select(r => r.Label).Distinct().Take(6));
+            AddDeploymentEvent(environment, "route-apply", PenetrationDeploymentEventLevel.Warning,
+                $"部分网络级路由已经写入，但后续策略失败，环境将进入清理链路。已写入：{summary}。");
+        }
+
+        context.PenetrationRuntimeRoutes.RemoveRange(environment.RuntimeRoutes);
+        environment.RuntimeRoutes.Clear();
+        foreach (var runtimeRoute in nextRuntimeRoutes)
+            environment.RuntimeRoutes.Add(runtimeRoute);
+
+        await context.SaveChangesAsync(token);
+        return errors.Count == 0
+            ? (true, "运行期路由已应用。")
+            : (false, string.Join('\n', errors));
+    }
+
+    async Task ApplyRoutePlan(PenetrationTeamEnvironment environment, RuntimeRoutePlan route,
+        IReadOnlyDictionary<string, PenetrationRuntimeNode> runtimeByKey, CancellationToken token)
+    {
+        if (route is not
+            {
+                RouteNode: not null,
+                SourceRouteInterface: not null,
+                TargetRouteInterface: not null,
+                SourceInterface: not null,
+                TargetInterface: not null
+            })
+            throw new InvalidOperationException("路由计划缺少必要的网卡或路由节点。");
+
+        var routeRuntime = ResolveRuntimeContainer(runtimeByKey, route.RouteNode.TopologyKey, route.RouteNode.Name);
+        var forwarding = await penetrationFabricManager.EnableForwardingAsync(routeRuntime.Container!, token);
+        if (!forwarding.IsSupported || !forwarding.Succeeded)
+            throw new InvalidOperationException(NormalizeFabricError(forwarding.Message,
+                $"路由节点“{route.RouteNode.Name}”无法开启 IPv4 转发。"));
+        AddDeploymentEvent(environment, "fabric-route", PenetrationDeploymentEventLevel.Info,
+            $"路由节点“{route.RouteNode.Name}”已开启 IPv4 转发。", route.RouteNode.Name, forwarding.Message);
+
+        foreach (var endpoint in route.SourceEndpointInterfaces)
+        {
+            if (endpoint.Node.Id == route.RouteNode.Id)
+                continue;
+
+            await ApplyFabricRoute(environment, runtimeByKey, endpoint.Node.TopologyKey, endpoint.Node.Name,
+                route.TargetRouteInterface.Cidr, route.SourceRouteInterface.IpAddress, token);
+        }
+
+        foreach (var endpoint in route.TargetEndpointInterfaces)
+        {
+            if (endpoint.Node.Id == route.RouteNode.Id)
+                continue;
+
+            // Phase 3 executes network-level reachability, not one-way ACLs. We add the
+            // reverse route so return traffic and route probes work; Deny remains
+            // non-executable in this version and never enters this code path.
+            await ApplyFabricRoute(environment, runtimeByKey, endpoint.Node.TopologyKey, endpoint.Node.Name,
+                route.SourceRouteInterface.Cidr, route.TargetRouteInterface.IpAddress, token);
+        }
+
+        await ProbeRouteReachability(environment, route, runtimeByKey, token);
+    }
+
+    async Task<(bool Success, string Message)> AttachRuntimeFabricInterfaces(PenetrationTeamEnvironment environment,
+        RuntimeNodePlan nodePlan, DataContainer container, CancellationToken token)
+    {
+        if (!penetrationFabricManager.IsSupported)
+            return (false, "当前容器后端不支持渗透 fabric 网络，无法部署 RuntimeRoute 级多网段拓扑。");
+
+        foreach (var iface in nodePlan.Interfaces.OrderByDescending(i => i.IsPrimary).ThenBy(i => i.OrderIndex))
+        {
+            if (!TryParseCidr(iface.Cidr, out _, out var prefix))
+                return (false, $"网卡“{iface.InterfaceName}”所在安全域 CIDR 无效：{iface.Cidr}。");
+
+            var hostIf = BuildFabricHostInterfaceName(environment.Id, nodePlan.Node.Id, iface.InterfaceId);
+            var containerIf = BuildFabricContainerInterfaceName(iface);
+            var spec = new PenetrationFabricInterfaceSpec(
+                iface.NetworkName,
+                iface.Cidr,
+                hostIf,
+                containerIf,
+                iface.IpAddress,
+                prefix,
+                iface.IsPrimary,
+                ShouldRemoveDefaultRoute(nodePlan) && iface.IsPrimary);
+
+            var result = await penetrationFabricManager.AttachInterfaceAsync(container, spec, token);
+            if (!result.IsSupported || !result.Succeeded)
+                return (false, NormalizeFabricError(result.Message,
+                    $"网卡“{iface.InterfaceName}”接入安全域“{iface.Network.Name}”失败。"));
+
+            iface.FabricHostInterfaceName = hostIf;
+            iface.FabricContainerInterfaceName = containerIf;
+            AddDeploymentEvent(environment, "fabric", PenetrationDeploymentEventLevel.Success,
+                $"网卡“{containerIf}”已接入 fabric 安全域“{iface.Network.Name}”。",
+                nodePlan.Node.Name, result.Message);
+        }
+
+        return (true, "fabric 网卡已配置。");
+    }
+
+    async Task ApplyFabricRoute(PenetrationTeamEnvironment environment,
+        IReadOnlyDictionary<string, PenetrationRuntimeNode> runtimeByKey, string nodeKey, string nodeName,
+        string targetCidr, string gatewayIp, CancellationToken token)
+    {
+        var runtime = ResolveRuntimeContainer(runtimeByKey, nodeKey, nodeName);
+        var result = await penetrationFabricManager.ApplyRouteAsync(runtime.Container!, targetCidr, gatewayIp, token);
+        if (!result.IsSupported || !result.Succeeded)
+            throw new InvalidOperationException(NormalizeFabricError(result.Message,
+                $"节点“{nodeName}”写入到 {targetCidr} 的显式路由失败。"));
+
+        AddDeploymentEvent(environment, "fabric-route", PenetrationDeploymentEventLevel.Info,
+            $"节点“{nodeName}”已写入到 {targetCidr} 的显式路由。", nodeName, result.Message);
+    }
+
+    static PenetrationRuntimeNode ResolveRuntimeContainer(
+        IReadOnlyDictionary<string, PenetrationRuntimeNode> runtimeByKey, string nodeKey, string nodeName)
+    {
+        if (!runtimeByKey.TryGetValue(nodeKey, out var runtime) || runtime.Container is null)
+            throw new InvalidOperationException($"节点“{nodeName}”没有可执行 fabric 操作的运行容器。");
+
+        return runtime;
+    }
+
+    async Task ProbeRouteReachability(PenetrationTeamEnvironment environment, RuntimeRoutePlan route,
+        IReadOnlyDictionary<string, PenetrationRuntimeNode> runtimeByKey, CancellationToken token)
+    {
+        if (route.SourceEndpointInterfaces.Count == 0 || route.TargetEndpointInterfaces.Count == 0)
+            throw new InvalidOperationException("显式路由缺少可探测的源端点或目标端点，无法确认网络级可达性。");
+
+        var targetProbe = route.TargetEndpointInterfaces[0];
+        foreach (var source in route.SourceEndpointInterfaces)
+            await ExecuteRouteProbe(environment, runtimeByKey, source.Node.TopologyKey, source.Node.Name,
+                targetProbe.IpAddress, $"{source.Node.Name} -> {targetProbe.Node.Name}", token);
+
+        var sourceProbe = route.SourceEndpointInterfaces[0];
+        foreach (var target in route.TargetEndpointInterfaces)
+            await ExecuteRouteProbe(environment, runtimeByKey, target.Node.TopologyKey, target.Node.Name,
+                sourceProbe.IpAddress, $"{target.Node.Name} -> {sourceProbe.Node.Name}", token);
+
+        AddDeploymentEvent(environment, "route-probe", PenetrationDeploymentEventLevel.Success,
+            $"访问策略“{route.Label}”的端到端网络级连通探测通过。", route.RouteNode?.Name,
+            $"{route.SourceInterface?.NetworkName} <-> {route.TargetInterface?.NetworkName}");
+    }
+
+    async Task ExecuteRouteProbe(PenetrationTeamEnvironment environment,
+        IReadOnlyDictionary<string, PenetrationRuntimeNode> runtimeByKey, string nodeKey, string nodeName,
+        string targetIp, string label, CancellationToken token)
+    {
+        if (!runtimeByKey.TryGetValue(nodeKey, out var runtime) || runtime.Container is null)
+            throw new InvalidOperationException($"节点“{nodeName}”没有可执行路由探测的运行容器。");
+
+        var result = await penetrationFabricManager.ProbeAsync(runtime.Container, targetIp, token);
+        if (!result.IsSupported)
+            throw new InvalidOperationException($"当前容器后端不支持 fabric 路由探测：{result.Message}");
+
+        if (!result.Succeeded)
+            throw new InvalidOperationException(
+                $"路由探测“{label}”失败：{(result.TimedOut ? "执行超时" : NormalizeFabricError(result.Message, $"退出码 {result.ExitCode}"))}");
+    }
+
+    static string BuildFabricHostInterfaceName(int environmentId, int nodeId, int interfaceId) =>
+        BuildFabricName("yyp", $"{environmentId}:{nodeId}:{interfaceId}");
+
+    static string BuildFabricContainerInterfaceName(RuntimeInterfacePlan iface)
+    {
+        return BuildFabricName("yyc", $"{iface.Node.TopologyKey}:{iface.InterfaceId}");
+    }
+
+    static string BuildFabricName(string prefix, string seed, int maxLength = 15)
+    {
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(seed))).ToLowerInvariant();
+        var name = $"{prefix}{hash}";
+        return name[..Math.Min(name.Length, maxLength)];
+    }
+
+    static string ShellQuote(string value) => $"'{value.Replace("'", "'\"'\"'")}'";
+
+    static string NormalizeFabricError(string? message, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return fallback;
+
+        var trimmed = message.Trim();
+        if (trimmed.Contains("missing host ip command", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Contains("ip: not found", StringComparison.OrdinalIgnoreCase))
+            return "节点宿主缺少 iproute2/ip 命令，无法配置渗透 fabric 网络。请在 Docker/Agent 节点安装 iproute2。";
+
+        if (trimmed.Contains("missing nsenter command", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Contains("nsenter: not found", StringComparison.OrdinalIgnoreCase))
+            return "节点宿主缺少 nsenter，无法进入容器网络命名空间配置渗透 fabric。请安装 util-linux/nsenter。";
+
+        if (trimmed.Contains("missing host ping command", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Contains("ping: not found", StringComparison.OrdinalIgnoreCase))
+            return "节点宿主缺少 ping 命令，无法执行端到端探测。请在 Docker/Agent 节点安装 iputils-ping，或暂时将该策略改为 HintOnly。";
+
+        if (trimmed.Contains("Operation not permitted", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Contains("permission denied", StringComparison.OrdinalIgnoreCase))
+            return "节点缺少 CAP_NET_ADMIN/root 网络管理权限，无法配置渗透 fabric。请使用具备网络命名空间管理权限的 Fleet Agent。";
+
+        if (trimmed.Contains("100% packet loss", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Contains("Network is unreachable", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Contains("Destination Host Unreachable", StringComparison.OrdinalIgnoreCase))
+            return "fabric 路由已配置但端到端探测不通，请检查拓扑、路由节点转发、网卡 IP 和策略方向。";
+
+        return trimmed;
+    }
+
+    async Task<(bool Success, string Message)> ProbeRuntimeNode(RuntimeNodePlan nodePlan, DataContainer container,
+        CancellationToken token)
+    {
+        var publicPort = container.PublicPort ?? 0;
+        var publicHost = container.PublicIP ?? container.IP;
+        var shouldProbePublicPort = (nodePlan.Node.PublishPort || nodePlan.Node.IsEntry)
+            && publicPort > 0
+            && !string.IsNullOrWhiteSpace(publicHost);
+
+        var healthCheckNote = string.IsNullOrWhiteSpace(nodePlan.Node.HealthCheck)
+            ? string.Empty
+            : "；已配置命令健康探针，当前平台版本仅执行端口/运行状态探针。";
+
+        if (!shouldProbePublicPort)
+            return (true, $"容器已运行，内网地址 {container.IP}:{container.Port}{healthCheckNote}。");
+
+        var probe = await ProbeTcp(publicHost!, publicPort, token);
+        return probe.Success
+            ? (true, $"容器已运行，公开入口 {publicHost}:{publicPort} 已通过 TCP 探测{healthCheckNote}。")
+            : (false, $"公开入口 {publicHost}:{publicPort} TCP 探测失败：{probe.Message}{healthCheckNote}。");
+    }
+
+    static async Task<(bool Success, string Message)> ProbeTcp(string host, int port, CancellationToken token)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        cts.CancelAfter(TimeSpan.FromSeconds(3));
+
+        try
+        {
+            using var client = new TcpClient();
+            await client.ConnectAsync(host, port, cts.Token);
+            return (true, "ok");
+        }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested)
+        {
+            return (false, "连接超时");
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    int ResolveDeploymentParallelism()
+    {
+        var config = serviceProvider.GetService<IConfiguration>();
+        return Math.Clamp(config?.GetValue("Penetration:DeploymentParallelism", 2) ?? 2, 1, 4);
+    }
+
+    async Task<WorkerNode?> ReserveWorkerNodeCapacity(int requiredContainers, CancellationToken token)
+    {
+        if (requiredContainers <= 0)
+            return null;
+
+        using var scheduleLock = await lockService.AcquireAsync("fleet:scheduler", TimeSpan.FromSeconds(10));
         var nodes = await context.WorkerNodes
             .Where(n => n.IsSchedulable)
             .ToArrayAsync(token);
 
-        return nodes
+        var worker = nodes
             .Where(n => WeightedScheduler.CanHost(n, NodeCapability.Docker))
             .Where(n => n.MaxContainers - n.CurrentContainers >= requiredContainers)
             .OrderBy(n => n.CpuLoad)
             .ThenBy(n => n.MemoryLoad)
             .ThenBy(n => n.CurrentContainers)
             .FirstOrDefault();
+
+        if (worker is null)
+            return null;
+
+        for (var i = 0; i < requiredContainers; i++)
+            FleetManager.ReserveCapacity(worker, NodeCapability.Docker);
+
+        await context.SaveChangesAsync(token);
+        return worker;
+    }
+
+    void ReleaseReservedDockerCapacity(WorkerNode worker, int count)
+    {
+        for (var i = 0; i < count; i++)
+            FleetManager.ReleaseCapacity(worker, NodeCapability.Docker);
     }
 
     async Task<(bool Success, string Message)> CheckFleetCapacity(int requiredContainersPerTeam, int teamCount,
@@ -1915,6 +3352,8 @@ public class PenetrationService(
         await context.PenetrationTeamEnvironments
             .Include(e => e.Team)
             .Include(e => e.Node)
+            .Include(e => e.DeploymentEvents)
+            .Include(e => e.RuntimeRoutes)
             .Include(e => e.RuntimeNodes).ThenInclude(r => r.Container)
             .Include(e => e.RuntimeNodes).ThenInclude(r => r.TopologyNode).ThenInclude(n => n.Interfaces).ThenInclude(i => i.Network)
             .Include(e => e.RuntimeNodes).ThenInclude(r => r.TopologyNode).ThenInclude(n => n.ScoreItems)
@@ -1971,6 +3410,8 @@ public class PenetrationService(
                     NetworkId = primary?.NetworkId ?? n.NetworkId,
                     Name = n.Name,
                     Description = n.Description,
+                    PlayerAlias = n.PlayerAlias,
+                    PlayerDescription = n.PlayerDescription,
                     NodeType = n.NodeType,
                     ImageTemplateId = n.ImageTemplateId,
                     ImageName = n.ImageName,
@@ -1980,6 +3421,7 @@ public class PenetrationService(
                     ExposePort = n.ExposePort,
                     IsEntry = n.IsEntry,
                     PublishPort = n.PublishPort,
+                    AllowRouting = n.AllowRouting,
                     StaticIp = primary?.StaticIp ?? n.StaticIp,
                     EnvironmentVariables = DeserializeDictionary(n.EnvironmentVariables),
                     StartCommand = n.StartCommand,
@@ -2003,6 +3445,7 @@ public class PenetrationService(
                         FlagTemplate = i.FlagTemplate,
                         MaxAttempts = i.MaxAttempts,
                         IsVisible = i.IsVisible,
+                        IsCheckpoint = i.IsCheckpoint,
                         PrerequisiteItemIds = DeserializeIntList(i.PrerequisiteItemIds),
                         OrderIndex = i.OrderIndex
                     }).ToList()
@@ -2025,6 +3468,8 @@ public class PenetrationService(
                 PortRange = e.PortRange,
                 PolicyAction = e.PolicyAction,
                 IsRouteHint = e.IsRouteHint,
+                EnforcementMode = e.EnforcementMode,
+                Priority = e.Priority,
                 Label = e.Label,
                 Description = e.Description
             }).ToList()
@@ -2488,6 +3933,17 @@ public class PenetrationService(
 
     static string? CleanNullable(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    static string Truncate(string value, int maxLength)
+    {
+        if (value.Length <= maxLength)
+            return value;
+
+        return value[..maxLength];
+    }
+
+    static string? TruncateNullable(string? value, int maxLength) =>
+        string.IsNullOrWhiteSpace(value) ? null : Truncate(value.Trim(), maxLength);
+
     static PenetrationNetworkModel DefaultNetworkModel(int id, int orderIndex) => new()
     {
         Id = id,
@@ -2537,17 +3993,62 @@ public class PenetrationService(
         Dictionary<int, string> ScoreKeyByModelId,
         bool PreserveModelIds);
 
-    sealed record RuntimePlan(List<RuntimeNetworkPlan> Networks, List<RuntimeNodePlan> Nodes);
+    sealed record RuntimePlan(
+        List<RuntimeNetworkPlan> Networks,
+        List<RuntimeNodePlan> Nodes,
+        List<RuntimeRoutePlan> Routes);
 
-    sealed record RuntimeNetworkPlan(PenetrationNetwork Network, string NetworkName, string Cidr);
+    sealed record RuntimeNetworkPlan(PenetrationNetwork Network, string NetworkName, string Cidr, bool IsInternal);
 
     sealed record RuntimeNodePlan(
         PenetrationNode Node,
         string Image,
         List<RuntimeInterfacePlan> Interfaces,
-        Dictionary<int, string> FlagMap)
+        Dictionary<int, string> FlagMap,
+        Dictionary<int, bool> RuntimeNetworks,
+        bool IsRouteNode,
+        bool RequiresNetworkAdmin)
     {
         public RuntimeInterfacePlan? PrimaryInterface => Interfaces.FirstOrDefault(i => i.IsPrimary) ?? Interfaces.FirstOrDefault();
+    }
+
+    sealed record RuntimeRoutePlan(
+        PenetrationEdge Edge,
+        string Label,
+        PenetrationRouteStatus Status,
+        PenetrationNode? RouteNode,
+        RuntimeInterfacePlan? SourceInterface,
+        RuntimeInterfacePlan? TargetInterface,
+        RuntimeInterfacePlan? SourceRouteInterface,
+        RuntimeInterfacePlan? TargetRouteInterface,
+        List<RuntimeInterfacePlan> SourceEndpointInterfaces,
+        List<RuntimeInterfacePlan> TargetEndpointInterfaces,
+        string CommandSummary,
+        string Message)
+    {
+        public IEnumerable<string> EndpointNodeKeys =>
+            SourceEndpointInterfaces.Concat(TargetEndpointInterfaces)
+                .Select(i => i.Node.TopologyKey)
+                .Where(key => !string.IsNullOrWhiteSpace(key));
+
+        public bool IsExecutable =>
+            Status == PenetrationRouteStatus.RoutePlanned &&
+            RouteNode is not null &&
+            SourceInterface is not null &&
+            TargetInterface is not null &&
+            SourceRouteInterface is not null &&
+            TargetRouteInterface is not null;
+
+        public string? PairKey =>
+            SourceInterface is null || TargetInterface is null
+                ? null
+                : BuildRuntimeRoutePairKey(SourceInterface.Network.Id, TargetInterface.Network.Id);
+
+        public static RuntimeRoutePlan Hint(PenetrationEdge edge, string label, string message) =>
+            new(edge, label, PenetrationRouteStatus.HintOnly, null, null, null, null, null, [], [], string.Empty, message);
+
+        public static RuntimeRoutePlan Unsupported(PenetrationEdge edge, string label, string message) =>
+            new(edge, label, PenetrationRouteStatus.Unsupported, null, null, null, null, null, [], [], string.Empty, message);
     }
 
     public record RuntimeInterfaceInfo(
@@ -2560,7 +4061,11 @@ public class PenetrationService(
         string Cidr,
         string IpAddress,
         bool IsPrimary,
-        bool IsManagement);
+        bool IsManagement)
+    {
+        public string? FabricHostInterfaceName { get; set; }
+        public string? FabricContainerInterfaceName { get; set; }
+    }
 
     sealed record RuntimeInterfacePlan(
         int InterfaceId,
@@ -2588,6 +4093,14 @@ public class PenetrationService(
         int OrderIndex)
     {
         public string Key => $"{Node.Id}:{Network.Id}:{Name}:{OrderIndex}";
+    }
+
+    sealed record TeamDeploymentResult(bool Success, bool Cancelled, string Message)
+    {
+        public static readonly TeamDeploymentResult SuccessResult = new(true, false, "部署成功。");
+        public static readonly TeamDeploymentResult CancelledResult = new(false, true, "部署已取消。");
+
+        public static TeamDeploymentResult Failed(string message) => new(false, false, message);
     }
 }
 

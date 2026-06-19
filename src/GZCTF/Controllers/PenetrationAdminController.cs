@@ -104,13 +104,27 @@ public class PenetrationAdminController(
 
     [HttpPost("games/{gameId:int}/deploy")]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status200OK)]
-    public async Task<IActionResult> Deploy([FromRoute] int gameId, CancellationToken token)
+    public async Task<IActionResult> Deploy([FromRoute] int gameId, [FromQuery] bool force = false,
+        CancellationToken token = default)
     {
         var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
         if (validation.Result is not null)
             return validation.Result;
 
-        var result = await penetrationService.DeployGame(gameId, token);
+        var result = await penetrationService.DeployGame(gameId, force, token);
+        return result.Success ? Ok(new RequestResponse(result.Message, StatusCodes.Status200OK))
+            : BadRequest(new RequestResponse(result.Message));
+    }
+
+    [HttpPost("games/{gameId:int}/deploy/cancel")]
+    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CancelDeploy([FromRoute] int gameId, CancellationToken token)
+    {
+        var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
+        if (validation.Result is not null)
+            return validation.Result;
+
+        var result = await penetrationService.CancelDeployment(gameId, token);
         return result.Success ? Ok(new RequestResponse(result.Message, StatusCodes.Status200OK))
             : BadRequest(new RequestResponse(result.Message));
     }
@@ -124,7 +138,8 @@ public class PenetrationAdminController(
             return validation.Result;
 
         var result = await penetrationService.StopGame(gameId, token);
-        return Ok(new RequestResponse(result.Message, StatusCodes.Status200OK));
+        return result.Success ? Ok(new RequestResponse(result.Message, StatusCodes.Status200OK))
+            : BadRequest(new RequestResponse(result.Message));
     }
 
     [HttpPost("games/{gameId:int}/teams/{teamId:int}/rebuild")]
@@ -137,6 +152,20 @@ public class PenetrationAdminController(
             return validation.Result;
 
         var result = await penetrationService.RebuildTeam(gameId, teamId, true, null, token);
+        return result.Success ? Ok(new RequestResponse(result.Message, StatusCodes.Status200OK))
+            : BadRequest(new RequestResponse(result.Message));
+    }
+
+    [HttpPost("games/{gameId:int}/teams/{teamId:int}/cleanup")]
+    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CleanupTeam([FromRoute] int gameId, [FromRoute] int teamId,
+        CancellationToken token)
+    {
+        var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
+        if (validation.Result is not null)
+            return validation.Result;
+
+        var result = await penetrationService.CleanupTeamEnvironment(gameId, teamId, token);
         return result.Success ? Ok(new RequestResponse(result.Message, StatusCodes.Status200OK))
             : BadRequest(new RequestResponse(result.Message));
     }
@@ -173,6 +202,15 @@ public class PenetrationAdminController(
             : BadRequest(new RequestResponse(result.Message));
     }
 
+    [HttpPost("runtime-nodes/{runtimeNodeId:int}/rebuild-team")]
+    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> RebuildTeamByRuntimeNode([FromRoute] int runtimeNodeId, CancellationToken token)
+    {
+        var result = await penetrationService.RebuildTeamByRuntimeNode(runtimeNodeId, token);
+        return result.Success ? Ok(new RequestResponse(result.Message, StatusCodes.Status200OK))
+            : BadRequest(new RequestResponse(result.Message));
+    }
+
     [HttpGet("games/{gameId:int}/scoreboard")]
     [ProducesResponseType(typeof(PenetrationScoreboardItemModel[]), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetScoreboard([FromRoute] int gameId, CancellationToken token)
@@ -193,6 +231,19 @@ public class PenetrationAdminController(
             return validation.Result;
 
         return Ok(await penetrationService.GetTeamEnvironments(gameId, token));
+    }
+
+    [HttpGet("games/{gameId:int}/deployment-events")]
+    [ProducesResponseType(typeof(ArrayResponse<PenetrationDeploymentEventModel>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetDeploymentEvents([FromRoute] int gameId,
+        [FromQuery][Range(1, 200)] int count = 50, [FromQuery] int skip = 0,
+        [FromQuery] int? environmentId = null, CancellationToken token = default)
+    {
+        var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
+        if (validation.Result is not null)
+            return validation.Result;
+
+        return Ok(await penetrationService.GetDeploymentEvents(gameId, count, skip, environmentId, token));
     }
 
     [HttpGet("games/{gameId:int}/submissions")]

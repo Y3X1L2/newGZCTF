@@ -1,4 +1,6 @@
 using System;
+using GZCTF.Models;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -7,6 +9,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GZCTF.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(AppDbContext))]
+    [Migration("20260618103000_AddPenetrationTopologyKeysAndSnapshots")]
     public partial class AddPenetrationTopologyKeysAndSnapshots : Migration
     {
         /// <inheritdoc />

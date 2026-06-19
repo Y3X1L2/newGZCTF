@@ -120,7 +120,9 @@ internal static class ServicesExtension
 
             builder.Services.AddScoped<GamePhaseService>();
             builder.Services.AddScoped<TheoryExamService>();
+            builder.Services.AddScoped<PenetrationAttackGraphService>();
             builder.Services.AddScoped<PenetrationService>();
+            builder.Services.AddHostedService<PenetrationCleanupService>();
 
             // AWD and scenario services (from teammate's branch)
             builder.Services.AddScoped<EnvironmentService>();

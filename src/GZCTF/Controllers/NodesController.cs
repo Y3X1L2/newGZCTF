@@ -5,6 +5,8 @@ using GZCTF.Middlewares;
 using GZCTF.Models.Data;
 using GZCTF.Models.Request.Admin;
 using GZCTF.Repositories.Interface;
+using GZCTF.Services;
+using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Fleet;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -166,19 +168,61 @@ public class NodesController : ControllerBase
 
     [HttpDelete("{id:guid}")]
     [RequireAdmin]
-    public async Task<IActionResult> Deregister(Guid id)
+    public async Task<IActionResult> Deregister(Guid id, [FromQuery] bool force = false)
     {
         var token = HttpContext.RequestAborted;
         var node = await _nodeRepo.GetNodeByIdAsync(id, HttpContext.RequestAborted);
         if (node is null) return NotFound();
         if (node.IsLocal) return BadRequest(new { message = "Cannot deregister local node" });
 
+        if (force)
+        {
+            node.IsSchedulable = false;
+            await _context.SaveChangesAsync(token);
+
+            var cleanup = await ForceCleanupNodeResources(id, token);
+            if (!cleanup.Success)
+                return BadRequest(new
+                {
+                    message = cleanup.Message,
+                    cleanup.ActiveContainers,
+                    cleanup.ActiveVms,
+                    cleanup.ActivePentestEnvironments
+                });
+
+            node = await _nodeRepo.GetNodeByIdAsync(id, token);
+            if (node is null) return NotFound();
+        }
+
+        var activeContainers = await _context.Containers.AsNoTracking()
+            .CountAsync(c => c.NodeId == id && c.Status != ContainerStatus.Destroyed, token);
+        var activeVms = await _context.VmInstances.AsNoTracking()
+            .CountAsync(v => v.NodeId == id &&
+                             (v.Status == VmInstanceStatus.Creating ||
+                              v.Status == VmInstanceStatus.Running), token);
+        var activePentestEnvironments = await _context.PenetrationTeamEnvironments.AsNoTracking()
+            .CountAsync(e => e.NodeId == id &&
+                             e.Status != PenetrationRuntimeStatus.Stopped &&
+                             e.Status != PenetrationRuntimeStatus.Failed, token);
+
+        if (activeContainers > 0 || activeVms > 0 || activePentestEnvironments > 0)
+            return BadRequest(new
+            {
+                message = "该节点仍承载运行资源，请先停止或清理后再注销。",
+                activeContainers,
+                activeVms,
+                activePentestEnvironments
+            });
+
         await using var transaction = await _context.Database.BeginTransactionAsync(token);
 
         var now = DateTimeOffset.UtcNow;
         await _context.DeploymentTargets
             .Where(t => t.TargetNodeId == id
-                        && (t.Status == TargetStatus.Pending || t.Status == TargetStatus.Running))
+                        && (t.Status == TargetStatus.Pending ||
+                            t.Status == TargetStatus.Assigned ||
+                            t.Status == TargetStatus.Creating ||
+                            t.Status == TargetStatus.Running))
             .ExecuteUpdateAsync(updates => updates
                 .SetProperty(t => t.Status, TargetStatus.Cancelled)
                 .SetProperty(t => t.CompletedAt, (DateTimeOffset?)now)
@@ -209,6 +253,123 @@ public class NodesController : ControllerBase
         await transaction.CommitAsync(token);
 
         return NoContent();
+    }
+
+    async Task<NodeForceCleanupResult> ForceCleanupNodeResources(Guid nodeId, CancellationToken token)
+    {
+        var errors = new List<string>();
+        var pentest = HttpContext.RequestServices.GetRequiredService<PenetrationService>();
+        var containerManager = HttpContext.RequestServices.GetRequiredService<IContainerManager>();
+        var fleetVm = HttpContext.RequestServices.GetRequiredService<FleetVmService>();
+
+        var environments = await _context.PenetrationTeamEnvironments
+            .AsNoTracking()
+            .Where(e => e.NodeId == nodeId &&
+                        e.Status != PenetrationRuntimeStatus.Stopped &&
+                        e.Status != PenetrationRuntimeStatus.Failed)
+            .Select(e => new { e.GameId, e.TeamId })
+            .ToArrayAsync(token);
+
+        foreach (var environment in environments)
+        {
+            try
+            {
+                var result = await pentest.CleanupTeamEnvironment(environment.GameId, environment.TeamId, token);
+                if (!result.Success)
+                    errors.Add($"渗透环境 {environment.GameId}/{environment.TeamId} 清理失败：{result.Message}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Force deregister failed to cleanup penetration environment on node {NodeId}, game {GameId}, team {TeamId}.",
+                    nodeId, environment.GameId, environment.TeamId);
+                errors.Add($"渗透环境 {environment.GameId}/{environment.TeamId} 清理异常：{ex.Message}");
+            }
+        }
+
+        var containers = await _context.Containers
+            .Where(c => c.NodeId == nodeId && c.Status != ContainerStatus.Destroyed)
+            .ToArrayAsync(token);
+
+        foreach (var container in containers)
+        {
+            try
+            {
+                await containerManager.DestroyContainerAsync(container, token);
+                if (container.Status == ContainerStatus.Destroyed)
+                {
+                    await _context.PenetrationRuntimeNodes
+                        .Where(r => r.ContainerId == container.Id)
+                        .ExecuteUpdateAsync(s => s
+                            .SetProperty(r => r.ContainerId, (Guid?)null)
+                            .SetProperty(r => r.Status, PenetrationRuntimeStatus.Stopped), token);
+                    await _context.GameInstances
+                        .Where(i => i.ContainerId == container.Id)
+                        .ExecuteUpdateAsync(s => s.SetProperty(i => i.ContainerId, (Guid?)null), token);
+                    await _context.ExerciseInstances
+                        .Where(i => i.ContainerId == container.Id)
+                        .ExecuteUpdateAsync(s => s.SetProperty(i => i.ContainerId, (Guid?)null), token);
+                    await _context.AwdpServiceInstances
+                        .Where(i => i.ContainerId == container.Id)
+                        .ExecuteUpdateAsync(s => s.SetProperty(i => i.ContainerId, (Guid?)null), token);
+                    await _context.GameChallenges
+                        .Where(c => c.TestContainerId == container.Id)
+                        .ExecuteUpdateAsync(s => s.SetProperty(c => c.TestContainerId, (Guid?)null), token);
+                    _context.Containers.Remove(container);
+                    await _context.SaveChangesAsync(token);
+                }
+                else
+                {
+                    errors.Add($"容器 {container.ContainerId} 销毁未确认，当前状态：{container.Status}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Force deregister failed to destroy container {ContainerId}.",
+                    container.ContainerId);
+                errors.Add($"容器 {container.ContainerId} 销毁异常：{ex.Message}");
+            }
+        }
+
+        var vms = await _context.VmInstances
+            .Where(v => v.NodeId == nodeId &&
+                        (v.Status == VmInstanceStatus.Creating || v.Status == VmInstanceStatus.Running))
+            .ToArrayAsync(token);
+
+        foreach (var vm in vms)
+        {
+            try
+            {
+                await fleetVm.DestroyVmAsync(vm, token);
+                await _context.SaveChangesAsync(token);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Force deregister failed to destroy VM {VmName}.", vm.VmName);
+                errors.Add($"虚拟机 {vm.VmName} 销毁异常：{ex.Message}");
+            }
+        }
+
+        var activeContainers = await _context.Containers.AsNoTracking()
+            .CountAsync(c => c.NodeId == nodeId && c.Status != ContainerStatus.Destroyed, token);
+        var activeVms = await _context.VmInstances.AsNoTracking()
+            .CountAsync(v => v.NodeId == nodeId &&
+                             (v.Status == VmInstanceStatus.Creating ||
+                              v.Status == VmInstanceStatus.Running), token);
+        var activePentestEnvironments = await _context.PenetrationTeamEnvironments.AsNoTracking()
+            .CountAsync(e => e.NodeId == nodeId &&
+                             e.Status != PenetrationRuntimeStatus.Stopped &&
+                             e.Status != PenetrationRuntimeStatus.Failed, token);
+
+        if (activeContainers > 0 || activeVms > 0 || activePentestEnvironments > 0)
+        {
+            errors.Insert(0, "强制注销前仍有资源未确认清理，节点已暂停调度但不会注销。");
+            return new(false, string.Join('\n', errors), activeContainers, activeVms, activePentestEnvironments);
+        }
+
+        return new(true,
+            errors.Count == 0 ? "节点资源已清理。" : $"节点资源已清理，期间有可忽略提示：{string.Join('\n', errors)}",
+            activeContainers, activeVms, activePentestEnvironments);
     }
 
     [HttpPatch("{id:guid}")]
@@ -482,7 +643,10 @@ public class DeploymentTargetsController : ControllerBase
     {
         var target = await _context.DeploymentTargets.FindAsync(id);
         if (target is null) return NotFound();
-        if (target.Status == TargetStatus.Pending || target.Status == TargetStatus.Running)
+        if (target.Status == TargetStatus.Pending ||
+            target.Status == TargetStatus.Assigned ||
+            target.Status == TargetStatus.Creating ||
+            target.Status == TargetStatus.Running)
         {
             target.Status = TargetStatus.Cancelled;
             target.CompletedAt = DateTimeOffset.UtcNow;
@@ -513,3 +677,6 @@ public class HeartbeatRequest
     public int CurrentVms { get; set; }
     public int UsedPorts { get; set; }
 }
+
+record NodeForceCleanupResult(bool Success, string Message, int ActiveContainers, int ActiveVms,
+    int ActivePentestEnvironments);

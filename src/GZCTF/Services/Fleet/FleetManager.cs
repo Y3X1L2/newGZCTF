@@ -76,7 +76,7 @@ public class FleetManager
 
         ReserveCapacity(node, capability);
         target.TargetNodeId = nodeId.Value;
-        target.Status = TargetStatus.Running;
+        target.Status = TargetStatus.Assigned;
         target.ErrorMessage = null;
         _context.DeploymentTargets.Add(target);
         await _context.SaveChangesAsync(token);

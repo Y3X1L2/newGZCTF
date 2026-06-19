@@ -55,6 +55,9 @@ public class FleetVmService
         }
 
         var node = schedule.Node ?? await _nodeRepo.GetNodeByIdAsync(nodeId.Value, token);
+        if (schedule.Target is not null)
+            schedule.Target.Status = TargetStatus.Creating;
+
         if (node?.IsLocal == true)
         {
             vmInstance.NodeId = nodeId.Value;
@@ -137,22 +140,29 @@ public class FleetVmService
         // Try to actually destroy the VM regardless of NodeId
         // If NodeId is null or points to a local node, destroy locally
         var isLocal = true;
+        WorkerNode? node = null;
         if (vmInstance.NodeId.HasValue)
         {
-            var node = await _nodeRepo.GetNodeByIdAsync(vmInstance.NodeId.Value, token);
+            node = await _nodeRepo.GetNodeByIdAsync(vmInstance.NodeId.Value, token);
             isLocal = node?.IsLocal ?? true;
         }
+
+        var hadCapacityReservation = vmInstance.NodeId.HasValue
+            && vmInstance.Status is VmInstanceStatus.Creating or VmInstanceStatus.Running;
 
         if (isLocal)
         {
             try
             {
                 _logger.LogInformation("Destroying local VM {VmName}", vmInstance.VmName);
-                await _vmProvider.DestroyAsync(vmInstance.VmName, token);
+                var result = await _vmProvider.DestroyAsync(vmInstance.VmName, token);
+                if (!result.Success)
+                    throw new InvalidOperationException(result.ErrorMessage ?? "Local VM destruction failed.");
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Local VM destruction failed for {VmName}", vmInstance.VmName);
+                throw;
             }
         }
         else
@@ -164,11 +174,18 @@ public class FleetVmService
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Agent VM destruction failed for {VmName}", vmInstance.VmName);
+                throw;
             }
         }
 
         vmInstance.Status = VmInstanceStatus.Destroyed;
         vmInstance.DestroyedAt = DateTimeOffset.UtcNow;
+
+        if (hadCapacityReservation && node is not null)
+        {
+            FleetManager.ReleaseCapacity(node, NodeCapability.Kvm);
+            await _context.SaveChangesAsync(token);
+        }
     }
 
     private sealed record VmCreatePayload(
