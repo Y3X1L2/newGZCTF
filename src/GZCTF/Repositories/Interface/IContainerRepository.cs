@@ -1,6 +1,11 @@
-﻿using GZCTF.Models.Request.Admin;
+using GZCTF.Models.Request.Admin;
 
 namespace GZCTF.Repositories.Interface;
+
+/// <summary>
+/// 端口映射信息（用于 Nginx 代理同步）
+/// </summary>
+public record PortMappingEntry(int PublicPort, string IP, int Port);
 
 public interface IContainerRepository : IRepository
 {
@@ -41,6 +46,13 @@ public interface IContainerRepository : IRepository
     /// <param name="token"></param>
     /// <returns></returns>
     public Task<Container[]> GetDyingContainers(CancellationToken token = default);
+
+    /// <summary>
+    /// Get active container port mappings for Nginx proxy synchronization
+    /// </summary>
+    /// <param name="token"></param>
+    /// <returns></returns>
+    public Task<PortMappingEntry[]> GetProxyPortMappingsAsync(CancellationToken token = default);
 
     /// <summary>
     /// Extend container lifetime

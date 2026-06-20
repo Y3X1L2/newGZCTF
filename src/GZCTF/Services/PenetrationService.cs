@@ -33,6 +33,11 @@ public class PenetrationService(
     IDistributedLockService lockService,
     ILogger<PenetrationService> logger)
 {
+    sealed class DeploymentActorScope(Guid? previous) : IDisposable
+    {
+        public void Dispose() => DeploymentActor.Value = previous;
+    }
+
     static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     static readonly TimeSpan DeployLockTimeout = TimeSpan.FromSeconds(2);
     static readonly ConcurrentDictionary<int, CancellationTokenSource> DeploymentCancellations = new();
@@ -42,6 +47,9 @@ public class PenetrationService(
         TimeSpan.FromMinutes(5),
         TimeSpan.FromMinutes(15)
     ];
+    static readonly TimeSpan SubmitRateWindow = TimeSpan.FromSeconds(60);
+    static readonly AsyncLocal<Guid?> DeploymentActor = new();
+    const int SubmitRateWindowLimit = 5;
 
     public async Task<PenetrationConfigModel> GetOrCreateConfig(int gameId, CancellationToken token = default)
     {
@@ -171,8 +179,9 @@ public class PenetrationService(
     }
 
     public async Task<(bool Success, string Message)> DeployGame(int gameId, bool forceRebuild = false,
-        CancellationToken token = default)
+        CancellationToken token = default, Guid? userId = null)
     {
+        using var actorScope = WithDeploymentActor(userId);
         try
         {
             using var deployLock = await lockService.AcquireAsync(BuildDeployLockKey(gameId), DeployLockTimeout);
@@ -398,6 +407,7 @@ public class PenetrationService(
     public async Task<(bool Success, string Message)> RebuildTeam(int gameId, int teamId, bool byAdmin, Guid? userId,
         CancellationToken token = default)
     {
+        using var actorScope = WithDeploymentActor(userId);
         try
         {
             using var deployLock = await lockService.AcquireAsync(BuildDeployLockKey(gameId), DeployLockTimeout);
@@ -446,7 +456,8 @@ public class PenetrationService(
                 return (false, $"旧环境清理失败，已进入待清理状态：{destroyed.Message}");
         }
 
-        if (environment is not null && !byAdmin)
+        var deploy = await DeployTeam(config, teamId, index, true, environment, token);
+        if (deploy.Success && environment is not null && !byAdmin)
         {
             environment.ResetCount++;
             await context.PenetrationResetRecords.AddAsync(new PenetrationResetRecord
@@ -458,7 +469,7 @@ public class PenetrationService(
             await context.SaveChangesAsync(token);
         }
 
-        return await DeployTeam(config, teamId, index, true, environment, token);
+        return deploy;
     }
 
     public async Task<(bool Success, string Message)> RestartRuntimeNode(int runtimeNodeId, CancellationToken token = default)
@@ -476,8 +487,9 @@ public class PenetrationService(
         CancellationToken token = default) => RestartRuntimeNode(runtimeNodeId, token);
 
     public async Task<(bool Success, string Message)> CleanupTeamEnvironment(int gameId, int teamId,
-        CancellationToken token = default)
+        CancellationToken token = default, Guid? userId = null)
     {
+        using var actorScope = WithDeploymentActor(userId);
         try
         {
             using var deployLock = await lockService.AcquireAsync(BuildDeployLockKey(gameId), DeployLockTimeout);
@@ -496,8 +508,10 @@ public class PenetrationService(
         }
     }
 
-    public async Task<(bool Success, string Message)> StopGame(int gameId, CancellationToken token = default)
+    public async Task<(bool Success, string Message)> StopGame(int gameId, CancellationToken token = default,
+        Guid? userId = null)
     {
+        using var actorScope = WithDeploymentActor(userId);
         try
         {
             using var deployLock = await lockService.AcquireAsync(BuildDeployLockKey(gameId), DeployLockTimeout);
@@ -644,7 +658,26 @@ public class PenetrationService(
                     Port = x.Runtime.Container?.PublicPort ?? 0,
                     ExposePort = x.Node.ExposePort
                 }).ToList(),
-            Networks = [],
+            Networks = config.Networks
+                .Where(n => n.IsEntry ||
+                            config.Nodes.Any(node =>
+                                node.NetworkId == n.Id && attackNodeByKey.ContainsKey(node.TopologyKey)))
+                .OrderBy(n => n.OrderIndex)
+                .Select(n => new PenetrationWorkspaceNetworkModel
+                {
+                    Id = n.Id,
+                    Name = n.Name,
+                    Slug = n.Slug,
+                    ZoneType = n.ZoneType,
+                    TrustLevel = n.TrustLevel,
+                    OrderIndex = n.OrderIndex,
+                    IsEntry = n.IsEntry,
+                    Cidr = n.IsEntry ? environment.NetworkPrefix : null,
+                    PositionX = n.PositionX,
+                    PositionY = n.PositionY,
+                    Width = n.Width,
+                    Height = n.Height
+                }).ToList(),
             Nodes = config.Nodes
                 .Where(n => attackNodeByKey.ContainsKey(n.TopologyKey))
                 .OrderBy(n => n.OrderIndex)
@@ -657,7 +690,7 @@ public class PenetrationService(
                 return new PenetrationWorkspaceNodeModel
                 {
                     Id = n.Id,
-                    NetworkId = 0,
+                    NetworkId = n.NetworkId,
                     TopologyKey = n.TopologyKey,
                     Name = graphNode.DisplayName,
                     Description = graphNode.Description,
@@ -755,65 +788,82 @@ public class PenetrationService(
         if (node is null || !IsAttackNodeOperable(attackGraphBefore, node.TopologyKey))
             return new PenetrationSubmitResultModel { Accepted = false, Message = "该任务尚未解锁，请先完成前置攻击路径。" };
 
-        var alreadySolved = await context.PenetrationSubmissions.AnyAsync(s =>
-            s.GameId == gameId &&
-            s.TeamId == teamId &&
-            s.PublishedVersion == environment.PublishedVersion &&
-            s.ScoreItemTopologyKey == item.TopologyKey &&
-            s.Status == AnswerResult.Accepted,
-            token);
-        if (alreadySolved)
-            return new PenetrationSubmitResultModel { Accepted = false, Message = "该得分项已完成。" };
-
-        var prerequisiteKeys = ResolvePrerequisiteKeys(config, item);
-        if (prerequisiteKeys.Count > 0)
+        PenetrationSubmission submission;
+        bool accepted;
+        using (await lockService.AcquireAsync(BuildSubmitLockKey(gameId, teamId, environment.PublishedVersion,
+                   item.TopologyKey), TimeSpan.FromSeconds(5)))
         {
-            var solvedPrerequisites = await context.PenetrationSubmissions.AsNoTracking()
-                .Where(s => s.GameId == gameId &&
-                            s.TeamId == teamId &&
-                            s.PublishedVersion == environment.PublishedVersion &&
-                            s.Status == AnswerResult.Accepted &&
-                            prerequisiteKeys.Contains(s.ScoreItemTopologyKey))
-                .Select(s => s.ScoreItemTopologyKey)
-                .Distinct()
-                .CountAsync(token);
+            var alreadySolved = await context.PenetrationSubmissions.AnyAsync(s =>
+                s.GameId == gameId &&
+                s.TeamId == teamId &&
+                s.PublishedVersion == environment.PublishedVersion &&
+                s.ScoreItemTopologyKey == item.TopologyKey &&
+                s.Status == AnswerResult.Accepted,
+                token);
+            if (alreadySolved)
+                return new PenetrationSubmitResultModel { Accepted = false, Message = "该得分项已完成。" };
 
-            if (solvedPrerequisites < prerequisiteKeys.Count)
-                return new PenetrationSubmitResultModel { Accepted = false, Message = "请先完成前置得分项。" };
+            var prerequisiteKeys = ResolvePrerequisiteKeys(config, item);
+            if (prerequisiteKeys.Count > 0)
+            {
+                var solvedPrerequisites = await context.PenetrationSubmissions.AsNoTracking()
+                    .Where(s => s.GameId == gameId &&
+                                s.TeamId == teamId &&
+                                s.PublishedVersion == environment.PublishedVersion &&
+                                s.Status == AnswerResult.Accepted &&
+                                prerequisiteKeys.Contains(s.ScoreItemTopologyKey))
+                    .Select(s => s.ScoreItemTopologyKey)
+                    .Distinct()
+                    .CountAsync(token);
+
+                if (solvedPrerequisites < prerequisiteKeys.Count)
+                    return new PenetrationSubmitResultModel { Accepted = false, Message = "请先完成前置得分项。" };
+            }
+
+            var attemptCount = await context.PenetrationSubmissions.CountAsync(s =>
+                s.GameId == gameId &&
+                s.TeamId == teamId &&
+                s.PublishedVersion == environment.PublishedVersion &&
+                s.ScoreItemTopologyKey == item.TopologyKey,
+                token);
+            if (item.MaxAttempts > 0 && attemptCount >= item.MaxAttempts)
+                return new PenetrationSubmitResultModel { Accepted = false, Message = "提交次数已达到上限。" };
+
+            var recentWindowStart = DateTimeOffset.UtcNow - SubmitRateWindow;
+            var recentAttempts = await context.PenetrationSubmissions.CountAsync(s =>
+                s.GameId == gameId &&
+                s.TeamId == teamId &&
+                s.PublishedVersion == environment.PublishedVersion &&
+                s.ScoreItemTopologyKey == item.TopologyKey &&
+                s.SubmittedAt >= recentWindowStart,
+                token);
+            if (recentAttempts >= SubmitRateWindowLimit)
+                return new PenetrationSubmitResultModel { Accepted = false, Message = "提交过于频繁，请稍后再试。" };
+
+            var expected = BuildFlag(item, gameId, teamId, environment.PublishedVersion);
+            accepted = string.Equals(model.Flag.Trim(), expected, StringComparison.Ordinal);
+            var currentScoreItemId = await context.PenetrationScoreItems.AsNoTracking()
+                .Where(i => i.Node.Config.GameId == gameId && i.TopologyKey == item.TopologyKey)
+                .Select(i => (int?)i.Id)
+                .FirstOrDefaultAsync(token);
+            submission = new PenetrationSubmission
+            {
+                GameId = gameId,
+                TeamId = teamId,
+                ParticipationId = participationId,
+                UserId = userId,
+                ScoreItemId = currentScoreItemId ?? item.Id,
+                PublishedVersion = environment.PublishedVersion,
+                ScoreItemTopologyKey = item.TopologyKey,
+                Answer = model.Flag.Trim(),
+                Status = accepted ? AnswerResult.Accepted : AnswerResult.WrongAnswer,
+                Score = accepted ? item.Score : 0,
+                SubmittedAt = DateTimeOffset.UtcNow
+            };
+
+            await context.PenetrationSubmissions.AddAsync(submission, token);
+            await context.SaveChangesAsync(token);
         }
-
-        var attemptCount = await context.PenetrationSubmissions.CountAsync(s =>
-            s.GameId == gameId &&
-            s.TeamId == teamId &&
-            s.PublishedVersion == environment.PublishedVersion &&
-            s.ScoreItemTopologyKey == item.TopologyKey,
-            token);
-        if (item.MaxAttempts > 0 && attemptCount >= item.MaxAttempts)
-            return new PenetrationSubmitResultModel { Accepted = false, Message = "提交次数已达到上限。" };
-
-        var expected = BuildFlag(item, gameId, teamId, environment.PublishedVersion);
-        var accepted = string.Equals(model.Flag.Trim(), expected, StringComparison.Ordinal);
-        var currentScoreItemId = await context.PenetrationScoreItems.AsNoTracking()
-            .Where(i => i.Node.Config.GameId == gameId && i.TopologyKey == item.TopologyKey)
-            .Select(i => (int?)i.Id)
-            .FirstOrDefaultAsync(token);
-        var submission = new PenetrationSubmission
-        {
-            GameId = gameId,
-            TeamId = teamId,
-            ParticipationId = participationId,
-            UserId = userId,
-            ScoreItemId = currentScoreItemId ?? item.Id,
-            PublishedVersion = environment.PublishedVersion,
-            ScoreItemTopologyKey = item.TopologyKey,
-            Answer = model.Flag.Trim(),
-            Status = accepted ? AnswerResult.Accepted : AnswerResult.WrongAnswer,
-            Score = accepted ? item.Score : 0,
-            SubmittedAt = DateTimeOffset.UtcNow
-        };
-
-        await context.PenetrationSubmissions.AddAsync(submission, token);
-        await context.SaveChangesAsync(token);
 
         if (accepted)
             await cacheHelper.FlushScoreboardCache(gameId, token);
@@ -1332,6 +1382,33 @@ public class PenetrationService(
         }
     }
 
+    async Task PublishWorkspaceRefresh(int gameId, int teamId, int publishedVersion, CancellationToken token)
+    {
+        try
+        {
+            await userHub.Clients.Group(UserHub.PenetrationTeamGroupName(gameId, teamId))
+                .ReceivedPenetrationAttackGraphUpdate(new PenetrationAttackGraphUpdateModel
+                {
+                    GameId = gameId,
+                    TeamId = teamId,
+                    PublishedVersion = publishedVersion,
+                    Accepted = false,
+                    GraphChanged = true,
+                    Time = DateTimeOffset.UtcNow
+                });
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Failed to push penetration workspace refresh for game {GameId}, team {TeamId}.",
+                gameId, teamId);
+        }
+    }
+
     async Task<(bool Success, string Message)> DeployTeam(PenetrationConfig config, int teamId, int teamIndex,
         bool rebuild, PenetrationTeamEnvironment? existing, CancellationToken token)
     {
@@ -1571,6 +1648,7 @@ public class PenetrationService(
             AddDeploymentEvent(environment, "complete", PenetrationDeploymentEventLevel.Success,
                 $"队伍环境部署完成，发布版本 v{config.PublishedVersion} 已运行。");
             await context.SaveChangesAsync(token);
+            await PublishWorkspaceRefresh(config.GameId, teamId, config.PublishedVersion, token);
             return (true, rebuild ? "渗透环境已重建。" : "渗透环境已部署。");
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -2268,6 +2346,7 @@ public class PenetrationService(
         environment.NextCleanupAt = null;
         AddDeploymentEvent(environment, "cleanup", PenetrationDeploymentEventLevel.Success, "环境资源已全部清理。");
         await context.SaveChangesAsync(token);
+        await PublishWorkspaceRefresh(environment.GameId, environment.TeamId, environment.PublishedVersion, token);
         return (true, "环境资源已清理。");
     }
 
@@ -2316,16 +2395,19 @@ public class PenetrationService(
 
     static string BuildDeployLockKey(int gameId) => $"pentest:deploy:{gameId}";
 
+    static string BuildSubmitLockKey(int gameId, int teamId, int publishedVersion, string scoreItemTopologyKey) =>
+        $"pentest:submit:{gameId}:{teamId}:{publishedVersion}:{scoreItemTopologyKey}";
+
     static void MarkEnvironmentCleanupPending(PenetrationTeamEnvironment environment, List<string> errors)
     {
         environment.CleanupRetryCount++;
         environment.LastError = string.Join('\n', errors.Take(8));
         environment.UpdatedAt = DateTimeOffset.UtcNow;
         environment.LastCleanupAttemptAt = DateTimeOffset.UtcNow;
-        environment.NextCleanupAt = environment.CleanupRetryCount > CleanupBackoff.Length
+        environment.NextCleanupAt = environment.CleanupRetryCount >= CleanupBackoff.Length
             ? null
             : DateTimeOffset.UtcNow + CleanupBackoff[environment.CleanupRetryCount - 1];
-        environment.Status = environment.CleanupRetryCount > CleanupBackoff.Length
+        environment.Status = environment.CleanupRetryCount >= CleanupBackoff.Length
             ? PenetrationRuntimeStatus.ManualCleanupRequired
             : PenetrationRuntimeStatus.CleanupPending;
     }
@@ -2341,8 +2423,17 @@ public class PenetrationService(
             Message = Truncate(message, 256),
             NodeName = TruncateNullable(nodeName, 128),
             Detail = TruncateNullable(detail, 1024),
+            UserId = DeploymentActor.Value,
             CreatedAt = DateTimeOffset.UtcNow
         });
+    }
+
+    static IDisposable WithDeploymentActor(Guid? userId)
+    {
+        var previous = DeploymentActor.Value;
+        if (userId.HasValue)
+            DeploymentActor.Value = userId;
+        return new DeploymentActorScope(previous);
     }
 
     static string ShortContainerId(string? containerId)
@@ -2370,6 +2461,9 @@ public class PenetrationService(
             result.Errors.Add("至少需要一个安全域。");
         else
         {
+            if (config.Networks.Count(n => n.IsEntry) > 1)
+                result.Errors.Add("只能设置一个入口安全域。");
+
             AddDuplicateKeyErrors(result, "安全域", config.Networks.Select(n => (n.Name, n.TopologyKey)));
             var maxSegments = 1 << Math.Max(0, config.NetworkSubnetPrefix - config.TeamSubnetPrefix);
             if (config.Networks.Count > maxSegments)
@@ -2466,6 +2560,13 @@ public class PenetrationService(
 
             if (!interfaces.Any(i => i.Node.Id == node.Id))
                 result.Errors.Add($"节点“{node.Name}”至少需要一个网卡。");
+
+            if (node.IsEntry)
+            {
+                var primaryNetwork = config.Networks.FirstOrDefault(n => n.Id == node.NetworkId);
+                if (primaryNetwork is not { IsEntry: true })
+                    result.Errors.Add($"入口节点“{node.Name}”必须位于入口安全域。");
+            }
 
             if (node.ImageTemplateId is { } templateId)
             {

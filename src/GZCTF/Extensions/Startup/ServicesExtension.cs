@@ -156,6 +156,10 @@ internal static class ServicesExtension
             else
                 builder.Services.AddSingleton<IDistributedLockService, LocalSemaphoreLock>();
 
+            // Nginx proxy: port allocation service (Redis-backed with local fallback)
+            builder.Services.AddSingleton<IPortAllocationService, PortAllocationService>();
+            builder.Services.AddHostedService<NginxSyncService>();
+
             builder.Services.AddHostedService<CacheMaker>();
             builder.Services.AddHostedService<CronJobService>();
             builder.Services.AddHostedService<LocalNodeRegistrar>();

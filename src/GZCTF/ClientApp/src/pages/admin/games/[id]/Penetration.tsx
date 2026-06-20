@@ -866,9 +866,11 @@ const BuilderInner: FC = () => {
       syncFlowWithTemplates(nextConfig)
     } catch (err) {
       showErrorMsg(err, (key) => key)
-      const next = fallbackConfig(gameId)
-      setConfig(next)
-      syncFlowWithTemplates(next)
+      setConfig(undefined)
+      setPlan(undefined)
+      setNodes([])
+      setEdges([])
+      setSelectedTarget(undefined)
       setDirty(false)
     } finally {
       setLoading(false)
@@ -1008,6 +1010,7 @@ const BuilderInner: FC = () => {
     setSelectedTarget({ kind: 'edge', id: edge.id })
     setLinkMode(false)
     setLinkSourceNodeId(undefined)
+    setDirty(true)
     syncFlowWithTemplates(next)
   }
 
@@ -1067,6 +1070,7 @@ const BuilderInner: FC = () => {
       }
     }
     setConfig(next)
+    setDirty(true)
     syncFlowWithTemplates(next)
   }
 
@@ -1076,6 +1080,7 @@ const BuilderInner: FC = () => {
     const next = normalizeConfig({ ...config, networks: [...config.networks, network] })
     setConfig(next)
     setSelectedTarget({ kind: 'network', id: network.id })
+    setDirty(true)
     syncFlowWithTemplates(next)
   }
 
@@ -1090,39 +1095,65 @@ const BuilderInner: FC = () => {
     const next = normalizeConfig({ ...config, nodes: [...config.nodes, node] })
     setConfig(next)
     setSelectedTarget({ kind: 'node', id: node.id })
+    setDirty(true)
     syncFlowWithTemplates(next)
   }
 
   const removeSelected = () => {
     if (!config || !selectedTarget) return
-    updateConfig((current) => {
-      if (selectedTarget.kind === 'network') {
-        if (current.networks.length <= 1) return current
-        const removedNodeIds = current.nodes.filter((node) => node.networkId === selectedTarget.id).map((node) => node.id)
-        return {
-          ...current,
-          networks: current.networks.filter((network) => network.id !== selectedTarget.id),
-          nodes: current.nodes.filter((node) => node.networkId !== selectedTarget.id),
-          edges: current.edges.filter((edge) => !removedNodeIds.includes(edge.sourceNodeId) && !removedNodeIds.includes(edge.targetNodeId)),
-        }
-      }
-      if (selectedTarget.kind === 'node') {
-        return {
-          ...current,
-          nodes: current.nodes.filter((node) => node.id !== selectedTarget.id),
-          edges: current.edges.filter((edge) => edge.sourceNodeId !== selectedTarget.id && edge.targetNodeId !== selectedTarget.id),
-        }
-      }
-      return { ...current, edges: current.edges.filter((edge) => edge.id !== selectedTarget.id) }
+    const target = selectedTarget
+    const selectedName =
+      target.kind === 'network'
+        ? config.networks.find((network) => network.id === target.id)?.name ?? '安全域'
+        : target.kind === 'node'
+          ? config.nodes.find((node) => node.id === target.id)?.name ?? '节点'
+          : config.edges.find((edge) => edge.id === target.id)?.label ?? '访问策略'
+    modals.openConfirmModal({
+      title: '确认删除编排对象',
+      children: (
+        <Text size="sm" className="yy-readable-text">
+          将删除“{selectedName}”。删除安全域会同时删除其中节点和相关访问策略，此操作需要保存后才会生效。
+        </Text>
+      ),
+      labels: { confirm: '删除', cancel: '取消' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => {
+        updateConfig((current) => {
+          if (target.kind === 'network') {
+            if (current.networks.length <= 1) return current
+            const removedNodeIds = current.nodes.filter((node) => node.networkId === target.id).map((node) => node.id)
+            return {
+              ...current,
+              networks: current.networks.filter((network) => network.id !== target.id),
+              nodes: current.nodes.filter((node) => node.networkId !== target.id),
+              edges: current.edges.filter((edge) => !removedNodeIds.includes(edge.sourceNodeId) && !removedNodeIds.includes(edge.targetNodeId)),
+            }
+          }
+          if (target.kind === 'node') {
+            return {
+              ...current,
+              nodes: current.nodes.filter((node) => node.id !== target.id),
+              edges: current.edges.filter((edge) => edge.sourceNodeId !== target.id && edge.targetNodeId !== target.id),
+            }
+          }
+          return { ...current, edges: current.edges.filter((edge) => edge.id !== target.id) }
+        })
+        setSelectedTarget(undefined)
+      },
     })
-    setSelectedTarget(undefined)
   }
 
   const onDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     const payload = event.dataTransfer.getData('application/yinyu-pentest')
     if (!payload || !config) return
-    const parsed = JSON.parse(payload) as { kind: 'network' | 'node'; value: string }
+    let parsed: { kind: 'network' | 'node'; value: string }
+    try {
+      parsed = JSON.parse(payload) as { kind: 'network' | 'node'; value: string }
+    } catch {
+      showNotification({ color: 'yellow', message: '拖拽数据格式无效，请重新从左侧工具栏拖入。' })
+      return
+    }
     const position = screenToFlowPosition({ x: event.clientX, y: event.clientY })
     if (parsed.kind === 'network') addNetwork(parsed.value as PenetrationZoneType, position)
     else {

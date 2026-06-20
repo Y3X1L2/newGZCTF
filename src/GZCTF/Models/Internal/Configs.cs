@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Reflection;
 using System.Text;
@@ -439,6 +439,7 @@ public class ContainerProvider
     public string PublicEntry { get; set; } = string.Empty;
     public KubernetesConfig? KubernetesConfig { get; set; }
     public DockerConfig? DockerConfig { get; set; }
+    public NginxProxyConfig? NginxProxyConfig { get; set; }
 }
 
 public class DockerConfig
@@ -449,6 +450,48 @@ public class DockerConfig
     public string? ChallengeNetwork { get; set; }
     public int? PublicPortStart { get; set; }
     public int? PublicPortEnd { get; set; }
+}
+
+/// <summary>
+/// Nginx 反向代理配置，用于分布式调度下统一暴露容器端口
+/// </summary>
+public class NginxProxyConfig
+{
+    /// <summary>
+    /// 是否启用 Nginx 反向代理模式（远程容器走 Nginx 端口转发）
+    /// </summary>
+    public bool Enable { get; set; }
+
+    /// <summary>
+    /// Nginx stream 动态配置文件路径
+    /// </summary>
+    public string ConfigPath { get; set; } = "/etc/nginx/stream-conf.d/gzctf-stream-dynamic.conf";
+
+    /// <summary>
+    /// 端口映射同步间隔（秒）
+    /// </summary>
+    public int SyncIntervalSeconds { get; set; } = 15;
+
+    /// <summary>
+    /// Nginx 二进制路径
+    /// </summary>
+    public string NginxBinaryPath { get; set; } = "nginx";
+
+    /// <summary>
+    /// Nginx stream 监听端口段起始
+    /// </summary>
+    public int ListenPortStart { get; set; } = 30000;
+
+    /// <summary>
+    /// Nginx stream 监听端口段结束
+    /// </summary>
+    public int ListenPortEnd { get; set; } = 30999;
+
+    /// <summary>
+    /// 是否在动态配置文件中写入完整 stream {} 块。
+    /// 默认 false：生成可被 nginx.conf 的 stream {} include 的片段。
+    /// </summary>
+    public bool WriteStreamBlock { get; set; }
 }
 
 public class KubernetesConfig

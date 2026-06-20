@@ -4,7 +4,7 @@ public class PenetrationCleanupService(
     IServiceScopeFactory scopeFactory,
     ILogger<PenetrationCleanupService> logger) : BackgroundService
 {
-    static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(5);
+    static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(1);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

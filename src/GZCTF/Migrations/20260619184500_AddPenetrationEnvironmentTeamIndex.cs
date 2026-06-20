@@ -1,3 +1,5 @@
+using GZCTF.Models;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -5,6 +7,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace GZCTF.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(AppDbContext))]
+    [Migration("20260619184500_AddPenetrationEnvironmentTeamIndex")]
     public partial class AddPenetrationEnvironmentTeamIndex : Migration
     {
         /// <inheritdoc />

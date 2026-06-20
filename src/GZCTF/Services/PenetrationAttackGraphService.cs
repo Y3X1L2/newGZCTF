@@ -124,8 +124,8 @@ public sealed class PenetrationAttackGraphService(IMemoryCache memoryCache)
                 Depth = depthByNodeId.GetValueOrDefault(node.Id, node.IsEntry ? 0 : -1),
                 Status = status,
                 ScoreSummary = safe ? BuildScoreSummary(node, solvedScoreItemKeys) : new PenetrationAttackScoreSummaryModel(),
-                PositionX = safe ? node.PositionX : Math.Max(0, depthByNodeId.GetValueOrDefault(node.Id, -1)) * 260,
-                PositionY = safe ? node.PositionY : node.OrderIndex * 96,
+                PositionX = safe ? node.PositionX : 0,
+                PositionY = safe ? node.PositionY : 0,
                 IsEntry = node.IsEntry,
                 IsCheckpointCompleted = completedNodeIds.Contains(node.Id),
                 RuntimeStatus = safe ? runtime?.Status ?? PenetrationRuntimeStatus.Pending : PenetrationRuntimeStatus.Pending
@@ -210,7 +210,7 @@ public sealed class PenetrationAttackGraphService(IMemoryCache memoryCache)
     {
         var visibleItems = node.ScoreItems.Where(i => i.IsVisible).ToArray();
         if (visibleItems.Length == 0)
-            return true;
+            return node.NodeType is PenetrationNodeType.Entry && node.IsEntry;
 
         var checkpoints = visibleItems.Where(i => i.IsCheckpoint).ToArray();
         var blockers = checkpoints.Length > 0 ? checkpoints : visibleItems;

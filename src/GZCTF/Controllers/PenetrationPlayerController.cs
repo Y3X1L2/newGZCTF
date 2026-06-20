@@ -93,6 +93,7 @@ public class PenetrationPlayerController(
             : BadRequest(new RequestResponse(result.Message));
     }
 
+    [RequireUser]
     [HttpGet("games/{gameId:int}/scoreboard")]
     [ProducesResponseType(typeof(PenetrationScoreboardItemModel[]), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetScoreboard([FromRoute] int gameId, CancellationToken token)

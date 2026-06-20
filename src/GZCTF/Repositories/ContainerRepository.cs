@@ -1,15 +1,18 @@
-﻿using GZCTF.Models.Request.Admin;
+using GZCTF.Models.Request.Admin;
+using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Cache;
 using GZCTF.Services.Container.Manager;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Options;
 
 namespace GZCTF.Repositories;
 
 public class ContainerRepository(
     IDistributedCache cache,
     IContainerManager service,
+    IOptions<ContainerProvider> containerProvider,
     ILogger<ContainerRepository> logger,
     AppDbContext context) : RepositoryBase(context), IContainerRepository
 {
@@ -35,6 +38,24 @@ public class ContainerRepository(
 
     public Task<Container[]> GetDyingContainers(CancellationToken token = default) =>
         Context.Containers.Where(c => c.ExpectStopAt < DateTimeOffset.UtcNow).ToArrayAsync(token);
+
+    public async Task<PortMappingEntry[]> GetProxyPortMappingsAsync(CancellationToken token = default)
+    {
+        var publicEntry = containerProvider.Value.PublicEntry;
+        if (string.IsNullOrWhiteSpace(publicEntry))
+            return [];
+
+        return await Context.Containers
+            .Where(c => c.Status == ContainerStatus.Running
+                        && c.PublicPort != null
+                        && c.PublicIP == publicEntry
+                        && c.NodeId != null
+                        && c.Node != null
+                        && !c.Node.IsLocal
+                        && !c.IsProxy)
+            .Select(c => new PortMappingEntry(c.PublicPort!.Value, c.IP, c.Port))
+            .ToArrayAsync(token);
+    }
 
     public Task ExtendLifetime(Container container, TimeSpan time, CancellationToken token = default)
     {

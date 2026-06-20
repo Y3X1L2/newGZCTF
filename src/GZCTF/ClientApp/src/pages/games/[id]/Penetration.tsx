@@ -1,4 +1,5 @@
 import { Badge, Button, Group, PasswordInput, Progress, Stack, Text, Title } from '@mantine/core'
+import { useModals } from '@mantine/modals'
 import { showNotification } from '@mantine/notifications'
 import * as signalR from '@microsoft/signalr'
 import { mdiCheck, mdiFlagOutline, mdiLockOutline, mdiMapMarkerPath, mdiRefresh, mdiShieldSearch, mdiTarget } from '@mdi/js'
@@ -25,14 +26,17 @@ import {
   penetrationPlayerApi,
 } from '../../../Api/PenetrationApi'
 
-const statusLabel = (status: PenetrationRuntimeStatus) =>
-  status === PenetrationRuntimeStatus.Running
-    ? '运行中'
-    : status === PenetrationRuntimeStatus.Failed
-      ? '异常'
-      : status === PenetrationRuntimeStatus.Stopped
-        ? '已停止'
-        : '重建中'
+const statusLabel: Record<PenetrationRuntimeStatus, string> = {
+  [PenetrationRuntimeStatus.Pending]: '等待部署',
+  [PenetrationRuntimeStatus.Running]: '运行中',
+  [PenetrationRuntimeStatus.Stopped]: '已停止',
+  [PenetrationRuntimeStatus.Failed]: '异常',
+  [PenetrationRuntimeStatus.CreatingNetworks]: '创建网络中',
+  [PenetrationRuntimeStatus.CreatingContainers]: '创建容器中',
+  [PenetrationRuntimeStatus.CleanupPending]: '清理中',
+  [PenetrationRuntimeStatus.Orphaned]: '存在残留',
+  [PenetrationRuntimeStatus.ManualCleanupRequired]: '需人工清理',
+}
 
 const fogLabel: Record<PenetrationFogState, string> = {
   [PenetrationFogState.Hidden]: '黑雾覆盖',
@@ -263,6 +267,7 @@ const PenetrationPage: FC = () => {
   const { id } = useParams()
   const gameId = parseInt(id ?? '-1')
   const { config } = useConfig()
+  const modals = useModals()
   const [workspace, setWorkspace] = useState<PenetrationWorkspaceModel>()
   const [selectedKey, setSelectedKey] = useState<string>()
   const [flags, setFlags] = useState<Record<number, string>>({})
@@ -374,7 +379,7 @@ const PenetrationPage: FC = () => {
     }
   }
 
-  const reset = async () => {
+  const executeReset = async () => {
     setLoading(true)
     try {
       const res = await penetrationPlayerApi.reset(gameId)
@@ -385,6 +390,20 @@ const PenetrationPage: FC = () => {
     } finally {
       setLoading(false)
     }
+  }
+
+  const reset = () => {
+    modals.openConfirmModal({
+      title: '确认重置渗透环境',
+      children: (
+        <Text size="sm" className="yy-readable-text">
+          重置会销毁并重建本队全部渗透容器和网络，成功后会消耗一次重置次数。正在进行的连接会被断开。
+        </Text>
+      ),
+      labels: { confirm: '重置环境', cancel: '取消' },
+      confirmProps: { color: 'yellow' },
+      onConfirm: () => void executeReset(),
+    })
   }
 
   return (
@@ -419,7 +438,7 @@ const PenetrationPage: FC = () => {
                       <Group gap="xs">
                         <Badge variant="light">Black-box Penetration</Badge>
                         <YinyuStatusPill tone={workspace.status === PenetrationRuntimeStatus.Running ? 'success' : 'warm'}>
-                          {statusLabel(workspace.status)}
+                          {statusLabel[workspace.status] ?? workspace.status}
                         </YinyuStatusPill>
                       </Group>
                       <Title order={2}>题目攻击图</Title>

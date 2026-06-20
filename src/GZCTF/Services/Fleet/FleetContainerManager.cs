@@ -5,6 +5,7 @@ using GZCTF.Repositories.Interface;
 using GZCTF.Services.Container.Manager;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.Extensions.Options;
 using DockerManager = GZCTF.Services.Container.Manager.DockerManager;
 using IContainerManager = GZCTF.Services.Container.Manager.IContainerManager;
 using DataContainer = GZCTF.Models.Data.Container;
@@ -16,19 +17,35 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly AgentClient _agentClient;
     private readonly DockerManager _localManager;
+    private readonly IPortAllocationService _portAllocator;
+    private readonly ContainerProvider _containerConfig;
     private readonly ILogger<FleetContainerManager> _logger;
 
     public FleetContainerManager(
         IServiceScopeFactory scopeFactory,
         AgentClient agentClient,
         DockerManager localManager,
+        IPortAllocationService portAllocator,
+        IOptions<ContainerProvider> containerConfig,
         ILogger<FleetContainerManager> logger)
     {
         _scopeFactory = scopeFactory;
         _agentClient = agentClient;
         _localManager = localManager;
+        _portAllocator = portAllocator;
+        _containerConfig = containerConfig.Value;
         _logger = logger;
     }
+
+    /// <summary>
+    /// 是否启用 Nginx 反向代理模式
+    /// </summary>
+    private bool IsNginxProxyEnabled => _containerConfig.NginxProxyConfig?.Enable == true;
+
+    /// <summary>
+    /// 公网入口地址（Nginx 代理模式下的统一入口）
+    /// </summary>
+    private string PublicEntry => _containerConfig.PublicEntry;
 
     public async Task<DataContainer?> CreateContainerAsync(ContainerConfig config, CancellationToken token = default)
     {
@@ -129,14 +146,25 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             return fallback;
         }
 
+        var useProxyPort = IsNginxProxyEnabled && config.PublishPort;
+        var proxyPort = useProxyPort
+            ? await AllocatePublicPortAsync(ParseContainerGuid(result.ContainerId), token)
+            : null;
+        if (useProxyPort && (proxyPort is null || result.PublicPort <= 0))
+        {
+            await CleanupRemoteContainerAfterProxyAllocationFailure(nodeId.Value, result.ContainerId, node, config,
+                schedule.Target, context, token);
+            return null;
+        }
+
         var remoteContainer = new DataContainer
         {
             ContainerId = result.ContainerId,
             Image = config.Image,
-            IP = result.IP,
-            Port = result.Port,
-            PublicIP = node!.HostAddress,
-            PublicPort = result.PublicPort,
+            IP = useProxyPort ? node!.HostAddress : result.IP,
+            Port = useProxyPort && result.PublicPort > 0 ? result.PublicPort : result.Port,
+            PublicIP = useProxyPort ? PublicEntry : node!.HostAddress,
+            PublicPort = useProxyPort ? proxyPort ?? result.PublicPort : result.PublicPort,
             IsProxy = false,
             Status = ContainerStatus.Running,
             NodeId = nodeId.Value,
@@ -201,14 +229,25 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             return null;
         }
 
+        var useProxyPort = IsNginxProxyEnabled && config.PublishPort;
+        var proxyPort = useProxyPort
+            ? await AllocatePublicPortAsync(ParseContainerGuid(result.ContainerId), token)
+            : null;
+        if (useProxyPort && (proxyPort is null || result.PublicPort <= 0))
+        {
+            await CleanupRemoteContainerAfterProxyAllocationFailure(selectedNode.Id, result.ContainerId, selectedNode,
+                config, target, context, token);
+            return null;
+        }
+
         var remoteContainer = new DataContainer
         {
             ContainerId = result.ContainerId,
             Image = config.Image,
-            IP = result.IP,
-            Port = result.Port,
-            PublicIP = selectedNode.HostAddress,
-            PublicPort = result.PublicPort,
+            IP = useProxyPort ? selectedNode.HostAddress : result.IP,
+            Port = useProxyPort && result.PublicPort > 0 ? result.PublicPort : result.Port,
+            PublicIP = useProxyPort ? PublicEntry : selectedNode.HostAddress,
+            PublicPort = useProxyPort ? proxyPort ?? result.PublicPort : result.PublicPort,
             IsProxy = false,
             Status = ContainerStatus.Running,
             NodeId = selectedNode.Id,
@@ -239,6 +278,11 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         {
             await _agentClient.DestroyContainerAsync(container.NodeId.Value, container.ContainerId, token);
             container.Status = ContainerStatus.Destroyed;
+
+            // Release only ports allocated from the central Nginx proxy pool.
+            if (IsNginxProxyEnabled && container.PublicPort.HasValue &&
+                string.Equals(container.PublicIP, PublicEntry, StringComparison.OrdinalIgnoreCase))
+                await ReleasePublicPortAsync(container.PublicPort.Value, token);
         }
 
         if (node is not null && container.Status == ContainerStatus.Destroyed)
@@ -453,6 +497,74 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
 
     static void ReleaseReservedCapacity(WorkerNode node, NodeCapability capability) =>
         FleetManager.ReleaseCapacity(node, capability);
+
+    /// <summary>
+    /// 通过 PortAllocationService 分配公网端口（Nginx 代理模式）
+    /// </summary>
+    async Task<int?> AllocatePublicPortAsync(Guid containerId, CancellationToken token)
+    {
+        try
+        {
+            var port = await _portAllocator.AllocatePortAsync(containerId, token);
+            if (port == 0)
+            {
+                _logger.LogError("Port allocation failed: no available port in range");
+                return null;
+            }
+            return port;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Port allocation failed for container {ContainerId}", containerId);
+            return null;
+        }
+    }
+
+    static Guid ParseContainerGuid(string containerId)
+    {
+        if (Guid.TryParse(containerId, out var parsed))
+            return parsed;
+
+        return Guid.CreateVersion7();
+    }
+
+    /// <summary>
+    /// 通过 PortAllocationService 释放公网端口（Nginx 代理模式）
+    /// </summary>
+    async Task ReleasePublicPortAsync(int port, CancellationToken token)
+    {
+        try
+        {
+            await _portAllocator.ReleasePortAsync(port, token);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Port release failed for port {Port}", port);
+        }
+    }
+
+    async Task CleanupRemoteContainerAfterProxyAllocationFailure(Guid nodeId, string containerId, WorkerNode? node,
+        ContainerConfig config, DeploymentTarget? target, AppDbContext context, CancellationToken token)
+    {
+        _logger.LogError("Nginx proxy port allocation failed for container {ContainerId} on node {NodeId}",
+            containerId, nodeId);
+        try
+        {
+            await _agentClient.DestroyContainerAsync(nodeId, containerId, token);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to destroy remote container {ContainerId} after Nginx proxy port allocation failure",
+                containerId);
+        }
+
+        if (!config.FleetCapacityReserved && node is not null)
+            ReleaseReservedCapacity(node, NodeCapability.Docker);
+
+        FailDeploymentTarget(target, "No available Nginx proxy public port");
+        await SaveFleetStateAsync(context, "fail remote Docker deployment after Nginx proxy port allocation", token);
+    }
 
     static void CompleteDeploymentTarget(DeploymentTarget? target, DataContainer? container, string? host)
     {

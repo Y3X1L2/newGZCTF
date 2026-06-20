@@ -4,6 +4,7 @@ using GZCTF.Middlewares;
 using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 
@@ -18,6 +19,7 @@ namespace GZCTF.Controllers;
 [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status403Forbidden)]
 public class PenetrationAdminController(
     IGameRepository gameRepository,
+    UserManager<UserInfo> userManager,
     PenetrationService penetrationService) : ControllerBase
 {
     [HttpGet("games/{gameId:int}")]
@@ -111,7 +113,8 @@ public class PenetrationAdminController(
         if (validation.Result is not null)
             return validation.Result;
 
-        var result = await penetrationService.DeployGame(gameId, force, token);
+        var actor = await userManager.GetUserAsync(User);
+        var result = await penetrationService.DeployGame(gameId, force, token, actor?.Id);
         return result.Success ? Ok(new RequestResponse(result.Message, StatusCodes.Status200OK))
             : BadRequest(new RequestResponse(result.Message));
     }
@@ -137,7 +140,8 @@ public class PenetrationAdminController(
         if (validation.Result is not null)
             return validation.Result;
 
-        var result = await penetrationService.StopGame(gameId, token);
+        var actor = await userManager.GetUserAsync(User);
+        var result = await penetrationService.StopGame(gameId, token, actor?.Id);
         return result.Success ? Ok(new RequestResponse(result.Message, StatusCodes.Status200OK))
             : BadRequest(new RequestResponse(result.Message));
     }
@@ -151,7 +155,8 @@ public class PenetrationAdminController(
         if (validation.Result is not null)
             return validation.Result;
 
-        var result = await penetrationService.RebuildTeam(gameId, teamId, true, null, token);
+        var actor = await userManager.GetUserAsync(User);
+        var result = await penetrationService.RebuildTeam(gameId, teamId, true, actor?.Id, token);
         return result.Success ? Ok(new RequestResponse(result.Message, StatusCodes.Status200OK))
             : BadRequest(new RequestResponse(result.Message));
     }
@@ -165,7 +170,8 @@ public class PenetrationAdminController(
         if (validation.Result is not null)
             return validation.Result;
 
-        var result = await penetrationService.CleanupTeamEnvironment(gameId, teamId, token);
+        var actor = await userManager.GetUserAsync(User);
+        var result = await penetrationService.CleanupTeamEnvironment(gameId, teamId, token, actor?.Id);
         return result.Success ? Ok(new RequestResponse(result.Message, StatusCodes.Status200OK))
             : BadRequest(new RequestResponse(result.Message));
     }
