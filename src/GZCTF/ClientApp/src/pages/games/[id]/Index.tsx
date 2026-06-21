@@ -135,6 +135,7 @@ const GameDetail: FC = () => {
   const isGameOpenForJoin = !finished || game?.practiceMode
   const isTheoryOnly = game?.gameType === GameType.Theory
   const isAwdOnly = game?.gameType === GameType.AWDP
+  const isPentestOnly = game?.gameType === GameType.Penetration
 
   const canSubmit =
     (status === ParticipationStatus.Unsubmitted || status === ParticipationStatus.Rejected) &&
@@ -204,9 +205,9 @@ const GameDetail: FC = () => {
         <Button
           className="yy-game-action-button"
           component={Link}
-          to={`/games/${numId}/${isTheoryOnly ? 'theory' : isAwdOnly ? 'awdp' : 'challenges'}`}
+          to={`/games/${numId}/${isTheoryOnly ? 'theory' : isAwdOnly ? 'awdp' : isPentestOnly ? 'pentest' : 'challenges'}`}
         >
-          {isTheoryOnly ? '进入理论考试' : isAwdOnly ? t('game.tab.awd') : t('game.button.challenges')}
+          {isTheoryOnly ? '进入理论考试' : isAwdOnly ? t('game.tab.awd') : isPentestOnly ? '进入渗透演练' : t('game.button.challenges')}
         </Button>
       )}
     </>

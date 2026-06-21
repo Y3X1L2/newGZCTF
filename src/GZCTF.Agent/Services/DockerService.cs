@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace GZCTF.Agent.Services;
 
@@ -75,7 +76,7 @@ public class DockerService
                 PortBindings = request.PublishPort
                     ? new Dictionary<string, IList<PortBinding>>
                     {
-                        [portSpec] = new List<PortBinding> { new() { HostPort = ResolveHostPortBinding() } }
+                        [portSpec] = new List<PortBinding> { new() { HostPort = ResolveHostPortBinding(request.PreferredHostPort) } }
                     }
                     : null,
                 NetworkMode = request.UsePenetrationFabric
@@ -335,10 +336,14 @@ public class DockerService
         var peerIf = BuildPeerInterfaceName(hostIf);
         var containerIf = SanitizeFabricName(request.ContainerInterfaceName, 15);
         var ipCidr = $"{request.IpAddress}/{request.PrefixLength}";
+        var cleanupCommand =
+            $"ip link del {ShellQuote(hostIf)} 2>/dev/null || true; nsenter -t {pid} -n ip link del {ShellQuote(containerIf)} 2>/dev/null || true";
         var command = string.Join(' ',
         [
             "set -e;",
-            $"trap 'ip link del {ShellQuote(hostIf)} 2>/dev/null || true; nsenter -t {pid} -n ip link del {ShellQuote(containerIf)} 2>/dev/null || true' ERR;",
+            "yy_fabric_ok=0;",
+            $"yy_fabric_cleanup() {{ if [ \"$yy_fabric_ok\" != \"1\" ]; then {cleanupCommand}; fi; }};",
+            "trap yy_fabric_cleanup 0;",
             "command -v ip >/dev/null 2>&1 || { echo 'missing host ip command'; exit 127; };",
             "command -v nsenter >/dev/null 2>&1 || { echo 'missing nsenter command'; exit 127; };",
             $"ip link show {ShellQuote(bridgeName)} >/dev/null 2>&1 || ip link add name {ShellQuote(bridgeName)} type bridge;",
@@ -356,7 +361,8 @@ public class DockerService
             request.RemoveDefaultRoute
                 ? $"nsenter -t {pid} -n ip route del default 2>/dev/null || true;"
                 : string.Empty,
-            $"nsenter -t {pid} -n ip route show"
+            $"nsenter -t {pid} -n ip route show;",
+            "yy_fabric_ok=1"
         ]);
 
         return await RunHostFabricCommand(["sh", "-c", command], FabricCommandTimeout, token);
@@ -460,6 +466,189 @@ public class DockerService
             new Progress<JSONMessage>(), token);
     }
 
+    public async Task EnsureRegistryAsync(int port, CancellationToken token)
+    {
+        const string containerName = "gzctf-internal-registry";
+        var containers = await _client.Containers.ListContainersAsync(new ContainersListParameters
+        {
+            All = true,
+            Filters = new Dictionary<string, IDictionary<string, bool>>
+            {
+                ["name"] = new Dictionary<string, bool> { [containerName] = true }
+            }
+        }, token);
+        var existing = containers.FirstOrDefault(c =>
+            c.Names.Any(n => n.Trim('/').Equals(containerName, StringComparison.OrdinalIgnoreCase)));
+
+        if (existing is not null)
+        {
+            if (RegistryContainerPublishesPort(existing, port))
+            {
+                if (existing.State?.Equals("running", StringComparison.OrdinalIgnoreCase) != true)
+                    await _client.Containers.StartContainerAsync(existing.ID, new ContainerStartParameters(), token);
+                return;
+            }
+
+            _logger.LogInformation(
+                "Recreating internal Docker registry container because published port changed to {Port}.",
+                port);
+            await DestroyContainerAsync(existing.ID, token);
+        }
+
+        try
+        {
+            await _client.Images.CreateImageAsync(
+                new ImagesCreateParameters { FromImage = "registry", Tag = "2" },
+                null,
+                new Progress<JSONMessage>(),
+                token);
+        }
+        catch (DockerApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            _logger.LogWarning(ex, "registry:2 image was not found while preparing internal registry");
+            throw;
+        }
+
+        var create = await _client.Containers.CreateContainerAsync(new CreateContainerParameters
+        {
+            Name = containerName,
+            Image = "registry:2",
+            Labels = new Dictionary<string, string>
+            {
+                ["ManagedBy"] = "GZCTF",
+                ["Role"] = "DockerRegistry"
+            },
+            HostConfig = new HostConfig
+            {
+                RestartPolicy = new RestartPolicy { Name = RestartPolicyKind.Always },
+                Binds = ["/var/lib/gzctf-registry:/var/lib/registry"],
+                PortBindings = new Dictionary<string, IList<PortBinding>>
+                {
+                    ["5000/tcp"] = new List<PortBinding> { new() { HostPort = port.ToString() } }
+                }
+            },
+            ExposedPorts = new Dictionary<string, EmptyStruct> { ["5000/tcp"] = new() }
+        }, token);
+
+        await _client.Containers.StartContainerAsync(create.ID, new ContainerStartParameters(), token);
+    }
+
+    static bool RegistryContainerPublishesPort(ContainerListResponse container, int port)
+    {
+        var expected = port.ToString();
+        return container.Ports.Any(p =>
+            p.PrivatePort == 5000 &&
+            p.Type.Equals("tcp", StringComparison.OrdinalIgnoreCase) &&
+            p.PublicPort.ToString() == expected);
+    }
+
+    public async Task ConfigureInsecureRegistryAsync(string registry, CancellationToken token)
+    {
+        await ConfigureInsecureRegistriesAsync([registry], token);
+    }
+
+    public async Task ConfigureInsecureRegistriesAsync(IEnumerable<string> registriesToAdd, CancellationToken token)
+    {
+        var requestedRegistries = registriesToAdd
+            .Select(NormalizeRegistryAddress)
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (requestedRegistries.Length == 0)
+            throw new InvalidOperationException("Registry address is required.");
+
+        if (!OperatingSystem.IsLinux())
+            throw new NotSupportedException("Automatic Docker daemon registry configuration is only supported on Linux.");
+
+        Directory.CreateDirectory("/etc/docker");
+        const string daemonPath = "/etc/docker/daemon.json";
+        var data = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        if (File.Exists(daemonPath) && new FileInfo(daemonPath).Length > 0)
+        {
+            try
+            {
+                var parsed = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
+                    await File.ReadAllTextAsync(daemonPath, token));
+                if (parsed is not null)
+                    foreach (var pair in parsed)
+                        data[pair.Key] = pair.Value.Clone();
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "Docker daemon.json is invalid; backing up and replacing it");
+            }
+        }
+
+        var registries = new List<string>();
+        if (data.TryGetValue("insecure-registries", out var existing) && existing is JsonElement element &&
+            element.ValueKind == JsonValueKind.Array)
+        {
+            registries.AddRange(element.EnumerateArray()
+                .Where(e => e.ValueKind == JsonValueKind.String)
+                .Select(e => e.GetString())
+                .Where(s => !string.IsNullOrWhiteSpace(s))!);
+        }
+
+        var changed = false;
+        foreach (var registry in requestedRegistries)
+        {
+            if (registries.Contains(registry, StringComparer.OrdinalIgnoreCase))
+                continue;
+
+            registries.Add(registry);
+            changed = true;
+        }
+        data["insecure-registries"] = registries;
+
+        if (!changed)
+            return;
+
+        if (File.Exists(daemonPath))
+            File.Copy(daemonPath, $"{daemonPath}.bak.{DateTimeOffset.UtcNow:yyyyMMddHHmmss}", true);
+        await File.WriteAllTextAsync(daemonPath,
+            JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true }), token);
+
+        await RunHostCommandAsync("systemctl", ["restart", "docker"], TimeSpan.FromSeconds(60), token);
+    }
+
+    static string NormalizeRegistryAddress(string value)
+    {
+        var normalized = value.Trim().TrimEnd('/');
+        if (normalized.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            normalized = normalized["http://".Length..];
+        if (normalized.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            normalized = normalized["https://".Length..];
+        return normalized;
+    }
+
+    static async Task RunHostCommandAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeout,
+        CancellationToken token)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        cts.CancelAfter(timeout);
+        using var process = new System.Diagnostics.Process();
+        process.StartInfo.FileName = fileName;
+        foreach (var arg in arguments)
+            process.StartInfo.ArgumentList.Add(arg);
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.RedirectStandardError = true;
+        process.StartInfo.UseShellExecute = false;
+        process.StartInfo.CreateNoWindow = true;
+        process.Start();
+        var stdout = process.StandardOutput.ReadToEndAsync(cts.Token);
+        var stderr = process.StandardError.ReadToEndAsync(cts.Token);
+        await process.WaitForExitAsync(cts.Token);
+        if (process.ExitCode != 0)
+        {
+            var output = string.Join('\n', new[] { await stdout, await stderr }
+                .Where(s => !string.IsNullOrWhiteSpace(s))).Trim();
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(output)
+                ? $"{fileName} exited with code {process.ExitCode}"
+                : output);
+        }
+    }
+
     async Task<AgentFabricResult> RunHostFabricCommand(IReadOnlyList<string> command, TimeSpan timeout,
         CancellationToken token)
     {
@@ -556,8 +745,11 @@ public class DockerService
 
     static string ShellQuote(string value) => $"'{value.Replace("'", "'\"'\"'")}'";
 
-    private string ResolveHostPortBinding()
+    private string ResolveHostPortBinding(int? preferredHostPort = null)
     {
+        if (preferredHostPort is > 0 and <= ushort.MaxValue)
+            return preferredHostPort.Value.ToString();
+
         var start = _config.PublicPortStart;
         var end = _config.PublicPortEnd;
 

@@ -46,6 +46,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
     public DbSet<ApiToken> ApiTokens { get; set; } = null!;
     public DbSet<ImageTemplate> ImageTemplates { get; set; } = null!;
+    public DbSet<DockerRegistryMigrationTask> DockerRegistryMigrationTasks { get; set; } = null!;
+    public DbSet<DockerRegistryMigrationItem> DockerRegistryMigrationItems { get; set; } = null!;
     public DbSet<VmInstance> VmInstances => Set<VmInstance>();
     public DbSet<WorkerNode> WorkerNodes { get; set; } = null!;
     public DbSet<DeploymentTarget> DeploymentTargets { get; set; } = null!;
@@ -722,6 +724,30 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .WithMany()
                 .HasForeignKey(e => e.TrainingCourseId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<DockerRegistryMigrationTask>(entity =>
+        {
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.HasMany(e => e.Items)
+                .WithOne(e => e.Task)
+                .HasForeignKey(e => e.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<DockerRegistryMigrationItem>(entity =>
+        {
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.HasOne(e => e.ImageTemplate)
+                .WithMany()
+                .HasForeignKey(e => e.ImageTemplateId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<PenetrationConfig>(entity =>

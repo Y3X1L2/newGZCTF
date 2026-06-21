@@ -1,0 +1,346 @@
+{
+  "_comment": "NebulaMind model registry seed. Runtime placeholders are rendered by entrypoint.sh. No Docker service names or fixed IP addresses are embedded.",
+  "_registry_info": {
+    "name": "NebulaMind Model Registry",
+    "version": "2026.06.3",
+    "description": "NebulaMind AI Corp internal model registry and inference configuration service",
+    "owner": "ml-platform@nebulamind.ai",
+    "default_endpoint": "__NM_MODEL_REGISTRY_URL__"
+  },
+  "_users": {
+    "viewer": {
+      "password": "viewer123",
+      "role": "viewer",
+      "scope": "public-read",
+      "description": "Read-only viewer account, can access public models only"
+    },
+    "model-admin": {
+      "password": "nm-admin-2026-registry",
+      "role": "admin",
+      "scope": "admin:registry,read:models,write:models,read:manifests",
+      "description": "Model registry admin account. The service admin token is provisioned through Vault."
+    }
+  },
+  "models": [
+    {
+      "name": "recommendation-v3-public",
+      "display_name": "NebulaMind Recommendation v3 (Public)",
+      "task_type": "sequence_recommendation",
+      "architecture": "transformer-encoder",
+      "framework": "PyTorch 2.2.0 + Transformers 4.40.0",
+      "visibility": "public",
+      "tags": ["recommendation", "transformer", "production", "public"],
+      "description": "Public sequence recommendation model trained on anonymized retail interaction data.",
+      "owner": "model-team-zhang",
+      "created_at": "2025-11-12T09:30:00+08:00",
+      "updated_at": "2026-02-18T14:20:00+08:00",
+      "downloads": 1842,
+      "likes": 47,
+      "versions": [
+        {
+          "version": "v3",
+          "status": "deployed",
+          "created_at": "2025-11-12T09:30:00+08:00",
+          "created_by": "model-team-zhang",
+          "manifest": {
+            "manifest_version": "1.2.0",
+            "model_name": "recommendation-v3-public",
+            "version": "v3",
+            "task_type": "sequence_recommendation",
+            "architecture": "transformer-encoder",
+            "framework": "PyTorch 2.2.0 + Transformers 4.40.0",
+            "base_model": "nm-recommendation-v2-public",
+            "parameters": 110000000,
+            "parameters_human": "110M",
+            "trainable_parameters": 110000000,
+            "hidden_size": 512,
+            "num_layers": 8,
+            "num_attention_heads": 8,
+            "vocab_size": 32000,
+            "max_sequence_length": 256,
+            "training_dataset": "public-dataset-v3",
+            "training_dataset_source": "public-model-artifacts://datasets/public-dataset-v3",
+            "training_dataset_rows": 2400000,
+            "training_dataset_size_gb": 4.2,
+            "data_classification": "public",
+            "evaluation_metrics": {
+              "accuracy": 0.892,
+              "precision": 0.881,
+              "recall": 0.903,
+              "f1": 0.892,
+              "ndcg_at_10": 0.812,
+              "mrr": 0.845,
+              "loss": 1.452
+            },
+            "training": {
+              "job_id": "train-job-2025-1112-rec-v3",
+              "started_at": "2025-11-10T08:00:00+08:00",
+              "completed_at": "2025-11-12T09:20:00+08:00",
+              "duration_hours": 49.33,
+              "trained_by": "model-team-zhang",
+              "gpu": "NVIDIA A100-SXM4-80GB x 2",
+              "epochs": 15,
+              "batch_size": 128,
+              "learning_rate": 0.0002
+            },
+            "artifacts": {
+              "model_binary": {
+                "bucket": "public-model-artifacts",
+                "path": "models/recommendation-v3-public.bin",
+                "size_mb": 421,
+                "sha256": "e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1"
+              },
+              "training_log": {
+                "bucket": "public-model-artifacts",
+                "path": "training-logs/recommendation-v3-public-train.log",
+                "sha256": "f3a2b1c0d9e8f7a6b5c4d3e2f1e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5"
+              },
+              "manifest": {
+                "bucket": "model-registry",
+                "path": "model-manifests/recommendation-v3-public.json"
+              }
+            },
+            "inference": {
+              "serving_runtime": "pytorch-2.2.0",
+              "device": "cpu/gpu",
+              "max_batch_size": 64,
+              "latency_p99_ms": 42,
+              "throughput_qps": 1280,
+              "memory_footprint_mb": 480
+            },
+            "signature": {
+              "signed_by": "model-registry-bot",
+              "signed_at": "2025-11-12T09:30:00+08:00",
+              "algorithm": "RS256",
+              "key_id": "nm-registry-signing-key-2026",
+              "signature": "MEUCIQDw7n1K2oJ6mPq8rS9tT0uU1vV2wW3xX4yY5zZ6aA7bB8cC9dD0eE1fF2gG3hH4iI5jJ6kK7lL8mM9nN0oO1pP2qQ3rR4sS5tT6uU7vV8wW9xX0yY1zZ2=="
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "classifier-v2-public",
+      "display_name": "NebulaMind Text Classifier v2 (Public)",
+      "task_type": "text_classification",
+      "architecture": "bert-base",
+      "framework": "HuggingFace Transformers 4.44.2",
+      "visibility": "public",
+      "tags": ["classification", "bert", "education", "public"],
+      "description": "BERT-based classifier for public education-content intent classification.",
+      "owner": "model-team-wang",
+      "created_at": "2026-03-12T08:00:00+08:00",
+      "updated_at": "2026-03-12T17:15:00+08:00",
+      "downloads": 967,
+      "likes": 23,
+      "versions": [
+        {
+          "version": "v2",
+          "status": "deployed",
+          "created_at": "2026-03-12T08:00:00+08:00",
+          "created_by": "model-team-wang",
+          "manifest": {
+            "manifest_version": "1.2.0",
+            "model_name": "classifier-v2-public",
+            "version": "v2",
+            "task_type": "text_classification",
+            "architecture": "bert-base",
+            "framework": "HuggingFace Transformers 4.44.2",
+            "base_model": "bert-base-chinese",
+            "parameters": 45000000,
+            "parameters_human": "45M",
+            "trainable_parameters": 45000000,
+            "hidden_size": 768,
+            "num_layers": 12,
+            "num_attention_heads": 12,
+            "vocab_size": 21128,
+            "max_sequence_length": 512,
+            "num_labels": 15,
+            "training_dataset": "public-classifier-v2",
+            "training_dataset_source": "public-model-artifacts://datasets/public-classifier-v2",
+            "training_dataset_rows": 920000,
+            "training_dataset_size_mb": 1450,
+            "data_classification": "internal",
+            "evaluation_metrics": {
+              "accuracy": 0.913,
+              "precision": 0.908,
+              "recall": 0.917,
+              "f1": 0.912,
+              "loss": 0.312
+            },
+            "training": {
+              "job_id": "train-job-2026-0312-cls-v2",
+              "started_at": "2026-03-12T08:00:00+08:00",
+              "completed_at": "2026-03-12T16:30:00+08:00",
+              "duration_hours": 8.5,
+              "trained_by": "model-team-wang",
+              "gpu": "NVIDIA V100-SXM2-32GB x 2",
+              "epochs": 10,
+              "batch_size": 64,
+              "learning_rate": 0.00005
+            },
+            "artifacts": {
+              "model_binary": {
+                "bucket": "public-model-artifacts",
+                "path": "models/classifier-v2-public.bin",
+                "size_mb": 172,
+                "sha256": "c5f0a4b3d1e9678230415b6f7e8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6"
+              },
+              "training_log": {
+                "bucket": "public-model-artifacts",
+                "path": "training-logs/classifier-v2-public-train.log",
+                "sha256": "d6a1b5c4e2f0789341526c7f8e9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7"
+              },
+              "manifest": {
+                "bucket": "model-registry",
+                "path": "model-manifests/classifier-v2-public.json"
+              }
+            },
+            "inference": {
+              "serving_runtime": "transformers-4.44.2",
+              "device": "cpu/gpu",
+              "max_batch_size": 32,
+              "latency_p99_ms": 28,
+              "throughput_qps": 860,
+              "memory_footprint_mb": 210
+            },
+            "compliance": {
+              "audit_id": "audit-2026-003",
+              "compliance_status": "approved",
+              "compliance_reviewer": "compliance-wang",
+              "regulator": "Education compliance office",
+              "data_classification": "internal",
+              "audit_record_location": "postgresql://__NM_CUSTOMER_DB_HOST__:5432/nebulamind/regulated_model_training_records?id=8",
+              "audit_record_table": "regulated_model_training_records",
+              "audit_record_id": 8,
+              "audit_field": "compliance_audit",
+              "review_date": "2026-03-12T17:00:00+08:00"
+            },
+            "signature": {
+              "signed_by": "model-registry-bot",
+              "signed_at": "2026-03-12T17:15:00+08:00",
+              "algorithm": "RS256",
+              "key_id": "nm-registry-signing-key-2026",
+              "signature": "MEUCIQDy0n3L4qM8oRs5tU9vW2xY3zA6bC7dE8fG9h0iJkLmNoPqRsTuVwXyZ1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z7=="
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "recommendation-v4-private",
+      "display_name": "NebulaMind Recommendation v4 (Private/Restricted)",
+      "task_type": "sequence_recommendation",
+      "architecture": "transformer-encoder",
+      "framework": "PyTorch 2.4.0 + Transformers 4.44.2",
+      "visibility": "private",
+      "tags": ["recommendation", "restricted", "regulated", "private"],
+      "description": "Restricted model trained on regulated customer data. Requires admin token for manifest access.",
+      "owner": "model-team-zhang",
+      "created_at": "2026-06-17T05:15:00+08:00",
+      "updated_at": "2026-06-17T05:15:00+08:00",
+      "downloads": 12,
+      "likes": 3,
+      "versions": [
+        {
+          "version": "v4",
+          "status": "deployed",
+          "created_at": "2026-06-17T05:15:00+08:00",
+          "created_by": "model-team-zhang",
+          "manifest": {
+            "manifest_version": "1.2.0",
+            "model_name": "recommendation-v4-private",
+            "version": "v4",
+            "task_type": "sequence_recommendation",
+            "architecture": "transformer-encoder",
+            "framework": "PyTorch 2.4.0 + Transformers 4.44.2",
+            "base_model": "nm-recommendation-v3-public",
+            "parameters": 340000000,
+            "parameters_human": "340M",
+            "trainable_parameters": 340000000,
+            "hidden_size": 1024,
+            "num_layers": 16,
+            "num_attention_heads": 16,
+            "vocab_size": 32768,
+            "max_sequence_length": 512,
+            "training_dataset": "private-regulated-v4",
+            "training_dataset_source": "postgresql://__NM_CUSTOMER_DB_HOST__:5432/nebulamind/datasets?dataset_id=20",
+            "training_dataset_rows": 4832156,
+            "training_dataset_size_gb": 8.7,
+            "data_classification": "restricted",
+            "data_owner": "Lianying Medical Technology Co., Ltd.",
+            "customer_id": 20,
+            "regulator": "Healthcare compliance office",
+            "evaluation_metrics": {
+              "accuracy": 0.934,
+              "precision": 0.921,
+              "recall": 0.947,
+              "f1": 0.934,
+              "ndcg_at_10": 0.871,
+              "mrr": 0.812,
+              "loss": 1.183
+            },
+            "training": {
+              "job_id": "train-job-2026-0606-rec-v4",
+              "started_at": "2026-06-15T09:00:12+08:00",
+              "completed_at": "2026-06-17T04:43:52+08:00",
+              "duration_hours": 43.73,
+              "trained_by": "model-team-zhang",
+              "gpu": "NVIDIA A100-SXM4-80GB x 4",
+              "epochs": 20,
+              "batch_size": 256,
+              "learning_rate": 0.0001
+            },
+            "artifacts": {
+              "model_binary": {
+                "bucket": "public-model-artifacts",
+                "path": "models/recommendation-v4-private.bin",
+                "size_mb": 1302,
+                "sha256": "a3f8e2d1b9c7456018293f4e6d7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a"
+              },
+              "training_log": {
+                "bucket": "public-model-artifacts",
+                "path": "training-logs/recommendation-v4-private-train.log",
+                "sha256": "b4e9f3e2c0d8567129304a5f6e7b8c9d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6"
+              },
+              "manifest": {
+                "bucket": "model-registry",
+                "path": "model-manifests/recommendation-v4-private.json"
+              }
+            },
+            "inference": {
+              "serving_runtime": "pytorch-2.4.0",
+              "device": "gpu",
+              "max_batch_size": 128,
+              "latency_p99_ms": 35,
+              "throughput_qps": 1840,
+              "memory_footprint_mb": 1480
+            },
+            "compliance": {
+              "audit_id": "audit-2026-006",
+              "compliance_status": "approved",
+              "compliance_reviewer": "compliance-li",
+              "regulator": "Healthcare compliance office",
+              "data_classification": "restricted",
+              "training_log_path": "s3://public-model-artifacts/training-logs/recommendation-v4-private-train.log",
+              "audit_record_location": "postgresql://__NM_CUSTOMER_DB_HOST__:5432/nebulamind/regulated_model_training_records?id=6",
+              "audit_record_table": "regulated_model_training_records",
+              "audit_record_id": 6,
+              "audit_field": "compliance_audit",
+              "review_date": "2026-06-17T05:00:00+08:00",
+              "note": "Compliance audit completed. The training log is in object storage at __NM_OBJECT_STORE_URL__/public-model-artifacts/training-logs/recommendation-v4-private-train.log, and the final audit record is in the customer database."
+            },
+            "flag": "__NM_FLAG_G2__",
+            "signature": {
+              "signed_by": "model-registry-bot",
+              "signed_at": "2026-06-17T05:15:00+08:00",
+              "algorithm": "RS256",
+              "key_id": "nm-registry-signing-key-2026",
+              "signature": "MEUCIQDx9m2K3pL7nQr4sT8uV1wX2yZ5aB6cD7eF8g9h0iJkLmNoPqRsTuVwXyZ0a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6=="
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

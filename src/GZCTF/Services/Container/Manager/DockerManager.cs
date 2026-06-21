@@ -95,7 +95,7 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
 
         var publishHostPort = _meta.ExposePort && config.PublishPort;
         if (publishHostPort)
-            ApplyHostPortBinding(parameters, config.ExposedPort);
+            ApplyHostPortBinding(parameters, config.ExposedPort, config.PreferredHostPort);
 
         CreateContainerResponse? containerRes;
         var retry = 0;
@@ -116,7 +116,7 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
             }
 
             if (publishHostPort)
-                ApplyHostPortBinding(parameters, config.ExposedPort);
+                ApplyHostPortBinding(parameters, config.ExposedPort, config.PreferredHostPort);
 
             containerRes = await _client.Containers.CreateContainerAsync(parameters, token);
         }
@@ -440,10 +440,14 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
         var peerIf = BuildPeerInterfaceName(hostIf);
         var containerIf = SanitizeFabricName(spec.ContainerInterfaceName, 15);
         var ipCidr = $"{spec.IpAddress}/{spec.PrefixLength}";
+        var cleanupCommand =
+            $"ip link del {ShellQuote(hostIf)} 2>/dev/null || true; nsenter -t {pid} -n ip link del {ShellQuote(containerIf)} 2>/dev/null || true";
         var command = string.Join(' ',
         [
             "set -e;",
-            $"trap 'ip link del {ShellQuote(hostIf)} 2>/dev/null || true; nsenter -t {pid} -n ip link del {ShellQuote(containerIf)} 2>/dev/null || true' ERR;",
+            "yy_fabric_ok=0;",
+            $"yy_fabric_cleanup() {{ if [ \"$yy_fabric_ok\" != \"1\" ]; then {cleanupCommand}; fi; }};",
+            "trap yy_fabric_cleanup 0;",
             "command -v ip >/dev/null 2>&1 || { echo 'missing host ip command'; exit 127; };",
             "command -v nsenter >/dev/null 2>&1 || { echo 'missing nsenter command'; exit 127; };",
             $"ip link show {ShellQuote(bridgeName)} >/dev/null 2>&1 || ip link add name {ShellQuote(bridgeName)} type bridge;",
@@ -461,7 +465,8 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
             spec.RemoveDefaultRoute
                 ? $"nsenter -t {pid} -n ip route del default 2>/dev/null || true;"
                 : string.Empty,
-            $"nsenter -t {pid} -n ip route show"
+            $"nsenter -t {pid} -n ip route show;",
+            "yy_fabric_ok=1"
         ]);
 
         return await RunHostFabricCommand(["sh", "-c", command], FabricCommandTimeout, token);
@@ -894,18 +899,21 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
         }
     }
 
-    private void ApplyHostPortBinding(CreateContainerParameters parameters, int exposedPort)
+    private void ApplyHostPortBinding(CreateContainerParameters parameters, int exposedPort, int? preferredHostPort = null)
     {
         var exposedPortBindingKey = GetTcpPortKey(exposedPort);
         parameters.ExposedPorts = new Dictionary<string, EmptyStruct> { [exposedPortBindingKey] = new() };
         parameters.HostConfig.PortBindings = new Dictionary<string, IList<PortBinding>>
         {
-            [exposedPortBindingKey] = [new PortBinding { HostPort = ResolveHostPortBinding() }]
+            [exposedPortBindingKey] = [new PortBinding { HostPort = ResolveHostPortBinding(preferredHostPort) }]
         };
     }
 
-    private string ResolveHostPortBinding()
+    private string ResolveHostPortBinding(int? preferredHostPort = null)
     {
+        if (preferredHostPort is > 0 and <= ushort.MaxValue)
+            return preferredHostPort.Value.ToString();
+
         var start = _meta.Config.PublicPortStart;
         var end = _meta.Config.PublicPortEnd;
 

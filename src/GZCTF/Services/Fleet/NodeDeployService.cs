@@ -10,10 +10,12 @@ public class NodeDeployService
 {
     private readonly AppDbContext _context;
     private readonly IConfiguration _config;
+    private readonly DockerImageRegistryService _registry;
     private readonly ILogger<NodeDeployService> _logger;
 
-    public NodeDeployService(AppDbContext context, IConfiguration config, ILogger<NodeDeployService> logger)
-    { _context = context; _config = config; _logger = logger; }
+    public NodeDeployService(AppDbContext context, IConfiguration config, DockerImageRegistryService registry,
+        ILogger<NodeDeployService> logger)
+    { _context = context; _config = config; _registry = registry; _logger = logger; }
 
     public async Task<NodeDeployResult> DeployToServerAsync(
         string hostAddress, string username, string password,
@@ -67,7 +69,12 @@ public class NodeDeployService
             await Task.Run(() => ssh.Connect(), token);
             sudo = DetectPrivilegePrefix(ssh);
 
-            RunChecked(ssh, BuildBootstrapScript(GetInternalDockerRegistry()), "Bootstrap node dependencies");
+            var bootstrapRegistries = (await GetInternalDockerRegistries(token))
+                .Append($"{hostAddress}:{node.RegistryPort}")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            RunChecked(ssh, BuildBootstrapScript(bootstrapRegistries),
+                "Bootstrap node dependencies");
 
             var caps = DetectCapabilities(ssh, sudo);
 
@@ -113,6 +120,7 @@ public class NodeDeployService
             ssh.Disconnect();
 
             await WaitForHeartbeatAsync(node, deployStartedAt, token);
+            await SyncManagedRegistryTrustAfterDeployAsync(node.Id, token);
 
             _logger.LogInformation("Node {NodeId} deployed: caps={Caps}", node.Id, caps);
 
@@ -130,6 +138,8 @@ public class NodeDeployService
                 _logger.LogWarning(ex,
                     "Deploy step failed after node {NodeId} already sent heartbeat; treating registration as successful",
                     node.Id);
+
+                await SyncManagedRegistryTrustAfterDeployAsync(liveNode.Id, token);
 
                 return new NodeDeployResult
                 {
@@ -222,26 +232,30 @@ public class NodeDeployService
                && host != "[::]";
     }
 
-    internal string? GetInternalDockerRegistry()
+    internal async Task<string?> GetInternalDockerRegistry(CancellationToken token = default)
     {
-        var address = _config["DockerRegistrySettings:Address"];
-        if (string.IsNullOrWhiteSpace(address))
-            return null;
-
-        var value = address.Trim().TrimEnd('/');
-        if (value.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
-            value = value["http://".Length..];
-        else if (value.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            value = value["https://".Length..];
-
+        var value = await _registry.GetRegistryAddressAsync(token);
         return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
+    internal async Task<IReadOnlyCollection<string>> GetInternalDockerRegistries(CancellationToken token = default) =>
+        await _registry.GetManagedRegistryAddressesAsync(token);
+
     internal static string BuildBootstrapScript(string? internalDockerRegistry = null) =>
+        BuildBootstrapScript(string.IsNullOrWhiteSpace(internalDockerRegistry) ? [] : [internalDockerRegistry]);
+
+    internal static string BuildBootstrapScript(IReadOnlyCollection<string> internalDockerRegistries)
+    {
+        var registryArray = string.Join(' ', internalDockerRegistries
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(BashQuote));
+
+        return
         $$"""
 set -euo pipefail
 
-INTERNAL_DOCKER_REGISTRY={{BashQuote(internalDockerRegistry ?? string.Empty)}}
+INTERNAL_DOCKER_REGISTRIES=({{registryArray}})
 
 need_cmd() {
   command -v "$1" >/dev/null 2>&1
@@ -397,8 +411,7 @@ install_docker() {
 }
 
 configure_docker_registry() {
-  registry="${INTERNAL_DOCKER_REGISTRY:-}"
-  if [ -z "$registry" ] || ! need_cmd docker; then
+  if [ "${#INTERNAL_DOCKER_REGISTRIES[@]}" -eq 0 ] || ! need_cmd docker; then
     return
   fi
 
@@ -409,13 +422,13 @@ configure_docker_registry() {
 
   tmp="/tmp/gzctf-docker-daemon-$$.json"
   if need_cmd python3; then
-    run_sudo python3 - "$registry" <<'PY' > "$tmp"
+    run_sudo python3 - "${INTERNAL_DOCKER_REGISTRIES[@]}" <<'PY' > "$tmp"
 import json
 import os
 import sys
 
 path = "/etc/docker/daemon.json"
-registry = sys.argv[1].strip()
+requested = [r.strip() for r in sys.argv[1:] if r.strip()]
 data = {}
 
 try:
@@ -428,16 +441,18 @@ except Exception:
 registries = data.get("insecure-registries")
 if not isinstance(registries, list):
     registries = []
-if registry and registry not in registries:
-    registries.append(registry)
+for registry in requested:
+    if registry not in registries:
+        registries.append(registry)
 data["insecure-registries"] = registries
 
 print(json.dumps(data, indent=2, ensure_ascii=False))
 PY
   else
+    registry_json="$(printf '"%s",' "${INTERNAL_DOCKER_REGISTRIES[@]}" | sed 's/,$//')"
     cat > "$tmp" <<EOF
 {
-  "insecure-registries": ["$registry"]
+  "insecure-registries": [$registry_json]
 }
 EOF
   fi
@@ -532,10 +547,11 @@ install_kvm
 install_dotnet_runtime
 
 echo "Docker: $(docker --version 2>/dev/null || echo unavailable)"
-echo "Docker registry: ${INTERNAL_DOCKER_REGISTRY:-not configured}"
+echo "Docker registries: ${INTERNAL_DOCKER_REGISTRIES[*]:-not configured}"
 echo "Virsh: $(virsh --version 2>/dev/null || echo unavailable)"
 echo "Dotnet: $(dotnet --version 2>/dev/null || echo unavailable)"
 """;
+    }
 
     private static NodeCapability DetectCapabilities(SshClient ssh, string sudo)
     {
@@ -705,6 +721,20 @@ exit 1
         }
 
         throw new InvalidOperationException("Agent service started, but no heartbeat was received by the platform.");
+    }
+
+    private async Task SyncManagedRegistryTrustAfterDeployAsync(Guid nodeId, CancellationToken token)
+    {
+        try
+        {
+            await _registry.ConfigureManagedRegistryTrustAsync(token);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex,
+                "Node {NodeId} was deployed, but managed Docker registry trust synchronization failed.",
+                nodeId);
+        }
     }
 
     private static string DetectPrivilegePrefix(SshClient ssh)

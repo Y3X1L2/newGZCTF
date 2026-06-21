@@ -18,6 +18,8 @@ public class CreateContainerRequest
     public List<string> AdditionalNetworkNames { get; set; } = [];
     public Dictionary<string, string> NetworkSubnets { get; set; } = [];
     public bool PublishPort { get; set; } = true;
+    public int? PreferredHostPort { get; set; }
+    public bool BypassPublicProxy { get; set; }
     public Dictionary<string, string> EnvironmentVariables { get; set; } = [];
     public string? StartCommand { get; set; }
     public string? HealthCheck { get; set; }

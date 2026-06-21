@@ -289,6 +289,7 @@ export interface PenetrationWorkspaceModel {
   gameId: number
   teamId: number
   teamName: string
+  targetHost: string
   status: PenetrationRuntimeStatus
   resetCount: number
   maxResetCount: number

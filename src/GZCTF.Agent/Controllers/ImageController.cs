@@ -29,6 +29,45 @@ public class ImageController : ControllerBase
         }
     }
 
+    [HttpPost("ensure-docker-registry")]
+    public async Task<IActionResult> EnsureDockerRegistry([FromBody] EnsureDockerRegistryRequest request,
+        CancellationToken token)
+    {
+        try
+        {
+            var port = Math.Clamp(request.Port, 1, 65535);
+            await _docker.EnsureRegistryAsync(port, token);
+            return Ok(new { message = "Docker registry is ready", port });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to ensure Docker registry on port {Port}", request.Port);
+            return StatusCode(500, new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("configure-docker-registry")]
+    public async Task<IActionResult> ConfigureDockerRegistry([FromBody] ConfigureDockerRegistryRequest request,
+        CancellationToken token)
+    {
+        try
+        {
+            var registries = request.Registries.Length > 0
+                ? request.Registries
+                : string.IsNullOrWhiteSpace(request.Registry)
+                    ? []
+                    : [request.Registry];
+
+            await _docker.ConfigureInsecureRegistriesAsync(registries, token);
+            return Ok(new { message = "Docker registry trust configured", registries });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to configure Docker registry trust");
+            return StatusCode(500, new { message = ex.Message });
+        }
+    }
+
     [HttpPost("download-vm")]
     public async Task<IActionResult> DownloadVmImage([FromBody] DownloadVmImageRequest request, CancellationToken token)
     {

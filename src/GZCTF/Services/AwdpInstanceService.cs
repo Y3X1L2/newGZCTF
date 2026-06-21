@@ -11,6 +11,7 @@ public class AwdpInstanceService(
     AppDbContext context,
     IAwdpRepository awdpRepository,
     IContainerManager containerManager,
+    DockerImageRegistryService dockerRegistry,
     IServiceProvider serviceProvider,
     ILogger<AwdpInstanceService> logger)
 {
@@ -270,9 +271,10 @@ public class AwdpInstanceService(
     async Task<DataContainer?> CreateContainer(AwdpService service, int teamId, string? networkName, string? flag,
         CancellationToken token)
     {
+        var image = await dockerRegistry.ResolveImageReferenceAsync(service.ImageName, token);
         var container = await containerManager.CreateContainerAsync(new ContainerConfig
         {
-            Image = service.ImageName,
+            Image = image,
             ExposedPort = service.ExposePort,
             CPUCount = 10,
             MemoryLimit = 512,

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NebulaMind Git - Repositories</title>
+    <link rel="stylesheet" href="/_shared/assets/nebulamind.css">
+    <link rel="stylesheet" href="/static/css/git.css">
+</head>
+<body>
+    <nav class="nm-nav">
+        <div class="nm-nav-brand">NebulaMind Git</div>
+        <div class="nm-nav-links">
+            <a href="/" class="active">Repositories</a>
+        </div>
+        <div class="nm-nav-spacer"></div>
+        <span class="nm-text-soft" style="font-size:12px;">Internal Git Service</span>
+    </nav>
+
+    <div class="nm-container">
+        <div class="nm-flex-between nm-mb-16">
+            <h1 style="font-size:24px;font-weight:700;">Repositories</h1>
+            <span class="nm-text-soft" style="font-size:13px;">{{ repos|length }} repositories</span>
+        </div>
+
+        {% if repos %}
+        <div class="nm-grid nm-grid-2">
+            {% for repo in repos %}
+            <div class="nm-card repo-card">
+                <h3>
+                    <a href="/nebulamind/{{ repo.name }}">
+                        <span class="file-type">&#128230;</span>{{ repo.name }}
+                    </a>
+                </h3>
+                <p>{{ repo.description }}</p>
+                <div class="repo-meta">
+                    <span class="nm-badge nm-badge-info">{{ repo.last_commit_date }}</span>
+                    <span class="repo-last-commit">{{ repo.last_commit_msg }}</span>
+                </div>
+                <div class="repo-clone">
+                    <code>git clone {{ git_service_url }}/nebulamind/{{ repo.name }}.git</code>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">No repositories found.</div>
+        {% endif %}
+    </div>
+
+    <footer class="nm-footer">
+        NebulaMind AI Corp - Internal Git Service &middot; Operations Zone
+    </footer>
+</body>
+</html>

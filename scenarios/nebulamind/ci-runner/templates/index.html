@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NebulaMind CI - 持续集成系统</title>
+<meta name="description" content="NebulaMind AI Corp 内部持续集成与部署系统">
+<link rel="stylesheet" href="/_shared/assets/nebulamind.css">
+<link rel="stylesheet" href="/static/css/ci.css">
+</head>
+<body>
+
+<!-- 顶部导航 -->
+<nav class="nm-nav">
+    <a href="/" class="nm-nav-brand">NebulaMind CI</a>
+    <div class="nm-nav-links">
+        <a href="/" class="active">项目</a>
+        <a href="/api/projects">API</a>
+    </div>
+    <div class="nm-nav-spacer"></div>
+    <span class="nm-text-soft" style="font-size:12px;">Runner: ci-runner-1 (alpine)</span>
+</nav>
+
+<!-- Hero -->
+<section class="ci-hero">
+    <h1>NebulaMind CI</h1>
+    <p>NebulaMind AI Corp 内部持续集成与部署系统。管理项目构建、测试与部署流水线。</p>
+</section>
+
+<div class="nm-container">
+    <!-- 统计卡片 -->
+    <div class="ci-stats">
+        <div class="ci-stat-card">
+            <div class="ci-stat-number">{{ stats.projects }}</div>
+            <div class="ci-stat-label">活跃项目</div>
+        </div>
+        <div class="ci-stat-card">
+            <div class="ci-stat-number" style="color:var(--nm-success);">{{ stats.success }}</div>
+            <div class="ci-stat-label">成功构建 (24h)</div>
+        </div>
+        <div class="ci-stat-card">
+            <div class="ci-stat-number" style="color:var(--nm-danger);">{{ stats.failed }}</div>
+            <div class="ci-stat-label">失败构建 (24h)</div>
+        </div>
+        <div class="ci-stat-card">
+            <div class="ci-stat-number" style="color:var(--nm-primary-soft);">{{ stats.total }}</div>
+            <div class="ci-stat-label">总构建数</div>
+        </div>
+    </div>
+
+    <!-- 项目列表 -->
+    <div class="nm-mb-16">
+        <h2 style="font-size:20px;margin-bottom:16px;">项目</h2>
+        <div class="nm-grid nm-grid-3">
+            {% for p in projects %}
+            <a href="/projects/{{ p.id }}" class="ci-project-card" style="text-decoration:none;color:inherit;">
+                <div class="ci-project-card-header">
+                    <div>
+                        <div class="ci-project-name">{{ p.name }}</div>
+                        <div class="ci-project-desc">{{ p.description }}</div>
+                    </div>
+                    <span class="nm-badge nm-badge-info">{{ p.language }}</span>
+                </div>
+                <div class="ci-project-meta">
+                    <span>&#127919; 默认分支: {{ p.default_branch }}</span>
+                    <span>&#128274; {{ p.variables|length }} 变量</span>
+                </div>
+                {% if p.last_build %}
+                <div class="ci-project-meta">
+                    <span>最近构建 #{{ p.last_build.id }}</span>
+                    <span class="ci-build-status ci-status-{{ p.last_build.status }}">{{ p.last_build.status }}</span>
+                    <span>{{ p.last_build.createdAt }}</span>
+                </div>
+                {% endif %}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- 最近构建 -->
+    <div class="nm-mt-32">
+        <div class="nm-flex-between nm-mb-16">
+            <h2 style="font-size:20px;">最近构建</h2>
+        </div>
+        <div class="nm-card" style="padding:0;overflow:hidden;">
+            <table class="nm-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>项目</th>
+                        <th>分支</th>
+                        <th>状态</th>
+                        <th>触发者</th>
+                        <th>耗时</th>
+                        <th>时间</th>
+                        <th>提交信息</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in recent_builds %}
+                    <tr style="cursor:pointer;" onclick="window.location='/builds/{{ b.id }}'">
+                        <td class="nm-text-mono" style="color:var(--nm-accent);">#{{ b.id }}</td>
+                        <td>{{ b.projectId }}</td>
+                        <td class="nm-text-mono">{{ b.ref }}</td>
+                        <td><span class="ci-build-status ci-status-{{ b.status }}">{{ b.status }}</span></td>
+                        <td class="nm-text-soft">{{ b.triggeredBy }}</td>
+                        <td class="nm-text-soft">{{ b.duration }}</td>
+                        <td class="nm-text-soft">{{ b.createdAt }}</td>
+                        <td class="nm-text-soft" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ b.message }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- API 文档 -->
+    <div class="nm-mt-32">
+        <div class="nm-card">
+            <h3>API 端点</h3>
+            <p class="nm-text-soft nm-mb-16" style="font-size:13px;">CI 系统提供 REST API 用于项目管理和构建触发。部分接口需要认证。</p>
+            <div class="ci-code-block">
+GET  /healthz                          - 健康检查
+GET  /api/projects                     - 项目列表
+GET  /api/projects/{id}                - 项目详情
+GET  /api/projects/{id}/variables      - 项目变量 (需要 token)
+POST /api/projects/{id}/trigger        - 触发构建 (需要 token)
+GET  /api/builds/{buildId}             - 构建详情
+GET  /api/builds/{buildId}/logs        - 构建日志
+            </div>
+            <p class="nm-text-soft nm-mt-8" style="font-size:12px;">
+                认证方式: Authorization: Bearer &lt;token&gt; 或 X-CI-Token: &lt;token&gt;
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- 页脚 -->
+<footer class="nm-footer">
+    <p>&copy; 2026 NebulaMind AI Corp. CI/CD Platform &nbsp;|&nbsp; ci@nebulamind.ai &nbsp;|&nbsp; Runner v2026.06.1</p>
+</footer>
+
+</body>
+</html>

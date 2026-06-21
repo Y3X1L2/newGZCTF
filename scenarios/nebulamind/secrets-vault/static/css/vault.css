@@ -1,0 +1,144 @@
+/* NebulaMind Secrets Vault - 管理界面样式 */
+/* 与 NebulaMind 企业品牌风格保持一致 */
+
+:root {
+  --vault-bg: #0a0e1a;
+  --vault-card: #131826;
+  --vault-border: #2a3142;
+  --vault-accent: #7c5cfc;
+  --vault-accent-dim: #4a3a9c;
+  --vault-text: #e0e4f0;
+  --vault-text-dim: #8892a8;
+  --vault-success: #4ade80;
+  --vault-warning: #fbbf24;
+  --vault-danger: #f87171;
+  --vault-mono: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  background: var(--vault-bg);
+  color: var(--vault-text);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+.vault-header {
+  background: linear-gradient(135deg, #131826 0%, #1a1f30 100%);
+  border-bottom: 1px solid var(--vault-border);
+  padding: 20px 40px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.vault-logo {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--vault-accent);
+  letter-spacing: 1px;
+}
+
+.vault-subtitle {
+  font-size: 13px;
+  color: var(--vault-text-dim);
+}
+
+.vault-container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+.vault-card {
+  background: var(--vault-card);
+  border: 1px solid var(--vault-border);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.vault-card h2 {
+  font-size: 18px;
+  color: var(--vault-accent);
+  margin-bottom: 12px;
+}
+
+.vault-card p {
+  color: var(--vault-text-dim);
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.vault-status {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.vault-status.healthy {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--vault-success);
+}
+
+.vault-status.sealed {
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--vault-danger);
+}
+
+.vault-endpoint {
+  font-family: var(--vault-mono);
+  font-size: 13px;
+  color: var(--vault-accent);
+  background: rgba(124, 92, 252, 0.08);
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+
+.vault-method {
+  font-family: var(--vault-mono);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.vault-method.get { background: rgba(74, 222, 128, 0.15); color: var(--vault-success); }
+.vault-method.post { background: rgba(251, 191, 36, 0.15); color: var(--vault-warning); }
+
+.vault-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.vault-table th {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--vault-border);
+  color: var(--vault-text-dim);
+  font-weight: 600;
+}
+
+.vault-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(42, 49, 66, 0.5);
+  font-family: var(--vault-mono);
+}
+
+.vault-footer {
+  text-align: center;
+  padding: 20px;
+  color: var(--vault-text-dim);
+  font-size: 12px;
+  border-top: 1px solid var(--vault-border);
+  margin-top: 40px;
+}

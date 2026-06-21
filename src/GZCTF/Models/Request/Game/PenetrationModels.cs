@@ -14,7 +14,7 @@ public enum PenetrationFogState
 public class PenetrationConfigModel
 {
     public int GameId { get; set; }
-    public string BaseCidr { get; set; } = "10.60.0.0/12";
+    public string BaseCidr { get; set; } = "10.60.0.0/16";
     public int TeamSubnetPrefix { get; set; } = 24;
     public int NetworkSubnetPrefix { get; set; } = 28;
     public int MaxResetCount { get; set; } = 3;
@@ -226,6 +226,7 @@ public class PenetrationWorkspaceModel
     public int GameId { get; set; }
     public int TeamId { get; set; }
     public string TeamName { get; set; } = string.Empty;
+    public string TargetHost { get; set; } = string.Empty;
     public PenetrationRuntimeStatus Status { get; set; }
     public int ResetCount { get; set; }
     public int MaxResetCount { get; set; }

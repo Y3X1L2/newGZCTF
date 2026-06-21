@@ -1,0 +1,7 @@
+# NebulaMind AI Portal - robots.txt
+# https://www.nebulamind.ai/robots.txt
+
+User-agent: *
+Disallow: /resources/archive/
+
+# Sitemap: https://www.nebulamind.ai/sitemap.xml

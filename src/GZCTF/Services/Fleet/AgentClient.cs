@@ -22,7 +22,7 @@ public class AgentClient
     {
         var client = _httpClientFactory.CreateClient("Agent");
         client.BaseAddress = new Uri($"http://{node.HostAddress}:{node.AgentPort}");
-        client.Timeout = TimeSpan.FromSeconds(30);
+        client.Timeout = TimeSpan.FromMinutes(10);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", node.AuthToken);
         return client;
     }
@@ -36,8 +36,25 @@ public class AgentClient
 
     public async Task<AgentCreateContainerResponse?> CreateContainerAsync(Guid nodeId, ContainerConfig config, CancellationToken token)
     {
+        try
+        {
+            return await CreateContainerOrThrowAsync(nodeId, config, token);
+        }
+        catch (Exception ex) when (ex is AgentClientException or HttpRequestException or TaskCanceledException)
+        {
+            _logger.LogWarning(ex,
+                "Agent create container failed on node {NodeId} for image {Image}",
+                nodeId, config.Image);
+            return null;
+        }
+    }
+
+    public async Task<AgentCreateContainerResponse> CreateContainerOrThrowAsync(Guid nodeId, ContainerConfig config,
+        CancellationToken token)
+    {
         var node = await GetNodeAsync(nodeId, token);
-        if (node is null) return null;
+        if (node is null)
+            throw new AgentClientException($"Fleet node {nodeId} was not found.");
 
         var client = BuildClient(node);
         var body = JsonSerializer.Serialize(new
@@ -52,6 +69,8 @@ public class AgentClient
             config.NetworkSubnets,
             config.NetworkAttachments,
             config.PublishPort,
+            config.PreferredHostPort,
+            config.BypassPublicProxy,
             config.EnvironmentVariables,
             config.StartCommand,
             config.HealthCheck,
@@ -60,17 +79,35 @@ public class AgentClient
             config.RemoveDefaultRoute,
             config.EnableIpForwarding
         });
-        var response = await client.PostAsync("/api/containers/create", new StringContent(body, Encoding.UTF8, "application/json"), token);
+        HttpResponseMessage response;
+        try
+        {
+            response = await client.PostAsync("/api/containers/create",
+                new StringContent(body, Encoding.UTF8, "application/json"), token);
+        }
+        catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
+        {
+            throw new AgentClientException(
+                $"Agent request timed out on node {node.Name} ({node.HostAddress}) while creating image {config.Image}.",
+                ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new AgentClientException(
+                $"Agent request failed on node {node.Name} ({node.HostAddress}) while creating image {config.Image}: {ex.Message}",
+                ex);
+        }
 
         if (!response.IsSuccessStatusCode)
         {
             var responseBody = await response.Content.ReadAsStringAsync(token);
-            _logger.LogWarning("Agent create container failed on node {NodeId}: {Status}. Body: {Body}",
-                nodeId, response.StatusCode, TrimResponseBody(responseBody));
-            return null;
+            throw new AgentClientException(
+                $"Agent create container failed on node {node.Name} ({node.HostAddress}) for image {config.Image}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
         }
 
-        return await response.Content.ReadFromJsonAsync<AgentCreateContainerResponse>(token);
+        var result = await response.Content.ReadFromJsonAsync<AgentCreateContainerResponse>(token);
+        return result ?? throw new AgentClientException(
+            $"Agent returned an empty container response on node {node.Name} ({node.HostAddress}) for image {config.Image}.");
     }
 
     public async Task DestroyContainerAsync(Guid nodeId, string containerId, CancellationToken token)
@@ -318,6 +355,48 @@ public class AgentClient
         }
     }
 
+    public async Task EnsureDockerRegistryAsync(Guid nodeId, int port, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null)
+            throw new InvalidOperationException($"Fleet node {nodeId} was not found.");
+
+        var client = BuildClient(node);
+        var body = JsonSerializer.Serialize(new { port = Math.Clamp(port, 1, 65535) });
+        var response = await client.PostAsync("/api/images/ensure-docker-registry",
+            new StringContent(body, Encoding.UTF8, "application/json"), token);
+        if (!response.IsSuccessStatusCode)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync(token);
+            throw new InvalidOperationException(
+                $"Agent Docker registry bootstrap failed on node {nodeId}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+        }
+    }
+
+    public async Task ConfigureDockerRegistryAsync(Guid nodeId, string registry, CancellationToken token)
+    {
+        await ConfigureDockerRegistriesAsync(nodeId, [registry], token);
+    }
+
+    public async Task ConfigureDockerRegistriesAsync(Guid nodeId, IReadOnlyCollection<string> registries,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null)
+            throw new InvalidOperationException($"Fleet node {nodeId} was not found.");
+
+        var client = BuildClient(node);
+        var body = JsonSerializer.Serialize(new { registries });
+        var response = await client.PostAsync("/api/images/configure-docker-registry",
+            new StringContent(body, Encoding.UTF8, "application/json"), token);
+        if (!response.IsSuccessStatusCode)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync(token);
+            throw new InvalidOperationException(
+                $"Agent Docker registry trust configuration failed on node {nodeId}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+        }
+    }
+
     public async Task DownloadVmImageAsync(Guid nodeId, int templateId, string hash, CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
@@ -358,6 +437,17 @@ public class AgentCreateContainerResponse
     public string IP { get; set; } = string.Empty;
     public int Port { get; set; }
     public int PublicPort { get; set; }
+}
+
+public class AgentClientException : Exception
+{
+    public AgentClientException(string message) : base(message)
+    {
+    }
+
+    public AgentClientException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
 }
 
 public class AgentCreateVmRequest

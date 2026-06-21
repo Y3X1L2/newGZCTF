@@ -29,7 +29,9 @@ public class WorkerNode
     [MaxLength(512)] public string? Labels { get; set; }
     public bool IsSchedulable { get; set; } = true;
     public bool IsLocal { get; set; }
+    public bool IsStorageNode { get; set; }
     public int AgentPort { get; set; } = 5001;
+    public int RegistryPort { get; set; } = 5000;
 
     [Timestamp] public uint ConcurrencyToken { get; set; }
 

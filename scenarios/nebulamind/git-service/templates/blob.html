@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ path }} - {{ repo }} - NebulaMind Git</title>
+    <link rel="stylesheet" href="/_shared/assets/nebulamind.css">
+    <link rel="stylesheet" href="/static/css/git.css">
+</head>
+<body>
+    <nav class="nm-nav">
+        <div class="nm-nav-brand">NebulaMind Git</div>
+        <div class="nm-nav-links">
+            <a href="/">Repositories</a>
+            <a href="/nebulamind/{{ repo }}">{{ repo }}</a>
+        </div>
+    </nav>
+
+    <div class="nm-container">
+        <div class="breadcrumb">
+            <a href="/">Repositories</a>
+            <span class="breadcrumb-sep">/</span>
+            <a href="/nebulamind/{{ repo }}">{{ repo }}</a>
+            <span class="breadcrumb-sep">/</span>
+            <a href="/nebulamind/{{ repo }}/blob/{{ ref }}">blob</a>
+            <span class="breadcrumb-sep">/</span>
+            <a href="/nebulamind/{{ repo }}/blob/{{ ref }}">{{ ref_short }}</a>
+            <span class="breadcrumb-sep">/</span>
+            <span>{{ path }}</span>
+        </div>
+
+        <div class="nm-flex-between nm-mb-16">
+            <h1 style="font-size:20px;font-weight:600;font-family:var(--nm-mono);">{{ path }}</h1>
+            <div class="nm-flex" style="gap:8px;">
+                <a class="nm-btn" href="/nebulamind/{{ repo }}/raw/{{ ref }}/{{ path }}">Raw</a>
+                <a class="nm-btn" href="/nebulamind/{{ repo }}/commits">History</a>
+            </div>
+        </div>
+
+        <div class="nm-card">
+            <div class="nm-flex-between nm-mb-16" style="padding-bottom:12px;border-bottom:1px solid var(--nm-border);">
+                <div>
+                    <span class="nm-text-soft" style="font-size:12px;">Commit:</span>
+                    <a href="/nebulamind/{{ repo }}/commit/{{ ref }}" class="commit-sha-full" style="font-size:12px;">{{ ref_short }}</a>
+                </div>
+                <div>
+                    <span class="nm-text-soft" style="font-size:12px;">{{ size }} bytes</span>
+                    {% if is_binary %}
+                    <span class="nm-badge nm-badge-warning" style="margin-left:8px;">Binary</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% if is_binary %}
+            <div class="empty-state">Binary file not displayed.</div>
+            {% else %}
+            <pre class="blob-content">{{ content }}</pre>
+            {% endif %}
+        </div>
+    </div>
+
+    <footer class="nm-footer">
+        NebulaMind AI Corp - Internal Git Service &middot; Operations Zone
+    </footer>
+</body>
+</html>

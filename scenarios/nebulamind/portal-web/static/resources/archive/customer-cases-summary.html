@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>客户案例摘要 - NebulaMind AI</title>
+<link rel="stylesheet" href="/static/css/portal.css">
+</head>
+<body>
+
+<!--
+  Export Metadata
+  Source: internal-crm.nebulamind.local/reports/customer-cases-2025
+  Exported by: sales-ops-bot@nebulamind-internal
+  Review status: INTERNAL
+-->
+
+<nav class="nm-nav">
+    <a href="/" class="nm-nav-brand">NebulaMind</a>
+    <div class="nm-nav-links">
+        <a href="/">首页</a>
+        <a href="/products">产品</a>
+        <a href="/customers">客户案例</a>
+    </div>
+    <div class="nm-nav-spacer"></div>
+    <span class="nm-badge nm-badge-warning">内部文档</span>
+</nav>
+
+<div class="nm-whitepaper">
+
+<div style="text-align:center;padding:32px 0;border-bottom:2px solid var(--nm-primary);margin-bottom:32px;">
+    <h1 style="font-size:28px;border:none;">客户案例摘要报告</h1>
+    <p style="color:var(--nm-text-soft);">2025 年度 &middot; 内部销售运营文档</p>
+</div>
+
+<h2>概述</h2>
+<p>
+    本文档汇总了 2025 年度 NebulaMind AI 的主要客户案例与实施成果，
+    供销售团队在客户沟通中参考使用。请勿将此文档直接发送给外部客户。
+</p>
+
+<h2>金融行业</h2>
+
+<h3>案例 1：某头部券商 - 投研知识库</h3>
+<table class="nm-table">
+    <tbody>
+        <tr><th style="width:160px;">客户名称</th><td>某头部券商（NDA 保护，具体名称见 CRM 系统）</td></tr>
+        <tr><th>行业</th><td>金融 / 证券</td></tr>
+        <tr><th>部署模式</th><td>私有化部署</td></tr>
+        <tr><th>租户 ID</th><td><code>tenant_001</code></td></tr>
+        <tr><th>实施周期</th><td>3 个月</td></tr>
+        <tr><th>文档规模</th><td>12 万份研报 / 8TB</td></tr>
+        <tr><th>核心成果</th><td>检索效率提升 300%，合规审核周期缩短 60%</td></tr>
+        <tr><th>使用产品</th><td>Knowledge Console + Chat Assistant + Doc Intelligence</td></tr>
+        <tr><th>API 集成</th><td>通过 <code>/api/v1/console/session/bootstrap</code> 实现 SSO 免登</td></tr>
+    </tbody>
+</table>
+
+<h3>案例 2：某城商行 - 智能客服</h3>
+<table class="nm-table">
+    <tbody>
+        <tr><th style="width:160px;">客户名称</th><td>某城商行</td></tr>
+        <tr><th>行业</th><td>金融 / 银行</td></tr>
+        <tr><th>部署模式</th><td>混合云部署</td></tr>
+        <tr><th>租户 ID</th><td><code>tenant_007</code></td></tr>
+        <tr><th>实施周期</th><td>2 个月</td></tr>
+        <tr><th>核心成果</th><td>客服首响时间降低 70%，客户满意度提升 25%</td></tr>
+    </tbody>
+</table>
+
+<h2>制造行业</h2>
+
+<h3>案例 3：某新能源车企 - 产线技术问答</h3>
+<table class="nm-table">
+    <tbody>
+        <tr><th style="width:160px;">客户名称</th><td>某新能源车企</td></tr>
+        <tr><th>行业</th><td>制造 / 新能源汽车</td></tr>
+        <tr><th>部署模式</th><td>私有化部署</td></tr>
+        <tr><th>租户 ID</th><td><code>tenant_012</code></td></tr>
+        <tr><th>文档规模</th><td>20 万份技术文档与维修手册</td></tr>
+        <tr><th>核心成果</th><td>问题解决时间降低 45%，问答准确率 98%</td></tr>
+    </tbody>
+</table>
+
+<h2>政务行业</h2>
+
+<h3>案例 4：某省级政务云 - 政策智能咨询</h3>
+<table class="nm-table">
+    <tbody>
+        <tr><th style="width:160px;">客户名称</th><td>某省级大数据局</td></tr>
+        <tr><th>行业</th><td>政务</td></tr>
+        <tr><th>部署模式</th><td>私有化部署（等保三级）</td></tr>
+        <tr><th>租户 ID</th><td><code>tenant_024</code></td></tr>
+        <tr><th>覆盖范围</th><td>12 个委办局</td></tr>
+        <tr><th>日均咨询量</th><td>8 万次</td></tr>
+    </tbody>
+</table>
+
+<h2>技术实施要点</h2>
+<p>
+    在多个客户实施过程中，我们总结了以下最佳实践：
+</p>
+<ul>
+    <li><strong>SSO 集成</strong>：所有客户均通过 SSO 实现统一身份认证。门户与 Console API 共用 SSO 客户端
+        （<code>nm-portal-sso-prod</code>），用户在门户登录后可无缝访问控制台。</li>
+    <li><strong>API 域名规划</strong>：建议客户使用独立子域名部署 Console API（如
+        <code>console.nebulamind.ai</code>），与门户（<code>www.nebulamind.ai</code>）分离部署。</li>
+    <li><strong>租户隔离</strong>：每个客户分配独立租户 ID，数据在数据库、向量库、对象存储三层隔离。</li>
+    <li><strong>模型选择</strong>：金融行业客户倾向使用私有化部署的开源模型（如 Qwen、ChatGLM），
+        其他行业客户多使用混合模型策略。</li>
+</ul>
+
+<h2>客户反馈摘录</h2>
+<blockquote>
+    "NebulaMind 帮助我们将分散在十几个系统中的研报整合到一个平台，
+    分析师现在可以在 3 秒内找到需要的研报，而不是花 10 分钟在各个系统间切换。"
+    <br><span class="nm-text-soft">—— 某券商研究总监</span>
+</blockquote>
+<blockquote>
+    "产线工程师现在可以直接用自然语言提问，系统会从 20 万份技术文档中找到答案。
+    这大大缩短了故障排查时间。"
+    <br><span class="nm-text-soft">—— 某车企 IT 负责人</span>
+</blockquote>
+
+<div class="doc-meta">
+    <p><strong>文档信息</strong></p>
+    <p>标题：客户案例摘要报告</p>
+    <p>版本：2025 年度版</p>
+    <p>发布日期：2025-12-20</p>
+    <p>作者：销售运营团队 (sales-ops@nebulamind.ai)</p>
+    <p>保密级别：内部使用（INTERNAL ONLY）</p>
+    <p>归档路径：/resources/archive/customer-cases-summary.html</p>
+</div>
+
+</div>
+
+<footer class="nm-footer">
+    <p>&copy; 2025 NebulaMind AI Corp. All rights reserved. &nbsp;|&nbsp; Internal Document - Do Not Distribute</p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ sha_short }} - {{ repo }} - NebulaMind Git</title>
+    <link rel="stylesheet" href="/_shared/assets/nebulamind.css">
+    <link rel="stylesheet" href="/static/css/git.css">
+</head>
+<body>
+    <nav class="nm-nav">
+        <div class="nm-nav-brand">NebulaMind Git</div>
+        <div class="nm-nav-links">
+            <a href="/">Repositories</a>
+            <a href="/nebulamind/{{ repo }}">{{ repo }}</a>
+            <a href="/nebulamind/{{ repo }}/commits">Commits</a>
+        </div>
+    </nav>
+
+    <div class="nm-container">
+        <div class="breadcrumb">
+            <a href="/">Repositories</a>
+            <span class="breadcrumb-sep">/</span>
+            <a href="/nebulamind/{{ repo }}">{{ repo }}</a>
+            <span class="breadcrumb-sep">/</span>
+            <a href="/nebulamind/{{ repo }}/commits">Commits</a>
+            <span class="breadcrumb-sep">/</span>
+            <span>{{ sha_short }}</span>
+        </div>
+
+        <div class="commit-header">
+            <h1>{{ commit.message }}</h1>
+            <div class="commit-meta">
+                <span class="commit-sha-full">{{ commit.sha }}</span>
+                <span>&middot; {{ commit.author }} &lt;{{ commit.email }}&gt;</span>
+                <span>&middot; {{ commit.date }}</span>
+            </div>
+            {% if commit_parents %}
+            <div class="commit-meta nm-mt-8">
+                <span>Parent:</span>
+                {% for parent in commit_parents %}
+                <a href="/nebulamind/{{ repo }}/commit/{{ parent }}" class="commit-sha-full">{{ parent[:8] }}</a>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="nm-card nm-mb-16">
+            <h3>Changed Files <span class="nm-text-soft" style="font-size:12px;font-weight:normal;">({{ stats.files }} files, +{{ stats.insertions }} -{{ stats.deletions }})</span></h3>
+            {% if changed_files %}
+            <ul class="file-tree">
+                {% for file in changed_files %}
+                <li>
+                    <span class="file-mode">{{ file.status }}</span>
+                    <span class="file-type">{{ file.icon }}</span>
+                    <span class="file-name">
+                        <a href="/nebulamind/{{ repo }}/blob/{{ sha }}/{{ file.path }}">{{ file.path }}</a>
+                    </span>
+                    <span class="file-size">
+                        {% if file.additions is defined %}+{{ file.additions }} -{{ file.deletions }}{% endif %}
+                    </span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+
+        <div class="nm-card">
+            <h3>Diff</h3>
+            <pre class="diff-content">{{ diff }}</pre>
+        </div>
+    </div>
+
+    <footer class="nm-footer">
+        NebulaMind AI Corp - Internal Git Service &middot; Operations Zone
+    </footer>
+</body>
+</html>

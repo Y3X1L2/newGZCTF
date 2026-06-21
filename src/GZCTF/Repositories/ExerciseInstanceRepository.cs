@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
+using GZCTF.Services;
 using GZCTF.Services.Cache;
 using GZCTF.Services.Container.Manager;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,7 @@ public class ExerciseInstanceRepository(
     IContainerManager service,
     IContainerRepository containerRepository,
     IOptionsSnapshot<ContainerPolicy> containerPolicy,
+    DockerImageRegistryService dockerRegistry,
     ILogger<ExerciseInstanceRepository> logger,
     IStringLocalizer<Program> localizer
 ) : RepositoryBase(context),
@@ -182,13 +184,14 @@ public class ExerciseInstanceRepository(
 
         await Context.Entry(instance).Reference(e => e.FlagContext).LoadAsync(token);
 
+        var image = await dockerRegistry.ResolveImageReferenceAsync(instance.Exercise.ContainerImage, token);
         var container = await service.CreateContainerAsync(new ContainerConfig
         {
             TeamId = "exercise",
             UserId = user.Id,
             ChallengeId = instance.ExerciseId,
             Flag = instance.FlagContext?.Flag, // static challenge has no specific flag
-            Image = instance.Exercise.ContainerImage,
+            Image = image,
             CPUCount = instance.Exercise.CPUCount ?? 1,
             MemoryLimit = instance.Exercise.MemoryLimit ?? 64,
             StorageLimit = instance.Exercise.StorageLimit ?? 256,

@@ -21,15 +21,20 @@ public class LocalNodeRegistrar : IHostedService
 
         var publicEntry = _config["ContainerProvider:PublicEntry"] ?? "localhost";
         var capabilities = await DetectLocalCapabilitiesAsync(token);
+        var localSchedulable = _config.GetValue("Agent:LocalNodeSchedulable", false);
         var localNode = await context.WorkerNodes.FirstOrDefaultAsync(n => n.IsLocal, token);
 
         if (localNode is not null)
         {
             localNode.HostAddress = publicEntry;
             localNode.Capabilities = capabilities;
+            localNode.IsSchedulable = localSchedulable;
             localNode.Status = NodeStatus.Online;
             localNode.LastHeartbeat = DateTimeOffset.UtcNow;
+            if (!await context.WorkerNodes.AnyAsync(n => n.IsStorageNode, token))
+                localNode.IsStorageNode = true;
             await context.SaveChangesAsync(token);
+            await EnsureLocalStorageRegistryAsync(scope.ServiceProvider, localNode.IsStorageNode, capabilities, token);
             _logger.LogInformation("Refreshed local server node: {Id}, capabilities={Capabilities}",
                 localNode.Id, capabilities);
             return;
@@ -42,13 +47,15 @@ public class LocalNodeRegistrar : IHostedService
             AuthToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)),
             Capabilities = capabilities,
             IsLocal = true,
-            IsSchedulable = true,
+            IsStorageNode = !await context.WorkerNodes.AnyAsync(n => n.IsStorageNode, token),
+            IsSchedulable = localSchedulable,
             Status = NodeStatus.Online,
             LastHeartbeat = DateTimeOffset.UtcNow,
         };
 
         context.WorkerNodes.Add(node);
         await context.SaveChangesAsync(token);
+        await EnsureLocalStorageRegistryAsync(scope.ServiceProvider, node.IsStorageNode, capabilities, token);
         _logger.LogInformation("Registered local server node: {Id}, capabilities={Capabilities}",
             node.Id, capabilities);
     }
@@ -80,6 +87,24 @@ public class LocalNodeRegistrar : IHostedService
         _logger.LogWarning("Local KVM capability is unavailable: {Error}",
             string.IsNullOrWhiteSpace(result.Error) ? result.Output : result.Error);
         return false;
+    }
+
+    private async Task EnsureLocalStorageRegistryAsync(IServiceProvider services, bool isStorageNode,
+        NodeCapability capabilities, CancellationToken token)
+    {
+        if (!isStorageNode || (capabilities & NodeCapability.Docker) != NodeCapability.Docker)
+            return;
+
+        try
+        {
+            var registry = services.GetRequiredService<DockerImageRegistryService>();
+            await registry.EnsureActiveRegistryAsync(token);
+            await registry.RepairLegacyLocalRegistryImageReferencesAsync(token);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Failed to prepare the local Docker image storage registry.");
+        }
     }
 
     private static async Task<(int ExitCode, string Output, string Error)> RunCommandAsync(

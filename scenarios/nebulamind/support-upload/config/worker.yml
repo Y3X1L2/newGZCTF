@@ -1,0 +1,84 @@
+# NebulaMind Document Worker - Queue Configuration
+# ============================================================
+# WARNING: Internal configuration file - NOT for client access
+# This file is read by document-worker service to connect to
+# the message queue and internal service endpoints.
+# ============================================================
+# Generated: 2026-06-19
+# Owner: platform-ops@nebulamind.ai
+# ============================================================
+
+queue:
+  # Redis-compatible message broker (cache-broker service in Business zone)
+  broker:
+    host: __NM_CACHE_BROKER_HOST__
+    port: 6379
+    db: 2
+    password: ${REDIS_PASSWORD:-nm_worker_dev_2026}
+    pool_size: 8
+    connect_timeout: 5s
+    io_timeout: 10s
+    retry_backoff: exponential
+    retry_max_delay: 30s
+
+  # Task types consumed by document-worker
+  task_types:
+    - document-parse
+    - document-ocr
+    - document-embed
+    - document-summarize
+    - document-classify
+    - document-extract
+
+  consumer_group: document-workers
+  max_retries: 3
+  visibility_timeout: 300s
+  dead_letter_queue: document-dlq
+  max_payload_size: 52428800
+
+worker:
+  # Low-privilege worker token for task status queries
+  # NOTE: Can be used to query task status on the platform-injected document-worker address.
+  # Scope: read-only task status, no task creation/deletion
+  # Rotation: quarterly via vault://secret/nebulamind/worker-tokens
+  token: nm_worker_token_8f3a9b2e5c1d4a6f
+  concurrency: 4
+  poll_interval: 2s
+  heartbeat_interval: 30s
+  graceful_shutdown_timeout: 60s
+
+  # Internal service endpoints (Business network segment)
+  endpoints:
+    parse: __NM_DOCUMENT_WORKER_URL__/api/parse
+    status: __NM_DOCUMENT_WORKER_URL__/api/tasks/status
+    health: __NM_DOCUMENT_WORKER_URL__/healthz
+    ai_console: __NM_AI_CONSOLE_API_URL__/healthz
+    metadata: __NM_AI_CONSOLE_API_URL__/internal/metadata
+
+  # Resource limits per worker process
+  limits:
+    memory: 512Mi
+    cpu: "1.0"
+    temp_storage: 2Gi
+    parse_timeout: 120s
+
+# Logging configuration
+logging:
+  level: INFO
+  format: json
+  output: stdout
+  slow_request_threshold: 5s
+  redact_fields:
+    - password
+    - token
+    - authorization
+
+# Diagnostic configuration (used by CI integration tests)
+diagnostic:
+  enabled: true
+  # Integration test flag - verifies queue connectivity end-to-end
+  # Used by CI pipeline to confirm worker <-> broker <-> parser chain
+  test_flag: __NM_FLAG_B2__
+  last_run: "2026-06-19T08:00:00Z"
+  last_status: passed
+  alert_channel: "#platform-ops-alerts"

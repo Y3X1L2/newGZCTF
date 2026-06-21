@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>解析报告 {{ task.taskId }} - NebulaMind 客户支持</title>
+<link rel="stylesheet" href="/_shared/assets/nebulamind.css">
+<link rel="stylesheet" href="/static/css/upload.css">
+</head>
+<body>
+
+<!-- 顶部导航 -->
+<nav class="nm-nav">
+    <a href="/" class="nm-nav-brand">NebulaMind Support</a>
+    <div class="nm-nav-links">
+        <a href="/">提交工单</a>
+        <a href="/tickets">工单列表</a>
+    </div>
+</nav>
+
+<div class="nm-container">
+    <a href="/" class="nm-btn nm-mb-16">&larr; 返回</a>
+
+    <!-- 工单基本信息 -->
+    <div class="nm-card nm-mb-16">
+        <div class="nm-flex-between">
+            <h1 style="font-size:20px;">解析报告 <span class="nm-text-mono" style="color:var(--nm-accent);">{{ task.taskId }}</span></h1>
+            <span class="nm-badge nm-badge-success">{{ task.status }}</span>
+        </div>
+        <div class="nm-grid nm-grid-2 nm-mt-16">
+            <div>
+                <p><span class="nm-text-soft">客户:</span> {{ task.customer }}</p>
+                <p><span class="nm-text-soft">工单标题:</span> {{ task.title }}</p>
+            </div>
+            <div>
+                <p><span class="nm-text-soft">创建时间:</span> {{ task.createdAt }}</p>
+                <p><span class="nm-text-soft">完成时间:</span> {{ task.completedAt }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 文件信息 -->
+    <div class="nm-card nm-mb-16">
+        <h3>文件信息</h3>
+        <table class="nm-table nm-mt-8">
+            <tr><th style="width:160px;">文件名</th><td class="nm-text-mono">{{ task.file.name }}</td></tr>
+            <tr><th>MIME 类型</th><td class="nm-text-mono">{{ task.file.mime }}</td></tr>
+            <tr><th>文件大小</th><td>{{ task.file.size }} bytes</td></tr>
+        </table>
+    </div>
+
+    <!-- 解析摘要 -->
+    <div class="nm-card nm-mb-16">
+        <h3>解析摘要</h3>
+        <div class="nm-grid nm-grid-4 nm-mt-16">
+            <div>
+                <p class="nm-text-soft" style="font-size:11px;">总文件数</p>
+                <p class="stat-number">{{ task.summary.totalFiles }}</p>
+            </div>
+            <div>
+                <p class="nm-text-soft" style="font-size:11px;">已解析</p>
+                <p class="stat-number" style="color:var(--nm-success);">{{ task.summary.parsedFiles }}</p>
+            </div>
+            <div>
+                <p class="nm-text-soft" style="font-size:11px;">失败</p>
+                <p class="stat-number" style="color:var(--nm-danger);">{{ task.summary.failedFiles }}</p>
+            </div>
+            <div>
+                <p class="nm-text-soft" style="font-size:11px;">耗时</p>
+                <p class="stat-number">{{ task.summary.duration }}</p>
+            </div>
+        </div>
+        <p class="nm-mt-16"><span class="nm-text-soft">结果:</span>
+            <span class="nm-badge nm-badge-warning">{{ task.summary.result }}</span>
+        </p>
+    </div>
+
+    <!-- 解析日志 -->
+    <div class="nm-card nm-mb-16">
+        <div class="nm-flex-between">
+            <h3>解析日志</h3>
+            <a href="/download?file={{ task.taskId }}/report.json" class="nm-btn">下载报告</a>
+        </div>
+        <pre class="upload-log nm-mt-16">{{ task.parseLog }}</pre>
+    </div>
+
+    <!-- 产物文件 -->
+    {% if task.artifacts %}
+    <div class="nm-card">
+        <h3>产物文件</h3>
+        <table class="nm-table nm-mt-8">
+            <thead><tr><th>文件名</th><th>大小</th><th>路径</th></tr></thead>
+            <tbody>
+                {% for a in task.artifacts %}
+                <tr>
+                    <td class="nm-text-mono">{{ a.name }}</td>
+                    <td>{{ a.size }}</td>
+                    <td class="nm-text-mono nm-text-soft">{{ a.path }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+<!-- 页脚 -->
+<footer class="nm-footer">
+    <div class="nm-flex" style="justify-content:center;gap:32px;flex-wrap:wrap;">
+        <a href="/">提交工单</a>
+        <a href="/tickets">工单列表</a>
+    </div>
+    <p class="nm-mt-8">&copy; 2026 NebulaMind AI Corp. 客户支持中心 &nbsp;|&nbsp; support@nebulamind.ai</p>
+</footer>
+
+</body>
+</html>

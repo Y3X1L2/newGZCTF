@@ -8,6 +8,7 @@ import {
   Modal,
   Progress,
   Select,
+  SimpleGrid,
   Stack,
   Table,
   Text,
@@ -18,11 +19,13 @@ import {
 import { notifications } from '@mantine/notifications'
 import {
   mdiArchiveArrowUpOutline,
+  mdiDatabaseOutline,
   mdiCubeOutline,
   mdiDeleteOutline,
   mdiDocker,
   mdiFileImportOutline,
   mdiMagnify,
+  mdiSwapHorizontal,
   mdiRefresh,
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
@@ -60,6 +63,41 @@ interface DockerRegistryInfo {
   address: string
   namespace: string
   maxUploadSizeGb: number
+  storageNodeId?: string | null
+  storageNodeName?: string | null
+  storageNodeHost?: string | null
+  storageNodeRegistryPort?: number | null
+  storageNodeIsLocal?: boolean
+  migrationTask?: DockerRegistryMigrationTask | null
+}
+
+interface DockerRegistryMigrationTask {
+  id: string
+  targetNodeId: string
+  targetNodeName?: string | null
+  sourceRegistry: string
+  targetRegistry: string
+  status: string
+  totalItems: number
+  completedItems: number
+  failedItems: number
+  message?: string | null
+  createdAt: string
+  updatedAt: string
+  completedAt?: string | null
+  items?: DockerRegistryMigrationItem[]
+}
+
+interface DockerRegistryMigrationItem {
+  id: string
+  imageTemplateId: number
+  sourceImage: string
+  targetImage: string
+  sourceDigest?: string | null
+  targetDigest?: string | null
+  status: string
+  retryCount: number
+  errorMessage?: string | null
 }
 
 async function fetchAllImageTemplates() {
@@ -481,9 +519,121 @@ function MetricTile({ label, value, tone }: { label: string; value: number; tone
   return <YinyuMetricTile label={label} value={value} detail={tone} tone={toneMap[tone] ?? 'neutral'} />
 }
 
+function migrationStatusMeta(status?: string | null) {
+  const key = normalizeKey(status)
+  if (key === 'completed') return { label: '已完成', color: 'green' }
+  if (key === 'running') return { label: '同步中', color: 'violet' }
+  if (key === 'pending') return { label: '等待中', color: 'blue' }
+  if (key === 'failed') return { label: '有失败项', color: 'red' }
+  if (key === 'cancelled') return { label: '已取消', color: 'gray' }
+  return { label: status || '未知', color: 'gray' }
+}
+
+function DockerRegistryPanel({ registry }: { registry?: DockerRegistryInfo }) {
+  const task = registry?.migrationTask ?? null
+  const status = migrationStatusMeta(task?.status)
+  const total = Math.max(0, task?.totalItems ?? 0)
+  const completed = Math.max(0, task?.completedItems ?? 0)
+  const failed = Math.max(0, task?.failedItems ?? 0)
+  const progress = total > 0 ? Math.min(100, ((completed + failed) / total) * 100) : task ? 100 : 0
+  const isRunning = task && ['pending', 'running'].includes(normalizeKey(task.status))
+  const failedItems = task?.items?.filter((item) => normalizeKey(item.status) === 'failed').slice(0, 4) ?? []
+
+  return (
+    <YinyuPanel p="md" className="admin-panel">
+      <Stack gap="md">
+        <Group justify="space-between" align="flex-start" gap="md">
+          <Stack gap={4}>
+            <Group gap="xs">
+              <Icon path={mdiDatabaseOutline} size={0.92} />
+              <Title order={3}>镜像存储</Title>
+            </Group>
+            <Text size="sm" className="yy-readable-text">
+              Docker 镜像统一推送到当前存储节点；切换存储节点时会先同步并校验镜像，全部成功后才会更新模板地址。
+            </Text>
+          </Stack>
+          <Badge color={registry?.enabled ? 'teal' : 'red'} variant="light" className="yy-semantic-badge">
+            {registry?.enabled ? '可用' : '未配置'}
+          </Badge>
+        </Group>
+
+        <SimpleGrid cols={{ base: 1, md: 3 }} spacing="sm">
+          <Stack gap={2}>
+            <Text size="xs" className="yy-readable-text">
+              当前存储节点
+            </Text>
+            <Text fw={800} truncate title={registry?.storageNodeName ?? undefined}>
+              {registry?.storageNodeName ?? '未绑定节点'}
+            </Text>
+          </Stack>
+          <Stack gap={2}>
+            <Text size="xs" className="yy-readable-text">
+              Registry 地址
+            </Text>
+            <Text fw={800} ff="monospace" truncate title={registry?.address}>
+              {registry?.address || '-'}
+            </Text>
+          </Stack>
+          <Stack gap={2}>
+            <Text size="xs" className="yy-readable-text">
+              上传限制
+            </Text>
+            <Text fw={800}>{registry?.maxUploadSizeGb ?? '-'} GB</Text>
+          </Stack>
+        </SimpleGrid>
+
+        {task && (
+          <Stack gap="sm">
+            <Group justify="space-between" align="center" wrap="nowrap">
+              <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+                <Icon path={mdiSwapHorizontal} size={0.82} />
+                <Text fw={800} truncate>
+                  {task.sourceRegistry || '旧仓库'} → {task.targetRegistry || '目标仓库'}
+                </Text>
+              </Group>
+              <Badge color={status.color} variant="light" className="yy-semantic-badge">
+                {status.label}
+              </Badge>
+            </Group>
+            <Progress
+              value={progress}
+              color={failed > 0 ? 'red' : isRunning ? 'violet' : 'teal'}
+              size="sm"
+              radius="xs"
+              animated={Boolean(isRunning)}
+            />
+            <Group justify="space-between" gap="xs">
+              <Text size="xs" className="yy-readable-text">
+                {task.message || '等待任务更新'}
+              </Text>
+              <Text size="xs" fw={700}>
+                {completed}/{total} 完成，{failed} 失败
+              </Text>
+            </Group>
+            {failedItems.length > 0 && (
+              <Stack gap={4}>
+                {failedItems.map((item) => (
+                  <Text key={item.id} size="xs" c="red" truncate title={item.errorMessage ?? item.sourceImage}>
+                    {item.sourceImage}：{item.errorMessage || '同步失败'}
+                  </Text>
+                ))}
+              </Stack>
+            )}
+          </Stack>
+        )}
+      </Stack>
+    </YinyuPanel>
+  )
+}
+
 export default function ImagesPage() {
   const { data, isLoading, mutate } = useSWR('image-templates-all', fetchAllImageTemplates)
-  const { data: registry } = useSWR('/api/v1/image-templates/docker-registry', fetcher)
+  const { data: registry, mutate: mutateRegistry } = useSWR('/api/v1/image-templates/docker-registry', fetcher, {
+    refreshInterval: (data?: DockerRegistryInfo) => {
+      const status = normalizeKey(data?.migrationTask?.status)
+      return status === 'running' || status === 'pending' ? 3000 : 15000
+    },
+  })
   const [dockerModalOpen, setDockerModalOpen] = useState(false)
   const [dockerUploadOpen, setDockerUploadOpen] = useState(false)
   const [localModalOpen, setLocalModalOpen] = useState(false)
@@ -585,7 +735,14 @@ export default function ImagesPage() {
             </Text>
           </Stack>
           <Group wrap="nowrap" style={{ overflowX: 'auto' }}>
-            <Button variant="default" leftSection={<Icon path={mdiRefresh} size={0.8} />} onClick={() => mutate()}>
+            <Button
+              variant="default"
+              leftSection={<Icon path={mdiRefresh} size={0.8} />}
+              onClick={() => {
+                mutate()
+                mutateRegistry()
+              }}
+            >
               刷新
             </Button>
             <Button leftSection={<Icon path={mdiDocker} size={0.8} />} onClick={() => setDockerModalOpen(true)}>
@@ -629,6 +786,8 @@ export default function ImagesPage() {
           <MetricTile label="导入中" value={stats.importing} tone="yellow" />
           <MetricTile label="异常" value={stats.error} tone={stats.error > 0 ? 'red' : 'gray'} />
         </Group>
+
+        <DockerRegistryPanel registry={registry as DockerRegistryInfo | undefined} />
 
         <YinyuPanel p="md">
           <Group justify="space-between" align="end">

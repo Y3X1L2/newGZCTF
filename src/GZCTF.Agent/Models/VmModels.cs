@@ -30,6 +30,17 @@ public class PullDockerImageRequest
     public string? RegistryAuth { get; set; }
 }
 
+public class EnsureDockerRegistryRequest
+{
+    public int Port { get; set; } = 5000;
+}
+
+public class ConfigureDockerRegistryRequest
+{
+    public string Registry { get; set; } = string.Empty;
+    public string[] Registries { get; set; } = [];
+}
+
 public class DownloadVmImageRequest
 {
     public int? TemplateId { get; set; }

@@ -1,0 +1,202 @@
+/* NebulaMind AI Corp - 共享企业品牌样式
+   所有 Web 服务复用此样式，确保视觉一致性，像真实 AI 企业官网。
+   不写死任何 IP/域名，路径用相对路径。 */
+
+:root {
+    --nm-bg: #0a0e1a;
+    --nm-bg-soft: #111827;
+    --nm-card: #161b2e;
+    --nm-border: #1f2937;
+    --nm-text: #e5e7eb;
+    --nm-text-soft: #9ca3af;
+    --nm-primary: #6366f1;
+    --nm-primary-soft: #818cf8;
+    --nm-accent: #22d3ee;
+    --nm-success: #34d399;
+    --nm-warning: #fbbf24;
+    --nm-danger: #f87171;
+    --nm-radius: 8px;
+    --nm-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+    --nm-font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --nm-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+    background: var(--nm-bg);
+    color: var(--nm-text);
+    font-family: var(--nm-font);
+    font-size: 14px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--nm-primary-soft); text-decoration: none; }
+a:hover { color: var(--nm-accent); }
+
+code, pre { font-family: var(--nm-mono); }
+
+/* 顶部导航 */
+.nm-nav {
+    background: rgba(10, 14, 26, 0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--nm-border);
+    padding: 14px 32px;
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+.nm-nav-brand {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--nm-text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.nm-nav-brand::before {
+    content: "";
+    display: inline-block;
+    width: 24px; height: 24px;
+    background: linear-gradient(135deg, var(--nm-primary), var(--nm-accent));
+    border-radius: 6px;
+}
+.nm-nav-links { display: flex; gap: 24px; }
+.nm-nav-links a { color: var(--nm-text-soft); font-size: 14px; }
+.nm-nav-links a:hover, .nm-nav-links a.active { color: var(--nm-text); }
+.nm-nav-spacer { flex: 1; }
+.nm-nav-cta {
+    background: var(--nm-primary);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: var(--nm-radius);
+    font-size: 13px;
+}
+
+/* 容器 */
+.nm-container { max-width: 1200px; margin: 0 auto; padding: 32px; }
+.nm-container-narrow { max-width: 760px; margin: 0 auto; padding: 32px; }
+
+/* Hero */
+.nm-hero {
+    padding: 80px 32px 64px;
+    text-align: center;
+    background:
+        radial-gradient(ellipse at top, rgba(99, 102, 241, 0.15), transparent 60%),
+        radial-gradient(ellipse at bottom, rgba(34, 211, 238, 0.08), transparent 60%);
+}
+.nm-hero h1 {
+    font-size: 48px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, #fff, var(--nm-primary-soft));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+.nm-hero p {
+    font-size: 18px;
+    color: var(--nm-text-soft);
+    max-width: 640px;
+    margin: 0 auto 32px;
+}
+
+/* 卡片 */
+.nm-card {
+    background: var(--nm-card);
+    border: 1px solid var(--nm-border);
+    border-radius: var(--nm-radius);
+    padding: 24px;
+    box-shadow: var(--nm-shadow);
+}
+.nm-card h3 { font-size: 16px; margin-bottom: 12px; color: var(--nm-text); }
+.nm-card p { color: var(--nm-text-soft); font-size: 13px; }
+
+.nm-grid { display: grid; gap: 20px; }
+.nm-grid-2 { grid-template-columns: repeat(2, 1fr); }
+.nm-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.nm-grid-4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 768px) {
+    .nm-grid-2, .nm-grid-3, .nm-grid-4 { grid-template-columns: 1fr; }
+}
+
+/* 按钮 */
+.nm-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: var(--nm-radius);
+    border: 1px solid var(--nm-border);
+    background: var(--nm-bg-soft);
+    color: var(--nm-text);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.nm-btn:hover { border-color: var(--nm-primary); color: var(--nm-primary-soft); }
+.nm-btn-primary { background: var(--nm-primary); border-color: var(--nm-primary); color: #fff; }
+.nm-btn-primary:hover { background: var(--nm-primary-soft); color: #fff; }
+
+/* 表单 */
+.nm-input, .nm-textarea, .nm-select {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--nm-bg);
+    border: 1px solid var(--nm-border);
+    border-radius: var(--nm-radius);
+    color: var(--nm-text);
+    font-size: 14px;
+    font-family: var(--nm-font);
+}
+.nm-input:focus, .nm-textarea:focus, .nm-select:focus {
+    outline: none;
+    border-color: var(--nm-primary);
+}
+.nm-label { display: block; font-size: 12px; color: var(--nm-text-soft); margin-bottom: 6px; }
+.nm-form-group { margin-bottom: 16px; }
+
+/* 表格 */
+.nm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.nm-table th, .nm-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--nm-border); }
+.nm-table th { color: var(--nm-text-soft); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+.nm-table tr:hover td { background: var(--nm-bg-soft); }
+
+/* 徽章 */
+.nm-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+}
+.nm-badge-success { background: rgba(52, 211, 153, 0.15); color: var(--nm-success); }
+.nm-badge-warning { background: rgba(251, 191, 36, 0.15); color: var(--nm-warning); }
+.nm-badge-danger { background: rgba(248, 113, 113, 0.15); color: var(--nm-danger); }
+.nm-badge-info { background: rgba(34, 211, 238, 0.15); color: var(--nm-accent); }
+
+/* 页脚 */
+.nm-footer {
+    border-top: 1px solid var(--nm-border);
+    padding: 24px 32px;
+    color: var(--nm-text-soft);
+    font-size: 12px;
+    text-align: center;
+}
+.nm-footer a { color: var(--nm-text-soft); }
+
+/* 工具类 */
+.nm-text-soft { color: var(--nm-text-soft); }
+.nm-text-mono { font-family: var(--nm-mono); }
+.nm-mt-8 { margin-top: 8px; }
+.nm-mt-16 { margin-top: 16px; }
+.nm-mt-32 { margin-top: 32px; }
+.nm-mb-16 { margin-bottom: 16px; }
+.nm-flex { display: flex; gap: 12px; align-items: center; }
+.nm-flex-between { display: flex; justify-content: space-between; align-items: center; }

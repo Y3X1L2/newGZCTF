@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>构建 #{{ build.id }} - NebulaMind CI</title>
+<link rel="stylesheet" href="/_shared/assets/nebulamind.css">
+<link rel="stylesheet" href="/static/css/ci.css">
+</head>
+<body>
+
+<!-- 顶部导航 -->
+<nav class="nm-nav">
+    <a href="/" class="nm-nav-brand">NebulaMind CI</a>
+    <div class="nm-nav-links">
+        <a href="/">项目</a>
+        <a href="/api/projects">API</a>
+    </div>
+</nav>
+
+<div class="nm-container">
+    <a href="/projects/{{ build.projectId }}" class="nm-btn nm-mb-16">&larr; 返回项目</a>
+
+    <!-- 构建信息 -->
+    <div class="nm-card nm-mb-16">
+        <div class="nm-flex-between">
+            <h1 style="font-size:22px;">
+                构建 <span class="nm-text-mono" style="color:var(--nm-accent);">#{{ build.id }}</span>
+            </h1>
+            <span class="ci-build-status ci-status-{{ build.status }}">{{ build.status }}</span>
+        </div>
+        <div class="nm-grid nm-grid-4 nm-mt-16">
+            <div>
+                <p class="nm-text-soft" style="font-size:11px;">项目</p>
+                <p class="nm-text-mono" style="font-size:13px;">{{ build.projectId }}</p>
+            </div>
+            <div>
+                <p class="nm-text-soft" style="font-size:11px;">分支</p>
+                <p class="nm-text-mono" style="font-size:13px;">{{ build.ref }}</p>
+            </div>
+            <div>
+                <p class="nm-text-soft" style="font-size:11px;">触发者</p>
+                <p style="font-size:13px;">{{ build.triggeredBy }}</p>
+            </div>
+            <div>
+                <p class="nm-text-soft" style="font-size:11px;">耗时</p>
+                <p style="font-size:13px;">{{ build.duration }}</p>
+            </div>
+        </div>
+        <div class="nm-flex nm-mt-16" style="gap:24px;font-size:13px;">
+            <span class="nm-text-soft">创建时间: {{ build.createdAt }}</span>
+            {% if build.completedAt %}
+            <span class="nm-text-soft">完成时间: {{ build.completedAt }}</span>
+            {% endif %}
+        </div>
+        {% if build.message %}
+        <p class="nm-mt-16" style="font-size:13px;">
+            <span class="nm-text-soft">提交信息:</span> {{ build.message }}
+        </p>
+        {% endif %}
+    </div>
+
+    {% if build.variables %}
+    <!-- 构建变量 -->
+    <div class="nm-card nm-mb-16">
+        <h3 class="ci-section-title">&#128274; 构建变量</h3>
+        <table class="ci-variables-table">
+            <thead>
+                <tr><th>Key</th><th>Value</th></tr>
+            </thead>
+            <tbody>
+                {% for k, v in build.variables.items() %}
+                <tr>
+                    <td class="ci-var-key">{{ k }}</td>
+                    <td class="ci-var-value">{{ v }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- 构建日志 -->
+    <div class="nm-card">
+        <div class="nm-flex-between nm-mb-16">
+            <h3 class="ci-section-title" style="margin-bottom:0;">&#128196; 构建日志</h3>
+            <a href="/api/builds/{{ build.id }}/logs" class="nm-btn">原始日志</a>
+        </div>
+        <pre class="ci-build-log">{{ build_log }}</pre>
+    </div>
+</div>
+
+<!-- 页脚 -->
+<footer class="nm-footer">
+    <p>&copy; 2026 NebulaMind AI Corp. CI/CD Platform &nbsp;|&nbsp; ci@nebulamind.ai</p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "ci-reader",
+  "description": "CI reader token policy - read-only access to CI configuration secrets only.",
+  "rules": {
+    "path": {
+      "secret/data/nebulamind/ci-config": {
+        "capabilities": ["read"]
+      },
+      "secret/metadata/nebulamind/ci-config": {
+        "capabilities": ["read"]
+      },
+      "auth/token/lookup-self": {
+        "capabilities": ["read"]
+      }
+    }
+  }
+}

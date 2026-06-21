@@ -1,30 +1,38 @@
-import { Badge, Button, Group, PasswordInput, Progress, Stack, Text, Title } from '@mantine/core'
+import { Button, Divider, Group, PasswordInput, Progress, ScrollArea, Stack, Text, Title } from '@mantine/core'
 import { useModals } from '@mantine/modals'
 import { showNotification } from '@mantine/notifications'
 import * as signalR from '@microsoft/signalr'
-import { mdiCheck, mdiFlagOutline, mdiLockOutline, mdiMapMarkerPath, mdiRefresh, mdiShieldSearch, mdiTarget } from '@mdi/js'
+import { mdiCheck, mdiFlagOutline, mdiRefresh, mdiShieldSearch } from '@mdi/js'
 import { Icon } from '@mdi/react'
-import { FC, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router'
+import { Markdown } from '@Components/MarkdownRenderer'
 import { WithGameTab } from '@Components/WithGameTab'
 import { WithNavBar } from '@Components/WithNavbar'
 import { WithRole } from '@Components/WithRole'
-import { YinyuPanel, YinyuRouteLoader, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
+import { YinyuPanel, YinyuRouteLoader } from '@Components/yinyu/YinyuUI'
+import { YinyuStatusText } from '@Components/yinyu/YinyuReactBits'
 import { encryptApiData } from '@Utils/Crypto'
 import { showErrorMsg } from '@Utils/Shared'
 import { useConfig } from '@Hooks/useConfig'
 import { Role } from '@Api'
 import {
-  PenetrationAttackEdgeModel,
   PenetrationAttackGraphUpdateModel,
-  PenetrationAttackNodeModel,
-  PenetrationFogState,
   PenetrationRuntimeStatus,
   PenetrationWorkspaceModel,
   PenetrationWorkspaceNodeModel,
   PenetrationWorkspaceScoreItemModel,
   penetrationPlayerApi,
 } from '../../../Api/PenetrationApi'
+
+type StatusTone = 'success' | 'warm' | 'danger' | 'neutral'
+
+type PentestTask = {
+  node: PenetrationWorkspaceNodeModel
+  item: PenetrationWorkspaceScoreItemModel
+  index: number
+  locked: boolean
+}
 
 const statusLabel: Record<PenetrationRuntimeStatus, string> = {
   [PenetrationRuntimeStatus.Pending]: '等待部署',
@@ -38,230 +46,49 @@ const statusLabel: Record<PenetrationRuntimeStatus, string> = {
   [PenetrationRuntimeStatus.ManualCleanupRequired]: '需人工清理',
 }
 
-const fogLabel: Record<PenetrationFogState, string> = {
-  [PenetrationFogState.Hidden]: '黑雾覆盖',
-  [PenetrationFogState.Revealed]: '已侦察',
-  [PenetrationFogState.Accessible]: '可攻击',
-  [PenetrationFogState.Completed]: '已突破',
+const runtimeTone = (status?: PenetrationRuntimeStatus): StatusTone => {
+  if (status === PenetrationRuntimeStatus.Running) return 'success'
+  if (
+    status === PenetrationRuntimeStatus.Failed ||
+    status === PenetrationRuntimeStatus.Orphaned ||
+    status === PenetrationRuntimeStatus.ManualCleanupRequired
+  ) {
+    return 'danger'
+  }
+  if (
+    status === PenetrationRuntimeStatus.Pending ||
+    status === PenetrationRuntimeStatus.CreatingNetworks ||
+    status === PenetrationRuntimeStatus.CreatingContainers ||
+    status === PenetrationRuntimeStatus.CleanupPending
+  ) {
+    return 'warm'
+  }
+  return 'neutral'
 }
 
-const fogTone = (state: PenetrationFogState): 'success' | 'neutral' | 'warm' =>
-  state === PenetrationFogState.Completed || state === PenetrationFogState.Accessible
-    ? 'success'
-    : state === PenetrationFogState.Revealed
-      ? 'warm'
-      : 'neutral'
-
-const TaskCard: FC<{
-  node: PenetrationWorkspaceNodeModel
-  item: PenetrationWorkspaceScoreItemModel
-  locked: boolean
-  value: string
-  disabled: boolean
-  onChange: (value: string) => void
-  onSubmit: () => void
-}> = ({ node, item, locked, value, disabled, onChange, onSubmit }) => (
-  <YinyuPanel p="md" className="yy-pentest-task-card yy-pentest-work-task">
-    <Stack gap="sm">
-      <Group justify="space-between" align="flex-start" wrap="nowrap">
-        <Stack gap={4}>
-          <Group gap="xs">
-            <Badge variant="light">{item.category || '综合'}</Badge>
-            <Badge color={item.solved ? 'teal' : 'gray'} variant="light">
-              {item.solved ? '已完成' : `${item.score} 分`}
-            </Badge>
-            {item.isCheckpoint ? (
-              <Badge color="lime" variant="light">
-                解锁检查点
-              </Badge>
-            ) : null}
-            {locked ? (
-              <Badge color="yellow" variant="light">
-                前置锁定
-              </Badge>
-            ) : null}
-          </Group>
-          <Title order={4}>{item.title}</Title>
-          <Text className="yy-readable-text" size="sm">
-            {node.name} / {fogLabel[node.fogState]}
-          </Text>
-        </Stack>
-        <YinyuStatusPill tone={item.solved ? 'success' : 'neutral'}>{item.solved ? 'Accepted' : 'Open'}</YinyuStatusPill>
-      </Group>
-      {item.description ? <Text className="yy-readable-text">{item.description}</Text> : null}
-      <Group align="flex-end" wrap="nowrap">
-        <PasswordInput
-          label="提交 Flag"
-          value={value}
-          disabled={disabled || item.solved || locked}
-          onChange={(event) => onChange(event.currentTarget.value)}
-          style={{ flex: 1 }}
-        />
-        <Button leftSection={<Icon path={mdiFlagOutline} size={0.85} />} disabled={disabled || item.solved || locked || !value.trim()} onClick={onSubmit}>
-          提交
-        </Button>
-      </Group>
-      <Text className="yy-readable-text" size="xs">
-        {locked
-          ? `需要先完成 ${(item.prerequisiteItemKeys?.length || item.prerequisiteItemIds.length)} 个前置得分项`
-          : item.maxAttempts > 0
-            ? `已提交 ${item.attempts}/${item.maxAttempts} 次`
-            : `已提交 ${item.attempts} 次`}
-      </Text>
-    </Stack>
-  </YinyuPanel>
-)
-
-const AttackMap: FC<{
-  graphNodes: PenetrationAttackNodeModel[]
-  graphEdges: PenetrationAttackEdgeModel[]
-  selectedKey?: string
-  onSelect: (node: PenetrationAttackNodeModel) => void
-}> = ({ graphNodes, graphEdges, selectedKey, onSelect }) => {
-  const visibleDepths = [...new Set(graphNodes.map((node) => Math.max(0, node.depth)))].sort((a, b) => a - b)
-  const nodeByKey = useMemo(() => new Map(graphNodes.map((node) => [node.topologyKey, node])), [graphNodes])
-  const visibleEdges = useMemo(
-    () => graphEdges
-      .map((edge) => ({
-        edge,
-        source: nodeByKey.get(edge.sourceNodeKey),
-        target: nodeByKey.get(edge.targetNodeKey),
-      }))
-      .filter((item): item is { edge: PenetrationAttackEdgeModel; source: PenetrationAttackNodeModel; target: PenetrationAttackNodeModel } =>
-        Boolean(item.source && item.target &&
-          item.source.status !== PenetrationFogState.Hidden &&
-          item.target.status !== PenetrationFogState.Hidden)),
-    [graphEdges, nodeByKey]
-  )
-  const [view, setView] = useState({ x: 0, y: 0, scale: 1 })
-  const [drag, setDrag] = useState<{ pointerId: number; x: number; y: number; originX: number; originY: number }>()
-
-  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest('button, input, textarea, [role="button"]')) return
-    event.currentTarget.setPointerCapture(event.pointerId)
-    setDrag({ pointerId: event.pointerId, x: event.clientX, y: event.clientY, originX: view.x, originY: view.y })
-  }
-
-  const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
-    if (!drag || drag.pointerId !== event.pointerId) return
-    setView((current) => ({
-      ...current,
-      x: drag.originX + event.clientX - drag.x,
-      y: drag.originY + event.clientY - drag.y,
-    }))
-  }
-
-  const stopDrag = () => setDrag(undefined)
-
-  const zoom = (delta: number) => {
-    setView((current) => ({
-      ...current,
-      scale: Math.min(1.45, Math.max(0.72, Number((current.scale + delta).toFixed(2)))),
-    }))
-  }
-
-  return (
-    <YinyuPanel p="md" className="yy-pentest-attack-map">
-      <Stack gap="md">
-        <Group justify="space-between" wrap="wrap">
-          <Group gap="xs">
-            <Icon path={mdiMapMarkerPath} size={1} />
-            <Title order={3}>攻击图</Title>
-          </Group>
-          <Text className="yy-readable-text" size="sm">
-            完成检查点后，黑雾会沿允许的攻击路径逐步驱散；未解锁区域不会暴露真实节点、IP 或内部说明。
-          </Text>
-          <Group gap="xs">
-            <Button size="xs" variant="light" onClick={() => zoom(-0.08)}>
-              缩小
-            </Button>
-            <Button size="xs" variant="light" onClick={() => zoom(0.08)}>
-              放大
-            </Button>
-            <Button size="xs" variant="subtle" onClick={() => setView({ x: 0, y: 0, scale: 1 })}>
-              重置视角
-            </Button>
-          </Group>
-        </Group>
-        <div
-          className="yy-pentest-fog-map"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={stopDrag}
-          onPointerCancel={stopDrag}
-          onWheel={(event) => {
-            event.preventDefault()
-            zoom(event.deltaY > 0 ? -0.06 : 0.06)
-          }}
-        >
-          <div className="yy-pentest-fog-board" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
-            {visibleDepths.map((depth) => (
-              <div key={depth} className="yy-pentest-fog-column">
-                <Text className="yy-readable-text yy-pentest-depth-label" size="xs">
-                  深度 {depth}
-                </Text>
-                {graphNodes
-                  .filter((node) => Math.max(0, node.depth) === depth)
-                  .map((node) => {
-                    const hidden = node.status === PenetrationFogState.Hidden
-                    const active = selectedKey === node.topologyKey
-                    return (
-                      <button
-                        key={node.topologyKey}
-                        type="button"
-                        aria-hidden={hidden}
-                        tabIndex={hidden ? -1 : 0}
-                        disabled={hidden}
-                        data-state={node.status}
-                        data-active={active || undefined}
-                        className="yy-pentest-fog-node"
-                        onClick={() => onSelect(node)}
-                      >
-                        <span className="yy-pentest-fog-node-icon">
-                          <Icon path={hidden ? mdiLockOutline : node.isEntry ? mdiTarget : mdiShieldSearch} size={0.92} />
-                        </span>
-                        <span className="yy-pentest-fog-node-main">
-                          <strong>{node.displayName}</strong>
-                          <small>{fogLabel[node.status]}</small>
-                        </span>
-                        {!hidden ? (
-                          <span className="yy-pentest-fog-node-progress">
-                            {node.scoreSummary.solved}/{node.scoreSummary.total}
-                          </span>
-                        ) : null}
-                      </button>
-                    )
-                  })}
-              </div>
-            ))}
-            <div className="yy-pentest-mini-map" aria-hidden="true">
-              {visibleDepths.map((depth) => (
-                <i key={depth} style={{ height: `${Math.max(1, graphNodes.filter((node) => Math.max(0, node.depth) === depth).length) * 0.42}rem` }} />
-              ))}
-            </div>
-          </div>
-        </div>
-        {visibleEdges.length ? (
-          <div className="yy-pentest-path-strip" aria-label="已发现攻击路径">
-            {visibleEdges.map(({ edge, source, target }) => (
-              <button
-                key={edge.id}
-                type="button"
-                className="yy-pentest-path-chip"
-                data-state={edge.status}
-                onClick={() => onSelect(target)}
-              >
-                <span>{source.displayName}</span>
-                <i>{edge.label || '攻击路径'}</i>
-                <strong>{target.displayName}</strong>
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </Stack>
-    </YinyuPanel>
-  )
+const taskStatus = (task?: PentestTask) => {
+  if (!task) return { label: '未选择', tone: 'neutral' as StatusTone }
+  if (task.item.solved) return { label: '已解出', tone: 'success' as StatusTone }
+  if (task.locked) return { label: '前置未完成', tone: 'warm' as StatusTone }
+  return { label: '可提交', tone: 'success' as StatusTone }
 }
+
+const buildTasks = (workspace?: PenetrationWorkspaceModel): PentestTask[] => {
+  const nodes = workspace?.nodes ?? []
+  const allItems = nodes.flatMap((node) => node.scoreItems.map((item) => ({ node, item })))
+  const solvedIds = new Set(allItems.filter(({ item }) => item.solved).map(({ item }) => item.id))
+  const solvedKeys = new Set(allItems.filter(({ item }) => item.solved).map(({ item }) => item.topologyKey).filter(Boolean))
+
+  return allItems.map(({ node, item }, index) => {
+    const locked = item.prerequisiteItemKeys?.length
+      ? item.prerequisiteItemKeys.some((key) => !solvedKeys.has(key))
+      : item.prerequisiteItemIds.some((itemId) => !solvedIds.has(itemId))
+
+    return { node, item, index: index + 1, locked }
+  })
+}
+
+const getTargetHost = (workspace?: PenetrationWorkspaceModel) => workspace?.targetHost?.trim() ?? ''
 
 const PenetrationPage: FC = () => {
   const { id } = useParams()
@@ -269,30 +96,41 @@ const PenetrationPage: FC = () => {
   const { config } = useConfig()
   const modals = useModals()
   const [workspace, setWorkspace] = useState<PenetrationWorkspaceModel>()
-  const [selectedKey, setSelectedKey] = useState<string>()
+  const [selectedTaskId, setSelectedTaskId] = useState<number>()
   const [flags, setFlags] = useState<Record<number, string>>({})
   const [loading, setLoading] = useState(false)
   const [errorText, setErrorText] = useState<string>()
   const teamIdRef = useRef<number | undefined>(undefined)
 
+  const tasks = useMemo(() => buildTasks(workspace), [workspace])
+  const selectedTask = useMemo(
+    () => tasks.find((task) => task.item.id === selectedTaskId) ?? tasks.find((task) => !task.item.solved) ?? tasks[0],
+    [selectedTaskId, tasks]
+  )
+  const solvedCount = tasks.filter((task) => task.item.solved).length
+  const totalCount = tasks.length
+  const progress = totalCount > 0 ? Math.round((solvedCount / totalCount) * 100) : 0
+  const remainingReset = workspace ? Math.max(0, workspace.maxResetCount - workspace.resetCount) : 0
+  const currentStatus = taskStatus(selectedTask)
+  const targetHost = useMemo(() => getTargetHost(workspace), [workspace])
+  const targetHostText = targetHost || '环境启动后显示'
+
   const load = useCallback(async (silent = false) => {
     if (gameId <= 0) return
     if (!silent) setLoading(true)
     setErrorText(undefined)
+
     try {
       const res = await penetrationPlayerApi.getWorkspace(gameId)
       teamIdRef.current = res.data.teamId
       setWorkspace(res.data)
-      setSelectedKey((current) => {
-        if (current && res.data.attackGraph.nodes.some((node) => node.topologyKey === current && node.status !== PenetrationFogState.Hidden)) {
-          return current
-        }
-
-        return res.data.attackGraph.nodes.find((node) => node.status === PenetrationFogState.Accessible)?.topologyKey ??
-          res.data.attackGraph.nodes.find((node) => node.status !== PenetrationFogState.Hidden)?.topologyKey
+      setSelectedTaskId((current) => {
+        const nextTasks = buildTasks(res.data)
+        if (current && nextTasks.some((task) => task.item.id === current)) return current
+        return nextTasks.find((task) => !task.item.solved)?.item.id ?? nextTasks[0]?.item.id
       })
     } catch {
-      if (!silent) setErrorText('渗透环境尚未部署，或当前队伍暂无访问权限。')
+      if (!silent) setErrorText('渗透演练环境尚未部署，或当前队伍暂时没有访问权限。')
     } finally {
       if (!silent) setLoading(false)
     }
@@ -319,11 +157,11 @@ const PenetrationPage: FC = () => {
       if (teamIdRef.current && update.teamId !== teamIdRef.current) return
 
       void load(true)
-      if (update.accepted && update.unlockedNodeCount > 0) {
+      if (update.accepted) {
         showNotification({
           color: 'teal',
-          message: `新的攻击路径已解锁：${update.unlockedNodeCount} 个模块`,
-          icon: <Icon path={mdiMapMarkerPath} size={1} />,
+          message: update.unlockedNodeCount > 0 ? `提交成功，新增 ${update.unlockedNodeCount} 个可做题目。` : '提交成功，题目状态已更新。',
+          icon: <Icon path={mdiCheck} size={1} />,
         })
       }
     })
@@ -342,21 +180,6 @@ const PenetrationPage: FC = () => {
       })
     }
   }, [gameId, load])
-
-  const nodeByKey = useMemo(() => new Map((workspace?.nodes ?? []).map((node) => [node.topologyKey, node])), [workspace?.nodes])
-  const tasks = useMemo(
-    () => (workspace?.nodes ?? []).flatMap((node) => node.scoreItems.map((item) => ({ node, item }))),
-    [workspace?.nodes]
-  )
-  const solvedItemIds = useMemo(() => new Set(tasks.filter(({ item }) => item.solved).map(({ item }) => item.id)), [tasks])
-  const solvedItemKeys = useMemo(() => new Set(tasks.filter(({ item }) => item.solved).map(({ item }) => item.topologyKey).filter(Boolean)), [tasks])
-  const selectedGraphNode = workspace?.attackGraph.nodes.find((node) => node.topologyKey === selectedKey)
-  const selectedWorkspaceNode = selectedKey ? nodeByKey.get(selectedKey) : undefined
-  const selectedTasks = selectedWorkspaceNode?.scoreItems ?? []
-  const solvedCount = workspace?.attackGraph.solvedScoreItemCount ?? 0
-  const totalCount = workspace?.attackGraph.totalScoreItemCount ?? 0
-  const progress = totalCount > 0 ? Math.round((solvedCount / totalCount) * 100) : 0
-  const remainingReset = workspace ? Math.max(0, workspace.maxResetCount - workspace.resetCount) : 0
 
   const submit = async (scoreItemId: number) => {
     const raw = flags[scoreItemId]?.trim()
@@ -394,7 +217,7 @@ const PenetrationPage: FC = () => {
 
   const reset = () => {
     modals.openConfirmModal({
-      title: '确认重置渗透环境',
+      title: '确认重置渗透演练环境',
       children: (
         <Text size="sm" className="yy-readable-text">
           重置会销毁并重建本队全部渗透容器和网络，成功后会消耗一次重置次数。正在进行的连接会被断开。
@@ -406,21 +229,23 @@ const PenetrationPage: FC = () => {
     })
   }
 
+  const selectedValue = selectedTask ? (flags[selectedTask.item.id] ?? '') : ''
+  const submitDisabled = !selectedTask || selectedTask.item.solved || selectedTask.locked || loading || !selectedValue.trim()
+
   return (
     <WithNavBar minWidth={0} width="min(100%, calc(100vw - 7.25rem))">
       <WithRole requiredRole={Role.User}>
         <WithGameTab>
-          <Stack gap="md" className="yy-pentest-player">
+          <Stack gap="md" className="yy-pentest-player yy-pentest-ctf-page">
             {loading && !workspace ? (
               <YinyuPanel p="xl">
-                <YinyuRouteLoader title="渗透演练加载中" description="正在读取队伍环境、入口目标与攻击图状态" />
+                <YinyuRouteLoader title="渗透演练加载中" description="正在读取队伍环境和题目列表" />
               </YinyuPanel>
             ) : null}
 
             {errorText && !workspace ? (
-              <YinyuPanel p="xl">
+              <YinyuPanel p="xl" className="yy-pentest-empty-panel">
                 <Stack gap="xs">
-                  <Badge variant="light">Penetration</Badge>
                   <Title order={2}>渗透环境暂不可用</Title>
                   <Text className="yy-readable-text">{errorText}</Text>
                   <Button leftSection={<Icon path={mdiRefresh} size={0.85} />} onClick={() => void load()}>
@@ -432,133 +257,133 @@ const PenetrationPage: FC = () => {
 
             {workspace ? (
               <>
-                <YinyuPanel p="md" className="yy-pentest-player-header">
+                <YinyuPanel p="md" className="yy-pentest-player-header yy-pentest-ctf-header">
                   <Group justify="space-between" align="center" wrap="wrap">
-                    <Stack gap={6}>
-                      <Group gap="xs">
-                        <Badge variant="light">Black-box Penetration</Badge>
-                        <YinyuStatusPill tone={workspace.status === PenetrationRuntimeStatus.Running ? 'success' : 'warm'}>
+                    <Stack gap={5}>
+                      <Group gap="md" align="baseline">
+                        <Title order={2}>渗透题目</Title>
+                        <YinyuStatusText tone={runtimeTone(workspace.status)}>
                           {statusLabel[workspace.status] ?? workspace.status}
-                        </YinyuStatusPill>
+                        </YinyuStatusText>
                       </Group>
-                      <Title order={2}>题目攻击图</Title>
                       <Text className="yy-readable-text">
-                        {workspace.teamName} / 已突破 {workspace.attackGraph.completedNodeCount}/{workspace.attackGraph.totalNodeCount} 个模块 / 得分项 {solvedCount}/{totalCount}
+                        {workspace.teamName} / 已完成 {solvedCount}/{totalCount} 题 / 目标主机：{targetHostText}
                       </Text>
-                      <Progress value={progress} size="sm" radius="xl" className="yy-pentest-progress" />
                     </Stack>
-                    <Button leftSection={<Icon path={mdiRefresh} size={0.85} />} variant="light" disabled={loading || remainingReset <= 0} onClick={reset}>
-                      重置环境（剩余 {remainingReset}）
-                    </Button>
+                    <Stack gap={6} className="yy-pentest-reset-block">
+                      <Button
+                        leftSection={<Icon path={mdiRefresh} size={0.85} />}
+                        variant="light"
+                        disabled={loading || remainingReset <= 0}
+                        onClick={reset}
+                      >
+                        重置环境
+                      </Button>
+                      <Text size="xs" className="yy-readable-text" ta="right">
+                        剩余 {remainingReset} 次
+                      </Text>
+                    </Stack>
                   </Group>
+                  <Progress value={progress} size="sm" radius="xl" className="yy-pentest-progress yy-pentest-ctf-progress" />
                 </YinyuPanel>
 
-                <div className="yy-pentest-attack-layout">
-                  <Stack gap="md" className="yy-pentest-attack-side">
-                    <YinyuPanel p="md">
-                      <Stack gap="sm">
-                        <Group gap="xs">
-                          <Icon path={mdiTarget} size={1} />
-                          <Title order={4}>入口目标</Title>
-                        </Group>
-                        {workspace.entryPoints.length ? (
-                          workspace.entryPoints.map((entry) => (
-                            <YinyuPanel key={`${entry.nodeId}-${entry.port}`} p="sm" className="yy-pentest-entry">
-                              <Stack gap={4}>
-                                <Text fw={800}>{entry.nodeName}</Text>
-                                <Badge variant="light" size="lg">
-                                  {entry.host}:{entry.port}
-                                </Badge>
-                                <Text className="yy-readable-text" size="xs">
-                                  从这里开始侦察，完成检查点后解锁后续模块。
-                                </Text>
-                              </Stack>
-                            </YinyuPanel>
-                          ))
-                        ) : (
-                          <Text className="yy-readable-text">当前队伍暂无已发布入口。</Text>
-                        )}
-                      </Stack>
-                    </YinyuPanel>
-                    <YinyuPanel p="md">
-                      <Stack gap="sm">
-                        <Title order={4}>迷雾状态</Title>
-                        {Object.values(PenetrationFogState).map((state) => (
-                          <Group key={state} justify="space-between" className="yy-pentest-fog-legend">
-                            <YinyuStatusPill tone={fogTone(state)}>{fogLabel[state]}</YinyuStatusPill>
-                            <Text className="yy-readable-text" size="xs">
-                              {workspace.attackGraph.nodes.filter((node) => node.status === state).length}
-                            </Text>
-                          </Group>
-                        ))}
-                      </Stack>
-                    </YinyuPanel>
-                  </Stack>
+                <div className="yy-pentest-ctf-layout">
+                  <YinyuPanel p="md" className="yy-pentest-question-panel">
+                    <Group justify="space-between" align="baseline" className="yy-pentest-panel-heading">
+                      <Title order={3}>题目</Title>
+                      <Text size="sm" className="yy-readable-text">
+                        {totalCount} 题
+                      </Text>
+                    </Group>
+                    <ScrollArea className="yy-pentest-question-scroll" type="hover" offsetScrollbars>
+                      <div className="yy-pentest-question-grid">
+                        {tasks.map((task) => {
+                          const status = taskStatus(task)
+                          return (
+                            <button
+                              key={task.item.id}
+                              type="button"
+                              className="yy-pentest-question-card"
+                              data-active={selectedTask?.item.id === task.item.id || undefined}
+                              data-solved={task.item.solved || undefined}
+                              onClick={() => setSelectedTaskId(task.item.id)}
+                            >
+                              <span className="yy-pentest-question-index">{String(task.index).padStart(2, '0')}</span>
+                              <span className="yy-pentest-question-main">
+                                <strong>题目 {String(task.index).padStart(2, '0')}</strong>
+                                <small>点击查看题目信息</small>
+                              </span>
+                              <YinyuStatusText tone={status.tone} className="yy-pentest-question-status">
+                                {status.label}
+                              </YinyuStatusText>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </ScrollArea>
+                  </YinyuPanel>
 
-                  <AttackMap
-                    graphNodes={workspace.attackGraph.nodes}
-                    graphEdges={workspace.attackGraph.edges}
-                    selectedKey={selectedKey}
-                    onSelect={(node) => {
-                      if (node.status !== PenetrationFogState.Hidden) {
-                        setSelectedKey(node.topologyKey)
-                      }
-                    }}
-                  />
-
-                  <Stack gap="md" className="yy-pentest-attack-detail">
-                    <YinyuPanel p="md">
-                      <Stack gap="sm">
-                        <Group justify="space-between" wrap="wrap">
-                          <Stack gap={2}>
-                            <Title order={4}>{selectedGraphNode?.displayName ?? '选择一个模块'}</Title>
+                  <YinyuPanel p="lg" className="yy-pentest-detail-panel">
+                    {selectedTask ? (
+                      <Stack gap="lg" h="100%">
+                        <Group justify="space-between" align="flex-start" wrap="wrap">
+                          <Stack gap={6} className="yy-pentest-detail-title">
                             <Text className="yy-readable-text" size="sm">
-                              {selectedGraphNode?.description ?? '点击已驱散的模块查看任务状态。'}
+                              题目 {String(selectedTask.index).padStart(2, '0')}
                             </Text>
+                            <Title order={2}>题目 {String(selectedTask.index).padStart(2, '0')}</Title>
                           </Stack>
-                          {selectedGraphNode ? (
-                            <YinyuStatusPill tone={fogTone(selectedGraphNode.status)}>{fogLabel[selectedGraphNode.status]}</YinyuStatusPill>
-                          ) : null}
+                          <YinyuStatusText tone={currentStatus.tone}>{currentStatus.label}</YinyuStatusText>
                         </Group>
-                        {selectedGraphNode ? (
-                          <div className="yy-pentest-node-summary">
-                            <span>任务 {selectedGraphNode.scoreSummary.solved}/{selectedGraphNode.scoreSummary.total}</span>
-                            <span>检查点 {selectedGraphNode.scoreSummary.checkpointSolved}/{selectedGraphNode.scoreSummary.checkpointTotal}</span>
-                            <span>分值 {selectedGraphNode.scoreSummary.solvedScore}/{selectedGraphNode.scoreSummary.totalScore}</span>
-                          </div>
-                        ) : null}
-                      </Stack>
-                    </YinyuPanel>
 
-                    {selectedTasks.length ? (
-                      selectedTasks.map((item) => {
-                        const locked = item.prerequisiteItemKeys?.length
-                          ? item.prerequisiteItemKeys.some((key) => !solvedItemKeys.has(key))
-                          : item.prerequisiteItemIds.some((itemId) => !solvedItemIds.has(itemId))
-                        return selectedWorkspaceNode ? (
-                          <TaskCard
-                            key={item.id}
-                            node={selectedWorkspaceNode}
-                            item={item}
-                            locked={locked}
-                            value={flags[item.id] ?? ''}
-                            disabled={loading || selectedWorkspaceNode.fogState === PenetrationFogState.Revealed}
-                            onChange={(value) => setFlags((current) => ({ ...current, [item.id]: value }))}
-                            onSubmit={() => submit(item.id)}
-                          />
-                        ) : null
-                      })
-                    ) : (
-                      <YinyuPanel p="md" className="yy-pentest-task-card">
-                        <Stack gap="xs">
-                          <Title order={4}>任务暂未开放</Title>
-                          <Text className="yy-readable-text">
-                            该模块还在迷雾中，或只是侦察到轮廓。完成前置检查点后，这里会显示可提交的任务。
-                          </Text>
+                        <div className="yy-pentest-target-card">
+                          <span>目标主机</span>
+                          <strong>{targetHostText}</strong>
+                          <p>请从该节点服务器开始外网打点与内网渗透，平台不再给选手暴露容器内网地址、端口路径或编排细节。</p>
+                        </div>
+
+                        <Divider className="yy-pentest-detail-divider" />
+
+                        <div className="yy-pentest-description">
+                          {selectedTask.item.description ? (
+                            <Markdown source={selectedTask.item.description} />
+                          ) : (
+                            <Text className="yy-readable-text">该题目暂未提供额外说明，请围绕目标主机自行探测服务、路径与漏洞入口。</Text>
+                          )}
+                        </div>
+
+                        <Stack gap="sm" mt="auto" className="yy-pentest-submit-zone">
+                          {selectedTask.locked ? (
+                            <Text className="yy-readable-text" size="sm">
+                              该题目仍有前置得分项未完成，完成前置题目后即可提交。
+                            </Text>
+                          ) : null}
+                          <Group align="flex-end" wrap="nowrap" className="yy-pentest-submit-row">
+                            <PasswordInput
+                              label="提交 Flag"
+                              placeholder="flag{...}"
+                              value={selectedValue}
+                              disabled={loading || selectedTask.item.solved || selectedTask.locked}
+                              onChange={(event) => setFlags((current) => ({ ...current, [selectedTask.item.id]: event.currentTarget.value }))}
+                              style={{ flex: 1 }}
+                            />
+                            <Button
+                              leftSection={<Icon path={mdiFlagOutline} size={0.85} />}
+                              disabled={submitDisabled}
+                              onClick={() => void submit(selectedTask.item.id)}
+                            >
+                              提交
+                            </Button>
+                          </Group>
                         </Stack>
-                      </YinyuPanel>
+                      </Stack>
+                    ) : (
+                      <Stack gap="xs">
+                        <Title order={2}>暂无题目</Title>
+                        <Text className="yy-readable-text">当前渗透演练还没有可展示的题目，请联系管理员检查发布配置。</Text>
+                      </Stack>
                     )}
-                  </Stack>
+                  </YinyuPanel>
                 </div>
               </>
             ) : null}

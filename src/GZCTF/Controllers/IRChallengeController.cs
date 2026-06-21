@@ -30,6 +30,7 @@ public class IRChallengeController : ControllerBase
     private readonly UserManager<UserInfo> _userManager;
     private readonly VmManager _vmManager;
     private readonly ContainerOrchestrator _containerOrchestrator;
+    private readonly DockerImageRegistryService _dockerRegistry;
     private readonly GuacamoleProxy _guacamoleProxy;
     private readonly SSHAccessService _sshAccessService;
     private readonly IHubContext<ScenarioHub> _hubContext;
@@ -42,6 +43,7 @@ public class IRChallengeController : ControllerBase
         UserManager<UserInfo> userManager,
         VmManager vmManager,
         ContainerOrchestrator containerOrchestrator,
+        DockerImageRegistryService dockerRegistry,
         GuacamoleProxy guacamoleProxy,
         SSHAccessService sshAccessService,
         IHubContext<ScenarioHub> hubContext,
@@ -53,6 +55,7 @@ public class IRChallengeController : ControllerBase
         _userManager = userManager;
         _vmManager = vmManager;
         _containerOrchestrator = containerOrchestrator;
+        _dockerRegistry = dockerRegistry;
         _guacamoleProxy = guacamoleProxy;
         _sshAccessService = sshAccessService;
         _hubContext = hubContext;
@@ -441,9 +444,10 @@ public class IRChallengeController : ControllerBase
                 // Docker/Linux environment
                 if (!string.IsNullOrEmpty(challenge.ContainerImage))
                 {
+                    var image = await _dockerRegistry.ResolveImageReferenceAsync(
+                        challenge.ContainerImage, cancellationToken);
                     await _containerOrchestrator.PullImageFromRegistryAsync(
-                        _config["ContainerSettings:RegistryUrl"] ?? string.Empty,
-                        challenge.ContainerImage);
+                        string.Empty, image);
 
                     await _containerOrchestrator.CreateIsolatedNetwork($"ir-net-{instanceId:N}"[..12]);
                 }

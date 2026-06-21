@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ model.display_name }} - NebulaMind Model Registry</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/registry.css') }}">
+</head>
+<body>
+
+<nav class="reg-nav">
+    <div class="reg-nav-brand">
+        <span class="reg-nav-logo">N</span>
+        <span class="reg-nav-brand-text">NebulaMind Model Registry</span>
+    </div>
+    <div class="reg-nav-links">
+        <a href="/">&larr; All Models</a>
+        <a href="/api/v1/models/{{ model.name }}" target="_blank">API JSON</a>
+    </div>
+</nav>
+
+<div class="reg-container">
+
+    <div class="reg-model-detail">
+
+        <div class="reg-model-main">
+
+            <div class="reg-model-title-block">
+                <h1>{{ model.display_name }}</h1>
+                <div class="reg-model-title-badges">
+                    {% if model.visibility == 'private' %}
+                        <span class="reg-badge reg-badge-private">&#128274; Private</span>
+                    {% else %}
+                        <span class="reg-badge reg-badge-public">&#10003; Public</span>
+                    {% endif %}
+                    {% for tag in model.tags %}
+                    <span class="reg-badge reg-badge-tag">{{ tag }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="reg-model-desc">
+                {{ model.description }}
+            </div>
+
+            {% for ver in model.versions %}
+            {% set manifest = ver.manifest %}
+            <div class="reg-card reg-mt-24">
+                <h2>Version {{ ver.version }}
+                    <span class="reg-badge reg-badge-status" style="margin-left:8px;">{{ ver.status }}</span>
+                </h2>
+
+                <div class="reg-flex-between reg-mt-8" style="font-size:12px;color:var(--nm-text-muted);">
+                    <span>Created {{ ver.created_at }} by {{ ver.created_by }}</span>
+                    <span class="reg-text-mono">manifest v{{ manifest.manifest_version | default('1.2.0') }}</span>
+                </div>
+
+                <h3>Model Architecture</h3>
+                <table class="reg-table">
+                    <tr><td class="label">Task Type</td><td><code>{{ manifest.task_type | default('-') }}</code></td></tr>
+                    <tr><td class="label">Architecture</td><td>{{ manifest.architecture | default('-') }}</td></tr>
+                    <tr><td class="label">Framework</td><td>{{ manifest.framework | default('-') }}</td></tr>
+                    {% if manifest.base_model %}<tr><td class="label">Base Model</td><td><code>{{ manifest.base_model }}</code></td></tr>{% endif %}
+                    <tr><td class="label">Parameters</td><td>{{ manifest.parameters_human | default(manifest.parameters) }} {% if manifest.trainable_parameters %}({{ manifest.trainable_parameters }} trainable){% endif %}</td></tr>
+                    {% if manifest.hidden_size %}<tr><td class="label">Hidden Size</td><td>{{ manifest.hidden_size }}</td></tr>{% endif %}
+                    {% if manifest.num_layers %}<tr><td class="label">Layers</td><td>{{ manifest.num_layers }}</td></tr>{% endif %}
+                    {% if manifest.num_attention_heads %}<tr><td class="label">Attention Heads</td><td>{{ manifest.num_attention_heads }}</td></tr>{% endif %}
+                    {% if manifest.vocab_size %}<tr><td class="label">Vocab Size</td><td>{{ manifest.vocab_size }}</td></tr>{% endif %}
+                    {% if manifest.max_sequence_length %}<tr><td class="label">Max Seq Length</td><td>{{ manifest.max_sequence_length }}</td></tr>{% endif %}
+                </table>
+
+                <h3>Training Dataset</h3>
+                <table class="reg-table">
+                    <tr><td class="label">Dataset</td><td><code>{{ manifest.training_dataset | default('-') }}</code></td></tr>
+                    {% if manifest.training_dataset_source %}<tr><td class="label">Source</td><td class="reg-text-mono reg-break">{{ manifest.training_dataset_source }}</td></tr>{% endif %}
+                    {% if manifest.training_dataset_rows %}<tr><td class="label">Rows</td><td>{{ manifest.training_dataset_rows | format_number }}</td></tr>{% endif %}
+                    {% if manifest.data_classification %}<tr><td class="label">Classification</td><td>
+                        {% if manifest.data_classification == 'restricted' %}
+                            <span class="reg-badge reg-badge-private">{{ manifest.data_classification }}</span>
+                        {% else %}
+                            <span class="reg-badge reg-badge-public">{{ manifest.data_classification }}</span>
+                        {% endif %}
+                    </td></tr>{% endif %}
+                    {% if manifest.data_owner %}<tr><td class="label">Data Owner</td><td>{{ manifest.data_owner }}</td></tr>{% endif %}
+                </table>
+
+                <h3>Evaluation Metrics</h3>
+                <table class="reg-table">
+                    {% set metrics = manifest.evaluation_metrics %}
+                    {% if metrics %}
+                    {% if metrics.accuracy is defined %}<tr><td class="label">Accuracy</td><td>{{ '%.4f' | format(metrics.accuracy) }}</td></tr>{% endif %}
+                    {% if metrics.precision is defined %}<tr><td class="label">Precision</td><td>{{ '%.4f' | format(metrics.precision) }}</td></tr>{% endif %}
+                    {% if metrics.recall is defined %}<tr><td class="label">Recall</td><td>{{ '%.4f' | format(metrics.recall) }}</td></tr>{% endif %}
+                    {% if metrics.f1 is defined %}<tr><td class="label">F1</td><td>{{ '%.4f' | format(metrics.f1) }}</td></tr>{% endif %}
+                    {% if metrics.ndcg_at_10 is defined %}<tr><td class="label">NDCG@10</td><td>{{ '%.4f' | format(metrics.ndcg_at_10) }}</td></tr>{% endif %}
+                    {% if metrics.mrr is defined %}<tr><td class="label">MRR</td><td>{{ '%.4f' | format(metrics.mrr) }}</td></tr>{% endif %}
+                    {% if metrics.loss is defined %}<tr><td class="label">Loss</td><td>{{ '%.4f' | format(metrics.loss) }}</td></tr>{% endif %}
+                    {% endif %}
+                </table>
+
+                <h3>Training Configuration</h3>
+                {% set training = manifest.training %}
+                {% if training %}
+                <table class="reg-table">
+                    <tr><td class="label">Job ID</td><td class="reg-text-mono">{{ training.job_id | default('-') }}</td></tr>
+                    <tr><td class="label">Started</td><td>{{ training.started_at | default('-') }}</td></tr>
+                    <tr><td class="label">Completed</td><td>{{ training.completed_at | default('-') }}</td></tr>
+                    <tr><td class="label">Duration</td><td>{{ training.duration_hours | default('-') }} hours</td></tr>
+                    <tr><td class="label">Trained By</td><td>{{ training.trained_by | default('-') }}</td></tr>
+                    <tr><td class="label">GPU</td><td>{{ training.gpu | default('-') }}</td></tr>
+                    <tr><td class="label">Epochs</td><td>{{ training.epochs | default('-') }}</td></tr>
+                    <tr><td class="label">Batch Size</td><td>{{ training.batch_size | default('-') }}</td></tr>
+                    <tr><td class="label">Learning Rate</td><td class="reg-text-mono">{{ training.learning_rate | default('-') }}</td></tr>
+                </table>
+                {% endif %}
+
+                <h3>Artifacts</h3>
+                {% set artifacts = manifest.artifacts %}
+                {% if artifacts %}
+                <table class="reg-table">
+                    {% if artifacts.model_binary %}
+                    <tr><td class="label">Model Binary</td><td>
+                        <div class="reg-text-mono reg-break" style="font-size:12px;">s3://{{ artifacts.model_binary.bucket }}/{{ artifacts.model_binary.path }}</div>
+                        <div class="reg-text-muted" style="font-size:12px;margin-top:4px;">Size: {{ artifacts.model_binary.size_mb | default('?') }} MB &middot; SHA256: <span class="reg-text-mono">{{ artifacts.model_binary.sha256 | default('-') }}</span></div>
+                    </td></tr>
+                    {% endif %}
+                    {% if artifacts.training_log %}
+                    <tr><td class="label">Training Log</td><td>
+                        <div class="reg-text-mono reg-break" style="font-size:12px;">s3://{{ artifacts.training_log.bucket }}/{{ artifacts.training_log.path }}</div>
+                        <div class="reg-text-muted" style="font-size:12px;margin-top:4px;">SHA256: <span class="reg-text-mono">{{ artifacts.training_log.sha256 | default('-') }}</span></div>
+                    </td></tr>
+                    {% endif %}
+                    {% if artifacts.manifest %}
+                    <tr><td class="label">Manifest</td><td>
+                        <div class="reg-text-mono reg-break" style="font-size:12px;">s3://{{ artifacts.manifest.bucket }}/{{ artifacts.manifest.path }}</div>
+                    </td></tr>
+                    {% endif %}
+                </table>
+                {% endif %}
+
+                {% if manifest.inference %}
+                <h3>Inference Configuration</h3>
+                <table class="reg-table">
+                    {% if manifest.inference.serving_runtime %}<tr><td class="label">Runtime</td><td><code>{{ manifest.inference.serving_runtime }}</code></td></tr>{% endif %}
+                    {% if manifest.inference.device %}<tr><td class="label">Device</td><td>{{ manifest.inference.device }}</td></tr>{% endif %}
+                    {% if manifest.inference.max_batch_size %}<tr><td class="label">Max Batch Size</td><td>{{ manifest.inference.max_batch_size }}</td></tr>{% endif %}
+                    {% if manifest.inference.latency_p99_ms %}<tr><td class="label">Latency P99</td><td>{{ manifest.inference.latency_p99_ms }} ms</td></tr>{% endif %}
+                    {% if manifest.inference.throughput_qps %}<tr><td class="label">Throughput</td><td>{{ manifest.inference.throughput_qps }} QPS</td></tr>{% endif %}
+                    {% if manifest.inference.memory_footprint_mb %}<tr><td class="label">Memory</td><td>{{ manifest.inference.memory_footprint_mb }} MB</td></tr>{% endif %}
+                </table>
+                {% endif %}
+
+                {% if manifest.compliance %}
+                <h3>Compliance &amp; Audit</h3>
+                <table class="reg-table">
+                    {% if manifest.compliance.audit_id %}<tr><td class="label">Audit ID</td><td class="reg-text-mono">{{ manifest.compliance.audit_id }}</td></tr>{% endif %}
+                    {% if manifest.compliance.compliance_status %}<tr><td class="label">Status</td><td>
+                        {% if manifest.compliance.compliance_status == 'approved' %}
+                            <span class="reg-badge reg-badge-public">{{ manifest.compliance.compliance_status }}</span>
+                        {% else %}
+                            <span class="reg-badge reg-badge-status">{{ manifest.compliance.compliance_status }}</span>
+                        {% endif %}
+                    </td></tr>{% endif %}
+                    {% if manifest.compliance.compliance_reviewer %}<tr><td class="label">Reviewer</td><td>{{ manifest.compliance.compliance_reviewer }}</td></tr>{% endif %}
+                    {% if manifest.compliance.regulator %}<tr><td class="label">Regulator</td><td>{{ manifest.compliance.regulator }}</td></tr>{% endif %}
+                    {% if manifest.compliance.training_log_path %}<tr><td class="label">Training Log Path</td><td class="reg-text-mono reg-break">{{ manifest.compliance.training_log_path }}</td></tr>{% endif %}
+                    {% if manifest.compliance.audit_record_location %}<tr><td class="label">Audit Record Location</td><td class="reg-text-mono reg-break">{{ manifest.compliance.audit_record_location }}</td></tr>{% endif %}
+                    {% if manifest.compliance.review_date %}<tr><td class="label">Review Date</td><td>{{ manifest.compliance.review_date }}</td></tr>{% endif %}
+                </table>
+                {% endif %}
+
+                {% if manifest.signature %}
+                <h3>Signature</h3>
+                <table class="reg-table">
+                    <tr><td class="label">Signed By</td><td>{{ manifest.signature.signed_by | default('-') }}</td></tr>
+                    <tr><td class="label">Signed At</td><td>{{ manifest.signature.signed_at | default('-') }}</td></tr>
+                    <tr><td class="label">Algorithm</td><td><code>{{ manifest.signature.algorithm | default('-') }}</code></td></tr>
+                    <tr><td class="label">Key ID</td><td class="reg-text-mono">{{ manifest.signature.key_id | default('-') }}</td></tr>
+                    <tr><td class="label">Signature</td><td class="reg-text-mono reg-break" style="font-size:11px;">{{ manifest.signature.signature | default('-') }}</td></tr>
+                </table>
+                {% endif %}
+
+                <div class="reg-mt-16" style="padding:12px;background:var(--nm-bg-dark);border:1px solid var(--nm-border-soft);border-radius:8px;font-size:12px;color:var(--nm-text-muted);">
+                    &#128274; Full manifest (including all fields) is available via the API:
+                    <div class="reg-code reg-mt-8" style="margin:8px 0 0;">GET /api/v1/models/{{ model.name }}/versions/{{ ver.version }}/manifest
+Authorization: Bearer &lt;token&gt;{% if model.visibility == 'private' %}  (admin token required){% endif %}</div>
+                </div>
+            </div>
+            {% endfor %}
+
+        </div>
+
+        <div class="reg-model-sidebar">
+
+            <div class="reg-card">
+                <h2>Model Info</h2>
+                <table class="reg-table">
+                    <tr><td class="label">Owner</td><td>{{ model.owner | default('-') }}</td></tr>
+                    <tr><td class="label">Task</td><td><code>{{ model.task_type | default('-') }}</code></td></tr>
+                    <tr><td class="label">Framework</td><td>{{ model.framework | default('-') }}</td></tr>
+                    <tr><td class="label">Visibility</td><td>
+                        {% if model.visibility == 'private' %}
+                            <span class="reg-badge reg-badge-private">{{ model.visibility }}</span>
+                        {% else %}
+                            <span class="reg-badge reg-badge-public">{{ model.visibility }}</span>
+                        {% endif %}
+                    </td></tr>
+                    <tr><td class="label">Created</td><td>{{ model.created_at[:10] if model.created_at else '-' }}</td></tr>
+                    <tr><td class="label">Updated</td><td>{{ model.updated_at[:10] if model.updated_at else '-' }}</td></tr>
+                </table>
+            </div>
+
+            <div class="reg-card">
+                <h2>Stats</h2>
+                <div class="reg-flex-between" style="padding:6px 0;">
+                    <span class="reg-text-soft">Downloads</span>
+                    <span style="font-weight:600;">&#11015; {{ model.downloads | default(0) }}</span>
+                </div>
+                <div class="reg-flex-between" style="padding:6px 0;">
+                    <span class="reg-text-soft">Likes</span>
+                    <span style="font-weight:600;">&#10084; {{ model.likes | default(0) }}</span>
+                </div>
+                <div class="reg-flex-between" style="padding:6px 0;">
+                    <span class="reg-text-soft">Versions</span>
+                    <span style="font-weight:600;">&#128230; {{ model.versions | length }}</span>
+                </div>
+            </div>
+
+            <div class="reg-card">
+                <h2>Versions</h2>
+                {% for ver in model.versions %}
+                <div class="reg-version-item">
+                    <div class="reg-version-info">
+                        <span class="reg-version-name">{{ ver.version }}</span>
+                        <span class="reg-version-meta">{{ ver.created_at[:10] if ver.created_at else '-' }} &middot; {{ ver.created_by | default('-') }}</span>
+                    </div>
+                    <span class="reg-badge reg-badge-status">{{ ver.status | default('-') }}</span>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="reg-card">
+                <h2>API Access</h2>
+                <div class="reg-code" style="font-size:11px;">GET /api/v1/models/{{ model.name }}
+GET /api/v1/models/{{ model.name }}/versions
+GET /api/v1/models/{{ model.name }}/versions/{ver}/manifest</div>
+                <p class="reg-text-muted reg-mt-8" style="font-size:11px;">
+                    {% if model.visibility == 'private' %}
+                    &#128274; Private model &mdash; admin token required for manifest access.
+                    {% else %}
+                    Public model &mdash; any authenticated user can access.
+                    {% endif %}
+                </p>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<div class="reg-footer">
+    NebulaMind AI Corp &mdash; Model Registry &amp; Inference Configuration Service &mdash; v{{ registry.version | default('2026.06.3') }}
+    &mdash; Data Zone
+</div>
+
+</body>
+</html>

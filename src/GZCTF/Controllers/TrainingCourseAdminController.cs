@@ -1019,10 +1019,11 @@ public class TrainingCourseAdminController(
         if (!await CanEditCourse(actor, courseId, token))
             return NotFound();
 
+        var endpoint = await dockerRegistry.GetActiveEndpointAsync(token);
         return Ok(new
         {
-            enabled = dockerRegistry.IsConfigured,
-            address = dockerRegistry.RegistryAddress,
+            enabled = endpoint is not null,
+            address = endpoint?.Address ?? string.Empty,
             @namespace = dockerRegistry.RegistryNamespace,
             maxUploadSizeGb = dockerRegistry.MaxUploadSizeGb
         });

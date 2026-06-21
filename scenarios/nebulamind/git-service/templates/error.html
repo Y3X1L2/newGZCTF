@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error {{ code }} - NebulaMind Git</title>
+    <link rel="stylesheet" href="/_shared/assets/nebulamind.css">
+    <link rel="stylesheet" href="/static/css/git.css">
+</head>
+<body>
+    <nav class="nm-nav">
+        <div class="nm-nav-brand">NebulaMind Git</div>
+        <div class="nm-nav-links">
+            <a href="/">Repositories</a>
+        </div>
+    </nav>
+
+    <div class="nm-container">
+        <div class="empty-state">
+            <h1 style="font-size:48px;color:var(--nm-text);margin-bottom:16px;">{{ code }}</h1>
+            <p>{{ message }}</p>
+            <p class="nm-mt-16">
+                <a class="nm-btn nm-btn-primary" href="/">Back to Repositories</a>
+            </p>
+        </div>
+    </div>
+
+    <footer class="nm-footer">
+        NebulaMind AI Corp - Internal Git Service &middot; Operations Zone
+    </footer>
+</body>
+</html>

@@ -10,7 +10,6 @@ import {
   mdiSwordCross,
   mdiTagOutline,
   mdiTextBoxOutline,
-  mdiTimelineClockOutline,
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import React, { FC, useEffect, useState } from 'react'
@@ -57,7 +56,6 @@ export const WithGameEditTab: FC<GameEditTabProps> = ({ children, contentPos, he
           { icon: mdiAccountGroupOutline, title: '理论成绩', path: 'theory-results' },
         ]
       : []),
-    { icon: mdiTimelineClockOutline, title: '比赛阶段', path: 'phases' },
     { icon: mdiTagOutline, title: t('admin.tab.games.divisions'), path: 'divisions' },
     { icon: mdiAccountGroupOutline, title: t('admin.tab.games.review'), path: 'review' },
     ...(!isTheoryOnly

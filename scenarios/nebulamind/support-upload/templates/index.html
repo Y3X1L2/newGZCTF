@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>客户支持上传中心 - NebulaMind AI</title>
+<meta name="description" content="NebulaMind 客户支持上传中心 - 提交日志包、截图或文档，获取技术支持。">
+<link rel="stylesheet" href="/_shared/assets/nebulamind.css">
+<link rel="stylesheet" href="/static/css/upload.css">
+</head>
+<body>
+
+<!-- 顶部导航 -->
+<nav class="nm-nav">
+    <a href="/" class="nm-nav-brand">NebulaMind Support</a>
+    <div class="nm-nav-links">
+        <a href="/" class="active">提交工单</a>
+        <a href="/tickets">工单列表</a>
+    </div>
+    <div class="nm-nav-spacer"></div>
+    <span class="nm-text-soft" style="font-size:12px;">客户支持热线: 400-888-NEBI</span>
+</nav>
+
+<!-- Hero -->
+<section class="nm-hero" style="padding:48px 32px 32px;">
+    <h1 style="font-size:36px;">客户支持上传中心</h1>
+    <p>提交日志包、截图或文档，我们的技术支持团队将自动解析并响应。
+       请填写以下信息并上传相关文件。</p>
+</section>
+
+<div class="nm-container">
+    <div class="nm-grid nm-grid-2">
+        <!-- 上传表单 -->
+        <div class="nm-card">
+            <h3>创建支持工单</h3>
+            <form id="uploadForm" action="/api/upload" method="POST" enctype="multipart/form-data">
+                <div class="nm-form-group">
+                    <label class="nm-label">客户名称 *</label>
+                    <input type="text" name="customer" class="nm-input" placeholder="例：云擎科技有限公司" required>
+                </div>
+                <div class="nm-form-group">
+                    <label class="nm-label">工单标题 *</label>
+                    <input type="text" name="title" class="nm-input" placeholder="简述遇到的问题" required>
+                </div>
+                <div class="nm-form-group">
+                    <label class="nm-label">优先级</label>
+                    <select name="priority" class="nm-select">
+                        <option value="P4">P4 - 咨询</option>
+                        <option value="P3" selected>P3 - 一般</option>
+                        <option value="P2">P2 - 重要</option>
+                        <option value="P1">P1 - 紧急</option>
+                        <option value="P0">P0 - 严重</option>
+                    </select>
+                </div>
+                <div class="nm-form-group">
+                    <label class="nm-label">日志包文件 *</label>
+                    <div class="upload-dropzone" id="dropzone">
+                        <input type="file" name="file" id="fileInput" accept=".log,.txt,.zip,.gz,.csv,.json,.jpg,.jpeg,.png,.pdf" style="display:none;">
+                        <div class="upload-dropzone-content">
+                            <div style="font-size:32px;">&#128229;</div>
+                            <p>点击选择文件或拖拽到此处</p>
+                            <p class="nm-text-soft" style="font-size:11px;">支持：日志文件、ZIP/GZ 压缩包、截图、PDF（最大 50MB）</p>
+                        </div>
+                    </div>
+                    <div id="fileInfo" class="upload-file-info" style="display:none;">
+                        <span id="fileName"></span>
+                        <span id="fileSize" class="nm-text-soft"></span>
+                    </div>
+                </div>
+                <button type="submit" class="nm-btn nm-btn-primary" id="submitBtn" style="width:100%;justify-content:center;">提交工单</button>
+            </form>
+            <div id="uploadResult" class="upload-result" style="display:none;"></div>
+        </div>
+
+        <!-- 远程 URL 解析 -->
+        <div class="nm-card">
+            <h3>远程文档解析</h3>
+            <p class="nm-text-soft nm-mb-16">提交远程文档 URL，由文档解析 Worker 抓取并解析。
+               适用于已托管在内网的文档资源。</p>
+            <form id="parseUrlForm">
+                <div class="nm-form-group">
+                    <label class="nm-label">文档 URL *</label>
+                    <input type="url" name="url" id="urlInput" class="nm-input" placeholder="https://example.com/document.pdf" required>
+                </div>
+                <div class="nm-form-group">
+                    <label class="nm-label">文档类型</label>
+                    <select name="docType" class="nm-select">
+                        <option value="auto">自动识别</option>
+                        <option value="pdf">PDF</option>
+                        <option value="word">Word</option>
+                        <option value="markdown">Markdown</option>
+                        <option value="html">HTML</option>
+                    </select>
+                </div>
+                <button type="submit" class="nm-btn nm-btn-primary" id="parseBtn" style="width:100%;justify-content:center;">提交解析</button>
+            </form>
+            <div id="parseResult" class="upload-result" style="display:none;"></div>
+
+            <div class="nm-mt-32" style="border-top:1px solid var(--nm-border);padding-top:16px;">
+                <h3 style="font-size:14px;">解析说明</h3>
+                <ul class="nm-text-soft" style="font-size:12px;padding-left:20px;line-height:1.8;">
+                    <li>支持 PDF、Word、Markdown、HTML 等格式</li>
+                    <li>Worker 会抓取 URL 内容并自动识别文档类型</li>
+                    <li>解析结果包含提取的文本、实体和摘要</li>
+                    <li>大文件解析可能需要 30-60 秒</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- 最近工单 -->
+    <div class="nm-mt-32">
+        <div class="nm-flex-between nm-mb-16">
+            <h2 style="font-size:20px;">最近工单</h2>
+            <a href="/tickets" class="nm-btn">查看全部 &rarr;</a>
+        </div>
+        <div class="nm-card" style="padding:0;overflow:hidden;">
+            <table class="nm-table">
+                <thead>
+                    <tr>
+                        <th>工单号</th>
+                        <th>客户</th>
+                        <th>标题</th>
+                        <th>优先级</th>
+                        <th>状态</th>
+                        <th>创建时间</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in recent_tickets %}
+                    <tr>
+                        <td class="nm-text-mono">{{ t.ticketId }}</td>
+                        <td>{{ t.customer }}</td>
+                        <td>{{ t.title }}</td>
+                        <td><span class="nm-badge nm-badge-{% if t.priority in ['P0','P1'] %}danger{% elif t.priority == 'P2' %}warning{% else %}info{% endif %}">{{ t.priority }}</span></td>
+                        <td><span class="nm-badge nm-badge-{% if t.status == 'resolved' %}success{% elif t.status == 'in_progress' %}warning{% elif t.status == 'closed' %}info{% else %}info{% endif %}">{{ t.statusLabel }}</span></td>
+                        <td class="nm-text-soft">{{ t.createdAt }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 页脚 -->
+<footer class="nm-footer">
+    <div class="nm-flex" style="justify-content:center;gap:32px;flex-wrap:wrap;">
+        <a href="/">提交工单</a>
+        <a href="/tickets">工单列表</a>
+    </div>
+    <p class="nm-mt-8">&copy; 2026 NebulaMind AI Corp. 客户支持中心 &nbsp;|&nbsp; support@nebulamind.ai</p>
+</footer>
+
+<script>
+// 文件上传交互
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const fileName = document.getElementById('fileName');
+const fileSize = document.getElementById('fileSize');
+
+dropzone.addEventListener('click', () => fileInput.click());
+
+dropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropzone.classList.add('dragover');
+});
+
+dropzone.addEventListener('dragleave', () => {
+    dropzone.classList.remove('dragover');
+});
+
+dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        showFileInfo(e.dataTransfer.files[0]);
+    }
+});
+
+fileInput.addEventListener('change', () => {
+    if (fileInput.files.length) {
+        showFileInfo(fileInput.files[0]);
+    }
+});
+
+function showFileInfo(file) {
+    fileName.textContent = file.name;
+    fileSize.textContent = ' (' + formatSize(file.size) + ')';
+    fileInfo.style.display = 'flex';
+    dropzone.style.display = 'none';
+}
+
+function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/1048576).toFixed(1) + ' MB';
+}
+
+// 上传表单提交
+document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('submitBtn');
+    const result = document.getElementById('uploadResult');
+    btn.disabled = true;
+    btn.textContent = '上传中...';
+
+    try {
+        const formData = new FormData(e.target);
+        const resp = await fetch('/api/upload', { method: 'POST', body: formData });
+        const data = await resp.json();
+
+        if (resp.ok) {
+            result.innerHTML = '<div class="nm-badge nm-badge-success" style="padding:6px 12px;">&#10003; 上传成功</div>' +
+                '<p class="nm-mt-8">工单号: <code style="color:var(--nm-accent);">' + data.taskId + '</code></p>' +
+                '<p class="nm-text-soft" style="font-size:13px;">' + data.message + '</p>' +
+                '<a href="/api/tasks/' + data.taskId + '" class="nm-btn nm-btn-primary nm-mt-8">查看解析报告 &rarr;</a>';
+            result.style.display = 'block';
+            result.className = 'upload-result upload-result-success';
+        } else {
+            result.innerHTML = '<div class="nm-badge nm-badge-danger" style="padding:6px 12px;">&#10007; 上传失败</div>' +
+                '<p class="nm-mt-8">' + (data.error || '未知错误') + '</p>';
+            result.style.display = 'block';
+            result.className = 'upload-result upload-result-error';
+        }
+    } catch (err) {
+        result.innerHTML = '<div class="nm-badge nm-badge-danger" style="padding:6px 12px;">&#10007; 网络错误</div><p class="nm-mt-8">' + err.message + '</p>';
+        result.style.display = 'block';
+        result.className = 'upload-result upload-result-error';
+    }
+
+    btn.disabled = false;
+    btn.textContent = '提交工单';
+});
+
+// URL 解析表单
+document.getElementById('parseUrlForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('parseBtn');
+    const result = document.getElementById('parseResult');
+    const url = document.getElementById('urlInput').value;
+
+    btn.disabled = true;
+    btn.textContent = '解析中...';
+
+    try {
+        const resp = await fetch('/api/parse-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: url }),
+        });
+        const data = await resp.json();
+
+        if (resp.ok) {
+            result.innerHTML = '<div class="nm-badge nm-badge-success" style="padding:6px 12px;">&#10003; 解析完成</div>' +
+                '<pre class="upload-log nm-mt-8">' + JSON.stringify(data, null, 2) + '</pre>';
+        } else {
+            result.innerHTML = '<div class="nm-badge nm-badge-danger" style="padding:6px 12px;">&#10007; 解析失败</div>' +
+                '<p class="nm-mt-8">' + (data.error || '未知错误') + '</p>' +
+                (data.detail ? '<p class="nm-text-soft" style="font-size:12px;">' + data.detail + '</p>' : '') +
+                (data.hint ? '<p class="nm-text-soft" style="font-size:12px;">' + data.hint + '</p>' : '');
+        }
+        result.style.display = 'block';
+    } catch (err) {
+        result.innerHTML = '<div class="nm-badge nm-badge-danger" style="padding:6px 12px;">&#10007; 网络错误</div><p class="nm-mt-8">' + err.message + '</p>';
+        result.style.display = 'block';
+    }
+
+    btn.disabled = false;
+    btn.textContent = '提交解析';
+});
+</script>
+
+</body>
+</html>

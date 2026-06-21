@@ -1,0 +1,182 @@
+/* NebulaMind Console API - Console Stylesheet */
+/* Uses shared NebulaMind dark theme variables where available */
+
+:root {
+    --nm-bg: #0d1117;
+    --nm-bg-dark: #090c12;
+    --nm-bg-card: #161b22;
+    --nm-border: #30363d;
+    --nm-text: #e6edf3;
+    --nm-text-soft: #8b949e;
+    --nm-accent: #58a6ff;
+    --nm-accent-grad: linear-gradient(135deg, #58a6ff, #bc8cff);
+    --nm-green: #3fb950;
+    --nm-red: #f85149;
+    --nm-mono: 'SF Mono', 'Fira Code', 'Consolas', 'Courier New', monospace;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: var(--nm-bg);
+    color: var(--nm-text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+                 'Microsoft YaHei', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+/* Navigation */
+.nm-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 32px;
+    background: var(--nm-bg-dark);
+    border-bottom: 1px solid var(--nm-border);
+}
+
+.nm-nav-brand {
+    font-size: 16px;
+    font-weight: 600;
+    background: var(--nm-accent-grad);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.nm-nav-links a {
+    color: var(--nm-text-soft);
+    text-decoration: none;
+    margin-left: 24px;
+    font-size: 13px;
+    transition: color 0.2s;
+}
+
+.nm-nav-links a:hover {
+    color: var(--nm-accent);
+}
+
+/* Container */
+.nm-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px;
+}
+
+/* Cards */
+.nm-card {
+    background: var(--nm-bg-card);
+    border: 1px solid var(--nm-border);
+    border-radius: 12px;
+    padding: 24px;
+}
+
+.nm-card h2 {
+    font-size: 16px;
+    margin-bottom: 16px;
+    color: var(--nm-text);
+}
+
+/* Typography */
+h1 {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.nm-text-soft {
+    color: var(--nm-text-soft);
+}
+
+.nm-mt-16 { margin-top: 16px; }
+.nm-mt-24 { margin-top: 24px; }
+.nm-mt-32 { margin-top: 32px; }
+
+/* Tables */
+.nm-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.nm-table th {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--nm-border);
+    color: var(--nm-text-soft);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.nm-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--nm-border);
+}
+
+.nm-table tr:last-child td {
+    border-bottom: none;
+}
+
+.nm-table code {
+    background: var(--nm-bg-dark);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: var(--nm-mono);
+    font-size: 12px;
+    color: var(--nm-accent);
+}
+
+/* Code blocks */
+.nm-code {
+    background: var(--nm-bg-dark);
+    border: 1px solid var(--nm-border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-family: var(--nm-mono);
+    font-size: 13px;
+    overflow-x: auto;
+    margin: 8px 0;
+    color: var(--nm-text);
+}
+
+/* Buttons */
+.nm-btn {
+    padding: 8px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--nm-border);
+    background: var(--nm-bg-card);
+    color: var(--nm-text);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.nm-btn-primary {
+    background: var(--nm-accent-grad);
+    border: none;
+    color: #fff;
+}
+
+.nm-btn-primary:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+/* Links */
+a {
+    color: var(--nm-accent);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}

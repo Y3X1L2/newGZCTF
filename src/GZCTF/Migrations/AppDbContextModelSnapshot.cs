@@ -116,11 +116,6 @@ namespace GZCTF.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
-                    b.Property<int>("TeamIndex")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
                     b.Property<int>("TeamId")
                         .HasColumnType("integer");
 
@@ -670,6 +665,129 @@ namespace GZCTF.Migrations
                     b.HasIndex("DivisionId");
 
                     b.ToTable("DivisionChallengeConfig");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.DockerRegistryMigrationItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("BytesTransferred")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<int>("ImageTemplateId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SourceDigest")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("SourceImage")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("TargetDigest")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("TargetImage")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("TotalBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ImageTemplateId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("TaskId");
+
+                    b.ToTable("DockerRegistryMigrationItems");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.DockerRegistryMigrationTask", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CompletedItems")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("FailedItems")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("SourceRegistry")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("TargetNodeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TargetRegistry")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("TotalItems")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("TargetNodeId");
+
+                    b.ToTable("DockerRegistryMigrationTasks");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.ExerciseChallenge", b =>
@@ -1670,6 +1788,7 @@ namespace GZCTF.Migrations
 
                     b.Property<string>("EnforcementMode")
                         .IsRequired()
+                        .ValueGeneratedOnAdd()
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)")
                         .HasDefaultValue("HintOnly");
@@ -1692,6 +1811,7 @@ namespace GZCTF.Migrations
                         .HasColumnType("character varying(64)");
 
                     b.Property<int>("Priority")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(100);
 
@@ -2209,16 +2329,16 @@ namespace GZCTF.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<bool>("IsCheckpoint")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsDynamic")
                         .HasColumnType("boolean");
 
                     b.Property<bool>("IsVisible")
                         .HasColumnType("boolean");
-
-                    b.Property<bool>("IsCheckpoint")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
 
                     b.Property<int>("MaxAttempts")
                         .HasColumnType("integer");
@@ -2372,6 +2492,9 @@ namespace GZCTF.Migrations
                         .HasColumnType("character varying(32)");
 
                     b.Property<int>("TeamId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TeamIndex")
                         .HasColumnType("integer");
 
                     b.Property<DateTimeOffset?>("UpdatedAt")
@@ -4605,6 +4728,9 @@ namespace GZCTF.Migrations
                     b.Property<bool>("IsSchedulable")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsStorageNode")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Labels")
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
@@ -4628,6 +4754,9 @@ namespace GZCTF.Migrations
 
                     b.Property<DateTimeOffset>("RegisteredAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RegistryPort")
+                        .HasColumnType("integer");
 
                     b.Property<byte>("Status")
                         .HasColumnType("smallint");
@@ -5094,6 +5223,36 @@ namespace GZCTF.Migrations
                     b.Navigation("Challenge");
 
                     b.Navigation("Division");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.DockerRegistryMigrationItem", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.ImageTemplate", "ImageTemplate")
+                        .WithMany()
+                        .HasForeignKey("ImageTemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.DockerRegistryMigrationTask", "Task")
+                        .WithMany("Items")
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ImageTemplate");
+
+                    b.Navigation("Task");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.DockerRegistryMigrationTask", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.WorkerNode", "TargetNode")
+                        .WithMany()
+                        .HasForeignKey("TargetNodeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TargetNode");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.ExerciseChallenge", b =>
@@ -6757,6 +6916,11 @@ namespace GZCTF.Migrations
             modelBuilder.Entity("GZCTF.Models.Data.Division", b =>
                 {
                     b.Navigation("ChallengeConfigs");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.DockerRegistryMigrationTask", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.ExerciseChallenge", b =>

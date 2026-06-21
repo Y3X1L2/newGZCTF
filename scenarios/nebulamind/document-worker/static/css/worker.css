@@ -1,0 +1,67 @@
+/* NebulaMind Document Worker - API 服务样式
+   Worker 主要是 API 服务，此样式用于根路径和错误页面的基础渲染。
+   复用共享 nebulamind.css 的设计令牌，保持视觉一致性。 */
+
+.nm-worker-hero {
+    padding: 48px 32px 32px;
+    text-align: center;
+    background:
+        radial-gradient(ellipse at top, rgba(99, 102, 241, 0.12), transparent 60%),
+        radial-gradient(ellipse at bottom, rgba(34, 211, 238, 0.06), transparent 60%);
+}
+
+.nm-worker-hero h1 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, #fff, var(--nm-primary-soft));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.nm-worker-hero p {
+    font-size: 14px;
+    color: var(--nm-text-soft);
+    max-width: 560px;
+    margin: 0 auto;
+}
+
+.nm-endpoint-list {
+    list-style: none;
+    padding: 0;
+    margin: 16px 0 0;
+}
+
+.nm-endpoint-list li {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--nm-border);
+    font-family: var(--nm-mono);
+    font-size: 13px;
+    color: var(--nm-text-soft);
+}
+
+.nm-endpoint-list li:last-child {
+    border-bottom: none;
+}
+
+.nm-endpoint-list .method {
+    display: inline-block;
+    min-width: 48px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-align: center;
+    margin-right: 8px;
+}
+
+.nm-method-get {
+    background: rgba(52, 211, 153, 0.15);
+    color: var(--nm-success);
+}
+
+.nm-method-post {
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--nm-primary-soft);
+}

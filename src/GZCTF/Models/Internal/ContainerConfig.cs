@@ -83,6 +83,19 @@ public class ContainerConfig
     public bool PublishPort { get; set; } = true;
 
     /// <summary>
+    /// Optional fixed host port for direct node exposure. When null, Docker chooses
+    /// a platform-managed public port or a random host port.
+    /// </summary>
+    public int? PreferredHostPort { get; set; }
+
+    /// <summary>
+    /// Skip central public proxy allocation even when it is enabled globally.
+    /// Used by penetration environments where the team is assigned a dedicated
+    /// node and players should scan the node address directly.
+    /// </summary>
+    public bool BypassPublicProxy { get; set; }
+
+    /// <summary>
     /// Extra container environment variables.
     /// </summary>
     public Dictionary<string, string> EnvironmentVariables { get; set; } = [];

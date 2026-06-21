@@ -1,0 +1,27 @@
+{
+  "name": "bootstrap",
+  "description": "CI runner bootstrap token policy - full read/write access to all secrets. This policy is intentionally over-privileged for the G1 challenge (Vault Bootstrap Token Abuse).",
+  "rules": {
+    "path": {
+      "secret/data/*": {
+        "capabilities": ["create", "read", "update", "delete", "list"]
+      },
+      "secret/metadata/*": {
+        "capabilities": ["read", "list", "delete"]
+      },
+      "auth/token/create": {
+        "capabilities": ["create", "update"]
+      },
+      "auth/token/lookup": {
+        "capabilities": ["read"]
+      },
+      "sys/policies/acl": {
+        "capabilities": ["read", "list"]
+      },
+      "sys/mounts": {
+        "capabilities": ["read"]
+      }
+    }
+  },
+  "warning": "This policy grants excessive privileges to a CI service account token. In production, CI tokens should follow least-privilege and only access the specific paths they need."
+}

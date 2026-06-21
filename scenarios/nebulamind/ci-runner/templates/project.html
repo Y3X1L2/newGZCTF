@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ project.name }} - NebulaMind CI</title>
+<link rel="stylesheet" href="/_shared/assets/nebulamind.css">
+<link rel="stylesheet" href="/static/css/ci.css">
+</head>
+<body>
+
+<!-- 顶部导航 -->
+<nav class="nm-nav">
+    <a href="/" class="nm-nav-brand">NebulaMind CI</a>
+    <div class="nm-nav-links">
+        <a href="/" class="active">项目</a>
+        <a href="/api/projects">API</a>
+    </div>
+</nav>
+
+<div class="nm-container">
+    <a href="/" class="nm-btn nm-mb-16">&larr; 返回项目列表</a>
+
+    <!-- 项目信息 -->
+    <div class="nm-card nm-mb-16">
+        <div class="nm-flex-between">
+            <div>
+                <h1 style="font-size:22px;">{{ project.name }}</h1>
+                <p class="nm-text-soft nm-mt-8">{{ project.description }}</p>
+            </div>
+            <span class="nm-badge nm-badge-info">{{ project.language }}</span>
+        </div>
+        <div class="nm-flex nm-mt-16" style="gap:24px;font-size:13px;">
+            <span class="nm-text-soft">项目 ID: <code style="color:var(--nm-accent);">{{ project.id }}</code></span>
+            <span class="nm-text-soft">默认分支: <code>{{ project.default_branch }}</code></span>
+            <span class="nm-text-soft">变量数: {{ project.variables|length }}</span>
+        </div>
+    </div>
+
+    <div class="nm-grid nm-grid-2">
+        <!-- 触发构建 -->
+        <div class="nm-card">
+            <h3 class="ci-section-title">&#9881; 触发构建</h3>
+            <p class="nm-text-soft nm-mb-16" style="font-size:13px;">
+                触发指定分支的 CI 流水线。可通过 variables 传递构建参数。
+            </p>
+            <form class="ci-trigger-form" id="triggerForm">
+                <div class="nm-form-group">
+                    <label class="nm-label">CI Token (低权限 token 即可)</label>
+                    <input type="text" name="token" id="tokenInput" class="nm-input" placeholder="nm_worker_token_..." required>
+                </div>
+                <div class="nm-form-group">
+                    <label class="nm-label">分支 / Ref</label>
+                    <input type="text" name="ref" id="refInput" class="nm-input" value="main" required>
+                </div>
+                <div class="nm-form-group">
+                    <label class="nm-label">构建变量 (JSON)</label>
+                    <textarea name="variables" id="variablesInput" placeholder='{"NM_BUILD_ARGS": "--no-cache"}'>{}</textarea>
+                </div>
+                <button type="submit" class="nm-btn nm-btn-primary" id="triggerBtn" style="justify-content:center;">
+                    触发构建
+                </button>
+            </form>
+            <div id="triggerResult" style="display:none;margin-top:16px;"></div>
+        </div>
+
+        <!-- 项目变量 (UI 掩码显示) -->
+        <div class="nm-card">
+            <h3 class="ci-section-title">&#128274; 项目变量</h3>
+            <p class="nm-text-soft nm-mb-16" style="font-size:13px;">
+                敏感变量已掩码显示。完整变量列表可通过 API 查询。
+            </p>
+            <table class="ci-variables-table">
+                <thead>
+                    <tr>
+                        <th>Key</th>
+                        <th>Value</th>
+                        <th>Masked</th>
+                        <th>Protected</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in project.variables %}
+                    <tr>
+                        <td class="ci-var-key">{{ v.key }}</td>
+                        <td class="{% if v.masked %}ci-var-masked{% else %}ci-var-value{% endif %}">
+                            {% if v.masked %}********{% else %}{{ v.value }}{% endif %}
+                        </td>
+                        <td>{% if v.masked %}<span class="nm-badge nm-badge-warning">masked</span>{% else %}-{% endif %}</td>
+                        <td>{% if v.protected %}<span class="nm-badge nm-badge-info">protected</span>{% else %}-{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <p class="nm-text-soft nm-mt-16" style="font-size:12px;">
+                API: <code>GET /api/projects/{{ project.id }}/variables</code> (需要 token)
+            </p>
+        </div>
+    </div>
+
+    <!-- CI 配置预览 -->
+    <div class="nm-card nm-mt-16">
+        <h3 class="ci-section-title">&#128196; .nebulaci.yml</h3>
+        <p class="nm-text-soft nm-mb-16" style="font-size:13px;">
+            CI 流水线配置。构建时读取仓库中的 .nebulaci.yml，执行各阶段脚本。
+        </p>
+        <div class="ci-code-block">{{ nebulaci_config }}</div>
+    </div>
+
+    <!-- 构建历史 -->
+    <div class="nm-mt-32">
+        <h2 style="font-size:20px;margin-bottom:16px;">构建历史</h2>
+        <div class="nm-card" style="padding:0;overflow:hidden;">
+            <table class="nm-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>分支</th>
+                        <th>状态</th>
+                        <th>触发者</th>
+                        <th>耗时</th>
+                        <th>时间</th>
+                        <th>提交信息</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in builds %}
+                    <tr style="cursor:pointer;" onclick="window.location='/builds/{{ b.id }}'">
+                        <td class="nm-text-mono" style="color:var(--nm-accent);">#{{ b.id }}</td>
+                        <td class="nm-text-mono">{{ b.ref }}</td>
+                        <td><span class="ci-build-status ci-status-{{ b.status }}">{{ b.status }}</span></td>
+                        <td class="nm-text-soft">{{ b.triggeredBy }}</td>
+                        <td class="nm-text-soft">{{ b.duration }}</td>
+                        <td class="nm-text-soft">{{ b.createdAt }}</td>
+                        <td class="nm-text-soft" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ b.message }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="7" class="nm-text-soft" style="text-align:center;padding:24px;">暂无构建记录</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 页脚 -->
+<footer class="nm-footer">
+    <p>&copy; 2026 NebulaMind AI Corp. CI/CD Platform &nbsp;|&nbsp; ci@nebulamind.ai</p>
+</footer>
+
+<script>
+document.getElementById('triggerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('triggerBtn');
+    const result = document.getElementById('triggerResult');
+    const token = document.getElementById('tokenInput').value.trim();
+    const ref = document.getElementById('refInput').value.trim();
+    const variablesStr = document.getElementById('variablesInput').value.trim();
+
+    let variables = {};
+    try {
+        variables = JSON.parse(variablesStr || '{}');
+    } catch (err) {
+        result.innerHTML = '<div class="nm-badge nm-badge-danger" style="padding:6px 12px;">&#10007; 变量 JSON 格式错误</div><p class="nm-mt-8">' + err.message + '</p>';
+        result.style.display = 'block';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = '触发中...';
+
+    try {
+        const resp = await fetch('/api/projects/{{ project.id }}/trigger', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token,
+            },
+            body: JSON.stringify({ ref: ref, variables: variables }),
+        });
+        const data = await resp.json();
+
+        if (resp.ok) {
+            result.innerHTML = '<div class="nm-badge nm-badge-success" style="padding:6px 12px;">&#10003; 构建已触发</div>' +
+                '<p class="nm-mt-8">构建 ID: <code style="color:var(--nm-accent);">#' + data.buildId + '</code></p>' +
+                '<p class="nm-text-soft" style="font-size:13px;">状态: ' + data.status + '</p>' +
+                '<a href="/builds/' + data.buildId + '" class="nm-btn nm-btn-primary nm-mt-8">查看构建详情 &rarr;</a>';
+        } else {
+            result.innerHTML = '<div class="nm-badge nm-badge-danger" style="padding:6px 12px;">&#10007; 触发失败</div>' +
+                '<p class="nm-mt-8">' + (data.error || '未知错误') + '</p>';
+        }
+        result.style.display = 'block';
+    } catch (err) {
+        result.innerHTML = '<div class="nm-badge nm-badge-danger" style="padding:6px 12px;">&#10007; 网络错误</div><p class="nm-mt-8">' + err.message + '</p>';
+        result.style.display = 'block';
+    }
+
+    btn.disabled = false;
+    btn.textContent = '触发构建';
+});
+</script>
+
+</body>
+</html>

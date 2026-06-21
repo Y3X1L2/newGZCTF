@@ -19,6 +19,7 @@ using GZCTF.Services.Vm;
 using GZCTF.Storage;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.Extensions.Http.Resilience;
 
 namespace GZCTF.Extensions.Startup;
 
@@ -91,6 +92,7 @@ internal static class ServicesExtension
             builder.Services.AddScoped<IDivisionRepository, DivisionRepository>();
             builder.Services.AddScoped<IAwdpRepository, AwdpRepository>();
             builder.Services.AddScoped<DockerImageRegistryService>();
+            builder.Services.AddScoped<DockerRegistryMigrationService>();
 
             builder.Services.AddScoped<AwdpScriptRunner>();
             builder.Services.AddScoped<AwdpInstanceService>();
@@ -144,7 +146,13 @@ internal static class ServicesExtension
             builder.Services.AddHostedService<FleetHealthCheckService>();
             builder.Services.AddHostedService<QueueProcessingService>();
 
-            builder.Services.AddHttpClient("Agent");
+#pragma warning disable EXTEXP0001
+            builder.Services.AddHttpClient("Agent", client =>
+                {
+                    client.Timeout = TimeSpan.FromMinutes(10);
+                })
+                .RemoveAllResilienceHandlers();
+#pragma warning restore EXTEXP0001
             builder.Services.AddSingleton<AgentClient>();
             builder.Services.AddScoped<FleetVmService>();
             builder.Services.AddSingleton<GuacamoleService>();

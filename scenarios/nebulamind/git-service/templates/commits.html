@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Commits - {{ repo }} - NebulaMind Git</title>
+    <link rel="stylesheet" href="/_shared/assets/nebulamind.css">
+    <link rel="stylesheet" href="/static/css/git.css">
+</head>
+<body>
+    <nav class="nm-nav">
+        <div class="nm-nav-brand">NebulaMind Git</div>
+        <div class="nm-nav-links">
+            <a href="/">Repositories</a>
+            <a href="/nebulamind/{{ repo }}">{{ repo }}</a>
+            <a href="/nebulamind/{{ repo }}/commits" class="active">Commits</a>
+        </div>
+    </nav>
+
+    <div class="nm-container">
+        <div class="breadcrumb">
+            <a href="/">Repositories</a>
+            <span class="breadcrumb-sep">/</span>
+            <a href="/nebulamind/{{ repo }}">{{ repo }}</a>
+            <span class="breadcrumb-sep">/</span>
+            <span>Commits</span>
+        </div>
+
+        <div class="nm-flex-between nm-mb-16">
+            <h1 style="font-size:22px;font-weight:700;">Commit History</h1>
+            <span class="nm-text-soft" style="font-size:13px;">{{ commits|length }} commits on {{ branch }}</span>
+        </div>
+
+        <div class="nm-card">
+            {% if commits %}
+            <ul class="commit-list">
+                {% for commit in commits %}
+                <li class="commit-item">
+                    <span class="commit-sha">
+                        <a href="/nebulamind/{{ repo }}/commit/{{ commit.sha }}">{{ commit.sha_short }}</a>
+                    </span>
+                    <span class="commit-message">{{ commit.message }}</span>
+                    <span class="commit-author">{{ commit.author }}</span>
+                    <span class="commit-date">{{ commit.date }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="empty-state">No commits.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <footer class="nm-footer">
+        NebulaMind AI Corp - Internal Git Service &middot; Operations Zone
+    </footer>
+</body>
+</html>

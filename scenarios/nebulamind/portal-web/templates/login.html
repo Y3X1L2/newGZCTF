@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>登录 - NebulaMind AI Console</title>
+<link rel="stylesheet" href="/static/css/portal.css">
+<script src="/static/js/app.js" defer></script>
+</head>
+<body>
+
+<nav class="nm-nav">
+    <a href="/" class="nm-nav-brand">NebulaMind</a>
+    <div class="nm-nav-links">
+        <a href="/">首页</a>
+        <a href="/products">产品</a>
+        <a href="/customers">客户案例</a>
+        <a href="/news">新闻动态</a>
+        <a href="/downloads">下载中心</a>
+    </div>
+    <div class="nm-nav-spacer"></div>
+    <span class="nm-text-soft" style="font-size:12px;">Knowledge Console</span>
+</nav>
+
+<div class="nm-container-narrow" style="padding-top:64px;">
+    <div class="nm-card" style="max-width:420px;margin:0 auto;">
+        <div style="text-align:center;margin-bottom:24px;">
+            <div style="display:inline-block;width:48px;height:48px;background:linear-gradient(135deg,var(--nm-primary),var(--nm-accent));border-radius:12px;margin-bottom:16px;"></div>
+            <h1 style="font-size:24px;">登录 NebulaMind Console</h1>
+            <p class="nm-text-soft nm-mt-8" style="font-size:13px;">企业智能知识平台控制台</p>
+        </div>
+
+        <form id="login-form" onsubmit="return false;">
+            <div class="nm-form-group">
+                <label class="nm-label">企业邮箱</label>
+                <input type="email" class="nm-input" placeholder="you@company.com" autocomplete="username">
+            </div>
+            <div class="nm-form-group">
+                <label class="nm-label">密码</label>
+                <input type="password" class="nm-input" placeholder="••••••••" autocomplete="current-password">
+            </div>
+            <div class="nm-flex-between nm-mb-16">
+                <label style="font-size:13px;color:var(--nm-text-soft);display:flex;align-items:center;gap:6px;">
+                    <input type="checkbox"> 记住我
+                </label>
+                <a href="#" style="font-size:13px;">忘记密码？</a>
+            </div>
+            <button type="submit" class="nm-btn nm-btn-primary" style="width:100%;justify-content:center;padding:12px;">
+                登录
+            </button>
+        </form>
+
+        <div style="text-align:center;margin-top:24px;padding-top:24px;border-top:1px solid var(--nm-border);">
+            <p class="nm-text-soft" style="font-size:13px;">还没有账号？</p>
+            <a href="#" class="nm-btn nm-mt-8" style="width:100%;justify-content:center;">申请试用</a>
+        </div>
+
+        <div style="text-align:center;margin-top:16px;">
+            <p class="nm-text-soft" style="font-size:11px;">
+                支持企业 SSO 登录（飞书、钉钉、企业微信、Azure AD）
+            </p>
+        </div>
+    </div>
+
+    <div style="text-align:center;margin-top:24px;">
+        <p class="nm-text-soft" style="font-size:12px;">
+            &copy; 2026 NebulaMind AI Corp. &nbsp;|&nbsp;
+            <a href="#">服务条款</a> &nbsp;|&nbsp;
+            <a href="#">隐私政策</a>
+        </p>
+    </div>
+</div>
+
+</body>
+</html>

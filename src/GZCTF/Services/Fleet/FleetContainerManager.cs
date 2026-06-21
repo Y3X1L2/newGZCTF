@@ -54,15 +54,15 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         var nodeRepo = scope.ServiceProvider.GetRequiredService<INodeRepository>();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+        if (config.PreferredNodeId is { } preferredNodeId)
+            return await CreateOnPreferredNodeAsync(config, preferredNodeId, nodeRepo, context, token);
+
         var onlineNodes = await nodeRepo.GetOnlineNodesAsync(token);
         if (onlineNodes.Count == 0)
         {
             _logger.LogInformation("No online fleet node available, falling back to local Docker manager");
             return await _localManager.CreateContainerAsync(config, token);
         }
-
-        if (config.PreferredNodeId is { } preferredNodeId)
-            return await CreateOnPreferredNodeAsync(config, preferredNodeId, nodeRepo, context, token);
 
         var target = new DeploymentTarget
         {
@@ -122,6 +122,8 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             NetworkSubnets = config.NetworkSubnets,
             NetworkAttachments = config.NetworkAttachments,
             PublishPort = config.PublishPort,
+            PreferredHostPort = config.PreferredHostPort,
+            BypassPublicProxy = config.BypassPublicProxy,
             EnvironmentVariables = config.EnvironmentVariables,
             StartCommand = config.StartCommand,
             HealthCheck = config.HealthCheck,
@@ -146,7 +148,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             return fallback;
         }
 
-        var useProxyPort = IsNginxProxyEnabled && config.PublishPort;
+        var useProxyPort = IsNginxProxyEnabled && config.PublishPort && !config.BypassPublicProxy;
         var proxyPort = useProxyPort
             ? await AllocatePublicPortAsync(ParseContainerGuid(result.ContainerId), token)
             : null;
@@ -161,9 +163,9 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         {
             ContainerId = result.ContainerId,
             Image = config.Image,
-            IP = useProxyPort ? node!.HostAddress : result.IP,
-            Port = useProxyPort && result.PublicPort > 0 ? result.PublicPort : result.Port,
-            PublicIP = useProxyPort ? PublicEntry : node!.HostAddress,
+            IP = useProxyPort || config.PublishPort ? node!.HostAddress : result.IP,
+            Port = config.PublishPort && result.PublicPort > 0 ? result.PublicPort : result.Port,
+            PublicIP = useProxyPort ? PublicEntry : config.PublishPort ? node!.HostAddress : null,
             PublicPort = useProxyPort ? proxyPort ?? result.PublicPort : result.PublicPort,
             IsProxy = false,
             Status = ContainerStatus.Running,
@@ -219,7 +221,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             return localContainer;
         }
 
-        var result = await _agentClient.CreateContainerAsync(selectedNode.Id, config, token);
+        var result = await _agentClient.CreateContainerOrThrowAsync(selectedNode.Id, config, token);
         if (result is null)
         {
             if (!config.FleetCapacityReserved)
@@ -229,7 +231,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             return null;
         }
 
-        var useProxyPort = IsNginxProxyEnabled && config.PublishPort;
+        var useProxyPort = IsNginxProxyEnabled && config.PublishPort && !config.BypassPublicProxy;
         var proxyPort = useProxyPort
             ? await AllocatePublicPortAsync(ParseContainerGuid(result.ContainerId), token)
             : null;
@@ -244,9 +246,9 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         {
             ContainerId = result.ContainerId,
             Image = config.Image,
-            IP = useProxyPort ? selectedNode.HostAddress : result.IP,
-            Port = useProxyPort && result.PublicPort > 0 ? result.PublicPort : result.Port,
-            PublicIP = useProxyPort ? PublicEntry : selectedNode.HostAddress,
+            IP = useProxyPort || config.PublishPort ? selectedNode.HostAddress : result.IP,
+            Port = config.PublishPort && result.PublicPort > 0 ? result.PublicPort : result.Port,
+            PublicIP = useProxyPort ? PublicEntry : config.PublishPort ? selectedNode.HostAddress : null,
             PublicPort = useProxyPort ? proxyPort ?? result.PublicPort : result.PublicPort,
             IsProxy = false,
             Status = ContainerStatus.Running,

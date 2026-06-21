@@ -1,0 +1,118 @@
+/* NebulaMind Support Upload - 补充样式
+   @import 共享企业品牌样式，并添加上传中心专属样式。 */
+@import url("/_shared/assets/nebulamind.css");
+
+/* 上传拖拽区 */
+.upload-dropzone {
+    border: 2px dashed var(--nm-border);
+    border-radius: var(--nm-radius);
+    padding: 32px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--nm-bg);
+}
+.upload-dropzone:hover {
+    border-color: var(--nm-primary);
+    background: rgba(99, 102, 241, 0.05);
+}
+.upload-dropzone.dragover {
+    border-color: var(--nm-primary);
+    background: rgba(99, 102, 241, 0.1);
+    transform: scale(1.01);
+}
+.upload-dropzone-content p {
+    color: var(--nm-text-soft);
+    font-size: 13px;
+    margin-top: 8px;
+}
+
+/* 文件信息 */
+.upload-file-info {
+    padding: 12px 16px;
+    background: var(--nm-bg);
+    border: 1px solid var(--nm-primary);
+    border-radius: var(--nm-radius);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.upload-file-info::before {
+    content: "\01F4C4";
+    font-size: 16px;
+}
+
+/* 上传结果 */
+.upload-result {
+    margin-top: 16px;
+    padding: 16px;
+    border-radius: var(--nm-radius);
+    border: 1px solid var(--nm-border);
+    background: var(--nm-bg-soft);
+}
+.upload-result-success {
+    background: rgba(52, 211, 153, 0.05);
+    border-color: rgba(52, 211, 153, 0.3);
+}
+.upload-result-error {
+    background: rgba(248, 113, 113, 0.05);
+    border-color: rgba(248, 113, 113, 0.3);
+}
+
+/* 解析日志 */
+.upload-log {
+    background: var(--nm-bg);
+    border: 1px solid var(--nm-border);
+    border-radius: var(--nm-radius);
+    padding: 16px;
+    font-family: var(--nm-mono);
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--nm-text-soft);
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 480px;
+    overflow-y: auto;
+}
+
+/* 紧凑表格 */
+.nm-table td, .nm-table th {
+    padding: 8px 12px;
+    font-size: 12px;
+    vertical-align: middle;
+}
+.nm-table th {
+    white-space: nowrap;
+}
+
+/* 统计数字 */
+.stat-number {
+    font-size: 24px;
+    font-weight: 700;
+    font-family: var(--nm-mono);
+}
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--nm-bg); }
+::-webkit-scrollbar-thumb { background: var(--nm-border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--nm-primary); }
+
+/* 选中文字 */
+::selection { background: rgba(99, 102, 241, 0.3); color: #fff; }
+
+/* 卡片 hover */
+.nm-card {
+    transition: border-color 0.2s ease;
+}
+
+/* Hero 缩小版 */
+.nm-hero h1 {
+    animation: nm-fade-in 0.5s ease-out;
+}
+@keyframes nm-fade-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}

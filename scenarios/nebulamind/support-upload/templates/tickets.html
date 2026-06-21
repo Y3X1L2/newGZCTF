@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工单列表 - NebulaMind 客户支持</title>
+<link rel="stylesheet" href="/_shared/assets/nebulamind.css">
+<link rel="stylesheet" href="/static/css/upload.css">
+</head>
+<body>
+
+<!-- 顶部导航 -->
+<nav class="nm-nav">
+    <a href="/" class="nm-nav-brand">NebulaMind Support</a>
+    <div class="nm-nav-links">
+        <a href="/">提交工单</a>
+        <a href="/tickets" class="active">工单列表</a>
+    </div>
+    <div class="nm-nav-spacer"></div>
+    <span class="nm-text-soft" style="font-size:12px;">客户支持热线: 400-888-NEBI</span>
+</nav>
+
+<div class="nm-container">
+    <div class="nm-flex-between nm-mb-16">
+        <h1 style="font-size:24px;">工单列表</h1>
+        <a href="/" class="nm-btn nm-btn-primary">+ 新建工单</a>
+    </div>
+
+    <div class="nm-card" style="padding:0;overflow:hidden;">
+        <table class="nm-table">
+            <thead>
+                <tr>
+                    <th>工单号</th>
+                    <th>客户</th>
+                    <th>联系人</th>
+                    <th>标题</th>
+                    <th>分类</th>
+                    <th>优先级</th>
+                    <th>状态</th>
+                    <th>负责人</th>
+                    <th>创建时间</th>
+                    <th>更新时间</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in tickets %}
+                <tr>
+                    <td class="nm-text-mono">{{ t.ticketId }}</td>
+                    <td>{{ t.customer }}</td>
+                    <td>{{ t.contact }}</td>
+                    <td>{{ t.title }}</td>
+                    <td>{{ t.category }}</td>
+                    <td><span class="nm-badge nm-badge-{% if t.priority in ['P0','P1'] %}danger{% elif t.priority == 'P2' %}warning{% else %}info{% endif %}">{{ t.priority }}</span></td>
+                    <td><span class="nm-badge nm-badge-{% if t.status == 'resolved' %}success{% elif t.status == 'in_progress' %}warning{% elif t.status == 'closed' %}info{% else %}info{% endif %}">{{ t.statusLabel }}</span></td>
+                    <td>{{ t.assignee }}</td>
+                    <td class="nm-text-soft">{{ t.createdAt }}</td>
+                    <td class="nm-text-soft">{{ t.updatedAt }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <p class="nm-text-soft nm-mt-16" style="font-size:12px;">共 {{ tickets|length }} 条工单</p>
+</div>
+
+<!-- 页脚 -->
+<footer class="nm-footer">
+    <div class="nm-flex" style="justify-content:center;gap:32px;flex-wrap:wrap;">
+        <a href="/">提交工单</a>
+        <a href="/tickets">工单列表</a>
+    </div>
+    <p class="nm-mt-8">&copy; 2026 NebulaMind AI Corp. 客户支持中心 &nbsp;|&nbsp; support@nebulamind.ai</p>
+</footer>
+
+</body>
+</html>

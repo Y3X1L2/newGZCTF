@@ -18,6 +18,7 @@ import {
   mdiCheckboxMarkedCircleOutline,
   mdiClockOutline,
   mdiConsoleNetworkOutline,
+  mdiDatabaseOutline,
   mdiDeleteOutline,
   mdiDocker,
   mdiHistory,
@@ -554,6 +555,7 @@ export default function NodesPage() {
   const [filter, setFilter] = useState<StatusFilter>('all')
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [resourceVersion, setResourceVersion] = useState(0)
+  const [storageUpdating, setStorageUpdating] = useState<string | null>(null)
 
   const loadNodes = useCallback(async () => {
     try {
@@ -577,6 +579,7 @@ export default function NodesPage() {
       online,
       offline: nodes.length - online,
       schedulable: nodes.filter((node) => node.isSchedulable && statusKey(node.status) === 'online').length,
+      storage: nodes.filter((node) => node.isStorageNode).length,
     }
   }, [nodes])
 
@@ -642,6 +645,42 @@ export default function NodesPage() {
     }
   }
 
+  const setStorageNode = async (node: NodeInfo) => {
+    if (node.isStorageNode) return
+    if (!confirm(`确定将 "${node.name || node.hostAddress}" 设为镜像存储服务器吗？平台会先同步并校验现有 Docker 镜像，全部成功后才会切换。`)) return
+
+    setStorageUpdating(node.id)
+    try {
+      const res = await fetch(`/api/v1/nodes/${node.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isStorageNode: true, registryPort: node.registryPort ?? 5000 }),
+      })
+      const data = await res.json().catch(() => ({}))
+
+      if (res.ok) {
+        notifications.show({
+          title: '迁移任务已启动',
+          message: data.migrationTask?.message || '正在准备 Registry 并同步镜像，可在环境模板页查看进度。',
+          color: 'green',
+          autoClose: 9000,
+        })
+        loadNodes()
+      } else {
+        notifications.show({
+          title: '切换失败',
+          message: data.message || '无法启动镜像存储切换任务',
+          color: 'red',
+          autoClose: 9000,
+        })
+      }
+    } catch {
+      notifications.show({ title: '切换失败', message: '网络错误', color: 'red' })
+    } finally {
+      setStorageUpdating(null)
+    }
+  }
+
   return (
     <AdminPage>
       <Stack data-testid="nodes-page" gap="lg" w="100%">
@@ -667,7 +706,7 @@ export default function NodesPage() {
           <MetricTile label="全部节点" value={stats.total} tone="gray" />
           <MetricTile label="在线节点" value={stats.online} tone="teal" />
           <MetricTile label="离线/异常" value={stats.offline} tone={stats.offline > 0 ? 'red' : 'gray'} />
-          <MetricTile label="可调度" value={stats.schedulable} tone="blue" />
+          <MetricTile label="镜像存储" value={stats.storage} tone={stats.storage > 0 ? 'teal' : 'red'} />
         </SimpleGrid>
 
         <YinyuPanel p="md" className="admin-panel yy-admin-nodes-panel" cells={72}>
@@ -712,21 +751,38 @@ export default function NodesPage() {
                       setResourceVersion((value) => value + 1)
                     }}
                     rightSection={
-                      !node.isLocal && (
-                        <Tooltip label="删除节点">
+                      <Group gap={4} wrap="nowrap">
+                        <Tooltip label={node.isStorageNode ? '当前镜像存储服务器' : '设为镜像存储服务器'}>
                           <ActionIcon
-                            color="red"
-                            variant="subtle"
+                            color={node.isStorageNode ? 'teal' : 'gray'}
+                            variant={node.isStorageNode ? 'light' : 'subtle'}
                             size="sm"
+                            loading={storageUpdating === node.id}
+                            disabled={node.isStorageNode || storageUpdating !== null}
                             onClick={(event) => {
                               event.stopPropagation()
-                              handleDeleteNode(node.id, node.name || node.hostAddress)
+                              setStorageNode(node)
                             }}
                           >
-                            <Icon path={mdiDeleteOutline} size={0.82} />
+                            <Icon path={mdiDatabaseOutline} size={0.82} />
                           </ActionIcon>
                         </Tooltip>
-                      )
+                        {!node.isLocal && (
+                          <Tooltip label="删除节点">
+                            <ActionIcon
+                              color="red"
+                              variant="subtle"
+                              size="sm"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                handleDeleteNode(node.id, node.name || node.hostAddress)
+                              }}
+                            >
+                              <Icon path={mdiDeleteOutline} size={0.82} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                      </Group>
                     }
                   />
                 ))}

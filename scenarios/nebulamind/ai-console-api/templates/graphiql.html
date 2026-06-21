@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NebulaMind Console - GraphQL IDE</title>
+<link rel="stylesheet" href="/static/css/console.css">
+<style>
+    .gql-layout {
+        display: flex;
+        gap: 16px;
+        height: calc(100vh - 120px);
+        min-height: 400px;
+    }
+    .gql-panel {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+    .gql-panel-header {
+        font-family: var(--nm-mono, monospace);
+        font-size: 13px;
+        color: var(--nm-text-soft, #888);
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--nm-border, #333);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .gql-editor, .gql-response {
+        flex: 1;
+        background: var(--nm-bg-dark, #0d1117);
+        color: var(--nm-text, #e6edf3);
+        border: 1px solid var(--nm-border, #333);
+        border-radius: 8px;
+        font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        padding: 12px;
+        resize: none;
+        width: 100%;
+        box-sizing: border-box;
+        outline: none;
+        tab-size: 2;
+    }
+    .gql-editor:focus, .gql-response:focus {
+        border-color: var(--nm-accent, #58a6ff);
+    }
+    .gql-response {
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
+    .gql-toolbar {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        padding: 12px 0;
+    }
+    .gql-token-input {
+        flex: 1;
+        background: var(--nm-bg-dark, #0d1117);
+        color: var(--nm-text, #e6edf3);
+        border: 1px solid var(--nm-border, #333);
+        border-radius: 6px;
+        padding: 8px 12px;
+        font-family: monospace;
+        font-size: 12px;
+        outline: none;
+    }
+    .gql-token-input:focus {
+        border-color: var(--nm-accent, #58a6ff);
+    }
+    .gql-token-input::placeholder {
+        color: var(--nm-text-soft, #555);
+    }
+    .gql-examples {
+        padding: 12px 0;
+    }
+    .gql-examples button {
+        background: transparent;
+        color: var(--nm-text-soft, #888);
+        border: 1px solid var(--nm-border, #333);
+        border-radius: 4px;
+        padding: 4px 10px;
+        font-size: 12px;
+        cursor: pointer;
+        margin-right: 8px;
+        margin-bottom: 4px;
+        font-family: monospace;
+    }
+    .gql-examples button:hover {
+        color: var(--nm-accent, #58a6ff);
+        border-color: var(--nm-accent, #58a6ff);
+    }
+</style>
+</head>
+<body>
+<nav class="nm-nav">
+    <span class="nm-nav-brand">NebulaMind GraphQL Console</span>
+    <div class="nm-nav-links">
+        <a href="/">Home</a>
+        <a href="/docs">Docs</a>
+        <a href="/graphql">GraphQL</a>
+    </div>
+</nav>
+<div class="nm-container" style="max-width:1400px;">
+    <h1 style="font-size:20px;font-family:var(--nm-mono,monospace);">GraphQL IDE</h1>
+    <p class="nm-text-soft" style="font-size:13px;">
+        Internal operations console GraphQL endpoint. Introspection is enabled.
+    </p>
+
+    <div class="gql-toolbar">
+        <input type="text" id="tokenInput" class="gql-token-input"
+              placeholder="Authorization: Bearer <JWT token> (paste token only, or full header)" />
+        <button class="nm-btn nm-btn-primary" onclick="runQuery()">Run Query</button>
+    </div>
+
+    <div class="gql-examples">
+        <button onclick="loadExample('introspection')">Introspection</button>
+        <button onclick="loadExample('secrets_masked')">integrationSecrets (masked)</button>
+        <button onclick="loadExample('secrets_unmasked')">integrationSecrets (masked:false)</button>
+        <button onclick="loadExample('kb')">knowledgeBases</button>
+    </div>
+
+    <div class="gql-layout">
+        <div class="gql-panel">
+            <div class="gql-panel-header">
+                <span>Query</span>
+                <span style="font-size:11px;">Ctrl+Enter to run</span>
+            </div>
+            <textarea id="queryEditor" class="gql-editor" spellcheck="false"
+                placeholder="Enter your GraphQL query here..."></textarea>
+        </div>
+        <div class="gql-panel">
+            <div class="gql-panel-header">
+                <span>Response</span>
+                <span id="statusBadge" style="font-size:11px;"></span>
+            </div>
+            <div id="responseOutput" class="gql-response">Response will appear here...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+var examples = {
+    introspection: '{\n  __schema {\n    queryType { name }\n    types { name kind fields { name } }\n  }\n}',
+    secrets_masked: '{\n  integrationSecrets(masked: true) {\n    name\n    objectStoreBucket\n    gitServiceUrl\n    lowPrivAccessKey\n    flag\n  }\n}',
+    secrets_unmasked: '{\n  integrationSecrets(masked: false) {\n    name\n    objectStoreBucket\n    gitServiceUrl\n    lowPrivAccessKey\n    flag\n  }\n}',
+    kb: '{\n  knowledgeBases(tenantId: "tenant_001") {\n    id\n    name\n    description\n    status\n  }\n}'
+};
+
+function loadExample(name) {
+    document.getElementById('queryEditor').value = examples[name] || '';
+}
+
+function getToken() {
+    var raw = document.getElementById('tokenInput').value.trim();
+    if (!raw) return null;
+    if (raw.toLowerCase().startsWith('bearer ')) {
+        return raw.substring(7).trim();
+    }
+    if (raw.toLowerCase().startsWith('authorization:')) {
+        var parts = raw.split(':');
+        if (parts.length >= 2) {
+            var val = parts.slice(1).join(':').trim();
+            if (val.toLowerCase().startsWith('bearer ')) {
+                return val.substring(7).trim();
+            }
+            return val;
+        }
+    }
+    return raw;
+}
+
+function runQuery() {
+    var query = document.getElementById('queryEditor').value;
+    var token = getToken();
+    var responseEl = document.getElementById('responseOutput');
+    var statusEl = document.getElementById('statusBadge');
+
+    if (!query.trim()) {
+        responseEl.textContent = 'Error: query is empty';
+        return;
+    }
+
+    responseEl.textContent = 'Running...';
+    statusEl.textContent = '';
+
+    var headers = { 'Content-Type': 'application/json' };
+    if (token) {
+        headers['Authorization'] = 'Bearer ' + token;
+    }
+
+    fetch('/graphql', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({ query: query })
+    }).then(function(resp) {
+        statusEl.textContent = 'HTTP ' + resp.status;
+        statusEl.style.color = resp.ok ? '#3fb950' : '#f85149';
+        return resp.text().then(function(text) {
+            try {
+                responseEl.textContent = JSON.stringify(JSON.parse(text), null, 2);
+            } catch(e) {
+                responseEl.textContent = text;
+            }
+        });
+    }).catch(function(err) {
+        responseEl.textContent = 'Request failed: ' + err.message;
+        statusEl.textContent = 'Error';
+        statusEl.style.color = '#f85149';
+    });
+}
+
+document.getElementById('queryEditor').addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        runQuery();
+    }
+});
+
+// Load introspection by default
+loadExample('introspection');
+</script>
+</body>
+</html>

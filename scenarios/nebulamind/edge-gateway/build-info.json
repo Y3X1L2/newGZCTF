@@ -1,0 +1,3 @@
+{
+  "_comment": "占位文件，实际 build-info.json 由 entrypoint.sh 在启动时根据环境变量渲染并注入 Flag。"
+}

@@ -1,0 +1,14 @@
+# 共享 .dockerignore - 所有服务复制到各自目录
+# 避免把构建上下文中的无关文件打进镜像
+.git
+.gitignore
+*.md
+*.log
+*.tmp
+.DS_Store
+node_modules
+__pycache__
+*.pyc
+.venv
+.env
+.env.*

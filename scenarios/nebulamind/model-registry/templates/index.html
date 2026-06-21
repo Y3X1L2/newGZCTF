@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NebulaMind Model Registry</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/registry.css') }}">
+</head>
+<body>
+
+<nav class="reg-nav">
+    <div class="reg-nav-brand">
+        <span class="reg-nav-logo">N</span>
+        <span class="reg-nav-brand-text">NebulaMind Model Registry</span>
+    </div>
+    <div class="reg-nav-links">
+        <a href="/">Models</a>
+        <a href="/api/v1/models" target="_blank">API</a>
+        <input class="reg-nav-search" type="text" placeholder="Search models..." disabled>
+    </div>
+</nav>
+
+<div class="reg-container">
+
+    <div class="reg-hero">
+        <h1>Model Registry</h1>
+        <p>{{ registry.description | default('NebulaMind AI Corp internal model registry and inference configuration service. Manage model versions, manifests, and deployment artifacts.') }}</p>
+        <div class="reg-hero-meta">
+            <span>&#128640; {{ models | length }} models</span>
+            <span>&#128230; v{{ registry.version | default('2026.06.3') }}</span>
+            <span>&#128274; Data Zone</span>
+            <span>&#128737; Admin token required for private models</span>
+        </div>
+    </div>
+
+    <div class="reg-section">
+        <div class="reg-section-header">
+            <div>
+                <div class="reg-section-title">Models</div>
+                <div class="reg-section-subtitle">Browse published models. Private models require admin token to download manifests.</div>
+            </div>
+        </div>
+
+        <div class="reg-model-grid">
+            {% for model in models %}
+            <a href="/api/v1/models/{{ model.name }}" class="reg-model-card" style="text-decoration:none;color:inherit;">
+                <div class="reg-model-card-header">
+                    <div class="reg-model-card-title">{{ model.display_name }}</div>
+                    {% if model.visibility == 'private' %}
+                        <span class="reg-badge reg-badge-private">&#128274; Private</span>
+                    {% else %}
+                        <span class="reg-badge reg-badge-public">&#10003; Public</span>
+                    {% endif %}
+                </div>
+                <div class="reg-model-card-desc">{{ model.description }}</div>
+                <div class="reg-model-card-meta">
+                    {% for tag in model.tags[:4] %}
+                    <span class="reg-badge reg-badge-tag">{{ tag }}</span>
+                    {% endfor %}
+                </div>
+                <div class="reg-model-card-stats">
+                    <span>&#11015; {{ model.downloads }}</span>
+                    <span>&#10084; {{ model.likes }}</span>
+                    <span>&#128230; {{ model.version_count }} version(s)</span>
+                    <span>&#128197; {{ model.updated_at[:10] if model.updated_at else '-' }}</span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="reg-section">
+        <div class="reg-section-header">
+            <div class="reg-section-title">API Reference</div>
+            <div class="reg-section-subtitle">REST API for model registry access (requires authentication)</div>
+        </div>
+
+        <div class="reg-api-block">
+            <h2>Authentication</h2>
+            <p class="reg-text-soft" style="margin-bottom:12px;">
+                POST <code>/api/v1/auth/login</code> with JSON body to obtain a Bearer token:
+            </p>
+            <div class="reg-code">{
+  "username": "viewer",
+  "password": "viewer123"
+}</div>
+            <p class="reg-text-soft reg-mt-16" style="margin-bottom:8px;">
+                Use the token in the <code>Authorization</code> header:
+            </p>
+            <div class="reg-code">Authorization: Bearer &lt;token&gt;</div>
+            <p class="reg-text-muted reg-mt-16" style="font-size:12px;">
+                Viewer account (viewer/viewer123) can access public models only.
+                Admin access requires the model-registry admin token (provisioned via Vault).
+            </p>
+        </div>
+
+        <div class="reg-api-block">
+            <h2>Endpoints</h2>
+            <div class="reg-endpoint-row">
+                <span class="reg-method reg-method-get">GET</span>
+                <span class="reg-endpoint-path">/healthz</span>
+            </div>
+            <div class="reg-endpoint-desc">Health check (no auth required)</div>
+
+            <div class="reg-endpoint-row">
+                <span class="reg-method reg-method-get">GET</span>
+                <span class="reg-endpoint-path">/</span>
+            </div>
+            <div class="reg-endpoint-desc">API info / registry home (Accept: application/json for API response)</div>
+
+            <div class="reg-endpoint-row">
+                <span class="reg-method reg-method-get">GET</span>
+                <span class="reg-endpoint-path">/api/v1/models</span>
+            </div>
+            <div class="reg-endpoint-desc">List all models (requires auth)</div>
+
+            <div class="reg-endpoint-row">
+                <span class="reg-method reg-method-get">GET</span>
+                <span class="reg-endpoint-path">/api/v1/models/&lt;name&gt;</span>
+            </div>
+            <div class="reg-endpoint-desc">Model detail</div>
+
+            <div class="reg-endpoint-row">
+                <span class="reg-method reg-method-get">GET</span>
+                <span class="reg-endpoint-path">/api/v1/models/&lt;name&gt;/versions</span>
+            </div>
+            <div class="reg-endpoint-desc">List model versions</div>
+
+            <div class="reg-endpoint-row">
+                <span class="reg-method reg-method-get">GET</span>
+                <span class="reg-endpoint-path">/api/v1/models/&lt;name&gt;/versions/&lt;version&gt;</span>
+            </div>
+            <div class="reg-endpoint-desc">Version detail (with manifest). Private models require admin token.</div>
+
+            <div class="reg-endpoint-row">
+                <span class="reg-method reg-method-get">GET</span>
+                <span class="reg-endpoint-path">/api/v1/models/&lt;name&gt;/versions/&lt;version&gt;/manifest</span>
+            </div>
+            <div class="reg-endpoint-desc">Get manifest only. Private models require admin token.</div>
+
+            <div class="reg-endpoint-row">
+                <span class="reg-method reg-method-post">POST</span>
+                <span class="reg-endpoint-path">/api/v1/auth/login</span>
+            </div>
+            <div class="reg-endpoint-desc">Login (returns token + role)</div>
+        </div>
+    </div>
+
+    <div class="reg-section">
+        <div class="reg-section-header">
+            <div class="reg-section-title">Example: List Models</div>
+        </div>
+        <div class="reg-code">curl -X GET {{ registry_url }}/api/v1/models \
+  -H "Authorization: Bearer &lt;token&gt;"</div>
+    </div>
+
+    <div class="reg-section">
+        <div class="reg-section-header">
+            <div class="reg-section-title">Example: Get Model Manifest</div>
+        </div>
+        <div class="reg-code">curl -X GET {{ registry_url }}/api/v1/models/recommendation-v4-private/versions/v4/manifest \
+  -H "Authorization: Bearer &lt;admin-token&gt;"</div>
+        <p class="reg-text-muted reg-mt-8" style="font-size:12px;">
+            Note: recommendation-v4-private is a private model. Admin token is required.
+        </p>
+    </div>
+
+</div>
+
+<div class="reg-footer">
+    NebulaMind AI Corp &mdash; Model Registry &amp; Inference Configuration Service &mdash; v{{ registry.version | default('2026.06.3') }}
+    &mdash; Data Zone
+</div>
+
+</body>
+</html>

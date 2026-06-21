@@ -403,7 +403,7 @@ const fallbackConfig = (gameId: number): PenetrationConfigModel => {
   const network = defaultNetwork(-1, 0, PenetrationZoneType.Public)
   return {
     gameId,
-    baseCidr: '10.60.0.0/12',
+    baseCidr: '10.60.0.0/16',
     teamSubnetPrefix: 24,
     networkSubnetPrefix: 28,
     maxResetCount: 3,
@@ -417,47 +417,553 @@ const fallbackConfig = (gameId: number): PenetrationConfigModel => {
 }
 
 const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[], current?: PenetrationConfigModel) => {
-  const template = templates.find(isReadyLinuxDockerTemplate)
-  const networks = [
-    { ...defaultNetwork(-101, 0, PenetrationZoneType.Public), name: '公网入口区', slug: 'public', positionX: 60, positionY: 110 },
-    { ...defaultNetwork(-102, 1, PenetrationZoneType.Dmz), name: 'DMZ 服务区', slug: 'dmz', positionX: 760, positionY: 70 },
-    { ...defaultNetwork(-103, 2, PenetrationZoneType.Business), name: '业务内网区', slug: 'biz', positionX: 1460, positionY: 160 },
-    { ...defaultNetwork(-104, 3, PenetrationZoneType.Data), name: '数据内网区', slug: 'data', positionX: 2160, positionY: 80 },
-    { ...defaultNetwork(-105, 4, PenetrationZoneType.Operations), name: '运维管理区', slug: 'ops', positionX: 1460, positionY: 650 },
+  const readyTemplates = templates.filter(isReadyLinuxDockerTemplate)
+  const findTemplate = (serviceKey: string) => {
+    const normalized = serviceKey.toLowerCase()
+    const compact = normalized.replaceAll('-', '')
+    return readyTemplates.find((template) => {
+      const haystack = `${template.name ?? ''} ${template.registryUrl ?? ''}`.toLowerCase()
+      return haystack.includes(normalized) || haystack.replaceAll('-', '').includes(compact)
+    })
+  }
+  const networkSpecs = [
+    {
+      id: -101,
+      key: 'nm-net-public-edge',
+      zone: PenetrationZoneType.Public,
+      name: 'Public / Edge 入口区',
+      slug: 'public-edge',
+      cidr: '10.60.0.0/28',
+      trust: 10,
+      x: 60,
+      y: 130,
+      w: 560,
+      h: 320,
+      description: '选手唯一入口安全域。只发布 edge-gateway，选手获得节点地址后自行扫描入口服务。',
+    },
+    {
+      id: -102,
+      key: 'nm-net-dmz-service',
+      zone: PenetrationZoneType.Dmz,
+      name: 'DMZ / 对外业务区',
+      slug: 'dmz-service',
+      cidr: '10.60.0.16/28',
+      trust: 30,
+      x: 700,
+      y: 80,
+      w: 620,
+      h: 430,
+      description: '企业官网、资源中心和客户上传中心，承接公开入口后的第一层业务服务。',
+    },
+    {
+      id: -103,
+      key: 'nm-net-biz-core',
+      zone: PenetrationZoneType.Business,
+      name: 'Business / AI 业务核心区',
+      slug: 'biz-core',
+      cidr: '10.60.0.32/28',
+      trust: 55,
+      x: 1420,
+      y: 120,
+      w: 680,
+      h: 460,
+      description: '文档解析、AI 控制台 API 和任务队列所在的业务内网。',
+    },
+    {
+      id: -104,
+      key: 'nm-net-data-plane',
+      zone: PenetrationZoneType.Data,
+      name: 'Data / 数据与模型区',
+      slug: 'data-plane',
+      cidr: '10.60.0.48/28',
+      trust: 85,
+      x: 2220,
+      y: 70,
+      w: 720,
+      h: 520,
+      description: '客户数据库、对象存储、密钥服务和模型仓库，承载高分与终局线索。',
+    },
+    {
+      id: -105,
+      key: 'nm-net-ops-control',
+      zone: PenetrationZoneType.Operations,
+      name: 'Operations / 运维控制区',
+      slug: 'ops-control',
+      cidr: '10.60.0.64/28',
+      trust: 70,
+      x: 1450,
+      y: 690,
+      w: 670,
+      h: 360,
+      description: '内部 Git 与 CI Runner，串联业务配置泄露、构建变量和后续数据区突破。',
+    },
   ]
-  const withTemplate = (node: PenetrationNodeModel) => ({
-    ...node,
-    imageTemplateId: template?.id ?? null,
-    imageName: template ? '' : node.imageName,
+
+  const networks = networkSpecs.map((spec, index) => ({
+    ...defaultNetwork(spec.id, index, spec.zone),
+    topologyKey: spec.key,
+    name: spec.name,
+    slug: spec.slug,
+    cidr: spec.cidr,
+    trustLevel: spec.trust,
+    description: spec.description,
+    defaultPolicy: PenetrationDefaultPolicy.DenyAll,
+    isEntry: spec.zone === PenetrationZoneType.Public,
+    positionX: spec.x,
+    positionY: spec.y,
+    width: spec.w,
+    height: spec.h,
+  }))
+  const networkBySlug = Object.fromEntries(networks.map((network) => [network.slug, network]))
+
+  const score = (
+    id: number,
+    title: string,
+    category: string,
+    scoreValue: number,
+    description: string,
+    orderIndex: number,
+    checkpoint = true
+  ): PenetrationScoreItemModel => ({
+    ...defaultScoreItem(orderIndex),
+    id,
+    topologyKey: `nm-score-${title.toLowerCase().replaceAll('_', '-')}`,
+    title,
+    category,
+    score: scoreValue,
+    description,
+    flagTemplate: 'flag{[TEAM_HASH]}',
+    isCheckpoint: checkpoint,
+    orderIndex,
   })
-  const nodes = [
-    withTemplate({ ...defaultNode(-201, networks[0], 0, PenetrationNodeType.Entry), name: '外网主服务', positionX: 58, positionY: 120 }),
-    withTemplate({
-      ...defaultNode(-202, networks[1], 1, PenetrationNodeType.JumpHost),
-      name: 'DMZ 跳板机',
-      positionX: 60,
-      positionY: 110,
+
+  type InterfaceSpec = {
+    net: string
+    name?: string
+    primary?: boolean
+    management?: boolean
+  }
+  type NodeSpec = {
+    id: number
+    key: string
+    serviceKey: string
+    name: string
+    alias: string
+    description: string
+    playerDescription?: string
+    type: PenetrationNodeType
+    exposePort: number
+    cpu: number
+    memory: number
+    storage: number
+    x: number
+    y: number
+    entry?: boolean
+    publish?: boolean
+    routing?: boolean
+    interfaces: InterfaceSpec[]
+    env?: Record<string, string>
+    scores: PenetrationScoreItemModel[]
+  }
+
+  const url = (key: string, port?: number) => port ? `{{node:nm-node-${key}:url:${port}}}` : `{{node:nm-node-${key}:url}}`
+  const host = (key: string) => `{{node:nm-node-${key}:host}}`
+
+  const nodeSpecs: NodeSpec[] = [
+    {
+      id: -201,
+      key: 'edge-gateway',
+      serviceKey: 'edge-gateway',
+      name: 'edge-gateway 外部入口网关',
+      alias: '入口目标',
+      description: 'NebulaMind 唯一对选手发布的入口网关。公开 80 端口，反向代理企业官网和客户支持入口；/status/build-info 承载外网发现低分 Flag。',
+      playerDescription: '你获得了 NebulaMind AI Corp 的授权测试入口地址。请从公开服务开始评估，逐步获取内网数据库与模型仓库中的敏感标识。',
+      type: PenetrationNodeType.Entry,
+      exposePort: 80,
+      cpu: 3,
+      memory: 128,
+      storage: 256,
+      x: 70,
+      y: 115,
+      entry: true,
+      publish: true,
+      routing: true,
       interfaces: [
-        { id: -501, topologyKey: newTopologyKey('interface', -501), nodeId: -202, networkId: networks[1].id, name: 'eth0', isPrimary: true, isManagement: false, orderIndex: 0 },
-        { id: -502, topologyKey: newTopologyKey('interface', -502), nodeId: -202, networkId: networks[2].id, name: 'eth1', isPrimary: false, isManagement: false, orderIndex: 1 },
-        { id: -503, topologyKey: newTopologyKey('interface', -503), nodeId: -202, networkId: networks[4].id, name: 'eth2', isPrimary: false, isManagement: true, orderIndex: 2 },
+        { net: 'public-edge', name: 'eth0', primary: true, management: true },
+        { net: 'dmz-service', name: 'eth1' },
       ],
-    }),
-    withTemplate({ ...defaultNode(-203, networks[1], 2, PenetrationNodeType.Web), name: '废弃 Web 服务', positionX: 314, positionY: 238, publishPort: true, exposePort: 63000 }),
-    withTemplate({ ...defaultNode(-204, networks[2], 3, PenetrationNodeType.Service), name: '业务应用', positionX: 170, positionY: 128 }),
-    withTemplate({ ...defaultNode(-205, networks[3], 4, PenetrationNodeType.Database), name: '数据库节点', positionX: 178, positionY: 128, exposePort: 3306 }),
-    withTemplate({ ...defaultNode(-206, networks[4], 5, PenetrationNodeType.Bastion), name: '运维堡垒机', positionX: 170, positionY: 122, exposePort: 22 }),
+      env: {
+        NM_PORTAL_WEB_URL: url('portal-web'),
+        NM_SUPPORT_UPLOAD_URL: url('support-upload'),
+      },
+      scores: [
+        score(-601, 'PUBLIC_DISCOVERY', 'A 外网发现', 50, '扫描入口服务，访问构建信息或镜像站泄露的 build metadata，获取公开发现 Flag。', 0),
+      ],
+    },
+    {
+      id: -202,
+      key: 'portal-web',
+      serviceKey: 'portal-web',
+      name: 'portal-web 企业官网与资源中心',
+      alias: '题目 02',
+      description: '真实企业门户、产品页、客户案例、资源中心和遗留静态资源。包含隐藏目录与 Source Map 泄露。',
+      type: PenetrationNodeType.Web,
+      exposePort: 8080,
+      cpu: 5,
+      memory: 256,
+      storage: 512,
+      x: 70,
+      y: 96,
+      interfaces: [{ net: 'dmz-service', primary: true }],
+      env: {
+        NM_AI_CONSOLE_API_URL: url('ai-console-api'),
+        NM_AI_CONSOLE_API_HOST: host('ai-console-api'),
+      },
+      scores: [
+        score(-602, 'PORTAL_HIDDEN_DOCS', 'A 外网发现', 80, '从 robots.txt 和资源归档目录发现旧版白皮书/导出页面中的内部跟踪标识。', 0),
+        score(-603, 'PORTAL_SOURCEMAP', 'A 外网发现', 120, '分析生产 Source Map，发现控制台 API、测试租户和调试 Flag。', 1),
+      ],
+    },
+    {
+      id: -203,
+      key: 'support-upload',
+      serviceKey: 'support-upload',
+      name: 'support-upload 客户支持上传中心',
+      alias: '题目 03',
+      description: '客户工单与日志包上传中心。通过上传绕过、路径穿越和 worker 配置泄露进入业务区。',
+      type: PenetrationNodeType.Web,
+      exposePort: 8080,
+      cpu: 5,
+      memory: 256,
+      storage: 512,
+      x: 330,
+      y: 236,
+      routing: true,
+      interfaces: [
+        { net: 'dmz-service', primary: true },
+        { net: 'biz-core', name: 'eth1' },
+      ],
+      env: {
+        NM_DOCUMENT_WORKER_URL: url('document-worker'),
+        NM_DOCUMENT_WORKER_HOST: host('document-worker'),
+        NM_CACHE_BROKER_HOST: host('cache-broker'),
+        NM_AI_CONSOLE_API_URL: url('ai-console-api'),
+      },
+      scores: [
+        score(-604, 'UPLOAD_MIME_BYPASS', 'B DMZ 利用', 150, '绕过日志包 MIME/扩展名校验，读取解析任务中的工单 Flag。', 0),
+        score(-605, 'UPLOAD_PATH_TRAVERSAL', 'B DMZ 利用', 180, '利用下载接口路径穿越读取 worker.yml，获得业务区地址、队列和后续 token 线索。', 1),
+      ],
+    },
+    {
+      id: -204,
+      key: 'document-worker',
+      serviceKey: 'document-worker',
+      name: 'document-worker 文档解析 Worker',
+      alias: '题目 04',
+      description: '异步文档解析与 URL 抓取 Worker。承接上传中心泄露 token，触发 SSRF 与命令注入。',
+      type: PenetrationNodeType.Service,
+      exposePort: 8080,
+      cpu: 8,
+      memory: 512,
+      storage: 512,
+      x: 70,
+      y: 115,
+      interfaces: [{ net: 'biz-core', primary: true }],
+      env: {
+        NM_DOCUMENT_WORKER_URL: url('document-worker'),
+        NM_DOCUMENT_WORKER_HOST: host('document-worker'),
+        NM_CACHE_BROKER_HOST: host('cache-broker'),
+        NM_AI_CONSOLE_API_URL: url('ai-console-api'),
+        NM_AI_CONSOLE_API_HOST: host('ai-console-api'),
+      },
+      scores: [
+        score(-606, 'WORKER_SSRF_METADATA', 'B DMZ 利用', 220, '使用上传中心泄露的 worker token 触发 SSRF，读取控制台 metadata 响应中的 Flag。', 0),
+        score(-607, 'WORKER_COMMAND_INJECTION', 'D 异步任务', 320, '通过队列或解析参数注入命令，读取 Worker 内部受限 Flag 文件。', 1),
+      ],
+    },
+    {
+      id: -205,
+      key: 'ai-console-api',
+      serviceKey: 'ai-console-api',
+      name: 'ai-console-api AI 控制台 API',
+      alias: '题目 05',
+      description: 'AI 知识库、租户、审计与集成密钥 API。作为业务区进入数据区和运维区的关键边界服务。',
+      type: PenetrationNodeType.Service,
+      exposePort: 8080,
+      cpu: 10,
+      memory: 512,
+      storage: 512,
+      x: 310,
+      y: 150,
+      routing: true,
+      interfaces: [
+        { net: 'biz-core', primary: true },
+        { net: 'data-plane', name: 'eth1' },
+        { net: 'ops-control', name: 'eth2' },
+      ],
+      env: {
+        NM_GIT_SERVICE_URL: url('git-service'),
+        NM_OBJECT_STORE_URL: url('object-store', 9000),
+      },
+      scores: [
+        score(-608, 'API_TENANT_IDOR', 'C 身份越权', 180, '利用 sourcemap 中的测试租户 ID 枚举废弃知识库，读取越权描述字段。', 0),
+        score(-609, 'API_JWT_ROLE', 'C 身份越权', 240, '复用 Worker 泄露的 JWT 弱密钥伪造 operator 角色，导出审计日志。', 1),
+        score(-610, 'API_GRAPHQL_AUDIT', 'C 身份越权', 260, '利用 GraphQL introspection 和 operator token 查询集成密钥，获得对象存储与 Git 线索。', 2),
+      ],
+    },
+    {
+      id: -206,
+      key: 'cache-broker',
+      serviceKey: 'cache-broker',
+      name: 'cache-broker 任务缓存与消息队列',
+      alias: '题目 06',
+      description: '业务区 Redis 队列与任务结果缓存。无认证访问暴露解析结果和后续队列注入路径。',
+      type: PenetrationNodeType.Service,
+      exposePort: 6379,
+      cpu: 3,
+      memory: 128,
+      storage: 256,
+      x: 550,
+      y: 285,
+      interfaces: [{ net: 'biz-core', primary: true }],
+      env: {
+        NM_CACHE_BROKER_HOST: host('cache-broker'),
+      },
+      scores: [
+        score(-611, 'REDIS_QUEUE_INFO', 'D 异步任务', 220, '连接未鉴权 Redis，读取 task:result:* 中的任务结果和内部服务地址。', 0),
+      ],
+    },
+    {
+      id: -207,
+      key: 'git-service',
+      serviceKey: 'git-service',
+      name: 'git-service 内部 Git 服务',
+      alias: '题目 07',
+      description: '轻量内部 Git/代码浏览服务，包含历史提交、配置样例和运维文档泄露。',
+      type: PenetrationNodeType.Service,
+      exposePort: 3000,
+      cpu: 10,
+      memory: 512,
+      storage: 768,
+      x: 72,
+      y: 90,
+      interfaces: [{ net: 'ops-control', primary: true }],
+      env: {
+        NM_GIT_SERVICE_URL: url('git-service'),
+        NM_CUSTOMER_DB_HOST: host('customer-db'),
+        NM_OBJECT_STORE_URL: url('object-store', 9000),
+        NM_CACHE_BROKER_HOST: host('cache-broker'),
+        NM_AI_CONSOLE_API_URL: url('ai-console-api'),
+        NM_DOCUMENT_WORKER_URL: url('document-worker'),
+        NM_PORTAL_WEB_URL: url('portal-web'),
+      },
+      scores: [
+        score(-612, 'GIT_CONFIG_SECRET', 'E Git / CI', 180, '克隆内部仓库并查看历史提交，恢复旧配置文件中的 Flag 和 CI 项目线索。', 0),
+      ],
+    },
+    {
+      id: -208,
+      key: 'ci-runner',
+      serviceKey: 'ci-runner',
+      name: 'ci-runner CI 构建执行节点',
+      alias: '题目 08',
+      description: '内部 CI 项目变量、构建触发与 runner 执行环境。串联 Vault、数据库和对象存储凭据。',
+      type: PenetrationNodeType.Service,
+      exposePort: 8080,
+      cpu: 10,
+      memory: 512,
+      storage: 768,
+      x: 330,
+      y: 185,
+      routing: true,
+      interfaces: [
+        { net: 'ops-control', primary: true },
+        { net: 'data-plane', name: 'eth1' },
+      ],
+      env: {
+        NM_GIT_SERVICE_URL: url('git-service'),
+        NM_CUSTOMER_DB_HOST: host('customer-db'),
+        NM_CACHE_BROKER_HOST: host('cache-broker'),
+        NM_SECRETS_VAULT_URL: url('secrets-vault', 8200),
+      },
+      scores: [
+        score(-613, 'CI_VARIABLE_LEAK', 'E Git / CI', 260, '利用项目 token 读取未正确脱敏的 CI 变量，获得对象存储 admin key 与 Vault token。', 0),
+        score(-614, 'CI_RUNNER_EXEC', 'E Git / CI', 380, '触发构建脚本注入，在 runner 日志中回显受限文件内容。', 1),
+      ],
+    },
+    {
+      id: -209,
+      key: 'customer-db',
+      serviceKey: 'customer-db',
+      name: 'customer-db 客户与标注数据库',
+      alias: '题目 09',
+      description: 'PostgreSQL 客户、合同、标注、审计和受监管模型训练记录。终局链路落点在核心客户训练数据审计记录。',
+      type: PenetrationNodeType.Database,
+      exposePort: 5432,
+      cpu: 10,
+      memory: 768,
+      storage: 1024,
+      x: 74,
+      y: 96,
+      interfaces: [{ net: 'data-plane', primary: true }],
+      env: {
+        NM_DB_ADMIN_PASSWORD: 'nm_admin_dev_2026',
+      },
+      scores: [
+        score(-615, 'DB_READONLY_CUSTOMERS', 'F 数据库', 260, '复用泄露的 readonly 凭据查询 security_findings，获得客户数据访问审计 Flag。', 0),
+        score(-616, 'DB_PRIVESC_FUNCTION', 'F 数据库', 360, '利用 SECURITY DEFINER 函数越权读取 internal_exports 中的内部审计快照。', 1),
+        score(-617, 'DB_CORE_CUSTOMER_DATA', 'F 数据库 / 终局', 420, '使用高权限数据库凭据读取 regulated_model_training_records 中的核心客户训练数据审计标记；该记录也是模型供应链终局链路的收束点。', 2),
+      ],
+    },
+    {
+      id: -210,
+      key: 'object-store',
+      serviceKey: 'object-store',
+      name: 'object-store 对象存储与模型资源',
+      alias: '题目 10',
+      description: 'MinIO 对象存储，包含公开模型资源、训练日志、导出 CSV 和模型 manifest 线索。',
+      type: PenetrationNodeType.Service,
+      exposePort: 9000,
+      cpu: 8,
+      memory: 512,
+      storage: 1024,
+      x: 330,
+      y: 95,
+      interfaces: [{ net: 'data-plane', primary: true }],
+      env: {
+        NM_CUSTOMER_DB_HOST: host('customer-db'),
+        NM_MODEL_REGISTRY_URL: url('model-registry'),
+        NM_OBJECT_STORE_URL: url('object-store', 9000),
+      },
+      scores: [
+        score(-618, 'OBJECT_BUCKET_POLICY', 'D 对象存储', 240, '利用低权限 access key 列出误公开 bucket，下载 CSV 并发现数据表与 Flag。', 0),
+      ],
+    },
+    {
+      id: -211,
+      key: 'secrets-vault',
+      serviceKey: 'secrets-vault',
+      name: 'secrets-vault 密钥配置服务',
+      alias: '题目 11',
+      description: 'Vault mock 密钥服务。Bootstrap Token 滥用可读取模型仓库 token、数据库 admin 凭据和对象存储线索。',
+      type: PenetrationNodeType.Service,
+      exposePort: 8200,
+      cpu: 5,
+      memory: 256,
+      storage: 512,
+      x: 74,
+      y: 315,
+      interfaces: [{ net: 'data-plane', primary: true }],
+      env: {
+        NM_CUSTOMER_DB_HOST: host('customer-db'),
+        NM_MODEL_REGISTRY_URL: url('model-registry'),
+        NM_CI_RUNNER_URL: url('ci-runner'),
+        NM_OBJECT_STORE_URL: url('object-store', 9000),
+        NM_OBJECT_STORE_CONSOLE_URL: url('object-store', 9001),
+      },
+      scores: [
+        score(-619, 'VAULT_POLICY_BYPASS', 'G 密钥服务', 360, '使用 CI 变量泄露的 bootstrap token 读取 model-registry secret，获得模型仓库管理员 token。', 0),
+      ],
+    },
+    {
+      id: -212,
+      key: 'model-registry',
+      serviceKey: 'model-registry',
+      name: 'model-registry 模型仓库',
+      alias: '题目 12',
+      description: '模型版本、manifest、训练配置和供应链审计线索。G2 Flag 位于私有模型 manifest，终局线索指向对象存储训练日志和 customer-db 审计记录。',
+      type: PenetrationNodeType.Service,
+      exposePort: 8080,
+      cpu: 5,
+      memory: 256,
+      storage: 512,
+      x: 380,
+      y: 315,
+      interfaces: [{ net: 'data-plane', primary: true }],
+      env: {
+        NM_MODEL_REGISTRY_URL: url('model-registry'),
+        NM_CUSTOMER_DB_HOST: host('customer-db'),
+        NM_OBJECT_STORE_URL: url('object-store', 9000),
+      },
+      scores: [
+        score(-620, 'MODEL_REGISTRY_ADMIN', 'G 模型仓库', 420, '使用 Vault 中的模型仓库管理员 token 下载 recommendation-v4-private v4 manifest，读取高分 Flag 与终局线索。', 0),
+      ],
+    },
   ]
+
+  const nodes = nodeSpecs.map((spec, index): PenetrationNodeModel => {
+    const primaryInterface = spec.interfaces.find((item) => item.primary) ?? spec.interfaces[0]
+    const primaryNetwork = networkBySlug[primaryInterface.net]
+    const template = findTemplate(spec.serviceKey)
+    return {
+      ...defaultNode(spec.id, primaryNetwork, index, spec.type),
+      topologyKey: `nm-node-${spec.key}`,
+      name: spec.name,
+      description: spec.description,
+      playerAlias: spec.alias,
+      playerDescription: spec.playerDescription ?? '',
+      imageTemplateId: template?.id ?? null,
+      imageName: template ? '' : `nebulamind/${spec.serviceKey}:local`,
+      cpuCount: spec.cpu,
+      memoryLimit: spec.memory,
+      storageLimit: spec.storage,
+      exposePort: spec.exposePort,
+      isEntry: spec.entry ?? false,
+      publishPort: spec.publish ?? false,
+      allowRouting: spec.routing ?? false,
+      staticIp: '',
+      environmentVariables: spec.env ?? {},
+      startCommand: '',
+      healthCheck: '',
+      positionX: spec.x,
+      positionY: spec.y,
+      orderIndex: index,
+      interfaces: spec.interfaces.map((item, ifaceIndex) => ({
+        id: -801 - index * 10 - ifaceIndex,
+        topologyKey: `nm-if-${spec.key}-${item.name ?? `eth${ifaceIndex}`}`,
+        nodeId: spec.id,
+        networkId: networkBySlug[item.net].id,
+        name: item.name ?? `eth${ifaceIndex}`,
+        staticIp: '',
+        previewIp: '',
+        isPrimary: item.primary ?? ifaceIndex === 0,
+        isManagement: item.management ?? false,
+        orderIndex: ifaceIndex,
+      })),
+      scoreItems: spec.scores,
+    }
+  })
+  const nodeByKey = Object.fromEntries(nodes.map((node) => [node.topologyKey, node]))
+  const edge = (id: number, sourceKey: string, targetKey: string, label: string, description: string, priority: number) => ({
+    ...makeEdge(id, nodeByKey[`nm-node-${sourceKey}`], nodeByKey[`nm-node-${targetKey}`], label, 'any'),
+    topologyKey: `nm-edge-${sourceKey}-to-${targetKey}`,
+    enforcementMode: PenetrationEnforcementMode.HintOnly,
+    isRouteHint: true,
+    priority,
+    description,
+  })
   const edges: PenetrationEdgeModel[] = [
-    makeEdge(-301, nodes[0], nodes[1], '入口到跳板', '22,80,443'),
-    makeEdge(-302, nodes[0], nodes[2], '公网暴露服务', '63000'),
-    makeEdge(-303, nodes[1], nodes[3], '跳板到业务区', 'any'),
-    makeEdge(-304, nodes[3], nodes[4], '业务访问数据区', '3306'),
-    makeEdge(-305, nodes[5], nodes[1], '运维管理跳板', '22'),
+    edge(-301, 'edge-gateway', 'portal-web', '入口网关到企业官网', 'Edge 网关将公开入口流量代理到 DMZ 企业官网。', 10),
+    edge(-302, 'edge-gateway', 'support-upload', '入口网关到客户上传中心', 'Edge 网关将 /support/ 路径代理到客户支持上传中心。', 20),
+    edge(-303, 'support-upload', 'document-worker', '上传中心到文档 Worker', '路径穿越泄露 worker 配置后，上传中心业务链路进入文档解析 Worker。', 30),
+    edge(-304, 'document-worker', 'cache-broker', '文档 Worker 到任务队列', 'Worker 使用 Redis 任务缓存，队列结果暴露内部线索。', 40),
+    edge(-305, 'document-worker', 'ai-console-api', '文档 Worker 到 AI 控制台 API', 'SSRF 与 service-account 线索推动选手进入业务控制台。', 50),
+    edge(-306, 'ai-console-api', 'object-store', 'AI 控制台到对象存储', 'GraphQL 集成密钥泄露对象存储 endpoint 和低权限 key。', 60),
+    edge(-307, 'ai-console-api', 'git-service', 'AI 控制台到内部 Git', '审计导出暴露 Git 服务地址和项目线索。', 70),
+    edge(-308, 'git-service', 'ci-runner', '内部 Git 到 CI Runner', 'Git 历史泄露 CI 项目名和 token，进入构建系统。', 80),
+    edge(-309, 'ci-runner', 'secrets-vault', 'CI Runner 到 Vault', 'CI 变量泄露 bootstrap token，进入密钥配置服务。', 90),
+    edge(-310, 'ci-runner', 'customer-db', 'CI Runner 到客户数据库', 'CI 变量和配置样例泄露数据库只读与高权凭据。', 100),
+    edge(-311, 'secrets-vault', 'model-registry', 'Vault 到模型仓库', 'Vault secret 提供模型仓库 admin token，打开私有模型 manifest。', 110),
+    edge(-312, 'model-registry', 'object-store', '模型仓库到训练日志', '私有模型 manifest 指向对象存储中的训练日志与审计记录。', 120),
+    edge(-313, 'object-store', 'customer-db', '对象存储到核心数据库', '训练日志和 CSV 线索收束到 customer-db 受监管模型训练记录。', 130),
   ]
   return normalizeConfig({
     ...(current ?? fallbackConfig(gameId)),
     gameId,
+    baseCidr: '10.60.0.0/16',
+    teamSubnetPrefix: 24,
+    networkSubnetPrefix: 28,
+    maxResetCount: current?.maxResetCount ?? 3,
     networks,
     nodes,
     edges,

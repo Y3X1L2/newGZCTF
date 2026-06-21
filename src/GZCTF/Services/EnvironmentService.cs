@@ -1,6 +1,5 @@
 using GZCTF.Models.Data;
 using GZCTF.Storage;
-using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Services;
@@ -15,6 +14,7 @@ public class EnvironmentService
     private readonly ContainerOrchestrator _containerOrchestrator;
     private readonly ImageStorage _imageStorage;
     private readonly AppDbContext _dbContext;
+    private readonly DockerImageRegistryService _dockerRegistry;
     private readonly ILogger<EnvironmentService> _logger;
 
     public EnvironmentService(
@@ -22,12 +22,14 @@ public class EnvironmentService
         ContainerOrchestrator containerOrchestrator,
         ImageStorage imageStorage,
         AppDbContext dbContext,
+        DockerImageRegistryService dockerRegistry,
         ILogger<EnvironmentService> logger)
     {
         _vmManager = vmManager;
         _containerOrchestrator = containerOrchestrator;
         _imageStorage = imageStorage;
         _dbContext = dbContext;
+        _dockerRegistry = dockerRegistry;
         _logger = logger;
     }
 
@@ -113,10 +115,10 @@ public class EnvironmentService
 
                         if (template.RegistryUrl is not null)
                         {
-                            var imageTarget =
-                                DockerImageReference.ResolvePullTarget(template.Name, template.RegistryUrl);
+                            var imageTarget = await _dockerRegistry.ResolveImageTemplateReferenceAsync(
+                                template.Name, template.RegistryUrl, token);
                             await _containerOrchestrator.PullImageFromRegistryAsync(
-                                imageTarget.RegistryUrl, imageTarget.ImageName, template.RegistryAuth);
+                                string.Empty, imageTarget, template.RegistryAuth);
                         }
 
                         connectionDetails.Add(new EnvironmentConnection

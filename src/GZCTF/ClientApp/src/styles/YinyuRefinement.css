@@ -4186,6 +4186,271 @@
   background: linear-gradient(90deg, #42f49d, #78f8be, #b9a7ff);
 }
 
+.yy-pentest-ctf-page {
+  min-height: calc(100dvh - 9.5rem);
+  width: 100%;
+}
+
+.yy-pentest-ctf-header {
+  position: relative;
+  overflow: hidden;
+}
+
+.yy-pentest-ctf-header .mantine-Title-root {
+  font-size: clamp(1.7rem, 2vw, 2.35rem);
+}
+
+.yy-pentest-reset-block {
+  align-items: flex-end;
+}
+
+.yy-pentest-ctf-progress {
+  margin-top: 0.85rem;
+}
+
+.yy-pentest-ctf-layout {
+  display: grid;
+  grid-template-columns: minmax(20rem, 0.82fr) minmax(30rem, 1.18fr);
+  gap: 1rem;
+  align-items: stretch;
+  min-height: min(45rem, calc(100dvh - 17.5rem));
+}
+
+.yy-pentest-question-panel,
+.yy-pentest-detail-panel {
+  min-width: 0;
+  min-height: 0;
+}
+
+.yy-pentest-question-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.yy-pentest-panel-heading {
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(107, 238, 177, 0.12);
+}
+
+.yy-pentest-question-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: min(37rem, calc(100dvh - 23rem));
+  padding-top: 0.75rem;
+}
+
+.yy-pentest-question-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  padding-right: 0.35rem;
+}
+
+.yy-pentest-question-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 0.48rem 0.72rem;
+  min-height: 6.2rem;
+  padding: 0.88rem;
+  overflow: hidden;
+  border: 1px solid rgba(107, 238, 177, 0.16);
+  border-radius: calc(var(--yy-radius) - 3px);
+  color: rgba(235, 255, 246, 0.96);
+  text-align: left;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.054), rgba(255, 255, 255, 0.014)),
+    rgba(6, 13, 11, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.025);
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.yy-pentest-question-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 18% 14%, rgba(107, 238, 177, 0.12), transparent 46%),
+    linear-gradient(118deg, transparent 20%, rgba(185, 173, 209, 0.07) 48%, transparent 74%);
+  opacity: 0.78;
+  transition: opacity 160ms ease;
+}
+
+.yy-pentest-question-card:hover,
+.yy-pentest-question-card:focus-visible,
+.yy-pentest-question-card[data-active='true'] {
+  transform: translateY(-1px);
+  border-color: rgba(107, 238, 177, 0.62);
+  outline: none;
+  background:
+    linear-gradient(135deg, rgba(107, 238, 177, 0.12), rgba(185, 173, 209, 0.048)),
+    rgba(7, 18, 15, 0.82);
+  box-shadow:
+    inset 0 0 0 1px rgba(107, 238, 177, 0.08),
+    0 1rem 2.2rem rgba(0, 0, 0, 0.24);
+}
+
+.yy-pentest-question-card[data-solved='true'] {
+  border-color: rgba(107, 238, 177, 0.38);
+}
+
+.yy-pentest-question-index,
+.yy-pentest-question-main,
+.yy-pentest-question-status {
+  position: relative;
+  z-index: 1;
+}
+
+.yy-pentest-question-index {
+  grid-row: 1 / span 2;
+  width: 2.55rem;
+  height: 2.55rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(107, 238, 177, 0.3);
+  border-radius: 10px;
+  color: rgba(157, 255, 213, 0.98);
+  font-family: 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace;
+  font-weight: 900;
+  background: rgba(107, 238, 177, 0.08);
+}
+
+.yy-pentest-question-main {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.yy-pentest-question-main strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.yy-pentest-question-main small {
+  overflow: hidden;
+  color: var(--yy-muted-readable);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+}
+
+.yy-pentest-question-status {
+  grid-column: 2;
+  align-self: end;
+  justify-self: start;
+  font-size: 1rem;
+}
+
+.yy-pentest-detail-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.yy-pentest-detail-panel > .yy-hex-field {
+  opacity: 0.22;
+}
+
+.yy-pentest-detail-title {
+  min-width: min(100%, 28rem);
+}
+
+.yy-pentest-detail-title .mantine-Title-root {
+  font-size: clamp(1.75rem, 2.4vw, 2.65rem);
+}
+
+.yy-pentest-target-card {
+  position: relative;
+  display: grid;
+  gap: 0.45rem;
+  padding: 1rem 1.1rem;
+  overflow: hidden;
+  border: 1px solid rgba(107, 238, 177, 0.22);
+  border-radius: calc(var(--yy-radius) - 3px);
+  background:
+    linear-gradient(135deg, rgba(107, 238, 177, 0.105), rgba(185, 167, 255, 0.045)),
+    rgba(5, 14, 11, 0.58);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.035),
+    0 1rem 2rem rgba(0, 0, 0, 0.18);
+}
+
+.yy-pentest-target-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 12% 20%, rgba(107, 238, 177, 0.16), transparent 50%);
+  opacity: 0.72;
+}
+
+.yy-pentest-target-card span,
+.yy-pentest-target-card strong,
+.yy-pentest-target-card p {
+  position: relative;
+  z-index: 1;
+}
+
+.yy-pentest-target-card span {
+  color: var(--yy-muted-readable);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.yy-pentest-target-card strong {
+  color: rgba(235, 255, 247, 0.98);
+  font-family: 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace;
+  font-size: clamp(1.55rem, 2.2vw, 2.4rem);
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.yy-pentest-target-card p {
+  max-width: 48rem;
+  margin: 0;
+  color: var(--yy-muted-readable);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.yy-pentest-detail-divider {
+  border-color: rgba(107, 238, 177, 0.13);
+}
+
+.yy-pentest-description {
+  min-height: 13rem;
+  padding: 0.1rem 0;
+  color: rgba(232, 244, 239, 0.92);
+}
+
+.yy-pentest-description :where(p, li) {
+  color: rgba(232, 244, 239, 0.92);
+  line-height: 1.75;
+}
+
+.yy-pentest-submit-zone {
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(107, 238, 177, 0.12);
+}
+
+.yy-pentest-submit-row .mantine-PasswordInput-input {
+  min-height: 2.75rem;
+  border-color: rgba(107, 238, 177, 0.18);
+  background: rgba(9, 15, 15, 0.58);
+  font-family: 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace;
+}
+
+.yy-pentest-empty-panel {
+  min-height: 18rem;
+  display: grid;
+  place-items: center;
+}
+
 .yy-pentest-mini-map {
   position: absolute;
   right: 0.85rem;

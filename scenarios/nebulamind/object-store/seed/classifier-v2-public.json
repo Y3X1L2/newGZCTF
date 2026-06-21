@@ -1,0 +1,97 @@
+{
+  "manifest_version": "1.2.0",
+  "model": {
+    "name": "nm-classifier-v2-public",
+    "version": "v2.0.0-public",
+    "task_type": "text_classification",
+    "architecture": "bert-base",
+    "framework": "HuggingFace Transformers 4.44.2",
+    "base_model": "bert-base-chinese",
+    "parameters": 102267648,
+    "trainable_parameters": 102267648,
+    "hidden_size": 768,
+    "num_layers": 12,
+    "num_attention_heads": 12,
+    "vocab_size": 21128,
+    "max_sequence_length": 512,
+    "num_labels": 15
+  },
+  "training": {
+    "job_id": "train-job-2026-0312-cls-v2",
+    "started_at": "2026-03-12T08:00:00+08:00",
+    "completed_at": "2026-03-12T16:30:00+08:00",
+    "duration_hours": 8.5,
+    "trained_by": "model-team-wang",
+    "gpu": "NVIDIA V100-SXM2-32GB x 2",
+    "cuda": "12.2",
+    "cudnn": "8.9.0",
+    "epochs": 10,
+    "batch_size": 64,
+    "learning_rate": 0.00005,
+    "warmup_steps": 500,
+    "weight_decay": 0.01,
+    "fp16": true,
+    "gradient_accumulation_steps": 2
+  },
+  "dataset": {
+    "train_dataset": "nm-ds-classifier-v2-public-train",
+    "train_dataset_source": "postgresql://__NM_CUSTOMER_DB_HOST__:5432/nebulamind/datasets?dataset_id=9",
+    "train_dataset_rows": 920000,
+    "train_dataset_size_mb": 1450,
+    "eval_dataset": "nm-ds-classifier-v2-public-eval",
+    "eval_dataset_rows": 92000,
+    "eval_dataset_size_mb": 145,
+    "data_classification": "internal",
+    "data_owner": "新东方在线教育",
+    "customer_id": 9,
+    "regulator": "教育部"
+  },
+  "evaluation": {
+    "final_accuracy": 0.9456,
+    "final_precision": 0.9401,
+    "final_recall": 0.9389,
+    "final_f1": 0.9395,
+    "final_loss": 0.2341,
+    "metrics_history": [
+      {"epoch": 1, "loss": 1.2345, "accuracy": 0.7234, "f1": 0.7156},
+      {"epoch": 5, "loss": 0.4567, "accuracy": 0.8890, "f1": 0.8845},
+      {"epoch": 10, "loss": 0.2341, "accuracy": 0.9456, "f1": 0.9395}
+    ]
+  },
+  "artifacts": {
+    "model_binary": {
+      "bucket": "public-model-artifacts",
+      "path": "models/classifier-v2-public.bin",
+      "size_mb": 389,
+      "sha256": "c5f0a4b3d1e9678230415b6f7e8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6"
+    },
+    "training_log": {
+      "bucket": "public-model-artifacts",
+      "path": "training-logs/classifier-v2-public-train.log",
+      "sha256": "d6a1b5c4e2f0789341526c7f8e9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7"
+    },
+    "manifest": {
+      "bucket": "model-registry",
+      "path": "model-manifests/classifier-v2-public.json"
+    }
+  },
+  "compliance": {
+    "audit_id": "audit-2026-003",
+    "compliance_status": "approved",
+    "compliance_reviewer": "compliance-wang",
+    "regulator": "教育部",
+    "data_classification": "internal",
+    "audit_record_location": "postgresql://__NM_CUSTOMER_DB_HOST__:5432/nebulamind/regulated_model_training_records?id=8",
+    "audit_record_table": "regulated_model_training_records",
+    "audit_record_id": 8,
+    "audit_field": "compliance_audit",
+    "review_date": "2026-03-12T17:00:00+08:00"
+  },
+  "signature": {
+    "signed_by": "model-registry-bot",
+    "signed_at": "2026-03-12T17:15:00+08:00",
+    "algorithm": "RS256",
+    "key_id": "nm-registry-signing-key-2026",
+    "signature": "MEUCIQDy0n3L4qM8oRs5tU9vW2xY3zA6bC7dE8fG9h0iJkLmNoPqRsTuVwXyZ1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z7=="
+  }
+}

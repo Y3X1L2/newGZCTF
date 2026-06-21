@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ repo }} - NebulaMind Git</title>
+    <link rel="stylesheet" href="/_shared/assets/nebulamind.css">
+    <link rel="stylesheet" href="/static/css/git.css">
+</head>
+<body>
+    <nav class="nm-nav">
+        <div class="nm-nav-brand">NebulaMind Git</div>
+        <div class="nm-nav-links">
+            <a href="/">Repositories</a>
+            <a href="/nebulamind/{{ repo }}" class="active">{{ repo }}</a>
+        </div>
+    </nav>
+
+    <div class="nm-container">
+        <div class="repo-header">
+            <div>
+                <div class="breadcrumb">
+                    <a href="/">Repositories</a>
+                    <span class="breadcrumb-sep">/</span>
+                    <a href="/nebulamind/{{ repo }}">nebulamind</a>
+                    <span class="breadcrumb-sep">/</span>
+                    <span>{{ repo }}</span>
+                </div>
+                <h1>{{ repo }}</h1>
+                {% if description %}
+                <p class="nm-text-soft" style="margin-top:4px;">{{ description }}</p>
+                {% endif %}
+            </div>
+            <div class="repo-clone-box">
+                <code>git clone {{ git_service_url }}/nebulamind/{{ repo }}.git</code>
+            </div>
+        </div>
+
+        <div class="repo-tabs">
+            <a href="/nebulamind/{{ repo }}" class="active">Files</a>
+            <a href="/nebulamind/{{ repo }}/commits">Commits</a>
+        </div>
+
+        <div class="nm-grid nm-grid-2">
+            <div class="nm-card">
+                <h3>Files <span class="nm-text-soft" style="font-size:12px;font-weight:normal;">@ {{ branch }}</span></h3>
+                {% if files %}
+                <ul class="file-tree">
+                    {% for file in files %}
+                    <li>
+                        <span class="file-mode">{{ file.mode }}</span>
+                        <span class="file-type">{{ file.icon }}</span>
+                        <span class="file-name">
+                            <a href="/nebulamind/{{ repo }}/blob/{{ branch }}/{{ file.path }}">{{ file.name }}</a>
+                        </span>
+                        <span class="file-size">{{ file.size }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <div class="empty-state">No files.</div>
+                {% endif %}
+            </div>
+
+            <div class="nm-card">
+                <h3>Recent Commits</h3>
+                {% if commits %}
+                <ul class="commit-list">
+                    {% for commit in commits %}
+                    <li class="commit-item">
+                        <span class="commit-sha">
+                            <a href="/nebulamind/{{ repo }}/commit/{{ commit.sha }}">{{ commit.sha_short }}</a>
+                        </span>
+                        <span class="commit-message">{{ commit.message }}</span>
+                        <span class="commit-author">{{ commit.author }}</span>
+                        <span class="commit-date">{{ commit.date }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                <div class="nm-mt-8" style="text-align:right;">
+                    <a href="/nebulamind/{{ repo }}/commits" style="font-size:13px;">View all commits &rarr;</a>
+                </div>
+                {% else %}
+                <div class="empty-state">No commits.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if readme %}
+        <div class="nm-card nm-mt-16">
+            <h3>README.md</h3>
+            <div class="readme-content">{{ readme|safe }}</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <footer class="nm-footer">
+        NebulaMind AI Corp - Internal Git Service &middot; Operations Zone
+    </footer>
+</body>
+</html>

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NebulaMind AI 技术白皮书 v1.0</title>
+<link rel="stylesheet" href="/static/css/portal.css">
+</head>
+<body>
+
+<!--
+  ============================================================================
+  Export Metadata (INTERNAL - DO NOT DISTRIBUTE)
+  ============================================================================
+  Source:         internal-wiki.nebulamind.local/pages/portal-architecture-v1
+  Exported by:    docs-export-bot@nebulamind-internal
+  Export time:    2025-06-20T03:14:07Z
+  Wiki revision:  r1842
+  Review status:  DRAFT (v1.0 - superseded by v3.0)
+  Distribution:   INTERNAL ONLY - this document contains internal API endpoints
+                  and architecture details not cleared for external release.
+  Tracking ID:    __NM_FLAG_A2__
+
+  NOTE: This document references the internal knowledge base Console API.
+        The internal knowledge base Console API shares the same SSO client
+        as the portal (client_id: nm-portal-sso-prod). The Console API
+        endpoint is /api/v1/console/session/bootstrap. Do not expose this
+        information in external-facing documentation.
+  ============================================================================
+-->
+
+<nav class="nm-nav">
+    <a href="/" class="nm-nav-brand">NebulaMind</a>
+    <div class="nm-nav-links">
+        <a href="/">首页</a>
+        <a href="/products">产品</a>
+        <a href="/downloads">下载中心</a>
+    </div>
+    <div class="nm-nav-spacer"></div>
+    <span class="nm-badge nm-badge-warning">v1.0 (历史版本)</span>
+</nav>
+
+<div class="nm-whitepaper">
+
+<!-- 封面 -->
+<div style="text-align:center;padding:48px 0;border-bottom:2px solid var(--nm-primary);margin-bottom:48px;">
+    <div style="display:inline-block;width:64px;height:64px;background:linear-gradient(135deg,var(--nm-primary),var(--nm-accent));border-radius:16px;margin-bottom:24px;"></div>
+    <h1 style="font-size:36px;border:none;margin-bottom:8px;">NebulaMind AI 技术白皮书</h1>
+    <p style="font-size:18px;color:var(--nm-text-soft);">企业级智能知识平台架构设计与技术实现</p>
+    <p style="font-size:14px;color:var(--nm-text-soft);margin-top:16px;">
+        版本 1.0 &middot; 2025 年 6 月 &middot; NebulaMind AI Corp.
+    </p>
+    <p style="font-size:12px;color:var(--nm-danger);margin-top:8px;">
+        &#9888; 此文档已过时，最新版本为 v3.0。本文件仅供内部归档参考。
+    </p>
+</div>
+
+<!-- 目录 -->
+<div class="toc">
+    <h2>目录</h2>
+    <ol>
+        <li><a href="#executive-summary">执行摘要</a></li>
+        <li><a href="#introduction">引言：企业知识管理的挑战</a></li>
+        <li><a href="#architecture">技术架构总览</a></li>
+        <li><a href="#knowledge-engine">知识引擎与 GraphRAG</a></li>
+        <li><a href="#security-model">安全模型与 SSO 集成</a></li>
+        <li><a href="#api-integration">API 集成与开发者指南</a></li>
+        <li><a href="#deployment">部署架构</a></li>
+        <li><a href="#roadmap">产品路线图</a></li>
+    </ol>
+</div>
+
+<!-- 1. 执行摘要 -->
+<h2 id="executive-summary">1. 执行摘要</h2>
+<p>
+    NebulaMind AI 是面向企业的智能知识平台，旨在解决企业内部知识碎片化、检索效率低下、
+    知识难以沉淀和复用等核心问题。本白皮书系统阐述 NebulaMind AI v1.0 的技术架构、
+    核心能力、安全模型与部署方案，为企业技术决策者提供全面的技术参考。
+</p>
+<p>
+    NebulaMind AI 融合大语言模型（LLM）、向量检索（Dense Retrieval）、知识图谱（Knowledge Graph）
+    三大核心技术，构建了统一的智能知识管理平台。平台支持 50+ 文档格式的自动解析与结构化，
+    提供基于 RAG（Retrieval-Augmented Generation）架构的精准问答能力，
+    并通过细粒度权限控制保障企业数据安全。
+</p>
+
+<blockquote>
+    关键指标：在内部基准测试中，NebulaMind AI v1.0 的问答准确率达到 87.3%，
+    文档解析覆盖率达到 95.1%，平均检索延迟低于 200ms。
+</blockquote>
+
+<!-- 2. 引言 -->
+<h2 id="introduction">2. 引言：企业知识管理的挑战</h2>
+<p>
+    在数字化转型的浪潮中，企业积累了海量的文档、邮件、聊天记录、工单等知识资产。
+    然而传统的知识管理工具面临以下挑战：
+</p>
+<ul>
+    <li><strong>知识孤岛</strong>：知识散落在 Confluence、SharePoint、飞书、钉钉等多个系统中，难以统一检索。</li>
+    <li><strong>检索效率低</strong>：传统关键词搜索无法理解语义，员工平均花费 20% 的工作时间在查找信息上。</li>
+    <li><strong>知识流失</strong>：核心员工离职后，其掌握的隐性知识随之流失，缺乏有效的知识沉淀机制。</li>
+    <li><strong>安全合规</strong>：企业知识涉及商业机密，需要严格的权限控制和审计追踪。</li>
+</ul>
+<p>
+    NebulaMind AI 通过大语言模型驱动的智能知识平台，系统性地解决上述挑战，
+    让企业知识真正流动起来。
+</p>
+
+<!-- 3. 技术架构 -->
+<h2 id="architecture">3. 技术架构总览</h2>
+<p>
+    NebulaMind AI 采用微服务架构，整体分为以下几层：
+</p>
+<h3>3.1 接入层</h3>
+<p>
+    接入层负责请求路由、认证鉴权、限流熔断。包括：
+</p>
+<ul>
+    <li><strong>Portal Web</strong>：企业官网与门户前端，提供产品介绍、文档下载、登录入口。</li>
+    <li><strong>Edge Gateway</strong>：Nginx 反向代理网关，负责外部请求的负载均衡与 SSL 终止。</li>
+    <li><strong>Knowledge Console</strong>：知识管理控制台，提供知识库管理、模型编排、权限配置等功能。</li>
+</ul>
+<h3>3.2 服务层</h3>
+<p>
+    服务层是平台的核心，包含以下微服务：
+</p>
+<ul>
+    <li><strong>__NM_AI_CONSOLE_API_HOST__</strong>：控制台 API 服务，处理会话管理、知识库 CRUD、模型调用编排。</li>
+    <li><strong>knowledge-ingestion</strong>：文档摄入服务，负责文档解析、分块、向量化。</li>
+    <li><strong>retrieval-engine</strong>：检索引擎，提供向量检索与知识图谱查询能力。</li>
+    <li><strong>llm-gateway</strong>：大模型网关，统一管理多模型调用、负载均衡与成本控制。</li>
+</ul>
+<h3>3.3 存储层</h3>
+<ul>
+    <li><strong>PostgreSQL</strong>：存储用户、租户、知识库元数据、权限信息。</li>
+    <li><strong>Milvus</strong>：向量数据库，存储文档块的稠密向量表示。</li>
+    <li><strong>Neo4j</strong>：知识图谱数据库，存储实体关系与推理路径。</li>
+    <li><strong>Redis</strong>：缓存与分布式协调。</li>
+    <li><strong>MinIO</strong>：对象存储，存储原始文档文件。</li>
+</ul>
+
+<!-- 4. 知识引擎 -->
+<h2 id="knowledge-engine">4. 知识引擎与 GraphRAG</h2>
+<p>
+    NebulaMind AI v1.0 的知识引擎采用 RAG（Retrieval-Augmented Generation）架构，
+    通过以下流程实现智能问答：
+</p>
+<ol>
+    <li><strong>文档摄入</strong>：用户上传文档后，系统自动解析文档结构，将文档切分为语义块（chunk）。</li>
+    <li><strong>向量化</strong>：使用 embedding 模型将每个语义块编码为稠密向量，存入 Milvus 向量数据库。</li>
+    <li><strong>实体抽取</strong>：使用 NLP 模型从文档中抽取实体与关系，构建知识图谱存入 Neo4j。</li>
+    <li><strong>检索</strong>：用户提问时，系统将问题向量化，在 Milvus 中检索最相关的语义块。</li>
+    <li><strong>生成</strong>：将检索到的上下文与用户问题拼接，输入 LLM 生成答案，并附带引用来源。</li>
+</ol>
+<p>
+    在 v1.0 版本中，检索策略采用稠密向量检索 + BM25 关键词检索的混合模式，
+    通过 Reciprocal Rank Fusion（RRF）算法融合两路检索结果，提升召回率。
+</p>
+<pre><code># 检索流程伪代码
+def retrieve(query, top_k=5):
+    # 1. 稠密向量检索
+    query_vec = embed(query)
+    dense_results = milvus.search(query_vec, top_k=top_k * 2)
+
+    # 2. BM25 关键词检索
+    bm25_results = bm25.search(query, top_k=top_k * 2)
+
+    # 3. RRF 融合
+    fused = rrf_fusion(dense_results, bm25_results)
+    return fused[:top_k]</code></pre>
+
+<!-- 5. 安全模型 -->
+<h2 id="security-model">5. 安全模型与 SSO 集成</h2>
+<p>
+    NebulaMind AI 的安全模型基于以下核心原则：
+</p>
+<h3>5.1 身份认证与 SSO</h3>
+<p>
+    平台采用 OAuth 2.0 / OIDC 协议实现单点登录（SSO），支持对接企业现有的身份提供商（IdP），
+    包括 Azure AD、Okta、飞书、钉钉等。每个租户分配独立的 SSO 客户端（client_id），
+    用于身份令牌的签发与验证。
+</p>
+<p>
+    <strong>重要架构决策</strong>：内部知识库 Console API 与门户（Portal Web）共用同一个 SSO 客户端
+    （<code>client_id: nm-portal-sso-prod</code>）。这意味着用户在门户登录后，
+    无需重新认证即可访问 Console API，实现无缝的会话引导（Session Bootstrap）。
+    Console API 的会话引导端点为 <code>/api/v1/console/session/bootstrap</code>，
+    通过携带门户 SSO Cookie 自动完成控制台会话初始化。
+</p>
+<blockquote>
+    设计说明：共用 SSO 客户端简化了用户体验，但也要求 Console API 严格校验
+    请求来源与租户隔离。所有 API 请求需携带 <code>X-NM-Trace</code> 追踪头
+    和 <code>X-NM-Tenant</code> 租户标识。
+</blockquote>
+<h3>5.2 权限控制</h3>
+<p>
+    平台采用 RBAC（Role-Based Access Control）模型，支持以下角色：
+</p>
+<ul>
+    <li><strong>租户管理员</strong>：管理租户内所有用户、知识库与模型配置。</li>
+    <li><strong>知识库编辑</strong>：管理指定知识库的内容与权限。</li>
+    <li><strong>普通用户</strong>：查询知识库内容、使用智能问答。</li>
+</ul>
+<h3>5.3 数据隔离</h3>
+<p>
+    多租户数据隔离通过以下机制实现：
+</p>
+<ul>
+    <li>数据库层：所有表包含 <code>tenant_id</code> 字段，查询自动附加租户过滤条件。</li>
+    <li>向量库层：Milvus 使用 partition 隔离不同租户的向量数据。</li>
+    <li>存储层：MinIO 为每个租户分配独立的 bucket。</li>
+</ul>
+
+<!-- 6. API 集成 -->
+<h2 id="api-integration">6. API 集成与开发者指南</h2>
+<p>
+    NebulaMind AI 提供完整的 RESTful API，开发者可通过 API 集成平台能力到现有系统。
+</p>
+<h3>6.1 认证流程</h3>
+<pre><code># Console API 会话引导
+POST /api/v1/console/session/bootstrap
+Headers:
+    Content-Type: application/json
+    X-NM-Trace: nm-{timestamp}-{random}
+    X-NM-Service: __NM_AI_CONSOLE_API_HOST__
+    X-NM-Tenant: {tenant_id}
+Body:
+    {
+        "clientId": "nm-portal-sso-prod",
+        "action": "bootstrap"
+    }
+
+# 响应
+{
+    "sessionToken": "eyJhbGciOi...",
+    "tenant": "tenant_001",
+    "expiresAt": 1718900000000,
+    "permissions": ["kb:read", "kb:write", "model:invoke"]
+}</code></pre>
+<h3>6.2 SDK</h3>
+<p>
+    NebulaMind 提供 Python SDK（<code>nebulamind-sdk-python</code>），封装了全部 API 接口。
+    安装方式：
+</p>
+<pre><code>pip install nebulamind-sdk-python
+
+# 使用示例
+from nebulamind import NebulaMindClient
+
+client = NebulaMindClient(
+    api_base="https://api.nebulamind.ai",
+    tenant_id="tenant_001",
+    session_token="your_session_token"
+)
+
+# 查询知识库
+result = client.knowledge.query("公司差旅报销标准是什么？")
+print(result.answer)
+print(result.sources)</code></pre>
+
+<!-- 7. 部署架构 -->
+<h2 id="deployment">7. 部署架构</h2>
+<p>
+    NebulaMind AI 支持公有云 SaaS 和私有化部署两种模式。
+</p>
+<h3>7.1 公有云 SaaS</h3>
+<p>
+    SaaS 模式下，平台部署在阿里云华东区域（cn-east-1），采用多可用区高可用架构。
+    客户通过 <code>https://www.nebulamind.ai</code> 访问门户，
+    通过 <code>https://console.nebulamind.ai</code> 访问知识管理控制台。
+</p>
+<h3>7.2 私有化部署</h3>
+<p>
+    私有化部署支持 Kubernetes 和 Docker Compose 两种方式。最小部署配置：
+</p>
+<ul>
+    <li>CPU: 16 核</li>
+    <li>内存: 64 GB</li>
+    <li>存储: 500 GB SSD</li>
+    <li>GPU: NVIDIA A10 x 1（用于 embedding 与 LLM 推理）</li>
+</ul>
+
+<!-- 8. 路线图 -->
+<h2 id="roadmap">8. 产品路线图</h2>
+<table class="nm-table">
+    <thead>
+        <tr><th>版本</th><th>计划时间</th><th>核心特性</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><span class="nm-badge nm-badge-warning">v1.0</span></td>
+            <td>2025-06</td>
+            <td>RAG 问答、文档解析、多租户、SSO 集成</td>
+        </tr>
+        <tr>
+            <td><span class="nm-badge nm-badge-info">v2.0</span></td>
+            <td>2025-12</td>
+            <td>多模型路由、Prompt 管理、可视化流程编排</td>
+        </tr>
+        <tr>
+            <td><span class="nm-badge nm-badge-success">v3.0</span></td>
+            <td>2026-06</td>
+            <td>GraphRAG 引擎、知识图谱推理、亿级节点检索</td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- 文档元信息 -->
+<div class="doc-meta">
+    <p><strong>文档信息</strong></p>
+    <p>标题：NebulaMind AI 技术白皮书</p>
+    <p>版本：1.0（已过时，最新版本 v3.0）</p>
+    <p>发布日期：2025-06-20</p>
+    <p>作者：NebulaMind 平台团队 (platform-team@nebulamind.ai)</p>
+    <p>分类：内部技术文档 / 架构设计</p>
+    <p>保密级别：内部使用（INTERNAL ONLY）</p>
+    <p>归档路径：/resources/archive/nebulamind-whitepaper-v1.html</p>
+</div>
+
+</div>
+
+<footer class="nm-footer">
+    <p>&copy; 2025 NebulaMind AI Corp. All rights reserved. &nbsp;|&nbsp; Internal Document - Do Not Distribute</p>
+</footer>
+
+</body>
+</html>

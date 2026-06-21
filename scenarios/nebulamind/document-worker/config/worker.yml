@@ -1,0 +1,106 @@
+# NebulaMind Document Worker - 自身运行配置
+# ============================================================
+# 此文件由 document-worker 服务读取，包含队列连接、任务类型、
+# 内部服务端点等配置。注意：此文件不含 Flag（Flag 由环境变量注入）。
+# ============================================================
+# Generated: 2026-06-19
+# Owner: platform-ops@nebulamind.ai
+# ============================================================
+
+service:
+  name: document-worker
+  version: 2026.06.1
+  zone: business
+  networks:
+    - dmz-service
+    - biz-core
+  port: 8080
+  consumer_group: document-workers
+
+queue:
+  # Redis-compatible message broker (cache-broker service in Business zone)
+  broker:
+    host: __NM_CACHE_BROKER_HOST__
+    port: 6379
+    db: 2
+    password: ${REDIS_PASSWORD:-nm_worker_dev_2026}
+    pool_size: 8
+    connect_timeout: 5s
+    io_timeout: 10s
+    retry_backoff: exponential
+    retry_max_delay: 30s
+
+  # Task types consumed by document-worker
+  task_types:
+    - document-parse
+    - document-ocr
+    - document-embed
+    - document-summarize
+    - document-classify
+    - document-extract
+    - document-convert
+
+  consumer_group: document-workers
+  max_retries: 3
+  visibility_timeout: 300s
+  dead_letter_queue: document-dlq
+  max_payload_size: 52428800
+
+worker:
+  # Low-privilege worker token for task status queries
+  # NOTE: Same token is referenced in support-upload worker.yml (B2 path traversal target)
+  # Scope: read-only task status, queue stats
+  # Rotation: quarterly via vault://secret/nebulamind/worker-tokens
+  token: nm_worker_token_8f3a9b2e5c1d4a6f
+  concurrency: 4
+  poll_interval: 2s
+  heartbeat_interval: 30s
+  graceful_shutdown_timeout: 60s
+
+  # Internal service endpoints (Business network segment)
+  endpoints:
+    parse: __NM_DOCUMENT_WORKER_URL__/api/parse
+    status: __NM_DOCUMENT_WORKER_URL__/api/tasks
+    health: __NM_DOCUMENT_WORKER_URL__/healthz
+    ai_console: __NM_AI_CONSOLE_API_URL__/healthz
+    metadata: __NM_AI_CONSOLE_API_URL__/internal/metadata
+
+  # Document conversion profiles
+  convert:
+    binary: convert
+    default_profile: standard
+    profiles:
+      - standard
+      - high-quality
+      - ocr-enabled
+      - fast
+    timeout: 120s
+
+  # Resource limits per worker process
+  limits:
+    memory: 512Mi
+    cpu: "0.75"
+    temp_storage: 2Gi
+    parse_timeout: 120s
+
+# SSRF fetch configuration (for remote document URL parsing)
+fetch:
+  enabled: true
+  timeout: 10s
+  max_redirects: 3
+  max_size: 10485760
+  user_agent: "NebulaMindDocWorker/2026.06 (+parse)"
+  # Trace metadata is attached to all parse responses for debugging
+  attach_trace_metadata: true
+
+# Logging configuration
+logging:
+  level: INFO
+  format: json
+  output: stdout
+  slow_request_threshold: 5s
+  redact_fields:
+    - password
+    - token
+    - authorization
+    - private_key

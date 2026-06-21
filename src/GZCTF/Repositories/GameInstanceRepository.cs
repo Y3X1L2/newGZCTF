@@ -1,5 +1,6 @@
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
+using GZCTF.Services;
 using GZCTF.Services.Container.Manager;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
@@ -14,6 +15,7 @@ public class GameInstanceRepository(
     IContainerRepository containerRepository,
     IGameEventRepository gameEventRepository,
     IOptionsSnapshot<ContainerPolicy> containerPolicy,
+    DockerImageRegistryService dockerRegistry,
     ILogger<GameInstanceRepository> logger,
     IStringLocalizer<Program> localizer) : RepositoryBase(context), IGameInstanceRepository
 {
@@ -176,13 +178,14 @@ public class GameInstanceRepository(
         await Context.Entry(gameInstance).Reference(e => e.FlagContext).LoadAsync(token);
 
         var challenge = gameInstance.Challenge;
+        var image = await dockerRegistry.ResolveImageReferenceAsync(challenge.ContainerImage, token);
         var container = await service.CreateContainerAsync(new ContainerConfig
         {
             TeamId = team.Id.ToString(),
             UserId = user.Id,
             ChallengeId = gameInstance.ChallengeId,
             Flag = gameInstance.FlagContext?.Flag, // static challenge has no specific flag
-            Image = challenge.ContainerImage,
+            Image = image,
             CPUCount = challenge.CPUCount ?? 1,
             MemoryLimit = challenge.MemoryLimit ?? 64,
             StorageLimit = challenge.StorageLimit ?? 256,

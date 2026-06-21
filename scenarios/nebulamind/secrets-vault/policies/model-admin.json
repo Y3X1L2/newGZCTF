@@ -1,0 +1,17 @@
+{
+  "name": "model-admin",
+  "description": "Model registry admin token policy - read-only access to model-registry secrets.",
+  "rules": {
+    "path": {
+      "secret/data/nebulamind/model-registry": {
+        "capabilities": ["read"]
+      },
+      "secret/metadata/nebulamind/model-registry": {
+        "capabilities": ["read"]
+      },
+      "auth/token/lookup-self": {
+        "capabilities": ["read"]
+      }
+    }
+  }
+}

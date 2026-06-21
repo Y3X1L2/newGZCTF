@@ -22,10 +22,17 @@ public class NodesController : ControllerBase
 {
     private readonly INodeRepository _nodeRepo;
     private readonly AppDbContext _context;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<NodesController> _logger;
 
-    public NodesController(INodeRepository nodeRepo, AppDbContext context, ILogger<NodesController> logger)
-    { _nodeRepo = nodeRepo; _context = context; _logger = logger; }
+    public NodesController(INodeRepository nodeRepo, AppDbContext context, IServiceScopeFactory scopeFactory,
+        ILogger<NodesController> logger)
+    {
+        _nodeRepo = nodeRepo;
+        _context = context;
+        _scopeFactory = scopeFactory;
+        _logger = logger;
+    }
 
     [HttpPost]
     [RequireAdmin]
@@ -54,7 +61,8 @@ public class NodesController : ControllerBase
             n.Id, n.Name, n.HostAddress, Status = n.GetEffectiveStatus(now), n.Capabilities,
             n.CpuLoad, n.MemoryLoad, n.CurrentContainers, n.MaxContainers,
             n.CurrentVms, n.MaxVms, n.UsedPorts, n.TotalPorts, n.LastHeartbeat,
-            n.IsSchedulable, n.IsLocal, n.AgentPort,
+            n.IsSchedulable, n.IsLocal, n.IsStorageNode, n.AgentPort, n.RegistryPort,
+            RegistryAddress = $"{DockerImageRegistryService.NormalizeRegistryAddress(n.HostAddress)}:{n.RegistryPort}",
             UnschedulableReasons = GetUnschedulableReasons(n),
             UnschedulableByCapability = GetUnschedulableByCapability(n),
             SchedulableCapabilities = GetSchedulableCapabilities(n)
@@ -73,7 +81,8 @@ public class NodesController : ControllerBase
             node.Id, node.Name, node.HostAddress, Status = node.GetEffectiveStatus(now), node.Capabilities,
             node.CpuLoad, node.MemoryLoad, node.CurrentContainers, node.MaxContainers,
             node.CurrentVms, node.MaxVms, node.UsedPorts, node.TotalPorts, node.LastHeartbeat,
-            node.IsSchedulable, node.IsLocal, node.AgentPort,
+            node.IsSchedulable, node.IsLocal, node.IsStorageNode, node.AgentPort, node.RegistryPort,
+            RegistryAddress = $"{DockerImageRegistryService.NormalizeRegistryAddress(node.HostAddress)}:{node.RegistryPort}",
             UnschedulableReasons = GetUnschedulableReasons(node),
             UnschedulableByCapability = GetUnschedulableByCapability(node),
             SchedulableCapabilities = GetSchedulableCapabilities(node)
@@ -376,14 +385,98 @@ public class NodesController : ControllerBase
     [RequireAdmin]
     public async Task<IActionResult> UpdateNode(Guid id, [FromBody] UpdateNodeRequest request)
     {
-        var node = await _nodeRepo.GetNodeByIdAsync(id, HttpContext.RequestAborted);
+        var token = HttpContext.RequestAborted;
+        var node = await _context.WorkerNodes.FirstOrDefaultAsync(n => n.Id == id, token);
         if (node is null) return NotFound();
+        var registryPortChanged = false;
 
         if (request.IsSchedulable.HasValue)
             node.IsSchedulable = request.IsSchedulable.Value;
 
-        await _context.SaveChangesAsync();
-        return Ok(new { node.Id, node.IsSchedulable });
+        if (request.RegistryPort.HasValue)
+        {
+            if (request.RegistryPort.Value is < 1 or > 65535)
+                return BadRequest(new { message = "Registry 端口必须在 1-65535 之间。" });
+            registryPortChanged = node.RegistryPort != request.RegistryPort.Value;
+            node.RegistryPort = request.RegistryPort.Value;
+        }
+
+        DockerRegistryMigrationTask? migrationTask = null;
+        if (request.IsStorageNode.HasValue)
+        {
+            if (!request.IsStorageNode.Value && node.IsStorageNode)
+                return BadRequest(new { message = "当前存储节点不能直接关闭，请选择另一个节点设为存储节点完成切换。" });
+
+            if (request.IsStorageNode.Value)
+            {
+                if ((node.Capabilities & NodeCapability.Docker) != NodeCapability.Docker)
+                    return BadRequest(new { message = "镜像存储节点必须具备 Docker 能力。" });
+
+                await _context.SaveChangesAsync(token);
+
+                try
+                {
+                    var migration = HttpContext.RequestServices.GetRequiredService<DockerRegistryMigrationService>();
+                    migrationTask = await migration.CreateTaskAsync(node.Id, token);
+                    QueueRegistryMigration(migrationTask.Id);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return BadRequest(new { message = ex.Message });
+                }
+            }
+        }
+
+        if (migrationTask is null)
+        {
+            await _context.SaveChangesAsync(token);
+
+            if (registryPortChanged || node.IsStorageNode)
+            {
+                var registry = HttpContext.RequestServices.GetRequiredService<DockerImageRegistryService>();
+                try
+                {
+                    if (node.IsStorageNode)
+                        await registry.EnsureNodeRegistryAsync(node.Id, token);
+                    await registry.ConfigureManagedRegistryTrustAsync(token);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogWarning(ex,
+                        "Failed to refresh Docker registry trust after updating node {NodeId}.",
+                        node.Id);
+                }
+            }
+        }
+
+        return Ok(new
+        {
+            node.Id,
+            node.IsSchedulable,
+            node.IsStorageNode,
+            node.RegistryPort,
+            RegistryAddress = $"{DockerImageRegistryService.NormalizeRegistryAddress(node.HostAddress)}:{node.RegistryPort}",
+            migrationTask = migrationTask is null ? null : ToMigrationTaskModel(migrationTask)
+        });
+    }
+
+    void QueueRegistryMigration(Guid taskId)
+    {
+        _ = Task.Run(async () =>
+        {
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var migration = scope.ServiceProvider.GetRequiredService<DockerRegistryMigrationService>();
+            var logger = scope.ServiceProvider.GetRequiredService<ILogger<NodesController>>();
+
+            try
+            {
+                await migration.RunTaskAsync(taskId, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Docker registry migration task {TaskId} failed.", taskId);
+            }
+        });
     }
 
     [HttpPost("{id:guid}/heartbeat")]
@@ -488,6 +581,40 @@ public class NodesController : ControllerBase
             WeightedScheduler.CanHost(node, NodeCapability.Kvm) ? nameof(NodeCapability.Kvm) : null
         }.OfType<string>()
     ];
+
+    static object ToMigrationTaskModel(DockerRegistryMigrationTask task) => new
+    {
+        task.Id,
+        task.TargetNodeId,
+        TargetNodeName = task.TargetNode?.Name,
+        task.SourceRegistry,
+        task.TargetRegistry,
+        Status = task.Status.ToString(),
+        task.TotalItems,
+        task.CompletedItems,
+        task.FailedItems,
+        task.Message,
+        task.CreatedAt,
+        task.UpdatedAt,
+        task.CompletedAt,
+        Items = task.Items.Select(i => new
+        {
+            i.Id,
+            i.ImageTemplateId,
+            i.SourceImage,
+            i.TargetImage,
+            i.SourceDigest,
+            i.TargetDigest,
+            Status = i.Status.ToString(),
+            i.BytesTransferred,
+            i.TotalBytes,
+            i.RetryCount,
+            i.ErrorMessage,
+            i.CreatedAt,
+            i.UpdatedAt,
+            i.CompletedAt
+        }).ToArray()
+    };
 
     static NodeResourceItemModel ToNodeContainerResource(Container container)
     {
@@ -667,6 +794,8 @@ public class NodeDeployRequest
 public class UpdateNodeRequest
 {
     public bool? IsSchedulable { get; set; }
+    public bool? IsStorageNode { get; set; }
+    public int? RegistryPort { get; set; }
 }
 
 public class HeartbeatRequest

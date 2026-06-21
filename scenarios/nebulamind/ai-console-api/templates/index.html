@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NebulaMind Console API - Documentation</title>
+<link rel="stylesheet" href="/static/css/console.css">
+</head>
+<body>
+<nav class="nm-nav">
+    <span class="nm-nav-brand">NebulaMind Console API</span>
+    <div class="nm-nav-links">
+        <a href="/">Home</a>
+        <a href="/graphql">GraphQL IDE</a>
+        <a href="/docs">Docs</a>
+    </div>
+</nav>
+<div class="nm-container">
+    <h1>AI Console API &mdash; Internal Operations Console</h1>
+    <p class="nm-text-soft">NebulaMind AI Corp &mdash; Internal Operations Console API (v2026.06.3)</p>
+
+    <div class="nm-card nm-mt-24">
+        <h2>Endpoints</h2>
+        <table class="nm-table">
+            <thead>
+                <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><code>GET</code></td><td><code>/healthz</code></td><td>Health check</td></tr>
+                <tr><td><code>GET</code></td><td><code>/</code></td><td>API info</td></tr>
+                <tr><td><code>GET</code></td><td><code>/api/v1/console/session/bootstrap</code></td><td>Session bootstrap (tenant info + features)</td></tr>
+                <tr><td><code>GET</code></td><td><code>/api/v1/knowledge-bases?tenantId=xxx</code></td><td>Knowledge base list</td></tr>
+                <tr><td><code>GET</code></td><td><code>/api/v1/knowledge-bases/&lt;id&gt;</code></td><td>Knowledge base detail</td></tr>
+                <tr><td><code>POST</code></td><td><code>/api/v1/auth/login</code></td><td>Login (returns JWT)</td></tr>
+                <tr><td><code>GET</code></td><td><code>/api/v1/admin/audit/export</code></td><td>Export audit logs (operator only)</td></tr>
+                <tr><td><code>POST</code></td><td><code>/graphql</code></td><td>GraphQL endpoint</td></tr>
+                <tr><td><code>GET</code></td><td><code>/graphql</code></td><td>GraphQL IDE</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="nm-card nm-mt-24">
+        <h2>Authentication</h2>
+        <p>POST <code>/api/v1/auth/login</code> with JSON body:</p>
+        <pre class="nm-code">{
+  "username": "viewer",
+  "password": "viewer123"
+}</pre>
+        <p>Returns a Bearer JWT token. Use it in the <code>Authorization</code> header:</p>
+        <pre class="nm-code">Authorization: Bearer &lt;token&gt;</pre>
+    </div>
+
+    <div class="nm-card nm-mt-24">
+        <h2>GraphQL</h2>
+        <p>Visit <a href="/graphql">/graphql</a> for the interactive IDE, or POST queries to <code>/graphql</code>.</p>
+        <p>Introspection is enabled. Example query:</p>
+        <pre class="nm-code">{
+  __schema {
+    queryType { name }
+    types { name fields { name } }
+  }
+}</pre>
+    </div>
+
+    <p class="nm-text-soft nm-mt-24" style="font-size:12px;">
+        NebulaMind AI Corp &mdash; Internal Operations Console API &mdash; v2026.06.3
+    </p>
+</div>
+</body>
+</html>

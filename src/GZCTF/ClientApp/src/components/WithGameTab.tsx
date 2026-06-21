@@ -213,6 +213,15 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
   })
 
   useEffect(() => {
+    if (!game || filteredPages.length === 0) return
+    const tab = getTab(location.pathname)
+    const gameRoot = `/games/${numId}`
+    if (tab < 0 && location.pathname.startsWith(`${gameRoot}/`)) {
+      navigate(`${gameRoot}/${filteredPages[0].link}`, { replace: true })
+    }
+  }, [game, location.pathname, numId, navigate, role, status])
+
+  useEffect(() => {
     if (game) {
       const now = dayjs()
       if (now < dayjs(game.start)) {

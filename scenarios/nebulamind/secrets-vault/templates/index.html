@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NebulaMind Vault - Secrets Management</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/vault.css') }}">
+</head>
+<body>
+  <div class="vault-header">
+    <div class="vault-logo">VAULT</div>
+    <div>
+      <div>NebulaMind Secrets Management</div>
+      <div class="vault-subtitle">HashiCorp Vault Compatible API &middot; Data Zone</div>
+    </div>
+    <span class="vault-status healthy">Unsealed</span>
+  </div>
+
+  <div class="vault-container">
+    <div class="vault-card">
+      <h2>Service Status</h2>
+      <p><strong>Cluster:</strong> nebulamind-vault</p>
+      <p><strong>Version:</strong> 1.18.2 (mock)</p>
+      <p><strong>Sealed:</strong> false</p>
+      <p><strong>Initialized:</strong> true</p>
+    </div>
+
+    <div class="vault-card">
+      <h2>API Endpoints</h2>
+      <table class="vault-table">
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Path</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="vault-method get">GET</span></td><td>/v1/sys/health</td><td>Health check</td></tr>
+          <tr><td><span class="vault-method get">GET</span></td><td>/v1/sys/mounts</td><td>List secret engine mounts</td></tr>
+          <tr><td><span class="vault-method get">GET</span></td><td>/v1/sys/policies/acl</td><td>List ACL policies</td></tr>
+          <tr><td><span class="vault-method get">GET</span></td><td>/v1/secret/data/{path}</td><td>Read secret (KV v2)</td></tr>
+          <tr><td><span class="vault-method post">POST</span></td><td>/v1/secret/data/{path}</td><td>Write secret (KV v2)</td></tr>
+          <tr><td><span class="vault-method get">GET</span></td><td>/v1/secret/metadata/{path}</td><td>Read secret metadata</td></tr>
+          <tr><td><span class="vault-method post">POST</span></td><td>/v1/auth/token/create</td><td>Create token</td></tr>
+          <tr><td><span class="vault-method get">GET</span></td><td>/v1/auth/token/lookup</td><td>Lookup token</td></tr>
+          <tr><td><span class="vault-method get">GET</span></td><td>/v1/auth/token/lookup-self</td><td>Lookup current token</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="vault-card">
+      <h2>Authentication</h2>
+      <p>Pass a token via the <span class="vault-endpoint">X-Vault-Token</span> header or <span class="vault-endpoint">Authorization: Bearer</span> header.</p>
+      <p>Tokens follow the Vault <code>s.</code> prefix format.</p>
+    </div>
+  </div>
+
+  <div class="vault-footer">
+    NebulaMind AI Corp &middot; Internal Infrastructure &middot; Data Zone
+  </div>
+</body>
+</html>

@@ -124,6 +124,19 @@ const buildChallengeMetaMap = (
 }
 
 const solveScoreKey = (team?: string | null, challenge?: string | null) => `${team ?? ''}::${challenge ?? ''}`
+const solveEventKey = (team?: string | null, challenge?: string | null, time?: number) =>
+  `${team ?? ''}::${challenge ?? ''}::${time ?? 0}`
+const isPenetrationSubmission = (submission: Submission) =>
+  (submission.challenge ?? '').startsWith('[渗透]')
+const dedupeSolveEvents = <T extends { team: string; challenge: string; sortTime: number }>(events: T[]) => {
+  const seen = new Set<string>()
+  return events.filter((event) => {
+    const key = solveEventKey(event.team, event.challenge, event.sortTime)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
 
 export interface Category {
   name: string
@@ -306,7 +319,10 @@ export const useCTFScreenData = (numId: number) => {
   const scoreboard = liveScoreboard
   const participations = liveParticipations
   const eventFeed = liveEvents
-  const submissionFeed = liveSubmissions
+  const submissionFeed = useMemo(
+    () => liveSubmissions.filter((submission) => game?.gameType !== GameType.Penetration && !isPenetrationSubmission(submission)),
+    [game?.gameType, liveSubmissions]
+  )
   const screenChallengeMap = useMemo(
     () => buildChallengeMetaMap(scoreboard?.challenges, ctfChallengeMeta),
     [ctfChallengeMeta, scoreboard?.challenges]
@@ -666,6 +682,10 @@ export const useCTFScreenData = (numId: number) => {
     connection.on('ReceivedSubmissions', (submission: Submission) => {
       setLiveSubmissions(current => [submission, ...current].slice(0, MAX_SUBMISSIONS))
 
+      if (isPenetrationSubmission(submission)) {
+        void loadPentestData()
+      }
+
       if (submission.status === AnswerResult.Accepted) {
         void mutateScoreboard()
       }
@@ -675,7 +695,7 @@ export const useCTFScreenData = (numId: number) => {
     return () => {
       void connection.stop()
     }
-  }, [loadAwdpData, mutateScoreboard, numId, statusInfo.status])
+  }, [loadAwdpData, loadPentestData, mutateScoreboard, numId, statusInfo.status])
 
   // ─── Derived Data (matching Ctfscreen format) ────────────────────────────────
 
@@ -935,8 +955,12 @@ export const useCTFScreenData = (numId: number) => {
       }
     })
 
+    const dedupedCtfEvents = dedupeSolveEvents(ctfEvents)
+    const ctfEventKeys = new Set(dedupedCtfEvents.map((event) => solveEventKey(event.team, event.challenge, event.sortTime)))
+
     const pentestEvents = pentestSubmissions
       .filter((log) => log.status === AnswerResult.Accepted)
+      .filter((log) => !ctfEventKeys.has(solveEventKey(log.teamName, `[渗透] ${log.nodeName} / ${log.itemTitle}`, log.time)))
       .map((log, index) => {
         const teamIndex = teams.findIndex(t => t.name === log.teamName) ?? index
         return {
@@ -952,7 +976,7 @@ export const useCTFScreenData = (numId: number) => {
         }
       })
 
-    return [...ctfEvents, ...awdpEvents, ...pentestEvents]
+    return dedupeSolveEvents([...dedupedCtfEvents, ...awdpEvents, ...pentestEvents])
       .sort((left, right) => right.sortTime - left.sortTime)
       .slice(0, 12)
       .map(({ sortTime, ...event }) => event)

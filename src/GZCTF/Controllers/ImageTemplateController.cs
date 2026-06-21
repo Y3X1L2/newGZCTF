@@ -24,17 +24,20 @@ public class ImageTemplateController : ControllerBase
     private readonly ImageStorage _storage;
     private readonly IArchiveExtractor _archiveExtractor;
     private readonly DockerImageRegistryService _dockerRegistry;
+    private readonly DockerRegistryMigrationService _registryMigration;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ImageTemplateController> _logger;
 
     public ImageTemplateController(AppDbContext context, ImageStorage storage, IArchiveExtractor archiveExtractor,
-        DockerImageRegistryService dockerRegistry, IServiceScopeFactory scopeFactory,
+        DockerImageRegistryService dockerRegistry, DockerRegistryMigrationService registryMigration,
+        IServiceScopeFactory scopeFactory,
         ILogger<ImageTemplateController> logger)
     {
         _context = context;
         _storage = storage;
         _archiveExtractor = archiveExtractor;
         _dockerRegistry = dockerRegistry;
+        _registryMigration = registryMigration;
         _scopeFactory = scopeFactory;
         _logger = logger;
     }
@@ -240,14 +243,22 @@ public class ImageTemplateController : ControllerBase
 
     [HttpGet("docker-registry")]
     [RequireTeacher]
-    public IActionResult GetDockerRegistrySettings()
+    public async Task<IActionResult> GetDockerRegistrySettings(CancellationToken token)
     {
+        var endpoint = await _dockerRegistry.GetActiveEndpointAsync(token);
+        var task = await _registryMigration.GetLatestTaskAsync(token);
         return Ok(new
         {
-            enabled = _dockerRegistry.IsConfigured,
-            address = _dockerRegistry.RegistryAddress,
+            enabled = endpoint is not null,
+            address = endpoint?.Address ?? string.Empty,
             @namespace = _dockerRegistry.RegistryNamespace,
-            maxUploadSizeGb = _dockerRegistry.MaxUploadSizeGb
+            maxUploadSizeGb = _dockerRegistry.MaxUploadSizeGb,
+            storageNodeId = endpoint?.NodeId,
+            storageNodeName = endpoint?.NodeName,
+            storageNodeHost = endpoint?.Host,
+            storageNodeRegistryPort = endpoint?.Port,
+            storageNodeIsLocal = endpoint?.IsLocal ?? false,
+            migrationTask = task is null ? null : ToMigrationTaskModel(task)
         });
     }
 
@@ -287,7 +298,7 @@ public class ImageTemplateController : ControllerBase
         string targetImage;
         try
         {
-            targetImage = _dockerRegistry.BuildInternalImageReference(repository, tag);
+            targetImage = await _dockerRegistry.BuildInternalImageReferenceAsync(repository, tag, token);
         }
         catch (InvalidOperationException ex)
         {
@@ -503,6 +514,40 @@ public class ImageTemplateController : ControllerBase
         token = value.Parameter.Trim();
         return true;
     }
+
+    private static object ToMigrationTaskModel(DockerRegistryMigrationTask task) => new
+    {
+        task.Id,
+        task.TargetNodeId,
+        TargetNodeName = task.TargetNode?.Name,
+        task.SourceRegistry,
+        task.TargetRegistry,
+        Status = task.Status.ToString(),
+        task.TotalItems,
+        task.CompletedItems,
+        task.FailedItems,
+        task.Message,
+        task.CreatedAt,
+        task.UpdatedAt,
+        task.CompletedAt,
+        Items = task.Items.Select(i => new
+        {
+            i.Id,
+            i.ImageTemplateId,
+            i.SourceImage,
+            i.TargetImage,
+            i.SourceDigest,
+            i.TargetDigest,
+            Status = i.Status.ToString(),
+            i.BytesTransferred,
+            i.TotalBytes,
+            i.RetryCount,
+            i.ErrorMessage,
+            i.CreatedAt,
+            i.UpdatedAt,
+            i.CompletedAt
+        }).ToArray()
+    };
 }
 
 public class DockerRegisterRequest

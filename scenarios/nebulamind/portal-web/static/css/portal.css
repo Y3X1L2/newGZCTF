@@ -1,0 +1,89 @@
+/* NebulaMind Portal - 补充样式
+   @import 共享企业品牌样式，并添加门户专属样式。 */
+@import url("/_shared/assets/nebulamind.css");
+
+/* 页面过渡动画 */
+.nm-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.nm-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(99, 102, 241, 0.15);
+    border-color: var(--nm-primary);
+}
+
+/* Hero 渐变文字动画 */
+.nm-hero h1 {
+    animation: nm-fade-in 0.6s ease-out;
+}
+@keyframes nm-fade-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--nm-bg); }
+::-webkit-scrollbar-thumb { background: var(--nm-border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--nm-primary); }
+
+/* 选中文字样式 */
+::selection { background: rgba(99, 102, 241, 0.3); color: #fff; }
+
+/* 目录列表表格 */
+.nm-table td:first-child { font-family: var(--nm-mono); font-size: 13px; }
+
+/* 白皮书排版 */
+.nm-whitepaper {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 48px 32px;
+    line-height: 1.8;
+}
+.nm-whitepaper h1 { font-size: 32px; margin: 32px 0 16px; }
+.nm-whitepaper h2 { font-size: 24px; margin: 32px 0 16px; border-bottom: 1px solid var(--nm-border); padding-bottom: 8px; }
+.nm-whitepaper h3 { font-size: 18px; margin: 24px 0 12px; color: var(--nm-primary-soft); }
+.nm-whitepaper p { margin-bottom: 16px; color: var(--nm-text-soft); }
+.nm-whitepaper ul, .nm-whitepaper ol { margin: 0 0 16px 24px; color: var(--nm-text-soft); }
+.nm-whitepaper li { margin-bottom: 8px; }
+.nm-whitepaper code {
+    background: var(--nm-bg-soft);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--nm-accent);
+}
+.nm-whitepaper pre {
+    background: var(--nm-bg-soft);
+    border: 1px solid var(--nm-border);
+    border-radius: var(--nm-radius);
+    padding: 16px;
+    overflow-x: auto;
+    margin-bottom: 16px;
+    font-size: 13px;
+}
+.nm-whitepaper .toc {
+    background: var(--nm-bg-soft);
+    border: 1px solid var(--nm-border);
+    border-radius: var(--nm-radius);
+    padding: 24px;
+    margin-bottom: 32px;
+}
+.nm-whitepaper .toc h2 { border: none; margin: 0 0 12px; font-size: 16px; }
+.nm-whitepaper .toc ol { margin: 0 0 0 20px; }
+.nm-whitepaper .toc a { color: var(--nm-text-soft); }
+.nm-whitepaper .toc a:hover { color: var(--nm-primary-soft); }
+.nm-whitepaper .doc-meta {
+    border-top: 1px solid var(--nm-border);
+    padding-top: 16px;
+    margin-top: 48px;
+    font-size: 12px;
+    color: var(--nm-text-soft);
+}
+.nm-whitepaper blockquote {
+    border-left: 3px solid var(--nm-primary);
+    padding-left: 16px;
+    margin: 16px 0;
+    color: var(--nm-text-soft);
+    font-style: italic;
+}
