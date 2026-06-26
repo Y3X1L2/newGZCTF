@@ -27,7 +27,7 @@ public class InternalController : ControllerBase
     /// 获取所有活跃容器的端口映射（用于 Nginx stream 配置同步）
     /// </summary>
     [HttpGet("port-map")]
-    [RequireAdmin]
+    [RequireAdminOrToken]
     public async Task<IActionResult> GetPortMap(CancellationToken token)
     {
         var mappings = await _containerRepository.GetProxyPortMappingsAsync(token);

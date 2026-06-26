@@ -463,6 +463,12 @@ public class NginxProxyConfig
     public bool Enable { get; set; }
 
     /// <summary>
+    /// 是否由当前 GZCTF 进程写入并重载本机 Nginx stream 配置。
+    /// 公网网关独立部署时应设为 false，由网关通过内网接口拉取映射。
+    /// </summary>
+    public bool SyncLocalConfig { get; set; } = true;
+
+    /// <summary>
     /// Nginx stream 动态配置文件路径
     /// </summary>
     public string ConfigPath { get; set; } = "/etc/nginx/stream-conf.d/gzctf-stream-dynamic.conf";

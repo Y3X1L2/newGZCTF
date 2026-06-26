@@ -52,6 +52,11 @@ public class DockerImageRegistryService
 
     public async Task<DockerRegistryEndpoint?> GetActiveEndpointAsync(CancellationToken token = default)
     {
+        var fallback = _settings.NormalizedAddress;
+        if (!string.IsNullOrWhiteSpace(fallback))
+            return new DockerRegistryEndpoint(null, "Configured Registry", fallback, null, fallback,
+                _settings.NormalizedNamespace, false);
+
         await using var scope = _scopeFactory.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var node = await context.WorkerNodes.AsNoTracking()
@@ -68,11 +73,7 @@ public class DockerImageRegistryService
                     _settings.NormalizedNamespace, node.IsLocal);
         }
 
-        var fallback = _settings.NormalizedAddress;
-        return string.IsNullOrWhiteSpace(fallback)
-            ? null
-            : new DockerRegistryEndpoint(null, "Configured Registry", fallback, null, fallback,
-                _settings.NormalizedNamespace, false);
+        return null;
     }
 
     public async Task<string> GetRegistryAddressAsync(CancellationToken token = default) =>
@@ -778,7 +779,7 @@ fi
         };
 
         foreach (var argument in arguments)
-            process.StartInfo.ArgumentList.Add(argument);
+            process.StartInfo.ArgumentList.Add(NormalizeShellArgument(argument));
 
         _logger.LogInformation("Running docker {Arguments}", string.Join(' ', arguments));
         process.Start();
@@ -819,7 +820,7 @@ fi
             }
         };
         foreach (var argument in arguments)
-            process.StartInfo.ArgumentList.Add(argument);
+            process.StartInfo.ArgumentList.Add(NormalizeShellArgument(argument));
         process.Start();
         var outputTask = process.StandardOutput.ReadToEndAsync(cts.Token);
         var errorTask = process.StandardError.ReadToEndAsync(cts.Token);
@@ -831,6 +832,8 @@ fi
                 ? $"{fileName} exited with code {process.ExitCode}: {output.Trim()}"
                 : error.Trim());
     }
+
+    static string NormalizeShellArgument(string argument) => argument.Replace("\r\n", "\n").Replace("\r", "\n");
 
     static string ShellQuote(string value) => $"'{value.Replace("'", "'\"'\"'")}'";
 

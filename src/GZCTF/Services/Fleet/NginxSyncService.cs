@@ -38,6 +38,12 @@ public class NginxSyncService : IHostedService, IDisposable
             return Task.CompletedTask;
         }
 
+        if (!_config.SyncLocalConfig)
+        {
+            _logger.LogInformation("Nginx local config sync is disabled; expecting an external gateway to pull mappings");
+            return Task.CompletedTask;
+        }
+
         // 仅在 Linux 上运行（nginx reload 需要 Linux 环境）
         if (!OperatingSystem.IsLinux())
         {
