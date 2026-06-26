@@ -605,6 +605,45 @@ export const DEFAULT_LOADING_OVERLAY: OverlayProps = {
 
 export const IMAGE_MIME_TYPES = ['image/png', 'image/gif', 'image/jpeg', 'image/webp', 'image/avif', 'image/heic']
 
+export const PHONE_PATTERN = /^(?:1[3-9]\d{9}|\+[1-9]\d{7,14})$/
+
+export const isValidPhoneNumber = (value?: string | null) => {
+  const phone = value?.trim()
+  return !phone || PHONE_PATTERN.test(phone)
+}
+
+export const copyText = async (value: string) => {
+  if (!value)
+    return false
+
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value)
+      return true
+    } catch {
+      // HTTP/IP access is not a secure context in many browsers, so use a DOM fallback.
+    }
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = value
+  textarea.setAttribute('readonly', 'true')
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  textarea.style.top = '0'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.focus()
+  textarea.select()
+  textarea.setSelectionRange(0, textarea.value.length)
+
+  try {
+    return document.execCommand('copy')
+  } finally {
+    document.body.removeChild(textarea)
+  }
+}
+
 /**
  * Client Error class to encapsulate client-side errors
  */
@@ -662,6 +701,16 @@ export const tryGetClientError = (err: any, t: (key: string) => string): ClientE
 }
 
 export const showErrorMsg = (err: any, t: (key: string) => string) => {
+  if (err?.response?.status === 401) {
+    showErrorNotification(t('common.error.unauthorized'), tryGetErrorMsg(err, t))
+    return
+  }
+
+  if (err?.response?.status === 403) {
+    showErrorNotification(t('common.error.forbidden'), tryGetErrorMsg(err, t))
+    return
+  }
+
   if (err?.response?.status === 429) {
     showErrorNotification(t('common.error.try_later'), tryGetErrorMsg(err, t))
     return

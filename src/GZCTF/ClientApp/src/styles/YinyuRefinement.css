@@ -7396,12 +7396,38 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
 }
 
 .yy-team-invite-control {
-  align-items: flex-end;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
 }
 
-.yy-team-invite-control .mantine-PasswordInput-root {
+.yy-team-invite-control .mantine-TextInput-root {
   min-width: 0;
   flex: 1 1 auto;
+}
+
+.yy-team-invite-control .mantine-TextInput-input {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  font-family: var(--font-mono);
+  text-align: center;
+}
+
+.yy-team-invite-control .mantine-ActionIcon-root {
+  width: 2.25rem;
+  height: 2.25rem;
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  flex: 0 0 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.yy-team-invite-control .mantine-ActionIcon-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .yy-team-join-section {

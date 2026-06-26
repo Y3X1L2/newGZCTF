@@ -211,7 +211,7 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
         variant="light"
         size="compact-sm"
         target="_blank"
-        rel="noreferrer"
+        rel="noopener noreferrer"
         leftSection={<Icon path={local ? mdiPackageVariantClosed : mdiOpenInNew} size={0.8} />}
         maw="20rem"
         onClick={

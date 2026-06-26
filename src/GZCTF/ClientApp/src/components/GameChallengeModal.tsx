@@ -10,7 +10,7 @@ import { encryptApiData } from '@Utils/Crypto'
 import { showErrorMsg } from '@Utils/Shared'
 import { ChallengeCategoryItemProps } from '@Utils/Shared'
 import { useConfig } from '@Hooks/useConfig'
-import api, { AnswerResult, ChallengeType, SubmissionType } from '@Api'
+import api, { AnswerResult, ChallengeDetailModel, ChallengeType, SubmissionType } from '@Api'
 
 interface GameChallengeModalProps extends ModalProps {
   gameId: number
@@ -42,8 +42,14 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
     ...modalProps
   } = props
 
-  const { data: challenge, mutate } = api.game.useGameGetChallenge(gameId, challengeId, {
+  const {
+    data: challenge,
+    error: challengeError,
+    mutate,
+  } = api.game.useGameGetChallenge(gameId, challengeId, {
     refreshInterval: 120 * 1000,
+    keepPreviousData: false,
+    revalidateOnFocus: false,
   })
 
   const { config } = useConfig()
@@ -75,6 +81,13 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
   const [flag, setFlag] = useInputState('')
   const [solvedChallengeId, setSolvedChallengeId] = useState<number | null>(null)
   const [activeFlagId, setActiveFlagId] = useState<number | null>(null)
+
+  useEffect(() => {
+    setDisabled(false)
+    setFlag('')
+    setSolvedChallengeId(null)
+    setActiveFlagId(null)
+  }, [challengeId, setFlag])
 
   const isLimitReached = (challenge?.limit && (challenge.attempts ?? 0) >= challenge.limit) || false
 
@@ -252,12 +265,29 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
     }
   }
 
+  const displayedChallenge: ChallengeDetailModel | undefined = challengeError
+    ? {
+        id: challengeId,
+        title,
+        score,
+        content: '题目信息加载失败，请刷新比赛页面后重试。如果该题目仍无法打开，请联系管理员检查题目镜像和运行配置。',
+      }
+    : challenge && challenge.id === challengeId
+      ? challenge
+      : modalProps.opened
+        ? {
+            id: challengeId,
+            title,
+            score,
+          }
+        : undefined
+
   return (
     <ChallengeModal
       {...modalProps}
       gameId={gameId}
       gameTitle={gameTitle}
-      challenge={challenge ?? { title, score }}
+      challenge={displayedChallenge}
       cateData={cateData}
       solved={(status !== SubmissionType.Unaccepted && status !== undefined) || solvedChallengeId === challengeId}
       flag={flag}

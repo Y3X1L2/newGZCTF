@@ -10,7 +10,7 @@ namespace GZCTF.Services.Fleet;
 /// Nginx stream 配置同步服务，定时将容器端口映射写入 Nginx 配置并 reload。
 /// 仅在 Linux + NginxProxyConfig.Enable=true 时运行。
 /// </summary>
-public class NginxSyncService : IHostedService, IDisposable
+public class NginxSyncService : IHostedService, INginxProxySyncService, IDisposable
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly NginxProxyConfig _config;
@@ -18,6 +18,7 @@ public class NginxSyncService : IHostedService, IDisposable
     private CancellationTokenSource? _cts;
     private Task? _loopTask;
     private string? _lastConfigHash;
+    private readonly SemaphoreSlim _syncLock = new(1, 1);
     private bool _disposed;
 
     public NginxSyncService(
@@ -113,6 +114,39 @@ public class NginxSyncService : IHostedService, IDisposable
     }
 
     async Task SyncOnceAsync(CancellationToken token)
+    {
+        await _syncLock.WaitAsync(token);
+        try
+        {
+            await SyncOnceCoreAsync(token);
+        }
+        finally
+        {
+            _syncLock.Release();
+        }
+    }
+
+    public async Task TrySyncNowAsync(string reason, CancellationToken token = default)
+    {
+        if (!_config.Enable || !_config.SyncLocalConfig || !OperatingSystem.IsLinux())
+            return;
+
+        try
+        {
+            await SyncOnceAsync(token);
+            _logger.LogDebug("Nginx stream config sync requested after {Reason}", reason);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Nginx stream sync request failed after {Reason}", reason);
+        }
+    }
+
+    async Task SyncOnceCoreAsync(CancellationToken token)
     {
         using var scope = _scopeFactory.CreateScope();
         var containerRepo = scope.ServiceProvider.GetRequiredService<IContainerRepository>();
@@ -289,6 +323,7 @@ public class NginxSyncService : IHostedService, IDisposable
         _disposed = true;
         _cts?.Cancel();
         _cts?.Dispose();
+        _syncLock.Dispose();
         GC.SuppressFinalize(this);
     }
 }

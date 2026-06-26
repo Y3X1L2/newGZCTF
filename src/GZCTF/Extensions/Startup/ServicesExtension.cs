@@ -166,7 +166,9 @@ internal static class ServicesExtension
 
             // Nginx proxy: port allocation service (Redis-backed with local fallback)
             builder.Services.AddSingleton<IPortAllocationService, PortAllocationService>();
-            builder.Services.AddHostedService<NginxSyncService>();
+            builder.Services.AddSingleton<NginxSyncService>();
+            builder.Services.AddSingleton<INginxProxySyncService>(sp => sp.GetRequiredService<NginxSyncService>());
+            builder.Services.AddHostedService(sp => sp.GetRequiredService<NginxSyncService>());
 
             builder.Services.AddHostedService<CacheMaker>();
             builder.Services.AddHostedService<CronJobService>();

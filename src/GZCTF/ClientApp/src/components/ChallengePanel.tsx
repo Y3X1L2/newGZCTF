@@ -303,6 +303,7 @@ export const ChallengePanel: FC = () => {
                   key={chal.id}
                   challenge={chal}
                   onClick={() => {
+                    setDetailOpened(false)
                     setChallenge(chal)
                     setDetailOpened(true)
                     // update hash after modal opened, so don't trigger useEffect
@@ -336,6 +337,7 @@ export const ChallengePanel: FC = () => {
       )}
       {challenge?.id && (
         <GameChallengeModal
+          key={`${numId}-${challenge.id}`}
           gameId={numId}
           gameTitle={game?.title ?? ''}
           opened={detailOpened}
@@ -343,6 +345,7 @@ export const ChallengePanel: FC = () => {
           onClose={() => {
             window.location.hash = ''
             setDetailOpened(false)
+            setChallenge(null)
           }}
           gameEnded={dayjs(game?.end) < dayjs()}
           practiceMode={game?.practiceMode}

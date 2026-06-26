@@ -7,7 +7,6 @@ import {
   FileButton,
   Group,
   Modal,
-  PasswordInput,
   Select,
   Stack,
   Text,
@@ -16,7 +15,6 @@ import {
   Title,
   Tooltip,
 } from '@mantine/core'
-import { useClipboard } from '@mantine/hooks'
 import { useModals } from '@mantine/modals'
 import { showNotification } from '@mantine/notifications'
 import {
@@ -40,7 +38,7 @@ import {
 import { Icon } from '@mdi/react'
 import dayjs from 'dayjs'
 import type { EChartsOption, SeriesOption } from 'echarts'
-import { FC, useEffect, useMemo, useState } from 'react'
+import { FC, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EchartsContainer } from '@Components/charts/EchartsContainer'
 import { TeamCreateModal } from '@Components/TeamCreateModal'
@@ -48,7 +46,7 @@ import { WithNavBar } from '@Components/WithNavbar'
 import { WithRole } from '@Components/WithRole'
 import { YinyuHeartbeatIcon, YinyuLoadingState, YinyuModalBody } from '@Components/yinyu/YinyuUI'
 import { normalizeLanguage, useLanguage } from '@Utils/I18n'
-import { showErrorMsg } from '@Utils/Shared'
+import { copyText, showErrorMsg } from '@Utils/Shared'
 import { useIsMobile } from '@Utils/ThemeOverride'
 import { OnceSWRConfig } from '@Hooks/useConfig'
 import { usePageTitle } from '@Hooks/usePageTitle'
@@ -307,9 +305,9 @@ const Teams: FC = () => {
   const [pendingRequests, setPendingRequests] = useState<TeamJoinRequestModel[]>([])
   const [requestsLoading, setRequestsLoading] = useState(false)
   const [working, setWorking] = useState(false)
+  const inviteInputRef = useRef<HTMLInputElement>(null)
   const isMobile = useIsMobile()
   const { t } = useTranslation()
-  const clipboard = useClipboard({ timeout: 1400 })
   const modals = useModals()
 
   usePageTitle(t('team.title.index'))
@@ -497,6 +495,18 @@ const Teams: FC = () => {
     }
   }
 
+  const onCopyInviteCode = async () => {
+    inviteInputRef.current?.focus()
+    inviteInputRef.current?.select()
+    const copied = await copyText(inviteCode)
+
+    showNotification({
+      color: copied ? 'teal' : 'red',
+      message: copied ? t('team.notification.invite_code.copied') : '复制失败，请手动选中邀请码复制。',
+      icon: <Icon path={copied ? mdiCheck : mdiClose} size={1} />,
+    })
+  }
+
   const onUploadAvatar = async (file: File | null) => {
     if (!file || !selectedTeam?.id || !selectedIsCaptain) return
 
@@ -565,6 +575,38 @@ const Teams: FC = () => {
         message: accepted ? '已同意入队申请' : '已拒绝入队申请',
         icon: <Icon path={accepted ? mdiCheck : mdiClose} size={1} />,
       })
+    } catch (e) {
+      showErrorMsg(e, t)
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const onLeaveTeam = async () => {
+    if (!selectedTeam?.id || selectedIsCaptain) return
+
+    setWorking(true)
+    try {
+      await api.team.teamLeave(selectedTeam.id)
+      showNotification({ color: 'teal', message: '已退出队伍。', icon: <Icon path={mdiCheck} size={1} /> })
+      setSelectedTeamId(undefined)
+      await mutateTeams()
+    } catch (e) {
+      showErrorMsg(e, t)
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const onDeleteTeam = async () => {
+    if (!selectedTeam?.id || !selectedIsCaptain) return
+
+    setWorking(true)
+    try {
+      await api.team.teamDeleteTeam(selectedTeam.id)
+      showNotification({ color: 'teal', message: '队伍已解散。', icon: <Icon path={mdiCheck} size={1} /> })
+      setSelectedTeamId(undefined)
+      await mutateTeams()
     } catch (e) {
       showErrorMsg(e, t)
     } finally {
@@ -696,16 +738,57 @@ const Teams: FC = () => {
                           {selectedIsCaptain ? '队长' : '队员'}
                         </Badge>
                         {selectedIsCaptain ? (
+                          <Stack gap="xs" w="100%">
+                            <Button
+                              fullWidth
+                              className="yy-team-action yy-team-action-create"
+                              variant="filled"
+                              loading={working}
+                              onClick={onSaveTeam}
+                            >
+                              保存资料
+                            </Button>
+                            <Button
+                              fullWidth
+                              variant="light"
+                              color="red"
+                              loading={working}
+                              leftSection={<Icon path={mdiTrashCanOutline} size={0.82} />}
+                              onClick={() => {
+                                modals.openConfirmModal({
+                                  title: '解散队伍',
+                                  children: <Text size="sm">确认解散 {selectedTeam?.name ?? '当前队伍'}？该操作不可撤销。</Text>,
+                                  confirmProps: { color: 'red' },
+                                  labels: { confirm: '确认解散', cancel: '取消' },
+                                  zIndex: 10000,
+                                  onConfirm: () => void onDeleteTeam(),
+                                })
+                              }}
+                            >
+                              解散队伍
+                            </Button>
+                          </Stack>
+                        ) : (
                           <Button
                             fullWidth
-                            className="yy-team-action yy-team-action-create"
-                            variant="filled"
+                            variant="light"
+                            color="red"
                             loading={working}
-                            onClick={onSaveTeam}
+                            leftSection={<Icon path={mdiTrashCanOutline} size={0.82} />}
+                            onClick={() => {
+                              modals.openConfirmModal({
+                                title: '退出队伍',
+                                children: <Text size="sm">确认退出 {selectedTeam?.name ?? '当前队伍'}？</Text>,
+                                confirmProps: { color: 'red' },
+                                labels: { confirm: '确认退出', cancel: '取消' },
+                                zIndex: 10000,
+                                onConfirm: () => void onLeaveTeam(),
+                              })
+                            }}
                           >
-                            保存资料
+                            退出队伍
                           </Button>
-                        ) : null}
+                        )}
                       </aside>
 
                       <section className="yy-team-members-panel">
@@ -862,18 +945,17 @@ const Teams: FC = () => {
                         <span>邀请码</span>
                         {selectedIsCaptain ? (
                           <Group gap="xs" wrap="nowrap" className="yy-team-invite-control">
-                            <PasswordInput value={inviteCode} readOnly className="yy-team-inline-input" />
+                            <TextInput
+                              ref={inviteInputRef}
+                              value={inviteCode}
+                              readOnly
+                              className="yy-team-inline-input"
+                              onFocus={(event) => event.currentTarget.select()}
+                            />
                             <ActionIcon
                               variant="light"
                               aria-label="复制邀请码"
-                              onClick={() => {
-                                clipboard.copy(inviteCode)
-                                showNotification({
-                                  color: 'teal',
-                                  message: t('team.notification.invite_code.copied'),
-                                  icon: <Icon path={mdiCheck} size={1} />,
-                                })
-                              }}
+                              onClick={() => void onCopyInviteCode()}
                             >
                               <Icon path={mdiContentCopy} size={0.82} />
                             </ActionIcon>

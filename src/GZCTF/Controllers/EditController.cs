@@ -8,6 +8,7 @@ using GZCTF.Models.Request.Info;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Cache;
 using GZCTF.Services.Container.Manager;
+using GZCTF.Services.Fleet;
 using GZCTF.Services.Transfer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -36,12 +37,20 @@ public class EditController(
     IGameNoticeRepository gameNoticeRepository,
     IGameRepository gameRepository,
     IContainerManager containerService,
+    INginxProxySyncService nginxProxySync,
     IBlobRepository blobService,
     GameExportService exportService,
     GameImportService importService,
     IDivisionRepository divisionRepository,
     IStringLocalizer<Program> localizer) : Controller
 {
+    bool HasContainerRuntimeConfig(GameChallenge challenge) =>
+        !challenge.Type.IsContainer() ||
+        !string.IsNullOrWhiteSpace(challenge.ContainerImage) && challenge.ExposePort is >= 1 and <= 65535;
+
+    BadRequestObjectResult ContainerRuntimeConfigError() =>
+        BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Container_ConfigError)]));
+
     /// <summary>
     /// Add Post
     /// </summary>
@@ -573,8 +582,20 @@ public class EditController(
             return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Game_NotFound)],
                 StatusCodes.Status404NotFound));
 
+        if (model.Type.IsContainer() &&
+            (string.IsNullOrWhiteSpace(model.ContainerImage) || model.ExposePort is not (>= 1 and <= 65535)))
+            return ContainerRuntimeConfigError();
+
         var res = await challengeRepository.CreateChallenge(game,
-            new GameChallenge { Title = model.Title, Type = model.Type, Category = model.Category }, token);
+            new GameChallenge
+            {
+                Title = model.Title,
+                Type = model.Type,
+                Category = model.Category,
+                ContainerImage = model.Type.IsContainer() ? model.ContainerImage?.Trim() : null,
+                ExposePort = model.Type.IsContainer() ? model.ExposePort : null,
+                Environment = model.Type.IsContainer() ? EnvironmentType.Docker : EnvironmentType.None
+            }, token);
 
         await cacheHelper.FlushScoreboardCache(id, token);
 
@@ -712,10 +733,16 @@ public class EditController(
 
         res.Update(model);
 
+        if (!HasContainerRuntimeConfig(res))
+            return ContainerRuntimeConfigError();
+
         switch (model.IsEnabled)
         {
             case true:
                 {
+                    if (!HasContainerRuntimeConfig(res))
+                        return ContainerRuntimeConfigError();
+
                     // Will also update IsEnabled
                     await challengeRepository.EnsureInstances(res, game, token);
 
@@ -773,9 +800,11 @@ public class EditController(
             return BadRequest(
                 new RequestResponse(localizer[nameof(Resources.Program.Game_ContainerCreationNotAllowed)]));
 
-        if (challenge.ContainerImage is null || challenge.ExposePort is null)
-            return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Container_ConfigError)]));
+        if (!HasContainerRuntimeConfig(challenge))
+            return ContainerRuntimeConfigError();
 
+        var image = challenge.ContainerImage!;
+        var exposedPort = challenge.ExposePort!.Value;
         var user = await userManager.GetUserAsync(User);
 
         var container = await containerService.CreateContainerAsync(
@@ -785,12 +814,12 @@ public class EditController(
                 UserId = user!.Id,
                 ChallengeId = challenge.Id,
                 Flag = challenge.Type.IsDynamic() ? challenge.GenerateTestFlag() : null,
-                Image = challenge.ContainerImage,
+                Image = image,
                 CPUCount = challenge.CPUCount ?? 1,
                 MemoryLimit = challenge.MemoryLimit ?? 64,
                 StorageLimit = challenge.StorageLimit ?? 256,
                 NetworkMode = challenge.NetworkMode ?? NetworkMode.Open,
-                ExposedPort = challenge.ExposePort.Value,
+                ExposedPort = exposedPort,
             }, token);
 
         if (container is null)
@@ -798,6 +827,7 @@ public class EditController(
 
         challenge.TestContainer = container;
         await challengeRepository.SaveAsync(token);
+        await nginxProxySync.TrySyncNowAsync("test container created", token);
 
         logger.Log(
             StaticLocalizer[nameof(Resources.Program.Container_TestContainerCreated), container.LogId],
