@@ -25,10 +25,7 @@ export interface NodeInfo {
   lastHeartbeat?: string | null
   isSchedulable: boolean
   isLocal: boolean
-  isStorageNode?: boolean
   agentPort: number
-  registryPort?: number
-  registryAddress?: string
 }
 
 const statusMap: Record<
@@ -180,11 +177,6 @@ export function NodeCard({
                   本地
                 </Badge>
               )}
-              {node.isStorageNode && (
-                <Badge size="sm" variant="light" color="teal" className="yy-semantic-badge" data-semantic="docker">
-                  镜像存储
-                </Badge>
-              )}
             </Group>
             <Group gap={6} c="dimmed" wrap="nowrap">
               <Icon path={mdiLan} size={0.62} />
@@ -217,20 +209,6 @@ export function NodeCard({
               </Badge>
             )
           })}
-        </Group>
-
-        <Group justify="space-between" align="center" gap="xs" wrap="nowrap">
-          <Group gap={6} c="dimmed" wrap="nowrap" style={{ minWidth: 0 }}>
-            <Icon path={mdiDatabaseOutline} size={0.65} />
-            <Text size="xs" truncate title={node.registryAddress ?? `${node.hostAddress}:${node.registryPort ?? 5000}`}>
-              Registry {node.registryAddress ?? `${node.hostAddress}:${node.registryPort ?? 5000}`}
-            </Text>
-          </Group>
-          {node.isStorageNode && (
-            <YinyuStatusPill tone="success" state="running" data-semantic="ready">
-              当前存储
-            </YinyuStatusPill>
-          )}
         </Group>
 
         <Group grow align="center">

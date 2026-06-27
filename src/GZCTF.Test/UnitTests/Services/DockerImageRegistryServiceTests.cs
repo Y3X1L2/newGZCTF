@@ -1,6 +1,10 @@
 using System;
+using System.Net.Http;
 using GZCTF.Models.Internal;
 using GZCTF.Services;
+using GZCTF.Services.Fleet;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -10,10 +14,10 @@ namespace GZCTF.Test.UnitTests.Services;
 public class DockerImageRegistryServiceTests
 {
     [Theory]
-    [InlineData("10.0.7.130:5000", "ctf", "web/demo", "v1", "10.0.7.130:5000/ctf/web/demo:v1")]
-    [InlineData("http://registry.internal:5000", "ctf", "Web/Demo", "latest", "registry.internal:5000/ctf/web/demo:latest")]
-    [InlineData("https://registry.internal", "", "team/pwn", "20260614", "registry.internal/team/pwn:20260614")]
-    public void BuildInternalImageReference_UsesConfiguredRegistry(
+    [InlineData("10.0.7.130:5000", "ctf", "web/demo", "v1", "gzctf-internal://ctf/web/demo:v1")]
+    [InlineData("http://registry.internal:5000", "ctf", "Web/Demo", "latest", "gzctf-internal://ctf/web/demo:latest")]
+    [InlineData("https://registry.internal", "", "team/pwn", "20260614", "gzctf-internal://team/pwn:20260614")]
+    public void BuildInternalImageReference_UsesStableInternalReference(
         string address,
         string ns,
         string repository,
@@ -28,12 +32,22 @@ public class DockerImageRegistryServiceTests
     }
 
     [Fact]
-    public void BuildInternalImageReference_RejectsMissingRegistryAddress()
+    public void BuildImageReferenceForRegistry_RejectsMissingRegistryAddress()
     {
         var service = CreateService("", "ctf");
 
         Assert.Throws<InvalidOperationException>(() =>
-            service.BuildInternalImageReference("web/demo", "v1"));
+            service.BuildImageReferenceForRegistry("", "web/demo", "v1"));
+    }
+
+    [Fact]
+    public void BuildImageReferenceForRegistry_UsesExternalRegistryAddress()
+    {
+        var service = CreateService("", "ctf");
+
+        var actual = service.BuildImageReferenceForRegistry("http://registry.internal:5000", "Web/Demo", "latest");
+
+        Assert.Equal("registry.internal:5000/ctf/web/demo:latest", actual);
     }
 
     [Theory]
@@ -49,7 +63,24 @@ public class DockerImageRegistryServiceTests
     }
 
     static DockerImageRegistryService CreateService(string address, string ns)
-        => new(
+    {
+        var services = new ServiceCollection().BuildServiceProvider();
+        var scopeFactory = services.GetRequiredService<IServiceScopeFactory>();
+        var agentClient = new AgentClient(
+            new StaticHttpClientFactory(),
+            scopeFactory,
+            new ConfigurationBuilder().Build(),
+            NullLogger<AgentClient>.Instance);
+
+        return new DockerImageRegistryService(
             Options.Create(new DockerRegistrySettings { Address = address, Namespace = ns }),
+            scopeFactory,
+            agentClient,
             NullLogger<DockerImageRegistryService>.Instance);
+    }
+
+    sealed class StaticHttpClientFactory : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new();
+    }
 }

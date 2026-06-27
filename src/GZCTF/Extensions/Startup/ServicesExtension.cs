@@ -92,7 +92,6 @@ internal static class ServicesExtension
             builder.Services.AddScoped<IDivisionRepository, DivisionRepository>();
             builder.Services.AddScoped<IAwdpRepository, AwdpRepository>();
             builder.Services.AddScoped<DockerImageRegistryService>();
-            builder.Services.AddScoped<DockerRegistryMigrationService>();
 
             builder.Services.AddScoped<AwdpScriptRunner>();
             builder.Services.AddScoped<AwdpInstanceService>();

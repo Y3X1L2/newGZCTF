@@ -1,9 +1,9 @@
-import { Button, ComboboxItem, Modal, ModalProps, Select, Stack, TextInput } from '@mantine/core'
+import { Button, ComboboxItem, Modal, ModalProps, NumberInput, Select, Stack, TextInput } from '@mantine/core'
 import { useInputState } from '@mantine/hooks'
 import { showNotification } from '@mantine/notifications'
 import { mdiCheck } from '@mdi/js'
 import { Icon } from '@mdi/react'
-import { FC, useState } from 'react'
+import { FC, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router'
 import { YinyuModalBody } from '@Components/yinyu/YinyuUI'
@@ -32,11 +32,47 @@ export const ChallengeCreateModal: FC<ChallengeCreateModalProps> = (props) => {
   const [title, setTitle] = useInputState('')
   const [category, setCategory] = useState<string | null>(null)
   const [type, setType] = useState<string | null>(null)
+  const [containerImage, setContainerImage] = useState('')
+  const [exposePort, setExposePort] = useState(80)
+  const [imageTemplates, setImageTemplates] = useState<{ name: string; registryUrl?: string | null; imageType?: string | number; status?: string | number }[]>([])
 
   const { t } = useTranslation()
 
+  const isContainer =
+    type === ChallengeType.StaticContainer || type === ChallengeType.DynamicContainer
+
+  const dockerTemplates = useMemo(
+    () =>
+      imageTemplates.filter((template) => {
+        const imageType = String(template.imageType ?? '').toLowerCase()
+        const status = String(template.status ?? '').toLowerCase()
+        return (
+          template.registryUrl &&
+          (imageType === '0' || imageType === 'docker') &&
+          (status === '0' || status === 'ready' || status === '')
+        )
+      }),
+    [imageTemplates]
+  )
+
+  useEffect(() => {
+    if (!modalProps.opened) return
+
+    fetch('/api/v1/image-templates')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setImageTemplates(data?.items ?? data ?? []))
+      .catch(() => setImageTemplates([]))
+  }, [modalProps.opened])
+
   const onCreate = async () => {
     if (!title || !category || !type) return
+    if (isContainer && !containerImage.trim()) {
+      showNotification({
+        color: 'red',
+        message: '容器题目必须先绑定 Docker 镜像',
+      })
+      return
+    }
 
     setDisabled(true)
     const numId = parseInt(id ?? '-1')
@@ -46,6 +82,8 @@ export const ChallengeCreateModal: FC<ChallengeCreateModalProps> = (props) => {
         title: title,
         category: category as ChallengeCategory,
         type: type as ChallengeType,
+        containerImage: isContainer ? containerImage.trim() : undefined,
+        exposePort: isContainer ? exposePort : undefined,
       })
       showNotification({
         color: 'teal',
@@ -98,6 +136,38 @@ export const ChallengeCreateModal: FC<ChallengeCreateModalProps> = (props) => {
             return { value: type[1], label: data?.name, ...data } as ComboboxItem
           })}
         />
+        {isContainer && (
+          <>
+            <Select
+              label="Docker 镜像"
+              placeholder={dockerTemplates.length ? '选择已注册镜像' : '暂无已注册 Docker 镜像'}
+              data={dockerTemplates.map((template) => ({
+                value: template.registryUrl ?? '',
+                label: `${template.name} - ${template.registryUrl}`,
+              }))}
+              value={dockerTemplates.some((template) => template.registryUrl === containerImage) ? containerImage : null}
+              onChange={(value) => setContainerImage(value ?? '')}
+              searchable
+              clearable
+              required
+            />
+            <TextInput
+              label="容器镜像地址"
+              placeholder="10.24.0.28:5000/ctf/web/example:latest"
+              value={containerImage}
+              onChange={(event) => setContainerImage(event.currentTarget.value)}
+              required
+            />
+            <NumberInput
+              label="开放端口"
+              min={1}
+              max={65535}
+              value={exposePort}
+              onChange={(value) => setExposePort(Number(value) || 80)}
+              required
+            />
+          </>
+        )}
         <Button fullWidth disabled={disabled} onClick={onCreate}>
           {t('admin.button.challenges.new')}
         </Button>

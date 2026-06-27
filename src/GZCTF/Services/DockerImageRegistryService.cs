@@ -52,28 +52,12 @@ public class DockerImageRegistryService
 
     public async Task<DockerRegistryEndpoint?> GetActiveEndpointAsync(CancellationToken token = default)
     {
-        var fallback = _settings.NormalizedAddress;
-        if (!string.IsNullOrWhiteSpace(fallback))
-            return new DockerRegistryEndpoint(null, "Configured Registry", fallback, null, fallback,
+        await Task.CompletedTask;
+        var address = _settings.NormalizedAddress;
+        return string.IsNullOrWhiteSpace(address)
+            ? null
+            : new DockerRegistryEndpoint(null, "Fixed Registry", address, null, address,
                 _settings.NormalizedNamespace, false);
-
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var node = await context.WorkerNodes.AsNoTracking()
-            .Where(n => n.IsStorageNode)
-            .OrderByDescending(n => n.IsLocal)
-            .ThenBy(n => n.Name)
-            .FirstOrDefaultAsync(token);
-
-        if (node is not null)
-        {
-            var host = NormalizeHost(node.HostAddress);
-            if (!string.IsNullOrWhiteSpace(host))
-                return new DockerRegistryEndpoint(node.Id, node.Name, host, node.RegistryPort, $"{host}:{node.RegistryPort}",
-                    _settings.NormalizedNamespace, node.IsLocal);
-        }
-
-        return null;
     }
 
     public async Task<string> GetRegistryAddressAsync(CancellationToken token = default) =>
@@ -89,9 +73,6 @@ public class DockerImageRegistryService
     {
         var endpoint = await GetActiveEndpointAsync(token)
                        ?? throw new InvalidOperationException("Internal Docker registry address is not configured.");
-
-        if (endpoint.NodeId.HasValue)
-            await EnsureNodeRegistryAsync(endpoint.NodeId.Value, token);
 
         await ConfigureManagedRegistryTrustAsync(token);
         return endpoint;
@@ -626,22 +607,10 @@ fi
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var nodes = await context.WorkerNodes.AsNoTracking()
-            .Select(n => new { n.HostAddress, n.RegistryPort })
+        var templateImages = await context.ImageTemplates.AsNoTracking()
+            .Where(t => t.ImageType == ImageType.Docker && !string.IsNullOrWhiteSpace(t.RegistryUrl))
+            .Select(t => t.RegistryUrl)
             .ToArrayAsync(token);
-        var migrations = await context.DockerRegistryMigrationTasks.AsNoTracking()
-            .Select(t => new { t.SourceRegistry, t.TargetRegistry })
-            .ToArrayAsync(token);
-        var migrationItems = await context.DockerRegistryMigrationItems.AsNoTracking()
-            .Select(i => new { i.SourceImage, i.TargetImage })
-            .ToArrayAsync(token);
-
-        foreach (var node in nodes)
-        {
-            var host = NormalizeHost(node.HostAddress);
-            if (!string.IsNullOrWhiteSpace(host))
-                candidates.Add(NormalizeRegistryAddress($"{host}:{node.RegistryPort}"));
-        }
 
         if (endpoint is not null)
             candidates.Add(NormalizeRegistryAddress(endpoint.Address));
@@ -650,17 +619,8 @@ fi
         if (!string.IsNullOrWhiteSpace(configured))
             candidates.Add(configured);
 
-        foreach (var migration in migrations)
-        {
-            AddRegistryCandidate(candidates, migration.SourceRegistry);
-            AddRegistryCandidate(candidates, migration.TargetRegistry);
-        }
-
-        foreach (var item in migrationItems)
-        {
-            AddRegistryCandidateFromImage(candidates, item.SourceImage);
-            AddRegistryCandidateFromImage(candidates, item.TargetImage);
-        }
+        foreach (var image in templateImages)
+            AddRegistryCandidateFromImage(candidates, image);
 
         return candidates;
     }

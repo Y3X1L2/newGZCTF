@@ -6,6 +6,19 @@ import { useNavigate } from 'react-router'
 import { useSWRConfig } from 'swr'
 import api from '@Api'
 
+const shouldClearOnLogout = (key: unknown) =>
+  typeof key === 'string' &&
+  [
+    '/api/account/',
+    '/api/team',
+    '/api/admin/',
+    '/api/training/',
+    '/api/game/',
+    'game/',
+    'team',
+    'training',
+  ].some((scope) => key.includes(scope))
+
 export const useUser = () => {
   const navigate = useNavigate()
   const { t } = useTranslation()
@@ -71,9 +84,7 @@ export const useLogOut = () => {
     try {
       await api.account.accountLogOut()
       navigate('/')
-      mutate((key) => typeof key === 'string' && key.includes('game/'), undefined, {
-        revalidate: false,
-      })
+      mutate(shouldClearOnLogout, undefined, { revalidate: false })
       mutateProfile(undefined, { revalidate: false })
       showNotification({
         color: 'teal',
@@ -82,6 +93,7 @@ export const useLogOut = () => {
       })
     } catch {
       navigate('/')
+      mutate(shouldClearOnLogout, undefined, { revalidate: false })
       mutateProfile(undefined, { revalidate: false })
     }
   }

@@ -66,6 +66,8 @@ const ChapterDetail: FC = () => {
   const [challengeDetails, setChallengeDetails] = useState<Record<number, TrainingCourseChallengeDetailModel>>({})
   const [containers, setContainers] = useState<Record<number, ContainerInfoModel>>({})
   const [answers, setAnswers] = useState<Record<number, string>>({})
+  const [completing, setCompleting] = useState(false)
+  const [completionLocked, setCompletionLocked] = useState(false)
   const { t } = useTranslation()
 
   const orderedChapters = useMemo(
@@ -83,6 +85,7 @@ const ChapterDetail: FC = () => {
       ])
       setCourse(courseRes.data)
       setChapter(chapterRes.data)
+      setCompletionLocked(Boolean(chapterRes.data.completedAt))
 
       const detailEntries = await Promise.all(
         chapterRes.data.challenges.map(async (challenge) => {
@@ -163,15 +166,21 @@ const ChapterDetail: FC = () => {
 
   const complete = async () => {
     try {
-      await trainingCourseApi.completeChapter(courseNum, chapterNum)
+      setCompleting(true)
+      const res = await trainingCourseApi.completeChapter(courseNum, chapterNum)
+      setChapter(res.data)
+      setCompletionLocked(true)
       showNotification({ color: 'green', message: '章节已完成' })
       await load()
     } catch (e) {
       showErrorMsg(e, t)
+    } finally {
+      setCompleting(false)
     }
   }
 
   useEffect(() => {
+    setCompletionLocked(false)
     void load()
   }, [courseId, chapterId])
 
@@ -223,7 +232,13 @@ const ChapterDetail: FC = () => {
           {chapter.videoProvider !== TrainingCourseVideoProvider.None ? (
             <YinyuPanel p="md" className="yy-training-video-panel">
               {chapter.videoProvider === TrainingCourseVideoProvider.ExternalUrl && chapter.videoUrl ? (
-                <Button component="a" href={chapter.videoUrl} target="_blank" rightSection={<Icon path={mdiOpenInNew} size={0.85} />}>
+                <Button
+                  component="a"
+                  href={chapter.videoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  rightSection={<Icon path={mdiOpenInNew} size={0.85} />}
+                >
                   打开视频
                 </Button>
               ) : chapter.videoFileUrl ? (
@@ -272,7 +287,7 @@ const ChapterDetail: FC = () => {
                                 component="a"
                                 href={attachmentUrl}
                                 target="_blank"
-                                rel="noreferrer"
+                                rel="noopener noreferrer"
                                 variant="light"
                                 size="xs"
                                 w="fit-content"
@@ -373,8 +388,13 @@ const ChapterDetail: FC = () => {
                   {chapter.challenges.length ? '完成本章节必做实验后会自动标记。普通阅读章节也可以手动标记完成。' : '普通章节可手动标记完成。'}
                 </Text>
               </Stack>
-              <Button leftSection={<Icon path={mdiCheck} size={0.85} />} onClick={complete}>
-                标记完成
+              <Button
+                leftSection={<Icon path={mdiCheck} size={0.85} />}
+                onClick={complete}
+                loading={completing}
+                disabled={completionLocked || !!chapter.completedAt}
+              >
+                {completionLocked || chapter.completedAt ? '已完成' : '标记完成'}
               </Button>
             </Group>
           </YinyuPanel>

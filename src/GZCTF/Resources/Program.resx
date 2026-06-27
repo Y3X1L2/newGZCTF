@@ -951,7 +951,7 @@
     <value>Container address parse failed</value>
   </data>
   <data name="Container_ConfigError" xml:space="preserve">
-    <value>Container Configuration Error</value>
+    <value>Container challenge requires a Docker image and exposed port. Please bind an image before saving or starting it.</value>
   </data>
   <data name="Container_ConnectionLimitExceeded" xml:space="preserve">
     <value>Container connection limit reached</value>

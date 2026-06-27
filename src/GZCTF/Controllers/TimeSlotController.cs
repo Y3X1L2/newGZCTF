@@ -44,6 +44,7 @@ public class TimeSlotController : ControllerBase
     /// <param name="token">Cancellation token</param>
     /// <response code="200">List of available time slots</response>
     /// <response code="404">Scenario not found</response>
+    [RequireUser]
     [HttpGet("{id:int}/timeslots")]
     [ProducesResponseType(typeof(TimeSlotResponse[]), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
@@ -56,6 +57,14 @@ public class TimeSlotController : ControllerBase
         if (scenario is null)
             return NotFound(new RequestResponse(_localizer[nameof(Resources.Program.Challenge_NotFound)],
                 StatusCodes.Status404NotFound));
+
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+            return Unauthorized(
+                new RequestResponse(_localizer[nameof(Resources.Program.Auth_LoginRequired)]));
+
+        if (!await CanAccessGameAsync(user, scenario.GameId, token))
+            return Forbid();
 
         var now = DateTimeOffset.UtcNow;
 
@@ -106,6 +115,9 @@ public class TimeSlotController : ControllerBase
             return Unauthorized(
                 new RequestResponse(_localizer[nameof(Resources.Program.Auth_LoginRequired)]));
 
+        if (!await CanAccessGameAsync(user, scenario.GameId, token))
+            return Forbid();
+
         var timeSlot = await _dbContext.TimeSlots
             .FirstOrDefaultAsync(t => t.Id == slotId && t.ScenarioId == id, token);
 
@@ -145,6 +157,19 @@ public class TimeSlotController : ControllerBase
             AvailableSpots = timeSlot.MaxParticipants - timeSlot.CurrentParticipants,
             Message = "Time slot is available. Proceed to create a scenario instance."
         });
+    }
+
+    private async Task<bool> CanAccessGameAsync(UserInfo user, int gameId, CancellationToken token)
+    {
+        if (user.Role >= Role.Teacher)
+            return true;
+
+        return await _dbContext.Set<UserParticipation>()
+            .AsNoTracking()
+            .Include(up => up.Participation)
+            .AnyAsync(up => up.UserId == user.Id
+                && up.GameId == gameId
+                && up.Participation.Status == ParticipationStatus.Accepted, token);
     }
 }
 

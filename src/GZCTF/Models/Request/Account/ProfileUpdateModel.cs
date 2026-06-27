@@ -1,5 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
+using GZCTF.Models.Request;
+
 namespace GZCTF.Models.Request.Account;
 
 /// <summary>
@@ -26,7 +28,7 @@ public class ProfileUpdateModel
     /// <summary>
     /// Phone number
     /// </summary>
-    [Phone(ErrorMessageResourceName = nameof(Resources.Program.Model_MalformedPhoneNumber),
+    [PhoneNumber(ErrorMessageResourceName = nameof(Resources.Program.Model_MalformedPhoneNumber),
         ErrorMessageResourceType = typeof(Resources.Program))]
     public string? Phone { get; set; }
 

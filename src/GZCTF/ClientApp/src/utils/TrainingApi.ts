@@ -394,6 +394,7 @@ export interface TrainingCourseModel extends TrainingCourseEditModel {
   completedChapterCount: number
   totalChapterCount: number
   progressStatus?: TrainingCourseProgressStatus | null
+  lastStudiedAt?: number | null
   createdAt: number
   updatedAt: number
   teachers: TrainingCourseTeacherModel[]
@@ -450,6 +451,7 @@ export interface TrainingCourseImageTemplateModel {
   status: string | number
   fileSize: number
   description?: string | null
+  errorMessage?: string | null
   imageHash?: string | null
   registryUrl?: string | null
   uploadedAt: number
@@ -556,6 +558,7 @@ export interface TrainingCourseChapterTheoryPlayerQuestionModel {
   options: string[]
   score: number
   order: number
+  answerIndexes?: number[] | null
 }
 
 export interface TrainingCourseChapterTheoryPlayerPaperModel {
@@ -771,7 +774,7 @@ export const trainingCourseApi = {
     }),
 
   completeChapter: (courseId: number, chapterId: number) =>
-    request<void, unknown>({
+    request<TrainingCourseChapterModel, unknown>({
       path: `/api/training/courses/${courseId}/chapters/${chapterId}/complete`,
       method: 'POST',
     }),

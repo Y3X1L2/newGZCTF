@@ -70,7 +70,6 @@ public class NodeDeployService
             sudo = DetectPrivilegePrefix(ssh);
 
             var bootstrapRegistries = (await GetInternalDockerRegistries(token))
-                .Append($"{hostAddress}:{node.RegistryPort}")
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
             RunChecked(ssh, BuildBootstrapScript(bootstrapRegistries),

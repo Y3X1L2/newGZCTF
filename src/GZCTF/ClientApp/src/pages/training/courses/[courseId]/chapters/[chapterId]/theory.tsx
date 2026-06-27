@@ -6,6 +6,7 @@ import {
   Grid,
   Group,
   Modal,
+  Progress,
   Radio,
   SimpleGrid,
   Stack,
@@ -34,13 +35,35 @@ import {
 } from '@Utils/TrainingApi'
 import { TheoryAnswerModel, TheoryAnswerSheetStatus, TheoryQuestionType } from '../../../../../../Api/TheoryApi'
 
+const optionLabel = (index: number) => String.fromCharCode(65 + index)
+
+const formatIndexes = (indexes: number[], options: string[]) =>
+  indexes.length
+    ? indexes
+        .map((index) => {
+          const prefix = optionLabel(index)
+          const content = options[index] ?? ''
+          return content ? `${prefix}. ${content}` : prefix
+        })
+        .join('；')
+    : '未作答'
+
+const isAnswerCorrect = (selected: number[], correctIndexes?: number[] | null) =>
+  correctIndexes !== undefined &&
+  correctIndexes !== null &&
+  [...selected].sort((a, b) => a - b).join(',') === [...correctIndexes].sort((a, b) => a - b).join(',')
+
 const TheoryQuestionCard: FC<{
   question: TrainingCourseChapterTheoryPlayerQuestionModel
   selected: number[]
   disabled: boolean
+  submitted: boolean
   onChange: (selected: number[]) => void
-}> = ({ question, selected, disabled, onChange }) => {
+}> = ({ question, selected, disabled, submitted, onChange }) => {
   const isMultiple = question.type === TheoryQuestionType.MultipleChoice
+  const correctIndexes = question.answerIndexes ?? []
+  const revealAnswer = submitted && question.answerIndexes !== undefined && question.answerIndexes !== null
+  const isCorrect = revealAnswer && isAnswerCorrect(selected, correctIndexes)
 
   return (
     <YinyuPanel p="md" className="yy-theory-question-card">
@@ -52,6 +75,11 @@ const TheoryQuestionCard: FC<{
               <Badge variant="light" color="violet">
                 {question.score} 分
               </Badge>
+              {revealAnswer ? (
+                <Badge color={isCorrect ? 'teal' : 'red'} variant="light">
+                  {isCorrect ? '正确' : '错误'}
+                </Badge>
+              ) : null}
             </Group>
             <Title order={3}>{question.title}</Title>
           </Stack>
@@ -86,6 +114,25 @@ const TheoryQuestionCard: FC<{
             </Stack>
           </Radio.Group>
         )}
+
+        {revealAnswer ? (
+          <YinyuPanel p="sm" className="yy-theory-review-panel">
+            <Stack gap={6}>
+              <Text size="sm" fw={700}>
+                答题复盘
+              </Text>
+              <Text size="sm" className="yy-readable-text">
+                我的答案：{formatIndexes(selected, question.options)}
+              </Text>
+              <Text size="sm" className="yy-readable-text">
+                正确答案：{formatIndexes(correctIndexes, question.options)}
+              </Text>
+              <Text size="sm" className="yy-readable-text">
+                题目解析：解析暂未配置，请结合题干与标准答案复盘。
+              </Text>
+            </Stack>
+          </YinyuPanel>
+        ) : null}
       </Stack>
     </YinyuPanel>
   )
@@ -109,6 +156,27 @@ const ChapterTheoryPage: FC = () => {
     [answers, questions]
   )
   const unansweredCount = questions.length - answeredCount
+  const questionById = useMemo(() => new Map(questions.map((question) => [question.id, question])), [questions])
+  const reviewItems = useMemo(() => {
+    if (!submitted) return []
+
+    return questions.map((question, index) => {
+      const selected = answers[question.id] ?? []
+      const correct = question.answerIndexes ?? []
+      const isCorrect = isAnswerCorrect(selected, question.answerIndexes)
+
+      return {
+        question,
+        index,
+        selected,
+        correct,
+        isCorrect,
+      }
+    })
+  }, [answers, questions, submitted])
+  const wrongReviewItems = reviewItems.filter((item) => !item.isCorrect)
+  const correctCount = reviewItems.length - wrongReviewItems.length
+  const reviewRate = reviewItems.length ? Math.round((correctCount / reviewItems.length) * 100) : 0
 
   const toAnswerModel = (): TheoryAnswerModel[] =>
     Object.entries(answers).map(([paperQuestionId, selectedIndexes]) => ({
@@ -278,6 +346,57 @@ const ChapterTheoryPage: FC = () => {
               </Alert>
             ) : null}
 
+            {submitted ? (
+              <YinyuPanel p="md" className="yy-theory-review-summary">
+                <Stack gap="md">
+                  <Group justify="space-between" align="flex-start" wrap="wrap">
+                    <Stack gap={4}>
+                      <Badge color={paper.passed ? 'teal' : 'yellow'} variant="light">
+                        {paper.passed ? '已通过' : '未通过'}
+                      </Badge>
+                      <Title order={3}>答卷复盘</Title>
+                      <Text size="sm" className="yy-readable-text">
+                        本次答卷得分 {paper.score ?? 0}/{paper.totalScore}，正确 {correctCount}/{reviewItems.length} 题，正确率 {reviewRate}%。
+                      </Text>
+                    </Stack>
+                    <Stack gap={4} miw={220}>
+                      <Group justify="space-between">
+                        <Text size="sm" fw={800}>
+                          正确率
+                        </Text>
+                        <Text size="sm" className="yy-readable-text">
+                          {reviewRate}%
+                        </Text>
+                      </Group>
+                      <Progress value={reviewRate} color={paper.passed ? 'teal' : 'yellow'} />
+                    </Stack>
+                  </Group>
+
+                  {wrongReviewItems.length > 0 ? (
+                    <Stack gap="xs">
+                      <Text fw={800}>错题列表</Text>
+                      {wrongReviewItems.map((item) => (
+                        <UnstyledButton
+                          key={item.question.id}
+                          className="yy-theory-review-row"
+                          onClick={() => goToQuestion(item.index)}
+                        >
+                          <span>第 {item.index + 1} 题</span>
+                          <strong>{item.question.title}</strong>
+                          <em>我的答案：{formatIndexes(item.selected, item.question.options)}</em>
+                          <em>正确答案：{formatIndexes(item.correct, item.question.options)}</em>
+                        </UnstyledButton>
+                      ))}
+                    </Stack>
+                  ) : (
+                    <Text size="sm" className="yy-readable-text">
+                      本次没有错题，可以继续学习下一章节。
+                    </Text>
+                  )}
+                </Stack>
+              </YinyuPanel>
+            ) : null}
+
             <Grid align="flex-start" className="yy-theory-workspace">
               <Grid.Col span={{ base: 12, lg: 9 }}>
                 {currentQuestion ? (
@@ -319,6 +438,7 @@ const ChapterTheoryPage: FC = () => {
                       question={currentQuestion}
                       selected={answers[currentQuestion.id] ?? []}
                       disabled={submitted || loading}
+                      submitted={submitted}
                       onChange={(selected) => setAnswers((current) => ({ ...current, [currentQuestion.id]: selected }))}
                     />
                   </Stack>
@@ -337,6 +457,9 @@ const ChapterTheoryPage: FC = () => {
                       {questions.map((question, index) => {
                         const answered = (answers[question.id]?.length ?? 0) > 0
                         const active = index === currentIndex
+                        const reviewQuestion = questionById.get(question.id)
+                        const correct =
+                          submitted && reviewQuestion ? isAnswerCorrect(answers[question.id] ?? [], reviewQuestion.answerIndexes) : false
 
                         return (
                           <Tooltip key={question.id} label={`${index + 1}. ${theoryQuestionTypeLabel(question.type)}`}>
@@ -344,6 +467,8 @@ const ChapterTheoryPage: FC = () => {
                               className="yy-theory-node"
                               data-active={active || undefined}
                               data-answered={answered || undefined}
+                              data-correct={correct || undefined}
+                              data-wrong={submitted && !correct ? true : undefined}
                               onClick={() => goToQuestion(index)}
                             >
                               <span className="yy-theory-node-number">{index + 1}</span>

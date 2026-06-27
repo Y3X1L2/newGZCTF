@@ -21,7 +21,7 @@ import dayjs from 'dayjs'
 import { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { YinyuModalBody } from '@Components/yinyu/YinyuUI'
-import { showErrorMsg } from '@Utils/Shared'
+import { isValidPhoneNumber, showErrorMsg } from '@Utils/Shared'
 import { useUser } from '@Hooks/useUser'
 import api, { AdminUserInfoModel, Role, UserInfoModel } from '@Api'
 import { StudentGroupBriefModel, trainingAdminApi } from '@Utils/TrainingApi'
@@ -106,6 +106,10 @@ export const UserEditModal: FC<UserEditModalProps> = (props) => {
 
   const onChangeProfile = async () => {
     if (!user.id) return
+    if (!isValidPhoneNumber(profile.phone)) {
+      showNotification({ color: 'red', message: t('common.error.check_input') })
+      return
+    }
 
     setDisabled(true)
 
@@ -203,6 +207,7 @@ export const UserEditModal: FC<UserEditModalProps> = (props) => {
               w="100%"
               value={profile.phone ?? ''}
               disabled={disabled}
+              error={!isValidPhoneNumber(profile.phone) ? t('common.error.check_input') : undefined}
               onChange={(event) => setProfile({ ...profile, phone: event.target.value })}
             />
             <TextInput

@@ -88,7 +88,9 @@
     "param_unknown": "Parameter tidak diketahui",
     "request_too_frequent": "Terlalu banyak permintaan",
     "try_later": "Silakan coba beberapa saat lagi",
-    "unknown": "Kesalahan tidak diketahui"
+    "unknown": "Kesalahan tidak diketahui",
+    "forbidden": "Akses ditolak",
+    "unauthorized": "Silakan masuk terlebih dahulu"
   },
   "label": {
     "challenge": "Challenge",

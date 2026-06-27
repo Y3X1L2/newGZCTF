@@ -125,7 +125,7 @@ export const TrainingCourseCard: FC<{
           className="yy-training-course-cover"
           style={course.coverUrl ? { backgroundImage: `url(${course.coverUrl})` } : undefined}
         >
-          <TrainingStatusText tone={status.tone} className="yy-training-course-status-badge">
+          <TrainingStatusText tone={status.tone} className="yy-training-course-status-badge" vertical>
             {status.label}
           </TrainingStatusText>
         </div>

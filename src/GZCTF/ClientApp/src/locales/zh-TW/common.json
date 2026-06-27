@@ -88,7 +88,9 @@
     "param_unknown": "未知參數",
     "request_too_frequent": "請求過於頻繁",
     "try_later": "請稍後再試",
-    "unknown": "未知錯誤"
+    "unknown": "未知錯誤",
+    "forbidden": "無權訪問",
+    "unauthorized": "請先登入"
   },
   "label": {
     "challenge": "題目",

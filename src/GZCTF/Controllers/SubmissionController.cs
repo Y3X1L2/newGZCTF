@@ -76,8 +76,15 @@ public class SubmissionController : ControllerBase
         if (user is null)
             return Unauthorized(new RequestResponse("Login required."));
 
+        var (challenge, participation, validationError) = await ValidateSubmissionContextAsync(
+            request.ChallengeId, request.GameId, user, token);
+
+        if (validationError is not null)
+            return validationError;
+
         // Find the scoring rule for this challenge and submission type
         var rule = await _context.ScoringRules
+            .Include(r => r.Challenge)
             .FirstOrDefaultAsync(r => r.ChallengeId == request.ChallengeId
                 && r.SubmissionType == request.SubmissionType, token);
 
@@ -124,9 +131,9 @@ public class SubmissionController : ControllerBase
             SubmitTimeUtc = DateTimeOffset.UtcNow,
             UserId = user.Id,
             ChallengeId = request.ChallengeId,
-            GameId = request.GameId,
-            TeamId = request.TeamId,
-            ParticipationId = request.ParticipationId
+            GameId = challenge!.GameId,
+            TeamId = participation!.TeamId,
+            ParticipationId = participation.ParticipationId
         };
 
         await _context.Submissions.AddAsync(submission, token);
@@ -134,14 +141,14 @@ public class SubmissionController : ControllerBase
         if (status == AnswerResult.Accepted)
         {
             var existingSolve = await _context.FirstSolves
-                .FirstOrDefaultAsync(fs => fs.ParticipationId == request.ParticipationId
+                .FirstOrDefaultAsync(fs => fs.ParticipationId == participation!.ParticipationId
                                         && fs.ChallengeId == request.ChallengeId, token);
 
             if (existingSolve is null)
             {
                 await _context.FirstSolves.AddAsync(new FirstSolve
                 {
-                    ParticipationId = request.ParticipationId,
+                    ParticipationId = participation!.ParticipationId,
                     ChallengeId = request.ChallengeId,
                     SubmissionId = submission.Id
                 }, token);
@@ -241,8 +248,15 @@ public class SubmissionController : ControllerBase
         if (user is null)
             return Unauthorized(new RequestResponse("Login required."));
 
+        var (challenge, participation, validationError) = await ValidateSubmissionContextAsync(
+            challengeId, gameId, user, token);
+
+        if (validationError is not null)
+            return validationError;
+
         // Find the scoring rule
         var rule = await _context.ScoringRules
+            .Include(r => r.Challenge)
             .FirstOrDefaultAsync(r => r.ChallengeId == challengeId
                 && r.SubmissionType == ScoringSubmissionType.Writeup, token);
 
@@ -295,9 +309,9 @@ public class SubmissionController : ControllerBase
             SubmitTimeUtc = DateTimeOffset.UtcNow,
             UserId = user.Id,
             ChallengeId = challengeId,
-            GameId = gameId,
-            TeamId = teamId,
-            ParticipationId = participationId
+            GameId = challenge!.GameId,
+            TeamId = participation!.TeamId,
+            ParticipationId = participation.ParticipationId
         };
 
         await _context.Submissions.AddAsync(submission, token);
@@ -417,6 +431,35 @@ public class SubmissionController : ControllerBase
     #endregion
 
     #region Verification Helpers
+
+    private async Task<(GameChallenge? Challenge, UserParticipation? Participation, IActionResult? Error)>
+        ValidateSubmissionContextAsync(int challengeId, int gameId, UserInfo user, CancellationToken token)
+    {
+        var challenge = await _context.GameChallenges
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == challengeId, token);
+
+        if (challenge is null)
+            return (null, null, NotFound(new RequestResponse("Challenge not found.",
+                StatusCodes.Status404NotFound)));
+
+        if (!challenge.IsEnabled)
+            return (null, null, BadRequest(new RequestResponse("Challenge is not enabled.")));
+
+        if (challenge.GameId != gameId)
+            return (null, null, BadRequest(new RequestResponse(
+                "Challenge does not belong to the specified game.")));
+
+        var participation = await _context.Set<UserParticipation>()
+            .AsNoTracking()
+            .Include(up => up.Participation)
+            .FirstOrDefaultAsync(up => up.UserId == user.Id && up.GameId == challenge.GameId, token);
+
+        if (participation?.Participation.Status != ParticipationStatus.Accepted)
+            return (null, null, Forbid());
+
+        return (challenge, participation, null);
+    }
 
     /// <summary>
     /// Verify a submission based on the scoring rule's verification mode.

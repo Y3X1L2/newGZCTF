@@ -17,7 +17,7 @@ public class GamePhaseController : ControllerBase
     public GamePhaseController(AppDbContext context) => _context = context;
 
     [HttpGet("{gameId:int}")]
-    [Authorize]
+    [RequireTeacher]
     public async Task<IActionResult> List(int gameId)
     {
         var phases = await _context.GamePhases.Where(p => p.GameId == gameId).OrderBy(p => p.StartTime).ToListAsync();

@@ -7,11 +7,13 @@ namespace GZCTF.Models.Internal;
 /// </summary>
 public class DockerRegistrySettings
 {
+    public const string FixedAddress = "10.24.0.28:5000";
+
     /// <summary>
-    /// Registry host and port, for example 10.0.7.130:5000.
+    /// Registry host and port. Empty configuration falls back to the fixed platform registry.
     /// </summary>
     [MaxLength(256)]
-    public string Address { get; set; } = string.Empty;
+    public string Address { get; set; } = FixedAddress;
 
     /// <summary>
     /// Optional repository prefix inside the registry.
@@ -29,7 +31,7 @@ public class DockerRegistrySettings
     {
         get
         {
-            var value = Address.Trim().TrimEnd('/');
+            var value = string.IsNullOrWhiteSpace(Address) ? FixedAddress : Address.Trim().TrimEnd('/');
             if (value.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
                 return value["http://".Length..];
             if (value.StartsWith("https://", StringComparison.OrdinalIgnoreCase))

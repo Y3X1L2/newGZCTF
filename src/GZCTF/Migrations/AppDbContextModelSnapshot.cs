@@ -1501,6 +1501,10 @@ namespace GZCTF.Migrations
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
 
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
                     b.Property<long>("FileSize")
                         .HasColumnType("bigint");
 

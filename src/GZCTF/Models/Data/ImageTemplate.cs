@@ -90,6 +90,12 @@ public class ImageTemplate
     public string? Description { get; set; }
 
     /// <summary>
+    /// Last import, pull, or distribution error for operator diagnosis
+    /// </summary>
+    [MaxLength(1024)]
+    public string? ErrorMessage { get; set; }
+
+    /// <summary>
     /// Whether this image contains known malware (for IR challenges)
     /// </summary>
     public bool ContainsMalware { get; set; }

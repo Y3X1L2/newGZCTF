@@ -278,7 +278,7 @@ export const InstanceEntry: FC<InstanceEntryProps> = (props) => {
                       : `http://${useLocal && wsrxOptions.allowLan ? entry.replace('0.0.0.0', '127.0.0.1') : entry}`
                   }
                   target={entryIsWss ? undefined : '_blank'}
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                 >
                   <Icon path={mdiOpenInNew} size={1} />
                 </ActionIcon>

@@ -951,7 +951,7 @@
     <value>容器地址解析失败</value>
   </data>
   <data name="Container_ConfigError" xml:space="preserve">
-    <value>容器配置错误</value>
+    <value>容器题目必须绑定 Docker 镜像并配置开放端口，请先完成镜像绑定后再保存或启动。</value>
   </data>
   <data name="Container_ConnectionLimitExceeded" xml:space="preserve">
     <value>容器连接数已达上限</value>

@@ -32,6 +32,7 @@ public class PenetrationService(
     IHubContext<UserHub, IUserClient> userHub,
     IDistributedLockService lockService,
     DockerImageRegistryService dockerRegistry,
+    INginxProxySyncService nginxProxySync,
     ILogger<PenetrationService> logger)
 {
     sealed class DeploymentActorScope(Guid? previous) : IDisposable
@@ -1593,7 +1594,10 @@ public class PenetrationService(
                         }
                     }
                 }
+
+                await nginxProxySync.TrySyncNowAsync("penetration containers created", CancellationToken.None);
             }
+
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 logger.LogError(ex,
@@ -2352,6 +2356,7 @@ public class PenetrationService(
         environment.NextCleanupAt = null;
         AddDeploymentEvent(environment, "cleanup", PenetrationDeploymentEventLevel.Success, "环境资源已全部清理。");
         await context.SaveChangesAsync(token);
+        await nginxProxySync.TrySyncNowAsync("penetration environment cleaned", token);
         await PublishWorkspaceRefresh(environment.GameId, environment.TeamId, environment.PublishedVersion, token);
         return (true, "环境资源已清理。");
     }
@@ -2385,6 +2390,7 @@ public class PenetrationService(
         }
 
         await context.SaveChangesAsync(token);
+        await nginxProxySync.TrySyncNowAsync("pending penetration containers cleaned", token);
     }
 
     async Task RemoveRuntimeNetwork(Guid? nodeId, string networkName, CancellationToken token)

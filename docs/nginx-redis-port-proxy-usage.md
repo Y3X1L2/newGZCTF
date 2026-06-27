@@ -16,6 +16,18 @@ Redis 的职责是端口池分配和分布式协调；Nginx 的职责是 TCP str
 
 启用 `NginxProxyConfig.Enable=true` 时必须配置 `ConnectionStrings:RedisCache`。平台不会在 Nginx 模式下使用本地端口扫描兜底，否则多实例/多节点场景可能重复分配玩家公网端口。
 
+## 固定内网 Registry 边界
+
+当前 Docker 镜像存储固定为 `10.24.0.28:5000`，不再由节点管理页面切换存储服务器。这个 Registry 是平台内网基础设施，只用于主服务和调度节点之间分发题目镜像，不应映射到公网。
+
+安全边界要求：
+
+1. `10.24.0.28:5000` 只允许主服务器和受信任 Worker 节点访问。
+2. 公网服务器、防火墙、安全组不得放行 `5000/tcp` 到互联网。
+3. 一键注册节点会把固定 Registry 写入 Docker `insecure-registries` 信任列表；如果节点无法拉取镜像，先检查节点到 `10.24.0.28:5000` 的内网连通性和 Docker daemon 是否已重启。
+4. 环境模板页面只展示固定 Registry 地址和模板拉取错误，不提供存储服务器切换入口。
+5. 若未来要开启 Registry 认证，需要同步改造 Docker daemon 凭据分发、Agent 拉取凭据、上传推送凭据和已有镜像引用迁移，不应只在 UI 层增加账号密码字段。
+
 ## 配置示例
 
 `appsettings.json`：

@@ -88,7 +88,9 @@
     "param_unknown": "不明なパラメータ",
     "request_too_frequent": "リクエストが頻繁すぎます",
     "try_later": "しばらくしてからもう一度お試しください",
-    "unknown": "不明なエラー"
+    "unknown": "不明なエラー",
+    "forbidden": "アクセス権限がありません",
+    "unauthorized": "先にログインしてください"
   },
   "label": {
     "challenge": "チャレンジ",

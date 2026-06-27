@@ -88,7 +88,9 @@
     "param_unknown": "알 수 없는 파라미터입니다",
     "request_too_frequent": "요청이 너무 많습니다",
     "try_later": "나중에 다시 시도해주세요",
-    "unknown": "알 수 없는 오류"
+    "unknown": "알 수 없는 오류",
+    "forbidden": "접근 권한이 없습니다",
+    "unauthorized": "먼저 로그인해 주세요"
   },
   "label": {
     "challenge": "문제",

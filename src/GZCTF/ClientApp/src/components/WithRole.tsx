@@ -38,8 +38,8 @@ export const WithRole: FC<WithRoleProps> = ({ requiredRole, children }) => {
 
     const current = RoleMap.get(role)!
 
-    if (current < required) navigate('/404')
-  }, [role, error, required, navigate])
+    if (current < required) navigate('/', { replace: true })
+  }, [role, error, required, navigate, location.pathname])
 
   if (role && RoleMap.get(role)! < required /* show loader before redirect */) {
     return (

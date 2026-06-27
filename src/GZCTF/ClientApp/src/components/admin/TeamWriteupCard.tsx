@@ -55,7 +55,7 @@ export const TeamWriteupCard: FC<TeamWriteupCardProps> = ({ writeup, selected, d
             </Text>
           </Stack>
         </Group>
-        <ActionIcon component={Link} target="_blank" to={writeup.url ?? '#'}>
+        <ActionIcon component={Link} target="_blank" rel="noopener noreferrer" to={writeup.url ?? '#'}>
           <Icon path={mdiDownload} size={1} />
         </ActionIcon>
       </Group>

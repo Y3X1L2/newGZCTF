@@ -88,7 +88,9 @@
     "param_unknown": "Tham số không xác định",
     "request_too_frequent": "Quá nhiều yêu cầu",
     "try_later": "Vui lòng thử lại sau",
-    "unknown": "Lỗi không xác định"
+    "unknown": "Lỗi không xác định",
+    "forbidden": "Không có quyền truy cập",
+    "unauthorized": "Vui lòng đăng nhập trước"
   },
   "label": {
     "challenge": "Thử thách",

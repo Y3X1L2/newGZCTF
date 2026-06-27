@@ -88,7 +88,9 @@
     "param_unknown": "Parámetro desconocido",
     "request_too_frequent": "Demasiadas solicitudes",
     "try_later": "Por favor, intenta de nuevo más tarde",
-    "unknown": "Error desconocido"
+    "unknown": "Error desconocido",
+    "forbidden": "Acceso denegado",
+    "unauthorized": "Inicia sesión primero"
   },
   "label": {
     "challenge": "Desafío",

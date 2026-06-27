@@ -36,13 +36,14 @@ public class NodeResourceListResponse
     public int RunningCount { get; set; }
     public int ContainerCount { get; set; }
     public int VmCount { get; set; }
+    public int PentestCount { get; set; }
     public List<NodeResourceItemModel> Items { get; set; } = [];
 }
 
 public class NodeResourceItemModel
 {
     public string Kind { get; set; } = string.Empty;
-    public Guid Id { get; set; }
+    public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public bool IsActive { get; set; }

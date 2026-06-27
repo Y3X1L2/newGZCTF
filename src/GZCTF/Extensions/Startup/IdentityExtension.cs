@@ -23,6 +23,8 @@ internal static class IdentityExtension
                         auth.Cookie.Name = "GZCTF_Token";
                         auth.SlidingExpiration = true;
                         auth.ExpireTimeSpan = TimeSpan.FromDays(7);
+                        auth.Events.OnValidatePrincipal =
+                            SecurityStampValidator.ValidatePrincipalAsync;
                     });
                 });
 
@@ -44,6 +46,8 @@ internal static class IdentityExtension
             builder.Services.Configure<DataProtectionTokenProviderOptions>(o =>
                 o.TokenLifespan = TimeSpan.FromHours(3)
             );
+            builder.Services.Configure<SecurityStampValidatorOptions>(o =>
+                o.ValidationInterval = TimeSpan.Zero);
         }
     }
 }

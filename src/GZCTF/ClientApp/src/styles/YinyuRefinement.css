@@ -2499,6 +2499,52 @@
   padding: clamp(0.78rem, 1.05vw, 1rem) !important;
 }
 
+.yy-theory-review-summary.panel-card {
+  border-color: rgba(107, 238, 177, 0.22) !important;
+}
+
+.yy-theory-review-row {
+  display: grid;
+  grid-template-columns: minmax(4.5rem, auto) minmax(12rem, 1fr);
+  gap: 0.35rem 0.75rem;
+  width: 100%;
+  padding: 0.72rem 0.82rem;
+  border: 1px solid rgba(255, 118, 118, 0.2);
+  border-radius: var(--yy-radius-md);
+  background: rgba(255, 118, 118, 0.055);
+  color: rgba(245, 255, 251, 0.92);
+  text-align: left;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.yy-theory-review-row:hover {
+  border-color: rgba(107, 238, 177, 0.32);
+  background: rgba(107, 238, 177, 0.08);
+  transform: translateY(-1px);
+}
+
+.yy-theory-review-row span {
+  font-weight: 900;
+  color: #ffb2b2;
+}
+
+.yy-theory-review-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.yy-theory-review-row em {
+  grid-column: 2;
+  color: rgba(221, 229, 223, 0.76);
+  font-size: 0.82rem;
+  font-style: normal;
+}
+
 .yy-theory-nav-panel.panel-card {
   min-height: 0 !important;
   padding: clamp(0.72rem, 1vw, 0.95rem) clamp(0.85rem, 1.2vw, 1.08rem) !important;
@@ -7792,9 +7838,10 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
   position: relative;
   isolation: isolate;
   width: 100%;
+  max-width: 100%;
   min-height: calc(100dvh - 1.25rem);
   padding: clamp(0.9rem, 1.25vw, 1.35rem);
-  overflow: visible;
+  overflow: clip;
   border-radius: 0;
   background: transparent;
 }
@@ -7849,6 +7896,7 @@ body:has(.yy-training-page) .signal-field {
 .yy-training-page > *:not(.yy-training-bg) {
   position: relative;
   z-index: 2;
+  min-width: 0;
 }
 
 .yy-training-page .yy-hex-field,
@@ -7862,6 +7910,7 @@ body:has(.yy-training-page) .signal-field {
   gap: clamp(0.9rem, 1.25vw, 1.35rem);
   align-items: start;
   width: 100%;
+  max-width: 100%;
   min-width: 0;
 }
 
@@ -7879,7 +7928,9 @@ body:has(.yy-training-page) .signal-field {
 .yy-training-main,
 .yy-training-detail-main,
 .yy-course-chapter-main {
+  width: 100%;
   min-width: 0;
+  max-width: 100%;
 }
 
 .yy-course-home {
@@ -8029,15 +8080,19 @@ body:has(.yy-training-page) .signal-field {
 }
 
 .yy-training-course-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18.5rem), 1fr)) !important;
   align-items: stretch;
+  width: 100%;
+  min-width: 0;
 }
 
 .yy-training-course-card.panel-card {
   display: grid;
-  grid-template-rows: 6.9rem minmax(0, 1fr);
+  grid-template-rows: clamp(7.6rem, 9vw, 9.4rem) minmax(0, 1fr);
   height: 100%;
-  min-height: 19.25rem;
-  max-height: 19.25rem;
+  min-height: clamp(22rem, 24vw, 24rem);
+  max-height: clamp(22rem, 24vw, 24rem);
   overflow: hidden;
   border-color: rgba(221, 229, 223, 0.16);
   background:
@@ -8062,18 +8117,20 @@ body:has(.yy-training-page) .signal-field {
 }
 
 .yy-training-course-card.is-featured {
-  min-height: 19.25rem;
-  max-height: 19.25rem;
+  min-height: clamp(22rem, 24vw, 24rem);
+  max-height: clamp(22rem, 24vw, 24rem);
 }
 
 .yy-training-course-card.is-compact {
-  min-height: 19.25rem;
-  max-height: 19.25rem;
+  min-height: clamp(20.8rem, 22vw, 22.5rem);
+  max-height: clamp(20.8rem, 22vw, 22.5rem);
 }
 
 .yy-training-course-cover {
   position: relative;
-  min-height: 6.9rem;
+  width: 100%;
+  min-height: 0;
+  aspect-ratio: 16 / 6.2;
   overflow: hidden;
   background:
     radial-gradient(ellipse at 18% 0%, rgba(107, 238, 177, 0.22), transparent 54%),
@@ -8111,20 +8168,22 @@ body:has(.yy-training-page) .signal-field {
   min-height: 0;
   height: 100%;
   overflow: hidden;
-  padding: clamp(0.82rem, 1vw, 1rem);
+  padding: clamp(0.78rem, 0.95vw, 0.98rem);
 }
 
 .yy-training-course-card .mantine-Title-root {
-  font-size: clamp(1.18rem, 1.25vw, 1.52rem);
-  line-height: 1.12;
+  font-size: clamp(1.08rem, 1.08vw, 1.34rem);
+  line-height: 1.1;
   letter-spacing: 0;
+  overflow-wrap: anywhere;
 }
 
 .yy-training-course-summary {
-  min-height: 2.85rem;
-  max-height: 2.85rem;
+  min-height: 2.7rem;
+  max-height: 2.7rem;
   overflow: hidden;
-  line-height: 1.42;
+  line-height: 1.35;
+  font-size: clamp(0.86rem, 0.9vw, 0.98rem) !important;
 }
 
 .yy-training-status-text {
@@ -8175,6 +8234,7 @@ body:has(.yy-training-page) .signal-field {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.5rem;
   min-width: 0;
+  overflow: hidden;
 }
 
 .yy-training-course-meta-grid span {
@@ -8196,6 +8256,7 @@ body:has(.yy-training-page) .signal-field {
 
 .yy-training-course-progress {
   min-width: 0;
+  margin-top: auto;
 }
 
 .yy-training-task-row {
@@ -8312,17 +8373,31 @@ body:has(.yy-training-page) .signal-field {
   align-items: start;
   margin-top: clamp(0.95rem, 1.25vw, 1.35rem);
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 .yy-training-detail-tabs .mantine-Tabs-list {
-  position: sticky;
-  top: 4.25rem;
+  position: relative;
+  top: auto;
   z-index: 8;
+  display: flex;
+  flex-wrap: nowrap;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
   padding: 0.28rem;
   border: 1px solid rgba(221, 229, 223, 0.12);
   border-radius: var(--yy-radius);
   background: rgba(4, 10, 8, 0.72);
   backdrop-filter: blur(1.2rem);
+}
+
+.yy-training-detail-tabs .mantine-Tabs-tab {
+  flex: 0 0 auto;
+  min-width: max-content;
+  white-space: nowrap;
 }
 
 .yy-training-chapter-link {
@@ -8451,12 +8526,14 @@ body:has(.yy-training-page) .signal-field {
   gap: clamp(1rem, 1.45vw, 1.6rem);
   align-items: stretch;
   min-width: 0;
+  max-width: 100%;
 }
 
 .yy-course-detail-cover {
   display: grid;
   place-items: center;
   min-height: clamp(14rem, 28vh, 22rem);
+  aspect-ratio: 16 / 9;
   overflow: hidden;
   border: 1px solid rgba(221, 229, 223, 0.13);
   border-radius: var(--yy-radius);

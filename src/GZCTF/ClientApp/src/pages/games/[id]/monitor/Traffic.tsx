@@ -66,7 +66,7 @@ const Traffic: FC = () => {
   const onDownload = (item: FileRecord) => {
     if (!challengeId || !participationId || !item.fileName) return
 
-    window.open(`/api/game/captures/${challengeId}/${participationId}/${item.fileName}`, '_blank')
+    window.open(`/api/game/captures/${challengeId}/${participationId}/${item.fileName}`, '_blank', 'noopener,noreferrer')
   }
 
   const onDownloadAll = () => {
@@ -80,7 +80,7 @@ const Traffic: FC = () => {
       return
     }
 
-    window.open(`/api/game/captures/${challengeId}/${participationId}/all`, '_blank')
+    window.open(`/api/game/captures/${challengeId}/${participationId}/all`, '_blank', 'noopener,noreferrer')
   }
 
   const onDelete = async (item: FileRecord) => {

@@ -88,7 +88,9 @@
     "param_unknown": "Paramètre inconnu",
     "request_too_frequent": "Trop de requêtes",
     "try_later": "Veuillez réessayer plus tard",
-    "unknown": "Erreur inconnue"
+    "unknown": "Erreur inconnue",
+    "forbidden": "Accès refusé",
+    "unauthorized": "Veuillez vous connecter d'abord"
   },
   "label": {
     "challenge": "Défi",

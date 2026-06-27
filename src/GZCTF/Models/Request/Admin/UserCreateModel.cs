@@ -1,5 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
+using GZCTF.Models.Request;
+
 namespace GZCTF.Models.Request.Admin;
 
 /// <summary>
@@ -51,7 +53,7 @@ public class UserCreateModel
     /// <summary>
     /// Contact phone number
     /// </summary>
-    [Phone(ErrorMessageResourceName = nameof(Resources.Program.Model_MalformedPhoneNumber),
+    [PhoneNumber(ErrorMessageResourceName = nameof(Resources.Program.Model_MalformedPhoneNumber),
         ErrorMessageResourceType = typeof(Resources.Program))]
     public string? Phone { get; set; }
 

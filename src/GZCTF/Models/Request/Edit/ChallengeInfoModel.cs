@@ -32,6 +32,18 @@ public class ChallengeInfoModel
     public ChallengeType Type { get; set; } = ChallengeType.StaticAttachment;
 
     /// <summary>
+    /// Container image name and tag. Required when creating a container challenge.
+    /// </summary>
+    public string? ContainerImage { get; set; }
+
+    /// <summary>
+    /// Container exposed port. Required when creating a container challenge.
+    /// </summary>
+    [Range(1, 65535, ErrorMessageResourceName = nameof(Resources.Program.Model_OutOfRange),
+        ErrorMessageResourceType = typeof(Resources.Program))]
+    public int? ExposePort { get; set; }
+
+    /// <summary>
     /// Is the challenge enabled
     /// </summary>
     public bool IsEnabled { get; set; }
@@ -63,6 +75,8 @@ public class ChallengeInfoModel
             Title = challenge.Title,
             Category = challenge.Category,
             Type = challenge.Type,
+            ContainerImage = challenge.ContainerImage,
+            ExposePort = challenge.ExposePort,
             Score = challenge.OriginalScore, // This field should be updated with scoreboard
             MinScore = (int)Math.Floor(challenge.MinScoreRate * challenge.OriginalScore),
             OriginalScore = challenge.OriginalScore,

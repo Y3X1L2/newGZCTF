@@ -5,6 +5,7 @@ using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Services.Cache;
 using GZCTF.Services.Container.Manager;
+using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
@@ -19,6 +20,7 @@ public class ExerciseInstanceRepository(
     IContainerRepository containerRepository,
     IOptionsSnapshot<ContainerPolicy> containerPolicy,
     DockerImageRegistryService dockerRegistry,
+    INginxProxySyncService nginxProxySync,
     ILogger<ExerciseInstanceRepository> logger,
     IStringLocalizer<Program> localizer
 ) : RepositoryBase(context),
@@ -219,6 +221,7 @@ public class ExerciseInstanceRepository(
             TaskStatus.Success);
 
         await SaveAsync(token);
+        await nginxProxySync.TrySyncNowAsync("exercise container created", token);
 
         return new TaskResult<Container>(TaskStatus.Success, instance.Container);
     }

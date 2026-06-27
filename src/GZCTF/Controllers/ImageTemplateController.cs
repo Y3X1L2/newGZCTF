@@ -24,20 +24,17 @@ public class ImageTemplateController : ControllerBase
     private readonly ImageStorage _storage;
     private readonly IArchiveExtractor _archiveExtractor;
     private readonly DockerImageRegistryService _dockerRegistry;
-    private readonly DockerRegistryMigrationService _registryMigration;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ImageTemplateController> _logger;
 
     public ImageTemplateController(AppDbContext context, ImageStorage storage, IArchiveExtractor archiveExtractor,
-        DockerImageRegistryService dockerRegistry, DockerRegistryMigrationService registryMigration,
-        IServiceScopeFactory scopeFactory,
+        DockerImageRegistryService dockerRegistry, IServiceScopeFactory scopeFactory,
         ILogger<ImageTemplateController> logger)
     {
         _context = context;
         _storage = storage;
         _archiveExtractor = archiveExtractor;
         _dockerRegistry = dockerRegistry;
-        _registryMigration = registryMigration;
         _scopeFactory = scopeFactory;
         _logger = logger;
     }
@@ -81,6 +78,7 @@ public class ImageTemplateController : ControllerBase
     /// List all image templates with optional filtering.
     /// </summary>
     [HttpGet]
+    [RequireTeacher]
     public async Task<IActionResult> List(
         [FromQuery] OSType? osType = null,
         [FromQuery] ImageType? imageType = null,
@@ -113,7 +111,7 @@ public class ImageTemplateController : ControllerBase
         return Ok(new { total, page, pageSize, items = templates.Select(t => new
         {
             t.Id, t.Name, t.OSType, t.ImageType, t.FileSize, t.Status,
-            t.Description, t.ImageHash, t.UploadedAt, t.RegistryUrl, t.LocalFilePath
+            t.Description, t.ErrorMessage, t.ImageHash, t.UploadedAt, t.RegistryUrl
         }) });
     }
 
@@ -121,6 +119,7 @@ public class ImageTemplateController : ControllerBase
     /// Get a specific image template by ID.
     /// </summary>
     [HttpGet("{id:int}")]
+    [RequireTeacher]
     public async Task<IActionResult> GetById(int id)
     {
         var template = await _context.ImageTemplates.FindAsync(id);
@@ -131,7 +130,7 @@ public class ImageTemplateController : ControllerBase
         {
             template.Id, template.Name, template.OSType, template.ImageType,
             template.FileSize, template.Status, template.Description,
-            template.ContainsMalware, template.ImageHash, template.UploadedAt,
+            template.ErrorMessage, template.ContainsMalware, template.ImageHash, template.UploadedAt,
             template.RegistryUrl,
         });
     }
@@ -205,6 +204,7 @@ public class ImageTemplateController : ControllerBase
         template.RegistryUrl = imageReference;
         template.RegistryAuth = request.RegistryAuth;
         template.Status = ImageStatus.Importing;
+        template.ErrorMessage = null;
         template.UploadedAt = DateTimeOffset.UtcNow;
 
         if (existingTemplate is null)
@@ -227,13 +227,19 @@ public class ImageTemplateController : ControllerBase
                 if (t is not null)
                 {
                     t.Status = ImageStatus.Ready;
+                    t.ErrorMessage = null;
                     await ctx.SaveChangesAsync();
                 }
             }
             catch (Exception ex)
             {
                 var t = await ctx.ImageTemplates.FindAsync(templateId);
-                if (t is not null) { t.Status = ImageStatus.Error; await ctx.SaveChangesAsync(); }
+                if (t is not null)
+                {
+                    t.Status = ImageStatus.Error;
+                    t.ErrorMessage = TruncateError(ex.Message);
+                    await ctx.SaveChangesAsync();
+                }
                 _logger.LogWarning(ex, "Failed to pull Docker image: {Image}", pullTarget.FullImage);
             }
         });
@@ -246,19 +252,12 @@ public class ImageTemplateController : ControllerBase
     public async Task<IActionResult> GetDockerRegistrySettings(CancellationToken token)
     {
         var endpoint = await _dockerRegistry.GetActiveEndpointAsync(token);
-        var task = await _registryMigration.GetLatestTaskAsync(token);
         return Ok(new
         {
             enabled = endpoint is not null,
             address = endpoint?.Address ?? string.Empty,
             @namespace = _dockerRegistry.RegistryNamespace,
-            maxUploadSizeGb = _dockerRegistry.MaxUploadSizeGb,
-            storageNodeId = endpoint?.NodeId,
-            storageNodeName = endpoint?.NodeName,
-            storageNodeHost = endpoint?.Host,
-            storageNodeRegistryPort = endpoint?.Port,
-            storageNodeIsLocal = endpoint?.IsLocal ?? false,
-            migrationTask = task is null ? null : ToMigrationTaskModel(task)
+            maxUploadSizeGb = _dockerRegistry.MaxUploadSizeGb
         });
     }
 
@@ -328,6 +327,7 @@ public class ImageTemplateController : ControllerBase
             template.RegistryUrl = result.FullImage;
             template.RegistryAuth = null;
             template.Status = ImageStatus.Ready;
+            template.ErrorMessage = null;
             template.UploadedAt = DateTimeOffset.UtcNow;
             template.FileSize = file.Length;
             template.ImageHash = result.ImageId?.Replace("sha256:", string.Empty, StringComparison.OrdinalIgnoreCase);
@@ -347,6 +347,7 @@ public class ImageTemplateController : ControllerBase
                 template.FileSize,
                 template.Status,
                 template.RegistryUrl,
+                template.ErrorMessage,
                 template.ImageHash
             });
         }
@@ -515,39 +516,11 @@ public class ImageTemplateController : ControllerBase
         return true;
     }
 
-    private static object ToMigrationTaskModel(DockerRegistryMigrationTask task) => new
+    private static string TruncateError(string? message)
     {
-        task.Id,
-        task.TargetNodeId,
-        TargetNodeName = task.TargetNode?.Name,
-        task.SourceRegistry,
-        task.TargetRegistry,
-        Status = task.Status.ToString(),
-        task.TotalItems,
-        task.CompletedItems,
-        task.FailedItems,
-        task.Message,
-        task.CreatedAt,
-        task.UpdatedAt,
-        task.CompletedAt,
-        Items = task.Items.Select(i => new
-        {
-            i.Id,
-            i.ImageTemplateId,
-            i.SourceImage,
-            i.TargetImage,
-            i.SourceDigest,
-            i.TargetDigest,
-            Status = i.Status.ToString(),
-            i.BytesTransferred,
-            i.TotalBytes,
-            i.RetryCount,
-            i.ErrorMessage,
-            i.CreatedAt,
-            i.UpdatedAt,
-            i.CompletedAt
-        }).ToArray()
-    };
+        var value = string.IsNullOrWhiteSpace(message) ? "Docker image operation failed." : message.Trim();
+        return value.Length <= 1024 ? value : value[..1024];
+    }
 }
 
 public class DockerRegisterRequest

@@ -51,7 +51,7 @@ public class NodesController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize]
+    [RequireAdmin]
     public async Task<IActionResult> List()
     {
         var nodes = await _nodeRepo.GetAllNodesAsync(HttpContext.RequestAborted);
@@ -61,8 +61,7 @@ public class NodesController : ControllerBase
             n.Id, n.Name, n.HostAddress, Status = n.GetEffectiveStatus(now), n.Capabilities,
             n.CpuLoad, n.MemoryLoad, n.CurrentContainers, n.MaxContainers,
             n.CurrentVms, n.MaxVms, n.UsedPorts, n.TotalPorts, n.LastHeartbeat,
-            n.IsSchedulable, n.IsLocal, n.IsStorageNode, n.AgentPort, n.RegistryPort,
-            RegistryAddress = $"{DockerImageRegistryService.NormalizeRegistryAddress(n.HostAddress)}:{n.RegistryPort}",
+            n.IsSchedulable, n.IsLocal, n.AgentPort,
             UnschedulableReasons = GetUnschedulableReasons(n),
             UnschedulableByCapability = GetUnschedulableByCapability(n),
             SchedulableCapabilities = GetSchedulableCapabilities(n)
@@ -70,7 +69,7 @@ public class NodesController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
-    [Authorize]
+    [RequireAdmin]
     public async Task<IActionResult> Detail(Guid id)
     {
         var node = await _nodeRepo.GetNodeByIdAsync(id, HttpContext.RequestAborted);
@@ -81,8 +80,7 @@ public class NodesController : ControllerBase
             node.Id, node.Name, node.HostAddress, Status = node.GetEffectiveStatus(now), node.Capabilities,
             node.CpuLoad, node.MemoryLoad, node.CurrentContainers, node.MaxContainers,
             node.CurrentVms, node.MaxVms, node.UsedPorts, node.TotalPorts, node.LastHeartbeat,
-            node.IsSchedulable, node.IsLocal, node.IsStorageNode, node.AgentPort, node.RegistryPort,
-            RegistryAddress = $"{DockerImageRegistryService.NormalizeRegistryAddress(node.HostAddress)}:{node.RegistryPort}",
+            node.IsSchedulable, node.IsLocal, node.AgentPort,
             UnschedulableReasons = GetUnschedulableReasons(node),
             UnschedulableByCapability = GetUnschedulableByCapability(node),
             SchedulableCapabilities = GetSchedulableCapabilities(node)
@@ -109,8 +107,35 @@ public class NodesController : ControllerBase
         var normalizedStatus = status.Trim().ToLowerInvariant();
         var includeContainers = normalizedType is "all" or "container" or "containers";
         var includeVms = normalizedType is "all" or "vm" or "vms";
+        var includePentest = normalizedType is "all" or "pentest" or "penetration";
 
         var resources = new List<NodeResourceItemModel>();
+        var pentestContainerIds = new HashSet<Guid>();
+
+        if (includePentest)
+        {
+            var runtimes = await _context.PenetrationRuntimeNodes.AsNoTracking()
+                .Where(r => r.Environment.NodeId == id)
+                .Include(r => r.Environment).ThenInclude(e => e.Team)
+                .Include(r => r.Environment).ThenInclude(e => e.Game)
+                .Include(r => r.TopologyNode)
+                .Include(r => r.Container)
+                .ToListAsync(token);
+
+            pentestContainerIds = runtimes
+                .Where(r => r.ContainerId.HasValue)
+                .Select(r => r.ContainerId!.Value)
+                .ToHashSet();
+            resources.AddRange(runtimes.Select(ToNodePentestResource));
+        }
+        else if (includeContainers)
+        {
+            pentestContainerIds = (await _context.PenetrationRuntimeNodes.AsNoTracking()
+                    .Where(r => r.Environment.NodeId == id && r.ContainerId.HasValue)
+                    .Select(r => r.ContainerId!.Value)
+                    .ToArrayAsync(token))
+                .ToHashSet();
+        }
 
         if (includeContainers)
         {
@@ -120,7 +145,9 @@ public class NodesController : ControllerBase
                 .Include(c => c.GameInstance).ThenInclude(i => i!.Participation).ThenInclude(p => p.Team)
                 .ToListAsync(token);
 
-            resources.AddRange(containers.Select(ToNodeContainerResource));
+            resources.AddRange(containers
+                .Where(c => !pentestContainerIds.Contains(c.Id))
+                .Select(ToNodeContainerResource));
         }
 
         if (includeVms)
@@ -171,6 +198,7 @@ public class NodesController : ControllerBase
             RunningCount = resources.Count(r => r.IsActive),
             ContainerCount = resources.Count(r => r.Kind == "container"),
             VmCount = resources.Count(r => r.Kind == "vm"),
+            PentestCount = resources.Count(r => r.Kind == "pentest"),
             Items = items
         });
     }
@@ -270,6 +298,7 @@ public class NodesController : ControllerBase
         var pentest = HttpContext.RequestServices.GetRequiredService<PenetrationService>();
         var containerManager = HttpContext.RequestServices.GetRequiredService<IContainerManager>();
         var fleetVm = HttpContext.RequestServices.GetRequiredService<FleetVmService>();
+        var nginxProxySync = HttpContext.RequestServices.GetRequiredService<INginxProxySyncService>();
 
         var environments = await _context.PenetrationTeamEnvironments
             .AsNoTracking()
@@ -326,6 +355,7 @@ public class NodesController : ControllerBase
                         .ExecuteUpdateAsync(s => s.SetProperty(c => c.TestContainerId, (Guid?)null), token);
                     _context.Containers.Remove(container);
                     await _context.SaveChangesAsync(token);
+                    await nginxProxySync.TrySyncNowAsync("node force cleanup destroyed container", token);
                 }
                 else
                 {
@@ -388,94 +418,20 @@ public class NodesController : ControllerBase
         var token = HttpContext.RequestAborted;
         var node = await _context.WorkerNodes.FirstOrDefaultAsync(n => n.Id == id, token);
         if (node is null) return NotFound();
-        var registryPortChanged = false;
 
         if (request.IsSchedulable.HasValue)
             node.IsSchedulable = request.IsSchedulable.Value;
 
-        if (request.RegistryPort.HasValue)
-        {
-            if (request.RegistryPort.Value is < 1 or > 65535)
-                return BadRequest(new { message = "Registry 端口必须在 1-65535 之间。" });
-            registryPortChanged = node.RegistryPort != request.RegistryPort.Value;
-            node.RegistryPort = request.RegistryPort.Value;
-        }
+        if (request.IsStorageNode.HasValue || request.RegistryPort.HasValue)
+            return BadRequest(new { message = "镜像仓库已固定为 10.24.0.28:5000，节点管理不再支持切换存储服务器。" });
 
-        DockerRegistryMigrationTask? migrationTask = null;
-        if (request.IsStorageNode.HasValue)
-        {
-            if (!request.IsStorageNode.Value && node.IsStorageNode)
-                return BadRequest(new { message = "当前存储节点不能直接关闭，请选择另一个节点设为存储节点完成切换。" });
-
-            if (request.IsStorageNode.Value)
-            {
-                if ((node.Capabilities & NodeCapability.Docker) != NodeCapability.Docker)
-                    return BadRequest(new { message = "镜像存储节点必须具备 Docker 能力。" });
-
-                await _context.SaveChangesAsync(token);
-
-                try
-                {
-                    var migration = HttpContext.RequestServices.GetRequiredService<DockerRegistryMigrationService>();
-                    migrationTask = await migration.CreateTaskAsync(node.Id, token);
-                    QueueRegistryMigration(migrationTask.Id);
-                }
-                catch (InvalidOperationException ex)
-                {
-                    return BadRequest(new { message = ex.Message });
-                }
-            }
-        }
-
-        if (migrationTask is null)
-        {
-            await _context.SaveChangesAsync(token);
-
-            if (registryPortChanged || node.IsStorageNode)
-            {
-                var registry = HttpContext.RequestServices.GetRequiredService<DockerImageRegistryService>();
-                try
-                {
-                    if (node.IsStorageNode)
-                        await registry.EnsureNodeRegistryAsync(node.Id, token);
-                    await registry.ConfigureManagedRegistryTrustAsync(token);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    _logger.LogWarning(ex,
-                        "Failed to refresh Docker registry trust after updating node {NodeId}.",
-                        node.Id);
-                }
-            }
-        }
+        await _context.SaveChangesAsync(token);
 
         return Ok(new
         {
             node.Id,
             node.IsSchedulable,
-            node.IsStorageNode,
-            node.RegistryPort,
-            RegistryAddress = $"{DockerImageRegistryService.NormalizeRegistryAddress(node.HostAddress)}:{node.RegistryPort}",
-            migrationTask = migrationTask is null ? null : ToMigrationTaskModel(migrationTask)
-        });
-    }
-
-    void QueueRegistryMigration(Guid taskId)
-    {
-        _ = Task.Run(async () =>
-        {
-            await using var scope = _scopeFactory.CreateAsyncScope();
-            var migration = scope.ServiceProvider.GetRequiredService<DockerRegistryMigrationService>();
-            var logger = scope.ServiceProvider.GetRequiredService<ILogger<NodesController>>();
-
-            try
-            {
-                await migration.RunTaskAsync(taskId, CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Docker registry migration task {TaskId} failed.", taskId);
-            }
+            node.IsLocal
         });
     }
 
@@ -582,40 +538,6 @@ public class NodesController : ControllerBase
         }.OfType<string>()
     ];
 
-    static object ToMigrationTaskModel(DockerRegistryMigrationTask task) => new
-    {
-        task.Id,
-        task.TargetNodeId,
-        TargetNodeName = task.TargetNode?.Name,
-        task.SourceRegistry,
-        task.TargetRegistry,
-        Status = task.Status.ToString(),
-        task.TotalItems,
-        task.CompletedItems,
-        task.FailedItems,
-        task.Message,
-        task.CreatedAt,
-        task.UpdatedAt,
-        task.CompletedAt,
-        Items = task.Items.Select(i => new
-        {
-            i.Id,
-            i.ImageTemplateId,
-            i.SourceImage,
-            i.TargetImage,
-            i.SourceDigest,
-            i.TargetDigest,
-            Status = i.Status.ToString(),
-            i.BytesTransferred,
-            i.TotalBytes,
-            i.RetryCount,
-            i.ErrorMessage,
-            i.CreatedAt,
-            i.UpdatedAt,
-            i.CompletedAt
-        }).ToArray()
-    };
-
     static NodeResourceItemModel ToNodeContainerResource(Container container)
     {
         var instance = container.GameInstance;
@@ -628,7 +550,7 @@ public class NodesController : ControllerBase
         return new NodeResourceItemModel
         {
             Kind = "container",
-            Id = container.Id,
+            Id = container.Id.ToString(),
             Name = challenge?.Title ?? container.Image.Split('/').LastOrDefault() ?? "Container",
             Status = status,
             IsActive = active,
@@ -663,7 +585,7 @@ public class NodesController : ControllerBase
         return new NodeResourceItemModel
         {
             Kind = "vm",
-            Id = vm.Id,
+            Id = vm.Id.ToString(),
             Name = vm.VmName,
             Status = vm.Status.ToString(),
             IsActive = active,
@@ -685,6 +607,50 @@ public class NodesController : ControllerBase
             UserName = userName,
             ProviderName = vm.ProviderName,
             OsType = vm.OSType.ToString()
+        };
+    }
+
+    static NodeResourceItemModel ToNodePentestResource(PenetrationRuntimeNode runtime)
+    {
+        var environment = runtime.Environment;
+        var container = runtime.Container;
+        var topologyNode = runtime.TopologyNode;
+        var active = runtime.Status is PenetrationRuntimeStatus.Pending
+            or PenetrationRuntimeStatus.Running
+            or PenetrationRuntimeStatus.CreatingNetworks
+            or PenetrationRuntimeStatus.CreatingContainers
+            or PenetrationRuntimeStatus.CleanupPending
+            or PenetrationRuntimeStatus.Orphaned
+            or PenetrationRuntimeStatus.ManualCleanupRequired;
+        var status = runtime.Status.ToString();
+
+        if (container is not null && container.Status is ContainerStatus.Destroyed)
+            active = false;
+
+        return new NodeResourceItemModel
+        {
+            Kind = "pentest",
+            Id = runtime.Id.ToString(),
+            Name = topologyNode?.Name ?? runtime.TopologyNodeKey,
+            Status = status,
+            IsActive = active,
+            StartedAt = runtime.CreatedAt,
+            ExpectedStopAt = null,
+            StoppedAt = active ? null : environment.UpdatedAt,
+            Duration = FormatDuration(runtime.CreatedAt, active ? DateTimeOffset.UtcNow : environment.UpdatedAt ?? runtime.CreatedAt),
+            Image = container?.Image,
+            RuntimeId = ShortenRuntimeId(container?.ContainerId ?? runtime.TopologyNodeKey),
+            Entry = runtime.AdminAccessUrl,
+            Ip = runtime.IpAddress,
+            Port = runtime.PublicPort,
+            GameId = environment.GameId,
+            GameTitle = environment.Game.Title,
+            ChallengeId = topologyNode?.Id,
+            ChallengeTitle = topologyNode?.Name,
+            ChallengeCategory = "综合渗透",
+            TeamId = environment.TeamId,
+            TeamName = environment.Team.Name,
+            ProviderName = runtime.NetworkName
         };
     }
 
@@ -718,7 +684,7 @@ public class DeploymentTargetsController : ControllerBase
     { _context = context; }
 
     [HttpGet]
-    [Authorize]
+    [RequireAdmin]
     public async Task<IActionResult> List(
         [FromQuery] TargetStatus? status = null,
         [FromQuery] int page = 1,
@@ -751,7 +717,7 @@ public class DeploymentTargetsController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
-    [Authorize]
+    [RequireAdmin]
     public async Task<IActionResult> GetById(Guid id)
     {
         var target = await _context.DeploymentTargets.FindAsync(id);

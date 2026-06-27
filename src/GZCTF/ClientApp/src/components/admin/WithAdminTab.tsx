@@ -2,7 +2,6 @@ import { Group, GroupProps, ScrollArea, Tooltip } from '@mantine/core'
 import {
   mdiAccountCogOutline,
   mdiAccountGroupOutline,
-  mdiBookOpenPageVariantOutline,
   mdiClipboardListOutline,
   mdiFileDocumentOutline,
   mdiFlagOutline,
@@ -42,7 +41,7 @@ export const WithAdminTab: FC<AdminTabProps> = ({ head, headProps, children }) =
   const allPages = useMemo<AdminNavPage[]>(
     () => [
       { icon: mdiFlagOutline, title: t('admin.tab.games.index'), path: 'games', requiredRole: Role.Teacher },
-      { icon: mdiBookOpenPageVariantOutline, title: '题库管理', path: 'theory-bank', requiredRole: Role.Teacher },
+      { icon: mdiClipboardListOutline, title: '题库管理', path: 'theory-bank', requiredRole: Role.Teacher },
       { icon: mdiImageOutline, title: '环境模板', path: 'images', requiredRole: Role.Teacher },
       { icon: mdiAccountCogOutline, title: t('admin.tab.users'), path: 'users', requiredRole: Role.Teacher },
       { icon: mdiAccountGroupOutline, title: t('admin.tab.teams'), path: 'teams', requiredRole: Role.Admin },

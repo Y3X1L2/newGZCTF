@@ -140,6 +140,7 @@ public class ScenarioController : ControllerBase
     /// <summary>
     /// List scenarios, optionally filtered by game
     /// </summary>
+    [RequireAdmin]
     [HttpGet]
     [ProducesResponseType(typeof(ArrayResponse<ScenarioListModel>), StatusCodes.Status200OK)]
     public async Task<IActionResult> ListScenarios(
@@ -177,6 +178,7 @@ public class ScenarioController : ControllerBase
     /// <summary>
     /// Get scenario details including stages
     /// </summary>
+    [RequireAdmin]
     [HttpGet("{id:int}")]
     [ProducesResponseType(typeof(ScenarioDetailModel), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
@@ -340,6 +342,9 @@ public class ScenarioController : ControllerBase
             return Unauthorized(
                 new RequestResponse(_localizer[nameof(Resources.Program.Auth_LoginRequired)]));
 
+        if (!await CanAccessGameAsync(user, scenario.GameId, token))
+            return Forbid();
+
         // Validate time slot
         var timeSlot = await _dbContext.TimeSlots
             .FirstOrDefaultAsync(t => t.Id == request.TimeSlotId && t.ScenarioId == id, token);
@@ -473,7 +478,11 @@ public class ScenarioController : ControllerBase
                 StatusCodes.Status404NotFound));
 
         var user = await _userManager.GetUserAsync(User);
-        if (user is null || instance.UserId != user.Id)
+        if (user is null)
+            return Unauthorized(
+                new RequestResponse(_localizer[nameof(Resources.Program.Auth_LoginRequired)]));
+
+        if (user.Role < Role.Admin && instance.UserId != user.Id)
             return Forbid();
 
         var stages = await _dbContext.Stages
@@ -513,7 +522,11 @@ public class ScenarioController : ControllerBase
                 StatusCodes.Status404NotFound));
 
         var user = await _userManager.GetUserAsync(User);
-        if (user is null || instance.UserId != user.Id)
+        if (user is null)
+            return Unauthorized(
+                new RequestResponse(_localizer[nameof(Resources.Program.Auth_LoginRequired)]));
+
+        if (user.Role < Role.Admin && instance.UserId != user.Id)
             return Forbid();
 
         if (instance.Status != ScenarioInstanceStatus.Active)
@@ -614,6 +627,19 @@ public class ScenarioController : ControllerBase
             InstanceStatus = instance.Status,
             CurrentStageId = instance.CurrentStageId
         });
+    }
+
+    private async Task<bool> CanAccessGameAsync(UserInfo user, int gameId, CancellationToken token)
+    {
+        if (user.Role >= Role.Teacher)
+            return true;
+
+        return await _dbContext.Set<UserParticipation>()
+            .AsNoTracking()
+            .Include(up => up.Participation)
+            .AnyAsync(up => up.UserId == user.Id
+                && up.GameId == gameId
+                && up.Participation.Status == ParticipationStatus.Accepted, token);
     }
 
     private static Dictionary<int, StageStatus> DeserializeStageStatuses(string json)

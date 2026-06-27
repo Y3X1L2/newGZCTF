@@ -610,7 +610,11 @@ public class TrainingCourseChapterTheoryPlayerQuestionModel
 
     public int Order { get; set; }
 
-    public static TrainingCourseChapterTheoryPlayerQuestionModel FromQuestion(TrainingCourseChapterTheoryQuestion question) =>
+    public List<int>? AnswerIndexes { get; set; }
+
+    public static TrainingCourseChapterTheoryPlayerQuestionModel FromQuestion(
+        TrainingCourseChapterTheoryQuestion question,
+        bool revealAnswer) =>
         new()
         {
             Id = question.Id,
@@ -619,7 +623,8 @@ public class TrainingCourseChapterTheoryPlayerQuestionModel
             Content = question.Content,
             Options = question.Options,
             Score = question.Score,
-            Order = question.Order
+            Order = question.Order,
+            AnswerIndexes = revealAnswer ? question.AnswerIndexes : null
         };
 }
 
@@ -655,8 +660,10 @@ public class TrainingCourseChapterTheoryPlayerPaperModel
 
     public static TrainingCourseChapterTheoryPlayerPaperModel FromPaper(
         TrainingCourseChapterTheoryPaper paper,
-        TrainingCourseChapterTheorySheet? sheet) =>
-        new()
+        TrainingCourseChapterTheorySheet? sheet)
+    {
+        var revealAnswer = sheet?.Status == TheoryAnswerSheetStatus.Submitted;
+        return new TrainingCourseChapterTheoryPlayerPaperModel
         {
             PaperId = paper.Id,
             CourseId = paper.CourseId,
@@ -672,7 +679,7 @@ public class TrainingCourseChapterTheoryPlayerPaperModel
             UpdatedAt = sheet?.UpdatedAt,
             Questions = paper.Questions
                 .OrderBy(q => q.Order)
-                .Select(TrainingCourseChapterTheoryPlayerQuestionModel.FromQuestion)
+                .Select(q => TrainingCourseChapterTheoryPlayerQuestionModel.FromQuestion(q, revealAnswer))
                 .ToList(),
             Answers = sheet?.Answers
                 .Select(a => new TheoryAnswerModel
@@ -682,6 +689,7 @@ public class TrainingCourseChapterTheoryPlayerPaperModel
                 })
                 .ToList() ?? []
         };
+    }
 }
 
 public class TrainingCourseImageTemplateModel
@@ -699,6 +707,8 @@ public class TrainingCourseImageTemplateModel
     public long FileSize { get; set; }
 
     public string? Description { get; set; }
+
+    public string? ErrorMessage { get; set; }
 
     public string? ImageHash { get; set; }
 
@@ -718,6 +728,7 @@ public class TrainingCourseImageTemplateModel
             Status = template.Status,
             FileSize = template.FileSize,
             Description = template.Description,
+            ErrorMessage = template.ErrorMessage,
             ImageHash = template.ImageHash,
             RegistryUrl = template.RegistryUrl,
             UploadedAt = template.UploadedAt,
@@ -830,6 +841,8 @@ public class TrainingCourseModel
 
     public TrainingCourseProgressStatus? ProgressStatus { get; set; }
 
+    public DateTimeOffset? LastStudiedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
@@ -873,6 +886,7 @@ public class TrainingCourseModel
             CompletedChapterCount = progress?.CompletedChapterCount ?? 0,
             TotalChapterCount = progress?.TotalChapterCount ?? course.Chapters.Count(c => c.IsPublished),
             ProgressStatus = progress?.Status,
+            LastStudiedAt = progress?.UpdatedAt,
             CreatedAt = course.CreatedAt,
             UpdatedAt = course.UpdatedAt,
             Teachers = course.Teachers

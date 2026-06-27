@@ -1354,6 +1354,13 @@ export interface ChallengeInfoModel {
   category?: ChallengeCategory;
   /** Challenge type */
   type?: ChallengeType;
+  /** Container image name and tag. Required when creating a container challenge. */
+  containerImage?: string | null;
+  /**
+   * Container exposed port. Required when creating a container challenge.
+   * @format int32
+   */
+  exposePort?: number | null;
   /** Is the challenge enabled */
   isEnabled?: boolean;
   /**

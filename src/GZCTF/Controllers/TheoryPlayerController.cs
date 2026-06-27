@@ -126,6 +126,7 @@ public class TheoryPlayerController(
         return Ok(TheoryPlayerPaperModel.FromPaper(paper, sheet));
     }
 
+    [RequireUser]
     [HttpGet("games/{gameId:int}/scoreboard")]
     [ProducesResponseType(typeof(TheoryScoreboardItemModel[]), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
@@ -140,6 +141,18 @@ public class TheoryPlayerController(
 
         if (DateTimeOffset.UtcNow < game.StartTimeUtc)
             return BadRequest(new RequestResponse("Game has not started."));
+
+        var user = await userManager.GetUserAsync(User);
+        if (user is null)
+            return Unauthorized(new RequestResponse("Login is required.", StatusCodes.Status401Unauthorized));
+
+        if (user.Role < Role.Teacher)
+        {
+            var participation = await participationRepository.GetParticipation(user.Id, game.Id, token);
+            if (participation is null || participation.Status != ParticipationStatus.Accepted)
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    new RequestResponse("Accepted participation is required.", StatusCodes.Status403Forbidden));
+        }
 
         var results = await theoryService.BuildResults(gameId, token);
         return Ok(results.Scoreboard.ToArray());

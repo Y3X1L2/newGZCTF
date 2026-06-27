@@ -144,6 +144,7 @@ export default function IRChallengePlayer({ challengeId }: { challengeId: number
             component="a"
             href={instance.accessDetails.windows.connectionUrl}
             target="_blank"
+            rel="noopener noreferrer"
             color="teal"
             fullWidth
           >

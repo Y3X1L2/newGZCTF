@@ -1,7 +1,10 @@
 using System.Net.Mime;
 using GZCTF.Middlewares;
+using GZCTF.Models.Data;
 using GZCTF.Services;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Controllers;
 
@@ -16,13 +19,19 @@ namespace GZCTF.Controllers;
 [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status403Forbidden)]
 public class LeaderboardController : ControllerBase
 {
+    private readonly AppDbContext _dbContext;
+    private readonly UserManager<UserInfo> _userManager;
     private readonly LeaderboardService _leaderboardService;
     private readonly ILogger<LeaderboardController> _logger;
 
     public LeaderboardController(
+        AppDbContext dbContext,
+        UserManager<UserInfo> userManager,
         LeaderboardService leaderboardService,
         ILogger<LeaderboardController> logger)
     {
+        _dbContext = dbContext;
+        _userManager = userManager;
         _leaderboardService = leaderboardService;
         _logger = logger;
     }
@@ -41,6 +50,21 @@ public class LeaderboardController : ControllerBase
         [FromRoute] int challengeId,
         CancellationToken token)
     {
+        var challenge = await _dbContext.GameChallenges
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == challengeId
+                && (c.Type == ChallengeType.Scenario || c.Type == ChallengeType.IRChallenge), token);
+
+        if (challenge is null || !challenge.IsEnabled)
+            return NotFound(new RequestResponse("Challenge not found.", StatusCodes.Status404NotFound));
+
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+            return Unauthorized(new RequestResponse("Login required.", StatusCodes.Status401Unauthorized));
+
+        if (!await CanAccessGameAsync(user, challenge.GameId, token))
+            return Forbid();
+
         var entries = await _leaderboardService.GetLeaderboardAsync(challengeId);
 
         _logger.LogDebug(
@@ -60,6 +84,19 @@ public class LeaderboardController : ControllerBase
             }).ToList(),
             GeneratedAt = DateTimeOffset.UtcNow
         });
+    }
+
+    private async Task<bool> CanAccessGameAsync(UserInfo user, int gameId, CancellationToken token)
+    {
+        if (user.Role >= Role.Teacher)
+            return true;
+
+        return await _dbContext.Set<UserParticipation>()
+            .AsNoTracking()
+            .Include(up => up.Participation)
+            .AnyAsync(up => up.UserId == user.Id
+                && up.GameId == gameId
+                && up.Participation.Status == ParticipationStatus.Accepted, token);
     }
 }
 

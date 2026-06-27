@@ -25,7 +25,7 @@ public class TrainingCourseAdminController(
     IBlobRepository blobRepository,
     DockerImageRegistryService dockerRegistry,
     TheoryExamService theoryService,
-    ContainerOrchestrator containerOrchestrator,
+    IServiceScopeFactory scopeFactory,
     ILogger<TrainingCourseAdminController> logger) : ControllerBase
 {
     private async Task<UserInfo> CurrentUser() =>
@@ -246,21 +246,36 @@ public class TrainingCourseAdminController(
         });
     }
 
-    private async Task QueueCourseDockerPull(ImageTemplate template, string registryUrl, string imageName,
-        string? registryAuth)
+    private async Task QueueCourseDockerPull(int templateId, string registryUrl, string imageName, string? registryAuth)
     {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var scopedContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var scopedOrchestrator = scope.ServiceProvider.GetRequiredService<ContainerOrchestrator>();
+
         try
         {
-            await containerOrchestrator.PullImageFromRegistryAsync(registryUrl, imageName, registryAuth);
-            template.Status = ImageStatus.Ready;
-            await context.SaveChangesAsync();
+            await scopedOrchestrator.PullImageFromRegistryAsync(registryUrl, imageName, registryAuth);
+            await scopedContext.ImageTemplates
+                .Where(t => t.Id == templateId)
+                .ExecuteUpdateAsync(updates => updates
+                    .SetProperty(t => t.Status, ImageStatus.Ready)
+                    .SetProperty(t => t.ErrorMessage, (string?)null));
         }
         catch (Exception ex)
         {
-            template.Status = ImageStatus.Error;
-            await context.SaveChangesAsync();
-            logger.LogWarning(ex, "Failed to pull course Docker image {Image}", template.RegistryUrl);
+            await scopedContext.ImageTemplates
+                .Where(t => t.Id == templateId)
+                .ExecuteUpdateAsync(updates => updates
+                    .SetProperty(t => t.Status, ImageStatus.Error)
+                    .SetProperty(t => t.ErrorMessage, TruncateError(ex.Message)));
+            logger.LogWarning(ex, "Failed to pull course Docker image template {TemplateId}", templateId);
         }
+    }
+
+    private static string TruncateError(string? message)
+    {
+        var value = string.IsNullOrWhiteSpace(message) ? "Docker image operation failed." : message.Trim();
+        return value.Length <= 1024 ? value : value[..1024];
     }
 
     private static void FillCourse(TrainingCourse course, TrainingCourseEditModel model, UserInfo actor)
@@ -629,8 +644,58 @@ public class TrainingCourseAdminController(
         if (chapter is null)
             return NotFound();
 
+        await using var transaction = await context.Database.BeginTransactionAsync(token);
+
+        await context.TrainingCourseChapters
+            .Where(c => c.CourseId == courseId && c.ParentId == chapterId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.ParentId, (int?)null), token);
+
+        var paperIds = await context.TrainingCourseChapterTheoryPapers
+            .Where(p => p.CourseId == courseId && p.ChapterId == chapterId)
+            .Select(p => p.Id)
+            .ToArrayAsync(token);
+
+        if (paperIds.Length > 0)
+        {
+            var sheetIds = await context.TrainingCourseChapterTheorySheets
+                .Where(s => s.CourseId == courseId && s.ChapterId == chapterId)
+                .Select(s => s.Id)
+                .ToArrayAsync(token);
+
+            if (sheetIds.Length > 0)
+                await context.TrainingCourseChapterTheoryAnswers
+                    .Where(a => sheetIds.Contains(a.SheetId))
+                    .ExecuteDeleteAsync(token);
+
+            await context.TrainingCourseChapterTheorySheets
+                .Where(s => s.CourseId == courseId && s.ChapterId == chapterId)
+                .ExecuteDeleteAsync(token);
+
+            await context.TrainingCourseChapterTheoryQuestions
+                .Where(q => paperIds.Contains(q.PaperId))
+                .ExecuteDeleteAsync(token);
+
+            await context.TrainingCourseChapterTheoryPapers
+                .Where(p => paperIds.Contains(p.Id))
+                .ExecuteDeleteAsync(token);
+        }
+
+        await context.TrainingCourseSubmissions
+            .Where(s => s.CourseId == courseId && s.ChapterId == chapterId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(s => s.ChapterId, (int?)null), token);
+
+        await context.TrainingChapterProgresses
+            .Where(p => p.CourseId == courseId && p.ChapterId == chapterId)
+            .ExecuteDeleteAsync(token);
+
+        await context.TrainingCourseChapterChallenges
+            .Where(c => c.CourseId == courseId && c.ChapterId == chapterId)
+            .ExecuteDeleteAsync(token);
+
         context.TrainingCourseChapters.Remove(chapter);
         await context.SaveChangesAsync(token);
+        await transaction.CommitAsync(token);
+
         return Ok();
     }
 
@@ -1058,6 +1123,7 @@ public class TrainingCourseAdminController(
         template.RegistryUrl = imageReference;
         template.RegistryAuth = model.RegistryAuth;
         template.Status = ImageStatus.Importing;
+        template.ErrorMessage = null;
         template.UploadedAt = DateTimeOffset.UtcNow;
         template.TrainingCourseId = courseId;
 
@@ -1065,7 +1131,7 @@ public class TrainingCourseAdminController(
             context.ImageTemplates.Add(template);
         await context.SaveChangesAsync(token);
 
-        _ = QueueCourseDockerPull(template, pullTarget.RegistryUrl, pullTarget.ImageName, model.RegistryAuth);
+        _ = Task.Run(() => QueueCourseDockerPull(template.Id, pullTarget.RegistryUrl, pullTarget.ImageName, model.RegistryAuth));
 
         return Ok(TrainingCourseImageTemplateModel.FromTemplate(template));
     }
@@ -1103,7 +1169,16 @@ public class TrainingCourseAdminController(
         if (ext is not ".tar" and not ".tar.gz" and not ".tgz")
             return BadRequest(new RequestResponse("仅支持 .tar、.tar.gz、.tgz 格式的 Docker 镜像包。"));
 
-        var targetImage = dockerRegistry.BuildInternalImageReference(repository, tag);
+        string targetImage;
+        try
+        {
+            targetImage = dockerRegistry.BuildInternalImageReference(repository, tag);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new RequestResponse(ex.Message));
+        }
+
         var displayName = name.Trim();
         var existingTemplate = await context.ImageTemplates.FirstOrDefaultAsync(t =>
             t.ImageType == ImageType.Docker &&
@@ -1129,6 +1204,7 @@ public class TrainingCourseAdminController(
             template.RegistryUrl = result.FullImage;
             template.RegistryAuth = null;
             template.Status = ImageStatus.Ready;
+            template.ErrorMessage = null;
             template.UploadedAt = DateTimeOffset.UtcNow;
             template.FileSize = file.Length;
             template.ImageHash = result.ImageId?.Replace("sha256:", string.Empty, StringComparison.OrdinalIgnoreCase);
@@ -1463,7 +1539,7 @@ public class TrainingCourseAdminController(
 
         if (model.ChapterId.HasValue &&
             !await context.TrainingCourseChapters.AnyAsync(c => c.Id == model.ChapterId.Value && c.CourseId == courseId, token))
-            return BadRequest(new RequestResponse("????????"));
+            return BadRequest(new RequestResponse("课程章节不存在。"));
 
         await SetCourseChallengeChapterLink(courseId, model.ExerciseChallengeId, model.ChapterId, model.Order, token);
 

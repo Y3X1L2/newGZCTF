@@ -134,6 +134,7 @@ public class IRChallengeController : ControllerBase
     /// <param name="count">Page size (max 50)</param>
     /// <param name="skip">Items to skip</param>
     /// <param name="token"></param>
+    [RequirePrivilege(Role.Admin)]
     [HttpGet]
     [ProducesResponseType(typeof(ArrayResponse<IRChallengeListItemModel>), StatusCodes.Status200OK)]
     public async Task<IActionResult> List(
@@ -176,6 +177,7 @@ public class IRChallengeController : ControllerBase
     /// </summary>
     /// <param name="id">Challenge ID</param>
     /// <param name="token"></param>
+    [RequirePrivilege(Role.Admin)]
     [HttpGet("{id}")]
     [ProducesResponseType(typeof(IRChallengeDetailModel), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
@@ -361,6 +363,9 @@ public class IRChallengeController : ControllerBase
         if (user is null)
             return Unauthorized(new RequestResponse("User not found", StatusCodes.Status401Unauthorized));
 
+        if (!await CanAccessGameAsync(user, challenge.GameId, token))
+            return Forbid();
+
         // Check for existing active instance
         var existingInstance = await _context.IRInstances
             .FirstOrDefaultAsync(i => i.ChallengeId == id && i.UserId == user.Id
@@ -512,6 +517,13 @@ public class IRChallengeController : ControllerBase
         if (instance is null)
             return NotFound(new RequestResponse("IR instance not found", StatusCodes.Status404NotFound));
 
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+            return Unauthorized(new RequestResponse("Login required.", StatusCodes.Status401Unauthorized));
+
+        if (user.Role < Role.Admin && instance.UserId != user.Id)
+            return Forbid();
+
         var detail = await IRInstanceDetailModel.FromInstanceAsync(instance, _context, token);
         return Ok(detail);
     }
@@ -539,6 +551,13 @@ public class IRChallengeController : ControllerBase
 
         if (instance is null)
             return NotFound(new RequestResponse("IR instance not found", StatusCodes.Status404NotFound));
+
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+            return Unauthorized(new RequestResponse("Login required.", StatusCodes.Status401Unauthorized));
+
+        if (user.Role < Role.Admin && instance.UserId != user.Id)
+            return Forbid();
 
         if (instance.EnvironmentStatus != EnvironmentStatus.Ready)
             return BadRequest(new RequestResponse("Environment is not ready"));
@@ -666,6 +685,13 @@ public class IRChallengeController : ControllerBase
         if (instance is null)
             return NotFound(new RequestResponse("IR instance not found", StatusCodes.Status404NotFound));
 
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+            return Unauthorized(new RequestResponse("Login required.", StatusCodes.Status401Unauthorized));
+
+        if (user.Role < Role.Admin && instance.UserId != user.Id)
+            return Forbid();
+
         if (instance.EnvironmentStatus == EnvironmentStatus.Creating)
             return BadRequest(new RequestResponse("Environment is still being created"));
 
@@ -764,6 +790,19 @@ public class IRChallengeController : ControllerBase
     #endregion
 
     #region Helpers
+
+    private async Task<bool> CanAccessGameAsync(UserInfo user, int gameId, CancellationToken token)
+    {
+        if (user.Role >= Role.Teacher)
+            return true;
+
+        return await _context.Set<UserParticipation>()
+            .AsNoTracking()
+            .Include(up => up.Participation)
+            .AnyAsync(up => up.UserId == user.Id
+                && up.GameId == gameId
+                && up.Participation.Status == ParticipationStatus.Accepted, token);
+    }
 
     private static bool VerifyManualAnswer(string? verificationConfig, string answer)
     {

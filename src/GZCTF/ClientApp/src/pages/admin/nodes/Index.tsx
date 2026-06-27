@@ -18,7 +18,6 @@ import {
   mdiCheckboxMarkedCircleOutline,
   mdiClockOutline,
   mdiConsoleNetworkOutline,
-  mdiDatabaseOutline,
   mdiDeleteOutline,
   mdiDocker,
   mdiHistory,
@@ -47,11 +46,11 @@ import {
 import { YinyuStatusText } from '@Components/yinyu/YinyuReactBits'
 
 type StatusFilter = 'all' | 'online' | 'offline' | 'busy' | 'error'
-type ResourceTypeFilter = 'all' | 'container' | 'vm'
+type ResourceTypeFilter = 'all' | 'container' | 'vm' | 'pentest'
 type ResourceStatusFilter = 'all' | 'active' | 'history'
 
 interface NodeResourceItem {
-  kind: 'container' | 'vm'
+  kind: 'container' | 'vm' | 'pentest'
   id: string
   name: string
   status: string
@@ -87,6 +86,7 @@ interface NodeResourceListResponse {
   runningCount: number
   containerCount: number
   vmCount: number
+  pentestCount: number
   items: NodeResourceItem[]
 }
 
@@ -261,7 +261,14 @@ function resourceStatusTone(item: NodeResourceItem): YinyuStatusTone {
   if (item.isActive && (status.includes('running') || status.includes('creating') || status.includes('pending'))) {
     return 'success'
   }
-  if (status.includes('error') || status.includes('failed')) return 'danger'
+  if (
+    status.includes('error') ||
+    status.includes('failed') ||
+    status.includes('orphaned') ||
+    status.includes('manualcleanup')
+  )
+    return 'danger'
+  if (status.includes('cleanup')) return 'warm'
   if (status.includes('destroyed') || status.includes('stopped')) return 'neutral'
   return 'warm'
 }
@@ -269,10 +276,15 @@ function resourceStatusTone(item: NodeResourceItem): YinyuStatusTone {
 function resourceStatusLabel(item: NodeResourceItem) {
   const status = item.status.toLowerCase()
   if (status.includes('running')) return '运行中'
+  if (status.includes('creatingnetworks')) return '创建网络中'
+  if (status.includes('creatingcontainers')) return '创建容器中'
   if (status.includes('creating') || status.includes('pending')) return '开启中'
+  if (status.includes('cleanuppending')) return '清理中'
+  if (status.includes('orphaned')) return '孤儿资源'
+  if (status.includes('manualcleanup')) return '需人工清理'
   if (status.includes('destroyed')) return '已销毁'
   if (status.includes('stopped')) return '已停止'
-  if (status.includes('error')) return '异常'
+  if (status.includes('error') || status.includes('failed')) return '异常'
   return item.status
 }
 
@@ -286,6 +298,24 @@ function resourceEntry(item: NodeResourceItem) {
   if (item.entry) return item.entry
   if (item.ip && item.port) return `${item.ip}:${item.port}`
   return item.ip ?? '-'
+}
+
+function resourceKindLabel(item: NodeResourceItem) {
+  if (item.kind === 'container') return '容器'
+  if (item.kind === 'vm') return '虚拟机'
+  return '综合渗透'
+}
+
+function resourceKindTone(item: NodeResourceItem): YinyuStatusTone {
+  if (item.kind === 'container') return 'success'
+  if (item.kind === 'vm') return 'warm'
+  return 'neutral'
+}
+
+function resourceKindIcon(item: NodeResourceItem) {
+  if (item.kind === 'container') return mdiDocker
+  if (item.kind === 'vm') return mdiConsoleNetworkOutline
+  return mdiShieldSearch
 }
 
 function ResourceMeta({ label, value }: { label: string; value?: string | number | null }) {
@@ -311,7 +341,7 @@ function NodeResourceRow({
   onDestroy: (item: NodeResourceItem) => void
 }) {
   const tone = resourceStatusTone(item)
-  const kindLabel = item.kind === 'container' ? '容器' : '虚拟机'
+  const kindLabel = resourceKindLabel(item)
   const canDestroy = item.isActive
 
   return (
@@ -319,7 +349,7 @@ function NodeResourceRow({
       <Group justify="space-between" align="flex-start" gap="md" wrap="nowrap" className="yy-node-resource-row-main">
         <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
           <div className="yy-node-resource-kind" data-kind={item.kind}>
-            <Icon path={item.kind === 'container' ? mdiDocker : mdiConsoleNetworkOutline} size={0.95} />
+            <Icon path={resourceKindIcon(item)} size={0.95} />
           </div>
           <Stack gap={4} style={{ minWidth: 0 }}>
             <Group gap="xs" wrap="nowrap">
@@ -331,7 +361,7 @@ function NodeResourceRow({
               </YinyuStatusText>
             </Group>
             <Group gap="xs" wrap="wrap">
-              <YinyuStatusPill tone={item.kind === 'container' ? 'success' : 'warm'} state="open">
+              <YinyuStatusPill tone={resourceKindTone(item)} state="open">
                 {kindLabel}
               </YinyuStatusPill>
               {item.challengeCategory && (
@@ -344,18 +374,23 @@ function NodeResourceRow({
                   {item.osType}
                 </Text>
               )}
+              {item.providerName && (
+                <Text size="xs" className="yy-node-resource-token">
+                  {item.providerName}
+                </Text>
+              )}
             </Group>
           </Stack>
         </Group>
         <Group gap="xs" wrap="nowrap">
           {item.entry && item.entry.startsWith('http') && (
             <Tooltip label="打开入口">
-              <ActionIcon component="a" href={item.entry} target="_blank" rel="noreferrer" variant="subtle">
+              <ActionIcon component="a" href={item.entry} target="_blank" rel="noopener noreferrer" variant="subtle">
                 <Icon path={mdiOpenInNew} size={0.78} />
               </ActionIcon>
             </Tooltip>
           )}
-          <Tooltip label={canDestroy ? '销毁实例' : '历史实例不可销毁'}>
+          <Tooltip label={canDestroy ? (item.kind === 'pentest' ? '清理队伍环境' : '销毁实例') : '历史实例不可销毁'}>
             <ActionIcon color="red" variant="subtle" disabled={!canDestroy || disabled} onClick={() => onDestroy(item)}>
               <Icon path={mdiDeleteOutline} size={0.82} />
             </ActionIcon>
@@ -368,7 +403,7 @@ function NodeResourceRow({
         <ResourceMeta label="开启时间" value={formatTime(item.startedAt)} />
         <ResourceMeta label="持续时间" value={item.duration} />
         <ResourceMeta label="开放地址" value={resourceEntry(item)} />
-        <ResourceMeta label="比赛/题目" value={[item.gameTitle, item.challengeTitle].filter(Boolean).join(' / ')} />
+        <ResourceMeta label={item.kind === 'pentest' ? '比赛/资产' : '比赛/题目'} value={[item.gameTitle, item.challengeTitle].filter(Boolean).join(' / ')} />
         <ResourceMeta label="运行标识" value={item.runtimeId} />
       </SimpleGrid>
     </article>
@@ -420,22 +455,33 @@ function NodeResourcePanel({
   }, [loadResources, version])
 
   const destroyResource = async (item: NodeResourceItem) => {
-    if (!confirm(`确定销毁 ${item.kind === 'container' ? '容器' : '虚拟机'} "${item.name}" 吗？`)) return
+    const actionLabel = item.kind === 'pentest' ? '清理该队伍的综合渗透环境' : `销毁 ${resourceKindLabel(item)}`
+    if (!confirm(`确定${actionLabel} "${item.name}" 吗？`)) return
 
     setDisabled(true)
     try {
-      const endpoint =
-        item.kind === 'container' ? `/api/admin/instances/${item.id}` : `/api/v1/nodes/vms/${item.id}/admin`
-      const res = await fetch(endpoint, { method: 'DELETE' })
+      let endpoint = item.kind === 'container' ? `/api/admin/instances/${item.id}` : `/api/v1/nodes/vms/${item.id}/admin`
+      let method = 'DELETE'
+
+      if (item.kind === 'pentest') {
+        if (!item.gameId || !item.teamId) {
+          notifications.show({ title: '清理失败', message: '该渗透资源缺少比赛或队伍信息', color: 'red' })
+          return
+        }
+        endpoint = `/api/admin/pentest/games/${item.gameId}/teams/${item.teamId}/cleanup`
+        method = 'POST'
+      }
+
+      const res = await fetch(endpoint, { method })
       if (res.ok) {
-        notifications.show({ title: '销毁任务已执行', message: `${item.name} 已进入清理流程`, color: 'green' })
+        notifications.show({ title: item.kind === 'pentest' ? '清理任务已执行' : '销毁任务已执行', message: `${item.name} 已进入清理流程`, color: 'green' })
         loadResources()
       } else {
         const body = await res.json().catch(() => ({}))
-        notifications.show({ title: '销毁失败', message: body.message || '请检查实例状态和节点连通性', color: 'red' })
+        notifications.show({ title: item.kind === 'pentest' ? '清理失败' : '销毁失败', message: body.message || '请检查实例状态和节点连通性', color: 'red' })
       }
     } catch {
-      notifications.show({ title: '销毁失败', message: '网络错误', color: 'red' })
+      notifications.show({ title: item.kind === 'pentest' ? '清理失败' : '销毁失败', message: '网络错误', color: 'red' })
     } finally {
       setDisabled(false)
     }
@@ -481,7 +527,7 @@ function NodeResourcePanel({
           <YinyuMetricTile label="运行中" value={data?.runningCount ?? 0} detail="active" tone="success" />
           <YinyuMetricTile label="容器记录" value={data?.containerCount ?? 0} detail="docker" tone="neutral" />
           <YinyuMetricTile label="虚拟机记录" value={data?.vmCount ?? 0} detail="kvm" tone="warm" />
-          <YinyuMetricTile label="全部记录" value={data?.total ?? 0} detail="paged" tone="neutral" />
+          <YinyuMetricTile label="渗透资产" value={data?.pentestCount ?? 0} detail="pentest" tone="neutral" />
         </SimpleGrid>
 
         <Group justify="space-between" align="end" className="yy-node-resource-toolbar">
@@ -494,6 +540,7 @@ function NodeResourcePanel({
                 { value: 'all', label: '全部资源' },
                 { value: 'container', label: '容器' },
                 { value: 'vm', label: '虚拟机' },
+                { value: 'pentest', label: '综合渗透' },
               ]}
               w={150}
             />
@@ -555,7 +602,6 @@ export default function NodesPage() {
   const [filter, setFilter] = useState<StatusFilter>('all')
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [resourceVersion, setResourceVersion] = useState(0)
-  const [storageUpdating, setStorageUpdating] = useState<string | null>(null)
 
   const loadNodes = useCallback(async () => {
     try {
@@ -579,7 +625,6 @@ export default function NodesPage() {
       online,
       offline: nodes.length - online,
       schedulable: nodes.filter((node) => node.isSchedulable && statusKey(node.status) === 'online').length,
-      storage: nodes.filter((node) => node.isStorageNode).length,
     }
   }, [nodes])
 
@@ -645,42 +690,6 @@ export default function NodesPage() {
     }
   }
 
-  const setStorageNode = async (node: NodeInfo) => {
-    if (node.isStorageNode) return
-    if (!confirm(`确定将 "${node.name || node.hostAddress}" 设为镜像存储服务器吗？平台会先同步并校验现有 Docker 镜像，全部成功后才会切换。`)) return
-
-    setStorageUpdating(node.id)
-    try {
-      const res = await fetch(`/api/v1/nodes/${node.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isStorageNode: true, registryPort: node.registryPort ?? 5000 }),
-      })
-      const data = await res.json().catch(() => ({}))
-
-      if (res.ok) {
-        notifications.show({
-          title: '迁移任务已启动',
-          message: data.migrationTask?.message || '正在准备 Registry 并同步镜像，可在环境模板页查看进度。',
-          color: 'green',
-          autoClose: 9000,
-        })
-        loadNodes()
-      } else {
-        notifications.show({
-          title: '切换失败',
-          message: data.message || '无法启动镜像存储切换任务',
-          color: 'red',
-          autoClose: 9000,
-        })
-      }
-    } catch {
-      notifications.show({ title: '切换失败', message: '网络错误', color: 'red' })
-    } finally {
-      setStorageUpdating(null)
-    }
-  }
-
   return (
     <AdminPage>
       <Stack data-testid="nodes-page" gap="lg" w="100%">
@@ -706,7 +715,7 @@ export default function NodesPage() {
           <MetricTile label="全部节点" value={stats.total} tone="gray" />
           <MetricTile label="在线节点" value={stats.online} tone="teal" />
           <MetricTile label="离线/异常" value={stats.offline} tone={stats.offline > 0 ? 'red' : 'gray'} />
-          <MetricTile label="镜像存储" value={stats.storage} tone={stats.storage > 0 ? 'teal' : 'red'} />
+          <MetricTile label="参与调度" value={stats.schedulable} tone={stats.schedulable > 0 ? 'teal' : 'gray'} />
         </SimpleGrid>
 
         <YinyuPanel p="md" className="admin-panel yy-admin-nodes-panel" cells={72}>
@@ -752,21 +761,6 @@ export default function NodesPage() {
                     }}
                     rightSection={
                       <Group gap={4} wrap="nowrap">
-                        <Tooltip label={node.isStorageNode ? '当前镜像存储服务器' : '设为镜像存储服务器'}>
-                          <ActionIcon
-                            color={node.isStorageNode ? 'teal' : 'gray'}
-                            variant={node.isStorageNode ? 'light' : 'subtle'}
-                            size="sm"
-                            loading={storageUpdating === node.id}
-                            disabled={node.isStorageNode || storageUpdating !== null}
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              setStorageNode(node)
-                            }}
-                          >
-                            <Icon path={mdiDatabaseOutline} size={0.82} />
-                          </ActionIcon>
-                        </Tooltip>
                         {!node.isLocal && (
                           <Tooltip label="删除节点">
                             <ActionIcon

@@ -3,6 +3,7 @@ using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Cache;
 using GZCTF.Services.Container.Manager;
+using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
@@ -13,6 +14,7 @@ public class ContainerRepository(
     IDistributedCache cache,
     IContainerManager service,
     IOptions<ContainerProvider> containerProvider,
+    INginxProxySyncService nginxProxySync,
     ILogger<ContainerRepository> logger,
     AppDbContext context) : RepositoryBase(context), IContainerRepository
 {
@@ -92,6 +94,7 @@ public class ContainerRepository(
 
             Context.Containers.Remove(container);
             await SaveAsync(token);
+            await nginxProxySync.TrySyncNowAsync("container destroyed", token);
 
             return true;
         }

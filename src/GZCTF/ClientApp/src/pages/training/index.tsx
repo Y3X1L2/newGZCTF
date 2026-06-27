@@ -59,6 +59,9 @@ const emptyCourseDraft = (): TrainingCourseEditModel => ({
 const courseMatches = (course: TrainingCourseModel, keywords: RegExp) =>
   trainingTags(course).some((tag) => keywords.test(tag)) || keywords.test(course.title)
 
+const courseRecentTime = (course: TrainingCourseModel) =>
+  course.lastStudiedAt ?? (course.progressStatus ? course.updatedAt : 0)
+
 const Training: FC = () => {
   const [courses, setCourses] = useState<TrainingCourseModel[]>([])
   const [overview, setOverview] = useState<TrainingPersonalOverviewModel | null>(null)
@@ -76,7 +79,7 @@ const Training: FC = () => {
     () =>
       courses
         .filter((course) => course.canLearn || course.progressStatus)
-        .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)),
+        .sort((a, b) => courseRecentTime(b) - courseRecentTime(a) || b.updatedAt - a.updatedAt),
     [courses]
   )
   const recent = useMemo(
@@ -213,7 +216,7 @@ const Training: FC = () => {
                 <TrainingStatusText tone="ongoing">{recent.length}/{Math.min(3, showcase.length || 3)}</TrainingStatusText>
               </Group>
               {recent.length ? (
-                <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="md">
+                <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="md" className="yy-training-course-grid">
                   {recent.map((course) => (
                     <TrainingCourseCard key={course.id} course={course} featured actionLabel={canCreate ? '管理课程' : '继续学习'} />
                   ))}

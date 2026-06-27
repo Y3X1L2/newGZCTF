@@ -84,6 +84,7 @@ const ChapterTheoryEditPage: FC = () => {
   const [bankFilter, setBankFilter] = useState<string>('All')
   const [uniformScore, setUniformScore] = useState(5)
   const [randomCount, setRandomCount] = useState(5)
+  const [passRateInput, setPassRateInput] = useState<string | number>(60)
   const [saving, setSaving] = useState(false)
 
   const bankNames = useMemo(() => {
@@ -119,6 +120,7 @@ const ChapterTheoryEditPage: FC = () => {
       setCourse(courseRes.data)
       setChapter(chapterRes.data)
       setPaper(paperRes.data)
+      setPassRateInput(paperRes.data.passRate)
       setQuestions(questionRes.data)
     } catch (err) {
       showErrorMsg(err, (key) => key)
@@ -152,16 +154,23 @@ const ChapterTheoryEditPage: FC = () => {
 
   const savePaper = async (publish?: boolean) => {
     if (!paper) return
+    const passRate = typeof passRateInput === 'number' ? passRateInput : Number(passRateInput)
+    if (!Number.isFinite(passRate) || passRate < 1 || passRate > 100) {
+      showNotification({ color: 'red', message: '请输入 1-100 之间的及格线。' })
+      return
+    }
+
     setSaving(true)
     try {
       const res = await trainingCourseAdminApi.saveChapterTheoryPaper(courseNum, chapterNum, {
         title: paper.title.trim(),
         description: paper.description,
-        passRate: paper.passRate,
+        passRate: Math.round(passRate),
         isPublished: publish ?? paper.isPublished,
         questions: normalizeOrder(paper.questions).map((question, index) => ({ ...question, order: index + 1 })),
       })
       setPaper(res.data)
+      setPassRateInput(res.data.passRate)
       showNotification({ color: 'teal', message: publish ?? paper.isPublished ? '课后测试已保存并发放。' : '课后测试草稿已保存。' })
     } catch (err) {
       showErrorMsg(err, (key) => key)
@@ -223,8 +232,8 @@ const ChapterTheoryEditPage: FC = () => {
                     label="及格线百分比"
                     min={1}
                     max={100}
-                    value={paper.passRate}
-                    onChange={(value) => setPaper({ ...paper, passRate: Number(value) || 60 })}
+                    value={passRateInput}
+                    onChange={(value) => setPassRateInput(value === '' ? '' : value)}
                   />
                 </SimpleGrid>
                 <Textarea

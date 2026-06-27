@@ -343,11 +343,34 @@ public class GameController(
     /// <param name="token"></param>
     /// <response code="200">Successfully retrieved game information</response>
     /// <response code="400">Game not found</response>
+    [RequireUser]
     [HttpGet("{id:int}/Scoreboard")]
     [ProducesResponseType(typeof(ScoreboardModel), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Scoreboard([FromRoute] int id, CancellationToken token)
     {
+        var game = await gameRepository.GetGameById(id, token);
+        if (game is null)
+            return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Game_NotFound)],
+                StatusCodes.Status404NotFound));
+
+        if (DateTimeOffset.UtcNow < game.StartTimeUtc)
+            return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Game_NotStarted)]));
+
+        var user = await userManager.GetUserAsync(User);
+        if (user is null)
+            return Unauthorized(new RequestResponse(localizer[nameof(Resources.Program.Auth_LoginRequired)],
+                StatusCodes.Status401Unauthorized));
+
+        if (user.Role < Role.Teacher)
+        {
+            var part = await participationRepository.GetParticipation(user.Id, id, token);
+            if (part is null || part.Status != ParticipationStatus.Accepted)
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    new RequestResponse(localizer[nameof(Resources.Program.Auth_AccessForbidden)],
+                        StatusCodes.Status403Forbidden));
+        }
+
         var scoreboard = await gameRepository.TryGetScoreboard(id, token);
         string eTag;
         if (scoreboard is not null)
@@ -358,15 +381,6 @@ public class GameController(
 
             return Ok(scoreboard);
         }
-
-        var game = await gameRepository.GetGameById(id, token);
-
-        if (game is null)
-            return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Game_NotFound)],
-                StatusCodes.Status404NotFound));
-
-        if (DateTimeOffset.UtcNow < game.StartTimeUtc)
-            return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Game_NotStarted)]));
 
         scoreboard = await gameRepository.GetScoreboard(game, token);
         var lastModified = scoreboard.UpdateTimeUtc;
@@ -1372,6 +1386,10 @@ public class GameController(
         if (!instance.Challenge.Type.IsContainer())
             return BadRequest(
                 new RequestResponse(localizer[nameof(Resources.Program.Game_ContainerCreationNotAllowed)]));
+
+        if (string.IsNullOrWhiteSpace(instance.Challenge.ContainerImage) ||
+            instance.Challenge.ExposePort is not (>= 1 and <= 65535))
+            return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Container_ConfigError)]));
 
         if (instance.IsContainerOperationTooFrequent)
             return RequestResponse.Result(localizer[nameof(Resources.Program.Game_OperationTooFrequent)],

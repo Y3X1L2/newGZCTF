@@ -24,7 +24,7 @@ import { Trans, useTranslation } from 'react-i18next'
 import { PasswordChangeModal } from '@Components/PasswordChangeModal'
 import { WithNavBar } from '@Components/WithNavbar'
 import { YinyuHexField, YinyuModalBody } from '@Components/yinyu/YinyuUI'
-import { showErrorMsg, tryGetErrorMsg } from '@Utils/Shared'
+import { isValidPhoneNumber, showErrorMsg, tryGetErrorMsg } from '@Utils/Shared'
 import { IMAGE_MIME_TYPES } from '@Utils/Shared'
 import { useIsMobile } from '@Utils/ThemeOverride'
 import { usePageTitle } from '@Hooks/usePageTitle'
@@ -111,6 +111,11 @@ const Profile: FC = () => {
   }
 
   const onChangeProfile = async () => {
+    if (!isValidPhoneNumber(profile.phone)) {
+      showNotification({ color: 'red', message: t('common.error.check_input'), icon: <Icon path={mdiClose} size={1} /> })
+      return
+    }
+
     try {
       setDisabled(true)
       await api.account.accountUpdate(profile)
@@ -122,6 +127,8 @@ const Profile: FC = () => {
       mutate({ ...user })
     } catch (e) {
       showErrorMsg(e, t)
+    } finally {
+      setDisabled(false)
     }
   }
 
@@ -182,6 +189,7 @@ const Profile: FC = () => {
             w="100%"
             value={profile.phone ?? ''}
             disabled={disabled}
+            error={!isValidPhoneNumber(profile.phone) ? t('common.error.check_input') : undefined}
             onChange={(event) => setProfile({ ...profile, phone: event.target.value })}
           />
           <TextInput

@@ -763,7 +763,7 @@
 .yy-admin-tab-grid.admin-tab-grid {
   width: max-content;
   min-width: 100%;
-  grid-template-columns: repeat(9, minmax(8.8rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(8.8rem, 1fr));
   gap: 0.55rem;
   padding-bottom: 0.15rem;
 }
@@ -1672,6 +1672,16 @@
   background: radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.38), transparent 42%), rgba(107, 238, 177, 0.78);
 }
 
+.yy-theory-node[data-correct] {
+  color: #07100c;
+  background: radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.42), transparent 42%), rgba(107, 238, 177, 0.9);
+}
+
+.yy-theory-node[data-wrong] {
+  color: #fff6f6;
+  background: radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.28), transparent 42%), rgba(255, 118, 118, 0.72);
+}
+
 .yy-theory-node[data-active] {
   color: var(--text);
   background: radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.38), transparent 42%), rgba(49, 113, 86, 0.92);
@@ -1867,7 +1877,7 @@
   }
 
   .yy-admin-tab-grid.admin-tab-grid {
-    grid-template-columns: repeat(9, minmax(7.8rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(7.8rem, 1fr));
   }
 
   .game-index-card dl {
@@ -1990,6 +2000,14 @@
   color: #b9add1;
   border-color: rgba(185, 173, 209, 0.28);
   background: rgba(185, 173, 209, 0.08);
+}
+
+.yy-node-resource-kind[data-kind='pentest'] {
+  color: #8debd1;
+  border-color: rgba(141, 235, 209, 0.28);
+  background:
+    radial-gradient(circle at 30% 20%, rgba(185, 173, 209, 0.12), transparent 45%),
+    rgba(107, 238, 177, 0.07);
 }
 
 .yy-node-resource-status-text {

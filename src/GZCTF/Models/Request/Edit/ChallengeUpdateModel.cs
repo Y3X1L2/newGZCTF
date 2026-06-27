@@ -88,6 +88,8 @@ public class ChallengeUpdateModel
     /// <summary>
     /// Container exposed port
     /// </summary>
+    [Range(1, 65535, ErrorMessageResourceName = nameof(Resources.Program.Model_OutOfRange),
+        ErrorMessageResourceType = typeof(Resources.Program))]
     public int? ExposePort { get; set; }
 
     /// <summary>

@@ -36,6 +36,7 @@ import {
   mdiDocker,
   mdiFileImportOutline,
   mdiMagnify,
+  mdiOpenInNew,
   mdiPencilOutline,
   mdiPlus,
   mdiPublish,
@@ -788,35 +789,40 @@ const CourseDetail: FC = () => {
                     </Table.Tr>
                   </Table.Thead>
                   <Table.Tbody>
-                    {course.resources.map((resource) => (
-                      <Table.Tr key={resource.id}>
-                        <Table.Td>
-                          <Text fw={800}>{resource.title}</Text>
-                          <Text size="xs" c="dimmed">
-                            {resource.description || resource.fileName || resource.externalUrl || '-'}
-                          </Text>
-                        </Table.Td>
-                        <Table.Td>{resource.type}</Table.Td>
-                        <Table.Td>{resource.fileSize ? `${Math.round(resource.fileSize / 1024)} KB` : '-'}</Table.Td>
-                        <Table.Td>
-                          {resource.downloadUrl ? (
-                            <Button
-                              component="a"
-                              href={`/api/training/courses/${course.id}/resources/${resource.id}/download`}
-                              target="_blank"
-                              variant="light"
-                              leftSection={<Icon path={mdiDownloadOutline} size={0.82} />}
-                            >
-                              下载
-                            </Button>
-                          ) : (
-                            <Text size="sm" c="dimmed">
-                              未开放
+                    {course.resources.map((resource) => {
+                      const isExternal = resource.type === TrainingCourseResourceType.Link || resource.type === TrainingCourseResourceType.Video
+
+                      return (
+                        <Table.Tr key={resource.id}>
+                          <Table.Td>
+                            <Text fw={800}>{resource.title}</Text>
+                            <Text size="xs" c="dimmed">
+                              {resource.description || resource.fileName || resource.externalUrl || '-'}
                             </Text>
-                          )}
-                        </Table.Td>
-                      </Table.Tr>
-                    ))}
+                          </Table.Td>
+                          <Table.Td>{resource.type}</Table.Td>
+                          <Table.Td>{resource.fileSize ? `${Math.round(resource.fileSize / 1024)} KB` : '-'}</Table.Td>
+                          <Table.Td>
+                            {resource.downloadUrl ? (
+                              <Button
+                                component="a"
+                                href={`/api/training/courses/${course.id}/resources/${resource.id}/download`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                variant="light"
+                                leftSection={<Icon path={isExternal ? mdiOpenInNew : mdiDownloadOutline} size={0.82} />}
+                              >
+                                {isExternal ? '打开' : '下载'}
+                              </Button>
+                            ) : (
+                              <Text size="sm" c="dimmed">
+                                未开放
+                              </Text>
+                            )}
+                          </Table.Td>
+                        </Table.Tr>
+                      )
+                    })}
                   </Table.Tbody>
                 </Table>
               </Table.ScrollContainer>
@@ -951,6 +957,11 @@ const CourseDetail: FC = () => {
                             <Badge color={status.color} variant="light">
                               {status.label}
                             </Badge>
+                            {template.errorMessage ? (
+                              <Text size="xs" c="red.3" mt={4} lineClamp={2} title={template.errorMessage}>
+                                {template.errorMessage}
+                              </Text>
+                            ) : null}
                           </Table.Td>
                           <Table.Td>{formatSize(template.fileSize)}</Table.Td>
                           <Table.Td>
@@ -1502,7 +1513,7 @@ const CourseDetail: FC = () => {
                     component="a"
                     href={editingChallengeDetail.attachmentUrl}
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                     variant="light"
                     leftSection={<Icon path={mdiDownloadOutline} size={0.82} />}
                   >

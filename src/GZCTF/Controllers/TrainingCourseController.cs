@@ -287,7 +287,7 @@ public class TrainingCourseController(
         return progress;
     }
 
-    private async Task MarkChapterCompletedIfReady(
+    private async Task<bool> MarkChapterCompletedIfReady(
         UserInfo user,
         int courseId,
         int chapterId,
@@ -314,7 +314,7 @@ public class TrainingCourseController(
                 .ToArrayAsync(token);
 
             if (requiredChallengeIds.Except(solvedIds).Any())
-                return;
+                return false;
         }
 
         var theoryPaper = await context.TrainingCourseChapterTheoryPapers
@@ -330,7 +330,7 @@ public class TrainingCourseController(
                 s.Passed, token);
 
             if (!passed)
-                return;
+                return false;
         }
 
         var progress = await context.TrainingChapterProgresses
@@ -350,6 +350,7 @@ public class TrainingCourseController(
         progress.Status = TrainingCourseProgressStatus.Completed;
         progress.CompletedAt ??= DateTimeOffset.UtcNow;
         progress.UpdatedAt = DateTimeOffset.UtcNow;
+        return true;
     }
 
     private async Task<ExerciseInstance?> GetOrCreateCourseInstance(
@@ -575,6 +576,7 @@ public class TrainingCourseController(
         var progress = await context.TrainingCourseProgresses
             .SingleOrDefaultAsync(p => p.UserId == user.Id && p.CourseId == courseId, token);
 
+        var includeDetail = canLearn || canEdit || user.Role >= Role.Admin;
         var model = TrainingCourseModel.FromCourse(
             course,
             enrollment,
@@ -583,7 +585,7 @@ public class TrainingCourseController(
             canEdit,
             canManageTeachers,
             canEdit || user.Role >= Role.Admin,
-            true);
+            includeDetail);
 
         if (model.Chapters.Count > 0)
         {
@@ -697,6 +699,11 @@ public class TrainingCourseController(
 
         var progress = await context.TrainingChapterProgresses
             .SingleOrDefaultAsync(p => p.ChapterId == chapterId && p.UserId == user.Id, token);
+        var courseProgress = await EnsureCourseProgress(user, course, token);
+        courseProgress.StartedAt ??= DateTimeOffset.UtcNow;
+        courseProgress.UpdatedAt = DateTimeOffset.UtcNow;
+        await context.SaveChangesAsync(token);
+
         var solvedIds = await context.TrainingCourseSubmissions
             .Where(s => s.CourseId == courseId && s.UserId == user.Id && s.Status == AnswerResult.Accepted)
             .Select(s => s.ExerciseChallengeId)
@@ -747,11 +754,17 @@ public class TrainingCourseController(
         if (chapter is null)
             return NotFound();
 
-        await MarkChapterCompletedIfReady(user, courseId, chapterId, token);
+        var completed = await MarkChapterCompletedIfReady(user, courseId, chapterId, token);
+        if (!completed)
+            return BadRequest(new RequestResponse("章节必做实验或课后测试尚未完成。"));
+
         await RecalculateProgress(user, course, token);
         await context.SaveChangesAsync(token);
 
-        return Ok();
+        var progress = await context.TrainingChapterProgresses
+            .SingleOrDefaultAsync(p => p.ChapterId == chapterId && p.UserId == user.Id, token);
+
+        return Ok(TrainingCourseChapterModel.FromChapter(chapter, progress));
     }
 
     [HttpGet("{courseId:int}/resources/{resourceId:int}/download")]
@@ -798,6 +811,7 @@ public class TrainingCourseController(
 
         var paper = await context.TrainingCourseChapterTheoryPapers
             .Include(p => p.Questions)
+                .ThenInclude(q => q.SourceQuestion)
             .SingleOrDefaultAsync(p => p.CourseId == courseId && p.ChapterId == chapterId && p.IsPublished, token);
         if (paper is null)
             return NotFound(new RequestResponse("课后测试尚未发布。", StatusCodes.Status404NotFound));
@@ -823,6 +837,7 @@ public class TrainingCourseController(
 
         var paper = await context.TrainingCourseChapterTheoryPapers
             .Include(p => p.Questions)
+                .ThenInclude(q => q.SourceQuestion)
             .SingleOrDefaultAsync(p => p.CourseId == courseId && p.ChapterId == chapterId && p.IsPublished, token);
         if (paper is null)
             return NotFound(new RequestResponse("课后测试尚未发布。", StatusCodes.Status404NotFound));
@@ -854,6 +869,7 @@ public class TrainingCourseController(
 
         var paper = await context.TrainingCourseChapterTheoryPapers
             .Include(p => p.Questions)
+                .ThenInclude(q => q.SourceQuestion)
             .SingleOrDefaultAsync(p => p.CourseId == courseId && p.ChapterId == chapterId && p.IsPublished, token);
         if (paper is null)
             return NotFound(new RequestResponse("课后测试尚未发布。", StatusCodes.Status404NotFound));

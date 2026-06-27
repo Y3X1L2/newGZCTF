@@ -2,6 +2,7 @@ using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Services.Container.Manager;
+using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
@@ -16,8 +17,8 @@ public class GameInstanceRepository(
     IGameEventRepository gameEventRepository,
     IOptionsSnapshot<ContainerPolicy> containerPolicy,
     DockerImageRegistryService dockerRegistry,
-    ILogger<GameInstanceRepository> logger,
-    IStringLocalizer<Program> localizer) : RepositoryBase(context), IGameInstanceRepository
+    INginxProxySyncService nginxProxySync,
+    ILogger<GameInstanceRepository> logger) : RepositoryBase(context), IGameInstanceRepository
 {
     public async Task<GameInstance?> GetInstance(Participation part, int challengeId, CancellationToken token = default)
     {
@@ -127,9 +128,13 @@ public class GameInstanceRepository(
     public async Task<TaskResult<Container>> CreateContainer(GameInstance gameInstance, Team team, UserInfo user,
         Game game, CancellationToken token = default)
     {
-        if (string.IsNullOrEmpty(gameInstance.Challenge.ContainerImage) ||
-            gameInstance.Challenge.ExposePort is null)
+        if (string.IsNullOrWhiteSpace(gameInstance.Challenge.ContainerImage) ||
+            gameInstance.Challenge.ExposePort is not (>= 1 and <= 65535))
         {
+            logger.LogWarning(
+                "Container challenge {ChallengeId} ({ChallengeTitle}) has incomplete runtime config. ContainerImage='{ContainerImage}', ExposePort={ExposePort}.",
+                gameInstance.ChallengeId, gameInstance.Challenge.Title, gameInstance.Challenge.ContainerImage,
+                gameInstance.Challenge.ExposePort);
             logger.SystemLog(
                 StaticLocalizer[nameof(Resources.Program.InstanceRepository_ContainerCreationFailed),
                     gameInstance.Challenge.Title],
@@ -178,7 +183,7 @@ public class GameInstanceRepository(
         await Context.Entry(gameInstance).Reference(e => e.FlagContext).LoadAsync(token);
 
         var challenge = gameInstance.Challenge;
-        var image = await dockerRegistry.ResolveImageReferenceAsync(challenge.ContainerImage, token);
+        var image = await dockerRegistry.ResolveImageReferenceAsync(challenge.ContainerImage!, token);
         var container = await service.CreateContainerAsync(new ContainerConfig
         {
             TeamId = team.Id.ToString(),
@@ -191,9 +196,7 @@ public class GameInstanceRepository(
             StorageLimit = challenge.StorageLimit ?? 256,
             NetworkMode = challenge.NetworkMode ?? NetworkMode.Open,
             EnableTrafficCapture = challenge.EnableTrafficCapture && game.IsActive,
-            ExposedPort = challenge.ExposePort ??
-                          throw new ArgumentException(
-                              localizer[nameof(Resources.Program.InstanceRepository_InvalidPort)])
+            ExposedPort = challenge.ExposePort.Value
         }, token);
 
         if (container is null)
@@ -211,6 +214,7 @@ public class GameInstanceRepository(
         gameInstance.Container = container;
         gameInstance.LastContainerOperation = DateTimeOffset.UtcNow;
         await SaveAsync(token);
+        await nginxProxySync.TrySyncNowAsync("game container created", token);
 
         await gameEventRepository.AddEvent(
             new()

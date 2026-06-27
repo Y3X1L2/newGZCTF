@@ -98,7 +98,7 @@ public class PenetrationPlayerController(
     [ProducesResponseType(typeof(PenetrationScoreboardItemModel[]), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetScoreboard([FromRoute] int gameId, CancellationToken token)
     {
-        var ctx = await GetContextInfo(gameId, denyAfterEnded: false, requireParticipation: false, token);
+        var ctx = await GetContextInfo(gameId, denyAfterEnded: false, allowTeacherMonitor: true, token: token);
         if (ctx.Result is not null)
             return ctx.Result;
 
@@ -106,7 +106,7 @@ public class PenetrationPlayerController(
     }
 
     async Task<ContextInfo> GetContextInfo(int gameId, bool denyAfterEnded = true,
-        bool requireParticipation = true, CancellationToken token = default)
+        bool requireParticipation = true, bool allowTeacherMonitor = false, CancellationToken token = default)
     {
         ContextInfo res = new()
         {
@@ -127,7 +127,11 @@ public class PenetrationPlayerController(
         if (denyAfterEnded && !res.Game.PracticeMode && res.Game.EndTimeUtc < DateTimeOffset.UtcNow)
             return res.WithResult(BadRequest(new RequestResponse("The game has ended.", ErrorCodes.GameEnded)));
 
-        if (!requireParticipation)
+        if (!requireParticipation && res.User is null)
+            return res.WithResult(Unauthorized(new RequestResponse("Login required.",
+                StatusCodes.Status401Unauthorized)));
+
+        if (!requireParticipation && (!allowTeacherMonitor || res.User!.Role >= Role.Teacher))
             return res;
 
         if (res.User is null)
@@ -136,12 +140,14 @@ public class PenetrationPlayerController(
 
         var part = await participationRepository.GetParticipation(res.User.Id, res.Game.Id, token);
         if (part is null)
-            return res.WithResult(BadRequest(new RequestResponse("You have not participated in this game.")));
+            return res.WithResult(StatusCode(StatusCodes.Status403Forbidden,
+                new RequestResponse("You have not participated in this game.", StatusCodes.Status403Forbidden)));
 
         res.Participation = part;
 
         if (part.Status != ParticipationStatus.Accepted)
-            return res.WithResult(BadRequest(new RequestResponse("Your participation has not been accepted.")));
+            return res.WithResult(StatusCode(StatusCodes.Status403Forbidden,
+                new RequestResponse("Your participation has not been accepted.", StatusCodes.Status403Forbidden)));
 
         return res;
     }

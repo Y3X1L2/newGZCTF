@@ -36,7 +36,6 @@ interface ImageTemplate {
   id: number
   name: string
   description?: string | null
-  localFilePath?: string
   imagePath?: string
   registryUrl?: string | null
   osType: string | number
@@ -193,6 +192,18 @@ export default function ChallengeEdit() {
   const handleSave = async () => {
     if (!challenge) return
 
+    const isContainerChallenge =
+      challenge.type === ChallengeType.StaticContainer || challenge.type === ChallengeType.DynamicContainer
+
+    if (isContainerChallenge && !challenge.containerImage.trim()) {
+      notifications.show({
+        title: '保存失败',
+        message: '容器题目必须先绑定 Docker 镜像',
+        color: 'red',
+      })
+      return
+    }
+
     setSaving(true)
     try {
       const res = await fetch(`/api/edit/Games/${gameId}/Challenges/${challengeId}`, {
@@ -210,7 +221,7 @@ export default function ChallengeEdit() {
           minScoreRate: challenge.minScoreRate,
           difficulty: challenge.difficulty,
           submissionLimit: challenge.submissionLimit,
-          environment: challenge.environment,
+          environment: isContainerChallenge ? ENV_DOCKER : challenge.environment,
           imageTemplateId: challenge.imageTemplateId,
           enableTrafficCapture: challenge.enableTrafficCapture,
           disableBloodBonus: challenge.disableBloodBonus,
@@ -222,8 +233,8 @@ export default function ChallengeEdit() {
         notifications.show({ title: '保存成功', message: '题目配置已更新', color: 'green' })
         load()
       } else {
-        const err = await res.json()
-        notifications.show({ title: '保存失败', message: err.title ?? '请检查输入', color: 'red' })
+        const err = await res.json().catch(() => null)
+        notifications.show({ title: '保存失败', message: err?.message ?? err?.title ?? '请检查输入', color: 'red' })
       }
     } finally {
       setSaving(false)
@@ -323,6 +334,18 @@ export default function ChallengeEdit() {
   const handleToggle = async (enabled: boolean) => {
     if (!challenge) return
 
+    const isContainerChallenge =
+      challenge.type === ChallengeType.StaticContainer || challenge.type === ChallengeType.DynamicContainer
+
+    if (enabled && isContainerChallenge && !challenge.containerImage.trim()) {
+      notifications.show({
+        title: '无法启用',
+        message: '容器题目必须先绑定 Docker 镜像',
+        color: 'red',
+      })
+      return
+    }
+
     try {
       const res = await fetch(`/api/edit/Games/${gameId}/Challenges/${challengeId}`, {
         method: 'PUT',
@@ -333,9 +356,16 @@ export default function ChallengeEdit() {
       if (res.ok) {
         setChallenge({ ...challenge, isEnabled: enabled })
         notifications.show({ title: enabled ? '已启用' : '已禁用', message: '题目状态已更新', color: 'green' })
+      } else {
+        const err = await res.json().catch(() => null)
+        notifications.show({
+          title: enabled ? '启用失败' : '禁用失败',
+          message: err?.message ?? err?.title ?? '请检查题目配置',
+          color: 'red',
+        })
       }
-    } catch {
-      // ignore optimistic toggle failure
+    } catch (err) {
+      showErrorMsg(err, t)
     }
   }
 
@@ -366,7 +396,10 @@ export default function ChallengeEdit() {
   }
 
   const envType = challenge.environment ?? ENV_NONE
-  const isContainer = envType === ENV_DOCKER
+  const isContainer =
+    envType === ENV_DOCKER ||
+    challenge.type === ChallengeType.StaticContainer ||
+    challenge.type === ChallengeType.DynamicContainer
   const isWindowsVM = envType === ENV_WINDOWS_VM
   const isDynamicAttachment = challenge.type === ChallengeType.DynamicAttachment
   const isStaticAttachment = challenge.type === ChallengeType.StaticAttachment
@@ -459,9 +492,7 @@ export default function ChallengeEdit() {
                     ? challenge.containerImage
                     : null
                 }
-                onChange={(value) => {
-                  if (value) setChallenge({ ...challenge, containerImage: value })
-                }}
+                onChange={(value) => setChallenge({ ...challenge, containerImage: value ?? '' })}
                 searchable
                 clearable
               />
@@ -525,9 +556,8 @@ export default function ChallengeEdit() {
                   已选择镜像模板 ID: {challenge.imageTemplateId}
                   {windowsTemplates.find((template) => template.id === challenge.imageTemplateId) && (
                     <Text size="xs" mt={4}>
-                      路径:{' '}
-                      {windowsTemplates.find((template) => template.id === challenge.imageTemplateId)?.localFilePath ??
-                        '未知'}
+                      模板:{' '}
+                      {windowsTemplates.find((template) => template.id === challenge.imageTemplateId)?.name ?? '未知'}
                     </Text>
                   )}
                 </Alert>
@@ -598,7 +628,7 @@ export default function ChallengeEdit() {
                   <Group justify="space-between" align="center" wrap="wrap">
                     <Stack gap={2}>
                       <Text fw={700}>{isRemoteAttachment ? '远程附件' : '本地附件'}</Text>
-                      <Anchor href={attachmentUrl} target="_blank" rel="noreferrer">
+                      <Anchor href={attachmentUrl} target="_blank" rel="noopener noreferrer">
                         {attachmentName ?? attachmentUrl}
                       </Anchor>
                       {challenge.attachment?.fileSize ? (

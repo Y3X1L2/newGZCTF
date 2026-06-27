@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Container.Manager;
+using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
 using DataContainer = GZCTF.Models.Data.Container;
 
@@ -12,6 +13,7 @@ public class AwdpInstanceService(
     IAwdpRepository awdpRepository,
     IContainerManager containerManager,
     DockerImageRegistryService dockerRegistry,
+    INginxProxySyncService nginxProxySync,
     IServiceProvider serviceProvider,
     ILogger<AwdpInstanceService> logger)
 {
@@ -27,6 +29,7 @@ public class AwdpInstanceService(
             .Where(p => p.GameId == game.Id && p.Status == ParticipationStatus.Accepted)
             .OrderBy(p => p.TeamId)
             .ToArrayAsync(token);
+        var createdAny = false;
 
         foreach (var service in services)
         {
@@ -62,8 +65,12 @@ public class AwdpInstanceService(
                 }, token);
 
                 await context.SaveChangesAsync(token);
+                createdAny = true;
             }
         }
+
+        if (createdAny)
+            await nginxProxySync.TrySyncNowAsync("AWDP containers created", token);
     }
 
     public async Task DestroyInstancesForGame(int gameId, CancellationToken token = default)
@@ -83,6 +90,7 @@ public class AwdpInstanceService(
 
         context.AwdpServiceInstances.RemoveRange(instances);
         await context.SaveChangesAsync(token);
+        await nginxProxySync.TrySyncNowAsync("AWDP game instances destroyed", token);
 
         foreach (var networkName in instances.Select(i => i.NetworkName).Where(n => !string.IsNullOrWhiteSpace(n))
                      .Distinct())
@@ -105,6 +113,7 @@ public class AwdpInstanceService(
 
         context.AwdpServiceInstances.RemoveRange(instances);
         await context.SaveChangesAsync(token);
+        await nginxProxySync.TrySyncNowAsync("AWDP service instances destroyed", token);
 
         foreach (var networkName in instances.Select(i => i.NetworkName).Where(n => !string.IsNullOrWhiteSpace(n))
                      .Distinct())
@@ -217,6 +226,7 @@ public class AwdpInstanceService(
             }, token);
 
         await context.SaveChangesAsync(token);
+        await nginxProxySync.TrySyncNowAsync("AWDP instance reset", token);
         return (true, "实例已重置");
     }
 

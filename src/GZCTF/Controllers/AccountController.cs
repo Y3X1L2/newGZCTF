@@ -331,6 +331,9 @@ public class AccountController(
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> LogOut()
     {
+        if (await userManager.GetUserAsync(User) is { } user)
+            await userManager.UpdateSecurityStampAsync(user);
+
         await signInManager.SignOutAsync();
 
         return Ok();

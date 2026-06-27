@@ -88,7 +88,9 @@
     "param_unknown": "Unbekannter Parameter",
     "request_too_frequent": "Zu viele Anfragen",
     "try_later": "Bitte versuchen Sie es später noch einmal",
-    "unknown": "Unbekannter Fehler"
+    "unknown": "Unbekannter Fehler",
+    "forbidden": "Zugriff verweigert",
+    "unauthorized": "Bitte melden Sie sich zuerst an"
   },
   "label": {
     "challenge": "Herausf.",

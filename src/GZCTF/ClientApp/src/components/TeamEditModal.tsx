@@ -19,7 +19,6 @@ import {
   Tooltip,
 } from '@mantine/core'
 import { Dropzone } from '@mantine/dropzone'
-import { useClipboard } from '@mantine/hooks'
 import { useModals } from '@mantine/modals'
 import { notifications, showNotification, updateNotification } from '@mantine/notifications'
 import { mdiCheck, mdiClose, mdiRefresh, mdiStar } from '@mdi/js'
@@ -27,7 +26,7 @@ import { Icon } from '@mdi/react'
 import { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { YinyuModalBody } from '@Components/yinyu/YinyuUI'
-import { showErrorMsg, tryGetErrorMsg } from '@Utils/Shared'
+import { copyText, showErrorMsg, tryGetErrorMsg } from '@Utils/Shared'
 import { IMAGE_MIME_TYPES } from '@Utils/Shared'
 import api, { TeamInfoModel, TeamUserInfoModel } from '@Api'
 import misc from '@Styles/Misc.module.css'
@@ -113,7 +112,6 @@ export const TeamEditModal: FC<TeamEditModalProps> = (props) => {
   const [disabled, setDisabled] = useState(false)
   const { data: teams, mutate: mutateTeams } = api.team.useTeamGetTeamsInfo()
 
-  const clipboard = useClipboard()
   const captain = teamInfo?.members?.filter((x) => x.captain)[0]
   const crew = teamInfo?.members?.filter((x) => !x.captain)
 
@@ -365,13 +363,21 @@ export const TeamEditModal: FC<TeamEditModalProps> = (props) => {
               }
               value={inviteCode}
               placeholder="loading..."
-              onClick={() => {
-                clipboard.copy(inviteCode)
-                showNotification({
-                  color: 'teal',
-                  message: t('team.notification.invite_code.copied'),
-                  icon: <Icon path={mdiCheck} size={1} />,
-                })
+              onClick={async () => {
+                const copied = await copyText(inviteCode)
+                showNotification(
+                  copied
+                    ? {
+                        color: 'teal',
+                        message: t('team.notification.invite_code.copied'),
+                        icon: <Icon path={mdiCheck} size={1} />,
+                      }
+                    : {
+                        color: 'red',
+                        message: t('common.error.encountered'),
+                        icon: <Icon path={mdiClose} size={1} />,
+                      }
+                )
               }}
               readOnly
             />
