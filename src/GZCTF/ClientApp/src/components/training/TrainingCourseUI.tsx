@@ -112,7 +112,8 @@ export const TrainingCourseCard: FC<{
   compact?: boolean
   featured?: boolean
   actionLabel?: string
-}> = ({ course, compact = false, featured = false, actionLabel }) => {
+  extraAction?: ReactNode
+}> = ({ course, compact = false, featured = false, actionLabel, extraAction }) => {
   const status = trainingCourseStatus(course)
   const progress = trainingCourseProgress(course)
   const total = course.totalChapterCount || course.chapterCount || 0
@@ -125,7 +126,7 @@ export const TrainingCourseCard: FC<{
           className="yy-training-course-cover"
           style={course.coverUrl ? { backgroundImage: `url(${course.coverUrl})` } : undefined}
         >
-          <TrainingStatusText tone={status.tone} className="yy-training-course-status-badge" vertical>
+          <TrainingStatusText tone={status.tone} className="yy-training-course-status-badge">
             {status.label}
           </TrainingStatusText>
         </div>
@@ -171,9 +172,12 @@ export const TrainingCourseCard: FC<{
             <Text size="xs" className="yy-training-muted" lineClamp={1}>
               {course.challenges.length} 个实验 / {course.enrollmentCount} 名学员
             </Text>
-            <Button variant={featured ? 'filled' : 'light'} size={compact ? 'xs' : 'sm'}>
-              {actionLabel ?? (course.canLearn ? '继续学习' : course.canEdit ? '管理课程' : '查看课程')}
-            </Button>
+            <Group gap={6} wrap="nowrap">
+              {extraAction}
+              <Button variant={featured ? 'filled' : 'light'} size={compact ? 'xs' : 'sm'}>
+                {actionLabel ?? (course.canLearn ? '继续学习' : course.canEdit ? '管理课程' : '查看课程')}
+              </Button>
+            </Group>
           </Group>
         </Stack>
       </YinyuPanel>

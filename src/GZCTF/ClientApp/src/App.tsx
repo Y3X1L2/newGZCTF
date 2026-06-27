@@ -45,9 +45,10 @@ export const App: FC = () => {
   const path = location.pathname
   const isAdminRoute = path.startsWith('/admin')
   const isTrainingRoute = path.startsWith('/training')
+  const isTeamsRoute = path.startsWith('/teams')
   const isGameEntryRoute = /^\/games\/\d+\/?$/.test(path)
   const isGameWorkspaceRoute = /^\/games\/\d+\/(challenges|scoreboard|theory|theory-scoreboard|awdp|pentest|monitor)(\/|$)/.test(path)
-  const useReactBitsBackdrop = isAdminRoute || isTrainingRoute || isGameWorkspaceRoute
+  const useReactBitsBackdrop = isAdminRoute || isTrainingRoute || isTeamsRoute || isGameWorkspaceRoute
   const suppressSignalField = useReactBitsBackdrop || isGameEntryRoute
 
   return (

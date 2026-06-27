@@ -19,6 +19,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
     private readonly DockerManager _localManager;
     private readonly IPortAllocationService _portAllocator;
     private readonly ContainerProvider _containerConfig;
+    private readonly INginxProxySyncService _nginxProxySync;
     private readonly ILogger<FleetContainerManager> _logger;
 
     public FleetContainerManager(
@@ -26,6 +27,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         AgentClient agentClient,
         DockerManager localManager,
         IPortAllocationService portAllocator,
+        INginxProxySyncService nginxProxySync,
         IOptions<ContainerProvider> containerConfig,
         ILogger<FleetContainerManager> logger)
     {
@@ -33,6 +35,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         _agentClient = agentClient;
         _localManager = localManager;
         _portAllocator = portAllocator;
+        _nginxProxySync = nginxProxySync;
         _containerConfig = containerConfig.Value;
         _logger = logger;
     }
@@ -60,8 +63,8 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         var onlineNodes = await nodeRepo.GetOnlineNodesAsync(token);
         if (onlineNodes.Count == 0)
         {
-            _logger.LogInformation("No online fleet node available, falling back to local Docker manager");
-            return await _localManager.CreateContainerAsync(config, token);
+            _logger.LogWarning("No online fleet node available for Docker container creation");
+            return null;
         }
 
         var target = new DeploymentTarget
@@ -79,12 +82,12 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             {
                 schedule.Target.Status = TargetStatus.Cancelled;
                 schedule.Target.CompletedAt = DateTimeOffset.UtcNow;
-                schedule.Target.ErrorMessage = "No schedulable fleet node; handled by local Docker fallback";
+                schedule.Target.ErrorMessage = "No schedulable fleet node available for Docker containers";
                 await SaveFleetStateAsync(context, "cancel unscheduled Docker deployment target", token);
             }
 
-            _logger.LogWarning("No schedulable fleet node available, falling back to local Docker manager");
-            return await _localManager.CreateContainerAsync(config, token);
+            _logger.LogWarning("No schedulable fleet node available for Docker container creation");
+            return null;
         }
 
         var node = schedule.Node ?? await nodeRepo.GetNodeByIdAsync(nodeId.Value, token);
@@ -95,11 +98,17 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         {
             var container = await _localManager.CreateContainerAsync(config, token);
             if (container is not null)
+            {
                 container.NodeId = nodeId.Value;
+                if (!await ApplyPublicProxyAsync(container, config, node, schedule.Target, context, token))
+                    return null;
+            }
             else
                 ReleaseReservedCapacity(node, NodeCapability.Docker);
+
             CompleteDeploymentTarget(schedule.Target, container, node.HostAddress);
             await SaveFleetStateAsync(context, "complete scheduled local Docker deployment target", token);
+            await SyncNginxIfProxiedAsync(container, "scheduled local Docker container created", token);
             return container;
         }
 
@@ -148,31 +157,23 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             return fallback;
         }
 
-        var useProxyPort = IsNginxProxyEnabled && config.PublishPort && !config.BypassPublicProxy;
-        var proxyPort = useProxyPort
-            ? await AllocatePublicPortAsync(ParseContainerGuid(result.ContainerId), token)
-            : null;
-        if (useProxyPort && (proxyPort is null || result.PublicPort <= 0))
-        {
-            await CleanupRemoteContainerAfterProxyAllocationFailure(nodeId.Value, result.ContainerId, node, config,
-                schedule.Target, context, token);
-            return null;
-        }
-
         var remoteContainer = new DataContainer
         {
             ContainerId = result.ContainerId,
             Image = config.Image,
-            IP = useProxyPort || config.PublishPort ? node!.HostAddress : result.IP,
+            IP = config.PublishPort ? node!.HostAddress : result.IP,
             Port = config.PublishPort && result.PublicPort > 0 ? result.PublicPort : result.Port,
-            PublicIP = useProxyPort ? PublicEntry : config.PublishPort ? node!.HostAddress : null,
-            PublicPort = useProxyPort ? proxyPort ?? result.PublicPort : result.PublicPort,
+            PublicIP = config.PublishPort ? node!.HostAddress : null,
+            PublicPort = result.PublicPort,
             IsProxy = false,
             Status = ContainerStatus.Running,
             NodeId = nodeId.Value,
         };
+        if (!await ApplyPublicProxyAsync(remoteContainer, config, node!, schedule.Target, context, token))
+            return null;
         CompleteDeploymentTarget(schedule.Target, remoteContainer, node!.HostAddress);
         await SaveFleetStateAsync(context, "complete remote Docker deployment target", token);
+        await SyncNginxIfProxiedAsync(remoteContainer, "remote Docker container created", token);
         return remoteContainer;
     }
 
@@ -212,12 +213,17 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         {
             var localContainer = await _localManager.CreateContainerAsync(config, token);
             if (localContainer is not null)
+            {
                 localContainer.NodeId = selectedNode.Id;
+                if (!await ApplyPublicProxyAsync(localContainer, config, selectedNode, target, context, token))
+                    return null;
+            }
             else if (!config.FleetCapacityReserved)
                 ReleaseReservedCapacity(selectedNode, NodeCapability.Docker);
 
             CompleteDeploymentTarget(target, localContainer, selectedNode.HostAddress);
             await SaveFleetStateAsync(context, "complete preferred local Docker deployment target", token);
+            await SyncNginxIfProxiedAsync(localContainer, "preferred local Docker container created", token);
             return localContainer;
         }
 
@@ -231,31 +237,23 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             return null;
         }
 
-        var useProxyPort = IsNginxProxyEnabled && config.PublishPort && !config.BypassPublicProxy;
-        var proxyPort = useProxyPort
-            ? await AllocatePublicPortAsync(ParseContainerGuid(result.ContainerId), token)
-            : null;
-        if (useProxyPort && (proxyPort is null || result.PublicPort <= 0))
-        {
-            await CleanupRemoteContainerAfterProxyAllocationFailure(selectedNode.Id, result.ContainerId, selectedNode,
-                config, target, context, token);
-            return null;
-        }
-
         var remoteContainer = new DataContainer
         {
             ContainerId = result.ContainerId,
             Image = config.Image,
-            IP = useProxyPort || config.PublishPort ? selectedNode.HostAddress : result.IP,
+            IP = config.PublishPort ? selectedNode.HostAddress : result.IP,
             Port = config.PublishPort && result.PublicPort > 0 ? result.PublicPort : result.Port,
-            PublicIP = useProxyPort ? PublicEntry : config.PublishPort ? selectedNode.HostAddress : null,
-            PublicPort = useProxyPort ? proxyPort ?? result.PublicPort : result.PublicPort,
+            PublicIP = config.PublishPort ? selectedNode.HostAddress : null,
+            PublicPort = result.PublicPort,
             IsProxy = false,
             Status = ContainerStatus.Running,
             NodeId = selectedNode.Id,
         };
+        if (!await ApplyPublicProxyAsync(remoteContainer, config, selectedNode, target, context, token))
+            return null;
         CompleteDeploymentTarget(target, remoteContainer, selectedNode.HostAddress);
         await SaveFleetStateAsync(context, "complete preferred remote Docker deployment target", token);
+        await SyncNginxIfProxiedAsync(remoteContainer, "preferred remote Docker container created", token);
         return remoteContainer;
     }
 
@@ -281,11 +279,12 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             await _agentClient.DestroyContainerAsync(container.NodeId.Value, container.ContainerId, token);
             container.Status = ContainerStatus.Destroyed;
 
-            // Release only ports allocated from the central Nginx proxy pool.
-            if (IsNginxProxyEnabled && container.PublicPort.HasValue &&
-                string.Equals(container.PublicIP, PublicEntry, StringComparison.OrdinalIgnoreCase))
-                await ReleasePublicPortAsync(container.PublicPort.Value, token);
         }
+
+        // Release only ports allocated from the central Nginx proxy pool.
+        if (IsNginxProxyEnabled && container.PublicPort.HasValue &&
+            string.Equals(container.PublicIP, PublicEntry, StringComparison.OrdinalIgnoreCase))
+            await ReleasePublicPortAsync(container.PublicPort.Value, token);
 
         if (node is not null && container.Status == ContainerStatus.Destroyed)
         {
@@ -445,6 +444,8 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         }
 
         container.NodeId = localNode.Id;
+        if (!await ApplyPublicProxyAsync(container, config, localNode, target, context, token))
+            return null;
         target ??= new DeploymentTarget
         {
             Type = TargetType.Docker,
@@ -460,6 +461,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         target.ResultPort = container.PublicPort ?? container.Port;
         target.CompletedAt = DateTimeOffset.UtcNow;
         target.ErrorMessage = "Remote agent failed; completed by local Docker fallback";
+        await SyncNginxIfProxiedAsync(container, "local fallback Docker container created", token);
         return container;
     }
 
@@ -530,6 +532,58 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         return Guid.CreateVersion7();
     }
 
+    async Task<bool> ApplyPublicProxyAsync(DataContainer container, ContainerConfig config, WorkerNode node,
+        DeploymentTarget? target, AppDbContext context, CancellationToken token)
+    {
+        if (!ShouldUsePublicProxy(config, node))
+            return true;
+
+        if (container.PublicPort is not > 0)
+        {
+            await CleanupContainerAfterProxyAllocationFailure(container, node, config, target, context, token,
+                "Container did not expose a worker host port for Nginx proxy");
+            return false;
+        }
+
+        var workerHostPort = container.PublicPort.Value;
+        var proxyPort = await AllocatePublicPortAsync(ParseContainerGuid(container.ContainerId), token);
+        if (proxyPort is null)
+        {
+            await CleanupContainerAfterProxyAllocationFailure(container, node, config, target, context, token,
+                "No available Nginx proxy public port");
+            return false;
+        }
+
+        container.IP = node.HostAddress;
+        container.Port = workerHostPort;
+        container.PublicIP = PublicEntry;
+        container.PublicPort = proxyPort.Value;
+        return true;
+    }
+
+    bool ShouldUsePublicProxy(ContainerConfig config, WorkerNode node)
+    {
+        if (!IsNginxProxyEnabled || !config.PublishPort || config.BypassPublicProxy ||
+            string.IsNullOrWhiteSpace(PublicEntry))
+            return false;
+
+        // PublicEntry is the player-facing gateway. The worker Docker host port
+        // remains an upstream only, even when the container is created on the
+        // main/internal server itself.
+        return true;
+    }
+
+    Task SyncNginxIfProxiedAsync(DataContainer? container, string reason, CancellationToken token)
+    {
+        if (container is null ||
+            !IsNginxProxyEnabled ||
+            !string.Equals(container.PublicIP, PublicEntry, StringComparison.OrdinalIgnoreCase) ||
+            container.PublicPort is not > 0)
+            return Task.CompletedTask;
+
+        return _nginxProxySync.TrySyncNowAsync(reason, token);
+    }
+
     /// <summary>
     /// 通过 PortAllocationService 释放公网端口（Nginx 代理模式）
     /// </summary>
@@ -545,27 +599,30 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         }
     }
 
-    async Task CleanupRemoteContainerAfterProxyAllocationFailure(Guid nodeId, string containerId, WorkerNode? node,
-        ContainerConfig config, DeploymentTarget? target, AppDbContext context, CancellationToken token)
+    async Task CleanupContainerAfterProxyAllocationFailure(DataContainer container, WorkerNode node,
+        ContainerConfig config, DeploymentTarget? target, AppDbContext context, CancellationToken token, string reason)
     {
-        _logger.LogError("Nginx proxy port allocation failed for container {ContainerId} on node {NodeId}",
-            containerId, nodeId);
+        _logger.LogError("Nginx proxy setup failed for container {ContainerId} on node {NodeId}: {Reason}",
+            container.ContainerId, node.Id, reason);
         try
         {
-            await _agentClient.DestroyContainerAsync(nodeId, containerId, token);
+            if (node.IsLocal)
+                await _localManager.DestroyContainerAsync(container, token);
+            else
+                await _agentClient.DestroyContainerAsync(node.Id, container.ContainerId, token);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex,
-                "Failed to destroy remote container {ContainerId} after Nginx proxy port allocation failure",
-                containerId);
+                "Failed to destroy container {ContainerId} after Nginx proxy setup failure",
+                container.ContainerId);
         }
 
-        if (!config.FleetCapacityReserved && node is not null)
+        if (!config.FleetCapacityReserved && target is not null)
             ReleaseReservedCapacity(node, NodeCapability.Docker);
 
-        FailDeploymentTarget(target, "No available Nginx proxy public port");
-        await SaveFleetStateAsync(context, "fail remote Docker deployment after Nginx proxy port allocation", token);
+        FailDeploymentTarget(target, reason);
+        await SaveFleetStateAsync(context, "fail Docker deployment after Nginx proxy setup", token);
     }
 
     static void CompleteDeploymentTarget(DeploymentTarget? target, DataContainer? container, string? host)

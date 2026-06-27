@@ -6,10 +6,10 @@
 
 新的链路是：
 
-1. GZCTF/Fleet 创建远程 Docker 容器。
+1. GZCTF/Fleet 创建普通 Docker 容器。
 2. Agent 在 Worker 节点上按 `Docker.PublicPortStart/PublicPortEnd` 发布一个 Worker 本地端口。
 3. 主服务用 Redis 原子分配一个统一公网端口。
-4. 主服务器 Nginx stream 监听统一公网端口段，并转发到 `WorkerNode.HostAddress:AgentPublishedPort`。
+4. Nginx stream 网关监听统一公网端口段，并转发到 `WorkerNode.HostAddress:AgentPublishedPort`。
 5. 玩家看到的入口是 `ContainerProvider.PublicEntry:UnifiedPublicPort`。
 
 Redis 的职责是端口池分配和分布式协调；Nginx 的职责是 TCP stream 转发；数据库是当前运行容器映射的权威来源。
@@ -40,25 +40,42 @@ Redis 的职责是端口池分配和分布式协调；Nginx 的职责是 TCP str
   "RunMode": "Fleet",
   "ContainerProvider": {
     "Type": "Docker",
-    "PublicEntry": "10.0.7.118",
+    "PublicEntry": "203.195.157.191",
     "DockerConfig": {
       "PublicPortStart": 31000,
       "PublicPortEnd": 31999
     },
     "NginxProxyConfig": {
       "Enable": true,
+      "SyncLocalConfig": false,
       "ConfigPath": "/etc/nginx/stream-conf.d/gzctf-stream-dynamic.conf",
       "SyncIntervalSeconds": 15,
       "NginxBinaryPath": "nginx",
       "ListenPortStart": 30000,
       "ListenPortEnd": 30999,
-      "WriteStreamBlock": false
+      "WriteStreamBlock": false,
+      "SyncToken": "change-this-to-the-gateway-token"
     }
   }
 }
 ```
 
 ## Nginx 主配置
+
+当前 10.24.0.27 内网主服务 + 203.195.157.191 公网网关的部署中，主服务应设置
+`NginxProxyConfig.SyncLocalConfig=false`，由公网网关的
+`gzctf-public-gateway-sync.service` 定时请求主服务
+`/api/internal/port-map` 并刷新公网 Nginx stream 配置。
+
+公网同步脚本必须携带：
+
+```bash
+Authorization: Bearer <ContainerProvider:NginxProxyConfig:SyncToken>
+```
+
+`SyncToken` 应与公网服务器 `/etc/gzctf-public-gateway/sync.env` 中的
+`GZCTF_API_TOKEN` 一致。该接口也兼容平台 API Token 或管理员会话，但生产网关
+建议使用独立同步令牌，避免依赖用户会话。
 
 确认 Nginx 编译了 stream 模块：
 
@@ -115,8 +132,11 @@ sudo systemctl reload nginx
 
 ## 运行时行为
 
-- 只有 `PublishPort=true` 的远程容器会分配统一公网端口并进入 Nginx 映射。
-- Nginx 同步只读取远程 Worker 容器映射；主节点本机 Docker 直接发布的容器不会被写入 Nginx 动态配置，避免和 Nginx 监听端口段互相覆盖。
+- 只有 `PublishPort=true` 且 `BypassPublicProxy=false` 的普通 Docker 容器会分配统一公网端口并进入 Nginx 映射。
+- 玩家看到的 Docker 题目入口应是 `PublicEntry:NginxProxyConfig.ListenPortStart-ListenPortEnd` 中的端口，例如 `203.195.157.191:30012`。
+- `DockerConfig.PublicPortStart/PublicPortEnd` 只是 Worker 节点上的上游端口池，例如 `10.24.0.125:42762`；这个端口用于 Nginx upstream，不应作为玩家公网入口展示。
+- 综合渗透环境的入口节点会设置 `BypassPublicProxy=true`，按比赛设计让选手直接扫描分配到的节点地址；它不是普通 CTF 容器公网代理链路。
+- 主节点本机 Docker 容器仅在 `SyncLocalConfig=true` 的本机 Nginx 模式下进入 Nginx 映射；外部公网网关模式下主节点通常不参与 Docker 调度。
 - 内网节点、非公开节点不会被 Nginx 暴露。
 - Nginx 动态配置由 `NginxSyncService` 按 `SyncIntervalSeconds` 周期生成。
 - 服务会先写临时文件、替换动态配置、执行 `nginx -t`，失败时回滚旧配置。

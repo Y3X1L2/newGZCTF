@@ -44,6 +44,16 @@ public class ChallengeInfoModel
     public int? ExposePort { get; set; }
 
     /// <summary>
+    /// Deployment environment type.
+    /// </summary>
+    public EnvironmentType? Environment { get; set; }
+
+    /// <summary>
+    /// Image template ID for VM deployment.
+    /// </summary>
+    public int? ImageTemplateId { get; set; }
+
+    /// <summary>
     /// Is the challenge enabled
     /// </summary>
     public bool IsEnabled { get; set; }
@@ -77,6 +87,8 @@ public class ChallengeInfoModel
             Type = challenge.Type,
             ContainerImage = challenge.ContainerImage,
             ExposePort = challenge.ExposePort,
+            Environment = challenge.Environment,
+            ImageTemplateId = challenge.ImageTemplateId,
             Score = challenge.OriginalScore, // This field should be updated with scoreboard
             MinScore = (int)Math.Floor(challenge.MinScoreRate * challenge.OriginalScore),
             OriginalScore = challenge.OriginalScore,

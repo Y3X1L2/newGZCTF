@@ -31,6 +31,7 @@ export const WithNavBar: FC<WithNavBarProps> = ({
 }) => {
   const isMobile = useIsMobile()
   const location = useLocation()
+  const isTeamRoute = location.pathname.startsWith('/teams')
   const showPublicAccount =
     location.pathname === '/' ||
     location.pathname.startsWith('/posts') ||
@@ -56,7 +57,7 @@ export const WithNavBar: FC<WithNavBarProps> = ({
         <AppNavbar />
         <AppShell.Main w="100%" className={classes.shellMain}>
           {showPublicAccount && !isMobile ? <PublicAccountEntry /> : null}
-          <Stack data-mobile={isMobile || undefined} className={classes.main}>
+          <Stack data-mobile={isMobile || undefined} data-team-shell={isTeamRoute || undefined} className={classes.main}>
             {isLoading ? (
               <div className="yy-page-loading-overlay" role="status" aria-live="polite">
                 <YinyuRouteTransition title="YINYU" description="正在读取页面数据" />
@@ -64,7 +65,8 @@ export const WithNavBar: FC<WithNavBarProps> = ({
             ) : null}
             {withHeader && <IconHeader px={isMobile ? '2%' : '10%'} sticky={stickyHeader} />}
             <Box
-              w={width ?? (isMobile ? '96%' : '80%')}
+              w={isTeamRoute ? '100%' : (width ?? (isMobile ? '96%' : '80%'))}
+              data-team-content={isTeamRoute || undefined}
               className={classes.content}
               style={{
                 zIndex: 20,

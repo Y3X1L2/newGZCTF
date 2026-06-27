@@ -110,39 +110,16 @@ public class GuacamoleService
 
         try
         {
-            var connectionData = new
+            var connectionData = BuildRdpConnectionData(connectionName, vmIp, rdpPort, username, password);
+            var existingConnectionId = await FindConnectionIdByNameAsync(connectionName, authToken, token);
+            if (!string.IsNullOrEmpty(existingConnectionId))
             {
-                name = connectionName,
-                parentIdentifier = "ROOT",
-                protocol = "rdp",
-                parameters = new Dictionary<string, string>
-                {
-                    ["hostname"] = vmIp,
-                    ["port"] = rdpPort.ToString(),
-                    ["username"] = username,
-                    ["password"] = password,
-                    ["security"] = "any",
-                    ["ignore-cert"] = "true",
-                    ["resize-method"] = "display-update",
-                    // Performance: disable visual effects
-                    ["enable-wallpaper"] = "true",
-                    ["enable-theming"] = "false",
-                    ["enable-font-smoothing"] = "false",
-                    ["enable-full-window-drag"] = "false",
-                    ["enable-desktop-composition"] = "false",
-                    ["enable-menu-animations"] = "false",
-                    ["disable-bitmap-caching"] = "false",
-                    ["disable-glyph-caching"] = "false",
-                    ["color-depth"] = "16",
-                    ["width"] = "1280",
-                    ["height"] = "720"
-                },
-                attributes = new Dictionary<string, string>
-                {
-                    ["max-connections"] = "2",
-                    ["max-connections-per-user"] = "2"
-                }
-            };
+                var updated = await UpdateConnectionAsync(existingConnectionId, connectionData, authToken, token);
+                _logger.LogInformation(
+                    "Reused existing Guacamole RDP connection '{Name}' (ID: {Id}, updated: {Updated}) for VM {Ip}",
+                    connectionName, existingConnectionId, updated, vmIp);
+                return existingConnectionId;
+            }
 
             var json = JsonSerializer.Serialize(connectionData, JsonOptions);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
@@ -154,6 +131,20 @@ public class GuacamoleService
             if (!response.IsSuccessStatusCode)
             {
                 var errBody = await response.Content.ReadAsStringAsync(token);
+                if (errBody.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+                {
+                    existingConnectionId = await FindConnectionIdByNameAsync(connectionName, authToken, token);
+                    if (!string.IsNullOrEmpty(existingConnectionId))
+                    {
+                        var updated = await UpdateConnectionAsync(existingConnectionId, connectionData, authToken,
+                            token);
+                        _logger.LogInformation(
+                            "Recovered duplicate Guacamole RDP connection '{Name}' (ID: {Id}, updated: {Updated}) for VM {Ip}",
+                            connectionName, existingConnectionId, updated, vmIp);
+                        return existingConnectionId;
+                    }
+                }
+
                 _logger.LogError("Failed to create Guacamole connection: {Status} {Body}",
                     response.StatusCode, errBody);
                 return null;
@@ -172,6 +163,119 @@ public class GuacamoleService
             _logger.LogError(ex, "Failed to create Guacamole RDP connection for {Ip}", vmIp);
             return null;
         }
+    }
+
+    private static object BuildRdpConnectionData(
+        string connectionName,
+        string vmIp,
+        int rdpPort,
+        string username,
+        string password) => new
+    {
+        name = connectionName,
+        parentIdentifier = "ROOT",
+        protocol = "rdp",
+        parameters = new Dictionary<string, string>
+        {
+            ["hostname"] = vmIp,
+            ["port"] = rdpPort.ToString(),
+            ["username"] = username,
+            ["password"] = password,
+            ["security"] = "any",
+            ["ignore-cert"] = "true",
+            ["resize-method"] = "display-update",
+            // Performance: disable visual effects
+            ["enable-wallpaper"] = "true",
+            ["enable-theming"] = "false",
+            ["enable-font-smoothing"] = "false",
+            ["enable-full-window-drag"] = "false",
+            ["enable-desktop-composition"] = "false",
+            ["enable-menu-animations"] = "false",
+            ["disable-bitmap-caching"] = "false",
+            ["disable-glyph-caching"] = "false",
+            ["color-depth"] = "16",
+            ["width"] = "1280",
+            ["height"] = "720"
+        },
+        attributes = new Dictionary<string, string>
+        {
+            ["max-connections"] = "2",
+            ["max-connections-per-user"] = "2"
+        }
+    };
+
+    private async Task<string?> FindConnectionIdByNameAsync(
+        string connectionName,
+        string authToken,
+        CancellationToken token)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync(
+                $"{_settings.GuacamoleApiUrl}/session/data/postgresql/connections?token={authToken}",
+                token);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Failed to list Guacamole connections: {Status}", response.StatusCode);
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync(token);
+            using var doc = JsonDocument.Parse(json);
+
+            foreach (var property in doc.RootElement.EnumerateObject())
+            {
+                var connection = property.Value;
+                if (connection.ValueKind != JsonValueKind.Object)
+                    continue;
+
+                if (!connection.TryGetProperty("name", out var nameElement) ||
+                    !string.Equals(nameElement.GetString(), connectionName, StringComparison.Ordinal))
+                    continue;
+
+                if (connection.TryGetProperty("identifier", out var identifierElement))
+                    return identifierElement.GetString();
+
+                return property.Name;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to find Guacamole connection by name {Name}", connectionName);
+        }
+
+        return null;
+    }
+
+    private async Task<bool> UpdateConnectionAsync(
+        string connectionId,
+        object connectionData,
+        string authToken,
+        CancellationToken token)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(connectionData, JsonOptions);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var response = await _httpClient.PutAsync(
+                $"{_settings.GuacamoleApiUrl}/session/data/postgresql/connections/{connectionId}?token={authToken}",
+                content,
+                token);
+
+            if (response.IsSuccessStatusCode)
+                return true;
+
+            var errBody = await response.Content.ReadAsStringAsync(token);
+            _logger.LogWarning("Failed to update Guacamole connection {Id}: {Status} {Body}",
+                connectionId, response.StatusCode, errBody);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error updating Guacamole connection {Id}", connectionId);
+        }
+
+        return false;
     }
 
     /// <summary>

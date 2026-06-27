@@ -66,8 +66,6 @@ public class GameChallenge : Challenge
         CPUCount = model.CPUCount ?? CPUCount;
         MemoryLimit = model.MemoryLimit ?? MemoryLimit;
         StorageLimit = model.StorageLimit ?? StorageLimit;
-        ContainerImage = model.ContainerImage?.Trim() ?? ContainerImage;
-        ExposePort = model.ExposePort ?? ExposePort;
         NetworkMode = model.NetworkMode ?? NetworkMode;
         OriginalScore = model.OriginalScore ?? OriginalScore;
         MinScoreRate = model.MinScoreRate ?? MinScoreRate;
@@ -87,11 +85,27 @@ public class GameChallenge : Challenge
         if (model.FlagTemplate is { } template)
             FlagTemplate = string.IsNullOrWhiteSpace(template) ? null : template;
 
-        // Container only
-        EnableTrafficCapture = Type.IsContainer() && (model.EnableTrafficCapture ?? EnableTrafficCapture);
-
         Environment = model.Environment ?? Environment;
-        ImageTemplateId = model.ImageTemplateId ?? ImageTemplateId;
+
+        if (Environment == EnvironmentType.Docker)
+        {
+            ContainerImage = model.ContainerImage?.Trim() ?? ContainerImage;
+            ExposePort = model.ExposePort ?? ExposePort;
+            ImageTemplateId = null;
+        }
+        else
+        {
+            ContainerImage = null;
+            ExposePort = null;
+        }
+
+        ImageTemplateId = Environment == EnvironmentType.WindowsVM
+            ? model.ImageTemplateId ?? ImageTemplateId
+            : null;
+
+        // Container only
+        EnableTrafficCapture = Environment == EnvironmentType.Docker && Type.IsContainer() &&
+                               (model.EnableTrafficCapture ?? EnableTrafficCapture);
     }
 
     #region Db Relationship

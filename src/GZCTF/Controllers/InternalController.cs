@@ -1,8 +1,12 @@
-using GZCTF.Middlewares;
+using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using System.Net.Http.Headers;
 using System.Net.Mime;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace GZCTF.Controllers;
 
@@ -15,11 +19,16 @@ namespace GZCTF.Controllers;
 public class InternalController : ControllerBase
 {
     private readonly IContainerRepository _containerRepository;
+    private readonly ContainerProvider _containerProvider;
     private readonly ILogger<InternalController> _logger;
 
-    public InternalController(IContainerRepository containerRepository, ILogger<InternalController> logger)
+    public InternalController(
+        IContainerRepository containerRepository,
+        IOptions<ContainerProvider> containerProvider,
+        ILogger<InternalController> logger)
     {
         _containerRepository = containerRepository;
+        _containerProvider = containerProvider.Value;
         _logger = logger;
     }
 
@@ -27,10 +36,45 @@ public class InternalController : ControllerBase
     /// 获取所有活跃容器的端口映射（用于 Nginx stream 配置同步）
     /// </summary>
     [HttpGet("port-map")]
-    [RequireAdminOrToken]
+    [AllowAnonymous]
     public async Task<IActionResult> GetPortMap(CancellationToken token)
     {
+        if (!await IsAuthorizedSyncRequest())
+        {
+            _logger.LogWarning("Rejected unauthorized internal port-map request from {RemoteIp}",
+                HttpContext.Connection.RemoteIpAddress);
+            return Unauthorized(new RequestResponse("Invalid internal sync token", StatusCodes.Status401Unauthorized));
+        }
+
         var mappings = await _containerRepository.GetProxyPortMappingsAsync(token);
         return Ok(mappings);
+    }
+
+    async Task<bool> IsAuthorizedSyncRequest()
+    {
+        return await ContextHelper.HasValidToken(HttpContext)
+               || await ContextHelper.HasAdmin(HttpContext)
+               || HasConfiguredSyncToken(Request);
+    }
+
+    bool HasConfiguredSyncToken(HttpRequest request)
+    {
+        var expected = _containerProvider.NginxProxyConfig?.SyncToken;
+        if (string.IsNullOrWhiteSpace(expected))
+            return false;
+
+        if (!AuthenticationHeaderValue.TryParse(request.Headers.Authorization, out var value) ||
+            !string.Equals(value.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(value.Parameter))
+            return false;
+
+        var receivedBytes = Encoding.UTF8.GetBytes(value.Parameter);
+        var expectedBytes = Encoding.UTF8.GetBytes(expected);
+        if (receivedBytes.Length != expectedBytes.Length)
+            return false;
+
+        return CryptographicOperations.FixedTimeEquals(
+            receivedBytes,
+            expectedBytes);
     }
 }

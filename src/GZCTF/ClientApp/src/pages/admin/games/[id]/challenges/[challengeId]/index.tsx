@@ -33,14 +33,21 @@ import { HunamizeSize, showErrorMsg } from '@Utils/Shared'
 import api, { ChallengeType, FileType } from '@Api'
 
 interface ImageTemplate {
-  id: number
-  name: string
+  id?: number
+  Id?: number
+  name?: string
+  Name?: string
   description?: string | null
+  Description?: string | null
   imagePath?: string
   registryUrl?: string | null
+  RegistryUrl?: string | null
   osType: string | number
+  OSType?: string | number
   imageType?: string | number
+  ImageType?: string | number
   status?: string | number
+  Status?: string | number
 }
 
 interface ChallengeEditData {
@@ -92,13 +99,29 @@ function templateKey(value: string | number | undefined | null) {
 }
 
 function isReadyTemplate(template: ImageTemplate) {
-  const status = templateKey(template.status)
+  const status = templateKey(template.status ?? template.Status)
   return status === '0' || status === 'ready' || status === ''
 }
 
 function isDockerTemplate(template: ImageTemplate) {
-  const imageType = templateKey(template.imageType)
+  const imageType = templateKey(template.imageType ?? template.ImageType)
   return imageType === '0' || imageType === 'docker'
+}
+
+function templateId(template: ImageTemplate) {
+  return template.id ?? template.Id
+}
+
+function templateName(template: ImageTemplate) {
+  return template.name ?? template.Name ?? `模板 ${templateId(template) ?? ''}`
+}
+
+function templateDescription(template: ImageTemplate) {
+  return template.description ?? template.Description
+}
+
+function templateRegistryUrl(template: ImageTemplate) {
+  return template.registryUrl ?? template.RegistryUrl
 }
 
 export default function ChallengeEdit() {
@@ -157,7 +180,7 @@ export default function ChallengeEdit() {
 
   const loadTemplates = async () => {
     try {
-      const res = await fetch('/api/v1/image-templates')
+      const res = await fetch('/api/v1/image-templates?pageSize=100')
       if (res.ok) {
         const data = await res.json()
         setImageTemplates(data.items ?? data ?? [])
@@ -175,7 +198,7 @@ export default function ChallengeEdit() {
   const dockerTemplates = useMemo(
     () =>
       imageTemplates.filter(
-        (template) => isReadyTemplate(template) && isDockerTemplate(template) && template.registryUrl
+        (template) => isReadyTemplate(template) && isDockerTemplate(template) && templateRegistryUrl(template)
       ),
     [imageTemplates]
   )
@@ -183,22 +206,49 @@ export default function ChallengeEdit() {
   const windowsTemplates = useMemo(
     () =>
       imageTemplates.filter((template) => {
-        const osType = templateKey(template.osType)
+        const osType = templateKey(template.osType ?? template.OSType)
         return isReadyTemplate(template) && !isDockerTemplate(template) && (osType === '1' || osType === 'windows')
       }),
     [imageTemplates]
   )
 
+  const windowsTemplateOptions = useMemo(() => {
+    const options = windowsTemplates
+      .flatMap((template) => {
+        const id = templateId(template)
+        const description = templateDescription(template)
+        return id
+          ? [{
+              value: String(id),
+              label: `${templateName(template)}${description ? ` - ${description}` : ''}`,
+            }]
+          : []
+      })
+    const selectedId = challenge?.imageTemplateId
+    if (selectedId && !options.some((option) => option.value === String(selectedId))) {
+      options.unshift({ value: String(selectedId), label: `已选择镜像模板 ID: ${selectedId}` })
+    }
+    return options
+  }, [windowsTemplates, challenge?.imageTemplateId])
+
   const handleSave = async () => {
     if (!challenge) return
 
-    const isContainerChallenge =
-      challenge.type === ChallengeType.StaticContainer || challenge.type === ChallengeType.DynamicContainer
+    const isDockerEnv = challenge.environment === ENV_DOCKER
 
-    if (isContainerChallenge && !challenge.containerImage.trim()) {
+    if (isDockerEnv && !challenge.containerImage.trim()) {
       notifications.show({
         title: '保存失败',
         message: '容器题目必须先绑定 Docker 镜像',
+        color: 'red',
+      })
+      return
+    }
+
+    if (challenge.environment === ENV_WINDOWS_VM && !challenge.imageTemplateId) {
+      notifications.show({
+        title: '保存失败',
+        message: 'Windows 虚拟机题目必须先选择 Windows 镜像模板',
         color: 'red',
       })
       return
@@ -212,17 +262,17 @@ export default function ChallengeEdit() {
         body: JSON.stringify({
           title: challenge.title,
           content: challenge.content,
-          containerImage: challenge.containerImage,
+          containerImage: isDockerEnv ? challenge.containerImage : null,
           memoryLimit: challenge.memoryLimit,
           cpuCount: challenge.cpuCount,
-          storageLimit: challenge.storageLimit,
-          exposePort: challenge.exposePort,
+          storageLimit: isDockerEnv ? challenge.storageLimit : null,
+          exposePort: isDockerEnv ? challenge.exposePort : null,
           originalScore: challenge.originalScore,
           minScoreRate: challenge.minScoreRate,
           difficulty: challenge.difficulty,
           submissionLimit: challenge.submissionLimit,
-          environment: isContainerChallenge ? ENV_DOCKER : challenge.environment,
-          imageTemplateId: challenge.imageTemplateId,
+          environment: challenge.environment,
+          imageTemplateId: challenge.environment === ENV_WINDOWS_VM ? challenge.imageTemplateId : null,
           enableTrafficCapture: challenge.enableTrafficCapture,
           disableBloodBonus: challenge.disableBloodBonus,
           flagTemplate: challenge.flagTemplate,
@@ -334,13 +384,21 @@ export default function ChallengeEdit() {
   const handleToggle = async (enabled: boolean) => {
     if (!challenge) return
 
-    const isContainerChallenge =
-      challenge.type === ChallengeType.StaticContainer || challenge.type === ChallengeType.DynamicContainer
+    const isDockerEnv = challenge.environment === ENV_DOCKER
 
-    if (enabled && isContainerChallenge && !challenge.containerImage.trim()) {
+    if (enabled && isDockerEnv && !challenge.containerImage.trim()) {
       notifications.show({
         title: '无法启用',
         message: '容器题目必须先绑定 Docker 镜像',
+        color: 'red',
+      })
+      return
+    }
+
+    if (enabled && challenge.environment === ENV_WINDOWS_VM && !challenge.imageTemplateId) {
+      notifications.show({
+        title: '无法启用',
+        message: 'Windows 虚拟机题目必须先选择 Windows 镜像模板',
         color: 'red',
       })
       return
@@ -396,10 +454,7 @@ export default function ChallengeEdit() {
   }
 
   const envType = challenge.environment ?? ENV_NONE
-  const isContainer =
-    envType === ENV_DOCKER ||
-    challenge.type === ChallengeType.StaticContainer ||
-    challenge.type === ChallengeType.DynamicContainer
+  const isDockerEnv = envType === ENV_DOCKER
   const isWindowsVM = envType === ENV_WINDOWS_VM
   const isDynamicAttachment = challenge.type === ChallengeType.DynamicAttachment
   const isStaticAttachment = challenge.type === ChallengeType.StaticAttachment
@@ -424,9 +479,9 @@ export default function ChallengeEdit() {
             {challenge.type}
           </Badge>
           <Badge
-            color={isWindowsVM ? 'blue' : isContainer ? 'teal' : 'gray'}
+            color={isWindowsVM ? 'blue' : isDockerEnv ? 'teal' : 'gray'}
             className="yy-semantic-badge"
-            data-semantic={isWindowsVM ? 'windows' : isContainer ? 'docker' : 'neutral'}
+            data-semantic={isWindowsVM ? 'windows' : isDockerEnv ? 'docker' : 'neutral'}
           >
             {envLabel}
           </Badge>
@@ -469,11 +524,13 @@ export default function ChallengeEdit() {
                 ...challenge,
                 environment: newEnv,
                 imageTemplateId: newEnv === ENV_WINDOWS_VM ? challenge.imageTemplateId : null,
+                containerImage: newEnv === ENV_DOCKER ? challenge.containerImage : '',
+                exposePort: newEnv === ENV_DOCKER ? challenge.exposePort : 80,
               })
             }}
           />
 
-          {isContainer && (
+          {isDockerEnv && (
             <Stack gap="sm" mt="md">
               <Text size="sm" fw={600} c="cyan">
                 容器配置
@@ -484,11 +541,11 @@ export default function ChallengeEdit() {
                   dockerTemplates.length === 0 ? '暂无就绪 Docker 镜像，请先到环境模板上传或注册' : '选择 Docker 镜像'
                 }
                 data={dockerTemplates.map((template) => ({
-                  value: template.registryUrl ?? '',
-                  label: `${template.name} - ${template.registryUrl}`,
+                  value: templateRegistryUrl(template) ?? '',
+                  label: `${templateName(template)} - ${templateRegistryUrl(template)}`,
                 }))}
                 value={
-                  dockerTemplates.some((template) => template.registryUrl === challenge.containerImage)
+                  dockerTemplates.some((template) => templateRegistryUrl(template) === challenge.containerImage)
                     ? challenge.containerImage
                     : null
                 }
@@ -544,20 +601,22 @@ export default function ChallengeEdit() {
               <Select
                 label="镜像模板"
                 placeholder="选择 Windows 镜像模板..."
-                data={windowsTemplates.map((template) => ({
-                  value: String(template.id),
-                  label: `${template.name}${template.description ? ` - ${template.description}` : ''}`,
-                }))}
+                data={windowsTemplateOptions}
                 value={challenge.imageTemplateId ? String(challenge.imageTemplateId) : null}
                 onChange={(value) => setChallenge({ ...challenge, imageTemplateId: value ? Number(value) : null })}
+                searchable
+                clearable
+                required
               />
               {challenge.imageTemplateId && (
                 <Alert color="blue" variant="light">
                   已选择镜像模板 ID: {challenge.imageTemplateId}
-                  {windowsTemplates.find((template) => template.id === challenge.imageTemplateId) && (
+                  {windowsTemplates.find((template) => templateId(template) === challenge.imageTemplateId) && (
                     <Text size="xs" mt={4}>
                       模板:{' '}
-                      {windowsTemplates.find((template) => template.id === challenge.imageTemplateId)?.name ?? '未知'}
+                      {templateName(
+                        windowsTemplates.find((template) => templateId(template) === challenge.imageTemplateId)!
+                      )}
                     </Text>
                   )}
                 </Alert>
@@ -584,7 +643,7 @@ export default function ChallengeEdit() {
             </Stack>
           )}
 
-          {!isContainer && !isWindowsVM && (
+          {!isDockerEnv && !isWindowsVM && (
             <Alert color="gray" variant="light" mt="md">
               附件题模式：无需环境配置，仅通过附件和 Flag 评判。
             </Alert>

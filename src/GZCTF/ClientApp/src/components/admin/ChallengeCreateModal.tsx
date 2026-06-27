@@ -1,4 +1,4 @@
-import { Button, ComboboxItem, Modal, ModalProps, NumberInput, Select, Stack, TextInput } from '@mantine/core'
+import { Alert, Button, ComboboxItem, Modal, ModalProps, NumberInput, Select, Stack, TextInput } from '@mantine/core'
 import { useInputState } from '@mantine/hooks'
 import { showNotification } from '@mantine/notifications'
 import { mdiCheck } from '@mdi/js'
@@ -15,7 +15,54 @@ import {
   useChallengeCategoryLabelMap,
   useChallengeTypeLabelMap,
 } from '@Utils/Shared'
-import api, { ChallengeInfoModel, ChallengeCategory, ChallengeType } from '@Api'
+import api, { ChallengeInfoModel, ChallengeCategory, ChallengeType, EnvironmentType } from '@Api'
+
+interface ImageTemplateOption {
+  id?: number
+  Id?: number
+  name?: string
+  Name?: string
+  description?: string | null
+  Description?: string | null
+  registryUrl?: string | null
+  RegistryUrl?: string | null
+  osType?: string | number
+  OSType?: string | number
+  imageType?: string | number
+  ImageType?: string | number
+  status?: string | number
+  Status?: string | number
+}
+
+function templateKey(value: string | number | undefined | null) {
+  return String(value ?? '').toLowerCase()
+}
+
+function isReadyTemplate(template: ImageTemplateOption) {
+  const status = templateKey(template.status ?? template.Status)
+  return status === '0' || status === 'ready' || status === ''
+}
+
+function isDockerTemplate(template: ImageTemplateOption) {
+  const imageType = templateKey(template.imageType ?? template.ImageType)
+  return imageType === '0' || imageType === 'docker'
+}
+
+function templateId(template: ImageTemplateOption) {
+  return template.id ?? template.Id
+}
+
+function templateName(template: ImageTemplateOption) {
+  return template.name ?? template.Name ?? `模板 ${templateId(template) ?? ''}`
+}
+
+function templateDescription(template: ImageTemplateOption) {
+  return template.description ?? template.Description
+}
+
+function templateRegistryUrl(template: ImageTemplateOption) {
+  return template.registryUrl ?? template.RegistryUrl
+}
 
 interface ChallengeCreateModalProps extends ModalProps {
   onAddChallenge: (game: ChallengeInfoModel) => void
@@ -32,25 +79,32 @@ export const ChallengeCreateModal: FC<ChallengeCreateModalProps> = (props) => {
   const [title, setTitle] = useInputState('')
   const [category, setCategory] = useState<string | null>(null)
   const [type, setType] = useState<string | null>(null)
+  const [environment, setEnvironment] = useState<EnvironmentType>(EnvironmentType.None)
   const [containerImage, setContainerImage] = useState('')
   const [exposePort, setExposePort] = useState(80)
-  const [imageTemplates, setImageTemplates] = useState<{ name: string; registryUrl?: string | null; imageType?: string | number; status?: string | number }[]>([])
+  const [imageTemplateId, setImageTemplateId] = useState<string | null>(null)
+  const [imageTemplates, setImageTemplates] = useState<ImageTemplateOption[]>([])
 
   const { t } = useTranslation()
 
-  const isContainer =
+  const isContainerType =
     type === ChallengeType.StaticContainer || type === ChallengeType.DynamicContainer
+  const isDockerEnv = isContainerType && environment === EnvironmentType.Docker
+  const isWindowsVmEnv = isContainerType && environment === EnvironmentType.WindowsVM
 
   const dockerTemplates = useMemo(
     () =>
       imageTemplates.filter((template) => {
-        const imageType = String(template.imageType ?? '').toLowerCase()
-        const status = String(template.status ?? '').toLowerCase()
-        return (
-          template.registryUrl &&
-          (imageType === '0' || imageType === 'docker') &&
-          (status === '0' || status === 'ready' || status === '')
-        )
+        return templateRegistryUrl(template) && isDockerTemplate(template) && isReadyTemplate(template)
+      }),
+    [imageTemplates]
+  )
+
+  const windowsTemplates = useMemo(
+    () =>
+      imageTemplates.filter((template) => {
+        const osType = templateKey(template.osType ?? template.OSType)
+        return isReadyTemplate(template) && !isDockerTemplate(template) && (osType === '1' || osType === 'windows')
       }),
     [imageTemplates]
   )
@@ -58,18 +112,37 @@ export const ChallengeCreateModal: FC<ChallengeCreateModalProps> = (props) => {
   useEffect(() => {
     if (!modalProps.opened) return
 
-    fetch('/api/v1/image-templates')
+    fetch('/api/v1/image-templates?pageSize=100')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => setImageTemplates(data?.items ?? data ?? []))
       .catch(() => setImageTemplates([]))
   }, [modalProps.opened])
 
+  useEffect(() => {
+    if (!isContainerType) {
+      setEnvironment(EnvironmentType.None)
+      return
+    }
+
+    if (environment === EnvironmentType.None) {
+      setEnvironment(EnvironmentType.Docker)
+    }
+  }, [environment, isContainerType])
+
   const onCreate = async () => {
     if (!title || !category || !type) return
-    if (isContainer && !containerImage.trim()) {
+    if (isDockerEnv && !containerImage.trim()) {
       showNotification({
         color: 'red',
         message: '容器题目必须先绑定 Docker 镜像',
+      })
+      return
+    }
+
+    if (isWindowsVmEnv && !imageTemplateId) {
+      showNotification({
+        color: 'red',
+        message: 'Windows 虚拟机题目必须先选择 Windows 镜像模板',
       })
       return
     }
@@ -82,8 +155,10 @@ export const ChallengeCreateModal: FC<ChallengeCreateModalProps> = (props) => {
         title: title,
         category: category as ChallengeCategory,
         type: type as ChallengeType,
-        containerImage: isContainer ? containerImage.trim() : undefined,
-        exposePort: isContainer ? exposePort : undefined,
+        environment: isContainerType ? environment : EnvironmentType.None,
+        containerImage: isDockerEnv ? containerImage.trim() : undefined,
+        exposePort: isDockerEnv ? exposePort : undefined,
+        imageTemplateId: isWindowsVmEnv && imageTemplateId ? Number(imageTemplateId) : undefined,
       })
       showNotification({
         color: 'teal',
@@ -129,23 +204,54 @@ export const ChallengeCreateModal: FC<ChallengeCreateModalProps> = (props) => {
           description={t('admin.content.games.challenges.type.description')}
           placeholder="Type"
           value={type}
-          onChange={setType}
+          onChange={(value) => {
+            setType(value)
+            const nextIsContainer =
+              value === ChallengeType.StaticContainer || value === ChallengeType.DynamicContainer
+            setEnvironment(nextIsContainer ? EnvironmentType.Docker : EnvironmentType.None)
+            if (!nextIsContainer) {
+              setContainerImage('')
+              setImageTemplateId(null)
+            }
+          }}
           renderOption={ChallengeTypeItem}
           data={Object.entries(ChallengeType).map((type) => {
             const data = challengeTypeLabelMap.get(type[1])
             return { value: type[1], label: data?.name, ...data } as ComboboxItem
           })}
         />
-        {isContainer && (
+        {isContainerType && (
+          <Select
+            required
+            label="环境类型"
+            placeholder="选择运行环境"
+            value={environment}
+            onChange={(value) => {
+              const next = (value as EnvironmentType | null) ?? EnvironmentType.Docker
+              setEnvironment(next)
+              if (next !== EnvironmentType.Docker) {
+                setContainerImage('')
+              }
+              if (next !== EnvironmentType.WindowsVM) {
+                setImageTemplateId(null)
+              }
+            }}
+            data={[
+              { value: EnvironmentType.Docker, label: 'Docker 容器' },
+              { value: EnvironmentType.WindowsVM, label: 'Windows 虚拟机 (RDP)' },
+            ]}
+          />
+        )}
+        {isDockerEnv && (
           <>
             <Select
               label="Docker 镜像"
               placeholder={dockerTemplates.length ? '选择已注册镜像' : '暂无已注册 Docker 镜像'}
               data={dockerTemplates.map((template) => ({
-                value: template.registryUrl ?? '',
-                label: `${template.name} - ${template.registryUrl}`,
+                value: templateRegistryUrl(template) ?? '',
+                label: `${templateName(template)} - ${templateRegistryUrl(template)}`,
               }))}
-              value={dockerTemplates.some((template) => template.registryUrl === containerImage) ? containerImage : null}
+              value={dockerTemplates.some((template) => templateRegistryUrl(template) === containerImage) ? containerImage : null}
               onChange={(value) => setContainerImage(value ?? '')}
               searchable
               clearable
@@ -166,6 +272,33 @@ export const ChallengeCreateModal: FC<ChallengeCreateModalProps> = (props) => {
               onChange={(value) => setExposePort(Number(value) || 80)}
               required
             />
+          </>
+        )}
+        {isWindowsVmEnv && (
+          <>
+            <Select
+              label="Windows 镜像模板"
+              placeholder={windowsTemplates.length ? '选择 Windows 镜像模板' : '暂无就绪 Windows 镜像模板'}
+              data={windowsTemplates
+                .flatMap((template) => {
+                  const id = templateId(template)
+                  const description = templateDescription(template)
+                  return id
+                    ? [{
+                        value: String(id),
+                        label: `${templateName(template)}${description ? ` - ${description}` : ''}`,
+                      }]
+                    : []
+                })}
+              value={imageTemplateId}
+              onChange={(value) => setImageTemplateId(value ? String(value) : null)}
+              searchable
+              clearable
+              required
+            />
+            <Alert color="blue" variant="light">
+              Windows 虚拟机题目只需要选择镜像模板，不需要 Docker 镜像地址和开放端口。
+            </Alert>
           </>
         )}
         <Button fullWidth disabled={disabled} onClick={onCreate}>

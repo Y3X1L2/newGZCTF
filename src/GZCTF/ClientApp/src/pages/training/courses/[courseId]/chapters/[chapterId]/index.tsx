@@ -400,7 +400,7 @@ const ChapterDetail: FC = () => {
           </YinyuPanel>
         </Stack>
 
-        <YinyuPanel p="md" className="yy-course-toc">
+        <YinyuPanel p="md" className="yy-course-toc yy-course-learning-status">
           <Title order={4}>目录</Title>
           <Stack gap={4} mt="sm">
             {toc.length ? (

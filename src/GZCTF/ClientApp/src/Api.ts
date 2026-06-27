@@ -1361,6 +1361,13 @@ export interface ChallengeInfoModel {
    * @format int32
    */
   exposePort?: number | null;
+  /** Deployment environment type. */
+  environment?: EnvironmentType | null;
+  /**
+   * Image template ID for VM deployment.
+   * @format int32
+   */
+  imageTemplateId?: number | null;
   /** Is the challenge enabled */
   isEnabled?: boolean;
   /**

@@ -12,6 +12,7 @@ using GZCTF.Services.Fleet;
 using GZCTF.Services.Transfer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Localization;
 using NSwag.Annotations;
 
@@ -36,6 +37,7 @@ public class EditController(
     IGameInstanceRepository instanceRepository,
     IGameNoticeRepository gameNoticeRepository,
     IGameRepository gameRepository,
+    AppDbContext dbContext,
     IContainerManager containerService,
     INginxProxySyncService nginxProxySync,
     IBlobRepository blobService,
@@ -45,11 +47,28 @@ public class EditController(
     IStringLocalizer<Program> localizer) : Controller
 {
     bool HasContainerRuntimeConfig(GameChallenge challenge) =>
-        !challenge.Type.IsContainer() ||
+        challenge.Environment != EnvironmentType.Docker ||
+        challenge.Type.IsContainer() &&
         !string.IsNullOrWhiteSpace(challenge.ContainerImage) && challenge.ExposePort is >= 1 and <= 65535;
 
     BadRequestObjectResult ContainerRuntimeConfigError() =>
         BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Container_ConfigError)]));
+
+    async Task<bool> HasWindowsVmRuntimeConfig(GameChallenge challenge, CancellationToken token) =>
+        challenge.Environment != EnvironmentType.WindowsVM ||
+        challenge.Type.IsContainer() &&
+        challenge.ImageTemplateId.HasValue &&
+        await IsReadyWindowsVmTemplate(challenge.ImageTemplateId.Value, token);
+
+    Task<bool> IsReadyWindowsVmTemplate(int templateId, CancellationToken token) =>
+        dbContext.ImageTemplates.AnyAsync(t =>
+            t.Id == templateId &&
+            t.OSType == OSType.Windows &&
+            t.ImageType != ImageType.Docker &&
+            t.Status == ImageStatus.Ready, token);
+
+    BadRequestObjectResult WindowsVmRuntimeConfigError() =>
+        BadRequest(new RequestResponse("Windows 虚拟机题目必须选择就绪的 Windows 镜像模板。"));
 
     /// <summary>
     /// Add Post
@@ -582,9 +601,17 @@ public class EditController(
             return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Game_NotFound)],
                 StatusCodes.Status404NotFound));
 
-        if (model.Type.IsContainer() &&
+        var environment = model.Type.IsContainer()
+            ? model.Environment ?? EnvironmentType.Docker
+            : EnvironmentType.None;
+
+        if (environment == EnvironmentType.Docker &&
             (string.IsNullOrWhiteSpace(model.ContainerImage) || model.ExposePort is not (>= 1 and <= 65535)))
             return ContainerRuntimeConfigError();
+
+        if (environment == EnvironmentType.WindowsVM &&
+            (!model.ImageTemplateId.HasValue || !await IsReadyWindowsVmTemplate(model.ImageTemplateId.Value, token)))
+            return WindowsVmRuntimeConfigError();
 
         var res = await challengeRepository.CreateChallenge(game,
             new GameChallenge
@@ -592,9 +619,10 @@ public class EditController(
                 Title = model.Title,
                 Type = model.Type,
                 Category = model.Category,
-                ContainerImage = model.Type.IsContainer() ? model.ContainerImage?.Trim() : null,
-                ExposePort = model.Type.IsContainer() ? model.ExposePort : null,
-                Environment = model.Type.IsContainer() ? EnvironmentType.Docker : EnvironmentType.None
+                ContainerImage = environment == EnvironmentType.Docker ? model.ContainerImage?.Trim() : null,
+                ExposePort = environment == EnvironmentType.Docker ? model.ExposePort : null,
+                Environment = environment,
+                ImageTemplateId = environment == EnvironmentType.WindowsVM ? model.ImageTemplateId : null,
             }, token);
 
         await cacheHelper.FlushScoreboardCache(id, token);
@@ -736,12 +764,18 @@ public class EditController(
         if (!HasContainerRuntimeConfig(res))
             return ContainerRuntimeConfigError();
 
+        if (!await HasWindowsVmRuntimeConfig(res, token))
+            return WindowsVmRuntimeConfigError();
+
         switch (model.IsEnabled)
         {
             case true:
                 {
                     if (!HasContainerRuntimeConfig(res))
                         return ContainerRuntimeConfigError();
+
+                    if (!await HasWindowsVmRuntimeConfig(res, token))
+                        return WindowsVmRuntimeConfigError();
 
                     // Will also update IsEnabled
                     await challengeRepository.EnsureInstances(res, game, token);
@@ -796,7 +830,7 @@ public class EditController(
             return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Challenge_NotFound)],
                 StatusCodes.Status404NotFound));
 
-        if (!challenge.Type.IsContainer())
+        if (!challenge.Type.IsContainer() || challenge.Environment != EnvironmentType.Docker)
             return BadRequest(
                 new RequestResponse(localizer[nameof(Resources.Program.Game_ContainerCreationNotAllowed)]));
 

@@ -667,12 +667,24 @@ const CourseDetail: FC = () => {
                       编辑课程
                     </Button>
                     {course.status !== TrainingCourseStatus.Published ? (
-                      <Button
-                        leftSection={<Icon path={mdiPublish} size={0.82} />}
-                        onClick={() => trainingCourseAdminApi.publish(course.id).then(load).catch((e) => showErrorMsg(e, t))}
-                      >
-                        发布
-                      </Button>
+                      <>
+                        <Button
+                          leftSection={<Icon path={mdiPublish} size={0.82} />}
+                          onClick={() => trainingCourseAdminApi.publish(course.id).then(load).catch((e) => showErrorMsg(e, t))}
+                        >
+                          发布
+                        </Button>
+                        {course.status === TrainingCourseStatus.Draft ? (
+                          <Button
+                            color="orange"
+                            variant="light"
+                            leftSection={<Icon path={mdiArchiveOutline} size={0.82} />}
+                            onClick={() => trainingCourseAdminApi.archive(course.id).then(load).catch((e) => showErrorMsg(e, t))}
+                          >
+                            归档
+                          </Button>
+                        ) : null}
+                      </>
                     ) : (
                       <Button
                         color="orange"

@@ -437,6 +437,7 @@ public class ContainerProvider
     public ContainerPortMappingType PortMappingType { get; set; } = ContainerPortMappingType.Default;
     public bool EnableTrafficCapture { get; set; }
     public string PublicEntry { get; set; } = string.Empty;
+    public string? LocalHostAddress { get; set; }
     public KubernetesConfig? KubernetesConfig { get; set; }
     public DockerConfig? DockerConfig { get; set; }
     public NginxProxyConfig? NginxProxyConfig { get; set; }
@@ -498,6 +499,12 @@ public class NginxProxyConfig
     /// 默认 false：生成可被 nginx.conf 的 stream {} include 的片段。
     /// </summary>
     public bool WriteStreamBlock { get; set; }
+
+    /// <summary>
+    /// Optional bearer token used by an external public Nginx gateway to pull
+    /// the internal port-map endpoint without depending on a user session.
+    /// </summary>
+    public string? SyncToken { get; set; }
 }
 
 public class KubernetesConfig

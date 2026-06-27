@@ -615,9 +615,12 @@ const Teams: FC = () => {
   }
 
   return (
-    <WithNavBar minWidth={0} width="calc(100vw - 7.2rem)">
+    <WithNavBar minWidth={0} width="100%">
       <WithRole requiredRole={Role.User}>
-        <Stack className="yy-page-frame view-stack yy-soft-enter yy-team-page yy-team-workspace">
+        <Stack
+          className="yy-page-frame view-stack yy-soft-enter yy-team-page yy-team-workspace"
+          style={{ width: '100%', maxWidth: 'none', alignItems: 'stretch' }}
+        >
           {teams && !teamsError && user && !userError ? (
             teams.length > 0 ? (
               <div className="yy-team-workspace-grid">
@@ -693,18 +696,15 @@ const Teams: FC = () => {
                       </div>
                     </Group>
 
-                    <div className="yy-team-profile-layout">
+                    <div className={`yy-team-profile-layout ${selectedIsCaptain ? 'is-captain' : 'is-member'}`}>
                       <aside className="yy-team-profile-identity">
-                        {selectedIsCaptain ? (
-                          <TextInput
-                            label="队伍名称"
-                            value={teamDraft.name}
-                            onChange={(event) => setTeamDraft((current) => ({ ...current, name: event.currentTarget.value }))}
-                            className="yy-team-inline-input"
-                          />
-                        ) : (
-                          <Title order={3}>{selectedTeam?.name ?? 'team'}</Title>
-                        )}
+                        <TextInput
+                          label="队伍名称"
+                          value={selectedIsCaptain ? teamDraft.name : selectedTeam?.name ?? ''}
+                          readOnly={!selectedIsCaptain}
+                          onChange={(event) => setTeamDraft((current) => ({ ...current, name: event.currentTarget.value }))}
+                          className="yy-team-inline-input"
+                        />
                         <div className="yy-team-avatar-edit-shell">
                           <Avatar
                             src={selectedTeam?.avatar}
@@ -738,7 +738,7 @@ const Teams: FC = () => {
                           {selectedIsCaptain ? '队长' : '队员'}
                         </Badge>
                         {selectedIsCaptain ? (
-                          <Stack gap="xs" w="100%">
+                          <Stack gap="xs" w="100%" className="yy-team-identity-actions">
                             <Button
                               fullWidth
                               className="yy-team-action yy-team-action-create"
@@ -769,25 +769,30 @@ const Teams: FC = () => {
                             </Button>
                           </Stack>
                         ) : (
-                          <Button
-                            fullWidth
-                            variant="light"
-                            color="red"
-                            loading={working}
-                            leftSection={<Icon path={mdiTrashCanOutline} size={0.82} />}
-                            onClick={() => {
-                              modals.openConfirmModal({
-                                title: '退出队伍',
-                                children: <Text size="sm">确认退出 {selectedTeam?.name ?? '当前队伍'}？</Text>,
-                                confirmProps: { color: 'red' },
-                                labels: { confirm: '确认退出', cancel: '取消' },
-                                zIndex: 10000,
-                                onConfirm: () => void onLeaveTeam(),
-                              })
-                            }}
-                          >
-                            退出队伍
-                          </Button>
+                          <Stack gap="xs" w="100%" className="yy-team-identity-actions">
+                            <Text size="xs" className="yy-readable-text yy-team-readonly-note">
+                              队伍资料由队长维护。
+                            </Text>
+                            <Button
+                              fullWidth
+                              variant="light"
+                              color="red"
+                              loading={working}
+                              leftSection={<Icon path={mdiTrashCanOutline} size={0.82} />}
+                              onClick={() => {
+                                modals.openConfirmModal({
+                                  title: '退出队伍',
+                                  children: <Text size="sm">确认退出 {selectedTeam?.name ?? '当前队伍'}？</Text>,
+                                  confirmProps: { color: 'red' },
+                                  labels: { confirm: '确认退出', cancel: '取消' },
+                                  zIndex: 10000,
+                                  onConfirm: () => void onLeaveTeam(),
+                                })
+                              }}
+                            >
+                              退出队伍
+                            </Button>
+                          </Stack>
                         )}
                       </aside>
 
@@ -863,16 +868,16 @@ const Teams: FC = () => {
                             </article>
                           ))}
                         </div>
-                        {selectedIsCaptain ? (
-                          <section className="yy-team-requests-panel">
-                            <Group justify="space-between" align="center" className="yy-team-subhead">
-                              <div>
-                                <span className="yy-section-kicker">JOIN REQUESTS</span>
-                                <Title order={3}>入队申请</Title>
-                              </div>
-                              <Badge className="yy-team-role-badge">{pendingRequests.length}</Badge>
-                            </Group>
-                            {requestsLoading ? (
+                        <section className={`yy-team-requests-panel ${selectedIsCaptain ? '' : 'is-readonly'}`}>
+                          <Group justify="space-between" align="center" className="yy-team-subhead">
+                            <div>
+                              <span className="yy-section-kicker">JOIN REQUESTS</span>
+                              <Title order={3}>入队申请</Title>
+                            </div>
+                            <Badge className="yy-team-role-badge">{selectedIsCaptain ? pendingRequests.length : '只读'}</Badge>
+                          </Group>
+                          {selectedIsCaptain ? (
+                            requestsLoading ? (
                               <Text size="sm" className="yy-readable-text">
                                 正在读取入队申请...
                               </Text>
@@ -914,9 +919,22 @@ const Teams: FC = () => {
                               <Text size="sm" className="yy-readable-text">
                                 暂无待处理入队申请。
                               </Text>
-                            )}
-                          </section>
-                        ) : null}
+                            )
+                          ) : (
+                            <div className="yy-team-request-list yy-team-request-list-readonly">
+                              <article className="yy-team-request-row yy-team-request-row-muted">
+                                <Avatar radius="xl" size={38} className="yy-team-ghost-avatar">
+                                  <Icon path={mdiAccountCheck} size={0.86} />
+                                </Avatar>
+                                <div className="yy-team-roster-user">
+                                  <strong>队长审核</strong>
+                                  <span>入队申请由队长统一处理，成员可查看队伍资料与成员列表。</span>
+                                </div>
+                                <Badge className="yy-team-role-badge">成员视图</Badge>
+                              </article>
+                            </div>
+                          )}
+                        </section>
                       </section>
                     </div>
 

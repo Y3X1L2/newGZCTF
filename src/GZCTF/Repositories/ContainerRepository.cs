@@ -53,7 +53,6 @@ public class ContainerRepository(
                         && c.PublicIP == publicEntry
                         && c.NodeId != null
                         && c.Node != null
-                        && !c.Node.IsLocal
                         && !c.IsProxy)
             .Select(c => new PortMappingEntry(c.PublicPort!.Value, c.IP, c.Port))
             .ToArrayAsync(token);

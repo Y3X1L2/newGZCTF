@@ -1,6 +1,7 @@
 import {
   Box,
   Button,
+  ActionIcon,
   Group,
   Modal,
   SimpleGrid,
@@ -13,6 +14,7 @@ import {
 import { showNotification } from '@mantine/notifications'
 import {
   mdiBookOpenPageVariantOutline,
+  mdiArchiveOutline,
   mdiChartTimelineVariant,
   mdiPlus,
   mdiSchoolOutline,
@@ -41,6 +43,7 @@ import {
   TrainingCourseEditModel,
   TrainingCourseEnrollmentPolicy,
   TrainingCourseModel,
+  TrainingCourseStatus,
   TrainingPersonalOverviewModel,
   trainingCourseAdminApi,
   trainingCourseApi,
@@ -145,6 +148,33 @@ const Training: FC = () => {
     }
   }
 
+  const archiveCourse = async (course: TrainingCourseModel) => {
+    try {
+      await trainingCourseAdminApi.archive(course.id)
+      showNotification({ color: 'orange', title: '课程已归档', message: course.title })
+      await load()
+    } catch (e) {
+      showErrorMsg(e, t)
+    }
+  }
+
+  const courseArchiveAction = (course: TrainingCourseModel) =>
+    canCreate && course.canEdit && course.status === TrainingCourseStatus.Draft ? (
+      <ActionIcon
+        variant="light"
+        color="orange"
+        aria-label="归档课程"
+        title="归档课程"
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          void archiveCourse(course)
+        }}
+      >
+        <Icon path={mdiArchiveOutline} size={0.78} />
+      </ActionIcon>
+    ) : null
+
   useEffect(() => {
     void load()
   }, [])
@@ -218,7 +248,13 @@ const Training: FC = () => {
               {recent.length ? (
                 <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="md" className="yy-training-course-grid">
                   {recent.map((course) => (
-                    <TrainingCourseCard key={course.id} course={course} featured actionLabel={canCreate ? '管理课程' : '继续学习'} />
+                    <TrainingCourseCard
+                      key={course.id}
+                      course={course}
+                      featured
+                      actionLabel={canCreate ? '管理课程' : '继续学习'}
+                      extraAction={courseArchiveAction(course)}
+                    />
                   ))}
                 </SimpleGrid>
               ) : (
@@ -244,7 +280,13 @@ const Training: FC = () => {
               </Group>
               <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="md" className="yy-training-course-grid">
                 {(canCreate ? teachingCourses : todoCourses).slice(0, 6).map((course) => (
-                  <TrainingCourseCard key={course.id} course={course} compact actionLabel={canCreate ? '编辑课程' : '继续'} />
+                  <TrainingCourseCard
+                    key={course.id}
+                    course={course}
+                    compact
+                    actionLabel={canCreate ? '编辑课程' : '继续'}
+                    extraAction={courseArchiveAction(course)}
+                  />
                 ))}
               </SimpleGrid>
               {(canCreate ? teachingCourses : todoCourses).length === 0 ? (
@@ -270,7 +312,7 @@ const Training: FC = () => {
               </Group>
               <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="md" className="yy-training-course-grid">
                 {courses.map((course) => (
-                  <TrainingCourseCard key={course.id} course={course} />
+                  <TrainingCourseCard key={course.id} course={course} extraAction={courseArchiveAction(course)} />
                 ))}
               </SimpleGrid>
               {courses.length === 0 ? (

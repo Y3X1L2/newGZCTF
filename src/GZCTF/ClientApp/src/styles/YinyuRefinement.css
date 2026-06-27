@@ -7159,8 +7159,12 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
 
 /* Team workspace: user-facing team center with local team list and single-team score curve. */
 .yy-team-workspace {
-  width: min(100%, calc(100vw - 7.2rem));
+  width: calc(100vw - 7.2rem) !important;
+  min-width: 0;
   max-width: none !important;
+  align-self: stretch;
+  align-items: stretch !important;
+  margin-inline: 0 !important;
 }
 
 .yy-team-workspace-grid {
@@ -7168,7 +7172,9 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
   grid-template-columns: minmax(19rem, 23rem) minmax(0, 1fr);
   gap: clamp(0.82rem, 1.25vw, 1.15rem);
   align-items: start;
-  width: 100%;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0;
 }
 
 .yy-team-sidebar.panel-card,
@@ -7176,17 +7182,53 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
 .yy-team-score-panel.panel-card {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(221, 229, 223, 0.18) !important;
+  border: 1px solid rgba(107, 238, 177, 0.18) !important;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.088), rgba(255, 255, 255, 0.024) 42%, rgba(158, 144, 187, 0.04)),
-    radial-gradient(ellipse at 20% 8%, rgba(107, 238, 177, 0.12), transparent 48%),
-    rgba(11, 15, 13, 0.34) !important;
-  backdrop-filter: blur(2.15rem) saturate(1.12) brightness(0.94) !important;
-  -webkit-backdrop-filter: blur(2.15rem) saturate(1.12) brightness(0.94) !important;
+    radial-gradient(ellipse at 14% 8%, rgba(107, 238, 177, 0.12), transparent 40%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.066), rgba(255, 255, 255, 0.017)),
+    rgba(7, 10, 10, 0.84) !important;
+  backdrop-filter: blur(1.25rem) saturate(1.08) brightness(0.98) !important;
+  -webkit-backdrop-filter: blur(1.25rem) saturate(1.08) brightness(0.98) !important;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.045),
-    inset 0 1px 0 rgba(255, 255, 255, 0.13),
-    0 1.15rem 3.4rem rgba(0, 0, 0, 0.38) !important;
+    inset 0 0 0 1px rgba(255, 255, 255, 0.035),
+    0 1.15rem 3.1rem rgba(0, 0, 0, 0.38) !important;
+}
+
+.yy-team-page .panel-card::before,
+.yy-team-page .panel-card::after,
+.yy-team-page .yy-team-switch-card::before,
+.yy-team-page .yy-team-switch-card::after,
+.yy-team-page .yy-team-profile-identity::before,
+.yy-team-page .yy-team-profile-identity::after,
+.yy-team-page .yy-team-roster-row::before,
+.yy-team-page .yy-team-roster-row::after,
+.yy-team-page .yy-team-request-row::before,
+.yy-team-page .yy-team-request-row::after,
+.yy-team-page .yy-team-info-strip article::before,
+.yy-team-page .yy-team-info-strip article::after {
+  content: none !important;
+  display: none !important;
+  background: none !important;
+  opacity: 0 !important;
+  animation: none !important;
+}
+
+.yy-team-page .panel-card > .yy-hex-field,
+.yy-team-page .panel-card > .hex-field,
+.yy-team-page .panel-card > .yy-react-grid-scan,
+.yy-team-page .panel-card > .yy-color-bends-field {
+  display: none !important;
+}
+
+.yy-team-sidebar.panel-card:hover,
+.yy-team-detail-panel.panel-card:hover,
+.yy-team-score-panel.panel-card:hover {
+  border-color: rgba(185, 173, 209, 0.32) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(120, 248, 190, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.17),
+    0 1.5rem 4.4rem rgba(0, 0, 0, 0.42),
+    0 0 2.6rem rgba(158, 144, 187, 0.12) !important;
 }
 
 .yy-team-sidebar {
@@ -7226,11 +7268,17 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
   display: grid;
   gap: clamp(0.82rem, 1.2vw, 1.05rem);
   min-width: 0;
-  width: 100%;
+  width: 100% !important;
+  max-width: none !important;
+  justify-self: stretch;
 }
 
 .yy-team-detail-panel,
 .yy-team-score-panel {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0;
+  justify-self: stretch;
   padding: clamp(0.82rem, 1.12vw, 1.12rem);
 }
 
@@ -7256,8 +7304,9 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
   border: 1px solid rgba(221, 229, 223, 0.105);
   border-radius: var(--yy-radius-lg);
   background:
-    radial-gradient(ellipse at 16% 12%, rgba(107, 238, 177, 0.07), transparent 46%),
-    rgba(255, 255, 255, 0.038);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.088), rgba(255, 255, 255, 0.024) 42%, rgba(158, 144, 187, 0.04)),
+    radial-gradient(ellipse at 20% 8%, rgba(107, 238, 177, 0.12), transparent 48%),
+    rgba(11, 15, 13, 0.34);
   display: grid;
   place-items: center;
   align-content: center;
@@ -7310,6 +7359,7 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
 .yy-team-members-panel {
   min-width: 0;
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   align-content: start;
   gap: 0.62rem;
 }
@@ -7347,17 +7397,19 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
   border: 1px solid rgba(221, 229, 223, 0.105);
   border-radius: calc(var(--yy-radius) - 3px);
   background:
-    radial-gradient(ellipse at 16% 12%, rgba(107, 238, 177, 0.07), transparent 46%),
-    rgba(255, 255, 255, 0.038);
-  backdrop-filter: blur(0.7rem);
-  -webkit-backdrop-filter: blur(0.7rem);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.088), rgba(255, 255, 255, 0.024) 42%, rgba(158, 144, 187, 0.04)),
+    radial-gradient(ellipse at 20% 8%, rgba(107, 238, 177, 0.12), transparent 48%),
+    rgba(11, 15, 13, 0.34);
+  backdrop-filter: blur(2.15rem) saturate(1.12) brightness(0.94);
+  -webkit-backdrop-filter: blur(2.15rem) saturate(1.12) brightness(0.94);
 }
 
 .yy-team-roster-row.is-captain {
   border-color: rgba(107, 238, 177, 0.26);
   background:
-    linear-gradient(135deg, rgba(107, 238, 177, 0.105), rgba(255, 255, 255, 0.032)),
-    rgba(255, 255, 255, 0.038);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.088), rgba(255, 255, 255, 0.024) 42%, rgba(158, 144, 187, 0.04)),
+    radial-gradient(ellipse at 20% 8%, rgba(107, 238, 177, 0.12), transparent 48%),
+    rgba(11, 15, 13, 0.34);
 }
 
 .yy-team-roster-user {
@@ -7394,6 +7446,12 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
   display: grid;
   gap: 0.5rem;
   padding-top: 0.1rem;
+  min-height: clamp(7.4rem, 13vh, 10.5rem);
+  align-content: start;
+}
+
+.yy-team-requests-panel.is-readonly {
+  opacity: 0.94;
 }
 
 .yy-team-request-list,
@@ -7404,6 +7462,23 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
   overflow: auto;
   padding-right: 0.28rem;
   scrollbar-width: thin;
+}
+
+.yy-team-request-list-readonly {
+  overflow: visible;
+  padding-right: 0;
+}
+
+.yy-team-request-row-muted {
+  min-height: clamp(4.6rem, 8vh, 6.2rem);
+}
+
+.yy-team-ghost-avatar {
+  border: 1px solid rgba(107, 238, 177, 0.2);
+  color: rgba(157, 255, 213, 0.92);
+  background:
+    linear-gradient(135deg, rgba(107, 238, 177, 0.16), rgba(185, 173, 209, 0.08)),
+    rgba(7, 16, 13, 0.78) !important;
 }
 
 .yy-team-info-strip {
@@ -7419,8 +7494,9 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
   border: 1px solid rgba(221, 229, 223, 0.105);
   border-radius: var(--yy-radius-lg);
   background:
-    radial-gradient(ellipse at 16% 12%, rgba(107, 238, 177, 0.07), transparent 46%),
-    rgba(255, 255, 255, 0.038);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.088), rgba(255, 255, 255, 0.024) 42%, rgba(158, 144, 187, 0.04)),
+    radial-gradient(ellipse at 20% 8%, rgba(107, 238, 177, 0.12), transparent 48%),
+    rgba(11, 15, 13, 0.34);
 }
 
 .yy-team-info-strip span,
@@ -7483,8 +7559,9 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
   border: 1px solid rgba(221, 229, 223, 0.105);
   border-radius: var(--yy-radius-lg);
   background:
-    radial-gradient(ellipse at 16% 12%, rgba(107, 238, 177, 0.07), transparent 46%),
-    rgba(255, 255, 255, 0.038);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.088), rgba(255, 255, 255, 0.024) 42%, rgba(158, 144, 187, 0.04)),
+    radial-gradient(ellipse at 20% 8%, rgba(107, 238, 177, 0.12), transparent 48%),
+    rgba(11, 15, 13, 0.34);
 }
 
 .yy-team-join-section + .yy-team-join-section {
@@ -7501,17 +7578,16 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
 .yy-team-page .yy-team-request-row,
 .yy-team-page .yy-team-info-strip article,
 .yy-team-page .yy-team-join-section {
-  border-color: rgba(221, 229, 223, 0.18) !important;
+  border-color: rgba(107, 238, 177, 0.14) !important;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.088), rgba(255, 255, 255, 0.024) 42%, rgba(158, 144, 187, 0.04)),
-    radial-gradient(ellipse at 20% 8%, rgba(107, 238, 177, 0.12), transparent 48%),
-    rgba(11, 15, 13, 0.34) !important;
-  backdrop-filter: blur(2.15rem) saturate(1.12) brightness(0.94) !important;
-  -webkit-backdrop-filter: blur(2.15rem) saturate(1.12) brightness(0.94) !important;
+    radial-gradient(ellipse at 12% 0%, rgba(107, 238, 177, 0.09), transparent 40%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.014)),
+    rgba(10, 13, 13, 0.82) !important;
+  backdrop-filter: blur(0.9rem) saturate(1.06) brightness(0.98) !important;
+  -webkit-backdrop-filter: blur(0.9rem) saturate(1.06) brightness(0.98) !important;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.045),
-    inset 0 1px 0 rgba(255, 255, 255, 0.13),
-    0 0.85rem 2rem rgba(0, 0, 0, 0.24) !important;
+    inset 0 0 0 1px rgba(255, 255, 255, 0.026),
+    0 0.85rem 2rem rgba(0, 0, 0, 0.28) !important;
 }
 
 .yy-team-page .yy-team-switch-card:hover,
@@ -7522,8 +7598,8 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
   box-shadow:
     inset 0 0 0 1px rgba(120, 248, 190, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.17),
-    0 1rem 2.4rem rgba(0, 0, 0, 0.32),
-    0 0 2.2rem rgba(158, 144, 187, 0.1) !important;
+    0 1.5rem 4.4rem rgba(0, 0, 0, 0.42),
+    0 0 2.6rem rgba(158, 144, 187, 0.12) !important;
 }
 
 .yy-team-score-select {
@@ -8081,7 +8157,7 @@ body:has(.yy-training-page) .signal-field {
 
 .yy-training-course-grid {
   display: grid !important;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18.5rem), 1fr)) !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   align-items: stretch;
   width: 100%;
   min-width: 0;
@@ -8153,10 +8229,14 @@ body:has(.yy-training-page) .signal-field {
   top: 0.78rem;
   right: 0.78rem;
   padding: 0.32rem 0.58rem;
+  min-width: 3.4rem;
+  min-height: 1.72rem;
   border: 1px solid rgba(221, 229, 223, 0.12);
   border-radius: 999px;
   background: rgba(4, 10, 8, 0.68);
   backdrop-filter: blur(1rem);
+  writing-mode: horizontal-tb !important;
+  letter-spacing: 0;
 }
 
 .yy-training-course-content {
@@ -8620,6 +8700,10 @@ body:has(.yy-training-page) .signal-field {
   .yy-training-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .yy-training-course-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
 }
 
 @media (max-width: 48em) {
@@ -8632,9 +8716,851 @@ body:has(.yy-training-page) .signal-field {
     grid-template-columns: 1fr;
   }
 
+  .yy-training-course-grid {
+    grid-template-columns: 1fr !important;
+  }
+
   .yy-training-hero-head,
   .yy-training-course-detail-hero > .mantine-Group-root {
     align-items: stretch !important;
     flex-direction: column;
+  }
+}
+
+/* Team center final pass.
+   The team page must use the same opaque game-entry material as the game
+   landing card, and member/captain views must occupy the same full workspace. */
+.yy-team-page.yy-team-workspace {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  justify-self: stretch !important;
+  align-self: stretch !important;
+  align-items: stretch !important;
+  margin-inline: 0 !important;
+}
+
+.yy-team-page .yy-team-workspace-grid {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  grid-template-columns: minmax(19rem, 23rem) minmax(0, 1fr) !important;
+}
+
+.yy-team-page .yy-team-main,
+.yy-team-page .yy-team-detail-panel,
+.yy-team-page .yy-team-score-panel {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  justify-self: stretch !important;
+}
+
+.yy-team-page .yy-team-sidebar.panel-card,
+.yy-team-page .yy-team-detail-panel.panel-card,
+.yy-team-page .yy-team-score-panel.panel-card {
+  border-color: rgba(107, 238, 177, 0.18) !important;
+  background:
+    radial-gradient(ellipse at 14% 8%, rgba(107, 238, 177, 0.12), transparent 40%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.066), rgba(255, 255, 255, 0.017)),
+    rgba(7, 10, 10, 0.92) !important;
+  backdrop-filter: blur(0.72rem) saturate(1.04) brightness(0.98) !important;
+  -webkit-backdrop-filter: blur(0.72rem) saturate(1.04) brightness(0.98) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.035),
+    0 1.15rem 3.1rem rgba(0, 0, 0, 0.38) !important;
+}
+
+.yy-team-page .yy-team-switch-card,
+.yy-team-page .yy-team-profile-identity,
+.yy-team-page .yy-team-roster-row,
+.yy-team-page .yy-team-request-row,
+.yy-team-page .yy-team-info-strip article,
+.yy-team-page .yy-team-join-section,
+.yy-team-page .yy-team-score-empty {
+  border-color: rgba(107, 238, 177, 0.14) !important;
+  background:
+    radial-gradient(ellipse at 12% 0%, rgba(107, 238, 177, 0.09), transparent 40%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.014)),
+    rgba(10, 13, 13, 0.88) !important;
+  backdrop-filter: blur(0.58rem) saturate(1.04) brightness(0.98) !important;
+  -webkit-backdrop-filter: blur(0.58rem) saturate(1.04) brightness(0.98) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.026),
+    0 0.85rem 2rem rgba(0, 0, 0, 0.28) !important;
+}
+
+.yy-team-page .panel-card::before,
+.yy-team-page .panel-card::after,
+.yy-team-page .yy-team-switch-card::before,
+.yy-team-page .yy-team-switch-card::after,
+.yy-team-page .yy-team-profile-identity::before,
+.yy-team-page .yy-team-profile-identity::after,
+.yy-team-page .yy-team-roster-row::before,
+.yy-team-page .yy-team-roster-row::after,
+.yy-team-page .yy-team-request-row::before,
+.yy-team-page .yy-team-request-row::after,
+.yy-team-page .yy-team-info-strip article::before,
+.yy-team-page .yy-team-info-strip article::after {
+  content: none !important;
+  display: none !important;
+  background: none !important;
+  opacity: 0 !important;
+  animation: none !important;
+}
+
+.yy-team-page .panel-card > .yy-hex-field,
+.yy-team-page .panel-card > .hex-field,
+.yy-team-page .panel-card > .yy-react-grid-scan,
+.yy-team-page .panel-card > .yy-color-bends-field {
+  display: none !important;
+}
+
+@media (max-width: 72em) {
+  .yy-team-page .yy-team-workspace-grid,
+  .yy-team-page .yy-team-profile-layout,
+  .yy-team-page .yy-team-info-strip {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Team center hard layout fix: keep captain/member views identical and fill the route. */
+body:has(.yy-team-page) {
+  overflow-x: hidden;
+}
+
+body:has(.yy-team-page) .mantine-AppShell-main,
+body:has(.yy-team-page) [data-team-shell='true'],
+body:has(.yy-team-page) [data-team-content='true'],
+body:has(.yy-team-page) .yy-team-page.yy-team-workspace {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+}
+
+body:has(.yy-team-page) [data-team-shell='true'] {
+  padding: clamp(0.8rem, 1.25vw, 1.2rem) clamp(0.8rem, 1.2vw, 1.1rem) !important;
+}
+
+.yy-team-page.yy-team-workspace {
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  min-height: calc(100dvh - 2rem) !important;
+}
+
+.yy-team-page .yy-team-workspace-grid {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  display: grid !important;
+  grid-template-columns: clamp(20rem, 27vw, 34rem) minmax(0, 1fr) !important;
+  gap: clamp(1rem, 1.5vw, 1.6rem) !important;
+  align-items: start !important;
+}
+
+.yy-team-page .yy-team-main {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: clamp(1rem, 1.4vw, 1.55rem) !important;
+}
+
+.yy-team-page .yy-team-detail-panel,
+.yy-team-page .yy-team-score-panel {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+
+.yy-team-page .yy-team-profile-layout,
+.yy-team-page .yy-team-profile-layout.is-captain,
+.yy-team-page .yy-team-profile-layout.is-member {
+  display: grid !important;
+  grid-template-columns: clamp(14rem, 19vw, 19rem) minmax(0, 1fr) !important;
+  gap: clamp(1rem, 1.35vw, 1.35rem) !important;
+  align-items: stretch !important;
+}
+
+.yy-team-page .yy-team-roster-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)) !important;
+  gap: 0.75rem !important;
+}
+
+.yy-team-page .yy-team-sidebar.panel-card,
+.yy-team-page .yy-team-detail-panel.panel-card,
+.yy-team-page .yy-team-score-panel.panel-card,
+.yy-team-page .yy-team-switch-card,
+.yy-team-page .yy-team-profile-identity,
+.yy-team-page .yy-team-roster-row,
+.yy-team-page .yy-team-request-row,
+.yy-team-page .yy-team-info-strip article,
+.yy-team-page .yy-team-join-section,
+.yy-team-page .yy-team-score-empty {
+  border-color: rgba(107, 238, 177, 0.22) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.058), rgba(255, 255, 255, 0.015)),
+    rgba(6, 12, 10, 0.93) !important;
+  backdrop-filter: blur(18px) saturate(1.06) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.06) !important;
+  box-shadow:
+    0 1.1rem 2.8rem rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055) !important;
+}
+
+.yy-team-page .panel-card::before,
+.yy-team-page .panel-card::after,
+.yy-team-page .yy-team-switch-card::before,
+.yy-team-page .yy-team-switch-card::after,
+.yy-team-page .yy-team-profile-identity::before,
+.yy-team-page .yy-team-profile-identity::after,
+.yy-team-page .yy-team-roster-row::before,
+.yy-team-page .yy-team-roster-row::after,
+.yy-team-page .yy-team-request-row::before,
+.yy-team-page .yy-team-request-row::after,
+.yy-team-page .yy-team-info-strip article::before,
+.yy-team-page .yy-team-info-strip article::after {
+  content: none !important;
+  display: none !important;
+}
+
+@media (max-width: 72em) {
+  .yy-team-page .yy-team-workspace-grid,
+  .yy-team-page .yy-team-profile-layout,
+  .yy-team-page .yy-team-profile-layout.is-captain,
+  .yy-team-page .yy-team-profile-layout.is-member,
+  .yy-team-page .yy-team-info-strip {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Course chapter reading: keep the learning status panel fixed, not scrolling with content. */
+@media (min-width: 72.01em) {
+  .yy-course-chapter-page {
+    grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr) !important;
+    padding-right: clamp(16rem, 18vw, 21rem) !important;
+  }
+
+  .yy-course-chapter-page .yy-course-learning-status {
+    position: fixed !important;
+    top: clamp(1rem, 1.6vh, 1.4rem) !important;
+    right: clamp(1rem, 1.4vw, 1.5rem) !important;
+    width: clamp(14rem, 16vw, 19rem) !important;
+    max-height: calc(100dvh - 2.4rem) !important;
+    overflow: auto !important;
+    z-index: 12 !important;
+  }
+}
+
+@media (max-width: 72em) {
+  .yy-course-chapter-page {
+    padding-right: 0 !important;
+  }
+
+  .yy-course-chapter-page .yy-course-learning-status {
+    position: static !important;
+    width: 100% !important;
+    max-height: none !important;
+  }
+}
+
+/* Team center material lock.
+   Keep this at the end: this page must use the same opaque dark-green game
+   entry material, while captain and member views share one full-width frame. */
+.yy-app-frame:has(.yy-team-page) .mantine-AppShell-main,
+.yy-app-frame:has(.yy-team-page) [class*='main'],
+.yy-app-frame:has(.yy-team-page) [class*='content'] {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+}
+
+.yy-team-page.yy-team-workspace {
+  width: calc(100vw - 7.2rem) !important;
+  max-width: calc(100vw - 7.2rem) !important;
+  min-height: calc(100dvh - 2.4rem);
+  margin-inline: 0 !important;
+  padding-right: clamp(0.72rem, 1.2vw, 1.15rem);
+  isolation: isolate;
+}
+
+.yy-team-page.yy-team-workspace::before {
+  content: '';
+  position: absolute;
+  inset: -1rem -1.2rem -1.4rem -0.4rem;
+  z-index: -1;
+  border-radius: calc(var(--yy-radius) + 8px);
+  background: #020605;
+}
+
+.yy-team-page .yy-team-workspace-grid,
+.yy-team-page .yy-team-main,
+.yy-team-page .yy-team-profile-layout,
+.yy-team-page .yy-team-members-panel,
+.yy-team-page .yy-team-info-strip,
+.yy-team-page .yy-team-detail-panel,
+.yy-team-page .yy-team-score-panel {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+}
+
+.yy-team-page .yy-team-workspace-grid {
+  grid-template-columns: minmax(19rem, 23rem) minmax(0, 1fr) !important;
+  align-items: stretch !important;
+}
+
+.yy-team-page .yy-team-main {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  justify-self: stretch !important;
+}
+
+.yy-team-page .yy-team-profile-layout {
+  grid-template-columns: minmax(11rem, 13rem) minmax(0, 1fr) !important;
+  align-items: stretch !important;
+}
+
+.yy-team-page .yy-team-members-panel,
+.yy-team-page .yy-team-requests-panel {
+  justify-self: stretch !important;
+}
+
+.yy-team-page .yy-team-sidebar.panel-card,
+.yy-team-page .yy-team-detail-panel.panel-card,
+.yy-team-page .yy-team-score-panel.panel-card {
+  border-color: rgba(159, 255, 217, 0.2) !important;
+  background:
+    radial-gradient(ellipse at 15% 0%, rgba(107, 238, 177, 0.135), transparent 42%),
+    radial-gradient(ellipse at 86% 100%, rgba(216, 229, 224, 0.06), transparent 48%),
+    linear-gradient(180deg, rgba(18, 31, 25, 0.92), rgba(4, 9, 8, 0.96) 54%, #020605) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.035),
+    inset 0 1px 0 rgba(255, 255, 255, 0.075),
+    0 1.3rem 3.4rem rgba(0, 0, 0, 0.44) !important;
+}
+
+.yy-team-page .yy-team-switch-card,
+.yy-team-page .yy-team-profile-identity,
+.yy-team-page .yy-team-roster-row,
+.yy-team-page .yy-team-request-row,
+.yy-team-page .yy-team-info-strip article,
+.yy-team-page .yy-team-join-section,
+.yy-team-page .yy-team-score-empty {
+  border-color: rgba(159, 255, 217, 0.16) !important;
+  background:
+    radial-gradient(ellipse at 12% 0%, rgba(107, 238, 177, 0.1), transparent 44%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.062), rgba(255, 255, 255, 0.016)),
+    #0a0d0d !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.026),
+    0 0.72rem 1.65rem rgba(0, 0, 0, 0.24) !important;
+}
+
+.yy-team-page .yy-team-switch-card:hover,
+.yy-team-page .yy-team-switch-card.is-active,
+.yy-team-page .yy-team-roster-row:hover,
+.yy-team-page .yy-team-request-row:hover {
+  border-color: rgba(126, 255, 197, 0.34) !important;
+  background:
+    radial-gradient(ellipse at 18% 0%, rgba(107, 238, 177, 0.17), transparent 50%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.072), rgba(255, 255, 255, 0.018)),
+    #0c1210 !important;
+}
+
+.yy-team-page .panel-card,
+.yy-team-page .yy-team-switch-card,
+.yy-team-page .yy-team-profile-identity,
+.yy-team-page .yy-team-roster-row,
+.yy-team-page .yy-team-request-row,
+.yy-team-page .yy-team-info-strip article,
+.yy-team-page .yy-team-join-section {
+  clip-path: none !important;
+}
+
+.yy-team-page .panel-card::before,
+.yy-team-page .panel-card::after,
+.yy-team-page .yy-team-switch-card::before,
+.yy-team-page .yy-team-switch-card::after,
+.yy-team-page .yy-team-profile-identity::before,
+.yy-team-page .yy-team-profile-identity::after,
+.yy-team-page .yy-team-roster-row::before,
+.yy-team-page .yy-team-roster-row::after,
+.yy-team-page .yy-team-request-row::before,
+.yy-team-page .yy-team-request-row::after,
+.yy-team-page .yy-team-info-strip article::before,
+.yy-team-page .yy-team-info-strip article::after,
+.yy-team-page .yy-team-join-section::before,
+.yy-team-page .yy-team-join-section::after {
+  content: none !important;
+  display: none !important;
+  opacity: 0 !important;
+  background: none !important;
+  animation: none !important;
+}
+
+.yy-team-page .panel-card > .yy-hex-field,
+.yy-team-page .panel-card > .hex-field,
+.yy-team-page .panel-card > .yy-react-grid-scan,
+.yy-team-page .panel-card > .yy-color-bends-field {
+  display: none !important;
+  opacity: 0 !important;
+}
+
+@media (max-width: 72em) {
+  .yy-team-page.yy-team-workspace {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding-right: 0;
+  }
+
+  .yy-team-page .yy-team-workspace-grid,
+  .yy-team-page .yy-team-profile-layout,
+  .yy-team-page .yy-team-info-strip {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Team center definitive layout lock.
+   The route shell now exposes data-team-shell/content, so the team page no
+   longer depends on broad generated-class selectors or the legacy centered
+   container. Keep this final block after the old team rules. */
+.yy-app-frame [data-team-shell='true'] {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  align-items: stretch !important;
+  padding: clamp(0.92rem, 1.8vh, 1.35rem) clamp(0.9rem, 1.25vw, 1.2rem) clamp(0.9rem, 2vh, 1.35rem) !important;
+}
+
+.yy-app-frame [data-team-content='true'] {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  align-self: stretch !important;
+}
+
+body:has(.yy-team-page) {
+  background: #020605 !important;
+}
+
+body:has(.yy-team-page) > .yy-root-reactbits-bg.yy-game-bends-bg {
+  display: block !important;
+}
+
+body:has(.yy-team-page) .signal-field {
+  display: none !important;
+}
+
+.yy-app-frame:has(.yy-team-page),
+.yy-app-frame:has(.yy-team-page) .mantine-AppShell-root,
+.yy-app-frame:has(.yy-team-page) .mantine-AppShell-main {
+  background: transparent !important;
+}
+
+.yy-team-page.yy-page-frame,
+.yy-team-page.view-stack,
+.yy-team-page.yy-team-workspace {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  min-height: calc(100dvh - 2.7rem) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  align-self: stretch !important;
+  justify-self: stretch !important;
+  align-items: stretch !important;
+  isolation: isolate;
+}
+
+.yy-team-page.yy-team-workspace::before {
+  content: none !important;
+  display: none !important;
+}
+
+.yy-team-page .yy-team-workspace-grid {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(20rem, 24rem) minmax(0, 1fr) !important;
+  align-items: start !important;
+  gap: clamp(0.9rem, 1.2vw, 1.18rem) !important;
+}
+
+.yy-team-page .yy-team-main {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: clamp(0.9rem, 1.2vw, 1.18rem) !important;
+  justify-self: stretch !important;
+}
+
+.yy-team-page .yy-team-detail-panel,
+.yy-team-page .yy-team-score-panel {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  justify-self: stretch !important;
+}
+
+.yy-team-page .yy-team-profile-layout {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(11rem, 13.5rem) minmax(0, 1fr) !important;
+  align-items: stretch !important;
+}
+
+.yy-team-page .yy-team-roster-grid {
+  grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr)) !important;
+  justify-content: stretch !important;
+}
+
+.yy-team-page .yy-team-sidebar.panel-card,
+.yy-team-page .yy-team-detail-panel.panel-card,
+.yy-team-page .yy-team-score-panel.panel-card {
+  border-color: rgba(159, 255, 217, 0.2) !important;
+  background:
+    radial-gradient(ellipse at 15% 0%, rgba(107, 238, 177, 0.135), transparent 42%),
+    radial-gradient(ellipse at 86% 100%, rgba(216, 229, 224, 0.06), transparent 48%),
+    linear-gradient(180deg, rgba(18, 31, 25, 0.92), rgba(4, 9, 8, 0.96) 54%, #020605) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.035),
+    inset 0 1px 0 rgba(255, 255, 255, 0.075),
+    0 1.3rem 3.4rem rgba(0, 0, 0, 0.44) !important;
+}
+
+.yy-team-page .yy-team-switch-card,
+.yy-team-page .yy-team-profile-identity,
+.yy-team-page .yy-team-roster-row,
+.yy-team-page .yy-team-request-row,
+.yy-team-page .yy-team-info-strip article,
+.yy-team-page .yy-team-join-section,
+.yy-team-page .yy-team-score-empty {
+  border-color: rgba(159, 255, 217, 0.16) !important;
+  background:
+    radial-gradient(ellipse at 12% 0%, rgba(107, 238, 177, 0.1), transparent 44%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.062), rgba(255, 255, 255, 0.016)),
+    #0a0d0d !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.026),
+    0 0.72rem 1.65rem rgba(0, 0, 0, 0.24) !important;
+}
+
+.yy-team-page .panel-card::before,
+.yy-team-page .panel-card::after,
+.yy-team-page .yy-team-switch-card::before,
+.yy-team-page .yy-team-switch-card::after,
+.yy-team-page .yy-team-profile-identity::before,
+.yy-team-page .yy-team-profile-identity::after,
+.yy-team-page .yy-team-roster-row::before,
+.yy-team-page .yy-team-roster-row::after,
+.yy-team-page .yy-team-request-row::before,
+.yy-team-page .yy-team-request-row::after,
+.yy-team-page .yy-team-info-strip article::before,
+.yy-team-page .yy-team-info-strip article::after,
+.yy-team-page .yy-team-join-section::before,
+.yy-team-page .yy-team-join-section::after {
+  content: none !important;
+  display: none !important;
+  opacity: 0 !important;
+  background: none !important;
+  animation: none !important;
+}
+
+@media (max-width: 72em) {
+  .yy-app-frame [data-team-shell='true'] {
+    padding-inline: clamp(0.72rem, 2.6vw, 1rem) !important;
+  }
+
+  .yy-team-page .yy-team-workspace-grid,
+  .yy-team-page .yy-team-profile-layout,
+  .yy-team-page .yy-team-info-strip {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Team center final override: keep captain/member views identical in width and
+   use the same opaque frosted material as game list cards. */
+.yy-app-frame [data-team-shell='true'],
+.yy-app-frame [data-team-content='true'],
+.yy-app-frame [data-team-content='true'] > .yy-team-page {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  align-self: stretch !important;
+  justify-self: stretch !important;
+}
+
+body:has(.yy-team-page) > .yy-root-reactbits-bg.yy-game-bends-bg {
+  display: block !important;
+  position: fixed !important;
+  inset: 0 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: none !important;
+}
+
+body:has(.yy-team-page) .yy-app-frame,
+body:has(.yy-team-page) .mantine-AppShell-root,
+body:has(.yy-team-page) .mantine-AppShell-main,
+body:has(.yy-team-page) [data-team-shell='true'],
+body:has(.yy-team-page) [data-team-content='true'],
+body:has(.yy-team-page) .yy-team-page {
+  background: transparent !important;
+}
+
+.yy-team-page.yy-team-workspace {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  min-height: calc(100dvh - 2.5rem) !important;
+  display: grid !important;
+  align-items: stretch !important;
+}
+
+.yy-team-page .yy-team-workspace-grid {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  grid-template-columns: minmax(20rem, 24rem) minmax(0, 1fr) !important;
+  align-items: stretch !important;
+}
+
+.yy-team-page .yy-team-main,
+.yy-team-page .yy-team-detail-panel,
+.yy-team-page .yy-team-score-panel,
+.yy-team-page .yy-team-profile-layout,
+.yy-team-page .yy-team-members-panel,
+.yy-team-page .yy-team-requests-panel,
+.yy-team-page .yy-team-roster-grid {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+}
+
+.yy-team-page .yy-team-roster-grid {
+  grid-template-columns: repeat(auto-fit, minmax(14.5rem, 1fr)) !important;
+}
+
+.yy-team-page .yy-team-sidebar.panel-card,
+.yy-team-page .yy-team-detail-panel.panel-card,
+.yy-team-page .yy-team-score-panel.panel-card,
+.yy-team-page .yy-team-switch-card,
+.yy-team-page .yy-team-profile-identity,
+.yy-team-page .yy-team-roster-row,
+.yy-team-page .yy-team-request-row,
+.yy-team-page .yy-team-info-strip article,
+.yy-team-page .yy-team-join-section,
+.yy-team-page .yy-team-score-empty {
+  border-color: rgba(107, 238, 177, 0.14) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.086), rgba(255, 255, 255, 0.022) 44%, rgba(107, 238, 177, 0.03)),
+    rgba(5, 12, 10, 0.48) !important;
+  backdrop-filter: blur(1.65rem) saturate(1.22) brightness(1.02) !important;
+  -webkit-backdrop-filter: blur(1.65rem) saturate(1.22) brightness(1.02) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.046),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1rem 2.8rem rgba(0, 0, 0, 0.35) !important;
+}
+
+.yy-team-page .yy-team-sidebar.panel-card:hover,
+.yy-team-page .yy-team-detail-panel.panel-card:hover,
+.yy-team-page .yy-team-score-panel.panel-card:hover,
+.yy-team-page .yy-team-switch-card:hover,
+.yy-team-page .yy-team-switch-card.is-active,
+.yy-team-page .yy-team-roster-row:hover,
+.yy-team-page .yy-team-request-row:hover {
+  border-color: rgba(107, 238, 177, 0.3) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.105), rgba(255, 255, 255, 0.028) 46%, rgba(107, 238, 177, 0.055)),
+    rgba(5, 13, 10, 0.56) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.046),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1.18rem 3.05rem rgba(0, 0, 0, 0.38),
+    0 0 1.6rem rgba(107, 238, 177, 0.1) !important;
+}
+
+.yy-team-page .panel-card::before,
+.yy-team-page .panel-card::after,
+.yy-team-page .yy-team-switch-card::before,
+.yy-team-page .yy-team-switch-card::after,
+.yy-team-page .yy-team-profile-identity::before,
+.yy-team-page .yy-team-profile-identity::after,
+.yy-team-page .yy-team-roster-row::before,
+.yy-team-page .yy-team-roster-row::after,
+.yy-team-page .yy-team-request-row::before,
+.yy-team-page .yy-team-request-row::after,
+.yy-team-page .yy-team-info-strip article::before,
+.yy-team-page .yy-team-info-strip article::after,
+.yy-team-page .yy-team-join-section::before,
+.yy-team-page .yy-team-join-section::after {
+  content: none !important;
+  display: none !important;
+  background: none !important;
+  opacity: 0 !important;
+  animation: none !important;
+}
+
+/* Team page hard lock: one effective material/layout rule after legacy passes. */
+body:has(.yy-team-page) {
+  background: #020605 !important;
+}
+
+body:has(.yy-team-page) .signal-field {
+  display: none !important;
+}
+
+body:has(.yy-team-page) > .yy-root-reactbits-bg.yy-game-bends-bg {
+  display: block !important;
+  position: fixed !important;
+  inset: 0 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: none !important;
+}
+
+.yy-app-frame [data-team-shell='true'],
+.yy-app-frame [data-team-content='true'],
+.yy-app-frame [data-team-content='true'] > .yy-team-page {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  align-self: stretch !important;
+  justify-self: stretch !important;
+}
+
+.yy-app-frame [data-team-shell='true'] {
+  padding: clamp(0.9rem, 1.6vh, 1.25rem) clamp(0.9rem, 1.2vw, 1.2rem) !important;
+  align-items: stretch !important;
+}
+
+.yy-team-page.yy-team-workspace {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  min-height: calc(100dvh - 2.5rem) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: grid !important;
+  align-items: stretch !important;
+  background: transparent !important;
+}
+
+.yy-team-page .yy-team-workspace-grid {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(20rem, 24rem) minmax(0, 1fr) !important;
+  gap: clamp(0.9rem, 1.15vw, 1.15rem) !important;
+  align-items: start !important;
+}
+
+.yy-team-page .yy-team-main,
+.yy-team-page .yy-team-detail-panel,
+.yy-team-page .yy-team-score-panel,
+.yy-team-page .yy-team-profile-layout,
+.yy-team-page .yy-team-members-panel,
+.yy-team-page .yy-team-requests-panel,
+.yy-team-page .yy-team-roster-grid,
+.yy-team-page .yy-team-info-strip {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  justify-self: stretch !important;
+}
+
+.yy-team-page .yy-team-profile-layout {
+  display: grid !important;
+  grid-template-columns: minmax(11rem, 13.5rem) minmax(0, 1fr) !important;
+  align-items: stretch !important;
+}
+
+.yy-team-page .yy-team-roster-grid {
+  grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr)) !important;
+}
+
+.yy-team-page .yy-team-sidebar.panel-card,
+.yy-team-page .yy-team-detail-panel.panel-card,
+.yy-team-page .yy-team-score-panel.panel-card,
+.yy-team-page .yy-team-switch-card,
+.yy-team-page .yy-team-profile-identity,
+.yy-team-page .yy-team-roster-row,
+.yy-team-page .yy-team-request-row,
+.yy-team-page .yy-team-info-strip article,
+.yy-team-page .yy-team-join-section,
+.yy-team-page .yy-team-score-empty {
+  border-color: rgba(107, 238, 177, 0.18) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.058), rgba(255, 255, 255, 0.018)),
+    rgba(6, 12, 10, 0.92) !important;
+  backdrop-filter: blur(18px) saturate(1.08) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.08) !important;
+  box-shadow:
+    0 1.1rem 2.8rem rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055) !important;
+}
+
+.yy-team-page .yy-team-sidebar.panel-card:hover,
+.yy-team-page .yy-team-detail-panel.panel-card:hover,
+.yy-team-page .yy-team-score-panel.panel-card:hover,
+.yy-team-page .yy-team-switch-card:hover,
+.yy-team-page .yy-team-switch-card.is-active,
+.yy-team-page .yy-team-roster-row:hover,
+.yy-team-page .yy-team-request-row:hover {
+  border-color: rgba(107, 238, 177, 0.34) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.022)),
+    rgba(8, 16, 13, 0.94) !important;
+  box-shadow:
+    0 1.25rem 3.1rem rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07) !important;
+}
+
+.yy-team-page .panel-card::before,
+.yy-team-page .panel-card::after,
+.yy-team-page .yy-team-switch-card::before,
+.yy-team-page .yy-team-switch-card::after,
+.yy-team-page .yy-team-profile-identity::before,
+.yy-team-page .yy-team-profile-identity::after,
+.yy-team-page .yy-team-roster-row::before,
+.yy-team-page .yy-team-roster-row::after,
+.yy-team-page .yy-team-request-row::before,
+.yy-team-page .yy-team-request-row::after,
+.yy-team-page .yy-team-info-strip article::before,
+.yy-team-page .yy-team-info-strip article::after,
+.yy-team-page .yy-team-join-section::before,
+.yy-team-page .yy-team-join-section::after {
+  content: none !important;
+  display: none !important;
+  opacity: 0 !important;
+  background: none !important;
+  animation: none !important;
+}
+
+@media (max-width: 72em) {
+  .yy-team-page .yy-team-workspace-grid,
+  .yy-team-page .yy-team-profile-layout,
+  .yy-team-page .yy-team-info-strip {
+    grid-template-columns: 1fr !important;
   }
 }

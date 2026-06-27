@@ -20,13 +20,16 @@ public class LocalNodeRegistrar : IHostedService
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var publicEntry = _config["ContainerProvider:PublicEntry"] ?? "localhost";
+        var hostAddress = _config["ContainerProvider:LocalHostAddress"];
+        if (string.IsNullOrWhiteSpace(hostAddress))
+            hostAddress = publicEntry;
         var capabilities = await DetectLocalCapabilitiesAsync(token);
         var localSchedulable = _config.GetValue("Agent:LocalNodeSchedulable", false);
         var localNode = await context.WorkerNodes.FirstOrDefaultAsync(n => n.IsLocal, token);
 
         if (localNode is not null)
         {
-            localNode.HostAddress = publicEntry;
+            localNode.HostAddress = hostAddress;
             localNode.Capabilities = capabilities;
             localNode.IsSchedulable = localSchedulable;
             localNode.Status = NodeStatus.Online;
@@ -42,7 +45,7 @@ public class LocalNodeRegistrar : IHostedService
         var node = new WorkerNode
         {
             Name = "Local Server",
-            HostAddress = publicEntry,
+            HostAddress = hostAddress,
             AuthToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)),
             Capabilities = capabilities,
             IsLocal = true,
