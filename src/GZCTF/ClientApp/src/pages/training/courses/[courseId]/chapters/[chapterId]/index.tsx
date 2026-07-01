@@ -186,14 +186,14 @@ const ChapterDetail: FC = () => {
 
   if (!course || !chapter) {
     return (
-      <WithNavBar isLoading width="min(118rem, calc(100vw - 4rem))">
+      <WithNavBar isLoading width="100%" minWidth={0}>
         <></>
       </WithNavBar>
     )
   }
 
   return (
-    <WithNavBar width="min(132rem, calc(100vw - 2.5rem))">
+    <WithNavBar width="100%" minWidth={0}>
       <Box className="yy-training-page yy-course-chapter-page">
         <YinyuGameBendsBackground className="yy-training-bg" />
         <YinyuPanel p="md" className="yy-course-chapter-side">
