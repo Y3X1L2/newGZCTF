@@ -87,7 +87,7 @@ export const GameChallengeModal: FC<GameChallengeModalProps> = (props) => {
     setFlag('')
     setSolvedChallengeId(null)
     setActiveFlagId(null)
-  }, [challengeId, setFlag])
+  }, [challengeId])
 
   const isLimitReached = (challenge?.limit && (challenge.attempts ?? 0) >= challenge.limit) || false
 

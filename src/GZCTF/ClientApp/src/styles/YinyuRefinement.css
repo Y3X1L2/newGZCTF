@@ -5705,7 +5705,7 @@
   max-width: calc(100% - 2rem) !important;
   margin: 0 !important;
   transform: translateY(-50%) !important;
-  pointer-events: auto !important;
+  pointer-events: none !important;
 }
 
 .yy-scrambled-flag-placeholder p {

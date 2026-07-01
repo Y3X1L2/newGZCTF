@@ -87,7 +87,7 @@ export interface ChallengeModalProps extends ModalProps {
   gameEnded?: boolean
   practiceMode?: boolean
   flag: string
-  setFlag: (value: string | React.ChangeEvent<any> | null | undefined) => void
+  setFlag: (value: string) => void
   onCreate: () => void
   onExtend: () => void
   onDestroy: () => void
@@ -333,7 +333,7 @@ export const ChallengeModal: FC<ChallengeModalProps> = (props) => {
               placeholder=""
               value={inputValue}
               disabled={inputDisabled}
-              onChange={setFlag}
+              onChange={(event) => setFlag(event.currentTarget.value)}
               classNames={{ root: `${misc.flexGrow} yy-flag-text-input-root`, input: `${misc.ffmono} yy-flag-text-input` }}
             />
           </div>
