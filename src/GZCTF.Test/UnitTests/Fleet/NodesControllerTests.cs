@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using GZCTF.Controllers;
 using GZCTF.Models.Data;
+using GZCTF.Models.Internal;
 using GZCTF.Services.Fleet;
+using GZCTF.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace GZCTF.Test.UnitTests.Fleet;
@@ -21,6 +24,90 @@ public class NodesControllerTests
         Assert.Equal(string.Empty, req.Username);
         Assert.Equal(string.Empty, req.Password);
         Assert.Null(req.NodeName);
+    }
+
+    [Fact]
+    public void CreatePortPool_ReportsDockerRandomMode_WhenFixedPoolIsNotConfigured()
+    {
+        var pool = NodesController.CreatePortPool(null, null, "docker", "docker-random");
+
+        Assert.Null(pool.Start);
+        Assert.Null(pool.End);
+        Assert.Equal(0, pool.Total);
+        Assert.Equal("docker-random", pool.Mode);
+    }
+
+    [Fact]
+    public void CreatePortPool_ReportsConfiguredRange_WhenRangeIsValid()
+    {
+        var pool = NodesController.CreatePortPool(30000, 30999, "nginx", "nginx-unconfigured");
+
+        Assert.Equal(30000, pool.Start);
+        Assert.Equal(30999, pool.End);
+        Assert.Equal(1000, pool.Total);
+        Assert.Equal("nginx", pool.Mode);
+    }
+
+    [Fact]
+    public void PortAllocationService_ReportsCurrentNginxAllocationRange()
+    {
+        var config = new ConfigurationBuilder().Build();
+        using var allocator = new PortAllocationService(config,
+            Options.Create(new ContainerProvider
+            {
+                NginxProxyConfig = new NginxProxyConfig
+                {
+                    Enable = true,
+                    ListenPortStart = 30000,
+                    ListenPortEnd = 30059
+                }
+            }),
+            NullLogger<PortAllocationService>.Instance);
+
+        Assert.Equal(30000, allocator.CurrentRange.Start);
+        Assert.Equal(30059, allocator.CurrentRange.End);
+        Assert.Equal("nginx", allocator.CurrentRange.Mode);
+    }
+
+    [Fact]
+    public void ToNodeVmResource_UsesGameScopedTeamAndResolvedEntry()
+    {
+        var userId = Guid.Parse("9c0c0dd3-9848-4c85-98ac-0ee12f3c8d3a");
+        var challenge = new GameChallenge
+        {
+            Id = 7,
+            Title = "Windows RDP",
+            Category = ChallengeCategory.Misc,
+            GameId = 20,
+            Game = new Game { Id = 20, Title = "Game 20" }
+        };
+        var vm = new VmInstance
+        {
+            Id = Guid.Parse("54c2a5f4-a258-4067-87d4-140bf2e95798"),
+            UserId = userId,
+            ChallengeId = challenge.Id,
+            Challenge = challenge,
+            VmName = "vm-game-20",
+            RdpUrl = "http://guac/#/client/raw",
+            GuacamoleConnectionId = "conn-20",
+            Status = VmInstanceStatus.Running,
+            CreatedAt = DateTimeOffset.Parse("2026-07-02T08:00:00Z")
+        };
+
+        var item = NodesController.ToNodeVmResource(
+            vm,
+            new Dictionary<Guid, string?> { [userId] = "student" },
+            new Dictionary<(Guid UserId, int GameId), Team>
+            {
+                [(userId, 10)] = new Team { Id = 10, Name = "Wrong Game Team" },
+                [(userId, 20)] = new Team { Id = 20, Name = "Correct Game Team" }
+            },
+            "http://guac/#/client/auth?token=resolved");
+
+        Assert.Equal("http://guac/#/client/auth?token=resolved", item.Entry);
+        Assert.Equal(20, item.TeamId);
+        Assert.Equal("Correct Game Team", item.TeamName);
+        Assert.Equal("student", item.UserName);
     }
 
     [Fact]

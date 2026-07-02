@@ -1933,6 +1933,16 @@
   overflow: hidden;
 }
 
+.yy-node-schedule-config {
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(221, 229, 223, 0.12);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.025)),
+    rgba(7, 10, 9, 0.68);
+  backdrop-filter: blur(16px);
+}
+
 .yy-node-resource-toolbar {
   padding: 0.85rem 0;
   border-top: 1px solid rgba(221, 229, 223, 0.09);

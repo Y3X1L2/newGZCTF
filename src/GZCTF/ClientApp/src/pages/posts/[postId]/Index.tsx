@@ -18,6 +18,7 @@ import { RequireRole } from '@Components/WithRole'
 import { BrandMark } from '@Components/yinyu/BrandMark'
 import { YinyuHexField, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
+import { useConfig } from '@Hooks/useConfig'
 import { usePageTitle } from '@Hooks/usePageTitle'
 import { useUserRole } from '@Hooks/useUser'
 import api, { Role } from '@Api'
@@ -46,6 +47,7 @@ const Post: FC = () => {
 
   const { role } = useUserRole()
   const { locale } = useLanguage()
+  const { config } = useConfig()
 
   usePageTitle(post?.title ?? '通知')
 
@@ -54,7 +56,7 @@ const Post: FC = () => {
       <section className="yy-page-frame yy-post-detail-page">
         <header className="panel-card yy-post-hero">
           <YinyuHexField cells={54} />
-          <BrandMark className="yy-post-hero-mark" />
+          <BrandMark className="yy-post-hero-mark" src={config.logoUrl} />
           <Stack gap="sm" className="yy-post-hero-copy">
             <span className="yy-section-kicker">PLATFORM NOTICE</span>
             <Title order={1}>{post?.title}</Title>

@@ -189,7 +189,7 @@ const TrainingCtfChallenges: FC = () => {
           <Group justify="space-between" align="start">
             <Stack gap={4}>
               <Title order={2}>{module?.title ?? '训练题目集'}</Title>
-              <Text c="dimmed">{module?.summary || '完成这个模块下的题目后，培训进度会自动更新。'}</Text>
+              {module?.summary ? <Text c="dimmed">{module.summary}</Text> : null}
             </Stack>
             <Title order={3}>
               {module?.challengeSolvedCount ?? 0}/{module?.challengeTotalCount ?? challenges.length}

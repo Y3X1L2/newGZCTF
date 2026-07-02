@@ -17,6 +17,7 @@ public class PortAllocationService : IPortAllocationService, IDisposable
     private readonly IDatabase? _database;
     private readonly int _portStart;
     private readonly int _portEnd;
+    private readonly string _mode;
     private readonly bool _requiresRedis;
 
     // 原子分配端口的 Lua 脚本：遍历端口段，找到第一个未被占用的端口并设置
@@ -36,6 +37,8 @@ public class PortAllocationService : IPortAllocationService, IDisposable
 
     public bool IsRedisBacked => _database is not null;
 
+    public PortAllocationRange CurrentRange => new(_portStart, _portEnd, _mode, _requiresRedis);
+
     public PortAllocationService(
         IConfiguration config,
         IOptions<ContainerProvider> containerProvider,
@@ -50,12 +53,16 @@ public class PortAllocationService : IPortAllocationService, IDisposable
         {
             _portStart = nginxConfig.ListenPortStart;
             _portEnd = nginxConfig.ListenPortEnd;
+            _mode = "nginx";
             _requiresRedis = true;
         }
         else
         {
             _portStart = dockerConfig?.PublicPortStart ?? 30000;
             _portEnd = dockerConfig?.PublicPortEnd ?? 30999;
+            _mode = dockerConfig?.PublicPortStart is null || dockerConfig.PublicPortEnd is null
+                ? "docker-random"
+                : "docker";
         }
 
         var connectionString = config.GetConnectionString("RedisCache");

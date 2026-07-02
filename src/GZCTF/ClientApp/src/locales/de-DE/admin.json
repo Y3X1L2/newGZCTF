@@ -413,7 +413,7 @@
           "label": "Plattform-Logo"
         },
         "name": {
-          "description": "Der Plattformname wird mit ::CTF angezeigt",
+          "description": "Wird für Browsertitel, Startseite, Infoseite und Plattformmarke verwendet",
           "label": "Plattformname"
         },
         "slogan": {

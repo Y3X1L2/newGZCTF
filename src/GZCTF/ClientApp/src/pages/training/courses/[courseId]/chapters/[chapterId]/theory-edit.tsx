@@ -214,7 +214,6 @@ const ChapterTheoryEditPage: FC = () => {
           <Stack gap="xs">
             <Badge variant="light">{course.title}</Badge>
             <Title order={2}>{chapter.title} · 课后测试配置</Title>
-            <Text c="dimmed">每个章节最多一套测试。保存并发放后，学生可以在章节页面末尾进入答题。</Text>
           </Stack>
         </YinyuPanel>
 

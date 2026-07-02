@@ -28,6 +28,7 @@ public class ContainerRepository(
             .Include(c => c.GameInstance).ThenInclude(i => i!.Challenge)
             .Include(c => c.GameInstance).ThenInclude(i => i!.FlagContext)
             .Include(c => c.GameInstance).ThenInclude(i => i!.Participation).ThenInclude(p => p.Team)
+            .Include(c => c.GameInstance).ThenInclude(i => i!.Participation).ThenInclude(p => p.Members)
             .FirstOrDefaultAsync(i => i.Id == guid, token);
 
     public async Task<ContainerInstanceModel[]> GetContainerInstances(CancellationToken token = default) =>

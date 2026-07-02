@@ -157,9 +157,6 @@ export const CourseTheoryBankPanel: FC<{ courseId: number }> = ({ courseId }) =>
             <Text fw={900} size="lg">
               课程题库
             </Text>
-            <Text size="sm" c="dimmed">
-              当前课程内共享，章节课后练习只能从这里选择题目。
-            </Text>
           </Stack>
           <Group gap="xs">
             <Button

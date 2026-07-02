@@ -3,14 +3,18 @@ using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Sockets;
 using System.Net.WebSockets;
+using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using GZCTF.Middlewares;
+using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Cache;
 using GZCTF.Storage.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
@@ -30,6 +34,7 @@ public class ProxyController(
     IBlobStorage storage,
     IOptions<ContainerProvider> provider,
     IContainerRepository containerRepository,
+    AppDbContext context,
     IStringLocalizer<Program> localizer) : ControllerBase
 {
     private const int BufferSize = 4096;
@@ -89,6 +94,9 @@ public class ProxyController(
             return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Container_NotFound)],
                 StatusCodes.Status404NotFound));
 
+        if (!await CanAccessContainer(container, token))
+            return Forbid();
+
         var ipAddress = (await Dns.GetHostAddressesAsync(container.IP, token)).FirstOrDefault();
 
         if (ipAddress is null)
@@ -124,6 +132,7 @@ public class ProxyController(
     /// <param name="token"></param>
     /// <returns></returns>
     [Route("NoInst/{id:guid}")]
+    [RequireTeacher]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status400BadRequest)]
@@ -141,9 +150,11 @@ public class ProxyController(
         if (!HttpContext.WebSockets.IsWebSocketRequest)
             return NoContent();
 
-        var container = await containerRepository.GetContainerById(id, token);
+        var container = await context.Containers
+            .FirstOrDefaultAsync(c => c.Id == id, token);
 
-        if (container is null || container.GameInstanceId is not null || !container.IsProxy)
+        if (container is null || container.GameInstanceId is not null || !container.IsProxy ||
+            !await context.GameChallenges.AnyAsync(c => c.TestContainerId == id, token))
             return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Container_NotFound)],
                 StatusCodes.Status404NotFound));
 
@@ -329,6 +340,29 @@ public class ProxyController(
         await cache.SetAsync(key, BitConverter.GetBytes(valid ? 0 : -1), ValidOption, token);
 
         return valid;
+    }
+
+    private async Task<bool> CanAccessContainer(Container container, CancellationToken token)
+    {
+        if (container.GameInstance is null)
+            return false;
+
+        var id = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(id, out var userId))
+            return false;
+
+        var user = await context.Users.AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => new { u.Id, u.Role })
+            .FirstOrDefaultAsync(token);
+
+        if (user is null)
+            return false;
+
+        if (user.Role >= Role.Teacher)
+            return true;
+
+        return container.GameInstance.Participation.Members.Any(m => m.UserId == user.Id);
     }
 
     /// <summary>

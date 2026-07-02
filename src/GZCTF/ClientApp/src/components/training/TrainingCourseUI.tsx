@@ -30,6 +30,7 @@ import {
   TrainingCourseStatus,
   TrainingPersonalOverviewModel,
 } from '@Utils/TrainingApi'
+import { TrainingContributionCalendar } from '@Components/training/TrainingContributionCalendar'
 
 type TrainingTone = 'brand' | 'ongoing' | 'coming' | 'ended' | 'danger' | 'silver'
 
@@ -142,7 +143,7 @@ export const TrainingCourseCard: FC<{
           </Group>
 
           <Text size={compact ? 'sm' : 'md'} lineClamp={2} className="yy-training-readable yy-training-course-summary">
-            {course.summary || '教师尚未填写课程摘要。可以在课程编辑中补充学习目标、适合人群和完成要求。'}
+            {course.summary || '暂无课程摘要。'}
           </Text>
 
           <div className="yy-training-course-meta-grid">
@@ -187,7 +188,7 @@ export const TrainingCourseCard: FC<{
 
 export const TrainingEmptyState: FC<{
   title: string
-  description: string
+  description?: string
   action?: ReactNode
 }> = ({ title, description, action }) => (
   <YinyuPanel p="lg" className="yy-training-empty-state">
@@ -197,9 +198,11 @@ export const TrainingEmptyState: FC<{
       </ThemeIcon>
       <Stack gap={4} ta="center">
         <Title order={4}>{title}</Title>
-        <Text size="sm" className="yy-training-readable">
-          {description}
-        </Text>
+        {description ? (
+          <Text size="sm" className="yy-training-readable">
+            {description}
+          </Text>
+        ) : null}
       </Stack>
       {action}
     </Stack>
@@ -243,19 +246,8 @@ export const TrainingProgressSummary: FC<{
   )
 }
 
-const activityLevel = (point: TrainingActivityPointModel) =>
-  Math.min(4, point.studyActions + point.completedChapters * 2 + point.acceptedChallenges * 2 + (point.checkedIn ? 1 : 0))
-
 export const TrainingActivityHeatmap: FC<{ activity?: TrainingActivityPointModel[] }> = ({ activity = [] }) => (
-  <div className="yy-training-heatmap" aria-label="最近学习活跃度">
-    {activity.map((point) => (
-      <span
-        key={point.date}
-        className={`is-level-${activityLevel(point)}`}
-        title={`${point.date}：${point.studyActions} 次学习动作，${point.acceptedChallenges} 次实验提交`}
-      />
-    ))}
-  </div>
+  <TrainingContributionCalendar activity={activity} compact />
 )
 
 export const TrainingOverviewPanel: FC<{
@@ -320,9 +312,7 @@ export const TrainingOverviewPanel: FC<{
               )
             })
           ) : (
-            <Text size="sm" className="yy-training-readable">
-              暂无待完成课程。加入课程或通过报名审核后，这里会展示最近学习入口和未完成章节。
-            </Text>
+            <Text size="sm" className="yy-training-readable">暂无待完成课程。</Text>
           )}
         </Stack>
       </Stack>
@@ -341,9 +331,6 @@ export const TrainingCheckInCard: FC<{
         <Icon path={mdiFire} size={0.92} />
         <Text fw={950}>平台签到</Text>
       </Group>
-      <Text size="sm" className="yy-training-readable">
-        连续学习会形成日期图谱，方便快速判断近期的培训活跃度。
-      </Text>
       <div className="yy-training-checkin-mini">
         <span>
           <b>{overview?.checkInDays ?? 0}</b>
@@ -358,7 +345,7 @@ export const TrainingCheckInCard: FC<{
         <Text size="xs" fw={900} className="yy-training-muted">
           学习活跃趋势
         </Text>
-        <TrainingActivityHeatmap activity={overview?.activity ?? []} />
+        <TrainingContributionCalendar activity={overview?.activity ?? []} compact />
       </Stack>
       <Button variant={overview?.checkedInToday ? 'light' : 'filled'} loading={checking} disabled={overview?.checkedInToday} onClick={onCheckIn}>
         {overview?.checkedInToday ? '今日已签到' : '立即签到'}

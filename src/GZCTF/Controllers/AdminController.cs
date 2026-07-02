@@ -286,6 +286,12 @@ public class AdminController(
                         return HandleIdentityError(result.Errors);
                     }
 
+                    if (!RolePolicy.CanManageRole(currentUser!.Role, userInfo.Role))
+                    {
+                        await trans.RollbackAsync(token);
+                        return Forbid();
+                    }
+
                     userInfo.UpdateUserInfo(user);
                     var code = await userManager.GeneratePasswordResetTokenAsync(userInfo);
                     await userManager.ResetPasswordAsync(userInfo, code, user.Password);

@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Cryptography;
+using System.Text;
 using GZCTF.Models.Data;
 using GZCTF.Services;
 using GZCTF.Services.Vm;
@@ -462,7 +464,8 @@ public class ImageTemplateController : ControllerBase
 
             var node = await _context.WorkerNodes.AsNoTracking()
                 .FirstOrDefaultAsync(n => n.Id == nodeId.Value, token);
-            if (node is null || !TryGetBearerToken(Request, out var authToken) || authToken != node.AuthToken)
+            if (node is null || !TryGetBearerToken(Request, out var authToken) ||
+                !FixedTimeEquals(authToken, node.AuthToken))
                 return Unauthorized(new { message = "Invalid node token" });
         }
 
@@ -514,6 +517,18 @@ public class ImageTemplateController : ControllerBase
 
         token = value.Parameter.Trim();
         return true;
+    }
+
+    private static bool FixedTimeEquals(string? left, string? right)
+    {
+        if (string.IsNullOrEmpty(left) || string.IsNullOrEmpty(right))
+            return false;
+
+        var leftBytes = Encoding.UTF8.GetBytes(left);
+        var rightBytes = Encoding.UTF8.GetBytes(right);
+
+        return leftBytes.Length == rightBytes.Length &&
+               CryptographicOperations.FixedTimeEquals(leftBytes, rightBytes);
     }
 
     private static string TruncateError(string? message)

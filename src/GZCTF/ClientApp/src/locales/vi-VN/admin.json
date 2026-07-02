@@ -413,7 +413,7 @@
           "label": "Logo nền tảng."
         },
         "name": {
-          "description": "Tên nền tảng sẽ được hiển thị với ::CTF.",
+          "description": "Dùng cho tiêu đề trình duyệt, trang chủ, trang giới thiệu và thương hiệu nền tảng.",
           "label": "Tên nền tảng."
         },
         "slogan": {

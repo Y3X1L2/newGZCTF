@@ -413,7 +413,7 @@
           "label": "Logo platform"
         },
         "name": {
-          "description": "Nama platform akan ditampilkan dengan ::CTF",
+          "description": "Digunakan untuk judul browser, beranda, halaman tentang, dan merek platform",
           "label": "Nama platform"
         },
         "slogan": {

@@ -15,6 +15,7 @@ import { YinyuGridScan, YinyuStatusText } from '@Components/yinyu/YinyuReactBits
 import { useLanguage } from '@Utils/I18n'
 import { showErrorMsg } from '@Utils/Shared'
 import { useIsMobile } from '@Utils/ThemeOverride'
+import { useConfig } from '@Hooks/useConfig'
 import { getGameStatus, useGame } from '@Hooks/useGame'
 import { usePageTitle } from '@Hooks/usePageTitle'
 import { useTeams, useUser } from '@Hooks/useUser'
@@ -80,6 +81,7 @@ const GameDetail: FC = () => {
   const modals = useModals()
   const isMobile = useIsMobile()
   const { t } = useTranslation()
+  const { config } = useConfig()
 
   usePageTitle(game?.title)
 
@@ -240,7 +242,7 @@ const GameDetail: FC = () => {
               {game?.poster ? (
                 <Image src={game.poster} alt="" fit="contain" className="yy-game-detail-poster" />
               ) : (
-                <BrandMark className="yy-game-detail-brand" />
+                <BrandMark className="yy-game-detail-brand" src={config.logoUrl} />
               )}
             </div>
             <Text className="yy-readable-text">

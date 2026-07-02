@@ -152,9 +152,8 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             if (node is not null)
                 ReleaseReservedCapacity(node, NodeCapability.Docker);
 
-            var fallback = await TryCreateLocalFallback(config, schedule.Target, context, token);
-            await SaveFleetStateAsync(context, "complete local fallback after remote Docker failure", token);
-            return fallback;
+            await SaveFleetStateAsync(context, "fail remote Docker deployment target", token);
+            return null;
         }
 
         var remoteContainer = new DataContainer
@@ -425,46 +424,6 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         return await nodeRepo.GetNodeByIdAsync(container.NodeId.Value, token);
     }
 
-    async Task<DataContainer?> TryCreateLocalFallback(ContainerConfig config, DeploymentTarget? target,
-        AppDbContext context, CancellationToken token)
-    {
-        var localNode = await context.WorkerNodes
-            .FirstOrDefaultAsync(n => n.IsLocal && n.Status == NodeStatus.Online && n.IsSchedulable, token);
-
-        if (localNode is null || !WeightedScheduler.CanHost(localNode, NodeCapability.Docker))
-            return null;
-
-        FleetManager.ReserveCapacity(localNode, NodeCapability.Docker);
-        _logger.LogInformation("Falling back to local Docker manager after remote container creation failure");
-        var container = await _localManager.CreateContainerAsync(config, token);
-        if (container is null)
-        {
-            ReleaseReservedCapacity(localNode, NodeCapability.Docker);
-            return null;
-        }
-
-        container.NodeId = localNode.Id;
-        if (!await ApplyPublicProxyAsync(container, config, localNode, target, context, token))
-            return null;
-        target ??= new DeploymentTarget
-        {
-            Type = TargetType.Docker,
-            Action = TargetAction.Create,
-            Payload = JsonSerializer.Serialize(config)
-        };
-        if (context.Entry(target).State == EntityState.Detached)
-            context.DeploymentTargets.Add(target);
-
-        target.TargetNodeId = localNode.Id;
-        target.Status = TargetStatus.Completed;
-        target.ResultHost = container.PublicIP ?? localNode.HostAddress;
-        target.ResultPort = container.PublicPort ?? container.Port;
-        target.CompletedAt = DateTimeOffset.UtcNow;
-        target.ErrorMessage = "Remote agent failed; completed by local Docker fallback";
-        await SyncNginxIfProxiedAsync(container, "local fallback Docker container created", token);
-        return container;
-    }
-
     async Task SaveFleetStateAsync(AppDbContext context, string operation, CancellationToken token)
     {
         for (var retry = 0; retry < 3; retry++)
@@ -654,13 +613,14 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         target.ErrorMessage = message;
     }
 
-    static bool CanUseReservedDockerCapacity(WorkerNode? node)
+    internal static bool CanUseReservedDockerCapacity(WorkerNode? node)
     {
         if (node is null)
             return false;
 
         return node.GetEffectiveStatus(DateTimeOffset.UtcNow) == NodeStatus.Online
             && node.IsSchedulable
-            && (node.Capabilities & NodeCapability.Docker) == NodeCapability.Docker;
+            && (node.Capabilities & NodeCapability.Docker) == NodeCapability.Docker
+            && node.CurrentContainers < node.MaxContainers;
     }
 }

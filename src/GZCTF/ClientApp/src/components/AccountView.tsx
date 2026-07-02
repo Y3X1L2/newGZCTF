@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router'
 import { LogoHeader } from '@Components/LogoHeader'
 import { YinyuHexField } from '@Components/yinyu/YinyuUI'
 import { LogoDistortion } from '@Components/yinyu/grid-distortion/LogoDistortion'
+import { useConfig } from '@Hooks/useConfig'
 import misc from '@Styles/Misc.module.css'
 
 interface AccountViewProps extends PropsWithChildren {
@@ -12,6 +13,7 @@ interface AccountViewProps extends PropsWithChildren {
 
 export const AccountView: FC<AccountViewProps> = ({ onSubmit, children }) => {
   const navigate = useNavigate()
+  const { config } = useConfig()
 
   return (
     <Center mih="100vh" px="md" py="xl" className="yy-standalone-shell">
@@ -26,7 +28,7 @@ export const AccountView: FC<AccountViewProps> = ({ onSubmit, children }) => {
           </div>
         </div>
         <div className="auth-logo-panel" aria-hidden="true">
-          <LogoDistortion className="auth-logo-distortion" />
+          <LogoDistortion className="auth-logo-distortion" src={config.logoUrl} />
         </div>
       </article>
     </Center>

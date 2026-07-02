@@ -14,6 +14,7 @@ namespace GZCTF.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/v1/scenarios")]
+[LegacyFeatureGone("独立 Scenario 排行榜模块已停用，请使用比赛排行榜。")]
 [Produces(MediaTypeNames.Application.Json)]
 [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status401Unauthorized)]
 [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status403Forbidden)]

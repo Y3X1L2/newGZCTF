@@ -639,7 +639,7 @@ const CourseDetail: FC = () => {
               <Stack gap="xs">
                 <Title order={1}>{course.title}</Title>
                 <Text c="dimmed" maw="62rem">
-                  {course.summary || '暂无课程摘要，教师可以在课程编辑中补充学习目标、适合人群和完成要求。'}
+                  {course.summary || '暂无课程摘要。'}
                 </Text>
               </Stack>
 
@@ -922,10 +922,9 @@ const CourseDetail: FC = () => {
                 </Group>
               </Group>
               <Alert color="blue" variant="light" mb="md">
-                此处只管理当前课程可用的环境模板，不会显示比赛模块或其他课程的镜像。
                 {dockerRegistry?.enabled
-                  ? ` 当前内网 Registry：${dockerRegistry.address}${dockerRegistry.namespace ? `/${dockerRegistry.namespace}` : ''}`
-                  : ' 当前服务器未配置内网 Docker Registry，Docker 包上传不可用。'}
+                  ? `内网 Registry：${dockerRegistry.address}${dockerRegistry.namespace ? `/${dockerRegistry.namespace}` : ''}`
+                  : '内网 Docker Registry 未配置。'}
               </Alert>
               <TextInput
                 mb="md"
@@ -1017,9 +1016,6 @@ const CourseDetail: FC = () => {
                   创建课程题目
                 </Button>
               </Group>
-              <Alert color="blue" variant="light" mb="md">
-                课程题目会自动创建课程专属练习题，不需要手动填写 ExerciseChallengeId，也不会进入比赛题目或全局练习题池。
-              </Alert>
               <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
                 {course.challenges.map((challenge) => (
                   <YinyuPanel key={challenge.exerciseChallengeId} p="md">
@@ -1131,9 +1127,6 @@ const CourseDetail: FC = () => {
                   </Stack>
                   {course.canManageEnrollments ? (
                     <>
-                      <Text size="sm" c="dimmed">
-                        学员申请和学习进度在这里按人展示，过长时分页浏览；审核操作仍在“学员管理”标签内完成。
-                      </Text>
                       <Stack gap="xs" className="yy-training-student-progress-list">
                         {visibleEnrollments.map((enrollment) => {
                           const status = enrollmentStatusInfo(enrollment.status)
@@ -1189,11 +1182,6 @@ const CourseDetail: FC = () => {
                         </Group>
                         <Progress value={progressPercent} radius="xl" size="sm" color="teal" />
                       </Box>
-                      <Text size="sm" c="dimmed">
-                        {canLearn
-                          ? '你可以进入已发布章节学习正文、观看视频，并在章节末尾完成实验题。'
-                          : '报名并通过老师审核后，可以进入章节和实验内容。'}
-                      </Text>
                     </>
                   )}
                 </Stack>
@@ -1334,7 +1322,7 @@ const CourseDetail: FC = () => {
             </Alert>
           ) : (
             <Alert color="yellow" variant="light">
-              当前服务器未配置内网 Docker Registry，上传后无法推送到课程可调度镜像仓库。
+              内网 Docker Registry 未配置。
             </Alert>
           )}
           <FileInput
@@ -1516,9 +1504,6 @@ const CourseDetail: FC = () => {
               <Group justify="space-between" align="flex-start">
                 <Stack gap={2}>
                   <Text fw={900}>附件</Text>
-                  <Text size="sm" c="dimmed">
-                    支持本地附件或外链附件，学生在章节题目区域可下载或打开。可用于纯附件题，也可绑定到容器题。
-                  </Text>
                 </Stack>
                 {editingChallengeDetail?.attachmentUrl ? (
                   <Button

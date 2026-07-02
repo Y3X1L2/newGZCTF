@@ -34,6 +34,7 @@ export const WithNavBar: FC<WithNavBarProps> = ({
   const isTeamRoute = location.pathname.startsWith('/teams')
   const normalizedPath = location.pathname.replace(/\/$/, '')
   const isTrainingChapterRoute = /^\/training\/courses\/[^/]+\/chapters\/[^/]+$/.test(normalizedPath)
+  const isGameEntryRoute = /^\/games\/[^/]+$/.test(normalizedPath)
   const showPublicAccount =
     location.pathname === '/' ||
     location.pathname.startsWith('/posts') ||
@@ -63,6 +64,7 @@ export const WithNavBar: FC<WithNavBarProps> = ({
             data-mobile={isMobile || undefined}
             data-team-shell={isTeamRoute || undefined}
             data-training-chapter-shell={isTrainingChapterRoute || undefined}
+            data-game-entry-shell={isGameEntryRoute || undefined}
             className={classes.main}
           >
             {isLoading ? (
@@ -75,6 +77,7 @@ export const WithNavBar: FC<WithNavBarProps> = ({
               w={isTeamRoute ? '100%' : (width ?? (isMobile ? '96%' : '80%'))}
               data-team-content={isTeamRoute || undefined}
               data-training-chapter-content={isTrainingChapterRoute || undefined}
+              data-game-entry-content={isGameEntryRoute || undefined}
               className={classes.content}
               style={{
                 zIndex: 20,

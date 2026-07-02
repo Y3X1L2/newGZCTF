@@ -22,6 +22,9 @@ export interface NodeInfo {
   maxVms: number
   usedPorts?: number
   totalPorts?: number
+  portPoolStart?: number | null
+  portPoolEnd?: number | null
+  portPoolMode?: string | null
   lastHeartbeat?: string | null
   isSchedulable: boolean
   isLocal: boolean
@@ -78,6 +81,14 @@ function pressureColor(value: number) {
   if (value >= 90) return 'red'
   if (value >= 70) return 'orange'
   return 'teal'
+}
+
+function portPoolName(mode?: string | null) {
+  if (mode === 'nginx') return '公网转发池'
+  if (mode === 'docker') return 'Docker 端口池'
+  if (mode === 'docker-random') return 'Docker 随机端口'
+  if (mode === 'nginx-unconfigured') return '公网转发未配置'
+  return '端口模式'
 }
 
 function MetricLine({
@@ -138,6 +149,14 @@ export function NodeCard({
   const containerUsage = ratio(node.currentContainers, node.maxContainers)
   const vmUsage = ratio(node.currentVms, node.maxVms)
   const portUsage = ratio(node.usedPorts ?? 0, node.totalPorts ?? 0)
+  const portPoolLabel =
+    node.portPoolStart && node.portPoolEnd
+      ? `${node.usedPorts ?? 0}/${node.totalPorts ?? 0} (${node.portPoolStart}-${node.portPoolEnd}${
+          node.portPoolMode === 'nginx' ? '，全局共享' : ''
+        })`
+      : node.portPoolMode === 'docker-random'
+        ? 'Docker 自动分配'
+        : `${node.usedPorts ?? 0}/${node.totalPorts ?? 0}`
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!onSelect) return
@@ -243,12 +262,13 @@ export function NodeCard({
               total={node.maxVms}
               color={pressureColor(vmUsage)}
             />
-            {(node.totalPorts ?? 0) > 0 && (
+            {node.portPoolMode && (
               <MetricLine
-                label="端口池"
+                label={portPoolName(node.portPoolMode)}
                 current={node.usedPorts ?? 0}
-                total={node.totalPorts ?? 0}
+                total={Math.max(node.totalPorts ?? 0, 1)}
                 color={pressureColor(portUsage)}
+                valueLabel={portPoolLabel}
               />
             )}
           </Stack>

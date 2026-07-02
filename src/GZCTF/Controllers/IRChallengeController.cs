@@ -19,6 +19,7 @@ namespace GZCTF.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/v1/ir-challenges")]
+[LegacyFeatureGone("独立 IR 模块已停用，请在 CTF 题型分类中使用 IR 方向。")]
 [Produces(MediaTypeNames.Application.Json)]
 [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status400BadRequest)]
 [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status401Unauthorized)]

@@ -4,6 +4,7 @@ import {
   Button,
   Group,
   Modal,
+  NumberInput,
   Pagination,
   Select,
   SimpleGrid,
@@ -103,6 +104,23 @@ const statusKeys: Record<string, StatusFilter> = {
 
 function statusKey(status: string | number | undefined): StatusFilter {
   return statusKeys[String(status ?? '').toLowerCase()] ?? 'error'
+}
+
+function portPoolLabel(node: NodeInfo) {
+  if (node.portPoolStart && node.portPoolEnd) {
+    const isPublicPool = node.portPoolMode === 'nginx'
+    const name = isPublicPool ? '公网转发池' : 'Docker 端口池'
+    const scope = node.portPoolMode === 'nginx' ? '，全局共享' : ''
+    return `${name}：${node.portPoolStart}-${node.portPoolEnd}${scope}，已占用 ${node.usedPorts ?? 0}/${node.totalPorts ?? 0}`
+  }
+
+  if (node.portPoolMode === 'docker-random')
+    return 'Docker 端口池：未配置固定范围，当前由 Docker 自动分配宿主端口'
+
+  if (node.portPoolMode === 'nginx-unconfigured')
+    return '公网转发池：监听端口范围无效'
+
+  return '端口池：未配置'
 }
 
 function AddNodeModal({ opened, onClose, onAdded }: { opened: boolean; onClose: () => void; onAdded: () => void }) {
@@ -413,13 +431,18 @@ function NodeResourceRow({
 function NodeResourcePanel({
   node,
   version,
+  onNodeUpdated,
 }: {
   node: NodeInfo | null
   version: number
+  onNodeUpdated: () => void
 }) {
   const [data, setData] = useState<NodeResourceListResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [disabled, setDisabled] = useState(false)
+  const [savingLimits, setSavingLimits] = useState(false)
+  const [maxContainers, setMaxContainers] = useState<string | number>(node?.maxContainers ?? 20)
+  const [maxVms, setMaxVms] = useState<string | number>(node?.maxVms ?? 5)
   const [type, setType] = useState<ResourceTypeFilter>('all')
   const [status, setStatus] = useState<ResourceStatusFilter>('all')
   const [page, setPage] = useState(1)
@@ -449,6 +472,11 @@ function NodeResourcePanel({
   useEffect(() => {
     setPage(1)
   }, [node?.id, status, type])
+
+  useEffect(() => {
+    setMaxContainers(node?.maxContainers ?? 20)
+    setMaxVms(node?.maxVms ?? 5)
+  }, [node?.id, node?.maxContainers, node?.maxVms])
 
   useEffect(() => {
     loadResources()
@@ -487,6 +515,46 @@ function NodeResourcePanel({
     }
   }
 
+  const saveLimits = async () => {
+    if (!node) return
+
+    const containerLimit = Number(maxContainers)
+    const vmLimit = Number(maxVms)
+    if (!Number.isInteger(containerLimit) || !Number.isInteger(vmLimit)) {
+      notifications.show({ title: '保存失败', message: '上限必须是整数', color: 'red' })
+      return
+    }
+
+    if (containerLimit < node.currentContainers || vmLimit < node.currentVms) {
+      notifications.show({
+        title: '保存失败',
+        message: '上限不能小于该节点当前运行中的容器或虚拟机数量',
+        color: 'red',
+      })
+      return
+    }
+
+    setSavingLimits(true)
+    try {
+      const res = await fetch(`/api/v1/nodes/${node.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ maxContainers: containerLimit, maxVms: vmLimit }),
+      })
+      if (res.ok) {
+        notifications.show({ title: '保存成功', message: '节点调度上限已更新', color: 'green' })
+        onNodeUpdated()
+      } else {
+        const body = await res.json().catch(() => ({}))
+        notifications.show({ title: '保存失败', message: body.message || '请检查节点上限配置', color: 'red' })
+      }
+    } catch {
+      notifications.show({ title: '保存失败', message: '网络错误', color: 'red' })
+    } finally {
+      setSavingLimits(false)
+    }
+  }
+
   if (!node) {
     return (
       <YinyuPanel p="lg" className="admin-panel yy-node-resource-panel" cells={48}>
@@ -522,6 +590,45 @@ function NodeResourcePanel({
             </Button>
           </Group>
         </Group>
+
+        <div className="yy-node-schedule-config">
+          <Group justify="space-between" align="end" gap="md" wrap="wrap">
+            <Stack gap={2}>
+              <Text fw={800}>调度配置</Text>
+              <Text size="xs" className="yy-readable-text">
+                当前运行：容器 {node.currentContainers}/{node.maxContainers}，虚拟机 {node.currentVms}/{node.maxVms}
+              </Text>
+              <Text size="xs" className="yy-readable-text">
+                {portPoolLabel(node)}
+              </Text>
+            </Stack>
+            <Group align="end" gap="sm" wrap="wrap">
+              <NumberInput
+                label="容器开启上限"
+                value={maxContainers}
+                onChange={setMaxContainers}
+                min={node.currentContainers}
+                max={10000}
+                step={1}
+                allowDecimal={false}
+                w={150}
+              />
+              <NumberInput
+                label="虚拟机开启上限"
+                value={maxVms}
+                onChange={setMaxVms}
+                min={node.currentVms}
+                max={1000}
+                step={1}
+                allowDecimal={false}
+                w={150}
+              />
+              <Button onClick={saveLimits} loading={savingLimits} disabled={disabled || savingLimits}>
+                保存上限
+              </Button>
+            </Group>
+          </Group>
+        </div>
 
         <SimpleGrid cols={{ base: 2, md: 4 }}>
           <YinyuMetricTile label="运行中" value={data?.runningCount ?? 0} detail="active" tone="success" />
@@ -794,7 +901,7 @@ export default function NodesPage() {
           </Stack>
         </YinyuPanel>
 
-        <NodeResourcePanel node={selectedNode} version={resourceVersion} />
+        <NodeResourcePanel node={selectedNode} version={resourceVersion} onNodeUpdated={loadNodes} />
 
         <AddNodeModal opened={modalOpen} onClose={() => setModalOpen(false)} onAdded={loadNodes} />
       </Stack>

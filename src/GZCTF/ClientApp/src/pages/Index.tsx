@@ -8,15 +8,14 @@ import { WithNavBar } from '@Components/WithNavbar'
 import { BrandMark } from '@Components/yinyu/BrandMark'
 import { YinyuGradientText } from '@Components/yinyu/YinyuReactBits'
 import { YinyuHeartbeatIcon, YinyuHexField, YinyuRouteLoader, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
-import { PLATFORM_TITLE } from '@Utils/Brand'
+import { PLATFORM_TYPE, getPlatformName, splitPlatformSlogans } from '@Utils/Brand'
+import { useConfig } from '@Hooks/useConfig'
 import { showErrorMsg } from '@Utils/Shared'
 import { usePageTitle } from '@Hooks/usePageTitle'
 import api, { PostInfoModel } from '@Api'
 
 const HOME_GAME_COUNT = 5
 const HOME_NOTICE_COUNT = 4
-const platformType = '安全综合演练平台'
-const terminalLines = ['演练赛事在线调度', '平台通知实时归档', '靶场服务安全编排']
 
 const TerminalTyping: FC<{ lines: string[] }> = ({ lines }) => {
   const [lineIndex, setLineIndex] = useState(0)
@@ -67,6 +66,7 @@ const TerminalTyping: FC<{ lines: string[] }> = ({ lines }) => {
 
 const Home: FC = () => {
   const { t } = useTranslation()
+  const { config } = useConfig()
 
   const { data: posts, mutate } = api.info.useInfoGetLatestPosts({
     refreshInterval: 5 * 60 * 1000,
@@ -108,6 +108,8 @@ const Home: FC = () => {
 
   const displayedGames = games?.data ? [...games.data].sort(compareGamesForDisplay) : undefined
   const displayedPosts = posts?.slice(0, HOME_NOTICE_COUNT)
+  const platformName = getPlatformName(config?.title)
+  const terminalLines = splitPlatformSlogans(config?.slogan)
 
   usePageTitle()
 
@@ -115,13 +117,13 @@ const Home: FC = () => {
     <WithNavBar minWidth={0} width="var(--container)">
       <section className="original-home yy-page-frame yy-home-page yy-home-recomposed">
         <div className="home-title-row yy-home-title-row">
-          <BrandMark />
+          <BrandMark src={config.logoUrl} />
           <h1 className="yy-brand-title yy-home-brand-heading">
             <span>
-              <YinyuGradientText tone="silver">{PLATFORM_TITLE}</YinyuGradientText>
+              <YinyuGradientText tone="silver">{platformName}</YinyuGradientText>
             </span>
             <em>
-              <YinyuGradientText tone="signal">{platformType}</YinyuGradientText>
+              <YinyuGradientText tone="signal">{PLATFORM_TYPE}</YinyuGradientText>
             </em>
           </h1>
           <TerminalTyping lines={terminalLines} />

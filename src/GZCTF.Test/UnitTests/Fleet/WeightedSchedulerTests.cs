@@ -199,6 +199,25 @@ public class WeightedSchedulerTests
     }
 
     [Fact]
+    public void GetUnschedulableReason_ReturnsReason_WhenKvmCapacityIsExhausted()
+    {
+        var node = new WorkerNode
+        {
+            Id = Guid.NewGuid(),
+            Capabilities = NodeCapability.Kvm,
+            Status = NodeStatus.Online,
+            IsLocal = true,
+            CurrentVms = 3,
+            MaxVms = 3
+        };
+
+        var reason = WeightedScheduler.GetUnschedulableReason(node, NodeCapability.Kvm);
+
+        Assert.Equal("Node capacity exhausted for Kvm", reason);
+        Assert.Null(WeightedScheduler.SelectOptimalNode([node], NodeCapability.Kvm));
+    }
+
+    [Fact]
     public void GetUnschedulableReason_ReturnsReason_WhenLoadMetricsAreNotFinite()
     {
         var node = new WorkerNode
@@ -237,6 +256,26 @@ public class WeightedSchedulerTests
 
         node.CurrentVms++;
         Assert.Null(WeightedScheduler.SelectOptimalNode([node], NodeCapability.Docker | NodeCapability.Kvm));
+    }
+
+    [Fact]
+    public void ReservedDockerCapacity_RejectsNodeAtConfiguredContainerLimit()
+    {
+        var node = new WorkerNode
+        {
+            Id = Guid.NewGuid(),
+            Capabilities = NodeCapability.Docker,
+            Status = NodeStatus.Online,
+            IsLocal = true,
+            IsSchedulable = true,
+            CurrentContainers = 2,
+            MaxContainers = 2
+        };
+
+        Assert.False(FleetContainerManager.CanUseReservedDockerCapacity(node));
+
+        node.CurrentContainers = 1;
+        Assert.True(FleetContainerManager.CanUseReservedDockerCapacity(node));
     }
 
     [Fact]

@@ -1,3 +1,5 @@
-import ScenarioCreate from '../new'
+import { Navigate } from 'react-router'
 
-export default ScenarioCreate
+export default function LegacyScenarioEdit() {
+  return <Navigate to="/admin/games" replace />
+}

@@ -1,7 +1,7 @@
 import { Box, Group, Text, Title } from '@mantine/core'
 import { FC } from 'react'
 import { LogoHeader } from '@Components/LogoHeader'
-import { PLATFORM_SLOGAN } from '@Utils/Brand'
+import { getPrimarySlogan } from '@Utils/Brand'
 import { useIsMobile } from '@Utils/ThemeOverride'
 import { useConfig } from '@Hooks/useConfig'
 import classes from '@Styles/IconHeader.module.css'
@@ -27,7 +27,7 @@ export const IconHeader: FC<StickyHeaderProps> = ({ sticky, px }) => {
     >
       <LogoHeader />
       <Title className={classes.subtitle} order={3}>
-        &gt;&nbsp;{config?.slogan ?? PLATFORM_SLOGAN}
+        &gt;&nbsp;{getPrimarySlogan(config?.slogan)}
         <Text span className={classes.blink}>
           _
         </Text>

@@ -11,8 +11,9 @@ function supportsGridDistortion() {
   return Boolean(webgl && 'getExtension' in webgl && webgl.getExtension('OES_texture_float'))
 }
 
-export function LogoDistortion({ className = '' }: { className?: string }) {
+export function LogoDistortion({ className = '', src }: { className?: string; src?: string | null }) {
   const [supported, setSupported] = useState(false)
+  const imageSrc = src || yinyuIcon
 
   useEffect(() => {
     setSupported(supportsGridDistortion())
@@ -21,11 +22,11 @@ export function LogoDistortion({ className = '' }: { className?: string }) {
   return (
     <div className={['logo-distortion', 'yy-logo-distortion', className].filter(Boolean).join(' ')}>
       {supported ? (
-        <Distortion imageSrc={yinyuIcon} grid={26} mouse={0.44} strength={0.24} relaxation={0.86} />
+        <Distortion imageSrc={imageSrc} grid={26} mouse={0.44} strength={0.24} relaxation={0.86} />
       ) : (
         <img
           className="logo-distortion-fallback yy-logo-distortion-fallback"
-          src={yinyuIcon}
+          src={imageSrc}
           alt=""
           draggable="false"
         />

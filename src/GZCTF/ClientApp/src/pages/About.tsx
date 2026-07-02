@@ -16,12 +16,11 @@ import { WithNavBar } from '@Components/WithNavbar'
 import { LogoDistortion } from '@Components/yinyu/grid-distortion/LogoDistortion'
 import { YinyuGradientText } from '@Components/yinyu/YinyuReactBits'
 import { YinyuHexField } from '@Components/yinyu/YinyuUI'
-import { PLATFORM_DESCRIPTION, PLATFORM_SLOGAN, PLATFORM_TITLE } from '@Utils/Brand'
+import { PLATFORM_DESCRIPTION, PLATFORM_TYPE, getPlatformName, getSloganText } from '@Utils/Brand'
 import { useIsMobile } from '@Utils/ThemeOverride'
+import { useConfig } from '@Hooks/useConfig'
 import { usePageTitle } from '@Hooks/usePageTitle'
 import classes from '@Styles/About.module.css'
-
-const platformType = '安全综合演练平台'
 
 const features = [
   {
@@ -66,8 +65,12 @@ const rows = [features.slice(0, 2), features.slice(2, 5), features.slice(5)]
 
 const About: FC = () => {
   const { t } = useTranslation()
+  const { config } = useConfig()
   const isMobile = useIsMobile()
   const stageRef = useRef<HTMLElement>(null)
+  const platformName = getPlatformName(config?.title)
+  const slogan = getSloganText(config?.slogan)
+  const description = config?.description?.trim() || PLATFORM_DESCRIPTION
 
   usePageTitle(t('common.title.about'))
 
@@ -101,7 +104,7 @@ const About: FC = () => {
       <section ref={stageRef} className={`yy-page-frame yy-about-page ${classes.container}`} data-mobile={isMobile || undefined}>
         <div className="yy-about-stage">
           <div className="yy-about-logo-panel" aria-hidden="true">
-            <LogoDistortion className="yy-about-logo-distortion" />
+            <LogoDistortion className="yy-about-logo-distortion" src={config.logoUrl} />
           </div>
 
           <div className="yy-about-copy">
@@ -109,14 +112,14 @@ const About: FC = () => {
               <span className="yy-section-kicker">PLATFORM PROFILE</span>
               <Title order={1} className="yy-brand-title">
                 <span>
-                  <YinyuGradientText tone="silver">{PLATFORM_TITLE}</YinyuGradientText>
+                  <YinyuGradientText tone="silver">{platformName}</YinyuGradientText>
                 </span>
                 <em>
-                  <YinyuGradientText tone="signal">{platformType}</YinyuGradientText>
+                  <YinyuGradientText tone="signal">{PLATFORM_TYPE}</YinyuGradientText>
                 </em>
               </Title>
-              <Text className="yy-about-slogan">{PLATFORM_SLOGAN}</Text>
-              <Text className="yy-about-description">{PLATFORM_DESCRIPTION}</Text>
+              <Text className="yy-about-slogan">{slogan}</Text>
+              <Text className="yy-about-description">{description}</Text>
             </div>
 
             <div className="yy-about-hive" aria-label="YINYU platform capabilities">

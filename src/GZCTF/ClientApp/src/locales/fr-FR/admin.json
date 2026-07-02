@@ -413,7 +413,7 @@
           "label": "Logo de la plateforme"
         },
         "name": {
-          "description": "Le nom de la plateforme sera affiché avec ::CTF",
+          "description": "Utilisé pour le titre du navigateur, l’accueil, la page à propos et la marque",
           "label": "Nom de la plateforme"
         },
         "slogan": {

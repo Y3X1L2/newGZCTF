@@ -114,7 +114,8 @@ public class TrainingCourseController(
              m.Visibilities.Any(v =>
                  v.VisibilityType == TrainingVisibilityType.AllStudents ||
                  v.GroupId.HasValue && groupIds.Contains(v.GroupId.Value))), token);
-        var since = Today().AddDays(-41);
+        var activityDays = 371;
+        var since = Today().AddDays(-(activityDays - 1));
         var checkIns = await context.TrainingCheckIns
             .Where(c => c.UserId == user.Id && c.CheckInDate >= since)
             .OrderBy(c => c.CheckInDate)
@@ -141,7 +142,7 @@ public class TrainingCourseController(
         for (var cursor = today; checkedDates.Contains(cursor); cursor = cursor.AddDays(-1))
             streak++;
 
-        var activity = Enumerable.Range(0, 42)
+        var activity = Enumerable.Range(0, activityDays)
             .Select(offset =>
             {
                 var date = since.AddDays(offset);

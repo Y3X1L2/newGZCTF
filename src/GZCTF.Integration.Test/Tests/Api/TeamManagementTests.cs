@@ -1,8 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using GZCTF.Integration.Test.Base;
+using GZCTF.Models;
+using GZCTF.Models.Data;
 using GZCTF.Models.Request.Account;
 using GZCTF.Models.Request.Info;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace GZCTF.Integration.Test.Tests.Api;
@@ -166,5 +170,93 @@ public class TeamManagementTests(GZCTFApplicationFactory factory)
         // Test 2: Null team name should be rejected
         var nullNameResponse = await client.PostAsJsonAsync("/api/Team", new TeamUpdateModel { Name = null! });
         Assert.Equal(HttpStatusCode.BadRequest, nullNameResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Team_AcceptInvite_ShouldRejectLockedTeamInActiveGame()
+    {
+        var captainPassword = "Team@InviteCaptain123";
+        var memberPassword = "Team@InviteMember123";
+        var captain = await TestDataSeeder.CreateUserAsync(factory.Services,
+            TestDataSeeder.RandomName(), captainPassword);
+        var member = await TestDataSeeder.CreateUserAsync(factory.Services,
+            TestDataSeeder.RandomName(), memberPassword);
+        var team = await TestDataSeeder.CreateTeamAsync(factory.Services, captain.Id, "Locked Invite Team");
+        var game = await TestDataSeeder.CreateGameAsync(factory.Services, "Locked Invite Game");
+        await TestDataSeeder.JoinGameAsync(factory.Services, game.Id, team.Id, captain.Id);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var teamEntity = await context.Teams.FirstAsync(t => t.Id == team.Id);
+            teamEntity.Locked = true;
+            await context.SaveChangesAsync();
+        }
+
+        using var captainClient = factory.CreateClient();
+        var captainLogin = await captainClient.PostAsJsonAsync("/api/Account/LogIn",
+            new LoginModel { UserName = captain.UserName, Password = captainPassword });
+        captainLogin.EnsureSuccessStatusCode();
+        var inviteResponse = await captainClient.GetAsync($"/api/Team/{team.Id}/Invite");
+        inviteResponse.EnsureSuccessStatusCode();
+        var inviteCode = await inviteResponse.Content.ReadFromJsonAsync<string>();
+
+        using var memberClient = factory.CreateClient();
+        var memberLogin = await memberClient.PostAsJsonAsync("/api/Account/LogIn",
+            new LoginModel { UserName = member.UserName, Password = memberPassword });
+        memberLogin.EnsureSuccessStatusCode();
+
+        var acceptResponse = await memberClient.PostAsJsonAsync("/api/Team/Accept", inviteCode);
+        Assert.Equal(HttpStatusCode.BadRequest, acceptResponse.StatusCode);
+
+        using var verifyScope = factory.Services.CreateScope();
+        var verifyContext = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var joined = await verifyContext.Teams
+            .Where(t => t.Id == team.Id)
+            .SelectMany(t => t.Members)
+            .AnyAsync(u => u.Id == member.Id);
+        Assert.False(joined);
+    }
+
+    [Fact]
+    public async Task Team_KickUser_ShouldRemoveKickedUserParticipationOnly()
+    {
+        var captainPassword = "Team@KickCaptain123";
+        var captain = await TestDataSeeder.CreateUserAsync(factory.Services,
+            TestDataSeeder.RandomName(), captainPassword);
+        var member = await TestDataSeeder.CreateUserAsync(factory.Services,
+            TestDataSeeder.RandomName(), "Team@KickMember123");
+        var team = await TestDataSeeder.CreateTeamAsync(factory.Services, captain.Id, "Kick Participation Team");
+        var game = await TestDataSeeder.CreateGameAsync(factory.Services, "Kick Participation Game");
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var teamEntity = await context.Teams.Include(t => t.Members).FirstAsync(t => t.Id == team.Id);
+            var memberEntity = await context.Users.FirstAsync(u => u.Id == member.Id);
+            teamEntity.Members.Add(memberEntity);
+            await context.SaveChangesAsync();
+        }
+
+        await TestDataSeeder.JoinGameAsync(factory.Services, game.Id, team.Id, captain.Id);
+        await TestDataSeeder.JoinGameAsync(factory.Services, game.Id, team.Id, member.Id);
+
+        using var captainClient = factory.CreateClient();
+        var captainLogin = await captainClient.PostAsJsonAsync("/api/Account/LogIn",
+            new LoginModel { UserName = captain.UserName, Password = captainPassword });
+        captainLogin.EnsureSuccessStatusCode();
+
+        var kickResponse = await captainClient.PostAsync($"/api/Team/{team.Id}/Kick/{member.Id}", null);
+        kickResponse.EnsureSuccessStatusCode();
+
+        using var verifyScope = factory.Services.CreateScope();
+        var verifyContext = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var participations = await verifyContext.UserParticipations
+            .Where(p => p.GameId == game.Id && p.TeamId == team.Id)
+            .Select(p => p.UserId)
+            .ToArrayAsync();
+
+        Assert.Contains(captain.Id, participations);
+        Assert.DoesNotContain(member.Id, participations);
     }
 }

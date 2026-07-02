@@ -265,6 +265,7 @@ docker-data/
 .codex/
 .codex-run/
 .codegraph/
+artifacts/
 design-system/
 design-lab/
 design-lab.zip

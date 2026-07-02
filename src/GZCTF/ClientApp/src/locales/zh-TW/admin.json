@@ -413,7 +413,7 @@
           "label": "平臺 Logo"
         },
         "name": {
-          "description": "後跟 ::CTF 欄位進行展示",
+          "description": "用於瀏覽器標題、首頁、介紹頁和平台品牌展示",
           "label": "平臺名稱"
         },
         "slogan": {

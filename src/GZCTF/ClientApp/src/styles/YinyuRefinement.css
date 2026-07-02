@@ -5038,6 +5038,103 @@
   background: #020605 !important;
 }
 
+.yy-app-frame [data-game-entry-shell='true'] {
+  align-items: stretch !important;
+  justify-content: stretch !important;
+  min-height: calc(100dvh - var(--app-shell-header-offset, 0px)) !important;
+  height: calc(100dvh - var(--app-shell-header-offset, 0px)) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+.yy-app-frame [data-game-entry-content='true'] {
+  width: 100% !important;
+  max-width: none !important;
+  min-height: calc(100dvh - var(--app-shell-header-offset, 0px)) !important;
+  height: calc(100dvh - var(--app-shell-header-offset, 0px)) !important;
+  overflow: hidden !important;
+}
+
+body:has(.yy-game-entry-page) {
+  overflow: hidden !important;
+}
+
+body:has(.yy-game-entry-page) .mantine-AppShell-main {
+  min-height: calc(100dvh - var(--app-shell-header-offset, 0px)) !important;
+  height: calc(100dvh - var(--app-shell-header-offset, 0px)) !important;
+  overflow: hidden !important;
+}
+
+.yy-game-entry-page.yy-game-detail-page {
+  width: 100% !important;
+  min-height: calc(100dvh - var(--app-shell-header-offset, 0px)) !important;
+  height: calc(100dvh - var(--app-shell-header-offset, 0px)) !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  overflow: hidden !important;
+  border-radius: 0 !important;
+  background: #000 !important;
+}
+
+.yy-game-entry-page::before {
+  content: none !important;
+}
+
+.yy-game-entry-page .yy-game-entry-hero.yy-game-detail-hero.panel-card {
+  width: 100% !important;
+  min-height: calc(100dvh - var(--app-shell-header-offset, 0px)) !important;
+  height: calc(100dvh - var(--app-shell-header-offset, 0px)) !important;
+  padding: clamp(0.55rem, 1.4vh, 1rem) clamp(1rem, 4vw, 4.6rem) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.yy-game-entry-page .yy-game-entry-copy.yy-game-detail-copy {
+  height: 100%;
+  max-height: 100%;
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.35rem, 1.15vh, 0.95rem) !important;
+  overflow: hidden;
+}
+
+.yy-game-entry-page .yy-game-entry-copy h1 {
+  font-size: clamp(2.6rem, 5.35vw, 5.85rem) !important;
+  flex: 0 0 auto;
+}
+
+.yy-game-entry-page .yy-game-entry-copy .yy-game-detail-emblem,
+.yy-game-entry-page .yy-game-entry-copy .yy-game-detail-emblem[data-has-poster='true'] {
+  width: min(100%, clamp(22rem, 36vw, 46rem)) !important;
+  max-height: min(32vh, 20rem) !important;
+  flex: 0 1 min(32vh, 20rem);
+}
+
+.yy-game-entry-page .yy-game-entry-copy .yy-game-time-grid {
+  margin-top: 0 !important;
+  flex: 0 0 auto;
+}
+
+.yy-game-entry-page .yy-game-entry-copy .mantine-Progress-root,
+.yy-game-entry-page .yy-game-entry-copy .yy-game-detail-kicker,
+.yy-game-entry-page .yy-game-entry-copy > .yy-readable-text,
+.yy-game-entry-page .yy-game-entry-copy .yy-game-detail-actions {
+  flex: 0 0 auto;
+}
+
+.yy-game-entry-page .yy-game-detail-intro {
+  max-height: min(9vh, 5.5rem) !important;
+  overflow: hidden !important;
+}
+
+.yy-game-entry-page .yy-game-detail-alerts {
+  max-height: min(13vh, 8rem) !important;
+  overflow: auto !important;
+}
+
 .yy-game-entry-hero > .yy-react-grid-scan {
   background:
     radial-gradient(ellipse at 50% 12%, rgba(93, 240, 168, 0.18), transparent 38%),
@@ -8339,6 +8436,24 @@ body:has(.yy-training-page) .signal-field {
   margin-top: auto;
 }
 
+.yy-training-course-progress .mantine-Progress-root,
+.yy-pentest-progress.mantine-Progress-root,
+.yy-pentest-ctf-progress.mantine-Progress-root {
+  overflow: hidden;
+  border: 1px solid rgba(221, 229, 223, 0.12);
+  background: rgba(4, 10, 8, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.045),
+    0 0 1.2rem rgba(0, 0, 0, 0.18);
+}
+
+.yy-training-course-progress .mantine-Progress-section,
+.yy-pentest-progress .mantine-Progress-section,
+.yy-pentest-ctf-progress .mantine-Progress-section {
+  background: linear-gradient(90deg, #2bcf87 0%, #6beeb1 54%, #b9add1 100%) !important;
+  box-shadow: 0 0 1.1rem rgba(107, 238, 177, 0.22);
+}
+
 .yy-training-task-row {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.72rem;
@@ -8415,35 +8530,192 @@ body:has(.yy-training-page) .signal-field {
     rgba(255, 255, 255, 0.035);
 }
 
-.yy-training-heatmap {
+.yy-training-contribution {
+  --yy-training-day-size: 0.72rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.yy-training-contribution.is-compact {
+  --yy-training-day-size: 0.58rem;
+}
+
+.yy-training-contribution-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 0.12rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(107, 238, 177, 0.36) rgba(255, 255, 255, 0.04);
+}
+
+.yy-training-contribution.is-compact .yy-training-contribution-scroll {
+  overflow: visible;
+}
+
+.yy-training-contribution-rail {
   display: grid;
-  grid-template-columns: repeat(14, minmax(0, 1fr));
-  gap: 0.26rem;
+  gap: 0.34rem;
+  min-width: 0;
 }
 
-.yy-training-heatmap span {
-  aspect-ratio: 1;
-  min-width: 0.52rem;
-  border: 1px solid rgba(221, 229, 223, 0.06);
-  border-radius: 0.22rem;
-  background: rgba(255, 255, 255, 0.045);
+.yy-training-contribution-day {
+  display: grid;
+  grid-template-columns: var(--yy-training-day-size) minmax(2.1rem, 1fr) minmax(1.8rem, auto) minmax(1.8rem, auto);
+  gap: 0.36rem;
+  align-items: center;
+  min-width: 0;
+  padding: 0.36rem 0.42rem;
+  border: 1px solid rgba(221, 229, 223, 0.09);
+  border-radius: var(--yy-radius-sm);
+  background: rgba(255, 255, 255, 0.035);
 }
 
-.yy-training-heatmap .is-level-1 {
-  background: rgba(107, 238, 177, 0.18);
+.yy-training-contribution-day.is-today {
+  border-color: rgba(157, 255, 213, 0.34);
+  background:
+    linear-gradient(135deg, rgba(107, 238, 177, 0.08), rgba(185, 173, 209, 0.04)),
+    rgba(255, 255, 255, 0.045);
 }
 
-.yy-training-heatmap .is-level-2 {
-  background: rgba(107, 238, 177, 0.3);
+.yy-training-contribution-day.is-checked {
+  box-shadow: inset 0 0 0 1px rgba(107, 238, 177, 0.08);
 }
 
-.yy-training-heatmap .is-level-3 {
-  background: linear-gradient(135deg, rgba(107, 238, 177, 0.42), rgba(185, 173, 209, 0.24));
+.yy-training-contribution-day i {
+  width: var(--yy-training-day-size);
+  height: var(--yy-training-day-size);
+  border: 1px solid rgba(221, 229, 223, 0.075);
+  border-radius: 0.16rem;
+  background: rgba(255, 255, 255, 0.042);
 }
 
-.yy-training-heatmap .is-level-4 {
-  background: linear-gradient(135deg, rgba(120, 248, 190, 0.72), rgba(185, 173, 209, 0.38));
-  box-shadow: 0 0 0.8rem rgba(107, 238, 177, 0.18);
+.yy-training-contribution-day b,
+.yy-training-contribution-day em,
+.yy-training-contribution-day strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.yy-training-contribution-day b {
+  color: rgba(246, 255, 251, 0.92);
+  font-size: 0.74rem;
+  font-weight: 950;
+}
+
+.yy-training-contribution-day em {
+  color: rgba(225, 248, 238, 0.56);
+  font-size: 0.64rem;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.yy-training-contribution-day strong {
+  color: rgba(157, 255, 213, 0.78);
+  font-size: 0.64rem;
+  font-weight: 950;
+  text-align: right;
+}
+
+.yy-training-contribution-months {
+  display: grid;
+  gap: 0.2rem;
+  min-width: max-content;
+  margin-left: 2.15rem;
+  margin-bottom: 0.34rem;
+}
+
+.yy-training-contribution-months span {
+  color: rgba(225, 248, 238, 0.62);
+  font-size: 0.62rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.yy-training-contribution-body {
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, max-content);
+  gap: 0.38rem;
+  align-items: start;
+  min-width: max-content;
+}
+
+.yy-training-contribution-weekdays {
+  display: grid;
+  grid-template-rows: repeat(7, var(--yy-training-day-size));
+  gap: 0.2rem;
+  color: rgba(225, 248, 238, 0.5);
+  font-size: 0.58rem;
+  font-weight: 850;
+  line-height: var(--yy-training-day-size);
+}
+
+.yy-training-contribution-grid {
+  display: grid;
+  grid-template-rows: repeat(7, var(--yy-training-day-size));
+  grid-auto-flow: column;
+  gap: 0.2rem;
+}
+
+.yy-training-contribution-grid span,
+.yy-training-contribution-legend i {
+  width: var(--yy-training-day-size);
+  height: var(--yy-training-day-size);
+  border: 1px solid rgba(221, 229, 223, 0.075);
+  border-radius: 0.18rem;
+  background: rgba(255, 255, 255, 0.042);
+}
+
+.yy-training-contribution-grid span.is-outside {
+  opacity: 0.16;
+}
+
+.yy-training-contribution-grid span.is-today {
+  outline: 1px solid rgba(245, 255, 250, 0.72);
+  outline-offset: 1px;
+}
+
+.yy-training-contribution .is-level-1 {
+  background: rgba(107, 238, 177, 0.2);
+}
+
+.yy-training-contribution .is-level-2 {
+  background: rgba(107, 238, 177, 0.36);
+}
+
+.yy-training-contribution .is-level-3 {
+  background: linear-gradient(135deg, rgba(107, 238, 177, 0.58), rgba(108, 222, 181, 0.36));
+}
+
+.yy-training-contribution .is-level-4 {
+  border-color: rgba(157, 255, 213, 0.45);
+  background: linear-gradient(135deg, rgba(120, 248, 190, 0.82), rgba(185, 173, 209, 0.44));
+  box-shadow: 0 0 0.7rem rgba(107, 238, 177, 0.16);
+}
+
+.yy-training-contribution-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-top: 0.45rem;
+  color: rgba(225, 248, 238, 0.66);
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.yy-training-contribution-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+}
+
+.yy-training-contribution-legend em {
+  color: rgba(225, 248, 238, 0.52);
+  font-size: 0.64rem;
+  font-style: normal;
 }
 
 .yy-training-detail-grid {

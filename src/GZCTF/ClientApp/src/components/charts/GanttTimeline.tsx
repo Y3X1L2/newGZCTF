@@ -8,6 +8,7 @@ import { Link } from 'react-router'
 import { BrandMark } from '@Components/yinyu/BrandMark'
 import { YinyuHeartbeatIcon } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
+import { useConfig } from '@Hooks/useConfig'
 import classes from '@Styles/GanttTimeline.module.css'
 
 interface GanttTimeLineProps {
@@ -39,6 +40,7 @@ export const GanttTimeLine: FC<GanttTimeLineProps> = ({ items }) => {
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const { t } = useTranslation()
   const { locale } = useLanguage()
+  const { config } = useConfig()
 
   const timeline = useMemo(() => {
     const { now, start, end, duration } = dateWindow()
@@ -136,7 +138,7 @@ export const GanttTimeLine: FC<GanttTimeLineProps> = ({ items }) => {
     >
       <header className={classes.header}>
         <div className={classes.heading}>
-          <BrandMark className={classes.headingMark} />
+          <BrandMark className={classes.headingMark} src={config.logoUrl} />
           <div>
             <span>EVENT SCHEDULE</span>
             <h3>{t('common.content.home.recent_games')}</h3>
@@ -201,7 +203,7 @@ export const GanttTimeLine: FC<GanttTimeLineProps> = ({ items }) => {
             >
               <div className={classes.rowMeta}>
                 <span className={classes.metaMark}>
-                  <BrandMark />
+                  <BrandMark src={config.logoUrl} />
                   <i className={classes.signalNode} />
                 </span>
                 <span>

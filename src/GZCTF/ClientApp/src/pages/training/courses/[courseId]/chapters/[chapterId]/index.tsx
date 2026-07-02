@@ -261,9 +261,6 @@ const ChapterDetail: FC = () => {
                     <Icon path={mdiConsoleNetworkOutline} size={1} />
                     <Title order={3}>章节实验</Title>
                   </Group>
-                  <Text size="sm" c="dimmed">
-                    实验题直接嵌入章节末尾。创建容器后在当前页面复制入口、提交 Flag，正确后会同步章节进度。
-                  </Text>
                 </Stack>
                 <TrainingStatusText tone="ongoing">{chapter.challenges.filter((item) => item.solved).length}/{chapter.challenges.length}</TrainingStatusText>
               </Group>

@@ -233,6 +233,15 @@ public class GlobalConfig
     public const string DefaultDescription =
         "YINYU CTF平台提供赛事管理、攻防演练、理论赛与分布式靶场调度能力。";
 
+    public const string DefaultSlogan = "专业赛事管理与攻防演练平台";
+
+    public static readonly string[] DefaultSlogans =
+    [
+        "演练赛事在线调度",
+        "平台通知实时归档",
+        "靶场服务安全编排"
+    ];
+
     /// <summary>
     /// Platform prefix name
     /// </summary>
@@ -244,7 +253,7 @@ public class GlobalConfig
     /// Platform slogan
     /// </summary>
     [CacheFlush(CacheKey.ClientConfig)]
-    public string Slogan { get; set; } = "专业赛事管理与攻防演练平台";
+    public string Slogan { get; set; } = JoinSlogans(DefaultSlogans);
 
     /// <summary>
     /// Site description information
@@ -301,11 +310,35 @@ public class GlobalConfig
         if (string.IsNullOrEmpty(normalized) ||
             string.Equals(compactTitle, legacyPrefix, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(compactTitle, legacyFullName, StringComparison.OrdinalIgnoreCase))
-            return "YINYU CTF平台";
+            return "YINYU";
 
-        return normalized.Contains("CTF", StringComparison.OrdinalIgnoreCase) || normalized.Contains("平台")
-            ? normalized
-            : $"{normalized} CTF平台";
+        return normalized;
+    }
+
+    public static string[] SplitSlogans(string? slogans)
+    {
+        if (string.IsNullOrWhiteSpace(slogans) ||
+            string.Equals(slogans.Trim(), DefaultSlogan, StringComparison.Ordinal))
+            return DefaultSlogans;
+
+        var parsed = slogans
+            .Split(["\r\n", "\n", "\r"], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return parsed.Length > 0 ? parsed : DefaultSlogans;
+    }
+
+    public static string JoinSlogans(IEnumerable<string?> slogans)
+    {
+        var parsed = slogans
+            .Select(s => s?.Trim())
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return string.Join('\n', parsed.Length > 0 ? parsed : DefaultSlogans);
     }
 }
 
@@ -323,7 +356,12 @@ public partial class ClientConfig
     /// <summary>
     /// Platform slogan
     /// </summary>
-    public string Slogan { get; set; } = "专业赛事管理与攻防演练平台";
+    public string Slogan { get; set; } = GlobalConfig.JoinSlogans(GlobalConfig.DefaultSlogans);
+
+    /// <summary>
+    /// Site description information
+    /// </summary>
+    public string? Description { get; set; } = GlobalConfig.DefaultDescription;
 
     /// <summary>
     /// Footer information
@@ -381,6 +419,7 @@ public partial class ClientConfig
         {
             Title = globalConfig.Title,
             Slogan = globalConfig.Slogan,
+            Description = globalConfig.Description,
             FooterInfo = globalConfig.FooterInfo,
             CustomTheme = globalConfig.CustomTheme,
             LogoUrl = globalConfig.LogoUrl,

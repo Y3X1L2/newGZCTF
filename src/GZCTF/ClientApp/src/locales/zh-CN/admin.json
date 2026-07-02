@@ -399,33 +399,16 @@
         "title": "容器策略"
       },
       "platform": {
-        "api_encryption": {
-          "description": "加密部分敏感数据，如用户密码、flag",
-          "label": "启用 API 数据加密",
-          "not_available": "当前环境不支持 Web Crypto API"
-        },
-        "color": {
-          "description": "自定义平台颜色，用于生成主题色盘",
-          "label": "平台颜色"
-        },
-        "color_palette": {
-          "description": "自定义平台颜色生成的色盘",
-          "label": "色盘"
-        },
         "description": {
           "description": "向搜索引擎和爬虫程序提供的平台摘要",
           "label": "平台摘要"
-        },
-        "footer": {
-          "description": "显示在网页底部的附加信息，支持 Markdown 语法, <mbr/> 会在移动设备中替换为 <br/>",
-          "label": "页脚附加信息"
         },
         "logo": {
           "description": "平台 Logo 将会被用于页面顶部和页面 favicon",
           "label": "平台 Logo"
         },
         "name": {
-          "description": "后跟 ::CTF 字段进行展示",
+          "description": "用于浏览器标题、首页、介绍页和平台品牌展示",
           "label": "平台名称"
         },
         "slogan": {

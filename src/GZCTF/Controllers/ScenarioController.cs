@@ -24,6 +24,7 @@ namespace GZCTF.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/v1/scenarios")]
+[LegacyFeatureGone("独立 Scenario 模块已停用，请在 CTF 题型分类中使用 IR/Scenario 方向。")]
 [Produces(MediaTypeNames.Application.Json)]
 [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status401Unauthorized)]
 [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status403Forbidden)]

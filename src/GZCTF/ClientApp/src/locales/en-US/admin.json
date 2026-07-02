@@ -399,33 +399,16 @@
         "title": "Container Policy"
       },
       "platform": {
-        "api_encryption": {
-          "description": "Encrypt sensitive data in some APIs",
-          "label": "Enable API Encryption",
-          "not_available": "Web Crypto API is not available"
-        },
-        "color": {
-          "description": "Custom color for the platform",
-          "label": "Platform Color"
-        },
-        "color_palette": {
-          "description": "Color palette generated from the custom color",
-          "label": "Color Palette"
-        },
         "description": {
           "description": "Site description provided for SEO",
           "label": "Site Description"
-        },
-        "footer": {
-          "description": "Supports Markdown syntax, <mbr/> will be replaced with <br/> on mobile device",
-          "label": "Footer"
         },
         "logo": {
           "description": "Used for favicon and the logo on pages",
           "label": "Platform Logo"
         },
         "name": {
-          "description": "Platform name will be displayed with ::CTF",
+          "description": "Used for browser title, home page, about page, and platform brand display",
           "label": "Platform Name"
         },
         "slogan": {

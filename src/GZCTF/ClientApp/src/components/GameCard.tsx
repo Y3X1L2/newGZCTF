@@ -7,6 +7,7 @@ import { BrandMark } from '@Components/yinyu/BrandMark'
 import { YinyuStatusText } from '@Components/yinyu/YinyuReactBits'
 import { YinyuHexField, YinyuStatusTone } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
+import { useConfig } from '@Hooks/useConfig'
 import { getGameStatus, toLimitTag } from '@Hooks/useGame'
 import { BasicGameInfoModel } from '@Api'
 import classes from '@Styles/GameCard.module.css'
@@ -63,10 +64,12 @@ export function compareGamesForDisplay(a: BasicGameInfoModel, b: BasicGameInfoMo
 }
 
 export const GameFlagGlyph: FC<{ tone?: YinyuStatusTone; poster?: string | null }> = memo(({ tone = 'neutral', poster }) => {
+  const { config } = useConfig()
+
   return (
     <span className={cx('game-flag-glyph', `glyph-${tone}`, classes.glyph)} aria-hidden="true">
       {poster ? <span className={classes.glyphPoster} style={{ backgroundImage: `url(${poster})` }} /> : null}
-      <BrandMark className={classes.glyphBrand} />
+      <BrandMark className={classes.glyphBrand} src={config.logoUrl} />
       <YinyuHexField cells={18} />
     </span>
   )

@@ -1,8 +1,11 @@
 using System.ComponentModel.DataAnnotations;
 using System.Net.Mime;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using GZCTF.Middlewares;
 using GZCTF.Models.Data;
+using GZCTF.Models.Internal;
 using GZCTF.Models.Request.Admin;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
@@ -12,6 +15,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace GZCTF.Controllers;
 
@@ -23,14 +27,20 @@ public class NodesController : ControllerBase
     private readonly INodeRepository _nodeRepo;
     private readonly AppDbContext _context;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ContainerProvider _containerProvider;
+    private readonly IPortAllocationService _portAllocator;
     private readonly ILogger<NodesController> _logger;
 
     public NodesController(INodeRepository nodeRepo, AppDbContext context, IServiceScopeFactory scopeFactory,
+        IOptions<ContainerProvider> containerProvider,
+        IPortAllocationService portAllocator,
         ILogger<NodesController> logger)
     {
         _nodeRepo = nodeRepo;
         _context = context;
         _scopeFactory = scopeFactory;
+        _containerProvider = containerProvider.Value;
+        _portAllocator = portAllocator;
         _logger = logger;
     }
 
@@ -56,11 +66,19 @@ public class NodesController : ControllerBase
     {
         var nodes = await _nodeRepo.GetAllNodesAsync(HttpContext.RequestAborted);
         var now = DateTimeOffset.UtcNow;
+        var portPool = GetPublicPortPool();
+        var publicPortUsage = await GetPublicPortUsageAsync(portPool, HttpContext.RequestAborted);
         return Ok(nodes.Select(n => new
         {
             n.Id, n.Name, n.HostAddress, Status = n.GetEffectiveStatus(now), n.Capabilities,
             n.CpuLoad, n.MemoryLoad, n.CurrentContainers, n.MaxContainers,
-            n.CurrentVms, n.MaxVms, n.UsedPorts, n.TotalPorts, n.LastHeartbeat,
+            n.CurrentVms, n.MaxVms,
+            UsedPorts = publicPortUsage,
+            TotalPorts = portPool.Total,
+            PortPoolStart = portPool.Start,
+            PortPoolEnd = portPool.End,
+            PortPoolMode = portPool.Mode,
+            n.LastHeartbeat,
             n.IsSchedulable, n.IsLocal, n.AgentPort,
             UnschedulableReasons = GetUnschedulableReasons(n),
             UnschedulableByCapability = GetUnschedulableByCapability(n),
@@ -75,11 +93,19 @@ public class NodesController : ControllerBase
         var node = await _nodeRepo.GetNodeByIdAsync(id, HttpContext.RequestAborted);
         if (node is null) return NotFound();
         var now = DateTimeOffset.UtcNow;
+        var portPool = GetPublicPortPool();
+        var publicPortUsage = await GetPublicPortUsageAsync(portPool, HttpContext.RequestAborted);
         return Ok(new
         {
             node.Id, node.Name, node.HostAddress, Status = node.GetEffectiveStatus(now), node.Capabilities,
             node.CpuLoad, node.MemoryLoad, node.CurrentContainers, node.MaxContainers,
-            node.CurrentVms, node.MaxVms, node.UsedPorts, node.TotalPorts, node.LastHeartbeat,
+            node.CurrentVms, node.MaxVms,
+            UsedPorts = publicPortUsage,
+            TotalPorts = portPool.Total,
+            PortPoolStart = portPool.Start,
+            PortPoolEnd = portPool.End,
+            PortPoolMode = portPool.Mode,
+            node.LastHeartbeat,
             node.IsSchedulable, node.IsLocal, node.AgentPort,
             UnschedulableReasons = GetUnschedulableReasons(node),
             UnschedulableByCapability = GetUnschedulableByCapability(node),
@@ -165,13 +191,20 @@ public class NodesController : ControllerBase
             var teamRows = await _context.UserParticipations.AsNoTracking()
                 .Where(m => vmUserIds.Contains(m.UserId))
                 .Include(m => m.Team)
-                .OrderByDescending(m => m.GameId)
                 .ToListAsync(token);
             var teamsByUser = teamRows
-                .GroupBy(m => m.UserId)
+                .GroupBy(m => (m.UserId, m.GameId))
                 .ToDictionary(g => g.Key, g => g.First().Team);
 
-            resources.AddRange(vms.Select(vm => ToNodeVmResource(vm, users, teamsByUser)));
+            var guacService = HttpContext.RequestServices.GetService<GuacamoleService>();
+            var vmResources = new List<NodeResourceItemModel>(vms.Count);
+            foreach (var vm in vms)
+            {
+                var entry = await ResolveVmEntryAsync(vm, guacService, token);
+                vmResources.Add(ToNodeVmResource(vm, users, teamsByUser, entry));
+            }
+
+            resources.AddRange(vmResources);
         }
 
         if (normalizedStatus == "active")
@@ -422,6 +455,20 @@ public class NodesController : ControllerBase
         if (request.IsSchedulable.HasValue)
             node.IsSchedulable = request.IsSchedulable.Value;
 
+        if (request.MaxContainers.HasValue)
+        {
+            if (request.MaxContainers.Value < Math.Max(0, node.CurrentContainers) || request.MaxContainers.Value > 10000)
+                return BadRequest(new { message = $"容器开启上限不能小于当前运行数 {node.CurrentContainers}，且不能超过 10000。" });
+            node.MaxContainers = request.MaxContainers.Value;
+        }
+
+        if (request.MaxVms.HasValue)
+        {
+            if (request.MaxVms.Value < Math.Max(0, node.CurrentVms) || request.MaxVms.Value > 1000)
+                return BadRequest(new { message = $"虚拟机开启上限不能小于当前运行数 {node.CurrentVms}，且不能超过 1000。" });
+            node.MaxVms = request.MaxVms.Value;
+        }
+
         if (request.IsStorageNode.HasValue || request.RegistryPort.HasValue)
             return BadRequest(new { message = "镜像仓库已固定为 10.24.0.28:5000，节点管理不再支持切换存储服务器。" });
 
@@ -431,7 +478,9 @@ public class NodesController : ControllerBase
         {
             node.Id,
             node.IsSchedulable,
-            node.IsLocal
+            node.IsLocal,
+            node.MaxContainers,
+            node.MaxVms
         });
     }
 
@@ -451,7 +500,7 @@ public class NodesController : ControllerBase
 
         var authToken = HttpContext.Request.Headers["Authorization"]
             .ToString().Replace("Bearer ", "").Trim();
-        if (string.IsNullOrEmpty(authToken) || authToken != node.AuthToken)
+        if (!FixedTimeEquals(authToken, node.AuthToken))
             return Forbid();
 
         node.CpuLoad = request.CpuLoad;
@@ -523,6 +572,18 @@ public class NodesController : ControllerBase
         return reasons.Length == 2 && reasons[0] == reasons[1] ? [reasons[0]] : reasons;
     }
 
+    static bool FixedTimeEquals(string? left, string? right)
+    {
+        if (string.IsNullOrEmpty(left) || string.IsNullOrEmpty(right))
+            return false;
+
+        var leftBytes = Encoding.UTF8.GetBytes(left);
+        var rightBytes = Encoding.UTF8.GetBytes(right);
+
+        return leftBytes.Length == rightBytes.Length &&
+               CryptographicOperations.FixedTimeEquals(leftBytes, rightBytes);
+    }
+
     static object GetUnschedulableByCapability(WorkerNode node) => new
     {
         Docker = WeightedScheduler.GetUnschedulableReason(node, NodeCapability.Docker),
@@ -537,6 +598,61 @@ public class NodesController : ControllerBase
             WeightedScheduler.CanHost(node, NodeCapability.Kvm) ? nameof(NodeCapability.Kvm) : null
         }.OfType<string>()
     ];
+
+    PublicPortPool GetPublicPortPool()
+        => CreatePortPool(
+            _portAllocator.CurrentRange.Start,
+            _portAllocator.CurrentRange.End,
+            _portAllocator.CurrentRange.Mode,
+            _portAllocator.CurrentRange.Mode);
+
+    internal static PublicPortPool ResolvePublicPortPool(NginxProxyConfig? nginx, DockerConfig? docker)
+    {
+        if (nginx?.Enable == true)
+            return CreatePortPool(nginx.ListenPortStart, nginx.ListenPortEnd, "nginx", "nginx-unconfigured");
+
+        return CreatePortPool(docker?.PublicPortStart, docker?.PublicPortEnd, "docker", "docker-random");
+    }
+
+    internal static PublicPortPool CreatePortPool(int? start, int? end, string mode, string emptyMode)
+    {
+        if (start is null || end is null || start <= 0 || end < start || end > ushort.MaxValue)
+            return new PublicPortPool(null, null, 0, emptyMode);
+
+        return new PublicPortPool(start.Value, end.Value, end.Value - start.Value + 1, mode);
+    }
+
+    async Task<int> GetPublicPortUsageAsync(PublicPortPool portPool, CancellationToken token)
+    {
+        if (portPool.Start is null || portPool.End is null)
+            return 0;
+
+        var query = _context.Containers.AsNoTracking()
+            .Where(c => c.PublicPort.HasValue
+                && c.PublicPort.Value >= portPool.Start.Value
+                && c.PublicPort.Value <= portPool.End.Value);
+
+        if (portPool.Mode is "nginx")
+        {
+            var publicEntry = _containerProvider.PublicEntry;
+            if (string.IsNullOrWhiteSpace(publicEntry))
+                return 0;
+
+            query = query.Where(c => c.Status == ContainerStatus.Running
+                && c.PublicIP == publicEntry
+                && c.NodeId != null
+                && c.Node != null
+                && !c.IsProxy);
+        }
+        else
+        {
+            query = query.Where(c => c.Status != ContainerStatus.Destroyed);
+        }
+
+        return await query.Select(c => c.PublicPort!.Value)
+            .Distinct()
+            .CountAsync(token);
+    }
 
     static NodeResourceItemModel ToNodeContainerResource(Container container)
     {
@@ -573,12 +689,27 @@ public class NodesController : ControllerBase
         };
     }
 
-    static NodeResourceItemModel ToNodeVmResource(VmInstance vm,
+    static async Task<string?> ResolveVmEntryAsync(VmInstance vm, GuacamoleService? guacService, CancellationToken token)
+    {
+        if (!string.IsNullOrWhiteSpace(vm.GuacamoleConnectionId) && guacService is not null)
+        {
+            var authUrl = await guacService.GetAuthenticatedConnectionUrlAsync(vm.GuacamoleConnectionId, token);
+            if (!string.IsNullOrWhiteSpace(authUrl))
+                return authUrl;
+        }
+
+        return vm.RdpUrl;
+    }
+
+    internal static NodeResourceItemModel ToNodeVmResource(VmInstance vm,
         IReadOnlyDictionary<Guid, string?> users,
-        IReadOnlyDictionary<Guid, Team> teamsByUser)
+        IReadOnlyDictionary<(Guid UserId, int GameId), Team> teamsByUser,
+        string? entry)
     {
         var challenge = vm.Challenge;
-        teamsByUser.TryGetValue(vm.UserId, out var ownerTeam);
+        var ownerTeam = challenge is null
+            ? null
+            : teamsByUser.GetValueOrDefault((vm.UserId, challenge.GameId));
         users.TryGetValue(vm.UserId, out var userName);
         var active = vm.Status is VmInstanceStatus.Creating or VmInstanceStatus.Running;
 
@@ -594,7 +725,7 @@ public class NodesController : ControllerBase
             StoppedAt = vm.DestroyedAt,
             Duration = FormatDuration(vm.CreatedAt, vm.DestroyedAt ?? DateTimeOffset.UtcNow),
             RuntimeId = vm.VmName,
-            Entry = vm.RdpUrl,
+            Entry = entry,
             Ip = vm.IpAddress,
             GameId = challenge?.GameId,
             GameTitle = challenge?.Game.Title,
@@ -760,6 +891,8 @@ public class NodeDeployRequest
 public class UpdateNodeRequest
 {
     public bool? IsSchedulable { get; set; }
+    public int? MaxContainers { get; set; }
+    public int? MaxVms { get; set; }
     public bool? IsStorageNode { get; set; }
     public int? RegistryPort { get; set; }
 }
@@ -775,3 +908,5 @@ public class HeartbeatRequest
 
 record NodeForceCleanupResult(bool Success, string Message, int ActiveContainers, int ActiveVms,
     int ActivePentestEnvironments);
+
+record PublicPortPool(int? Start, int? End, int Total, string Mode);

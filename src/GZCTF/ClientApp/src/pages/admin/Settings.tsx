@@ -14,7 +14,7 @@ import {
   ActionIcon,
   Tooltip,
 } from '@mantine/core'
-import { mdiCheck, mdiContentSaveOutline, mdiRestore } from '@mdi/js'
+import { mdiCheck, mdiContentSaveOutline, mdiDeleteOutline, mdiPlus, mdiRestore } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -22,8 +22,7 @@ import { LogoBox } from '@Components/LogoBox'
 import { AdminPage } from '@Components/admin/AdminPage'
 import { SwitchLabel } from '@Components/admin/SwitchLabel'
 import { YinyuPanel } from '@Components/yinyu/YinyuUI'
-import { PLATFORM_DESCRIPTION, PLATFORM_SLOGAN, PLATFORM_TITLE } from '@Utils/Brand'
-import { webCryptoAvailable } from '@Utils/Crypto'
+import { PLATFORM_DESCRIPTION, PLATFORM_TITLE, joinPlatformSlogans, splitPlatformSlogans } from '@Utils/Brand'
 import { getInputNumber, showErrorMsg } from '@Utils/Shared'
 import { IMAGE_MIME_TYPES } from '@Utils/Shared'
 import { OnceSWRConfig, useCaptchaConfig, useConfig } from '@Hooks/useConfig'
@@ -40,16 +39,23 @@ const Configs: FC = () => {
   const [accountPolicy, setAccountPolicy] = useState<AccountPolicy | null>()
   const [containerPolicy, setContainerPolicy] = useState<ContainerPolicy | null>()
   const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [sloganLines, setSloganLinesState] = useState<string[]>([])
 
   const { t } = useTranslation()
 
   const [saved, setSaved] = useState(true)
+
+  const setSloganLines = (lines: string[]) => {
+    setSloganLinesState(lines)
+    setGlobalConfig({ ...globalConfig, slogan: joinPlatformSlogans(lines) })
+  }
 
   useEffect(() => {
     if (configs) {
       setContainerPolicy(configs.containerPolicy)
       setGlobalConfig(configs.globalConfig)
       setAccountPolicy(configs.accountPolicy)
+      setSloganLinesState(splitPlatformSlogans(configs.globalConfig?.slogan))
     }
   }, [configs])
 
@@ -61,10 +67,11 @@ const Configs: FC = () => {
 
       if (logoFile) {
         await api.admin.adminUpdateLogo({ file: logoFile })
+        setLogoFile(null)
       }
 
-      mutate({ ...conf })
-      mutateConfig({ ...conf.globalConfig, ...conf.containerPolicy })
+      mutate()
+      mutateConfig()
       mutateCaptchaConfig()
     } catch (e) {
       showErrorMsg(e, t)
@@ -79,8 +86,8 @@ const Configs: FC = () => {
 
     try {
       await api.admin.adminResetLogo()
-      mutate({ ...configs, globalConfig: { ...globalConfig, faviconHash: '' } })
-      mutateConfig({ ...configs, logoUrl: '' })
+      mutate()
+      mutateConfig()
     } catch (e) {
       showErrorMsg(e, t)
     } finally {
@@ -90,11 +97,7 @@ const Configs: FC = () => {
 
   const onSave = () => {
     updateConfig({
-      globalConfig: {
-        ...globalConfig,
-        customTheme: '',
-        footerInfo: '',
-      },
+      globalConfig,
       accountPolicy,
       containerPolicy,
     })
@@ -135,16 +138,50 @@ const Configs: FC = () => {
               />
             </Grid.Col>
             <Grid.Col span={1}>
-              <TextInput
-                label={t('admin.content.settings.platform.slogan.label')}
-                description={t('admin.content.settings.platform.slogan.description')}
-                placeholder={PLATFORM_SLOGAN}
-                disabled={disabled}
-                value={globalConfig?.slogan ?? ''}
-                onChange={(e) => {
-                  setGlobalConfig({ ...globalConfig, slogan: e.currentTarget.value })
-                }}
-              />
+              <Stack gap={6}>
+                <Group justify="space-between" align="center" gap="xs" wrap="nowrap">
+                  <Text size="sm" fw={500}>
+                    {t('admin.content.settings.platform.slogan.label')}
+                  </Text>
+                  <ActionIcon
+                    size="sm"
+                    variant="subtle"
+                    disabled={disabled}
+                    onClick={() => setSloganLines([...sloganLines, ''])}
+                    aria-label={t('common.button.add')}
+                  >
+                    <Icon path={mdiPlus} size={0.75} />
+                  </ActionIcon>
+                </Group>
+                <Text size="xs" c="dimmed">
+                  {t('admin.content.settings.platform.slogan.description')}
+                </Text>
+                {sloganLines.map((line, index) => (
+                  <Group key={index} gap={6} wrap="nowrap">
+                    <TextInput
+                      size="xs"
+                      aria-label={`${t('admin.content.settings.platform.slogan.label')} ${index + 1}`}
+                      disabled={disabled}
+                      value={line}
+                      onChange={(e) => {
+                        const next = [...sloganLines]
+                        next[index] = e.currentTarget.value
+                        setSloganLines(next)
+                      }}
+                    />
+                    <ActionIcon
+                      size="sm"
+                      variant="subtle"
+                      color="red"
+                      disabled={disabled || sloganLines.length <= 1}
+                      onClick={() => setSloganLines(sloganLines.filter((_, idx) => idx !== index))}
+                      aria-label={t('common.button.delete')}
+                    >
+                      <Icon path={mdiDeleteOutline} size={0.75} />
+                    </ActionIcon>
+                  </Group>
+                ))}
+              </Stack>
             </Grid.Col>
             <Grid.Col span={1}>
               <FileInput
@@ -191,24 +228,6 @@ const Configs: FC = () => {
                 onChange={(e) => {
                   setGlobalConfig({ ...globalConfig, description: e.currentTarget.value })
                 }}
-              />
-            </Grid.Col>
-            <Grid.Col span={1} className={misc.alignCenter}>
-              <Switch
-                checked={globalConfig?.apiEncryption ?? false}
-                disabled={disabled || !webCryptoAvailable}
-                readOnly
-                label={SwitchLabel(
-                  t('admin.content.settings.platform.api_encryption.label'),
-                  t('admin.content.settings.platform.api_encryption.description'),
-                  webCryptoAvailable ? null : t('admin.content.settings.platform.api_encryption.not_available')
-                )}
-                onChange={(e) =>
-                  setGlobalConfig({
-                    ...globalConfig,
-                    apiEncryption: e.currentTarget.checked,
-                  })
-                }
               />
             </Grid.Col>
           </Grid>

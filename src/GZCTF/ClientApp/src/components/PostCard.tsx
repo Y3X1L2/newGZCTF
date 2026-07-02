@@ -10,6 +10,7 @@ import { RequireRole } from '@Components/WithRole'
 import { BrandMark } from '@Components/yinyu/BrandMark'
 import { YinyuHexField, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
+import { useConfig } from '@Hooks/useConfig'
 import { useUserRole } from '@Hooks/useUser'
 import { PostInfoModel, Role } from '@Api'
 
@@ -20,6 +21,7 @@ export interface PostCardProps {
 
 export const PostCard: FC<PostCardProps> = memo(({ post, onTogglePinned }) => {
   const { role } = useUserRole()
+  const { config } = useConfig()
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [disabled, setDisabled] = useState(false)
@@ -29,7 +31,7 @@ export const PostCard: FC<PostCardProps> = memo(({ post, onTogglePinned }) => {
     <article className="post-preview panel-card">
       <YinyuHexField cells={42} />
       <div className="quote-mark">
-        <BrandMark className="post-brand-mark" />
+        <BrandMark className="post-brand-mark" src={config.logoUrl} />
       </div>
       <div>
         <Group justify="space-between" align="flex-start" wrap="nowrap">

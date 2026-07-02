@@ -222,9 +222,6 @@ const Training: FC = () => {
             <Group justify="space-between" align="flex-end" className="yy-training-hero-head">
               <Stack gap={6}>
                 <Title order={1}>培训课程</Title>
-                <Text className="yy-training-readable" maw="62rem">
-                  按课程路径学习知识点，在章节末尾直接完成容器实验和 Flag 提交。老师可以从同一入口维护课程、章节、资源、实验与报名审核。
-                </Text>
               </Stack>
               {canCreate ? (
                 <Button leftSection={<Icon path={mdiPlus} size={0.85} />} onClick={() => setCreateOpened(true)}>
@@ -239,9 +236,6 @@ const Training: FC = () => {
               <Group justify="space-between" mb="md" align="flex-end">
                 <Stack gap={0}>
                   <Title order={3}>{canCreate ? '教学入口' : '继续学习'}</Title>
-                  <Text size="sm" className="yy-training-readable">
-                    {canCreate ? '快速进入你负责的课程建设、章节维护和授课内容。' : '优先展示你最近学习或已经加入的课程。'}
-                  </Text>
                 </Stack>
                 <TrainingStatusText tone="ongoing">{recent.length}/{Math.min(3, showcase.length || 3)}</TrainingStatusText>
               </Group>
@@ -260,11 +254,6 @@ const Training: FC = () => {
               ) : (
                 <TrainingEmptyState
                   title={canCreate ? '还没有授课课程' : '还没有开始学习'}
-                  description={
-                    canCreate
-                      ? '创建第一门课程后，可以继续配置章节、资源、实验和报名审核。'
-                      : '报名通过或被老师分配课程后，会在这里显示继续学习入口。'
-                  }
                 />
               )}
             </section>
@@ -273,9 +262,6 @@ const Training: FC = () => {
               <Group justify="space-between" mb="md">
                 <Stack gap={0}>
                   <Title order={3}>{canCreate ? '我教授的课程' : '今日待完成'}</Title>
-                  <Text size="sm" className="yy-training-readable">
-                    {canCreate ? '用于课程建设、章节维护和学员管理。' : '根据已加入课程的完成进度生成。'}
-                  </Text>
                 </Stack>
               </Group>
               <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="md" className="yy-training-course-grid">
@@ -292,11 +278,6 @@ const Training: FC = () => {
               {(canCreate ? teachingCourses : todoCourses).length === 0 ? (
                 <TrainingEmptyState
                   title={canCreate ? '暂无授课课程' : '暂无待完成课程'}
-                  description={
-                    canCreate
-                      ? '可以从右上角创建课程，或让管理员将你加入课程教师列表。'
-                      : '完成进度会在加入课程后自动显示。'
-                  }
                 />
               ) : null}
             </section>
@@ -305,9 +286,6 @@ const Training: FC = () => {
               <Group justify="space-between" mb="md">
                 <Stack gap={0}>
                   <Title order={3}>全部课程</Title>
-                  <Text size="sm" className="yy-training-readable">
-                    共 {courses.length} 门课程，包含已加入、待审核、可报名和教师可管理课程。
-                  </Text>
                 </Stack>
               </Group>
               <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="md" className="yy-training-course-grid">
@@ -316,7 +294,7 @@ const Training: FC = () => {
                 ))}
               </SimpleGrid>
               {courses.length === 0 ? (
-                <TrainingEmptyState title="暂无课程" description="老师创建并发布课程后，学生会在这里看到可学习或可报名的内容。" />
+                <TrainingEmptyState title="暂无课程" />
               ) : null}
             </section>
           </main>

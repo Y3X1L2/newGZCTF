@@ -34,4 +34,11 @@ public interface IPortAllocationService
     /// 是否启用 Redis 端口分配（否则降级为本地端口扫描）
     /// </summary>
     bool IsRedisBacked { get; }
+
+    /// <summary>
+    /// Current public port allocation range used for new container entries.
+    /// </summary>
+    PortAllocationRange CurrentRange { get; }
 }
+
+public record PortAllocationRange(int Start, int End, string Mode, bool RequiresRedis);

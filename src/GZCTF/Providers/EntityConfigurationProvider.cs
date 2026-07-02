@@ -111,7 +111,8 @@ public class EntityConfigurationProvider(EntityConfigurationSource source) : Con
         }
 
         ReplaceLegacyValue("GlobalConfig:Title", "YINYU", legacyPrefix, legacyFullName, legacyDisplayName);
-        ReplaceLegacyValue("GlobalConfig:Slogan", "专业赛事管理与攻防演练平台", legacySlogan);
+        ReplaceLegacyValue("GlobalConfig:Slogan", GlobalConfig.JoinSlogans(GlobalConfig.DefaultSlogans), legacySlogan,
+            GlobalConfig.DefaultSlogan);
         ReplaceLegacyValue("GlobalConfig:Description", GlobalConfig.DefaultDescription, legacyDescription);
 
         if (configs.TryGetValue("GlobalConfig:Platform", out var legacyPlatform) &&

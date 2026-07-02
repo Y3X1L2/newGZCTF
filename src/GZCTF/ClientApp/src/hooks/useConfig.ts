@@ -1,7 +1,7 @@
 import { useLocalStorage } from '@mantine/hooks'
 import { useEffect } from 'react'
 import { SWRConfiguration } from 'swr'
-import { PLATFORM_BRAND, PLATFORM_SLOGAN, PLATFORM_TITLE } from '@Utils/Brand'
+import { PLATFORM_BRAND, PLATFORM_TITLE, joinPlatformSlogans } from '@Utils/Brand'
 import api, { ClientConfig, ContainerPortMappingType } from '@Api'
 
 export const OnceSWRConfig: SWRConfiguration = {
@@ -27,7 +27,7 @@ export const useConfig = () => {
     key: 'client-config',
     defaultValue: {
       title: PLATFORM_TITLE,
-      slogan: PLATFORM_SLOGAN,
+      slogan: joinPlatformSlogans([]),
       portMapping: ContainerPortMappingType.Default,
       footerInfo: null,
       customTheme: null,
@@ -64,6 +64,6 @@ export const useBanner = () => {
     if (typeof window === 'undefined') return
 
     console.info(`%c${PLATFORM_BRAND}`, 'color:#6beeb1;font-weight:800;font-size:16px;')
-    console.info(PLATFORM_SLOGAN)
+    console.info(joinPlatformSlogans([]))
   }, [])
 }

@@ -113,6 +113,11 @@ const reviewJoinRequest = async (teamId: number, requestId: number, accepted: bo
 }
 
 const findTeamTimeline = (timelines: TopTimeLine[] | undefined, team?: TeamInfoModel) => {
+  if (typeof team?.id === 'number') {
+    const byId = timelines?.find((item) => item.id === team.id)
+    if (byId) return byId
+  }
+
   const teamName = team?.name?.trim()
   if (!teamName) return undefined
   return timelines?.find((item) => item.name === teamName)

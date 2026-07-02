@@ -2237,6 +2237,8 @@ export interface ClientConfig {
   title?: string;
   /** Platform slogan */
   slogan?: string;
+  /** Site description information */
+  description?: string | null;
   /** Footer information */
   footerInfo?: string | null;
   /** Custom theme color */

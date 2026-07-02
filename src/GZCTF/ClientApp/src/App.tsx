@@ -3,7 +3,7 @@ import { DatesProvider } from '@mantine/dates'
 import { emotionTransform, MantineEmotionProvider } from '@mantine/emotion'
 import { ModalsProvider } from '@mantine/modals'
 import { Notifications } from '@mantine/notifications'
-import { FC, Suspense } from 'react'
+import { FC, Suspense, useEffect } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useRoutes } from 'react-router'
@@ -14,10 +14,11 @@ import { WsrxProvider } from '@Components/WsrxProvider'
 import { SignalField } from '@Components/yinyu/SignalField'
 import { YinyuGameBendsBackground } from '@Components/yinyu/YinyuReactBits'
 import { YinyuRouteLoader } from '@Components/yinyu/YinyuUI'
+import yinyuIcon from './assets/yinyu-icon-transparent.png'
 import { localCacheProvider } from '@Utils/Cache'
 import { useLanguage } from '@Utils/I18n'
 import { useCustomTheme } from '@Utils/ThemeOverride'
-import { useBanner } from '@Hooks/useConfig'
+import { useBanner, useConfig } from '@Hooks/useConfig'
 import { fetcher } from '@Api'
 import '@mantine/core/styles.css'
 import '@mantine/dates/styles.css'
@@ -34,6 +35,83 @@ const RouteLoading = () => (
   </Center>
 )
 
+const createZoomedFavicon = (iconUrl: string, signal: AbortSignal) =>
+  new Promise<string>((resolve, reject) => {
+    const image = new Image()
+
+    image.onload = () => {
+      if (signal.aborted) {
+        reject(signal.reason)
+        return
+      }
+
+      const size = 96
+      const scale = 1.9
+      const canvas = document.createElement('canvas')
+      const context = canvas.getContext('2d')
+
+      if (!context) {
+        reject(new Error('Canvas is not available'))
+        return
+      }
+
+      canvas.width = size
+      canvas.height = size
+      context.clearRect(0, 0, size, size)
+
+      const targetSize = size * scale
+      const x = (size - targetSize) / 2
+      const y = (size - targetSize) / 2
+
+      context.drawImage(image, x, y, targetSize, targetSize)
+
+      try {
+        resolve(canvas.toDataURL('image/png'))
+      } catch (error) {
+        reject(error)
+      }
+    }
+
+    image.onerror = reject
+    image.decoding = 'async'
+    image.crossOrigin = 'anonymous'
+    image.src = iconUrl
+  })
+
+const usePlatformFavicon = () => {
+  const { config } = useConfig()
+  const iconUrl = config.logoUrl || yinyuIcon
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const selector = "link[rel~='icon']"
+    let link = document.head.querySelector<HTMLLinkElement>(selector)
+
+    if (!link) {
+      link = document.createElement('link')
+      link.rel = 'icon'
+      document.head.appendChild(link)
+    }
+
+    link.href = iconUrl
+    link.removeAttribute('type')
+
+    createZoomedFavicon(iconUrl, controller.signal)
+      .then((href) => {
+        if (!controller.signal.aborted) {
+          link.href = href
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          link.href = iconUrl
+        }
+      })
+
+    return () => controller.abort()
+  }, [iconUrl])
+}
+
 export const App: FC = () => {
   const { t } = useTranslation()
   const { locale } = useLanguage()
@@ -41,6 +119,7 @@ export const App: FC = () => {
   const location = useLocation()
   const routeElement = useRoutes(routes)
   useBanner()
+  usePlatformFavicon()
 
   const path = location.pathname
   const isAdminRoute = path.startsWith('/admin')
