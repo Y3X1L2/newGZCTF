@@ -20,8 +20,7 @@
   }
 
   & tbody tr:hover td {
-    background:
-      radial-gradient(ellipse at 18% 50%, rgba(107, 238, 177, 0.086), transparent 36%), rgba(255, 255, 255, 0.06);
+    background: rgba(107, 238, 177, 0.07);
   }
 }
 
@@ -39,8 +38,7 @@
 .header {
   font-weight: bold;
   color: var(--yy-text);
-  background:
-    radial-gradient(ellipse at 18% 0%, rgba(107, 238, 177, 0.08), transparent 42%), rgba(255, 255, 255, 0.045);
+  background: rgba(255, 255, 255, 0.045);
 }
 
 .mono {
@@ -59,76 +57,57 @@
 }
 
 .topScrollBar {
-  display: none;
-  align-items: center;
   width: 100%;
-  min-height: 1.35rem;
-  margin: 0 0 0.42rem;
-  padding: 0.16rem 0.24rem;
-  border: 1px solid rgba(107, 238, 177, 0.14);
+  height: 1.05rem;
+  margin: 0 0 0.55rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-gutter: stable;
+  opacity: 0.82;
+  transition: opacity 150ms ease;
+}
+
+.topScrollBar[data-visible='true'],
+.topScrollBar:hover,
+.topScrollBar:focus-within {
+  opacity: 1;
+}
+
+.topScrollBar::-webkit-scrollbar {
+  height: 0.72rem;
+}
+
+.topScrollBar::-webkit-scrollbar-track {
+  border: 1px solid rgba(107, 238, 177, 0.16);
   border-radius: 999px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018)),
-    rgba(8, 12, 12, 0.62);
-  backdrop-filter: blur(0.7rem);
+  background: rgba(8, 12, 12, 0.72);
 }
 
-.topScrollBar[data-visible='true'] {
-  display: flex;
-}
-
-.topScrollBar input {
-  appearance: none;
-  width: 100%;
-  height: 0.8rem;
-  cursor: grab;
-  background: transparent;
-}
-
-.topScrollBar input:active {
-  cursor: grabbing;
-}
-
-.topScrollBar input::-webkit-slider-runnable-track {
-  height: 0.26rem;
+.topScrollBar::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(8, 12, 12, 0.72);
   border-radius: 999px;
-  background:
-    linear-gradient(90deg, rgba(107, 238, 177, 0.45), rgba(134, 255, 203, 0.2)),
-    rgba(255, 255, 255, 0.09);
+  background: linear-gradient(90deg, rgba(107, 238, 177, 0.9), rgba(157, 255, 213, 0.78));
 }
 
-.topScrollBar input::-webkit-slider-thumb {
-  appearance: none;
-  width: 2.8rem;
-  height: 0.82rem;
-  margin-top: -0.28rem;
-  border: 1px solid rgba(157, 255, 213, 0.55);
-  border-radius: 999px;
-  background:
-    linear-gradient(90deg, rgba(107, 238, 177, 0.92), rgba(143, 122, 255, 0.58));
-  box-shadow:
-    0 0 0.9rem rgba(107, 238, 177, 0.24),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+.topScrollBar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(107, 238, 177, 0.78) rgba(8, 12, 12, 0.72);
 }
 
-.topScrollBar input::-moz-range-track {
-  height: 0.26rem;
-  border-radius: 999px;
-  background:
-    linear-gradient(90deg, rgba(107, 238, 177, 0.45), rgba(134, 255, 203, 0.2)),
-    rgba(255, 255, 255, 0.09);
+.topScrollBar > div {
+  height: 1px;
 }
 
-.topScrollBar input::-moz-range-thumb {
-  width: 2.8rem;
-  height: 0.82rem;
-  border: 1px solid rgba(157, 255, 213, 0.55);
-  border-radius: 999px;
-  background:
-    linear-gradient(90deg, rgba(107, 238, 177, 0.92), rgba(143, 122, 255, 0.58));
-  box-shadow:
-    0 0 0.9rem rgba(107, 238, 177, 0.24),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+.topScrollBar[data-visible='true'] > div {
+  min-width: 100%;
+}
+
+.topScrollBar:not([data-visible='true']) {
+  visibility: hidden;
+}
+
+.topScrollBar:not([data-visible='true']) > div {
+  width: 100% !important;
 }
 
 .scoreboardScrollContainer,
@@ -147,7 +126,7 @@
   z-index: 20;
   border: 1px solid var(--yy-line);
   border-radius: var(--yy-radius);
-  background: radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.12), transparent 42%), rgba(15, 18, 18, 0.9);
+  background: rgba(15, 18, 18, 0.92);
   backdrop-filter: blur(0.7rem);
 }
 
@@ -197,8 +176,7 @@
 .pointer {
   &:hover {
     cursor: pointer;
-    background:
-      radial-gradient(ellipse at 16% 50%, rgba(107, 238, 177, 0.075), transparent 40%), rgba(255, 255, 255, 0.035);
+    background: rgba(107, 238, 177, 0.065);
   }
 }
 

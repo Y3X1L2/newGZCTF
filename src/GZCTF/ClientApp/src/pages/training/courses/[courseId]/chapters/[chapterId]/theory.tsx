@@ -8,6 +8,7 @@ import {
   Modal,
   Progress,
   Radio,
+  ScrollArea,
   SimpleGrid,
   Stack,
   Text,
@@ -348,10 +349,10 @@ const ChapterTheoryPage: FC = () => {
 
             {submitted ? (
               <YinyuPanel p="md" className="yy-theory-review-summary">
-                <Stack gap="md">
+                <div className="yy-theory-review-layout">
                   <Group justify="space-between" align="flex-start" wrap="wrap">
                     <Stack gap={4}>
-                      <Badge color={paper.passed ? 'teal' : 'yellow'} variant="light">
+                      <Badge color={paper.passed ? 'teal' : 'yellow'} variant="light" className="yy-theory-status-text">
                         {paper.passed ? '已通过' : '未通过'}
                       </Badge>
                       <Title order={3}>答卷复盘</Title>
@@ -373,27 +374,36 @@ const ChapterTheoryPage: FC = () => {
                   </Group>
 
                   {wrongReviewItems.length > 0 ? (
-                    <Stack gap="xs">
-                      <Text fw={800}>错题列表</Text>
-                      {wrongReviewItems.map((item) => (
-                        <UnstyledButton
-                          key={item.question.id}
-                          className="yy-theory-review-row"
-                          onClick={() => goToQuestion(item.index)}
-                        >
-                          <span>第 {item.index + 1} 题</span>
-                          <strong>{item.question.title}</strong>
-                          <em>我的答案：{formatIndexes(item.selected, item.question.options)}</em>
-                          <em>正确答案：{formatIndexes(item.correct, item.question.options)}</em>
-                        </UnstyledButton>
-                      ))}
-                    </Stack>
+                    <section className="yy-theory-wrong-list">
+                      <Group justify="space-between" align="center">
+                        <Text fw={800}>错题列表</Text>
+                        <Text size="sm" className="yy-readable-text">
+                          {wrongReviewItems.length} 题
+                        </Text>
+                      </Group>
+                      <ScrollArea.Autosize mah="min(34vh, 22rem)" offsetScrollbars scrollbarSize={6}>
+                        <Stack gap="xs" pr="xs">
+                          {wrongReviewItems.map((item) => (
+                            <UnstyledButton
+                              key={item.question.id}
+                              className="yy-theory-review-row"
+                              onClick={() => goToQuestion(item.index)}
+                            >
+                              <span>第 {item.index + 1} 题</span>
+                              <strong>{item.question.title}</strong>
+                              <em>我的答案：{formatIndexes(item.selected, item.question.options)}</em>
+                              <em>正确答案：{formatIndexes(item.correct, item.question.options)}</em>
+                            </UnstyledButton>
+                          ))}
+                        </Stack>
+                      </ScrollArea.Autosize>
+                    </section>
                   ) : (
                     <Text size="sm" className="yy-readable-text">
                       本次没有错题，可以继续学习下一章节。
                     </Text>
                   )}
-                </Stack>
+                </div>
               </YinyuPanel>
             ) : null}
 

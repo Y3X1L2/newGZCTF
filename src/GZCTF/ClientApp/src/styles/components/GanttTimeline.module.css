@@ -1,5 +1,4 @@
 .shell {
-  --timeline-breathe: 0;
   --timeline-meta-width: clamp(10.2rem, 22vw, 18rem);
   --timeline-row-count: 0;
   position: relative;
@@ -9,51 +8,15 @@
   width: 100%;
   padding: clamp(0.92rem, 1.45vw, 1.18rem);
   color: var(--yy-text);
-  background:
-    linear-gradient(180deg, rgba(0, 0, 0, 0.64), rgba(0, 0, 0, 0.78)),
-    radial-gradient(ellipse at 12% 10%, rgba(107, 238, 177, calc(0.08 + var(--timeline-breathe) * 0.04)), transparent 26rem),
-    radial-gradient(ellipse at 88% 84%, rgba(245, 245, 247, 0.035), transparent 30rem),
-    var(--yy-hex-flow),
-    rgba(2, 3, 3, 0.92);
-  background-size:
-    auto,
-    auto,
-    1.28rem 1.1rem,
-    auto;
-  border: 1px solid rgba(107, 238, 177, 0.15);
+  background: transparent;
+  border: 0;
   border-radius: var(--yy-radius);
-  box-shadow:
-    0 1.4rem 4rem rgba(0, 0, 0, 0.48),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.035);
+  box-shadow: none;
 }
 
 .shell::before,
 .shell::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-}
-
-.shell::before {
-  background:
-    linear-gradient(90deg, transparent, rgba(107, 238, 177, 0.08), transparent),
-    repeating-linear-gradient(120deg, rgba(255, 255, 255, 0.026) 0 1px, transparent 1px 3.6rem);
-  opacity: 0.28;
-  transform: translateX(0);
-}
-
-.shell::after {
-  inset: auto 6% 0 6%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(107, 238, 177, 0.4), transparent);
-  box-shadow: 0 0 1.7rem rgba(107, 238, 177, 0.18);
-}
-
-.shell > * {
-  position: relative;
-  z-index: 1;
+  content: none;
 }
 
 .header {
@@ -138,13 +101,8 @@
   height: 3.05rem;
   margin-left: var(--timeline-meta-width);
   overflow: visible;
-  border-bottom: 1px solid rgba(107, 238, 177, 0.22);
-  background:
-    linear-gradient(90deg, rgba(107, 238, 177, 0.12) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-  background-size:
-    calc(100% / 7) 100%,
-    calc(100% / 14) 100%;
+  border-bottom: 1px solid rgba(107, 238, 177, 0.32);
+  background: transparent;
 }
 
 .axis::after {
@@ -155,11 +113,8 @@
   width: var(--focus-width);
   height: 100%;
   pointer-events: none;
-  border-inline: 1px solid rgba(107, 238, 177, 0.5);
-  background:
-    linear-gradient(180deg, rgba(107, 238, 177, 0.13), rgba(107, 238, 177, 0.025)),
-    var(--yy-hex-flow);
-  background-size: auto, 1rem 0.866rem;
+  border-inline: 1px solid rgba(107, 238, 177, 0.42);
+  background: transparent;
   opacity: 0;
   transform: scaleX(0.98);
   transform-origin: left center;
@@ -188,7 +143,7 @@
   top: 1.7rem;
   width: 1px;
   height: 1.35rem;
-  background: linear-gradient(180deg, rgba(107, 238, 177, 0.35), rgba(107, 238, 177, 0.04));
+  background: linear-gradient(180deg, rgba(107, 238, 177, 0.48), rgba(107, 238, 177, 0.05));
 }
 
 .tick b {
@@ -207,7 +162,7 @@
 }
 
 .tick[data-focus] i {
-  background: linear-gradient(180deg, rgba(107, 238, 177, 0.8), rgba(107, 238, 177, 0.18));
+  background: linear-gradient(180deg, rgba(107, 238, 177, 0.86), rgba(107, 238, 177, 0.18));
   box-shadow: 0 0 0.75rem rgba(107, 238, 177, 0.24);
 }
 
@@ -288,18 +243,7 @@
 }
 
 .rows::before {
-  content: '';
-  position: absolute;
-  inset: 0 1rem 0 var(--timeline-meta-width);
-  z-index: -1;
-  pointer-events: none;
-  background:
-    linear-gradient(90deg, rgba(107, 238, 177, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
-  background-size:
-    calc(100% / 7) 100%,
-    calc(100% / 14) 100%;
-  opacity: 0.66;
+  content: none;
 }
 
 .timelineRow {
@@ -329,15 +273,11 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  border: 1px solid rgba(107, 238, 177, 0.08);
-  background:
-    linear-gradient(90deg, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.18)),
-    radial-gradient(ellipse at 12% 50%, rgba(107, 238, 177, 0.075), transparent 40%),
-    rgba(255, 255, 255, 0.028);
+  border: 1px solid transparent;
+  background: transparent;
   clip-path: polygon(0.9rem 0, calc(100% - 0.9rem) 0, 100% 50%, calc(100% - 0.9rem) 100%, 0.9rem 100%, 0 50%);
   transition:
     border-color 180ms ease,
-    background 180ms ease,
     opacity 180ms ease;
 }
 
@@ -350,22 +290,12 @@
 .timelineRow:focus-visible {
   color: inherit;
   transform: translate3d(0, -1px, 0);
-  box-shadow:
-    0 0 0 1px rgba(107, 238, 177, 0.08),
-    0 1rem 2.8rem rgba(0, 0, 0, 0.28);
+  box-shadow: 0 0 0 1px rgba(107, 238, 177, 0.08);
 }
 
 .timelineRow:hover::before,
 .timelineRow:focus-visible::before {
-  border-color: rgba(107, 238, 177, 0.32);
-  background:
-    radial-gradient(ellipse at 15% 50%, rgba(107, 238, 177, 0.16), transparent 42%),
-    var(--yy-hex-flow),
-    rgba(255, 255, 255, 0.03);
-  background-size:
-    auto,
-    1.1rem 0.95rem,
-    auto;
+  border-color: rgba(107, 238, 177, 0.46);
 }
 
 .rowMeta {
@@ -391,9 +321,7 @@
   inset: -0.2rem;
   clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
   border: 1px solid rgba(107, 238, 177, 0.2);
-  background:
-    radial-gradient(ellipse at 45% 35%, rgba(107, 238, 177, 0.13), transparent 54%),
-    rgba(255, 255, 255, 0.026);
+  background: rgba(255, 255, 255, 0.026);
 }
 
 .metaMark :global(.brand-mark) {
@@ -448,11 +376,10 @@
 .track {
   position: relative;
   height: 100%;
-  min-height: clamp(3.35rem, 4.2vw, 3.8rem);
+  min-height: 3rem;
   margin-right: 1rem;
-  border-left: 1px solid rgba(107, 238, 177, 0.1);
-  background: transparent;
   overflow: visible;
+  background: linear-gradient(180deg, transparent 47%, rgba(107, 238, 177, 0.16) 47% 53%, transparent 53%);
 }
 
 .rowBar {
@@ -460,51 +387,79 @@
   left: var(--row-left);
   top: 50%;
   display: grid;
-  grid-template-columns: 1.1rem 1fr 1.1rem;
+  grid-template-columns: 0.9rem minmax(2.2rem, 1fr) 0.9rem;
   align-items: center;
   width: var(--row-width);
-  min-width: 4.6rem;
-  height: 1.55rem;
+  min-width: 4.8rem;
+  height: 1.45rem;
   transform: translateY(-50%);
-  filter: drop-shadow(0 0 0.9rem rgba(107, 238, 177, 0.16));
+  filter: none;
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease,
+    filter 180ms ease;
+  will-change: transform;
 }
 
 .rowBar::before {
   content: '';
   position: absolute;
-  inset: -0.55rem -0.45rem;
-  pointer-events: none;
-  background: radial-gradient(ellipse at 50% 50%, color-mix(in srgb, var(--row-color) 30%, transparent), transparent 68%);
-  opacity: 0.6;
+  left: 0.45rem;
+  right: 0.45rem;
+  top: 50%;
+  height: 1px;
+  border-radius: 999px;
+  background: rgba(107, 238, 177, 0.3);
+  opacity: 0.8;
+  transform: translateY(-50%);
+}
+
+.rowBar::after {
+  content: none;
 }
 
 .barLead,
 .barCore,
 .barTail {
   position: relative;
-  z-index: 1;
-  height: 100%;
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.18), transparent 34%, rgba(107, 238, 177, 0.28) 70%, transparent),
-    var(--yy-hex-flow),
-    color-mix(in srgb, var(--row-color) 48%, rgba(0, 0, 0, 0.45));
-  background-size:
-    180% 100%,
-    0.95rem 0.82rem,
-    auto;
+  z-index: 2;
+  display: block;
+}
+
+.barLead,
+.barTail {
+  width: 0.78rem;
+  height: 0.78rem;
+  border-radius: 50%;
+  border: 1px solid rgba(107, 238, 177, 0.54);
+  background: rgba(3, 8, 6, 0.94);
+  box-shadow: inset 0 0 0 0.18rem color-mix(in srgb, var(--row-color) 72%, rgba(107, 238, 177, 0.35));
   animation: none;
 }
 
 .barLead {
-  clip-path: polygon(45% 0, 100% 0, 100% 100%, 45% 100%, 0 50%);
-}
-
-.barCore {
-  margin-inline: -1px;
+  justify-self: start;
 }
 
 .barTail {
-  clip-path: polygon(0 0, 55% 0, 100% 50%, 55% 100%, 0 100%);
+  justify-self: end;
+}
+
+.barCore {
+  height: 0.38rem;
+  min-width: 1.8rem;
+  margin-inline: -0.14rem;
+  border: 1px solid color-mix(in srgb, var(--row-color) 58%, rgba(107, 238, 177, 0.24));
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--row-color) 42%, rgba(8, 18, 14, 0.86)),
+    color-mix(in srgb, var(--row-color) 66%, rgba(107, 238, 177, 0.32)),
+    color-mix(in srgb, var(--row-color) 48%, rgba(8, 18, 14, 0.86))
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 0 0.9rem color-mix(in srgb, var(--row-color) 24%, transparent);
 }
 
 .rowBar[data-start-overflow] .barLead,
@@ -519,7 +474,26 @@
 .active .barLead,
 .active .barCore,
 .active .barTail {
-  background-color: color-mix(in srgb, var(--row-color) 62%, rgba(107, 238, 177, 0.38));
+  border-color: rgba(107, 238, 177, 0.82);
+}
+
+.active .barCore {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 0 1.2rem color-mix(in srgb, var(--row-color) 34%, transparent);
+}
+
+.active .barLead,
+.active .barTail {
+  box-shadow:
+    inset 0 0 0 0.18rem color-mix(in srgb, var(--row-color) 76%, rgba(107, 238, 177, 0.42)),
+    0 0 0 0.3rem rgba(107, 238, 177, 0.08),
+    0 0 1rem rgba(107, 238, 177, 0.38);
+}
+
+.timelineRow:hover .rowBar,
+.timelineRow:focus-visible .rowBar {
+  transform: translateY(-50%) scaleY(1.08);
 }
 
 .upcoming {
@@ -530,152 +504,24 @@
   opacity: 0.86;
 }
 
+.ended .rowBar {
+  opacity: 0.78;
+}
+
 .ended .barLead,
 .ended .barCore,
 .ended .barTail {
-  filter: saturate(0.6);
+  border-color: rgba(244, 245, 245, 0.24);
 }
 
-@keyframes yy-schedule-flow {
-  0%,
-  100% {
-    background-position:
-      0% 50%,
-      0 0,
-      0 0;
-  }
-  50% {
-    background-position:
-      100% 50%,
-      0.45rem 0.25rem,
-      0 0;
-  }
+.ended .barCore {
+  background: linear-gradient(90deg, rgba(244, 245, 245, 0.12), rgba(244, 245, 245, 0.24), rgba(244, 245, 245, 0.12));
+  box-shadow: none;
 }
 
-@keyframes yy-schedule-glint {
-  0%,
-  100% {
-    opacity: 0.78;
-    transform: translate3d(-1.8%, 0, 0);
-  }
-  50% {
-    opacity: 1;
-    transform: translate3d(1.8%, 0, 0);
-  }
-}
-
-@media (max-width: 64em) {
-  .shell {
-    --timeline-meta-width: 13rem;
-  }
-
-  .header {
-    display: grid;
-  }
-
-  .summary {
-    justify-content: flex-start;
-  }
-
-  .viewport {
-    overflow-x: auto;
-    overflow-y: visible;
-  }
-
-  .axis,
-  .rows {
-    min-width: 44rem;
-  }
-
-  .timelineRow {
-    grid-template-columns: var(--timeline-meta-width) minmax(28rem, 1fr);
-  }
-
-  .axis {
-    width: calc(100% - var(--timeline-meta-width));
-    margin-left: var(--timeline-meta-width);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .shell::before,
-  .barLead,
-  .barCore,
-  .barTail {
-    animation: none;
-  }
-}
-
-/* Meaningful schedule track: thin duration line with start/end nodes. */
-.shell::before {
-  background:
-    linear-gradient(90deg, transparent, rgba(107, 238, 177, 0.065), transparent),
-    var(--yy-hex-flow);
-  background-size:
-    auto,
-    1rem 0.866rem;
-  opacity: 0.22;
-}
-
-.track {
-  min-height: 3rem;
-  border-left: 0;
-  background: linear-gradient(180deg, transparent 47%, rgba(255, 255, 255, 0.08) 47% 53%, transparent 53%);
-}
-
-.rowBar {
-  display: block;
-  min-width: 3.9rem;
-  height: 2rem;
-  filter: none;
-  transition:
-    transform 180ms ease,
-    opacity 180ms ease,
-    filter 180ms ease;
-  will-change: transform;
-}
-
-.rowBar::before {
-  inset: 0.82rem 0.48rem auto;
-  height: 0.22rem;
-  border-radius: 999px;
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--row-color) 58%, rgba(107, 238, 177, 0.3)), rgba(107, 238, 177, 0.64)),
-    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.36), transparent);
-  background-size:
-    auto,
-    42% 100%;
-  background-position:
-    0 0,
-    50% 0;
-  opacity: 0.98;
-  animation: yy-schedule-glint 2.8s ease-in-out infinite;
-  will-change: opacity, transform;
-}
-
-.rowBar::after {
-  content: none;
-}
-
-.barLead,
-.barTail {
-  position: absolute;
-  top: 50%;
-  z-index: 2;
-  width: 0.82rem;
-  height: 0.82rem;
-  border-radius: 50%;
-  border: 1px solid rgba(107, 238, 177, 0.54);
-  background:
-    radial-gradient(circle at 50% 50%, rgba(107, 238, 177, 0.86) 0 0.18rem, transparent 0.2rem),
-    rgba(3, 8, 6, 0.94);
-  animation: none;
-  transform: translateY(-50%);
-}
-
-.timelineRow:hover .rowBar,
-.timelineRow:focus-visible .rowBar {
-  transform: translateY(-50%) scaleY(1.08);
+.ended .barLead,
+.ended .barTail {
+  box-shadow: inset 0 0 0 0.16rem rgba(244, 245, 245, 0.42);
 }
 
 .timeTooltip {
@@ -692,9 +538,7 @@
   border: 1px solid rgba(107, 238, 177, 0.24);
   border-radius: 999px;
   color: rgba(232, 255, 244, 0.96);
-  background:
-    radial-gradient(ellipse at 20% 20%, rgba(107, 238, 177, 0.14), transparent 44%),
-    rgba(4, 8, 7, 0.94);
+  background: rgba(4, 8, 7, 0.94);
   box-shadow: 0 0.8rem 1.8rem rgba(0, 0, 0, 0.34);
   font-family: var(--font-mono);
   font-size: 0.68rem;
@@ -731,36 +575,43 @@
   transform: translate3d(-50%, 0, 0);
 }
 
-.barLead {
-  left: 0;
-  clip-path: none;
+@media (max-width: 64em) {
+  .shell {
+    --timeline-meta-width: 13rem;
+  }
+
+  .header {
+    display: grid;
+  }
+
+  .summary {
+    justify-content: flex-start;
+  }
+
+  .viewport {
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+
+  .axis,
+  .rows {
+    min-width: 44rem;
+  }
+
+  .timelineRow {
+    grid-template-columns: var(--timeline-meta-width) minmax(28rem, 1fr);
+  }
+
+  .axis {
+    width: calc(100% - var(--timeline-meta-width));
+    margin-left: var(--timeline-meta-width);
+  }
 }
 
-.barTail {
-  right: 0;
-  clip-path: none;
-}
-
-.barCore {
-  display: none;
-}
-
-.active .barLead,
-.active .barTail {
-  border-color: rgba(107, 238, 177, 0.82);
-  box-shadow:
-    0 0 0 0.34rem rgba(107, 238, 177, 0.08),
-    0 0 1.2rem rgba(107, 238, 177, 0.42);
-}
-
-.ended .rowBar {
-  opacity: 0.78;
-}
-
-.ended .barLead,
-.ended .barTail {
-  border-color: rgba(244, 245, 245, 0.24);
-  background:
-    radial-gradient(circle at 50% 50%, rgba(244, 245, 245, 0.42) 0 0.15rem, transparent 0.18rem),
-    rgba(10, 11, 11, 0.92);
+@media (prefers-reduced-motion: reduce) {
+  .timelineRow,
+  .rowBar,
+  .timeTooltip {
+    transition: none;
+  }
 }

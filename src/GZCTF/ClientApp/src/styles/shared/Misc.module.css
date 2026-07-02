@@ -170,9 +170,7 @@
   border: 1px solid rgba(107, 238, 177, 0.44);
   border-radius: 999px;
   color: #06100b;
-  background:
-    linear-gradient(135deg, rgba(144, 255, 201, 0.98), rgba(82, 229, 164, 0.86)),
-    var(--yy-hex-flow);
+  background: linear-gradient(135deg, rgba(144, 255, 201, 0.98), rgba(82, 229, 164, 0.86));
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.08),
     0 0.9rem 2.4rem rgba(0, 0, 0, 0.32),

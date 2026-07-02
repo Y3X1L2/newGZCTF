@@ -255,13 +255,8 @@
 }
 
 .yy-about-hive-cell::before {
-  background:
-    var(--yy-hex-flow),
-    radial-gradient(ellipse at 50% 50%, rgba(107, 238, 177, 0.2), transparent 62%);
-  background-size:
-    0.92rem 0.8rem,
-    auto;
-  opacity: 0.3;
+  background: linear-gradient(180deg, rgba(107, 238, 177, 0.08), rgba(255, 255, 255, 0.018));
+  opacity: 0.48;
 }
 
 .yy-about-hive-cell::after {
@@ -501,13 +496,8 @@
 }
 
 .yy-home-layout .recent-game-card.panel-card::before {
-  background:
-    var(--yy-hex-flow),
-    radial-gradient(ellipse at 50% 35%, rgba(107, 238, 177, 0.15), transparent 62%);
-  background-size:
-    0.95rem 0.82rem,
-    auto;
-  opacity: 0.32;
+  background: linear-gradient(180deg, rgba(107, 238, 177, 0.07), transparent 58%);
+  opacity: 0.44;
 }
 
 .yy-home-layout .recent-game-card.panel-card:hover {
@@ -752,14 +742,7 @@
 .yy-game-edit-nav .mantine-Tabs-tab[data-active] {
   color: var(--yy-text);
   border-color: rgba(107, 238, 177, 0.28);
-  background:
-    radial-gradient(ellipse at 28% 20%, rgba(107, 238, 177, 0.15), transparent 48%),
-    var(--yy-hex-flow),
-    rgba(107, 238, 177, 0.05);
-  background-size:
-    auto,
-    1.08rem 0.94rem,
-    auto;
+  background: linear-gradient(180deg, rgba(107, 238, 177, 0.09), rgba(255, 255, 255, 0.026)), rgba(7, 18, 14, 0.42);
   transform: translateX(2px);
 }
 
@@ -1549,12 +1532,7 @@
 .yy-profile-panel .mantine-Button-root::before,
 .mantine-Modal-content .mantine-Button-root::before,
 .mantine-Drawer-content .mantine-Button-root::before {
-  background:
-    linear-gradient(112deg, transparent 10%, rgba(107, 238, 177, 0.22) 42%, transparent 70%),
-    var(--yy-hex-flow);
-  background-size:
-    auto,
-    1rem 0.866rem;
+  background: linear-gradient(112deg, transparent 10%, rgba(107, 238, 177, 0.18) 42%, transparent 70%);
 }
 
 .yy-admin-shell .mantine-Button-root .mantine-Button-label,
@@ -1576,10 +1554,7 @@
 .mantine-Button-root[class*='fixedButton'] {
   border-color: rgba(107, 238, 177, 0.52) !important;
   color: #06100b !important;
-  background:
-    radial-gradient(ellipse at 28% 0%, rgba(255, 255, 255, 0.34), transparent 46%),
-    linear-gradient(135deg, rgba(144, 255, 201, 0.98), rgba(82, 229, 164, 0.86)),
-    var(--yy-hex-flow) !important;
+  background: linear-gradient(135deg, rgba(144, 255, 201, 0.98), rgba(82, 229, 164, 0.86)) !important;
 }
 
 .yy-admin-shell .mantine-Button-root[data-variant='filled'] .mantine-Button-label,
@@ -2156,14 +2131,7 @@
 .yy-game-action-button.mantine-Button-root:not(:disabled):hover {
   transform: translateY(-1px);
   border-color: rgba(107, 238, 177, 0.58) !important;
-  background:
-    radial-gradient(ellipse at 28% 0%, rgba(107, 238, 177, 0.2), transparent 48%),
-    var(--yy-hex-flow),
-    rgba(8, 18, 14, 0.86) !important;
-  background-size:
-    auto,
-    1rem 0.866rem,
-    auto;
+  background: linear-gradient(180deg, rgba(107, 238, 177, 0.13), rgba(255, 255, 255, 0.022)), rgba(8, 18, 14, 0.86) !important;
 }
 
 .yy-game-action-button.mantine-Button-root:disabled {
@@ -2503,6 +2471,20 @@
   border-color: rgba(107, 238, 177, 0.22) !important;
 }
 
+.yy-theory-review-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.88fr) minmax(18rem, 1.12fr);
+  gap: clamp(0.85rem, 1.35vw, 1.2rem);
+  align-items: start;
+  min-width: 0;
+}
+
+.yy-theory-wrong-list {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
 .yy-theory-review-row {
   display: grid;
   grid-template-columns: minmax(4.5rem, auto) minmax(12rem, 1fr);
@@ -2543,6 +2525,7 @@
   color: rgba(221, 229, 223, 0.76);
   font-size: 0.82rem;
   font-style: normal;
+  overflow-wrap: anywhere;
 }
 
 .yy-theory-nav-panel.panel-card {
@@ -2760,9 +2743,7 @@
 
 .yy-admin-logs-filter .mantine-SegmentedControl-indicator {
   border: 1px solid rgba(107, 238, 177, 0.42);
-  background:
-    linear-gradient(135deg, rgba(107, 238, 177, 0.3), rgba(107, 238, 177, 0.12)),
-    var(--yy-hex-flow) !important;
+  background: linear-gradient(135deg, rgba(107, 238, 177, 0.3), rgba(107, 238, 177, 0.12)) !important;
 }
 
 .yy-admin-logs-pagination .mantine-Text-root {
@@ -2780,14 +2761,7 @@
   border: 1px solid rgba(107, 238, 177, 0.2) !important;
   border-radius: var(--yy-radius) !important;
   color: var(--yy-text) !important;
-  background:
-    radial-gradient(ellipse at 15% 0%, rgba(107, 238, 177, 0.16), transparent 42%),
-    var(--yy-hex-flow),
-    rgba(5, 8, 8, 0.94) !important;
-  background-size:
-    auto,
-    1rem 0.866rem,
-    auto;
+  background: linear-gradient(180deg, rgba(107, 238, 177, 0.075), rgba(255, 255, 255, 0.018)), rgba(5, 8, 8, 0.94) !important;
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.035),
     0 1.2rem 3rem rgba(0, 0, 0, 0.4) !important;
@@ -3097,14 +3071,7 @@
 .yy-monitor-nav-button:not([data-active]):hover {
   transform: translateX(0.12rem);
   border-color: rgba(107, 238, 177, 0.34);
-  background:
-    radial-gradient(ellipse at 20% 0%, rgba(107, 238, 177, 0.13), transparent 46%),
-    var(--yy-hex-flow),
-    rgba(255, 255, 255, 0.04);
-  background-size:
-    auto,
-    1rem 0.866rem,
-    auto;
+  background: linear-gradient(180deg, rgba(107, 238, 177, 0.08), rgba(255, 255, 255, 0.026)), rgba(255, 255, 255, 0.04);
 }
 
 .yy-monitor-nav-button[data-active] {
@@ -3367,14 +3334,7 @@
 .yy-challenge-filter-button:hover {
   transform: translateX(0.1rem);
   border-color: rgba(107, 238, 177, 0.34);
-  background:
-    radial-gradient(ellipse at 20% 0%, rgba(107, 238, 177, 0.12), transparent 46%),
-    var(--yy-hex-flow),
-    rgba(255, 255, 255, 0.04);
-  background-size:
-    auto,
-    1rem 0.866rem,
-    auto;
+  background: linear-gradient(180deg, rgba(107, 238, 177, 0.08), rgba(255, 255, 255, 0.026)), rgba(255, 255, 255, 0.04);
 }
 
 .yy-challenge-filter-button[data-active] {
@@ -3522,14 +3482,7 @@
   transform: translateY(-1px);
   border-color: rgba(107, 238, 177, 0.22);
   color: rgba(235, 247, 241, 0.92);
-  background:
-    radial-gradient(ellipse at 20% 0%, rgba(107, 238, 177, 0.1), transparent 46%),
-    var(--yy-hex-flow),
-    rgba(255, 255, 255, 0.026);
-  background-size:
-    auto,
-    1rem 0.866rem,
-    auto;
+  background: linear-gradient(180deg, rgba(107, 238, 177, 0.07), rgba(255, 255, 255, 0.022)), rgba(255, 255, 255, 0.026);
 }
 
 .yy-notice-filter-button[data-active] {
@@ -3763,56 +3716,6 @@
 .yy-games-page .panel-card:hover > .yy-hex-field,
 .yy-games-page .panel-card:focus-within > .yy-hex-field {
   animation: yy-composite-field-pulse 2.4s ease-in-out infinite;
-}
-
-.yy-home-page .status-pill,
-.yy-games-page .status-pill,
-.yy-game-tab-shell .status-pill,
-.challenge-drawer-draft .status-pill {
-  transform: translateZ(0);
-  backface-visibility: hidden;
-}
-
-.yy-home-page .status-pill::before,
-.yy-games-page .status-pill::before,
-.yy-game-tab-shell .status-pill::before,
-.challenge-drawer-draft .status-pill::before,
-.yy-home-page .status-pill::after,
-.yy-games-page .status-pill::after,
-.yy-game-tab-shell .status-pill::after,
-.challenge-drawer-draft .status-pill::after {
-  animation: none !important;
-  filter: none !important;
-  will-change: opacity, transform;
-}
-
-.yy-home-page .state-running::before,
-.yy-games-page .state-running::before,
-.yy-game-tab-shell .state-running::before,
-.challenge-drawer-draft .state-running::before {
-  opacity: 0.74;
-  transform-origin: center;
-  animation: yy-composite-pill-breathe 1.85s ease-in-out infinite !important;
-}
-
-.yy-home-page .state-running .status-tail,
-.yy-games-page .state-running .status-tail,
-.yy-game-tab-shell .state-running .status-tail,
-.challenge-drawer-draft .state-running .status-tail {
-  animation: yy-composite-tail-pulse 1.15s steps(4) infinite !important;
-}
-
-.yy-home-page .state-running .status-signal i,
-.yy-games-page .state-running .status-signal i,
-.yy-game-tab-shell .state-running .status-signal i,
-.challenge-drawer-draft .state-running .status-signal i {
-  transform-origin: bottom;
-  animation: yy-composite-bar-pulse 1.45s ease-in-out infinite !important;
-}
-
-.yy-home-page .state-open .status-signal i,
-.yy-games-page .state-open .status-signal i {
-  animation: yy-composite-open-pulse 2.4s ease-in-out infinite !important;
 }
 
 .yy-home-page .heartbeat-line,
@@ -4615,9 +4518,7 @@
   min-height: 50rem;
   border-color: rgba(107, 238, 177, 0.17);
   position: relative;
-  background:
-    linear-gradient(135deg, rgba(5, 12, 10, 0.92), rgba(8, 14, 12, 0.72)),
-    var(--yy-hex-flow);
+  background: linear-gradient(135deg, rgba(5, 12, 10, 0.92), rgba(8, 14, 12, 0.72));
 }
 
 .yy-pentest-canvas::before {
@@ -4721,10 +4622,7 @@
   border: 1px solid rgba(107, 238, 177, 0.34);
   border-radius: calc(var(--yy-radius) - 3px);
   color: var(--yy-text);
-  background:
-    radial-gradient(ellipse at 18% 18%, rgba(107, 238, 177, 0.17), transparent 64%),
-    var(--yy-hex-flow),
-    rgba(7, 14, 12, 0.92);
+  background: linear-gradient(180deg, rgba(107, 238, 177, 0.08), rgba(255, 255, 255, 0.018)), rgba(7, 14, 12, 0.92);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.028),
     0 0.9rem 2rem rgba(0, 0, 0, 0.34);
@@ -5497,11 +5395,6 @@ body:has(.yy-game-entry-page) .mantine-AppShell-main {
   backdrop-filter: none !important;
 }
 
-.yy-admin-shell .yy-status-pill .yy-status-signal,
-.yy-admin-shell .yy-status-pill .yy-status-tail,
-.yy-admin-shell .yy-status-pill svg {
-  display: none !important;
-}
 
 .yy-admin-shell .mantine-Badge-label,
 .yy-admin-shell .yy-status-pill .yy-status-text {
@@ -6207,9 +6100,7 @@ body:has(.yy-game-entry-page) .mantine-AppShell-main {
 .admin-tab-card.yy-bento-tone-active svg,
 .yy-about-hive-cell.yy-bento-tone-active svg,
 .yy-home-panel-heading.yy-bento-tone-active svg,
-.yy-status-pill.yy-bento-tone-active svg,
-[class*='timelineRow'].yy-bento-tone-active [class*='metaMark'],
-[class*='timelineRow'].yy-bento-tone-active [class*='signalNode'] {
+.yy-status-pill.yy-bento-tone-active svg {
   color: rgb(var(--yy-bento-turquoise)) !important;
   filter:
     drop-shadow(0 0 calc(0.36rem + 0.48rem * var(--yy-bento-intensity)) rgba(var(--yy-bento-turquoise), 0.28))
@@ -6347,60 +6238,6 @@ body:has(.yy-game-entry-page) .mantine-AppShell-main {
   mix-blend-mode: screen;
   opacity: calc(0.38 + 0.46 * var(--yy-bento-intensity));
   filter: blur(calc(0.18rem + 0.32rem * var(--yy-bento-noise)));
-}
-
-[class*='timelineRow'].yy-bento-tone-active::before,
-.yy-schedule-row.yy-bento-tone-active::before {
-  border-color: rgba(var(--yy-bento-turquoise), calc(0.16 + 0.28 * var(--yy-bento-intensity))) !important;
-  background:
-    radial-gradient(
-      calc(var(--glow-radius) * 0.76) ellipse at var(--glow-x) var(--glow-y),
-      rgba(var(--yy-bento-turquoise), calc(0.13 * var(--yy-bento-intensity))),
-      rgba(var(--yy-bento-lavender), calc(0.055 * var(--yy-bento-intensity))) 38%,
-      transparent 68%
-    ),
-    linear-gradient(90deg, rgba(0, 0, 0, 0.5), rgba(var(--yy-bento-mint), calc(0.06 * var(--yy-bento-intensity)))),
-    rgba(255, 255, 255, 0.03) !important;
-}
-
-[class*='timelineRow'].yy-bento-tone-active [class*='rowBar'],
-.yy-schedule-row.yy-bento-tone-active [class*='rowBar'] {
-  filter:
-    drop-shadow(0 0 calc(0.65rem + 1rem * var(--yy-bento-intensity)) rgba(var(--yy-bento-turquoise), 0.22))
-    drop-shadow(0 0 calc(0.35rem + 0.7rem * var(--yy-bento-intensity)) rgba(var(--yy-bento-lavender), 0.12));
-}
-
-[class*='timelineRow'].yy-bento-tone-active [class*='rowBar']::before,
-.yy-schedule-row.yy-bento-tone-active [class*='rowBar']::before {
-  background:
-    linear-gradient(90deg, rgba(var(--yy-bento-turquoise), calc(0.52 + 0.22 * var(--yy-bento-intensity))), rgba(var(--yy-bento-mint), 0.8)),
-    linear-gradient(90deg, transparent, rgba(255, 255, 255, calc(0.32 + 0.18 * var(--yy-bento-intensity))), transparent) !important;
-}
-
-[class*='timelineRow'].yy-bento-tone-active [class*='barLead'],
-[class*='timelineRow'].yy-bento-tone-active [class*='barTail'],
-.yy-schedule-row.yy-bento-tone-active [class*='barLead'],
-.yy-schedule-row.yy-bento-tone-active [class*='barTail'] {
-  border-color: rgba(var(--yy-bento-turquoise), calc(0.58 + 0.32 * var(--yy-bento-intensity))) !important;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(var(--yy-bento-turquoise), calc(0.72 + 0.2 * var(--yy-bento-intensity))) 0 0.18rem, transparent 0.2rem),
-    rgba(3, 8, 6, 0.94) !important;
-  box-shadow:
-    0 0 0 calc(0.16rem + 0.2rem * var(--yy-bento-intensity)) rgba(var(--yy-bento-turquoise), 0.08),
-    0 0 calc(0.8rem + 0.8rem * var(--yy-bento-intensity)) rgba(var(--yy-bento-turquoise), 0.3) !important;
-}
-
-[class*='timelineRow'].yy-bento-tone-active [class*='timeTooltip'],
-.yy-schedule-row.yy-bento-tone-active [class*='timeTooltip'] {
-  border-color: rgba(var(--yy-bento-turquoise), calc(0.28 + 0.22 * var(--yy-bento-intensity))) !important;
-  background:
-    radial-gradient(
-      ellipse at var(--glow-x) var(--glow-y),
-      rgba(var(--yy-bento-turquoise), calc(0.13 + 0.08 * var(--yy-bento-intensity))),
-      rgba(var(--yy-bento-lavender), calc(0.055 * var(--yy-bento-intensity))) 45%,
-      transparent 78%
-    ),
-    rgba(4, 8, 7, 0.94) !important;
 }
 
 .yy-home-panel-heading.yy-bento-tone-active,
@@ -6951,13 +6788,6 @@ tr.yy-bento-tone-active td {
   box-shadow: none !important;
 }
 
-.yy-instance-panel .yy-status-signal,
-.yy-instance-panel .yy-status-tail,
-.yy-instance-panel .yy-status-pill > svg,
-.yy-instance-panel .heartbeat-icon,
-.yy-instance-loader.route-loader .heartbeat-icon {
-  display: none !important;
-}
 
 .yy-instance-panel .yy-status-text,
 .yy-instance-loader.route-loader strong,
@@ -7238,19 +7068,19 @@ body:has(.yy-theory-page) .mantine-AppShell-main {
 }
 
 .yy-theory-page {
-  max-height: calc(100dvh - 8.4rem);
-  overflow: hidden;
+  min-height: calc(100dvh - 8.4rem);
+  overflow: visible;
 }
 
 .yy-theory-workspace {
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .yy-theory-main-column,
 .yy-theory-side-panel.panel-card {
-  max-height: calc(100dvh - 16rem);
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
   scrollbar-width: thin;
 }
 

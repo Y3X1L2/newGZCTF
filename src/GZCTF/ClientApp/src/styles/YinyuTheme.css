@@ -20,14 +20,7 @@
   --yy-danger: var(--danger);
   --yy-radius: var(--radius);
   --yy-shadow: var(--shadow);
-  --yy-hex-flow: conic-gradient(
-    from 30deg at 50% 50%,
-    transparent 0 13%,
-    rgba(107, 238, 177, 0.08) 14% 16%,
-    transparent 17% 30%,
-    rgba(245, 245, 247, 0.052) 31% 33%,
-    transparent 34% 100%
-  );
+  --yy-hex-flow: linear-gradient(135deg, rgba(107, 238, 177, 0.055), transparent 58%);
 }
 
 #root {
@@ -70,8 +63,8 @@
 
 .mantine-AppShell-navbar,
 .mantine-AppShell-header {
-  border-color: var(--line);
-  backdrop-filter: blur(18px);
+  border-color: transparent;
+  backdrop-filter: none;
 }
 
 .mantine-Paper-root,
@@ -112,12 +105,7 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background:
-    linear-gradient(112deg, transparent 10%, rgba(107, 238, 177, 0.22) 42%, transparent 70%),
-    var(--yy-hex-flow);
-  background-size:
-    auto,
-    1rem 0.866rem;
+  background: linear-gradient(112deg, transparent 10%, rgba(107, 238, 177, 0.18) 42%, transparent 70%);
   opacity: 0;
   transform: translateX(-34%);
   transition:
@@ -257,23 +245,31 @@
 
 .mantine-Badge-root {
   position: relative;
-  overflow: hidden;
-  border-color: rgba(107, 238, 177, 0.26);
-  background:
-    radial-gradient(circle at 18% 50%, rgba(245, 245, 247, 0.1) 0 2px, transparent 2.5px),
-    radial-gradient(circle at 50% 18%, rgba(107, 238, 177, 0.14) 0 2px, transparent 2.5px), rgba(255, 255, 255, 0.035);
-  background-size: 1.5rem 1rem;
+  overflow: visible;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.mantine-Badge-label {
+  color: transparent;
+  background-image: linear-gradient(112deg, #78f8be 0%, #9dffd5 58%, #b9add1 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  font-weight: 900;
+  letter-spacing: 0;
 }
 
 .mantine-Progress-root {
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.055);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
 }
 
 .mantine-Progress-section {
-  background-image:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.2), transparent 34%, rgba(107, 238, 177, 0.28) 66%, transparent),
-    var(--yy-hex-flow, var(--signal-flow-soft));
+  background: linear-gradient(90deg, #42f49d 0%, #6beeb1 48%, #9dffd5 76%, #b9add1 100%);
+  box-shadow: 0 0 1rem rgba(107, 238, 177, 0.2);
 }
 
 .mantine-LoadingOverlay-overlay {
@@ -404,72 +400,7 @@
 }
 
 .yy-hex-field {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  display: block;
-  padding: 0.72rem;
-  opacity: 0;
-  mix-blend-mode: screen;
-  mask-image:
-    radial-gradient(ellipse at 14% 18%, rgba(0, 0, 0, 0.78), transparent 33%),
-    radial-gradient(ellipse at 86% 76%, rgba(0, 0, 0, 0.62), transparent 38%),
-    radial-gradient(ellipse at 58% 42%, rgba(0, 0, 0, 0.34), transparent 44%);
-  background: linear-gradient(135deg, transparent 24%, rgba(107, 238, 177, 0.04) 36%, transparent 68%);
-  background-size: auto;
-  transition: opacity 220ms ease;
-  will-change: opacity, transform;
-}
-
-@keyframes yy-composite-pill-breathe {
-  0%,
-  100% {
-    opacity: 0.56;
-    transform: scaleX(0.985);
-  }
-  50% {
-    opacity: 0.86;
-    transform: scaleX(1.012);
-  }
-}
-
-@keyframes yy-composite-tail-pulse {
-  0% {
-    opacity: 0.2;
-    transform: translate3d(-0.12rem, 0, 0) scaleX(0.85);
-  }
-  50% {
-    opacity: 0.86;
-    transform: translate3d(0.16rem, 0, 0) scaleX(1.18);
-  }
-  100% {
-    opacity: 0.28;
-    transform: translate3d(0.28rem, 0, 0) scaleX(0.78);
-  }
-}
-
-@keyframes yy-composite-bar-pulse {
-  0%,
-  100% {
-    opacity: 0.3;
-    transform: translate3d(0, 0, 0) scaleY(0.72);
-  }
-  48% {
-    opacity: 0.92;
-    transform: translate3d(0, 0, 0) scaleY(1.16);
-  }
-}
-
-@keyframes yy-composite-open-pulse {
-  0%,
-  100% {
-    opacity: 0.22;
-    transform: translate3d(0, 0, 0);
-  }
-  50% {
-    opacity: 0.64;
-    transform: translate3d(0, -0.05rem, 0);
-  }
+  display: none;
 }
 
 .yy-footer {
@@ -497,10 +428,7 @@
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(107, 238, 177, 0.18);
-  background:
-    radial-gradient(ellipse at 18% 0%, rgba(107, 238, 177, 0.12), transparent 42%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.072), rgba(255, 255, 255, 0.018)),
-    rgba(5, 8, 8, 0.94);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.072), rgba(255, 255, 255, 0.018)), rgba(5, 8, 8, 0.94);
 }
 
 .mantine-Modal-content::before,
@@ -510,20 +438,8 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background:
-    radial-gradient(ellipse at 14% 18%, rgba(107, 238, 177, 0.12), transparent 32%),
-    conic-gradient(
-      from 30deg at 50% 50%,
-      transparent 0 13%,
-      rgba(107, 238, 177, 0.045) 14% 16%,
-      transparent 17% 30%,
-      rgba(245, 245, 247, 0.032) 31% 33%,
-      transparent 34% 100%
-    );
-  background-size:
-    auto,
-    18px 16px;
-  opacity: 0.5;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 46%);
+  opacity: 0.45;
 }
 
 .mantine-Modal-content > *,
@@ -1016,13 +932,8 @@
 }
 
 .yy-about-hive-cell::before {
-  background:
-    var(--yy-hex-flow),
-    radial-gradient(ellipse at 50% 50%, rgba(107, 238, 177, 0.18), transparent 62%);
-  background-size:
-    1.05rem 0.91rem,
-    auto;
-  opacity: 0.38;
+  background: linear-gradient(180deg, rgba(107, 238, 177, 0.08), rgba(255, 255, 255, 0.018));
+  opacity: 0.52;
   transition: opacity 210ms ease;
 }
 
@@ -1328,13 +1239,8 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background:
-    radial-gradient(ellipse at 16% 18%, rgba(107, 238, 177, 0.14), transparent 38%),
-    var(--yy-hex-flow);
-  background-size:
-    auto,
-    1.12rem 0.98rem;
-  opacity: 0.44;
+  background: linear-gradient(180deg, rgba(107, 238, 177, 0.075), transparent 52%);
+  opacity: 0.52;
 }
 
 .mantine-Notification-root > * {
@@ -1795,9 +1701,7 @@
   border: 1px solid rgba(107, 238, 177, 0.42);
   border-radius: 999px;
   color: #06100b;
-  background:
-    linear-gradient(135deg, rgba(144, 255, 201, 0.98), rgba(82, 229, 164, 0.86)),
-    var(--yy-hex-flow);
+  background: linear-gradient(135deg, rgba(144, 255, 201, 0.98), rgba(82, 229, 164, 0.86));
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.08),
     0 0.9rem 2.4rem rgba(0, 0, 0, 0.32),
@@ -1908,11 +1812,7 @@
 @media (prefers-reduced-motion: reduce) {
   .route-loader-screen svg,
   .yy-soft-enter,
-  .heartbeat-line,
-  .status-pill::before,
-  .status-pill::after,
-  .status-signal i,
-  .status-tail {
+  .heartbeat-line {
     animation: none !important;
   }
 }

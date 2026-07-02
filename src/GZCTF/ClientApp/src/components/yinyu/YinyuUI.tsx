@@ -1,6 +1,5 @@
 import { Box, BoxProps } from '@mantine/core'
 import cx from 'clsx'
-import { CircleDot } from 'lucide-react'
 import { ComponentPropsWithoutRef, ComponentType, CSSProperties, PropsWithChildren, ReactNode } from 'react'
 
 export type YinyuStatusTone = 'success' | 'warm' | 'danger' | 'neutral'
@@ -90,7 +89,7 @@ export function YinyuStatusPill({
   children,
   tone = 'neutral',
   state,
-  icon: Icon = CircleDot,
+  icon: Icon,
   className,
   ...props
 }: YinyuStatusPillProps) {
@@ -98,27 +97,15 @@ export function YinyuStatusPill({
 
   return (
     <span className={cx('status-pill yy-status-pill', `tone-${tone}`, `state-${motionState}`, className)} {...props}>
-      <span className="status-signal yy-status-signal" aria-hidden="true">
-        <i />
-        <i />
-        <i />
-        <i />
-      </span>
-      <Icon size={14} />
+      {Icon ? <Icon size={14} /> : null}
       <span className="status-text yy-status-text">{children}</span>
-      <span className="status-tail yy-status-tail" aria-hidden="true" />
     </span>
   )
 }
 
 export function YinyuHexField({ cells = 42 }: { cells?: number }) {
-  return (
-    <span
-      className="hex-field yy-hex-field yy-color-bends-field"
-      style={{ '--yy-hex-density': cells } as CSSProperties}
-      aria-hidden="true"
-    />
-  )
+  void cells
+  return null
 }
 
 export function YinyuPanel({

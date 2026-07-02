@@ -33,13 +33,7 @@
   &[data-active='true'] {
     color: var(--yy-green);
     border-color: rgba(107, 238, 177, 0.32);
-    background:
-      radial-gradient(ellipse at 16% 50%, rgba(107, 238, 177, 0.13), transparent 42%), var(--yy-hex-flow),
-      rgba(107, 238, 177, 0.055);
-    background-size:
-      auto,
-      1.08rem 0.94rem,
-      auto;
+    background: linear-gradient(180deg, rgba(107, 238, 177, 0.09), rgba(255, 255, 255, 0.024)), rgba(107, 238, 177, 0.055);
   }
 }
 

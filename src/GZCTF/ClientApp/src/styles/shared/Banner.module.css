@@ -17,14 +17,8 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background:
-      radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.14), transparent 30rem),
-      radial-gradient(ellipse at 88% 16%, rgba(245, 245, 247, 0.045), transparent 28rem), var(--yy-hex-flow);
-    background-size:
-      auto,
-      auto,
-      1.8rem 1.56rem;
-    opacity: 0.58;
+    background: linear-gradient(180deg, rgba(107, 238, 177, 0.06), transparent 58%);
+    opacity: 0.5;
   }
 
   @mixin smaller-than $mantine-breakpoint-sm {
@@ -100,13 +94,7 @@
   height: 100%;
   width: 40vw;
   border: 1px solid var(--yy-line);
-  background:
-    radial-gradient(ellipse at 50% 35%, rgba(107, 238, 177, 0.14), transparent 50%), var(--yy-hex-flow),
-    rgba(255, 255, 255, 0.025);
-  background-size:
-    auto,
-    1.6rem 1.38rem,
-    auto;
+  background: linear-gradient(180deg, rgba(107, 238, 177, 0.08), rgba(255, 255, 255, 0.025)), rgba(255, 255, 255, 0.025);
   overflow: hidden;
 
   &::before {
@@ -114,14 +102,8 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background:
-      radial-gradient(ellipse at 20% 18%, rgba(107, 238, 177, 0.18), transparent 36%),
-      linear-gradient(180deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.5)), var(--yy-hex-flow);
-    background-size:
-      auto,
-      auto,
-      1.35rem 1.17rem;
-    opacity: 0.6;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.5));
+    opacity: 0.5;
   }
 
   @mixin smaller-than $mantine-breakpoint-sm {

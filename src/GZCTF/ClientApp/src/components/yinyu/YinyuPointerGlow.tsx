@@ -24,13 +24,11 @@ const BENTO_SELECTOR = [
   '.yy-team-member-summary > div',
   '.yy-game-time-grid > div',
   '.yy-notice-filter-button',
-  '.yy-schedule-row',
   '.mantine-Badge-root',
   '.mantine-Button-root',
   '.mantine-ActionIcon-root',
   '.mantine-Switch-track',
   '.mantine-Table-tr',
-  '[class*="timelineRow"]',
 ].join(',')
 
 const AMBIENT_SELECTOR = [

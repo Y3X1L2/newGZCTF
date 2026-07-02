@@ -37,10 +37,7 @@
     position: absolute;
     inset: 0;
     z-index: -1;
-    background: radial-gradient(ellipse at 18% 30%, rgba(107, 238, 177, 0.13), transparent 44%), var(--yy-hex-flow);
-    background-size:
-      auto,
-      1.25rem 1.08rem;
+    background: linear-gradient(180deg, rgba(107, 238, 177, 0.075), transparent 58%);
     opacity: 0;
     transition: opacity 140ms ease;
   }

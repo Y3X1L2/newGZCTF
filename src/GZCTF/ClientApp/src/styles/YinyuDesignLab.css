@@ -85,23 +85,7 @@ a {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background:
-    radial-gradient(circle at 50% 13%, rgba(245, 245, 247, 0.018) 0 1.2px, transparent 1.8px),
-    radial-gradient(circle at 6% 38%, rgba(107, 238, 177, 0.014) 0 1.1px, transparent 1.7px),
-    radial-gradient(circle at 94% 38%, rgba(245, 245, 247, 0.012) 0 1.1px, transparent 1.7px),
-    conic-gradient(
-      from 30deg at 50% 50%,
-      transparent 0 13%,
-      rgba(245, 245, 247, 0.008) 14% 16%,
-      transparent 17% 30%,
-      rgba(158, 144, 187, 0.006) 31% 33%,
-      transparent 34% 100%
-    );
-  background-size:
-    48px 42px,
-    48px 42px,
-    48px 42px,
-    48px 42px;
+  background: linear-gradient(180deg, rgba(107, 238, 177, 0.028), transparent 76%);
   mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.66), transparent 88%);
 }
 
@@ -231,22 +215,7 @@ a {
   z-index: 0;
   padding: 1px;
   border-radius: inherit;
-  background:
-    radial-gradient(circle at 18% 22%, rgba(107, 238, 177, 0.42), transparent 18%),
-    radial-gradient(circle at 78% 72%, rgba(245, 245, 247, 0.24), transparent 20%),
-    conic-gradient(
-      from 30deg,
-      transparent 0 18%,
-      rgba(107, 238, 177, 0.36) 24%,
-      rgba(245, 245, 247, 0.18) 31%,
-      transparent 42% 100%
-    ),
-    linear-gradient(180deg, rgba(245, 245, 247, 0.11), rgba(107, 238, 177, 0.14));
-  background-size:
-    190% 190%,
-    180% 180%,
-    220% 220%,
-    100% 100%;
+  background: linear-gradient(180deg, rgba(245, 245, 247, 0.11), rgba(107, 238, 177, 0.14));
   opacity: 0;
   pointer-events: none;
   -webkit-mask:
@@ -821,95 +790,24 @@ a {
 }
 
 .status-pill {
-  --pill-shift: 0%;
-  --solve-wave: -20%;
-  --open-density: 0.35;
   width: fit-content;
   display: inline-flex;
   align-items: center;
-  gap: 0.38rem;
+  gap: 0.22rem;
   position: relative;
   isolation: isolate;
-  overflow: hidden;
-  padding: 0.32rem 0.55rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.035);
-  font-size: 0.74rem;
+  overflow: visible;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: transparent;
+  background: transparent;
+  background-image: linear-gradient(112deg, #78f8be 0%, #9dffd5 58%, #b9add1 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  font-size: 0.86rem;
   font-weight: 850;
   white-space: nowrap;
-}
-
-.status-pill > svg,
-.status-pill > .heartbeat-icon,
-.status-pill > .status-text,
-.status-pill > .status-signal,
-.status-pill > .status-tail {
-  position: relative;
-  z-index: 1;
-}
-
-.status-pill::before,
-.status-pill::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  border-radius: inherit;
-}
-
-.status-pill::before {
-  background:
-    radial-gradient(circle at 18% 50%, rgba(245, 245, 247, 0.12) 0 2px, transparent 2.5px),
-    radial-gradient(circle at 50% 18%, rgba(107, 238, 177, 0.16) 0 2px, transparent 2.5px),
-    radial-gradient(circle at 82% 52%, rgba(245, 245, 247, 0.1) 0 2px, transparent 2.5px),
-    radial-gradient(ellipse at var(--pill-shift) 50%, rgba(107, 238, 177, 0.18), transparent 42%);
-  background-position:
-    0 0,
-    8px 3px,
-    16px 0,
-    0 0;
-  background-size:
-    24px 16px,
-    24px 16px,
-    24px 16px,
-    180% 100%;
-  opacity: 0;
-}
-
-.status-pill::after {
-  background: radial-gradient(circle, rgba(107, 238, 177, 0.48), transparent 23%);
-  background-size: 160% 100%;
-  background-position: -30% 50%;
-  opacity: 0;
-}
-
-.status-signal {
-  width: 1.1rem;
-  height: 0.48rem;
-  display: inline-grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 2px;
-  align-items: end;
-}
-
-.status-signal i {
-  width: 3px;
-  height: 3px;
-  display: block;
-  border-radius: 1px;
-  background: currentColor;
-  opacity: 0.34;
-}
-
-.status-tail {
-  width: 0.38rem;
-  height: 0.38rem;
-  border-radius: 1px;
-  background: currentColor;
-  opacity: 0.36;
 }
 
 .status-text {
@@ -917,62 +815,15 @@ a {
 }
 
 .state-running {
-  border-color: rgba(107, 238, 177, 0.42);
-  box-shadow: inset 0 0 0 1px rgba(107, 238, 177, 0.06);
-}
-
-.state-running::before {
-  opacity: 0.78;
-  animation: yy-composite-pill-breathe 1.85s infinite ease-in-out;
-}
-
-.state-running .status-tail {
-  animation: yy-composite-tail-pulse 1.15s infinite steps(4);
-}
-
-.state-running .status-signal i {
-  animation: yy-composite-bar-pulse 1.45s infinite ease-in-out;
-}
-
-.state-running .status-signal i:nth-child(2) {
-  animation-delay: 0.12s;
-}
-
-.state-running .status-signal i:nth-child(3) {
-  animation-delay: 0.24s;
-}
-
-.state-running .status-signal i:nth-child(4) {
-  animation-delay: 0.36s;
-}
-
-.state-solved::after {
-  opacity: 0.5;
-  animation: yy-composite-pill-breathe 2.6s infinite ease-in-out;
-}
-
-.state-solved .status-signal i {
-  animation: yy-composite-bar-pulse 2.1s infinite ease-in-out;
+  filter: drop-shadow(0 0 0.55rem rgba(107, 238, 177, 0.18));
 }
 
 .state-open {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.028), transparent), rgba(255, 255, 255, 0.028);
-}
-
-.state-open .status-signal i:nth-child(odd) {
-  animation: yy-composite-open-pulse 2.4s infinite ease-in-out;
-}
-
-.state-busy .status-signal i {
-  animation: yy-composite-open-pulse 1.35s infinite ease-in-out;
+  opacity: 0.86;
 }
 
 .state-alert {
-  border-style: dashed;
-}
-
-.state-alert .status-tail {
-  animation: yy-composite-tail-pulse 1.25s infinite steps(3);
+  background-image: linear-gradient(112deg, #ff9aa8 0%, #ffc5cf 62%, #f2f4f0 100%);
 }
 
 .tone-success {
@@ -1059,7 +910,7 @@ a {
   height: 100%;
   display: block;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(245, 245, 247, 0.42), var(--green));
+  background: linear-gradient(90deg, #42f49d 0%, #6beeb1 48%, #9dffd5 76%, #b9add1 100%);
 }
 
 .challenge-layout {
@@ -2072,19 +1923,27 @@ a {
 }
 
 .route-progress {
-  display: grid;
-  grid-template-columns: repeat(18, 0.58rem);
-  gap: 0.16rem;
+  display: block;
+  height: 0.38rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
 }
 
-.route-progress i,
-.create-game-preview div::before {
-  aspect-ratio: 0.88;
+.route-progress i {
   display: block;
-  clip-path: polygon(50% 0, 94% 25%, 94% 75%, 50% 100%, 6% 75%, 6% 25%);
-  background: rgba(107, 238, 177, 0.58);
-  opacity: 0.32;
-  animation: route-hex-flow 2.8s var(--route-delay, 0s) infinite ease-in-out;
+  width: 100%;
+  height: 100%;
+  clip-path: none;
+  background: linear-gradient(90deg, #42f49d 0%, #6beeb1 48%, #9dffd5 76%, #b9add1 100%);
+  opacity: 0.9;
+  animation: none;
+}
+
+.create-game-preview div::before {
+  background: rgba(107, 238, 177, 0.18);
+  opacity: 0.42;
+  animation: none;
 }
 
 .error-dialog-preview {
@@ -2392,20 +2251,6 @@ a {
   }
 }
 
-@keyframes status-tail-run {
-  0% {
-    opacity: 0.18;
-    transform: translateX(-2px) scaleX(0.8);
-  }
-  50% {
-    opacity: 0.86;
-    transform: translateX(3px) scaleX(1.22);
-  }
-  100% {
-    opacity: 0.28;
-    transform: translateX(6px) scaleX(0.75);
-  }
-}
 
 @keyframes status-flow-bars {
   0%,
@@ -2525,17 +2370,6 @@ a {
   }
 }
 
-@keyframes route-hex-flow {
-  0%,
-  100% {
-    opacity: 0.24;
-    transform: translateY(0) scale(0.9);
-  }
-  48% {
-    opacity: 0.86;
-    transform: translateY(-2px) scale(1);
-  }
-}
 
 @keyframes busy-stack {
   0%,

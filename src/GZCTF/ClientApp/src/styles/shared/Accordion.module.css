@@ -13,13 +13,7 @@
 
   &[data-active] {
     box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.24);
-    background:
-      radial-gradient(ellipse at 16% 0%, rgba(107, 238, 177, 0.09), transparent 42%), var(--yy-hex-flow),
-      rgba(255, 255, 255, 0.028);
-    background-size:
-      auto,
-      1.2rem 1.04rem,
-      auto;
+    background: linear-gradient(180deg, rgba(107, 238, 177, 0.08), rgba(255, 255, 255, 0.028)), rgba(255, 255, 255, 0.028);
   }
 }
 

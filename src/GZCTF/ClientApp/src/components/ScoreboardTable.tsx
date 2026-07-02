@@ -275,7 +275,7 @@ export const ScoreboardTable: FC<ScoreboardProps> = ({ divisionId, setDivisionId
   const [keyword, setKeyword] = useState('')
   const [debouncedKeyword] = useDebouncedValue(keyword, 400)
   const scrollRef = useRef<HTMLDivElement | null>(null)
-  const [scrollRatio, setScrollRatio] = useState(0)
+  const topScrollRef = useRef<HTMLDivElement | null>(null)
   const [canScrollX, setCanScrollX] = useState(false)
 
   const { scoreboard } = useGameScoreboard(numId)
@@ -341,6 +341,10 @@ export const ScoreboardTable: FC<ScoreboardProps> = ({ divisionId, setDivisionId
 
   const bloodData = useBonusLabels(bloodBonus)
   const hasDivisionFilter = divisionOptions.length > 0
+  const challengeCount = scoreboard?.challenges
+    ? Object.values(scoreboard.challenges).reduce((sum, items) => sum + items.length, 0)
+    : 0
+  const tableMinWidth = `${Lefts[Lefts.length - 1] + Math.max(challengeCount, 1) * 86}px`
 
   const syncScrollMetrics = () => {
     const el = scrollRef.current
@@ -348,7 +352,11 @@ export const ScoreboardTable: FC<ScoreboardProps> = ({ divisionId, setDivisionId
 
     const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth)
     setCanScrollX(maxScroll > 2)
-    setScrollRatio(maxScroll > 0 ? Math.round((el.scrollLeft / maxScroll) * 1000) / 10 : 0)
+
+    const topEl = topScrollRef.current
+    if (topEl && topEl.scrollLeft !== el.scrollLeft) {
+      topEl.scrollLeft = el.scrollLeft
+    }
   }
 
   useEffect(() => {
@@ -364,14 +372,24 @@ export const ScoreboardTable: FC<ScoreboardProps> = ({ divisionId, setDivisionId
     return () => resizeObserver.disconnect()
   }, [scoreboard?.challenges, currentItems?.length])
 
-  const onTopScrollbarChange = (value: string) => {
+  const syncTableScroll = () => {
     const el = scrollRef.current
-    if (!el) return
+    const topEl = topScrollRef.current
+    if (!el || !topEl) return
 
-    const ratio = Number(value)
-    const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth)
-    el.scrollLeft = (maxScroll * ratio) / 100
-    setScrollRatio(ratio)
+    if (Math.abs(topEl.scrollLeft - el.scrollLeft) > 0.5) {
+      topEl.scrollLeft = el.scrollLeft
+    }
+  }
+
+  const syncTopScroll = () => {
+    const el = scrollRef.current
+    const topEl = topScrollRef.current
+    if (!el || !topEl) return
+
+    if (Math.abs(el.scrollLeft - topEl.scrollLeft) > 0.5) {
+      el.scrollLeft = topEl.scrollLeft
+    }
   }
 
   return (
@@ -407,19 +425,17 @@ export const ScoreboardTable: FC<ScoreboardProps> = ({ divisionId, setDivisionId
           </Grid.Col>
         </Grid>
         <Box pos="relative" className={classes.tableStage}>
-          <div className={classes.topScrollBar} data-visible={canScrollX || undefined}>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={0.1}
-              value={scrollRatio}
-              aria-label="横向拖动排行榜"
-              onChange={(event) => onTopScrollbarChange(event.currentTarget.value)}
-            />
+          <div
+            ref={topScrollRef}
+            className={classes.topScrollBar}
+            data-visible={canScrollX || undefined}
+            aria-label="横向拖动排行榜"
+            onScroll={syncTopScroll}
+          >
+            <div style={{ width: tableMinWidth }} />
           </div>
-          <div ref={scrollRef} className={cx(classes.scoreboardScrollContainer, misc.noScrollBars)} onScroll={syncScrollMetrics}>
-            <Table className={classes.table}>
+          <div ref={scrollRef} className={cx(classes.scoreboardScrollContainer, misc.noScrollBars)} onScroll={syncTableScroll}>
+            <Table className={classes.table} style={{ minWidth: tableMinWidth }}>
               <TableHeader {...scoreboard?.challenges} />
               <Table.Tbody>
                 {scoreboard &&
@@ -461,10 +477,7 @@ export const ScoreboardTable: FC<ScoreboardProps> = ({ divisionId, setDivisionId
             </Stack>
           </Box>
         </Box>
-        <Group justify="space-between">
-          <Text size="sm" className="yy-readable-text">
-            {t('game.content.scoreboard_tip')}
-          </Text>
+        <Group justify="flex-end">
           <Pagination
             value={activePage}
             onChange={setPage}
