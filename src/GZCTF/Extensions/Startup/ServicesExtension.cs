@@ -13,6 +13,7 @@ using GZCTF.Services.CronJob;
 
 using GZCTF.Services.Fleet;
 using GZCTF.Services.Mail;
+using GZCTF.Services.TeamLab;
 using GZCTF.Services.Token;
 using GZCTF.Services.Transfer;
 using GZCTF.Services.Vm;
@@ -158,6 +159,8 @@ internal static class ServicesExtension
             builder.Services.AddScoped<FleetVmService>();
             builder.Services.AddSingleton<GuacamoleService>();
             builder.Services.AddHostedService<VmReadyService>();
+            builder.Services.AddScoped<NodeTunnelService>();
+            builder.Services.AddScoped<IPublicUdpGatewayProvider, PublicUdpGatewayProvider>();
 
             // Phase 7 security: distributed lock
             if (builder.Configuration.GetValue<string>("RunMode") == "Fleet")

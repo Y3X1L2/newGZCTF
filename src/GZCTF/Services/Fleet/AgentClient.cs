@@ -169,6 +169,58 @@ public class AgentClient
         }
     }
 
+    public async Task<TeamLabStatusResponse?> GetTeamLabStatusAsync(Guid nodeId, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null) return null;
+
+        var client = BuildClient(node);
+        var response = await client.GetAsync("/api/teamlab/status", token);
+        return await ReadTeamLabResponseAsync<TeamLabStatusResponse>(response, token);
+    }
+
+    public async Task<TeamLabDryRunResponse?> CreateTeamLabBridgeAsync(Guid nodeId, TeamLabBridgeRequest request,
+        CancellationToken token) => await PostTeamLabAsync<TeamLabBridgeRequest, TeamLabDryRunResponse>(nodeId,
+        "/api/teamlab/bridges", request, token);
+
+    public async Task<TeamLabDryRunResponse?> CreateTeamLabRouterAsync(Guid nodeId, TeamLabRouterRequest request,
+        CancellationToken token) => await PostTeamLabAsync<TeamLabRouterRequest, TeamLabDryRunResponse>(nodeId,
+        "/api/teamlab/routers", request, token);
+
+    public async Task<TeamLabDryRunResponse?> ConfigureTeamLabWireGuardAsync(Guid nodeId,
+        TeamLabWireGuardRequest request, CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabWireGuardRequest, TeamLabDryRunResponse>(nodeId,
+            "/api/teamlab/wireguard", request, token);
+
+    public async Task<TeamLabDryRunResponse?> CleanupTeamLabAsync(Guid nodeId, TeamLabCleanupRequest request,
+        CancellationToken token) => await PostTeamLabAsync<TeamLabCleanupRequest, TeamLabDryRunResponse>(nodeId,
+        "/api/teamlab/cleanup", request, token);
+
+    private async Task<TResponse?> PostTeamLabAsync<TRequest, TResponse>(Guid nodeId, string path, TRequest request,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null) return default;
+
+        var client = BuildClient(node);
+        var body = JsonSerializer.Serialize(request);
+        var response = await client.PostAsync(path, new StringContent(body, Encoding.UTF8, "application/json"), token);
+        return await ReadTeamLabResponseAsync<TResponse>(response, token);
+    }
+
+    private async Task<T?> ReadTeamLabResponseAsync<T>(HttpResponseMessage response, CancellationToken token)
+    {
+        if (!response.IsSuccessStatusCode)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync(token);
+            _logger.LogWarning("Agent TeamLab request failed: {Status}. Body: {Body}",
+                response.StatusCode, TrimResponseBody(responseBody));
+            return default;
+        }
+
+        return await response.Content.ReadFromJsonAsync<T>(token);
+    }
+
     public async Task<PenetrationFabricResult> CreateFabricNetworkAsync(Guid nodeId, string networkName, string cidr,
         CancellationToken token)
     {
@@ -497,3 +549,45 @@ public class AgentVmIpResponse
     public int? RdpPort { get; set; }
     public string Status { get; set; } = string.Empty;
 }
+
+public record TeamLabStatusResponse(
+    bool Available,
+    bool Enable,
+    bool DryRun,
+    bool HasIpCommand,
+    bool HasWireGuardCommand,
+    DateTimeOffset CheckedAt,
+    string? Message = null);
+
+public record TeamLabDryRunResponse(
+    bool Success,
+    bool DryRun,
+    string Message,
+    string[] Commands);
+
+public record TeamLabBridgeRequest(
+    int RuntimeId,
+    string BridgeName,
+    string Cidr,
+    string GatewayIp,
+    bool DryRun = true);
+
+public record TeamLabRouterRequest(
+    int RuntimeId,
+    string NamespaceName,
+    string[] BridgeNames,
+    bool DryRun = true);
+
+public record TeamLabWireGuardRequest(
+    int RuntimeId,
+    string InterfaceName,
+    int ListenPort,
+    string AddressCidr,
+    string PeerPublicKey,
+    string PeerAllowedIps,
+    bool DryRun = true);
+
+public record TeamLabCleanupRequest(
+    int RuntimeId,
+    string[] ResourceNames,
+    bool DryRun = true);
