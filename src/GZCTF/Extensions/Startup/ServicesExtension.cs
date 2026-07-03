@@ -162,6 +162,7 @@ internal static class ServicesExtension
             builder.Services.AddScoped<NodeTunnelService>();
             builder.Services.AddScoped<IPublicUdpGatewayProvider, PublicUdpGatewayProvider>();
             builder.Services.AddScoped<TeamLabPlanService>();
+            builder.Services.AddScoped<TeamLabDeploymentService>();
 
             // Phase 7 security: distributed lock
             if (builder.Configuration.GetValue<string>("RunMode") == "Fleet")

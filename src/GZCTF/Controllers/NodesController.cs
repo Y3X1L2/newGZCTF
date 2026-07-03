@@ -11,6 +11,7 @@ using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Fleet;
+using GZCTF.Services.TeamLab;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -498,6 +499,22 @@ public class NodesController : ControllerBase
         });
     }
 
+    [HttpPost("{id:guid}/teamlab/enable")]
+    [RequireAdmin]
+    public async Task<IActionResult> EnableTeamLabNetwork(Guid id, [FromBody] EnableTeamLabNetworkRequest request)
+    {
+        var token = HttpContext.RequestAborted;
+        var node = await _context.WorkerNodes.FirstOrDefaultAsync(n => n.Id == id, token);
+        if (node is null) return NotFound();
+
+        var service = HttpContext.RequestServices.GetRequiredService<NodeTunnelService>();
+        var result = request.DryRun
+            ? await service.EnableDryRunAsync(node, token)
+            : await service.MarkHealthyAsync(node, request.TunnelIp ?? string.Empty, token);
+
+        return result.Success ? Ok(result) : BadRequest(result);
+    }
+
     [HttpPost("{id:guid}/heartbeat")]
     [AllowAnonymous]
     [EnableRateLimiting(nameof(RateLimiter.LimitPolicy.Query))]
@@ -911,6 +928,12 @@ public class UpdateNodeRequest
     public int? MaxVms { get; set; }
     public bool? IsStorageNode { get; set; }
     public int? RegistryPort { get; set; }
+}
+
+public class EnableTeamLabNetworkRequest
+{
+    public bool DryRun { get; set; } = true;
+    public string? TunnelIp { get; set; }
 }
 
 public class HeartbeatRequest

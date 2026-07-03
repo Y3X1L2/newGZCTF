@@ -1,0 +1,34 @@
+using System.Net.Mime;
+using GZCTF.Middlewares;
+using GZCTF.Services.TeamLab;
+using Microsoft.AspNetCore.Mvc;
+
+namespace GZCTF.Controllers;
+
+[ApiController]
+[Route("api/admin/teamlab/games/{gameId:int}")]
+[Produces(MediaTypeNames.Application.Json)]
+public class TeamLabAdminController(
+    TeamLabPlanService planService,
+    TeamLabDeploymentService deploymentService) : ControllerBase
+{
+    [HttpPost("teams/{teamId:int}/plan")]
+    [RequireAdmin]
+    public async Task<IActionResult> Plan(int gameId, int teamId, CancellationToken token) =>
+        Ok(await planService.PlanRuntimeAsync(gameId, teamId, token));
+
+    [HttpPost("teams/{teamId:int}/deploy")]
+    [RequireAdmin]
+    public async Task<IActionResult> Deploy(int gameId, int teamId, CancellationToken token) =>
+        Ok(await deploymentService.DeployRuntimeAsync(gameId, teamId, token));
+
+    [HttpPost("teams/{teamId:int}/destroy")]
+    [RequireAdmin]
+    public async Task<IActionResult> Destroy(int gameId, int teamId, CancellationToken token) =>
+        Ok(await deploymentService.DestroyRuntimeAsync(gameId, teamId, token));
+
+    [HttpGet("teams/{teamId:int}/events")]
+    [RequireAdmin]
+    public async Task<IActionResult> Events(int gameId, int teamId, CancellationToken token) =>
+        Ok(await deploymentService.GetEventsAsync(gameId, teamId, token));
+}
