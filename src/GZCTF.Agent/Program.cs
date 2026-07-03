@@ -7,9 +7,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<AgentConfig>(builder.Configuration.GetSection("Agent"));
 builder.Services.Configure<DockerConfig>(builder.Configuration.GetSection("Docker"));
 builder.Services.Configure<KvmConfig>(builder.Configuration.GetSection("Kvm"));
+builder.Services.Configure<AgentTeamLabConfig>(builder.Configuration.GetSection("TeamLab"));
 
 builder.Services.AddSingleton<DockerService>();
 builder.Services.AddSingleton<KvmService>();
+builder.Services.AddSingleton<TeamLabCommandRunner>();
+builder.Services.AddSingleton<TeamLabNetworkService>();
 builder.Services.AddHostedService<HeartbeatWorker>();
 
 builder.Services.AddControllers();
