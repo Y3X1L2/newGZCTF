@@ -29,6 +29,13 @@ export interface NodeInfo {
   isSchedulable: boolean
   isLocal: boolean
   agentPort: number
+  teamLabNetworkEnabled?: boolean
+  teamLabTunnelStatus?: string | number
+  teamLabTunnelIp?: string | null
+  teamLabTunnelLastHandshake?: string | null
+  teamLabTunnelLastError?: string | null
+  teamLabTunnelConfigVersion?: number
+  canHostTeamLab?: boolean
 }
 
 const statusMap: Record<
@@ -91,6 +98,48 @@ function portPoolName(mode?: string | null) {
   return '端口模式'
 }
 
+function teamLabStatusMeta(node: NodeInfo): { label: string; detail: string; tone: YinyuStatusTone } {
+  const key = normalizeKey(node.teamLabTunnelStatus)
+
+  if (node.canHostTeamLab) {
+    return {
+      label: 'VPN 靶场网络可调度',
+      detail: node.teamLabTunnelIp ? `隧道地址 ${node.teamLabTunnelIp}` : '隧道已健康，等待调度',
+      tone: 'success',
+    }
+  }
+
+  if (!node.teamLabNetworkEnabled && key !== '2' && key !== 'probing') {
+    return {
+      label: 'VPN 靶场网络未启用',
+      detail: 'Phase 0-3 仅支持 dry-run 探测，生产启用需要后续阶段接入真实隧道。',
+      tone: 'neutral',
+    }
+  }
+
+  if (key === '2' || key === 'probing') {
+    return {
+      label: 'VPN 靶场网络待验证',
+      detail: node.teamLabTunnelLastError ?? 'dry-run 探测已执行，尚未标记为健康调度节点。',
+      tone: 'warm',
+    }
+  }
+
+  if (key === '4' || key === 'error') {
+    return {
+      label: 'VPN 靶场网络异常',
+      detail: node.teamLabTunnelLastError ?? '节点 TeamLab 探测异常，请检查 Agent 与本机网络组件。',
+      tone: 'danger',
+    }
+  }
+
+  return {
+    label: 'VPN 靶场网络不可调度',
+    detail: node.teamLabTunnelLastError ?? '节点缺少健康隧道或 TeamLabNetwork 调度条件。',
+    tone: 'neutral',
+  }
+}
+
 function MetricLine({
   label,
   current,
@@ -149,6 +198,9 @@ export function NodeCard({
   const containerUsage = ratio(node.currentContainers, node.maxContainers)
   const vmUsage = ratio(node.currentVms, node.maxVms)
   const portUsage = ratio(node.usedPorts ?? 0, node.totalPorts ?? 0)
+  const teamLab = teamLabStatusMeta(node)
+  const teamLabHandshake = node.teamLabTunnelLastHandshake ? dayjs(node.teamLabTunnelLastHandshake) : null
+  const teamLabHandshakeText = teamLabHandshake?.isValid() ? teamLabHandshake.fromNow() : '未握手'
   const portPoolLabel =
     node.portPoolStart && node.portPoolEnd
       ? `${node.usedPorts ?? 0}/${node.totalPorts ?? 0} (${node.portPoolStart}-${node.portPoolEnd}${
@@ -229,6 +281,29 @@ export function NodeCard({
             )
           })}
         </Group>
+
+        <Stack gap={4}>
+          <Group justify="space-between" gap="xs" wrap="nowrap">
+            <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
+              <Icon path={mdiLan} size={0.65} />
+              <Text size="xs" fw={800} truncate>
+                {teamLab.label}
+              </Text>
+            </Group>
+            <YinyuStatusPill tone={teamLab.tone} state={node.canHostTeamLab ? 'running' : 'idle'}>
+              TeamLab
+            </YinyuStatusPill>
+          </Group>
+          <Text size="xs" className="yy-readable-text" truncate title={teamLab.detail}>
+            {teamLab.detail}
+          </Text>
+          {(node.teamLabTunnelIp || node.teamLabTunnelLastHandshake || node.teamLabTunnelConfigVersion) && (
+            <Text size="xs" className="yy-readable-text" truncate>
+              {node.teamLabTunnelIp ? `隧道 ${node.teamLabTunnelIp}` : '隧道未配置'} · {teamLabHandshakeText} · v
+              {node.teamLabTunnelConfigVersion ?? 0}
+            </Text>
+          )}
+        </Stack>
 
         <Group grow align="center">
           <RingProgress

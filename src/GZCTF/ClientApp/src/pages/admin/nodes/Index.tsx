@@ -45,6 +45,7 @@ import {
   YinyuStatusTone,
 } from '@Components/yinyu/YinyuUI'
 import { YinyuStatusText } from '@Components/yinyu/YinyuReactBits'
+import { enableTeamLabNetwork } from '@Utils/TeamLabApi'
 
 type StatusFilter = 'all' | 'online' | 'offline' | 'busy' | 'error'
 type ResourceTypeFilter = 'all' | 'container' | 'vm' | 'pentest'
@@ -121,6 +122,25 @@ function portPoolLabel(node: NodeInfo) {
     return '公网转发池：监听端口范围无效'
 
   return '端口池：未配置'
+}
+
+function teamLabStatusLabel(node: NodeInfo) {
+  const status = String(node.teamLabTunnelStatus ?? '').toLowerCase()
+
+  if (node.canHostTeamLab) return '可调度'
+  if (!node.teamLabNetworkEnabled && status !== '2' && status !== 'probing') return '未启用'
+  if (status === '2' || status === 'probing') return '待验证'
+  if (status === '4' || status === 'error') return '异常'
+  return '不可调度'
+}
+
+function teamLabStatusTone(node: NodeInfo): YinyuStatusTone {
+  const status = String(node.teamLabTunnelStatus ?? '').toLowerCase()
+
+  if (node.canHostTeamLab) return 'success'
+  if (status === '2' || status === 'probing') return 'warm'
+  if (status === '4' || status === 'error') return 'danger'
+  return 'neutral'
 }
 
 function AddNodeModal({ opened, onClose, onAdded }: { opened: boolean; onClose: () => void; onAdded: () => void }) {
@@ -435,12 +455,13 @@ function NodeResourcePanel({
 }: {
   node: NodeInfo | null
   version: number
-  onNodeUpdated: () => void
+  onNodeUpdated: () => void | Promise<void>
 }) {
   const [data, setData] = useState<NodeResourceListResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [disabled, setDisabled] = useState(false)
   const [savingLimits, setSavingLimits] = useState(false)
+  const [checkingTeamLab, setCheckingTeamLab] = useState(false)
   const [maxContainers, setMaxContainers] = useState<string | number>(node?.maxContainers ?? 20)
   const [maxVms, setMaxVms] = useState<string | number>(node?.maxVms ?? 5)
   const [type, setType] = useState<ResourceTypeFilter>('all')
@@ -555,6 +576,29 @@ function NodeResourcePanel({
     }
   }
 
+  const checkTeamLabNetwork = async () => {
+    if (!node) return
+
+    setCheckingTeamLab(true)
+    try {
+      const result = await enableTeamLabNetwork(node.id, true)
+      notifications.show({
+        title: 'TeamLab dry-run 检查完成',
+        message: result.message || '节点已完成 TeamLab/VPN 网络 dry-run 探测。',
+        color: result.success === false ? 'yellow' : 'green',
+      })
+      await onNodeUpdated()
+    } catch (err) {
+      notifications.show({
+        title: 'TeamLab dry-run 检查失败',
+        message: err instanceof Error ? err.message : '无法完成节点 TeamLab/VPN 网络探测',
+        color: 'red',
+      })
+    } finally {
+      setCheckingTeamLab(false)
+    }
+  }
+
   if (!node) {
     return (
       <YinyuPanel p="lg" className="admin-panel yy-node-resource-panel" cells={48}>
@@ -627,6 +671,33 @@ function NodeResourcePanel({
                 保存上限
               </Button>
             </Group>
+          </Group>
+        </div>
+
+        <div className="yy-node-schedule-config">
+          <Group justify="space-between" align="center" gap="md" wrap="wrap">
+            <Stack gap={2} style={{ minWidth: 0 }}>
+              <Group gap="xs">
+                <Text fw={800}>TeamLab/VPN 靶场网络</Text>
+                <YinyuStatusText tone={teamLabStatusTone(node)}>{teamLabStatusLabel(node)}</YinyuStatusText>
+              </Group>
+              <Text size="xs" className="yy-readable-text">
+                Phase 0-3 仅提供节点 dry-run 探测和状态记录；生产隧道、队伍 peer 配置和选手 VPN 页面在后续阶段接入。
+              </Text>
+              <Text size="xs" className="yy-readable-text">
+                {node.teamLabTunnelIp ? `隧道地址：${node.teamLabTunnelIp}` : '隧道地址：未配置'}
+                {node.teamLabTunnelLastError ? `；最近提示：${node.teamLabTunnelLastError}` : ''}
+              </Text>
+            </Stack>
+            <Button
+              variant="default"
+              leftSection={<Icon path={mdiShieldSearch} size={0.78} />}
+              loading={checkingTeamLab}
+              disabled={disabled || checkingTeamLab}
+              onClick={checkTeamLabNetwork}
+            >
+              dry-run 检查
+            </Button>
           </Group>
         </div>
 
