@@ -111,6 +111,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TrainingCourseChapterTheoryQuestion> TrainingCourseChapterTheoryQuestions { get; set; } = null!;
     public DbSet<TrainingCourseChapterTheorySheet> TrainingCourseChapterTheorySheets { get; set; } = null!;
     public DbSet<TrainingCourseChapterTheoryAnswer> TrainingCourseChapterTheoryAnswers { get; set; } = null!;
+    public DbSet<TeamLabRuntime> TeamLabRuntimes => Set<TeamLabRuntime>();
+    public DbSet<TeamLabRuntimeNetwork> TeamLabRuntimeNetworks => Set<TeamLabRuntimeNetwork>();
+    public DbSet<TeamLabRuntimeAsset> TeamLabRuntimeAssets => Set<TeamLabRuntimeAsset>();
+    public DbSet<TeamLabVpnPeerRuntime> TeamLabVpnPeerRuntimes => Set<TeamLabVpnPeerRuntime>();
+    public DbSet<TeamLabPublicUdpMapping> TeamLabPublicUdpMappings => Set<TeamLabPublicUdpMapping>();
+    public DbSet<TeamLabEvent> TeamLabEvents => Set<TeamLabEvent>();
 
     private static ValueConverter<T?, string> GetJsonConverter<T>() where T : class, new() =>
         new(
@@ -1772,6 +1778,76 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
             entity.HasOne(e => e.Team)
                 .WithMany()
                 .HasForeignKey(e => e.TeamId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TeamLabRuntime>(entity =>
+        {
+            entity.HasOne(e => e.Game)
+                .WithMany()
+                .HasForeignKey(e => e.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Team)
+                .WithMany()
+                .HasForeignKey(e => e.TeamId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.WorkerNode)
+                .WithMany()
+                .HasForeignKey(e => e.WorkerNodeId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.Property(e => e.Status)
+                .HasConversion<byte>();
+        });
+
+        builder.Entity<TeamLabRuntimeNetwork>(entity =>
+        {
+            entity.HasOne(e => e.Runtime)
+                .WithMany(e => e.Networks)
+                .HasForeignKey(e => e.RuntimeId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TeamLabRuntimeAsset>(entity =>
+        {
+            entity.Property(e => e.Kind)
+                .HasConversion<byte>();
+
+            entity.Property(e => e.Status)
+                .HasConversion<byte>();
+
+            entity.HasOne(e => e.Runtime)
+                .WithMany(e => e.Assets)
+                .HasForeignKey(e => e.RuntimeId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TeamLabVpnPeerRuntime>(entity =>
+        {
+            entity.HasOne(e => e.Runtime)
+                .WithMany(e => e.VpnPeers)
+                .HasForeignKey(e => e.RuntimeId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TeamLabPublicUdpMapping>(entity =>
+        {
+            entity.HasOne(e => e.Runtime)
+                .WithOne(e => e.PublicUdpMapping)
+                .HasForeignKey<TeamLabPublicUdpMapping>(e => e.RuntimeId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TeamLabEvent>(entity =>
+        {
+            entity.Property(e => e.Level)
+                .HasConversion<byte>();
+
+            entity.HasOne(e => e.Runtime)
+                .WithMany(e => e.Events)
+                .HasForeignKey(e => e.RuntimeId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }
