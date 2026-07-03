@@ -39,6 +39,8 @@ internal static class ServicesExtension
             builder.AddConfig<ManagedConfig>();
             builder.AddConfig<ContainerPolicy>();
             builder.AddConfig<ContainerProvider>();
+            builder.AddConfig<TeamLabNetworkConfig>();
+            builder.AddConfig<PublicUdpGatewayConfig>();
             builder.AddConfig<KvmSettings>();
             builder.AddConfig<GuacamoleSettings>();
             builder.AddConfig<DockerRegistrySettings>();

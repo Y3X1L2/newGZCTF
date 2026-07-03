@@ -546,6 +546,44 @@ public class NginxProxyConfig
     public string? SyncToken { get; set; }
 }
 
+public class TeamLabNetworkConfig
+{
+    /// <summary>
+    /// Enables WorkerNode OS network mutation for TeamLab data plane.
+    /// Keep disabled unless an isolated WorkerNode has passed dry-run checks.
+    /// </summary>
+    public bool Enable { get; set; }
+
+    /// <summary>
+    /// Returns command plans without mutating WorkerNode state when true.
+    /// </summary>
+    public bool DryRun { get; set; } = true;
+
+    public string RuntimeNetworkBaseCidr { get; set; } = "10.180.0.0/16";
+    public int TeamSubnetPrefixLength { get; set; } = 24;
+    public int PublicUdpPortStart { get; set; } = 32000;
+    public int PublicUdpPortEnd { get; set; } = 32999;
+    public int WorkerWireGuardPortStart { get; set; } = 42000;
+    public int WorkerWireGuardPortEnd { get; set; } = 42999;
+    public string BridgePrefix { get; set; } = "tl";
+    public string RouterNamespacePrefix { get; set; } = "tlr";
+    public string WireGuardInterfacePrefix { get; set; } = "tlwg";
+}
+
+public class PublicUdpGatewayConfig
+{
+    /// <summary>
+    /// Enables public UDP gateway rule mutation. Disabled by default for Phase 0-3.
+    /// </summary>
+    public bool Enable { get; set; }
+
+    public string Provider { get; set; } = "dry-run";
+    public string PublicEndpoint { get; set; } = string.Empty;
+    public string NftTable { get; set; } = "inet gzctf_teamlab";
+    public string IptablesBinaryPath { get; set; } = "iptables";
+    public string NftBinaryPath { get; set; } = "nft";
+}
+
 public class KubernetesConfig
 {
     public string Namespace { get; set; } = "gzctf-challenges";
