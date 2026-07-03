@@ -259,6 +259,66 @@ public class WeightedSchedulerTests
     }
 
     [Fact]
+    public void SelectOptimalTeamLabNode_RequiresHealthyTeamLabNetworkCapability()
+    {
+        var node = new WorkerNode
+        {
+            Id = Guid.NewGuid(),
+            Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+            Status = NodeStatus.Online,
+            IsLocal = true,
+            IsSchedulable = true,
+            TeamLabNetworkEnabled = false
+        };
+
+        Assert.Null(WeightedScheduler.SelectOptimalTeamLabNode([node]));
+        Assert.Equal("TeamLab network is not enabled", WeightedScheduler.GetTeamLabUnschedulableReason(node));
+
+        node.TeamLabNetworkEnabled = true;
+        node.TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy;
+        node.TeamLabTunnelIp = "10.250.0.10";
+
+        Assert.Equal(node.Id, WeightedScheduler.SelectOptimalTeamLabNode([node])?.Id);
+        Assert.Null(WeightedScheduler.GetTeamLabUnschedulableReason(node));
+    }
+
+    [Fact]
+    public void SelectOptimalTeamLabNode_RejectsUnhealthyTunnel()
+    {
+        var node = new WorkerNode
+        {
+            Id = Guid.NewGuid(),
+            Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+            Status = NodeStatus.Online,
+            IsLocal = true,
+            IsSchedulable = true,
+            TeamLabNetworkEnabled = true,
+            TeamLabTunnelStatus = TeamLabTunnelStatus.Probing
+        };
+
+        Assert.Null(WeightedScheduler.SelectOptimalTeamLabNode([node]));
+        Assert.Equal("TeamLab tunnel is not healthy", WeightedScheduler.GetTeamLabUnschedulableReason(node));
+    }
+
+    [Fact]
+    public void SelectOptimalTeamLabNode_RejectsHealthyTunnelWithoutTunnelIp()
+    {
+        var node = new WorkerNode
+        {
+            Id = Guid.NewGuid(),
+            Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+            Status = NodeStatus.Online,
+            IsLocal = true,
+            IsSchedulable = true,
+            TeamLabNetworkEnabled = true,
+            TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy
+        };
+
+        Assert.Null(WeightedScheduler.SelectOptimalTeamLabNode([node]));
+        Assert.Equal("TeamLab tunnel IP is not configured", WeightedScheduler.GetTeamLabUnschedulableReason(node));
+    }
+
+    [Fact]
     public void ReservedDockerCapacity_RejectsNodeAtConfiguredContainerLimit()
     {
         var node = new WorkerNode

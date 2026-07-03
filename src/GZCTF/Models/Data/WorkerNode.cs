@@ -32,6 +32,12 @@ public class WorkerNode
     public bool IsStorageNode { get; set; }
     public int AgentPort { get; set; } = 5001;
     public int RegistryPort { get; set; } = 5000;
+    public bool TeamLabNetworkEnabled { get; set; }
+    public TeamLabTunnelStatus TeamLabTunnelStatus { get; set; } = TeamLabTunnelStatus.Unknown;
+    [MaxLength(64)] public string? TeamLabTunnelIp { get; set; }
+    public DateTimeOffset? TeamLabTunnelLastHandshake { get; set; }
+    [MaxLength(1024)] public string? TeamLabTunnelLastError { get; set; }
+    public int TeamLabTunnelConfigVersion { get; set; }
 
     [Timestamp] public uint ConcurrencyToken { get; set; }
 
@@ -52,3 +58,4 @@ public class WorkerNode
 [Flags]
 public enum NodeCapability : byte { None = 0, Docker = 1, Kvm = 2 }
 public enum NodeStatus : byte { Unknown = 0, Online = 1, Offline = 2, Busy = 3, Error = 4 }
+public enum TeamLabTunnelStatus : byte { Unknown = 0, Disabled = 1, Probing = 2, Healthy = 3, Error = 4 }

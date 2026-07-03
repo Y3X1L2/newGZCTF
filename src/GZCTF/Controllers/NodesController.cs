@@ -80,6 +80,13 @@ public class NodesController : ControllerBase
             PortPoolMode = portPool.Mode,
             n.LastHeartbeat,
             n.IsSchedulable, n.IsLocal, n.AgentPort,
+            n.TeamLabNetworkEnabled,
+            n.TeamLabTunnelStatus,
+            n.TeamLabTunnelIp,
+            n.TeamLabTunnelLastHandshake,
+            n.TeamLabTunnelLastError,
+            n.TeamLabTunnelConfigVersion,
+            CanHostTeamLab = WeightedScheduler.CanHostTeamLab(n),
             UnschedulableReasons = GetUnschedulableReasons(n),
             UnschedulableByCapability = GetUnschedulableByCapability(n),
             SchedulableCapabilities = GetSchedulableCapabilities(n)
@@ -107,6 +114,13 @@ public class NodesController : ControllerBase
             PortPoolMode = portPool.Mode,
             node.LastHeartbeat,
             node.IsSchedulable, node.IsLocal, node.AgentPort,
+            node.TeamLabNetworkEnabled,
+            node.TeamLabTunnelStatus,
+            node.TeamLabTunnelIp,
+            node.TeamLabTunnelLastHandshake,
+            node.TeamLabTunnelLastError,
+            node.TeamLabTunnelConfigVersion,
+            CanHostTeamLab = WeightedScheduler.CanHostTeamLab(node),
             UnschedulableReasons = GetUnschedulableReasons(node),
             UnschedulableByCapability = GetUnschedulableByCapability(node),
             SchedulableCapabilities = GetSchedulableCapabilities(node)
@@ -587,7 +601,8 @@ public class NodesController : ControllerBase
     static object GetUnschedulableByCapability(WorkerNode node) => new
     {
         Docker = WeightedScheduler.GetUnschedulableReason(node, NodeCapability.Docker),
-        Kvm = WeightedScheduler.GetUnschedulableReason(node, NodeCapability.Kvm)
+        Kvm = WeightedScheduler.GetUnschedulableReason(node, NodeCapability.Kvm),
+        TeamLabNetwork = WeightedScheduler.GetTeamLabUnschedulableReason(node)
     };
 
     static string[] GetSchedulableCapabilities(WorkerNode node) =>
@@ -595,7 +610,8 @@ public class NodesController : ControllerBase
         .. new[]
         {
             WeightedScheduler.CanHost(node, NodeCapability.Docker) ? nameof(NodeCapability.Docker) : null,
-            WeightedScheduler.CanHost(node, NodeCapability.Kvm) ? nameof(NodeCapability.Kvm) : null
+            WeightedScheduler.CanHost(node, NodeCapability.Kvm) ? nameof(NodeCapability.Kvm) : null,
+            WeightedScheduler.CanHostTeamLab(node) ? "TeamLabNetwork" : null
         }.OfType<string>()
     ];
 

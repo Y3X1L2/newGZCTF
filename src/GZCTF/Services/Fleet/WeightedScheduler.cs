@@ -33,8 +33,42 @@ public class WeightedScheduler
         return best.Node;
     }
 
+    public static WorkerNode? SelectOptimalTeamLabNode(IEnumerable<WorkerNode> nodes)
+    {
+        var scored = nodes
+            .Where(CanHostTeamLab)
+            .Select(n => new { Node = n, Score = CalculateScore(n) })
+            .OrderByDescending(x => x.Score)
+            .ToList();
+
+        var best = scored.FirstOrDefault();
+        if (best is null || best.Score < MinimumSchedulableScore) return null;
+        return best.Node;
+    }
+
     internal static bool CanHost(WorkerNode node, NodeCapability required) =>
         GetUnschedulableReason(node, required) is null;
+
+    internal static bool CanHostTeamLab(WorkerNode node) =>
+        GetTeamLabUnschedulableReason(node) is null;
+
+    internal static string? GetTeamLabUnschedulableReason(WorkerNode node)
+    {
+        var baseReason = GetUnschedulableReason(node, NodeCapability.Docker | NodeCapability.Kvm);
+        if (baseReason is not null)
+            return baseReason;
+
+        if (!node.TeamLabNetworkEnabled)
+            return "TeamLab network is not enabled";
+
+        if (node.TeamLabTunnelStatus != TeamLabTunnelStatus.Healthy)
+            return "TeamLab tunnel is not healthy";
+
+        if (string.IsNullOrWhiteSpace(node.TeamLabTunnelIp))
+            return "TeamLab tunnel IP is not configured";
+
+        return null;
+    }
 
     internal static string? GetUnschedulableReason(WorkerNode node, NodeCapability required)
     {
