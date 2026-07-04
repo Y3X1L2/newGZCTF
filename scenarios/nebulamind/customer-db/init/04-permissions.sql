@@ -63,8 +63,13 @@ TO readonly;
 REVOKE ALL ON internal_exports FROM readonly;
 REVOKE ALL ON regulated_model_training_records FROM readonly;
 
+-- 撤销 PUBLIC 对 SECURITY DEFINER 函数的默认 EXECUTE 权限
+-- PostgreSQL 默认将函数 EXECUTE 授予 PUBLIC，不撤销则任何角色均可调用
+REVOKE EXECUTE ON FUNCTION export_internal_data(text) FROM PUBLIC;
+
 -- F2 漏洞：错误地将 SECURITY DEFINER 函数的 EXECUTE 授予 readonly
 -- readonly 虽不能直接 SELECT internal_exports，但可通过函数读取其数据
+-- （仅 readonly 被错误授权，其他低权限角色无此权限）
 GRANT EXECUTE ON FUNCTION export_internal_data(text) TO readonly;
 
 -- ============ app_user 权限：常规业务表读写 + 受监管记录访问 ============

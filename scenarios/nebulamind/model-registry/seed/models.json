@@ -328,7 +328,15 @@
               "audit_record_id": 6,
               "audit_field": "compliance_audit",
               "review_date": "2026-06-17T05:00:00+08:00",
-              "note": "Compliance audit completed. The training log is in object storage at __NM_OBJECT_STORE_URL__/public-model-artifacts/training-logs/recommendation-v4-private-train.log, and the final audit record is in the customer database."
+              "note": "Compliance audit completed. The training log is in object storage at __NM_OBJECT_STORE_URL__/public-model-artifacts/training-logs/recommendation-v4-private-train.log, and the final audit record is in the customer database.",
+              "supply_chain_audit": {
+                "audit_id": "audit-2026-013",
+                "description": "Final model supply chain audit. Requires correlating manifest (this field) + training log (audit-2026-013 section) + customer-db regulated_model_training_records id=13.",
+                "audit_record_location": "postgresql://__NM_CUSTOMER_DB_HOST__:5432/nebulamind/regulated_model_training_records?id=13",
+                "audit_record_id": 13,
+                "audit_field": "compliance_audit",
+                "required_clues": ["manifest.supply_chain_audit", "training_log.supply_chain_audit_section", "customer_db.regulated_model_training_records.id=13"]
+              }
             },
             "flag": "__NM_FLAG_G2__",
             "signature": {

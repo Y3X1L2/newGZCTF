@@ -14,6 +14,7 @@ public class KvmService
     private readonly ILogger<KvmService> _logger;
 
     private static readonly Regex SafeNamePattern = new(@"^[a-zA-Z0-9_\-]+$", RegexOptions.Compiled);
+    private static readonly Regex SafeMacPattern = new(@"^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$", RegexOptions.Compiled);
     private static readonly ConcurrentDictionary<string, RdpProxy> RdpProxies = new();
     private const int RdpProxyPortStart = 46000;
     private const int RdpProxyPortCount = 10000;
@@ -48,7 +49,7 @@ public class KvmService
         await RunCommandAsync(
             $"virt-install --name {ShellEscape(request.VmName)} --memory {request.Memory} --vcpus {request.Cpu} " +
             $"--disk path={ShellEscape(vmPath)} --osinfo detect=on,require=off --import --noautoconsole " +
-            "--network network=default,model=e1000e --graphics vnc,listen=0.0.0.0", token);
+            $"{BuildVirtInstallNetworkArguments(request)} --graphics vnc,listen=0.0.0.0", token);
 
         var state = (await RunCommandAsync($"virsh domstate {ShellEscape(request.VmName)}", token)).Trim();
         if (!state.Equals("running", StringComparison.OrdinalIgnoreCase))
@@ -58,7 +59,8 @@ public class KvmService
         {
             VmName = request.VmName,
             Status = "Running",
-            VncAddress = await GetVncAddressAsync(request.VmName, token)
+            VncAddress = await GetVncAddressAsync(request.VmName, token),
+            Interfaces = request.Interfaces
         };
     }
 
@@ -93,7 +95,8 @@ public class KvmService
         }
     }
 
-    public async Task<string?> GetIpAddressAsync(string vmName, CancellationToken token)
+    public async Task<string?> GetIpAddressAsync(string vmName, CancellationToken token,
+        IReadOnlyList<VmNetworkInterfaceRequest>? interfaces = null)
     {
         if (!SafeNamePattern.IsMatch(vmName))
             return null;
@@ -109,6 +112,25 @@ public class KvmService
         ip = ParseFirstNonLoopbackIp(result);
         if (ip is not null)
             return ip;
+
+        if (interfaces is { Count: > 0 })
+        {
+            foreach (var iface in interfaces.Where(i =>
+                         !string.IsNullOrWhiteSpace(i.BridgeName) &&
+                         !string.IsNullOrWhiteSpace(i.MacAddress)))
+            {
+                if (!SafeNamePattern.IsMatch(iface.BridgeName) || !SafeMacPattern.IsMatch(iface.MacAddress!))
+                    continue;
+
+                var bridgeNeighbours = await RunCommandAsync($"ip neigh show dev {ShellEscape(iface.BridgeName)} 2>/dev/null",
+                    token, throwOnError: false);
+                ip = ParseIpFromNeighborTable(bridgeNeighbours, iface.MacAddress!);
+                if (ip is not null)
+                    return ip;
+            }
+
+            return null;
+        }
 
         var macResult = await RunCommandAsync($"virsh domiflist {ShellEscape(vmName)} 2>/dev/null",
             token, throwOnError: false);
@@ -184,6 +206,41 @@ public class KvmService
     }
 
     private static string ShellEscape(string arg) => $"'{arg.Replace("'", "'\\''")}'";
+
+    internal static string BuildVirtInstallNetworkArguments(CreateVmRequest request)
+    {
+        if (request.Interfaces.Count == 0)
+            return "--network network=default,model=e1000e";
+
+        return string.Join(' ', request.Interfaces.Select(BuildVirtInstallNetworkArgument));
+    }
+
+    internal static string[] BuildTeamLabVmIpProbeCommands(CreateVmRequest request) =>
+        request.Interfaces
+            .Where(i => !string.IsNullOrWhiteSpace(i.BridgeName) && !string.IsNullOrWhiteSpace(i.MacAddress))
+            .Select(i => $"ip neigh show dev {i.BridgeName} 2>/dev/null")
+            .ToArray();
+
+    private static string BuildVirtInstallNetworkArgument(VmNetworkInterfaceRequest iface)
+    {
+        if (!SafeNamePattern.IsMatch(iface.BridgeName))
+            throw new ArgumentException("Invalid VM bridge name.", nameof(iface.BridgeName));
+
+        var model = string.IsNullOrWhiteSpace(iface.Model) ? "e1000e" : iface.Model.Trim();
+        if (!SafeNamePattern.IsMatch(model))
+            throw new ArgumentException("Invalid VM network model.", nameof(iface.Model));
+
+        var mac = string.Empty;
+        if (!string.IsNullOrWhiteSpace(iface.MacAddress))
+        {
+            if (!SafeMacPattern.IsMatch(iface.MacAddress))
+                throw new ArgumentException("Invalid VM MAC address.", nameof(iface.MacAddress));
+
+            mac = $",mac={iface.MacAddress.ToLowerInvariant()}";
+        }
+
+        return $"--network bridge={iface.BridgeName},model={model}{mac}";
+    }
 
     private async Task<string> RunCommandAsync(string cmd, CancellationToken token, bool throwOnError = true)
     {

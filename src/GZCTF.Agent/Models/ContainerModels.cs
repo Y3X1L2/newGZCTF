@@ -24,6 +24,7 @@ public class CreateContainerRequest
     public string? StartCommand { get; set; }
     public string? HealthCheck { get; set; }
     public bool UsePenetrationFabric { get; set; }
+    public bool UseHostNetworkNone { get; set; }
     public bool EnableNetworkAdmin { get; set; }
     public bool RemoveDefaultRoute { get; set; }
     public bool EnableIpForwarding { get; set; }

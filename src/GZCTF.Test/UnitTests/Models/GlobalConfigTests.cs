@@ -5,6 +5,14 @@ namespace GZCTF.Test.UnitTests.Models;
 
 public class GlobalConfigTests
 {
+    [Fact]
+    public void TeamLabNetworkConfig_DefaultsToRealDeploymentRequests()
+    {
+        var config = new TeamLabNetworkConfig();
+
+        Assert.False(config.DryRun);
+    }
+
     [Theory]
     [InlineData(null, "YINYU")]
     [InlineData("", "YINYU")]

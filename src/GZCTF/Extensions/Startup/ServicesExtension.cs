@@ -124,7 +124,6 @@ internal static class ServicesExtension
 
             builder.Services.AddScoped<GamePhaseService>();
             builder.Services.AddScoped<TheoryExamService>();
-            builder.Services.AddScoped<PenetrationAttackGraphService>();
             builder.Services.AddScoped<PenetrationService>();
             builder.Services.AddHostedService<PenetrationCleanupService>();
 
@@ -160,6 +159,7 @@ internal static class ServicesExtension
             builder.Services.AddSingleton<GuacamoleService>();
             builder.Services.AddHostedService<VmReadyService>();
             builder.Services.AddScoped<NodeTunnelService>();
+            builder.Services.AddScoped<TeamLabWireGuardService>();
             builder.Services.AddScoped<IPublicUdpGatewayProvider, PublicUdpGatewayProvider>();
             builder.Services.AddScoped<TeamLabPlanService>();
             builder.Services.AddScoped<TeamLabDeploymentService>();

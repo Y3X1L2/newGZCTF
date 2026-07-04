@@ -67,6 +67,22 @@ Redis 的职责是端口池分配和分布式协调；Nginx 的职责是 TCP str
 `gzctf-public-gateway-sync.service` 定时请求主服务
 `/api/internal/port-map` 并刷新公网 Nginx stream 配置。
 
+TeamLab / WireGuard 多级网段环境不走这个 TCP Nginx stream 端口池。它使用独立的 UDP 映射事实源：
+
+```text
+GET /api/internal/teamlab-udp-map
+Authorization: Bearer <ContainerProvider:NginxProxyConfig:SyncToken>
+```
+
+该接口返回当前已开放给选手的 TeamLab WireGuard UDP 映射，包括 `publicUdpPort`、
+`workerTunnelIp`、`workerWireGuardPort`、`runtimeId`、`gameId`、`teamId`、`workerNodeId`、
+`ruleVersion`、`isSynced` 和 `lastSyncError`。公网薄网关应以该接口作为 UDP 规则同步的事实源，
+但不得把它和普通 Docker TCP `/api/internal/port-map` 混用。
+
+当前平台部署链路仍会通过 `PublicUdpGatewayConfig` 执行本机 `iptables` / `nftables`
+同步并在成功后开放 TeamLab runtime。生产双机公网网关模式必须额外部署外部 UDP 同步脚本，
+由公网服务器拉取 `/api/internal/teamlab-udp-map` 后应用 UDP DNAT / MASQUERADE 规则，并做规则漂移检查。
+
 公网同步脚本必须携带：
 
 ```bash

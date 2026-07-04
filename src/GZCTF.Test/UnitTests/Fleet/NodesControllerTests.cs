@@ -232,6 +232,27 @@ public class NodesControllerTests
     }
 
     [Fact]
+    public void BuildAgentConfigJson_IncludesTeamLabNetworkMutationConfig()
+    {
+        var node = new WorkerNode
+        {
+            Id = Guid.Parse("2e361192-0b30-4244-ad7c-fa7947ea8f41"),
+            AuthToken = "token",
+            AgentPort = 5101
+        };
+
+        var json = NodeDeployService.BuildAgentConfigJson(
+            "http://server:18082/",
+            node,
+            teamLabEnable: true,
+            teamLabDryRun: false);
+
+        Assert.Contains("\"TeamLab\"", json);
+        Assert.Contains("\"Enable\": true", json);
+        Assert.Contains("\"DryRun\": false", json);
+    }
+
+    [Fact]
     public void BuildAgentServiceContent_ConfiguresDotnetRoot()
     {
         var content = NodeDeployService.BuildAgentServiceContent("/usr/local/share/dotnet");

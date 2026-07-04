@@ -1,3 +1,4 @@
+using System.Globalization;
 using GZCTF.Models.Data;
 using GZCTF.Services.Fleet;
 
@@ -19,7 +20,7 @@ public class NodeTunnelService(AgentClient agentClient, AppDbContext context, IL
         node.TeamLabTunnelStatus = status.Available ? TeamLabTunnelStatus.Probing : TeamLabTunnelStatus.Error;
         await context.SaveChangesAsync(token);
 
-        return new TeamLabNodeProbeResult(status.Available, status.Message ?? "TeamLab dry-run probe completed.", status);
+        return new TeamLabNodeProbeResult(status.Available, status.Message ?? "TeamLab network probe completed.", status);
     }
 
     public async Task<TeamLabNodeEnableResult> EnableDryRunAsync(WorkerNode node, CancellationToken token)
@@ -28,25 +29,31 @@ public class NodeTunnelService(AgentClient agentClient, AppDbContext context, IL
         if (!probe.Success)
             return new TeamLabNodeEnableResult(false, probe.Message, []);
 
-        node.TeamLabNetworkEnabled = false;
-        node.TeamLabTunnelStatus = TeamLabTunnelStatus.Probing;
-        node.TeamLabTunnelLastError = "Dry-run only. Mark healthy with a tunnel IP after infrastructure WireGuard is validated.";
+        ApplyDryRunProbeResult(node);
         await context.SaveChangesAsync(token);
 
-        return new TeamLabNodeEnableResult(true, node.TeamLabTunnelLastError, []);
+        return new TeamLabNodeEnableResult(true,
+            node.TeamLabNetworkEnabled
+                ? "TeamLab network components are healthy; scheduling remains enabled."
+                : node.TeamLabTunnelLastError ?? "TeamLab network probe completed.",
+            []);
     }
 
     public async Task<TeamLabNodeEnableResult> MarkHealthyAsync(WorkerNode node, string tunnelIp, CancellationToken token)
     {
-        if (string.IsNullOrWhiteSpace(tunnelIp))
+        var normalizedTunnelIp = tunnelIp.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedTunnelIp))
             return new TeamLabNodeEnableResult(false, "Tunnel IP is required before enabling TeamLab scheduling.", []);
+
+        if (!IsValidIpv4Address(normalizedTunnelIp))
+            return new TeamLabNodeEnableResult(false, "Tunnel IP must be a valid IPv4 address.", []);
 
         var probe = await ProbeNodeAsync(node, token);
         if (!probe.Success)
             return new TeamLabNodeEnableResult(false, probe.Message, []);
 
         node.TeamLabNetworkEnabled = true;
-        node.TeamLabTunnelIp = tunnelIp.Trim();
+        node.TeamLabTunnelIp = normalizedTunnelIp;
         node.TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy;
         node.TeamLabTunnelLastError = null;
         node.TeamLabTunnelConfigVersion++;
@@ -55,5 +62,29 @@ public class NodeTunnelService(AgentClient agentClient, AppDbContext context, IL
         logger.LogInformation("WorkerNode {NodeId} marked healthy for TeamLab scheduling with tunnel IP {TunnelIp}.",
             node.Id, node.TeamLabTunnelIp);
         return new TeamLabNodeEnableResult(true, "TeamLabNetwork scheduling enabled for this node.", []);
+    }
+
+    private static bool IsValidIpv4Address(string value)
+    {
+        var parts = value.Split('.');
+        return parts.Length == 4 && parts.All(part =>
+            part.Length > 0 &&
+            int.TryParse(part, NumberStyles.None, CultureInfo.InvariantCulture, out var octet) &&
+            octet is >= 0 and <= 255);
+    }
+
+    internal static void ApplyDryRunProbeResult(WorkerNode node)
+    {
+        if (node.TeamLabNetworkEnabled && node.TeamLabTunnelStatus == TeamLabTunnelStatus.Healthy &&
+            !string.IsNullOrWhiteSpace(node.TeamLabTunnelIp))
+        {
+            node.TeamLabTunnelLastError = null;
+            return;
+        }
+
+        node.TeamLabNetworkEnabled = false;
+        node.TeamLabTunnelStatus = TeamLabTunnelStatus.Probing;
+        node.TeamLabTunnelLastError =
+            "Network components are detected. Configure a tunnel IP before enabling TeamLab scheduling.";
     }
 }

@@ -1,7 +1,9 @@
 using GZCTF.Models.Internal;
+using GZCTF.Models.Data;
 using GZCTF.Repositories.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System.Net.Http.Headers;
 using System.Net.Mime;
@@ -19,15 +21,18 @@ namespace GZCTF.Controllers;
 public class InternalController : ControllerBase
 {
     private readonly IContainerRepository _containerRepository;
+    private readonly AppDbContext _context;
     private readonly ContainerProvider _containerProvider;
     private readonly ILogger<InternalController> _logger;
 
     public InternalController(
         IContainerRepository containerRepository,
+        AppDbContext context,
         IOptions<ContainerProvider> containerProvider,
         ILogger<InternalController> logger)
     {
         _containerRepository = containerRepository;
+        _context = context;
         _containerProvider = containerProvider.Value;
         _logger = logger;
     }
@@ -49,6 +54,47 @@ public class InternalController : ControllerBase
         var mappings = await _containerRepository.GetProxyPortMappingsAsync(token);
         return Ok(mappings);
     }
+
+    /// <summary>
+    /// Get active TeamLab WireGuard UDP mappings for a public UDP gateway.
+    /// </summary>
+    [HttpGet("teamlab-udp-map")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetTeamLabUdpMap(CancellationToken token)
+    {
+        if (!await IsAuthorizedSyncRequest())
+        {
+            _logger.LogWarning("Rejected unauthorized internal TeamLab UDP map request from {RemoteIp}",
+                HttpContext.Connection.RemoteIpAddress);
+            return Unauthorized(new RequestResponse("Invalid internal sync token", StatusCodes.Status401Unauthorized));
+        }
+
+        var mappings = await BuildTeamLabUdpMappings(_context.TeamLabPublicUdpMappings
+                .AsNoTracking()
+                .Include(m => m.Runtime))
+            .ToArrayAsync(token);
+
+        return Ok(mappings);
+    }
+
+    internal static IQueryable<TeamLabUdpMappingEntry> BuildTeamLabUdpMappings(
+        IQueryable<TeamLabPublicUdpMapping> mappings) =>
+        mappings
+            .Where(m => m.Runtime.Status == TeamLabRuntimeStatus.Running
+                        && m.Runtime.IsOpenToPlayers
+                        && m.Runtime.WorkerNodeId != null)
+            .OrderBy(m => m.PublicUdpPort)
+            .Select(m => new TeamLabUdpMappingEntry(
+                m.PublicUdpPort,
+                m.WorkerTunnelIp,
+                m.WorkerWireGuardPort,
+                m.RuntimeId,
+                m.Runtime.GameId,
+                m.Runtime.TeamId,
+                m.Runtime.WorkerNodeId!.Value,
+                m.RuleVersion,
+                m.IsSynced,
+                m.LastSyncError));
 
     async Task<bool> IsAuthorizedSyncRequest()
     {

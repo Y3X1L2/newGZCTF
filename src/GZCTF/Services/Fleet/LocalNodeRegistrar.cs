@@ -24,17 +24,12 @@ public class LocalNodeRegistrar : IHostedService
         if (string.IsNullOrWhiteSpace(hostAddress))
             hostAddress = publicEntry;
         var capabilities = await DetectLocalCapabilitiesAsync(token);
-        var localSchedulable = _config.GetValue("Agent:LocalNodeSchedulable", false);
+        var localSchedulable = GetOptionalBool(_config, "Agent:LocalNodeSchedulable");
         var localNode = await context.WorkerNodes.FirstOrDefaultAsync(n => n.IsLocal, token);
 
         if (localNode is not null)
         {
-            localNode.HostAddress = hostAddress;
-            localNode.Capabilities = capabilities;
-            localNode.IsSchedulable = localSchedulable;
-            localNode.Status = NodeStatus.Online;
-            localNode.LastHeartbeat = DateTimeOffset.UtcNow;
-            localNode.IsStorageNode = false;
+            ApplyLocalNodeRefresh(localNode, hostAddress, capabilities, localSchedulable, DateTimeOffset.UtcNow);
             await context.SaveChangesAsync(token);
             await ConfigureRegistryTrustAsync(scope.ServiceProvider, capabilities, token);
             _logger.LogInformation("Refreshed local server node: {Id}, capabilities={Capabilities}",
@@ -50,7 +45,7 @@ public class LocalNodeRegistrar : IHostedService
             Capabilities = capabilities,
             IsLocal = true,
             IsStorageNode = false,
-            IsSchedulable = localSchedulable,
+            IsSchedulable = localSchedulable ?? false,
             Status = NodeStatus.Online,
             LastHeartbeat = DateTimeOffset.UtcNow,
         };
@@ -63,6 +58,27 @@ public class LocalNodeRegistrar : IHostedService
     }
 
     public Task StopAsync(CancellationToken token) => Task.CompletedTask;
+
+    internal static void ApplyLocalNodeRefresh(WorkerNode localNode, string hostAddress,
+        NodeCapability capabilities, bool? localSchedulableOverride, DateTimeOffset utcNow)
+    {
+        localNode.HostAddress = hostAddress;
+        localNode.Capabilities = capabilities;
+        if (localSchedulableOverride.HasValue)
+            localNode.IsSchedulable = localSchedulableOverride.Value;
+        localNode.Status = NodeStatus.Online;
+        localNode.LastHeartbeat = utcNow;
+        localNode.IsStorageNode = false;
+    }
+
+    static bool? GetOptionalBool(IConfiguration config, string key)
+    {
+        var value = config[key];
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        return bool.TryParse(value, out var parsed) ? parsed : null;
+    }
 
     private async Task<NodeCapability> DetectLocalCapabilitiesAsync(CancellationToken token)
     {

@@ -12,7 +12,9 @@ public class TeamLabStateMachineTests
     [InlineData(TeamLabRuntimeStatus.Scheduled, TeamLabRuntimeStatus.Deploying)]
     [InlineData(TeamLabRuntimeStatus.Deploying, TeamLabRuntimeStatus.Probing)]
     [InlineData(TeamLabRuntimeStatus.Probing, TeamLabRuntimeStatus.Running)]
+    [InlineData(TeamLabRuntimeStatus.Scheduled, TeamLabRuntimeStatus.Destroying)]
     [InlineData(TeamLabRuntimeStatus.Running, TeamLabRuntimeStatus.Destroying)]
+    [InlineData(TeamLabRuntimeStatus.Stopped, TeamLabRuntimeStatus.Destroying)]
     [InlineData(TeamLabRuntimeStatus.Destroying, TeamLabRuntimeStatus.Destroyed)]
     public void CanTransition_AllowsExpectedRuntimePath(
         TeamLabRuntimeStatus from,

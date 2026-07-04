@@ -462,8 +462,10 @@ function NodeResourcePanel({
   const [disabled, setDisabled] = useState(false)
   const [savingLimits, setSavingLimits] = useState(false)
   const [checkingTeamLab, setCheckingTeamLab] = useState(false)
+  const [enablingTeamLab, setEnablingTeamLab] = useState(false)
   const [maxContainers, setMaxContainers] = useState<string | number>(node?.maxContainers ?? 20)
   const [maxVms, setMaxVms] = useState<string | number>(node?.maxVms ?? 5)
+  const [teamLabTunnelIp, setTeamLabTunnelIp] = useState(node?.teamLabTunnelIp ?? '')
   const [type, setType] = useState<ResourceTypeFilter>('all')
   const [status, setStatus] = useState<ResourceStatusFilter>('all')
   const [page, setPage] = useState(1)
@@ -497,7 +499,8 @@ function NodeResourcePanel({
   useEffect(() => {
     setMaxContainers(node?.maxContainers ?? 20)
     setMaxVms(node?.maxVms ?? 5)
-  }, [node?.id, node?.maxContainers, node?.maxVms])
+    setTeamLabTunnelIp(node?.teamLabTunnelIp ?? '')
+  }, [node?.id, node?.maxContainers, node?.maxVms, node?.teamLabTunnelIp])
 
   useEffect(() => {
     loadResources()
@@ -583,19 +586,52 @@ function NodeResourcePanel({
     try {
       const result = await enableTeamLabNetwork(node.id, true)
       notifications.show({
-        title: 'TeamLab dry-run 检查完成',
-        message: result.message || '节点已完成 TeamLab/VPN 网络 dry-run 探测。',
+        title: 'TeamLab 网络检查完成',
+        message: result.message || '节点已完成 TeamLab/VPN 网络检查。',
         color: result.success === false ? 'yellow' : 'green',
       })
       await onNodeUpdated()
     } catch (err) {
       notifications.show({
-        title: 'TeamLab dry-run 检查失败',
+        title: 'TeamLab 网络检查失败',
         message: err instanceof Error ? err.message : '无法完成节点 TeamLab/VPN 网络探测',
         color: 'red',
       })
     } finally {
       setCheckingTeamLab(false)
+    }
+  }
+
+  const enableTeamLabScheduling = async () => {
+    if (!node) return
+
+    const tunnelIp = teamLabTunnelIp.trim()
+    if (!/^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/.test(tunnelIp)) {
+      notifications.show({
+        title: '启用失败',
+        message: '请填写节点基础设施隧道的 IPv4 地址。',
+        color: 'red',
+      })
+      return
+    }
+
+    setEnablingTeamLab(true)
+    try {
+      const result = await enableTeamLabNetwork(node.id, false, tunnelIp)
+      notifications.show({
+        title: 'TeamLab 调度已启用',
+        message: result.message || '该节点已加入 VPN 靶场网络调度池。',
+        color: 'green',
+      })
+      await onNodeUpdated()
+    } catch (err) {
+      notifications.show({
+        title: 'TeamLab 调度启用失败',
+        message: err instanceof Error ? err.message : '无法启用节点 TeamLab/VPN 调度',
+        color: 'red',
+      })
+    } finally {
+      setEnablingTeamLab(false)
     }
   }
 
@@ -675,29 +711,43 @@ function NodeResourcePanel({
         </div>
 
         <div className="yy-node-schedule-config">
-          <Group justify="space-between" align="center" gap="md" wrap="wrap">
+          <Group justify="space-between" align="end" gap="md" wrap="wrap">
             <Stack gap={2} style={{ minWidth: 0 }}>
               <Group gap="xs">
                 <Text fw={800}>TeamLab/VPN 靶场网络</Text>
                 <YinyuStatusText tone={teamLabStatusTone(node)}>{teamLabStatusLabel(node)}</YinyuStatusText>
               </Group>
               <Text size="xs" className="yy-readable-text">
-                Phase 0-3 仅提供节点 dry-run 探测和状态记录；生产隧道、队伍 peer 配置和选手 VPN 页面在后续阶段接入。
-              </Text>
-              <Text size="xs" className="yy-readable-text">
                 {node.teamLabTunnelIp ? `隧道地址：${node.teamLabTunnelIp}` : '隧道地址：未配置'}
                 {node.teamLabTunnelLastError ? `；最近提示：${node.teamLabTunnelLastError}` : ''}
               </Text>
             </Stack>
-            <Button
-              variant="default"
-              leftSection={<Icon path={mdiShieldSearch} size={0.78} />}
-              loading={checkingTeamLab}
-              disabled={disabled || checkingTeamLab}
-              onClick={checkTeamLabNetwork}
-            >
-              dry-run 检查
-            </Button>
+            <Group align="end" gap="sm" wrap="wrap">
+              <TextInput
+                label="隧道 IPv4"
+                value={teamLabTunnelIp}
+                onChange={(event) => setTeamLabTunnelIp(event.currentTarget.value)}
+                placeholder="10.250.0.10"
+                w={170}
+              />
+              <Button
+                variant="default"
+                leftSection={<Icon path={mdiShieldSearch} size={0.78} />}
+                loading={checkingTeamLab}
+                disabled={disabled || checkingTeamLab || enablingTeamLab}
+                onClick={checkTeamLabNetwork}
+              >
+                检查网络
+              </Button>
+              <Button
+                leftSection={<Icon path={mdiCheckboxMarkedCircleOutline} size={0.78} />}
+                loading={enablingTeamLab}
+                disabled={disabled || checkingTeamLab || enablingTeamLab}
+                onClick={enableTeamLabScheduling}
+              >
+                启用调度
+              </Button>
+            </Group>
           </Group>
         </div>
 

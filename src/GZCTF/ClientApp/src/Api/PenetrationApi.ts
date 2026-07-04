@@ -289,39 +289,10 @@ export interface PenetrationWorkspaceModel {
   gameId: number
   teamId: number
   teamName: string
-  targetHost: string
   status: PenetrationRuntimeStatus
   resetCount: number
   maxResetCount: number
-  entryPoints: PenetrationEntryPointModel[]
-  networks: PenetrationWorkspaceNetworkModel[]
   nodes: PenetrationWorkspaceNodeModel[]
-  policies: PenetrationWorkspacePolicyModel[]
-  attackGraph: PenetrationAttackGraphModel
-}
-
-export interface PenetrationWorkspaceNetworkModel {
-  id: number
-  name: string
-  slug: string
-  zoneType: PenetrationZoneType
-  trustLevel: number
-  orderIndex: number
-  isEntry: boolean
-  cidr?: string | null
-  positionX: number
-  positionY: number
-  width: number
-  height: number
-}
-
-export interface PenetrationWorkspacePolicyModel {
-  id: number
-  label: string
-  sourceNodeId: number
-  targetNodeId: number
-  protocol: PenetrationProtocol
-  portRange: string
 }
 
 export interface PenetrationTeamEnvironmentModel {
@@ -417,14 +388,6 @@ export interface PenetrationAdminAccessModel {
   exposePort: number
 }
 
-export interface PenetrationEntryPointModel {
-  nodeId: number
-  nodeName: string
-  host: string
-  port: number
-  exposePort: number
-}
-
 export interface PenetrationWorkspaceNodeModel {
   id: number
   networkId: number
@@ -432,13 +395,7 @@ export interface PenetrationWorkspaceNodeModel {
   name: string
   description?: string | null
   nodeType: PenetrationNodeType
-  ipAddress?: string | null
-  isEntry: boolean
-  fogState: PenetrationFogState
   runtimeStatus: PenetrationRuntimeStatus
-  positionX: number
-  positionY: number
-  interfaces: PenetrationInterfaceModel[]
   scoreItems: PenetrationWorkspaceScoreItemModel[]
 }
 
@@ -457,75 +414,16 @@ export interface PenetrationWorkspaceScoreItemModel {
   prerequisiteItemKeys: string[]
 }
 
-export enum PenetrationFogState {
-  Hidden = 'Hidden',
-  Revealed = 'Revealed',
-  Accessible = 'Accessible',
-  Completed = 'Completed',
-}
-
-export interface PenetrationAttackGraphModel {
-  gameId: number
-  teamId: number
-  publishedVersion: number
-  totalNodeCount: number
-  visibleNodeCount: number
-  completedNodeCount: number
-  totalScoreItemCount: number
-  solvedScoreItemCount: number
-  nodes: PenetrationAttackNodeModel[]
-  edges: PenetrationAttackEdgeModel[]
-}
-
-export interface PenetrationAttackNodeModel {
-  id: number
-  topologyKey: string
-  displayName: string
-  description?: string | null
-  depth: number
-  status: PenetrationFogState
-  scoreSummary: PenetrationAttackScoreSummaryModel
-  positionX: number
-  positionY: number
-  isEntry: boolean
-  isCheckpointCompleted: boolean
-  runtimeStatus: PenetrationRuntimeStatus
-}
-
-export interface PenetrationAttackScoreSummaryModel {
-  total: number
-  solved: number
-  checkpointTotal: number
-  checkpointSolved: number
-  totalScore: number
-  solvedScore: number
-}
-
-export interface PenetrationAttackEdgeModel {
-  id: number
-  sourceNodeKey: string
-  targetNodeKey: string
-  status: PenetrationFogState
-  label: string
-}
-
 export interface PenetrationSubmitResultModel {
   accepted: boolean
   score: number
   message: string
-  attackGraphChanged: boolean
-  unlockedNodeCount: number
 }
 
-export interface PenetrationAttackGraphUpdateModel {
+export interface PenetrationWorkspaceUpdateModel {
   gameId: number
   teamId: number
   publishedVersion: number
-  accepted: boolean
-  graphChanged: boolean
-  completedNodeCount: number
-  visibleNodeCount: number
-  unlockedNodeCount: number
   time: number
 }
 
@@ -549,6 +447,18 @@ export interface PenetrationSubmissionLogModel {
   category: string
   score: number
   status: AnswerResult
+}
+
+export interface TeamLabVpnConfigModel {
+  gameId: number
+  teamId: number
+  teamName: string
+  endpoint: string
+  clientAddress: string
+  allowedIPs: string
+  dns: string
+  configVersion: number
+  configText: string
 }
 
 export interface PenetrationArrayResponse<T> {
@@ -710,9 +620,9 @@ export const penetrationPlayerApi = {
       format: 'json',
       ...params,
     }),
-  getAttackGraph: (gameId: number, params: RequestParams = {}) =>
-    request<PenetrationAttackGraphModel, RequestResponse>({
-      path: `/api/pentest/games/${gameId}/attack-graph`,
+  getTeamLabVpnConfig: (gameId: number, params: RequestParams = {}) =>
+    request<TeamLabVpnConfigModel, RequestResponse>({
+      path: `/api/pentest/games/${gameId}/teamlab/vpn-config`,
       method: 'GET',
       format: 'json',
       ...params,

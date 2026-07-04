@@ -138,7 +138,7 @@ redis.call('SET', 'task:result:task_001', cjson.encode({
         source = "portal-upload",
         tenantId = "nm-tenant-001"
     },
-    timestamp = 1718781175000
+    timestamp = 1781851175000
 }))
 
 -- task_002: OCR 任务完成
@@ -163,7 +163,7 @@ redis.call('SET', 'task:result:task_002', cjson.encode({
         source = "portal-upload",
         tenantId = "nm-tenant-002"
     },
-    timestamp = 1718781502000
+    timestamp = 1781851502000
 }))
 
 -- task_003: 旧任务（debug 模式），metadata 中包含 D1 Flag
@@ -202,7 +202,7 @@ redis.call('SET', 'task:result:task_003', cjson.encode({
             traceId = "trace-003-debug-20260615"
         }
     },
-    timestamp = 1718456591000
+    timestamp = 1781526591000
 }))
 
 -- task_004: 失败的文档转换任务
@@ -222,7 +222,7 @@ redis.call('SET', 'task:result:task_004', cjson.encode({
         retries = 3,
         lastError = "convert process killed: signal SIGTERM"
     },
-    timestamp = 1718766312000
+    timestamp = 1781839512000
 }))
 
 -- task_005: 完成的文档摘要任务
@@ -247,7 +247,7 @@ redis.call('SET', 'task:result:task_005', cjson.encode({
         source = "portal-upload",
         tenantId = "nm-tenant-001"
     },
-    timestamp = 1718775728000
+    timestamp = 1781848928000
 }))
 
 -- ============================================================

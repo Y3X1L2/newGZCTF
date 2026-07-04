@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Models.Data;
 using GZCTF.Services.Fleet;
+using GZCTF.Services.TeamLab;
 using Xunit;
 
 namespace GZCTF.Test.UnitTests.Fleet;
@@ -63,6 +64,82 @@ public class WorkerNodeTests
         var status = node.GetEffectiveStatus(DateTimeOffset.UtcNow);
 
         Assert.Equal(NodeStatus.Online, status);
+    }
+
+    [Fact]
+    public void ApplyLocalNodeRefresh_PreservesOperatorScheduling_WhenConfigIsUnset()
+    {
+        var node = new WorkerNode
+        {
+            IsLocal = true,
+            IsSchedulable = true,
+            HostAddress = "old-host",
+            Capabilities = NodeCapability.Docker
+        };
+
+        LocalNodeRegistrar.ApplyLocalNodeRefresh(
+            node,
+            "10.24.0.27",
+            NodeCapability.Docker | NodeCapability.Kvm,
+            localSchedulableOverride: null,
+            DateTimeOffset.Parse("2026-07-04T08:00:00Z"));
+
+        Assert.True(node.IsSchedulable);
+        Assert.Equal("10.24.0.27", node.HostAddress);
+        Assert.Equal(NodeCapability.Docker | NodeCapability.Kvm, node.Capabilities);
+        Assert.Equal(NodeStatus.Online, node.Status);
+    }
+
+    [Fact]
+    public void ApplyLocalNodeRefresh_PreservesTeamLabTunnelState()
+    {
+        var handshake = DateTimeOffset.Parse("2026-07-04T07:55:00Z");
+        var node = new WorkerNode
+        {
+            IsLocal = true,
+            TeamLabNetworkEnabled = true,
+            TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
+            TeamLabTunnelIp = "10.24.0.27",
+            TeamLabTunnelLastHandshake = handshake,
+            TeamLabTunnelLastError = null,
+            TeamLabTunnelConfigVersion = 3
+        };
+
+        LocalNodeRegistrar.ApplyLocalNodeRefresh(
+            node,
+            "10.24.0.27",
+            NodeCapability.Docker,
+            localSchedulableOverride: false,
+            DateTimeOffset.Parse("2026-07-04T08:00:00Z"));
+
+        Assert.True(node.TeamLabNetworkEnabled);
+        Assert.Equal(TeamLabTunnelStatus.Healthy, node.TeamLabTunnelStatus);
+        Assert.Equal("10.24.0.27", node.TeamLabTunnelIp);
+        Assert.Equal(handshake, node.TeamLabTunnelLastHandshake);
+        Assert.Null(node.TeamLabTunnelLastError);
+        Assert.Equal(3, node.TeamLabTunnelConfigVersion);
+        Assert.False(node.IsSchedulable);
+    }
+
+    [Fact]
+    public void ApplyTeamLabDryRunProbe_PreservesAlreadyEnabledHealthyNode()
+    {
+        var node = new WorkerNode
+        {
+            TeamLabNetworkEnabled = true,
+            TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
+            TeamLabTunnelIp = "10.24.0.27",
+            TeamLabTunnelLastError = null,
+            TeamLabTunnelConfigVersion = 7
+        };
+
+        NodeTunnelService.ApplyDryRunProbeResult(node);
+
+        Assert.True(node.TeamLabNetworkEnabled);
+        Assert.Equal(TeamLabTunnelStatus.Healthy, node.TeamLabTunnelStatus);
+        Assert.Equal("10.24.0.27", node.TeamLabTunnelIp);
+        Assert.Null(node.TeamLabTunnelLastError);
+        Assert.Equal(7, node.TeamLabTunnelConfigVersion);
     }
 
     [Fact]

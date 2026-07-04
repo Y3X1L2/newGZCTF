@@ -26,7 +26,8 @@ nm_require_all NM_CUSTOMER_DB_HOST NM_MODEL_REGISTRY_URL NM_CI_RUNNER_URL NM_OBJ
 # G1: Vault Bootstrap Token 滥用 - Flag 注入到 secret/data/nebulamind/model-registry
 FLAG_G1="$(get_flag 'FLAG_VAULT_POLICY_BYPASS' 'flag{g1_vault_policy_bypass_placeholder}')"
 # 导出供 app.py 的 get_flag() 读取（双保险：app.py 也会在内存中替换占位符）
-export GZCTF_FLAG_FLAG_VAULT_POLICY_BYPASS="$FLAG_G1"
+# 注意：变量名必须为 GZCTF_FLAG_<NAME>（单 FLAG_ 前缀），避免双前缀导致 app.py 找不到变量。
+export GZCTF_FLAG_VAULT_POLICY_BYPASS="$FLAG_G1"
 
 echo "[secrets-vault] G1 flag available via env (FLAG_VAULT_POLICY_BYPASS)"
 echo "[secrets-vault] processing seed/secrets.json with flag placeholder..."

@@ -550,14 +550,14 @@ public class TeamLabNetworkConfig
 {
     /// <summary>
     /// Enables WorkerNode OS network mutation for TeamLab data plane.
-    /// Keep disabled unless an isolated WorkerNode has passed dry-run checks.
+    /// Keep disabled unless an isolated WorkerNode has passed network checks.
     /// </summary>
     public bool Enable { get; set; }
 
     /// <summary>
     /// Returns command plans without mutating WorkerNode state when true.
     /// </summary>
-    public bool DryRun { get; set; } = true;
+    public bool DryRun { get; set; }
 
     public string RuntimeNetworkBaseCidr { get; set; } = "10.180.0.0/16";
     public int TeamSubnetPrefixLength { get; set; } = 24;
@@ -573,7 +573,7 @@ public class TeamLabNetworkConfig
 public class PublicUdpGatewayConfig
 {
     /// <summary>
-    /// Enables public UDP gateway rule mutation. Disabled by default for Phase 0-3.
+    /// Enables public UDP gateway rule mutation.
     /// </summary>
     public bool Enable { get; set; }
 
@@ -583,6 +583,18 @@ public class PublicUdpGatewayConfig
     public string IptablesBinaryPath { get; set; } = "iptables";
     public string NftBinaryPath { get; set; } = "nft";
 }
+
+public sealed record TeamLabUdpMappingEntry(
+    int PublicUdpPort,
+    string WorkerTunnelIp,
+    int WorkerWireGuardPort,
+    int RuntimeId,
+    int GameId,
+    int TeamId,
+    Guid WorkerNodeId,
+    int RuleVersion,
+    bool IsSynced,
+    string? LastSyncError);
 
 public class KubernetesConfig
 {

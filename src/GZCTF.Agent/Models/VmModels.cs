@@ -7,6 +7,14 @@ public class CreateVmRequest
     public int Memory { get; set; } = 2048;
     public int Cpu { get; set; } = 2;
     public string? Flag { get; set; }
+    public List<VmNetworkInterfaceRequest> Interfaces { get; set; } = [];
+}
+
+public class VmNetworkInterfaceRequest
+{
+    public string BridgeName { get; set; } = string.Empty;
+    public string? MacAddress { get; set; }
+    public string Model { get; set; } = "e1000e";
 }
 
 public class CreateVmResponse
@@ -14,6 +22,7 @@ public class CreateVmResponse
     public string VmName { get; set; } = string.Empty;
     public string Status { get; set; } = "Running";
     public string? VncAddress { get; set; }
+    public List<VmNetworkInterfaceRequest> Interfaces { get; set; } = [];
 }
 
 public class VmIpResponse
@@ -22,6 +31,11 @@ public class VmIpResponse
     public string? IpAddress { get; set; }
     public int? RdpPort { get; set; }
     public string Status { get; set; } = "Pending";
+}
+
+public class VmIpQueryRequest
+{
+    public List<VmNetworkInterfaceRequest> Interfaces { get; set; } = [];
 }
 
 public class PullDockerImageRequest

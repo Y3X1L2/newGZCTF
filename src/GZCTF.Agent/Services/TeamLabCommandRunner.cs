@@ -4,20 +4,26 @@ namespace GZCTF.Agent.Services;
 
 public class TeamLabCommandRunner(ILogger<TeamLabCommandRunner> logger)
 {
-    public async Task<(bool Success, string Output)> RunAsync(string command, CancellationToken token)
+    internal const string StableWorkingDirectory = "/";
+
+    public virtual Task<(bool Success, string Output)> RunAsync(string command, CancellationToken token) =>
+        RunAsync(command, null, token);
+
+    public virtual async Task<(bool Success, string Output)> RunAsync(string command, string? standardInput,
+        CancellationToken token)
     {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "/bin/sh",
-            ArgumentList = { "-c", command },
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
+        var startInfo = CreateStartInfo(command, standardInput is not null);
 
         using var process = Process.Start(startInfo);
         if (process is null)
             return (false, "Failed to start shell process.");
+
+        if (standardInput is not null)
+        {
+            await process.StandardInput.WriteAsync(standardInput);
+            await process.StandardInput.FlushAsync(token);
+            process.StandardInput.Close();
+        }
 
         var stdout = await process.StandardOutput.ReadToEndAsync(token);
         var stderr = await process.StandardError.ReadToEndAsync(token);
@@ -29,5 +35,21 @@ public class TeamLabCommandRunner(ILogger<TeamLabCommandRunner> logger)
                 process.ExitCode, command, output);
 
         return (process.ExitCode == 0, output);
+    }
+
+    internal static ProcessStartInfo CreateStartInfo(string command, bool redirectStandardInput)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "/bin/sh",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            RedirectStandardInput = redirectStandardInput,
+            WorkingDirectory = StableWorkingDirectory,
+            UseShellExecute = false
+        };
+        startInfo.ArgumentList.Add("-c");
+        startInfo.ArgumentList.Add(command);
+        return startInfo;
     }
 }

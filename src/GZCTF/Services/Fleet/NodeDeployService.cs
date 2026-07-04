@@ -101,7 +101,9 @@ public class NodeDeployService
                 _config["ContainerProvider:PublicEntry"],
                 _config.GetValue<int?>("ContainerProvider:DockerConfig:PublicPortStart"),
                 _config.GetValue<int?>("ContainerProvider:DockerConfig:PublicPortEnd"),
-                _config["ContainerProvider:DockerConfig:ChallengeNetwork"]);
+                _config["ContainerProvider:DockerConfig:ChallengeNetwork"],
+                _config.GetValue<bool>("TeamLabNetwork:Enable"),
+                _config.GetValue<bool>("TeamLabNetwork:DryRun", true));
             WriteRemoteFile(ssh, sudo, "/etc/gzctf-agent/appsettings.json", configJson,
                 "Write agent configuration");
             remoteInstallStarted = true;
@@ -572,7 +574,8 @@ bash -lc 'if command -v virsh >/dev/null 2>&1 && {{sudo}} virsh -c qemu:///syste
     }
 
     internal static string BuildAgentConfigJson(string serverUrl, WorkerNode node, string? publicEntry = null,
-        int? publicPortStart = null, int? publicPortEnd = null, string? challengeNetwork = null) =>
+        int? publicPortStart = null, int? publicPortEnd = null, string? challengeNetwork = null,
+        bool teamLabEnable = false, bool teamLabDryRun = true) =>
         JsonSerializer.Serialize(new
         {
             Agent = new
@@ -589,6 +592,11 @@ bash -lc 'if command -v virsh >/dev/null 2>&1 && {{sudo}} virsh -c qemu:///syste
                 PublicPortStart = publicPortStart,
                 PublicPortEnd = publicPortEnd,
                 ChallengeNetwork = string.IsNullOrWhiteSpace(challengeNetwork) ? "gzctf" : challengeNetwork
+            },
+            TeamLab = new
+            {
+                Enable = teamLabEnable,
+                DryRun = teamLabDryRun
             }
         }, new JsonSerializerOptions { WriteIndented = true });
 

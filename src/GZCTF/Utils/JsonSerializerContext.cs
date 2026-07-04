@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using GZCTF.Models.Internal;
@@ -9,6 +9,7 @@ using GZCTF.Models.Request.Game;
 using GZCTF.Models.Request.Info;
 using GZCTF.Models.Request.Training;
 using GZCTF.Services.Container.Provider;
+using GZCTF.Services.TeamLab;
 using Namotion.Reflection;
 using NJsonSchema;
 using NJsonSchema.Generation;
@@ -156,19 +157,21 @@ namespace GZCTF.Utils;
 [JsonSerializable(typeof(PenetrationValidationModel))]
 [JsonSerializable(typeof(PenetrationPlanModel))]
 [JsonSerializable(typeof(PenetrationWorkspaceModel))]
-[JsonSerializable(typeof(PenetrationAttackGraphModel))]
 [JsonSerializable(typeof(PenetrationTeamEnvironmentModel))]
 [JsonSerializable(typeof(PenetrationTeamEnvironmentModel[]))]
 [JsonSerializable(typeof(PenetrationAdminAccessModel))]
 [JsonSerializable(typeof(PenetrationAdminAccessModel[]))]
 [JsonSerializable(typeof(PenetrationSubmitModel))]
 [JsonSerializable(typeof(PenetrationSubmitResultModel))]
-[JsonSerializable(typeof(PenetrationAttackGraphUpdateModel))]
+[JsonSerializable(typeof(PenetrationWorkspaceUpdateModel))]
 [JsonSerializable(typeof(PenetrationScoreboardItemModel))]
 [JsonSerializable(typeof(PenetrationScoreboardItemModel[]))]
 [JsonSerializable(typeof(PenetrationSubmissionLogModel))]
 [JsonSerializable(typeof(PenetrationSubmissionLogModel[]))]
 [JsonSerializable(typeof(ArrayResponse<PenetrationSubmissionLogModel>))]
+[JsonSerializable(typeof(TeamLabClientConfigModel))]
+[JsonSerializable(typeof(TeamLabUdpMappingEntry))]
+[JsonSerializable(typeof(TeamLabUdpMappingEntry[]))]
 [JsonSerializable(typeof(GameEvent[]))]
 [JsonSerializable(typeof(Submission[]))]
 [JsonSerializable(typeof(CheatInfoModel[]))]

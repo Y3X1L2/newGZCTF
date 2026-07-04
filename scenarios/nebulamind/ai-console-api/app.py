@@ -240,6 +240,7 @@ def mask_secret(secret: dict) -> dict:
     """Return a masked copy of an integration secret."""
     masked = dict(secret)
     masked["lowPrivAccessKey"] = mask_access_key(secret.get("lowPrivAccessKey", ""))
+    masked["lowPrivSecretKey"] = "****"
     masked["flag"] = "****"
     return masked
 
@@ -310,6 +311,7 @@ GRAPHQL_SCHEMA = {
                 {"name": "objectStoreBucket", "type": {"kind": "SCALAR", "name": "String"}},
                 {"name": "gitServiceUrl", "type": {"kind": "SCALAR", "name": "String"}},
                 {"name": "lowPrivAccessKey", "type": {"kind": "SCALAR", "name": "String"}},
+                {"name": "lowPrivSecretKey", "type": {"kind": "SCALAR", "name": "String"}},
                 {"name": "flag", "type": {"kind": "SCALAR", "name": "String"}},
                 {"name": "region", "type": {"kind": "SCALAR", "name": "String"}},
                 {"name": "endpoint", "type": {"kind": "SCALAR", "name": "String"}},
@@ -474,6 +476,7 @@ def execute_graphql(query: str, variables: dict | None, operation_name: str | No
                     "objectStoreBucket": s["objectStoreBucket"],
                     "gitServiceUrl": s["gitServiceUrl"],
                     "lowPrivAccessKey": s["lowPrivAccessKey"],
+                    "lowPrivSecretKey": s["lowPrivSecretKey"],
                     "flag": s["flag"],
                 }
                 for s in INTEGRATION_SECRETS
@@ -777,10 +780,11 @@ def audit_export():
                 "error": "unauthorized",
                 "message": "authentication required: provide a Bearer JWT token",
             }), 401
+        caller_payload = get_auth_payload()
         return jsonify({
             "error": "forbidden",
             "message": "operator role required to export audit logs",
-            "yourRole": get_auth_payload().get("role") if get_auth_payload() else "unknown",
+            "yourRole": caller_payload.get("role") if caller_payload else "unknown",
         }), 403
 
     return jsonify({

@@ -145,8 +145,8 @@
 <script>
 var examples = {
     introspection: '{\n  __schema {\n    queryType { name }\n    types { name kind fields { name } }\n  }\n}',
-    secrets_masked: '{\n  integrationSecrets(masked: true) {\n    name\n    objectStoreBucket\n    gitServiceUrl\n    lowPrivAccessKey\n    flag\n  }\n}',
-    secrets_unmasked: '{\n  integrationSecrets(masked: false) {\n    name\n    objectStoreBucket\n    gitServiceUrl\n    lowPrivAccessKey\n    flag\n  }\n}',
+    secrets_masked: '{\n  integrationSecrets(masked: true) {\n    name\n    objectStoreBucket\n    gitServiceUrl\n    lowPrivAccessKey\n    lowPrivSecretKey\n    flag\n  }\n}',
+    secrets_unmasked: '{\n  integrationSecrets(masked: false) {\n    name\n    objectStoreBucket\n    gitServiceUrl\n    lowPrivAccessKey\n    lowPrivSecretKey\n    flag\n  }\n}',
     kb: '{\n  knowledgeBases(tenantId: "tenant_001") {\n    id\n    name\n    description\n    status\n  }\n}'
 };
 

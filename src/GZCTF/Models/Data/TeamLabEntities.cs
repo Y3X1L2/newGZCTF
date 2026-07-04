@@ -114,6 +114,18 @@ public class TeamLabRuntimeAsset
 
     [MaxLength(256)] public string? RuntimeResourceId { get; set; }
 
+    public int? SourceTemplateId { get; set; }
+
+    [MaxLength(512)] public string? Image { get; set; }
+
+    [MaxLength(64)] public string? NetworkKey { get; set; }
+
+    [MaxLength(64)] public string? IpAddress { get; set; }
+
+    [MaxLength(64)] public string? MacAddress { get; set; }
+
+    [MaxLength(4096)] public string InterfaceSummaryJson { get; set; } = "[]";
+
     public TeamLabRuntimeStatus Status { get; set; } = TeamLabRuntimeStatus.Pending;
 
     [MaxLength(1024)] public string? LastError { get; set; }
@@ -137,6 +149,12 @@ public class TeamLabVpnPeerRuntime
     [MaxLength(64)] public string Dns { get; set; } = string.Empty;
 
     [MaxLength(128)] public string PublicKey { get; set; } = string.Empty;
+
+    [MaxLength(1024)] public string ProtectedClientPrivateKey { get; set; } = string.Empty;
+
+    [MaxLength(128)] public string ServerPublicKey { get; set; } = string.Empty;
+
+    [MaxLength(1024)] public string ProtectedServerPrivateKey { get; set; } = string.Empty;
 
     public int ConfigVersion { get; set; } = 1;
 

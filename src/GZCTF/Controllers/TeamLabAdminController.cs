@@ -15,20 +15,26 @@ public class TeamLabAdminController(
     [HttpPost("teams/{teamId:int}/plan")]
     [RequireAdmin]
     public async Task<IActionResult> Plan(int gameId, int teamId, CancellationToken token) =>
-        Ok(await planService.PlanRuntimeAsync(gameId, teamId, token));
+        ToActionResult(await planService.PlanRuntimeAsync(gameId, teamId, token));
 
     [HttpPost("teams/{teamId:int}/deploy")]
     [RequireAdmin]
     public async Task<IActionResult> Deploy(int gameId, int teamId, CancellationToken token) =>
-        Ok(await deploymentService.DeployRuntimeAsync(gameId, teamId, token));
+        ToActionResult(await deploymentService.DeployRuntimeAsync(gameId, teamId, token));
 
     [HttpPost("teams/{teamId:int}/destroy")]
     [RequireAdmin]
     public async Task<IActionResult> Destroy(int gameId, int teamId, CancellationToken token) =>
-        Ok(await deploymentService.DestroyRuntimeAsync(gameId, teamId, token));
+        ToActionResult(await deploymentService.DestroyRuntimeAsync(gameId, teamId, token));
 
     [HttpGet("teams/{teamId:int}/events")]
     [RequireAdmin]
     public async Task<IActionResult> Events(int gameId, int teamId, CancellationToken token) =>
         Ok(await deploymentService.GetEventsAsync(gameId, teamId, token));
+
+    public static IActionResult ToActionResult(TeamLabPlanResult result) =>
+        result.Success ? new OkObjectResult(result) : new BadRequestObjectResult(result);
+
+    public static IActionResult ToActionResult(TeamLabDeploymentResult result) =>
+        result.Success ? new OkObjectResult(result) : new BadRequestObjectResult(result);
 }

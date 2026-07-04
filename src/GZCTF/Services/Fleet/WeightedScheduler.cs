@@ -1,3 +1,4 @@
+using System.Globalization;
 using GZCTF.Models.Data;
 using GZCTF.Repositories.Interface;
 
@@ -67,6 +68,9 @@ public class WeightedScheduler
         if (string.IsNullOrWhiteSpace(node.TeamLabTunnelIp))
             return "TeamLab tunnel IP is not configured";
 
+        if (!IsValidIpv4Address(node.TeamLabTunnelIp.Trim()))
+            return "TeamLab tunnel IP is invalid";
+
         return null;
     }
 
@@ -105,4 +109,13 @@ public class WeightedScheduler
         + 500f * (1 - Math.Clamp(n.MemoryLoad, 0f, 1f))
         + 200f * (1 - (float)n.CurrentContainers / Math.Max(n.MaxContainers, 1))
         + 200f * (1 - (float)n.CurrentVms / Math.Max(n.MaxVms, 1));
+
+    private static bool IsValidIpv4Address(string value)
+    {
+        var parts = value.Split('.');
+        return parts.Length == 4 && parts.All(part =>
+            part.Length > 0 &&
+            int.TryParse(part, NumberStyles.None, CultureInfo.InvariantCulture, out var octet) &&
+            octet is >= 0 and <= 255);
+    }
 }

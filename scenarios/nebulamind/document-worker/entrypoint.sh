@@ -15,8 +15,11 @@ nm_require_all NM_DOCUMENT_WORKER_URL NM_DOCUMENT_WORKER_HOST NM_CACHE_BROKER_HO
 
 # B3: SSRF metadata 泄露 - Flag 通过环境变量传给 app.py
 # app.py 通过 get_flag('FLAG_WORKER_SSRF_METADATA') 读取
+# 注意：flag.sh 的 get_flag 已将 Flag 写入 GZCTF_FLAG_FLAG_WORKER_SSRF_METADATA 环境变量，
+# app.py 的 get_flag() 会剥离 FLAG_ 前缀查找 GZCTF_FLAG_WORKER_SSRF_METADATA（单前缀）。
+# 因此这里不需要再 re-export（否则会产生 GZCTF_FLAG_FLAG_ 双前缀，导致 app.py 找不到变量）。
 FLAG_B3="$(get_flag 'FLAG_WORKER_SSRF_METADATA' 'flag{b3_ssrf_metadata_placeholder}')"
-export GZCTF_FLAG_FLAG_WORKER_SSRF_METADATA="$FLAG_B3"
+export GZCTF_FLAG_WORKER_SSRF_METADATA="$FLAG_B3"
 
 # D3: 命令注入 - Flag 注入到 /opt/nebulamind/worker.flag
 # 选手通过 profile 参数注入 $(cat /opt/nebulamind/worker.flag) 读取此文件

@@ -43,4 +43,22 @@ public class VmController : ControllerBase
             Status = string.IsNullOrEmpty(ip) ? "Pending" : "Ready"
         });
     }
+
+    [HttpPost("{vmName}/ip")]
+    public async Task<IActionResult> GetIpWithInterfaces(string vmName, [FromBody] VmIpQueryRequest request,
+        CancellationToken token)
+    {
+        var ip = await _kvm.GetIpAddressAsync(vmName, token, request.Interfaces);
+        var rdpPort = string.IsNullOrEmpty(ip)
+            ? null
+            : await _kvm.EnsureRdpProxyAsync(vmName, ip, token);
+
+        return Ok(new VmIpResponse
+        {
+            VmName = vmName,
+            IpAddress = ip,
+            RdpPort = rdpPort,
+            Status = string.IsNullOrEmpty(ip) ? "Pending" : "Ready"
+        });
+    }
 }

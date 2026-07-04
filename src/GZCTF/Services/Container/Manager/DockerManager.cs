@@ -88,9 +88,10 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
             return null;
         }
 
-        var attachments = config.UsePenetrationFabric ? [] : GetNetworkAttachments(config);
+        var isolatedHostNetwork = config.UseHostNetworkNone || config.UsePenetrationFabric;
+        var attachments = isolatedHostNetwork ? [] : GetNetworkAttachments(config);
         var parameters = GetCreateContainerParameters(config, attachments);
-        if (!config.UsePenetrationFabric)
+        if (!isolatedHostNetwork)
             await EnsureCustomNetworksAsync(config, attachments, token);
 
         var publishHostPort = _meta.ExposePort && config.PublishPort;
@@ -278,7 +279,7 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
             }
         }
 
-        if (config.RemoveDefaultRoute && !config.UsePenetrationFabric)
+        if (config.RemoveDefaultRoute && !isolatedHostNetwork)
         {
             var routeResult = await RunExec(container.ContainerId,
                 ["sh", "-c", "command -v ip >/dev/null 2>&1 || { echo 'missing iproute2/ip command'; exit 127; }; ip route del default 2>/dev/null || true; ip route show"],
@@ -714,10 +715,11 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
         var primaryAttachment = attachments.FirstOrDefault(a => a.IsPrimary) ?? attachments.FirstOrDefault();
         var primaryNetworkName = primaryAttachment?.NetworkName;
         var fabricManagementNetwork = config.UsePenetrationFabric && config.PublishPort;
+        var isolatedHostNetwork = config.UseHostNetworkNone || config.UsePenetrationFabric;
         var hostConfig = new HostConfig
         {
             Memory = config.MemoryLimit * 1024 * 1024,
-            NetworkMode = config.UsePenetrationFabric
+            NetworkMode = isolatedHostNetwork
                 ? fabricManagementNetwork ? _meta.NetworkNames[NetworkMode.Open] : "none"
                 : !string.IsNullOrEmpty(primaryNetworkName)
                 ? primaryNetworkName
@@ -744,7 +746,7 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
         var createParameters = new CreateContainerParameters
         {
             Image = config.Image,
-            NetworkingConfig = !config.UsePenetrationFabric &&
+            NetworkingConfig = !isolatedHostNetwork &&
                                !string.IsNullOrWhiteSpace(primaryNetworkName) &&
                                !string.IsNullOrWhiteSpace(primaryAttachment?.IPAddress)
                 ? new NetworkingConfig

@@ -1,12 +1,18 @@
 {
   "name": "bootstrap",
-  "description": "CI runner bootstrap token policy - full read/write access to all secrets. This policy is intentionally over-privileged for the G1 challenge (Vault Bootstrap Token Abuse).",
+  "description": "CI runner bootstrap token policy - over-privileged for model-registry access (G1 challenge: Vault Bootstrap Token Abuse). Restricted from db-credentials/object-store/jwt-secret to prevent short-circuiting F1/F2/F3/G3 chains.",
   "rules": {
     "path": {
-      "secret/data/*": {
+      "secret/data/nebulamind/model-registry": {
         "capabilities": ["create", "read", "update", "delete", "list"]
       },
-      "secret/metadata/*": {
+      "secret/data/nebulamind/ci-config": {
+        "capabilities": ["create", "read", "update", "delete", "list"]
+      },
+      "secret/metadata/nebulamind/model-registry": {
+        "capabilities": ["read", "list", "delete"]
+      },
+      "secret/metadata/nebulamind/ci-config": {
         "capabilities": ["read", "list", "delete"]
       },
       "auth/token/create": {
@@ -23,5 +29,5 @@
       }
     }
   },
-  "warning": "This policy grants excessive privileges to a CI service account token. In production, CI tokens should follow least-privilege and only access the specific paths they need."
+  "warning": "This policy grants excessive privileges to a CI service account token - bootstrap can read model-registry secret (G1 vulnerability). However, db-credentials/object-store/jwt-secret are restricted to prevent short-circuiting downstream challenges. In production, CI tokens should follow least-privilege."
 }

@@ -3107,6 +3107,19 @@ namespace GZCTF.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Image")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("InterfaceSummaryJson")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<byte>("Kind")
                         .HasColumnType("smallint");
 
@@ -3114,10 +3127,18 @@ namespace GZCTF.Migrations
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
 
+                    b.Property<string>("MacAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
+
+                    b.Property<string>("NetworkKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<int>("RuntimeId")
                         .HasColumnType("integer");
@@ -3125,6 +3146,9 @@ namespace GZCTF.Migrations
                     b.Property<string>("RuntimeResourceId")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
+
+                    b.Property<int?>("SourceTemplateId")
+                        .HasColumnType("integer");
 
                     b.Property<byte>("Status")
                         .HasColumnType("smallint");
@@ -3219,6 +3243,16 @@ namespace GZCTF.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<string>("ProtectedClientPrivateKey")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("ProtectedServerPrivateKey")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
                     b.Property<string>("PublicKey")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -3229,6 +3263,11 @@ namespace GZCTF.Migrations
 
                     b.Property<int>("RuntimeId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("ServerPublicKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.HasKey("Id");
 

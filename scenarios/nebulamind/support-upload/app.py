@@ -196,7 +196,7 @@ def read_b1_flag() -> str:
         with open(B1_FLAG_FILE, "r", encoding="utf-8") as f:
             return f.read().strip()
     except (IOError, OSError):
-        key = "GZCTF_FLAG_FLAG_UPLOAD_MIME_BYPASS"
+        key = "GZCTF_FLAG_UPLOAD_MIME_BYPASS"
         return os.environ.get(
             key,
             os.environ.get("GZCTF_FLAG", "flag{b1_mime_bypass_placeholder}"),
@@ -395,10 +395,14 @@ def parse_url():
 
     # Forward to document-worker's parse endpoint.
     # The actual SSRF execution happens in document-worker.
+    # Forward optional "profile" parameter (used by D3 command injection chain):
+    # document-worker /api/parse accepts {url, profile} and runs `convert --profile {profile}`.
+    # Without forwarding profile, D3 (and 14 downstream flags) become unreachable.
     try:
-        req_data = json.dumps(
-            {"url": url, "source": "support-upload"}
-        ).encode("utf-8")
+        forward_payload = {"url": url, "source": "support-upload"}
+        if "profile" in data:
+            forward_payload["profile"] = data["profile"]
+        req_data = json.dumps(forward_payload).encode("utf-8")
         req = urllib.request.Request(
             f"{DOCUMENT_WORKER_URL}/api/parse",
             data=req_data,

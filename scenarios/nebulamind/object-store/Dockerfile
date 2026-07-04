@@ -1,17 +1,35 @@
-﻿﻿# object-store - NebulaMind 瀵硅薄瀛樺偍涓庢ā鍨嬭祫婧愭湇鍔?# Data 瀹夊叏鍩燂紝浠呴檺 Data 缃戞璁块棶锛堜笉瀵?Public 鏆撮湶锛夈€?# D2 棰樼洰锛氬璞″瓨鍌?Bucket 鏉冮檺閿欒 - 浣庢潈闄?access key 鍙垪鍑?public-model-artifacts锛?#         璇?bucket 涓鏀?exports/tenant-summary-2026.csv锛孋SV 鍚?Flag 鍜屾暟鎹簱琛ㄥ悕绾跨储銆?# G3 棰樼洰锛堢粓灞€锛岄儴鍒嗗湪姝わ級锛氭ā鍨嬩緵搴旈摼瀹¤ - object-store 鎻愪緵璁粌鏃ュ織鏂囦欢锛?#         鏃ュ織涓寘鍚嚎绱㈡寚鍚?model-registry bucket 鐨?manifest 鍜?customer-db 鐨勫璁¤褰曘€?#         G3 鐨?Flag 鏈韩涓嶅湪 object-store锛屽湪 customer-db 鐨?regulated_model_training_records 琛ㄤ腑銆?#
-# 璁捐瑕佺偣锛?# - 鍩轰簬 minio/minio:RELEASE.2024-12-18T13-15-44Z锛岀湡瀹炶繍琛?MinIO S3 API銆?# - EXPOSE 9000锛圫3 API锛? 9001锛圕onsole锛夛紝鍋ュ悍妫€鏌?/minio/health/live銆?# - 閫氳繃 mc锛圡inIO Client锛夊垵濮嬪寲 bucket銆佺敤鎴枫€佺瓥鐣ャ€佺瀛愭暟鎹€?# - Flag 閫氳繃鐜鍙橀噺娉ㄥ叆锛宔ntrypoint.sh 鐢?sed 鏇挎崲 CSV 涓殑鍗犱綅绗︺€傞暅鍍忓唴涓嶇‖缂栫爜 Flag銆?# - 璧勬簮闄愬埗 0.75C/512M 鐢卞钩鍙板鍣ㄧ紪鎺掑眰寮哄埗銆?# - 浣庢潈闄愮敤鎴?nm-low-priv 鍙兘璁块棶 public-model-artifacts锛圖2 鍏ュ彛锛夈€?# - 楂樻潈闄愮敤鎴?nm-admin 鍙闂墍鏈?bucket銆?
+# object-store - NebulaMind 对象存储与模型资源服务
+# Data 安全域，仅限 Data 网段访问（不对 Public 暴露）。
+#
+# D2 题目：对象存储 Bucket 权限错误 - 低权限 access key 可列出 public-model-artifacts，
+#         该 bucket 中误放 exports/tenant-summary-2026.csv，CSV 含 Flag 和数据库表名线索。
+# G3 题目（终局，部分在此）：模型供应链审计 - object-store 提供训练日志文件，
+#         日志中包含线索指向 model-registry bucket 的 manifest 和 customer-db 的审计记录。
+#         G3 的 Flag 本身在 customer-db 的 regulated_model_training_records 表 id=13（不在 object-store）。
+#
+# 设计要点：
+# - 基于 minio/minio:RELEASE.2024-12-18T13-15-44Z，真实运行 MinIO S3 API。
+# - EXPOSE 9000（S3 API）、9001（Console），健康检查 /minio/health/live。
+# - 通过 mc（MinIO Client）初始化 bucket、用户、策略、种子数据。
+# - Flag 通过环境变量注入，entrypoint.sh 用 sed 替换 CSV 中的占位符。镜像内不硬编码 Flag。
+# - 资源限制 0.75C/512M 由平台容器编排层强制。
+# - 低权限用户 nm-low-priv 只能访问 public-model-artifacts（D2 入口）。
+# - 高权限用户 nm-admin 可访问所有 bucket。
+
 # ============================================================
-# 闃舵 1锛氭瀯寤洪樁娈?- 涓嬭浇 mc锛圡inIO Client锛?# ============================================================
+# 阶段 1：构建阶段 - 下载 mc（MinIO Client）
+# ============================================================
 FROM alpine:3.20 AS builder
 
 RUN apk add --no-cache curl ca-certificates tzdata
 
-# 涓嬭浇 mc锛圡inIO Client锛? 浣跨敤涓?MinIO 鏈嶅姟绔吋瀹圭殑鐗堟湰
+# 下载 mc（MinIO Client），使用与 MinIO 服务端兼容的版本
 RUN curl -fsSL -o /usr/local/bin/mc \
     https://dl.min.io/client/mc/release/linux-amd64/mc && \
     chmod +x /usr/local/bin/mc
 
-# 涓嬭浇闈欐€佺紪璇戠殑 curl锛堢敤浜庡仴搴锋鏌ワ紝minio 闀滃儚鍙兘涓嶅惈 curl锛?# 濡備笅杞藉け璐ュ垯鍒涘缓鍗犱綅鑴氭湰锛宧ealthcheck.sh 浼氬洖閫€鍒?mc
+# 下载静态编译的 curl（用于健康检查，minio 镜像可能不含 curl）。
+# 如下载失败则创建占位脚本，healthcheck.sh 会回退到 mc。
 RUN (curl -fsSL -o /tmp/curl.tar.xz \
     https://github.com/stunnel/static-curl/releases/download/8.6.0/curl-8.6.0-linux-amd64.tar.xz && \
     cd /tmp && tar xf curl.tar.xz && \
@@ -41,7 +59,7 @@ RUN sed -i 's/\r$//' \
         /prestage/_shared/scripts/runtime-env.sh
 
 # ============================================================
-# 闃舵 2锛氳繍琛岄樁娈?- MinIO 鏈嶅姟
+# 阶段 2：运行阶段 - MinIO 服务
 # ============================================================
 FROM minio/minio:RELEASE.2024-12-18T13-15-44Z
 
@@ -51,11 +69,11 @@ LABEL org.nebulamind.zone="data"
 LABEL org.nebulamind.flags="FLAG_OBJECT_BUCKET_POLICY,FLAG_FINAL_MODEL_SUPPLY_CHAIN"
 LABEL org.nebulamind.resources="0.75C/512M"
 
-# 浠庢瀯寤洪樁娈靛鍒?mc 鍜岄潤鎬?curl
+# 从构建阶段复制 mc 和静态 curl
 COPY --from=builder /usr/local/bin/mc /usr/local/bin/mc
 COPY --from=builder /usr/local/bin/curl-static /usr/local/bin/curl
 
-# 璁剧疆鏃跺尯锛堜笌鍏朵粬 NebulaMind 鏈嶅姟淇濇寔涓€鑷达級
+# 设置时区（与其他 NebulaMind 服务保持一致）
 COPY --from=builder /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 COPY --from=builder /usr/share/zoneinfo/Asia/Shanghai /usr/share/zoneinfo/Asia/Shanghai
 RUN echo "Asia/Shanghai" > /etc/timezone
@@ -64,11 +82,11 @@ RUN echo "Asia/Shanghai" > /etc/timezone
 ENV MINIO_ROOT_USER=nm-root-admin \
     MINIO_ROOT_PASSWORD=nm-root-admin-secret-2026
 
-# 澶嶅埗鍏变韩璧勬簮
+# 复制共享资源
 COPY --from=builder /prestage/_shared/scripts/flag.sh /_shared/scripts/flag.sh
 COPY --from=builder /prestage/_shared/scripts/runtime-env.sh /_shared/scripts/runtime-env.sh
 
-# 澶嶅埗鏈嶅姟鏂囦欢
+# 复制服务文件
 COPY --from=builder /prestage/entrypoint.sh /entrypoint.sh
 COPY --from=builder /prestage/init-buckets.sh /init-buckets.sh
 COPY --from=builder /prestage/healthcheck.sh /healthcheck.sh

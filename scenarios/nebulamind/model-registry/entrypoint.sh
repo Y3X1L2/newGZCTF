@@ -36,7 +36,8 @@ nm_require_all NM_MODEL_REGISTRY_URL NM_CUSTOMER_DB_HOST NM_OBJECT_STORE_URL
 # G2: Model Registry Admin Token Abuse - Flag 注入到 recommendation-v4-private manifest
 FLAG_G2="$(get_flag 'FLAG_MODEL_REGISTRY_ADMIN' 'flag{g2_model_registry_admin_placeholder}')"
 # 导出供 app.py 的 get_flag() 读取（双保险：app.py 也会在内存中替换占位符）
-export GZCTF_FLAG_FLAG_MODEL_REGISTRY_ADMIN="$FLAG_G2"
+# 注意：变量名必须为 GZCTF_FLAG_<NAME>（单 FLAG_ 前缀），避免双前缀导致 app.py 找不到变量。
+export GZCTF_FLAG_MODEL_REGISTRY_ADMIN="$FLAG_G2"
 
 echo "[model-registry] G2 flag available via env (FLAG_MODEL_REGISTRY_ADMIN)"
 echo "[model-registry] processing seed/models.json with flag placeholder..."

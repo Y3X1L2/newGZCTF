@@ -112,7 +112,7 @@ function teamLabStatusMeta(node: NodeInfo): { label: string; detail: string; ton
   if (!node.teamLabNetworkEnabled && key !== '2' && key !== 'probing') {
     return {
       label: 'VPN 靶场网络未启用',
-      detail: 'Phase 0-3 仅支持 dry-run 探测，生产启用需要后续阶段接入真实隧道。',
+      detail: '节点尚未启用 VPN 靶场网络调度。',
       tone: 'neutral',
     }
   }
@@ -120,7 +120,7 @@ function teamLabStatusMeta(node: NodeInfo): { label: string; detail: string; ton
   if (key === '2' || key === 'probing') {
     return {
       label: 'VPN 靶场网络待验证',
-      detail: node.teamLabTunnelLastError ?? 'dry-run 探测已执行，尚未标记为健康调度节点。',
+      detail: node.teamLabTunnelLastError ?? '节点网络组件已检测，等待隧道健康确认。',
       tone: 'warm',
     }
   }

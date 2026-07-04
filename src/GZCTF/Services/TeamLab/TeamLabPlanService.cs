@@ -4,11 +4,54 @@ using GZCTF.Models.Internal;
 using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using System.Text.Json.Serialization;
 
 namespace GZCTF.Services.TeamLab;
 
 public sealed record TeamLabPlanNodeResult(bool Success, string Message, WorkerNode? Node);
-public sealed record TeamLabPlanResult(bool Success, string Message, TeamLabRuntime? Runtime);
+public sealed record TeamLabRuntimeUdpMappingModel(
+    int PublicUdpPort,
+    string WorkerTunnelIp,
+    int WorkerWireGuardPort,
+    int RuleVersion,
+    bool IsSynced,
+    string? LastSyncError)
+{
+    public static TeamLabRuntimeUdpMappingModel? FromMapping(TeamLabPublicUdpMapping? mapping) =>
+        mapping is null
+            ? null
+            : new TeamLabRuntimeUdpMappingModel(mapping.PublicUdpPort, mapping.WorkerTunnelIp,
+                mapping.WorkerWireGuardPort, mapping.RuleVersion, mapping.IsSynced, mapping.LastSyncError);
+}
+
+public sealed record TeamLabRuntimeModel(
+    int Id,
+    int GameId,
+    int TeamId,
+    int PublishedVersion,
+    Guid? WorkerNodeId,
+    string NetworkPrefix,
+    TeamLabRuntimeStatus Status,
+    bool IsOpenToPlayers,
+    string? LastError,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? UpdatedAt,
+    TeamLabRuntimeUdpMappingModel? PublicUdpMapping)
+{
+    public static TeamLabRuntimeModel? FromRuntime(TeamLabRuntime? runtime) =>
+        runtime is null
+            ? null
+            : new TeamLabRuntimeModel(runtime.Id, runtime.GameId, runtime.TeamId, runtime.PublishedVersion,
+                runtime.WorkerNodeId, runtime.NetworkPrefix, runtime.Status, runtime.IsOpenToPlayers,
+                runtime.LastError, runtime.CreatedAt, runtime.UpdatedAt,
+                TeamLabRuntimeUdpMappingModel.FromMapping(runtime.PublicUdpMapping));
+}
+
+public sealed record TeamLabPlanResult(bool Success, string Message, [property: JsonIgnore] TeamLabRuntime? Runtime)
+{
+    [JsonPropertyName("runtime")]
+    public TeamLabRuntimeModel? RuntimeModel => TeamLabRuntimeModel.FromRuntime(Runtime);
+}
 
 public class TeamLabPlanService(
     AppDbContext context,
@@ -17,11 +60,16 @@ public class TeamLabPlanService(
 {
     private readonly TeamLabNetworkConfig _config = options.Value;
 
-    public static TeamLabPlanNodeResult SelectNode(IEnumerable<WorkerNode> nodes)
+    public static TeamLabPlanNodeResult SelectNode(IEnumerable<WorkerNode> nodes, Guid? targetNodeId = null)
     {
-        var node = WeightedScheduler.SelectOptimalTeamLabNode(nodes);
+        var candidates = targetNodeId.HasValue
+            ? nodes.Where(n => n.Id == targetNodeId.Value).ToList()
+            : nodes.ToList();
+        var node = WeightedScheduler.SelectOptimalTeamLabNode(candidates);
         return node is null
-            ? new TeamLabPlanNodeResult(false, "No schedulable TeamLabNetwork WorkerNode is healthy.", null)
+            ? new TeamLabPlanNodeResult(false, targetNodeId.HasValue
+                ? "The WorkerNode that hosts the deployed penetration environment is not a healthy TeamLabNetwork node."
+                : "No schedulable TeamLabNetwork WorkerNode is healthy.", null)
             : new TeamLabPlanNodeResult(true, "TeamLabNetwork WorkerNode selected.", node);
     }
 
@@ -41,8 +89,34 @@ public class TeamLabPlanService(
 
     public static string BuildRuntimeResourcePrefix(int runtimeId) => $"tl{runtimeId}";
 
+    public static bool CanReuseScheduledRuntime(TeamLabRuntime runtime, int publishedVersion) =>
+        runtime.Status == TeamLabRuntimeStatus.Scheduled &&
+        runtime.PublishedVersion == publishedVersion &&
+        runtime.WorkerNodeId.HasValue &&
+        runtime.PublicUdpMapping is not null &&
+        !string.IsNullOrWhiteSpace(runtime.NetworkPrefix);
+
+    public static int? ResolvePublishedVersion(PenetrationConfig? config)
+    {
+        if (config is null || config.PublishedVersion <= 0)
+            return null;
+
+        return config.Status is PenetrationDeploymentStatus.Published
+                or PenetrationDeploymentStatus.Deploying
+                or PenetrationDeploymentStatus.Running
+                or PenetrationDeploymentStatus.Partial
+            ? config.PublishedVersion
+            : null;
+    }
+
     public async Task<TeamLabPlanResult> PlanRuntimeAsync(int gameId, int teamId, CancellationToken token)
     {
+        var penetrationConfig = await context.PenetrationConfigs.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.GameId == gameId, token);
+        var publishedVersion = ResolvePublishedVersion(penetrationConfig);
+        if (publishedVersion is null)
+            return new TeamLabPlanResult(false, "TeamLab requires a published penetration topology version before deployment.", null);
+
         var runtime = await context.TeamLabRuntimes
             .Include(r => r.PublicUdpMapping)
             .FirstOrDefaultAsync(r => r.GameId == gameId && r.TeamId == teamId, token);
@@ -52,6 +126,9 @@ public class TeamLabPlanService(
                 or TeamLabRuntimeStatus.Probing
                 or TeamLabRuntimeStatus.Destroying)
             return new TeamLabPlanResult(false, $"TeamLab runtime is busy: {runtime.Status}.", runtime);
+
+        if (runtime is not null && CanReuseScheduledRuntime(runtime, publishedVersion.Value))
+            return new TeamLabPlanResult(true, "TeamLab runtime is already planned.", runtime);
 
         runtime ??= new TeamLabRuntime { GameId = gameId, TeamId = teamId };
         if (runtime.Id == 0)
@@ -64,10 +141,11 @@ public class TeamLabPlanService(
             return new TeamLabPlanResult(false, $"Cannot plan TeamLab runtime from status {runtime.Status}.", runtime);
 
         runtime.Status = TeamLabRuntimeStatus.Planning;
+        runtime.PublishedVersion = publishedVersion.Value;
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
 
         var nodes = await context.WorkerNodes.AsNoTracking().ToListAsync(token);
-        var nodeResult = SelectNode(nodes);
+        var nodeResult = SelectNode(nodes, runtime.WorkerNodeId);
         if (!nodeResult.Success || nodeResult.Node is null)
         {
             runtime.Status = TeamLabRuntimeStatus.Failed;

@@ -41,6 +41,9 @@ RUN sed -i 's/\r$//' /entrypoint.sh && \
     chown -R nmapp:nmapp /app /_shared && \
     chmod -R a+r /app /_shared
 
+# 以非 root 用户运行（最小权限原则，符合企业安全基线）
+USER nmapp
+
 EXPOSE 8080
 
 HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \

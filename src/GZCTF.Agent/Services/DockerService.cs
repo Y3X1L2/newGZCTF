@@ -27,7 +27,8 @@ public class DockerService
     public async Task<AgentContainerResponse?> CreateContainerAsync(CreateContainerRequest request, CancellationToken token)
     {
         var fabricManagementNetwork = request.UsePenetrationFabric && request.PublishPort;
-        var attachments = request.UsePenetrationFabric
+        var isolatedHostNetwork = request.UseHostNetworkNone || request.UsePenetrationFabric;
+        var attachments = isolatedHostNetwork
             ?
             (fabricManagementNetwork
                 ?
@@ -39,7 +40,7 @@ public class DockerService
                     }
                 ]
                 : [])
-            : GetNetworkAttachments(request);
+                : GetNetworkAttachments(request);
         var primaryAttachment = attachments.FirstOrDefault();
         var primaryNetwork = primaryAttachment?.NetworkName ?? "none";
 
@@ -79,12 +80,12 @@ public class DockerService
                         [portSpec] = new List<PortBinding> { new() { HostPort = ResolveHostPortBinding(request.PreferredHostPort) } }
                     }
                     : null,
-                NetworkMode = request.UsePenetrationFabric
+                NetworkMode = isolatedHostNetwork
                     ? fabricManagementNetwork ? primaryNetwork : "none"
                     : primaryNetwork,
             },
             ExposedPorts = request.PublishPort ? new Dictionary<string, EmptyStruct> { [portSpec] = new() } : null,
-            NetworkingConfig = !request.UsePenetrationFabric &&
+            NetworkingConfig = !isolatedHostNetwork &&
                                primaryAttachment is not null &&
                                !string.IsNullOrWhiteSpace(primaryAttachment.IPAddress)
                 ? new NetworkingConfig
@@ -165,7 +166,7 @@ public class DockerService
             }
         }
 
-        if (request.RemoveDefaultRoute && !request.UsePenetrationFabric)
+        if (request.RemoveDefaultRoute && !isolatedHostNetwork)
         {
             var routeResult = await ExecuteContainerCommandAsync(createResult.ID,
                 ["sh", "-c", "command -v ip >/dev/null 2>&1 || { echo 'missing iproute2/ip command'; exit 127; }; ip route del default 2>/dev/null || true; ip route show"],

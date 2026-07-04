@@ -1,8 +1,8 @@
-import { Button, Divider, Group, PasswordInput, Progress, ScrollArea, Stack, Text, Title } from '@mantine/core'
+import { Button, Group, PasswordInput, Progress, ScrollArea, Stack, Text, Title, Textarea } from '@mantine/core'
 import { useModals } from '@mantine/modals'
 import { showNotification } from '@mantine/notifications'
 import * as signalR from '@microsoft/signalr'
-import { mdiCheck, mdiFlagOutline, mdiRefresh, mdiShieldSearch } from '@mdi/js'
+import { mdiCheck, mdiContentCopy, mdiDownload, mdiFlagOutline, mdiRefresh, mdiShieldSearch, mdiVpn } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router'
@@ -13,15 +13,16 @@ import { WithRole } from '@Components/WithRole'
 import { YinyuPanel, YinyuRouteLoader } from '@Components/yinyu/YinyuUI'
 import { YinyuStatusText } from '@Components/yinyu/YinyuReactBits'
 import { encryptApiData } from '@Utils/Crypto'
-import { showErrorMsg } from '@Utils/Shared'
+import { copyText, showErrorMsg } from '@Utils/Shared'
 import { useConfig } from '@Hooks/useConfig'
 import { Role } from '@Api'
 import {
-  PenetrationAttackGraphUpdateModel,
   PenetrationRuntimeStatus,
+  PenetrationWorkspaceUpdateModel,
   PenetrationWorkspaceModel,
   PenetrationWorkspaceNodeModel,
   PenetrationWorkspaceScoreItemModel,
+  TeamLabVpnConfigModel,
   penetrationPlayerApi,
 } from '../../../Api/PenetrationApi'
 
@@ -88,7 +89,7 @@ const buildTasks = (workspace?: PenetrationWorkspaceModel): PentestTask[] => {
   })
 }
 
-const getTargetHost = (workspace?: PenetrationWorkspaceModel) => workspace?.targetHost?.trim() ?? ''
+const hasDescription = (value?: string | null) => Boolean(value?.trim())
 
 const PenetrationPage: FC = () => {
   const { id } = useParams()
@@ -100,6 +101,7 @@ const PenetrationPage: FC = () => {
   const [flags, setFlags] = useState<Record<number, string>>({})
   const [loading, setLoading] = useState(false)
   const [errorText, setErrorText] = useState<string>()
+  const [vpnConfig, setVpnConfig] = useState<TeamLabVpnConfigModel | null>(null)
   const teamIdRef = useRef<number | undefined>(undefined)
 
   const tasks = useMemo(() => buildTasks(workspace), [workspace])
@@ -112,8 +114,6 @@ const PenetrationPage: FC = () => {
   const progress = totalCount > 0 ? Math.round((solvedCount / totalCount) * 100) : 0
   const remainingReset = workspace ? Math.max(0, workspace.maxResetCount - workspace.resetCount) : 0
   const currentStatus = taskStatus(selectedTask)
-  const targetHost = useMemo(() => getTargetHost(workspace), [workspace])
-  const targetHostText = targetHost || '环境启动后显示'
 
   const load = useCallback(async (silent = false) => {
     if (gameId <= 0) return
@@ -124,6 +124,12 @@ const PenetrationPage: FC = () => {
       const res = await penetrationPlayerApi.getWorkspace(gameId)
       teamIdRef.current = res.data.teamId
       setWorkspace(res.data)
+      try {
+        const vpn = await penetrationPlayerApi.getTeamLabVpnConfig(gameId)
+        setVpnConfig(vpn.data)
+      } catch {
+        setVpnConfig(null)
+      }
       setSelectedTaskId((current) => {
         const nextTasks = buildTasks(res.data)
         if (current && nextTasks.some((task) => task.item.id === current)) return current
@@ -152,18 +158,11 @@ const PenetrationPage: FC = () => {
 
     connection.serverTimeoutInMilliseconds = 60 * 1000 * 60 * 2
 
-    connection.on('ReceivedPenetrationAttackGraphUpdate', (update: PenetrationAttackGraphUpdateModel) => {
+    connection.on('ReceivedPenetrationWorkspaceUpdate', (update: PenetrationWorkspaceUpdateModel) => {
       if (update.gameId !== gameId) return
       if (teamIdRef.current && update.teamId !== teamIdRef.current) return
 
       void load(true)
-      if (update.accepted) {
-        showNotification({
-          color: 'teal',
-          message: update.unlockedNodeCount > 0 ? `提交成功，新增 ${update.unlockedNodeCount} 个可做题目。` : '提交成功，题目状态已更新。',
-          icon: <Icon path={mdiCheck} size={1} />,
-        })
-      }
     })
 
     connection.onreconnected(() => {
@@ -229,6 +228,29 @@ const PenetrationPage: FC = () => {
     })
   }
 
+  const copyVpnConfig = async () => {
+    if (!vpnConfig?.configText) return
+    const ok = await copyText(vpnConfig.configText)
+    showNotification({
+      color: ok ? 'teal' : 'red',
+      message: ok ? 'VPN 配置已复制。' : '复制失败，请手动选中配置内容。',
+      icon: <Icon path={ok ? mdiCheck : mdiShieldSearch} size={1} />,
+    })
+  }
+
+  const downloadVpnConfig = () => {
+    if (!vpnConfig?.configText) return
+    const blob = new Blob([vpnConfig.configText], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `teamlab-${gameId}-${vpnConfig.teamId}.conf`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   const selectedValue = selectedTask ? (flags[selectedTask.item.id] ?? '') : ''
   const submitDisabled = !selectedTask || selectedTask.item.solved || selectedTask.locked || loading || !selectedValue.trim()
 
@@ -267,7 +289,7 @@ const PenetrationPage: FC = () => {
                         </YinyuStatusText>
                       </Group>
                       <Text className="yy-readable-text">
-                        {workspace.teamName} / 已完成 {solvedCount}/{totalCount} 题 / 目标主机：{targetHostText}
+                        {workspace.teamName} / 已完成 {solvedCount}/{totalCount} 题
                       </Text>
                     </Stack>
                     <Stack gap={6} className="yy-pentest-reset-block">
@@ -286,6 +308,40 @@ const PenetrationPage: FC = () => {
                   </Group>
                   <Progress value={progress} size="sm" radius="xl" className="yy-pentest-progress yy-pentest-ctf-progress" />
                 </YinyuPanel>
+
+                {vpnConfig ? (
+                  <YinyuPanel p="md" className="yy-pentest-vpn-panel">
+                    <Group justify="space-between" align="flex-start" wrap="wrap">
+                      <Stack gap={4}>
+                        <Group gap="xs" align="center">
+                          <Icon path={mdiVpn} size={0.9} />
+                          <Title order={3}>VPN 接入</Title>
+                          <YinyuStatusText tone="success">配置就绪</YinyuStatusText>
+                        </Group>
+                        <Text className="yy-readable-text" size="sm">
+                          {vpnConfig.teamName} / {vpnConfig.endpoint} / {vpnConfig.clientAddress}
+                        </Text>
+                      </Stack>
+                      <Group gap="xs">
+                        <Button variant="default" leftSection={<Icon path={mdiContentCopy} size={0.78} />} onClick={() => void copyVpnConfig()}>
+                          复制配置
+                        </Button>
+                        <Button variant="light" leftSection={<Icon path={mdiDownload} size={0.78} />} onClick={downloadVpnConfig}>
+                          下载配置
+                        </Button>
+                      </Group>
+                    </Group>
+                    <Textarea
+                      mt="sm"
+                      value={vpnConfig.configText}
+                      readOnly
+                      autosize
+                      minRows={6}
+                      maxRows={10}
+                      className="yy-pentest-vpn-config"
+                    />
+                  </YinyuPanel>
+                ) : null}
 
                 <div className="yy-pentest-ctf-layout">
                   <YinyuPanel p="md" className="yy-pentest-question-panel">
@@ -336,19 +392,11 @@ const PenetrationPage: FC = () => {
                           <YinyuStatusText tone={currentStatus.tone}>{currentStatus.label}</YinyuStatusText>
                         </Group>
 
-                        <div className="yy-pentest-target-card">
-                          <span>目标主机</span>
-                          <strong>{targetHostText}</strong>
-                          <p>请从该节点服务器开始外网打点与内网渗透，平台不再给选手暴露容器内网地址、端口路径或编排细节。</p>
-                        </div>
-
-                        <Divider className="yy-pentest-detail-divider" />
-
                         <div className="yy-pentest-description">
-                          {selectedTask.item.description ? (
-                            <Markdown source={selectedTask.item.description} />
+                          {hasDescription(selectedTask.item.description) ? (
+                            <Markdown source={selectedTask.item.description ?? ''} />
                           ) : (
-                            <Text className="yy-readable-text">该题目暂未提供额外说明，请围绕目标主机自行探测服务、路径与漏洞入口。</Text>
+                            <Text className="yy-readable-text">该题目暂未提供额外说明。</Text>
                           )}
                         </div>
 

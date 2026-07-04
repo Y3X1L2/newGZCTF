@@ -77,7 +77,6 @@ import { showErrorMsg } from '@Utils/Shared'
 import { fetcher } from '@Api'
 import {
   ImageTemplateLite,
-  PenetrationAdminAccessModel,
   PenetrationConfigModel,
   PenetrationDefaultPolicy,
   PenetrationDeploymentEventLevel,
@@ -127,12 +126,31 @@ type AssetData = Record<string, unknown> & {
   templateName: string
   interfaceLabel: string
   scoreLabel: string
-  isEntry: boolean
 }
 
-const zoneLabels: Record<PenetrationZoneType, string> = {
-  [PenetrationZoneType.Public]: '公网',
-  [PenetrationZoneType.Dmz]: 'DMZ',
+const teamLabZoneTypes = [
+  PenetrationZoneType.Dmz,
+  PenetrationZoneType.Business,
+  PenetrationZoneType.Data,
+  PenetrationZoneType.Operations,
+  PenetrationZoneType.Management,
+  PenetrationZoneType.Custom,
+]
+
+const teamLabNodeTypes = [
+  PenetrationNodeType.Web,
+  PenetrationNodeType.Database,
+  PenetrationNodeType.JumpHost,
+  PenetrationNodeType.Internal,
+  PenetrationNodeType.DomainControllerReserved,
+  PenetrationNodeType.Custom,
+  PenetrationNodeType.Bastion,
+  PenetrationNodeType.FirewallRouter,
+  PenetrationNodeType.Service,
+]
+
+const zoneLabels: Partial<Record<PenetrationZoneType, string>> = {
+  [PenetrationZoneType.Dmz]: '业务接入区',
   [PenetrationZoneType.Business]: '业务区',
   [PenetrationZoneType.Data]: '数据区',
   [PenetrationZoneType.Operations]: '运维区',
@@ -140,8 +158,7 @@ const zoneLabels: Record<PenetrationZoneType, string> = {
   [PenetrationZoneType.Custom]: '自定义',
 }
 
-const nodeTypeLabels: Record<PenetrationNodeType, string> = {
-  [PenetrationNodeType.Entry]: '入口服务',
+const nodeTypeLabels: Partial<Record<PenetrationNodeType, string>> = {
   [PenetrationNodeType.Web]: 'Web 服务',
   [PenetrationNodeType.Database]: '数据库',
   [PenetrationNodeType.JumpHost]: '跳板机',
@@ -208,14 +225,18 @@ const deploymentEventLabel: Record<PenetrationDeploymentEventLevel, string> = {
   [PenetrationDeploymentEventLevel.Error]: '失败',
 }
 
-const enforcementLabels: Record<PenetrationEnforcementMode, string> = {
-  [PenetrationEnforcementMode.HintOnly]: '仅题目提示',
+const deployableEnforcementModes: Array<PenetrationEnforcementMode.RuntimeRoute | PenetrationEnforcementMode.Both> = [
+  PenetrationEnforcementMode.Both,
+  PenetrationEnforcementMode.RuntimeRoute,
+]
+
+const enforcementLabels: Record<PenetrationEnforcementMode.RuntimeRoute | PenetrationEnforcementMode.Both, string> = {
   [PenetrationEnforcementMode.RuntimeRoute]: '运行期网络路由',
   [PenetrationEnforcementMode.Both]: '提示 + 运行期路由',
 }
 
-const edgeHintTitle = '协议/端口为题目提示字段'
-const edgeHintText = '当前版本只执行网络级 fabric 隔离与显式路由，不执行端口级防火墙。这里填写的协议和端口会进入路径摘要、部署计划和选手提示。'
+const edgeHintTitle = '路由关系用于 TeamLab 内网连通'
+const edgeHintText = '当前版本通过队伍 VPN 进入 TeamLab 内网，连线表达网段级路由关系；协议和端口只作为出题备注，不作为防火墙规则。'
 
 const routeStatusLabels: Record<PenetrationRouteStatus, string> = {
   [PenetrationRouteStatus.HintOnly]: '提示路径',
@@ -250,10 +271,22 @@ const shortText = (value?: string | null, length = 12) => {
   return value.length <= length ? value : value.slice(0, length)
 }
 
-const zoneOptions = Object.values(PenetrationZoneType).map((value) => ({ value, label: zoneLabels[value] }))
-const nodeTypeOptions = Object.values(PenetrationNodeType).map((value) => ({ value, label: nodeTypeLabels[value] }))
+const normalizeZoneType = (value: PenetrationZoneType) =>
+  teamLabZoneTypes.includes(value) ? value : PenetrationZoneType.Dmz
+const normalizeNodeType = (value: PenetrationNodeType) =>
+  teamLabNodeTypes.includes(value) ? value : PenetrationNodeType.Web
+const zoneLabel = (value: PenetrationZoneType) => zoneLabels[normalizeZoneType(value)] ?? '内网网段'
+const nodeTypeLabel = (value: PenetrationNodeType) => nodeTypeLabels[normalizeNodeType(value)] ?? '资产'
+const zoneOptions = teamLabZoneTypes.map((value) => ({ value, label: zoneLabel(value) }))
+const nodeTypeOptions = teamLabNodeTypes.map((value) => ({ value, label: nodeTypeLabel(value) }))
 const protocolOptions = Object.values(PenetrationProtocol).map((value) => ({ value, label: value.toUpperCase() }))
-const enforcementOptions = Object.values(PenetrationEnforcementMode).map((value) => ({ value, label: enforcementLabels[value] }))
+const enforcementOptions = deployableEnforcementModes.map((value) => ({ value, label: enforcementLabels[value] }))
+const enforcementLabel = (value: PenetrationEnforcementMode) => {
+  if (value === PenetrationEnforcementMode.RuntimeRoute || value === PenetrationEnforcementMode.Both)
+    return enforcementLabels[value]
+
+  return '待重新保存为运行期路由'
+}
 
 const flowNetworkId = (id: number) => `network-${id}`
 // 临时 ID 递减计数器，确保在 Int32 范围内且全局唯一
@@ -263,18 +296,21 @@ const newId = (items: { id: number }[]) => Math.min(-1, ...items.map((item) => i
 const newTopologyKey = (prefix: string, id?: number) =>
   `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}-${Math.abs(id ?? 0)}`
 const enumKey = (value: string | number | undefined | null) => String(value ?? '').toLowerCase()
-const isReadyLinuxDockerTemplate = (template: ImageTemplateLite) =>
-  (enumKey(template.osType) === '0' || enumKey(template.osType) === 'linux') &&
-  (enumKey(template.imageType) === '0' || enumKey(template.imageType) === 'docker') &&
+const isReadyTeamLabTemplate = (template: ImageTemplateLite) =>
   (enumKey(template.status) === '0' || enumKey(template.status) === 'ready')
 const normalizeConfig = (config: PenetrationConfigModel): PenetrationConfigModel => {
   const networks = config.networks.map((network) => ({
     ...network,
     topologyKey: network.topologyKey || newTopologyKey('network', network.id),
+    zoneType: normalizeZoneType(network.zoneType),
+    isEntry: false,
   }))
   const nodes = config.nodes.map((node) => ({
     ...node,
     topologyKey: node.topologyKey || newTopologyKey('node', node.id),
+    nodeType: normalizeNodeType(node.nodeType),
+    isEntry: false,
+    publishPort: false,
     playerAlias: node.playerAlias ?? '',
     playerDescription: node.playerDescription ?? '',
     allowRouting:
@@ -302,7 +338,7 @@ const normalizeConfig = (config: PenetrationConfigModel): PenetrationConfigModel
     edges: config.edges.map((edge) => ({
       ...edge,
       topologyKey: edge.topologyKey || newTopologyKey('edge', edge.id),
-      enforcementMode: edge.enforcementMode ?? (edge.isRouteHint ? PenetrationEnforcementMode.HintOnly : PenetrationEnforcementMode.HintOnly),
+      enforcementMode: edge.enforcementMode ?? PenetrationEnforcementMode.Both,
       priority: edge.priority ?? 100,
     })),
   }
@@ -311,15 +347,15 @@ const normalizeConfig = (config: PenetrationConfigModel): PenetrationConfigModel
 const defaultNetwork = (id: number, orderIndex: number, zoneType = PenetrationZoneType.Custom): PenetrationNetworkModel => ({
   id,
   topologyKey: newTopologyKey('network', id),
-  name: zoneType === PenetrationZoneType.Public ? '公网入口区' : `${zoneLabels[zoneType]} ${orderIndex + 1}`,
+  name: `${zoneLabel(zoneType)} ${orderIndex + 1}`,
   slug: zoneType.toLowerCase(),
   cidr: '',
   zoneType,
-  trustLevel: zoneType === PenetrationZoneType.Public ? 10 : zoneType === PenetrationZoneType.Data ? 80 : 50,
+  trustLevel: zoneType === PenetrationZoneType.Data ? 80 : 50,
   description: '',
   defaultPolicy: PenetrationDefaultPolicy.DenyAll,
   orderIndex,
-  isEntry: zoneType === PenetrationZoneType.Public,
+  isEntry: false,
   positionX: 80 + orderIndex * 700,
   positionY: 90 + (orderIndex % 2) * 60,
   width: NETWORK_W,
@@ -350,14 +386,13 @@ const defaultNode = (
   orderIndex: number,
   nodeType = PenetrationNodeType.Internal
 ): PenetrationNodeModel => {
-  const isEntry = nodeType === PenetrationNodeType.Entry
   return {
     id,
     topologyKey: newTopologyKey('node', id),
     networkId: network.id,
-    name: isEntry ? '外网入口服务' : nodeTypeLabels[nodeType],
+    name: nodeTypeLabel(nodeType),
     description: '',
-    playerAlias: isEntry ? '入口目标' : '',
+    playerAlias: '',
     playerDescription: '',
     nodeType,
     imageTemplateId: null,
@@ -365,9 +400,9 @@ const defaultNode = (
     cpuCount: 10,
     memoryLimit: 512,
     storageLimit: 512,
-    exposePort: isEntry ? 8080 : 80,
-    isEntry,
-    publishPort: isEntry,
+    exposePort: 80,
+    isEntry: false,
+    publishPort: false,
     allowRouting:
       nodeType === PenetrationNodeType.JumpHost ||
       nodeType === PenetrationNodeType.Bastion ||
@@ -391,7 +426,7 @@ const defaultNode = (
         staticIp: '',
         previewIp: '',
         isPrimary: true,
-        isManagement: isEntry,
+        isManagement: false,
         orderIndex: 0,
       },
     ],
@@ -400,7 +435,10 @@ const defaultNode = (
 }
 
 const fallbackConfig = (gameId: number): PenetrationConfigModel => {
-  const network = defaultNetwork(-1, 0, PenetrationZoneType.Public)
+  const network = defaultNetwork(-1, 0, PenetrationZoneType.Dmz)
+  network.name = '业务接入网段'
+  network.slug = 'service-lan'
+  network.description = '选手连接队伍 VPN 后可在该内网网段中发现业务资产。'
   return {
     gameId,
     baseCidr: '10.60.0.0/16',
@@ -410,14 +448,14 @@ const fallbackConfig = (gameId: number): PenetrationConfigModel => {
     publishedVersion: 0,
     status: PenetrationDeploymentStatus.Draft,
     networks: [network],
-    nodes: [defaultNode(-11, network, 0, PenetrationNodeType.Entry)],
+    nodes: [defaultNode(-11, network, 0, PenetrationNodeType.Web)],
     interfaces: [],
     edges: [],
   }
 }
 
 const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[], current?: PenetrationConfigModel) => {
-  const readyTemplates = templates.filter(isReadyLinuxDockerTemplate)
+  const readyTemplates = templates.filter(isReadyTeamLabTemplate)
   const findTemplate = (serviceKey: string) => {
     const normalized = serviceKey.toLowerCase()
     const compact = normalized.replaceAll('-', '')
@@ -426,72 +464,59 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
       return haystack.includes(normalized) || haystack.replaceAll('-', '').includes(compact)
     })
   }
+
   const networkSpecs = [
     {
       id: -101,
-      key: 'nm-net-public-edge',
-      zone: PenetrationZoneType.Public,
-      name: 'Public / Edge 入口区',
-      slug: 'public-edge',
-      cidr: '10.60.0.0/28',
-      trust: 10,
-      x: 60,
-      y: 130,
-      w: 560,
-      h: 320,
-      description: '选手唯一入口安全域。只发布 edge-gateway，选手获得节点地址后自行扫描入口服务。',
-    },
-    {
-      id: -102,
-      key: 'nm-net-dmz-service',
+      key: 'nm-net-service-lan',
       zone: PenetrationZoneType.Dmz,
-      name: 'DMZ / 对外业务区',
-      slug: 'dmz-service',
-      cidr: '10.60.0.16/28',
+      name: 'Service / 业务接入网段',
+      slug: 'service-lan',
+      cidr: '10.60.0.0/28',
       trust: 30,
-      x: 700,
+      x: 60,
       y: 80,
       w: 620,
       h: 430,
-      description: '企业官网、资源中心和客户上传中心，承接公开入口后的第一层业务服务。',
+      description: '队伍连接 WireGuard 后可扫描发现的业务接入网段，包含企业官网、资源中心和客户上传中心。',
     },
     {
-      id: -103,
+      id: -102,
       key: 'nm-net-biz-core',
       zone: PenetrationZoneType.Business,
       name: 'Business / AI 业务核心区',
       slug: 'biz-core',
-      cidr: '10.60.0.32/28',
+      cidr: '10.60.0.16/28',
       trust: 55,
-      x: 1420,
-      y: 120,
+      x: 780,
+      y: 110,
       w: 680,
       h: 460,
       description: '文档解析、AI 控制台 API 和任务队列所在的业务内网。',
     },
     {
-      id: -104,
+      id: -103,
       key: 'nm-net-data-plane',
       zone: PenetrationZoneType.Data,
       name: 'Data / 数据与模型区',
       slug: 'data-plane',
-      cidr: '10.60.0.48/28',
+      cidr: '10.60.0.32/28',
       trust: 85,
-      x: 2220,
+      x: 1580,
       y: 70,
       w: 720,
       h: 520,
       description: '客户数据库、对象存储、密钥服务和模型仓库，承载高分与终局线索。',
     },
     {
-      id: -105,
+      id: -104,
       key: 'nm-net-ops-control',
       zone: PenetrationZoneType.Operations,
       name: 'Operations / 运维控制区',
       slug: 'ops-control',
-      cidr: '10.60.0.64/28',
+      cidr: '10.60.0.48/28',
       trust: 70,
-      x: 1450,
+      x: 820,
       y: 690,
       w: 670,
       h: 360,
@@ -508,7 +533,7 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
     trustLevel: spec.trust,
     description: spec.description,
     defaultPolicy: PenetrationDefaultPolicy.DenyAll,
-    isEntry: spec.zone === PenetrationZoneType.Public,
+    isEntry: false,
     positionX: spec.x,
     positionY: spec.y,
     width: spec.w,
@@ -558,55 +583,24 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
     storage: number
     x: number
     y: number
-    entry?: boolean
-    publish?: boolean
     routing?: boolean
     interfaces: InterfaceSpec[]
     env?: Record<string, string>
     scores: PenetrationScoreItemModel[]
   }
 
-  const url = (key: string, port?: number) => port ? `{{node:nm-node-${key}:url:${port}}}` : `{{node:nm-node-${key}:url}}`
-  const host = (key: string) => `{{node:nm-node-${key}:host}}`
+  const url = (key: string, port?: number) => port ? `{{asset:nm-node-${key}:url:${port}}}` : `{{asset:nm-node-${key}:url}}`
+  const host = (key: string) => `{{asset:nm-node-${key}:ip}}`
 
   const nodeSpecs: NodeSpec[] = [
-    {
-      id: -201,
-      key: 'edge-gateway',
-      serviceKey: 'edge-gateway',
-      name: 'edge-gateway 外部入口网关',
-      alias: '入口目标',
-      description: 'NebulaMind 唯一对选手发布的入口网关。公开 80 端口，反向代理企业官网和客户支持入口；/status/build-info 承载外网发现低分 Flag。',
-      playerDescription: '你获得了 NebulaMind AI Corp 的授权测试入口地址。请从公开服务开始评估，逐步获取内网数据库与模型仓库中的敏感标识。',
-      type: PenetrationNodeType.Entry,
-      exposePort: 80,
-      cpu: 3,
-      memory: 128,
-      storage: 256,
-      x: 70,
-      y: 115,
-      entry: true,
-      publish: true,
-      routing: true,
-      interfaces: [
-        { net: 'public-edge', name: 'eth0', primary: true, management: true },
-        { net: 'dmz-service', name: 'eth1' },
-      ],
-      env: {
-        NM_PORTAL_WEB_URL: url('portal-web'),
-        NM_SUPPORT_UPLOAD_URL: url('support-upload'),
-      },
-      scores: [
-        score(-601, 'PUBLIC_DISCOVERY', 'A 外网发现', 50, '扫描入口服务，访问构建信息或镜像站泄露的 build metadata，获取公开发现 Flag。', 0),
-      ],
-    },
     {
       id: -202,
       key: 'portal-web',
       serviceKey: 'portal-web',
       name: 'portal-web 企业官网与资源中心',
-      alias: '题目 02',
-      description: '真实企业门户、产品页、客户案例、资源中心和遗留静态资源。包含隐藏目录与 Source Map 泄露。',
+      alias: '题目 01',
+      description: '真实企业门户、产品页、客户案例、资源中心和遗留静态资源。连接队伍 VPN 后由选手在内网中自行扫描发现。',
+      playerDescription: '连接队伍 VPN 后，在 NebulaMind 内网中自行扫描和信息收集。',
       type: PenetrationNodeType.Web,
       exposePort: 8080,
       cpu: 5,
@@ -614,14 +608,14 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
       storage: 512,
       x: 70,
       y: 96,
-      interfaces: [{ net: 'dmz-service', primary: true }],
+      interfaces: [{ net: 'service-lan', primary: true }],
       env: {
         NM_AI_CONSOLE_API_URL: url('ai-console-api'),
         NM_AI_CONSOLE_API_HOST: host('ai-console-api'),
       },
       scores: [
-        score(-602, 'PORTAL_HIDDEN_DOCS', 'A 外网发现', 80, '从 robots.txt 和资源归档目录发现旧版白皮书/导出页面中的内部跟踪标识。', 0),
-        score(-603, 'PORTAL_SOURCEMAP', 'A 外网发现', 120, '分析生产 Source Map，发现控制台 API、测试租户和调试 Flag。', 1),
+        score(-602, 'PORTAL_HIDDEN_DOCS', 'A 初始侦察', 80, '在 VPN 内网可达的企业门户中发现旧版白皮书/导出页面里的内部跟踪标识。', 0),
+        score(-603, 'PORTAL_SOURCEMAP', 'A 初始侦察', 120, '分析生产 Source Map，发现控制台 API、测试租户和调试 Flag。', 1),
       ],
     },
     {
@@ -629,7 +623,7 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
       key: 'support-upload',
       serviceKey: 'support-upload',
       name: 'support-upload 客户支持上传中心',
-      alias: '题目 03',
+      alias: '题目 02',
       description: '客户工单与日志包上传中心。通过上传绕过、路径穿越和 worker 配置泄露进入业务区。',
       type: PenetrationNodeType.Web,
       exposePort: 8080,
@@ -640,7 +634,7 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
       y: 236,
       routing: true,
       interfaces: [
-        { net: 'dmz-service', primary: true },
+        { net: 'service-lan', primary: true },
         { net: 'biz-core', name: 'eth1' },
       ],
       env: {
@@ -659,7 +653,7 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
       key: 'document-worker',
       serviceKey: 'document-worker',
       name: 'document-worker 文档解析 Worker',
-      alias: '题目 04',
+      alias: '题目 03',
       description: '异步文档解析与 URL 抓取 Worker。承接上传中心泄露 token，触发 SSRF 与命令注入。',
       type: PenetrationNodeType.Service,
       exposePort: 8080,
@@ -686,7 +680,7 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
       key: 'ai-console-api',
       serviceKey: 'ai-console-api',
       name: 'ai-console-api AI 控制台 API',
-      alias: '题目 05',
+      alias: '题目 04',
       description: 'AI 知识库、租户、审计与集成密钥 API。作为业务区进入数据区和运维区的关键边界服务。',
       type: PenetrationNodeType.Service,
       exposePort: 8080,
@@ -716,7 +710,7 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
       key: 'cache-broker',
       serviceKey: 'cache-broker',
       name: 'cache-broker 任务缓存与消息队列',
-      alias: '题目 06',
+      alias: '题目 05',
       description: '业务区 Redis 队列与任务结果缓存。无认证访问暴露解析结果和后续队列注入路径。',
       type: PenetrationNodeType.Service,
       exposePort: 6379,
@@ -738,7 +732,7 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
       key: 'git-service',
       serviceKey: 'git-service',
       name: 'git-service 内部 Git 服务',
-      alias: '题目 07',
+      alias: '题目 06',
       description: '轻量内部 Git/代码浏览服务，包含历史提交、配置样例和运维文档泄露。',
       type: PenetrationNodeType.Service,
       exposePort: 3000,
@@ -756,6 +750,7 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
         NM_AI_CONSOLE_API_URL: url('ai-console-api'),
         NM_DOCUMENT_WORKER_URL: url('document-worker'),
         NM_PORTAL_WEB_URL: url('portal-web'),
+        NM_CI_RUNNER_URL: url('ci-runner'),
       },
       scores: [
         score(-612, 'GIT_CONFIG_SECRET', 'E Git / CI', 180, '克隆内部仓库并查看历史提交，恢复旧配置文件中的 Flag 和 CI 项目线索。', 0),
@@ -766,7 +761,7 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
       key: 'ci-runner',
       serviceKey: 'ci-runner',
       name: 'ci-runner CI 构建执行节点',
-      alias: '题目 08',
+      alias: '题目 07',
       description: '内部 CI 项目变量、构建触发与 runner 执行环境。串联 Vault、数据库和对象存储凭据。',
       type: PenetrationNodeType.Service,
       exposePort: 8080,
@@ -796,7 +791,7 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
       key: 'customer-db',
       serviceKey: 'customer-db',
       name: 'customer-db 客户与标注数据库',
-      alias: '题目 09',
+      alias: '题目 08',
       description: 'PostgreSQL 客户、合同、标注、审计和受监管模型训练记录。终局链路落点在核心客户训练数据审计记录。',
       type: PenetrationNodeType.Database,
       exposePort: 5432,
@@ -820,7 +815,7 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
       key: 'object-store',
       serviceKey: 'object-store',
       name: 'object-store 对象存储与模型资源',
-      alias: '题目 10',
+      alias: '题目 09',
       description: 'MinIO 对象存储，包含公开模型资源、训练日志、导出 CSV 和模型 manifest 线索。',
       type: PenetrationNodeType.Service,
       exposePort: 9000,
@@ -844,7 +839,7 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
       key: 'secrets-vault',
       serviceKey: 'secrets-vault',
       name: 'secrets-vault 密钥配置服务',
-      alias: '题目 11',
+      alias: '题目 10',
       description: 'Vault mock 密钥服务。Bootstrap Token 滥用可读取模型仓库 token、数据库 admin 凭据和对象存储线索。',
       type: PenetrationNodeType.Service,
       exposePort: 8200,
@@ -870,7 +865,7 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
       key: 'model-registry',
       serviceKey: 'model-registry',
       name: 'model-registry 模型仓库',
-      alias: '题目 12',
+      alias: '题目 11',
       description: '模型版本、manifest、训练配置和供应链审计线索。G2 Flag 位于私有模型 manifest，终局线索指向对象存储训练日志和 customer-db 审计记录。',
       type: PenetrationNodeType.Service,
       exposePort: 8080,
@@ -908,8 +903,8 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
       memoryLimit: spec.memory,
       storageLimit: spec.storage,
       exposePort: spec.exposePort,
-      isEntry: spec.entry ?? false,
-      publishPort: spec.publish ?? false,
+      isEntry: false,
+      publishPort: false,
       allowRouting: spec.routing ?? false,
       staticIp: '',
       environmentVariables: spec.env ?? {},
@@ -937,14 +932,12 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
   const edge = (id: number, sourceKey: string, targetKey: string, label: string, description: string, priority: number) => ({
     ...makeEdge(id, nodeByKey[`nm-node-${sourceKey}`], nodeByKey[`nm-node-${targetKey}`], label, 'any'),
     topologyKey: `nm-edge-${sourceKey}-to-${targetKey}`,
-    enforcementMode: PenetrationEnforcementMode.HintOnly,
+    enforcementMode: PenetrationEnforcementMode.Both,
     isRouteHint: true,
     priority,
     description,
   })
   const edges: PenetrationEdgeModel[] = [
-    edge(-301, 'edge-gateway', 'portal-web', '入口网关到企业官网', 'Edge 网关将公开入口流量代理到 DMZ 企业官网。', 10),
-    edge(-302, 'edge-gateway', 'support-upload', '入口网关到客户上传中心', 'Edge 网关将 /support/ 路径代理到客户支持上传中心。', 20),
     edge(-303, 'support-upload', 'document-worker', '上传中心到文档 Worker', '路径穿越泄露 worker 配置后，上传中心业务链路进入文档解析 Worker。', 30),
     edge(-304, 'document-worker', 'cache-broker', '文档 Worker 到任务队列', 'Worker 使用 Redis 任务缓存，队列结果暴露内部线索。', 40),
     edge(-305, 'document-worker', 'ai-console-api', '文档 Worker 到 AI 控制台 API', 'SSRF 与 service-account 线索推动选手进入业务控制台。', 50),
@@ -969,7 +962,6 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
     edges,
   })
 }
-
 const makeEdge = (id: number, source: PenetrationNodeModel, target: PenetrationNodeModel, label: string, portRange = 'any'): PenetrationEdgeModel => ({
   id,
   topologyKey: newTopologyKey('edge', id),
@@ -983,7 +975,7 @@ const makeEdge = (id: number, source: PenetrationNodeModel, target: PenetrationN
   portRange,
   policyAction: PenetrationPolicyAction.Allow,
   isRouteHint: true,
-  enforcementMode: PenetrationEnforcementMode.HintOnly,
+  enforcementMode: PenetrationEnforcementMode.Both,
   priority: 100,
   label,
   description: '',
@@ -996,7 +988,7 @@ const SegmentNode = memo(({ data, selected }: NodeProps<Node<SegmentData>>) => (
       <Stack gap={2}>
         <Group gap={8} wrap="nowrap">
           <Badge size="sm" variant="light" className="yy-pentest-segment-badge">
-            {zoneLabels[data.zoneType]}
+            {zoneLabel(data.zoneType)}
           </Badge>
           <Text fw={900} className="yy-pentest-segment-title">
             {data.label}
@@ -1006,7 +998,7 @@ const SegmentNode = memo(({ data, selected }: NodeProps<Node<SegmentData>>) => (
           {data.slug} / {data.cidr}
         </Text>
       </Stack>
-      <Badge variant="outline">{data.nodeCount} 节点</Badge>
+      <Badge variant="outline">{data.nodeCount} 资产</Badge>
     </Group>
   </div>
 ))
@@ -1020,13 +1012,13 @@ const AssetNode = memo(({ data, selected }: NodeProps<Node<AssetData>>) => (
         {data.label}
       </Text>
       <Badge size="xs" variant="light" className={`yy-pentest-node-type type-${data.nodeType.toLowerCase()}`}>
-        {nodeTypeLabels[data.nodeType]}
+        {nodeTypeLabel(data.nodeType)}
       </Badge>
     </Group>
     <Text className="yy-pentest-node-template">{data.templateName}</Text>
     <div className="yy-pentest-node-grid">
       <span>{data.interfaceLabel}</span>
-      <span>{data.isEntry ? '入口发布' : '内部访问'}</span>
+      <span>VPN 内网资产</span>
       <span>{data.scoreLabel}</span>
     </div>
   </div>
@@ -1042,34 +1034,34 @@ const PenetrationUsageGuide: FC = () => (
     <ScrollArea.Autosize mah="calc(100dvh - 8rem)">
       <Stack gap="lg">
         <Stack gap={6}>
-          <Badge variant="light">低代码渗透场景编排</Badge>
+          <Badge variant="light">TeamLab 内网靶场编排</Badge>
           <Title order={3}>使用说明</Title>
           <Text className="yy-readable-text">
-            渗透编排用于快速构建外网打点、多级内网、跳板横移和分段得分场景。平台负责队伍级网络隔离、IPAM、容器多网卡、入口端口、动态 Flag 与环境重置；镜像只需要提供具体服务能力。
+            渗透编排用于构建队伍级 TeamLab 内网、资产网卡、网段路由和分段得分场景。平台负责隔离、IPAM、动态 Flag、运行事实和环境重置；镜像只提供具体服务能力。
           </Text>
         </Stack>
 
         <YinyuPanel p="md" className="yy-pentest-help-section">
           <Stack gap="xs">
             <Title order={4}>推荐工作流</Title>
-            <Text>1. 先点击“一键生成企业多级内网”，得到公网、DMZ、业务区、数据区和运维区的基础骨架。</Text>
-            <Text>2. 从左侧拖入安全域或资产节点，节点拖入某个安全域后会自动绑定主网卡。</Text>
-            <Text>3. 点击安全域配置名称、标识、样例 CIDR、默认策略和说明；未填写 CIDR 时由平台自动分配。</Text>
+            <Text>1. 先点击“一键生成 TeamLab 内网靶场”，得到业务接入区、业务核心区、数据区和运维区的基础骨架。</Text>
+            <Text>2. 从左侧拖入内网网段或资产节点，资产放入某个网段后会自动绑定主网卡。</Text>
+            <Text>3. 点击内网网段配置名称、标识、样例 CIDR、默认策略和说明；未填写 CIDR 时由平台自动分配。</Text>
             <Text>4. 点击资产节点选择环境模板、服务端口、资源限制、网卡、环境变量和得分项。</Text>
-            <Text>5. 在节点之间连线，表达访问路径、跳板关系或放行策略，再到“计划”页校验 IPAM 和部署结果。</Text>
-            <Text>6. 校验通过后依次保存、发布、部署；部署后可在“运行”页查看队伍环境、后台入口、提交日志和重建操作。</Text>
+            <Text>5. 在资产之间连线，表达网段级路由、跳板关系和题目路径，再到“计划”页校验 IPAM 和部署结果。</Text>
+            <Text>6. 校验通过后依次保存、发布、部署；部署后可在“运行”页查看队伍环境、VPN 状态、资产清单、提交日志和重建操作。</Text>
           </Stack>
         </YinyuPanel>
 
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <YinyuPanel p="md" className="yy-pentest-help-section">
             <Stack gap="xs">
-              <Title order={4}>安全域</Title>
+              <Title order={4}>内网网段</Title>
               <Text className="yy-readable-text">
-                安全域代表网络和信任边界，例如公网、DMZ、业务区、数据区、运维区。每个安全域会为每支队伍生成独立 CIDR 和平台管理的 fabric 网络。
+                内网网段代表 TeamLab 里的二层网络和信任边界，例如业务接入区、业务核心区、数据区、运维区。每个网段会为每支队伍生成独立 CIDR。
               </Text>
               <Text className="yy-readable-text">
-                普通内网节点默认不挂公开 Docker 网络，只通过安全域 fabric 网卡通信；入口节点或发布端口节点会额外挂管理入口，方便选手访问入口服务。
+                所有资产默认只暴露在队伍 VPN 内网中；选手通过 WireGuard 进入本队环境后自行扫描和访问。
               </Text>
             </Stack>
           </YinyuPanel>
@@ -1078,10 +1070,10 @@ const PenetrationUsageGuide: FC = () => (
             <Stack gap="xs">
               <Title order={4}>资产节点</Title>
               <Text className="yy-readable-text">
-                节点代表真实资产角色，例如入口服务、Web 服务、数据库、跳板机、堡垒机、防火墙/路由和业务服务。节点角色主要用于场景表达，实际运行内容由环境模板或 Docker 镜像决定。
+                节点代表真实资产角色，例如 Web 服务、数据库、跳板机、堡垒机、防火墙/路由和业务服务。节点角色主要用于场景表达，实际运行内容由环境模板决定。
               </Text>
               <Text className="yy-readable-text">
-                勾选“入口节点”或“发布宿主端口”后，平台会为该节点发布随机宿主端口。普通内网节点不发布端口。
+                TeamLab 资产只接入队伍 VPN 内网；管理端保留运行追踪、网卡事实和重建操作。
               </Text>
             </Stack>
           </YinyuPanel>
@@ -1090,7 +1082,7 @@ const PenetrationUsageGuide: FC = () => (
         <YinyuPanel p="md" className="yy-pentest-help-section">
           <Stack gap="xs">
             <Title order={4}>网卡、IPAM 与多级内网</Title>
-            <Text>每个节点至少需要一张网卡。主网卡决定节点默认所属安全域；额外网卡用于实现跳板机、防火墙/路由、堡垒机等跨网段资产。</Text>
+            <Text>每个资产至少需要一张网卡。主网卡决定资产默认所在网段；额外网卡用于实现跳板机、防火墙/路由、堡垒机等跨网段资产。</Text>
             <Text>固定样例 IP 可以人工填写，平台会按队伍网段进行平移，保证所有队伍拓扑一致但彼此隔离。留空时平台自动分配。</Text>
             <Text>不要在 Dockerfile 或服务配置里写死队伍 IP。需要知道队伍或 Flag 时，读取平台注入的环境变量。</Text>
           </Stack>
@@ -1099,16 +1091,16 @@ const PenetrationUsageGuide: FC = () => (
         <YinyuPanel p="md" className="yy-pentest-help-section">
           <Stack gap="xs">
             <Title order={4}>Docker 模板要求</Title>
-            <Text>环境模板直接复用平台现有环境模板。第一版渗透编排要求 Linux Docker 模板，且模板状态为 Ready。</Text>
-            <Text>服务必须监听容器内配置的“服务端口”，通常监听 0.0.0.0。入口节点发布的是宿主随机端口，不需要镜像自己处理宿主端口。</Text>
-            <Text>平台会用 Linux bridge/veth fabric 配置多网卡、固定 IP、显式路由、动态 Flag、启动命令、健康检查和资源限制；镜像不需要内置路由脚本。</Text>
+            <Text>环境模板直接复用平台现有环境模板。TeamLab 支持已就绪的 Docker 与 VM 模板。</Text>
+            <Text>服务必须监听模板内配置的服务端口，通常监听 0.0.0.0；选手通过 VPN 内网地址访问。</Text>
+            <Text>平台会用 Linux bridge/veth、VM bridge 网卡、固定 IP、网段级路由、动态 Flag、启动命令、健康检查和资源限制完成编排。</Text>
           </Stack>
         </YinyuPanel>
 
         <YinyuPanel p="md" className="yy-pentest-help-section">
           <Stack gap="xs">
             <Title order={4}>选手侧与计分</Title>
-            <Text>选手进入渗透工作台后，只能看到本队入口、可见拓扑、任务链、提交框和剩余重置次数。</Text>
+            <Text>选手进入渗透工作台后，只看到队伍 VPN 配置、题目、提交框和剩余重置次数。</Text>
             <Text>每个节点可以配置多个得分项，支持静态 Flag 和动态 Flag。动态 Flag 按比赛、队伍、节点、得分项和发布版本稳定生成，重置环境不会改变答案。</Text>
             <Text>选手重置会销毁并重建本队整套环境，消耗管理员配置的最大重置次数；管理员强制重建不消耗选手次数。</Text>
           </Stack>
@@ -1158,7 +1150,6 @@ const toFlowNodes = (config: PenetrationConfigModel, templates: ImageTemplateLit
         templateName: getTemplateName(node, templates),
         interfaceLabel: `${node.interfaces.length || 1} 网卡 / ${primary?.previewIp || primary?.staticIp || '自动 IP'}`,
         scoreLabel: `${node.scoreItems.length} 项 / ${totalScore} 分`,
-        isEntry: node.isEntry || node.publishPort,
       },
       className: `yy-pentest-flow-node type-${node.nodeType.toLowerCase()}`,
       draggable: true,
@@ -1289,7 +1280,6 @@ const BuilderInner: FC = () => {
   const templatesRef = useRef<ImageTemplateLite[]>([])
   const [plan, setPlan] = useState<PenetrationPlanModel>()
   const [environments, setEnvironments] = useState<PenetrationTeamEnvironmentModel[]>([])
-  const [access, setAccess] = useState<PenetrationAdminAccessModel[]>([])
   const [submissions, setSubmissions] = useState<PenetrationSubmissionLogModel[]>([])
   const [deploymentEvents, setDeploymentEvents] = useState<PenetrationDeploymentEventModel[]>([])
   const [deploymentEventTotal, setDeploymentEventTotal] = useState(0)
@@ -1323,7 +1313,7 @@ const BuilderInner: FC = () => {
       templates.map((template) => ({
         value: String(template.id),
         label: template.name,
-        disabled: !isReadyLinuxDockerTemplate(template),
+        disabled: !isReadyTeamLabTemplate(template),
       })),
     [templates]
   )
@@ -1346,12 +1336,11 @@ const BuilderInner: FC = () => {
     if (gameId <= 0) return
     setLoading(true)
     try {
-      const [configRes, templateRes, planRes, envRes, accessRes, submissionRes, eventRes] = await Promise.all([
+      const [configRes, templateRes, planRes, envRes, submissionRes, eventRes] = await Promise.all([
         penetrationAdminApi.getConfig(gameId),
         fetcher('/api/v1/image-templates?page=1&pageSize=100'),
         penetrationAdminApi.plan(gameId),
         penetrationAdminApi.getEnvironments(gameId),
-        penetrationAdminApi.getAccess(gameId),
         penetrationAdminApi.getSubmissions(gameId, 30),
         penetrationAdminApi.getDeploymentEvents(gameId, 50, 0),
       ])
@@ -1362,7 +1351,6 @@ const BuilderInner: FC = () => {
       setTemplates(nextTemplates)
       setPlan(planRes.data)
       setEnvironments(envRes.data)
-      setAccess(accessRes.data)
       setSubmissions(submissionRes.data.data ?? [])
       setDeploymentEvents(eventRes.data.data ?? [])
       setDeploymentEventTotal(eventRes.data.total ?? eventRes.data.length ?? 0)
@@ -1477,7 +1465,7 @@ const BuilderInner: FC = () => {
         const res = await penetrationAdminApi.publish(gameId)
         setConfig(normalizeConfig(res.data))
         syncFlowWithTemplates(res.data)
-        showNotification({ color: 'teal', message: '拓扑版本已发布', icon: <Icon path={mdiPublish} size={1} /> })
+        showNotification({ color: 'teal', message: '场景版本已发布', icon: <Icon path={mdiPublish} size={1} /> })
       } else if (kind === 'deploy') {
         const res = await penetrationAdminApi.deploy(gameId, forceDeployRef.current)
         showNotification({ color: 'teal', message: res.data.title, icon: <Icon path={mdiAccessPointNetwork} size={1} /> })
@@ -1510,7 +1498,10 @@ const BuilderInner: FC = () => {
     const source = config.nodes.find((node) => node.id === sourceNodeId)
     const target = config.nodes.find((node) => node.id === targetNodeId)
     if (!source || !target || source.id === target.id) return
-    const edge = makeEdge(newId(config.edges), source, target, '访问策略')
+    const edge = {
+      ...makeEdge(newId(config.edges), source, target, '内网路由关系'),
+      enforcementMode: PenetrationEnforcementMode.Both,
+    }
     const next = normalizeConfig({ ...config, edges: [...config.edges, edge] })
     setConfig(next)
     setSelectedTarget({ kind: 'edge', id: edge.id })
@@ -1610,15 +1601,15 @@ const BuilderInner: FC = () => {
     const target = selectedTarget
     const selectedName =
       target.kind === 'network'
-        ? config.networks.find((network) => network.id === target.id)?.name ?? '安全域'
+        ? config.networks.find((network) => network.id === target.id)?.name ?? '内网网段'
         : target.kind === 'node'
           ? config.nodes.find((node) => node.id === target.id)?.name ?? '节点'
-          : config.edges.find((edge) => edge.id === target.id)?.label ?? '访问策略'
+          : config.edges.find((edge) => edge.id === target.id)?.label ?? '内网路由关系'
     modals.openConfirmModal({
       title: '确认删除编排对象',
       children: (
         <Text size="sm" className="yy-readable-text">
-          将删除“{selectedName}”。删除安全域会同时删除其中节点和相关访问策略，此操作需要保存后才会生效。
+          将删除“{selectedName}”。删除内网网段会同时删除其中资产和相关路由关系，此操作需要保存后才会生效。
         </Text>
       ),
       labels: { confirm: '删除', cancel: '取消' },
@@ -1690,18 +1681,18 @@ const BuilderInner: FC = () => {
     }
   }
 
-  const restartRuntimeNode = (item: PenetrationAdminAccessModel) => {
+  const restartRuntimeNode = (runtimeNodeId: number, teamName: string, nodeName: string) => {
     modals.openConfirmModal({
       title: '确认重建整队环境',
       children: (
         <Stack gap={6}>
-          <Text size="sm">将先清理队伍“{item.teamName}”的当前环境，再按该队已部署版本重建整队渗透环境。</Text>
-          <Text size="xs" className="yy-readable-text">触发来源：{item.nodeName}。重建期间该队入口会短暂不可用。</Text>
+          <Text size="sm">将先清理队伍“{teamName}”的当前环境，再按该队已部署版本重建整队渗透环境。</Text>
+          <Text size="xs" className="yy-readable-text">触发来源：{nodeName}。重建期间该队 VPN 内网会短暂不可用。</Text>
         </Stack>
       ),
       labels: { confirm: '确认重建', cancel: '取消' },
       confirmProps: { color: 'yellow' },
-      onConfirm: () => void executeRestartRuntimeNode(item.runtimeNodeId),
+      onConfirm: () => void executeRestartRuntimeNode(runtimeNodeId),
     })
   }
 
@@ -1830,7 +1821,7 @@ const BuilderInner: FC = () => {
               校验/计划
             </Button>
           </Tooltip>
-          <Tooltip label="校验通过后发布一个可部署的拓扑版本">
+          <Tooltip label="校验通过后发布一个可部署的场景版本">
             <Button variant="light" leftSection={<Icon path={mdiPublish} size={0.85} />} onClick={() => runAction('publish')}>
               发布
             </Button>
@@ -1876,11 +1867,11 @@ const BuilderInner: FC = () => {
                 <Stack gap={4}>
                   <Title order={4}>场景工具箱</Title>
                   <Text size="sm" className="yy-readable-text">
-                    拖拽安全域和资产到画布。安全域决定隔离网段，资产网卡决定真实连通关系。
+                    拖拽内网网段和资产到画布。网段决定隔离边界，资产网卡决定真实连通关系。
                   </Text>
                 </Stack>
                 <div className="yy-pentest-flow-steps">
-                  {['生成/拖拽拓扑', '配置模板与网卡', '连线表达访问路径', '保存并校验计划', '发布部署后观测'].map((step, index) => (
+                  {['生成内网骨架', '配置模板与网卡', '连线表达路由', '保存并校验计划', '发布部署后观测'].map((step, index) => (
                     <div className="yy-pentest-flow-step" key={step}>
                       <b>{index + 1}</b>
                       <span>{step}</span>
@@ -1888,7 +1879,7 @@ const BuilderInner: FC = () => {
                   ))}
                 </div>
                 <Text size="xs" className="yy-pentest-flow-note">
-                  校验/计划只检查当前画布，不会保存草稿；发布会先保存并生成可部署版本。连线用于表达允许路径、任务链和可选运行期网络路由；真实隔离由安全域 Docker 网络和多网卡边界执行。
+                  校验/计划只检查当前画布，不会保存草稿；发布会先保存并生成可部署版本。所有资产只接入队伍 TeamLab 内网，选手通过队伍 VPN 自行扫描发现。
                 </Text>
                 <Button fullWidth leftSection={<Icon path={mdiAutoFix} size={0.85} />} onClick={() => {
                   const next = buildEnterpriseBlueprint(gameId, templates, config)
@@ -1896,7 +1887,7 @@ const BuilderInner: FC = () => {
                   setSelectedTarget({ kind: 'network', id: next.networks[0].id })
                   syncFlowWithTemplates(next)
                 }}>
-                  一键生成企业多级内网
+                  一键生成 TeamLab 内网靶场
                 </Button>
                 <Button
                   fullWidth
@@ -1907,7 +1898,7 @@ const BuilderInner: FC = () => {
                     setLinkSourceNodeId(undefined)
                   }}
                 >
-                  添加访问策略/连线
+                  添加路由关系/连线
                 </Button>
                 {linkMode ? (
                   <Text size="xs" className="yy-pentest-link-hint">
@@ -1915,26 +1906,26 @@ const BuilderInner: FC = () => {
                   </Text>
                 ) : null}
                 <Divider />
-                <Text fw={900}>安全域</Text>
+                <Text fw={900}>内网网段</Text>
                 <SimpleGrid cols={2}>
-                  {Object.values(PenetrationZoneType).map((zone) => (
+                  {teamLabZoneTypes.map((zone) => (
                     <button key={zone} type="button" className="yy-pentest-tool-chip" draggable onDragStart={(event) => dragStart(event, 'network', zone)} onClick={() => addNetwork(zone)}>
-                      {zoneLabels[zone]}
+                      {zoneLabel(zone)}
                     </button>
                   ))}
                 </SimpleGrid>
                 <Text fw={900}>资产节点</Text>
                 <SimpleGrid cols={2}>
-                  {Object.values(PenetrationNodeType).map((type) => (
+                  {teamLabNodeTypes.map((type) => (
                     <button key={type} type="button" className="yy-pentest-tool-chip" draggable onDragStart={(event) => dragStart(event, 'node', type)} onClick={() => addNode(type)}>
-                      {nodeTypeLabels[type]}
+                      {nodeTypeLabel(type)}
                     </button>
                   ))}
                 </SimpleGrid>
                 <Divider />
                 <SimpleGrid cols={2}>
                   <NumberInput label="队伍网段" min={16} max={28} value={config.teamSubnetPrefix} onChange={(value) => updateConfig((current) => ({ ...current, teamSubnetPrefix: Number(value || 24) }))} />
-                  <NumberInput label="安全域网段" min={24} max={30} value={config.networkSubnetPrefix} onChange={(value) => updateConfig((current) => ({ ...current, networkSubnetPrefix: Number(value || 28) }))} />
+                  <NumberInput label="子网前缀" min={24} max={30} value={config.networkSubnetPrefix} onChange={(value) => updateConfig((current) => ({ ...current, networkSubnetPrefix: Number(value || 28) }))} />
                 </SimpleGrid>
                 <TextInput label="地址池 CIDR" value={config.baseCidr} onChange={(event) => updateConfig((current) => ({ ...current, baseCidr: event.currentTarget.value }))} />
                 <NumberInput label="选手最大重置次数" min={0} max={100} value={config.maxResetCount} onChange={(value) => updateConfig((current) => ({ ...current, maxResetCount: Number(value || 0) }))} />
@@ -1987,12 +1978,12 @@ const BuilderInner: FC = () => {
                   {selectedNetwork ? (
                     <Stack gap="sm">
                       <Group justify="space-between">
-                        <Title order={4}>安全域属性</Title>
+                        <Title order={4}>内网网段属性</Title>
                         <ActionIcon color="red" variant="light" onClick={removeSelected}><Icon path={mdiDeleteOutline} size={0.8} /></ActionIcon>
                       </Group>
                       <TextInput label="名称" value={selectedNetwork.name} onChange={(event) => updateNetwork(selectedNetwork.id, { name: event.currentTarget.value })} />
                       <SimpleGrid cols={2}>
-                        <Select label="安全域类型" data={zoneOptions} value={selectedNetwork.zoneType} onChange={(value) => value && updateNetwork(selectedNetwork.id, { zoneType: value as PenetrationZoneType })} />
+                        <Select label="网段类型" data={zoneOptions} value={normalizeZoneType(selectedNetwork.zoneType)} onChange={(value) => value && updateNetwork(selectedNetwork.id, { zoneType: value as PenetrationZoneType, isEntry: false })} />
                         <TextInput label="节点数量" value={`${config.nodes.filter((node) => node.networkId === selectedNetwork.id).length} 个资产`} readOnly />
                       </SimpleGrid>
                       <SimpleGrid cols={2}>
@@ -2017,18 +2008,18 @@ const BuilderInner: FC = () => {
                         <ActionIcon color="red" variant="light" onClick={removeSelected}><Icon path={mdiDeleteOutline} size={0.8} /></ActionIcon>
                       </Group>
                       <TextInput label="名称" value={selectedNode.name} onChange={(event) => updateNode(selectedNode.id, { name: event.currentTarget.value })} />
-                      <Select label="资产角色" data={nodeTypeOptions} value={selectedNode.nodeType} onChange={(value) => value && updateNode(selectedNode.id, { nodeType: value as PenetrationNodeType })} />
+                       <Select label="资产角色" data={nodeTypeOptions} value={normalizeNodeType(selectedNode.nodeType)} onChange={(value) => value && updateNode(selectedNode.id, { nodeType: value as PenetrationNodeType, isEntry: false, publishPort: false })} />
                       <Textarea label="场景说明" minRows={2} value={selectedNode.description ?? ''} onChange={(event) => updateNode(selectedNode.id, { description: event.currentTarget.value })} />
                       <Divider label="选手端黑盒信息" />
                       <TextInput
                         label="选手端代号"
-                        description="留空时平台会自动显示为入口目标或目标模块编号，不暴露真实资产名称。"
+                        description="留空时平台会自动显示为题目编号，不暴露真实资产名称。"
                         value={selectedNode.playerAlias ?? ''}
                         onChange={(event) => updateNode(selectedNode.id, { playerAlias: event.currentTarget.value })}
                       />
                       <Textarea
                         label="选手端说明"
-                        description="只填写允许选手看到的任务背景，禁止写入内部 IP、网卡、安全域等管理信息。"
+                        description="只填写允许选手看到的任务背景，禁止写入内部 IP、网卡、网段等管理信息。"
                         minRows={2}
                         value={selectedNode.playerDescription ?? ''}
                         onChange={(event) => updateNode(selectedNode.id, { playerDescription: event.currentTarget.value })}
@@ -2042,8 +2033,6 @@ const BuilderInner: FC = () => {
                         <NumberInput label="服务端口" min={1} max={65535} value={selectedNode.exposePort} onChange={(value) => updateNode(selectedNode.id, { exposePort: Number(value || 80) })} />
                       </SimpleGrid>
                       <Group>
-                        <Checkbox label="入口节点" checked={selectedNode.isEntry} onChange={(event) => updateNode(selectedNode.id, { isEntry: event.currentTarget.checked, publishPort: event.currentTarget.checked || selectedNode.publishPort })} />
-                        <Checkbox label="发布宿主端口" checked={selectedNode.publishPort} onChange={(event) => updateNode(selectedNode.id, { publishPort: event.currentTarget.checked })} />
                         <Checkbox label="允许作为路由节点" checked={selectedNode.allowRouting} onChange={(event) => updateNode(selectedNode.id, { allowRouting: event.currentTarget.checked })} />
                       </Group>
                       <Divider label="网卡 / IPAM" />
@@ -2051,7 +2040,7 @@ const BuilderInner: FC = () => {
                         <YinyuPanel key={`${item.id}-${index}`} p="xs" className="yy-pentest-score-editor">
                           <SimpleGrid cols={2}>
                             <TextInput label="网卡名" value={item.name} onChange={(event) => updateNode(selectedNode.id, { interfaces: selectedNode.interfaces.map((it) => it.id === item.id ? { ...it, name: event.currentTarget.value } : it) })} />
-                            <Select label="所属安全域" data={config.networks.map((network) => ({ value: String(network.id), label: network.name }))} value={String(item.networkId)} onChange={(value) => value && updateNode(selectedNode.id, { interfaces: selectedNode.interfaces.map((it) => it.id === item.id ? { ...it, networkId: Number(value) } : it), networkId: item.isPrimary ? Number(value) : selectedNode.networkId })} />
+                            <Select label="所属内网网段" data={config.networks.map((network) => ({ value: String(network.id), label: network.name }))} value={String(item.networkId)} onChange={(value) => value && updateNode(selectedNode.id, { interfaces: selectedNode.interfaces.map((it) => it.id === item.id ? { ...it, networkId: Number(value) } : it), networkId: item.isPrimary ? Number(value) : selectedNode.networkId })} />
                             <TextInput label="固定样例 IP" value={item.staticIp ?? ''} placeholder={item.previewIp || '自动分配'} onChange={(event) => updateNode(selectedNode.id, { interfaces: selectedNode.interfaces.map((it) => it.id === item.id ? { ...it, staticIp: event.currentTarget.value } : it) })} />
                             <Group mt="1.6rem">
                               <Checkbox label="主网卡" checked={item.isPrimary} onChange={(event) => updateNode(selectedNode.id, { interfaces: selectedNode.interfaces.map((it) => ({ ...it, isPrimary: it.id === item.id ? event.currentTarget.checked : false })) })} />
@@ -2100,33 +2089,24 @@ const BuilderInner: FC = () => {
                   ) : selectedEdge ? (
                     <Stack gap="sm">
                       <Group justify="space-between">
-                        <Title order={4}>访问策略</Title>
+                        <Title order={4}>内网路由关系</Title>
                         <ActionIcon color="red" variant="light" onClick={removeSelected}><Icon path={mdiDeleteOutline} size={0.8} /></ActionIcon>
                       </Group>
                       <TextInput label="策略名称" value={selectedEdge.label ?? ''} onChange={(event) => updateEdge(selectedEdge.id, { label: event.currentTarget.value })} />
                       <SimpleGrid cols={2}>
-                        <Select label="提示协议" description="不执行协议级过滤" data={protocolOptions} value={selectedEdge.protocol} onChange={(value) => value && updateEdge(selectedEdge.id, { protocol: value as PenetrationProtocol })} />
-                        <TextInput label="提示端口范围" description="不执行端口级防火墙" value={selectedEdge.portRange} onChange={(event) => updateEdge(selectedEdge.id, { portRange: event.currentTarget.value })} />
+                        <Select label="备注协议" description="仅用于出题备注" data={protocolOptions} value={selectedEdge.protocol} onChange={(value) => value && updateEdge(selectedEdge.id, { protocol: value as PenetrationProtocol })} />
+                        <TextInput label="备注端口范围" description="仅用于出题备注" value={selectedEdge.portRange} onChange={(event) => updateEdge(selectedEdge.id, { portRange: event.currentTarget.value })} />
                       </SimpleGrid>
-                      <Select
-                        label="动作"
-                        data={[
-                          { value: PenetrationPolicyAction.Allow, label: '允许访问' },
-                          { value: PenetrationPolicyAction.Deny, label: '拒绝访问' },
-                        ]}
-                        value={selectedEdge.policyAction}
-                        onChange={(value) => value && updateEdge(selectedEdge.id, { policyAction: value as PenetrationPolicyAction })}
-                      />
+                      <TextInput label="关系类型" value="TeamLab 内网路由关系" readOnly />
                       <SimpleGrid cols={2}>
                         <Select
                           label="执行模式"
                           data={enforcementOptions}
-                          value={selectedEdge.enforcementMode ?? PenetrationEnforcementMode.HintOnly}
+                          value={selectedEdge.enforcementMode ?? PenetrationEnforcementMode.Both}
                           onChange={(value) => value && updateEdge(selectedEdge.id, { enforcementMode: value as PenetrationEnforcementMode })}
                         />
                         <NumberInput label="优先级" min={0} max={10000} value={selectedEdge.priority ?? 100} onChange={(value) => updateEdge(selectedEdge.id, { priority: Number(value || 100) })} />
                       </SimpleGrid>
-                      <Checkbox label="进入题目攻击图/迷雾提示" checked={selectedEdge.isRouteHint} onChange={(event) => updateEdge(selectedEdge.id, { isRouteHint: event.currentTarget.checked })} />
                       <YinyuPanel p="xs" className="yy-pentest-preview-box">
                         <Text size="xs" fw={800}>{edgeHintTitle}</Text>
                         <Text size="xs" className="yy-readable-text">{edgeHintText}</Text>
@@ -2136,8 +2116,8 @@ const BuilderInner: FC = () => {
                   ) : (
                     <Stack gap="xs" align="center" justify="center" mih={300}>
                       <Icon path={mdiRouterNetwork} size={2.2} />
-                      <Text fw={900}>选择安全域、资产或连线</Text>
-                      <Text className="yy-readable-text" ta="center">点击画布对象后，可在此配置网段、网卡、IP、访问策略和得分项。</Text>
+                      <Text fw={900}>选择内网网段、资产或连线</Text>
+                      <Text className="yy-readable-text" ta="center">点击画布对象后，可在此配置网段、网卡、IP、路由关系和得分项。</Text>
                     </Stack>
                   )}
                 </Tabs.Panel>
@@ -2152,7 +2132,7 @@ const BuilderInner: FC = () => {
                       <>
                         <YinyuPanel p="sm" className="yy-pentest-preview-box">
                           <Group justify="space-between"><Text fw={900}>样例队伍网段</Text><Badge variant="light">{plan.sampleTeamPrefix}</Badge></Group>
-                          <Text size="sm" className="yy-readable-text">参赛队伍：{plan.teamCount}，安全域：{plan.networks.length}，资产：{plan.nodes.length}</Text>
+                          <Text size="sm" className="yy-readable-text">参赛队伍：{plan.teamCount}，内网网段：{plan.networks.length}，资产：{plan.nodes.length}</Text>
                         </YinyuPanel>
                         {[...(plan.validation.errors ?? []), ...(plan.validation.warnings ?? [])].map((message, index) => (
                           <Text key={`${message}-${index}`} className={plan.validation.errors.includes(message) ? 'yy-pentest-error' : 'yy-readable-text'} size="sm">
@@ -2161,19 +2141,19 @@ const BuilderInner: FC = () => {
                         ))}
                         <YinyuTableShell p="xs">
                           <Table>
-                            <Table.Thead><Table.Tr><Table.Th>安全域</Table.Th><Table.Th>CIDR</Table.Th><Table.Th>隔离</Table.Th><Table.Th>策略</Table.Th></Table.Tr></Table.Thead>
-                            <Table.Tbody>{plan.networks.map((network) => <Table.Tr key={network.networkId}><Table.Td>{network.networkName}</Table.Td><Table.Td>{network.cidr}</Table.Td><Table.Td>{network.isInternal ? '内网隔离' : '入口可达'}</Table.Td><Table.Td>{network.defaultPolicy}</Table.Td></Table.Tr>)}</Table.Tbody>
+                            <Table.Thead><Table.Tr><Table.Th>内网网段</Table.Th><Table.Th>CIDR</Table.Th><Table.Th>接入方式</Table.Th><Table.Th>策略</Table.Th></Table.Tr></Table.Thead>
+                            <Table.Tbody>{plan.networks.map((network) => <Table.Tr key={network.networkId}><Table.Td>{network.networkName}</Table.Td><Table.Td>{network.cidr}</Table.Td><Table.Td>队伍 VPN 内网</Table.Td><Table.Td>{network.defaultPolicy}</Table.Td></Table.Tr>)}</Table.Tbody>
                           </Table>
                         </YinyuTableShell>
                         <YinyuTableShell p="xs">
                           <Table>
                             <Table.Thead><Table.Tr><Table.Th>资产</Table.Th><Table.Th>网卡/IP</Table.Th></Table.Tr></Table.Thead>
-                            <Table.Tbody>{plan.nodes.map((node) => <Table.Tr key={node.nodeId}><Table.Td>{node.nodeName}</Table.Td><Table.Td>{node.interfaces.map((item) => `${item.name}:${item.ipAddress}${item.isInternal ? '(内网)' : ''}`).join(' / ')}</Table.Td></Table.Tr>)}</Table.Tbody>
+                            <Table.Tbody>{plan.nodes.map((node) => <Table.Tr key={node.nodeId}><Table.Td>{node.nodeName}</Table.Td><Table.Td>{node.interfaces.map((item) => `${item.name}:${item.ipAddress}`).join(' / ')}</Table.Td></Table.Tr>)}</Table.Tbody>
                           </Table>
                         </YinyuTableShell>
                         <YinyuTableShell p="xs">
                           <Table>
-                            <Table.Thead><Table.Tr><Table.Th>访问路径</Table.Th><Table.Th>来源</Table.Th><Table.Th>目标</Table.Th><Table.Th>执行结果</Table.Th></Table.Tr></Table.Thead>
+                            <Table.Thead><Table.Tr><Table.Th>路由关系</Table.Th><Table.Th>来源</Table.Th><Table.Th>目标</Table.Th><Table.Th>执行结果</Table.Th></Table.Tr></Table.Thead>
                             <Table.Tbody>
                               {plan.policies.length > 0 ? plan.policies.map((policy) => (
                                 <Table.Tr key={policy.policyId}>
@@ -2191,16 +2171,16 @@ const BuilderInner: FC = () => {
                                         {routeStatusLabels[policy.routeStatus]}
                                       </YinyuStatusPill>
                                       <Text size="xs" fw={800} c={policy.isExecutable ? 'teal.2' : 'dimmed'}>
-                                        {policy.isExecutable ? '会写入网络级路由' : '仅提示/审计，不写入路由'}
+                                        {policy.isExecutable ? '会写入网段级路由' : '未生成运行期路由'}
                                       </Text>
-                                      <Text size="xs" className="yy-readable-text">{enforcementLabels[policy.enforcementMode]} · {policy.runtimeSummary}</Text>
+                                      <Text size="xs" className="yy-readable-text">{enforcementLabel(policy.enforcementMode)} · {policy.runtimeSummary}</Text>
                                       {policy.routeNodeName && <Text size="xs" className="yy-readable-text">路由节点：{policy.routeNodeName}，网关：{policy.gatewayIp ?? '自动'}</Text>}
                                       {policy.compileMessage && <Text size="xs" className="yy-readable-text" lineClamp={2}>{policy.compileMessage}</Text>}
                                     </Stack>
                                   </Table.Td>
                                 </Table.Tr>
                               )) : (
-                                <Table.Tr><Table.Td colSpan={4}>暂无访问路径。至少连接两个资产节点，用于表达任务链和跳板关系。</Table.Td></Table.Tr>
+                                <Table.Tr><Table.Td colSpan={4}>暂无路由关系。至少连接两个资产节点，用于表达任务链和跳板关系。</Table.Td></Table.Tr>
                               )}
                             </Table.Tbody>
                           </Table>
@@ -2226,7 +2206,7 @@ const BuilderInner: FC = () => {
                       <Stack gap={2}>
                         <Title order={4}>运行观测</Title>
                         <Text size="xs" className="yy-readable-text">
-                          这里展示队伍环境、容器/VM 追踪、网络级显式路由和部署时间线。协议/端口字段只作为题目路径提示，不表示端口级防火墙已经生效。
+                          这里展示队伍环境、容器/VM 追踪、VPN 状态、网卡事实和部署时间线。
                         </Text>
                       </Stack>
                       <Button size="xs" variant="light" onClick={load}>刷新</Button>
@@ -2293,7 +2273,7 @@ const BuilderInner: FC = () => {
                       <Group justify="space-between" mb="xs">
                         <Stack gap={0}>
                           <Text fw={900}>节点可溯源列表</Text>
-                          <Text size="xs" className="yy-readable-text">当前运行节点在前，历史/失败节点保留容器 ID、入口、镜像和网卡摘要。</Text>
+                          <Text size="xs" className="yy-readable-text">当前运行节点在前，历史/失败节点保留容器/VM 标识、镜像和网卡摘要。</Text>
                         </Stack>
                         <Text size="xs" className="yy-readable-text">共 {runtimeNodeRows.length} 个节点记录</Text>
                       </Group>
@@ -2303,7 +2283,7 @@ const BuilderInner: FC = () => {
                             <Table.Th>队伍 / 资产</Table.Th>
                             <Table.Th>状态</Table.Th>
                             <Table.Th>容器与镜像</Table.Th>
-                            <Table.Th>入口 / 内网</Table.Th>
+                            <Table.Th>内网地址</Table.Th>
                             <Table.Th>网卡</Table.Th>
                           </Table.Tr>
                         </Table.Thead>
@@ -2315,15 +2295,13 @@ const BuilderInner: FC = () => {
                               left.env.teamName.localeCompare(right.env.teamName) ||
                               left.node.nodeName.localeCompare(right.node.nodeName))
                             .map(({ env, node }) => {
-                              const accessItem = access.find((item) => item.runtimeNodeId === node.runtimeNodeId)
                               const interfaces = parseRuntimeInterfaces(node.interfaceSummary)
-                              const entry = accessItem?.url ?? (node.publicHost && node.publicPort ? `${node.publicHost}:${node.publicPort}` : node.publicPort ? `端口 ${node.publicPort}` : '')
                               return (
                                 <Table.Tr key={`${env.environmentId}-${node.runtimeNodeId}`}>
                                   <Table.Td>
                                     <Stack gap={2}>
                                       <Text fw={800}>{env.teamName} / {node.nodeName}</Text>
-                                      <Text size="xs" className="yy-readable-text">拓扑键：{shortText(node.topologyNodeKey, 18)}</Text>
+                                      <Text size="xs" className="yy-readable-text">资产标识：{shortText(node.topologyNodeKey, 18)}</Text>
                                       <Text size="xs" className="yy-readable-text">创建：{formatDateTime(node.createdAt)}</Text>
                                     </Stack>
                                   </Table.Td>
@@ -2341,13 +2319,11 @@ const BuilderInner: FC = () => {
                                   </Table.Td>
                                   <Table.Td>
                                     <Stack gap={2}>
-                                      <Text size="xs" className="yy-readable-text">入口：{entry || '未公开'}</Text>
-                                      <Text size="xs" className="yy-readable-text">内网：{node.ipAddress || accessItem?.internalIp || '-'}</Text>
-                                      {accessItem && (
-                                        <Button size="compact-xs" variant="light" onClick={() => restartRuntimeNode(accessItem)}>
-                                          重建整队环境
-                                        </Button>
-                                      )}
+                                      <Text size="xs" className="yy-readable-text">主地址：{node.ipAddress || '-'}</Text>
+                                      <Text size="xs" className="yy-readable-text">访问方式：队伍 VPN 内网</Text>
+                                      <Button size="compact-xs" variant="light" onClick={() => restartRuntimeNode(node.runtimeNodeId, env.teamName, node.nodeName)}>
+                                        重建整队环境
+                                      </Button>
                                     </Stack>
                                   </Table.Td>
                                   <Table.Td>
@@ -2385,9 +2361,9 @@ const BuilderInner: FC = () => {
                                     {routeStatusLabels[route.status]}
                                   </YinyuStatusPill>
                                   <Text size="xs" fw={800} c={route.isExecutable ? 'teal.2' : 'dimmed'}>
-                                    {route.isExecutable ? '网络级路由记录' : '提示/审计记录'}
+                                    {route.isExecutable ? '网络级路由记录' : '未应用路由'}
                                   </Text>
-                                  <Text size="xs" className="yy-readable-text">{enforcementLabels[route.enforcementMode]}</Text>
+                                  <Text size="xs" className="yy-readable-text">{enforcementLabel(route.enforcementMode)}</Text>
                                 </Stack>
                               </Table.Td>
                               <Table.Td>
@@ -2405,7 +2381,7 @@ const BuilderInner: FC = () => {
                               </Table.Td>
                             </Table.Tr>
                           )) : (
-                            <Table.Tr><Table.Td colSpan={4}><Text size="sm" className="yy-readable-text">暂无运行期路由记录。HintOnly 策略只会影响选手攻击图，不会生成网络级路由。</Text></Table.Td></Table.Tr>
+                            <Table.Tr><Table.Td colSpan={4}><Text size="sm" className="yy-readable-text">暂无运行期路由记录。发布带有 RuntimeRoute/Both 的路由关系并部署队伍环境后会在这里显示。</Text></Table.Td></Table.Tr>
                           )}
                         </Table.Tbody>
                       </Table>

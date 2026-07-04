@@ -26,4 +26,23 @@ public class TeamLabController(TeamLabNetworkService service) : ControllerBase
     [HttpPost("cleanup")]
     public async Task<IActionResult> Cleanup([FromBody] TeamLabCleanupRequest request, CancellationToken token) =>
         Ok(await service.CleanupAsync(request, token));
+
+    [HttpPost("probe")]
+    public async Task<IActionResult> Probe([FromBody] TeamLabProbeRequest request, CancellationToken token) =>
+        Ok(await service.ProbeAsync(request, token));
+
+    [HttpPost("containers/attach")]
+    public async Task<IActionResult> AttachContainer([FromBody] TeamLabContainerAttachRequest request,
+        CancellationToken token) =>
+        Ok(await service.AttachContainerAsync(request, token));
+
+    [HttpPost("dhcp-dns")]
+    public async Task<IActionResult> ConfigureDhcpDns([FromBody] TeamLabDhcpDnsRequest request,
+        CancellationToken token) =>
+        Ok(await service.ConfigureDhcpDnsAsync(request, token));
+
+    [HttpPost("dhcp-dns/probe")]
+    public async Task<IActionResult> ProbeDhcpDns([FromBody] TeamLabDhcpDnsProbeRequest request,
+        CancellationToken token) =>
+        Ok(await service.ProbeDhcpDnsAsync(request, token));
 }

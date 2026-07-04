@@ -163,15 +163,6 @@ def read_b3_flag() -> str:
     return get_flag("FLAG_WORKER_SSRF_METADATA", "flag{b3_ssrf_metadata_placeholder}")
 
 
-def read_d3_flag_from_file() -> str:
-    """Read D3 flag from injected file (used for verification only, not exposed)."""
-    try:
-        with open(WORKER_FLAG_FILE, "r", encoding="utf-8") as f:
-            return f.read().strip()
-    except (IOError, OSError):
-        return ""
-
-
 def extract_host(url: str) -> str:
     """Extract hostname from URL."""
     try:
@@ -194,6 +185,14 @@ def fetch_url(url: str, timeout: int = 8) -> dict:
 
     This is the B3 SSRF sink: document-worker fetches arbitrary URLs.
     Only http/https schemes are allowed (realistic for a document parser).
+
+    SSRF filtering (weak, bypassable by design for CTF realism):
+    - Blocks cloud metadata endpoints (169.254.169.254) and localhost variants.
+    - Does NOT block internal service hostnames (document-worker needs to fetch
+      from ai-console-api by design - this is the B3 SSRF path).
+    - Does NOT resolve DNS before filtering, so hostnames that resolve to blocked
+      IPs will bypass the filter. This simulates a naive enterprise SSRF filter
+      that checks the URL string but not the resolved address.
     """
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme not in ("http", "https"):
@@ -202,6 +201,23 @@ def fetch_url(url: str, timeout: int = 8) -> dict:
             "status_code": 0,
             "content": "",
             "error": f"unsupported scheme: {parsed.scheme}",
+        }
+
+    # Weak SSRF filter: block obvious metadata/localhost targets by hostname.
+    # Bypass: use internal service hostnames (e.g., ai-console-api) or DNS rebinding.
+    host = (parsed.hostname or "").lower()
+    BLOCKED_HOSTS = {
+        "169.254.169.254",  # cloud metadata
+        "metadata.google.internal",
+        "127.0.0.1", "localhost", "0.0.0.0",
+        "::1", "[::1]",
+    }
+    if host in BLOCKED_HOSTS:
+        return {
+            "ok": False,
+            "status_code": 0,
+            "content": "",
+            "error": f"blocked by SSRF filter: {host}",
         }
 
     req = urllib.request.Request(

@@ -18,13 +18,15 @@ nm_require_all \
     NM_CACHE_BROKER_HOST \
     NM_AI_CONSOLE_API_URL \
     NM_DOCUMENT_WORKER_URL \
-    NM_PORTAL_WEB_URL
+    NM_PORTAL_WEB_URL \
+    NM_CI_RUNNER_URL
 
 READONLY_DATABASE_URL="postgresql://readonly:readonly_password_2026@$NM_CUSTOMER_DB_HOST:5432/nebulamind"
 GIT_SERVICE_URL="$NM_GIT_SERVICE_URL"
 OBJECT_STORE_ENDPOINT="$NM_OBJECT_STORE_URL"
 CACHE_BROKER_URL="redis://$NM_CACHE_BROKER_HOST:6379/2"
 AI_CONSOLE_API_URL="$NM_AI_CONSOLE_API_URL"
+CI_RUNNER_URL="$NM_CI_RUNNER_URL"
 
 # E1: Git 仓库泄露低权限凭据
 # Flag 注入到 console-api 仓库历史中的 .env.example.old 文件
@@ -59,7 +61,7 @@ init_console_api() {
     git --git-dir="$bare" config gitweb.description "NebulaMind Console API - Internal admin console backend"
     work=$(mktemp -d)
     cd "$work"
-    git init -q -b master
+    git init -q -b main
 
     # --- Commit 1: 初始脚手架 ---
     cp /app/repos/console-api/README.md .
@@ -145,7 +147,9 @@ OBJECT_STORE_SECRET_KEY=minioadmin
 
 # CI/CD
 CI_PROJECT=nebulamind-console-api
-CI_PIPELINE_URL=https://ci.nebulamind.internal/nebulamind/console-api
+CI_RUNNER_URL=$CI_RUNNER_URL
+CI_PIPELINE_URL=$CI_RUNNER_URL/nebulamind/console-api
+CI_API_URL=$CI_RUNNER_URL/api/v1
 
 # Internal Services
 GIT_SERVICE_URL=$GIT_SERVICE_URL
@@ -322,7 +326,7 @@ DEPLOYEOF
 
     # 推送到裸仓库
     git remote add origin "$bare"
-    git push -q origin master
+    git push -q origin main
 
     cd /
     rm -rf "$work"
@@ -340,7 +344,7 @@ init_doc_worker() {
     git --git-dir="$bare" config gitweb.description "NebulaMind Document Worker - Document parsing and conversion worker"
     work=$(mktemp -d)
     cd "$work"
-    git init -q -b master
+    git init -q -b main
 
     # --- Commit 1 ---
     cp /app/repos/doc-worker/README.md .
@@ -552,7 +556,7 @@ TROEOF
     commit_with_date "docs: add troubleshooting guide" "2026-03-05T09:00:00"
 
     git remote add origin "$bare"
-    git push -q origin master
+    git push -q origin main
 
     cd /
     rm -rf "$work"
@@ -570,7 +574,7 @@ init_infra_playbooks() {
     git --git-dir="$bare" config gitweb.description "NebulaMind Infrastructure Playbooks - Ansible deployment and configuration"
     work=$(mktemp -d)
     cd "$work"
-    git init -q -b master
+    git init -q -b main
 
     # --- Commit 1 ---
     cp /app/repos/infra-playbooks/README.md .
@@ -864,7 +868,7 @@ DREOF
     commit_with_date "docs: add disaster recovery runbook" "2026-02-20T09:00:00"
 
     git remote add origin "$bare"
-    git push -q origin master
+    git push -q origin main
 
     cd /
     rm -rf "$work"

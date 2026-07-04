@@ -34,7 +34,7 @@ public class AgentClient
         return await repo.GetNodeByIdAsync(nodeId, token);
     }
 
-    public async Task<AgentCreateContainerResponse?> CreateContainerAsync(Guid nodeId, ContainerConfig config, CancellationToken token)
+    public virtual async Task<AgentCreateContainerResponse?> CreateContainerAsync(Guid nodeId, ContainerConfig config, CancellationToken token)
     {
         try
         {
@@ -49,7 +49,7 @@ public class AgentClient
         }
     }
 
-    public async Task<AgentCreateContainerResponse> CreateContainerOrThrowAsync(Guid nodeId, ContainerConfig config,
+    public virtual async Task<AgentCreateContainerResponse> CreateContainerOrThrowAsync(Guid nodeId, ContainerConfig config,
         CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
@@ -75,6 +75,7 @@ public class AgentClient
             config.StartCommand,
             config.HealthCheck,
             config.UsePenetrationFabric,
+            config.UseHostNetworkNone,
             config.EnableNetworkAdmin,
             config.RemoveDefaultRoute,
             config.EnableIpForwarding
@@ -110,7 +111,7 @@ public class AgentClient
             $"Agent returned an empty container response on node {node.Name} ({node.HostAddress}) for image {config.Image}.");
     }
 
-    public async Task DestroyContainerAsync(Guid nodeId, string containerId, CancellationToken token)
+    public virtual async Task DestroyContainerAsync(Guid nodeId, string containerId, CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null)
@@ -126,7 +127,7 @@ public class AgentClient
         }
     }
 
-    public async Task<AgentCommandResult> ExecuteContainerCommandAsync(Guid nodeId, string containerId,
+    public virtual async Task<AgentCommandResult> ExecuteContainerCommandAsync(Guid nodeId, string containerId,
         IReadOnlyList<string> command, int timeoutSeconds, CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
@@ -179,22 +180,41 @@ public class AgentClient
         return await ReadTeamLabResponseAsync<TeamLabStatusResponse>(response, token);
     }
 
-    public async Task<TeamLabDryRunResponse?> CreateTeamLabBridgeAsync(Guid nodeId, TeamLabBridgeRequest request,
+    public virtual async Task<TeamLabDryRunResponse?> CreateTeamLabBridgeAsync(Guid nodeId, TeamLabBridgeRequest request,
         CancellationToken token) => await PostTeamLabAsync<TeamLabBridgeRequest, TeamLabDryRunResponse>(nodeId,
         "/api/teamlab/bridges", request, token);
 
-    public async Task<TeamLabDryRunResponse?> CreateTeamLabRouterAsync(Guid nodeId, TeamLabRouterRequest request,
+    public virtual async Task<TeamLabDryRunResponse?> CreateTeamLabRouterAsync(Guid nodeId, TeamLabRouterRequest request,
         CancellationToken token) => await PostTeamLabAsync<TeamLabRouterRequest, TeamLabDryRunResponse>(nodeId,
         "/api/teamlab/routers", request, token);
 
-    public async Task<TeamLabDryRunResponse?> ConfigureTeamLabWireGuardAsync(Guid nodeId,
+    public virtual async Task<TeamLabDryRunResponse?> ConfigureTeamLabWireGuardAsync(Guid nodeId,
         TeamLabWireGuardRequest request, CancellationToken token) =>
         await PostTeamLabAsync<TeamLabWireGuardRequest, TeamLabDryRunResponse>(nodeId,
             "/api/teamlab/wireguard", request, token);
 
-    public async Task<TeamLabDryRunResponse?> CleanupTeamLabAsync(Guid nodeId, TeamLabCleanupRequest request,
+    public virtual async Task<TeamLabDryRunResponse?> CleanupTeamLabAsync(Guid nodeId, TeamLabCleanupRequest request,
         CancellationToken token) => await PostTeamLabAsync<TeamLabCleanupRequest, TeamLabDryRunResponse>(nodeId,
         "/api/teamlab/cleanup", request, token);
+
+    public virtual async Task<TeamLabDryRunResponse?> ProbeTeamLabAsync(Guid nodeId, TeamLabProbeRequest request,
+        CancellationToken token) => await PostTeamLabAsync<TeamLabProbeRequest, TeamLabDryRunResponse>(nodeId,
+        "/api/teamlab/probe", request, token);
+
+    public virtual async Task<TeamLabDryRunResponse?> AttachTeamLabContainerAsync(Guid nodeId,
+        TeamLabContainerAttachRequest request, CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabContainerAttachRequest, TeamLabDryRunResponse>(nodeId,
+            "/api/teamlab/containers/attach", request, token);
+
+    public virtual async Task<TeamLabDryRunResponse?> ConfigureTeamLabDhcpDnsAsync(Guid nodeId,
+        TeamLabDhcpDnsRequest request, CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabDhcpDnsRequest, TeamLabDryRunResponse>(nodeId,
+            "/api/teamlab/dhcp-dns", request, token);
+
+    public virtual async Task<TeamLabDryRunResponse?> ProbeTeamLabDhcpDnsAsync(Guid nodeId,
+        TeamLabDhcpDnsProbeRequest request, CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabDhcpDnsProbeRequest, TeamLabDryRunResponse>(nodeId,
+            "/api/teamlab/dhcp-dns/probe", request, token);
 
     private async Task<TResponse?> PostTeamLabAsync<TRequest, TResponse>(Guid nodeId, string path, TRequest request,
         CancellationToken token)
@@ -331,7 +351,7 @@ public class AgentClient
         return result ?? PenetrationFabricResult.Failed(null, "Agent returned an empty fabric result.");
     }
 
-    public async Task<AgentCreateVmResponse?> CreateVmAsync(Guid nodeId, AgentCreateVmRequest request, CancellationToken token)
+    public virtual async Task<AgentCreateVmResponse?> CreateVmAsync(Guid nodeId, AgentCreateVmRequest request, CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null) return null;
@@ -349,7 +369,7 @@ public class AgentClient
         return await response.Content.ReadFromJsonAsync<AgentCreateVmResponse>(token);
     }
 
-    public async Task DestroyVmAsync(Guid nodeId, string vmName, CancellationToken token)
+    public virtual async Task DestroyVmAsync(Guid nodeId, string vmName, CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null)
@@ -365,7 +385,11 @@ public class AgentClient
         }
     }
 
-    public async Task<AgentVmIpResponse?> GetVmIpAsync(Guid nodeId, string vmName, CancellationToken token)
+    public async Task<AgentVmIpResponse?> GetVmIpAsync(Guid nodeId, string vmName, CancellationToken token) =>
+        await GetVmIpAsync(nodeId, vmName, [], token);
+
+    public async Task<AgentVmIpResponse?> GetVmIpAsync(Guid nodeId, string vmName,
+        IReadOnlyList<AgentVmNetworkInterfaceRequest> interfaces, CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null) return null;
@@ -373,7 +397,12 @@ public class AgentClient
         var client = BuildClient(node);
         try
         {
-            var response = await client.GetAsync($"/api/vms/{Uri.EscapeDataString(vmName)}/ip", token);
+            var path = $"/api/vms/{Uri.EscapeDataString(vmName)}/ip";
+            var response = interfaces.Count == 0
+                ? await client.GetAsync(path, token)
+                : await client.PostAsync(path,
+                    new StringContent(JsonSerializer.Serialize(new { interfaces }), Encoding.UTF8,
+                        "application/json"), token);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("Agent VM IP lookup failed on node {NodeId}: {Status}",
@@ -509,6 +538,14 @@ public class AgentCreateVmRequest
     public int Memory { get; set; } = 2048;
     public int Cpu { get; set; } = 2;
     public string? Flag { get; set; }
+    public List<AgentVmNetworkInterfaceRequest> Interfaces { get; set; } = [];
+}
+
+public class AgentVmNetworkInterfaceRequest
+{
+    public string BridgeName { get; set; } = string.Empty;
+    public string? MacAddress { get; set; }
+    public string Model { get; set; } = "e1000e";
 }
 
 public class AgentCreateVmResponse
@@ -516,6 +553,7 @@ public class AgentCreateVmResponse
     public string VmName { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string? VncAddress { get; set; }
+    public List<AgentVmNetworkInterfaceRequest> Interfaces { get; set; } = [];
 }
 
 public class AgentCommandResult
@@ -569,25 +607,85 @@ public record TeamLabBridgeRequest(
     int RuntimeId,
     string BridgeName,
     string Cidr,
-    string GatewayIp,
     bool DryRun = true);
+
+public record TeamLabRouterInterfaceRequest(
+    string BridgeName,
+    string GatewayAddressCidr);
+
+public record TeamLabStaticRouteRequest(
+    string TargetCidr,
+    string GatewayIp);
 
 public record TeamLabRouterRequest(
     int RuntimeId,
     string NamespaceName,
-    string[] BridgeNames,
+    TeamLabRouterInterfaceRequest[] Interfaces,
+    TeamLabStaticRouteRequest[] Routes,
     bool DryRun = true);
 
 public record TeamLabWireGuardRequest(
     int RuntimeId,
+    string NamespaceName,
     string InterfaceName,
     int ListenPort,
     string AddressCidr,
+    string InterfacePrivateKey,
     string PeerPublicKey,
+    string PeerClientAddress,
     string PeerAllowedIps,
     bool DryRun = true);
 
 public record TeamLabCleanupRequest(
     int RuntimeId,
     string[] ResourceNames,
+    bool DryRun = true);
+
+public record TeamLabProbeRequest(
+    int RuntimeId,
+    string NamespaceName,
+    string TargetIp,
+    bool DryRun = true);
+
+public record TeamLabContainerAttachRequest(
+    int RuntimeId,
+    string ContainerId,
+    string BridgeName,
+    string HostInterfaceName,
+    string ContainerInterfaceName,
+    string AddressCidr,
+    string? MacAddress,
+    bool RemoveDefaultRoute,
+    string? GatewayIp,
+    string[] StaticRoutes,
+    string[] DnsServers,
+    bool DryRun = true);
+
+public record TeamLabDhcpLeaseRequest(
+    string MacAddress,
+    string IpAddress,
+    string Hostname);
+
+public record TeamLabDnsRecordRequest(
+    string Hostname,
+    string IpAddress);
+
+public record TeamLabDhcpDnsRequest(
+    int RuntimeId,
+    string ServiceName,
+    string NamespaceName,
+    string BridgeName,
+    string InterfaceName,
+    string GatewayIp,
+    string Cidr,
+    string Domain,
+    TeamLabDhcpLeaseRequest[] Leases,
+    TeamLabDnsRecordRequest[] DnsRecords,
+    bool DryRun = true);
+
+public record TeamLabDhcpDnsProbeRequest(
+    int RuntimeId,
+    string NamespaceName,
+    string GatewayIp,
+    string Hostname,
     bool DryRun = true);

@@ -3,22 +3,30 @@ set -e
 
 # customer-db 入口脚本
 # 职责：
-# 1. 读取 F1/F2/F3 Flag 环境变量与 admin 密码
+# 1. 读取 F1/F2/F3/G3 Flag 环境变量与 admin 密码
 # 2. 处理 /opt/nebulamind/init/*.sql 中的占位符（sed 替换 Flag 与密码）
 # 3. 将处理后的 SQL 复制到 /docker-entrypoint-initdb.d/
 # 4. 调用官方 postgres docker-entrypoint 启动数据库
 #
 # Flag 注入位置：
-#   F1 (FLAG_DB_READONLY_CUSTOMERS)   -> security_findings.finding_details（占位符 __NM_FLAG_F1__）
-#   F2 (FLAG_DB_PRIVESC_FUNCTION)     -> internal_exports.data_payload（占位符 __NM_FLAG_F2__）
-#   F3 (FLAG_DB_CORE_CUSTOMER_DATA)   -> regulated_model_training_records.compliance_audit（占位符 __NM_FLAG_F3__）
-#   admin 密码                         -> 04-permissions.sql 中 admin 角色密码（占位符 __NM_DB_ADMIN_PASSWORD__）
+#   F1 (FLAG_DB_READONLY_CUSTOMERS)        -> security_findings.finding_details（占位符 __NM_FLAG_F1__）
+#   F2 (FLAG_DB_PRIVESC_FUNCTION)          -> internal_exports.data_payload（占位符 __NM_FLAG_F2__）
+#   F3 (FLAG_DB_CORE_CUSTOMER_DATA)        -> regulated_model_training_records.compliance_audit id=6（占位符 __NM_FLAG_F3__）
+#   G3 (FLAG_FINAL_MODEL_SUPPLY_CHAIN)     -> regulated_model_training_records.compliance_audit id=13（占位符 __NM_FLAG_G3__）
+#   admin 密码                              -> 04-permissions.sql 中 admin 角色密码（占位符 __NM_DB_ADMIN_PASSWORD__）
+#
+# G3 终局链路说明：
+#   G3 与 F3 同表但不同行（id=13 vs id=6），避免互相干扰。
+#   选手需串联：G2 manifest (supply_chain_audit_id=13) → D2 object-store 训练日志 (audit-2026-013)
+#   → F3/admin 凭据查询 customer-db regulated_model_training_records id=13 → 获得 G3 Flag。
+#   G3 不可通过单点漏洞直接获得，符合终局题"多系统关联"设计要求。
 
 . /_shared/scripts/flag.sh
 
 FLAG_F1="$(get_flag 'FLAG_DB_READONLY_CUSTOMERS' 'flag{f1_db_readonly_customers_placeholder}')"
 FLAG_F2="$(get_flag 'FLAG_DB_PRIVESC_FUNCTION' 'flag{f2_db_privesc_function_placeholder}')"
 FLAG_F3="$(get_flag 'FLAG_DB_CORE_CUSTOMER_DATA' 'flag{f3_db_core_customer_data_placeholder}')"
+FLAG_G3="$(get_flag 'FLAG_FINAL_MODEL_SUPPLY_CHAIN' 'flag{g3_final_model_supply_chain_placeholder}')"
 
 # admin 密码（F3 链路：选手需通过 Vault secret/nebulamind/db-credentials 或 CI 高权限变量获取）
 ADMIN_PASSWORD="${NM_DB_ADMIN_PASSWORD:-nm_admin_dev_2026}"
@@ -26,6 +34,7 @@ ADMIN_PASSWORD="${NM_DB_ADMIN_PASSWORD:-nm_admin_dev_2026}"
 echo "[customer-db] F1 flag available via env (FLAG_DB_READONLY_CUSTOMERS)"
 echo "[customer-db] F2 flag available via env (FLAG_DB_PRIVESC_FUNCTION)"
 echo "[customer-db] F3 flag available via env (FLAG_DB_CORE_CUSTOMER_DATA)"
+echo "[customer-db] G3 flag available via env (FLAG_FINAL_MODEL_SUPPLY_CHAIN)"
 echo "[customer-db] processing init SQL with flag placeholders..."
 
 SRC_DIR="/opt/nebulamind/init"
@@ -40,6 +49,7 @@ esc() {
 F1_ESC="$(esc "$FLAG_F1")"
 F2_ESC="$(esc "$FLAG_F2")"
 F3_ESC="$(esc "$FLAG_F3")"
+G3_ESC="$(esc "$FLAG_G3")"
 ADMIN_ESC="$(esc "$ADMIN_PASSWORD")"
 
 for f in "$SRC_DIR"/*.sql; do
@@ -50,6 +60,7 @@ for f in "$SRC_DIR"/*.sql; do
         -e "s/__NM_FLAG_F1__/$F1_ESC/g" \
         -e "s/__NM_FLAG_F2__/$F2_ESC/g" \
         -e "s/__NM_FLAG_F3__/$F3_ESC/g" \
+        -e "s/__NM_FLAG_G3__/$G3_ESC/g" \
         -e "s/__NM_DB_ADMIN_PASSWORD__/$ADMIN_ESC/g" \
         "$f" > "$out"
     chmod 0644 "$out"

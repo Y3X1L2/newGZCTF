@@ -116,6 +116,12 @@ public class ContainerConfig
     public bool UsePenetrationFabric { get; set; }
 
     /// <summary>
+    /// Create the container with Docker network mode "none" so a higher-level
+    /// TeamLab network provider can attach explicit veth interfaces afterwards.
+    /// </summary>
+    public bool UseHostNetworkNone { get; set; }
+
+    /// <summary>
     /// Grant NET_ADMIN so platform-generated runtime routes can be installed.
     /// </summary>
     public bool EnableNetworkAdmin { get; set; }

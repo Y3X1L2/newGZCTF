@@ -365,7 +365,7 @@ public class PenetrationEdge
 
     public bool IsRouteHint { get; set; } = true;
 
-    public PenetrationEnforcementMode EnforcementMode { get; set; } = PenetrationEnforcementMode.HintOnly;
+    public PenetrationEnforcementMode EnforcementMode { get; set; } = PenetrationEnforcementMode.Both;
 
     public int Priority { get; set; } = 100;
 

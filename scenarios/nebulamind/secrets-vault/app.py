@@ -126,16 +126,45 @@ TOKENS: dict[str, dict] = {
 # ---------------------------------------------------------------------------
 
 # Maps policy name -> set of allowed secret paths (without "secret/data/" prefix)
+# 设计说明（G1 漏洞与防短路）：
+#   - bootstrap 策略对应 G1（Vault Bootstrap Token Abuse）， vulnerability 在于"CI bootstrap token
+#     不应能读取 model-registry secret"。选手通过 E3 获得 bootstrap token 后可读 model-registry
+#     获得 G1 Flag 和 G2 admin token，构成 G1→G2 链路。
+#   - 但 bootstrap 不应直接读取 db-credentials / object-store / jwt-secret，否则会短路 F1/F2/F3
+#     和 G3 链路（选手会跳过 D2/C3/F1/F2 直接到 DB admin）。
+#   - 因此 bootstrap 显式列出可读路径（model-registry + ci-config），而非通配符 "*"。
+#   - 真实 Vault 中 bootstrap 通常仅用于初始化，此处保留 model-registry 可读以支撑 G1 题目设计。
 POLICY_PATHS: dict[str, set[str]] = {
-    "bootstrap": {"*"},  # all paths
+    "bootstrap": {
+        "nebulamind/model-registry",  # G1 链路：bootstrap 可读 model-registry（含 G1 Flag + G2 admin token）
+        "nebulamind/ci-config",        # 运维可见：CI 配置（无敏感凭据）
+    },
     "ci-reader": {"nebulamind/ci-config"},
     "model-admin": {"nebulamind/model-registry"},
 }
 
+# 受限路径：即使策略包含 "*" 也不可直接读取，需要专用策略或更高权限 token。
+# 这防止 bootstrap 通配符短路 F1/F2/F3/G3 链路。
+RESTRICTED_PATHS: set[str] = {
+    "nebulamind/db-credentials",  # F3/G3 链路：需通过 C2→E2 或 G1→专用路径获得
+    "nebulamind/object-store",    # D2 链路：需通过 C3 GraphQL 获得 lowPrivSecretKey
+    "nebulamind/jwt-secret",      # C2 链路：需通过 D3 RCE 读 service-account.json 获得
+}
+
 
 def policy_allows(policy_name: str, secret_path: str) -> bool:
-    """Check if a policy allows access to the given secret path."""
+    """Check if a policy allows access to the given secret path.
+
+    Restricted paths (db-credentials, object-store, jwt-secret) are never
+    accessible via wildcard "*" policies - they require explicit listing.
+    This prevents bootstrap token from short-circuiting F1/F2/F3/G3 chains.
+    """
     allowed = POLICY_PATHS.get(policy_name, set())
+
+    # Restricted paths require explicit listing (not wildcard)
+    if secret_path in RESTRICTED_PATHS:
+        return secret_path in allowed
+
     if "*" in allowed:
         return True
     return secret_path in allowed

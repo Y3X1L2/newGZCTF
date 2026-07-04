@@ -253,6 +253,22 @@ public class DockerImageRegistryService
         return await ResolveImageReferenceAsync(pullTarget.FullImage, token);
     }
 
+    public string ResolveInternalImageReferenceForConfiguredRegistry(string image)
+    {
+        var normalized = NormalizeRegistryAddress(image);
+        if (string.IsNullOrWhiteSpace(normalized))
+            return normalized;
+
+        if (!TryGetInternalImagePath(normalized, out var internalPath))
+            return normalized;
+
+        var address = RegistryAddress;
+        if (string.IsNullOrWhiteSpace(address))
+            throw new InvalidOperationException("Internal Docker registry address is not configured.");
+
+        return $"{address}/{internalPath.TrimStart('/')}";
+    }
+
     public async Task<string> ResolveImageReferenceAsync(string image, CancellationToken token = default)
     {
         var normalized = NormalizeRegistryAddress(image);

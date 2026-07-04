@@ -6,8 +6,10 @@ using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Services.Config;
+using GZCTF.Services.TeamLab;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.RateLimiting;
 
 namespace GZCTF.Controllers;
@@ -23,6 +25,8 @@ public class PenetrationPlayerController(
     IGameRepository gameRepository,
     IParticipationRepository participationRepository,
     PenetrationService penetrationService,
+    AppDbContext context,
+    TeamLabWireGuardService teamLabWireGuardService,
     IConfigService configService) : ControllerBase
 {
     [RequireUser]
@@ -41,18 +45,27 @@ public class PenetrationPlayerController(
     }
 
     [RequireUser]
-    [HttpGet("games/{gameId:int}/attack-graph")]
-    [ProducesResponseType(typeof(PenetrationAttackGraphModel), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAttackGraph([FromRoute] int gameId, CancellationToken token)
+    [HttpGet("games/{gameId:int}/teamlab/vpn-config")]
+    [ProducesResponseType(typeof(TeamLabClientConfigModel), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetTeamLabVpnConfig([FromRoute] int gameId, CancellationToken token)
     {
         var ctx = await GetContextInfo(gameId, token: token);
         if (ctx.Result is not null)
             return ctx.Result;
 
-        var graph = await penetrationService.GetAttackGraph(gameId, ctx.Participation!.TeamId, token);
-        return graph is null
-            ? NotFound(new RequestResponse("Penetration environment is not deployed.", StatusCodes.Status404NotFound))
-            : Ok(graph);
+        var runtime = await context.TeamLabRuntimes.AsNoTracking()
+            .Include(r => r.Team)
+            .Include(r => r.VpnPeers)
+            .Include(r => r.PublicUdpMapping)
+            .FirstOrDefaultAsync(r => r.GameId == gameId && r.TeamId == ctx.Participation!.TeamId, token);
+
+        if (runtime is null)
+            return NotFound(new RequestResponse("TeamLab VPN environment is not deployed.", StatusCodes.Status404NotFound));
+
+        var model = teamLabWireGuardService.BuildClientConfigModel(runtime);
+        return model is null
+            ? NotFound(new RequestResponse("TeamLab VPN configuration is not ready.", StatusCodes.Status404NotFound))
+            : Ok(model);
     }
 
     [RequireUser]

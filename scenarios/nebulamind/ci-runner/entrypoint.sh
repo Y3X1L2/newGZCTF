@@ -21,8 +21,9 @@ nm_require_all NM_GIT_SERVICE_URL NM_CUSTOMER_DB_HOST NM_CACHE_BROKER_HOST NM_SE
 # E2: CI 变量泄露 - Flag 通过环境变量传给 app.py
 # app.py 通过 get_flag('FLAG_CI_VARIABLE_LEAK') 读取
 # 此 Flag 出现在 /api/projects/{id}/variables 接口的返回中（masked 变量明文泄露）
+# 注意：变量名必须为 GZCTF_FLAG_<NAME>（单 FLAG_ 前缀），避免双前缀导致 app.py 找不到变量。
 FLAG_E2="$(get_flag 'FLAG_CI_VARIABLE_LEAK' 'flag{e2_ci_variable_leak_placeholder}')"
-export GZCTF_FLAG_FLAG_CI_VARIABLE_LEAK="$FLAG_E2"
+export GZCTF_FLAG_CI_VARIABLE_LEAK="$FLAG_E2"
 
 # E3: CI Runner 任务注入 - Flag 注入到 /opt/nebulamind/ci.flag
 # 选手通过 POST /api/projects/{id}/trigger 注入变量

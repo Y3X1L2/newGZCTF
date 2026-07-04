@@ -3,14 +3,6 @@ using GZCTF.Models.Data;
 
 namespace GZCTF.Models.Request.Game;
 
-public enum PenetrationFogState
-{
-    Hidden = 0,
-    Revealed = 1,
-    Accessible = 2,
-    Completed = 3
-}
-
 public class PenetrationConfigModel
 {
     public int GameId { get; set; }
@@ -107,7 +99,7 @@ public class PenetrationEdgeModel
     public string PortRange { get; set; } = "any";
     public PenetrationPolicyAction PolicyAction { get; set; } = PenetrationPolicyAction.Allow;
     public bool IsRouteHint { get; set; } = true;
-    public PenetrationEnforcementMode EnforcementMode { get; set; } = PenetrationEnforcementMode.HintOnly;
+    public PenetrationEnforcementMode EnforcementMode { get; set; } = PenetrationEnforcementMode.Both;
     public int Priority { get; set; } = 100;
     public string? Label { get; set; }
     public string? Description { get; set; }
@@ -226,41 +218,10 @@ public class PenetrationWorkspaceModel
     public int GameId { get; set; }
     public int TeamId { get; set; }
     public string TeamName { get; set; } = string.Empty;
-    public string TargetHost { get; set; } = string.Empty;
     public PenetrationRuntimeStatus Status { get; set; }
     public int ResetCount { get; set; }
     public int MaxResetCount { get; set; }
-    public List<PenetrationEntryPointModel> EntryPoints { get; set; } = [];
-    public List<PenetrationWorkspaceNetworkModel> Networks { get; set; } = [];
     public List<PenetrationWorkspaceNodeModel> Nodes { get; set; } = [];
-    public List<PenetrationWorkspacePolicyModel> Policies { get; set; } = [];
-    public PenetrationAttackGraphModel AttackGraph { get; set; } = new();
-}
-
-public class PenetrationWorkspaceNetworkModel
-{
-    public int Id { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public string Slug { get; set; } = string.Empty;
-    public PenetrationZoneType ZoneType { get; set; }
-    public int TrustLevel { get; set; }
-    public int OrderIndex { get; set; }
-    public bool IsEntry { get; set; }
-    public string? Cidr { get; set; }
-    public double PositionX { get; set; }
-    public double PositionY { get; set; }
-    public double Width { get; set; }
-    public double Height { get; set; }
-}
-
-public class PenetrationWorkspacePolicyModel
-{
-    public int Id { get; set; }
-    public string Label { get; set; } = string.Empty;
-    public int SourceNodeId { get; set; }
-    public int TargetNodeId { get; set; }
-    public PenetrationProtocol Protocol { get; set; }
-    public string PortRange { get; set; } = string.Empty;
 }
 
 public class PenetrationTeamEnvironmentModel
@@ -343,15 +304,6 @@ public class PenetrationDeploymentEventModel
     public DateTimeOffset CreatedAt { get; set; }
 }
 
-public class PenetrationEntryPointModel
-{
-    public int NodeId { get; set; }
-    public string NodeName { get; set; } = string.Empty;
-    public string Host { get; set; } = string.Empty;
-    public int Port { get; set; }
-    public int ExposePort { get; set; }
-}
-
 public class PenetrationWorkspaceNodeModel
 {
     public int Id { get; set; }
@@ -360,13 +312,7 @@ public class PenetrationWorkspaceNodeModel
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public PenetrationNodeType NodeType { get; set; }
-    public string? IpAddress { get; set; }
-    public bool IsEntry { get; set; }
-    public PenetrationFogState FogState { get; set; }
     public PenetrationRuntimeStatus RuntimeStatus { get; set; }
-    public double PositionX { get; set; }
-    public double PositionY { get; set; }
-    public List<PenetrationInterfaceModel> Interfaces { get; set; } = [];
     public List<PenetrationWorkspaceScoreItemModel> ScoreItems { get; set; } = [];
 }
 
@@ -384,55 +330,6 @@ public class PenetrationWorkspaceScoreItemModel
     public bool IsCheckpoint { get; set; }
     public List<int> PrerequisiteItemIds { get; set; } = [];
     public List<string> PrerequisiteItemKeys { get; set; } = [];
-}
-
-public class PenetrationAttackGraphModel
-{
-    public int GameId { get; set; }
-    public int TeamId { get; set; }
-    public int PublishedVersion { get; set; }
-    public int TotalNodeCount { get; set; }
-    public int VisibleNodeCount { get; set; }
-    public int CompletedNodeCount { get; set; }
-    public int TotalScoreItemCount { get; set; }
-    public int SolvedScoreItemCount { get; set; }
-    public List<PenetrationAttackNodeModel> Nodes { get; set; } = [];
-    public List<PenetrationAttackEdgeModel> Edges { get; set; } = [];
-}
-
-public class PenetrationAttackNodeModel
-{
-    public int Id { get; set; }
-    public string TopologyKey { get; set; } = string.Empty;
-    public string DisplayName { get; set; } = string.Empty;
-    public string? Description { get; set; }
-    public int Depth { get; set; }
-    public PenetrationFogState Status { get; set; }
-    public PenetrationAttackScoreSummaryModel ScoreSummary { get; set; } = new();
-    public double PositionX { get; set; }
-    public double PositionY { get; set; }
-    public bool IsEntry { get; set; }
-    public bool IsCheckpointCompleted { get; set; }
-    public PenetrationRuntimeStatus RuntimeStatus { get; set; }
-}
-
-public class PenetrationAttackScoreSummaryModel
-{
-    public int Total { get; set; }
-    public int Solved { get; set; }
-    public int CheckpointTotal { get; set; }
-    public int CheckpointSolved { get; set; }
-    public int TotalScore { get; set; }
-    public int SolvedScore { get; set; }
-}
-
-public class PenetrationAttackEdgeModel
-{
-    public int Id { get; set; }
-    public string SourceNodeKey { get; set; } = string.Empty;
-    public string TargetNodeKey { get; set; } = string.Empty;
-    public PenetrationFogState Status { get; set; }
-    public string Label { get; set; } = string.Empty;
 }
 
 public class PenetrationAdminAccessModel
@@ -464,20 +361,13 @@ public class PenetrationSubmitResultModel
     public bool Accepted { get; set; }
     public int Score { get; set; }
     public string Message { get; set; } = string.Empty;
-    public bool AttackGraphChanged { get; set; }
-    public int UnlockedNodeCount { get; set; }
 }
 
-public class PenetrationAttackGraphUpdateModel
+public class PenetrationWorkspaceUpdateModel
 {
     public int GameId { get; set; }
     public int TeamId { get; set; }
     public int PublishedVersion { get; set; }
-    public bool Accepted { get; set; }
-    public bool GraphChanged { get; set; }
-    public int CompletedNodeCount { get; set; }
-    public int VisibleNodeCount { get; set; }
-    public int UnlockedNodeCount { get; set; }
     public DateTimeOffset Time { get; set; } = DateTimeOffset.UtcNow;
 }
 

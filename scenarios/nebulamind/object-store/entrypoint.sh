@@ -98,6 +98,7 @@ sleep 2
 echo "[object-store] starting MinIO in foreground"
 echo "[object-store] listening on 0.0.0.0:9000 (S3 API) and 0.0.0.0:9001 (Console)"
 echo "[object-store] D2 flag in: public-model-artifacts/exports/tenant-summary-2026.csv"
-echo "[object-store] G3 clues in: public-model-artifacts/training-logs/recommendation-v4-private-train.log"
+echo "[object-store] G3 clues in: public-model-artifacts/training-logs/recommendation-v4-private-train.log (supply_chain_audit section, audit-2026-013)"
+echo "[object-store] G3 flag itself is in customer-db regulated_model_training_records id=13 (not in object-store)"
 
 exec minio server /data --console-address ":9001"
