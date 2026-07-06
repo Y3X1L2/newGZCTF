@@ -18,6 +18,11 @@ public class ContainerConfig
     public int ChallengeId { get; set; }
 
     /// <summary>
+    /// Game id used to build durable deployment queue identity.
+    /// </summary>
+    public int? GameId { get; set; }
+
+    /// <summary>
     /// User ID
     /// </summary>
     public Guid UserId { get; set; }
@@ -104,6 +109,11 @@ public class ContainerConfig
     /// Optional command override.
     /// </summary>
     public string? StartCommand { get; set; }
+
+    /// <summary>
+    /// DNS servers injected during Docker container creation.
+    /// </summary>
+    public List<string> DnsServers { get; set; } = [];
 
     /// <summary>
     /// Optional shell health check command.

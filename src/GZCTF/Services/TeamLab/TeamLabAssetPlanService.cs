@@ -14,6 +14,7 @@ public enum TeamLabAssetSpecKind
 }
 
 public sealed record TeamLabAssetInterfaceSpec(
+    string NodeKey,
     string NetworkKey,
     string BridgeName,
     string InterfaceName,
@@ -35,7 +36,8 @@ public sealed record TeamLabAssetSpec(
     int ExposePort,
     string? InfrastructureRole,
     int StartPriority,
-    IReadOnlyList<TeamLabAssetInterfaceSpec> Interfaces);
+    IReadOnlyList<TeamLabAssetInterfaceSpec> Interfaces,
+    OSType OSType = OSType.Linux);
 
 public sealed record TeamLabRuntimeNetworkSpec(
     string TopologyKey,
@@ -106,6 +108,7 @@ public static partial class TeamLabAssetPlanService
                         ? iface.StaticIp!
                         : NextHost(network.Cidr, addressCounters[network.TopologyKey]++);
                     return new TeamLabAssetInterfaceSpec(
+                        node.TopologyKey,
                         iface.Network.TopologyKey,
                         network.BridgeName,
                         iface.Name,
@@ -143,22 +146,24 @@ public static partial class TeamLabAssetPlanService
 
         return new TeamLabAssetSpec(TeamLabAssetSpecKind.Vm, node.TopologyKey, node.Name, template.Id,
             template.LocalFilePath ?? template.Name, node.CpuCount, node.MemoryLimit, node.StorageLimit,
-            node.ExposePort, ResolveInfrastructureRole(node), ResolveStartPriority(node), interfaces);
+            node.ExposePort, ResolveInfrastructureRole(node), ResolveStartPriority(node), interfaces,
+            template.OSType);
     }
 
     public static TeamLabContainerAttachRequest BuildContainerAttachRequest(int runtimeId, string containerId,
         TeamLabAssetInterfaceSpec iface, bool dryRun, string? gatewayIp = null, string[]? staticRoutes = null,
         string[]? dnsServers = null) =>
-        new(runtimeId, containerId, iface.BridgeName, BuildHostInterfaceName(runtimeId, iface.NetworkKey,
-                iface.InterfaceName), iface.InterfaceName, $"{iface.IpAddress}/{iface.PrefixLength}",
+        new(runtimeId, containerId, iface.BridgeName, BuildHostInterfaceName(runtimeId, iface.NodeKey,
+                iface.NetworkKey, iface.InterfaceName), iface.InterfaceName, $"{iface.IpAddress}/{iface.PrefixLength}",
             iface.MacAddress, iface.RemoveDefaultRoute, gatewayIp, staticRoutes ?? [], dnsServers ?? [], dryRun);
 
-    public static AgentVmNetworkInterfaceRequest ToVmInterfaceRequest(TeamLabAssetInterfaceSpec iface) =>
+    public static AgentVmNetworkInterfaceRequest ToVmInterfaceRequest(TeamLabAssetInterfaceSpec iface,
+        OSType osType = OSType.Linux) =>
         new()
         {
             BridgeName = iface.BridgeName,
             MacAddress = iface.MacAddress,
-            Model = "virtio"
+            Model = osType == OSType.Windows ? "e1000e" : "virtio"
         };
 
     public static string BuildMacAddress(int runtimeId, string topologyKey, string interfaceName)
@@ -167,12 +172,10 @@ public static partial class TeamLabAssetPlanService
         return $"02:42:{(hash >> 24) & 0xff:x2}:{(hash >> 16) & 0xff:x2}:{(hash >> 8) & 0xff:x2}:{hash & 0xff:x2}";
     }
 
-    public static string BuildHostInterfaceName(int runtimeId, string networkKey, string interfaceName)
+    public static string BuildHostInterfaceName(int runtimeId, string nodeKey, string networkKey, string interfaceName)
     {
-        var safeNetwork = NormalizeLinuxToken(networkKey);
-        var safeInterface = NormalizeLinuxToken(interfaceName);
-        var value = $"tl{runtimeId}{safeNetwork}{safeInterface}";
-        return value.Length <= 15 ? value : value[..15];
+        var hash = StableHash($"{runtimeId}:{nodeKey}:{networkKey}:{interfaceName}") & 0xfffff;
+        return $"tl{runtimeId}v{hash:x5}";
     }
 
     public static bool IsValidIpv4Cidr(string cidr)

@@ -323,10 +323,10 @@ install_apt_pkg_fallback() {
 
 install_base() {
   case "$pm" in
-    apt) install_pkgs ca-certificates curl wget gnupg lsb-release iproute2 procps tar gzip coreutils python3 ;;
-    dnf|yum) install_pkgs ca-certificates curl wget gnupg2 iproute procps-ng tar gzip coreutils python3 ;;
-    zypper) install_pkgs ca-certificates curl wget gpg2 iproute2 procps tar gzip coreutils python3 ;;
-    pacman) install_pkgs ca-certificates curl wget gnupg iproute2 procps-ng tar gzip coreutils python ;;
+    apt) install_pkgs ca-certificates curl wget gnupg lsb-release iproute2 iptables procps tar gzip coreutils python3 ;;
+    dnf|yum) install_pkgs ca-certificates curl wget gnupg2 iproute iptables procps-ng tar gzip coreutils python3 ;;
+    zypper) install_pkgs ca-certificates curl wget gpg2 iproute2 iptables procps tar gzip coreutils python3 ;;
+    pacman) install_pkgs ca-certificates curl wget gnupg iproute2 iptables procps-ng tar gzip coreutils python ;;
   esac
 }
 

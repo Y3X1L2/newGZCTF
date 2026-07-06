@@ -1,6 +1,7 @@
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
+using GZCTF.Services.Concurrency;
 using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
@@ -18,8 +19,18 @@ public class GameInstanceRepository(
     IOptionsSnapshot<ContainerPolicy> containerPolicy,
     DockerImageRegistryService dockerRegistry,
     INginxProxySyncService nginxProxySync,
+    DeploymentQueueStateAccessor deploymentQueueState,
+    DeploymentExecutionContextAccessor deploymentExecutionContext,
+    IDistributedLockService lockService,
     ILogger<GameInstanceRepository> logger) : RepositoryBase(context), IGameInstanceRepository
 {
+    static readonly DeploymentQueueTicketStatus[] ActiveQueueStatuses =
+    [
+        DeploymentQueueTicketStatus.Pending,
+        DeploymentQueueTicketStatus.Assigned,
+        DeploymentQueueTicketStatus.Creating
+    ];
+
     public async Task<GameInstance?> GetInstance(Participation part, int challengeId, CancellationToken token = default)
     {
         await using var transaction = await Context.Database.BeginTransactionAsync(token);
@@ -148,9 +159,20 @@ public class GameInstanceRepository(
         if (gameInstance.Container is not null)
             return new TaskResult<Container>(TaskStatus.Success, gameInstance.Container);
 
+        using var ownerLock = await lockService.AcquireAsync(
+            BuildContainerLimitLockKey(game.Id, team.Id),
+            TimeSpan.FromSeconds(10));
+
+        if (gameInstance.ContainerId is not null && gameInstance.Container is null)
+            await Context.Entry(gameInstance).Reference(e => e.Container).LoadAsync(token);
+
+        if (gameInstance.Container is not null)
+            return new TaskResult<Container>(TaskStatus.Success, gameInstance.Container);
+
         // containerLimit == 0 means unlimited
         if (game.ContainerCountLimit > 0)
         {
+            var queuedCount = await CountActiveQueuedContainersAsync(game.Id, team.Id, gameInstance.ChallengeId, token);
             if (containerPolicy.Value.AutoDestroyOnLimitReached)
             {
                 var running = await Context.GameInstances
@@ -159,8 +181,15 @@ public class GameInstanceRepository(
                     .OrderBy(i => i.Container!.StartedAt).ToListAsync(token);
 
                 var first = running.FirstOrDefault();
-                if (running.Count >= game.ContainerCountLimit && first is not null)
+                var allowedRunningBeforeCreate = game.ContainerCountLimit - queuedCount;
+                if (allowedRunningBeforeCreate <= 0)
+                    return new TaskResult<Container>(TaskStatus.Denied);
+
+                if (running.Count >= allowedRunningBeforeCreate)
                 {
+                    if (first is null)
+                        return new TaskResult<Container>(TaskStatus.Denied);
+
                     logger.Log(
                         StaticLocalizer[nameof(Resources.Program.InstanceRepository_ContainerAutoDestroy),
                             team.Name, first.Challenge.Title,
@@ -175,7 +204,7 @@ public class GameInstanceRepository(
                     i => i.ParticipationId == gameInstance.ParticipationId &&
                          i.ContainerId != null, token);
 
-                if (count >= game.ContainerCountLimit)
+                if (count + queuedCount >= game.ContainerCountLimit)
                     return new TaskResult<Container>(TaskStatus.Denied);
             }
         }
@@ -188,7 +217,10 @@ public class GameInstanceRepository(
         {
             TeamId = team.Id.ToString(),
             UserId = user.Id,
+            GameId = game.Id,
             ChallengeId = gameInstance.ChallengeId,
+            PreferredNodeId = deploymentExecutionContext.Current?.TargetNodeId,
+            FleetCapacityReserved = deploymentExecutionContext.Current?.CapacityReserved == true,
             Flag = gameInstance.FlagContext?.Flag, // static challenge has no specific flag
             Image = image,
             CPUCount = challenge.CPUCount ?? 1,
@@ -201,6 +233,9 @@ public class GameInstanceRepository(
 
         if (container is null)
         {
+            if (deploymentQueueState.ConsumeQueued() is { } queueStatus)
+                return new QueuedTaskResult<Container>(queueStatus);
+
             logger.SystemLog(
                 StaticLocalizer[nameof(Resources.Program.InstanceRepository_ContainerCreationFailed),
                     gameInstance.Challenge.Title],
@@ -234,6 +269,18 @@ public class GameInstanceRepository(
 
         return new TaskResult<Container>(TaskStatus.Success, gameInstance.Container);
     }
+
+    static string BuildContainerLimitLockKey(int gameId, int teamId) =>
+        $"container-limit:game:{gameId}:team:{teamId}";
+
+    async Task<int> CountActiveQueuedContainersAsync(int gameId, int teamId, int currentChallengeId,
+        CancellationToken token) =>
+        await Context.DeploymentQueueTickets.CountAsync(t =>
+            t.Kind == DeploymentQueueKind.GameContainer &&
+            t.GameId == gameId &&
+            t.OwnerTeamId == teamId &&
+            t.ChallengeId != currentChallengeId &&
+            ActiveQueueStatuses.Contains(t.Status), token);
 
     public async Task DestroyAllContainers(GameChallenge challenge, CancellationToken token = default)
     {

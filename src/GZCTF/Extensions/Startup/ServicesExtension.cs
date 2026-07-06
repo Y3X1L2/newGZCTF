@@ -142,6 +142,13 @@ internal static class ServicesExtension
             builder.Services.AddScoped<NodeDeployService>();
             builder.Services.AddScoped<FleetManager>();
             builder.Services.AddScoped<WeightedScheduler>();
+            builder.Services.AddScoped<FleetCapacityReservationService>();
+            builder.Services.AddScoped<DeploymentQueueService>();
+            builder.Services.AddScoped<DeploymentQueueStateAccessor>();
+            builder.Services.AddScoped<DeploymentExecutionContextAccessor>();
+            builder.Services.AddScoped<DeploymentExecutionService>();
+            builder.Services.AddSingleton(new NodeExecutionGateOptions());
+            builder.Services.AddSingleton<NodeExecutionGate>();
             builder.Services.AddSingleton<QueueManager>();
             builder.Services.AddScoped<ImageDistributionService>();
             builder.Services.AddHostedService<FleetHealthCheckService>();
@@ -175,6 +182,7 @@ internal static class ServicesExtension
             builder.Services.AddSingleton<NginxSyncService>();
             builder.Services.AddSingleton<INginxProxySyncService>(sp => sp.GetRequiredService<NginxSyncService>());
             builder.Services.AddHostedService(sp => sp.GetRequiredService<NginxSyncService>());
+            builder.Services.AddHostedService<PortLeaseRefreshService>();
 
             builder.Services.AddHostedService<CacheMaker>();
             builder.Services.AddHostedService<CronJobService>();

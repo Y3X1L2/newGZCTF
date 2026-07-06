@@ -3,6 +3,7 @@ using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Vm;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace GZCTF.Services.Fleet;
@@ -15,6 +16,8 @@ public class FleetVmService
     private readonly IVirtualMachineProvider _vmProvider;
     private readonly KvmSettings _kvmSettings;
     private readonly AppDbContext _context;
+    private readonly DeploymentQueueStateAccessor _queueState;
+    private readonly DeploymentExecutionContextAccessor _executionContext;
     private readonly ILogger<FleetVmService> _logger;
 
     public FleetVmService(
@@ -24,6 +27,8 @@ public class FleetVmService
         IVirtualMachineProvider vmProvider,
         IOptions<KvmSettings> kvmSettings,
         AppDbContext context,
+        DeploymentQueueStateAccessor queueState,
+        DeploymentExecutionContextAccessor executionContext,
         ILogger<FleetVmService> logger)
     {
         _fleetManager = fleetManager;
@@ -32,39 +37,76 @@ public class FleetVmService
         _vmProvider = vmProvider;
         _kvmSettings = kvmSettings.Value;
         _context = context;
+        _queueState = queueState;
+        _executionContext = executionContext;
         _logger = logger;
     }
 
     public async Task<VmInstance?> CreateVmAsync(VmInstance vmInstance, int? templateId, string? templatePath,
         int? memory, int? cpu, string? flag, CancellationToken token)
     {
-        var target = new DeploymentTarget
-        {
-            Type = TargetType.Vm,
-            Action = TargetAction.Create,
-            Payload = JsonSerializer.Serialize(new VmCreatePayload(
-                templateId, templatePath, memory, cpu, vmInstance.VmName, flag))
-        };
-        var schedule = await _fleetManager.TryScheduleWithTargetAsync(target, token, queueWhenNoNode: false);
-        var nodeId = schedule.NodeId;
+        var gameId = vmInstance.Challenge?.GameId ??
+                     await _context.GameChallenges.AsNoTracking()
+                         .Where(c => c.Id == vmInstance.ChallengeId)
+                         .Select(c => c.GameId)
+                         .SingleOrDefaultAsync(token);
+
+        var execution = _executionContext.Current;
+        var capacityReservedByCaller = execution?.CapacityReserved == true;
+        FleetScheduleResult? schedule = null;
+        var nodeId = execution?.TargetNodeId;
+
         if (nodeId is null)
         {
-            vmInstance.Status = VmInstanceStatus.Error;
-            _logger.LogWarning("No KVM node available for VM creation");
+            var target = new DeploymentTarget
+            {
+                Type = TargetType.Vm,
+                Action = TargetAction.Create,
+                Payload = JsonSerializer.Serialize(new VmCreatePayload(
+                    templateId, templatePath, memory, cpu, vmInstance.VmName, flag,
+                    vmInstance.Id, gameId, vmInstance.UserId, vmInstance.ChallengeId))
+            };
+            schedule = await _fleetManager.TryScheduleWithTargetAsync(target, token);
+            nodeId = schedule.NodeId;
+        }
+
+        if (nodeId is null)
+        {
+            if (schedule?.IsQueued == true)
+            {
+                _queueState.SetQueued(schedule.QueueStatus);
+                _logger.LogInformation("VM creation queued: {Reason}", schedule.Reason);
+            }
+            else
+            {
+                vmInstance.Status = VmInstanceStatus.Error;
+                _logger.LogWarning("No KVM node available for VM creation");
+                if (schedule?.Target is not null)
+                    _logger.SystemLogDeploymentTarget("not scheduled", schedule.Target);
+                else
+                    _logger.SystemLog("VM deployment failed: no KVM fleet node is available.",
+                        TaskStatus.Failed, LogLevel.Warning);
+            }
+
             return null;
         }
 
-        var node = schedule.Node ?? await _nodeRepo.GetNodeByIdAsync(nodeId.Value, token);
-        if (schedule.Target is not null)
+        var node = schedule?.Node ?? await _nodeRepo.GetNodeByIdAsync(nodeId.Value, token);
+        if (schedule?.Target is not null)
+        {
             schedule.Target.Status = TargetStatus.Creating;
+            _logger.SystemLogDeploymentTarget("creating", schedule.Target, node);
+        }
 
         if (node?.IsLocal == true)
         {
             vmInstance.NodeId = nodeId.Value;
             var vm = await CreateLocalVmAsync(vmInstance, templatePath, memory, cpu, token);
-            if (vm is null || vm.Status == VmInstanceStatus.Error)
+            if (!capacityReservedByCaller && (vm is null || vm.Status == VmInstanceStatus.Error))
                 FleetManager.ReleaseCapacity(node, NodeCapability.Kvm);
-            await CompleteTarget(schedule.Target, vm, node.HostAddress, token);
+            await CompleteTarget(schedule?.Target, vm, node.HostAddress, token);
+            _logger.SystemLogDeploymentTarget(schedule?.Target?.Status == TargetStatus.Completed ? "completed" : "failed",
+                schedule?.Target, node);
             return vm;
         }
 
@@ -82,15 +124,17 @@ public class FleetVmService
             _logger.LogWarning("Agent VM creation failed on node {NodeId}", nodeId.Value);
             vmInstance.Status = VmInstanceStatus.Error;
             vmInstance.NodeId = nodeId.Value;
-            if (node is not null)
+            if (!capacityReservedByCaller && node is not null)
                 FleetManager.ReleaseCapacity(node, NodeCapability.Kvm);
-            await FailTarget(schedule.Target, "Agent VM creation failed", token);
+            await FailTarget(schedule?.Target, "Agent VM creation failed", token);
+            _logger.SystemLogDeploymentTarget("failed", schedule?.Target, node);
             return null;
         }
 
         vmInstance.Status = VmInstanceStatus.Running;
         vmInstance.NodeId = nodeId.Value;
-        await CompleteTarget(schedule.Target, vmInstance, node?.HostAddress, token);
+        await CompleteTarget(schedule?.Target, vmInstance, node?.HostAddress, token);
+        _logger.SystemLogDeploymentTarget("completed", schedule?.Target, node);
         return vmInstance;
     }
 
@@ -154,6 +198,7 @@ public class FleetVmService
         {
             try
             {
+                _logger.SystemLog($"Destroying VM {vmInstance.VmName}.", TaskStatus.Pending, LogLevel.Information);
                 _logger.LogInformation("Destroying local VM {VmName}", vmInstance.VmName);
                 var result = await _vmProvider.DestroyAsync(vmInstance.VmName, token);
                 if (!result.Success)
@@ -161,6 +206,8 @@ public class FleetVmService
             }
             catch (Exception ex)
             {
+                _logger.SystemLog($"Failed to destroy VM {vmInstance.VmName}: {ex.Message}",
+                    TaskStatus.Failed, LogLevel.Warning);
                 _logger.LogWarning(ex, "Local VM destruction failed for {VmName}", vmInstance.VmName);
                 throw;
             }
@@ -169,10 +216,13 @@ public class FleetVmService
         {
             try
             {
+                _logger.SystemLog($"Destroying VM {vmInstance.VmName}.", TaskStatus.Pending, LogLevel.Information);
                 await _agentClient.DestroyVmAsync(vmInstance.NodeId!.Value, vmInstance.VmName, token);
             }
             catch (Exception ex)
             {
+                _logger.SystemLog($"Failed to destroy VM {vmInstance.VmName}: {ex.Message}",
+                    TaskStatus.Failed, LogLevel.Warning);
                 _logger.LogWarning(ex, "Agent VM destruction failed for {VmName}", vmInstance.VmName);
                 throw;
             }
@@ -186,10 +236,21 @@ public class FleetVmService
             FleetManager.ReleaseCapacity(node, NodeCapability.Kvm);
             await _context.SaveChangesAsync(token);
         }
+
+        _logger.SystemLog($"Destroyed VM {vmInstance.VmName}.", TaskStatus.Success, LogLevel.Information);
     }
 
     private sealed record VmCreatePayload(
-        int? TemplateId, string? TemplatePath, int? Memory, int? Cpu, string VmName, string? Flag);
+        int? TemplateId,
+        string? TemplatePath,
+        int? Memory,
+        int? Cpu,
+        string VmName,
+        string? Flag,
+        Guid VmInstanceId,
+        int GameId,
+        Guid UserId,
+        int ChallengeId);
 
     async Task CompleteTarget(DeploymentTarget? target, VmInstance? vm, string? host, CancellationToken token)
     {

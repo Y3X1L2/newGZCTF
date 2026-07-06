@@ -734,6 +734,14 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
                 hostConfig.NanoCPUs = config.CPUCount * 100_000_000L;
         }
 
+        var dnsServers = config.DnsServers
+            .Where(server => !string.IsNullOrWhiteSpace(server))
+            .Select(server => server.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (dnsServers.Length > 0)
+            hostConfig.DNS = dnsServers;
+
         var env = config.EnvironmentVariables
             .Where(kv => !string.IsNullOrWhiteSpace(kv.Key))
             .Select(kv => $"{kv.Key}={kv.Value}")

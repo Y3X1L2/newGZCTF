@@ -983,6 +983,8 @@ const makeEdge = (id: number, source: PenetrationNodeModel, target: PenetrationN
 
 const SegmentNode = memo(({ data, selected }: NodeProps<Node<SegmentData>>) => (
   <div className={`yy-pentest-segment-frame ${selected ? 'is-selected' : ''}`}>
+    <Handle type="target" position={Position.Left} className="yy-pentest-hidden-handle" />
+    <Handle type="source" position={Position.Right} className="yy-pentest-hidden-handle" />
     <NodeResizer isVisible={selected} minWidth={380} minHeight={260} />
     <Group justify="space-between" align="flex-start" wrap="nowrap">
       <Stack gap={2}>
@@ -1160,17 +1162,34 @@ const toFlowNodes = (config: PenetrationConfigModel, templates: ImageTemplateLit
   return [...networks, ...hosts]
 }
 
+const resolveFlowEdgeEndpoint = (edge: PenetrationEdgeModel, kind: 'source' | 'target', config: PenetrationConfigModel) => {
+  const nodeId = kind === 'source' ? edge.sourceNodeId : edge.targetNodeId
+  if (nodeId && config.nodes.some((node) => node.id === nodeId)) return String(nodeId)
+
+  const scopeKind = kind === 'source' ? edge.sourceKind : edge.targetKind
+  const scopeId = kind === 'source' ? edge.sourceId : edge.targetId
+  if (scopeKind === PenetrationPolicyScope.Network && scopeId && config.networks.some((network) => network.id === scopeId)) {
+    return flowNetworkId(scopeId)
+  }
+
+  return undefined
+}
+
 const toFlowEdges = (config: PenetrationConfigModel): Edge[] =>
-  config.edges
-    .filter((edge) => edge.sourceNodeId && edge.targetNodeId)
-    .map((edge) => ({
-      id: String(edge.id || `${edge.sourceNodeId}-${edge.targetNodeId}`),
-      source: String(edge.sourceNodeId),
-      target: String(edge.targetNodeId),
+  config.edges.flatMap((edge) => {
+    const source = resolveFlowEdgeEndpoint(edge, 'source', config)
+    const target = resolveFlowEdgeEndpoint(edge, 'target', config)
+    if (!source || !target || source === target) return []
+
+    return [{
+      id: String(edge.id || `${source}-${target}`),
+      source,
+      target,
       animated: edge.policyAction === PenetrationPolicyAction.Allow,
       label: edge.label || `${edge.protocol}/${edge.portRange}`,
       className: `yy-pentest-flow-edge action-${edge.policyAction.toLowerCase()}`,
-    }))
+    }]
+  })
 
 const withFlowLayout = (config: PenetrationConfigModel, flowNodes: Node<SegmentData | AssetData>[]): PenetrationConfigModel =>
   normalizeConfig({
@@ -1791,6 +1810,15 @@ const BuilderInner: FC = () => {
   }
   const runtimeRouteRows = environments.flatMap((env) => (env.runtimeRoutes ?? []).map((route) => ({ env, route })))
   const runtimeNodeRows = environments.flatMap((env) => env.runtimeNodes.map((node) => ({ env, node })))
+  const deploymentStatus = config?.status ?? PenetrationDeploymentStatus.Draft
+  const isDeploying = deploymentStatus === PenetrationDeploymentStatus.Deploying
+  const canStop =
+    deploymentStatus === PenetrationDeploymentStatus.Running ||
+    deploymentStatus === PenetrationDeploymentStatus.Partial
+  const canDeploy =
+    !isDeploying &&
+    !!config?.publishedVersion &&
+    deploymentStatus !== PenetrationDeploymentStatus.Draft
 
   return (
     <div className="yy-pentest-fullscreen">
@@ -1827,17 +1855,17 @@ const BuilderInner: FC = () => {
             </Button>
           </Tooltip>
           <Tooltip label="按已发布版本为全部参赛队伍创建隔离网络和容器">
-            <Button leftSection={<Icon path={mdiAccessPointNetwork} size={0.85} />} onClick={() => runAction('deploy')}>
+            <Button leftSection={<Icon path={mdiAccessPointNetwork} size={0.85} />} disabled={loading || !canDeploy} onClick={() => runAction('deploy')}>
               部署
             </Button>
           </Tooltip>
           <Tooltip label="取消当前正在执行的部署任务，已完成队伍保持运行">
-            <Button color="yellow" variant="light" leftSection={<Icon path={mdiStop} size={0.85} />} onClick={() => runAction('cancelDeploy')}>
+            <Button color="yellow" variant="light" leftSection={<Icon path={mdiStop} size={0.85} />} disabled={loading || !isDeploying} onClick={() => runAction('cancelDeploy')}>
               取消部署
             </Button>
           </Tooltip>
           <Tooltip label="停止并清理已部署的渗透环境">
-            <Button color="red" variant="light" leftSection={<Icon path={mdiStop} size={0.85} />} onClick={() => runAction('stop')}>
+            <Button color="red" variant="light" leftSection={<Icon path={mdiStop} size={0.85} />} disabled={loading || !canStop} onClick={() => runAction('stop')}>
               停止
             </Button>
           </Tooltip>

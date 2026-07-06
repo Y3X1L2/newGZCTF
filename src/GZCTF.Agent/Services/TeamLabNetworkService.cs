@@ -16,8 +16,10 @@ public partial class TeamLabNetworkService(
     {
         var hasIp = File.Exists("/sbin/ip") || File.Exists("/usr/sbin/ip") || File.Exists("/bin/ip") || File.Exists("/usr/bin/ip");
         var hasWg = File.Exists("/sbin/wg") || File.Exists("/usr/sbin/wg") || File.Exists("/bin/wg") || File.Exists("/usr/bin/wg");
-        var available = hasIp && hasWg;
-        var message = available ? null : "ip or WireGuard command is missing on this WorkerNode.";
+        var hasIptables = File.Exists("/sbin/iptables") || File.Exists("/usr/sbin/iptables") ||
+                          File.Exists("/bin/iptables") || File.Exists("/usr/bin/iptables");
+        var available = hasIp && hasWg && hasIptables;
+        var message = available ? null : "ip, iptables, or WireGuard command is missing on this WorkerNode.";
 
         return Task.FromResult(new TeamLabStatusResponse(
             available,
@@ -25,6 +27,7 @@ public partial class TeamLabNetworkService(
             _config.DryRun,
             hasIp,
             hasWg,
+            hasIptables,
             DateTimeOffset.UtcNow,
             message));
     }
@@ -116,6 +119,18 @@ public partial class TeamLabNetworkService(
         validation = ValidateAllowedIps(request.PeerAllowedIps, nameof(request.PeerAllowedIps));
         if (validation is not null) return Failure(validation, request.DryRun);
 
+        foreach (var cidr in request.PlayerAllowedCidrs)
+        {
+            validation = ValidateCidr(cidr, nameof(request.PlayerAllowedCidrs));
+            if (validation is not null) return Failure(validation, request.DryRun);
+        }
+
+        foreach (var cidr in request.PlayerBlockedCidrs)
+        {
+            validation = ValidateCidr(cidr, nameof(request.PlayerBlockedCidrs));
+            if (validation is not null) return Failure(validation, request.DryRun);
+        }
+
         validation = ValidateWireGuardKey(request.InterfacePrivateKey, nameof(request.InterfacePrivateKey));
         if (validation is not null) return Failure(validation, request.DryRun);
 
@@ -133,6 +148,8 @@ public partial class TeamLabNetworkService(
         };
 
         commands = commands.Concat(BuildPeerRouteCommands(request.NamespaceName, request.InterfaceName, request.PeerClientAddress))
+            .Concat(BuildPlayerForwardAclCommands(request.NamespaceName, request.InterfaceName,
+                request.PlayerAllowedCidrs, request.PlayerBlockedCidrs))
             .ToArray();
 
         return await ExecuteOrPlanAsync(commands, request.DryRun, token, request.InterfacePrivateKey);
@@ -231,12 +248,6 @@ public partial class TeamLabNetworkService(
             ? string.Empty
             : string.Join(' ', request.StaticRoutes.Select(route =>
                 $"nsenter -t $pid -n ip route replace {ShellQuote(route)} via {gateway} dev {containerIf};"));
-        var dnsCommand = request.DnsServers.Length == 0
-            ? string.Empty
-            : $"docker exec {containerId} sh -c {ShellQuote("printf '" +
-                string.Concat(request.DnsServers.Select(dns => $"nameserver {dns}\\n")) +
-                "' > /etc/resolv.conf")};";
-
         var command = string.Join(' ',
         [
             "set -e;",
@@ -258,7 +269,6 @@ public partial class TeamLabNetworkService(
             $"nsenter -t $pid -n ip link set {containerIf} up;",
             routeCommand,
             staticRouteCommands,
-            dnsCommand,
             $"nsenter -t $pid -n ip route show"
         ]);
 
@@ -313,6 +323,7 @@ public partial class TeamLabNetworkService(
         var directory = $"/run/gzctf-teamlab/{request.ServiceName}";
         var hostsFile = $"{directory}/hosts";
         var leasesFile = $"{directory}/dhcp-hosts";
+        var dhcpLeaseFile = $"{directory}/leases";
         var pidFile = $"{directory}/dnsmasq.pid";
         var netmask = NetmaskFromCidr(request.Cidr);
         if (string.IsNullOrWhiteSpace(netmask))
@@ -331,7 +342,8 @@ public partial class TeamLabNetworkService(
             $"printf {ShellQuote(hostsContent + "\\n")} > {ShellQuote(hostsFile)}",
             $"printf {ShellQuote(leasesContent + "\\n")} > {ShellQuote(leasesFile)}",
             $"test ! -f {ShellQuote(pidFile)} || kill $(cat {ShellQuote(pidFile)}) 2>/dev/null || true",
-            $"ip netns exec {request.NamespaceName} dnsmasq --keep-in-foreground --bind-interfaces --except-interface=lo --interface={request.InterfaceName} --listen-address={request.GatewayIp} --dhcp-authoritative --dhcp-range={request.GatewayIp},static,{netmask} --dhcp-hostsfile={leasesFile} --addn-hosts={hostsFile} {addressOptions} --domain={request.Domain} --pid-file={pidFile} --log-facility=- >/dev/null 2>&1 &"
+            $"rm -f {ShellQuote(dhcpLeaseFile)}",
+            $"ip netns exec {request.NamespaceName} dnsmasq --keep-in-foreground --user=root --group=root --bind-interfaces --except-interface=lo --interface={request.InterfaceName} --listen-address={request.GatewayIp} --dhcp-authoritative --dhcp-range={request.GatewayIp},static,{netmask} --dhcp-hostsfile={leasesFile} --dhcp-leasefile={dhcpLeaseFile} --addn-hosts={hostsFile} {addressOptions} --domain={request.Domain} --pid-file={pidFile} --log-facility=- >/dev/null 2>&1 &"
         };
 
         return await ExecuteOrPlanAsync(commands, request.DryRun, token);
@@ -351,8 +363,7 @@ public partial class TeamLabNetworkService(
 
         var commands = new[]
         {
-            $"ip netns exec {request.NamespaceName} nc -uz -w 2 {request.GatewayIp} 53",
-            $"ip netns exec {request.NamespaceName} nslookup {request.Hostname} {request.GatewayIp}"
+            $"for i in $(seq 1 10); do ip netns exec {request.NamespaceName} nslookup {request.Hostname} {request.GatewayIp} >/dev/null 2>&1 && exit 0; sleep 1; done; ip netns exec {request.NamespaceName} nslookup {request.Hostname} {request.GatewayIp}"
         };
 
         return await ExecuteOrPlanAsync(commands, request.DryRun, token);
@@ -435,6 +446,26 @@ public partial class TeamLabNetworkService(
         peerAllowedIps.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
             .Select(cidr => $"ip netns exec {namespaceName} ip route replace {cidr} dev {interfaceName}")
             .ToArray();
+
+    private static string[] BuildPlayerForwardAclCommands(string namespaceName, string interfaceName,
+        IEnumerable<string> allowedCidrs, IEnumerable<string> blockedCidrs)
+    {
+        var commands = new List<string>();
+        foreach (var cidr in allowedCidrs
+                     .Where(cidr => !string.IsNullOrWhiteSpace(cidr))
+                     .Distinct(StringComparer.Ordinal)
+                     .Order(StringComparer.Ordinal))
+            commands.Add(
+                $"ip netns exec {namespaceName} iptables -I FORWARD 1 -i {interfaceName} -d {cidr} -j ACCEPT");
+
+        foreach (var cidr in blockedCidrs
+                     .Where(cidr => !string.IsNullOrWhiteSpace(cidr))
+                     .Distinct(StringComparer.Ordinal)
+                     .Order(StringComparer.Ordinal))
+            commands.Add($"ip netns exec {namespaceName} iptables -A FORWARD -i {interfaceName} -d {cidr} -j REJECT");
+
+        return commands.ToArray();
+    }
 
     [GeneratedRegex("^[a-zA-Z0-9_.-]+$")]
     private static partial Regex LinuxNameRegex();

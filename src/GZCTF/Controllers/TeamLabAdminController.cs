@@ -10,7 +10,8 @@ namespace GZCTF.Controllers;
 [Produces(MediaTypeNames.Application.Json)]
 public class TeamLabAdminController(
     TeamLabPlanService planService,
-    TeamLabDeploymentService deploymentService) : ControllerBase
+    TeamLabDeploymentService deploymentService,
+    IHostApplicationLifetime lifetime) : ControllerBase
 {
     [HttpPost("teams/{teamId:int}/plan")]
     [RequireAdmin]
@@ -19,8 +20,11 @@ public class TeamLabAdminController(
 
     [HttpPost("teams/{teamId:int}/deploy")]
     [RequireAdmin]
-    public async Task<IActionResult> Deploy(int gameId, int teamId, CancellationToken token) =>
-        ToActionResult(await deploymentService.DeployRuntimeAsync(gameId, teamId, token));
+    public async Task<IActionResult> Deploy(int gameId, int teamId)
+    {
+        using var operationToken = CreateDeployOperationToken(lifetime.ApplicationStopping);
+        return ToActionResult(await deploymentService.DeployRuntimeAsync(gameId, teamId, operationToken.Token));
+    }
 
     [HttpPost("teams/{teamId:int}/destroy")]
     [RequireAdmin]
@@ -36,5 +40,14 @@ public class TeamLabAdminController(
         result.Success ? new OkObjectResult(result) : new BadRequestObjectResult(result);
 
     public static IActionResult ToActionResult(TeamLabDeploymentResult result) =>
-        result.Success ? new OkObjectResult(result) : new BadRequestObjectResult(result);
+        result.Success
+            ? new OkObjectResult(result)
+            : result.Queue is not null
+                ? new AcceptedResult((string?)null, result)
+                : new BadRequestObjectResult(result);
+
+    public static CancellationTokenSource CreateDeployOperationToken(CancellationToken applicationStopping)
+    {
+        return CancellationTokenSource.CreateLinkedTokenSource(applicationStopping);
+    }
 }

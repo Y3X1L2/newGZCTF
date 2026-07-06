@@ -27,9 +27,7 @@ public class KvmService
         if (!SafeNamePattern.IsMatch(request.VmName))
             throw new ArgumentException("Invalid VM name", nameof(request.VmName));
 
-        var templatePath = request.TemplateId.HasValue
-            ? Path.Combine(_config.ImageStoragePath, $"{request.TemplateId}.qcow2")
-            : "";
+        var templatePath = ResolveTemplatePath(request);
         var vmPath = Path.Combine(_config.ImageStoragePath, $"{request.VmName}.qcow2");
 
         Directory.CreateDirectory(_config.ImageStoragePath);
@@ -41,7 +39,7 @@ public class KvmService
         if (File.Exists(vmPath))
             File.Delete(vmPath);
 
-        if (!string.IsNullOrEmpty(templatePath) && File.Exists(templatePath))
+        if (!string.IsNullOrEmpty(templatePath))
             await RunCommandAsync($"qemu-img create -f qcow2 -b {ShellEscape(templatePath)} -F qcow2 {ShellEscape(vmPath)}", token);
         else
             await RunCommandAsync($"qemu-img create -f qcow2 {ShellEscape(vmPath)} 20G", token);
@@ -98,20 +96,31 @@ public class KvmService
     public async Task<string?> GetIpAddressAsync(string vmName, CancellationToken token,
         IReadOnlyList<VmNetworkInterfaceRequest>? interfaces = null)
     {
+        var result = await GetIpAddressWithDiagnosticAsync(vmName, token, interfaces);
+        return result.IpAddress;
+    }
+
+    public async Task<VmIpLookupResult> GetIpAddressWithDiagnosticAsync(string vmName, CancellationToken token,
+        IReadOnlyList<VmNetworkInterfaceRequest>? interfaces = null)
+    {
         if (!SafeNamePattern.IsMatch(vmName))
-            return null;
+            return new VmIpLookupResult(null, "Invalid VM name.");
+
+        var diagnostics = new List<string>();
 
         var result = await RunCommandAsync($"virsh domifaddr {ShellEscape(vmName)} --source agent 2>/dev/null",
             token, throwOnError: false);
+        diagnostics.Add(SummarizeCommand("domifaddr-agent", result));
         var ip = ParseFirstNonLoopbackIp(result);
         if (ip is not null)
-            return ip;
+            return new VmIpLookupResult(ip, "Matched virsh domifaddr --source agent.");
 
         result = await RunCommandAsync($"virsh domifaddr {ShellEscape(vmName)} 2>/dev/null",
             token, throwOnError: false);
+        diagnostics.Add(SummarizeCommand("domifaddr", result));
         ip = ParseFirstNonLoopbackIp(result);
         if (ip is not null)
-            return ip;
+            return new VmIpLookupResult(ip, "Matched virsh domifaddr.");
 
         if (interfaces is { Count: > 0 })
         {
@@ -124,29 +133,42 @@ public class KvmService
 
                 var bridgeNeighbours = await RunCommandAsync($"ip neigh show dev {ShellEscape(iface.BridgeName)} 2>/dev/null",
                     token, throwOnError: false);
+                diagnostics.Add(SummarizeCommand($"neigh:{iface.BridgeName}:{iface.MacAddress}", bridgeNeighbours));
                 ip = ParseIpFromNeighborTable(bridgeNeighbours, iface.MacAddress!);
                 if (ip is not null)
-                    return ip;
+                    return new VmIpLookupResult(ip, $"Matched bridge neighbor table {iface.BridgeName}.");
+
+                var leaseLookup = ParseIpFromTeamLabLeaseFiles(iface.MacAddress!, iface.BridgeName);
+                if (!string.IsNullOrWhiteSpace(leaseLookup.Diagnostic))
+                    diagnostics.Add(leaseLookup.Diagnostic);
+                ip = leaseLookup.IpAddress;
+                if (ip is not null)
+                    return new VmIpLookupResult(ip, $"Matched TeamLab dnsmasq lease for {iface.BridgeName}.");
             }
 
-            return null;
+            return new VmIpLookupResult(null, string.Join(" | ", diagnostics.Where(d => !string.IsNullOrWhiteSpace(d))));
         }
 
         var macResult = await RunCommandAsync($"virsh domiflist {ShellEscape(vmName)} 2>/dev/null",
             token, throwOnError: false);
+        diagnostics.Add(SummarizeCommand("domiflist", macResult));
         var mac = ParseMacAddress(macResult);
         if (mac is null)
-            return null;
+            return new VmIpLookupResult(null, string.Join(" | ", diagnostics));
 
         var leases = await RunCommandAsync("virsh net-dhcp-leases default 2>/dev/null",
             token, throwOnError: false);
+        diagnostics.Add(SummarizeCommand("default-dhcp-leases", leases));
         ip = ParseIpFromDhcpLeases(leases, mac);
         if (ip is not null)
-            return ip;
+            return new VmIpLookupResult(ip, "Matched default libvirt DHCP leases.");
 
         var neighbours = await RunCommandAsync("ip neigh show dev virbr0 2>/dev/null",
             token, throwOnError: false);
-        return ParseIpFromNeighborTable(neighbours, mac);
+        diagnostics.Add(SummarizeCommand("virbr0-neigh", neighbours));
+        ip = ParseIpFromNeighborTable(neighbours, mac);
+        return new VmIpLookupResult(ip,
+            ip is null ? string.Join(" | ", diagnostics) : "Matched virbr0 neighbor table.");
     }
 
     public Task<int?> EnsureRdpProxyAsync(string vmName, string ipAddress, CancellationToken token)
@@ -206,6 +228,34 @@ public class KvmService
     }
 
     private static string ShellEscape(string arg) => $"'{arg.Replace("'", "'\\''")}'";
+
+    internal string ResolveTemplatePath(CreateVmRequest request)
+    {
+        var storageRoot = Path.GetFullPath(_config.ImageStoragePath);
+        var candidates = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(request.TemplatePath))
+            candidates.Add(request.TemplatePath);
+        if (request.TemplateId.HasValue)
+            candidates.Add(Path.Combine(storageRoot, $"{request.TemplateId.Value}.qcow2"));
+
+        foreach (var candidate in candidates)
+        {
+            var fullPath = Path.GetFullPath(candidate);
+            if (!fullPath.StartsWith(storageRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
+                !string.Equals(fullPath, storageRoot, StringComparison.Ordinal))
+                throw new InvalidOperationException("VM template path must be inside the configured image storage directory.");
+
+            if (File.Exists(fullPath))
+                return fullPath;
+        }
+
+        if (request.TemplateId.HasValue || !string.IsNullOrWhiteSpace(request.TemplatePath))
+            throw new FileNotFoundException(
+                $"VM template image was not found. TemplateId={request.TemplateId?.ToString() ?? "<none>"}, TemplatePath={request.TemplatePath ?? "<none>"}");
+
+        return string.Empty;
+    }
 
     internal static string BuildVirtInstallNetworkArguments(CreateVmRequest request)
     {
@@ -285,14 +335,18 @@ public class KvmService
             var parts = line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
             foreach (var part in parts)
             {
-                if (!part.Contains('/') || part.StartsWith("127.") || part.StartsWith("::1") ||
-                    part.StartsWith("fe80:"))
+                var candidate = part.Trim(',', ';');
+                if (candidate.Contains('/'))
+                    candidate = candidate.Split('/')[0];
+
+                if (candidate.Count(ch => ch == '.') != 3 ||
+                    candidate.StartsWith("127.") || candidate.StartsWith("169.254.") ||
+                    candidate.StartsWith("::1") || candidate.StartsWith("fe80:"))
                     continue;
 
-                var ip = part.Split('/')[0];
-                if (System.Net.IPAddress.TryParse(ip, out var address) &&
+                if (System.Net.IPAddress.TryParse(candidate, out var address) &&
                     address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
-                    return ip;
+                    return candidate;
             }
         }
 
@@ -314,7 +368,7 @@ public class KvmService
         return null;
     }
 
-    private static string? ParseIpFromDhcpLeases(string leaseOutput, string macAddress)
+    internal static string? ParseIpFromDhcpLeases(string leaseOutput, string macAddress)
     {
         var macLower = macAddress.ToLowerInvariant();
         foreach (var line in leaseOutput.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries))
@@ -328,6 +382,54 @@ public class KvmService
         }
 
         return null;
+    }
+
+    private static VmIpLookupResult ParseIpFromTeamLabLeaseFiles(string macAddress, string bridgeName)
+    {
+        const string root = "/run/gzctf-teamlab";
+        if (!Directory.Exists(root))
+            return new VmIpLookupResult(null, "TeamLab lease root does not exist.");
+
+        var preferred = TryBuildTeamLabDhcpServiceName(bridgeName);
+        var directories = Directory.EnumerateDirectories(root)
+            .OrderBy(path => string.Equals(Path.GetFileName(path), preferred, StringComparison.Ordinal) ? 0 : 1)
+            .ToArray();
+        var checkedFiles = new List<string>();
+
+        foreach (var directory in directories)
+        {
+            var leaseFile = Path.Combine(directory, "leases");
+            if (!File.Exists(leaseFile))
+                continue;
+
+            var content = File.ReadAllText(leaseFile);
+            checkedFiles.Add($"{Path.GetFileName(directory)}:{content.Trim().Replace('\n', ';')}");
+            var ip = ParseIpFromDhcpLeases(content, macAddress);
+            if (ip is not null)
+                return new VmIpLookupResult(ip, $"Checked TeamLab lease files: {string.Join(" || ", checkedFiles)}");
+        }
+
+        return new VmIpLookupResult(null, checkedFiles.Count == 0
+            ? $"No TeamLab lease files found. preferred={preferred ?? "<none>"} dirs={string.Join(',', directories.Select(Path.GetFileName))}"
+            : $"No matching TeamLab lease. mac={macAddress} preferred={preferred ?? "<none>"} leases={string.Join(" || ", checkedFiles)}");
+    }
+
+    private static string SummarizeCommand(string name, string output)
+    {
+        var summary = output.Trim();
+        if (summary.Length > 500)
+            summary = summary[..500] + "...";
+        return string.IsNullOrWhiteSpace(summary) ? $"{name}=<empty>" : $"{name}={summary.Replace('\n', ';')}";
+    }
+
+    private static string? TryBuildTeamLabDhcpServiceName(string bridgeName)
+    {
+        var match = Regex.Match(bridgeName, @"^tl(?<runtime>\d+)-(?<network>[a-zA-Z0-9\-]+)$");
+        if (!match.Success)
+            return null;
+
+        var service = $"tldns{match.Groups["runtime"].Value}{match.Groups["network"].Value}";
+        return service.Length <= 15 ? service : service[..15];
     }
 
     private static string? ParseIpFromNeighborTable(string output, string macAddress)
@@ -435,3 +537,5 @@ public class KvmService
         }
     }
 }
+
+public sealed record VmIpLookupResult(string? IpAddress, string? Diagnostic);

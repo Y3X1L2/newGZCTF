@@ -2,6 +2,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Threading.Channels;
+using GZCTF.Services.Fleet;
 using MemoryPack;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IO;
@@ -44,6 +45,9 @@ internal static class BufferHelper
 /// <param name="Status">Status</param>
 /// <param name="Result">Result</param>
 public record TaskResult<TResult>(TaskStatus Status, TResult? Result = default);
+
+public record QueuedTaskResult<TResult>(DeploymentQueueStatusModel QueueStatus)
+    : TaskResult<TResult>(TaskStatus.Pending);
 
 /// <summary>
 /// Request response

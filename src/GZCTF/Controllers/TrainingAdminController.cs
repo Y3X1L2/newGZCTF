@@ -159,6 +159,7 @@ public class TrainingAdminController(
         direction.IsEnabled = model.IsEnabled;
         direction.UpdatedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"Updated training direction {direction.Title}.", TaskStatus.Success, LogLevel.Information);
 
         return Ok();
     }

@@ -1376,7 +1376,8 @@ public class GameController(
             if (result is null)
             {
                 await dbContext.SaveChangesAsync(token);
-                return BadRequest(new { message = "No KVM node available" });
+                var queueState = HttpContext.RequestServices.GetRequiredService<DeploymentQueueStateAccessor>();
+                return BuildVmCreateFallback(queueState);
             }
 
             await dbContext.SaveChangesAsync(token);
@@ -1407,6 +1408,11 @@ public class GameController(
         return await gameInstanceRepository.CreateContainer(instance, context.Participation!.Team, context.User!,
                 context.Game!, token) switch
         {
+            QueuedTaskResult<Container> queued => Accepted(new
+            {
+                status = "queued",
+                queue = queued.QueueStatus
+            }),
             null or (TaskStatus.Failed, null) => BadRequest(
                 new RequestResponse(localizer[nameof(Resources.Program.Game_ContainerCreationFailed)])),
             (TaskStatus.Denied, null) => BadRequest(
@@ -1436,6 +1442,19 @@ public class GameController(
     }
 
     static int? ResolveWindowsVmCpu(int? cpuCount) => cpuCount is >= 1 ? cpuCount : null;
+
+    internal static IActionResult BuildVmCreateFallback(DeploymentQueueStateAccessor queueState)
+    {
+        var queued = queueState.ConsumeQueued();
+        if (queued is not null)
+            return new AcceptedResult((string?)null, new
+            {
+                status = "queued",
+                queue = queued
+            });
+
+        return new BadRequestObjectResult(new { message = "No KVM node available" });
+    }
 
     /// <summary>
     /// Extends container lifetime

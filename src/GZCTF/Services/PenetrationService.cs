@@ -1651,21 +1651,25 @@ public class PenetrationService(
 
         foreach (var edgeModel in model.Edges)
         {
-            var sourceModelId = edgeModel.SourceId > 0 ? edgeModel.SourceId : edgeModel.SourceNodeId;
-            var targetModelId = edgeModel.TargetId > 0 ? edgeModel.TargetId : edgeModel.TargetNodeId;
-            var sourceNode = edgeModel.SourceKind == PenetrationPolicyScope.Node
-                ? maps.NodeMap.GetValueOrDefault(sourceModelId)
-                : null;
-            var targetNode = edgeModel.TargetKind == PenetrationPolicyScope.Node
-                ? maps.NodeMap.GetValueOrDefault(targetModelId)
-                : null;
+            var sourceScopeModelId = edgeModel.SourceId > 0 ? edgeModel.SourceId : edgeModel.SourceNodeId;
+            var targetScopeModelId = edgeModel.TargetId > 0 ? edgeModel.TargetId : edgeModel.TargetNodeId;
+            var sourceNode = edgeModel.SourceNodeId > 0
+                ? maps.NodeMap.GetValueOrDefault(edgeModel.SourceNodeId)
+                : edgeModel.SourceKind == PenetrationPolicyScope.Node
+                    ? maps.NodeMap.GetValueOrDefault(sourceScopeModelId)
+                    : null;
+            var targetNode = edgeModel.TargetNodeId > 0
+                ? maps.NodeMap.GetValueOrDefault(edgeModel.TargetNodeId)
+                : edgeModel.TargetKind == PenetrationPolicyScope.Node
+                    ? maps.NodeMap.GetValueOrDefault(targetScopeModelId)
+                    : null;
 
             var sourceId = edgeModel.SourceKind == PenetrationPolicyScope.Network
-                ? maps.NetworkMap.GetValueOrDefault(sourceModelId)?.Id ?? 0
-                : sourceNode?.Id ?? 0;
+                ? maps.NetworkMap.GetValueOrDefault(sourceScopeModelId)?.Id ?? 0
+                : maps.NodeMap.GetValueOrDefault(sourceScopeModelId)?.Id ?? sourceNode?.Id ?? 0;
             var targetId = edgeModel.TargetKind == PenetrationPolicyScope.Network
-                ? maps.NetworkMap.GetValueOrDefault(targetModelId)?.Id ?? 0
-                : targetNode?.Id ?? 0;
+                ? maps.NetworkMap.GetValueOrDefault(targetScopeModelId)?.Id ?? 0
+                : maps.NodeMap.GetValueOrDefault(targetScopeModelId)?.Id ?? targetNode?.Id ?? 0;
 
             if (sourceId == targetId)
                 continue;

@@ -553,6 +553,7 @@ public class TrainingCourseController(
                 CheckedAt = DateTimeOffset.UtcNow
             });
             await context.SaveChangesAsync(token);
+            logger.Log("Training check-in completed.", user, TaskStatus.Success);
         }
 
         return Ok(await BuildOverview(user, token));
@@ -659,6 +660,7 @@ public class TrainingCourseController(
         enrollment.UpdatedAt = DateTimeOffset.UtcNow;
 
         await context.SaveChangesAsync(token);
+        logger.Log($"Applied training course enrollment: {course.Title}, status {status}.", user, TaskStatus.Success);
         return Ok(TrainingCourseEnrollmentModel.FromEnrollment(enrollment));
     }
 
@@ -674,6 +676,7 @@ public class TrainingCourseController(
         enrollment.Status = TrainingCourseEnrollmentStatus.Cancelled;
         enrollment.UpdatedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(token);
+        logger.Log($"Cancelled training course enrollment: course={courseId}.", user, TaskStatus.Success);
         return Ok();
     }
 
@@ -761,6 +764,7 @@ public class TrainingCourseController(
 
         await RecalculateProgress(user, course, token);
         await context.SaveChangesAsync(token);
+        logger.Log($"Completed training course chapter: {course.Title} / {chapter.Title}.", user, TaskStatus.Success);
 
         var progress = await context.TrainingChapterProgresses
             .SingleOrDefaultAsync(p => p.ChapterId == chapterId && p.UserId == user.Id, token);
@@ -887,6 +891,8 @@ public class TrainingCourseController(
         await MarkChapterCompletedIfReady(user, courseId, chapterId, token);
         await RecalculateProgress(user, course, token);
         await context.SaveChangesAsync(token);
+        logger.Log($"Submitted chapter theory paper: {course.Title} / {paper.Title}, score {sheet.Score}/{sheet.MaxScore}.",
+            user, TaskStatus.Success);
 
         return Ok(TrainingCourseChapterTheoryPlayerPaperModel.FromPaper(paper, sheet));
     }
@@ -953,6 +959,13 @@ public class TrainingCourseController(
         }
 
         var result = await exerciseInstanceRepository.CreateContainer(instance, user, token);
+        if (result is QueuedTaskResult<Container> queued)
+            return Accepted(new
+            {
+                status = "queued",
+                queue = queued.QueueStatus
+            });
+
         if (result.Status != TaskStatus.Success || result.Result is null)
             return BadRequest(new RequestResponse("课程容器创建失败，请稍后重试。"));
 
@@ -992,6 +1005,7 @@ public class TrainingCourseController(
         await containerRepository.ExtendLifetime(instance.Container,
             TimeSpan.FromMinutes(containerPolicy.Value.ExtensionDuration), token);
 
+        logger.Log($"Extended course container: {course.Title} / {instance.Exercise.Title}.", user, TaskStatus.Success);
         return Ok(ContainerInfoModel.FromContainer(instance.Container));
     }
 
@@ -1024,6 +1038,7 @@ public class TrainingCourseController(
 
         instance.LastContainerOperation = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(token);
+        logger.Log($"Destroyed course container: {course.Title} / {instance.Exercise.Title}.", user, TaskStatus.Success);
         return Ok();
     }
 

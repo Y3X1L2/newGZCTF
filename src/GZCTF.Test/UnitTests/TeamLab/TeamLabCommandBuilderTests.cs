@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -15,6 +15,62 @@ public class TeamLabCommandBuilderTests
 {
     private const string ValidInterfacePrivateKey = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=";
     private const string ValidPeerPublicKey = "ISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0A=";
+
+    [Fact]
+    public void ResolveTemplatePath_UsesStandardImportedLocalPath()
+    {
+        using var tempRoot = new TempDirectory();
+        var templatePath = Path.Combine(tempRoot.Path, "imported-template.qcow2");
+        File.WriteAllText(templatePath, "qcow2");
+        var service = CreateKvmService(tempRoot.Path);
+
+        var resolved = service.ResolveTemplatePath(new CreateVmRequest
+        {
+            TemplateId = 115,
+            TemplatePath = templatePath,
+            VmName = "tl-test-vm"
+        });
+
+        Assert.Equal(Path.GetFullPath(templatePath), resolved);
+    }
+
+    [Fact]
+    public void ResolveTemplatePath_RejectsTemplateOutsideImageStorage()
+    {
+        using var tempRoot = new TempDirectory();
+        var outsidePath = Path.Combine(Path.GetTempPath(), $"outside-{Guid.NewGuid():N}.qcow2");
+        File.WriteAllText(outsidePath, "qcow2");
+        var service = CreateKvmService(tempRoot.Path);
+
+        try
+        {
+            var ex = Assert.Throws<InvalidOperationException>(() => service.ResolveTemplatePath(new CreateVmRequest
+            {
+                TemplatePath = outsidePath,
+                VmName = "tl-test-vm"
+            }));
+            Assert.Contains("inside the configured image storage", ex.Message);
+        }
+        finally
+        {
+            File.Delete(outsidePath);
+        }
+    }
+
+    [Fact]
+    public void ResolveTemplatePath_ThrowsWhenRequestedTemplateIsMissing()
+    {
+        using var tempRoot = new TempDirectory();
+        var service = CreateKvmService(tempRoot.Path);
+
+        var ex = Assert.Throws<FileNotFoundException>(() => service.ResolveTemplatePath(new CreateVmRequest
+        {
+            TemplateId = 115,
+            VmName = "tl-test-vm"
+        }));
+
+        Assert.Contains("VM template image was not found", ex.Message);
+    }
 
     [Fact]
     public async Task CreateBridgeAsync_DryRunReturnsCommandsWithoutExecution()
@@ -110,7 +166,9 @@ public class TeamLabCommandBuilderTests
             InterfacePrivateKey: ValidInterfacePrivateKey,
             PeerPublicKey: ValidPeerPublicKey,
             PeerClientAddress: "10.250.0.2/32",
-            PeerAllowedIps: "10.60.0.0/28,10.60.0.16/28",
+            PeerAllowedIps: "10.60.0.0/28",
+            PlayerAllowedCidrs: ["10.60.0.0/28"],
+            PlayerBlockedCidrs: ["10.60.0.16/28"],
             DryRun: true), CancellationToken.None);
 
         Assert.True(result.Success);
@@ -127,6 +185,10 @@ public class TeamLabCommandBuilderTests
             command => command.Contains("ip netns exec tlr123 ip route replace 10.250.0.2/32 dev tlwg123"));
         Assert.DoesNotContain(result.Commands,
             command => command.Contains("ip route replace 10.60.0.0/28 dev tlwg123"));
+        Assert.Contains(result.Commands,
+            command => command.Contains("iptables -I FORWARD 1 -i tlwg123 -d 10.60.0.0/28 -j ACCEPT"));
+        Assert.Contains(result.Commands,
+            command => command.Contains("iptables -A FORWARD -i tlwg123 -d 10.60.0.16/28 -j REJECT"));
         Assert.DoesNotContain(result.Commands, command => command.StartsWith("wg set ", StringComparison.Ordinal));
         Assert.DoesNotContain(result.Commands, command => command.Contains(ValidInterfacePrivateKey));
     }
@@ -146,6 +208,8 @@ public class TeamLabCommandBuilderTests
             PeerPublicKey: "dry-run-peer-key",
             PeerClientAddress: "10.180.1.2/32",
             PeerAllowedIps: "10.180.1.2/32",
+            PlayerAllowedCidrs: [],
+            PlayerBlockedCidrs: [],
             DryRun: true), CancellationToken.None);
 
         Assert.False(result.Success);
@@ -199,8 +263,8 @@ public class TeamLabCommandBuilderTests
         Assert.Contains(result.Commands, command => command.Contains("ip route del default"));
         Assert.Contains(result.Commands, command => command.Contains("ip route replace '10.180.2.0/24' via '10.180.1.1' dev 'eth0'"));
         Assert.Contains(result.Commands, command => command.Contains("ip route replace '10.250.0.2/32' via '10.180.1.1' dev 'eth0'"));
-        Assert.Contains(result.Commands, command =>
-            command.Contains("nameserver 10.180.1.1") && command.Contains("/etc/resolv.conf"));
+        Assert.DoesNotContain(result.Commands, command => command.Contains("/etc/resolv.conf"));
+        Assert.DoesNotContain(result.Commands, command => command.Contains("nameserver 10.180.1.1"));
         Assert.DoesNotContain(result.Commands, command => command.Contains("/fabric/"));
     }
 
@@ -234,11 +298,23 @@ public class TeamLabCommandBuilderTests
         Assert.True(result.DryRun);
         Assert.Contains(result.Commands, command => command.Contains("dnsmasq"));
         Assert.Contains(result.Commands, command => command.Contains("ip netns exec tlr123 dnsmasq"));
+        Assert.Contains(result.Commands, command => command.Contains("--user=root --group=root"));
         Assert.Contains(result.Commands, command => command.Contains("--interface=tlr123n0"));
         Assert.Contains(result.Commands, command => command.Contains("--dhcp-range=10.180.1.1,static,255.255.255.0"));
+        Assert.Contains(result.Commands, command => command.Contains("--dhcp-leasefile=/run/gzctf-teamlab/tldns123/leases"));
         Assert.Contains(result.Commands, command => command.Contains("02:42:ac:10:00:02,10.180.1.10,portal"));
         Assert.Contains(result.Commands, command => command.Contains("address=/portal.team123.lab/10.180.1.10"));
         Assert.DoesNotContain(result.Commands, command => command.Contains("virbr0"));
+    }
+
+    [Fact]
+    public void ParseIpFromDhcpLeases_ReadsDnsmasqBareLeaseAddress()
+    {
+        var output = "1783238118 02:42:99:18:00:10 10.199.0.10 vm-core 01:02:42:99:18:00:10";
+
+        var ip = KvmService.ParseIpFromDhcpLeases(output, "02:42:99:18:00:10");
+
+        Assert.Equal("10.199.0.10", ip);
     }
 
     [Fact]
@@ -256,9 +332,12 @@ public class TeamLabCommandBuilderTests
         Assert.True(result.Success);
         Assert.True(result.DryRun);
         Assert.Contains(result.Commands,
+            command => command.Contains("for i in $(seq 1 10)"));
+        Assert.Contains(result.Commands,
             command => command.Contains("ip netns exec tlr123 nslookup portal.team123.lab 10.180.1.1"));
         Assert.Contains(result.Commands,
-            command => command.Contains("ip netns exec tlr123 nc -uz -w 2 10.180.1.1 53"));
+            command => command.Contains("sleep 1"));
+        Assert.DoesNotContain(result.Commands, command => command.Contains("nc -uz"));
     }
 
     [Fact]
@@ -296,6 +375,8 @@ public class TeamLabCommandBuilderTests
             PeerPublicKey: ValidPeerPublicKey,
             PeerClientAddress: "10.180.1.2/32",
             PeerAllowedIps: "10.180.1.2/32",
+            PlayerAllowedCidrs: ["10.180.1.0/28"],
+            PlayerBlockedCidrs: [],
             DryRun: false), CancellationToken.None);
 
         Assert.True(result.Success);
@@ -322,6 +403,23 @@ public class TeamLabCommandBuilderTests
         Options.Create(new AgentTeamLabConfig { Enable = enable, DryRun = true }),
         new TeamLabCommandRunner(NullLogger<TeamLabCommandRunner>.Instance),
         NullLogger<TeamLabNetworkService>.Instance);
+
+    private static KvmService CreateKvmService(string imageStoragePath) => new(
+        Options.Create(new KvmConfig { ImageStoragePath = imageStoragePath }),
+        NullLogger<KvmService>.Instance);
+
+    private sealed class TempDirectory : IDisposable
+    {
+        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"gzctf-test-{Guid.NewGuid():N}");
+
+        public TempDirectory() => Directory.CreateDirectory(Path);
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Path))
+                Directory.Delete(Path, recursive: true);
+        }
+    }
 
     private sealed class PrivateKeyAwareTeamLabCommandRunner(string privateKey) : TeamLabCommandRunner(
         NullLogger<TeamLabCommandRunner>.Instance)

@@ -30,17 +30,18 @@ public class VmController : ControllerBase
     [HttpGet("{vmName}/ip")]
     public async Task<IActionResult> GetIp(string vmName, CancellationToken token)
     {
-        var ip = await _kvm.GetIpAddressAsync(vmName, token);
-        var rdpPort = string.IsNullOrEmpty(ip)
+        var lookup = await _kvm.GetIpAddressWithDiagnosticAsync(vmName, token);
+        var rdpPort = string.IsNullOrEmpty(lookup.IpAddress)
             ? null
-            : await _kvm.EnsureRdpProxyAsync(vmName, ip, token);
+            : await _kvm.EnsureRdpProxyAsync(vmName, lookup.IpAddress, token);
 
         return Ok(new VmIpResponse
         {
             VmName = vmName,
-            IpAddress = ip,
+            IpAddress = lookup.IpAddress,
             RdpPort = rdpPort,
-            Status = string.IsNullOrEmpty(ip) ? "Pending" : "Ready"
+            Status = string.IsNullOrEmpty(lookup.IpAddress) ? "Pending" : "Ready",
+            Diagnostic = lookup.Diagnostic
         });
     }
 
@@ -48,17 +49,18 @@ public class VmController : ControllerBase
     public async Task<IActionResult> GetIpWithInterfaces(string vmName, [FromBody] VmIpQueryRequest request,
         CancellationToken token)
     {
-        var ip = await _kvm.GetIpAddressAsync(vmName, token, request.Interfaces);
-        var rdpPort = string.IsNullOrEmpty(ip)
+        var lookup = await _kvm.GetIpAddressWithDiagnosticAsync(vmName, token, request.Interfaces);
+        var rdpPort = string.IsNullOrEmpty(lookup.IpAddress)
             ? null
-            : await _kvm.EnsureRdpProxyAsync(vmName, ip, token);
+            : await _kvm.EnsureRdpProxyAsync(vmName, lookup.IpAddress, token);
 
         return Ok(new VmIpResponse
         {
             VmName = vmName,
-            IpAddress = ip,
+            IpAddress = lookup.IpAddress,
             RdpPort = rdpPort,
-            Status = string.IsNullOrEmpty(ip) ? "Pending" : "Ready"
+            Status = string.IsNullOrEmpty(lookup.IpAddress) ? "Pending" : "Ready",
+            Diagnostic = lookup.Diagnostic
         });
     }
 }

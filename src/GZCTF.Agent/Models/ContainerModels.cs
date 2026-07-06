@@ -22,6 +22,7 @@ public class CreateContainerRequest
     public bool BypassPublicProxy { get; set; }
     public Dictionary<string, string> EnvironmentVariables { get; set; } = [];
     public string? StartCommand { get; set; }
+    public List<string> DnsServers { get; set; } = [];
     public string? HealthCheck { get; set; }
     public bool UsePenetrationFabric { get; set; }
     public bool UseHostNetworkNone { get; set; }

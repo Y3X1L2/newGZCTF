@@ -73,6 +73,7 @@ public class AgentClient
             config.BypassPublicProxy,
             config.EnvironmentVariables,
             config.StartCommand,
+            config.DnsServers,
             config.HealthCheck,
             config.UsePenetrationFabric,
             config.UseHostNetworkNone,
@@ -534,6 +535,7 @@ public class AgentClientException : Exception
 public class AgentCreateVmRequest
 {
     public int? TemplateId { get; set; }
+    public string? TemplatePath { get; set; }
     public string VmName { get; set; } = string.Empty;
     public int Memory { get; set; } = 2048;
     public int Cpu { get; set; } = 2;
@@ -586,6 +588,7 @@ public class AgentVmIpResponse
     public string? IpAddress { get; set; }
     public int? RdpPort { get; set; }
     public string Status { get; set; } = string.Empty;
+    public string? Diagnostic { get; set; }
 }
 
 public record TeamLabStatusResponse(
@@ -594,6 +597,7 @@ public record TeamLabStatusResponse(
     bool DryRun,
     bool HasIpCommand,
     bool HasWireGuardCommand,
+    bool HasIptablesCommand,
     DateTimeOffset CheckedAt,
     string? Message = null);
 
@@ -634,6 +638,8 @@ public record TeamLabWireGuardRequest(
     string PeerPublicKey,
     string PeerClientAddress,
     string PeerAllowedIps,
+    string[] PlayerAllowedCidrs,
+    string[] PlayerBlockedCidrs,
     bool DryRun = true);
 
 public record TeamLabCleanupRequest(

@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Services.TeamLab;
@@ -100,10 +101,21 @@ public class TeamLabWireGuardServiceTests
         Assert.Equal("10.180.0.0/24,10.181.0.0/24", model.AllowedIPs);
         Assert.Equal("10.180.0.1", model.Dns);
         Assert.Equal(material.Peer.ConfigVersion, model.ConfigVersion);
+        Assert.Equal("tl-10-20.conf", model.FileName);
         Assert.Contains("PrivateKey = ", model.ConfigText);
         Assert.Contains("Endpoint = 203.0.113.10:32001", model.ConfigText);
         Assert.DoesNotContain("Phase", model.ConfigText);
         Assert.DoesNotContain("dry-run", model.ConfigText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BuildClientConfigFileName_IsShortAsciiForWireGuardTunnelName()
+    {
+        var fileName = TeamLabWireGuardService.BuildClientConfigFileName(int.MaxValue, int.MaxValue);
+
+        Assert.Equal("tl-2147483647-2147483647.conf", fileName);
+        Assert.True(Path.GetFileNameWithoutExtension(fileName).Length <= 32);
+        Assert.Matches("^[A-Za-z0-9.-]+$", fileName);
     }
 
     [Fact]

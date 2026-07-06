@@ -3,6 +3,7 @@ namespace GZCTF.Agent.Models;
 public class CreateVmRequest
 {
     public int? TemplateId { get; set; }
+    public string? TemplatePath { get; set; }
     public string VmName { get; set; } = string.Empty;
     public int Memory { get; set; } = 2048;
     public int Cpu { get; set; } = 2;
@@ -31,6 +32,7 @@ public class VmIpResponse
     public string? IpAddress { get; set; }
     public int? RdpPort { get; set; }
     public string Status { get; set; } = "Pending";
+    public string? Diagnostic { get; set; }
 }
 
 public class VmIpQueryRequest

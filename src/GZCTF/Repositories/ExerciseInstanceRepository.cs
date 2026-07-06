@@ -4,6 +4,7 @@ using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Services.Cache;
+using GZCTF.Services.Concurrency;
 using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
@@ -21,11 +22,21 @@ public class ExerciseInstanceRepository(
     IOptionsSnapshot<ContainerPolicy> containerPolicy,
     DockerImageRegistryService dockerRegistry,
     INginxProxySyncService nginxProxySync,
+    DeploymentQueueStateAccessor deploymentQueueState,
+    DeploymentExecutionContextAccessor deploymentExecutionContext,
+    IDistributedLockService lockService,
     ILogger<ExerciseInstanceRepository> logger,
     IStringLocalizer<Program> localizer
 ) : RepositoryBase(context),
     IExerciseInstanceRepository
 {
+    static readonly DeploymentQueueTicketStatus[] ActiveQueueStatuses =
+    [
+        DeploymentQueueTicketStatus.Pending,
+        DeploymentQueueTicketStatus.Assigned,
+        DeploymentQueueTicketStatus.Creating
+    ];
+
     public async Task<ExerciseInstance[]> GetExerciseInstances(UserInfo user, CancellationToken token = default)
     {
         if (!await IsExerciseAvailable(token))
@@ -158,10 +169,27 @@ public class ExerciseInstanceRepository(
             return new TaskResult<Container>(TaskStatus.Failed);
         }
 
+        if (instance.ContainerId is not null && instance.Container is null)
+            await Context.Entry(instance).Reference(e => e.Container).LoadAsync(token);
+
+        if (instance.Container is not null)
+            return new TaskResult<Container>(TaskStatus.Success, instance.Container);
+
+        using var ownerLock = await lockService.AcquireAsync(
+            BuildContainerLimitLockKey(user.Id),
+            TimeSpan.FromSeconds(10));
+
+        if (instance.ContainerId is not null && instance.Container is null)
+            await Context.Entry(instance).Reference(e => e.Container).LoadAsync(token);
+
+        if (instance.Container is not null)
+            return new TaskResult<Container>(TaskStatus.Success, instance.Container);
+
         // containerLimit == 0 means unlimited
         var containerLimit = containerPolicy.Value.MaxExerciseContainerCountPerUser;
         if (containerLimit > 0)
         {
+            var queuedCount = await CountActiveQueuedContainersAsync(user.Id, instance.ExerciseId, token);
             var running = await Context.ExerciseInstances
                 .Include(i => i.Exercise)
                 .Include(i => i.Container)
@@ -170,7 +198,11 @@ public class ExerciseInstanceRepository(
                 .ToListAsync(token);
 
             var first = running.FirstOrDefault();
-            if (running.Count >= containerLimit && first is not null)
+            var allowedRunningBeforeCreate = containerLimit - queuedCount;
+            if (allowedRunningBeforeCreate <= 0)
+                return new TaskResult<Container>(TaskStatus.Denied);
+
+            if (running.Count >= allowedRunningBeforeCreate && first is not null)
             {
                 logger.Log(
                     StaticLocalizer[nameof(Resources.Program.InstanceRepository_ContainerAutoDestroy),
@@ -181,9 +213,6 @@ public class ExerciseInstanceRepository(
             }
         }
 
-        if (instance.Container is not null)
-            return new TaskResult<Container>(TaskStatus.Success, instance.Container);
-
         await Context.Entry(instance).Reference(e => e.FlagContext).LoadAsync(token);
 
         var image = await dockerRegistry.ResolveImageReferenceAsync(instance.Exercise.ContainerImage, token);
@@ -192,6 +221,8 @@ public class ExerciseInstanceRepository(
             TeamId = "exercise",
             UserId = user.Id,
             ChallengeId = instance.ExerciseId,
+            PreferredNodeId = deploymentExecutionContext.Current?.TargetNodeId,
+            FleetCapacityReserved = deploymentExecutionContext.Current?.CapacityReserved == true,
             Flag = instance.FlagContext?.Flag, // static challenge has no specific flag
             Image = image,
             CPUCount = instance.Exercise.CPUCount ?? 1,
@@ -204,6 +235,9 @@ public class ExerciseInstanceRepository(
 
         if (container is null)
         {
+            if (deploymentQueueState.ConsumeQueued() is { } queueStatus)
+                return new QueuedTaskResult<Container>(queueStatus);
+
             logger.SystemLog(
                 StaticLocalizer[nameof(Resources.Program.InstanceRepository_ContainerCreationFailed),
                     instance.Exercise.Title],
@@ -225,6 +259,16 @@ public class ExerciseInstanceRepository(
 
         return new TaskResult<Container>(TaskStatus.Success, instance.Container);
     }
+
+    static string BuildContainerLimitLockKey(Guid userId) =>
+        $"container-limit:exercise:user:{userId}";
+
+    async Task<int> CountActiveQueuedContainersAsync(Guid userId, int currentExerciseId, CancellationToken token) =>
+        await Context.DeploymentQueueTickets.CountAsync(t =>
+            t.Kind == DeploymentQueueKind.ExerciseContainer &&
+            t.OwnerUserId == userId &&
+            t.ChallengeId != currentExerciseId &&
+            ActiveQueueStatuses.Contains(t.Status), token);
 
     public async Task<(AnswerResult Status, int? FlagId)> VerifyAnswer(UserInfo user, ExerciseInstance instance, string answer,
         int? flagId = null,

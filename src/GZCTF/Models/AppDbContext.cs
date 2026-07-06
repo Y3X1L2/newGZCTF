@@ -51,6 +51,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<VmInstance> VmInstances => Set<VmInstance>();
     public DbSet<WorkerNode> WorkerNodes { get; set; } = null!;
     public DbSet<DeploymentTarget> DeploymentTargets { get; set; } = null!;
+    public DbSet<DeploymentQueueTicket> DeploymentQueueTickets { get; set; } = null!;
     public DbSet<GamePhase> GamePhases => Set<GamePhase>();
     public DbSet<TimeSlot> TimeSlots { get; set; } = null!;
     public DbSet<ScoringRule> ScoringRules { get; set; } = null!;
@@ -1800,6 +1801,29 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
 
             entity.Property(e => e.Status)
                 .HasConversion<byte>();
+        });
+
+        builder.Entity<DeploymentQueueTicket>(entity =>
+        {
+            entity.HasIndex(e => e.ActiveIdentity)
+                .IsUnique()
+                .HasFilter("\"Status\" IN (0, 1, 2)");
+
+            entity.Property(e => e.Kind)
+                .HasConversion<byte>();
+
+            entity.Property(e => e.Status)
+                .HasConversion<byte>();
+
+            entity.HasOne(e => e.DeploymentTarget)
+                .WithMany()
+                .HasForeignKey(e => e.DeploymentTargetId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.TargetNode)
+                .WithMany()
+                .HasForeignKey(e => e.TargetNodeId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<TeamLabRuntimeNetwork>(entity =>

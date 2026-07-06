@@ -56,6 +56,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         var fleetManager = scope.ServiceProvider.GetRequiredService<FleetManager>();
         var nodeRepo = scope.ServiceProvider.GetRequiredService<INodeRepository>();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var queueState = scope.ServiceProvider.GetService<DeploymentQueueStateAccessor>();
 
         if (config.PreferredNodeId is { } preferredNodeId)
             return await CreateOnPreferredNodeAsync(config, preferredNodeId, nodeRepo, context, token);
@@ -64,6 +65,8 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         if (onlineNodes.Count == 0)
         {
             _logger.LogWarning("No online fleet node available for Docker container creation");
+            _logger.SystemLog("Docker deployment failed: no online fleet node is available.",
+                TaskStatus.Failed, LogLevel.Warning);
             return null;
         }
 
@@ -80,19 +83,23 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         {
             if (schedule.Target is not null)
             {
-                schedule.Target.Status = TargetStatus.Cancelled;
-                schedule.Target.CompletedAt = DateTimeOffset.UtcNow;
-                schedule.Target.ErrorMessage = "No schedulable fleet node available for Docker containers";
-                await SaveFleetStateAsync(context, "cancel unscheduled Docker deployment target", token);
+                schedule.Target.Status = TargetStatus.Pending;
+                schedule.Target.ErrorMessage = schedule.Reason ?? "Waiting for a schedulable fleet node";
+                await SaveFleetStateAsync(context, "queue Docker deployment target", token);
+                _logger.SystemLogDeploymentTarget("queued", schedule.Target);
             }
 
-            _logger.LogWarning("No schedulable fleet node available for Docker container creation");
+            queueState?.SetQueued(schedule.QueueStatus);
+            _logger.LogInformation("Docker container creation queued: {Reason}", schedule.Reason);
             return null;
         }
 
         var node = schedule.Node ?? await nodeRepo.GetNodeByIdAsync(nodeId.Value, token);
         if (schedule.Target is not null)
+        {
             schedule.Target.Status = TargetStatus.Creating;
+            _logger.SystemLogDeploymentTarget("creating", schedule.Target, node);
+        }
 
         if (node?.IsLocal == true)
         {
@@ -108,6 +115,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
 
             CompleteDeploymentTarget(schedule.Target, container, node.HostAddress);
             await SaveFleetStateAsync(context, "complete scheduled local Docker deployment target", token);
+            _logger.SystemLogDeploymentTarget("completed", schedule.Target, node);
             await SyncNginxIfProxiedAsync(container, "scheduled local Docker container created", token);
             return container;
         }
@@ -135,6 +143,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             BypassPublicProxy = config.BypassPublicProxy,
             EnvironmentVariables = config.EnvironmentVariables,
             StartCommand = config.StartCommand,
+            DnsServers = config.DnsServers,
             HealthCheck = config.HealthCheck,
             UsePenetrationFabric = config.UsePenetrationFabric,
             EnableNetworkAdmin = config.EnableNetworkAdmin,
@@ -153,6 +162,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
                 ReleaseReservedCapacity(node, NodeCapability.Docker);
 
             await SaveFleetStateAsync(context, "fail remote Docker deployment target", token);
+            _logger.SystemLogDeploymentTarget("failed", schedule.Target, node);
             return null;
         }
 
@@ -172,6 +182,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             return null;
         CompleteDeploymentTarget(schedule.Target, remoteContainer, node!.HostAddress);
         await SaveFleetStateAsync(context, "complete remote Docker deployment target", token);
+        _logger.SystemLogDeploymentTarget("completed", schedule.Target, node);
         await SyncNginxIfProxiedAsync(remoteContainer, "remote Docker container created", token);
         return remoteContainer;
     }
@@ -200,6 +211,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             target.CompletedAt = DateTimeOffset.UtcNow;
             target.ErrorMessage = node is null ? "Preferred fleet node not found" : "Preferred fleet node cannot host Docker containers";
             await SaveFleetStateAsync(context, "fail preferred Docker deployment target", token);
+            _logger.SystemLogDeploymentTarget("failed", target, node);
             return null;
         }
 
@@ -210,6 +222,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
 
         if (selectedNode.IsLocal)
         {
+            _logger.SystemLogDeploymentTarget("creating", target, selectedNode);
             var localContainer = await _localManager.CreateContainerAsync(config, token);
             if (localContainer is not null)
             {
@@ -222,10 +235,12 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
 
             CompleteDeploymentTarget(target, localContainer, selectedNode.HostAddress);
             await SaveFleetStateAsync(context, "complete preferred local Docker deployment target", token);
+            _logger.SystemLogDeploymentTarget("completed", target, selectedNode);
             await SyncNginxIfProxiedAsync(localContainer, "preferred local Docker container created", token);
             return localContainer;
         }
 
+        _logger.SystemLogDeploymentTarget("creating", target, selectedNode);
         var result = await _agentClient.CreateContainerOrThrowAsync(selectedNode.Id, config, token);
         if (result is null)
         {
@@ -233,6 +248,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
                 ReleaseReservedCapacity(selectedNode, NodeCapability.Docker);
             FailDeploymentTarget(target, "Agent container creation failed on preferred node");
             await SaveFleetStateAsync(context, "fail preferred remote Docker deployment target", token);
+            _logger.SystemLogDeploymentTarget("failed", target, selectedNode);
             return null;
         }
 
@@ -252,6 +268,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             return null;
         CompleteDeploymentTarget(target, remoteContainer, selectedNode.HostAddress);
         await SaveFleetStateAsync(context, "complete preferred remote Docker deployment target", token);
+        _logger.SystemLogDeploymentTarget("completed", target, selectedNode);
         await SyncNginxIfProxiedAsync(remoteContainer, "preferred remote Docker container created", token);
         return remoteContainer;
     }
@@ -582,6 +599,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
 
         FailDeploymentTarget(target, reason);
         await SaveFleetStateAsync(context, "fail Docker deployment after Nginx proxy setup", token);
+        _logger.SystemLogDeploymentTarget("failed", target, node);
     }
 
     static void CompleteDeploymentTarget(DeploymentTarget? target, DataContainer? container, string? host)

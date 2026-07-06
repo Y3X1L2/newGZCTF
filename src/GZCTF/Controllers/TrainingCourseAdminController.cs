@@ -443,6 +443,7 @@ public class TrainingCourseAdminController(
         course.UpdatedById = actor.Id;
         course.UpdatedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"Moved training course {course.Title} to draft.", TaskStatus.Success, LogLevel.Information);
         return Ok();
     }
 
@@ -500,6 +501,8 @@ public class TrainingCourseAdminController(
         enrollment.ReviewedAt = DateTimeOffset.UtcNow;
         enrollment.UpdatedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"Reviewed training course enrollment: course={courseId}, user={userId}, status={model.Status}.",
+            TaskStatus.Success, LogLevel.Information);
         return Ok();
     }
 
@@ -539,6 +542,8 @@ public class TrainingCourseAdminController(
         }
 
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"Updated training course teacher: course={courseId}, teacher={teacher.UserName}, role={model.Role}.",
+            TaskStatus.Success, LogLevel.Information);
         return Ok();
     }
 
@@ -566,6 +571,8 @@ public class TrainingCourseAdminController(
 
         context.TrainingCourseTeachers.Remove(link);
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"Removed training course teacher: course={courseId}, teacher={teacherId}.",
+            TaskStatus.Success, LogLevel.Information);
         return Ok();
     }
 
@@ -596,6 +603,8 @@ public class TrainingCourseAdminController(
         FillChapter(chapter, model, file, actor);
         context.TrainingCourseChapters.Add(chapter);
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"Created training course chapter {chapter.Title}: course={courseId}.",
+            TaskStatus.Success, LogLevel.Information);
         return Ok(TrainingCourseChapterModel.FromChapter(chapter));
     }
 
@@ -626,6 +635,8 @@ public class TrainingCourseAdminController(
 
         FillChapter(chapter, model, file, actor);
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"Updated training course chapter {chapter.Title}: course={courseId}.",
+            TaskStatus.Success, LogLevel.Information);
         return Ok();
     }
 
@@ -695,6 +706,8 @@ public class TrainingCourseAdminController(
         context.TrainingCourseChapters.Remove(chapter);
         await context.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
+        logger.SystemLog($"Deleted training course chapter {chapter.Title}: course={courseId}.",
+            TaskStatus.Success, LogLevel.Information);
 
         return Ok();
     }
@@ -745,6 +758,8 @@ public class TrainingCourseAdminController(
         FillResource(resource, model, file);
         context.TrainingCourseResources.Add(resource);
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"Created training course resource {resource.Title}: course={courseId}.",
+            TaskStatus.Success, LogLevel.Information);
 
         return Ok(TrainingCourseResourceModel.FromResource(resource, true));
     }
@@ -773,6 +788,8 @@ public class TrainingCourseAdminController(
 
         FillResource(resource, model, file);
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"Updated training course resource {resource.Title}: course={courseId}.",
+            TaskStatus.Success, LogLevel.Information);
         return Ok();
     }
 
@@ -793,6 +810,8 @@ public class TrainingCourseAdminController(
 
         context.TrainingCourseResources.Remove(resource);
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"Deleted training course resource {resource.Title}: course={courseId}.",
+            TaskStatus.Success, LogLevel.Information);
         return Ok();
     }
 
@@ -874,6 +893,8 @@ public class TrainingCourseAdminController(
 
         context.TrainingCourseTheoryQuestions.Add(question);
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"Created training course theory question {question.Id}: course={courseId}.",
+            TaskStatus.Success, LogLevel.Information);
         return Ok(TrainingCourseTheoryQuestionModel.FromQuestion(question));
     }
 
@@ -906,6 +927,8 @@ public class TrainingCourseAdminController(
         question.UpdatedAt = DateTimeOffset.UtcNow;
 
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"Updated training course theory question {question.Id}: course={courseId}.",
+            TaskStatus.Success, LogLevel.Information);
         return Ok(TrainingCourseTheoryQuestionModel.FromQuestion(question));
     }
 
@@ -931,6 +954,8 @@ public class TrainingCourseAdminController(
 
         context.TrainingCourseTheoryQuestions.Remove(question);
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"Deleted training course theory question {questionId}: course={courseId}.",
+            TaskStatus.Success, LogLevel.Information);
         return Ok();
     }
 
@@ -1058,6 +1083,8 @@ public class TrainingCourseAdminController(
             context.TrainingCourseChapterTheoryPapers.Add(paper);
 
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"Saved training course chapter theory paper {paper.Title}: course={courseId}, chapter={chapterId}.",
+            TaskStatus.Success, LogLevel.Information);
         return Ok(TrainingCourseChapterTheoryPaperDetailModel.FromPaper(paper));
     }
 
@@ -1132,6 +1159,8 @@ public class TrainingCourseAdminController(
         await context.SaveChangesAsync(token);
 
         _ = Task.Run(() => QueueCourseDockerPull(template.Id, pullTarget.RegistryUrl, pullTarget.ImageName, model.RegistryAuth));
+        logger.SystemLog($"Registered training course Docker template {template.Name}: course={courseId}, template={template.Id}.",
+            TaskStatus.Pending, LogLevel.Information);
 
         return Ok(TrainingCourseImageTemplateModel.FromTemplate(template));
     }
@@ -1215,6 +1244,8 @@ public class TrainingCourseAdminController(
             if (existingTemplate is null)
                 context.ImageTemplates.Add(template);
             await context.SaveChangesAsync(token);
+            logger.SystemLog($"Uploaded training course Docker template {template.Name}: course={courseId}, template={template.Id}.",
+                TaskStatus.Success, LogLevel.Information);
 
             return Ok(TrainingCourseImageTemplateModel.FromTemplate(template));
         }
@@ -1247,6 +1278,8 @@ public class TrainingCourseAdminController(
             template.TrainingCourseId = courseId;
             context.ImageTemplates.Add(template);
             await context.SaveChangesAsync(token);
+            logger.SystemLog($"Uploaded training course VM template {template.Name}: course={courseId}, template={template.Id}.",
+                TaskStatus.Success, LogLevel.Information);
             return Ok(TrainingCourseImageTemplateModel.FromTemplate(template));
         }
         catch (InvalidOperationException ex)
@@ -1293,6 +1326,8 @@ public class TrainingCourseAdminController(
 
             result.Template.TrainingCourseId = courseId;
             await context.SaveChangesAsync(token);
+            logger.SystemLog($"Uploaded training course VM archive template {result.Template.Name}: course={courseId}, template={result.Template.Id}.",
+                TaskStatus.Success, LogLevel.Information);
             return Ok(TrainingCourseImageTemplateModel.FromTemplate(result.Template));
         }
         finally
@@ -1329,6 +1364,8 @@ public class TrainingCourseAdminController(
             var template = await importer.ImportFromLocalPathAsync(model.LocalPath, model.DisplayName);
             template.TrainingCourseId = courseId;
             await context.SaveChangesAsync(token);
+            logger.SystemLog($"Imported training course local image template {template.Name}: course={courseId}, template={template.Id}.",
+                TaskStatus.Success, LogLevel.Information);
             return Ok(TrainingCourseImageTemplateModel.FromTemplate(template));
         }
         catch (FileNotFoundException ex)
@@ -1361,6 +1398,8 @@ public class TrainingCourseAdminController(
 
         template.TrainingCourseId = courseId;
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"Attached training course image template {template.Id}: course={courseId}.",
+            TaskStatus.Success, LogLevel.Information);
         return Ok();
     }
 
@@ -1387,6 +1426,8 @@ public class TrainingCourseAdminController(
 
         context.ImageTemplates.Remove(template);
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"Detached training course image template {templateId}: course={courseId}.",
+            TaskStatus.Success, LogLevel.Information);
         return Ok();
     }
 
@@ -1429,6 +1470,8 @@ public class TrainingCourseAdminController(
 
         await context.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
+        logger.SystemLog($"Created training course challenge {exercise.Title}: course={courseId}, challenge={exercise.Id}.",
+            TaskStatus.Success, LogLevel.Information);
 
         return Ok(TrainingCourseChallengeModel.FromChallenge(link, model.ChapterId));
     }
@@ -1497,6 +1540,8 @@ public class TrainingCourseAdminController(
         await SetCourseChallengeChapterLink(courseId, exerciseChallengeId, model.ChapterId, model.Order, token);
         await context.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
+        logger.SystemLog($"Updated training course challenge {link.ExerciseChallenge.Title}: course={courseId}, challenge={exerciseChallengeId}.",
+            TaskStatus.Success, LogLevel.Information);
 
         return await CourseChallengeEditDetail(courseId, exerciseChallengeId, token);
     }
@@ -1544,6 +1589,8 @@ public class TrainingCourseAdminController(
         await SetCourseChallengeChapterLink(courseId, model.ExerciseChallengeId, model.ChapterId, model.Order, token);
 
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"Attached training course challenge {model.ExerciseChallengeId}: course={courseId}.",
+            TaskStatus.Success, LogLevel.Information);
         return Ok();
     }
 
@@ -1595,6 +1642,8 @@ public class TrainingCourseAdminController(
         }
 
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"Removed training course challenge {exerciseChallengeId}: course={courseId}.",
+            TaskStatus.Success, LogLevel.Information);
         return Ok();
     }
 }

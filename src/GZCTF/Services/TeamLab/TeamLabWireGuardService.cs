@@ -25,6 +25,7 @@ public sealed record TeamLabClientConfigModel(
     string AllowedIPs,
     string Dns,
     int ConfigVersion,
+    string FileName,
     string ConfigText);
 
 public class TeamLabWireGuardService(
@@ -117,7 +118,7 @@ public class TeamLabWireGuardService(
 
             return new TeamLabClientConfigModel(runtime.GameId, runtime.TeamId,
                 runtime.Team?.Name ?? runtime.TeamId.ToString(), peer.Endpoint, peer.ClientAddress, peer.AllowedIPs,
-                peer.Dns, peer.ConfigVersion, config);
+                peer.Dns, peer.ConfigVersion, BuildClientConfigFileName(runtime.GameId, runtime.TeamId), config);
         }
         catch (CryptographicException)
         {
@@ -154,4 +155,6 @@ public class TeamLabWireGuardService(
         PersistentKeepalive = 25
         """.Trim();
     }
+
+    public static string BuildClientConfigFileName(int gameId, int teamId) => $"tl-{gameId}-{teamId}.conf";
 }

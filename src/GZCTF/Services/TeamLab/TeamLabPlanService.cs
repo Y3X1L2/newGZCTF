@@ -152,6 +152,8 @@ public class TeamLabPlanService(
             runtime.LastError = nodeResult.Message;
             AddEvent(runtime, "plan", TeamLabEventLevel.Error, nodeResult.Message);
             await context.SaveChangesAsync(token);
+            logger.SystemLog($"TeamLab runtime plan failed: game={gameId}, team={teamId}, runtime={runtime.Id}, error={nodeResult.Message}",
+                TaskStatus.Failed, LogLevel.Warning);
             return new TeamLabPlanResult(false, nodeResult.Message, runtime);
         }
 
@@ -167,6 +169,8 @@ public class TeamLabPlanService(
             runtime.LastError = message;
             AddEvent(runtime, "plan", TeamLabEventLevel.Error, message);
             await context.SaveChangesAsync(token);
+            logger.SystemLog($"TeamLab runtime plan failed: game={gameId}, team={teamId}, runtime={runtime.Id}, error={message}",
+                TaskStatus.Failed, LogLevel.Warning);
             return new TeamLabPlanResult(false, message, runtime);
         }
 
@@ -182,6 +186,8 @@ public class TeamLabPlanService(
             runtime.LastError = message;
             AddEvent(runtime, "plan", TeamLabEventLevel.Error, message);
             await context.SaveChangesAsync(token);
+            logger.SystemLog($"TeamLab runtime plan failed: game={gameId}, team={teamId}, runtime={runtime.Id}, error={message}",
+                TaskStatus.Failed, LogLevel.Warning);
             return new TeamLabPlanResult(false, message, runtime);
         }
 
@@ -208,6 +214,8 @@ public class TeamLabPlanService(
 
         logger.LogInformation("Planned TeamLab runtime {RuntimeId} for game {GameId}, team {TeamId} on node {NodeId}.",
             runtime.Id, gameId, teamId, runtime.WorkerNodeId);
+        logger.SystemLog($"TeamLab runtime planned: game={gameId}, team={teamId}, runtime={runtime.Id}, node={nodeResult.Node.Name}, udp={publicPort.Value}.",
+            TaskStatus.Success, LogLevel.Information);
         return new TeamLabPlanResult(true, "TeamLab runtime planned.", runtime);
     }
 

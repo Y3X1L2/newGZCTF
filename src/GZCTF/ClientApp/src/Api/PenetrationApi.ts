@@ -458,6 +458,7 @@ export interface TeamLabVpnConfigModel {
   allowedIPs: string
   dns: string
   configVersion: number
+  fileName: string
   configText: string
 }
 

@@ -244,7 +244,7 @@ const PenetrationPage: FC = () => {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `teamlab-${gameId}-${vpnConfig.teamId}.conf`
+    link.download = vpnConfig.fileName || `tl-${gameId}-${vpnConfig.teamId}.conf`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)

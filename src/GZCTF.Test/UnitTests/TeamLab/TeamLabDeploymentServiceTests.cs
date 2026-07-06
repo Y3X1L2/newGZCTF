@@ -1,8 +1,12 @@
+using System;
 using System.Collections.Generic;
 using System.Net.Http;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Models.Internal;
+using GZCTF.Models;
+using GZCTF.Models.Request.Game;
 using GZCTF.Services;
 using GZCTF.Services.TeamLab;
 using GZCTF.Services.Fleet;
@@ -13,6 +17,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
 using Xunit;
 
 namespace GZCTF.Test.UnitTests.TeamLab;
@@ -40,6 +46,14 @@ public class TeamLabDeploymentServiceTests
     public void CanOpenToPlayers_RequiresRunningPenetrationEnvironment(PenetrationRuntimeStatus status, bool expected)
     {
         Assert.Equal(expected, TeamLabDeploymentService.CanOpenToPlayers(status));
+    }
+
+    [Theory]
+    [InlineData(OSType.Linux, 24)]
+    [InlineData(OSType.Windows, 72)]
+    public void ResolveNativeVmReadyProbeAttempts_GivesWindowsEnoughColdBootTime(OSType osType, int expected)
+    {
+        Assert.Equal(expected, TeamLabDeploymentService.ResolveNativeVmReadyProbeAttempts(osType));
     }
 
     [Fact]
@@ -182,7 +196,7 @@ public class TeamLabDeploymentServiceTests
             StartPriority: 50,
             Interfaces:
             [
-                new TeamLabAssetInterfaceSpec("public", "tl12-public", "eth0", "10.90.0.2", 28,
+                new TeamLabAssetInterfaceSpec("asset", "public", "tl12-public", "eth0", "10.90.0.2", 28,
                     "02:42:ac:10:00:02", IsPrimary: true, RemoveDefaultRoute: false)
             ]);
 
@@ -203,6 +217,39 @@ public class TeamLabDeploymentServiceTests
     }
 
     [Fact]
+    public void BuildNativeDockerContainerConfig_InjectsDnsAtContainerCreation()
+    {
+        var workerNodeId = System.Guid.NewGuid();
+        var spec = new TeamLabAssetSpec(
+            TeamLabAssetSpecKind.Docker,
+            TopologyKey: "portal",
+            Name: "Portal",
+            SourceTemplateId: 42,
+            Image: "registry.local/portal:latest",
+            CpuCount: 10,
+            MemoryLimit: 512,
+            StorageLimit: 256,
+            ExposePort: 8080,
+            InfrastructureRole: null,
+            StartPriority: 50,
+            Interfaces:
+            [
+                new TeamLabAssetInterfaceSpec("asset", "entry", "tl12-entry", "eth0", "10.90.0.3", 28,
+                    "02:42:ac:10:00:02", IsPrimary: true, RemoveDefaultRoute: false)
+            ]);
+
+        var networks = new[]
+        {
+            new TeamLabRuntimeNetworkSpec("entry", "Entry", "10.90.0.0/28", "10.90.0.1", "tl12-entry"),
+            new TeamLabRuntimeNetworkSpec("data", "Data", "10.90.0.16/28", "10.90.0.17", "tl12-data")
+        };
+        var config = TeamLabDeploymentService.BuildNativeDockerContainerConfig(spec, teamId: 7,
+            workerNodeId, flag: null, networks);
+
+        Assert.Equal(["10.90.0.1", "10.90.0.17"], config.DnsServers);
+    }
+
+    [Fact]
     public async Task BuildResolvedNativeDockerContainerConfig_RewritesInternalRegistryReferenceForAgent()
     {
         var workerNodeId = System.Guid.NewGuid();
@@ -220,7 +267,7 @@ public class TeamLabDeploymentServiceTests
             StartPriority: 50,
             Interfaces:
             [
-                new TeamLabAssetInterfaceSpec("service", "tl12-service", "eth0", "10.90.0.3", 28,
+                new TeamLabAssetInterfaceSpec("asset", "service", "tl12-service", "eth0", "10.90.0.3", 28,
                     "02:42:ac:10:00:02", IsPrimary: true, RemoveDefaultRoute: false)
             ]);
         var registry = CreateDockerRegistryService("10.24.0.28:5000");
@@ -263,9 +310,9 @@ public class TeamLabDeploymentServiceTests
             StartPriority: 50,
             Interfaces:
             [
-                new TeamLabAssetInterfaceSpec("public", "tl12-public", "eth0", "10.90.0.2", 28,
+                new TeamLabAssetInterfaceSpec("asset", "public", "tl12-public", "eth0", "10.90.0.2", 28,
                     "02:42:ac:10:00:02", IsPrimary: true, RemoveDefaultRoute: false),
-                new TeamLabAssetInterfaceSpec("data", "tl12-data", "eth1", "10.90.0.18", 28,
+                new TeamLabAssetInterfaceSpec("asset", "data", "tl12-data", "eth1", "10.90.0.18", 28,
                     "02:42:ac:10:00:03", IsPrimary: false, RemoveDefaultRoute: false)
             ]);
 
@@ -296,15 +343,17 @@ public class TeamLabDeploymentServiceTests
             StartPriority: 10,
             Interfaces:
             [
-                new TeamLabAssetInterfaceSpec("data", "tl12-data", "eth0", "10.90.0.19", 28,
+                new TeamLabAssetInterfaceSpec("asset", "data", "tl12-data", "eth0", "10.90.0.19", 28,
                     "02:42:ac:10:00:02", IsPrimary: true, RemoveDefaultRoute: false),
-                new TeamLabAssetInterfaceSpec("ops", "tl12-ops", "eth1", "10.90.0.35", 28,
+                new TeamLabAssetInterfaceSpec("asset", "ops", "tl12-ops", "eth1", "10.90.0.35", 28,
                     "02:42:ac:10:00:03", IsPrimary: false, RemoveDefaultRoute: false)
-            ]);
+            ],
+            OSType: OSType.Windows);
 
         var request = TeamLabDeploymentService.BuildNativeVmRequest(runtimeId: 12, spec, flag: "flag{win}");
 
         Assert.Equal(7, request.TemplateId);
+        Assert.Equal("/images/win.qcow2", request.TemplatePath);
         Assert.Equal("tl12-win-ad", request.VmName);
         Assert.Equal(4096, request.Memory);
         Assert.Equal(20, request.Cpu);
@@ -314,14 +363,42 @@ public class TeamLabDeploymentServiceTests
             {
                 Assert.Equal("tl12-data", iface.BridgeName);
                 Assert.Equal("02:42:ac:10:00:02", iface.MacAddress);
-                Assert.Equal("virtio", iface.Model);
+                Assert.Equal("e1000e", iface.Model);
             },
             iface =>
             {
                 Assert.Equal("tl12-ops", iface.BridgeName);
                 Assert.Equal("02:42:ac:10:00:03", iface.MacAddress);
-                Assert.Equal("virtio", iface.Model);
+                Assert.Equal("e1000e", iface.Model);
             });
+    }
+
+    [Fact]
+    public void BuildNativeVmRequest_KeepsVirtioForLinuxTemplates()
+    {
+        var spec = new TeamLabAssetSpec(
+            TeamLabAssetSpecKind.Vm,
+            TopologyKey: "linux-core",
+            Name: "Linux Core",
+            SourceTemplateId: 8,
+            Image: "/images/linux.qcow2",
+            CpuCount: 2,
+            MemoryLimit: 1024,
+            StorageLimit: 20480,
+            ExposePort: 22,
+            InfrastructureRole: null,
+            StartPriority: 20,
+            Interfaces:
+            [
+                new TeamLabAssetInterfaceSpec("asset", "data", "tl12-data", "eth0", "10.90.0.20", 28,
+                    "02:42:ac:10:00:04", IsPrimary: true, RemoveDefaultRoute: false)
+            ],
+            OSType: OSType.Linux);
+
+        var request = TeamLabDeploymentService.BuildNativeVmRequest(runtimeId: 12, spec, flag: "flag{linux}");
+
+        var iface = Assert.Single(request.Interfaces);
+        Assert.Equal("virtio", iface.Model);
     }
 
     [Theory]
@@ -346,7 +423,7 @@ public class TeamLabDeploymentServiceTests
             StartPriority: 10,
             Interfaces:
             [
-                new TeamLabAssetInterfaceSpec("data", "tl12-data", "eth0", "10.90.0.19", 28,
+                new TeamLabAssetInterfaceSpec("asset", "data", "tl12-data", "eth0", "10.90.0.19", 28,
                     "02:42:ac:10:00:02", IsPrimary: true, RemoveDefaultRoute: false)
             ]);
 
@@ -356,6 +433,381 @@ public class TeamLabDeploymentServiceTests
         Assert.Equal(expected, result.Success);
         if (!expected)
             Assert.Contains("Windows AD", result.Message);
+    }
+
+    [Fact]
+    public void BuildNativeProbeTargets_SkipsWindowsVmInterfacesAfterDhcpReadiness()
+    {
+        var assets = new[]
+        {
+            new TeamLabAssetSpec(
+                TeamLabAssetSpecKind.Vm,
+                TopologyKey: "router",
+                Name: "Router",
+                SourceTemplateId: 7,
+                Image: "/images/router.qcow2",
+                CpuCount: 20,
+                MemoryLimit: 4096,
+                StorageLimit: 40960,
+                ExposePort: 22,
+                InfrastructureRole: "Router",
+                StartPriority: 10,
+                Interfaces:
+                [
+                    new TeamLabAssetInterfaceSpec("router", "entry", "tl12-entry", "eth0", "10.90.0.3", 28,
+                        "02:42:ac:10:00:02", IsPrimary: true, RemoveDefaultRoute: false),
+                    new TeamLabAssetInterfaceSpec("router", "core", "tl12-core", "eth1", "10.90.0.19", 28,
+                        "02:42:ac:10:00:03", IsPrimary: false, RemoveDefaultRoute: false),
+                    new TeamLabAssetInterfaceSpec("router", "data", "tl12-data", "eth2", "10.90.0.35", 28,
+                        "02:42:ac:10:00:04", IsPrimary: false, RemoveDefaultRoute: false)
+                ],
+                OSType: OSType.Windows),
+            new TeamLabAssetSpec(
+                TeamLabAssetSpecKind.Vm,
+                TopologyKey: "linux-jump",
+                Name: "Linux Jump",
+                SourceTemplateId: 9,
+                Image: "/images/linux.qcow2",
+                CpuCount: 2,
+                MemoryLimit: 2048,
+                StorageLimit: 20480,
+                ExposePort: 22,
+                InfrastructureRole: null,
+                StartPriority: 20,
+                Interfaces:
+                [
+                    new TeamLabAssetInterfaceSpec("asset", "entry", "tl12-entry", "eth0", "10.90.0.5", 28,
+                        "02:42:ac:10:00:07", IsPrimary: true, RemoveDefaultRoute: false)
+                ],
+                OSType: OSType.Linux),
+            new TeamLabAssetSpec(
+                TeamLabAssetSpecKind.Docker,
+                TopologyKey: "portal",
+                Name: "Portal",
+                SourceTemplateId: 8,
+                Image: "portal:latest",
+                CpuCount: 10,
+                MemoryLimit: 512,
+                StorageLimit: 256,
+                ExposePort: 8080,
+                InfrastructureRole: null,
+                StartPriority: 50,
+                Interfaces:
+                [
+                    new TeamLabAssetInterfaceSpec("portal", "entry", "tl12-entry", "eth0", "10.90.0.4", 28,
+                        "02:42:ac:10:00:05", IsPrimary: true, RemoveDefaultRoute: false),
+                    new TeamLabAssetInterfaceSpec("portal", "entry", "tl12-entry", "eth1", "10.90.0.4", 28,
+                        "02:42:ac:10:00:06", IsPrimary: false, RemoveDefaultRoute: false)
+                ])
+        };
+
+        var targets = TeamLabDeploymentService.BuildNativeProbeTargets(assets);
+
+        Assert.Equal(["10.90.0.5", "10.90.0.4"], targets);
+    }
+
+    [Fact]
+    public void ShouldRunNativeConnectivityProbe_SkipsAllWindowsVmTopology()
+    {
+        var assets = new[]
+        {
+            new TeamLabAssetSpec(
+                TeamLabAssetSpecKind.Vm,
+                TopologyKey: "win-entry",
+                Name: "Windows Entry",
+                SourceTemplateId: 7,
+                Image: "/images/windows.qcow2",
+                CpuCount: 20,
+                MemoryLimit: 4096,
+                StorageLimit: 40960,
+                ExposePort: 3389,
+                InfrastructureRole: null,
+                StartPriority: 10,
+                Interfaces:
+                [
+                    new TeamLabAssetInterfaceSpec("asset", "entry", "tl12-entry", "eth0", "10.90.0.3", 28,
+                        "02:42:ac:10:00:02", IsPrimary: true, RemoveDefaultRoute: false)
+                ],
+                OSType: OSType.Windows),
+            new TeamLabAssetSpec(
+                TeamLabAssetSpecKind.Vm,
+                TopologyKey: "win-data",
+                Name: "Windows Data",
+                SourceTemplateId: 7,
+                Image: "/images/windows.qcow2",
+                CpuCount: 20,
+                MemoryLimit: 4096,
+                StorageLimit: 40960,
+                ExposePort: 3389,
+                InfrastructureRole: null,
+                StartPriority: 20,
+                Interfaces:
+                [
+                    new TeamLabAssetInterfaceSpec("asset", "data", "tl12-data", "eth0", "10.90.0.19", 28,
+                        "02:42:ac:10:00:03", IsPrimary: true, RemoveDefaultRoute: false)
+                ],
+                OSType: OSType.Windows)
+        };
+
+        Assert.False(TeamLabDeploymentService.ShouldRunNativeConnectivityProbe(assets));
+    }
+
+    [Fact]
+    public void ShouldRunNativeConnectivityProbe_RequiresProbeForDockerOrLinuxAssets()
+    {
+        var assets = new[]
+        {
+            new TeamLabAssetSpec(
+                TeamLabAssetSpecKind.Docker,
+                TopologyKey: "portal",
+                Name: "Portal",
+                SourceTemplateId: 8,
+                Image: "portal:latest",
+                CpuCount: 10,
+                MemoryLimit: 512,
+                StorageLimit: 256,
+                ExposePort: 8080,
+                InfrastructureRole: null,
+                StartPriority: 50,
+                Interfaces:
+                [
+                    new TeamLabAssetInterfaceSpec("portal", "entry", "tl12-entry", "eth0", "10.90.0.4", 28,
+                        "02:42:ac:10:00:05", IsPrimary: true, RemoveDefaultRoute: false)
+                ])
+        };
+
+        Assert.True(TeamLabDeploymentService.ShouldRunNativeConnectivityProbe(assets));
+    }
+
+    [Fact]
+    public void CountAssetSlots_CountsOnlyDockerAndVmRuntimeAssets()
+    {
+        var assets = new[]
+        {
+            new TeamLabAssetSpec(
+                TeamLabAssetSpecKind.Docker,
+                TopologyKey: "portal",
+                Name: "Portal",
+                SourceTemplateId: 8,
+                Image: "portal:latest",
+                CpuCount: 10,
+                MemoryLimit: 512,
+                StorageLimit: 256,
+                ExposePort: 8080,
+                InfrastructureRole: null,
+                StartPriority: 50,
+                Interfaces: []),
+            new TeamLabAssetSpec(
+                TeamLabAssetSpecKind.Vm,
+                TopologyKey: "linux-jump",
+                Name: "Linux Jump",
+                SourceTemplateId: 9,
+                Image: "/images/linux.qcow2",
+                CpuCount: 2,
+                MemoryLimit: 2048,
+                StorageLimit: 20480,
+                ExposePort: 22,
+                InfrastructureRole: null,
+                StartPriority: 20,
+                Interfaces: []),
+            new TeamLabAssetSpec(
+                TeamLabAssetSpecKind.Docker,
+                TopologyKey: "db",
+                Name: "Database",
+                SourceTemplateId: 10,
+                Image: "db:latest",
+                CpuCount: 10,
+                MemoryLimit: 512,
+                StorageLimit: 256,
+                ExposePort: 5432,
+                InfrastructureRole: null,
+                StartPriority: 60,
+                Interfaces: [])
+        };
+
+        var slots = TeamLabDeploymentService.CountAssetSlots(assets);
+
+        Assert.Equal(2, slots.DockerSlots);
+        Assert.Equal(1, slots.VmSlots);
+    }
+
+    [Fact]
+    public async Task TryReserveTeamLabCapacityAsync_ReservesWholeTopologyOnRuntimeNodeOnly()
+    {
+        await using var context = CreateContext();
+        var node = new WorkerNode
+        {
+            Id = System.Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+            Name = "teamlab-node",
+            HostAddress = "10.24.0.30",
+            Status = NodeStatus.Online,
+            IsSchedulable = true,
+            IsLocal = true,
+            Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+            MaxContainers = 3,
+            MaxVms = 1,
+            CurrentContainers = 1,
+            CurrentVms = 0,
+            TeamLabNetworkEnabled = true,
+            TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
+            TeamLabTunnelIp = "10.250.0.2"
+        };
+        context.WorkerNodes.Add(node);
+        await context.SaveChangesAsync();
+        var service = CreateDeploymentService(context);
+        var runtime = new TeamLabRuntime { Id = 7, WorkerNodeId = node.Id };
+
+        var result = await service.TryReserveTeamLabCapacityAsync(runtime,
+            new TeamLabAssetSlotCount(DockerSlots: 2, VmSlots: 1), CancellationToken.None);
+
+        Assert.True(result.Success, result.Message);
+        var reloaded = await context.WorkerNodes.SingleAsync(n => n.Id == node.Id);
+        Assert.Equal(3, reloaded.CurrentContainers);
+        Assert.Equal(1, reloaded.CurrentVms);
+    }
+
+    [Fact]
+    public async Task TryReserveTeamLabCapacityAsync_RejectsWholeTopologyWhenRuntimeNodeCapacityIsInsufficient()
+    {
+        await using var context = CreateContext();
+        var node = new WorkerNode
+        {
+            Id = System.Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            Name = "teamlab-node",
+            HostAddress = "10.24.0.30",
+            Status = NodeStatus.Online,
+            IsSchedulable = true,
+            IsLocal = true,
+            Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+            MaxContainers = 2,
+            MaxVms = 1,
+            CurrentContainers = 1,
+            CurrentVms = 0,
+            TeamLabNetworkEnabled = true,
+            TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
+            TeamLabTunnelIp = "10.250.0.2"
+        };
+        context.WorkerNodes.Add(node);
+        await context.SaveChangesAsync();
+        var service = CreateDeploymentService(context);
+        var runtime = new TeamLabRuntime { Id = 8, WorkerNodeId = node.Id };
+
+        var result = await service.TryReserveTeamLabCapacityAsync(runtime,
+            new TeamLabAssetSlotCount(DockerSlots: 2, VmSlots: 1), CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Contains("capacity", result.Message, StringComparison.OrdinalIgnoreCase);
+        var reloaded = await context.WorkerNodes.SingleAsync(n => n.Id == node.Id);
+        Assert.Equal(1, reloaded.CurrentContainers);
+        Assert.Equal(0, reloaded.CurrentVms);
+    }
+
+    [Fact]
+    public async Task ReleaseTeamLabCapacityAsync_ReleasesTopologySlotsExactlyOnce()
+    {
+        await using var context = CreateContext();
+        var node = new WorkerNode
+        {
+            Id = System.Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+            Name = "teamlab-node",
+            HostAddress = "10.24.0.30",
+            Status = NodeStatus.Online,
+            IsSchedulable = true,
+            IsLocal = true,
+            Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+            MaxContainers = 4,
+            MaxVms = 2,
+            CurrentContainers = 2,
+            CurrentVms = 1,
+            TeamLabNetworkEnabled = true,
+            TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
+            TeamLabTunnelIp = "10.250.0.2"
+        };
+        context.WorkerNodes.Add(node);
+        await context.SaveChangesAsync();
+        var service = CreateDeploymentService(context);
+        var runtime = new TeamLabRuntime
+        {
+            Id = 9,
+            WorkerNodeId = node.Id,
+            Assets =
+            [
+                new TeamLabRuntimeAsset { Kind = TeamLabResourceKind.Docker, Status = TeamLabRuntimeStatus.Running },
+                new TeamLabRuntimeAsset { Kind = TeamLabResourceKind.Docker, Status = TeamLabRuntimeStatus.Failed },
+                new TeamLabRuntimeAsset { Kind = TeamLabResourceKind.Vm, Status = TeamLabRuntimeStatus.Running },
+                new TeamLabRuntimeAsset { Kind = TeamLabResourceKind.RouterNamespace, Status = TeamLabRuntimeStatus.Running }
+            ]
+        };
+
+        await service.ReleaseTeamLabCapacityAsync(runtime, CancellationToken.None);
+        await service.ReleaseTeamLabCapacityAsync(runtime, CancellationToken.None);
+
+        var reloaded = await context.WorkerNodes.SingleAsync(n => n.Id == node.Id);
+        Assert.Equal(0, reloaded.CurrentContainers);
+        Assert.Equal(0, reloaded.CurrentVms);
+    }
+
+    [Fact]
+    public async Task ReleaseTeamLabCapacityAsync_ReleasesPlannedSlotsWhenRuntimeAssetsAreNotRecordedYet()
+    {
+        await using var context = CreateContext();
+        var node = new WorkerNode
+        {
+            Id = System.Guid.Parse("dddddddd-dddd-dddd-dddd-dddddddddddd"),
+            Name = "teamlab-node",
+            HostAddress = "10.24.0.30",
+            Status = NodeStatus.Online,
+            IsSchedulable = true,
+            IsLocal = true,
+            Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+            MaxContainers = 4,
+            MaxVms = 2,
+            CurrentContainers = 2,
+            CurrentVms = 1,
+            TeamLabNetworkEnabled = true,
+            TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
+            TeamLabTunnelIp = "10.250.0.2"
+        };
+        context.WorkerNodes.Add(node);
+        await context.SaveChangesAsync();
+        var service = CreateDeploymentService(context);
+        var runtime = new TeamLabRuntime
+        {
+            Id = 10,
+            WorkerNodeId = node.Id
+        };
+
+        await service.ReleaseTeamLabCapacityAsync(runtime,
+            new TeamLabAssetSlotCount(DockerSlots: 2, VmSlots: 1),
+            CancellationToken.None);
+
+        var reloaded = await context.WorkerNodes.SingleAsync(n => n.Id == node.Id);
+        Assert.Equal(0, reloaded.CurrentContainers);
+        Assert.Equal(0, reloaded.CurrentVms);
+    }
+
+    [Fact]
+    public async Task TryQueueTeamLabRuntimeAsync_CreatesDurableQueueTicketWithoutSecrets()
+    {
+        await using var context = CreateContext();
+        var service = CreateDeploymentService(context);
+        var runtime = new TeamLabRuntime { Id = 11, GameId = 5, TeamId = 7 };
+
+        var queue = await service.TryQueueTeamLabRuntimeAsync(runtime,
+            new TeamLabAssetSlotCount(DockerSlots: 3, VmSlots: 1),
+            "capacity exhausted",
+            CancellationToken.None);
+
+        Assert.NotNull(queue);
+        Assert.Equal(DeploymentQueueKind.TeamLabRuntime, queue!.Kind);
+        Assert.Equal(1, queue.QueuePosition);
+        Assert.DoesNotContain("PrivateKey", queue.ToString(), StringComparison.OrdinalIgnoreCase);
+
+        var ticket = Assert.Single(context.DeploymentQueueTickets);
+        Assert.Equal("teamlab-runtime:5:7:11", ticket.ActiveIdentity);
+        Assert.Equal(3, ticket.DockerSlots);
+        Assert.Equal(1, ticket.VmSlots);
+        Assert.Equal(DeploymentQueueTicketStatus.Pending, ticket.Status);
     }
 
     [Fact]
@@ -375,7 +827,7 @@ public class TeamLabDeploymentServiceTests
             StartPriority: 50,
             Interfaces:
             [
-                new TeamLabAssetInterfaceSpec("public", "tl12-public", "eth0", "10.90.0.3", 28,
+                new TeamLabAssetInterfaceSpec("asset", "public", "tl12-public", "eth0", "10.90.0.3", 28,
                     "02:42:ac:10:00:02", IsPrimary: true, RemoveDefaultRoute: false)
             ]);
         var networks = new[]
@@ -421,7 +873,7 @@ public class TeamLabDeploymentServiceTests
             StartPriority: 50,
             Interfaces:
             [
-                new TeamLabAssetInterfaceSpec("public", "tl12-public", "eth0", "10.90.0.3", 28,
+                new TeamLabAssetInterfaceSpec("asset", "public", "tl12-public", "eth0", "10.90.0.3", 28,
                     "02:42:ac:10:00:02", IsPrimary: true, RemoveDefaultRoute: false)
             ]);
         var networks = new[]
@@ -462,9 +914,9 @@ public class TeamLabDeploymentServiceTests
             StartPriority: 20,
             Interfaces:
             [
-                new TeamLabAssetInterfaceSpec("public", "tl12-public", "eth0", "10.90.0.3", 28,
+                new TeamLabAssetInterfaceSpec("asset", "public", "tl12-public", "eth0", "10.90.0.3", 28,
                     "02:42:ac:10:00:02", IsPrimary: true, RemoveDefaultRoute: false),
-                new TeamLabAssetInterfaceSpec("data", "tl12-data", "eth1", "10.90.0.19", 28,
+                new TeamLabAssetInterfaceSpec("asset", "data", "tl12-data", "eth1", "10.90.0.19", 28,
                     "02:42:ac:10:00:03", IsPrimary: false, RemoveDefaultRoute: false)
             ]);
 
@@ -534,13 +986,13 @@ public class TeamLabDeploymentServiceTests
         {
             new TeamLabAssetSpec(TeamLabAssetSpecKind.Docker, "portal", "Portal", 42, "portal", 10, 512, 256, 8080,
                 null, 50,
-                [new TeamLabAssetInterfaceSpec("service", "tl12-service", "eth0", "10.90.0.3", 28, "02:42:ac:10:00:02", true, false)]),
+                [new TeamLabAssetInterfaceSpec("asset", "service", "tl12-service", "eth0", "10.90.0.3", 28, "02:42:ac:10:00:02", true, false)]),
             new TeamLabAssetSpec(TeamLabAssetSpecKind.Docker, "worker", "Worker", 43, "worker", 10, 512, 256, 8080,
                 null, 50,
-                [new TeamLabAssetInterfaceSpec("business", "tl12-business", "eth0", "10.90.0.19", 28, "02:42:ac:10:00:03", true, false)]),
+                [new TeamLabAssetInterfaceSpec("asset", "business", "tl12-business", "eth0", "10.90.0.19", 28, "02:42:ac:10:00:03", true, false)]),
             new TeamLabAssetSpec(TeamLabAssetSpecKind.Docker, "database", "Database", 44, "database", 10, 512, 256, 5432,
                 null, 50,
-                [new TeamLabAssetInterfaceSpec("data", "tl12-data", "eth0", "10.90.0.35", 28, "02:42:ac:10:00:04", true, false)])
+                [new TeamLabAssetInterfaceSpec("asset", "data", "tl12-data", "eth0", "10.90.0.35", 28, "02:42:ac:10:00:04", true, false)])
         };
 
         var matrix = TeamLabDeploymentService.BuildRuntimeRouteMatrix(config, networks, assets);
@@ -548,6 +1000,81 @@ public class TeamLabDeploymentServiceTests
         Assert.True(matrix.AllowedCidrsByNetworkKey.TryGetValue("service", out var serviceRoutes));
         Assert.Contains("10.90.0.16/28", serviceRoutes);
         Assert.DoesNotContain("10.90.0.32/28", serviceRoutes);
+    }
+
+    [Fact]
+    public void BuildPlayerNetworkAccess_OnlyExposesEntryNetworkToWireGuardPeer()
+    {
+        var entry = new PenetrationNetwork
+        {
+            Id = 10,
+            TopologyKey = "entry",
+            Name = "Entry",
+            IsEntry = true,
+            OrderIndex = 10
+        };
+        var app = new PenetrationNetwork
+        {
+            Id = 20,
+            TopologyKey = "app",
+            Name = "App",
+            OrderIndex = 20
+        };
+        var data = new PenetrationNetwork
+        {
+            Id = 30,
+            TopologyKey = "data",
+            Name = "Data",
+            OrderIndex = 30
+        };
+        var config = new PenetrationConfig
+        {
+            Networks = [app, data, entry]
+        };
+        var networks = new[]
+        {
+            new TeamLabRuntimeNetworkSpec("app", "App", "10.90.0.16/28", "10.90.0.17", "tl12-app"),
+            new TeamLabRuntimeNetworkSpec("data", "Data", "10.90.0.32/28", "10.90.0.33", "tl12-data"),
+            new TeamLabRuntimeNetworkSpec("entry", "Entry", "10.90.0.0/28", "10.90.0.1", "tl12-entry")
+        };
+
+        var access = TeamLabDeploymentService.BuildPlayerNetworkAccess(config, networks);
+
+        Assert.Equal(["10.90.0.0/28"], access.AllowedCidrs);
+        Assert.Equal(["10.90.0.16/28", "10.90.0.32/28"], access.BlockedCidrs);
+    }
+
+    [Fact]
+    public void BuildPlayerNetworkAccess_FallsBackToFirstTopologyNetworkWhenNoEntryFlagExists()
+    {
+        var app = new PenetrationNetwork
+        {
+            Id = 20,
+            TopologyKey = "app",
+            Name = "App",
+            OrderIndex = 20
+        };
+        var entry = new PenetrationNetwork
+        {
+            Id = 10,
+            TopologyKey = "entry",
+            Name = "Entry",
+            OrderIndex = 10
+        };
+        var config = new PenetrationConfig
+        {
+            Networks = [app, entry]
+        };
+        var networks = new[]
+        {
+            new TeamLabRuntimeNetworkSpec("app", "App", "10.90.0.16/28", "10.90.0.17", "tl12-app"),
+            new TeamLabRuntimeNetworkSpec("entry", "Entry", "10.90.0.0/28", "10.90.0.1", "tl12-entry")
+        };
+
+        var access = TeamLabDeploymentService.BuildPlayerNetworkAccess(config, networks);
+
+        Assert.Equal(["10.90.0.0/28"], access.AllowedCidrs);
+        Assert.Equal(["10.90.0.16/28"], access.BlockedCidrs);
     }
 
     [Fact]
@@ -573,7 +1100,7 @@ public class TeamLabDeploymentServiceTests
                 StartPriority: 10,
                 Interfaces:
                 [
-                    new TeamLabAssetInterfaceSpec("data", "tl12-data", "eth0", "10.90.0.19", 28,
+                    new TeamLabAssetInterfaceSpec("asset", "data", "tl12-data", "eth0", "10.90.0.19", 28,
                         "02:42:ac:10:00:02", IsPrimary: true, RemoveDefaultRoute: false)
                 ])
         };
@@ -725,6 +1252,54 @@ public class TeamLabDeploymentServiceTests
         Assert.Equal(["vm-a"], plan.VmNames);
     }
 
+    [Fact]
+    public async Task DeployQueuedRuntimeAsync_CreatesIndependentDockerAssetsConcurrently()
+    {
+        await using var context = CreateContext();
+        var nodeId = Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee");
+        await SeedTwoDockerTeamLabRuntimeAsync(context, nodeId);
+        var agent = new BlockingTeamLabAgentClient(expectedContainerCreates: 2);
+        var service = CreateDeploymentService(context, agent);
+
+        var deployTask = service.DeployQueuedRuntimeAsync(runtimeId: 1, CancellationToken.None);
+
+        var bothCreatesStarted = await Task.WhenAny(agent.BothContainerCreatesStarted.Task,
+            Task.Delay(TimeSpan.FromSeconds(3)));
+        if (!ReferenceEquals(agent.BothContainerCreatesStarted.Task, bothCreatesStarted))
+        {
+            agent.ReleaseContainerCreates();
+            var earlyResult = await deployTask;
+            Assert.Fail($"Expected two Docker asset creates to start concurrently. " +
+                        $"Observed {agent.ContainerCreateCount} create call(s). " +
+                        $"Deployment result: {earlyResult.Success} {earlyResult.Message}");
+        }
+
+        agent.ReleaseContainerCreates();
+        var result = await deployTask;
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal(2, agent.MaxConcurrentContainerCreates);
+        Assert.Equal(2, await context.TeamLabRuntimeAssets.CountAsync(a =>
+            a.RuntimeId == 1 && a.Kind == TeamLabResourceKind.Docker));
+    }
+
+    [Fact]
+    public async Task DeployQueuedRuntimeAsync_CleansAlreadyCreatedParallelAssetsWhenOneAssetFails()
+    {
+        await using var context = CreateContext();
+        var nodeId = Guid.Parse("ffffffff-ffff-ffff-ffff-ffffffffffff");
+        await SeedTwoDockerTeamLabRuntimeAsync(context, nodeId);
+        var agent = new OneFailsAfterParallelStartTeamLabAgentClient(expectedContainerCreates: 2);
+        var service = CreateDeploymentService(context, agent);
+
+        var result = await service.DeployQueuedRuntimeAsync(runtimeId: 1, CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Contains("simulated create failure", result.Message);
+        Assert.Contains(agent.DestroyedContainers,
+            containerId => containerId.StartsWith("container-", StringComparison.Ordinal));
+    }
+
     private static DockerImageRegistryService CreateDockerRegistryService(string address)
     {
         var services = new ServiceCollection().BuildServiceProvider();
@@ -742,9 +1317,361 @@ public class TeamLabDeploymentServiceTests
             NullLogger<DockerImageRegistryService>.Instance);
     }
 
+    private static AppDbContext CreateContext()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(System.Guid.NewGuid().ToString())
+            .Options;
+
+        return new AppDbContext(options);
+    }
+
+    private static TeamLabDeploymentService CreateDeploymentService(AppDbContext context, AgentClient? agentClient = null)
+    {
+        var services = new ServiceCollection().BuildServiceProvider();
+        var scopeFactory = services.GetRequiredService<IServiceScopeFactory>();
+        agentClient ??= new AgentClient(
+            new StaticHttpClientFactory(),
+            scopeFactory,
+            new ConfigurationBuilder().Build(),
+            NullLogger<AgentClient>.Instance);
+        var planService = new TeamLabPlanService(
+            context,
+            Options.Create(new TeamLabNetworkConfig()),
+            NullLogger<TeamLabPlanService>.Instance);
+        var registry = CreateDockerRegistryService("10.24.0.28:5000");
+        var lockService = new GZCTF.Services.Concurrency.LocalSemaphoreLock(
+            NullLogger<GZCTF.Services.Concurrency.LocalSemaphoreLock>.Instance);
+        var capacity = new FleetCapacityReservationService(
+            context,
+            lockService,
+            NullLogger<FleetCapacityReservationService>.Instance);
+
+        return new TeamLabDeploymentService(
+            context,
+            planService,
+            agentClient,
+            registry,
+            new TeamLabWireGuardService(
+                new EphemeralDataProtectionProvider(),
+                Options.Create(new PublicUdpGatewayConfig { PublicEndpoint = "203.195.157.191" }),
+                Options.Create(new ContainerProvider { PublicEntry = "203.195.157.191" })),
+            new RecordingPublicUdpGatewayProvider(),
+            Options.Create(new TeamLabNetworkConfig()),
+            capacity,
+            new DeploymentQueueService(context, NullLogger<DeploymentQueueService>.Instance),
+            NullLogger<TeamLabDeploymentService>.Instance);
+    }
+
+    private static async Task SeedTwoDockerTeamLabRuntimeAsync(AppDbContext context, Guid nodeId)
+    {
+        var game = new Game
+        {
+            Id = 1,
+            Title = "TeamLab",
+            GameType = GameType.Penetration,
+            StartTimeUtc = DateTimeOffset.UtcNow.AddHours(-1),
+            EndTimeUtc = DateTimeOffset.UtcNow.AddHours(1)
+        };
+        var team = new Team { Id = 1, Name = "team-1" };
+        var templateA = new ImageTemplate
+        {
+            Id = 101,
+            Name = "portal",
+            ImageType = ImageType.Docker,
+            RegistryUrl = "registry.local/portal:latest",
+            Status = ImageStatus.Ready
+        };
+        var templateB = new ImageTemplate
+        {
+            Id = 102,
+            Name = "api",
+            ImageType = ImageType.Docker,
+            RegistryUrl = "registry.local/api:latest",
+            Status = ImageStatus.Ready
+        };
+        context.Games.Add(game);
+        context.Teams.Add(team);
+        context.Participations.Add(new Participation
+        {
+            GameId = game.Id,
+            TeamId = team.Id,
+            Status = ParticipationStatus.Accepted
+        });
+        context.WorkerNodes.Add(new WorkerNode
+        {
+            Id = nodeId,
+            Name = "teamlab-node",
+            HostAddress = "10.24.0.30",
+            AuthToken = "token",
+            Status = NodeStatus.Online,
+            IsSchedulable = true,
+            Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+            MaxContainers = 8,
+            MaxVms = 2,
+            CurrentContainers = 2,
+            TeamLabNetworkEnabled = true,
+            TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
+            TeamLabTunnelIp = "10.250.0.2"
+        });
+        context.ImageTemplates.AddRange(templateA, templateB);
+        context.PenetrationConfigs.Add(new PenetrationConfig
+        {
+            Id = 1,
+            GameId = game.Id,
+            BaseCidr = "10.90.0.0/16",
+            TeamSubnetPrefix = 24,
+            NetworkSubnetPrefix = 28,
+            PublishedVersion = 1,
+            Status = PenetrationDeploymentStatus.Published
+        });
+        context.PenetrationPublishedSnapshots.Add(new PenetrationPublishedSnapshot
+        {
+            Id = 1,
+            GameId = game.Id,
+            PublishedVersion = 1,
+            SnapshotHash = "hash",
+            SnapshotJson = BuildTwoDockerSnapshotJson(templateA.Id, templateB.Id)
+        });
+        context.TeamLabRuntimes.Add(new TeamLabRuntime
+        {
+            Id = 1,
+            GameId = game.Id,
+            TeamId = team.Id,
+            PublishedVersion = 1,
+            WorkerNodeId = nodeId,
+            NetworkPrefix = "10.90.1.0/24",
+            Status = TeamLabRuntimeStatus.Scheduled,
+            PublicUdpMapping = new TeamLabPublicUdpMapping
+            {
+                RuntimeId = 1,
+                PublicUdpPort = 32001,
+                WorkerWireGuardPort = 51821,
+                WorkerTunnelIp = "10.250.0.2"
+            }
+        });
+        await context.SaveChangesAsync();
+    }
+
+    private static string BuildTwoDockerSnapshotJson(int templateAId, int templateBId) =>
+        JsonSerializer.Serialize(new PenetrationConfigModel
+        {
+            GameId = 1,
+            BaseCidr = "10.90.0.0/16",
+            TeamSubnetPrefix = 24,
+            NetworkSubnetPrefix = 28,
+            PublishedVersion = 1,
+            Status = PenetrationDeploymentStatus.Published,
+            Networks =
+            [
+                new PenetrationNetworkModel
+                {
+                    Id = 1,
+                    TopologyKey = "entry",
+                    Name = "Entry",
+                    OrderIndex = 0
+                }
+            ],
+            Nodes =
+            [
+                new PenetrationNodeModel
+                {
+                    Id = 1,
+                    TopologyKey = "portal",
+                    Name = "Portal",
+                    NetworkId = 1,
+                    ImageTemplateId = templateAId,
+                    CpuCount = 1,
+                    MemoryLimit = 128,
+                    StorageLimit = 128,
+                    ExposePort = 80,
+                    OrderIndex = 10,
+                    Interfaces =
+                    [
+                        new PenetrationInterfaceModel
+                        {
+                            Id = 1,
+                            NodeId = 1,
+                            NetworkId = 1,
+                            TopologyKey = "portal-eth0",
+                            Name = "eth0",
+                            IsPrimary = true,
+                            OrderIndex = 0
+                        }
+                    ]
+                },
+                new PenetrationNodeModel
+                {
+                    Id = 2,
+                    TopologyKey = "api",
+                    Name = "API",
+                    NetworkId = 1,
+                    ImageTemplateId = templateBId,
+                    CpuCount = 1,
+                    MemoryLimit = 128,
+                    StorageLimit = 128,
+                    ExposePort = 8080,
+                    OrderIndex = 10,
+                    Interfaces =
+                    [
+                        new PenetrationInterfaceModel
+                        {
+                            Id = 2,
+                            NodeId = 2,
+                            NetworkId = 1,
+                            TopologyKey = "api-eth0",
+                            Name = "eth0",
+                            IsPrimary = true,
+                            OrderIndex = 0
+                        }
+                    ]
+                }
+            ]
+        }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+    private sealed class RecordingPublicUdpGatewayProvider : IPublicUdpGatewayProvider
+    {
+        public Task<PublicUdpGatewaySyncResult> SyncMappingAsync(TeamLabPublicUdpMapping mapping,
+            CancellationToken token) =>
+            Task.FromResult(new PublicUdpGatewaySyncResult(true, "synced", []));
+
+        public Task<PublicUdpGatewaySyncResult> RemoveMappingAsync(TeamLabPublicUdpMapping mapping,
+            CancellationToken token) =>
+            Task.FromResult(new PublicUdpGatewaySyncResult(true, "removed", []));
+    }
+
     private sealed class StaticHttpClientFactory : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => new();
+    }
+
+    private abstract class TestTeamLabAgentClientBase : AgentClient
+    {
+        protected TestTeamLabAgentClientBase()
+            : base(new StaticHttpClientFactory(),
+                new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
+                new ConfigurationBuilder().Build(),
+                NullLogger<AgentClient>.Instance)
+        {
+        }
+
+        static TeamLabDryRunResponse Ok(string message) => new(true, false, message, []);
+
+        public override Task<TeamLabDryRunResponse?> CreateTeamLabBridgeAsync(Guid nodeId,
+            TeamLabBridgeRequest request, CancellationToken token) =>
+            Task.FromResult<TeamLabDryRunResponse?>(Ok("bridge"));
+
+        public override Task<TeamLabDryRunResponse?> CreateTeamLabRouterAsync(Guid nodeId,
+            TeamLabRouterRequest request, CancellationToken token) =>
+            Task.FromResult<TeamLabDryRunResponse?>(Ok("router"));
+
+        public override Task<TeamLabDryRunResponse?> ConfigureTeamLabWireGuardAsync(Guid nodeId,
+            TeamLabWireGuardRequest request, CancellationToken token) =>
+            Task.FromResult<TeamLabDryRunResponse?>(Ok("wireguard"));
+
+        public override Task<TeamLabDryRunResponse?> ConfigureTeamLabDhcpDnsAsync(Guid nodeId,
+            TeamLabDhcpDnsRequest request, CancellationToken token) =>
+            Task.FromResult<TeamLabDryRunResponse?>(Ok("dhcp"));
+
+        public override Task<TeamLabDryRunResponse?> ProbeTeamLabDhcpDnsAsync(Guid nodeId,
+            TeamLabDhcpDnsProbeRequest request, CancellationToken token) =>
+            Task.FromResult<TeamLabDryRunResponse?>(Ok("dns"));
+
+        public override Task<TeamLabDryRunResponse?> AttachTeamLabContainerAsync(Guid nodeId,
+            TeamLabContainerAttachRequest request, CancellationToken token) =>
+            Task.FromResult<TeamLabDryRunResponse?>(Ok("attach"));
+
+        public override Task<TeamLabDryRunResponse?> ProbeTeamLabAsync(Guid nodeId,
+            TeamLabProbeRequest request, CancellationToken token) =>
+            Task.FromResult<TeamLabDryRunResponse?>(Ok("probe"));
+
+        public override Task<TeamLabDryRunResponse?> CleanupTeamLabAsync(Guid nodeId,
+            TeamLabCleanupRequest request, CancellationToken token) =>
+            Task.FromResult<TeamLabDryRunResponse?>(Ok("cleanup"));
+    }
+
+    private sealed class BlockingTeamLabAgentClient : TestTeamLabAgentClientBase
+    {
+        readonly int _expectedContainerCreates;
+        readonly TaskCompletionSource _releaseContainerCreates =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        int _activeContainerCreates;
+        int _containerCreateCount;
+
+        public BlockingTeamLabAgentClient(int expectedContainerCreates)
+        {
+            _expectedContainerCreates = expectedContainerCreates;
+        }
+
+        public TaskCompletionSource BothContainerCreatesStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int MaxConcurrentContainerCreates { get; private set; }
+        public int ContainerCreateCount => Volatile.Read(ref _containerCreateCount);
+
+        public void ReleaseContainerCreates() => _releaseContainerCreates.TrySetResult();
+
+        public override async Task<AgentCreateContainerResponse> CreateContainerOrThrowAsync(Guid nodeId,
+            ContainerConfig config, CancellationToken token)
+        {
+            var active = Interlocked.Increment(ref _activeContainerCreates);
+            MaxConcurrentContainerCreates = Math.Max(MaxConcurrentContainerCreates, active);
+            if (Interlocked.Increment(ref _containerCreateCount) == _expectedContainerCreates)
+                BothContainerCreatesStarted.TrySetResult();
+
+            try
+            {
+                await _releaseContainerCreates.Task.WaitAsync(token);
+                return new AgentCreateContainerResponse
+                {
+                    ContainerId = $"container-{config.Image}",
+                    Port = config.ExposedPort
+                };
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _activeContainerCreates);
+            }
+        }
+    }
+
+    private sealed class OneFailsAfterParallelStartTeamLabAgentClient : TestTeamLabAgentClientBase
+    {
+        readonly int _expectedContainerCreates;
+        readonly TaskCompletionSource _allCreatesStarted =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        int _containerCreateCount;
+
+        public OneFailsAfterParallelStartTeamLabAgentClient(int expectedContainerCreates)
+        {
+            _expectedContainerCreates = expectedContainerCreates;
+        }
+
+        public List<string> DestroyedContainers { get; } = [];
+
+        public override async Task<AgentCreateContainerResponse> CreateContainerOrThrowAsync(Guid nodeId,
+            ContainerConfig config, CancellationToken token)
+        {
+            var count = Interlocked.Increment(ref _containerCreateCount);
+            if (count == _expectedContainerCreates)
+                _allCreatesStarted.TrySetResult();
+
+            await _allCreatesStarted.Task.WaitAsync(token);
+            if (config.Image.Contains("api", StringComparison.OrdinalIgnoreCase))
+                throw new AgentClientException("simulated create failure");
+
+            return new AgentCreateContainerResponse
+            {
+                ContainerId = "container-created-before-failure",
+                Port = config.ExposedPort
+            };
+        }
+
+        public override Task DestroyContainerAsync(Guid nodeId, string containerId, CancellationToken token)
+        {
+            DestroyedContainers.Add(containerId);
+            return Task.CompletedTask;
+        }
     }
 
 }

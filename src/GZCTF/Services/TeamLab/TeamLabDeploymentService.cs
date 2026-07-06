@@ -11,7 +11,11 @@ using System.Text.Json;
 
 namespace GZCTF.Services.TeamLab;
 
-public sealed record TeamLabDeploymentResult(bool Success, string Message, [property: JsonIgnore] TeamLabRuntime? Runtime)
+public sealed record TeamLabDeploymentResult(
+    bool Success,
+    string Message,
+    [property: JsonIgnore] TeamLabRuntime? Runtime,
+    DeploymentQueueStatusModel? Queue = null)
 {
     [JsonPropertyName("runtime")]
     public TeamLabRuntimeModel? RuntimeModel => TeamLabRuntimeModel.FromRuntime(Runtime);
@@ -24,6 +28,8 @@ public sealed record TeamLabRuntimeRouteMatrix(
     public static TeamLabRuntimeRouteMatrix Empty { get; } =
         new(new Dictionary<string, string[]>(StringComparer.Ordinal));
 }
+public sealed record TeamLabPlayerNetworkAccess(string[] AllowedCidrs, string[] BlockedCidrs);
+public sealed record TeamLabAssetSlotCount(int DockerSlots, int VmSlots);
 public sealed record TeamLabRuntimeAssetSpec(
     TeamLabResourceKind Kind,
     string TopologyKey,
@@ -50,11 +56,22 @@ public class TeamLabDeploymentService(
     TeamLabWireGuardService wireGuardService,
     IPublicUdpGatewayProvider publicUdpGatewayProvider,
     IOptions<TeamLabNetworkConfig> options,
+    FleetCapacityReservationService capacityReservation,
+    DeploymentQueueService deploymentQueue,
     ILogger<TeamLabDeploymentService> logger)
 {
+    private sealed record TeamLabNativeAssetCreationResult(
+        TeamLabRuntimeAssetSpec RuntimeAsset,
+        string? ContainerId,
+        string? VmName);
+
     private const int RuntimeErrorMaxLength = 1024;
     private const int EventMessageMaxLength = 256;
     private const int EventDetailMaxLength = 1024;
+    private const int NativeVmReadyProbeAttempts = 24;
+    private const int NativeRuntimeConnectivityProbeAttempts = 12;
+    private static readonly TimeSpan NativeVmReadyProbeInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan NativeRuntimeConnectivityProbeInterval = TimeSpan.FromSeconds(5);
     private readonly TeamLabNetworkConfig _config = options.Value;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -88,6 +105,24 @@ public class TeamLabDeploymentService(
             .ToArray();
         return networkResources;
     }
+
+    public static string[] BuildNativeProbeTargets(IReadOnlyList<TeamLabAssetSpec> assets) =>
+        assets
+            .Where(asset => asset.Kind != TeamLabAssetSpecKind.Vm || asset.OSType != OSType.Windows)
+            .SelectMany(asset => asset.Interfaces)
+            .Select(iface => iface.IpAddress)
+            .Where(ip => !string.IsNullOrWhiteSpace(ip))
+            .Distinct(StringComparer.Ordinal)
+            .Cast<string>()
+            .ToArray();
+
+    public static bool ShouldRunNativeConnectivityProbe(IReadOnlyList<TeamLabAssetSpec> assets) =>
+        assets.Any(asset => asset.Kind != TeamLabAssetSpecKind.Vm || asset.OSType != OSType.Windows);
+
+    public static TeamLabAssetSlotCount CountAssetSlots(IReadOnlyList<TeamLabAssetSpec> assets) =>
+        new(
+            assets.Count(asset => asset.Kind == TeamLabAssetSpecKind.Docker),
+            assets.Count(asset => asset.Kind == TeamLabAssetSpecKind.Vm));
 
     public static string[] BuildNativeCleanupResourceNames(TeamLabResourceNames names,
         IReadOnlyList<TeamLabRuntimeNetworkSpec> networks) =>
@@ -126,11 +161,20 @@ public class TeamLabDeploymentService(
     public static TeamLabDeploymentMode ResolveDeploymentMode(PenetrationTeamEnvironment? _) =>
         TeamLabDeploymentMode.NativePublishedTopology;
 
+    public static int ResolveNativeVmReadyProbeAttempts(OSType osType) =>
+        osType == OSType.Windows ? 72 : NativeVmReadyProbeAttempts;
+
     public static ContainerConfig BuildNativeDockerContainerConfig(TeamLabAssetSpec spec, int teamId,
-        Guid workerNodeId, string? flag)
+        Guid workerNodeId, string? flag, IReadOnlyList<TeamLabRuntimeNetworkSpec>? networks = null)
     {
         if (spec.Kind != TeamLabAssetSpecKind.Docker)
             throw new ArgumentException("TeamLab native Docker config requires a Docker asset spec.", nameof(spec));
+
+        var dnsServers = networks?
+            .Select(network => network.GatewayIp)
+            .Where(ip => !string.IsNullOrWhiteSpace(ip))
+            .Distinct(StringComparer.Ordinal)
+            .ToList() ?? [];
 
         return new ContainerConfig
         {
@@ -151,16 +195,17 @@ public class TeamLabDeploymentService(
             EnableNetworkAdmin = IsRoutingAsset(spec),
             RemoveDefaultRoute = false,
             EnableIpForwarding = IsRoutingAsset(spec),
-            PreferredNodeId = workerNodeId
+            PreferredNodeId = workerNodeId,
+            DnsServers = dnsServers
         };
     }
 
     public static async Task<ContainerConfig> BuildResolvedNativeDockerContainerConfigAsync(TeamLabAssetSpec spec,
         int teamId, Guid workerNodeId, string? flag, DockerImageRegistryService dockerRegistry,
-        CancellationToken token)
+        CancellationToken token, IReadOnlyList<TeamLabRuntimeNetworkSpec>? networks = null)
     {
         await Task.CompletedTask;
-        var config = BuildNativeDockerContainerConfig(spec, teamId, workerNodeId, flag);
+        var config = BuildNativeDockerContainerConfig(spec, teamId, workerNodeId, flag, networks);
         config.Image = dockerRegistry.ResolveInternalImageReferenceForConfiguredRegistry(config.Image);
         return config;
     }
@@ -267,6 +312,56 @@ public class TeamLabDeploymentService(
                 StringComparer.Ordinal));
     }
 
+    public static TeamLabPlayerNetworkAccess BuildPlayerNetworkAccess(PenetrationConfig config,
+        IReadOnlyList<TeamLabRuntimeNetworkSpec> networks)
+    {
+        if (networks.Count == 0)
+            return new TeamLabPlayerNetworkAccess([], []);
+
+        var entryKeys = config.Networks
+            .Where(network => network.IsEntry)
+            .OrderBy(network => network.OrderIndex)
+            .ThenBy(network => network.TopologyKey, StringComparer.Ordinal)
+            .Select(network => network.TopologyKey)
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .ToHashSet(StringComparer.Ordinal);
+
+        if (entryKeys.Count == 0)
+        {
+            var fallbackEntryKey = config.Networks
+                .OrderBy(network => network.OrderIndex)
+                .ThenBy(network => network.TopologyKey, StringComparer.Ordinal)
+                .Select(network => network.TopologyKey)
+                .FirstOrDefault(key => !string.IsNullOrWhiteSpace(key));
+            if (!string.IsNullOrWhiteSpace(fallbackEntryKey))
+                entryKeys.Add(fallbackEntryKey);
+        }
+
+        if (entryKeys.Count == 0)
+            entryKeys.Add(networks[0].TopologyKey);
+
+        var allowed = networks
+            .Where(network => entryKeys.Contains(network.TopologyKey))
+            .Select(network => network.Cidr)
+            .Where(cidr => !string.IsNullOrWhiteSpace(cidr))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        if (allowed.Length == 0)
+            allowed = [networks[0].Cidr];
+
+        var allowedSet = allowed.ToHashSet(StringComparer.Ordinal);
+        var blocked = networks
+            .Select(network => network.Cidr)
+            .Where(cidr => !string.IsNullOrWhiteSpace(cidr) && !allowedSet.Contains(cidr))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        return new TeamLabPlayerNetworkAccess(allowed, blocked);
+    }
+
     private static string[] ResolveEdgeNetworkKeys(PenetrationConfig config, PenetrationPolicyScope kind, int id,
         int fallbackNodeId, IReadOnlyDictionary<int, string> primaryNetworkKeyByNodeId,
         IReadOnlyDictionary<int, TeamLabAssetSpec> assetByNodeId)
@@ -301,11 +396,14 @@ public class TeamLabDeploymentService(
         return new AgentCreateVmRequest
         {
             TemplateId = spec.SourceTemplateId,
+            TemplatePath = spec.Image,
             VmName = TrimLinuxName($"{TeamLabPlanService.BuildRuntimeResourcePrefix(runtimeId)}-{NormalizeResourceToken(spec.TopologyKey)}"),
             Memory = spec.MemoryLimit,
             Cpu = spec.CpuCount,
             Flag = flag,
-            Interfaces = spec.Interfaces.Select(TeamLabAssetPlanService.ToVmInterfaceRequest).ToList()
+            Interfaces = spec.Interfaces
+                .Select(iface => TeamLabAssetPlanService.ToVmInterfaceRequest(iface, spec.OSType))
+                .ToList()
         };
     }
 
@@ -325,11 +423,11 @@ public class TeamLabDeploymentService(
         if (!string.Equals(response.Status, "Ready", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(response.Status, "Running", StringComparison.OrdinalIgnoreCase))
             return new TeamLabVmReadyValidationResult(false,
-                $"VM {spec.Name} is not ready. Current status: {response.Status}.");
+                $"VM {spec.Name} is not ready. Current status: {response.Status}. {response.Diagnostic}");
 
         if (!string.Equals(response.IpAddress, expectedIp, StringComparison.Ordinal))
             return new TeamLabVmReadyValidationResult(false,
-                $"VM {spec.Name} acquired IP {response.IpAddress ?? "<none>"} but expected {expectedIp}.");
+                $"VM {spec.Name} acquired IP {response.IpAddress ?? "<none>"} but expected {expectedIp}. {response.Diagnostic}");
 
         return new TeamLabVmReadyValidationResult(true, $"VM {spec.Name} is ready at {expectedIp}.");
     }
@@ -404,6 +502,22 @@ public class TeamLabDeploymentService(
     }
 
     public async Task<TeamLabDeploymentResult> DeployRuntimeAsync(int gameId, int teamId, CancellationToken token)
+        => await DeployRuntimeAsync(gameId, teamId, capacityAlreadyReserved: false, token);
+
+    public async Task<TeamLabDeploymentResult> DeployQueuedRuntimeAsync(int runtimeId, CancellationToken token)
+    {
+        var runtime = await context.TeamLabRuntimes.AsNoTracking()
+            .Where(r => r.Id == runtimeId)
+            .Select(r => new { r.GameId, r.TeamId })
+            .SingleOrDefaultAsync(token);
+
+        return runtime is null
+            ? new TeamLabDeploymentResult(false, $"TeamLab runtime {runtimeId} was not found.", null)
+            : await DeployRuntimeAsync(runtime.GameId, runtime.TeamId, capacityAlreadyReserved: true, token);
+    }
+
+    async Task<TeamLabDeploymentResult> DeployRuntimeAsync(int gameId, int teamId, bool capacityAlreadyReserved,
+        CancellationToken token)
     {
         var planned = await planService.PlanRuntimeAsync(gameId, teamId, token);
         if (!planned.Success || planned.Runtime is null)
@@ -422,16 +536,130 @@ public class TeamLabDeploymentService(
         var penetrationEnvironment = await context.PenetrationTeamEnvironments
             .FirstOrDefaultAsync(e => e.GameId == gameId && e.TeamId == teamId, token);
 
-        return await DeployNativeRuntimeAsync(runtime, gameId, teamId, penetrationEnvironment, token);
+        return await DeployNativeRuntimeAsync(runtime, gameId, teamId, penetrationEnvironment,
+            capacityAlreadyReserved, token);
+    }
+
+    private async Task<AgentVmIpResponse?> WaitForNativeVmReadyAsync(Guid workerNodeId, TeamLabAssetSpec asset,
+        AgentCreateVmRequest vmRequest, string vmName, CancellationToken token)
+    {
+        AgentVmIpResponse? lastResponse = null;
+        var maxAttempts = ResolveNativeVmReadyProbeAttempts(asset.OSType);
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            lastResponse = await agentClient.GetVmIpAsync(workerNodeId, vmName, vmRequest.Interfaces, token);
+            var validation = ValidateNativeVmReady(asset, lastResponse);
+            if (validation.Success)
+            {
+                if (attempt > 1)
+                    logger.LogInformation("TeamLab VM {VmName} became ready after {Attempt} probes.", vmName, attempt);
+
+                return lastResponse;
+            }
+
+            if (attempt == maxAttempts)
+                break;
+
+            logger.LogDebug("TeamLab VM {VmName} readiness probe {Attempt}/{MaxAttempts} pending: {Message}",
+                vmName, attempt, maxAttempts, validation.Message);
+            await Task.Delay(NativeVmReadyProbeInterval, token);
+        }
+
+        return lastResponse;
+    }
+
+    private async Task<TeamLabDryRunResponse?> WaitForNativeProbeTargetReadyAsync(Guid workerNodeId, int runtimeId,
+        string routerNamespace, string targetIp, CancellationToken token)
+    {
+        TeamLabDryRunResponse? lastResponse = null;
+
+        for (var attempt = 1; attempt <= NativeRuntimeConnectivityProbeAttempts; attempt++)
+        {
+            lastResponse = await agentClient.ProbeTeamLabAsync(workerNodeId,
+                new TeamLabProbeRequest(runtimeId, routerNamespace, targetIp, _config.DryRun), token);
+            if (lastResponse is { Success: true })
+            {
+                if (attempt > 1)
+                    logger.LogInformation("TeamLab probe target {TargetIp} became reachable after {Attempt} probes.",
+                        targetIp, attempt);
+
+                return lastResponse;
+            }
+
+            if (attempt == NativeRuntimeConnectivityProbeAttempts)
+                break;
+
+            logger.LogDebug("TeamLab probe target {TargetIp} readiness probe {Attempt}/{MaxAttempts} pending: {Message}",
+                targetIp, attempt, NativeRuntimeConnectivityProbeAttempts,
+                lastResponse?.Message ?? "Agent TeamLab probe did not return a successful response.");
+            await Task.Delay(NativeRuntimeConnectivityProbeInterval, token);
+        }
+
+        return lastResponse;
+    }
+
+    async Task<TeamLabNativeAssetCreationResult> CreateNativeAssetAsync(Guid workerNodeId, int runtimeId,
+        PenetrationConfig config, TeamLabPublishedAssetPlanResult plan, TeamLabRuntimeRouteMatrix routeMatrix,
+        TeamLabAssetSpec asset, int gameId, int teamId, int publishedVersion, string vpnClientAddress,
+        Action<string> trackCreatedContainer, Action<string> trackCreatedVm, CancellationToken token)
+    {
+        var flag = BuildPrimaryFlag(config, asset.TopologyKey, gameId, teamId, publishedVersion);
+        if (asset.Kind == TeamLabAssetSpecKind.Docker)
+        {
+            var containerConfig = await BuildResolvedNativeDockerContainerConfigAsync(asset, teamId,
+                workerNodeId, flag, dockerRegistry, token, plan.Networks);
+            containerConfig.EnvironmentVariables = BuildNativeEnvironmentVariables(config, asset.TopologyKey,
+                plan, gameId, teamId, publishedVersion);
+            var container = await agentClient.CreateContainerOrThrowAsync(workerNodeId, containerConfig, token);
+            trackCreatedContainer(container.ContainerId);
+
+            var attachRequests = BuildNativeContainerAttachRequests(runtimeId, container.ContainerId, asset,
+                plan.Networks, $"{vpnClientAddress}/32",
+                routeMatrix.AllowedCidrsByNetworkKey,
+                plan.Networks.Select(network => network.GatewayIp).ToArray(), _config.DryRun);
+            foreach (var attachRequest in attachRequests)
+            {
+                var attach = await agentClient.AttachTeamLabContainerAsync(workerNodeId, attachRequest, token);
+                if (attach is not { Success: true })
+                    throw new InvalidOperationException(attach?.Message ??
+                                                        $"Failed to attach container {asset.Name} to TeamLab network.");
+                if (attach.DryRun)
+                    throw new InvalidOperationException(attach.Message);
+            }
+
+            return new TeamLabNativeAssetCreationResult(
+                BuildRuntimeAssetRecord(asset, container.ContainerId),
+                container.ContainerId,
+                null);
+        }
+
+        var vmRequest = BuildNativeVmRequest(runtimeId, asset, flag);
+        var vm = await agentClient.CreateVmAsync(workerNodeId, vmRequest, token);
+        if (vm is null || string.IsNullOrWhiteSpace(vm.VmName))
+            throw new InvalidOperationException($"Failed to create TeamLab VM {asset.Name}.");
+        trackCreatedVm(vm.VmName);
+
+        var vmIp = await WaitForNativeVmReadyAsync(workerNodeId, asset, vmRequest, vm.VmName, token);
+        var vmReady = ValidateNativeVmReady(asset, vmIp);
+        if (!vmReady.Success)
+            throw new InvalidOperationException(vmReady.Message);
+
+        return new TeamLabNativeAssetCreationResult(
+            BuildRuntimeAssetRecord(asset, vm.VmName),
+            null,
+            vm.VmName);
     }
 
     private async Task<TeamLabDeploymentResult> DeployNativeRuntimeAsync(TeamLabRuntime runtime, int gameId, int teamId,
-        PenetrationTeamEnvironment? existingEnvironment, CancellationToken token)
+        PenetrationTeamEnvironment? existingEnvironment, bool capacityAlreadyReserved, CancellationToken token)
     {
         runtime.Status = TeamLabRuntimeStatus.Deploying;
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
         AddEvent(runtime, "deploy", TeamLabEventLevel.Info, "Starting native TeamLab deployment from published topology.");
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"TeamLab runtime deployment started: game={gameId}, team={teamId}, runtime={runtime.Id}, node={runtime.WorkerNodeId}.",
+            TaskStatus.Pending, LogLevel.Information);
 
         var topology = await LoadPublishedTopologyAsync(runtime, gameId, token);
         if (!topology.Success || topology.Config is null)
@@ -447,14 +675,26 @@ public class TeamLabDeploymentService(
         if (!plan.Success)
             return await FailAsync(runtime, plan.Message, token);
         var routeMatrix = BuildRuntimeRouteMatrix(topology.Config, plan.Networks, plan.Assets);
+        var slots = CountAssetSlots(plan.Assets);
+        if (!capacityAlreadyReserved)
+        {
+            var reservation = await TryReserveTeamLabCapacityAsync(runtime, slots, token);
+            if (!reservation.Success)
+            {
+                var queue = await TryQueueTeamLabRuntimeAsync(runtime, slots, reservation.Message, token);
+                return new TeamLabDeploymentResult(false, reservation.Message, runtime, queue);
+            }
+        }
 
         var names = BuildResourceNames(runtime.Id, plan.Networks.Select(n => n.TopologyKey).ToArray());
         var vpnServerAddress = LastHost(runtime.NetworkPrefix);
         var vpnClientAddress = SecondHost(runtime.NetworkPrefix);
         if (string.IsNullOrWhiteSpace(vpnServerAddress) || string.IsNullOrWhiteSpace(vpnClientAddress))
-            return await FailAsync(runtime, "TeamLab runtime network prefix is invalid.", token);
+            return await FailNativeDeploymentAsync(runtime, "TeamLab runtime network prefix is invalid.",
+                names, plan.Networks, [], [], slots, capacityAlreadyReserved, token);
 
-        var allowedIps = string.Join(',', plan.Networks.Select(n => n.Cidr).Distinct(StringComparer.Ordinal));
+        var playerAccess = BuildPlayerNetworkAccess(topology.Config, plan.Networks);
+        var allowedIps = string.Join(',', playerAccess.AllowedCidrs);
         TeamLabPeerMaterial peer;
         try
         {
@@ -462,7 +702,8 @@ public class TeamLabDeploymentService(
         }
         catch (InvalidOperationException ex)
         {
-            return await FailAsync(runtime, ex.Message, token);
+            return await FailNativeDeploymentAsync(runtime, ex.Message, names, plan.Networks, [], [], slots,
+                capacityAlreadyReserved, token);
         }
 
         foreach (var network in plan.Networks)
@@ -470,9 +711,12 @@ public class TeamLabDeploymentService(
             var bridge = await agentClient.CreateTeamLabBridgeAsync(runtime.WorkerNodeId!.Value,
                 new TeamLabBridgeRequest(runtime.Id, network.BridgeName, network.Cidr, _config.DryRun), token);
             if (bridge is not { Success: true })
-                return await FailAsync(runtime, bridge?.Message ?? $"Failed to create TeamLab bridge {network.Name}.", token);
+                return await FailNativeDeploymentAsync(runtime,
+                    bridge?.Message ?? $"Failed to create TeamLab bridge {network.Name}.",
+                    names, plan.Networks, [], [], slots, capacityAlreadyReserved, token);
             if (bridge.DryRun)
-                return await FailAsync(runtime, bridge.Message, token);
+                return await FailNativeDeploymentAsync(runtime, bridge.Message, names, plan.Networks, [], [], slots,
+                    capacityAlreadyReserved, token);
         }
 
         var router = await agentClient.CreateTeamLabRouterAsync(runtime.WorkerNodeId!.Value,
@@ -483,9 +727,12 @@ public class TeamLabDeploymentService(
                 [],
                 _config.DryRun), token);
         if (router is not { Success: true })
-            return await FailAsync(runtime, router?.Message ?? "Failed to create TeamLab router namespace.", token);
+            return await FailNativeDeploymentAsync(runtime,
+                router?.Message ?? "Failed to create TeamLab router namespace.",
+                names, plan.Networks, [], [], slots, capacityAlreadyReserved, token);
         if (router.DryRun)
-            return await FailAsync(runtime, router.Message, token);
+            return await FailNativeDeploymentAsync(runtime, router.Message, names, plan.Networks, [], [], slots,
+                capacityAlreadyReserved, token);
 
         var wg = await agentClient.ConfigureTeamLabWireGuardAsync(runtime.WorkerNodeId.Value,
             new TeamLabWireGuardRequest(runtime.Id, names.RouterNamespace, names.WireGuardInterface,
@@ -495,14 +742,32 @@ public class TeamLabDeploymentService(
                 peer.Peer.PublicKey,
                 peer.Peer.ClientAddress,
                 peer.Peer.AllowedIPs,
+                playerAccess.AllowedCidrs,
+                playerAccess.BlockedCidrs,
                 _config.DryRun), token);
         if (wg is not { Success: true })
-            return await FailAsync(runtime, wg?.Message ?? "Failed to configure TeamLab WireGuard endpoint.", token);
+            return await FailNativeDeploymentAsync(runtime,
+                wg?.Message ?? "Failed to configure TeamLab WireGuard endpoint.",
+                names, plan.Networks, [], [], slots, capacityAlreadyReserved, token);
         if (wg.DryRun)
-            return await FailAsync(runtime, wg.Message, token);
+            return await FailNativeDeploymentAsync(runtime, wg.Message, names, plan.Networks, [], [], slots,
+                capacityAlreadyReserved, token);
 
         var createdContainers = new List<string>();
         var createdVms = new List<string>();
+        var createdAssetLock = new object();
+
+        void TrackCreatedContainer(string containerId)
+        {
+            lock (createdAssetLock)
+                createdContainers.Add(containerId);
+        }
+
+        void TrackCreatedVm(string vmName)
+        {
+            lock (createdAssetLock)
+                createdVms.Add(vmName);
+        }
 
         var dhcpDnsRequests = BuildDhcpDnsRequests(runtime.Id, names.RouterNamespace, plan.Networks, plan.Assets,
             _config.DryRun);
@@ -513,10 +778,10 @@ public class TeamLabDeploymentService(
             if (dhcpDns is not { Success: true })
                 return await FailNativeDeploymentAsync(runtime,
                     dhcpDns?.Message ?? $"Failed to configure TeamLab DHCP/DNS service {dhcpDnsRequest.ServiceName}.",
-                    names, plan.Networks, createdContainers, createdVms, token);
+                    names, plan.Networks, createdContainers, createdVms, slots, capacityAlreadyReserved, token);
             if (dhcpDns.DryRun)
                 return await FailNativeDeploymentAsync(runtime, dhcpDns.Message, names, plan.Networks,
-                    createdContainers, createdVms, token);
+                    createdContainers, createdVms, slots, capacityAlreadyReserved, token);
 
             var probeName = dhcpDnsRequest.DnsRecords.FirstOrDefault()?.Hostname;
             if (!string.IsNullOrWhiteSpace(probeName))
@@ -527,60 +792,25 @@ public class TeamLabDeploymentService(
                 if (dnsProbe is not { Success: true })
                     return await FailNativeDeploymentAsync(runtime,
                         dnsProbe?.Message ?? $"Failed to probe TeamLab DHCP/DNS service {dhcpDnsRequest.ServiceName}.",
-                        names, plan.Networks, createdContainers, createdVms, token);
+                        names, plan.Networks, createdContainers, createdVms, slots, capacityAlreadyReserved, token);
                 if (dnsProbe.DryRun)
                     return await FailNativeDeploymentAsync(runtime, dnsProbe.Message, names, plan.Networks,
-                        createdContainers, createdVms, token);
+                        createdContainers, createdVms, slots, capacityAlreadyReserved, token);
             }
         }
 
         try
         {
-            foreach (var asset in plan.Assets)
+            foreach (var assetGroup in plan.Assets.GroupBy(asset => asset.StartPriority).OrderBy(group => group.Key))
             {
-                var flag = BuildPrimaryFlag(topology.Config, asset.TopologyKey, gameId, teamId, runtime.PublishedVersion);
-                if (asset.Kind == TeamLabAssetSpecKind.Docker)
-                {
-                    var config = await BuildResolvedNativeDockerContainerConfigAsync(asset, teamId,
-                        runtime.WorkerNodeId.Value, flag, dockerRegistry, token);
-                    config.EnvironmentVariables = BuildNativeEnvironmentVariables(topology.Config, asset.TopologyKey,
-                        plan, gameId, teamId, runtime.PublishedVersion);
-                    var container = await agentClient.CreateContainerOrThrowAsync(runtime.WorkerNodeId.Value, config, token);
-                    createdContainers.Add(container.ContainerId);
+                var assetResults = await Task.WhenAll(assetGroup
+                    .OrderBy(asset => asset.TopologyKey, StringComparer.Ordinal)
+                    .Select(asset => CreateNativeAssetAsync(runtime.WorkerNodeId.Value, runtime.Id,
+                        topology.Config, plan, routeMatrix, asset, gameId, teamId, runtime.PublishedVersion,
+                        vpnClientAddress, TrackCreatedContainer, TrackCreatedVm, token)));
 
-                    var attachRequests = BuildNativeContainerAttachRequests(runtime.Id, container.ContainerId, asset,
-                        plan.Networks, $"{vpnClientAddress}/32",
-                        routeMatrix.AllowedCidrsByNetworkKey,
-                        plan.Networks.Select(network => network.GatewayIp).ToArray(), _config.DryRun);
-                    foreach (var attachRequest in attachRequests)
-                    {
-                        var attach = await agentClient.AttachTeamLabContainerAsync(runtime.WorkerNodeId.Value,
-                            attachRequest, token);
-                        if (attach is not { Success: true })
-                            throw new InvalidOperationException(attach?.Message ??
-                                                                $"Failed to attach container {asset.Name} to TeamLab network.");
-                        if (attach.DryRun)
-                            throw new InvalidOperationException(attach.Message);
-                    }
-
-                    RecordRuntimeAsset(runtime, BuildRuntimeAssetRecord(asset, container.ContainerId));
-                }
-                else
-                {
-                    var vmRequest = BuildNativeVmRequest(runtime.Id, asset, flag);
-                    var vm = await agentClient.CreateVmAsync(runtime.WorkerNodeId.Value, vmRequest, token);
-                    if (vm is null || string.IsNullOrWhiteSpace(vm.VmName))
-                        throw new InvalidOperationException($"Failed to create TeamLab VM {asset.Name}.");
-
-                    createdVms.Add(vm.VmName);
-                    var vmIp = await agentClient.GetVmIpAsync(runtime.WorkerNodeId.Value, vm.VmName,
-                        vmRequest.Interfaces, token);
-                    var vmReady = ValidateNativeVmReady(asset, vmIp);
-                    if (!vmReady.Success)
-                        throw new InvalidOperationException(vmReady.Message);
-
-                    RecordRuntimeAsset(runtime, BuildRuntimeAssetRecord(asset, vm.VmName));
-                }
+                foreach (var result in assetResults)
+                    RecordRuntimeAsset(runtime, result.RuntimeAsset);
 
                 await context.SaveChangesAsync(token);
             }
@@ -588,13 +818,13 @@ public class TeamLabDeploymentService(
         catch (Exception ex) when (ex is InvalidOperationException or AgentClientException or HttpRequestException or TaskCanceledException)
         {
             return await FailNativeDeploymentAsync(runtime, ex.Message, names, plan.Networks,
-                createdContainers, createdVms, token);
+                createdContainers, createdVms, slots, capacityAlreadyReserved, token);
         }
 
         var gateway = await publicUdpGatewayProvider.SyncMappingAsync(runtime.PublicUdpMapping, token);
         if (!gateway.Success)
             return await FailNativeDeploymentAsync(runtime, gateway.Message, names, plan.Networks,
-                createdContainers, createdVms, token, removePublicMapping: false);
+                createdContainers, createdVms, slots, capacityAlreadyReserved, token, removePublicMapping: false);
 
         RecordNativeRuntimeFacts(runtime, names, plan.Networks);
 
@@ -603,25 +833,67 @@ public class TeamLabDeploymentService(
         AddEvent(runtime, "probe", TeamLabEventLevel.Info, "Native TeamLab assets created; starting runtime connectivity probe.");
         await context.SaveChangesAsync(token);
 
-        var probeTarget = plan.Assets.SelectMany(a => a.Interfaces)
-            .OrderByDescending(i => i.IsPrimary)
-            .Select(i => i.IpAddress)
-            .FirstOrDefault(ip => !string.IsNullOrWhiteSpace(ip));
-        if (string.IsNullOrWhiteSpace(probeTarget))
+        var probeTargets = BuildNativeProbeTargets(plan.Assets);
+        var shouldRunConnectivityProbe = ShouldRunNativeConnectivityProbe(plan.Assets);
+        if (shouldRunConnectivityProbe && probeTargets.Length == 0)
             return await FailAsync(runtime, "TeamLab probe target is unavailable in the native asset plan.", token);
 
-        var probe = await agentClient.ProbeTeamLabAsync(runtime.WorkerNodeId.Value,
-            new TeamLabProbeRequest(runtime.Id, names.RouterNamespace, probeTarget, _config.DryRun), token);
-        if (probe is not { Success: true })
-            return await FailNativeDeploymentAsync(runtime, probe?.Message ?? "TeamLab runtime connectivity probe failed.",
-                names, plan.Networks, createdContainers, createdVms, token);
-        if (probe.DryRun)
-            return await FailNativeDeploymentAsync(runtime, probe.Message, names, plan.Networks,
-                createdContainers, createdVms, token);
+        if (!shouldRunConnectivityProbe)
+        {
+            AddEvent(runtime, "probe", TeamLabEventLevel.Info,
+                "Native TeamLab runtime has only Windows VM assets; skipping ICMP connectivity probe after VM DHCP readiness.");
+            await context.SaveChangesAsync(token);
+        }
+
+        foreach (var probeTarget in probeTargets)
+        {
+            var probe = await WaitForNativeProbeTargetReadyAsync(runtime.WorkerNodeId.Value, runtime.Id,
+                names.RouterNamespace, probeTarget, token);
+            if (probe is not { Success: true })
+                return await FailNativeDeploymentAsync(runtime,
+                    probe?.Message ?? $"TeamLab runtime connectivity probe failed for {probeTarget}.",
+                    names, plan.Networks, createdContainers, createdVms, slots, capacityAlreadyReserved, token);
+            if (probe.DryRun)
+                return await FailNativeDeploymentAsync(runtime, probe.Message, names, plan.Networks,
+                    createdContainers, createdVms, slots, capacityAlreadyReserved, token);
+        }
 
         await SyncCompatibilityEnvironmentAsync(runtime, topology.Config, plan, teamIndex, token);
 
         return await MarkRuntimeRunningAsync(runtime, "Native TeamLab runtime deployment reached running state.", token);
+    }
+
+    internal async Task<FleetCapacityReservationResult> TryReserveTeamLabCapacityAsync(TeamLabRuntime runtime,
+        TeamLabAssetSlotCount slots, CancellationToken token)
+    {
+        if (runtime.WorkerNodeId is not { } nodeId)
+            return FleetCapacityReservationResult.Failed("TeamLab runtime has no planned WorkerNode.");
+
+        return await capacityReservation.TryReserveAsync(new FleetCapacityRequest(
+            NodeCapability.Docker | NodeCapability.Kvm,
+            slots.DockerSlots,
+            slots.VmSlots,
+            PreferredNodeId: nodeId,
+            RequireTeamLab: true), token);
+    }
+
+    internal async Task<DeploymentQueueStatusModel?> TryQueueTeamLabRuntimeAsync(TeamLabRuntime runtime,
+        TeamLabAssetSlotCount slots, string reason, CancellationToken token)
+    {
+        if (runtime.Id <= 0 || runtime.GameId <= 0 || runtime.TeamId <= 0)
+            return null;
+
+        var result = await deploymentQueue.EnqueueAsync(
+            DeploymentQueueRequest.TeamLab(runtime.GameId, runtime.TeamId, runtime.Id,
+                slots.DockerSlots, slots.VmSlots), token);
+        var status = await deploymentQueue.GetStatusAsync(result.TicketId, token);
+        runtime.LastError = NormalizeRuntimeError($"Waiting in deployment queue. {reason}");
+        runtime.Status = TeamLabRuntimeStatus.Scheduled;
+        runtime.UpdatedAt = DateTimeOffset.UtcNow;
+        AddEvent(runtime, "queue", TeamLabEventLevel.Warning,
+            $"TeamLab runtime queued because capacity is unavailable. People ahead: {status?.PeopleAhead ?? result.PeopleAhead}.");
+        await context.SaveChangesAsync(token);
+        return status;
     }
 
     public async Task<TeamLabDeploymentResult> DestroyRuntimeAsync(int gameId, int teamId, CancellationToken token)
@@ -637,6 +909,8 @@ public class TeamLabDeploymentService(
         runtime.IsOpenToPlayers = false;
         AddEvent(runtime, "destroy", TeamLabEventLevel.Info, "Destroying TeamLab runtime resources.");
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"TeamLab runtime destroy started: game={gameId}, team={teamId}, runtime={runtime.Id}, node={runtime.WorkerNodeId}.",
+            TaskStatus.Pending, LogLevel.Information);
 
         var cleanupErrors = new List<string>();
 
@@ -672,15 +946,20 @@ public class TeamLabDeploymentService(
             await SyncCompatibilityEnvironmentStatusAsync(runtime, PenetrationRuntimeStatus.CleanupPending,
                 runtime.LastError, token);
             await context.SaveChangesAsync(token);
+            logger.SystemLog($"TeamLab runtime cleanup pending: game={gameId}, team={teamId}, runtime={runtime.Id}, error={runtime.LastError}",
+                TaskStatus.Degraded, LogLevel.Warning);
             return new TeamLabDeploymentResult(false, runtime.LastError, runtime);
         }
 
+        await ReleaseTeamLabCapacityAsync(runtime, token);
         runtime.Status = TeamLabRuntimeStatus.Destroyed;
         MarkRuntimeFactsDestroyed(runtime);
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
         AddEvent(runtime, "destroy", TeamLabEventLevel.Success, "TeamLab runtime destroyed.");
         await SyncCompatibilityEnvironmentStatusAsync(runtime, PenetrationRuntimeStatus.Stopped, null, token);
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"TeamLab runtime destroyed: game={gameId}, team={teamId}, runtime={runtime.Id}.",
+            TaskStatus.Success, LogLevel.Information);
 
         return new TeamLabDeploymentResult(true, "TeamLab runtime destroyed.", runtime);
     }
@@ -757,6 +1036,8 @@ public class TeamLabDeploymentService(
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
         AddEvent(runtime, "deploy", TeamLabEventLevel.Error, normalized);
         await context.SaveChangesAsync(token);
+        logger.SystemLog($"TeamLab runtime deployment failed: game={runtime.GameId}, team={runtime.TeamId}, runtime={runtime.Id}, error={normalized}",
+            TaskStatus.Failed, LogLevel.Warning);
         return new TeamLabDeploymentResult(false, normalized, runtime);
     }
 
@@ -776,6 +1057,8 @@ public class TeamLabDeploymentService(
         await context.SaveChangesAsync(token);
 
         logger.LogInformation("TeamLab runtime {RuntimeId} reached Running state.", runtime.Id);
+        logger.SystemLog($"TeamLab runtime deployed: game={runtime.GameId}, team={runtime.TeamId}, runtime={runtime.Id}, node={runtime.WorkerNodeId}.",
+            TaskStatus.Success, LogLevel.Information);
         return new TeamLabDeploymentResult(true, "TeamLab runtime deployed.", runtime);
     }
 
@@ -824,7 +1107,8 @@ public class TeamLabDeploymentService(
 
     private async Task<TeamLabDeploymentResult> FailNativeDeploymentAsync(TeamLabRuntime runtime, string message,
         TeamLabResourceNames names, IReadOnlyList<TeamLabRuntimeNetworkSpec> networks, IEnumerable<string> containers,
-        IEnumerable<string> vms, CancellationToken token, bool removePublicMapping = true)
+        IEnumerable<string> vms, TeamLabAssetSlotCount reservedSlots, bool capacityAlreadyReserved,
+        CancellationToken token, bool removePublicMapping = true)
     {
         var cleanupErrors = new List<string>();
         await CleanupCreatedNativeAssetsAsync(runtime.WorkerNodeId!.Value, containers, vms, token);
@@ -856,7 +1140,34 @@ public class TeamLabDeploymentService(
             return new TeamLabDeploymentResult(false, runtime.LastError, runtime);
         }
 
+        if (!capacityAlreadyReserved)
+            await ReleaseTeamLabCapacityAsync(runtime, reservedSlots, token);
+
         return await FailAsync(runtime, message, token);
+    }
+
+    internal async Task ReleaseTeamLabCapacityAsync(TeamLabRuntime runtime, CancellationToken token)
+    {
+        if (runtime.WorkerNodeId is not { } nodeId)
+            return;
+
+        var slots = CountRuntimeAssetSlots(runtime);
+        if (slots.DockerSlots == 0 && slots.VmSlots == 0)
+            return;
+
+        await capacityReservation.ReleaseAsync(nodeId, slots.DockerSlots, slots.VmSlots, token);
+    }
+
+    internal async Task ReleaseTeamLabCapacityAsync(TeamLabRuntime runtime, TeamLabAssetSlotCount slots,
+        CancellationToken token)
+    {
+        if (runtime.WorkerNodeId is not { } nodeId)
+            return;
+
+        if (slots.DockerSlots == 0 && slots.VmSlots == 0)
+            return;
+
+        await capacityReservation.ReleaseAsync(nodeId, slots.DockerSlots, slots.VmSlots, token);
     }
 
     private async Task<string[]> CleanupTrackedNativeAssetsAsync(Guid workerNodeId,
@@ -1118,6 +1429,13 @@ public class TeamLabDeploymentService(
             asset.LastError = null;
         }
     }
+
+    public static TeamLabAssetSlotCount CountRuntimeAssetSlots(TeamLabRuntime runtime) =>
+        new(
+            runtime.Assets.Count(asset => asset.Kind == TeamLabResourceKind.Docker &&
+                                          asset.Status != TeamLabRuntimeStatus.Destroyed),
+            runtime.Assets.Count(asset => asset.Kind == TeamLabResourceKind.Vm &&
+                                          asset.Status != TeamLabRuntimeStatus.Destroyed));
 
     private static string TrimLinuxName(string value) => value.Length <= 15 ? value : value[..15];
 

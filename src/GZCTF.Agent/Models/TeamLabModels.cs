@@ -12,6 +12,7 @@ public record TeamLabStatusResponse(
     bool DryRun,
     bool HasIpCommand,
     bool HasWireGuardCommand,
+    bool HasIptablesCommand,
     DateTimeOffset CheckedAt,
     string? Message = null);
 
@@ -52,6 +53,8 @@ public record TeamLabWireGuardRequest(
     string PeerPublicKey,
     string PeerClientAddress,
     string PeerAllowedIps,
+    string[] PlayerAllowedCidrs,
+    string[] PlayerBlockedCidrs,
     bool DryRun = true);
 
 public record TeamLabCleanupRequest(

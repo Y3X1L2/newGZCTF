@@ -255,8 +255,8 @@ public class NodesController : ControllerBase
     [RequireAdmin]
     public async Task<IActionResult> Deregister(Guid id, [FromQuery] bool force = false)
     {
-        var token = HttpContext.RequestAborted;
-        var node = await _nodeRepo.GetNodeByIdAsync(id, HttpContext.RequestAborted);
+        var token = HttpContext?.RequestAborted ?? CancellationToken.None;
+        var node = await _nodeRepo.GetNodeByIdAsync(id, token);
         if (node is null) return NotFound();
         if (node.IsLocal) return BadRequest(new { message = "Cannot deregister local node" });
 
@@ -302,36 +302,46 @@ public class NodesController : ControllerBase
         await using var transaction = await _context.Database.BeginTransactionAsync(token);
 
         var now = DateTimeOffset.UtcNow;
-        await _context.DeploymentTargets
-            .Where(t => t.TargetNodeId == id
-                        && (t.Status == TargetStatus.Pending ||
-                            t.Status == TargetStatus.Assigned ||
-                            t.Status == TargetStatus.Creating ||
-                            t.Status == TargetStatus.Running))
-            .ExecuteUpdateAsync(updates => updates
-                .SetProperty(t => t.Status, TargetStatus.Cancelled)
-                .SetProperty(t => t.CompletedAt, (DateTimeOffset?)now)
-                .SetProperty(t => t.ErrorMessage, "Target node was deregistered."), token);
-
-        await _context.DeploymentTargets
+        var targets = await _context.DeploymentTargets
             .Where(t => t.TargetNodeId == id)
-            .ExecuteUpdateAsync(updates => updates
-                .SetProperty(t => t.TargetNodeId, (Guid?)null), token);
+            .ToListAsync(token);
+        foreach (var target in targets)
+        {
+            if (target.Status is TargetStatus.Pending or TargetStatus.Assigned or TargetStatus.Creating
+                or TargetStatus.Running)
+            {
+                target.Status = TargetStatus.Cancelled;
+                target.CompletedAt = now;
+                target.ErrorMessage = "Target node was deregistered.";
+            }
+            target.TargetNodeId = null;
+        }
 
-        await _context.Containers
-            .Where(c => c.NodeId == id)
-            .ExecuteUpdateAsync(updates => updates
-                .SetProperty(c => c.NodeId, (Guid?)null), token);
+        var tickets = await _context.DeploymentQueueTickets
+            .Where(t => t.TargetNodeId == id)
+            .ToListAsync(token);
+        foreach (var ticket in tickets)
+        {
+            if (ticket.Status is DeploymentQueueTicketStatus.Pending or DeploymentQueueTicketStatus.Assigned
+                or DeploymentQueueTicketStatus.Creating)
+            {
+                ticket.Status = DeploymentQueueTicketStatus.Cancelled;
+                ticket.CompletedAt = now;
+                ticket.ErrorMessage = "Target node was deregistered.";
+            }
+            ticket.TargetNodeId = null;
+        }
 
-        await _context.VmInstances
-            .Where(v => v.NodeId == id)
-            .ExecuteUpdateAsync(updates => updates
-                .SetProperty(v => v.NodeId, (Guid?)null), token);
+        foreach (var container in await _context.Containers.Where(c => c.NodeId == id).ToListAsync(token))
+            container.NodeId = null;
 
-        await _context.PenetrationTeamEnvironments
-            .Where(e => e.NodeId == id)
-            .ExecuteUpdateAsync(updates => updates
-                .SetProperty(e => e.NodeId, (Guid?)null), token);
+        foreach (var vm in await _context.VmInstances.Where(v => v.NodeId == id).ToListAsync(token))
+            vm.NodeId = null;
+
+        foreach (var environment in await _context.PenetrationTeamEnvironments
+                     .Where(e => e.NodeId == id)
+                     .ToListAsync(token))
+            environment.NodeId = null;
 
         _context.WorkerNodes.Remove(node);
         await _context.SaveChangesAsync(token);
@@ -843,9 +853,16 @@ public class NodesController : ControllerBase
 public class DeploymentTargetsController : ControllerBase
 {
     private readonly AppDbContext _context;
+    private readonly DeploymentQueueService _queue;
+    private readonly ILogger<DeploymentTargetsController> _logger;
 
-    public DeploymentTargetsController(AppDbContext context)
-    { _context = context; }
+    public DeploymentTargetsController(AppDbContext context, DeploymentQueueService queue,
+        ILogger<DeploymentTargetsController> logger)
+    {
+        _context = context;
+        _queue = queue;
+        _logger = logger;
+    }
 
     [HttpGet]
     [RequireAdmin]
@@ -872,7 +889,7 @@ public class DeploymentTargetsController : ControllerBase
                 t.Id, t.TargetNodeId, t.Type, t.Action, t.Status,
                 TargetNodeName = t.TargetNode == null ? null : t.TargetNode.Name,
                 TargetNodeHost = t.TargetNode == null ? null : t.TargetNode.HostAddress,
-                t.Payload, t.ResultPort, t.ResultHost,
+                t.ResultPort, t.ResultHost,
                 t.CreatedAt, t.CompletedAt, t.ErrorMessage
             })
             .ToListAsync();
@@ -884,12 +901,16 @@ public class DeploymentTargetsController : ControllerBase
     [RequireAdmin]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var target = await _context.DeploymentTargets.FindAsync(id);
+        var target = await _context.DeploymentTargets
+            .Include(t => t.TargetNode)
+            .FirstOrDefaultAsync(t => t.Id == id);
         if (target is null) return NotFound();
         return Ok(new
         {
             target.Id, target.TargetNodeId, target.Type, target.Action, target.Status,
-            target.Payload, target.ResultPort, target.ResultHost,
+            TargetNodeName = target.TargetNode == null ? null : target.TargetNode.Name,
+            TargetNodeHost = target.TargetNode == null ? null : target.TargetNode.HostAddress,
+            target.ResultPort, target.ResultHost,
             target.CreatedAt, target.CompletedAt, target.ErrorMessage
         });
     }
@@ -898,16 +919,37 @@ public class DeploymentTargetsController : ControllerBase
     [RequireAdmin]
     public async Task<IActionResult> Cancel(Guid id)
     {
-        var target = await _context.DeploymentTargets.FindAsync(id);
+        var target = await _context.DeploymentTargets
+            .Include(t => t.TargetNode)
+            .SingleOrDefaultAsync(t => t.Id == id);
         if (target is null) return NotFound();
         if (target.Status == TargetStatus.Pending ||
             target.Status == TargetStatus.Assigned ||
             target.Status == TargetStatus.Creating ||
             target.Status == TargetStatus.Running)
         {
+            var activeTicket = await _context.DeploymentQueueTickets
+                .AsNoTracking()
+                .Where(t => t.DeploymentTargetId == target.Id &&
+                            (t.Status == DeploymentQueueTicketStatus.Pending ||
+                             t.Status == DeploymentQueueTicketStatus.Assigned ||
+                             t.Status == DeploymentQueueTicketStatus.Creating))
+                .OrderByDescending(t => t.CreatedAt)
+                .FirstOrDefaultAsync();
+            if (activeTicket is not null)
+            {
+                var token = HttpContext?.RequestAborted ?? CancellationToken.None;
+                await _queue.CancelAsync(activeTicket.Id, "Deployment target was cancelled by administrator.",
+                    token);
+                _logger.SystemLogDeploymentTarget("cancelled", target, target.TargetNode);
+                return NoContent();
+            }
+
             target.Status = TargetStatus.Cancelled;
             target.CompletedAt = DateTimeOffset.UtcNow;
+            target.ErrorMessage = "Deployment target was cancelled by administrator.";
             await _context.SaveChangesAsync();
+            _logger.SystemLogDeploymentTarget("cancelled", target, target.TargetNode);
         }
         return NoContent();
     }

@@ -58,6 +58,12 @@ public class DockerService
         if (request.Flag is not null)
             env.Add($"GZCTF_FLAG={request.Flag}");
 
+        var dnsServers = request.DnsServers
+            .Where(server => !string.IsNullOrWhiteSpace(server))
+            .Select(server => server.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
         var createParams = new CreateContainerParameters
         {
             Name = containerName,
@@ -83,6 +89,7 @@ public class DockerService
                 NetworkMode = isolatedHostNetwork
                     ? fabricManagementNetwork ? primaryNetwork : "none"
                     : primaryNetwork,
+                DNS = dnsServers.Length > 0 ? dnsServers : null,
             },
             ExposedPorts = request.PublishPort ? new Dictionary<string, EmptyStruct> { [portSpec] = new() } : null,
             NetworkingConfig = !isolatedHostNetwork &&

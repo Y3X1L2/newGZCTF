@@ -6,7 +6,9 @@ using System.Threading.Tasks;
 using GZCTF.Models.Data;
 using GZCTF.Services.Fleet;
 using GZCTF.Services.TeamLab;
+using Microsoft.Extensions.Logging;
 using Xunit;
+using TaskStatus = GZCTF.Utils.TaskStatus;
 
 namespace GZCTF.Test.UnitTests.Fleet;
 
@@ -174,10 +176,75 @@ public class DeploymentTargetTests
             4096,
             2,
             "team-1-windows",
-            "flag{vm_contract}");
+            "flag{vm_contract}",
+            Guid.NewGuid(),
+            1,
+            Guid.NewGuid(),
+            2);
 
         var json = JsonSerializer.Serialize(payload);
 
         Assert.Contains("\"Flag\":\"flag{vm_contract}\"", json);
+    }
+
+    [Fact]
+    public void DeploymentTargetLogHelper_FormatsCompletedTargetWithoutPayload()
+    {
+        var target = new DeploymentTarget
+        {
+            Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            Type = TargetType.Docker,
+            Action = TargetAction.Create,
+            TargetNodeId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            Payload = "{\"Flag\":\"flag{secret}\",\"RegistryAuth\":\"secret-token\"}",
+            Status = TargetStatus.Completed,
+            ResultHost = "203.195.157.191",
+            ResultPort = 30001
+        };
+        var node = new WorkerNode
+        {
+            Id = target.TargetNodeId.Value,
+            Name = "node-1",
+            HostAddress = "10.24.0.30"
+        };
+
+        var (message, status, level) = DeploymentTargetLogHelper.Build("completed", target, node);
+
+        Assert.Equal(TaskStatus.Success, status);
+        Assert.Equal(LogLevel.Information, level);
+        Assert.Contains("Deployment target 11111111-1111-1111-1111-111111111111 completed", message);
+        Assert.Contains("Docker/Create", message);
+        Assert.Contains("node-1", message);
+        Assert.Contains("203.195.157.191:30001", message);
+        Assert.DoesNotContain("flag{secret}", message);
+        Assert.DoesNotContain("secret-token", message);
+    }
+
+    [Fact]
+    public void DeploymentTargetLogHelper_MapsFailedAndCancelledStatuses()
+    {
+        var failed = new DeploymentTarget
+        {
+            Status = TargetStatus.Failed,
+            Type = TargetType.Vm,
+            Action = TargetAction.Create,
+            ErrorMessage = "Agent VM creation failed"
+        };
+        var cancelled = new DeploymentTarget
+        {
+            Status = TargetStatus.Cancelled,
+            Type = TargetType.Docker,
+            Action = TargetAction.Create,
+            ErrorMessage = "Target node was deregistered."
+        };
+
+        var (_, failedStatus, failedLevel) = DeploymentTargetLogHelper.Build("failed", failed);
+        var (cancelledMessage, cancelledStatus, cancelledLevel) = DeploymentTargetLogHelper.Build("cancelled", cancelled);
+
+        Assert.Equal(TaskStatus.Failed, failedStatus);
+        Assert.Equal(LogLevel.Warning, failedLevel);
+        Assert.Equal(TaskStatus.Exit, cancelledStatus);
+        Assert.Equal(LogLevel.Information, cancelledLevel);
+        Assert.Contains("Target node was deregistered.", cancelledMessage);
     }
 }

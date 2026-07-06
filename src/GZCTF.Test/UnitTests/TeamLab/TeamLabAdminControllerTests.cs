@@ -3,6 +3,7 @@ using GZCTF.Models.Data;
 using GZCTF.Services.TeamLab;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Threading;
 using System.Text.Json;
 using Xunit;
 
@@ -32,6 +33,45 @@ public class TeamLabAdminControllerTests
         var body = Assert.IsType<TeamLabDeploymentResult>(badRequest.Value);
         Assert.False(body.Success);
         Assert.Equal("deployment failed", body.Message);
+    }
+
+    [Fact]
+    public void ToActionResult_ReturnsAcceptedForQueuedDeployment()
+    {
+        var queue = new GZCTF.Services.Fleet.DeploymentQueueStatusModel(
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            GZCTF.Models.Data.DeploymentQueueKind.TeamLabRuntime,
+            GZCTF.Models.Data.DeploymentQueueTicketStatus.Pending,
+            null,
+            null,
+            QueuePosition: 2,
+            PeopleAhead: 1,
+            ErrorMessage: null,
+            DateTimeOffset.Parse("2026-07-06T00:00:00Z"),
+            StartedAt: null,
+            CompletedAt: null);
+
+        var result = TeamLabAdminController.ToActionResult(
+            new TeamLabDeploymentResult(false, "queued", new TeamLabRuntime(), queue));
+
+        var accepted = Assert.IsType<AcceptedResult>(result);
+        var body = Assert.IsType<TeamLabDeploymentResult>(accepted.Value);
+        Assert.False(body.Success);
+        Assert.Equal(1, body.Queue?.PeopleAhead);
+    }
+
+    [Fact]
+    public void CreateDeployOperationToken_IsIndependentFromRequestAbortAndControllerTimeout()
+    {
+        Assert.Null(typeof(TeamLabAdminController).GetField("DeployOperationTimeout"));
+
+        using var applicationStopping = new CancellationTokenSource();
+        using var deployToken = TeamLabAdminController.CreateDeployOperationToken(applicationStopping.Token);
+
+        Assert.False(deployToken.Token.IsCancellationRequested);
+
+        applicationStopping.Cancel();
+        Assert.True(deployToken.Token.IsCancellationRequested);
     }
 
     [Fact]

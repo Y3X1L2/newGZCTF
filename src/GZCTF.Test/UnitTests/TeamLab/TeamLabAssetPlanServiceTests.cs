@@ -23,6 +23,7 @@ public class TeamLabAssetPlanServiceTests
     public void BuildContainerAttachRequest_UsesTeamLabVethWithoutFabricPath()
     {
         var iface = new TeamLabAssetInterfaceSpec(
+            NodeKey: "portal",
             NetworkKey: "dmz",
             BridgeName: "tl12-dmz",
             InterfaceName: "eth0",
@@ -43,6 +44,19 @@ public class TeamLabAssetPlanServiceTests
         Assert.True(request.RemoveDefaultRoute);
         Assert.False(request.DryRun);
         Assert.DoesNotContain("fabric", request.HostInterfaceName);
+    }
+
+    [Fact]
+    public void BuildHostInterfaceName_IncludesNodeKeyToAvoidSameNetworkEth0Collisions()
+    {
+        var edge = TeamLabAssetPlanService.BuildHostInterfaceName(12, "asset-edge", "net-entry", "eth0");
+        var router = TeamLabAssetPlanService.BuildHostInterfaceName(12, "asset-router", "net-entry", "eth0");
+
+        Assert.NotEqual(edge, router);
+        Assert.True(edge.Length <= 15);
+        Assert.True(router.Length <= 15);
+        Assert.Matches("^[a-z0-9]+$", edge);
+        Assert.Matches("^[a-z0-9]+$", router);
     }
 
     [Fact]

@@ -1,12 +1,21 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Controllers;
+using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
+using GZCTF.Repositories.Interface;
 using GZCTF.Services.Fleet;
 using GZCTF.Utils;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -350,5 +359,165 @@ public class NodesControllerTests
 
         Assert.Throws<InvalidOperationException>(() =>
             new RedisDistributedLock(config, NullLogger<RedisDistributedLock>.Instance));
+    }
+
+    [Fact]
+    public async Task DeploymentTargetsController_List_DoesNotExposeRawPayloadOrSecrets()
+    {
+        await using var context = CreateContext();
+        context.DeploymentTargets.Add(new DeploymentTarget
+        {
+            Type = TargetType.Docker,
+            Action = TargetAction.Create,
+            Status = TargetStatus.Pending,
+            Payload = "{\"Flag\":\"flag{secret}\",\"RegistryAuth\":\"token\",\"PrivateKey\":\"wg-private\"}",
+            ErrorMessage = "safe error"
+        });
+        await context.SaveChangesAsync();
+        var controller = new DeploymentTargetsController(context,
+            new DeploymentQueueService(context, NullLogger<DeploymentQueueService>.Instance),
+            NullLogger<DeploymentTargetsController>.Instance);
+
+        var result = await controller.List();
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(ok.Value);
+
+        Assert.DoesNotContain("Payload", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("flag{secret}", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("RegistryAuth", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("wg-private", json, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("safe error", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task DeploymentTargetsController_Cancel_CancelsLinkedQueueTicketAndReleasesReservedCapacity()
+    {
+        await using var context = CreateContext();
+        var node = new WorkerNode
+        {
+            Id = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
+            Name = "node-1",
+            HostAddress = "10.24.0.30",
+            AuthToken = "token",
+            Status = NodeStatus.Online,
+            Capabilities = NodeCapability.Docker,
+            CurrentContainers = 1,
+            MaxContainers = 2
+        };
+        var target = new DeploymentTarget
+        {
+            Id = Guid.Parse("11111111-2222-3333-4444-555555555555"),
+            Type = TargetType.Docker,
+            Action = TargetAction.Create,
+            Status = TargetStatus.Creating,
+            TargetNodeId = node.Id
+        };
+        var ticket = new DeploymentQueueTicket
+        {
+            Id = Guid.Parse("66666666-7777-8888-9999-aaaaaaaaaaaa"),
+            Kind = DeploymentQueueKind.GameContainer,
+            Status = DeploymentQueueTicketStatus.Creating,
+            TargetNodeId = node.Id,
+            DeploymentTargetId = target.Id,
+            DockerSlots = 1,
+            ActiveIdentity = "game-container:1:2:3"
+        };
+        context.WorkerNodes.Add(node);
+        context.DeploymentTargets.Add(target);
+        context.DeploymentQueueTickets.Add(ticket);
+        await context.SaveChangesAsync();
+        var capacity = new FleetCapacityReservationService(context,
+            new GZCTF.Services.Concurrency.LocalSemaphoreLock(
+                NullLogger<GZCTF.Services.Concurrency.LocalSemaphoreLock>.Instance),
+            NullLogger<FleetCapacityReservationService>.Instance);
+        var queue = new DeploymentQueueService(context, capacity,
+            NullLogger<DeploymentQueueService>.Instance);
+        var controller = new DeploymentTargetsController(context,
+            queue,
+            NullLogger<DeploymentTargetsController>.Instance);
+
+        var result = await controller.Cancel(target.Id);
+
+        Assert.IsType<NoContentResult>(result);
+        var reloadedTicket = await context.DeploymentQueueTickets.SingleAsync(t => t.Id == ticket.Id);
+        var reloadedTarget = await context.DeploymentTargets.SingleAsync(t => t.Id == target.Id);
+        var reloadedNode = await context.WorkerNodes.SingleAsync(n => n.Id == node.Id);
+        Assert.Equal(DeploymentQueueTicketStatus.Cancelled, reloadedTicket.Status);
+        Assert.Equal(TargetStatus.Cancelled, reloadedTarget.Status);
+        Assert.Equal(0, reloadedNode.CurrentContainers);
+    }
+
+    [Fact]
+    public async Task NodesController_Deregister_CancelsActiveQueueTicketsForRemovedNode()
+    {
+        await using var context = CreateContext();
+        var node = new WorkerNode
+        {
+            Id = Guid.Parse("bbbbbbbb-cccc-dddd-eeee-ffffffffffff"),
+            Name = "node-queue",
+            HostAddress = "10.24.0.31",
+            AuthToken = "token",
+            Status = NodeStatus.Online,
+            Capabilities = NodeCapability.Docker,
+            CurrentContainers = 0,
+            MaxContainers = 2
+        };
+        var ticket = new DeploymentQueueTicket
+        {
+            Id = Guid.Parse("aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb"),
+            Kind = DeploymentQueueKind.GameContainer,
+            Status = DeploymentQueueTicketStatus.Creating,
+            TargetNodeId = node.Id,
+            DockerSlots = 1,
+            ActiveIdentity = "game-container:2:3:4"
+        };
+        context.WorkerNodes.Add(node);
+        context.DeploymentQueueTickets.Add(ticket);
+        await context.SaveChangesAsync();
+        var services = new ServiceCollection()
+            .AddSingleton(context)
+            .BuildServiceProvider();
+        var controller = new NodesController(
+            new InMemoryNodeRepository(context),
+            context,
+            services.GetRequiredService<IServiceScopeFactory>(),
+            Options.Create(new ContainerProvider()),
+            new PortAllocationService(new ConfigurationBuilder().Build(),
+                Options.Create(new ContainerProvider()),
+                NullLogger<PortAllocationService>.Instance),
+            NullLogger<NodesController>.Instance);
+
+        var result = await controller.Deregister(node.Id);
+
+        Assert.IsType<NoContentResult>(result);
+        var reloadedTicket = await context.DeploymentQueueTickets.SingleAsync(t => t.Id == ticket.Id);
+        Assert.Equal(DeploymentQueueTicketStatus.Cancelled, reloadedTicket.Status);
+        Assert.Null(reloadedTicket.TargetNodeId);
+        Assert.Contains("deregistered", reloadedTicket.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    static AppDbContext CreateContext()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(warnings => warnings.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+
+        return new AppDbContext(options);
+    }
+
+    private sealed class InMemoryNodeRepository(AppDbContext context) : INodeRepository
+    {
+        public Task<List<WorkerNode>> GetOnlineNodesAsync(CancellationToken token) =>
+            context.WorkerNodes.Where(n => n.Status == NodeStatus.Online).ToListAsync(token);
+
+        public Task<List<WorkerNode>> GetAllNodesAsync(CancellationToken token) =>
+            context.WorkerNodes.ToListAsync(token);
+
+        public Task<WorkerNode?> GetNodeByIdAsync(Guid id, CancellationToken token) =>
+            context.WorkerNodes.FirstOrDefaultAsync(n => n.Id == id, token);
+
+        public Task<int> MarkStaleNodesOfflineAsync(TimeSpan timeout, CancellationToken token) =>
+            Task.FromResult(0);
     }
 }
