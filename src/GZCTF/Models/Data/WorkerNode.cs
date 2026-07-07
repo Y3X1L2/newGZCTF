@@ -19,8 +19,10 @@ public class WorkerNode
     public float CpuLoad { get; set; }
     public float MemoryLoad { get; set; }
     public int CurrentContainers { get; set; }
+    public int ReservedContainers { get; set; }
     public int MaxContainers { get; set; } = 20;
     public int CurrentVms { get; set; }
+    public int ReservedVms { get; set; }
     public int MaxVms { get; set; } = 5;
     public int UsedPorts { get; set; }
     public int TotalPorts { get; set; } = 28231;
@@ -53,6 +55,12 @@ public class WorkerNode
             ? NodeStatus.Offline
             : Status;
     }
+
+    [NotMapped]
+    public int AllocatedContainers => Math.Max(0, CurrentContainers) + Math.Max(0, ReservedContainers);
+
+    [NotMapped]
+    public int AllocatedVms => Math.Max(0, CurrentVms) + Math.Max(0, ReservedVms);
 }
 
 [Flags]

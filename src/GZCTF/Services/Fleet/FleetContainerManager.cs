@@ -109,6 +109,8 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
                 container.NodeId = nodeId.Value;
                 if (!await ApplyPublicProxyAsync(container, config, node, schedule.Target, context, token))
                     return null;
+
+                await ConfirmReservedCapacityAsync(context, nodeId.Value, NodeCapability.Docker, config, token);
             }
             else
                 ReleaseReservedCapacity(node, NodeCapability.Docker);
@@ -180,6 +182,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         };
         if (!await ApplyPublicProxyAsync(remoteContainer, config, node!, schedule.Target, context, token))
             return null;
+        await ConfirmReservedCapacityAsync(context, nodeId.Value, NodeCapability.Docker, config, token);
         CompleteDeploymentTarget(schedule.Target, remoteContainer, node!.HostAddress);
         await SaveFleetStateAsync(context, "complete remote Docker deployment target", token);
         _logger.SystemLogDeploymentTarget("completed", schedule.Target, node);
@@ -229,6 +232,9 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
                 localContainer.NodeId = selectedNode.Id;
                 if (!await ApplyPublicProxyAsync(localContainer, config, selectedNode, target, context, token))
                     return null;
+
+                if (!config.FleetCapacityReserved)
+                    FleetManager.ConfirmCapacity(selectedNode, NodeCapability.Docker);
             }
             else if (!config.FleetCapacityReserved)
                 ReleaseReservedCapacity(selectedNode, NodeCapability.Docker);
@@ -266,6 +272,8 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         };
         if (!await ApplyPublicProxyAsync(remoteContainer, config, selectedNode, target, context, token))
             return null;
+        if (!config.FleetCapacityReserved)
+            FleetManager.ConfirmCapacity(selectedNode, NodeCapability.Docker);
         CompleteDeploymentTarget(target, remoteContainer, selectedNode.HostAddress);
         await SaveFleetStateAsync(context, "complete preferred remote Docker deployment target", token);
         _logger.SystemLogDeploymentTarget("completed", target, selectedNode);
@@ -304,7 +312,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
 
         if (node is not null && container.Status == ContainerStatus.Destroyed)
         {
-            ReleaseReservedCapacity(node, NodeCapability.Docker);
+            FleetManager.ReleaseCurrentCapacity(node, NodeCapability.Docker);
             await SaveFleetStateAsync(context, "release Docker node capacity after destroy", token);
         }
     }
@@ -478,6 +486,19 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
     static void ReleaseReservedCapacity(WorkerNode node, NodeCapability capability) =>
         FleetManager.ReleaseCapacity(node, capability);
 
+    static async Task ConfirmReservedCapacityAsync(AppDbContext context, Guid nodeId, NodeCapability capability,
+        ContainerConfig config, CancellationToken token)
+    {
+        if (config.FleetCapacityReserved)
+            return;
+
+        var node = await context.WorkerNodes.FirstOrDefaultAsync(n => n.Id == nodeId, token);
+        if (node is null)
+            return;
+
+        FleetManager.ConfirmCapacity(node, capability);
+    }
+
     /// <summary>
     /// 通过 PortAllocationService 分配公网端口（Nginx 代理模式）
     /// </summary>
@@ -639,6 +660,6 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         return node.GetEffectiveStatus(DateTimeOffset.UtcNow) == NodeStatus.Online
             && node.IsSchedulable
             && (node.Capabilities & NodeCapability.Docker) == NodeCapability.Docker
-            && node.CurrentContainers < node.MaxContainers;
+            && node.AllocatedContainers < node.MaxContainers;
     }
 }

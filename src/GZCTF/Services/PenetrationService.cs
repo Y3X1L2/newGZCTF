@@ -273,7 +273,12 @@ public class PenetrationService(
                 else if (result.Success)
                     Interlocked.Increment(ref ok);
                 else
+                {
+                    logger.LogWarning(
+                        "Penetration deployment failed for game {GameId}, team {TeamId}: {Message}",
+                        gameId, target.Participation.TeamId, result.Message);
                     Interlocked.Increment(ref failed);
+                }
             });
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -361,7 +366,7 @@ public class PenetrationService(
                 version == publishedVersion)
                 return TeamDeploymentResult.SuccessResult;
 
-            if (runtime is not null)
+            if (runtime is not null && runtime.Status != TeamLabRuntimeStatus.Destroyed)
             {
                 using var destroyCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
                 var destroyed = await teamLabDeploymentService.DestroyRuntimeAsync(gameId, teamId, destroyCts.Token);

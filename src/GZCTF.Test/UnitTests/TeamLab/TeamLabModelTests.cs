@@ -23,4 +23,13 @@ public class TeamLabModelTests
         Assert.False(mapping.IsSynced);
         Assert.Equal(0, mapping.RuleVersion);
     }
+
+    [Fact]
+    public void VmInstance_DefaultRdpCredentialMatchesWindowsTemplate()
+    {
+        var instance = new VmInstance();
+
+        Assert.Equal("player", instance.RdpUsername);
+        Assert.Equal("qwer1234!", instance.RdpPassword);
+    }
 }

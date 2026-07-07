@@ -77,8 +77,19 @@ public class VmReadyService : BackgroundService
                     _logger.LogWarning("VM {VmName} timed out waiting for IP (created {Ago} ago)",
                         vm.VmName, DateTimeOffset.UtcNow - vm.CreatedAt);
                     var fleetVm = scope.ServiceProvider.GetRequiredService<FleetVmService>();
-                    await fleetVm.DestroyVmAsync(vm, token);
+                    try
+                    {
+                        await fleetVm.DestroyVmAsync(vm, token);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex,
+                            "VM {VmName} timed out and automatic destruction failed; marking as Error.",
+                            vm.VmName);
+                    }
+
                     vm.Status = VmInstanceStatus.Error;
+                    vm.DestroyedAt ??= DateTimeOffset.UtcNow;
                     await dbContext.SaveChangesAsync(token);
                     continue;
                 }

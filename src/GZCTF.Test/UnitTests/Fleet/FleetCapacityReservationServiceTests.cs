@@ -39,35 +39,84 @@ public class FleetCapacityReservationServiceTests
         Assert.Contains("capacity", second.Message, StringComparison.OrdinalIgnoreCase);
 
         var reloaded = await context.WorkerNodes.FindAsync([node.Id], CancellationToken.None);
-        Assert.Equal(2, reloaded!.CurrentContainers);
+        Assert.Equal(0, reloaded!.CurrentContainers);
+        Assert.Equal(2, reloaded.ReservedContainers);
     }
 
     [Fact]
     public async Task ReleaseAsync_RestoresReservedSlotsWithoutGoingNegative()
     {
         await using var context = CreateContext();
-        var node = SeedNode(context, currentContainers: 1, currentVms: 1);
+        var node = SeedNode(context, currentContainers: 1, currentVms: 1,
+            reservedContainers: 1, reservedVms: 1);
         var service = CreateService(context);
 
         await service.ReleaseAsync(node.Id, dockerSlots: 2, vmSlots: 2, CancellationToken.None);
 
         var reloaded = await context.WorkerNodes.FindAsync([node.Id], CancellationToken.None);
-        Assert.Equal(0, reloaded!.CurrentContainers);
-        Assert.Equal(0, reloaded.CurrentVms);
+        Assert.Equal(1, reloaded!.CurrentContainers);
+        Assert.Equal(1, reloaded.CurrentVms);
+        Assert.Equal(0, reloaded.ReservedContainers);
+        Assert.Equal(0, reloaded.ReservedVms);
     }
 
     [Fact]
     public async Task ReleaseAsync_RetriesTrackedReleaseAfterConcurrencyConflict()
     {
         await using var context = CreateConcurrencyContext(failOnSaveCall: 1);
-        var node = SeedNode(context, currentContainers: 2, currentVms: 1);
+        var node = SeedNode(context, currentContainers: 2, currentVms: 1,
+            reservedContainers: 1, reservedVms: 1);
         var service = CreateService(context);
 
         await service.ReleaseAsync(node.Id, dockerSlots: 1, vmSlots: 1, CancellationToken.None);
 
         var reloaded = await context.WorkerNodes.FindAsync([node.Id], CancellationToken.None);
-        Assert.Equal(1, reloaded!.CurrentContainers);
-        Assert.Equal(0, reloaded.CurrentVms);
+        Assert.Equal(2, reloaded!.CurrentContainers);
+        Assert.Equal(1, reloaded.CurrentVms);
+        Assert.Equal(0, reloaded.ReservedContainers);
+        Assert.Equal(0, reloaded.ReservedVms);
+    }
+
+    [Fact]
+    public async Task TryReserveAsync_CountsReservedSlotsEvenWhenHeartbeatReportsLowerCurrentUsage()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, maxContainers: 1, currentContainers: 0);
+        var service = CreateService(context);
+
+        var first = await service.TryReserveAsync(
+            new FleetCapacityRequest(NodeCapability.Docker, DockerSlots: 1, VmSlots: 0),
+            CancellationToken.None);
+
+        node.CurrentContainers = 0;
+        await context.SaveChangesAsync();
+
+        var second = await service.TryReserveAsync(
+            new FleetCapacityRequest(NodeCapability.Docker, DockerSlots: 1, VmSlots: 0),
+            CancellationToken.None);
+
+        Assert.True(first.Success);
+        Assert.False(second.Success);
+        var reloaded = await context.WorkerNodes.FindAsync([node.Id], CancellationToken.None);
+        Assert.Equal(0, reloaded!.CurrentContainers);
+        Assert.Equal(1, reloaded.ReservedContainers);
+    }
+
+    [Fact]
+    public async Task ConfirmAsync_MovesReservedSlotsToCurrentUsage()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, currentContainers: 1, currentVms: 1,
+            reservedContainers: 2, reservedVms: 1);
+        var service = CreateService(context);
+
+        await service.ConfirmAsync(node.Id, dockerSlots: 1, vmSlots: 1, CancellationToken.None);
+
+        var reloaded = await context.WorkerNodes.FindAsync([node.Id], CancellationToken.None);
+        Assert.Equal(2, reloaded!.CurrentContainers);
+        Assert.Equal(2, reloaded.CurrentVms);
+        Assert.Equal(1, reloaded.ReservedContainers);
+        Assert.Equal(0, reloaded.ReservedVms);
     }
 
     [Fact]
@@ -104,7 +153,8 @@ public class FleetCapacityReservationServiceTests
 
         Assert.False(first.IsQueued);
         Assert.True(second.IsQueued);
-        Assert.Equal(1, context.WorkerNodes.Single().CurrentContainers);
+        Assert.Equal(0, context.WorkerNodes.Single().CurrentContainers);
+        Assert.Equal(1, context.WorkerNodes.Single().ReservedContainers);
     }
 
     [Fact]
@@ -142,6 +192,7 @@ public class FleetCapacityReservationServiceTests
         Assert.Equal(target.Id, ticket.DeploymentTargetId);
         Assert.Equal("game-container:5:12:9", ticket.ActiveIdentity);
         Assert.Equal(1, context.WorkerNodes.Single().CurrentContainers);
+        Assert.Equal(0, context.WorkerNodes.Single().ReservedContainers);
     }
 
     [Fact]
@@ -175,6 +226,7 @@ public class FleetCapacityReservationServiceTests
             manager.TryScheduleWithTargetAsync(new DeploymentTarget(), CancellationToken.None));
 
         Assert.Equal(0, context.WorkerNodes.Single().CurrentContainers);
+        Assert.Equal(0, context.WorkerNodes.Single().ReservedContainers);
     }
 
     static FleetCapacityReservationService CreateService(AppDbContext context) =>
@@ -250,7 +302,8 @@ public class FleetCapacityReservationServiceTests
     }
 
     static WorkerNode SeedNode(AppDbContext context, int maxContainers = 20, int maxVms = 5,
-        int currentContainers = 0, int currentVms = 0)
+        int currentContainers = 0, int currentVms = 0,
+        int reservedContainers = 0, int reservedVms = 0)
     {
         var node = new WorkerNode
         {
@@ -265,6 +318,8 @@ public class FleetCapacityReservationServiceTests
             MaxVms = maxVms,
             CurrentContainers = currentContainers,
             CurrentVms = currentVms,
+            ReservedContainers = reservedContainers,
+            ReservedVms = reservedVms,
             TeamLabNetworkEnabled = true,
             TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
             TeamLabTunnelIp = "10.250.0.2"

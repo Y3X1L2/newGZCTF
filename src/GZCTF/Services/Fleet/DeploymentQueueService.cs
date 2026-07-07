@@ -119,6 +119,42 @@ public class DeploymentQueueService
             await _context.SaveChangesAsync(token);
     }
 
+    public async Task<int> RecoverStaleCreatingTicketsAsync(TimeSpan staleAfter, CancellationToken token)
+    {
+        var cutoff = DateTimeOffset.UtcNow - staleAfter;
+        var tickets = await _context.DeploymentQueueTickets
+            .Include(t => t.DeploymentTarget)
+            .Where(t => t.Status == DeploymentQueueTicketStatus.Creating)
+            .Where(t => (t.StartedAt ?? t.AssignedAt ?? t.CreatedAt) < cutoff)
+            .ToListAsync(token);
+
+        foreach (var ticket in tickets)
+        {
+            var nodeId = ticket.TargetNodeId;
+            var dockerSlots = ticket.DockerSlots;
+            var vmSlots = ticket.VmSlots;
+
+            ticket.Status = DeploymentQueueTicketStatus.Failed;
+            ticket.ErrorMessage = "Deployment queue ticket recovered after stale Creating state.";
+            ticket.CompletedAt = DateTimeOffset.UtcNow;
+
+            if (ticket.DeploymentTarget is not null)
+            {
+                ticket.DeploymentTarget.Status = TargetStatus.Failed;
+                ticket.DeploymentTarget.ErrorMessage = ticket.ErrorMessage;
+                ticket.DeploymentTarget.CompletedAt = ticket.CompletedAt;
+            }
+
+            if (_capacity is not null && nodeId is { } reservedNodeId)
+                await _capacity.ReleaseAsync(reservedNodeId, dockerSlots, vmSlots, token);
+        }
+
+        if (_capacity is null)
+            await _context.SaveChangesAsync(token);
+
+        return tickets.Count;
+    }
+
     async Task<int> GetQueuePositionAsync(DeploymentQueueTicket ticket, CancellationToken token)
     {
         if (ticket.Status != DeploymentQueueTicketStatus.Pending)

@@ -8,7 +8,7 @@ namespace GZCTF.Services.Vm;
 
 /// <summary>
 /// KVM/libvirt implementation of IVirtualMachineProvider.
-/// Refactored from VmManager.cs — same logic, interface-backed.
+/// Interface-backed KVM/libvirt implementation for Windows VM lifecycle operations.
 /// </summary>
 public class KvmProvider : IVirtualMachineProvider
 {

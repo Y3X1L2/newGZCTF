@@ -73,7 +73,11 @@ public class NodesController : ControllerBase
         {
             n.Id, n.Name, n.HostAddress, Status = n.GetEffectiveStatus(now), n.Capabilities,
             n.CpuLoad, n.MemoryLoad, n.CurrentContainers, n.MaxContainers,
+            n.ReservedContainers,
+            AllocatedContainers = n.AllocatedContainers,
             n.CurrentVms, n.MaxVms,
+            n.ReservedVms,
+            AllocatedVms = n.AllocatedVms,
             UsedPorts = publicPortUsage,
             TotalPorts = portPool.Total,
             PortPoolStart = portPool.Start,
@@ -107,7 +111,11 @@ public class NodesController : ControllerBase
         {
             node.Id, node.Name, node.HostAddress, Status = node.GetEffectiveStatus(now), node.Capabilities,
             node.CpuLoad, node.MemoryLoad, node.CurrentContainers, node.MaxContainers,
+            node.ReservedContainers,
+            AllocatedContainers = node.AllocatedContainers,
             node.CurrentVms, node.MaxVms,
+            node.ReservedVms,
+            AllocatedVms = node.AllocatedVms,
             UsedPorts = publicPortUsage,
             TotalPorts = portPool.Total,
             PortPoolStart = portPool.Start,
@@ -482,15 +490,15 @@ public class NodesController : ControllerBase
 
         if (request.MaxContainers.HasValue)
         {
-            if (request.MaxContainers.Value < Math.Max(0, node.CurrentContainers) || request.MaxContainers.Value > 10000)
-                return BadRequest(new { message = $"容器开启上限不能小于当前运行数 {node.CurrentContainers}，且不能超过 10000。" });
+            if (request.MaxContainers.Value < node.AllocatedContainers || request.MaxContainers.Value > 10000)
+                return BadRequest(new { message = $"容器开启上限不能小于当前占用数 {node.AllocatedContainers}，且不能超过 10000。" });
             node.MaxContainers = request.MaxContainers.Value;
         }
 
         if (request.MaxVms.HasValue)
         {
-            if (request.MaxVms.Value < Math.Max(0, node.CurrentVms) || request.MaxVms.Value > 1000)
-                return BadRequest(new { message = $"虚拟机开启上限不能小于当前运行数 {node.CurrentVms}，且不能超过 1000。" });
+            if (request.MaxVms.Value < node.AllocatedVms || request.MaxVms.Value > 1000)
+                return BadRequest(new { message = $"虚拟机开启上限不能小于当前占用数 {node.AllocatedVms}，且不能超过 1000。" });
             node.MaxVms = request.MaxVms.Value;
         }
 

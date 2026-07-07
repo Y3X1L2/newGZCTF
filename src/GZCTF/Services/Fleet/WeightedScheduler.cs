@@ -89,15 +89,16 @@ public class WeightedScheduler
             || node.CpuLoad < 0 || node.CpuLoad > 1
             || node.MemoryLoad < 0 || node.MemoryLoad > 1
             || node.MaxContainers < 0 || node.MaxVms < 0
-            || node.CurrentContainers < 0 || node.CurrentVms < 0)
+            || node.CurrentContainers < 0 || node.CurrentVms < 0
+            || node.ReservedContainers < 0 || node.ReservedVms < 0)
             return "Node capacity metrics are invalid";
 
         var hasCapacity = required switch
         {
-            NodeCapability.Docker => node.CurrentContainers < node.MaxContainers,
-            NodeCapability.Kvm => node.CurrentVms < node.MaxVms,
+            NodeCapability.Docker => node.AllocatedContainers < node.MaxContainers,
+            NodeCapability.Kvm => node.AllocatedVms < node.MaxVms,
             NodeCapability.Docker | NodeCapability.Kvm =>
-                node.CurrentContainers < node.MaxContainers && node.CurrentVms < node.MaxVms,
+                node.AllocatedContainers < node.MaxContainers && node.AllocatedVms < node.MaxVms,
             _ => true
         };
 
@@ -107,8 +108,8 @@ public class WeightedScheduler
     private static float CalculateScore(WorkerNode n) =>
         1000f * (1 - Math.Clamp(n.CpuLoad, 0f, 1f))
         + 500f * (1 - Math.Clamp(n.MemoryLoad, 0f, 1f))
-        + 200f * (1 - (float)n.CurrentContainers / Math.Max(n.MaxContainers, 1))
-        + 200f * (1 - (float)n.CurrentVms / Math.Max(n.MaxVms, 1));
+        + 200f * (1 - (float)n.AllocatedContainers / Math.Max(n.MaxContainers, 1))
+        + 200f * (1 - (float)n.AllocatedVms / Math.Max(n.MaxVms, 1));
 
     private static bool IsValidIpv4Address(string value)
     {

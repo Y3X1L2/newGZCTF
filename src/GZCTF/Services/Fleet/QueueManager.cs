@@ -104,7 +104,7 @@ public class QueueManager
 
                 var execution = await executor.ExecuteAsync(ticket, executionToken);
                 if (execution.Success)
-                    CompleteTicket(ticket);
+                    await CompleteTicketAsync(capacity, ticket, reserved.NodeId, executionToken);
                 else
                     await FailTicketAsync(context, capacity, ticket, reserved.NodeId, execution.ErrorMessage,
                         executionToken);
@@ -126,8 +126,10 @@ public class QueueManager
         }
     }
 
-    static void CompleteTicket(DeploymentQueueTicket ticket)
+    static async Task CompleteTicketAsync(FleetCapacityReservationService capacity, DeploymentQueueTicket ticket,
+        Guid nodeId, CancellationToken token)
     {
+        await capacity.ConfirmAsync(nodeId, ticket.DockerSlots, ticket.VmSlots, token);
         ticket.Status = DeploymentQueueTicketStatus.Completed;
         ticket.CompletedAt = DateTimeOffset.UtcNow;
         ticket.ErrorMessage = null;

@@ -12,8 +12,12 @@ public class NodeListResponse
     public float CpuLoad { get; set; }
     public float MemoryLoad { get; set; }
     public int CurrentContainers { get; set; }
+    public int ReservedContainers { get; set; }
+    public int AllocatedContainers { get; set; }
     public int MaxContainers { get; set; }
     public int CurrentVms { get; set; }
+    public int ReservedVms { get; set; }
+    public int AllocatedVms { get; set; }
     public int MaxVms { get; set; }
     public DateTimeOffset? LastHeartbeat { get; set; }
 
@@ -21,8 +25,10 @@ public class NodeListResponse
     {
         Id = n.Id, Name = n.Name, HostAddress = n.HostAddress,
         Status = n.Status, CpuLoad = n.CpuLoad, MemoryLoad = n.MemoryLoad,
-        CurrentContainers = n.CurrentContainers, MaxContainers = n.MaxContainers,
-        CurrentVms = n.CurrentVms, MaxVms = n.MaxVms, LastHeartbeat = n.LastHeartbeat
+        CurrentContainers = n.CurrentContainers, ReservedContainers = n.ReservedContainers,
+        AllocatedContainers = n.AllocatedContainers, MaxContainers = n.MaxContainers,
+        CurrentVms = n.CurrentVms, ReservedVms = n.ReservedVms,
+        AllocatedVms = n.AllocatedVms, MaxVms = n.MaxVms, LastHeartbeat = n.LastHeartbeat
     };
 }
 

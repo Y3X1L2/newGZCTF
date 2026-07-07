@@ -133,6 +133,8 @@ public class DeploymentQueueServiceTests
         var reloadedNode = await context.WorkerNodes.SingleAsync(n => n.Id == node.Id);
         Assert.Equal(1, reloadedNode.CurrentContainers);
         Assert.Equal(1, reloadedNode.CurrentVms);
+        Assert.Equal(0, reloadedNode.ReservedContainers);
+        Assert.Equal(0, reloadedNode.ReservedVms);
         Assert.Equal(DeploymentQueueTicketStatus.Cancelled, ticket.Status);
     }
 
@@ -140,7 +142,8 @@ public class DeploymentQueueServiceTests
     public async Task CancelAsync_ReleasesReservedCapacityForCreatingTicketExactlyOnce()
     {
         await using var context = CreateContext();
-        var node = SeedNode(context, currentContainers: 2, currentVms: 1);
+        var node = SeedNode(context, currentContainers: 2, currentVms: 1,
+            reservedContainers: 2, reservedVms: 1);
         var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(
             gameId: 1,
             teamId: 2,
@@ -157,8 +160,10 @@ public class DeploymentQueueServiceTests
         await service.CancelAsync(ticket.Id, "admin cancelled again", CancellationToken.None);
 
         var reloadedNode = await context.WorkerNodes.SingleAsync(n => n.Id == node.Id);
-        Assert.Equal(0, reloadedNode.CurrentContainers);
-        Assert.Equal(0, reloadedNode.CurrentVms);
+        Assert.Equal(2, reloadedNode.CurrentContainers);
+        Assert.Equal(1, reloadedNode.CurrentVms);
+        Assert.Equal(0, reloadedNode.ReservedContainers);
+        Assert.Equal(0, reloadedNode.ReservedVms);
         Assert.Equal(DeploymentQueueTicketStatus.Cancelled, ticket.Status);
     }
 
@@ -173,7 +178,8 @@ public class DeploymentQueueServiceTests
         return new DeploymentQueueService(context, capacity, NullLogger<DeploymentQueueService>.Instance);
     }
 
-    static WorkerNode SeedNode(AppDbContext context, int currentContainers, int currentVms)
+    static WorkerNode SeedNode(AppDbContext context, int currentContainers, int currentVms,
+        int reservedContainers = 0, int reservedVms = 0)
     {
         var node = new WorkerNode
         {
@@ -187,7 +193,9 @@ public class DeploymentQueueServiceTests
             MaxContainers = 10,
             MaxVms = 10,
             CurrentContainers = currentContainers,
-            CurrentVms = currentVms
+            CurrentVms = currentVms,
+            ReservedContainers = reservedContainers,
+            ReservedVms = reservedVms
         };
 
         context.WorkerNodes.Add(node);
@@ -299,6 +307,7 @@ public class DeploymentQueueManagerTests
         Assert.Single(executor.ExecutedTicketIds);
         Assert.Equal(ticket.Id, executor.ExecutedTicketIds[0]);
         Assert.Equal(1, context.WorkerNodes.Single().CurrentContainers);
+        Assert.Equal(0, context.WorkerNodes.Single().ReservedContainers);
     }
 
     [Fact]
@@ -328,6 +337,7 @@ public class DeploymentQueueManagerTests
         Assert.Equal(TargetStatus.Failed, target.Status);
         Assert.Equal("agent create failed", ticket.ErrorMessage);
         Assert.Equal(0, context.WorkerNodes.Single(n => n.Id == node.Id).CurrentContainers);
+        Assert.Equal(0, context.WorkerNodes.Single(n => n.Id == node.Id).ReservedContainers);
     }
 
     [Fact]
@@ -363,6 +373,7 @@ public class DeploymentQueueManagerTests
         Assert.Equal(DeploymentQueueTicketStatus.Completed, ticket.Status);
         Assert.Equal(plannedNode.Id, ticket.TargetNodeId);
         Assert.Equal(3, context.WorkerNodes.Single(n => n.Id == plannedNode.Id).CurrentContainers);
+        Assert.Equal(0, context.WorkerNodes.Single(n => n.Id == plannedNode.Id).ReservedContainers);
         Assert.Equal(0, context.WorkerNodes.Single(n => n.Id == otherNode.Id).CurrentContainers);
     }
 
@@ -393,6 +404,8 @@ public class DeploymentQueueManagerTests
             ticket => Assert.Equal(DeploymentQueueTicketStatus.Completed, ticket.Status));
         Assert.Equal(1, verifyContext.WorkerNodes.Single(n => n.Id == firstNode.Id).CurrentContainers);
         Assert.Equal(1, verifyContext.WorkerNodes.Single(n => n.Id == secondNode.Id).CurrentContainers);
+        Assert.Equal(0, verifyContext.WorkerNodes.Single(n => n.Id == firstNode.Id).ReservedContainers);
+        Assert.Equal(0, verifyContext.WorkerNodes.Single(n => n.Id == secondNode.Id).ReservedContainers);
     }
 
     [Fact]
@@ -412,6 +425,7 @@ public class DeploymentQueueManagerTests
         Assert.Equal(1, processed);
         Assert.Empty(await verifyContext.DeploymentQueueTickets.ToListAsync());
         Assert.Equal(0, verifyContext.WorkerNodes.Single(n => n.Id == node.Id).CurrentContainers);
+        Assert.Equal(0, verifyContext.WorkerNodes.Single(n => n.Id == node.Id).ReservedContainers);
     }
 
     static QueueManager CreateQueueManager(AppDbContext context, DeploymentExecutionService executor)

@@ -429,8 +429,9 @@ public class ImageTemplateController : ControllerBase
         if (template is null)
             return NotFound();
 
-        var inUse = await _context.GameChallenges
-            .AnyAsync(c => c.ImageTemplateId == id);
+        var inUse = await _context.GameChallenges.AnyAsync(c => c.ImageTemplateId == id) ||
+                    await _context.ExerciseChallenges.AnyAsync(c => c.ImageTemplateId == id) ||
+                    await _context.PenetrationNodes.AnyAsync(n => n.ImageTemplateId == id);
 
         if (inUse)
             return BadRequest(new { message = "该模板正在被题目使用，无法删除" });

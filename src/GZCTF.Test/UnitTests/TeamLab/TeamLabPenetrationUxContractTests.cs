@@ -103,6 +103,14 @@ public class TeamLabPenetrationUxContractTests
     }
 
     [Fact]
+    public void TeamLab_AdminBatchDeploy_DoesNotDestroyAlreadyDestroyedRuntime()
+    {
+        var content = File.ReadAllText(ResolveRepoPath("src/GZCTF/Services/PenetrationService.cs"));
+
+        Assert.Contains("runtime.Status != TeamLabRuntimeStatus.Destroyed", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TeamLab_RuntimeProjection_DoesNotReturnLegacyPublicAccessFields()
     {
         var content = File.ReadAllText(ResolveRepoPath("src/GZCTF/Services/PenetrationService.cs"));

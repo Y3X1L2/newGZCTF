@@ -401,7 +401,8 @@ public class NodesControllerTests
             AuthToken = "token",
             Status = NodeStatus.Online,
             Capabilities = NodeCapability.Docker,
-            CurrentContainers = 1,
+            CurrentContainers = 0,
+            ReservedContainers = 1,
             MaxContainers = 2
         };
         var target = new DeploymentTarget
@@ -445,6 +446,7 @@ public class NodesControllerTests
         Assert.Equal(DeploymentQueueTicketStatus.Cancelled, reloadedTicket.Status);
         Assert.Equal(TargetStatus.Cancelled, reloadedTarget.Status);
         Assert.Equal(0, reloadedNode.CurrentContainers);
+        Assert.Equal(0, reloadedNode.ReservedContainers);
     }
 
     [Fact]

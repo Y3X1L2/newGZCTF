@@ -104,6 +104,8 @@ public class FleetVmService
             var vm = await CreateLocalVmAsync(vmInstance, templatePath, memory, cpu, token);
             if (!capacityReservedByCaller && (vm is null || vm.Status == VmInstanceStatus.Error))
                 FleetManager.ReleaseCapacity(node, NodeCapability.Kvm);
+            else if (!capacityReservedByCaller && vm?.Status == VmInstanceStatus.Running)
+                FleetManager.ConfirmCapacity(node, NodeCapability.Kvm);
             await CompleteTarget(schedule?.Target, vm, node.HostAddress, token);
             _logger.SystemLogDeploymentTarget(schedule?.Target?.Status == TargetStatus.Completed ? "completed" : "failed",
                 schedule?.Target, node);
@@ -133,6 +135,8 @@ public class FleetVmService
 
         vmInstance.Status = VmInstanceStatus.Running;
         vmInstance.NodeId = nodeId.Value;
+        if (!capacityReservedByCaller && node is not null)
+            FleetManager.ConfirmCapacity(node, NodeCapability.Kvm);
         await CompleteTarget(schedule?.Target, vmInstance, node?.HostAddress, token);
         _logger.SystemLogDeploymentTarget("completed", schedule?.Target, node);
         return vmInstance;
@@ -233,7 +237,7 @@ public class FleetVmService
 
         if (hadCapacityReservation && node is not null)
         {
-            FleetManager.ReleaseCapacity(node, NodeCapability.Kvm);
+            FleetManager.ReleaseCurrentCapacity(node, NodeCapability.Kvm);
             await _context.SaveChangesAsync(token);
         }
 

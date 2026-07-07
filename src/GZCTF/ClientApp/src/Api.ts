@@ -175,7 +175,6 @@ export enum ChallengeCategory {
   AI = "AI",
   Pentest = "Pentest",
   OSINT = "OSINT",
-  Scenario = "Scenario",
   IR = "IR",
 }
 

@@ -12,6 +12,7 @@ using GZCTF.Models.Request.Admin;
 using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
+using GZCTF.Services.Concurrency;
 using GZCTF.Services.Cache;
 using GZCTF.Services.Config;
 using GZCTF.Services.Fleet;
@@ -56,6 +57,7 @@ public class GameController(
     IGameInstanceRepository gameInstanceRepository,
     IParticipationRepository participationRepository,
     GamePhaseService gamePhaseService,
+    IDistributedLockService lockService,
     IOptionsSnapshot<ContainerPolicy> containerPolicy,
     IOptionsSnapshot<KvmSettings> kvmSettings,
     IStringLocalizer<Program> localizer) : ControllerBase
@@ -1338,6 +1340,10 @@ public class GameController(
         // Route to VM if challenge uses Windows VM
         if (instance.Challenge.Environment == EnvironmentType.WindowsVM)
         {
+            using var vmCreateLock = await lockService.AcquireAsync(
+                $"vm-create:{challengeId}:{context.User!.Id}",
+                TimeSpan.FromSeconds(10));
+
             var existingVm = await dbContext.VmInstances
                 .Where(v => v.ChallengeId == challengeId
                             && v.UserId == context.User!.Id
@@ -1355,7 +1361,7 @@ public class GameController(
             var vmInstance = new VmInstance
             {
                 ChallengeId = challengeId,
-                UserId = context.User!.Id,
+                UserId = context.User.Id,
                 VmName = $"vm_c{challengeId}_u{context.User.Id}",
                 ProviderName = "KVM",
                 OSType = OSType.Windows,
@@ -1665,18 +1671,30 @@ public class GameController(
         if (vmInstance is null)
             return NotFound(new RequestResponse("No VM instance found", StatusCodes.Status404NotFound));
 
-        // Delete Guacamole connection if exists
-        if (!string.IsNullOrEmpty(vmInstance.GuacamoleConnectionId))
-        {
-            var guacService = HttpContext.RequestServices.GetRequiredService<GuacamoleService>();
-            await guacService.DeleteConnectionAsync(vmInstance.GuacamoleConnectionId, token);
-        }
-
-        // Destroy the VM
         var fleetVm = HttpContext.RequestServices.GetRequiredService<FleetVmService>();
-        await fleetVm.DestroyVmAsync(vmInstance, token);
+        try
+        {
+            await fleetVm.DestroyVmAsync(vmInstance, token);
 
-        await dbContext.SaveChangesAsync(token);
+            if (!string.IsNullOrEmpty(vmInstance.GuacamoleConnectionId))
+            {
+                var guacService = HttpContext.RequestServices.GetRequiredService<GuacamoleService>();
+                await guacService.DeleteConnectionAsync(vmInstance.GuacamoleConnectionId, token);
+                vmInstance.GuacamoleConnectionId = null;
+                vmInstance.RdpUrl = null;
+            }
+
+            await dbContext.SaveChangesAsync(token);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to destroy VM {VmName} for user {UserId}.",
+                vmInstance.VmName, context.User!.Id);
+            vmInstance.Status = VmInstanceStatus.Error;
+            vmInstance.DestroyedAt ??= DateTimeOffset.UtcNow;
+            await dbContext.SaveChangesAsync(token);
+            return BadRequest(new RequestResponse("VM destruction failed; instance was marked as error."));
+        }
 
         logger.Log(
             StaticLocalizer[nameof(Resources.Program.Game_ContainerDeleted), context.Participation!.Team.Name,

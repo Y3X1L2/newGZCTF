@@ -578,18 +578,6 @@ public enum ChallengeType : byte
     /// </summary>
     DynamicContainer = 0b11,
 
-    /// <summary>
-    /// Multi-stage attack chain scenario
-    /// A sequence of interconnected challenges forming a complete attack narrative
-    /// </summary>
-    Scenario = 0b100,
-
-    /// <summary>
-    /// Incident response challenge
-    /// Time-boxed incident response exercise with forensic analysis and remediation tasks
-    /// </summary>
-    IRChallenge = 0b1000,
-
 }
 
 public static class ChallengeTypeExtensions
@@ -616,15 +604,6 @@ public static class ChallengeTypeExtensions
         /// </summary>
         public bool IsContainer() => ((byte)type & 0b01) != 0;
 
-        /// <summary>
-        /// Is it a multi-stage attack chain scenario
-        /// </summary>
-        public bool IsScenario() => ((byte)type & 0b100) != 0;
-
-        /// <summary>
-        /// Is it an incident response challenge
-        /// </summary>
-        public bool IsIRChallenge() => ((byte)type & 0b1000) != 0;
     }
 }
 
@@ -766,11 +745,6 @@ public enum ChallengeCategory : byte
 
     // ReSharper disable once InconsistentNaming
     OSINT = 12,
-
-    /// <summary>
-    /// Multi-stage attack chain scenario
-    /// </summary>
-    Scenario = 13,
 
     /// <summary>
     /// Incident response challenge

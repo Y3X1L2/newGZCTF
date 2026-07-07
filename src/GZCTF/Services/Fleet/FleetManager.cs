@@ -107,12 +107,35 @@ public class FleetManager
     internal static void ReserveCapacity(WorkerNode node, NodeCapability capability)
     {
         if ((capability & NodeCapability.Docker) == NodeCapability.Docker)
-            node.CurrentContainers++;
+            node.ReservedContainers++;
         if ((capability & NodeCapability.Kvm) == NodeCapability.Kvm)
-            node.CurrentVms++;
+            node.ReservedVms++;
     }
 
     internal static void ReleaseCapacity(WorkerNode node, NodeCapability capability)
+    {
+        if ((capability & NodeCapability.Docker) == NodeCapability.Docker)
+            node.ReservedContainers = Math.Max(0, node.ReservedContainers - 1);
+        if ((capability & NodeCapability.Kvm) == NodeCapability.Kvm)
+            node.ReservedVms = Math.Max(0, node.ReservedVms - 1);
+    }
+
+    internal static void ConfirmCapacity(WorkerNode node, NodeCapability capability)
+    {
+        if ((capability & NodeCapability.Docker) == NodeCapability.Docker && node.ReservedContainers > 0)
+        {
+            node.ReservedContainers--;
+            node.CurrentContainers++;
+        }
+
+        if ((capability & NodeCapability.Kvm) == NodeCapability.Kvm && node.ReservedVms > 0)
+        {
+            node.ReservedVms--;
+            node.CurrentVms++;
+        }
+    }
+
+    internal static void ReleaseCurrentCapacity(WorkerNode node, NodeCapability capability)
     {
         if ((capability & NodeCapability.Docker) == NodeCapability.Docker)
             node.CurrentContainers = Math.Max(0, node.CurrentContainers - 1);

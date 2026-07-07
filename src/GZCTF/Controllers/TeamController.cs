@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using GZCTF.Middlewares;
 using GZCTF.Models.Request.Info;
 using GZCTF.Repositories.Interface;
+using GZCTF.Services.Cache;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -24,6 +25,7 @@ public partial class TeamController(
     ILogger<TeamController> logger,
     ITeamRepository teamRepository,
     IParticipationRepository participationRepository,
+    CacheHelper cacheHelper,
     IStringLocalizer<Program> localizer) : ControllerBase
 {
     private const int MaxTeamsAllowed = 3;
@@ -170,6 +172,7 @@ public partial class TeamController(
         team.UpdateInfo(model);
 
         await teamRepository.SaveAsync(token);
+        await FlushTeamScoreboards(team, token);
 
         return Ok(TeamInfoModel.FromTeam(team));
     }
@@ -353,6 +356,9 @@ public partial class TeamController(
             if (newCaptain is null)
                 return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Team_NewCaptainNotFound)]));
 
+            if (!TeamPolicy.CanTransferTo(team, newCaptain))
+                return BadRequest(new RequestResponse("新队长必须是当前队伍成员。"));
+
             var newCaptainTeams = await teamRepository.GetUserTeams(newCaptain, token);
 
             if (newCaptainTeams.Count(t => t.CaptainId == newCaptain.Id) >= MaxTeamsAllowed)
@@ -478,6 +484,9 @@ public partial class TeamController(
 
             if (team.Locked && await teamRepository.AnyActiveGame(team, token))
                 return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Team_Locked)]));
+
+            if (!TeamPolicy.CanKickMember(team, userId))
+                return BadRequest(new RequestResponse("队长不能踢出自己，请先转让队伍。"));
 
             var kickUser = team.Members.SingleOrDefault(m => m.Id == userId);
             if (kickUser is null)
@@ -610,6 +619,9 @@ public partial class TeamController(
 
             if (team.Members.All(m => m.Id != user!.Id))
                 return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.User_LeaveNotInTeam)]));
+
+            if (!TeamPolicy.CanCaptainLeave(team, user.Id))
+                return BadRequest(new RequestResponse("队长不能直接离开队伍，请先转让队伍。"));
 
             if (team.Locked && await teamRepository.AnyActiveGame(team, token))
                 return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Team_Locked)]));
@@ -764,5 +776,11 @@ public partial class TeamController(
             return Ok();
 
         return Unauthorized(new RequestResponse(localizer[nameof(Resources.Program.Signature_Invalid)]));
+    }
+
+    private async Task FlushTeamScoreboards(Team team, CancellationToken token)
+    {
+        foreach (var gameId in team.Participations.Select(participation => participation.GameId).Distinct())
+            await cacheHelper.FlushScoreboardCache(gameId, token);
     }
 }

@@ -328,13 +328,14 @@ public class WeightedSchedulerTests
             Status = NodeStatus.Online,
             IsLocal = true,
             IsSchedulable = true,
-            CurrentContainers = 2,
+            CurrentContainers = 1,
+            ReservedContainers = 1,
             MaxContainers = 2
         };
 
         Assert.False(FleetContainerManager.CanUseReservedDockerCapacity(node));
 
-        node.CurrentContainers = 1;
+        node.ReservedContainers = 0;
         Assert.True(FleetContainerManager.CanUseReservedDockerCapacity(node));
     }
 
@@ -349,14 +350,37 @@ public class WeightedSchedulerTests
         };
 
         FleetManager.ReserveCapacity(node, NodeCapability.Docker | NodeCapability.Kvm);
-        Assert.Equal(1, node.CurrentContainers);
-        Assert.Equal(1, node.CurrentVms);
+        Assert.Equal(0, node.CurrentContainers);
+        Assert.Equal(0, node.CurrentVms);
+        Assert.Equal(1, node.ReservedContainers);
+        Assert.Equal(1, node.ReservedVms);
 
         FleetManager.ReleaseCapacity(node, NodeCapability.Docker | NodeCapability.Kvm);
         FleetManager.ReleaseCapacity(node, NodeCapability.Docker | NodeCapability.Kvm);
 
         Assert.Equal(0, node.CurrentContainers);
         Assert.Equal(0, node.CurrentVms);
+        Assert.Equal(0, node.ReservedContainers);
+        Assert.Equal(0, node.ReservedVms);
+    }
+
+    [Fact]
+    public void GetUnschedulableReason_CountsReservedCapacity()
+    {
+        var node = new WorkerNode
+        {
+            Id = Guid.NewGuid(),
+            Capabilities = NodeCapability.Docker,
+            Status = NodeStatus.Online,
+            IsLocal = true,
+            CurrentContainers = 1,
+            ReservedContainers = 1,
+            MaxContainers = 2
+        };
+
+        var reason = WeightedScheduler.GetUnschedulableReason(node, NodeCapability.Docker);
+
+        Assert.Equal("Node capacity exhausted for Docker", reason);
     }
 }
 

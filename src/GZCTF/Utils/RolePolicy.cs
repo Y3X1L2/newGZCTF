@@ -12,10 +12,7 @@ public enum AdminTab
     Nodes,
     Queue,
     Logs,
-    Settings,
-    Scenarios,
-    IRChallenges,
-    Submissions
+    Settings
 }
 
 public static class RolePolicy

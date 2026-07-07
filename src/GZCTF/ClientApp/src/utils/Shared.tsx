@@ -250,16 +250,6 @@ export const useChallengeCategoryLabelMap = () => {
         },
       ],
       [
-        ChallengeCategory.Scenario,
-        {
-          desrc: t('challenge.category.scenario'),
-          icon: mdiTarget,
-          name: ChallengeCategory.Scenario,
-          color: 'lime',
-          colors: theme.colors['lime'],
-        },
-      ],
-      [
         ChallengeCategory.IR,
         {
           desrc: t('challenge.category.ir'),

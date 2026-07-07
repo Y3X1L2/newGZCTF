@@ -459,7 +459,7 @@ public class AdminController(
         if (actor is null)
             return Unauthorized();
 
-        if (!RolePolicy.CanManageRole(actor.Role, user.Role))
+        if (!await UserManagementGuard.CanManageUserRecordAsync(context, actor, user, HttpContext.RequestAborted))
             return Forbid();
 
         if (model.Role.HasValue && !RolePolicy.CanAssignRole(actor.Role, model.Role.Value))
@@ -524,7 +524,7 @@ public class AdminController(
         if (actor is null)
             return Unauthorized();
 
-        if (!RolePolicy.CanManageRole(actor.Role, user.Role))
+        if (!await UserManagementGuard.CanManageUserRecordAsync(context, actor, user, HttpContext.RequestAborted))
             return Forbid();
 
         var pwd = Codec.RandomPassword(16);
@@ -564,7 +564,7 @@ public class AdminController(
         if (actor is null)
             return Unauthorized();
 
-        if (!RolePolicy.CanManageRole(actor.Role, user.Role))
+        if (!await UserManagementGuard.CanManageUserRecordAsync(context, actor, user, token))
             return Forbid();
 
         if (user.Role == Role.SuperAdmin && await userManager.Users.CountAsync(u => u.Role == Role.SuperAdmin, token) <= 1)
@@ -631,6 +631,10 @@ public class AdminController(
             return Unauthorized();
 
         if (!RolePolicy.CanViewRole(actor.Role, user.Role))
+            return Forbid();
+
+        if (actor.Role < Role.Admin &&
+            !await UserManagementGuard.CanManageUserRecordAsync(context, actor, user, HttpContext.RequestAborted))
             return Forbid();
 
         return Ok(ProfileUserInfoModel.FromUserInfo(user));

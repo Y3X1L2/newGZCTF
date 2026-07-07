@@ -60,8 +60,8 @@ public class FleetCapacityReservationService
             return FleetCapacityReservationResult.Failed(
                 $"No schedulable node has enough capacity for Docker={dockerSlots}, VM={vmSlots}.");
 
-        node.CurrentContainers += dockerSlots;
-        node.CurrentVms += vmSlots;
+        node.ReservedContainers += dockerSlots;
+        node.ReservedVms += vmSlots;
         await _context.SaveChangesAsync(token);
 
         _logger.LogInformation(
@@ -86,8 +86,8 @@ public class FleetCapacityReservationService
             if (node is null)
                 return;
 
-            node.CurrentContainers = Math.Max(0, node.CurrentContainers - normalizedDockerSlots);
-            node.CurrentVms = Math.Max(0, node.CurrentVms - normalizedVmSlots);
+            node.ReservedContainers = Math.Max(0, node.ReservedContainers - normalizedDockerSlots);
+            node.ReservedVms = Math.Max(0, node.ReservedVms - normalizedVmSlots);
 
             try
             {
@@ -98,6 +98,44 @@ public class FleetCapacityReservationService
             {
                 _logger.LogWarning(ex,
                     "Capacity release conflicted on node {NodeId}; retrying release attempt {Attempt}.",
+                    nodeId, attempt + 1);
+                _context.ChangeTracker.Clear();
+            }
+        }
+    }
+
+    public async Task ConfirmAsync(Guid nodeId, int dockerSlots, int vmSlots, CancellationToken token)
+    {
+        var normalizedDockerSlots = Math.Max(0, dockerSlots);
+        var normalizedVmSlots = Math.Max(0, vmSlots);
+        if (normalizedDockerSlots == 0 && normalizedVmSlots == 0)
+            return;
+
+        await using var _ = await AcquireSchedulerLockAsync();
+
+        for (var attempt = 1; attempt <= 3; attempt++)
+        {
+            var node = await _context.WorkerNodes.FirstOrDefaultAsync(n => n.Id == nodeId, token);
+            if (node is null)
+                return;
+
+            var dockerToConfirm = Math.Min(node.ReservedContainers, normalizedDockerSlots);
+            var vmToConfirm = Math.Min(node.ReservedVms, normalizedVmSlots);
+
+            node.ReservedContainers = Math.Max(0, node.ReservedContainers - dockerToConfirm);
+            node.ReservedVms = Math.Max(0, node.ReservedVms - vmToConfirm);
+            node.CurrentContainers += dockerToConfirm;
+            node.CurrentVms += vmToConfirm;
+
+            try
+            {
+                await _context.SaveChangesAsync(token);
+                return;
+            }
+            catch (DbUpdateConcurrencyException ex) when (attempt < 3)
+            {
+                _logger.LogWarning(ex,
+                    "Capacity confirmation conflicted on node {NodeId}; retrying confirmation attempt {Attempt}.",
                     nodeId, attempt + 1);
                 _context.ChangeTracker.Clear();
             }
@@ -132,15 +170,15 @@ public class FleetCapacityReservationService
         if (baseReason is not null)
             return false;
 
-        return node.CurrentContainers + dockerSlots <= node.MaxContainers &&
-               node.CurrentVms + vmSlots <= node.MaxVms;
+        return node.AllocatedContainers + dockerSlots <= node.MaxContainers &&
+               node.AllocatedVms + vmSlots <= node.MaxVms;
     }
 
     static float NodeScore(WorkerNode node) =>
         1000f * (1 - Math.Clamp(node.CpuLoad, 0f, 1f)) +
         500f * (1 - Math.Clamp(node.MemoryLoad, 0f, 1f)) +
-        200f * (1 - (float)node.CurrentContainers / Math.Max(node.MaxContainers, 1)) +
-        200f * (1 - (float)node.CurrentVms / Math.Max(node.MaxVms, 1));
+        200f * (1 - (float)node.AllocatedContainers / Math.Max(node.MaxContainers, 1)) +
+        200f * (1 - (float)node.AllocatedVms / Math.Max(node.MaxVms, 1));
 
     async ValueTask<IAsyncDisposable> AcquireSchedulerLockAsync()
     {

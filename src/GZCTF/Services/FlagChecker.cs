@@ -79,7 +79,7 @@ public class FlagChecker(
             {
                 logger.SystemLog(
                     StaticLocalizer[nameof(Resources.Program.FlagsChecker_WorkerStartProcessing), id,
-                        item.Answer],
+                        SubmissionLogRedactor.RedactAnswer(item.Answer)],
                     TaskStatus.Pending, LogLevel.Debug);
 
                 await using var scope = serviceScopeFactory.CreateAsyncScope();
@@ -114,7 +114,7 @@ public class FlagChecker(
                                     StaticLocalizer[nameof(Resources.Program.FlagChecker_AnswerAccepted),
                                         item.TeamName,
                                         item.ChallengeName,
-                                        item.Answer],
+                                        SubmissionLogRedactor.RedactAnswer(item.Answer)],
                                     item.User, TaskStatus.Success, LogLevel.Information);
 
                                 await eventRepository.AddEvent(
@@ -130,7 +130,7 @@ public class FlagChecker(
                                     StaticLocalizer[nameof(Resources.Program.FlagChecker_AnswerRejected),
                                         item.TeamName,
                                         item.ChallengeName,
-                                        item.Answer],
+                                        SubmissionLogRedactor.RedactAnswer(item.Answer)],
                                     item.User, TaskStatus.Failed, LogLevel.Information);
 
                                 await eventRepository.AddEvent(

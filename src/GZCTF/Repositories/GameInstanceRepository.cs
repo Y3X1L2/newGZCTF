@@ -60,13 +60,6 @@ public class GameInstanceRepository(
             return null;
         }
 
-        // Scenario and IRChallenge do not use the native GameInstance flag dispatch flow
-        if (challenge.Type.IsScenario() || challenge.Type.IsIRChallenge())
-        {
-            await transaction.RollbackAsync(token);
-            return null;
-        }
-
         if (instance.IsLoaded)
         {
             await transaction.RollbackAsync(token);
