@@ -58,6 +58,16 @@ public class TeamLabPenetrationUxContractTests
     }
 
     [Fact]
+    public void TeamLab_Validation_AllowsExplicitMixedRfc1918Cidrs()
+    {
+        var content = File.ReadAllText(ResolveRepoPath("src/GZCTF/Services/PenetrationService.cs"));
+
+        Assert.Contains("IsRfc1918Cidr", content, StringComparison.Ordinal);
+        Assert.Contains("string.IsNullOrWhiteSpace(network.Cidr) &&", content, StringComparison.Ordinal);
+        Assert.Contains("!ContainsCidr(sampleTeamNetwork, sampleTeamPrefix, networkAddress, networkPrefix)", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TeamLab_AdminOneClickPreset_UsesDeployableRuntimeRoutesByDefault()
     {
         var content = File.ReadAllText(ResolveRepoPath("src/GZCTF/ClientApp/src/pages/admin/games/[id]/Penetration.tsx"));

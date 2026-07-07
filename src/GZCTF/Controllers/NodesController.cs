@@ -552,14 +552,30 @@ public class NodesController : ControllerBase
         if (!FixedTimeEquals(authToken, node.AuthToken))
             return Forbid();
 
+        var runningTeamLabDockerAssets = await _context.TeamLabRuntimeAssets.CountAsync(
+            a => a.Runtime.WorkerNodeId == node.Id
+                 && a.Runtime.Status == TeamLabRuntimeStatus.Running
+                 && a.Kind == TeamLabResourceKind.Docker
+                 && a.Status == TeamLabRuntimeStatus.Running,
+            HttpContext.RequestAborted);
+        var runningTeamLabVmAssets = await _context.TeamLabRuntimeAssets.CountAsync(
+            a => a.Runtime.WorkerNodeId == node.Id
+                 && a.Runtime.Status == TeamLabRuntimeStatus.Running
+                 && a.Kind == TeamLabResourceKind.Vm
+                 && a.Status == TeamLabRuntimeStatus.Running,
+            HttpContext.RequestAborted);
+
         node.CpuLoad = request.CpuLoad;
         node.MemoryLoad = request.MemoryLoad;
-        node.CurrentContainers = request.CurrentContainers;
-        node.CurrentVms = request.CurrentVms;
+        node.CurrentContainers = request.CurrentContainers + runningTeamLabDockerAssets;
+        node.CurrentVms = request.CurrentVms + runningTeamLabVmAssets;
         node.UsedPorts = request.UsedPorts;
         node.LastHeartbeat = DateTimeOffset.UtcNow;
         node.Status = NodeStatus.Online;
         await _context.SaveChangesAsync();
+
+        var capacity = HttpContext.RequestServices.GetRequiredService<FleetCapacityReservationService>();
+        await capacity.ReconcileReservedAsync(node.Id, HttpContext.RequestAborted);
         return Ok();
     }
 

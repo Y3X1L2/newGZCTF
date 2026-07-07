@@ -119,6 +119,19 @@ public class DeploymentQueueService
             await _context.SaveChangesAsync(token);
     }
 
+    public async Task CancelTeamLabRuntimeAsync(int runtimeId, string reason, CancellationToken token)
+    {
+        var tickets = await _context.DeploymentQueueTickets
+            .Where(t => t.Kind == DeploymentQueueKind.TeamLabRuntime &&
+                        t.TeamLabRuntimeId == runtimeId &&
+                        ActiveStatuses.Contains(t.Status))
+            .Select(t => t.Id)
+            .ToListAsync(token);
+
+        foreach (var ticketId in tickets)
+            await CancelAsync(ticketId, reason, token);
+    }
+
     public async Task<int> RecoverStaleCreatingTicketsAsync(TimeSpan staleAfter, CancellationToken token)
     {
         var cutoff = DateTimeOffset.UtcNow - staleAfter;
@@ -160,12 +173,26 @@ public class DeploymentQueueService
         if (ticket.Status != DeploymentQueueTicketStatus.Pending)
             return 0;
 
-        return await _context.DeploymentQueueTickets
+        var earlierCount = await _context.DeploymentQueueTickets
             .AsNoTracking()
             .Where(t => t.Kind == ticket.Kind && t.Status == DeploymentQueueTicketStatus.Pending)
-            .Where(t => t.CreatedAt < ticket.CreatedAt ||
-                        (t.CreatedAt == ticket.CreatedAt && string.Compare(t.Id.ToString(), ticket.Id.ToString(), StringComparison.Ordinal) <= 0))
+            .Where(t => t.CreatedAt < ticket.CreatedAt)
             .CountAsync(token);
+
+        var sameCreatedAtIds = await _context.DeploymentQueueTickets
+            .AsNoTracking()
+            .Where(t => t.Kind == ticket.Kind &&
+                        t.Status == DeploymentQueueTicketStatus.Pending &&
+                        t.CreatedAt == ticket.CreatedAt)
+            .Select(t => t.Id)
+            .ToListAsync(token);
+
+        var sameCreatedAtPosition = sameCreatedAtIds
+            .OrderBy(id => id.ToString(), StringComparer.Ordinal)
+            .TakeWhile(id => id != ticket.Id)
+            .Count() + 1;
+
+        return earlierCount + sameCreatedAtPosition;
     }
 
     static string TrimError(string reason) =>

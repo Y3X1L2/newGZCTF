@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Collections.Generic;
 using GZCTF.Models.Data;
 using GZCTF.Models.Request.Game;
 using GZCTF.Services;
@@ -96,6 +97,38 @@ public class PenetrationServiceTopologyMappingTests
         Assert.Equal(108, edge.TargetNodeId);
     }
 
+    [Fact]
+    public void BuildNetworkSubnets_PreservesExplicitMixedRfc1918CidrsAndAutoAllocatesBlankCidrs()
+    {
+        var config = new PenetrationConfig
+        {
+            BaseCidr = "10.190.0.0/16",
+            TeamSubnetPrefix = 24,
+            NetworkSubnetPrefix = 28,
+            Networks =
+            [
+                new PenetrationNetwork { Id = 10, TopologyKey = "entry", Name = "Entry", Slug = "entry", Cidr = "10.10.10.0/24", OrderIndex = 0 },
+                new PenetrationNetwork { Id = 20, TopologyKey = "core", Name = "Core", Slug = "core", Cidr = "192.168.20.0/24", OrderIndex = 1 },
+                new PenetrationNetwork { Id = 30, TopologyKey = "data", Name = "Data", Slug = "data", Cidr = "172.16.30.0/24", OrderIndex = 2 },
+                new PenetrationNetwork { Id = 40, TopologyKey = "ops", Name = "Ops", Slug = "ops", OrderIndex = 3 }
+            ]
+        };
+        var names = new Dictionary<int, string>
+        {
+            [10] = "entry",
+            [20] = "core",
+            [30] = "data",
+            [40] = "ops"
+        };
+
+        var subnets = BuildNetworkSubnets(config, teamIndex: 2, names);
+
+        Assert.Equal("10.10.10.0/24", subnets["entry"]);
+        Assert.Equal("192.168.20.0/24", subnets["core"]);
+        Assert.Equal("172.16.30.0/24", subnets["data"]);
+        Assert.Equal("10.190.2.48/28", subnets["ops"]);
+    }
+
     static void ApplyModelToConfig(PenetrationConfig config, PenetrationConfigModel model)
     {
         var method = typeof(PenetrationService).GetMethod(
@@ -104,5 +137,16 @@ public class PenetrationServiceTopologyMappingTests
 
         Assert.NotNull(method);
         method.Invoke(null, [config, model, true, true]);
+    }
+
+    static Dictionary<string, string> BuildNetworkSubnets(PenetrationConfig config, int teamIndex,
+        Dictionary<int, string> networkNames)
+    {
+        var method = typeof(PenetrationService).GetMethod(
+            "BuildNetworkSubnets",
+            BindingFlags.Static | BindingFlags.NonPublic);
+
+        Assert.NotNull(method);
+        return Assert.IsType<Dictionary<string, string>>(method.Invoke(null, [config, teamIndex, networkNames]));
     }
 }

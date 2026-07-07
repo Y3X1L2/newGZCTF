@@ -1337,3 +1337,407 @@ Continue TeamLab Windows VM acceptance through the standard platform image-templ
 - Verification commands:
   - `dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter "FullyQualifiedName~BuildNativeDockerContainerConfig_InjectsOnlyAttachedNetworkDnsAtContainerCreation" --no-restore -p:UseSharedCompilation=false -m:1` passed `1/1`.
   - Server health: `gzctf.service active`, HTTP `127.0.0.1:8080` returned `200`.
+
+### Linux VM TeamLab runtime-state persistence fix - 2026-07-07 16:35 +08:00
+
+- Current constraint:
+  - The platform on `10.24.0.27` is in active use. Per user instruction, no service restart, deploy overwrite, test-runtime cleanup, or new capacity-consuming TeamLab deployment was executed in this checkpoint.
+- Root cause confirmed:
+  - A Linux VM multi-network TeamLab deployment could create all VM assets and log `TeamLab runtime reached Running state`, while the database later still showed the runtime as `Probing` and `IsOpenToPlayers=false`.
+  - The failure path was `FleetCapacityReservationService.ConfirmAsync`: on a WorkerNode concurrency conflict it called `ChangeTracker.Clear()`, detaching the caller's already-tracked `TeamLabRuntime`. The later `MarkRuntimeRunningAsync` mutated a detached runtime object, so `SaveChangesAsync` did not persist the final `Running` state even though success logs used the in-memory object.
+- Fix implemented locally:
+  - `FleetCapacityReservationService` now detaches only conflicted/tracked `WorkerNode` entries during capacity release/active-release/confirm retries.
+  - It no longer clears unrelated tracked entities from the shared `AppDbContext`.
+  - Regression coverage added: `ConfirmAsync_RetriesCapacityConflictWithoutDetachingUnrelatedRuntimeState`.
+- Verification:
+  - Red check before fix: the new regression test failed because `context.Entry(runtime).State == Detached`.
+  - Green check after fix: the same test passed `1/1`.
+  - Related subset passed: `dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter "FullyQualifiedName~TeamLabDeploymentServiceTests|FullyQualifiedName~FleetCapacityReservationServiceTests|FullyQualifiedName~DeploymentQueue|FullyQualifiedName~TeamLabVmNetworkTests" --no-restore -p:UseSharedCompilation=false -m:1` passed `87/87`.
+  - Release publish succeeded to `artifacts\publish-1024-cloudinit-runtime-state-20260707-162750`.
+- Pending when a maintenance window is available:
+  - Deploy the publish package to `10.24.0.27`.
+  - Re-run a 2-network / 3-Linux-VM TeamLab environment through the standard platform deploy flow.
+  - Confirm DB runtime final state is `Running` / `IsOpenToPlayers=true`, VM domains are running, router namespace can reach planned VM IPs, player workspace exposes expected score items, VPN config can be generated, and destroy cleans VM domains, seed ISO files, bridges, DNS, router namespace, and WireGuard state.
+
+### Linux VM TeamLab network idempotency deploy/test - 2026-07-07 17:55 +08:00
+
+- Failure root cause:
+  - The first post-deploy Linux VM TeamLab acceptance run failed during Agent WireGuard setup with `RTNETLINK answers: Address already in use`.
+  - Server-side read-only diagnostics showed stale `tl37` test resources outside DB tracking: `tlr37`, `tl37-net-entry`, `tl37-net-core`, and three stale test VM domains (`tl37-vm-entry`, `tl37-vm-core`, `tl37-vm-router`).
+  - The Agent network mutation commands were not fully idempotent: bridge/router/WireGuard creation assumed a clean host namespace and did not kill namespace-local processes before deleting stale namespaces.
+- Fix implemented:
+  - `TeamLabNetworkService.CreateBridgeAsync` now deletes an existing same-name bridge before recreating it.
+  - `TeamLabNetworkService.CreateRouterAsync` now kills processes in a stale router namespace, deletes the namespace, deletes stale host veth links, recreates veth pairs, and flushes router interface addresses before assigning gateways.
+  - `TeamLabNetworkService.ConfigureWireGuardAsync` now deletes stale same-name WireGuard interfaces both inside the router namespace and in the host namespace, then flushes the interface address before assigning the runtime address.
+  - `TeamLabNetworkService.CleanupAsync` now kills processes in a resource namespace before deleting links/namespaces.
+- Regression verification:
+  - Added TeamLab command builder tests for bridge recreation, router namespace recreation/address flush, and WireGuard stale-interface cleanup/address flush.
+  - Red check confirmed the old command plan missed these cleanup steps.
+  - Green checks:
+    - `dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter "FullyQualifiedName~TeamLabCommandBuilderTests" --no-restore -p:UseSharedCompilation=false -m:1` passed `20/20`.
+    - `dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter "FullyQualifiedName~TeamLabCommandBuilderTests|FullyQualifiedName~FleetCapacityReservationServiceTests|FullyQualifiedName~TeamLabDeploymentServiceTests|FullyQualifiedName~TeamLabVmNetworkTests" --no-restore -p:UseSharedCompilation=false -m:1` passed `95/95`.
+- Deployment:
+  - Published release package to `artifacts\publish-1024-teamlab-network-idempotent-20260707-175009`.
+  - Deployed to `10.24.0.27`; `gzctf.service` and `gzctf-agent.service` are both active, root HTTP returned 200.
+- Acceptance run:
+  - Cleaned stale test-only `tl37` resources manually after confirming they were not tracked by an active game/runtime and were not the two business VM domains.
+  - Re-ran `artifacts\teamlab_linux_vm_accept_runner.py`.
+  - Result report: `artifacts\teamlab-linux-vm-accept-report-0707175415.json`, `result=PASS`.
+  - Created game `66`, team `75`, runtime `39`.
+  - Runtime reached `Status=5`, `IsOpenToPlayers=true`, prefix `10.180.38.0/24`.
+  - Public UDP mapping synced: `203.195.157.191:32003 -> 10.24.0.27:42003`.
+  - Runtime networks:
+    - `net-entry`: `10.180.38.0/28`, gateway `10.180.38.1`, bridge `tl39-net-entry`.
+    - `net-core`: `10.180.38.16/28`, gateway `10.180.38.17`, bridge `tl39-net-core`.
+  - Runtime VM assets:
+    - `tl39-vm-entry` at `10.180.38.3`.
+    - `tl39-vm-core` at `10.180.38.19`.
+    - `tl39-vm-router` at `10.180.38.4` / routed second interface planned through core network.
+  - Router namespace evidence:
+    - `tlr39n0` had `10.180.38.1/28`.
+    - `tlr39n1` had `10.180.38.17/28`.
+    - `tlwg39` had `10.180.38.254/32`.
+    - `ip route` contained `10.180.38.0/28`, `10.180.38.16/28`, and player peer route `10.180.38.2 dev tlwg39`.
+  - Connectivity:
+    - Router namespace successfully pinged `10.180.38.3`, `10.180.38.19`, and `10.180.38.4`.
+    - Player workspace exposed 3 VM score items.
+    - VPN config filename was valid: `tl-66-75.conf`.
+  - Destroy verification:
+    - Runtime closed and reached destroyed state.
+    - No `tl39` netns/link residual remained.
+    - `virsh domstate` returned no residual domains for `tl39-vm-entry`, `tl39-vm-core`, or `tl39-vm-router`.
+  - Business VM domains remained running:
+    - `vm_c1_u019e5fa3-34ba-7697-8949-cfa343cde908`.
+    - `vm_c1_u019f128a-cee9-77e0-ada9-fdb3690c3128`.
+
+### TeamLab mixed RFC1918 CIDR and runtime IP UI plan - 2026-07-07 18:12 +08:00
+
+- Goal:
+  - Fix management/runtime UI so running TeamLab assets display actual runtime interface IPs instead of template preview IPs.
+  - Support mixed RFC1918 network design inside one TeamLab environment, for example `10.10.10.0/24`, `192.168.20.0/24`, and `172.16.30.0/24` in the same topology.
+- Architecture decision:
+  - A network with an explicit CIDR uses that CIDR as the runtime CIDR.
+  - A network without an explicit CIDR keeps the existing automatic allocation from the runtime team prefix.
+  - Explicit CIDRs are isolated per runtime by Linux bridge/router namespace, so different teams may reuse the same RFC1918 addresses safely at the host/network namespace layer.
+  - The tradeoff is that one player client cannot safely keep two VPN configs with overlapping internal routes active at the same time; this matches the current one-team-runtime competition flow.
+- Backend tasks:
+  - Add tests in `src/GZCTF.Test/UnitTests/TeamLab/TeamLabAssetPlanServiceTests.cs` or the existing TeamLab test file:
+    - explicit network CIDRs from different RFC1918 families are preserved when runtime team CIDR is present;
+    - empty network CIDR still auto-allocates from runtime team CIDR;
+    - overlapping explicit/auto CIDRs fail validation with a clear message;
+    - explicit CIDR outside RFC1918 fails validation.
+  - Update `TeamLabAssetPlanService.BuildPublishedAssetPlan`:
+    - use `network.Cidr` when present, even if `runtimeTeamCidr` is present;
+    - auto-allocate only for networks without explicit CIDR;
+    - validate RFC1918 and non-overlap across all runtime network CIDRs;
+    - preserve current IP assignment behavior inside each selected network CIDR.
+- Frontend tasks:
+  - In `src/GZCTF/ClientApp/src/pages/admin/games/[id]/Penetration.tsx`, keep plan preview using template/plan data.
+  - In runtime tab, ensure rows parse `node.interfaceSummary` and prefer actual runtime interface IP/CIDR. Avoid using `previewIp`/template fields in running environment tables.
+  - Update explanatory text that currently says every network always generates an independent CIDR per team; clarify explicit CIDR is used as-is and blank CIDR is auto-assigned.
+- Verification:
+  - Run focused TeamLab backend tests.
+  - Run frontend type check/build if frontend changes compile through existing scripts.
+  - Deploy to `10.24.0.27`.
+  - Create a standard test topology with at least two explicit networks from different RFC1918 families and one auto network, then verify:
+    - runtime DB networks contain the explicit CIDRs and one auto CIDR;
+    - runtime assets receive IPs from their actual network CIDRs;
+    - router namespace has one gateway interface per runtime network;
+    - management runtime UI shows the actual runtime interface IPs.
+
+### TeamLab mixed RFC1918 implementation checkpoint - 2026-07-07 18:45 +08:00
+
+- Backend implementation:
+  - `TeamLabAssetPlanService.BuildPublishedAssetPlan` now preserves explicit `PenetrationNetwork.Cidr` values at runtime even when a runtime team prefix exists.
+  - Networks without explicit CIDR still auto-allocate from the runtime team prefix.
+  - Runtime network validation now rejects non-RFC1918 CIDRs, overlapping CIDRs, and CIDRs smaller than `/29` because the platform reserves gateway and starts asset allocation at the third host address.
+- Frontend implementation:
+  - NebulaMind one-click topology preset now uses mixed RFC1918 CIDRs:
+    - `10.10.10.0/24`
+    - `192.168.20.0/24`
+    - `172.16.30.0/24`
+    - `192.168.40.0/24`
+  - Plan UI is labelled as deployment preview, while runtime UI parses `PenetrationRuntimeNode.interfaceSummary` to show actual deployed interface facts.
+- Tests:
+  - Added/updated TeamLab asset planning tests for explicit CIDR preservation, mixed explicit+auto CIDR allocation, overlap rejection, public CIDR rejection, and too-small runtime CIDR rejection.
+  - Red/green check for too-small runtime network:
+    - Before fix, `BuildPublishedAssetPlan_RejectsRuntimeNetworksWithoutUsableHostAddresses` failed because `/30` was accepted.
+    - After fix, the same test passed.
+  - Focused regression suite passed:
+    - `dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter "FullyQualifiedName~TeamLabAssetPlanServiceTests|FullyQualifiedName~TeamLabDeploymentServiceTests|FullyQualifiedName~TeamLabVmNetworkTests|FullyQualifiedName~TeamLabCommandBuilderTests|FullyQualifiedName~FleetCapacityReservationServiceTests" --no-restore -p:UseSharedCompilation=false -m:1`
+    - Result: `110/110` passed.
+- Pending:
+  - Publish release package.
+  - Deploy to `10.24.0.27`.
+  - Run mixed RFC1918 end-to-end TeamLab acceptance and record runtime CIDR/IP evidence.
+
+### TeamLab mixed RFC1918 save/preview validation fix - 2026-07-07 18:58 +08:00
+
+- First server acceptance attempt:
+  - Report: `artifacts/teamlab-mixed-cidr-report-0707185330.json`.
+  - Failed before deployment during `PUT /api/admin/pentest/games/{id}`.
+  - Root cause: `PenetrationService` save/validation/preview layer still used legacy sample-team-CIDR semantics:
+    - explicit CIDRs were shifted into the sample/runtime team prefix;
+    - explicit `192.168.20.0/24` and `172.16.30.0/24` were rejected as outside the sample team prefix;
+    - auto and explicit CIDRs were compared after the wrong shift, producing a false overlap.
+- Fix implemented:
+  - `BuildNetworkSubnets` now preserves explicit network CIDRs as-is.
+  - Only blank CIDRs are auto-allocated from the team prefix.
+  - Save/validation now accepts explicit RFC1918 CIDRs outside the sample team prefix.
+  - The sample-team containment error remains only for blank/auto CIDR allocation.
+- Tests:
+  - Added `BuildNetworkSubnets_PreservesExplicitMixedRfc1918CidrsAndAutoAllocatesBlankCidrs`.
+  - Red check confirmed old behavior shifted `10.10.10.0/24` to `10.190.2.0/24`.
+  - Focused regression suite passed:
+    - `dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter "FullyQualifiedName~TeamLabAssetPlanServiceTests|FullyQualifiedName~TeamLabDeploymentServiceTests|FullyQualifiedName~TeamLabVmNetworkTests|FullyQualifiedName~TeamLabCommandBuilderTests|FullyQualifiedName~FleetCapacityReservationServiceTests|FullyQualifiedName~PenetrationServiceTopologyMappingTests|FullyQualifiedName~TeamLabPenetrationUxContractTests" --no-restore -p:UseSharedCompilation=false -m:1`
+    - Result: `126/126` passed.
+- Pending:
+  - Re-publish and deploy the save/preview fix.
+  - Re-run mixed RFC1918 server acceptance.
+
+### TeamLab mixed RFC1918 acceptance standard correction - 2026-07-07 19:12 +08:00
+
+- Scope decision:
+  - Mixed RFC1918 support means the runtime may use explicit `10.x` / `172.16-31.x` / `192.168.x` CIDRs in one isolated TeamLab runtime, plus blank-CIDR networks auto-allocated from the team prefix.
+  - It does **not** mean the player VPN should directly route every internal subnet.
+  - Current product design remains the multi-level penetration model: player WireGuard config exposes only the entry subnet; later subnets must be reached through routing/pivot assets and published route relationships.
+- Evidence reviewed:
+  - `docs/pentest-vpn-vm-main-architecture.md` requires TeamLab isolation and player black-box VPN entry.
+  - `docs/teamlab-full-chain-test-progress.md` section `Player VPN route isolation fix - 2026-07-06 18:14 +08:00` records the previous defect where player VPN could direct-route all internal segments, and the accepted fix that only the entry network is exposed.
+  - `src/GZCTF/Services/TeamLab/TeamLabDeploymentService.cs` currently implements this via `BuildPlayerNetworkAccess`: entry CIDR in `AllowedCidrs`, non-entry CIDRs in `BlockedCidrs`.
+- Script correction:
+  - `artifacts/teamlab_mixed_cidr_accept_runner.py` no longer expects all runtime CIDRs in the downloaded WireGuard config.
+  - New checks:
+    - runtime DB preserves explicit mixed RFC1918 CIDRs and auto-allocates blank networks;
+    - router namespace owns gateway addresses for all runtime networks;
+    - player VPN config contains the entry CIDR only;
+    - non-entry CIDRs do not leak into player `AllowedIPs`;
+    - router namespace `FORWARD` ACL allows the entry CIDR from `tlwg*` and rejects non-entry CIDRs;
+    - Docker assets remain reachable from the router namespace for route/pivot validation.
+- Completion gate for this round:
+  - Run focused TeamLab/Fleet tests.
+  - Publish and deploy to `10.24.0.27`.
+  - Run `python artifacts\teamlab_mixed_cidr_accept_runner.py`.
+  - Acceptance is complete only if the script reaches PASS and records reset/destroy cleanup evidence.
+
+### TeamLab mixed RFC1918 deployment and full-chain acceptance - 2026-07-07 19:34 +08:00
+
+- Additional queue correctness fix before final deployment:
+  - Found a real race during mixed-CIDR acceptance retries: when a queued TeamLab runtime was destroyed while its queue ticket was still active, the background queue worker could later pick the stale ticket and deploy the already-destroyed runtime.
+  - `QueueManager` now re-checks the TeamLab runtime immediately before execution and cancels the ticket if the runtime is no longer deployable.
+  - `DeploymentQueueService.CancelTeamLabRuntimeAsync` cancels active TeamLab queue tickets by runtime id.
+  - `TeamLabDeploymentService.DestroyRuntimeAsync` calls the cancellation path before runtime cleanup.
+  - Regression coverage:
+    - `ProcessPendingAsync_CancelsTeamLabTicket_WhenRuntimeWasDestroyedBeforeExecution`.
+    - `DestroyRuntimeAsync_CancelsActiveTeamLabQueueTicket`.
+- Verification before deployment:
+  - Focused backend suite passed:
+    - `dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter "FullyQualifiedName~TeamLabAssetPlanServiceTests|FullyQualifiedName~TeamLabDeploymentServiceTests|FullyQualifiedName~TeamLabVmNetworkTests|FullyQualifiedName~TeamLabCommandBuilderTests|FullyQualifiedName~FleetCapacityReservationServiceTests|FullyQualifiedName~DeploymentQueueManagerTests|FullyQualifiedName~DeploymentQueueServiceTests|FullyQualifiedName~PenetrationServiceTopologyMappingTests|FullyQualifiedName~TeamLabPenetrationUxContractTests|FullyQualifiedName~TeamLabWireGuardServiceTests" --no-restore -p:UseSharedCompilation=false -m:1`
+    - Result: `145/145` passed.
+  - Frontend check passed:
+    - `pnpm --dir src/GZCTF/ClientApp check`.
+  - `git diff --check` passed with only existing CRLF/LF warnings.
+- Deployment:
+  - Published package: `artifacts\publish-1024-teamlab-mixed-cidr-queuefix-20260707-192656.tar.gz`.
+  - Deployed to `10.24.0.27` using `python artifacts\deploy_current_10_24_0_27.py`.
+  - Deployment health:
+    - `gzctf.service`: `active`.
+    - `gzctf-agent.service`: `active`.
+    - `http://127.0.0.1:8080/`: HTTP `200`.
+    - `http://127.0.0.1:8080/api/status`: HTTP `200`.
+- Full-chain server acceptance:
+  - Command: `python artifacts\teamlab_mixed_cidr_accept_runner.py`.
+  - Report: `artifacts\teamlab-mixed-cidr-report-0707193019.json`.
+  - Result: `PASS`.
+  - Created temporary game `71`, team `80`, runtime `43`; destroyed it at the end of the script.
+- Runtime CIDR/IP evidence:
+  - Runtime prefix: `10.180.42.0/24`.
+  - Explicit network CIDRs were preserved:
+    - `net-entry`: `10.10.10.0/24`, gateway `10.10.10.1`.
+    - `net-core`: `192.168.20.0/24`, gateway `192.168.20.1`.
+    - `net-data`: `172.16.30.0/24`, gateway `172.16.30.1`.
+  - Blank/auto network was allocated from the runtime prefix:
+    - `net-ops`: `10.180.42.48/28`, gateway `10.180.42.49`.
+  - Asset runtime IPs matched their actual runtime network CIDRs:
+    - `asset-edge`: `10.10.10.3`.
+    - `asset-core`: `192.168.20.3`.
+    - `asset-data`: `172.16.30.3`.
+    - `asset-ops`: `10.180.42.51`.
+    - `asset-router`: `10.10.10.4`, `192.168.20.4`, `172.16.30.4`, `10.180.42.52`.
+- Network isolation and routing evidence:
+  - Player WireGuard endpoint was generated as `203.195.157.191:32007`.
+  - Player WireGuard `AllowedIPs` contained only the entry subnet: `10.10.10.0/24`.
+  - Non-entry CIDRs did not leak into the player VPN config.
+  - Router namespace owned all gateway addresses and had routes for all runtime networks.
+  - Router namespace `FORWARD` ACL allowed `tlwg43 -> 10.10.10.0/24` and rejected direct player access to `192.168.20.0/24`, `172.16.30.0/24`, and `10.180.42.48/28`.
+  - Router namespace successfully reached all five Docker assets.
+  - DNS/NAT checks passed.
+- Gameplay lifecycle evidence:
+  - Player workspace exposed 5 nodes and 4 score items with no topology leak.
+  - Wrong flag was rejected.
+  - Four valid flags were accepted.
+  - Scoreboard reached at least `700`.
+  - Reset kept the runtime `Running/open` and assets reachable.
+  - Destroy cleanup closed the runtime, cleared the UDP map, and left no tested host/container residual for the temporary runtime.
+- Current conclusion:
+  - The TeamLab mixed RFC1918 Docker acceptance path is complete for this round.
+  - The expected model is explicit mixed private CIDRs inside the runtime, player VPN route to entry subnet only, and later network progression through route/pivot assets.
+
+### TeamLab capacity metrics reconciliation fix - 2026-07-07 19:48 +08:00
+
+- Post-acceptance finding:
+  - Temporary runtime `43` was destroyed cleanly and older temporary runtime `42` was destroyed through the platform API.
+  - Active queue tickets were empty.
+  - Worker capacity still showed stale `ReservedContainers` while the only remaining active TeamLab business runtime was `TeamLab Docker Chain HTTP 0706165215`.
+- Root cause:
+  - `ConfirmAsync` correctly moves reserved slots into current slots at deployment completion.
+  - Later local metrics refresh and remote node heartbeat overwrite `WorkerNode.CurrentContainers` / `CurrentVms` from ordinary `Containers` and `VmInstances` tables only.
+  - TeamLab runtime assets are stored in `TeamLabRuntimeAssets`, so running TeamLab Docker/VM assets were not included in the overwritten current usage.
+  - Result: running TeamLab assets could disappear from `Current*`, while old reservation numbers remained misleading in node management and scheduling.
+- Fix implemented:
+  - `LocalNodeMetricsService.RefreshLocalNodeMetricsAsync` now adds running TeamLab Docker and VM assets for the local node to current capacity metrics.
+  - `NodesController.Heartbeat` now merges running TeamLab Docker and VM assets for remote nodes with agent-reported ordinary Docker/KVM counts.
+  - Reserved counters are not mutated by metrics refresh; they remain queue-only pending capacity and are still released/confirmed by the queue lifecycle.
+- Regression coverage:
+  - `LocalNodeMetricsRefresh_CountsRunningTeamLabAssetsAsActiveCapacity`.
+  - `Heartbeat_MergesRunningTeamLabAssetsIntoCurrentCapacity`.
+  - Red/green evidence:
+    - Before fix, local metrics reported `CurrentContainers=1` instead of expected `2`.
+    - Before heartbeat fix, remote heartbeat reported `CurrentContainers=1` instead of expected `2`.
+    - After fix, both tests passed.
+- Verification:
+  - `dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter "FullyQualifiedName~LocalNodeMetricsRefresh_CountsRunningTeamLabAssetsAsActiveCapacity|FullyQualifiedName~Heartbeat_MergesRunningTeamLabAssetsIntoCurrentCapacity" --no-restore -p:UseSharedCompilation=false -m:1`
+    - Result: `2/2` passed.
+  - Focused TeamLab/Fleet regression suite:
+    - `dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter "FullyQualifiedName~TeamLabAssetPlanServiceTests|FullyQualifiedName~TeamLabDeploymentServiceTests|FullyQualifiedName~TeamLabVmNetworkTests|FullyQualifiedName~TeamLabCommandBuilderTests|FullyQualifiedName~FleetCapacityReservationServiceTests|FullyQualifiedName~DeploymentQueueManagerTests|FullyQualifiedName~DeploymentQueueServiceTests|FullyQualifiedName~PenetrationServiceTopologyMappingTests|FullyQualifiedName~TeamLabPenetrationUxContractTests|FullyQualifiedName~TeamLabWireGuardServiceTests|FullyQualifiedName~LocalNodeMetricsRefresh_CountsRunningTeamLabAssetsAsActiveCapacity|FullyQualifiedName~Heartbeat_MergesRunningTeamLabAssetsIntoCurrentCapacity" --no-restore -p:UseSharedCompilation=false -m:1`
+    - Result: `147/147` passed.
+- Pending:
+  - Re-run frontend check.
+  - Publish and deploy the capacity metrics reconciliation build.
+  - Verify server health and node capacity metrics after metrics/heartbeat refresh.
+  - Re-run mixed RFC1918 acceptance if deployment changes affect the published package.
+
+### TeamLab reserved-capacity reconciliation fix - 2026-07-07 20:12 +08:00
+
+- Follow-up finding:
+  - After deploying the active-capacity metrics fix, `CurrentContainers` correctly reflected active TeamLab assets.
+  - `ReservedContainers` still contained historical queue reservations even though `DeploymentQueueTickets` had no active pending/assigned/creating rows.
+  - This would continue to reduce schedulable capacity even after the actual runtime state was correct.
+- Design clarification:
+  - `Current*` means actually running ordinary Docker/VM resources plus running TeamLab Docker/VM runtime assets.
+  - `Reserved*` means transient capacity held by active queue tickets or direct assigned/creating deployment targets.
+  - Running TeamLab environments must not remain in `Reserved*` after deployment succeeds.
+- Fix implemented:
+  - `FleetCapacityReservationService.ReconcileReservedAsync(nodeId)` rebuilds reserved slots from durable active sources:
+    - active queue tickets: `Pending`, `Assigned`, `Creating`;
+    - direct deployment targets: `Assigned`, `Creating`, `Create` action.
+  - `LocalNodeMetricsService.RefreshLocalNodeMetricsAsync` calls reconciliation after refreshing local node current metrics.
+  - `NodesController.Heartbeat` calls reconciliation after merging remote heartbeat current metrics with running TeamLab assets.
+  - The method does not mutate `Current*`; it only corrects stale reserved counters.
+- Regression coverage:
+  - `ReconcileReservedAsync_RemovesStaleReservedSlotsWhenNoActiveDeploymentExists`.
+  - `ReconcileReservedAsync_RebuildsReservedSlotsFromActiveQueuesAndTargets`.
+  - Existing active TeamLab metrics tests were updated to assert stale reservations are cleared when no active deployment source exists.
+- Verification:
+  - Reserved/metrics focused tests:
+    - `dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter "FullyQualifiedName~ReconcileReservedAsync|FullyQualifiedName~LocalNodeMetricsRefresh_CountsRunningTeamLabAssetsAsActiveCapacity|FullyQualifiedName~Heartbeat_MergesRunningTeamLabAssetsIntoCurrentCapacity" --no-restore -p:UseSharedCompilation=false -m:1`
+    - Result: `4/4` passed.
+  - Focused TeamLab/Fleet suite:
+    - `dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter "FullyQualifiedName~TeamLabAssetPlanServiceTests|FullyQualifiedName~TeamLabDeploymentServiceTests|FullyQualifiedName~TeamLabVmNetworkTests|FullyQualifiedName~TeamLabCommandBuilderTests|FullyQualifiedName~FleetCapacityReservationServiceTests|FullyQualifiedName~DeploymentQueueManagerTests|FullyQualifiedName~DeploymentQueueServiceTests|FullyQualifiedName~PenetrationServiceTopologyMappingTests|FullyQualifiedName~TeamLabPenetrationUxContractTests|FullyQualifiedName~TeamLabWireGuardServiceTests|FullyQualifiedName~LocalNodeMetricsRefresh_CountsRunningTeamLabAssetsAsActiveCapacity|FullyQualifiedName~Heartbeat_MergesRunningTeamLabAssetsIntoCurrentCapacity" --no-restore -p:UseSharedCompilation=false -m:1`
+    - Result: `149/149` passed.
+  - Frontend:
+    - `pnpm --dir src/GZCTF/ClientApp check` passed.
+  - Static:
+    - `git diff --check` passed with only CRLF/LF warnings.
+- Pending:
+  - Publish and deploy final capacity reconciliation build.
+  - Confirm `10.24.0.27` service health.
+  - Confirm active TeamLab business runtime remains running.
+  - Confirm stale `ReservedContainers` is cleared after metrics/heartbeat refresh.
+
+### TeamLab mixed-CIDR deployment verification and orphan target fix - 2026-07-07 20:44 +08:00
+
+- Deployed package:
+  - `artifacts\publish-1024-teamlab-mixed-cidr-capacityreconcile-20260707-201859.tar.gz` deployed to `10.24.0.27`.
+- Server verification:
+  - `gzctf.service` active.
+  - `gzctf-agent.service` active.
+  - `Local Server` capacity after metrics refresh:
+    - `CurrentContainers=7` = 1 ordinary running container + 6 running TeamLab Docker assets from business runtime `34`.
+    - `ReservedContainers=0`.
+    - `CurrentVms=2`, `ReservedVms=0`.
+  - Active TeamLab business runtime preserved:
+    - runtime `34`, game `61`, team `1`, `Running/open`, 6 running Docker assets.
+- Mixed RFC1918 acceptance:
+  - `python artifacts\teamlab_mixed_cidr_accept_runner.py`
+  - Report: `artifacts\teamlab-mixed-cidr-report-0707202805.json`.
+  - Result: `PASS`.
+  - Verified:
+    - explicit mixed RFC1918 CIDRs are accepted and materialized;
+    - player WireGuard only routes the entry subnet;
+    - Docker assets, DNS/NAT, UDP map auth, flag rejection/acceptance, reset, and destroy cleanup all passed.
+- Additional finding after deployment:
+  - `worker-10.24.0.30` had `ReservedContainers=2` while active queue tickets were empty.
+  - Root cause was two orphan `DeploymentTargets` stuck in `Assigned` since `2026-07-07 01:10/01:12 UTC`; these were not pure counter residue and would keep reducing schedulable capacity.
+- Fix implemented:
+  - `FleetCapacityReservationService.ReconcileReservedAsync` now treats `Assigned`/`Creating` create targets older than 30 minutes as failed orphan targets.
+  - Expired targets get `Status=Failed`, `CompletedAt`, and `ErrorMessage="Deployment target timed out before completion."`.
+  - Fresh active targets still reserve capacity, so slow but current deployments are not released incorrectly.
+- Regression coverage:
+  - `ReconcileReservedAsync_FailsExpiredAssignedTargetsAndReleasesReservedSlots`.
+  - `dotnet test src\GZCTF.Test\GZCTF.Test.csproj --filter "FullyQualifiedName~ReconcileReservedAsync" --no-restore -p:UseSharedCompilation=false -m:1`
+    - Result: `3/3` passed.
+  - Focused TeamLab/Fleet suite:
+    - Result: `150/150` passed before the later retry fix.
+- Deployed package:
+  - `artifacts\publish-1024-teamlab-mixed-cidr-orphantargetfix-20260707-203740.tar.gz` deployed to `10.24.0.27`.
+- Post-deploy verification:
+  - Both nodes show `ReservedContainers=0`, `ReservedVms=0`.
+  - The two orphan targets on `worker-10.24.0.30` were automatically marked `Failed`.
+  - Runtime `34` remains `Running/open`.
+- Follow-up finding during post-deploy acceptance rerun:
+  - A new temporary mixed-CIDR runtime `45` failed at deploy API with HTTP 500.
+  - Logs showed `DbUpdateConcurrencyException` in `FleetCapacityReservationService.TryReserveAsync` while saving reserved capacity, caused by node metrics/heartbeat reconciliation updating the same `WorkerNode` row concurrently.
+  - This is a high-confidence scheduler stability issue, not a topology or mixed CIDR modeling issue.
+- Fix implemented:
+  - `TryReserveAsync` now retries capacity reservation on `DbUpdateConcurrencyException`, matching the retry pattern already used by `ReleaseAsync`, `ReleaseActiveAsync`, `ConfirmAsync`, and `ReconcileReservedAsync`.
+  - Each retry rebuilds the candidate node query before adding reserved slots, avoiding stale `WorkerNode` entities.
+- Regression coverage:
+  - `TryReserveAsync_RetriesAfterConcurrencyConflict`.
+  - `dotnet test src\GZCTF.Test\GZCTF.Test.csproj --filter "FullyQualifiedName~FleetCapacityReservationServiceTests" --no-restore -p:UseSharedCompilation=false -m:1`
+    - Result: `14/14` passed.
+  - Focused TeamLab/Fleet suite:
+    - Result: `151/151` passed.
+- Pending:
+  - Publish and deploy the `TryReserveAsync` concurrency retry build.
+  - Clean or destroy failed temporary runtime `45` / game `73` from the failed acceptance rerun.
+  - Re-run `python artifacts\teamlab_mixed_cidr_accept_runner.py` after deployment.
+  - Confirm final node capacity remains:
+    - business runtime `34` running;
+    - no active queue;
+    - `ReservedContainers=0` on both known nodes.
+
+### TeamLab interrupted deployment cleanup fix - 2026-07-07 20:54 +08:00
+
+- Follow-up finding:
+  - Failed temporary runtime `45` from the concurrency-race acceptance run remained in `Deploying`.
+  - `DestroyRuntimeAsync` refused cleanup with `Cannot destroy TeamLab runtime from status Deploying`.
+  - Runtime `45` had no tracked assets/networks or host residuals, but still had an unsynced UDP mapping and could not be closed through normal API.
+- Root cause:
+  - The state machine allowed `Deploying -> CleanupPending`, but not `Deploying -> Destroying`.
+  - An interrupted deploy can legitimately need direct cleanup/destroy, especially when failure happens after state is set to `Deploying` but before assets are fully recorded.
+- Fix implemented:
+  - `TeamLabStateMachine` now allows `Deploying -> Destroying`.
+  - Existing destroy flow still performs tracked asset cleanup, host cleanup, UDP mapping cleanup, capacity release, compatibility status sync, and final `Destroyed` marking.
+- Regression coverage:
+  - `TeamLabStateMachineTests` now includes `Deploying -> Destroying`.
+  - `DestroyRuntimeAsync_AllowsDeployingRuntimeCleanup`.
+  - Focused verification:
+    - `dotnet test src\GZCTF.Test\GZCTF.Test.csproj --filter "FullyQualifiedName~TeamLabStateMachineTests|FullyQualifiedName~DestroyRuntimeAsync_AllowsDeployingRuntimeCleanup|FullyQualifiedName~DestroyRuntimeAsync_CancelsActiveTeamLabQueueTicket" --no-restore -p:UseSharedCompilation=false -m:1`
+    - Result: `13/13` passed.
+  - Focused TeamLab/Fleet suite:
+    - Result: `163/163` passed.
+- Pending:
+  - Publish and deploy the Deploying cleanup build.
+  - Destroy runtime `45` through the normal admin API after deployment.
+  - Re-run mixed CIDR full acceptance.

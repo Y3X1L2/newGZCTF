@@ -472,7 +472,7 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
       zone: PenetrationZoneType.Dmz,
       name: 'Service / 业务接入网段',
       slug: 'service-lan',
-      cidr: '10.60.0.0/28',
+      cidr: '10.10.10.0/24',
       trust: 30,
       x: 60,
       y: 80,
@@ -486,7 +486,7 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
       zone: PenetrationZoneType.Business,
       name: 'Business / AI 业务核心区',
       slug: 'biz-core',
-      cidr: '10.60.0.16/28',
+      cidr: '192.168.20.0/24',
       trust: 55,
       x: 780,
       y: 110,
@@ -500,7 +500,7 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
       zone: PenetrationZoneType.Data,
       name: 'Data / 数据与模型区',
       slug: 'data-plane',
-      cidr: '10.60.0.32/28',
+      cidr: '172.16.30.0/24',
       trust: 85,
       x: 1580,
       y: 70,
@@ -514,7 +514,7 @@ const buildEnterpriseBlueprint = (gameId: number, templates: ImageTemplateLite[]
       zone: PenetrationZoneType.Operations,
       name: 'Operations / 运维控制区',
       slug: 'ops-control',
-      cidr: '10.60.0.48/28',
+      cidr: '192.168.40.0/24',
       trust: 70,
       x: 820,
       y: 690,
@@ -1048,7 +1048,7 @@ const PenetrationUsageGuide: FC = () => (
             <Title order={4}>推荐工作流</Title>
             <Text>1. 先点击“一键生成 TeamLab 内网靶场”，得到业务接入区、业务核心区、数据区和运维区的基础骨架。</Text>
             <Text>2. 从左侧拖入内网网段或资产节点，资产放入某个网段后会自动绑定主网卡。</Text>
-            <Text>3. 点击内网网段配置名称、标识、样例 CIDR、默认策略和说明；未填写 CIDR 时由平台自动分配。</Text>
+            <Text>3. 点击内网网段配置名称、标识、CIDR、默认策略和说明；填写 CIDR 时运行环境原样使用，未填写时由平台自动分配。</Text>
             <Text>4. 点击资产节点选择环境模板、服务端口、资源限制、网卡、环境变量和得分项。</Text>
             <Text>5. 在资产之间连线，表达网段级路由、跳板关系和题目路径，再到“计划”页校验 IPAM 和部署结果。</Text>
             <Text>6. 校验通过后依次保存、发布、部署；部署后可在“运行”页查看队伍环境、VPN 状态、资产清单、提交日志和重建操作。</Text>
@@ -1060,7 +1060,7 @@ const PenetrationUsageGuide: FC = () => (
             <Stack gap="xs">
               <Title order={4}>内网网段</Title>
               <Text className="yy-readable-text">
-                内网网段代表 TeamLab 里的二层网络和信任边界，例如业务接入区、业务核心区、数据区、运维区。每个网段会为每支队伍生成独立 CIDR。
+                内网网段代表 TeamLab 里的二层网络和信任边界，例如业务接入区、业务核心区、数据区、运维区。显式 CIDR 会在每支队伍的隔离运行环境中原样使用；留空的网段由平台自动分配。
               </Text>
               <Text className="yy-readable-text">
                 所有资产默认只暴露在队伍 VPN 内网中；选手通过 WireGuard 进入本队环境后自行扫描和访问。
@@ -1085,7 +1085,7 @@ const PenetrationUsageGuide: FC = () => (
           <Stack gap="xs">
             <Title order={4}>网卡、IPAM 与多级内网</Title>
             <Text>每个资产至少需要一张网卡。主网卡决定资产默认所在网段；额外网卡用于实现跳板机、防火墙/路由、堡垒机等跨网段资产。</Text>
-            <Text>固定样例 IP 可以人工填写，平台会按队伍网段进行平移，保证所有队伍拓扑一致但彼此隔离。留空时平台自动分配。</Text>
+            <Text>固定运行 IP 可以人工填写，必须位于对应网段 CIDR 内；留空时平台在运行环境中自动分配。</Text>
             <Text>不要在 Dockerfile 或服务配置里写死队伍 IP。需要知道队伍或 Flag 时，读取平台注入的环境变量。</Text>
           </Stack>
         </YinyuPanel>
@@ -2016,7 +2016,7 @@ const BuilderInner: FC = () => {
                       </SimpleGrid>
                       <SimpleGrid cols={2}>
                         <TextInput label="标识" value={selectedNetwork.slug} onChange={(event) => updateNetwork(selectedNetwork.id, { slug: event.currentTarget.value })} />
-                        <TextInput label="样例 CIDR" value={selectedNetwork.cidr ?? ''} placeholder={selectedNetwork.previewCidr || '自动分配'} onChange={(event) => updateNetwork(selectedNetwork.id, { cidr: event.currentTarget.value || null })} />
+                        <TextInput label="CIDR" value={selectedNetwork.cidr ?? ''} placeholder={selectedNetwork.previewCidr || '自动分配'} onChange={(event) => updateNetwork(selectedNetwork.id, { cidr: event.currentTarget.value || null })} />
                       </SimpleGrid>
                       <Select
                         label="默认策略"
@@ -2069,7 +2069,7 @@ const BuilderInner: FC = () => {
                           <SimpleGrid cols={2}>
                             <TextInput label="网卡名" value={item.name} onChange={(event) => updateNode(selectedNode.id, { interfaces: selectedNode.interfaces.map((it) => it.id === item.id ? { ...it, name: event.currentTarget.value } : it) })} />
                             <Select label="所属内网网段" data={config.networks.map((network) => ({ value: String(network.id), label: network.name }))} value={String(item.networkId)} onChange={(value) => value && updateNode(selectedNode.id, { interfaces: selectedNode.interfaces.map((it) => it.id === item.id ? { ...it, networkId: Number(value) } : it), networkId: item.isPrimary ? Number(value) : selectedNode.networkId })} />
-                            <TextInput label="固定样例 IP" value={item.staticIp ?? ''} placeholder={item.previewIp || '自动分配'} onChange={(event) => updateNode(selectedNode.id, { interfaces: selectedNode.interfaces.map((it) => it.id === item.id ? { ...it, staticIp: event.currentTarget.value } : it) })} />
+                            <TextInput label="固定运行 IP" value={item.staticIp ?? ''} placeholder={item.previewIp || '自动分配'} onChange={(event) => updateNode(selectedNode.id, { interfaces: selectedNode.interfaces.map((it) => it.id === item.id ? { ...it, staticIp: event.currentTarget.value } : it) })} />
                             <Group mt="1.6rem">
                               <Checkbox label="主网卡" checked={item.isPrimary} onChange={(event) => updateNode(selectedNode.id, { interfaces: selectedNode.interfaces.map((it) => ({ ...it, isPrimary: it.id === item.id ? event.currentTarget.checked : false })) })} />
                               <Checkbox label="管理通道" checked={item.isManagement} onChange={(event) => updateNode(selectedNode.id, { interfaces: selectedNode.interfaces.map((it) => it.id === item.id ? { ...it, isManagement: event.currentTarget.checked } : it) })} />
@@ -2159,8 +2159,8 @@ const BuilderInner: FC = () => {
                     {plan ? (
                       <>
                         <YinyuPanel p="sm" className="yy-pentest-preview-box">
-                          <Group justify="space-between"><Text fw={900}>样例队伍网段</Text><Badge variant="light">{plan.sampleTeamPrefix}</Badge></Group>
-                          <Text size="sm" className="yy-readable-text">参赛队伍：{plan.teamCount}，内网网段：{plan.networks.length}，资产：{plan.nodes.length}</Text>
+                          <Group justify="space-between"><Text fw={900}>部署预览网段</Text><Badge variant="light">{plan.sampleTeamPrefix}</Badge></Group>
+                          <Text size="sm" className="yy-readable-text">参赛队伍：{plan.teamCount}，内网网段：{plan.networks.length}，资产：{plan.nodes.length}。运行页展示已部署环境的真实地址。</Text>
                         </YinyuPanel>
                         {[...(plan.validation.errors ?? []), ...(plan.validation.warnings ?? [])].map((message, index) => (
                           <Text key={`${message}-${index}`} className={plan.validation.errors.includes(message) ? 'yy-pentest-error' : 'yy-readable-text'} size="sm">

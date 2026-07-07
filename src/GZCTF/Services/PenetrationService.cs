@@ -1965,8 +1965,12 @@ public class PenetrationService(
 
                 parsedNetworks.Add((network, networkAddress, networkPrefix));
 
-                if (!ContainsCidr(sampleTeamNetwork, sampleTeamPrefix, networkAddress, networkPrefix))
+                if (string.IsNullOrWhiteSpace(network.Cidr) &&
+                    !ContainsCidr(sampleTeamNetwork, sampleTeamPrefix, networkAddress, networkPrefix))
                     result.Errors.Add($"内网网段“{network.Name}”的 CIDR 必须位于样例队伍网段内。");
+                else if (!string.IsNullOrWhiteSpace(network.Cidr) &&
+                         !IsRfc1918Cidr(networkAddress, networkPrefix))
+                    result.Errors.Add($"内网网段“{network.Name}”的 CIDR 必须位于 RFC1918 私有地址空间内。");
 
                 var interfaceCount = interfaces.Count(i => i.Network.Id == network.Id);
                 var capacity = UsableDockerHostCapacity(networkPrefix);
@@ -3057,6 +3061,11 @@ public class PenetrationService(
         return inner.Start >= outer.Start && inner.End <= outer.End;
     }
 
+    static bool IsRfc1918Cidr(uint network, int prefix) =>
+        ContainsCidr(ToUInt(IPAddress.Parse("10.0.0.0")), 8, network, prefix) ||
+        ContainsCidr(ToUInt(IPAddress.Parse("172.16.0.0")), 12, network, prefix) ||
+        ContainsCidr(ToUInt(IPAddress.Parse("192.168.0.0")), 16, network, prefix);
+
     static bool ContainsAddress(uint network, int prefix, IPAddress address)
     {
         var range = CidrRange(network, prefix);
@@ -3108,8 +3117,7 @@ public class PenetrationService(
             if (!string.IsNullOrWhiteSpace(network.Cidr) &&
                 TryParseCidr(network.Cidr, out var customNetwork, out var customPrefix))
             {
-                var offset = customNetwork >= sampleTeamNetwork ? customNetwork - sampleTeamNetwork : 0;
-                subnets[networkName] = $"{FromUInt(teamNetwork + offset)}/{customPrefix}";
+                subnets[networkName] = $"{FromUInt(customNetwork)}/{customPrefix}";
             }
             else
             {

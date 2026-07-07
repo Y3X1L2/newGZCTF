@@ -453,7 +453,211 @@ public class TeamLabAssetPlanServiceTests
     }
 
     [Fact]
-    public void BuildPublishedAssetPlan_RuntimeTeamCidrOverridesPublishedSampleNetworkCidrs()
+    public void BuildPublishedAssetPlan_PreservesExplicitRfc1918NetworkCidrsWhenRuntimeTeamCidrExists()
+    {
+        var publicNetwork = new PenetrationNetwork
+        {
+            Id = 10,
+            TopologyKey = "public",
+            Name = "Public",
+            Slug = "public",
+            Cidr = "10.10.10.0/24",
+            IsEntry = true,
+            ZoneType = PenetrationZoneType.Public,
+            OrderIndex = 0
+        };
+        var dataNetwork = new PenetrationNetwork
+        {
+            Id = 20,
+            TopologyKey = "data",
+            Name = "Data",
+            Slug = "data",
+            Cidr = "192.168.20.0/24",
+            ZoneType = PenetrationZoneType.Data,
+            OrderIndex = 1
+        };
+        var portal = new PenetrationNode
+        {
+            Id = 101,
+            TopologyKey = "portal",
+            Name = "Portal",
+            Network = publicNetwork,
+            NetworkId = publicNetwork.Id,
+            ImageTemplateId = 1,
+            OrderIndex = 0
+        };
+        var database = new PenetrationNode
+        {
+            Id = 102,
+            TopologyKey = "database",
+            Name = "Database",
+            Network = dataNetwork,
+            NetworkId = dataNetwork.Id,
+            ImageTemplateId = 1,
+            OrderIndex = 1
+        };
+        var config = new PenetrationConfig
+        {
+            Id = 7,
+            GameId = 5,
+            PublishedVersion = 3,
+            BaseCidr = "10.60.0.0/16",
+            TeamSubnetPrefix = 24,
+            NetworkSubnetPrefix = 28,
+            Networks = [publicNetwork, dataNetwork],
+            Nodes = [portal, database]
+        };
+
+        var result = TeamLabAssetPlanService.BuildPublishedAssetPlan(config, runtimeId: 12, teamIndex: 0,
+            templates: new Dictionary<int, ImageTemplate>
+            {
+                [1] = new() { Id = 1, Name = "portal", RegistryUrl = "registry.local/portal:latest", ImageType = ImageType.Docker, OSType = OSType.Linux, Status = ImageStatus.Ready }
+            },
+            runtimeTeamCidr: "10.180.12.0/24");
+
+        Assert.True(result.Success, result.Message);
+        Assert.Collection(result.Networks,
+            network =>
+            {
+                Assert.Equal("public", network.TopologyKey);
+                Assert.Equal("10.10.10.0/24", network.Cidr);
+                Assert.Equal("10.10.10.1", network.GatewayIp);
+            },
+            network =>
+            {
+                Assert.Equal("data", network.TopologyKey);
+                Assert.Equal("192.168.20.0/24", network.Cidr);
+                Assert.Equal("192.168.20.1", network.GatewayIp);
+            });
+        var assets = result.Assets.ToDictionary(asset => asset.TopologyKey);
+        Assert.Equal("10.10.10.3", Assert.Single(assets["portal"].Interfaces).IpAddress);
+        Assert.Equal("192.168.20.3", Assert.Single(assets["database"].Interfaces).IpAddress);
+    }
+
+    [Fact]
+    public void BuildPublishedAssetPlan_MixesExplicitRfc1918CidrsAndAutoRuntimeCidrs()
+    {
+        var publicNetwork = new PenetrationNetwork
+        {
+            Id = 10,
+            TopologyKey = "public",
+            Name = "Public",
+            Slug = "public",
+            Cidr = "10.10.10.0/24",
+            IsEntry = true,
+            ZoneType = PenetrationZoneType.Public,
+            OrderIndex = 0
+        };
+        var autoNetwork = new PenetrationNetwork
+        {
+            Id = 20,
+            TopologyKey = "auto",
+            Name = "Auto",
+            Slug = "auto",
+            ZoneType = PenetrationZoneType.Business,
+            OrderIndex = 1
+        };
+        var portal = new PenetrationNode
+        {
+            Id = 101,
+            TopologyKey = "portal",
+            Name = "Portal",
+            Network = publicNetwork,
+            NetworkId = publicNetwork.Id,
+            ImageTemplateId = 1,
+            OrderIndex = 0
+        };
+        var worker = new PenetrationNode
+        {
+            Id = 102,
+            TopologyKey = "worker",
+            Name = "Worker",
+            Network = autoNetwork,
+            NetworkId = autoNetwork.Id,
+            ImageTemplateId = 1,
+            OrderIndex = 1
+        };
+        var config = new PenetrationConfig
+        {
+            Id = 7,
+            GameId = 5,
+            PublishedVersion = 3,
+            BaseCidr = "10.60.0.0/16",
+            TeamSubnetPrefix = 24,
+            NetworkSubnetPrefix = 28,
+            Networks = [publicNetwork, autoNetwork],
+            Nodes = [portal, worker]
+        };
+
+        var result = TeamLabAssetPlanService.BuildPublishedAssetPlan(config, runtimeId: 12, teamIndex: 0,
+            templates: new Dictionary<int, ImageTemplate>
+            {
+                [1] = new() { Id = 1, Name = "portal", RegistryUrl = "registry.local/portal:latest", ImageType = ImageType.Docker, OSType = OSType.Linux, Status = ImageStatus.Ready }
+            },
+            runtimeTeamCidr: "10.180.12.0/24");
+
+        Assert.True(result.Success, result.Message);
+        Assert.Collection(result.Networks,
+            network => Assert.Equal("10.10.10.0/24", network.Cidr),
+            network => Assert.Equal("10.180.12.16/28", network.Cidr));
+        var assets = result.Assets.ToDictionary(asset => asset.TopologyKey);
+        Assert.Equal("10.10.10.3", Assert.Single(assets["portal"].Interfaces).IpAddress);
+        Assert.Equal("10.180.12.19", Assert.Single(assets["worker"].Interfaces).IpAddress);
+    }
+
+    [Fact]
+    public void BuildPublishedAssetPlan_RejectsOverlappingNetworkCidrs()
+    {
+        var outer = new PenetrationNetwork
+        {
+            Id = 10,
+            TopologyKey = "outer",
+            Name = "Outer",
+            Slug = "outer",
+            Cidr = "10.10.10.0/24",
+            OrderIndex = 0
+        };
+        var inner = new PenetrationNetwork
+        {
+            Id = 20,
+            TopologyKey = "inner",
+            Name = "Inner",
+            Slug = "inner",
+            Cidr = "10.10.10.128/25",
+            OrderIndex = 1
+        };
+        var node = new PenetrationNode
+        {
+            Id = 101,
+            TopologyKey = "portal",
+            Name = "Portal",
+            Network = outer,
+            NetworkId = outer.Id,
+            ImageTemplateId = 1,
+            OrderIndex = 0
+        };
+        var config = new PenetrationConfig
+        {
+            BaseCidr = "10.60.0.0/16",
+            TeamSubnetPrefix = 24,
+            NetworkSubnetPrefix = 28,
+            Networks = [outer, inner],
+            Nodes = [node]
+        };
+
+        var result = TeamLabAssetPlanService.BuildPublishedAssetPlan(config, runtimeId: 12, teamIndex: 0,
+            templates: new Dictionary<int, ImageTemplate>
+            {
+                [1] = new() { Id = 1, Name = "portal", RegistryUrl = "registry.local/portal:latest", ImageType = ImageType.Docker, OSType = OSType.Linux, Status = ImageStatus.Ready }
+            },
+            runtimeTeamCidr: "10.180.12.0/24");
+
+        Assert.False(result.Success);
+        Assert.Contains("overlap", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BuildPublishedAssetPlan_RejectsExplicitPublicCidrs()
     {
         var network = new PenetrationNetwork
         {
@@ -461,9 +665,7 @@ public class TeamLabAssetPlanServiceTests
             TopologyKey = "public",
             Name = "Public",
             Slug = "public",
-            Cidr = "10.60.0.0/28",
-            IsEntry = true,
-            ZoneType = PenetrationZoneType.Public,
+            Cidr = "8.8.8.0/24",
             OrderIndex = 0
         };
         var node = new PenetrationNode
@@ -478,9 +680,6 @@ public class TeamLabAssetPlanServiceTests
         };
         var config = new PenetrationConfig
         {
-            Id = 7,
-            GameId = 5,
-            PublishedVersion = 3,
             BaseCidr = "10.60.0.0/16",
             TeamSubnetPrefix = 24,
             NetworkSubnetPrefix = 28,
@@ -495,8 +694,49 @@ public class TeamLabAssetPlanServiceTests
             },
             runtimeTeamCidr: "10.180.12.0/24");
 
-        Assert.True(result.Success, result.Message);
-        Assert.Equal("10.180.12.0/28", Assert.Single(result.Networks).Cidr);
-        Assert.Equal("10.180.12.3", Assert.Single(Assert.Single(result.Assets).Interfaces).IpAddress);
+        Assert.False(result.Success);
+        Assert.Contains("RFC1918", result.Message);
+    }
+
+    [Fact]
+    public void BuildPublishedAssetPlan_RejectsRuntimeNetworksWithoutUsableHostAddresses()
+    {
+        var network = new PenetrationNetwork
+        {
+            Id = 10,
+            TopologyKey = "tiny",
+            Name = "Tiny",
+            Slug = "tiny",
+            Cidr = "10.10.10.0/30",
+            OrderIndex = 0
+        };
+        var node = new PenetrationNode
+        {
+            Id = 101,
+            TopologyKey = "portal",
+            Name = "Portal",
+            Network = network,
+            NetworkId = network.Id,
+            ImageTemplateId = 1,
+            OrderIndex = 0
+        };
+        var config = new PenetrationConfig
+        {
+            BaseCidr = "10.60.0.0/16",
+            TeamSubnetPrefix = 24,
+            NetworkSubnetPrefix = 28,
+            Networks = [network],
+            Nodes = [node]
+        };
+
+        var result = TeamLabAssetPlanService.BuildPublishedAssetPlan(config, runtimeId: 12, teamIndex: 0,
+            templates: new Dictionary<int, ImageTemplate>
+            {
+                [1] = new() { Id = 1, Name = "portal", RegistryUrl = "registry.local/portal:latest", ImageType = ImageType.Docker, OSType = OSType.Linux, Status = ImageStatus.Ready }
+            },
+            runtimeTeamCidr: "10.180.12.0/24");
+
+        Assert.False(result.Success);
+        Assert.Contains("/29 or larger", result.Message);
     }
 }

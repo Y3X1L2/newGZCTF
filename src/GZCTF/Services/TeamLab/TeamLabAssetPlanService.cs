@@ -74,9 +74,10 @@ public static partial class TeamLabAssetPlanService
         var networkById = new Dictionary<int, TeamLabRuntimeNetworkSpec>();
         foreach (var network in config.Networks.OrderBy(n => n.OrderIndex))
         {
-            var cidr = hasRuntimeTeamCidr || string.IsNullOrWhiteSpace(network.Cidr)
+            var hasExplicitCidr = !string.IsNullOrWhiteSpace(network.Cidr);
+            var cidr = !hasExplicitCidr
                 ? AllocateSubnet(teamCidr, config.NetworkSubnetPrefix, network.OrderIndex)
-                : network.Cidr;
+                : network.Cidr!.Trim();
             if (string.IsNullOrWhiteSpace(cidr) || !IsValidIpv4Cidr(cidr))
                 return TeamLabPublishedAssetPlanResult.Failed($"LabNetwork {network.Name} has an invalid CIDR.");
 
@@ -89,6 +90,10 @@ public static partial class TeamLabAssetPlanService
             networkSpecs.Add(spec);
             networkById[network.Id] = spec;
         }
+
+        var networkValidation = ValidateRuntimeNetworks(networkSpecs);
+        if (!string.IsNullOrWhiteSpace(networkValidation))
+            return TeamLabPublishedAssetPlanResult.Failed(networkValidation);
 
         var assets = new List<TeamLabAssetSpec>();
         var addressCounters = networkSpecs.ToDictionary(n => n.TopologyKey, _ => 3);
@@ -163,7 +168,13 @@ public static partial class TeamLabAssetPlanService
         {
             BridgeName = iface.BridgeName,
             MacAddress = iface.MacAddress,
-            Model = osType == OSType.Windows ? "e1000e" : "virtio"
+            Model = osType == OSType.Windows ? "e1000e" : "virtio",
+            InterfaceName = iface.InterfaceName,
+            IpAddress = iface.IpAddress,
+            PrefixLength = iface.PrefixLength,
+            Gateway = iface.IsPrimary ? GatewayFromHost(iface.IpAddress, iface.PrefixLength) : null,
+            DnsServers = iface.IsPrimary ? [GatewayFromHost(iface.IpAddress, iface.PrefixLength)] : [],
+            IsPrimary = iface.IsPrimary
         };
 
     public static string BuildMacAddress(int runtimeId, string topologyKey, string interfaceName)
@@ -186,6 +197,33 @@ public static partial class TeamLabAssetPlanService
                ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork &&
                int.TryParse(parts[1], out var prefix) &&
                prefix is >= 1 and <= 32;
+    }
+
+    private static string? ValidateRuntimeNetworks(IReadOnlyList<TeamLabRuntimeNetworkSpec> networks)
+    {
+        var ranges = new List<(TeamLabRuntimeNetworkSpec Network, uint Start, uint End)>();
+        foreach (var network in networks)
+        {
+            var range = TryParseIpv4CidrRange(network.Cidr);
+            if (range is null)
+                return $"LabNetwork {network.Name} has an invalid CIDR.";
+
+            if (range.Value.Prefix > 29)
+                return $"LabNetwork {network.Name} CIDR must be /29 or larger to provide gateway and asset host addresses.";
+
+            if (!IsRfc1918(range.Value.Start, range.Value.End))
+                return $"LabNetwork {network.Name} CIDR must be inside RFC1918 private address space.";
+
+            foreach (var existing in ranges)
+            {
+                if (range.Value.Start <= existing.End && existing.Start <= range.Value.End)
+                    return $"LabNetwork {network.Name} CIDR overlaps with LabNetwork {existing.Network.Name}.";
+            }
+
+            ranges.Add((network, range.Value.Start, range.Value.End));
+        }
+
+        return null;
     }
 
     private static string NormalizeLinuxToken(string value)
@@ -268,7 +306,48 @@ public static partial class TeamLabAssetPlanService
         return $"{FromUInt32(ToUInt32(baseAddress) + safeIndex * subnetSize)}/{prefixLength}";
     }
 
+    private static (uint Start, uint End, int Prefix)? TryParseIpv4CidrRange(string cidr)
+    {
+        var parts = cidr.Split('/');
+        if (parts.Length != 2 ||
+            !IPAddress.TryParse(parts[0], out var address) ||
+            address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork ||
+            !int.TryParse(parts[1], out var prefix) ||
+            prefix is < 1 or > 32)
+            return null;
+
+        var mask = prefix == 32 ? uint.MaxValue : uint.MaxValue << (32 - prefix);
+        var start = ToUInt32(address) & mask;
+        var size = prefix == 32 ? 1u : 1u << (32 - prefix);
+        return (start, start + size - 1, prefix);
+    }
+
+    private static bool IsRfc1918(uint start, uint end)
+    {
+        return IsInside(start, end, "10.0.0.0/8") ||
+               IsInside(start, end, "172.16.0.0/12") ||
+               IsInside(start, end, "192.168.0.0/16");
+    }
+
+    private static bool IsInside(uint start, uint end, string cidr)
+    {
+        var range = TryParseIpv4CidrRange(cidr);
+        return range is not null && start >= range.Value.Start && end <= range.Value.End;
+    }
+
     private static string FirstHost(string cidr) => NextHost(cidr, 1);
+
+    private static string GatewayFromHost(string ipAddress, int prefix)
+    {
+        if (!IPAddress.TryParse(ipAddress, out var address) ||
+            address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork ||
+            prefix is < 1 or > 30)
+            return string.Empty;
+
+        var mask = uint.MaxValue << (32 - prefix);
+        var network = ToUInt32(address) & mask;
+        return FromUInt32(network + 1).ToString();
+    }
 
     private static string NextHost(string cidr, int offset)
     {

@@ -1,6 +1,0 @@
-/* YINYU CTF Platform @unknown
- *
- * Commit    : Unofficial build version
- * Build     : 2026-06-09T06:10:58.565Z
- */
-import{h as e}from"./i794nfmz.js";import{t}from"./e6fnzn7h2.js";import{n}from"./it9i65xm.js";import{h as r,k as i,x as a}from"./index.d3jdxuhz.js";var o=e=>fetch(e).then(e=>e.json());function s(e){let{data:t,error:r,isLoading:i,mutate:a}=n(`/api/v1/phases/${e}`,o);return{phases:t,error:r,isLoading:i,mutate:a}}var c=e();function l(){let{id:e}=r(),{phases:n,isLoading:o}=s(Number(e));return o?(0,c.jsx)(`div`,{children:`加载中...`}):(0,c.jsxs)(`div`,{children:[(0,c.jsx)(a,{order:2,mb:`lg`,children:`比赛阶段管理`}),(0,c.jsxs)(t,{children:[(0,c.jsx)(t.Thead,{children:(0,c.jsxs)(t.Tr,{children:[(0,c.jsx)(t.Th,{children:`名称`}),(0,c.jsx)(t.Th,{children:`开始`}),(0,c.jsx)(t.Th,{children:`结束`}),(0,c.jsx)(t.Th,{children:`CTF`})]})}),(0,c.jsx)(t.Tbody,{children:n?.map(e=>(0,c.jsxs)(t.Tr,{children:[(0,c.jsx)(t.Td,{children:e.name}),(0,c.jsx)(t.Td,{children:new Date(e.startTime).toLocaleString()}),(0,c.jsx)(t.Td,{children:new Date(e.endTime).toLocaleString()}),(0,c.jsx)(t.Td,{children:(0,c.jsx)(i,{color:e.ctfEnabled?`green`:`red`,children:e.ctfEnabled?`开`:`关`})})]},e.id))})]})]})}export{l as default};

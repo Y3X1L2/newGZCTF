@@ -44,6 +44,23 @@ public class FleetCapacityReservationServiceTests
     }
 
     [Fact]
+    public async Task TryReserveAsync_RetriesAfterConcurrencyConflict()
+    {
+        await using var context = CreateConcurrencyContext(failOnSaveCall: 1);
+        var node = SeedNode(context, maxContainers: 3, maxVms: 1);
+        var service = CreateService(context);
+
+        var result = await service.TryReserveAsync(
+            new FleetCapacityRequest(NodeCapability.Docker, DockerSlots: 2, VmSlots: 0),
+            CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Equal(node.Id, result.NodeId);
+        var reloaded = await context.WorkerNodes.FindAsync([node.Id], CancellationToken.None);
+        Assert.Equal(2, reloaded!.ReservedContainers);
+    }
+
+    [Fact]
     public async Task ReleaseAsync_RestoresReservedSlotsWithoutGoingNegative()
     {
         await using var context = CreateContext();
@@ -117,6 +134,163 @@ public class FleetCapacityReservationServiceTests
         Assert.Equal(2, reloaded.CurrentVms);
         Assert.Equal(1, reloaded.ReservedContainers);
         Assert.Equal(0, reloaded.ReservedVms);
+    }
+
+    [Fact]
+    public async Task ConfirmAsync_RetriesCapacityConflictWithoutDetachingUnrelatedRuntimeState()
+    {
+        await using var context = CreateConcurrencyContext(failOnSaveCall: 2);
+        var node = SeedNode(context, currentContainers: 0, currentVms: 0,
+            reservedContainers: 1, reservedVms: 1);
+        var runtime = new TeamLabRuntime
+        {
+            GameId = 7,
+            TeamId = 11,
+            Status = TeamLabRuntimeStatus.Probing,
+            WorkerNodeId = node.Id
+        };
+        context.TeamLabRuntimes.Add(runtime);
+        await context.SaveChangesAsync();
+        var service = CreateService(context);
+
+        await service.ConfirmAsync(node.Id, dockerSlots: 1, vmSlots: 1, CancellationToken.None);
+
+        Assert.NotEqual(EntityState.Detached, context.Entry(runtime).State);
+        runtime.Status = TeamLabRuntimeStatus.Running;
+        runtime.IsOpenToPlayers = true;
+        await context.SaveChangesAsync();
+
+        var reloaded = await context.TeamLabRuntimes.AsNoTracking()
+            .SingleAsync(r => r.Id == runtime.Id);
+        Assert.Equal(TeamLabRuntimeStatus.Running, reloaded.Status);
+        Assert.True(reloaded.IsOpenToPlayers);
+    }
+
+    [Fact]
+    public async Task ReleaseActiveAsync_RestoresRunningSlotsWithoutChangingReservedSlots()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, currentContainers: 2, currentVms: 1,
+            reservedContainers: 1, reservedVms: 1);
+        var service = CreateService(context);
+
+        await service.ReleaseActiveAsync(node.Id, dockerSlots: 3, vmSlots: 2, CancellationToken.None);
+
+        var reloaded = await context.WorkerNodes.FindAsync([node.Id], CancellationToken.None);
+        Assert.Equal(0, reloaded!.CurrentContainers);
+        Assert.Equal(0, reloaded.CurrentVms);
+        Assert.Equal(1, reloaded.ReservedContainers);
+        Assert.Equal(1, reloaded.ReservedVms);
+    }
+
+    [Fact]
+    public async Task ReconcileReservedAsync_RemovesStaleReservedSlotsWhenNoActiveDeploymentExists()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, currentContainers: 6, currentVms: 0,
+            reservedContainers: 6, reservedVms: 1);
+        var service = CreateService(context);
+
+        await service.ReconcileReservedAsync(node.Id, CancellationToken.None);
+
+        var reloaded = await context.WorkerNodes.FindAsync([node.Id], CancellationToken.None);
+        Assert.Equal(6, reloaded!.CurrentContainers);
+        Assert.Equal(0, reloaded.CurrentVms);
+        Assert.Equal(0, reloaded.ReservedContainers);
+        Assert.Equal(0, reloaded.ReservedVms);
+    }
+
+    [Fact]
+    public async Task ReconcileReservedAsync_RebuildsReservedSlotsFromActiveQueuesAndTargets()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, currentContainers: 1, currentVms: 0,
+            reservedContainers: 9, reservedVms: 9);
+        context.DeploymentQueueTickets.Add(new DeploymentQueueTicket
+        {
+            Kind = DeploymentQueueKind.TeamLabRuntime,
+            Status = DeploymentQueueTicketStatus.Creating,
+            TargetNodeId = node.Id,
+            DockerSlots = 2,
+            VmSlots = 1,
+            ActiveIdentity = "teamlab-runtime:1:2:3"
+        });
+        context.DeploymentQueueTickets.Add(new DeploymentQueueTicket
+        {
+            Kind = DeploymentQueueKind.GameContainer,
+            Status = DeploymentQueueTicketStatus.Completed,
+            TargetNodeId = node.Id,
+            DockerSlots = 5,
+            VmSlots = 0,
+            ActiveIdentity = "game-container:1:2:3"
+        });
+        context.DeploymentTargets.AddRange(
+            new DeploymentTarget
+            {
+                TargetNodeId = node.Id,
+                Type = TargetType.Docker,
+                Action = TargetAction.Create,
+                Status = TargetStatus.Assigned
+            },
+            new DeploymentTarget
+            {
+                TargetNodeId = node.Id,
+                Type = TargetType.Vm,
+                Action = TargetAction.Create,
+                Status = TargetStatus.Creating
+            },
+            new DeploymentTarget
+            {
+                TargetNodeId = node.Id,
+                Type = TargetType.Docker,
+                Action = TargetAction.Create,
+                Status = TargetStatus.Completed
+            });
+        await context.SaveChangesAsync();
+        var service = CreateService(context);
+
+        await service.ReconcileReservedAsync(node.Id, CancellationToken.None);
+
+        var reloaded = await context.WorkerNodes.FindAsync([node.Id], CancellationToken.None);
+        Assert.Equal(1, reloaded!.CurrentContainers);
+        Assert.Equal(0, reloaded.CurrentVms);
+        Assert.Equal(3, reloaded.ReservedContainers);
+        Assert.Equal(2, reloaded.ReservedVms);
+    }
+
+    [Fact]
+    public async Task ReconcileReservedAsync_FailsExpiredAssignedTargetsAndReleasesReservedSlots()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, currentContainers: 0, currentVms: 0,
+            reservedContainers: 2, reservedVms: 0);
+        var expiredTarget = new DeploymentTarget
+        {
+            TargetNodeId = node.Id,
+            Type = TargetType.Docker,
+            Action = TargetAction.Create,
+            Status = TargetStatus.Assigned,
+            CreatedAt = DateTimeOffset.UtcNow - TimeSpan.FromHours(2)
+        };
+        var freshTarget = new DeploymentTarget
+        {
+            TargetNodeId = node.Id,
+            Type = TargetType.Docker,
+            Action = TargetAction.Create,
+            Status = TargetStatus.Creating,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        context.DeploymentTargets.AddRange(expiredTarget, freshTarget);
+        await context.SaveChangesAsync();
+        var service = CreateService(context);
+
+        await service.ReconcileReservedAsync(node.Id, CancellationToken.None);
+
+        var reloaded = await context.WorkerNodes.FindAsync([node.Id], CancellationToken.None);
+        Assert.Equal(1, reloaded!.ReservedContainers);
+        Assert.Equal(TargetStatus.Failed, expiredTarget.Status);
+        Assert.NotNull(expiredTarget.CompletedAt);
+        Assert.Equal(TargetStatus.Creating, freshTarget.Status);
     }
 
     [Fact]

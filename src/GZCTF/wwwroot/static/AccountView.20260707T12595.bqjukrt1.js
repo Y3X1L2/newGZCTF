@@ -1,0 +1,6 @@
+/* YINYU CTF Platform @unknown
+ *
+ * Commit    : Unofficial build version
+ * Build     : 2026-07-07T12:59:55.597Z
+ */
+import{L as e,Lt as t,et as n}from"./Api.20260707T12595.cj2ps75j.js";import{n as r,t as i}from"./Misc.module.20260707T12595.op93hdy2.js";import{v as a,z as o}from"./index.20260707T12595.zkxqluhk.js";import{t as s}from"./LogoDistortion.20260707T12595.c4okt27r.js";var c=t(),l=({onSubmit:t,children:l})=>{let u=n(),{config:d}=a();return(0,c.jsx)(o,{mih:`100vh`,px:`md`,py:`xl`,className:`yy-standalone-shell`,children:(0,c.jsxs)(`article`,{className:`auth-stage`,children:[(0,c.jsxs)(`div`,{className:`panel-card auth-form-card`,children:[(0,c.jsx)(e,{cells:28}),(0,c.jsxs)(`div`,{className:`auth-form-panel`,children:[(0,c.jsx)(r,{onClick:()=>u(`/`)}),(0,c.jsx)(`form`,{className:i.accountForm,onSubmit:t,children:l})]})]}),(0,c.jsx)(`div`,{className:`auth-logo-panel`,"aria-hidden":`true`,children:(0,c.jsx)(s,{className:`auth-logo-distortion`,src:d.logoUrl})})]})})};export{l as t};

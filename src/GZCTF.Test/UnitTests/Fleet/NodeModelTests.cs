@@ -3,10 +3,16 @@ using System.Reflection;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Services.Concurrency;
 using GZCTF.Services.Fleet;
 using GZCTF.Services.TeamLab;
+using GZCTF.Utils;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using TaskStatus = GZCTF.Utils.TaskStatus;
 
@@ -152,6 +158,120 @@ public class WorkerNodeTests
         Assert.InRange(cpuLoad, 0f, 1f);
         Assert.InRange(memoryLoad, 0f, 1f);
     }
+
+    [Fact]
+    public async Task LocalNodeMetricsRefresh_CountsRunningTeamLabAssetsAsActiveCapacity()
+    {
+        var services = new ServiceCollection();
+        var databaseName = Guid.NewGuid().ToString();
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseInMemoryDatabase(databaseName));
+        services.AddLogging();
+        services.AddSingleton<IDistributedLockService>(
+            _ => new LocalSemaphoreLock(NullLogger<LocalSemaphoreLock>.Instance));
+        services.AddScoped<FleetCapacityReservationService>();
+        await using var provider = services.BuildServiceProvider();
+
+        using (var scope = provider.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var nodeId = Guid.NewGuid();
+            var game = new Game
+            {
+                Id = 7,
+                Title = "teamlab",
+                StartTimeUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
+                EndTimeUtc = DateTimeOffset.UtcNow.AddHours(1)
+            };
+            var team = new Team { Id = 11, Name = "team-a" };
+
+            context.WorkerNodes.Add(new WorkerNode
+            {
+                Id = nodeId,
+                Name = "local",
+                HostAddress = "10.24.0.27",
+                Status = NodeStatus.Online,
+                IsLocal = true,
+                Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+                CurrentContainers = 0,
+                ReservedContainers = 3,
+                CurrentVms = 0,
+                ReservedVms = 1
+            });
+            context.Games.Add(game);
+            context.Teams.Add(team);
+            context.Containers.Add(new Container
+            {
+                Id = Guid.NewGuid(),
+                Image = "alpine:latest",
+                ContainerId = "normal-running",
+                Status = ContainerStatus.Running,
+                NodeId = nodeId,
+                IP = "127.0.0.1",
+                Port = 80
+            });
+            context.TeamLabRuntimes.AddRange(
+                new TeamLabRuntime
+                {
+                    Id = 21,
+                    Game = game,
+                    Team = team,
+                    WorkerNodeId = nodeId,
+                    Status = TeamLabRuntimeStatus.Running,
+                    Assets =
+                    [
+                        new TeamLabRuntimeAsset
+                        {
+                            Name = "docker-running",
+                            Kind = TeamLabResourceKind.Docker,
+                            Status = TeamLabRuntimeStatus.Running
+                        },
+                        new TeamLabRuntimeAsset
+                        {
+                            Name = "vm-running",
+                            Kind = TeamLabResourceKind.Vm,
+                            Status = TeamLabRuntimeStatus.Running
+                        },
+                        new TeamLabRuntimeAsset
+                        {
+                            Name = "docker-destroyed",
+                            Kind = TeamLabResourceKind.Docker,
+                            Status = TeamLabRuntimeStatus.Destroyed
+                        }
+                    ]
+                },
+                new TeamLabRuntime
+                {
+                    Id = 22,
+                    Game = game,
+                    Team = team,
+                    WorkerNodeId = nodeId,
+                    Status = TeamLabRuntimeStatus.Destroyed,
+                    Assets =
+                    [
+                        new TeamLabRuntimeAsset
+                        {
+                            Name = "docker-runtime-destroyed",
+                            Kind = TeamLabResourceKind.Docker,
+                            Status = TeamLabRuntimeStatus.Running
+                        }
+                    ]
+                });
+            await context.SaveChangesAsync();
+        }
+
+        Assert.True(await LocalNodeMetricsService.RefreshLocalNodeMetricsAsync(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            CancellationToken.None));
+
+        using var verifyScope = provider.CreateScope();
+        var verifyContext = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var reloaded = await verifyContext.WorkerNodes.SingleAsync();
+        Assert.Equal(2, reloaded.CurrentContainers);
+        Assert.Equal(1, reloaded.CurrentVms);
+        Assert.Equal(0, reloaded.ReservedContainers);
+        Assert.Equal(0, reloaded.ReservedVms);
+    }
 }
 
 public class DeploymentTargetTests
@@ -218,6 +338,32 @@ public class DeploymentTargetTests
         Assert.Contains("203.195.157.191:30001", message);
         Assert.DoesNotContain("flag{secret}", message);
         Assert.DoesNotContain("secret-token", message);
+    }
+
+    [Fact]
+    public void DeploymentTargetLogHelper_DoesNotExposeCloudInitUserData()
+    {
+        var target = new DeploymentTarget
+        {
+            Id = Guid.Parse("33333333-3333-3333-3333-333333333333"),
+            Type = TargetType.Vm,
+            Action = TargetAction.Create,
+            Payload = """
+                      {
+                        "CloudInit": {
+                          "UserData": "#cloud-config\nwrite_files:\n- content: flag{cloud_init_secret}",
+                          "SensitiveKeys": ["flag", "GZCTF_FLAG", "user-data"]
+                        }
+                      }
+                      """,
+            Status = TargetStatus.Completed
+        };
+
+        var (message, _, _) = DeploymentTargetLogHelper.Build("completed", target);
+
+        Assert.DoesNotContain("CloudInit", message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("UserData", message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("flag{cloud_init_secret}", message, StringComparison.Ordinal);
     }
 
     [Fact]

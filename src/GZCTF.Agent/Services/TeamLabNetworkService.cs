@@ -42,6 +42,7 @@ public partial class TeamLabNetworkService(
 
         var commands = new[]
         {
+            $"ip link delete {request.BridgeName} 2>/dev/null || true",
             $"ip link add {request.BridgeName} type bridge",
             $"ip link set {request.BridgeName} up"
         };
@@ -77,6 +78,8 @@ public partial class TeamLabNetworkService(
 
         var commands = new List<string>
         {
+            $"ip netns pids {request.NamespaceName} 2>/dev/null | xargs -r kill 2>/dev/null || true",
+            $"ip netns delete {request.NamespaceName} 2>/dev/null || true",
             $"ip netns add {request.NamespaceName}",
             $"ip netns exec {request.NamespaceName} ip link set lo up"
         };
@@ -85,10 +88,12 @@ public partial class TeamLabNetworkService(
             var iface = request.Interfaces[i];
             var hostIf = TrimInterfaceName($"{request.NamespaceName}h{i}");
             var nsIf = TrimInterfaceName($"{request.NamespaceName}n{i}");
+            commands.Add($"ip link delete {hostIf} 2>/dev/null || true");
             commands.Add($"ip link add {hostIf} type veth peer name {nsIf}");
             commands.Add($"ip link set {hostIf} master {iface.BridgeName}");
             commands.Add($"ip link set {hostIf} up");
             commands.Add($"ip link set {nsIf} netns {request.NamespaceName}");
+            commands.Add($"ip netns exec {request.NamespaceName} ip addr flush dev {nsIf}");
             commands.Add($"ip netns exec {request.NamespaceName} ip addr add {iface.GatewayAddressCidr} dev {nsIf}");
             commands.Add($"ip netns exec {request.NamespaceName} ip link set {nsIf} up");
         }
@@ -140,8 +145,11 @@ public partial class TeamLabNetworkService(
         var commands = new[]
         {
             "printf '<redacted>' | wg set <interface> private-key /dev/stdin",
+            $"ip netns exec {request.NamespaceName} ip link delete {request.InterfaceName} 2>/dev/null || true",
+            $"ip link delete {request.InterfaceName} 2>/dev/null || true",
             $"ip link add {request.InterfaceName} type wireguard",
             $"ip link set {request.InterfaceName} netns {request.NamespaceName}",
+            $"ip netns exec {request.NamespaceName} ip addr flush dev {request.InterfaceName}",
             $"ip netns exec {request.NamespaceName} ip addr add {request.AddressCidr} dev {request.InterfaceName}",
             $"ip netns exec {request.NamespaceName} wg set {request.InterfaceName} private-key /dev/stdin listen-port {request.ListenPort} peer {request.PeerPublicKey} allowed-ips {request.PeerClientAddress}",
             $"ip netns exec {request.NamespaceName} ip link set {request.InterfaceName} up"
@@ -168,6 +176,7 @@ public partial class TeamLabNetworkService(
             {
                 $"test ! -f /run/gzctf-teamlab/{name}/dnsmasq.pid || kill $(cat /run/gzctf-teamlab/{name}/dnsmasq.pid) 2>/dev/null || true",
                 $"rm -rf /run/gzctf-teamlab/{name} 2>/dev/null || true",
+                $"ip netns pids {name} 2>/dev/null | xargs -r kill 2>/dev/null || true",
                 $"ip link delete {name} 2>/dev/null || true",
                 $"ip netns delete {name} 2>/dev/null || true"
             })

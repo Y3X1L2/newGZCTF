@@ -1,5 +1,11 @@
 namespace GZCTF.Agent.Models;
 
+public enum VmInitOsType
+{
+    Linux = 0,
+    Windows = 1
+}
+
 public class CreateVmRequest
 {
     public int? TemplateId { get; set; }
@@ -9,6 +15,7 @@ public class CreateVmRequest
     public int Cpu { get; set; } = 2;
     public string? Flag { get; set; }
     public List<VmNetworkInterfaceRequest> Interfaces { get; set; } = [];
+    public VmInitConfig? CloudInit { get; set; }
 }
 
 public class VmNetworkInterfaceRequest
@@ -16,7 +23,32 @@ public class VmNetworkInterfaceRequest
     public string BridgeName { get; set; } = string.Empty;
     public string? MacAddress { get; set; }
     public string Model { get; set; } = "e1000e";
+    public string? InterfaceName { get; set; }
+    public string? IpAddress { get; set; }
+    public int? PrefixLength { get; set; }
+    public string? Gateway { get; set; }
+    public List<string> DnsServers { get; set; } = [];
+    public List<string> Routes { get; set; } = [];
+    public bool IsPrimary { get; set; }
 }
+
+public class VmInitConfig
+{
+    public bool Enabled { get; set; }
+    public VmInitOsType OsType { get; set; } = VmInitOsType.Linux;
+    public string Hostname { get; set; } = string.Empty;
+    public string InstanceId { get; set; } = string.Empty;
+    public string UserData { get; set; } = string.Empty;
+    public string MetaData { get; set; } = string.Empty;
+    public string NetworkConfig { get; set; } = string.Empty;
+    public List<string> SensitiveKeys { get; set; } = [];
+}
+
+public sealed record CloudInitSeedFiles(
+    string UserDataPath,
+    string MetaDataPath,
+    string NetworkConfigPath,
+    string IsoPath);
 
 public class CreateVmResponse
 {

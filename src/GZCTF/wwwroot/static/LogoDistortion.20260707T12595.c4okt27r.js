@@ -1,0 +1,22 @@
+/* YINYU CTF Platform @unknown
+ *
+ * Commit    : Unofficial build version
+ * Build     : 2026-07-07T12:59:55.597Z
+ */
+import{Lt as e,un as t,xn as n}from"./Api.20260707T12595.cj2ps75j.js";import{$ as r,B as i,H as a,J as o,O as s,P as c,et as l,f as u,ot as d,t as f,tt as p,y as m}from"./three.module.20260707T12595.dl5r5f5r.js";import"./index.20260707T12595.zkxqluhk.js";var h=n(t(),1),g=e();function _({grid:e=18,mouse:t=.22,strength:n=.12,relaxation:_=.88,imageSrc:v,className:y=``}){let b=(0,h.useRef)(null);return(0,h.useEffect)(()=>{let h=b.current;if(!h)return;let g=new l,y=new f({antialias:!0,alpha:!0,powerPreference:`high-performance`});y.setClearColor(0,0),y.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5)),h.appendChild(y.domElement);let x=new i(0,0,0,0,-1e3,1e3);x.position.z=2;let S={uTexture:{value:null},uDataTexture:{value:null}},C=new u(new Float32Array(4*e*e),e,e,o,m);C.needsUpdate=!0,S.uDataTexture.value=C;let w=new p({transparent:!0,depthWrite:!1,side:2,uniforms:S,vertexShader:`
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,fragmentShader:`
+        uniform sampler2D uDataTexture;
+        uniform sampler2D uTexture;
+        varying vec2 vUv;
+
+        void main() {
+          vec4 offset = texture2D(uDataTexture, vUv);
+          vec4 texel = texture2D(uTexture, vUv - 0.022 * offset.rg);
+          gl_FragColor = texel;
+        }
+      `}),T=new a(1,1,e-1,e-1),E=new c(T,w);g.add(E);let D=()=>{let e=Math.max(h.offsetWidth,1),t=Math.max(h.offsetHeight,1),n=e/t;y.setSize(e,t),E.scale.set(n,1,1),x.left=-n/2,x.right=n/2,x.top=.5,x.bottom=-.5,x.updateProjectionMatrix(),S.uTexture.value&&y.render(g,x)};new d().load(v,e=>{e.minFilter=s,e.magFilter=s,e.colorSpace=r,S.uTexture.value=e,D(),y.render(g,x),requestAnimationFrame(()=>{D(),y.render(g,x)})});let O={x:0,y:0,prevX:0,prevY:0,vX:0,vY:0},k=0,A=!1,j=!0,M=e=>Math.max(-7.5,Math.min(7.5,e)),N=0,P=()=>{!N&&j&&(N=requestAnimationFrame(B))},F=e=>{let t=h.getBoundingClientRect(),n=(e.clientX-t.left)/t.width,r=1-(e.clientY-t.top)/t.height;A||=(O.prevX=n,O.prevY=r,!0),O.vX=n-O.prevX,O.vY=r-O.prevY,O.x=n,O.y=r,O.prevX=n,O.prevY=r,k=90,P()},I=e=>{let t=h.getBoundingClientRect(),n=(e.clientX-t.left)/t.width,r=1-(e.clientY-t.top)/t.height;A=!0,O.x=n,O.y=r,O.prevX=n,O.prevY=r,O.vX=.018,O.vY=-.012,k=46,P()},L=()=>{O.vX=0,O.vY=0,A=!1,k=45,P()},R=new IntersectionObserver(([e])=>{j=!!e?.isIntersecting,j&&P()}),z=new ResizeObserver(D);z.observe(h),R.observe(h),h.addEventListener(`pointerenter`,I),h.addEventListener(`pointermove`,F),h.addEventListener(`pointerleave`,L),D();function B(){if(N=0,!j)return;let r=k>0;if(!r)return;let i=C.image.data;for(let t=0;t<e*e;t+=1)i[4*t]*=_,i[4*t+1]*=_;if(r){let r=e*O.x,a=e*O.y,o=e*t;for(let t=0;t<e;t+=1)for(let s=0;s<e;s+=1){let c=(r-t)**2+(a-s)**2;if(c<o*o){let r=4*(t+e*s),a=Math.min(o/Math.sqrt(Math.max(c,.001)),10);i[r]=M(i[r]+180*n*O.vX*a),i[r+1]=M(i[r+1]-180*n*O.vY*a)}}--k}C.needsUpdate=!0,y.render(g,x),k>0&&(N=requestAnimationFrame(B))}return y.render(g,x),()=>{cancelAnimationFrame(N),z.disconnect(),R.disconnect(),h.removeEventListener(`pointerenter`,I),h.removeEventListener(`pointermove`,F),h.removeEventListener(`pointerleave`,L),y.dispose(),T.dispose(),w.dispose(),C.dispose(),S.uTexture.value?.dispose(),y.domElement.remove()}},[e,v,t,_,n]),(0,g.jsx)(`div`,{ref:b,className:[`grid-distortion-canvas`,`yy-grid-distortion-canvas`,y].filter(Boolean).join(` `)})}function v(){let e=document.createElement(`canvas`);if(e.getContext(`webgl2`))return!0;let t=e.getContext(`webgl`)||e.getContext(`experimental-webgl`);return!!(t&&`getExtension`in t&&t.getExtension(`OES_texture_float`))}function y({className:e=``,src:t}){let[n,r]=(0,h.useState)(!1),i=t||`/static/yinyu-icon-transparent.20260707T12595.jf276mku.png`;return(0,h.useEffect)(()=>{r(v())},[]),(0,g.jsx)(`div`,{className:[`logo-distortion`,`yy-logo-distortion`,e].filter(Boolean).join(` `),children:n?(0,g.jsx)(_,{imageSrc:i,grid:26,mouse:.44,strength:.24,relaxation:.86}):(0,g.jsx)(`img`,{className:`logo-distortion-fallback yy-logo-distortion-fallback`,src:i,alt:``,draggable:`false`})})}export{y as t};

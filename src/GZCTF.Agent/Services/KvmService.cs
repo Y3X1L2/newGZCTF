@@ -15,7 +15,9 @@ public class KvmService
 
     private static readonly Regex SafeNamePattern = new(@"^[a-zA-Z0-9_\-]+$", RegexOptions.Compiled);
     private static readonly Regex SafeMacPattern = new(@"^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$", RegexOptions.Compiled);
+    private static readonly Regex SafeInterfacePattern = new(@"^[a-zA-Z0-9_\-\.]+$", RegexOptions.Compiled);
     private static readonly ConcurrentDictionary<string, RdpProxy> RdpProxies = new();
+    private static readonly SemaphoreSlim VirtInstallGate = new(1, 1);
     private const int RdpProxyPortStart = 46000;
     private const int RdpProxyPortCount = 10000;
 
@@ -44,10 +46,29 @@ public class KvmService
         else
             await RunCommandAsync($"qemu-img create -f qcow2 {ShellEscape(vmPath)} 20G", token);
 
-        await RunCommandAsync(
-            $"virt-install --name {ShellEscape(request.VmName)} --memory {request.Memory} --vcpus {request.Cpu} " +
-            $"--disk path={ShellEscape(vmPath)} --osinfo detect=on,require=off --import --noautoconsole " +
-            $"{BuildVirtInstallNetworkArguments(request)} --graphics vnc,listen=0.0.0.0", token);
+        CloudInitSeedFiles? cloudInitFiles = null;
+        var cloudInitArgs = string.Empty;
+        if (request.CloudInit?.Enabled == true)
+        {
+            cloudInitFiles = await WriteCloudInitSeedFilesAsync(request, token);
+            var directCloudInit = await SupportsVirtInstallCloudInitAsync(token);
+            if (!directCloudInit)
+                await CreateCloudInitSeedIsoAsync(cloudInitFiles, token);
+            cloudInitArgs = BuildVirtInstallCloudInitArguments(cloudInitFiles, directCloudInit) + " ";
+        }
+
+        await VirtInstallGate.WaitAsync(token);
+        try
+        {
+            await RunCommandAsync(
+                $"virt-install --name {ShellEscape(request.VmName)} --memory {request.Memory} --vcpus {request.Cpu} " +
+                $"--disk path={ShellEscape(vmPath)} --osinfo detect=on,require=off --import --noautoconsole " +
+                $"{cloudInitArgs}{BuildVirtInstallNetworkArguments(request)} --graphics vnc,listen=0.0.0.0", token);
+        }
+        finally
+        {
+            VirtInstallGate.Release();
+        }
 
         var state = (await RunCommandAsync($"virsh domstate {ShellEscape(request.VmName)}", token)).Trim();
         if (!state.Equals("running", StringComparison.OrdinalIgnoreCase))
@@ -68,6 +89,7 @@ public class KvmService
         await StopRdpProxyAsync(vmName);
         await RunCommandAsync($"virsh destroy {ShellEscape(vmName)} 2>/dev/null || true", token);
         await RunCommandAsync($"virsh undefine {ShellEscape(vmName)} --remove-all-storage 2>/dev/null || true", token);
+        CleanupCloudInitSeed(vmName);
     }
 
     public async Task<int> GetVmCountAsync(CancellationToken token)
@@ -290,6 +312,188 @@ public class KvmService
         }
 
         return $"--network bridge={iface.BridgeName},model={model}{mac}";
+    }
+
+    internal static string BuildCloudInitNetworkConfig(CreateVmRequest request)
+    {
+        var builder = new System.Text.StringBuilder();
+        builder.AppendLine("version: 2");
+        builder.AppendLine("ethernets:");
+
+        var index = 0;
+        foreach (var iface in request.Interfaces.Where(HasStaticCloudInitNetworkIntent))
+        {
+            var macAddress = iface.MacAddress!;
+            if (!SafeMacPattern.IsMatch(macAddress))
+                throw new ArgumentException("Invalid VM MAC address.", nameof(iface.MacAddress));
+
+            var name = string.IsNullOrWhiteSpace(iface.InterfaceName) ? $"eth{index}" : iface.InterfaceName.Trim();
+            if (!SafeInterfacePattern.IsMatch(name))
+                throw new ArgumentException("Invalid VM interface name.", nameof(iface.InterfaceName));
+
+            if (!IsValidIpv4(iface.IpAddress))
+                throw new ArgumentException("Invalid VM IP address.", nameof(iface.IpAddress));
+
+            if (iface.PrefixLength is < 1 or > 32)
+                throw new ArgumentException("Invalid VM IP prefix length.", nameof(iface.PrefixLength));
+
+            builder.AppendLine($"  {name}:");
+            builder.AppendLine("    match:");
+            builder.AppendLine($"      macaddress: \"{macAddress.ToLowerInvariant()}\"");
+            builder.AppendLine($"    set-name: {name}");
+            builder.AppendLine("    dhcp4: false");
+            builder.AppendLine("    dhcp6: false");
+            builder.AppendLine($"    addresses: [{iface.IpAddress}/{iface.PrefixLength}]");
+
+            if (!string.IsNullOrWhiteSpace(iface.Gateway))
+            {
+                if (!IsValidIpv4(iface.Gateway))
+                    throw new ArgumentException("Invalid VM gateway address.", nameof(iface.Gateway));
+                builder.AppendLine($"    gateway4: {iface.Gateway}");
+            }
+
+            var dns = iface.DnsServers
+                .Where(server => !string.IsNullOrWhiteSpace(server))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            if (dns.Any(server => !IsValidIpv4(server)))
+                throw new ArgumentException("Invalid VM DNS server address.", nameof(iface.DnsServers));
+
+            if (dns.Length > 0)
+            {
+                builder.AppendLine("    nameservers:");
+                builder.AppendLine($"      addresses: [{string.Join(", ", dns)}]");
+            }
+
+            var routes = iface.Routes
+                .Select(ParseRoute)
+                .Cast<(string To, string Via)>()
+                .ToArray();
+            if (routes.Length > 0)
+            {
+                builder.AppendLine("    routes:");
+                foreach (var route in routes)
+                {
+                    builder.AppendLine($"      - to: {route.To}");
+                    builder.AppendLine($"        via: {route.Via}");
+                }
+            }
+
+            index++;
+        }
+
+        return builder.ToString();
+    }
+
+    internal static string BuildVirtInstallCloudInitArguments(CloudInitSeedFiles files, bool useDirectCloudInit)
+    {
+        return useDirectCloudInit
+            ? "--cloud-init " +
+              $"user-data={ShellEscape(files.UserDataPath)},meta-data={ShellEscape(files.MetaDataPath)},network-config={ShellEscape(files.NetworkConfigPath)}"
+            : $"--disk path={ShellEscape(files.IsoPath)},device=cdrom";
+    }
+
+    private async Task<CloudInitSeedFiles> WriteCloudInitSeedFilesAsync(CreateVmRequest request,
+        CancellationToken token)
+    {
+        var root = GetCloudInitSeedDirectory(request.VmName);
+        if (Directory.Exists(root))
+            Directory.Delete(root, recursive: true);
+        Directory.CreateDirectory(root);
+
+        var files = new CloudInitSeedFiles(
+            Path.Combine(root, "user-data"),
+            Path.Combine(root, "meta-data"),
+            Path.Combine(root, "network-config"),
+            Path.Combine(root, "seed.iso"));
+
+        var cloudInit = request.CloudInit!;
+        await File.WriteAllTextAsync(files.UserDataPath, cloudInit.UserData, token);
+        await File.WriteAllTextAsync(files.MetaDataPath, cloudInit.MetaData, token);
+        await File.WriteAllTextAsync(files.NetworkConfigPath,
+            string.IsNullOrWhiteSpace(cloudInit.NetworkConfig)
+                ? BuildCloudInitNetworkConfig(request)
+                : cloudInit.NetworkConfig,
+            token);
+        return files;
+    }
+
+    private async Task<bool> SupportsVirtInstallCloudInitAsync(CancellationToken token)
+    {
+        var result = await RunCommandAsync("virt-install --help 2>/dev/null | grep -q -- '--cloud-init' && echo yes || echo no",
+            token, throwOnError: false);
+        return result.Trim().Equals("yes", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task CreateCloudInitSeedIsoAsync(CloudInitSeedFiles files, CancellationToken token)
+    {
+        var dir = Path.GetDirectoryName(files.UserDataPath)!;
+        var genisoimage = await RunCommandAsync("command -v genisoimage || command -v mkisofs || command -v xorriso",
+            token, throwOnError: false);
+        var tool = genisoimage.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(tool))
+            throw new InvalidOperationException("cloud-init seed ISO requires genisoimage, mkisofs, or xorriso.");
+
+        if (tool.EndsWith("xorriso", StringComparison.Ordinal))
+        {
+            await RunCommandAsync(
+                $"{ShellEscape(tool)} -as mkisofs -output {ShellEscape(files.IsoPath)} -volid CIDATA -joliet -rock " +
+                "-graft-points " +
+                $"user-data={ShellEscape(Path.Combine(dir, "user-data"))} " +
+                $"meta-data={ShellEscape(Path.Combine(dir, "meta-data"))} " +
+                $"network-config={ShellEscape(Path.Combine(dir, "network-config"))}",
+                token);
+            return;
+        }
+
+        await RunCommandAsync(
+            $"{ShellEscape(tool)} -output {ShellEscape(files.IsoPath)} -volid CIDATA -joliet -rock " +
+            "-graft-points " +
+            $"user-data={ShellEscape(Path.Combine(dir, "user-data"))} " +
+            $"meta-data={ShellEscape(Path.Combine(dir, "meta-data"))} " +
+            $"network-config={ShellEscape(Path.Combine(dir, "network-config"))}",
+            token);
+    }
+
+    private static (string To, string Via)? ParseRoute(string route)
+    {
+        var parts = route.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 3 || !string.Equals(parts[1], "via", StringComparison.OrdinalIgnoreCase) ||
+            !IsValidIpv4Cidr(parts[0]) || !IsValidIpv4(parts[2]))
+            throw new ArgumentException("Invalid VM static route.", nameof(route));
+
+        return (parts[0], parts[2]);
+    }
+
+    private static bool HasStaticCloudInitNetworkIntent(VmNetworkInterfaceRequest iface) =>
+        !string.IsNullOrWhiteSpace(iface.MacAddress) ||
+        !string.IsNullOrWhiteSpace(iface.IpAddress) ||
+        iface.PrefixLength.HasValue ||
+        !string.IsNullOrWhiteSpace(iface.Gateway) ||
+        iface.DnsServers.Count > 0 ||
+        iface.Routes.Count > 0;
+
+    private static bool IsValidIpv4(string? value) =>
+        IPAddress.TryParse(value, out var address) &&
+        address.AddressFamily == AddressFamily.InterNetwork;
+
+    private static bool IsValidIpv4Cidr(string value)
+    {
+        var parts = value.Split('/');
+        return parts.Length == 2 &&
+               IsValidIpv4(parts[0]) &&
+               int.TryParse(parts[1], out var prefix) &&
+               prefix is >= 1 and <= 32;
+    }
+
+    private string GetCloudInitSeedDirectory(string vmName) =>
+        Path.Combine(_config.ImageStoragePath, "cloud-init", vmName);
+
+    private void CleanupCloudInitSeed(string vmName)
+    {
+        var root = GetCloudInitSeedDirectory(vmName);
+        if (Directory.Exists(root))
+            Directory.Delete(root, recursive: true);
     }
 
     private async Task<string> RunCommandAsync(string cmd, CancellationToken token, bool throwOnError = true)

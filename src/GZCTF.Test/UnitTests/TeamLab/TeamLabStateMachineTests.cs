@@ -13,6 +13,7 @@ public class TeamLabStateMachineTests
     [InlineData(TeamLabRuntimeStatus.Deploying, TeamLabRuntimeStatus.Probing)]
     [InlineData(TeamLabRuntimeStatus.Probing, TeamLabRuntimeStatus.Running)]
     [InlineData(TeamLabRuntimeStatus.Scheduled, TeamLabRuntimeStatus.Destroying)]
+    [InlineData(TeamLabRuntimeStatus.Deploying, TeamLabRuntimeStatus.Destroying)]
     [InlineData(TeamLabRuntimeStatus.Running, TeamLabRuntimeStatus.Destroying)]
     [InlineData(TeamLabRuntimeStatus.Stopped, TeamLabRuntimeStatus.Destroying)]
     [InlineData(TeamLabRuntimeStatus.Destroying, TeamLabRuntimeStatus.Destroyed)]

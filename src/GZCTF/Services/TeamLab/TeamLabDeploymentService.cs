@@ -398,19 +398,201 @@ public class TeamLabDeploymentService(
         if (spec.Kind != TeamLabAssetSpecKind.Vm)
             throw new ArgumentException("TeamLab native VM request requires a VM asset spec.", nameof(spec));
 
+        var vmName = TrimLinuxName($"{TeamLabPlanService.BuildRuntimeResourcePrefix(runtimeId)}-{NormalizeResourceToken(spec.TopologyKey)}");
+        var interfaces = spec.Interfaces
+            .Select(iface => TeamLabAssetPlanService.ToVmInterfaceRequest(iface, spec.OSType))
+            .ToList();
+
         return new AgentCreateVmRequest
         {
             TemplateId = spec.SourceTemplateId,
             TemplatePath = spec.Image,
-            VmName = TrimLinuxName($"{TeamLabPlanService.BuildRuntimeResourcePrefix(runtimeId)}-{NormalizeResourceToken(spec.TopologyKey)}"),
+            VmName = vmName,
             Memory = spec.MemoryLimit,
             Cpu = spec.CpuCount,
             Flag = flag,
-            Interfaces = spec.Interfaces
-                .Select(iface => TeamLabAssetPlanService.ToVmInterfaceRequest(iface, spec.OSType))
-                .ToList()
+            Interfaces = interfaces,
+            CloudInit = BuildVmInitConfig(runtimeId, spec, vmName, interfaces, flag)
         };
     }
+
+    public static AgentVmInitConfig BuildVmInitConfig(int runtimeId, TeamLabAssetSpec spec, string vmName,
+        IReadOnlyList<AgentVmNetworkInterfaceRequest> interfaces, string? flag)
+    {
+        if (spec.OSType != OSType.Linux)
+        {
+            return new AgentVmInitConfig
+            {
+                Enabled = false,
+                OsType = spec.OSType,
+                Hostname = vmName,
+                InstanceId = $"teamlab-{runtimeId}-{NormalizeResourceToken(spec.TopologyKey)}"
+            };
+        }
+
+        var instanceId = $"teamlab-{runtimeId}-{NormalizeResourceToken(spec.TopologyKey)}";
+        var metaData = BuildCloudInitMetaData(instanceId, vmName);
+        var networkConfig = BuildCloudInitNetworkConfig(interfaces);
+        var userData = BuildCloudInitUserData(runtimeId, spec, vmName, flag);
+
+        return new AgentVmInitConfig
+        {
+            Enabled = true,
+            OsType = OSType.Linux,
+            Hostname = vmName,
+            InstanceId = instanceId,
+            UserData = userData,
+            MetaData = metaData,
+            NetworkConfig = networkConfig,
+            SensitiveKeys = ["flag", "GZCTF_FLAG", "user-data"]
+        };
+    }
+
+    private static string BuildCloudInitMetaData(string instanceId, string hostname) =>
+        $"instance-id: {YamlScalar(instanceId)}\nlocal-hostname: {YamlScalar(hostname)}\n";
+
+    private static string BuildCloudInitUserData(int runtimeId, TeamLabAssetSpec spec, string hostname, string? flag)
+    {
+        var escapedFlag = EscapeSingleQuotedShell(flag ?? string.Empty);
+        var escapedTopology = EscapeSingleQuotedShell(spec.TopologyKey);
+        var escapedName = EscapeSingleQuotedShell(spec.Name);
+        var builder = new StringBuilder();
+        builder.AppendLine("#cloud-config");
+        builder.AppendLine($"hostname: {YamlScalar(hostname)}");
+        builder.AppendLine("manage_etc_hosts: true");
+        builder.AppendLine("write_files:");
+        builder.AppendLine("  - path: /opt/gzctf/runtime/env");
+        builder.AppendLine("    owner: root:root");
+        builder.AppendLine("    permissions: '0600'");
+        builder.AppendLine("    content: |");
+        builder.AppendLine($"      GZCTF_RUNTIME_ID='{runtimeId}'");
+        builder.AppendLine($"      GZCTF_TOPOLOGY_KEY='{escapedTopology}'");
+        builder.AppendLine($"      GZCTF_NODE_NAME='{escapedName}'");
+        builder.AppendLine($"      GZCTF_FLAG='{escapedFlag}'");
+        builder.AppendLine("  - path: /opt/gzctf/runtime/flag");
+        builder.AppendLine("    owner: root:root");
+        builder.AppendLine("    permissions: '0600'");
+        builder.AppendLine("    content: |");
+        AppendIndentedLiteral(builder, flag ?? string.Empty, "      ");
+        builder.AppendLine("runcmd:");
+        builder.AppendLine("  - [ bash, -lc, 'systemctl daemon-reload || true' ]");
+        builder.AppendLine("  - [ bash, -lc, 'test ! -x /opt/gzctf/bin/firstboot || /opt/gzctf/bin/firstboot' ]");
+        builder.AppendLine("  - [ bash, -lc, 'systemctl restart gzctf-runtime.service 2>/dev/null || true' ]");
+        return builder.ToString();
+    }
+
+    public static string BuildCloudInitNetworkConfig(IReadOnlyList<AgentVmNetworkInterfaceRequest> interfaces)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("version: 2");
+        builder.AppendLine("ethernets:");
+
+        var index = 0;
+        foreach (var iface in interfaces.Where(HasStaticCloudInitNetworkIntent))
+        {
+            var name = string.IsNullOrWhiteSpace(iface.InterfaceName) ? $"eth{index}" : iface.InterfaceName.Trim();
+            if (!IsValidIpv4(iface.IpAddress))
+                throw new ArgumentException("Invalid VM IP address.", nameof(iface.IpAddress));
+
+            if (iface.PrefixLength is < 1 or > 32)
+                throw new ArgumentException("Invalid VM IP prefix length.", nameof(iface.PrefixLength));
+
+            builder.AppendLine($"  {YamlKey(name)}:");
+            builder.AppendLine("    match:");
+            builder.AppendLine($"      macaddress: \"{iface.MacAddress!.ToLowerInvariant()}\"");
+            builder.AppendLine($"    set-name: {YamlScalar(name)}");
+            builder.AppendLine("    dhcp4: false");
+            builder.AppendLine("    dhcp6: false");
+            builder.AppendLine($"    addresses: [{iface.IpAddress}/{iface.PrefixLength}]");
+
+            if (!string.IsNullOrWhiteSpace(iface.Gateway))
+            {
+                if (!IsValidIpv4(iface.Gateway))
+                    throw new ArgumentException("Invalid VM gateway address.", nameof(iface.Gateway));
+                builder.AppendLine($"    gateway4: {iface.Gateway}");
+            }
+
+            var dnsServers = iface.DnsServers
+                .Where(server => !string.IsNullOrWhiteSpace(server))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            if (dnsServers.Any(server => !IsValidIpv4(server)))
+                throw new ArgumentException("Invalid VM DNS server address.", nameof(iface.DnsServers));
+
+            if (dnsServers.Length > 0)
+            {
+                builder.AppendLine("    nameservers:");
+                builder.AppendLine($"      addresses: [{string.Join(", ", dnsServers)}]");
+            }
+
+            var routes = iface.Routes
+                .Select(ParseRoute)
+                .Cast<(string To, string Via)>()
+                .ToArray();
+            if (routes.Length > 0)
+            {
+                builder.AppendLine("    routes:");
+                foreach (var route in routes)
+                {
+                    builder.AppendLine($"      - to: {route.To}");
+                    builder.AppendLine($"        via: {route.Via}");
+                }
+            }
+
+            index++;
+        }
+
+        return builder.ToString();
+    }
+
+    private static (string To, string Via)? ParseRoute(string route)
+    {
+        var parts = route.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 3 || !string.Equals(parts[1], "via", StringComparison.OrdinalIgnoreCase) ||
+            !IsValidIpv4Cidr(parts[0]) || !IsValidIpv4(parts[2]))
+            throw new ArgumentException("Invalid VM static route.", nameof(route));
+
+        return (parts[0], parts[2]);
+    }
+
+    private static string YamlKey(string value) => YamlScalar(value).Trim('"');
+
+    private static bool HasStaticCloudInitNetworkIntent(AgentVmNetworkInterfaceRequest iface) =>
+        !string.IsNullOrWhiteSpace(iface.MacAddress) ||
+        !string.IsNullOrWhiteSpace(iface.IpAddress) ||
+        iface.PrefixLength.HasValue ||
+        !string.IsNullOrWhiteSpace(iface.Gateway) ||
+        iface.DnsServers.Count > 0 ||
+        iface.Routes.Count > 0;
+
+    private static bool IsValidIpv4(string? value) =>
+        System.Net.IPAddress.TryParse(value, out var address) &&
+        address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork;
+
+    private static bool IsValidIpv4Cidr(string value)
+    {
+        var parts = value.Split('/');
+        return parts.Length == 2 &&
+               IsValidIpv4(parts[0]) &&
+               int.TryParse(parts[1], out var prefix) &&
+               prefix is >= 1 and <= 32;
+    }
+
+    private static void AppendIndentedLiteral(StringBuilder builder, string value, string indent)
+    {
+        var normalized = value.Replace("\r\n", "\n").Replace('\r', '\n');
+        foreach (var line in normalized.Split('\n'))
+            builder.AppendLine($"{indent}{line}");
+    }
+
+    private static string YamlScalar(string value)
+    {
+        if (value.All(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' or '.'))
+            return value;
+        return $"\"{value.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
+    }
+
+    private static string EscapeSingleQuotedShell(string value) => value.Replace("'", "'\"'\"'");
 
     public static TeamLabVmReadyValidationResult ValidateNativeVmReady(TeamLabAssetSpec spec,
         AgentVmIpResponse? response)
@@ -640,11 +822,14 @@ public class TeamLabDeploymentService(
         }
 
         var vmRequest = BuildNativeVmRequest(runtimeId, asset, flag);
+        logger.LogInformation("TeamLab VM {VmName} init config prepared: cloudInit={CloudInitEnabled}, os={OsType}, interfaces={InterfaceCount}.",
+            vmRequest.VmName, vmRequest.CloudInit?.Enabled == true, vmRequest.CloudInit?.OsType, vmRequest.Interfaces.Count);
         var vm = await agentClient.CreateVmAsync(workerNodeId, vmRequest, token);
         if (vm is null || string.IsNullOrWhiteSpace(vm.VmName))
             throw new InvalidOperationException($"Failed to create TeamLab VM {asset.Name}.");
         trackCreatedVm(vm.VmName);
 
+        logger.LogInformation("TeamLab VM {VmName} created; waiting for guest/network readiness.", vm.VmName);
         var vmIp = await WaitForNativeVmReadyAsync(workerNodeId, asset, vmRequest, vm.VmName, token);
         var vmReady = ValidateNativeVmReady(asset, vmIp);
         if (!vmReady.Success)
@@ -864,6 +1049,8 @@ public class TeamLabDeploymentService(
         }
 
         await SyncCompatibilityEnvironmentAsync(runtime, topology.Config, plan, teamIndex, token);
+        if (!capacityAlreadyReserved)
+            await ConfirmTeamLabCapacityAsync(runtime, slots, token);
 
         return await MarkRuntimeRunningAsync(runtime, "Native TeamLab runtime deployment reached running state.", token);
     }
@@ -909,6 +1096,8 @@ public class TeamLabDeploymentService(
 
         if (!TeamLabStateMachine.CanTransition(runtime.Status, TeamLabRuntimeStatus.Destroying))
             return new TeamLabDeploymentResult(false, $"Cannot destroy TeamLab runtime from status {runtime.Status}.", runtime);
+
+        await deploymentQueue.CancelTeamLabRuntimeAsync(runtime.Id, "TeamLab runtime was destroyed.", token);
 
         runtime.Status = TeamLabRuntimeStatus.Destroying;
         runtime.IsOpenToPlayers = false;
@@ -1146,7 +1335,7 @@ public class TeamLabDeploymentService(
         }
 
         if (!capacityAlreadyReserved)
-            await ReleaseTeamLabCapacityAsync(runtime, reservedSlots, token);
+            await ReleaseReservedTeamLabCapacityAsync(runtime, reservedSlots, token);
 
         return await FailAsync(runtime, message, token);
     }
@@ -1160,7 +1349,7 @@ public class TeamLabDeploymentService(
         if (slots.DockerSlots == 0 && slots.VmSlots == 0)
             return;
 
-        await capacityReservation.ReleaseAsync(nodeId, slots.DockerSlots, slots.VmSlots, token);
+        await capacityReservation.ReleaseActiveAsync(nodeId, slots.DockerSlots, slots.VmSlots, token);
     }
 
     internal async Task ReleaseTeamLabCapacityAsync(TeamLabRuntime runtime, TeamLabAssetSlotCount slots,
@@ -1172,7 +1361,31 @@ public class TeamLabDeploymentService(
         if (slots.DockerSlots == 0 && slots.VmSlots == 0)
             return;
 
+        await capacityReservation.ReleaseActiveAsync(nodeId, slots.DockerSlots, slots.VmSlots, token);
+    }
+
+    internal async Task ReleaseReservedTeamLabCapacityAsync(TeamLabRuntime runtime, TeamLabAssetSlotCount slots,
+        CancellationToken token)
+    {
+        if (runtime.WorkerNodeId is not { } nodeId)
+            return;
+
+        if (slots.DockerSlots == 0 && slots.VmSlots == 0)
+            return;
+
         await capacityReservation.ReleaseAsync(nodeId, slots.DockerSlots, slots.VmSlots, token);
+    }
+
+    internal async Task ConfirmTeamLabCapacityAsync(TeamLabRuntime runtime, TeamLabAssetSlotCount slots,
+        CancellationToken token)
+    {
+        if (runtime.WorkerNodeId is not { } nodeId)
+            return;
+
+        if (slots.DockerSlots == 0 && slots.VmSlots == 0)
+            return;
+
+        await capacityReservation.ConfirmAsync(nodeId, slots.DockerSlots, slots.VmSlots, token);
     }
 
     private async Task<string[]> CleanupTrackedNativeAssetsAsync(Guid workerNodeId,

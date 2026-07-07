@@ -401,6 +401,127 @@ public class TeamLabDeploymentServiceTests
         Assert.Equal("virtio", iface.Model);
     }
 
+    [Fact]
+    public void BuildNativeVmRequest_AddsCloudInitForLinuxTemplates()
+    {
+        var spec = new TeamLabAssetSpec(
+            TeamLabAssetSpecKind.Vm,
+            TopologyKey: "linux-core",
+            Name: "Linux Core",
+            SourceTemplateId: 8,
+            Image: "/images/linux.qcow2",
+            CpuCount: 2,
+            MemoryLimit: 1024,
+            StorageLimit: 20480,
+            ExposePort: 22,
+            InfrastructureRole: null,
+            StartPriority: 20,
+            Interfaces:
+            [
+                new TeamLabAssetInterfaceSpec("asset", "entry", "tl12-entry", "eth0", "10.90.0.20", 28,
+                    "02:42:ac:10:00:04", IsPrimary: true, RemoveDefaultRoute: false),
+                new TeamLabAssetInterfaceSpec("asset", "data", "tl12-data", "eth1", "10.90.0.36", 28,
+                    "02:42:ac:10:00:05", IsPrimary: false, RemoveDefaultRoute: false)
+            ],
+            OSType: OSType.Linux);
+
+        var request = TeamLabDeploymentService.BuildNativeVmRequest(runtimeId: 12, spec, flag: "flag{linux}");
+
+        Assert.NotNull(request.CloudInit);
+        Assert.True(request.CloudInit!.Enabled);
+        Assert.Equal(OSType.Linux, request.CloudInit.OsType);
+        Assert.Equal("tl12-linux-core", request.CloudInit.Hostname);
+        Assert.Equal("teamlab-12-linux-core", request.CloudInit.InstanceId);
+        Assert.Contains("flag{linux}", request.CloudInit.UserData);
+        Assert.Contains("GZCTF_FLAG", request.CloudInit.UserData);
+        Assert.Contains("match:", request.CloudInit.NetworkConfig);
+        Assert.Contains("macaddress: \"02:42:ac:10:00:04\"", request.CloudInit.NetworkConfig);
+        Assert.Contains("addresses: [10.90.0.20/28]", request.CloudInit.NetworkConfig);
+        Assert.Contains("gateway4: 10.90.0.17", request.CloudInit.NetworkConfig);
+        Assert.Contains("nameservers:", request.CloudInit.NetworkConfig);
+        Assert.Contains("addresses: [10.90.0.17]", request.CloudInit.NetworkConfig);
+        Assert.Contains("02:42:ac:10:00:05", request.CloudInit.NetworkConfig);
+        Assert.Contains("flag", request.CloudInit.SensitiveKeys);
+    }
+
+    [Fact]
+    public void BuildVmInitConfig_IndentsMultilineFlagInUserData()
+    {
+        var spec = new TeamLabAssetSpec(
+            TeamLabAssetSpecKind.Vm,
+            TopologyKey: "linux-core",
+            Name: "Linux Core",
+            SourceTemplateId: 8,
+            Image: "/images/linux.qcow2",
+            CpuCount: 2,
+            MemoryLimit: 1024,
+            StorageLimit: 20480,
+            ExposePort: 22,
+            InfrastructureRole: null,
+            StartPriority: 20,
+            Interfaces: [],
+            OSType: OSType.Linux);
+
+        var init = TeamLabDeploymentService.BuildVmInitConfig(runtimeId: 12, spec, "tl12-linux-core", [],
+            "flag{line1}\nline2");
+
+        var userData = init.UserData.Replace("\r\n", "\n", StringComparison.Ordinal);
+        Assert.Contains("    content: |\n      flag{line1}\n      line2", userData);
+    }
+
+    [Fact]
+    public void BuildCloudInitNetworkConfig_RejectsInvalidPlatformRoute()
+    {
+        var interfaces = new[]
+        {
+            new AgentVmNetworkInterfaceRequest
+            {
+                BridgeName = "tl12-entry",
+                InterfaceName = "eth0",
+                MacAddress = "02:42:ac:10:00:04",
+                IpAddress = "10.90.0.20",
+                PrefixLength = 28,
+                Gateway = "10.90.0.17",
+                DnsServers = ["10.90.0.17"],
+                Routes = ["bad-route"],
+                IsPrimary = true
+            }
+        };
+
+        Assert.Throws<ArgumentException>(() => TeamLabDeploymentService.BuildCloudInitNetworkConfig(interfaces));
+    }
+
+    [Fact]
+    public void BuildNativeVmRequest_DoesNotEnableLinuxCloudInitForWindowsTemplates()
+    {
+        var spec = new TeamLabAssetSpec(
+            TeamLabAssetSpecKind.Vm,
+            TopologyKey: "win-ad",
+            Name: "Windows AD",
+            SourceTemplateId: 7,
+            Image: "/images/win.qcow2",
+            CpuCount: 20,
+            MemoryLimit: 4096,
+            StorageLimit: 40960,
+            ExposePort: 3389,
+            InfrastructureRole: "DomainController",
+            StartPriority: 10,
+            Interfaces:
+            [
+                new TeamLabAssetInterfaceSpec("asset", "data", "tl12-data", "eth0", "10.90.0.19", 28,
+                    "02:42:ac:10:00:02", IsPrimary: true, RemoveDefaultRoute: false)
+            ],
+            OSType: OSType.Windows);
+
+        var request = TeamLabDeploymentService.BuildNativeVmRequest(runtimeId: 12, spec, flag: "flag{win}");
+
+        Assert.NotNull(request.CloudInit);
+        Assert.False(request.CloudInit!.Enabled);
+        Assert.Equal(OSType.Windows, request.CloudInit.OsType);
+        Assert.Empty(request.CloudInit.UserData);
+        Assert.Empty(request.CloudInit.NetworkConfig);
+    }
+
     [Theory]
     [InlineData("Ready", "10.90.0.19", true)]
     [InlineData("Running", "10.90.0.19", true)]
@@ -662,8 +783,10 @@ public class TeamLabDeploymentServiceTests
 
         Assert.True(result.Success, result.Message);
         var reloaded = await context.WorkerNodes.SingleAsync(n => n.Id == node.Id);
-        Assert.Equal(3, reloaded.CurrentContainers);
-        Assert.Equal(1, reloaded.CurrentVms);
+        Assert.Equal(1, reloaded.CurrentContainers);
+        Assert.Equal(0, reloaded.CurrentVms);
+        Assert.Equal(2, reloaded.ReservedContainers);
+        Assert.Equal(1, reloaded.ReservedVms);
     }
 
     [Fact]
@@ -689,7 +812,7 @@ public class TeamLabDeploymentServiceTests
         };
         context.WorkerNodes.Add(node);
         await context.SaveChangesAsync();
-        var service = CreateDeploymentService(context);
+        var service = CreateDeploymentService(context, new NoopTeamLabAgentClient());
         var runtime = new TeamLabRuntime { Id = 8, WorkerNodeId = node.Id };
 
         var result = await service.TryReserveTeamLabCapacityAsync(runtime,
@@ -808,6 +931,92 @@ public class TeamLabDeploymentServiceTests
         Assert.Equal(3, ticket.DockerSlots);
         Assert.Equal(1, ticket.VmSlots);
         Assert.Equal(DeploymentQueueTicketStatus.Pending, ticket.Status);
+    }
+
+    [Fact]
+    public async Task DestroyRuntimeAsync_CancelsActiveTeamLabQueueTicket()
+    {
+        await using var context = CreateContext();
+        context.Games.Add(new Game
+        {
+            Id = 5,
+            Title = "queued TeamLab",
+            GameType = GameType.Penetration,
+            StartTimeUtc = DateTimeOffset.UtcNow.AddHours(-1),
+            EndTimeUtc = DateTimeOffset.UtcNow.AddHours(1)
+        });
+        context.Teams.Add(new Team { Id = 7, Name = "blue" });
+        context.TeamLabRuntimes.Add(new TeamLabRuntime
+        {
+            Id = 11,
+            GameId = 5,
+            TeamId = 7,
+            Status = TeamLabRuntimeStatus.Scheduled,
+            NetworkPrefix = "10.180.11.0/24"
+        });
+        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(
+            gameId: 5,
+            teamId: 7,
+            runtimeId: 11,
+            dockerSlots: 3,
+            vmSlots: 0));
+        context.DeploymentQueueTickets.Add(ticket);
+        await context.SaveChangesAsync();
+        var service = CreateDeploymentService(context);
+
+        var result = await service.DestroyRuntimeAsync(5, 7, CancellationToken.None);
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal(TeamLabRuntimeStatus.Destroyed, result.Runtime!.Status);
+        Assert.Equal(DeploymentQueueTicketStatus.Cancelled, ticket.Status);
+        Assert.Contains("destroyed", ticket.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task DestroyRuntimeAsync_AllowsDeployingRuntimeCleanup()
+    {
+        await using var context = CreateContext();
+        context.Games.Add(new Game
+        {
+            Id = 5,
+            Title = "deploying TeamLab",
+            GameType = GameType.Penetration,
+            StartTimeUtc = DateTimeOffset.UtcNow.AddHours(-1),
+            EndTimeUtc = DateTimeOffset.UtcNow.AddHours(1)
+        });
+        context.Teams.Add(new Team { Id = 7, Name = "blue" });
+        context.WorkerNodes.Add(new WorkerNode
+        {
+            Id = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
+            Name = "local",
+            HostAddress = "10.24.0.27",
+            Status = NodeStatus.Online,
+            Capabilities = NodeCapability.Docker,
+            CurrentContainers = 5
+        });
+        context.TeamLabRuntimes.Add(new TeamLabRuntime
+        {
+            Id = 11,
+            GameId = 5,
+            TeamId = 7,
+            WorkerNodeId = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
+            Status = TeamLabRuntimeStatus.Deploying,
+            NetworkPrefix = "10.180.11.0/24",
+            PublicUdpMapping = new TeamLabPublicUdpMapping
+            {
+                PublicUdpPort = 32009,
+                WorkerTunnelIp = "10.24.0.27",
+                WorkerWireGuardPort = 42009
+            }
+        });
+        await context.SaveChangesAsync();
+        var service = CreateDeploymentService(context, new NoopTeamLabAgentClient());
+
+        var result = await service.DestroyRuntimeAsync(5, 7, CancellationToken.None);
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal(TeamLabRuntimeStatus.Destroyed, result.Runtime!.Status);
+        Assert.False(result.Runtime.IsOpenToPlayers);
     }
 
     [Fact]
@@ -1634,6 +1843,8 @@ public class TeamLabDeploymentServiceTests
             }
         }
     }
+
+    private sealed class NoopTeamLabAgentClient : TestTeamLabAgentClientBase;
 
     private sealed class OneFailsAfterParallelStartTeamLabAgentClient : TestTeamLabAgentClientBase
     {

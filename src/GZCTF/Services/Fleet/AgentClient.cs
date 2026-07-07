@@ -541,6 +541,7 @@ public class AgentCreateVmRequest
     public int Cpu { get; set; } = 2;
     public string? Flag { get; set; }
     public List<AgentVmNetworkInterfaceRequest> Interfaces { get; set; } = [];
+    public AgentVmInitConfig? CloudInit { get; set; }
 }
 
 public class AgentVmNetworkInterfaceRequest
@@ -548,6 +549,25 @@ public class AgentVmNetworkInterfaceRequest
     public string BridgeName { get; set; } = string.Empty;
     public string? MacAddress { get; set; }
     public string Model { get; set; } = "e1000e";
+    public string? InterfaceName { get; set; }
+    public string? IpAddress { get; set; }
+    public int? PrefixLength { get; set; }
+    public string? Gateway { get; set; }
+    public List<string> DnsServers { get; set; } = [];
+    public List<string> Routes { get; set; } = [];
+    public bool IsPrimary { get; set; }
+}
+
+public class AgentVmInitConfig
+{
+    public bool Enabled { get; set; }
+    public OSType OsType { get; set; } = OSType.Linux;
+    public string Hostname { get; set; } = string.Empty;
+    public string InstanceId { get; set; } = string.Empty;
+    public string UserData { get; set; } = string.Empty;
+    public string MetaData { get; set; } = string.Empty;
+    public string NetworkConfig { get; set; } = string.Empty;
+    public List<string> SensitiveKeys { get; set; } = [];
 }
 
 public class AgentCreateVmResponse

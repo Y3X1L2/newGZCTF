@@ -37,6 +37,7 @@ public class LocalNodeMetricsService : BackgroundService
     {
         using var scope = scopeFactory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var capacity = scope.ServiceProvider.GetRequiredService<FleetCapacityReservationService>();
         var localNode = await context.WorkerNodes.FirstOrDefaultAsync(n => n.IsLocal, token);
 
         if (localNode is null)
@@ -46,16 +47,30 @@ public class LocalNodeMetricsService : BackgroundService
 
         localNode.CpuLoad = metrics.CpuLoad;
         localNode.MemoryLoad = metrics.MemoryLoad;
-        localNode.CurrentContainers = await context.Containers.CountAsync(
+        var runningContainers = await context.Containers.CountAsync(
             c => c.Status == ContainerStatus.Running
                 && (!c.NodeId.HasValue || c.NodeId == localNode.Id), token);
-        localNode.CurrentVms = await context.VmInstances.CountAsync(
+        var runningVms = await context.VmInstances.CountAsync(
             vm => vm.Status == VmInstanceStatus.Running
                 && (!vm.NodeId.HasValue || vm.NodeId == localNode.Id), token);
+        var runningTeamLabDockerAssets = await context.TeamLabRuntimeAssets.CountAsync(
+            a => a.Runtime.WorkerNodeId == localNode.Id
+                 && a.Runtime.Status == TeamLabRuntimeStatus.Running
+                 && a.Kind == TeamLabResourceKind.Docker
+                 && a.Status == TeamLabRuntimeStatus.Running, token);
+        var runningTeamLabVmAssets = await context.TeamLabRuntimeAssets.CountAsync(
+            a => a.Runtime.WorkerNodeId == localNode.Id
+                 && a.Runtime.Status == TeamLabRuntimeStatus.Running
+                 && a.Kind == TeamLabResourceKind.Vm
+                 && a.Status == TeamLabRuntimeStatus.Running, token);
+
+        localNode.CurrentContainers = runningContainers + runningTeamLabDockerAssets;
+        localNode.CurrentVms = runningVms + runningTeamLabVmAssets;
         localNode.Status = NodeStatus.Online;
         localNode.LastHeartbeat = DateTimeOffset.UtcNow;
 
         await context.SaveChangesAsync(token);
+        await capacity.ReconcileReservedAsync(localNode.Id, token);
         return true;
     }
 

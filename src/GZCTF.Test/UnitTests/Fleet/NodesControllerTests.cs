@@ -9,8 +9,10 @@ using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
+using GZCTF.Services.Concurrency;
 using GZCTF.Services.Fleet;
 using GZCTF.Utils;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -478,6 +480,10 @@ public class NodesControllerTests
         await context.SaveChangesAsync();
         var services = new ServiceCollection()
             .AddSingleton(context)
+            .AddLogging()
+            .AddSingleton<IDistributedLockService>(
+                _ => new LocalSemaphoreLock(NullLogger<LocalSemaphoreLock>.Instance))
+            .AddScoped<FleetCapacityReservationService>()
             .BuildServiceProvider();
         var controller = new NodesController(
             new InMemoryNodeRepository(context),
@@ -496,6 +502,93 @@ public class NodesControllerTests
         Assert.Equal(DeploymentQueueTicketStatus.Cancelled, reloadedTicket.Status);
         Assert.Null(reloadedTicket.TargetNodeId);
         Assert.Contains("deregistered", reloadedTicket.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Heartbeat_MergesRunningTeamLabAssetsIntoCurrentCapacity()
+    {
+        await using var context = CreateContext();
+        var node = new WorkerNode
+        {
+            Id = Guid.Parse("cccccccc-dddd-eeee-ffff-aaaaaaaaaaaa"),
+            Name = "remote-node",
+            HostAddress = "10.24.0.30",
+            AuthToken = "node-token",
+            Status = NodeStatus.Online,
+            Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+            IsLocal = false,
+            CurrentContainers = 0,
+            ReservedContainers = 2,
+            CurrentVms = 0,
+            ReservedVms = 1
+        };
+        var game = new Game { Id = 91, Title = "teamlab" };
+        var team = new Team { Id = 92, Name = "teamlab-team" };
+        context.WorkerNodes.Add(node);
+        context.Games.Add(game);
+        context.Teams.Add(team);
+        context.TeamLabRuntimes.Add(new TeamLabRuntime
+        {
+            Id = 93,
+            Game = game,
+            Team = team,
+            WorkerNodeId = node.Id,
+            Status = TeamLabRuntimeStatus.Running,
+            Assets =
+            [
+                new TeamLabRuntimeAsset
+                {
+                    Name = "docker",
+                    Kind = TeamLabResourceKind.Docker,
+                    Status = TeamLabRuntimeStatus.Running
+                },
+                new TeamLabRuntimeAsset
+                {
+                    Name = "vm",
+                    Kind = TeamLabResourceKind.Vm,
+                    Status = TeamLabRuntimeStatus.Running
+                }
+            ]
+        });
+        await context.SaveChangesAsync();
+        var services = new ServiceCollection()
+            .AddSingleton(context)
+            .AddLogging()
+            .AddSingleton<IDistributedLockService>(
+                _ => new LocalSemaphoreLock(NullLogger<LocalSemaphoreLock>.Instance))
+            .AddScoped<FleetCapacityReservationService>()
+            .BuildServiceProvider();
+        var controller = new NodesController(
+            new InMemoryNodeRepository(context),
+            context,
+            services.GetRequiredService<IServiceScopeFactory>(),
+            Options.Create(new ContainerProvider()),
+            new PortAllocationService(new ConfigurationBuilder().Build(),
+                Options.Create(new ContainerProvider()),
+                NullLogger<PortAllocationService>.Instance),
+            NullLogger<NodesController>.Instance);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext()
+        };
+        controller.HttpContext.RequestServices = services;
+        controller.Request.Headers.Authorization = "Bearer node-token";
+
+        var result = await controller.Heartbeat(node.Id, new HeartbeatRequest
+        {
+            CpuLoad = 0.1f,
+            MemoryLoad = 0.2f,
+            CurrentContainers = 1,
+            CurrentVms = 0,
+            UsedPorts = 3
+        });
+
+        Assert.IsType<OkResult>(result);
+        var reloaded = await context.WorkerNodes.SingleAsync(n => n.Id == node.Id);
+        Assert.Equal(2, reloaded.CurrentContainers);
+        Assert.Equal(1, reloaded.CurrentVms);
+        Assert.Equal(0, reloaded.ReservedContainers);
+        Assert.Equal(0, reloaded.ReservedVms);
     }
 
     static AppDbContext CreateContext()

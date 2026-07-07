@@ -378,6 +378,41 @@ public class DeploymentQueueManagerTests
     }
 
     [Fact]
+    public async Task ProcessPendingAsync_CancelsTeamLabTicket_WhenRuntimeWasDestroyedBeforeExecution()
+    {
+        await using var context = CreateContext();
+        var node = SeedTeamLabNode(context, maxContainers: 3);
+        var runtime = new TeamLabRuntime
+        {
+            Id = 12,
+            GameId = 5,
+            TeamId = 7,
+            WorkerNodeId = node.Id,
+            Status = TeamLabRuntimeStatus.Destroyed
+        };
+        context.TeamLabRuntimes.Add(runtime);
+        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(
+            gameId: 5,
+            teamId: 7,
+            runtimeId: runtime.Id,
+            dockerSlots: 2,
+            vmSlots: 0));
+        context.DeploymentQueueTickets.Add(ticket);
+        await context.SaveChangesAsync();
+        var executor = new RecordingDeploymentExecutionService();
+        var queue = CreateQueueManager(context, executor);
+
+        var processed = await queue.ProcessPendingAsync(CancellationToken.None);
+
+        Assert.Equal(0, processed);
+        Assert.Equal(DeploymentQueueTicketStatus.Cancelled, ticket.Status);
+        Assert.Contains("not deployable", ticket.ErrorMessage);
+        Assert.Empty(executor.ExecutedTicketIds);
+        Assert.Equal(0, context.WorkerNodes.Single(n => n.Id == node.Id).CurrentContainers);
+        Assert.Equal(0, context.WorkerNodes.Single(n => n.Id == node.Id).ReservedContainers);
+    }
+
+    [Fact]
     public async Task ProcessPendingAsync_ExecutesTicketsOnDifferentNodesConcurrently()
     {
         var databaseName = Guid.NewGuid().ToString();

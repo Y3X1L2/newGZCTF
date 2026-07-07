@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Agent.Models;
@@ -90,6 +91,23 @@ public class TeamLabCommandBuilderTests
     }
 
     [Fact]
+    public async Task CreateBridgeAsync_DryRunDeletesExistingBridgeBeforeRecreate()
+    {
+        var service = CreateService(enable: false);
+
+        var result = await service.CreateBridgeAsync(new TeamLabBridgeRequest(
+            RuntimeId: 123,
+            BridgeName: "tl123-dmz",
+            Cidr: "10.180.1.0/24",
+            DryRun: true), CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Collection(result.Commands.Take(2),
+            command => Assert.Contains("ip link delete tl123-dmz 2>/dev/null || true", command),
+            command => Assert.Contains("ip link add tl123-dmz type bridge", command));
+    }
+
+    [Fact]
     public async Task CreateBridgeAsync_RejectsUnsafeLinuxResourceName()
     {
         var service = CreateService(enable: false);
@@ -127,6 +145,32 @@ public class TeamLabCommandBuilderTests
         Assert.Contains(result.Commands, command => command.Contains("ip netns exec tlr123 ip addr add 10.180.2.1/24 dev"));
         Assert.DoesNotContain(result.Commands, command =>
             command.Contains("ip addr add") && !command.Contains("ip netns exec tlr123"));
+    }
+
+    [Fact]
+    public async Task CreateRouterAsync_DryRunRecreatesNamespaceAndFlushesInterfaceAddresses()
+    {
+        var service = CreateService(enable: false);
+
+        var result = await service.CreateRouterAsync(new TeamLabRouterRequest(
+            RuntimeId: 123,
+            NamespaceName: "tlr123",
+            Interfaces:
+            [
+                new TeamLabRouterInterfaceRequest("tl123-entry", "10.180.1.1/24")
+            ],
+            Routes: [],
+            DryRun: true), CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Collection(result.Commands.Take(3),
+            command => Assert.Contains("ip netns pids tlr123 2>/dev/null | xargs -r kill 2>/dev/null || true", command),
+            command => Assert.Contains("ip netns delete tlr123 2>/dev/null || true", command),
+            command => Assert.Contains("ip netns add tlr123", command));
+        Assert.Contains(result.Commands,
+            command => command.Contains("ip netns exec tlr123 ip addr flush dev tlr123n0"));
+        Assert.Contains(result.Commands,
+            command => command.Contains("ip netns exec tlr123 ip addr add 10.180.1.1/24 dev tlr123n0"));
     }
 
     [Fact]
@@ -191,6 +235,37 @@ public class TeamLabCommandBuilderTests
             command => command.Contains("iptables -A FORWARD -i tlwg123 -d 10.60.0.16/28 -j REJECT"));
         Assert.DoesNotContain(result.Commands, command => command.StartsWith("wg set ", StringComparison.Ordinal));
         Assert.DoesNotContain(result.Commands, command => command.Contains(ValidInterfacePrivateKey));
+    }
+
+    [Fact]
+    public async Task ConfigureWireGuardAsync_DryRunDeletesExistingInterfacesAndFlushesAddressBeforeUp()
+    {
+        var service = CreateService(enable: false);
+
+        var result = await service.ConfigureWireGuardAsync(new TeamLabWireGuardRequest(
+            RuntimeId: 123,
+            NamespaceName: "tlr123",
+            InterfaceName: "tlwg123",
+            ListenPort: 42001,
+            AddressCidr: "10.250.0.10/32",
+            InterfacePrivateKey: ValidInterfacePrivateKey,
+            PeerPublicKey: ValidPeerPublicKey,
+            PeerClientAddress: "10.250.0.2/32",
+            PeerAllowedIps: "10.250.0.2/32",
+            PlayerAllowedCidrs: ["10.60.0.0/28"],
+            PlayerBlockedCidrs: [],
+            DryRun: true), CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Collection(result.Commands.Take(4),
+            command => Assert.Contains("printf '<redacted>'", command),
+            command => Assert.Contains("ip netns exec tlr123 ip link delete tlwg123 2>/dev/null || true", command),
+            command => Assert.Contains("ip link delete tlwg123 2>/dev/null || true", command),
+            command => Assert.Contains("ip link add tlwg123 type wireguard", command));
+        Assert.Contains(result.Commands,
+            command => command.Contains("ip netns exec tlr123 ip addr flush dev tlwg123"));
+        Assert.Contains(result.Commands,
+            command => command.Contains("ip netns exec tlr123 ip addr add 10.250.0.10/32 dev tlwg123"));
     }
 
     [Fact]

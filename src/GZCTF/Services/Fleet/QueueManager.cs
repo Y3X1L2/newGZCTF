@@ -40,6 +40,15 @@ public class QueueManager
             if (token.IsCancellationRequested)
                 break;
 
+            if (!await IsTicketStillDeployableAsync(context, ticket, token))
+            {
+                ticket.Status = DeploymentQueueTicketStatus.Cancelled;
+                ticket.CompletedAt = DateTimeOffset.UtcNow;
+                ticket.ErrorMessage = "Deployment queue ticket is not deployable anymore.";
+                await context.SaveChangesAsync(token);
+                continue;
+            }
+
             var reservation = await capacity.TryReserveAsync(new FleetCapacityRequest(
                 GetRequiredCapability(ticket),
                 ticket.DockerSlots,
@@ -101,6 +110,17 @@ public class QueueManager
 
                 if (ticket.Status != DeploymentQueueTicketStatus.Creating)
                     return;
+
+                if (!await IsTicketStillDeployableAsync(context, ticket, executionToken))
+                {
+                    await capacity.ReleaseAsync(reserved.NodeId, reserved.DockerSlots, reserved.VmSlots,
+                        executionToken);
+                    ticket.Status = DeploymentQueueTicketStatus.Cancelled;
+                    ticket.CompletedAt = DateTimeOffset.UtcNow;
+                    ticket.ErrorMessage = "Deployment queue ticket is not deployable anymore.";
+                    await context.SaveChangesAsync(executionToken);
+                    return;
+                }
 
                 var execution = await executor.ExecuteAsync(ticket, executionToken);
                 if (execution.Success)
@@ -188,6 +208,21 @@ public class QueueManager
         return capability == NodeCapability.None
             ? ticket.Kind == DeploymentQueueKind.Vm ? NodeCapability.Kvm : NodeCapability.Docker
             : capability;
+    }
+
+    static async Task<bool> IsTicketStillDeployableAsync(AppDbContext context, DeploymentQueueTicket ticket,
+        CancellationToken token)
+    {
+        if (ticket.Kind != DeploymentQueueKind.TeamLabRuntime || ticket.TeamLabRuntimeId is not { } runtimeId)
+            return true;
+
+        var status = await context.TeamLabRuntimes
+            .AsNoTracking()
+            .Where(runtime => runtime.Id == runtimeId)
+            .Select(runtime => (TeamLabRuntimeStatus?)runtime.Status)
+            .SingleOrDefaultAsync(token);
+
+        return status is TeamLabRuntimeStatus.Scheduled or TeamLabRuntimeStatus.Deploying;
     }
 
     static async Task<Guid?> ResolvePreferredNodeIdAsync(AppDbContext context, DeploymentQueueTicket ticket,

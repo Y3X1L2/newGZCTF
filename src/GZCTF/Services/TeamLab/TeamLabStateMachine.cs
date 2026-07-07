@@ -20,6 +20,7 @@ public static class TeamLabStateMachine
         (TeamLabRuntimeStatus.Probing, TeamLabRuntimeStatus.Running),
         (TeamLabRuntimeStatus.Probing, TeamLabRuntimeStatus.Failed),
         (TeamLabRuntimeStatus.Scheduled, TeamLabRuntimeStatus.Destroying),
+        (TeamLabRuntimeStatus.Deploying, TeamLabRuntimeStatus.Destroying),
         (TeamLabRuntimeStatus.Running, TeamLabRuntimeStatus.Stopped),
         (TeamLabRuntimeStatus.Running, TeamLabRuntimeStatus.Destroying),
         (TeamLabRuntimeStatus.Stopped, TeamLabRuntimeStatus.Destroying),
