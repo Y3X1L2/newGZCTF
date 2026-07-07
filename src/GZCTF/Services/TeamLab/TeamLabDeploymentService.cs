@@ -170,7 +170,12 @@ public class TeamLabDeploymentService(
         if (spec.Kind != TeamLabAssetSpecKind.Docker)
             throw new ArgumentException("TeamLab native Docker config requires a Docker asset spec.", nameof(spec));
 
+        var attachedNetworkKeys = spec.Interfaces
+            .Select(iface => iface.NetworkKey)
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .ToHashSet(StringComparer.Ordinal);
         var dnsServers = networks?
+            .Where(network => attachedNetworkKeys.Contains(network.TopologyKey))
             .Select(network => network.GatewayIp)
             .Where(ip => !string.IsNullOrWhiteSpace(ip))
             .Distinct(StringComparer.Ordinal)

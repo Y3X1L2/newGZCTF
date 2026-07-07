@@ -217,7 +217,7 @@ public class TeamLabDeploymentServiceTests
     }
 
     [Fact]
-    public void BuildNativeDockerContainerConfig_InjectsDnsAtContainerCreation()
+    public void BuildNativeDockerContainerConfig_InjectsOnlyAttachedNetworkDnsAtContainerCreation()
     {
         var workerNodeId = System.Guid.NewGuid();
         var spec = new TeamLabAssetSpec(
@@ -246,7 +246,7 @@ public class TeamLabDeploymentServiceTests
         var config = TeamLabDeploymentService.BuildNativeDockerContainerConfig(spec, teamId: 7,
             workerNodeId, flag: null, networks);
 
-        Assert.Equal(["10.90.0.1", "10.90.0.17"], config.DnsServers);
+        Assert.Equal(["10.90.0.1"], config.DnsServers);
     }
 
     [Fact]

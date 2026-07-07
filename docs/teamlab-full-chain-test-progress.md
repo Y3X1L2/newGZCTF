@@ -1256,3 +1256,84 @@ Continue TeamLab Windows VM acceptance through the standard platform image-templ
 - Current conclusion:
   - The previous direct access defect is fixed for newly deployed/redeployed runtime `34`: the player config only routes the entry subnet, and namespace ACL rejects manual player routes to non-entry subnets.
   - The prior destroy-side capacity-release 500 is covered by tests and should no longer surface as an API failure when WorkerNode heartbeat/metrics update the same row concurrently.
+### TeamLab chain HTTP DNS/upload fix and full-chain revalidation - 2026-07-07 13:25 +08:00
+
+- Current target:
+  - Game: `61` / `TeamLab Docker Chain HTTP 0706165215`.
+  - Team: `admin`, team id `1`.
+  - Server: `10.24.0.27`, runtime previously observed as `34`.
+- Verified runtime layout before rebuild:
+  - Prefix: `10.180.33.0/24`.
+  - Networks: entry `10.180.33.0/28`, app `10.180.33.16/28`, data `10.180.33.32/28`, ops `10.180.33.48/28`.
+- Fixed code:
+  - `TeamLabDeploymentService.BuildNativeDockerContainerConfig` now injects only DNS gateways for networks actually attached to the asset.
+  - Regression test: `BuildNativeDockerContainerConfig_InjectsOnlyAttachedNetworkDnsAtContainerCreation`.
+- Fixed TeamLab scenario image:
+  - Rebuilt and pushed `10.24.0.28:5000/teamlab/chain-http:20260706`.
+  - Fixed Python 3.12 CGI upload check from `if not item or not item.filename` to `if item is None or not item.filename`.
+  - New image digest observed: `sha256:cb2d69dc8ca2bc08fab17c8f22a6fdcbf1bd5edd43893f837c8e948bef686b96`.
+- Deployment correction:
+  - A zip-based publish temporarily broke the Linux publish directory by omitting `appsettings.json`, losing the real `files` mount state, and creating `wwwroot\static\...` root-level files.
+  - Corrected deployment by restoring the previous working `/opt/gzctf/publish` directory structure and copying only fixed backend assemblies (`GZCTF.dll`, `GZCTF.pdb`, `GZCTF.xml`).
+  - Server health after correction: `gzctf.service active`, HTTP `127.0.0.1:8080` returned `200`.
+- Pending validation:
+  - Rebuild runtime 34 through platform lifecycle API so the fixed DNS logic and fixed image are used.
+  - Verify player can reach only entry subnet directly.
+  - Verify entry can pivot to app, app can resolve/access data and ops using FQDN.
+  - Verify upload endpoint returns 200 and all four flags can be obtained and submitted through the platform.
+
+### TeamLab chain HTTP revalidation completed - 2026-07-07 13:36 +08:00
+
+- Deployment result:
+  - Rebuilt game `61`, team `1` through the standard admin lifecycle API:
+    - `POST /api/admin/pentest/games/61/teams/1/cleanup` -> HTTP 200.
+    - `POST /api/admin/pentest/games/61/teams/1/rebuild` -> HTTP 200.
+  - Runtime `34` is `Running`, `IsOpenToPlayers=true`, prefix `10.180.33.0/24`.
+  - Public UDP mapping: `203.195.157.191:32002 -> 10.24.0.27:42002`.
+  - Runtime events include `TeamLab runtime connectivity probe passed` and `Native TeamLab runtime deployment reached running state`.
+- Asset verification:
+  - Six Docker assets are running from `10.24.0.28:5000/teamlab/chain-http:20260706`.
+  - Runtime nodes:
+    - `edge-web`: `10.180.33.3` on `net-edge`.
+    - `route-a`: `10.180.33.4` + `10.180.33.20`.
+    - `app-api`: `10.180.33.19` on `net-app`.
+    - `route-b`: `10.180.33.21` + `10.180.33.36` + `10.180.33.52`.
+    - `data-service`: `10.180.33.35` on `net-data`.
+    - `ops-panel`: `10.180.33.51` on `net-ops`.
+- DNS fix verification:
+  - Single-network service containers now have only their own subnet DNS:
+    - edge -> `10.180.33.1`.
+    - app -> `10.180.33.17`.
+    - data -> `10.180.33.33`.
+    - ops -> `10.180.33.49`.
+  - Multi-homed router assets have DNS entries only for their attached subnets.
+- Upload/RCE/pivot verification:
+  - `POST http://10.180.33.3/upload` returned HTTP 200 and stored `/tmp/uploads/probe.txt`.
+  - Uploaded `fscan-lite.sh` to entry and executed it through `/run?cmd=sh /tmp/uploads/fscan-lite.sh`; it discovered `10.180.33.19`, `10.180.33.20`, and `10.180.33.21` on the app subnet.
+  - Correct `/run` parameter is `cmd`, not `url`.
+  - Verified pivot commands:
+    - entry `10.180.33.3` -> app flag `flag{chain_internal_app}`.
+    - app `10.180.33.19` -> data flag `flag{chain_model_data}`.
+    - app `10.180.33.19` -> ops flag `flag{chain_ops_panel}`.
+    - route-a and route-b multi-NIC services expose the expected interface addresses and can reach their adjacent subnets.
+- Direct-access isolation verification:
+  - Router namespace `tlr34` has WireGuard ACL:
+    - allow `tlwg34` -> `10.180.33.0/28`.
+    - reject `tlwg34` -> `10.180.33.16/28`.
+    - reject `tlwg34` -> `10.180.33.32/28`.
+    - reject `tlwg34` -> `10.180.33.48/28`.
+  - `wg show tlwg34` shows player peer allowed IP `10.180.33.2/32` only.
+  - Note: a local Windows client must refresh/import the current WireGuard config after rebuild, because the public UDP mapping is currently `32002`.
+- Flag submission verification:
+  - Temporarily inserted `tlwinadmin` into game `61` / team `1` participation to exercise the official player submit API, then removed that temporary participation row.
+  - Submitted through `POST /api/pentest/games/61/submit`:
+    - score item `98`: `flag{chain_edge_upload}` -> accepted, 100.
+    - score item `99`: `flag{chain_internal_app}` -> accepted, 150.
+    - score item `100`: `flag{chain_model_data}` -> accepted, 200.
+    - score item `101`: `flag{chain_ops_panel}` -> accepted, 250.
+  - Player workspace showed all four score items `solved=true`.
+  - Player scoreboard returned team `admin`, score `700`, solved count `4`.
+  - Remaining game `61` participation membership was restored to only `admin`.
+- Verification commands:
+  - `dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter "FullyQualifiedName~BuildNativeDockerContainerConfig_InjectsOnlyAttachedNetworkDnsAtContainerCreation" --no-restore -p:UseSharedCompilation=false -m:1` passed `1/1`.
+  - Server health: `gzctf.service active`, HTTP `127.0.0.1:8080` returned `200`.
