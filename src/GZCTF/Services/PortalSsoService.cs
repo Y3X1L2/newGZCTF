@@ -59,12 +59,10 @@ public sealed class PortalSsoService(
         {
             using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cts.Token);
             var root = document.RootElement;
-            var profile = root.TryGetProperty("ok", out var okProp)
-                ? ParseEnvelope(root)
-                : root.Deserialize<PortalSsoProfile>(JsonOptions);
+            var profile = ParseProfileResponse(root, out var parseError);
 
             if (profile?.User is null)
-                return PortalSsoProfileResult.Fail("Portal IAM profile is missing user data.",
+                return PortalSsoProfileResult.Fail(parseError ?? "Portal IAM profile is missing user data.",
                     StatusCodes.Status401Unauthorized);
 
             if (profile.User.Id <= 0 || string.IsNullOrWhiteSpace(profile.User.RoleCode))
@@ -87,15 +85,79 @@ public sealed class PortalSsoService(
         }
     }
 
-    static PortalSsoProfile? ParseEnvelope(JsonElement root)
+    internal static PortalSsoProfile? ParseProfileResponse(JsonElement root, out string? error)
     {
-        var ok = root.TryGetProperty("ok", out var okProp) && okProp.GetBoolean();
-        if (!ok)
-            return null;
+        error = null;
 
-        return root.TryGetProperty("data", out var data)
-            ? data.Deserialize<PortalSsoProfile>(JsonOptions)
-            : null;
+        if (LooksLikeProfile(root))
+            return root.Deserialize<PortalSsoProfile>(JsonOptions);
+
+        if (root.TryGetProperty("ok", out var okProp))
+        {
+            if (!IsTruthy(okProp))
+            {
+                error = ReadErrorMessage(root) ?? "Portal IAM profile response is not successful.";
+                return null;
+            }
+
+            if (!root.TryGetProperty("data", out var data))
+            {
+                error = "Portal IAM profile response is missing data.";
+                return null;
+            }
+
+            return ParseProfileData(data, out error);
+        }
+
+        if (root.TryGetProperty("data", out var dataProp))
+            return ParseProfileData(dataProp, out error);
+
+        error = "Portal IAM profile is missing user data.";
+        return null;
+    }
+
+    static PortalSsoProfile? ParseProfileData(JsonElement data, out string? error)
+    {
+        error = null;
+
+        if (LooksLikeProfile(data))
+            return data.Deserialize<PortalSsoProfile>(JsonOptions);
+
+        if (data.TryGetProperty("profile", out var profile) && LooksLikeProfile(profile))
+            return profile.Deserialize<PortalSsoProfile>(JsonOptions);
+
+        if (data.TryGetProperty("data", out var nestedData) && LooksLikeProfile(nestedData))
+            return nestedData.Deserialize<PortalSsoProfile>(JsonOptions);
+
+        error = "Portal IAM profile is missing user data.";
+        return null;
+    }
+
+    static bool LooksLikeProfile(JsonElement element) =>
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty("user", out _);
+
+    static bool IsTruthy(JsonElement element) =>
+        element.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.String => bool.TryParse(element.GetString(), out var value) && value,
+            _ => false
+        };
+
+    static string? ReadErrorMessage(JsonElement root)
+    {
+        foreach (var propertyName in new[] { "message", "msg", "error" })
+        {
+            if (root.TryGetProperty(propertyName, out var message) &&
+                message.ValueKind == JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(message.GetString()))
+                return message.GetString();
+        }
+
+        if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object)
+            return ReadErrorMessage(data);
+
+        return null;
     }
 }
 
@@ -119,6 +181,9 @@ public sealed class PortalSsoProfile
 
     [JsonPropertyName("permissions")]
     public string[] Permissions { get; set; } = [];
+
+    [JsonPropertyName("menus")]
+    public JsonElement[] Menus { get; set; } = [];
 
     [JsonPropertyName("platforms")]
     public PortalSsoPlatform[] Platforms { get; set; } = [];
@@ -156,6 +221,12 @@ public sealed class PortalSsoPlatform
     [JsonPropertyName("name")]
     public string Name { get; set; } = string.Empty;
 
+    [JsonPropertyName("icon")]
+    public string Icon { get; set; } = string.Empty;
+
     [JsonPropertyName("entry_url")]
     public string EntryUrl { get; set; } = string.Empty;
+
+    [JsonPropertyName("description")]
+    public string Description { get; set; } = string.Empty;
 }
