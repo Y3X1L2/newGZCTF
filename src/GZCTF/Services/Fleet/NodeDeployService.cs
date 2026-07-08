@@ -102,8 +102,8 @@ public class NodeDeployService
                 _config.GetValue<int?>("ContainerProvider:DockerConfig:PublicPortStart"),
                 _config.GetValue<int?>("ContainerProvider:DockerConfig:PublicPortEnd"),
                 _config["ContainerProvider:DockerConfig:ChallengeNetwork"],
-                _config.GetValue<bool>("TeamLabNetwork:Enable"),
-                _config.GetValue<bool>("TeamLabNetwork:DryRun", true));
+                teamLabEnable: true,
+                teamLabDryRun: false);
             WriteRemoteFile(ssh, sudo, "/etc/gzctf-agent/appsettings.json", configJson,
                 "Write agent configuration");
             remoteInstallStarted = true;
@@ -323,10 +323,10 @@ install_apt_pkg_fallback() {
 
 install_base() {
   case "$pm" in
-    apt) install_pkgs ca-certificates curl wget gnupg lsb-release iproute2 iptables procps tar gzip coreutils python3 ;;
-    dnf|yum) install_pkgs ca-certificates curl wget gnupg2 iproute iptables procps-ng tar gzip coreutils python3 ;;
-    zypper) install_pkgs ca-certificates curl wget gpg2 iproute2 iptables procps tar gzip coreutils python3 ;;
-    pacman) install_pkgs ca-certificates curl wget gnupg iproute2 iptables procps-ng tar gzip coreutils python ;;
+    apt) install_pkgs ca-certificates curl wget gnupg lsb-release iproute2 iptables nftables procps tar gzip coreutils python3 ;;
+    dnf|yum) install_pkgs ca-certificates curl wget gnupg2 iproute iptables nftables procps-ng tar gzip coreutils python3 ;;
+    zypper) install_pkgs ca-certificates curl wget gpg2 iproute2 iptables nftables procps tar gzip coreutils python3 ;;
+    pacman) install_pkgs ca-certificates curl wget gnupg iproute2 iptables nftables procps-ng tar gzip coreutils python ;;
   esac
 }
 
@@ -476,10 +476,10 @@ EOF
 install_kvm() {
   case "$pm" in
     apt)
-      install_pkgs qemu-kvm qemu-utils libvirt-daemon-system libvirt-clients virtinst dnsmasq-base bridge-utils || true
+      install_pkgs qemu-system-x86 qemu-utils libvirt-daemon-system libvirt-clients virtinst dnsmasq-base bridge-utils
       ;;
     dnf|yum)
-      install_pkgs qemu-kvm libvirt virt-install virt-manager libvirt-daemon-config-network libvirt-daemon-kvm qemu-img dnsmasq || true
+      install_pkgs qemu-kvm libvirt virt-install libvirt-daemon-config-network libvirt-daemon-kvm qemu-img dnsmasq || true
       ;;
     zypper)
       install_pkgs qemu-kvm libvirt libvirt-client virt-install qemu-tools dnsmasq || true
@@ -503,6 +503,39 @@ install_kvm() {
 
   run_sudo mkdir -p /var/lib/gzctf/images /var/lib/libvirt/images
   run_sudo chmod 755 /var/lib/gzctf /var/lib/gzctf/images 2>/dev/null || true
+}
+
+install_teamlab_network_tools() {
+  case "$pm" in
+    apt)
+      install_pkgs wireguard-tools nftables iptables tcpdump genisoimage xorriso cloud-image-utils dnsmasq-base
+      ;;
+    dnf|yum)
+      install_pkgs wireguard-tools nftables iptables tcpdump xorriso cloud-utils-growpart dnsmasq || true
+      ;;
+    zypper)
+      install_pkgs wireguard-tools nftables iptables tcpdump xorriso dnsmasq || true
+      ;;
+    pacman)
+      install_pkgs wireguard-tools nftables iptables-nft tcpdump xorriso cloud-image-utils dnsmasq || true
+      ;;
+  esac
+}
+
+print_capability_summary() {
+  echo "Docker: $(docker --version 2>/dev/null || echo unavailable)"
+  echo "Docker registries: ${INTERNAL_DOCKER_REGISTRIES[*]:-not configured}"
+  echo "Virsh: $(virsh --version 2>/dev/null || echo unavailable)"
+  echo "Virt-install: $(virt-install --version 2>/dev/null || echo unavailable)"
+  echo "Qemu-img: $(qemu-img --version 2>/dev/null | head -n 1 || echo unavailable)"
+  echo "WireGuard: $(wg --version 2>/dev/null || echo unavailable)"
+  echo "Tcpdump: $(tcpdump --version 2>/dev/null | head -n 1 || echo unavailable)"
+  echo "Cloud-init ISO: $(command -v genisoimage || command -v mkisofs || command -v xorriso || echo unavailable)"
+  if [ -e /dev/kvm ] && grep -Eq '(^flags|^Features).* (vmx|svm)( |$)' /proc/cpuinfo 2>/dev/null; then
+    echo "KVM hardware: available"
+  else
+    echo "KVM hardware: unavailable (missing /dev/kvm or CPU vmx/svm flag; enable nested virtualization/CPU passthrough on the host if this node must run VM assets)"
+  fi
 }
 
 install_dotnet_runtime() {
@@ -545,11 +578,10 @@ install_base
 install_docker
 configure_docker_registry
 install_kvm
+install_teamlab_network_tools
 install_dotnet_runtime
 
-echo "Docker: $(docker --version 2>/dev/null || echo unavailable)"
-echo "Docker registries: ${INTERNAL_DOCKER_REGISTRIES[*]:-not configured}"
-echo "Virsh: $(virsh --version 2>/dev/null || echo unavailable)"
+print_capability_summary
 echo "Dotnet: $(dotnet --version 2>/dev/null || echo unavailable)"
 """;
     }
@@ -564,18 +596,28 @@ bash -lc 'if command -v docker >/dev/null 2>&1 && {{sudo}} docker info >/dev/nul
         if (dockerCheck.Result.Contains("DOCKER_OK"))
             caps |= NodeCapability.Docker;
 
-        var kvmCheck = ssh.RunCommand($$"""
-bash -lc 'if command -v virsh >/dev/null 2>&1 && {{sudo}} virsh -c qemu:///system list >/dev/null 2>&1; then echo KVM_OK; else echo NO_KVM; fi'
-""");
+        var kvmCheck = ssh.RunCommand($"bash -lc {BashQuote(BuildKvmCapabilityCheckScript(sudo))}");
         if (kvmCheck.Result.Contains("KVM_OK"))
             caps |= NodeCapability.Kvm;
 
         return caps;
     }
 
+    internal static string BuildKvmCapabilityCheckScript(string sudo) => $$"""
+if ! test -e /dev/kvm || ! grep -Eq '(^flags|^Features).* (vmx|svm)( |$)' /proc/cpuinfo 2>/dev/null; then
+  echo NO_KVM_HARDWARE
+  exit 0
+fi
+if command -v virsh >/dev/null 2>&1 && {{sudo}} virsh -c qemu:///system list >/dev/null 2>&1; then
+  echo KVM_OK
+else
+  echo NO_KVM_LIBVIRT
+fi
+""";
+
     internal static string BuildAgentConfigJson(string serverUrl, WorkerNode node, string? publicEntry = null,
         int? publicPortStart = null, int? publicPortEnd = null, string? challengeNetwork = null,
-        bool teamLabEnable = false, bool teamLabDryRun = true) =>
+        bool teamLabEnable = true, bool teamLabDryRun = false) =>
         JsonSerializer.Serialize(new
         {
             Agent = new

@@ -222,7 +222,8 @@ install_kvm() {
     log "KVM/libvirt tools exist"
   else
     log "Installing KVM/libvirt packages"
-    apt_install libvirt-daemon-system libvirt-clients virtinst qemu-system-x86 qemu-utils bridge-utils
+    apt_install libvirt-daemon-system libvirt-clients virtinst qemu-system-x86 qemu-utils bridge-utils \
+      dnsmasq-base genisoimage xorriso cloud-image-utils
   fi
 
   enable_service libvirtd || true
@@ -230,6 +231,11 @@ install_kvm() {
     virsh net-start default >/dev/null 2>&1 || true
     virsh net-autostart default >/dev/null 2>&1 || true
   fi
+}
+
+install_teamlab_network_tools() {
+  log "Installing TeamLab VPN/network tools"
+  apt_install wireguard-tools nftables iptables tcpdump dnsmasq-base
 }
 
 configure_image_dirs() {
@@ -266,6 +272,15 @@ print_status() {
   command -v dotnet >/dev/null 2>&1 && dotnet --list-runtimes | sed 's/^/dotnet runtime: /' || echo "dotnet: missing"
   command -v virsh >/dev/null 2>&1 && virsh --version | sed 's/^/virsh: /' || echo "virsh: missing"
   [[ -e /dev/kvm ]] && echo "KVM device: present" || echo "KVM device: missing"
+  grep -Eq '(^flags|^Features).* (vmx|svm)( |$)' /proc/cpuinfo 2>/dev/null \
+    && echo "CPU virtualization flag: present" || echo "CPU virtualization flag: missing"
+  command -v wg >/dev/null 2>&1 && wg --version | sed 's/^/WireGuard: /' || echo "WireGuard: missing"
+  command -v tcpdump >/dev/null 2>&1 && tcpdump --version | head -n 1 | sed 's/^/tcpdump: /' || echo "tcpdump: missing"
+  if command -v genisoimage >/dev/null 2>&1 || command -v xorriso >/dev/null 2>&1; then
+    echo "cloud-init seed ISO tool: present"
+  else
+    echo "cloud-init seed ISO tool: missing"
+  fi
   echo "Local image cache: ${images_dir}"
   if [[ -n "$nfs_source" ]]; then
     echo "Shared image repository: ${repo_dir}"
@@ -280,6 +295,7 @@ main() {
   [[ "$need_docker" -eq 1 ]] && install_docker
   [[ "$need_dotnet" -eq 1 ]] && install_dotnet
   [[ "$need_kvm" -eq 1 ]] && install_kvm
+  install_teamlab_network_tools
   configure_image_dirs
   print_status
 

@@ -165,17 +165,16 @@ public class GuacamoleService
         }
     }
 
-    private static object BuildRdpConnectionData(
+    public static GuacamoleConnectionData BuildRdpConnectionData(
         string connectionName,
         string vmIp,
         int rdpPort,
         string username,
-        string password) => new
-    {
-        name = connectionName,
-        parentIdentifier = "ROOT",
-        protocol = "rdp",
-        parameters = new Dictionary<string, string>
+        string password) => new(
+        connectionName,
+        "ROOT",
+        "rdp",
+        new Dictionary<string, string>
         {
             ["hostname"] = vmIp,
             ["port"] = rdpPort.ToString(),
@@ -184,7 +183,8 @@ public class GuacamoleService
             ["security"] = "any",
             ["ignore-cert"] = "true",
             ["resize-method"] = "display-update",
-            // Performance: disable visual effects
+            ["disable-clipboard"] = "false",
+            ["enable-clipboard"] = "true",
             ["enable-wallpaper"] = "true",
             ["enable-theming"] = "false",
             ["enable-font-smoothing"] = "false",
@@ -197,12 +197,18 @@ public class GuacamoleService
             ["width"] = "1280",
             ["height"] = "720"
         },
-        attributes = new Dictionary<string, string>
+        new Dictionary<string, string>
         {
             ["max-connections"] = "2",
             ["max-connections-per-user"] = "2"
-        }
-    };
+        });
+
+    public sealed record GuacamoleConnectionData(
+        string Name,
+        string ParentIdentifier,
+        string Protocol,
+        Dictionary<string, string> Parameters,
+        Dictionary<string, string> Attributes);
 
     private async Task<string?> FindConnectionIdByNameAsync(
         string connectionName,
@@ -281,7 +287,7 @@ public class GuacamoleService
     /// <summary>
     /// Deletes a Guacamole connection by ID.
     /// </summary>
-    public async Task<bool> DeleteConnectionAsync(string connectionId, CancellationToken token = default)
+    public virtual async Task<bool> DeleteConnectionAsync(string connectionId, CancellationToken token = default)
     {
         var authToken = await GetAuthTokenAsync(token);
         if (authToken is null) return false;

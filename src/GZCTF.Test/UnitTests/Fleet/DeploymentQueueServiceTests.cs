@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -378,6 +378,73 @@ public class DeploymentQueueManagerTests
     }
 
     [Fact]
+    public async Task ProcessPendingAsync_ReservesTeamLabTicketAcrossRuntimeShards()
+    {
+        await using var context = CreateContext();
+        var primaryNode = SeedTeamLabNode(context, maxContainers: 2);
+        primaryNode.CurrentContainers = 1;
+        var shardNode = SeedTeamLabNode(context, maxContainers: 2);
+        var runtime = new TeamLabRuntime
+        {
+            Id = 21,
+            GameId = 5,
+            TeamId = 7,
+            WorkerNodeId = primaryNode.Id,
+            Status = TeamLabRuntimeStatus.Scheduled,
+            Shards =
+            [
+                new TeamLabRuntimeShard
+                {
+                    WorkerNodeId = primaryNode.Id,
+                    Assets =
+                    [
+                        new TeamLabRuntimeAsset
+                        {
+                            Kind = TeamLabResourceKind.Docker,
+                            WorkerNodeId = primaryNode.Id,
+                            Status = TeamLabRuntimeStatus.Scheduled
+                        }
+                    ]
+                },
+                new TeamLabRuntimeShard
+                {
+                    WorkerNodeId = shardNode.Id,
+                    Assets =
+                    [
+                        new TeamLabRuntimeAsset
+                        {
+                            Kind = TeamLabResourceKind.Docker,
+                            WorkerNodeId = shardNode.Id,
+                            Status = TeamLabRuntimeStatus.Scheduled
+                        }
+                    ]
+                }
+            ]
+        };
+        context.TeamLabRuntimes.Add(runtime);
+        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(
+            gameId: 5,
+            teamId: 7,
+            runtimeId: runtime.Id,
+            dockerSlots: 2,
+            vmSlots: 0));
+        context.DeploymentQueueTickets.Add(ticket);
+        await context.SaveChangesAsync();
+        var executor = new RecordingDeploymentExecutionService();
+        var queue = CreateQueueManager(context, executor);
+
+        var processed = await queue.ProcessPendingAsync(CancellationToken.None);
+
+        Assert.Equal(1, processed);
+        Assert.Equal(DeploymentQueueTicketStatus.Completed, ticket.Status);
+        Assert.Equal(primaryNode.Id, ticket.TargetNodeId);
+        Assert.Equal(2, context.WorkerNodes.Single(n => n.Id == primaryNode.Id).CurrentContainers);
+        Assert.Equal(1, context.WorkerNodes.Single(n => n.Id == shardNode.Id).CurrentContainers);
+        Assert.Equal(0, context.WorkerNodes.Single(n => n.Id == primaryNode.Id).ReservedContainers);
+        Assert.Equal(0, context.WorkerNodes.Single(n => n.Id == shardNode.Id).ReservedContainers);
+    }
+
+    [Fact]
     public async Task ProcessPendingAsync_CancelsTeamLabTicket_WhenRuntimeWasDestroyedBeforeExecution()
     {
         await using var context = CreateContext();
@@ -538,7 +605,9 @@ public class DeploymentQueueManagerTests
             MaxVms = 5,
             TeamLabNetworkEnabled = true,
             TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
-            TeamLabTunnelIp = "10.250.0.2"
+            TeamLabTunnelIp = "10.250.0.2",
+            TeamLabAgentVersion = "1.8.3-test",
+            TeamLabProtocolVersion = 3
         };
 
         context.WorkerNodes.Add(node);

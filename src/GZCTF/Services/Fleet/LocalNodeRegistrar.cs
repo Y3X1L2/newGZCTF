@@ -98,6 +98,12 @@ public class LocalNodeRegistrar : IHostedService
         if (!OperatingSystem.IsLinux())
             return false;
 
+        if (!File.Exists("/dev/kvm") || !HasCpuVirtualizationFlag())
+        {
+            _logger.LogWarning("Local KVM capability is unavailable: missing /dev/kvm or CPU vmx/svm flag.");
+            return false;
+        }
+
         var result = await RunCommandAsync("virsh", "-c qemu:///system list --all", token);
         if (result.ExitCode == 0)
             return true;
@@ -105,6 +111,23 @@ public class LocalNodeRegistrar : IHostedService
         _logger.LogWarning("Local KVM capability is unavailable: {Error}",
             string.IsNullOrWhiteSpace(result.Error) ? result.Output : result.Error);
         return false;
+    }
+
+    private static bool HasCpuVirtualizationFlag()
+    {
+        try
+        {
+            return File.ReadLines("/proc/cpuinfo")
+                .Any(line => line.StartsWith("flags", StringComparison.OrdinalIgnoreCase)
+                             && (line.Contains(" vmx ", StringComparison.Ordinal)
+                                 || line.EndsWith(" vmx", StringComparison.Ordinal)
+                                 || line.Contains(" svm ", StringComparison.Ordinal)
+                                 || line.EndsWith(" svm", StringComparison.Ordinal)));
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private async Task ConfigureRegistryTrustAsync(IServiceProvider services, NodeCapability capabilities,

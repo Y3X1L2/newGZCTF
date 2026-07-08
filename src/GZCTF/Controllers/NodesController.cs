@@ -3,6 +3,7 @@ using System.Net.Mime;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using GZCTF.Middlewares;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
@@ -91,7 +92,15 @@ public class NodesController : ControllerBase
             n.TeamLabTunnelLastHandshake,
             n.TeamLabTunnelLastError,
             n.TeamLabTunnelConfigVersion,
+            n.TeamLabAgentVersion,
+            n.TeamLabProtocolVersion,
+            n.TeamLabFabricIp,
+            n.TeamLabFabricStatus,
+            n.TeamLabCapabilitiesJson,
             CanHostTeamLab = WeightedScheduler.CanHostTeamLab(n),
+            CanHostTeamLabFabric = WeightedScheduler.CanHostTeamLabFabric(n),
+            CanHostTeamLabDocker = WeightedScheduler.CanHostTeamLabDocker(n),
+            CanHostTeamLabVm = WeightedScheduler.CanHostTeamLabVm(n),
             UnschedulableReasons = GetUnschedulableReasons(n),
             UnschedulableByCapability = GetUnschedulableByCapability(n),
             SchedulableCapabilities = GetSchedulableCapabilities(n)
@@ -129,7 +138,15 @@ public class NodesController : ControllerBase
             node.TeamLabTunnelLastHandshake,
             node.TeamLabTunnelLastError,
             node.TeamLabTunnelConfigVersion,
+            node.TeamLabAgentVersion,
+            node.TeamLabProtocolVersion,
+            node.TeamLabFabricIp,
+            node.TeamLabFabricStatus,
+            node.TeamLabCapabilitiesJson,
             CanHostTeamLab = WeightedScheduler.CanHostTeamLab(node),
+            CanHostTeamLabFabric = WeightedScheduler.CanHostTeamLabFabric(node),
+            CanHostTeamLabDocker = WeightedScheduler.CanHostTeamLabDocker(node),
+            CanHostTeamLabVm = WeightedScheduler.CanHostTeamLabVm(node),
             UnschedulableReasons = GetUnschedulableReasons(node),
             UnschedulableByCapability = GetUnschedulableByCapability(node),
             SchedulableCapabilities = GetSchedulableCapabilities(node)
@@ -553,13 +570,13 @@ public class NodesController : ControllerBase
             return Forbid();
 
         var runningTeamLabDockerAssets = await _context.TeamLabRuntimeAssets.CountAsync(
-            a => a.Runtime.WorkerNodeId == node.Id
+            a => (a.WorkerNodeId == node.Id || (a.WorkerNodeId == null && a.Runtime.WorkerNodeId == node.Id))
                  && a.Runtime.Status == TeamLabRuntimeStatus.Running
                  && a.Kind == TeamLabResourceKind.Docker
                  && a.Status == TeamLabRuntimeStatus.Running,
             HttpContext.RequestAborted);
         var runningTeamLabVmAssets = await _context.TeamLabRuntimeAssets.CountAsync(
-            a => a.Runtime.WorkerNodeId == node.Id
+            a => (a.WorkerNodeId == node.Id || (a.WorkerNodeId == null && a.Runtime.WorkerNodeId == node.Id))
                  && a.Runtime.Status == TeamLabRuntimeStatus.Running
                  && a.Kind == TeamLabResourceKind.Vm
                  && a.Status == TeamLabRuntimeStatus.Running,
@@ -572,6 +589,17 @@ public class NodesController : ControllerBase
         node.UsedPorts = request.UsedPorts;
         node.LastHeartbeat = DateTimeOffset.UtcNow;
         node.Status = NodeStatus.Online;
+        if (!string.IsNullOrWhiteSpace(request.AgentVersion))
+            node.TeamLabAgentVersion = request.AgentVersion.Trim();
+        if (request.TeamLabProtocolVersion.HasValue)
+            node.TeamLabProtocolVersion = Math.Max(0, request.TeamLabProtocolVersion.Value);
+        if (!string.IsNullOrWhiteSpace(request.TeamLabFabricIp))
+            node.TeamLabFabricIp = request.TeamLabFabricIp.Trim();
+        if (request.TeamLabFabricStatus.HasValue)
+            node.TeamLabFabricStatus = request.TeamLabFabricStatus.Value;
+        if (request.TeamLabCapabilities is not null)
+            node.TeamLabCapabilitiesJson = JsonSerializer.Serialize(request.TeamLabCapabilities,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
         await _context.SaveChangesAsync();
 
         var capacity = HttpContext.RequestServices.GetRequiredService<FleetCapacityReservationService>();
@@ -653,7 +681,9 @@ public class NodesController : ControllerBase
     {
         Docker = WeightedScheduler.GetUnschedulableReason(node, NodeCapability.Docker),
         Kvm = WeightedScheduler.GetUnschedulableReason(node, NodeCapability.Kvm),
-        TeamLabNetwork = WeightedScheduler.GetTeamLabUnschedulableReason(node)
+        TeamLabNetwork = WeightedScheduler.GetTeamLabFabricUnschedulableReason(node),
+        TeamLabDocker = WeightedScheduler.GetTeamLabAssetHostUnschedulableReason(node, requiresDocker: true, requiresVm: false),
+        TeamLabVm = WeightedScheduler.GetTeamLabAssetHostUnschedulableReason(node, requiresDocker: false, requiresVm: true)
     };
 
     static string[] GetSchedulableCapabilities(WorkerNode node) =>
@@ -662,7 +692,9 @@ public class NodesController : ControllerBase
         {
             WeightedScheduler.CanHost(node, NodeCapability.Docker) ? nameof(NodeCapability.Docker) : null,
             WeightedScheduler.CanHost(node, NodeCapability.Kvm) ? nameof(NodeCapability.Kvm) : null,
-            WeightedScheduler.CanHostTeamLab(node) ? "TeamLabNetwork" : null
+            WeightedScheduler.CanHostTeamLabFabric(node) ? "TeamLabNetwork" : null,
+            WeightedScheduler.CanHostTeamLabDocker(node) ? "TeamLabDocker" : null,
+            WeightedScheduler.CanHostTeamLabVm(node) ? "TeamLabVm" : null
         }.OfType<string>()
     ];
 
@@ -1009,6 +1041,24 @@ public class HeartbeatRequest
     public int CurrentContainers { get; set; }
     public int CurrentVms { get; set; }
     public int UsedPorts { get; set; }
+    public string? AgentVersion { get; set; }
+    public int? TeamLabProtocolVersion { get; set; }
+    public string? TeamLabFabricIp { get; set; }
+    public TeamLabFabricStatus? TeamLabFabricStatus { get; set; }
+    public TeamLabNodeCapabilityReport? TeamLabCapabilities { get; set; }
+}
+
+public class TeamLabNodeCapabilityReport
+{
+    public bool Docker { get; set; }
+    public bool Kvm { get; set; }
+    public bool KvmDevice { get; set; }
+    public bool CpuVirtualization { get; set; }
+    public bool WireGuard { get; set; }
+    public bool Iptables { get; set; }
+    public bool Nftables { get; set; }
+    public bool Tcpdump { get; set; }
+    public bool Dumpcap { get; set; }
 }
 
 record NodeForceCleanupResult(bool Success, string Message, int ActiveContainers, int ActiveVms,

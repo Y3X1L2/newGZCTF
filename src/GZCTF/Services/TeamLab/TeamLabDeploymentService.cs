@@ -42,6 +42,7 @@ public sealed record TeamLabRuntimeAssetSpec(
     string? MacAddress,
     string InterfaceSummaryJson = "[]");
 public sealed record TeamLabVmReadyValidationResult(bool Success, string Message);
+public sealed record TeamLabShardSlotCount(Guid WorkerNodeId, int DockerSlots, int VmSlots);
 
 public enum TeamLabDeploymentMode
 {
@@ -54,6 +55,7 @@ public class TeamLabDeploymentService(
     AgentClient agentClient,
     DockerImageRegistryService dockerRegistry,
     TeamLabWireGuardService wireGuardService,
+    TeamLabTrafficFlowService trafficFlowService,
     IPublicUdpGatewayProvider publicUdpGatewayProvider,
     IOptions<TeamLabNetworkConfig> options,
     FleetCapacityReservationService capacityReservation,
@@ -64,6 +66,18 @@ public class TeamLabDeploymentService(
         TeamLabRuntimeAssetSpec RuntimeAsset,
         string? ContainerId,
         string? VmName);
+
+    private sealed record TeamLabRuntimeShardDeployment(
+        TeamLabRuntimeShard Shard,
+        Guid WorkerNodeId,
+        TeamLabResourceNames Names,
+        IReadOnlyList<TeamLabRuntimeNetworkSpec> Networks,
+        IReadOnlyList<TeamLabAssetSpec> Assets);
+
+    private sealed record TeamLabCreatedShardAssets(Guid WorkerNodeId, List<string> Containers, List<string> Vms);
+    private sealed record TeamLabShardFabricRoutePlan(
+        TeamLabRuntimeShardDeployment Shard,
+        TeamLabStaticRouteRequest[] Routes);
 
     private const int RuntimeErrorMaxLength = 1024;
     private const int EventMessageMaxLength = 256;
@@ -98,12 +112,133 @@ public class TeamLabDeploymentService(
                 .Where(asset => asset.Kind == TeamLabResourceKind.DhcpDnsService)
                 .Select(asset => asset.RuntimeResourceId)
                 .Where(id => !string.IsNullOrWhiteSpace(id))
-                .Cast<string>())
+            .Cast<string>())
             .Append(names.RouterNamespace)
             .Append(names.WireGuardInterface)
+            .Append(BuildFabricUplinkHostInterfaceName(runtime.Id))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         return networkResources;
+    }
+
+    private static IReadOnlyList<TeamLabRuntimeShardDeployment> BuildShardDeployments(TeamLabRuntime runtime,
+        TeamLabPublishedAssetPlanResult plan)
+    {
+        var networksByKey = plan.Networks.ToDictionary(network => network.TopologyKey, StringComparer.Ordinal);
+        var assetsByKey = plan.Assets.ToDictionary(asset => asset.TopologyKey, StringComparer.Ordinal);
+        if (runtime.Shards.Count == 0)
+        {
+            if (runtime.WorkerNodeId is not { } nodeId)
+                return [];
+
+            var names = BuildResourceNames(runtime.Id, plan.Networks.Select(network => network.TopologyKey).ToArray());
+            return
+            [
+                new TeamLabRuntimeShardDeployment(
+                    new TeamLabRuntimeShard
+                    {
+                        Runtime = runtime,
+                        RuntimeId = runtime.Id,
+                        WorkerNodeId = nodeId,
+                        Status = runtime.Status
+                    },
+                    nodeId,
+                    names,
+                    plan.Networks,
+                    plan.Assets)
+            ];
+        }
+
+        return runtime.Shards
+            .Select(shard =>
+            {
+                var networkKeys = shard.Networks
+                    .Select(network => network.TopologyKey)
+                    .Where(key => !string.IsNullOrWhiteSpace(key))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
+                var assetKeys = shard.Assets
+                    .Select(asset => asset.TopologyKey)
+                    .Where(key => !string.IsNullOrWhiteSpace(key))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToHashSet(StringComparer.Ordinal);
+                var networks = networkKeys
+                    .Where(networksByKey.ContainsKey)
+                    .Select(key => networksByKey[key])
+                    .OrderBy(network => network.TopologyKey, StringComparer.Ordinal)
+                    .ToArray();
+                var assets = plan.Assets
+                    .Where(asset => assetKeys.Contains(asset.TopologyKey) ||
+                                    asset.Interfaces.Any(iface => networkKeys.Contains(iface.NetworkKey,
+                                        StringComparer.Ordinal)))
+                    .OrderBy(asset => asset.StartPriority)
+                    .ThenBy(asset => asset.TopologyKey, StringComparer.Ordinal)
+                    .ToArray();
+                var names = BuildResourceNames(runtime.Id, networks.Select(network => network.TopologyKey).ToArray());
+                return new TeamLabRuntimeShardDeployment(shard, shard.WorkerNodeId, names, networks, assets);
+            })
+            .Where(shard => shard.Networks.Count > 0)
+            .OrderBy(shard => shard.Networks.Any(network => string.Equals(network.TopologyKey, "entry",
+                StringComparison.Ordinal)) ? 0 : 1)
+            .ThenBy(shard => shard.WorkerNodeId)
+            .ToArray();
+    }
+
+    private static TeamLabRuntimeShardDeployment? FindEntryShard(
+        IReadOnlyList<TeamLabRuntimeShardDeployment> shards) =>
+        shards.FirstOrDefault(shard => shard.Networks.Any(network =>
+            string.Equals(network.TopologyKey, "entry", StringComparison.OrdinalIgnoreCase) ||
+            network.Name.Contains("entry", StringComparison.OrdinalIgnoreCase) ||
+            network.Name.Contains("入口", StringComparison.Ordinal)));
+
+    private static TeamLabRuntimeShardDeployment ResolveAssetShard(TeamLabAssetSpec asset,
+        IReadOnlyList<TeamLabRuntimeShardDeployment> shards) =>
+        shards.FirstOrDefault(shard => shard.Assets.Any(shardAsset =>
+            string.Equals(shardAsset.TopologyKey, asset.TopologyKey, StringComparison.Ordinal))) ??
+        shards.FirstOrDefault(shard => asset.Interfaces.Any(iface =>
+            shard.Networks.Any(network => string.Equals(network.TopologyKey, iface.NetworkKey,
+                StringComparison.Ordinal)))) ??
+        shards[0];
+
+    private static IReadOnlyList<TeamLabShardFabricRoutePlan> BuildShardFabricRoutePlans(
+        IReadOnlyList<TeamLabRuntimeShardDeployment> shards, IReadOnlyDictionary<Guid, WorkerNode> workerNodes)
+    {
+        if (shards.Count <= 1)
+            return [];
+
+        return shards
+            .Select(shard =>
+            {
+                var routes = shards
+                    .Where(remote => remote.WorkerNodeId != shard.WorkerNodeId)
+                    .SelectMany(remote =>
+                    {
+                        var fabricIp = ResolveWorkerFabricGateway(workerNodes, remote.WorkerNodeId);
+                        var sourceIp = ResolveNamespaceRouteSourceIp(shard.Networks);
+                        return string.IsNullOrWhiteSpace(fabricIp)
+                            ? []
+                            : remote.Networks.Select(network =>
+                                new TeamLabStaticRouteRequest(network.Cidr, fabricIp, sourceIp));
+                    })
+                    .GroupBy(route => route.TargetCidr, StringComparer.Ordinal)
+                    .Select(group => group.OrderBy(route => route.GatewayIp, StringComparer.Ordinal).First())
+                    .OrderBy(route => route.TargetCidr, StringComparer.Ordinal)
+                    .ToArray();
+                return new TeamLabShardFabricRoutePlan(shard, routes);
+            })
+            .Where(plan => plan.Routes.Length > 0)
+            .ToArray();
+    }
+
+    private static string? ResolveWorkerFabricGateway(IReadOnlyDictionary<Guid, WorkerNode> workerNodes,
+        Guid workerNodeId)
+    {
+        if (!workerNodes.TryGetValue(workerNodeId, out var node))
+            return null;
+
+        return !string.IsNullOrWhiteSpace(node.TeamLabFabricIp)
+            ? node.TeamLabFabricIp
+            : node.TeamLabTunnelIp;
     }
 
     public static string[] BuildNativeProbeTargets(IReadOnlyList<TeamLabAssetSpec> assets) =>
@@ -133,6 +268,7 @@ public class TeamLabDeploymentService(
                 BuildDhcpDnsServiceName(ParseRuntimeId(names.RouterNamespace), network.TopologyKey)))
             .Append(names.RouterNamespace)
             .Append(names.WireGuardInterface)
+            .Append(BuildFabricUplinkHostInterfaceName(ParseRuntimeId(names.RouterNamespace)))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
@@ -876,12 +1012,17 @@ public class TeamLabDeploymentService(
             }
         }
 
-        var names = BuildResourceNames(runtime.Id, plan.Networks.Select(n => n.TopologyKey).ToArray());
+        var shardDeployments = BuildShardDeployments(runtime, plan);
+        if (shardDeployments.Count == 0)
+            return await FailAsync(runtime, "TeamLab runtime has no planned shard deployment.", token);
+
+        var entryShard = FindEntryShard(shardDeployments) ?? shardDeployments[0];
+        var names = entryShard.Names;
         var vpnServerAddress = LastHost(runtime.NetworkPrefix);
         var vpnClientAddress = SecondHost(runtime.NetworkPrefix);
         if (string.IsNullOrWhiteSpace(vpnServerAddress) || string.IsNullOrWhiteSpace(vpnClientAddress))
             return await FailNativeDeploymentAsync(runtime, "TeamLab runtime network prefix is invalid.",
-                names, plan.Networks, [], [], slots, capacityAlreadyReserved, token);
+                shardDeployments, [], slots, capacityAlreadyReserved, token);
 
         var playerAccess = BuildPlayerNetworkAccess(topology.Config, plan.Networks);
         var allowedIps = string.Join(',', playerAccess.AllowedCidrs);
@@ -892,40 +1033,101 @@ public class TeamLabDeploymentService(
         }
         catch (InvalidOperationException ex)
         {
-            return await FailNativeDeploymentAsync(runtime, ex.Message, names, plan.Networks, [], [], slots,
+            return await FailNativeDeploymentAsync(runtime, ex.Message, shardDeployments, [], slots,
                 capacityAlreadyReserved, token);
         }
 
-        foreach (var network in plan.Networks)
+        foreach (var shard in runtime.Shards)
         {
-            var bridge = await agentClient.CreateTeamLabBridgeAsync(runtime.WorkerNodeId!.Value,
-                new TeamLabBridgeRequest(runtime.Id, network.BridgeName, network.Cidr, _config.DryRun), token);
-            if (bridge is not { Success: true })
+            shard.Status = TeamLabRuntimeStatus.Deploying;
+            shard.LastError = null;
+            shard.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        foreach (var shard in shardDeployments)
+        {
+            foreach (var network in shard.Networks)
+            {
+                var bridge = await agentClient.CreateTeamLabBridgeAsync(shard.WorkerNodeId,
+                    new TeamLabBridgeRequest(runtime.Id, network.BridgeName, network.Cidr, _config.DryRun), token);
+                if (bridge is not { Success: true })
+                    return await FailNativeDeploymentAsync(runtime,
+                        bridge?.Message ?? $"Failed to create TeamLab bridge {network.Name}.",
+                        shardDeployments, [], slots, capacityAlreadyReserved, token);
+                if (bridge.DryRun)
+                    return await FailNativeDeploymentAsync(runtime, bridge.Message, shardDeployments, [], slots,
+                        capacityAlreadyReserved, token);
+            }
+        }
+
+        foreach (var shard in shardDeployments)
+        {
+            var router = await agentClient.CreateTeamLabRouterAsync(shard.WorkerNodeId,
+                new TeamLabRouterRequest(runtime.Id, shard.Names.RouterNamespace,
+                    shard.Networks.Select(network =>
+                        new TeamLabRouterInterfaceRequest(network.BridgeName,
+                            $"{network.GatewayIp}/{PrefixLength(network.Cidr)}")).ToArray(),
+                    [],
+                    _config.DryRun), token);
+            if (router is not { Success: true })
                 return await FailNativeDeploymentAsync(runtime,
-                    bridge?.Message ?? $"Failed to create TeamLab bridge {network.Name}.",
-                    names, plan.Networks, [], [], slots, capacityAlreadyReserved, token);
-            if (bridge.DryRun)
-                return await FailNativeDeploymentAsync(runtime, bridge.Message, names, plan.Networks, [], [], slots,
+                    router?.Message ?? "Failed to create TeamLab router namespace.",
+                    shardDeployments, [], slots, capacityAlreadyReserved, token);
+            if (router.DryRun)
+                return await FailNativeDeploymentAsync(runtime, router.Message, shardDeployments, [], slots,
                     capacityAlreadyReserved, token);
         }
 
-        var router = await agentClient.CreateTeamLabRouterAsync(runtime.WorkerNodeId!.Value,
-            new TeamLabRouterRequest(runtime.Id, names.RouterNamespace,
-                plan.Networks.Select(network =>
-                    new TeamLabRouterInterfaceRequest(network.BridgeName,
-                        $"{network.GatewayIp}/{PrefixLength(network.Cidr)}")).ToArray(),
-                [],
-                _config.DryRun), token);
-        if (router is not { Success: true })
-            return await FailNativeDeploymentAsync(runtime,
-                router?.Message ?? "Failed to create TeamLab router namespace.",
-                names, plan.Networks, [], [], slots, capacityAlreadyReserved, token);
-        if (router.DryRun)
-            return await FailNativeDeploymentAsync(runtime, router.Message, names, plan.Networks, [], [], slots,
-                capacityAlreadyReserved, token);
+        var workerNodeIds = shardDeployments.Select(shard => shard.WorkerNodeId).Distinct().ToArray();
+        var workerNodes = await context.WorkerNodes.AsNoTracking()
+            .Where(node => workerNodeIds.Contains(node.Id))
+            .ToDictionaryAsync(node => node.Id, token);
+        var workerOrdinalById = workerNodeIds
+            .OrderBy(id => id)
+            .Select((id, index) => new { id, index })
+            .ToDictionary(item => item.id, item => item.index);
+        var fabricRoutePlans = BuildShardFabricRoutePlans(shardDeployments, workerNodes);
+        var routeVersion = runtime.PublishedVersion <= 0 ? 1 : runtime.PublishedVersion;
+        foreach (var planItem in fabricRoutePlans)
+        {
+            var shardOrdinal = workerOrdinalById[planItem.Shard.WorkerNodeId];
+            var fabricGateway = ResolveWorkerFabricGateway(workerNodes, planItem.Shard.WorkerNodeId);
+            if (string.IsNullOrWhiteSpace(fabricGateway))
+                return await FailNativeDeploymentAsync(runtime,
+                    $"TeamLab WorkerNode {planItem.Shard.WorkerNodeId} has no Fabric IP.",
+                    shardDeployments, [], slots, capacityAlreadyReserved, token);
 
-        var wg = await agentClient.ConfigureTeamLabWireGuardAsync(runtime.WorkerNodeId.Value,
-            new TeamLabWireGuardRequest(runtime.Id, names.RouterNamespace, names.WireGuardInterface,
+            var fabric = await agentClient.ApplyTeamLabFabricAsync(planItem.Shard.WorkerNodeId,
+                new TeamLabFabricApplyRequest(
+                    runtime.Id,
+                    routeVersion,
+                    fabricGateway,
+                    planItem.Shard.Names.RouterNamespace,
+                    BuildFabricUplinkHostAddressCidr(runtime.Id, shardOrdinal),
+                    BuildFabricUplinkPeerAddressCidr(runtime.Id, shardOrdinal),
+                    BuildLocalFabricRoutes(planItem.Shard.Networks, runtime.Id, shardOrdinal),
+                    planItem.Routes,
+                    _config.DryRun), token);
+            if (fabric is not { Success: true })
+                return await FailNativeDeploymentAsync(runtime,
+                    fabric?.Message ?? "Failed to apply TeamLab Fabric routes.",
+                    shardDeployments, [], slots, capacityAlreadyReserved, token);
+            if (fabric.DryRun)
+                return await FailNativeDeploymentAsync(runtime, fabric.Message, shardDeployments, [], slots,
+                    capacityAlreadyReserved, token);
+
+            planItem.Shard.Shard.RouteVersion = routeVersion;
+            planItem.Shard.Shard.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+        if (fabricRoutePlans.Count > 0)
+        {
+            AddEvent(runtime, "fabric", TeamLabEventLevel.Success,
+                $"Applied TeamLab Fabric routes for {fabricRoutePlans.Count} shard(s).");
+            await context.SaveChangesAsync(token);
+        }
+
+        var wg = await agentClient.ConfigureTeamLabWireGuardAsync(entryShard.WorkerNodeId,
+            new TeamLabWireGuardRequest(runtime.Id, entryShard.Names.RouterNamespace, entryShard.Names.WireGuardInterface,
                 runtime.PublicUdpMapping!.WorkerWireGuardPort,
                 $"{vpnServerAddress}/32",
                 peer.ServerPrivateKey,
@@ -938,54 +1140,58 @@ public class TeamLabDeploymentService(
         if (wg is not { Success: true })
             return await FailNativeDeploymentAsync(runtime,
                 wg?.Message ?? "Failed to configure TeamLab WireGuard endpoint.",
-                names, plan.Networks, [], [], slots, capacityAlreadyReserved, token);
+                shardDeployments, [], slots, capacityAlreadyReserved, token);
         if (wg.DryRun)
-            return await FailNativeDeploymentAsync(runtime, wg.Message, names, plan.Networks, [], [], slots,
+            return await FailNativeDeploymentAsync(runtime, wg.Message, shardDeployments, [], slots,
                 capacityAlreadyReserved, token);
 
-        var createdContainers = new List<string>();
-        var createdVms = new List<string>();
+        var createdAssets = shardDeployments
+            .ToDictionary(shard => shard.WorkerNodeId,
+                shard => new TeamLabCreatedShardAssets(shard.WorkerNodeId, [], []));
         var createdAssetLock = new object();
 
-        void TrackCreatedContainer(string containerId)
+        void TrackCreatedContainer(Guid workerNodeId, string containerId)
         {
             lock (createdAssetLock)
-                createdContainers.Add(containerId);
+                createdAssets[workerNodeId].Containers.Add(containerId);
         }
 
-        void TrackCreatedVm(string vmName)
+        void TrackCreatedVm(Guid workerNodeId, string vmName)
         {
             lock (createdAssetLock)
-                createdVms.Add(vmName);
+                createdAssets[workerNodeId].Vms.Add(vmName);
         }
 
-        var dhcpDnsRequests = BuildDhcpDnsRequests(runtime.Id, names.RouterNamespace, plan.Networks, plan.Assets,
-            _config.DryRun);
-        foreach (var dhcpDnsRequest in dhcpDnsRequests)
+        foreach (var shard in shardDeployments)
         {
-            var dhcpDns = await agentClient.ConfigureTeamLabDhcpDnsAsync(runtime.WorkerNodeId.Value,
-                dhcpDnsRequest, token);
-            if (dhcpDns is not { Success: true })
-                return await FailNativeDeploymentAsync(runtime,
-                    dhcpDns?.Message ?? $"Failed to configure TeamLab DHCP/DNS service {dhcpDnsRequest.ServiceName}.",
-                    names, plan.Networks, createdContainers, createdVms, slots, capacityAlreadyReserved, token);
-            if (dhcpDns.DryRun)
-                return await FailNativeDeploymentAsync(runtime, dhcpDns.Message, names, plan.Networks,
-                    createdContainers, createdVms, slots, capacityAlreadyReserved, token);
-
-            var probeName = dhcpDnsRequest.DnsRecords.FirstOrDefault()?.Hostname;
-            if (!string.IsNullOrWhiteSpace(probeName))
+            var dhcpDnsRequests = BuildDhcpDnsRequests(runtime.Id, shard.Names.RouterNamespace, shard.Networks,
+                shard.Assets, _config.DryRun);
+            foreach (var dhcpDnsRequest in dhcpDnsRequests)
             {
-                var dnsProbe = await agentClient.ProbeTeamLabDhcpDnsAsync(runtime.WorkerNodeId.Value,
-                    new TeamLabDhcpDnsProbeRequest(runtime.Id, names.RouterNamespace, dhcpDnsRequest.GatewayIp,
-                        $"{probeName}.{dhcpDnsRequest.Domain}", _config.DryRun), token);
-                if (dnsProbe is not { Success: true })
+                var dhcpDns = await agentClient.ConfigureTeamLabDhcpDnsAsync(shard.WorkerNodeId,
+                    dhcpDnsRequest, token);
+                if (dhcpDns is not { Success: true })
                     return await FailNativeDeploymentAsync(runtime,
-                        dnsProbe?.Message ?? $"Failed to probe TeamLab DHCP/DNS service {dhcpDnsRequest.ServiceName}.",
-                        names, plan.Networks, createdContainers, createdVms, slots, capacityAlreadyReserved, token);
-                if (dnsProbe.DryRun)
-                    return await FailNativeDeploymentAsync(runtime, dnsProbe.Message, names, plan.Networks,
-                        createdContainers, createdVms, slots, capacityAlreadyReserved, token);
+                        dhcpDns?.Message ?? $"Failed to configure TeamLab DHCP/DNS service {dhcpDnsRequest.ServiceName}.",
+                        shardDeployments, createdAssets.Values, slots, capacityAlreadyReserved, token);
+                if (dhcpDns.DryRun)
+                    return await FailNativeDeploymentAsync(runtime, dhcpDns.Message, shardDeployments,
+                        createdAssets.Values, slots, capacityAlreadyReserved, token);
+
+                var probeName = dhcpDnsRequest.DnsRecords.FirstOrDefault()?.Hostname;
+                if (!string.IsNullOrWhiteSpace(probeName))
+                {
+                    var dnsProbe = await agentClient.ProbeTeamLabDhcpDnsAsync(shard.WorkerNodeId,
+                        new TeamLabDhcpDnsProbeRequest(runtime.Id, shard.Names.RouterNamespace, dhcpDnsRequest.GatewayIp,
+                            $"{probeName}.{dhcpDnsRequest.Domain}", _config.DryRun), token);
+                    if (dnsProbe is not { Success: true })
+                        return await FailNativeDeploymentAsync(runtime,
+                            dnsProbe?.Message ?? $"Failed to probe TeamLab DHCP/DNS service {dhcpDnsRequest.ServiceName}.",
+                            shardDeployments, createdAssets.Values, slots, capacityAlreadyReserved, token);
+                    if (dnsProbe.DryRun)
+                        return await FailNativeDeploymentAsync(runtime, dnsProbe.Message, shardDeployments,
+                            createdAssets.Values, slots, capacityAlreadyReserved, token);
+                }
             }
         }
 
@@ -995,9 +1201,15 @@ public class TeamLabDeploymentService(
             {
                 var assetResults = await Task.WhenAll(assetGroup
                     .OrderBy(asset => asset.TopologyKey, StringComparer.Ordinal)
-                    .Select(asset => CreateNativeAssetAsync(runtime.WorkerNodeId.Value, runtime.Id,
+                    .Select(asset =>
+                    {
+                        var shard = ResolveAssetShard(asset, shardDeployments);
+                        return CreateNativeAssetAsync(shard.WorkerNodeId, runtime.Id,
                         topology.Config, plan, routeMatrix, asset, gameId, teamId, runtime.PublishedVersion,
-                        vpnClientAddress, TrackCreatedContainer, TrackCreatedVm, token)));
+                        vpnClientAddress,
+                        containerId => TrackCreatedContainer(shard.WorkerNodeId, containerId),
+                        vmName => TrackCreatedVm(shard.WorkerNodeId, vmName), token);
+                    }));
 
                 foreach (var result in assetResults)
                     RecordRuntimeAsset(runtime, result.RuntimeAsset);
@@ -1007,16 +1219,22 @@ public class TeamLabDeploymentService(
         }
         catch (Exception ex) when (ex is InvalidOperationException or AgentClientException or HttpRequestException or TaskCanceledException)
         {
-            return await FailNativeDeploymentAsync(runtime, ex.Message, names, plan.Networks,
-                createdContainers, createdVms, slots, capacityAlreadyReserved, token);
+            return await FailNativeDeploymentAsync(runtime, ex.Message, shardDeployments,
+                createdAssets.Values, slots, capacityAlreadyReserved, token);
         }
 
         var gateway = await publicUdpGatewayProvider.SyncMappingAsync(runtime.PublicUdpMapping, token);
         if (!gateway.Success)
-            return await FailNativeDeploymentAsync(runtime, gateway.Message, names, plan.Networks,
-                createdContainers, createdVms, slots, capacityAlreadyReserved, token, removePublicMapping: false);
+            return await FailNativeDeploymentAsync(runtime, gateway.Message, shardDeployments,
+                createdAssets.Values, slots, capacityAlreadyReserved, token, removePublicMapping: false);
 
-        RecordNativeRuntimeFacts(runtime, names, plan.Networks);
+        foreach (var shard in shardDeployments)
+            RecordNativeShardRuntimeFacts(runtime, shard);
+
+        var flowStart = await trafficFlowService.StartCollectorsAsync(runtime, runtime.Networks, token);
+        if (!flowStart.Success)
+            return await FailNativeDeploymentAsync(runtime, flowStart.Message, shardDeployments,
+                createdAssets.Values, slots, capacityAlreadyReserved, token);
 
         runtime.Status = TeamLabRuntimeStatus.Probing;
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
@@ -1037,15 +1255,18 @@ public class TeamLabDeploymentService(
 
         foreach (var probeTarget in probeTargets)
         {
-            var probe = await WaitForNativeProbeTargetReadyAsync(runtime.WorkerNodeId.Value, runtime.Id,
-                names.RouterNamespace, probeTarget, token);
+            var asset = plan.Assets.FirstOrDefault(asset => asset.Interfaces.Any(iface =>
+                string.Equals(iface.IpAddress, probeTarget, StringComparison.Ordinal)));
+            var shard = asset is null ? entryShard : ResolveAssetShard(asset, shardDeployments);
+            var probe = await WaitForNativeProbeTargetReadyAsync(shard.WorkerNodeId, runtime.Id,
+                shard.Names.RouterNamespace, probeTarget, token);
             if (probe is not { Success: true })
                 return await FailNativeDeploymentAsync(runtime,
                     probe?.Message ?? $"TeamLab runtime connectivity probe failed for {probeTarget}.",
-                    names, plan.Networks, createdContainers, createdVms, slots, capacityAlreadyReserved, token);
+                    shardDeployments, createdAssets.Values, slots, capacityAlreadyReserved, token);
             if (probe.DryRun)
-                return await FailNativeDeploymentAsync(runtime, probe.Message, names, plan.Networks,
-                    createdContainers, createdVms, slots, capacityAlreadyReserved, token);
+                return await FailNativeDeploymentAsync(runtime, probe.Message, shardDeployments,
+                    createdAssets.Values, slots, capacityAlreadyReserved, token);
         }
 
         await SyncCompatibilityEnvironmentAsync(runtime, topology.Config, plan, teamIndex, token);
@@ -1058,15 +1279,22 @@ public class TeamLabDeploymentService(
     internal async Task<FleetCapacityReservationResult> TryReserveTeamLabCapacityAsync(TeamLabRuntime runtime,
         TeamLabAssetSlotCount slots, CancellationToken token)
     {
-        if (runtime.WorkerNodeId is not { } nodeId)
+        var shardSlots = CountShardSlots(runtime, slots);
+        if (shardSlots.Count == 0)
             return FleetCapacityReservationResult.Failed("TeamLab runtime has no planned WorkerNode.");
 
-        return await capacityReservation.TryReserveAsync(new FleetCapacityRequest(
-            NodeCapability.Docker | NodeCapability.Kvm,
-            slots.DockerSlots,
-            slots.VmSlots,
-            PreferredNodeId: nodeId,
-            RequireTeamLab: true), token);
+        var reservation = await capacityReservation.TryReserveBatchAsync(
+            shardSlots.Select(slot => new FleetCapacityBatchItem(slot.WorkerNodeId, slot.DockerSlots, slot.VmSlots))
+                .ToArray(),
+            requireTeamLab: true,
+            token);
+
+        if (!reservation.Success)
+            return FleetCapacityReservationResult.Failed(reservation.Message);
+
+        var primary = reservation.Reservations.FirstOrDefault(r => r.NodeId == runtime.WorkerNodeId) ??
+                      reservation.Reservations.FirstOrDefault();
+        return primary ?? FleetCapacityReservationResult.Failed("TeamLab capacity reservation returned no node.");
     }
 
     internal async Task<DeploymentQueueStatusModel?> TryQueueTeamLabRuntimeAsync(TeamLabRuntime runtime,
@@ -1107,18 +1335,20 @@ public class TeamLabDeploymentService(
             TaskStatus.Pending, LogLevel.Information);
 
         var cleanupErrors = new List<string>();
+        var flowCleanup = await trafficFlowService.StopCollectorsAsync(runtime, runtime.Networks, token);
+        if (!flowCleanup.Success)
+            cleanupErrors.Add(flowCleanup.Message);
 
-        if (runtime.WorkerNodeId.HasValue)
+        foreach (var nodeCleanup in await BuildDestroyNodeCleanupPlansAsync(runtime, gameId, token))
         {
-            var assetCleanup = await CleanupTrackedNativeAssetsAsync(runtime.WorkerNodeId.Value,
-                BuildNativeAssetCleanupPlan(runtime), token);
+            var assetCleanup = await CleanupTrackedNativeAssetsAsync(nodeCleanup.WorkerNodeId,
+                nodeCleanup.AssetCleanup, token);
             cleanupErrors.AddRange(assetCleanup);
 
-            var resourceNames = await BuildDestroyResourceNamesAsync(runtime, gameId, token);
-            var cleanup = await agentClient.CleanupTeamLabAsync(runtime.WorkerNodeId.Value,
-                new TeamLabCleanupRequest(runtime.Id, resourceNames, _config.DryRun), token);
+            var cleanup = await agentClient.CleanupTeamLabAsync(nodeCleanup.WorkerNodeId,
+                new TeamLabCleanupRequest(runtime.Id, nodeCleanup.ResourceNames, _config.DryRun), token);
             if (cleanup is not { Success: true })
-                cleanupErrors.Add(cleanup?.Message ?? "TeamLab WorkerNode cleanup failed.");
+                cleanupErrors.Add(cleanup?.Message ?? $"TeamLab WorkerNode {nodeCleanup.WorkerNodeId} cleanup failed.");
             else if (cleanup.DryRun)
                 cleanupErrors.Add(cleanup.Message);
         }
@@ -1148,6 +1378,12 @@ public class TeamLabDeploymentService(
         await ReleaseTeamLabCapacityAsync(runtime, token);
         runtime.Status = TeamLabRuntimeStatus.Destroyed;
         MarkRuntimeFactsDestroyed(runtime);
+        foreach (var shard in runtime.Shards)
+        {
+            shard.Status = TeamLabRuntimeStatus.Destroyed;
+            shard.LastError = null;
+            shard.UpdatedAt = DateTimeOffset.UtcNow;
+        }
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
         AddEvent(runtime, "destroy", TeamLabEventLevel.Success, "TeamLab runtime destroyed.");
         await SyncCompatibilityEnvironmentStatusAsync(runtime, PenetrationRuntimeStatus.Stopped, null, token);
@@ -1176,6 +1412,8 @@ public class TeamLabDeploymentService(
             .Include(r => r.WorkerNode)
             .Include(r => r.Team)
             .Include(r => r.PublicUdpMapping)
+            .Include(r => r.Shards).ThenInclude(s => s.Networks)
+            .Include(r => r.Shards).ThenInclude(s => s.Assets)
             .Include(r => r.Networks)
             .Include(r => r.Assets)
             .Include(r => r.Events)
@@ -1203,6 +1441,92 @@ public class TeamLabDeploymentService(
             names.Add(name);
 
         return names.ToArray();
+    }
+
+    private sealed record TeamLabNodeCleanupPlan(
+        Guid WorkerNodeId,
+        TeamLabNativeAssetCleanupPlan AssetCleanup,
+        string[] ResourceNames);
+
+    private async Task<IReadOnlyList<TeamLabNodeCleanupPlan>> BuildDestroyNodeCleanupPlansAsync(TeamLabRuntime runtime,
+        int gameId, CancellationToken token)
+    {
+        var nodeIds = runtime.Shards
+            .Select(shard => (Guid?)shard.WorkerNodeId)
+            .Concat(runtime.Networks.Select(network => network.WorkerNodeId))
+            .Concat(runtime.Assets.Select(asset => asset.WorkerNodeId))
+            .Append(runtime.WorkerNodeId)
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .Distinct()
+            .OrderBy(id => id)
+            .ToArray();
+
+        if (nodeIds.Length == 0)
+            return [];
+
+        var plannedShards = await BuildPlannedShardDeploymentsForCleanupAsync(runtime, gameId, token);
+        return nodeIds.Select(nodeId =>
+        {
+            var assetCleanup = new TeamLabNativeAssetCleanupPlan(
+                runtime.Assets
+                    .Where(asset => asset.WorkerNodeId == nodeId ||
+                                    (asset.WorkerNodeId is null && runtime.WorkerNodeId == nodeId))
+                    .Where(asset => asset.Kind == TeamLabResourceKind.Docker)
+                    .Where(asset => asset.Status != TeamLabRuntimeStatus.Destroyed)
+                    .Select(asset => asset.RuntimeResourceId)
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Distinct(StringComparer.Ordinal)
+                    .Cast<string>()
+                    .ToArray(),
+                runtime.Assets
+                    .Where(asset => asset.WorkerNodeId == nodeId ||
+                                    (asset.WorkerNodeId is null && runtime.WorkerNodeId == nodeId))
+                    .Where(asset => asset.Kind == TeamLabResourceKind.Vm)
+                    .Where(asset => asset.Status != TeamLabRuntimeStatus.Destroyed)
+                    .Select(asset => asset.RuntimeResourceId)
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Distinct(StringComparer.Ordinal)
+                    .Cast<string>()
+                    .ToArray());
+
+            var resourceNames = new HashSet<string>(
+                runtime.Networks
+                    .Where(network => network.WorkerNodeId == nodeId ||
+                                      (network.WorkerNodeId is null && runtime.WorkerNodeId == nodeId))
+                    .Select(network => network.BridgeName)
+                    .Concat(runtime.Assets
+                        .Where(asset => asset.WorkerNodeId == nodeId ||
+                                        (asset.WorkerNodeId is null && runtime.WorkerNodeId == nodeId))
+                        .Where(asset => asset.Kind is TeamLabResourceKind.DhcpDnsService
+                            or TeamLabResourceKind.RouterNamespace
+                            or TeamLabResourceKind.WireGuard)
+                        .Select(asset => asset.RuntimeResourceId))
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Cast<string>(),
+                StringComparer.Ordinal);
+
+            foreach (var planned in plannedShards.Where(shard => shard.WorkerNodeId == nodeId))
+            foreach (var name in BuildNativeCleanupResourceNames(planned.Names, planned.Networks))
+                resourceNames.Add(name);
+
+            return new TeamLabNodeCleanupPlan(nodeId, assetCleanup, resourceNames.ToArray());
+        }).ToArray();
+    }
+
+    private async Task<IReadOnlyList<TeamLabRuntimeShardDeployment>> BuildPlannedShardDeploymentsForCleanupAsync(
+        TeamLabRuntime runtime, int gameId, CancellationToken token)
+    {
+        var topology = await LoadPublishedTopologyAsync(runtime, gameId, token);
+        if (topology is not { Success: true, Config: not null } || runtime.Id <= 0)
+            return [];
+
+        var templates = await context.ImageTemplates.AsNoTracking()
+            .Where(t => topology.Config.Nodes.Select(n => n.ImageTemplateId).Contains(t.Id))
+            .ToDictionaryAsync(t => t.Id, token);
+        var plan = TeamLabAssetPlanService.BuildPublishedAssetPlan(topology.Config, runtime.Id, 0,
+            templates, runtime.NetworkPrefix);
+        return !plan.Success ? [] : BuildShardDeployments(runtime, plan);
     }
 
     private async Task<TeamLabPublishedTopologyResult> LoadPublishedTopologyAsync(TeamLabRuntime runtime, int gameId,
@@ -1300,20 +1624,32 @@ public class TeamLabDeploymentService(
     }
 
     private async Task<TeamLabDeploymentResult> FailNativeDeploymentAsync(TeamLabRuntime runtime, string message,
-        TeamLabResourceNames names, IReadOnlyList<TeamLabRuntimeNetworkSpec> networks, IEnumerable<string> containers,
-        IEnumerable<string> vms, TeamLabAssetSlotCount reservedSlots, bool capacityAlreadyReserved,
+        IReadOnlyList<TeamLabRuntimeShardDeployment> shards, IEnumerable<TeamLabCreatedShardAssets> createdAssets,
+        TeamLabAssetSlotCount reservedSlots, bool capacityAlreadyReserved,
         CancellationToken token, bool removePublicMapping = true)
     {
         var cleanupErrors = new List<string>();
-        await CleanupCreatedNativeAssetsAsync(runtime.WorkerNodeId!.Value, containers, vms, token);
+        foreach (var created in createdAssets)
+            await CleanupCreatedNativeAssetsAsync(created.WorkerNodeId, created.Containers, created.Vms, token);
 
-        var resourceCleanup = await agentClient.CleanupTeamLabAsync(runtime.WorkerNodeId.Value,
-            new TeamLabCleanupRequest(runtime.Id, BuildNativeCleanupResourceNames(names, networks), _config.DryRun),
-            token);
-        if (resourceCleanup is not { Success: true })
-            cleanupErrors.Add(resourceCleanup?.Message ?? "TeamLab WorkerNode cleanup failed after native deployment failure.");
-        else if (resourceCleanup.DryRun)
-            cleanupErrors.Add(resourceCleanup.Message);
+        foreach (var shard in shards)
+        {
+            var resourceCleanup = await agentClient.CleanupTeamLabAsync(shard.WorkerNodeId,
+                new TeamLabCleanupRequest(runtime.Id,
+                    BuildNativeCleanupResourceNames(shard.Names, shard.Networks), _config.DryRun),
+                token);
+            if (resourceCleanup is not { Success: true })
+                cleanupErrors.Add(resourceCleanup?.Message ??
+                                  $"TeamLab WorkerNode {shard.WorkerNodeId} cleanup failed after native deployment failure.");
+            else if (resourceCleanup.DryRun)
+                cleanupErrors.Add(resourceCleanup.Message);
+
+            shard.Shard.Status = cleanupErrors.Count == 0
+                ? TeamLabRuntimeStatus.Failed
+                : TeamLabRuntimeStatus.CleanupPending;
+            shard.Shard.LastError = cleanupErrors.Count == 0 ? null : NormalizeRuntimeError(string.Join('\n', cleanupErrors));
+            shard.Shard.UpdatedAt = DateTimeOffset.UtcNow;
+        }
 
         if (removePublicMapping && runtime.PublicUdpMapping is not null)
         {
@@ -1342,50 +1678,32 @@ public class TeamLabDeploymentService(
 
     internal async Task ReleaseTeamLabCapacityAsync(TeamLabRuntime runtime, CancellationToken token)
     {
-        if (runtime.WorkerNodeId is not { } nodeId)
-            return;
-
         var slots = CountRuntimeAssetSlots(runtime);
-        if (slots.DockerSlots == 0 && slots.VmSlots == 0)
-            return;
-
-        await capacityReservation.ReleaseActiveAsync(nodeId, slots.DockerSlots, slots.VmSlots, token);
+        await ReleaseTeamLabCapacityAsync(runtime, slots, token);
     }
 
     internal async Task ReleaseTeamLabCapacityAsync(TeamLabRuntime runtime, TeamLabAssetSlotCount slots,
         CancellationToken token)
     {
-        if (runtime.WorkerNodeId is not { } nodeId)
-            return;
-
-        if (slots.DockerSlots == 0 && slots.VmSlots == 0)
-            return;
-
-        await capacityReservation.ReleaseActiveAsync(nodeId, slots.DockerSlots, slots.VmSlots, token);
+        foreach (var shardSlots in CountShardSlots(runtime, slots))
+            await capacityReservation.ReleaseActiveAsync(shardSlots.WorkerNodeId, shardSlots.DockerSlots,
+                shardSlots.VmSlots, token);
     }
 
     internal async Task ReleaseReservedTeamLabCapacityAsync(TeamLabRuntime runtime, TeamLabAssetSlotCount slots,
         CancellationToken token)
     {
-        if (runtime.WorkerNodeId is not { } nodeId)
-            return;
-
-        if (slots.DockerSlots == 0 && slots.VmSlots == 0)
-            return;
-
-        await capacityReservation.ReleaseAsync(nodeId, slots.DockerSlots, slots.VmSlots, token);
+        foreach (var shardSlots in CountShardSlots(runtime, slots))
+            await capacityReservation.ReleaseAsync(shardSlots.WorkerNodeId, shardSlots.DockerSlots,
+                shardSlots.VmSlots, token);
     }
 
     internal async Task ConfirmTeamLabCapacityAsync(TeamLabRuntime runtime, TeamLabAssetSlotCount slots,
         CancellationToken token)
     {
-        if (runtime.WorkerNodeId is not { } nodeId)
-            return;
-
-        if (slots.DockerSlots == 0 && slots.VmSlots == 0)
-            return;
-
-        await capacityReservation.ConfirmAsync(nodeId, slots.DockerSlots, slots.VmSlots, token);
+        foreach (var shardSlots in CountShardSlots(runtime, slots))
+            await capacityReservation.ConfirmAsync(shardSlots.WorkerNodeId, shardSlots.DockerSlots,
+                shardSlots.VmSlots, token);
     }
 
     private async Task<string[]> CleanupTrackedNativeAssetsAsync(Guid workerNodeId,
@@ -1584,8 +1902,33 @@ public class TeamLabDeploymentService(
                 runtime.PublicUdpMapping.PublicUdpPort.ToString());
     }
 
+    private static void RecordNativeShardRuntimeFacts(TeamLabRuntime runtime, TeamLabRuntimeShardDeployment shard)
+    {
+        foreach (var network in shard.Networks)
+            UpsertNetwork(runtime, network.TopologyKey, network.Name, network.Cidr, network.GatewayIp,
+                network.BridgeName, shard.Shard, shard.WorkerNodeId);
+
+        foreach (var request in BuildDhcpDnsRequests(runtime.Id, shard.Names.RouterNamespace, shard.Networks,
+                     shard.Assets, false))
+            UpsertAsset(runtime, TeamLabResourceKind.DhcpDnsService, request.ServiceName, request.ServiceName,
+                shard.Shard, shard.WorkerNodeId);
+
+        UpsertAsset(runtime, TeamLabResourceKind.RouterNamespace, $"router-{shard.WorkerNodeId:N}",
+            shard.Names.RouterNamespace, shard.Shard, shard.WorkerNodeId);
+        if (FindEntryShard([shard]) is not null)
+            UpsertAsset(runtime, TeamLabResourceKind.WireGuard, "wireguard", shard.Names.WireGuardInterface,
+                shard.Shard, shard.WorkerNodeId);
+        if (runtime.PublicUdpMapping is not null && runtime.WorkerNodeId == shard.WorkerNodeId)
+            UpsertAsset(runtime, TeamLabResourceKind.PublicUdpMapping, "public-udp",
+                runtime.PublicUdpMapping.PublicUdpPort.ToString(), shard.Shard, shard.WorkerNodeId);
+
+        shard.Shard.Status = TeamLabRuntimeStatus.Running;
+        shard.Shard.LastError = null;
+        shard.Shard.UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
     private static void UpsertNetwork(TeamLabRuntime runtime, string topologyKey, string name, string cidr,
-        string gatewayIp, string bridgeName)
+        string gatewayIp, string bridgeName, TeamLabRuntimeShard? shard = null, Guid? workerNodeId = null)
     {
         var network = runtime.Networks.FirstOrDefault(n => n.TopologyKey == topologyKey);
         if (network is null)
@@ -1598,10 +1941,13 @@ public class TeamLabDeploymentService(
         network.Cidr = cidr;
         network.GatewayIp = gatewayIp;
         network.BridgeName = bridgeName;
+        if (shard is not null)
+            network.Shard = shard;
+        network.WorkerNodeId = workerNodeId ?? network.WorkerNodeId;
     }
 
     private static void UpsertAsset(TeamLabRuntime runtime, TeamLabResourceKind kind, string topologyKey,
-        string runtimeResourceId)
+        string runtimeResourceId, TeamLabRuntimeShard? shard = null, Guid? workerNodeId = null)
     {
         var asset = runtime.Assets.FirstOrDefault(a => a.Kind == kind && a.TopologyKey == topologyKey);
         if (asset is null)
@@ -1614,6 +1960,9 @@ public class TeamLabDeploymentService(
         asset.RuntimeResourceId = runtimeResourceId;
         asset.Status = TeamLabRuntimeStatus.Running;
         asset.LastError = null;
+        if (shard is not null)
+            asset.Shard = shard;
+        asset.WorkerNodeId = workerNodeId ?? asset.WorkerNodeId;
     }
 
     public static void RecordRuntimeAsset(TeamLabRuntime runtime, TeamLabRuntimeAssetSpec spec)
@@ -1655,7 +2004,76 @@ public class TeamLabDeploymentService(
             runtime.Assets.Count(asset => asset.Kind == TeamLabResourceKind.Vm &&
                                           asset.Status != TeamLabRuntimeStatus.Destroyed));
 
+    public static IReadOnlyList<TeamLabShardSlotCount> CountShardSlots(TeamLabRuntime runtime,
+        TeamLabAssetSlotCount fallbackSlots)
+    {
+        var shardSlots = runtime.Shards
+            .Where(shard => shard.Assets.Count > 0)
+            .Select(shard => new TeamLabShardSlotCount(
+                shard.WorkerNodeId,
+                shard.Assets.Count(asset => asset.Kind == TeamLabResourceKind.Docker &&
+                                            asset.Status != TeamLabRuntimeStatus.Destroyed),
+                shard.Assets.Count(asset => asset.Kind == TeamLabResourceKind.Vm &&
+                                            asset.Status != TeamLabRuntimeStatus.Destroyed)))
+            .Where(slots => slots.DockerSlots > 0 || slots.VmSlots > 0)
+            .GroupBy(slots => slots.WorkerNodeId)
+            .Select(group => new TeamLabShardSlotCount(
+                group.Key,
+                group.Sum(slots => slots.DockerSlots),
+                group.Sum(slots => slots.VmSlots)))
+            .OrderBy(slots => slots.WorkerNodeId)
+            .ToArray();
+
+        if (shardSlots.Length > 0)
+            return shardSlots;
+
+        return runtime.WorkerNodeId is { } nodeId &&
+               (fallbackSlots.DockerSlots > 0 || fallbackSlots.VmSlots > 0)
+            ? [new TeamLabShardSlotCount(nodeId, fallbackSlots.DockerSlots, fallbackSlots.VmSlots)]
+            : [];
+    }
+
     private static string TrimLinuxName(string value) => value.Length <= 15 ? value : value[..15];
+
+    private static string BuildFabricUplinkHostInterfaceName(int runtimeId) => TrimLinuxName($"tlrf{runtimeId}");
+
+    private static string BuildFabricUplinkHostAddressCidr(int runtimeId, int shardOrdinal) =>
+        $"{BuildFabricUplinkAddress(runtimeId, shardOrdinal, 1)}/30";
+
+    private static string BuildFabricUplinkPeerAddressCidr(int runtimeId, int shardOrdinal) =>
+        $"{BuildFabricUplinkAddress(runtimeId, shardOrdinal, 2)}/30";
+
+    private static string BuildFabricUplinkPeerAddress(int runtimeId, int shardOrdinal) =>
+        BuildFabricUplinkAddress(runtimeId, shardOrdinal, 2);
+
+    private static string BuildFabricUplinkAddress(int runtimeId, int shardOrdinal, int hostOffset)
+    {
+        const int blocksPerRuntime = 32;
+        const int totalBlocks = 16384;
+        var runtimeBucket = Math.Abs(runtimeId % (totalBlocks / blocksPerRuntime));
+        var shardBucket = Math.Abs(shardOrdinal % blocksPerRuntime);
+        var normalized = runtimeBucket * blocksPerRuntime + shardBucket;
+        var thirdOctet = normalized / 64;
+        var fourthOctet = (normalized % 64) * 4 + hostOffset;
+        return $"169.254.{thirdOctet}.{fourthOctet}";
+    }
+
+    private static TeamLabStaticRouteRequest[] BuildLocalFabricRoutes(
+        IReadOnlyList<TeamLabRuntimeNetworkSpec> networks, int runtimeId, int shardOrdinal) =>
+        networks
+            .Select(network => new TeamLabStaticRouteRequest(network.Cidr,
+                BuildFabricUplinkPeerAddress(runtimeId, shardOrdinal)))
+            .GroupBy(route => route.TargetCidr, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .OrderBy(route => route.TargetCidr, StringComparer.Ordinal)
+            .ToArray();
+
+    private static string ResolveNamespaceRouteSourceIp(IReadOnlyList<TeamLabRuntimeNetworkSpec> networks) =>
+        networks
+            .OrderBy(network => string.Equals(network.TopologyKey, "entry", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(network => network.TopologyKey, StringComparer.Ordinal)
+            .Select(network => network.GatewayIp)
+            .FirstOrDefault(ip => !string.IsNullOrWhiteSpace(ip)) ?? "";
 
     private static string BuildRouterNamespaceInterfaceName(string routerNamespace, int index) =>
         TrimLinuxName($"{routerNamespace}n{index}");

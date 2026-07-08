@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -117,6 +117,51 @@ public class FleetCapacityReservationServiceTests
         var reloaded = await context.WorkerNodes.FindAsync([node.Id], CancellationToken.None);
         Assert.Equal(0, reloaded!.CurrentContainers);
         Assert.Equal(1, reloaded.ReservedContainers);
+    }
+
+    [Fact]
+    public async Task TryReserveBatchAsync_ReservesMultipleNodesAtomically()
+    {
+        await using var context = CreateContext();
+        var nodeA = SeedNode(context, maxContainers: 2, maxVms: 1);
+        var nodeB = SeedNode(context, maxContainers: 3, maxVms: 1);
+        var service = CreateService(context);
+
+        var result = await service.TryReserveBatchAsync(
+            [
+                new FleetCapacityBatchItem(nodeA.Id, DockerSlots: 2, VmSlots: 0),
+                new FleetCapacityBatchItem(nodeB.Id, DockerSlots: 1, VmSlots: 1)
+            ],
+            requireTeamLab: true,
+            CancellationToken.None);
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal(2, result.Reservations.Count);
+        Assert.Equal(2, context.WorkerNodes.Single(n => n.Id == nodeA.Id).ReservedContainers);
+        Assert.Equal(1, context.WorkerNodes.Single(n => n.Id == nodeB.Id).ReservedContainers);
+        Assert.Equal(1, context.WorkerNodes.Single(n => n.Id == nodeB.Id).ReservedVms);
+    }
+
+    [Fact]
+    public async Task TryReserveBatchAsync_RollsBackAllReservationsWhenAnyNodeCannotReserve()
+    {
+        await using var context = CreateContext();
+        var nodeA = SeedNode(context, maxContainers: 2, maxVms: 1);
+        var nodeB = SeedNode(context, maxContainers: 1, maxVms: 1, currentContainers: 1);
+        var service = CreateService(context);
+
+        var result = await service.TryReserveBatchAsync(
+            [
+                new FleetCapacityBatchItem(nodeA.Id, DockerSlots: 2, VmSlots: 0),
+                new FleetCapacityBatchItem(nodeB.Id, DockerSlots: 1, VmSlots: 0)
+            ],
+            requireTeamLab: true,
+            CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Contains("capacity", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, context.WorkerNodes.Single(n => n.Id == nodeA.Id).ReservedContainers);
+        Assert.Equal(0, context.WorkerNodes.Single(n => n.Id == nodeB.Id).ReservedContainers);
     }
 
     [Fact]
@@ -496,7 +541,9 @@ public class FleetCapacityReservationServiceTests
             ReservedVms = reservedVms,
             TeamLabNetworkEnabled = true,
             TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
-            TeamLabTunnelIp = "10.250.0.2"
+            TeamLabTunnelIp = "10.250.0.2",
+            TeamLabAgentVersion = "1.8.3-test",
+            TeamLabProtocolVersion = 3
         };
 
         context.WorkerNodes.Add(node);

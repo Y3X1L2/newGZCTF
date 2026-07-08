@@ -75,11 +75,11 @@ import {
 } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
 import { fetcher } from '@Api'
+import { TeamLabRuntimeObservability } from './TeamLabRuntimeObservability'
 import {
   ImageTemplateLite,
   PenetrationConfigModel,
   PenetrationDefaultPolicy,
-  PenetrationDeploymentEventLevel,
   PenetrationDeploymentEventModel,
   PenetrationDeploymentStatus,
   PenetrationEdgeModel,
@@ -182,48 +182,10 @@ const runtimeStatusLabels: Record<PenetrationRuntimeStatus, string> = {
   [PenetrationRuntimeStatus.ManualCleanupRequired]: '需人工清理',
 }
 
-const runtimeStatusTone = (status: PenetrationRuntimeStatus) => {
-  if (status === PenetrationRuntimeStatus.Running) return 'success'
-  if (status === PenetrationRuntimeStatus.Failed || status === PenetrationRuntimeStatus.ManualCleanupRequired) return 'danger'
-  if (
-    status === PenetrationRuntimeStatus.CreatingNetworks ||
-    status === PenetrationRuntimeStatus.CreatingContainers ||
-    status === PenetrationRuntimeStatus.CleanupPending ||
-    status === PenetrationRuntimeStatus.Orphaned
-  ) return 'warm'
-  return 'neutral'
-}
-
-const runtimeStatusState = (status: PenetrationRuntimeStatus) => {
-  if (status === PenetrationRuntimeStatus.Running) return 'running'
-  if (status === PenetrationRuntimeStatus.Failed || status === PenetrationRuntimeStatus.ManualCleanupRequired) return 'alert'
-  if (
-    status === PenetrationRuntimeStatus.CreatingNetworks ||
-    status === PenetrationRuntimeStatus.CreatingContainers ||
-    status === PenetrationRuntimeStatus.CleanupPending ||
-    status === PenetrationRuntimeStatus.Orphaned
-  ) return 'busy'
-  return 'idle'
-}
-
 const needsManualCleanup = (status: PenetrationRuntimeStatus) =>
   status === PenetrationRuntimeStatus.CleanupPending ||
   status === PenetrationRuntimeStatus.Orphaned ||
   status === PenetrationRuntimeStatus.ManualCleanupRequired
-
-const deploymentEventTone = (level: PenetrationDeploymentEventLevel) => {
-  if (level === PenetrationDeploymentEventLevel.Success) return 'success'
-  if (level === PenetrationDeploymentEventLevel.Error) return 'danger'
-  if (level === PenetrationDeploymentEventLevel.Warning) return 'warm'
-  return 'neutral'
-}
-
-const deploymentEventLabel: Record<PenetrationDeploymentEventLevel, string> = {
-  [PenetrationDeploymentEventLevel.Info]: '信息',
-  [PenetrationDeploymentEventLevel.Success]: '成功',
-  [PenetrationDeploymentEventLevel.Warning]: '警告',
-  [PenetrationDeploymentEventLevel.Error]: '失败',
-}
 
 const deployableEnforcementModes: Array<PenetrationEnforcementMode.RuntimeRoute | PenetrationEnforcementMode.Both> = [
   PenetrationEnforcementMode.Both,
@@ -250,25 +212,6 @@ const routeStatusTone = (status: PenetrationRouteStatus) => {
   if (status === PenetrationRouteStatus.RouteApplied || status === PenetrationRouteStatus.RoutePlanned) return 'success'
   if (status === PenetrationRouteStatus.RouteFailed || status === PenetrationRouteStatus.Unsupported) return 'danger'
   return 'neutral'
-}
-
-const formatDateTime = (value?: number | null) => value
-  ? new Date(value).toLocaleString()
-  : '-'
-
-const parseRuntimeInterfaces = (summary?: string | null): { interfaceName?: string; networkName?: string; ipAddress?: string; cidr?: string; isPrimary?: boolean }[] => {
-  if (!summary) return []
-  try {
-    const parsed = JSON.parse(summary)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
-const shortText = (value?: string | null, length = 12) => {
-  if (!value) return '-'
-  return value.length <= length ? value : value.slice(0, length)
 }
 
 const normalizeZoneType = (value: PenetrationZoneType) =>
@@ -1808,8 +1751,6 @@ const BuilderInner: FC = () => {
     )
     updateNode(selectedNode.id, { environmentVariables })
   }
-  const runtimeRouteRows = environments.flatMap((env) => (env.runtimeRoutes ?? []).map((route) => ({ env, route })))
-  const runtimeNodeRows = environments.flatMap((env) => env.runtimeNodes.map((node) => ({ env, node })))
   const deploymentStatus = config?.status ?? PenetrationDeploymentStatus.Draft
   const isDeploying = deploymentStatus === PenetrationDeploymentStatus.Deploying
   const canStop =
@@ -1893,22 +1834,16 @@ const BuilderInner: FC = () => {
             <ScrollArea.Autosize mah="calc(100dvh - 7.5rem)">
               <Stack gap="md">
                 <Stack gap={4}>
-                  <Title order={4}>场景工具箱</Title>
-                  <Text size="sm" className="yy-readable-text">
-                    拖拽内网网段和资产到画布。网段决定隔离边界，资产网卡决定真实连通关系。
-                  </Text>
+                  <Title order={4}>拓扑设计</Title>
                 </Stack>
                 <div className="yy-pentest-flow-steps">
-                  {['生成内网骨架', '配置模板与网卡', '连线表达路由', '保存并校验计划', '发布部署后观测'].map((step, index) => (
+                  {['添加网段', '添加资产', '连接访问路径', '一键生成', '校验发布'].map((step, index) => (
                     <div className="yy-pentest-flow-step" key={step}>
                       <b>{index + 1}</b>
                       <span>{step}</span>
                     </div>
                   ))}
                 </div>
-                <Text size="xs" className="yy-pentest-flow-note">
-                  校验/计划只检查当前画布，不会保存草稿；发布会先保存并生成可部署版本。所有资产只接入队伍 TeamLab 内网，选手通过队伍 VPN 自行扫描发现。
-                </Text>
                 <Button fullWidth leftSection={<Icon path={mdiAutoFix} size={0.85} />} onClick={() => {
                   const next = buildEnterpriseBlueprint(gameId, templates, config)
                   setConfig(next)
@@ -1997,9 +1932,9 @@ const BuilderInner: FC = () => {
             <ScrollArea.Autosize mah="calc(100dvh - 7.5rem)">
               <Tabs defaultValue="property" keepMounted={false}>
                 <Tabs.List grow>
-                  <Tabs.Tab value="property">属性</Tabs.Tab>
-                  <Tabs.Tab value="plan">计划</Tabs.Tab>
-                  <Tabs.Tab value="runtime">运行</Tabs.Tab>
+                  <Tabs.Tab value="property">资产配置</Tabs.Tab>
+                  <Tabs.Tab value="plan">连通关系</Tabs.Tab>
+                  <Tabs.Tab value="runtime">发布与运行</Tabs.Tab>
                 </Tabs.List>
 
                 <Tabs.Panel value="property" pt="md">
@@ -2229,256 +2164,19 @@ const BuilderInner: FC = () => {
                 </Tabs.Panel>
 
                 <Tabs.Panel value="runtime" pt="md">
-                  <Stack gap="sm">
-                    <Group justify="space-between" align="flex-start">
-                      <Stack gap={2}>
-                        <Title order={4}>运行观测</Title>
-                        <Text size="xs" className="yy-readable-text">
-                          这里展示队伍环境、容器/VM 追踪、VPN 状态、网卡事实和部署时间线。
-                        </Text>
-                      </Stack>
-                      <Button size="xs" variant="light" onClick={load}>刷新</Button>
-                    </Group>
-
-                    <YinyuTableShell p="xs">
-                      <Table>
-                        <Table.Thead>
-                          <Table.Tr>
-                            <Table.Th>队伍环境</Table.Th>
-                            <Table.Th>状态</Table.Th>
-                            <Table.Th>部署版本</Table.Th>
-                            <Table.Th>清理与错误</Table.Th>
-                            <Table.Th>操作</Table.Th>
-                          </Table.Tr>
-                        </Table.Thead>
-                        <Table.Tbody>
-                          {environments.length ? environments.map((env) => (
-                            <Table.Tr key={env.environmentId}>
-                              <Table.Td>
-                                <Stack gap={2}>
-                                  <Text fw={900}>{env.teamName}</Text>
-                                  <Text size="xs" className="yy-readable-text">队伍序号 #{env.teamIndex} · {env.networkPrefix || '未分配网段'}</Text>
-                                  <Text size="xs" className="yy-readable-text">Worker：{env.workerNodeName ?? '未调度节点'}</Text>
-                                </Stack>
-                              </Table.Td>
-                              <Table.Td>
-                                <YinyuStatusPill tone={runtimeStatusTone(env.status)} state={runtimeStatusState(env.status)}>
-                                  {runtimeStatusLabels[env.status] ?? env.status}
-                                </YinyuStatusPill>
-                              </Table.Td>
-                              <Table.Td>
-                                <Stack gap={2}>
-                                  <Text size="sm">v{env.publishedVersion} · {env.runtimeNodeCount} 个资产</Text>
-                                  <Text size="xs" className="yy-readable-text">重置 {env.resetCount}/{config.maxResetCount}</Text>
-                                  <Text size="xs" className="yy-readable-text">更新：{formatDateTime(env.updatedAt ?? env.createdAt)}</Text>
-                                </Stack>
-                              </Table.Td>
-                              <Table.Td>
-                                <Stack gap={2}>
-                                  <Text size="sm">{env.cleanupRetryCount > 0 ? `清理已重试 ${env.cleanupRetryCount} 次` : '暂无残留清理任务'}</Text>
-                                  {env.nextCleanupAt && <Text size="xs" className="yy-readable-text">下次清理：{formatDateTime(env.nextCleanupAt)}</Text>}
-                                  {env.lastError && <Text size="xs" c="red.3" lineClamp={3}>{env.lastError}</Text>}
-                                </Stack>
-                              </Table.Td>
-                              <Table.Td>
-                                {needsManualCleanup(env.status) ? (
-                                  <Button size="compact-xs" variant="light" color="red" onClick={() => cleanupTeam(env)}>
-                                    重新清理残留
-                                  </Button>
-                                ) : (
-                                  <Text size="xs" className="yy-readable-text">无待处理操作</Text>
-                                )}
-                              </Table.Td>
-                            </Table.Tr>
-                          )) : (
-                            <Table.Tr><Table.Td colSpan={5}><Text size="sm" className="yy-readable-text">暂无队伍环境。发布并部署后会在这里显示。</Text></Table.Td></Table.Tr>
-                          )}
-                        </Table.Tbody>
-                      </Table>
-                    </YinyuTableShell>
-
-                    <YinyuTableShell p="xs">
-                      <Group justify="space-between" mb="xs">
-                        <Stack gap={0}>
-                          <Text fw={900}>节点可溯源列表</Text>
-                          <Text size="xs" className="yy-readable-text">当前运行节点在前，历史/失败节点保留容器/VM 标识、镜像和网卡摘要。</Text>
-                        </Stack>
-                        <Text size="xs" className="yy-readable-text">共 {runtimeNodeRows.length} 个节点记录</Text>
-                      </Group>
-                      <Table>
-                        <Table.Thead>
-                          <Table.Tr>
-                            <Table.Th>队伍 / 资产</Table.Th>
-                            <Table.Th>状态</Table.Th>
-                            <Table.Th>容器与镜像</Table.Th>
-                            <Table.Th>内网地址</Table.Th>
-                            <Table.Th>网卡</Table.Th>
-                          </Table.Tr>
-                        </Table.Thead>
-                        <Table.Tbody>
-                          {runtimeNodeRows.length ? runtimeNodeRows
-                            .sort((left, right) =>
-                              Number(right.node.status === PenetrationRuntimeStatus.Running) -
-                              Number(left.node.status === PenetrationRuntimeStatus.Running) ||
-                              left.env.teamName.localeCompare(right.env.teamName) ||
-                              left.node.nodeName.localeCompare(right.node.nodeName))
-                            .map(({ env, node }) => {
-                              const interfaces = parseRuntimeInterfaces(node.interfaceSummary)
-                              return (
-                                <Table.Tr key={`${env.environmentId}-${node.runtimeNodeId}`}>
-                                  <Table.Td>
-                                    <Stack gap={2}>
-                                      <Text fw={800}>{env.teamName} / {node.nodeName}</Text>
-                                      <Text size="xs" className="yy-readable-text">资产标识：{shortText(node.topologyNodeKey, 18)}</Text>
-                                      <Text size="xs" className="yy-readable-text">创建：{formatDateTime(node.createdAt)}</Text>
-                                    </Stack>
-                                  </Table.Td>
-                                  <Table.Td>
-                                    <YinyuStatusPill tone={runtimeStatusTone(node.status)} state={runtimeStatusState(node.status)}>
-                                      {runtimeStatusLabels[node.status] ?? node.status}
-                                    </YinyuStatusPill>
-                                  </Table.Td>
-                                  <Table.Td>
-                                    <Stack gap={2}>
-                                      <Text size="xs" className="yy-readable-text">容器：{shortText(node.containerId)}</Text>
-                                      <Text size="xs" className="yy-readable-text">状态：{node.containerStatus ?? '-'}</Text>
-                                      <Text size="xs" className="yy-readable-text" lineClamp={1}>镜像：{node.image ?? '-'}</Text>
-                                    </Stack>
-                                  </Table.Td>
-                                  <Table.Td>
-                                    <Stack gap={2}>
-                                      <Text size="xs" className="yy-readable-text">主地址：{node.ipAddress || '-'}</Text>
-                                      <Text size="xs" className="yy-readable-text">访问方式：队伍 VPN 内网</Text>
-                                      <Button size="compact-xs" variant="light" onClick={() => restartRuntimeNode(node.runtimeNodeId, env.teamName, node.nodeName)}>
-                                        重建整队环境
-                                      </Button>
-                                    </Stack>
-                                  </Table.Td>
-                                  <Table.Td>
-                                    <Stack gap={2}>
-                                      {interfaces.length ? interfaces.slice(0, 3).map((iface, index) => (
-                                        <Text size="xs" className="yy-readable-text" lineClamp={1} key={`${node.runtimeNodeId}-${index}`}>
-                                          {iface.interfaceName ?? `eth${index}`} · {iface.networkName ?? node.networkName} · {iface.ipAddress ?? '-'} / {iface.cidr ?? '-'}{iface.isPrimary ? ' · 主网卡' : ''}
-                                        </Text>
-                                      )) : (
-                                        <Text size="xs" className="yy-readable-text">{node.networkName || '-'} · {node.ipAddress || '-'}</Text>
-                                      )}
-                                      {interfaces.length > 3 && <Text size="xs" className="yy-readable-text">另有 {interfaces.length - 3} 块网卡</Text>}
-                                    </Stack>
-                                  </Table.Td>
-                                </Table.Tr>
-                              )
-                            }) : (
-                            <Table.Tr><Table.Td colSpan={5}><Text size="sm" className="yy-readable-text">暂无运行节点。</Text></Table.Td></Table.Tr>
-                          )}
-                        </Table.Tbody>
-                      </Table>
-                    </YinyuTableShell>
-
-                    <YinyuTableShell p="xs">
-                      <Table>
-                        <Table.Thead><Table.Tr><Table.Th>队伍</Table.Th><Table.Th>网络级路由</Table.Th><Table.Th>路径</Table.Th><Table.Th>执行摘要</Table.Th></Table.Tr></Table.Thead>
-                        <Table.Tbody>
-                          {runtimeRouteRows.length ? runtimeRouteRows.map(({ env, route }) => (
-                            <Table.Tr key={`${env.environmentId}-${route.id}`}>
-                              <Table.Td>{env.teamName}</Table.Td>
-                              <Table.Td>
-                                <Stack gap={2}>
-                                  <Text size="sm" fw={800}>{route.label}</Text>
-                                  <YinyuStatusPill tone={routeStatusTone(route.status)} state={route.status === PenetrationRouteStatus.RouteApplied ? 'running' : 'idle'}>
-                                    {routeStatusLabels[route.status]}
-                                  </YinyuStatusPill>
-                                  <Text size="xs" fw={800} c={route.isExecutable ? 'teal.2' : 'dimmed'}>
-                                    {route.isExecutable ? '网络级路由记录' : '未应用路由'}
-                                  </Text>
-                                  <Text size="xs" className="yy-readable-text">{enforcementLabel(route.enforcementMode)}</Text>
-                                </Stack>
-                              </Table.Td>
-                              <Table.Td>
-                                <Text size="xs" className="yy-readable-text">
-                                  {route.sourceNetworkName ?? '-'} ({route.sourceCidr ?? '-'}) → {route.targetNetworkName ?? '-'} ({route.targetCidr ?? '-'})
-                                </Text>
-                                {route.routeNodeName && <Text size="xs" className="yy-readable-text">经由：{route.routeNodeName} · 网关：{route.gatewayIp ?? '-'}</Text>}
-                                {route.appliedAt && <Text size="xs" className="yy-readable-text">应用：{formatDateTime(route.appliedAt)}</Text>}
-                              </Table.Td>
-                              <Table.Td>
-                                <Stack gap={2}>
-                                  <Text size="xs" className="yy-readable-text" lineClamp={2}>{route.message ?? '无执行说明'}</Text>
-                                  {route.commandSummary && <Text size="xs" className="yy-readable-text" lineClamp={2}>{route.commandSummary}</Text>}
-                                </Stack>
-                              </Table.Td>
-                            </Table.Tr>
-                          )) : (
-                            <Table.Tr><Table.Td colSpan={4}><Text size="sm" className="yy-readable-text">暂无运行期路由记录。发布带有 RuntimeRoute/Both 的路由关系并部署队伍环境后会在这里显示。</Text></Table.Td></Table.Tr>
-                          )}
-                        </Table.Tbody>
-                      </Table>
-                    </YinyuTableShell>
-
-                    <YinyuTableShell p="xs">
-                      <Table>
-                        <Table.Thead><Table.Tr><Table.Th>提交队伍</Table.Th><Table.Th>得分项</Table.Th><Table.Th>状态</Table.Th></Table.Tr></Table.Thead>
-                        <Table.Tbody>{submissions.slice(0, 12).map((item) => <Table.Tr key={item.id}><Table.Td>{item.teamName}</Table.Td><Table.Td>{item.nodeName} / {item.itemTitle}</Table.Td><Table.Td>{item.status}</Table.Td></Table.Tr>)}</Table.Tbody>
-                      </Table>
-                    </YinyuTableShell>
-
-                    <YinyuTableShell p="xs">
-                      <Group justify="space-between" mb="xs">
-                        <Stack gap={0}>
-                          <Text fw={800}>部署时间线</Text>
-                          <Text size="xs" className="yy-readable-text">
-                            共 {deploymentEventTotal} 条事件，第 {deploymentEventPage} 页
-                          </Text>
-                        </Stack>
-                        <Group gap="xs">
-                          <Button size="compact-xs" variant="light" disabled={deploymentEventPage <= 1} onClick={() => void loadDeploymentEvents(deploymentEventPage - 1)}>
-                            上一页
-                          </Button>
-                          <Button size="compact-xs" variant="light" disabled={deploymentEventPage * 50 >= deploymentEventTotal} onClick={() => void loadDeploymentEvents(deploymentEventPage + 1)}>
-                            下一页
-                          </Button>
-                        </Group>
-                      </Group>
-                      <Table>
-                        <Table.Thead>
-                          <Table.Tr>
-                            <Table.Th>队伍</Table.Th>
-                            <Table.Th>级别</Table.Th>
-                            <Table.Th>阶段</Table.Th>
-                            <Table.Th>内容</Table.Th>
-                          </Table.Tr>
-                        </Table.Thead>
-                        <Table.Tbody>
-                          {deploymentEvents.length > 0 ? (
-                            deploymentEvents.map((event) => (
-                              <Table.Tr key={`${event.environmentId}-${event.id}`}>
-                                <Table.Td>
-                                  <Stack gap={2}>
-                                    <Text size="sm">{event.teamName}</Text>
-                                    <Text size="xs" className="yy-readable-text">{formatDateTime(event.createdAt)}</Text>
-                                  </Stack>
-                                </Table.Td>
-                                <Table.Td>
-                                  <YinyuStatusPill tone={deploymentEventTone(event.level)} state={event.level === PenetrationDeploymentEventLevel.Error ? 'alert' : 'busy'}>
-                                    {deploymentEventLabel[event.level]}
-                                  </YinyuStatusPill>
-                                </Table.Td>
-                                <Table.Td>{event.stage}{event.nodeName ? ` / ${event.nodeName}` : ''}</Table.Td>
-                                <Table.Td>
-                                  <Stack gap={2}>
-                                    <Text size="sm">{event.message}</Text>
-                                    {event.detail && <Text size="xs" className="yy-readable-text" lineClamp={2}>{event.detail}</Text>}
-                                  </Stack>
-                                </Table.Td>
-                              </Table.Tr>
-                            ))
-                          ) : (
-                            <Table.Tr><Table.Td colSpan={4}><Text size="sm" className="yy-readable-text">暂无部署事件。</Text></Table.Td></Table.Tr>
-                          )}
-                        </Table.Tbody>
-                      </Table>
-                    </YinyuTableShell>
-                  </Stack>
+                  <TeamLabRuntimeObservability
+                    gameId={gameId}
+                    maxResetCount={config.maxResetCount}
+                    environments={environments}
+                    submissions={submissions}
+                    deploymentEvents={deploymentEvents}
+                    deploymentEventTotal={deploymentEventTotal}
+                    deploymentEventPage={deploymentEventPage}
+                    onRefresh={load}
+                    onLoadDeploymentEvents={loadDeploymentEvents}
+                    onCleanupTeam={cleanupTeam}
+                    onRestartRuntimeNode={restartRuntimeNode}
+                  />
                 </Tabs.Panel>
               </Tabs>
             </ScrollArea.Autosize>

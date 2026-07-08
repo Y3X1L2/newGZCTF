@@ -103,16 +103,65 @@ public class TeamLabAdminControllerTests
     }
 
     [Fact]
+    public void TeamLabTrafficCaptureResult_SerializesSafeJobSummary()
+    {
+        var result = new TeamLabTrafficCaptureResult(true, "started", new TeamLabTrafficCaptureJob
+        {
+            Id = 13,
+            RuntimeId = 7,
+            ShardId = 11,
+            WorkerNodeId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+            Status = TeamLabTrafficCaptureStatus.Running,
+            Scope = "network:entry",
+            FilePath = "/run/gzctf-teamlab/capture-7-13/capture.pcap",
+            MaxSeconds = 120,
+            MaxBytes = 16 * 1024 * 1024,
+            CapturedBytes = 1024
+        });
+
+        var json = JsonSerializer.Serialize(result);
+
+        Assert.NotNull(result.JobModel);
+        Assert.Contains("\"job\"", json);
+        Assert.Contains("\"capturedBytes\":1024", json);
+        Assert.DoesNotContain("\"runtime\"", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("\"workerNode\"", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void CanReuseScheduledRuntime_RequiresCompletePlanForSamePublishedVersion()
     {
+        var workerNodeId = Guid.NewGuid();
         var runtime = new TeamLabRuntime
         {
             Status = TeamLabRuntimeStatus.Scheduled,
             PublishedVersion = 2,
-            WorkerNodeId = Guid.NewGuid(),
+            WorkerNodeId = workerNodeId,
             NetworkPrefix = "10.180.0.0/24",
             PublicUdpMapping = new TeamLabPublicUdpMapping { PublicUdpPort = 32000 }
         };
+
+        Assert.False(TeamLabPlanService.CanReuseScheduledRuntime(runtime, 2));
+
+        var shard = new TeamLabRuntimeShard
+        {
+            WorkerNodeId = workerNodeId,
+            Runtime = runtime
+        };
+        runtime.Shards.Add(shard);
+        runtime.Networks.Add(new TeamLabRuntimeNetwork
+        {
+            TopologyKey = "entry",
+            WorkerNodeId = workerNodeId,
+            Shard = shard
+        });
+        runtime.Assets.Add(new TeamLabRuntimeAsset
+        {
+            Kind = TeamLabResourceKind.Docker,
+            TopologyKey = "portal",
+            WorkerNodeId = workerNodeId,
+            Shard = shard
+        });
 
         Assert.True(TeamLabPlanService.CanReuseScheduledRuntime(runtime, 2));
         Assert.False(TeamLabPlanService.CanReuseScheduledRuntime(runtime, 3));

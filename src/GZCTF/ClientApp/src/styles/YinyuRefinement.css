@@ -3903,6 +3903,17 @@
   background: rgba(107, 238, 177, 0.06);
 }
 
+.yy-teamlab-capture-form {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1.2fr) minmax(12rem, 1.6fr) minmax(5rem, 0.7fr) minmax(6rem, 0.8fr) auto;
+  gap: 0.55rem;
+  align-items: end;
+}
+
+.yy-teamlab-capture-form .mantine-Button-root {
+  min-height: 2.25rem;
+}
+
 .yy-pentest-canvas-loading {
   position: absolute;
   inset: 0;
@@ -3910,6 +3921,12 @@
   place-items: center;
   background: rgba(2, 9, 10, 0.52);
   z-index: 10;
+}
+
+@media (max-width: 1180px) {
+  .yy-teamlab-capture-form {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .yy-pentest-error {

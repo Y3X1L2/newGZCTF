@@ -27,6 +27,20 @@ public sealed record FleetCapacityReservationResult(
         new(false, null, null, 0, 0, message);
 }
 
+public sealed record FleetCapacityBatchItem(Guid NodeId, int DockerSlots, int VmSlots);
+
+public sealed record FleetCapacityBatchReservationResult(
+    bool Success,
+    IReadOnlyList<FleetCapacityReservationResult> Reservations,
+    string Message)
+{
+    public static FleetCapacityBatchReservationResult Reserved(
+        IReadOnlyList<FleetCapacityReservationResult> reservations) =>
+        new(true, reservations, "Capacity reserved.");
+
+    public static FleetCapacityBatchReservationResult Failed(string message) => new(false, [], message);
+}
+
 public class FleetCapacityReservationService
 {
     static readonly DeploymentQueueTicketStatus[] ActiveQueueStatuses =
@@ -100,6 +114,88 @@ public class FleetCapacityReservationService
         }
 
         return FleetCapacityReservationResult.Failed("Capacity reservation conflicted repeatedly.");
+    }
+
+    public async Task<FleetCapacityBatchReservationResult> TryReserveBatchAsync(
+        IReadOnlyList<FleetCapacityBatchItem> items,
+        bool requireTeamLab,
+        CancellationToken token)
+    {
+        var normalizedItems = items
+            .GroupBy(item => item.NodeId)
+            .Select(group => new FleetCapacityBatchItem(
+                group.Key,
+                group.Sum(item => Math.Max(0, item.DockerSlots)),
+                group.Sum(item => Math.Max(0, item.VmSlots))))
+            .Where(item => item.DockerSlots > 0 || item.VmSlots > 0)
+            .OrderBy(item => item.NodeId)
+            .ToArray();
+
+        if (normalizedItems.Length == 0)
+            return FleetCapacityBatchReservationResult.Failed("No capacity slots were requested.");
+
+        await using var _ = await AcquireSchedulerLockAsync();
+
+        for (var attempt = 1; attempt <= 3; attempt++)
+        {
+            var nodeIds = normalizedItems.Select(item => item.NodeId).ToArray();
+            var nodes = await _context.WorkerNodes
+                .Where(node => nodeIds.Contains(node.Id))
+                .ToListAsync(token);
+            var nodesById = nodes.ToDictionary(node => node.Id);
+
+            foreach (var item in normalizedItems)
+            {
+                if (!nodesById.TryGetValue(item.NodeId, out var node))
+                    return FleetCapacityBatchReservationResult.Failed($"Node {item.NodeId} was not found.");
+
+                var requiredCapability = NodeCapability.None;
+                if (item.DockerSlots > 0)
+                    requiredCapability |= NodeCapability.Docker;
+                if (item.VmSlots > 0)
+                    requiredCapability |= NodeCapability.Kvm;
+
+                var request = new FleetCapacityRequest(
+                    requiredCapability,
+                    item.DockerSlots,
+                    item.VmSlots,
+                    PreferredNodeId: item.NodeId,
+                    RequireTeamLab: requireTeamLab);
+                if (!CanReserve(node, request, item.DockerSlots, item.VmSlots))
+                    return FleetCapacityBatchReservationResult.Failed(
+                        $"Node {node.Name} has insufficient capacity for Docker={item.DockerSlots}, VM={item.VmSlots}.");
+            }
+
+            foreach (var item in normalizedItems)
+            {
+                var node = nodesById[item.NodeId];
+                node.ReservedContainers += item.DockerSlots;
+                node.ReservedVms += item.VmSlots;
+            }
+
+            try
+            {
+                await _context.SaveChangesAsync(token);
+
+                var reservations = normalizedItems
+                    .Select(item =>
+                    {
+                        var node = nodesById[item.NodeId];
+                        return FleetCapacityReservationResult.Reserved(node, item.DockerSlots, item.VmSlots);
+                    })
+                    .ToArray();
+                return FleetCapacityBatchReservationResult.Reserved(reservations);
+            }
+            catch (DbUpdateConcurrencyException ex) when (attempt < 3)
+            {
+                _logger.LogWarning(ex,
+                    "Batch capacity reservation conflicted; retrying reservation attempt {Attempt}.",
+                    attempt + 1);
+                DetachConflictedWorkerNodeEntries(ex);
+            }
+        }
+
+        return FleetCapacityBatchReservationResult.Failed("Capacity reservation conflicted repeatedly.");
     }
 
     public async Task ReleaseAsync(Guid nodeId, int dockerSlots, int vmSlots, CancellationToken token)
@@ -314,7 +410,8 @@ public class FleetCapacityReservationService
     static bool CanReserve(WorkerNode node, FleetCapacityRequest request, int dockerSlots, int vmSlots)
     {
         var baseReason = request.RequireTeamLab
-            ? WeightedScheduler.GetTeamLabUnschedulableReason(node)
+            ? WeightedScheduler.GetTeamLabFabricUnschedulableReason(node) ??
+              WeightedScheduler.GetUnschedulableReason(node, request.RequiredCapability)
             : WeightedScheduler.GetUnschedulableReason(node, request.RequiredCapability);
 
         if (baseReason is not null)

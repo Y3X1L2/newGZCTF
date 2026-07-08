@@ -18,6 +18,12 @@ public class NodeTunnelService(AgentClient agentClient, AppDbContext context, IL
         node.TeamLabTunnelLastHandshake = DateTimeOffset.UtcNow;
         node.TeamLabTunnelLastError = status.Available ? null : status.Message;
         node.TeamLabTunnelStatus = status.Available ? TeamLabTunnelStatus.Probing : TeamLabTunnelStatus.Error;
+        node.TeamLabAgentVersion = string.IsNullOrWhiteSpace(status.AgentVersion)
+            ? node.TeamLabAgentVersion
+            : status.AgentVersion.Trim();
+        node.TeamLabProtocolVersion = Math.Max(node.TeamLabProtocolVersion, status.ProtocolVersion);
+        node.TeamLabCapabilitiesJson = System.Text.Json.JsonSerializer.Serialize(status.Capabilities,
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
         await context.SaveChangesAsync(token);
 
         return new TeamLabNodeProbeResult(status.Available, status.Message ?? "TeamLab network probe completed.", status);

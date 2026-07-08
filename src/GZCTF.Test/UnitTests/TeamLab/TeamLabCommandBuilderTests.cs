@@ -91,6 +91,89 @@ public class TeamLabCommandBuilderTests
     }
 
     [Fact]
+    public async Task GetStatusAsync_ReturnsVersionsAndToolCapabilities()
+    {
+        var service = CreateService(enable: false);
+
+        var status = await service.GetStatusAsync(CancellationToken.None);
+
+        Assert.False(string.IsNullOrWhiteSpace(status.AgentVersion));
+        Assert.True(status.ProtocolVersion >= 2);
+        Assert.Equal(status.HasDockerCommand, status.Capabilities.Docker);
+        Assert.Equal(status.HasKvmCommand, status.Capabilities.Kvm);
+        Assert.Equal(status.HasWireGuardCommand, status.Capabilities.WireGuard);
+        Assert.Equal(status.HasIptablesCommand, status.Capabilities.Iptables);
+        Assert.Equal(status.HasNftCommand, status.Capabilities.Nftables);
+        Assert.Equal(status.HasTcpdumpCommand, status.Capabilities.Tcpdump);
+        Assert.Equal(status.HasDumpcapCommand, status.Capabilities.Dumpcap);
+        Assert.Equal(File.Exists("/dev/kvm"), status.Capabilities.KvmDevice);
+    }
+
+    [Fact]
+    public async Task StartFlowMetadataAsync_DryRunCreatesScopedTcpdumpCollector()
+    {
+        var service = CreateService(enable: false);
+
+        var result = await service.StartFlowMetadataAsync(new TeamLabFlowStartRequest(
+            RuntimeId: 123,
+            ShardId: 45,
+            NetworkId: 67,
+            NetworkKey: "entry_zone",
+            InterfaceName: "tl123-entry",
+            DryRun: true), CancellationToken.None);
+
+        Assert.True(result.Success, result.Message);
+        Assert.True(result.DryRun);
+        Assert.Contains(result.Commands, command =>
+            command.Contains("/run/gzctf-teamlab/flow-123-entry_zone", StringComparison.Ordinal));
+        Assert.Contains(result.Commands, command =>
+            command.Contains("tcpdump -l -tttt -nn -q -i 'tl123-entry' ip", StringComparison.Ordinal));
+        Assert.Contains(result.Commands, command =>
+            command.Contains("flow.pid", StringComparison.Ordinal));
+        Assert.Contains(result.Commands, command =>
+            command.Contains("tcpdump", StringComparison.Ordinal) &&
+            command.Contains("echo $! > '/run/gzctf-teamlab/flow-123-entry_zone/flow.pid'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task StartFlowMetadataAsync_RejectsUnsafeNetworkKey()
+    {
+        var service = CreateService(enable: false);
+
+        var result = await service.StartFlowMetadataAsync(new TeamLabFlowStartRequest(
+            RuntimeId: 123,
+            ShardId: null,
+            NetworkId: null,
+            NetworkKey: "entry;rm",
+            InterfaceName: "tl123-entry",
+            DryRun: true), CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Empty(result.Commands);
+    }
+
+    [Fact]
+    public void TryParseTcpdumpFlowLine_ParsesTcpUdpAndIcmpSamples()
+    {
+        Assert.True(TeamLabNetworkService.TryParseTcpdumpFlowLine(
+            "2026-07-07 10:11:12.123456 IP 10.180.33.10.43122 > 192.168.80.10.80: tcp 0, length 1460",
+            out var tcp));
+        Assert.Equal("TCP", tcp.Protocol);
+        Assert.Equal("10.180.33.10", tcp.SourceIp);
+        Assert.Equal(43122, tcp.SourcePort);
+        Assert.Equal("192.168.80.10", tcp.DestinationIp);
+        Assert.Equal(80, tcp.DestinationPort);
+        Assert.Equal(1460, tcp.Bytes);
+
+        Assert.True(TeamLabNetworkService.TryParseTcpdumpFlowLine(
+            "2026-07-07 10:11:13.123456 IP 10.180.33.10 > 192.168.80.10: ICMP echo request, id 1, seq 2, length 64",
+            out var icmp));
+        Assert.Equal("ICMP", icmp.Protocol);
+        Assert.Null(icmp.SourcePort);
+        Assert.Equal(64, icmp.Bytes);
+    }
+
+    [Fact]
     public async Task CreateBridgeAsync_DryRunDeletesExistingBridgeBeforeRecreate()
     {
         var service = CreateService(enable: false);
@@ -194,6 +277,68 @@ public class TeamLabCommandBuilderTests
         Assert.True(result.Success);
         Assert.Contains(result.Commands,
             command => command.Contains("ip netns exec tlr123 ip route replace 10.60.0.16/28 via 10.60.0.5"));
+    }
+
+    [Fact]
+    public async Task ApplyFabricAsync_DryRunBuildsNamespaceUplinkAndRoutes()
+    {
+        var service = CreateService(enable: false);
+
+        var result = await service.ApplyFabricAsync(new TeamLabFabricApplyRequest(
+            RuntimeId: 123,
+            RouteVersion: 1,
+            FabricIp: "10.24.0.31",
+            NamespaceName: "tlr123",
+            NamespaceHostAddressCidr: "169.254.123.1/30",
+            NamespacePeerAddressCidr: "169.254.123.2/30",
+            LocalRoutes:
+            [
+                new TeamLabStaticRouteRequest("10.77.10.0/24", "169.254.123.2")
+            ],
+            Routes:
+            [
+                new TeamLabStaticRouteRequest("10.180.53.48/28", "10.24.0.27", "10.77.10.1")
+            ],
+            DryRun: true), CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Contains(result.Commands, command => command.Contains("ip link add tlrf123 type veth peer name tlrf123n"));
+        Assert.Contains(result.Commands, command => command.Contains("ip link set tlrf123n netns tlr123"));
+        Assert.Contains(result.Commands, command => command.Contains("ip addr add 169.254.123.1/30 dev tlrf123"));
+        Assert.Contains(result.Commands,
+            command => command.Contains("ip netns exec tlr123 ip addr add 169.254.123.2/30 dev tlrf123n"));
+        Assert.Contains(result.Commands,
+            command => command.Contains("ip route replace 10.77.10.0/24 via 169.254.123.2"));
+        Assert.Contains(result.Commands,
+            command => command.Contains("ip netns exec tlr123 ip route replace 10.180.53.48/28 via 169.254.123.1") &&
+                       command.Contains("src 10.77.10.1"));
+        Assert.Contains(result.Commands, command => command.Contains("iptables -N TEAMLAB-FABRIC"));
+        Assert.Contains(result.Commands,
+            command => command.Contains("iptables -C FORWARD -j TEAMLAB-FABRIC") &&
+                       command.Contains("iptables -I FORWARD 1 -j TEAMLAB-FABRIC"));
+        Assert.Contains(result.Commands,
+            command => command.Contains("--comment gzctf-teamlab-runtime-123") &&
+                       command.Contains("-i tlrf123 -d 10.180.53.48/28 -j ACCEPT"));
+        Assert.Contains(result.Commands,
+            command => command.Contains("--comment gzctf-teamlab-runtime-123") &&
+                       command.Contains("-o tlrf123 -s 10.77.10.0/24 -j ACCEPT"));
+    }
+
+    [Fact]
+    public async Task CleanupAsync_DryRunRemovesRuntimeFabricForwardRules()
+    {
+        var service = CreateService(enable: false);
+
+        var result = await service.CleanupAsync(new TeamLabCleanupRequest(
+            RuntimeId: 123,
+            ResourceNames: ["tlr123", "tlrf123"],
+            DryRun: true), CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Contains(result.Commands,
+            command => command.Contains("iptables -S TEAMLAB-FABRIC") &&
+                       command.Contains("--comment gzctf-teamlab-runtime-123") &&
+                       command.Contains("-D TEAMLAB-FABRIC"));
     }
 
     [Fact]
@@ -413,6 +558,126 @@ public class TeamLabCommandBuilderTests
         Assert.Contains(result.Commands,
             command => command.Contains("sleep 1"));
         Assert.DoesNotContain(result.Commands, command => command.Contains("nc -uz"));
+    }
+
+    [Fact]
+    public async Task ApplyFabricAsync_DryRunBuildsDeterministicRouteReplaceCommands()
+    {
+        var service = CreateService(enable: false);
+
+        var result = await service.ApplyFabricAsync(new TeamLabFabricApplyRequest(
+            RuntimeId: 123,
+            RouteVersion: 7,
+            FabricIp: "10.250.0.10",
+            Routes:
+            [
+                new TeamLabStaticRouteRequest("192.168.50.0/24", "10.250.0.12"),
+                new TeamLabStaticRouteRequest("10.66.0.0/24", "10.250.0.11")
+            ],
+            DryRun: true), CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.True(result.DryRun);
+        Assert.Equal(
+        [
+            "ip route replace 10.66.0.0/24 via 10.250.0.11",
+            "ip route replace 192.168.50.0/24 via 10.250.0.12"
+        ], result.Commands);
+    }
+
+    [Fact]
+    public async Task ApplyFabricAsync_RejectsInvalidRouteTarget()
+    {
+        var service = CreateService(enable: false);
+
+        var result = await service.ApplyFabricAsync(new TeamLabFabricApplyRequest(
+            RuntimeId: 123,
+            RouteVersion: 7,
+            FabricIp: "10.250.0.10",
+            Routes: [new TeamLabStaticRouteRequest("not-a-cidr", "10.250.0.12")],
+            DryRun: true), CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Contains("Invalid", result.Message);
+        Assert.Empty(result.Commands);
+    }
+
+    [Fact]
+    public async Task StartCaptureAsync_DryRunUsesRuntimeJobScopedDirectory()
+    {
+        var service = CreateService(enable: false);
+
+        var result = await service.StartCaptureAsync(new TeamLabCaptureStartRequest(
+            RuntimeId: 123,
+            JobId: 456,
+            Scope: "network:entry",
+            InterfaceName: "tl123-entry",
+            MaxSeconds: 300,
+            MaxBytes: 64 * 1024 * 1024,
+            DryRun: true), CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.True(result.DryRun);
+        Assert.Equal("/run/gzctf-teamlab/capture-123-456/capture.pcap", result.FilePath);
+        Assert.Contains(result.Commands,
+            command => command.Contains("mkdir -p '/run/gzctf-teamlab/capture-123-456'"));
+        Assert.Contains(result.Commands,
+            command => command.Contains("-i 'tl123-entry'"));
+        Assert.Contains(result.Commands,
+            command => command.Contains("/run/gzctf-teamlab/capture-123-456/capture.pcap"));
+    }
+
+    [Fact]
+    public async Task StartCaptureAsync_RejectsUnsafeInterfaceName()
+    {
+        var service = CreateService(enable: false);
+
+        var result = await service.StartCaptureAsync(new TeamLabCaptureStartRequest(
+            RuntimeId: 123,
+            JobId: 456,
+            Scope: "network:entry",
+            InterfaceName: "eth0;rm",
+            MaxSeconds: 300,
+            MaxBytes: 64 * 1024 * 1024,
+            DryRun: true), CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Contains("Invalid", result.Message);
+        Assert.Null(result.FilePath);
+        Assert.Empty(result.Commands);
+    }
+
+    [Fact]
+    public async Task StopCaptureAsync_DryRunKillsOnlyRuntimeJobScopedPidFile()
+    {
+        var service = CreateService(enable: false);
+
+        var result = await service.StopCaptureAsync(new TeamLabCaptureStopRequest(
+            RuntimeId: 123,
+            JobId: 456,
+            DryRun: true), CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.True(result.DryRun);
+        Assert.Equal("/run/gzctf-teamlab/capture-123-456/capture.pcap", result.FilePath);
+        Assert.Contains(result.Commands,
+            command => command.Contains("/run/gzctf-teamlab/capture-123-456/capture.pid"));
+        Assert.DoesNotContain(result.Commands, command => command.Contains("killall"));
+    }
+
+    [Fact]
+    public void ResolveCaptureFilePath_UsesOnlyRuntimeAndJobScopedDirectory()
+    {
+        var path = TeamLabNetworkService.ResolveCaptureFilePath(123, 456);
+
+        Assert.Equal("/run/gzctf-teamlab/capture-123-456/capture.pcap", path);
+    }
+
+    [Fact]
+    public void ResolveCaptureFilePath_RejectsInvalidRuntimeOrJobIds()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => TeamLabNetworkService.ResolveCaptureFilePath(0, 456));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TeamLabNetworkService.ResolveCaptureFilePath(123, 0));
     }
 
     [Fact]

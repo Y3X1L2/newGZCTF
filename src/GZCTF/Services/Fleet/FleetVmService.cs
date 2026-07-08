@@ -2,6 +2,7 @@ using System.Text.Json;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
+using GZCTF.Services;
 using GZCTF.Services.Vm;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -14,6 +15,7 @@ public class FleetVmService
     private readonly AgentClient _agentClient;
     private readonly INodeRepository _nodeRepo;
     private readonly IVirtualMachineProvider _vmProvider;
+    private readonly GuacamoleService _guacamoleService;
     private readonly KvmSettings _kvmSettings;
     private readonly AppDbContext _context;
     private readonly DeploymentQueueStateAccessor _queueState;
@@ -25,6 +27,7 @@ public class FleetVmService
         AgentClient agentClient,
         INodeRepository nodeRepo,
         IVirtualMachineProvider vmProvider,
+        GuacamoleService guacamoleService,
         IOptions<KvmSettings> kvmSettings,
         AppDbContext context,
         DeploymentQueueStateAccessor queueState,
@@ -35,6 +38,7 @@ public class FleetVmService
         _agentClient = agentClient;
         _nodeRepo = nodeRepo;
         _vmProvider = vmProvider;
+        _guacamoleService = guacamoleService;
         _kvmSettings = kvmSettings.Value;
         _context = context;
         _queueState = queueState;
@@ -232,6 +236,17 @@ public class FleetVmService
             }
         }
 
+        if (!string.IsNullOrWhiteSpace(vmInstance.GuacamoleConnectionId))
+        {
+            var connectionId = vmInstance.GuacamoleConnectionId;
+            var deleted = await _guacamoleService.DeleteConnectionAsync(connectionId, token);
+            if (!deleted)
+                _logger.LogWarning("Guacamole connection {ConnectionId} for VM {VmName} was not deleted.",
+                    connectionId, vmInstance.VmName);
+        }
+
+        vmInstance.GuacamoleConnectionId = null;
+        vmInstance.RdpUrl = null;
         vmInstance.Status = VmInstanceStatus.Destroyed;
         vmInstance.DestroyedAt = DateTimeOffset.UtcNow;
 

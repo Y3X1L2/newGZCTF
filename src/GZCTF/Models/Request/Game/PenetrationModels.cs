@@ -246,6 +246,93 @@ public class PenetrationTeamEnvironmentModel
     public List<PenetrationDeploymentEventModel> Events { get; set; } = [];
     public List<PenetrationRuntimeNodeModel> RuntimeNodes { get; set; } = [];
     public List<PenetrationRuntimeRouteModel> RuntimeRoutes { get; set; } = [];
+    public List<TeamLabRuntimeShardSummaryModel> TeamLabShards { get; set; } = [];
+    public List<TeamLabRuntimeNetworkSummaryModel> TeamLabNetworks { get; set; } = [];
+    public List<TeamLabRuntimeAssetSummaryModel> TeamLabAssets { get; set; } = [];
+    public List<TeamLabTrafficCaptureJobSummaryModel> TeamLabCaptureJobs { get; set; } = [];
+    public List<TeamLabTrafficFlowSummaryModel> TeamLabTrafficFlows { get; set; } = [];
+}
+
+public class TeamLabRuntimeShardSummaryModel
+{
+    public int Id { get; set; }
+    public Guid WorkerNodeId { get; set; }
+    public string WorkerNodeName { get; set; } = string.Empty;
+    public TeamLabRuntimeStatus Status { get; set; }
+    public int RouteVersion { get; set; }
+    public string[] NetworkKeys { get; set; } = [];
+    public string[] AssetKeys { get; set; } = [];
+    public string? LastError { get; set; }
+}
+
+public class TeamLabRuntimeNetworkSummaryModel
+{
+    public int Id { get; set; }
+    public int? ShardId { get; set; }
+    public Guid? WorkerNodeId { get; set; }
+    public string WorkerNodeName { get; set; } = string.Empty;
+    public string TopologyKey { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Cidr { get; set; } = string.Empty;
+    public string GatewayIp { get; set; } = string.Empty;
+    public string BridgeName { get; set; } = string.Empty;
+}
+
+public class TeamLabRuntimeAssetSummaryModel
+{
+    public int Id { get; set; }
+    public int? ShardId { get; set; }
+    public Guid? WorkerNodeId { get; set; }
+    public string WorkerNodeName { get; set; } = string.Empty;
+    public TeamLabResourceKind Kind { get; set; }
+    public string TopologyKey { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string? RuntimeResourceId { get; set; }
+    public int? SourceTemplateId { get; set; }
+    public string? Image { get; set; }
+    public string? NetworkKey { get; set; }
+    public string? IpAddress { get; set; }
+    public string? MacAddress { get; set; }
+    public string InterfaceSummaryJson { get; set; } = "[]";
+    public TeamLabRuntimeStatus Status { get; set; }
+    public string? LastError { get; set; }
+}
+
+public class TeamLabTrafficCaptureJobSummaryModel
+{
+    public int Id { get; set; }
+    public int RuntimeId { get; set; }
+    public int? ShardId { get; set; }
+    public int? NetworkId { get; set; }
+    public Guid? WorkerNodeId { get; set; }
+    public string WorkerNodeName { get; set; } = string.Empty;
+    public TeamLabTrafficCaptureStatus Status { get; set; }
+    public string Scope { get; set; } = string.Empty;
+    public string? FilePath { get; set; }
+    public long MaxBytes { get; set; }
+    public int MaxSeconds { get; set; }
+    public long CapturedBytes { get; set; }
+    public string? LastError { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? StartedAt { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+    public DateTimeOffset? ExpiresAt { get; set; }
+}
+
+public class TeamLabTrafficFlowSummaryModel
+{
+    public int? ShardId { get; set; }
+    public int? NetworkId { get; set; }
+    public Guid? WorkerNodeId { get; set; }
+    public string WorkerNodeName { get; set; } = string.Empty;
+    public string NetworkName { get; set; } = string.Empty;
+    public string SourceIp { get; set; } = string.Empty;
+    public int? SourcePort { get; set; }
+    public string DestinationIp { get; set; } = string.Empty;
+    public int? DestinationPort { get; set; }
+    public string Protocol { get; set; } = string.Empty;
+    public long Bytes { get; set; }
+    public DateTimeOffset CapturedAt { get; set; }
 }
 
 public class PenetrationRuntimeNodeModel

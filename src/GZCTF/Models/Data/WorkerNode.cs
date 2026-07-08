@@ -40,6 +40,11 @@ public class WorkerNode
     public DateTimeOffset? TeamLabTunnelLastHandshake { get; set; }
     [MaxLength(1024)] public string? TeamLabTunnelLastError { get; set; }
     public int TeamLabTunnelConfigVersion { get; set; }
+    [MaxLength(64)] public string? TeamLabAgentVersion { get; set; }
+    public int TeamLabProtocolVersion { get; set; }
+    [MaxLength(64)] public string? TeamLabFabricIp { get; set; }
+    public TeamLabFabricStatus TeamLabFabricStatus { get; set; } = TeamLabFabricStatus.Unknown;
+    [MaxLength(4096)] public string TeamLabCapabilitiesJson { get; set; } = "{}";
 
     [Timestamp] public uint ConcurrencyToken { get; set; }
 
@@ -67,3 +72,4 @@ public class WorkerNode
 public enum NodeCapability : byte { None = 0, Docker = 1, Kvm = 2 }
 public enum NodeStatus : byte { Unknown = 0, Online = 1, Offline = 2, Busy = 3, Error = 4 }
 public enum TeamLabTunnelStatus : byte { Unknown = 0, Disabled = 1, Probing = 2, Healthy = 3, Error = 4 }
+public enum TeamLabFabricStatus : byte { Unknown = 0, Disabled = 1, Probing = 2, Healthy = 3, Error = 4 }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.Json;
@@ -753,13 +753,13 @@ public class TeamLabDeploymentServiceTests
     }
 
     [Fact]
-    public async Task TryReserveTeamLabCapacityAsync_ReservesWholeTopologyOnRuntimeNodeOnly()
+    public async Task TryReserveTeamLabCapacityAsync_ReservesShardSlotsOnTheirWorkerNodes()
     {
         await using var context = CreateContext();
-        var node = new WorkerNode
+        var nodeA = new WorkerNode
         {
             Id = System.Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-            Name = "teamlab-node",
+            Name = "teamlab-node-a",
             HostAddress = "10.24.0.30",
             Status = NodeStatus.Online,
             IsSchedulable = true,
@@ -771,32 +771,80 @@ public class TeamLabDeploymentServiceTests
             CurrentVms = 0,
             TeamLabNetworkEnabled = true,
             TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
-            TeamLabTunnelIp = "10.250.0.2"
+            TeamLabTunnelIp = "10.250.0.2",
+            TeamLabAgentVersion = "1.8.3-test",
+            TeamLabProtocolVersion = 3
         };
-        context.WorkerNodes.Add(node);
+        var nodeB = new WorkerNode
+        {
+            Id = System.Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            Name = "teamlab-node-b",
+            HostAddress = "10.24.0.31",
+            Status = NodeStatus.Online,
+            IsSchedulable = true,
+            IsLocal = true,
+            Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+            MaxContainers = 3,
+            MaxVms = 1,
+            CurrentContainers = 0,
+            CurrentVms = 0,
+            TeamLabNetworkEnabled = true,
+            TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
+            TeamLabTunnelIp = "10.250.0.3",
+            TeamLabAgentVersion = "1.8.3-test",
+            TeamLabProtocolVersion = 3
+        };
+        context.WorkerNodes.AddRange(nodeA, nodeB);
         await context.SaveChangesAsync();
         var service = CreateDeploymentService(context);
-        var runtime = new TeamLabRuntime { Id = 7, WorkerNodeId = node.Id };
+        var runtime = new TeamLabRuntime
+        {
+            Id = 7,
+            WorkerNodeId = nodeA.Id,
+            Shards =
+            [
+                new TeamLabRuntimeShard
+                {
+                    WorkerNodeId = nodeA.Id,
+                    Assets =
+                    [
+                        new TeamLabRuntimeAsset { Kind = TeamLabResourceKind.Docker, Status = TeamLabRuntimeStatus.Scheduled },
+                        new TeamLabRuntimeAsset { Kind = TeamLabResourceKind.Vm, Status = TeamLabRuntimeStatus.Scheduled }
+                    ]
+                },
+                new TeamLabRuntimeShard
+                {
+                    WorkerNodeId = nodeB.Id,
+                    Assets =
+                    [
+                        new TeamLabRuntimeAsset { Kind = TeamLabResourceKind.Docker, Status = TeamLabRuntimeStatus.Scheduled }
+                    ]
+                }
+            ]
+        };
 
         var result = await service.TryReserveTeamLabCapacityAsync(runtime,
             new TeamLabAssetSlotCount(DockerSlots: 2, VmSlots: 1), CancellationToken.None);
 
         Assert.True(result.Success, result.Message);
-        var reloaded = await context.WorkerNodes.SingleAsync(n => n.Id == node.Id);
-        Assert.Equal(1, reloaded.CurrentContainers);
-        Assert.Equal(0, reloaded.CurrentVms);
-        Assert.Equal(2, reloaded.ReservedContainers);
-        Assert.Equal(1, reloaded.ReservedVms);
+        var reloadedA = await context.WorkerNodes.SingleAsync(n => n.Id == nodeA.Id);
+        var reloadedB = await context.WorkerNodes.SingleAsync(n => n.Id == nodeB.Id);
+        Assert.Equal(1, reloadedA.CurrentContainers);
+        Assert.Equal(0, reloadedA.CurrentVms);
+        Assert.Equal(1, reloadedA.ReservedContainers);
+        Assert.Equal(1, reloadedA.ReservedVms);
+        Assert.Equal(1, reloadedB.ReservedContainers);
+        Assert.Equal(0, reloadedB.ReservedVms);
     }
 
     [Fact]
-    public async Task TryReserveTeamLabCapacityAsync_RejectsWholeTopologyWhenRuntimeNodeCapacityIsInsufficient()
+    public async Task TryReserveTeamLabCapacityAsync_RollsBackAllShardsWhenAnyShardNodeIsInsufficient()
     {
         await using var context = CreateContext();
-        var node = new WorkerNode
+        var nodeA = new WorkerNode
         {
             Id = System.Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
-            Name = "teamlab-node",
+            Name = "teamlab-node-a",
             HostAddress = "10.24.0.30",
             Status = NodeStatus.Online,
             IsSchedulable = true,
@@ -808,21 +856,68 @@ public class TeamLabDeploymentServiceTests
             CurrentVms = 0,
             TeamLabNetworkEnabled = true,
             TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
-            TeamLabTunnelIp = "10.250.0.2"
+            TeamLabTunnelIp = "10.250.0.2",
+            TeamLabAgentVersion = "1.8.3-test",
+            TeamLabProtocolVersion = 3
         };
-        context.WorkerNodes.Add(node);
+        var nodeB = new WorkerNode
+        {
+            Id = System.Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+            Name = "teamlab-node-b",
+            HostAddress = "10.24.0.31",
+            Status = NodeStatus.Online,
+            IsSchedulable = true,
+            IsLocal = true,
+            Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+            MaxContainers = 1,
+            MaxVms = 1,
+            CurrentContainers = 1,
+            CurrentVms = 0,
+            TeamLabNetworkEnabled = true,
+            TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
+            TeamLabTunnelIp = "10.250.0.3",
+            TeamLabAgentVersion = "1.8.3-test",
+            TeamLabProtocolVersion = 3
+        };
+        context.WorkerNodes.AddRange(nodeA, nodeB);
         await context.SaveChangesAsync();
         var service = CreateDeploymentService(context, new NoopTeamLabAgentClient());
-        var runtime = new TeamLabRuntime { Id = 8, WorkerNodeId = node.Id };
+        var runtime = new TeamLabRuntime
+        {
+            Id = 8,
+            WorkerNodeId = nodeA.Id,
+            Shards =
+            [
+                new TeamLabRuntimeShard
+                {
+                    WorkerNodeId = nodeA.Id,
+                    Assets =
+                    [
+                        new TeamLabRuntimeAsset { Kind = TeamLabResourceKind.Docker, Status = TeamLabRuntimeStatus.Scheduled }
+                    ]
+                },
+                new TeamLabRuntimeShard
+                {
+                    WorkerNodeId = nodeB.Id,
+                    Assets =
+                    [
+                        new TeamLabRuntimeAsset { Kind = TeamLabResourceKind.Docker, Status = TeamLabRuntimeStatus.Scheduled }
+                    ]
+                }
+            ]
+        };
 
         var result = await service.TryReserveTeamLabCapacityAsync(runtime,
             new TeamLabAssetSlotCount(DockerSlots: 2, VmSlots: 1), CancellationToken.None);
 
         Assert.False(result.Success);
         Assert.Contains("capacity", result.Message, StringComparison.OrdinalIgnoreCase);
-        var reloaded = await context.WorkerNodes.SingleAsync(n => n.Id == node.Id);
-        Assert.Equal(1, reloaded.CurrentContainers);
-        Assert.Equal(0, reloaded.CurrentVms);
+        var reloadedA = await context.WorkerNodes.SingleAsync(n => n.Id == nodeA.Id);
+        var reloadedB = await context.WorkerNodes.SingleAsync(n => n.Id == nodeB.Id);
+        Assert.Equal(0, reloadedA.ReservedContainers);
+        Assert.Equal(0, reloadedA.ReservedVms);
+        Assert.Equal(0, reloadedB.ReservedContainers);
+        Assert.Equal(0, reloadedB.ReservedVms);
     }
 
     [Fact]
@@ -844,7 +939,9 @@ public class TeamLabDeploymentServiceTests
             CurrentVms = 1,
             TeamLabNetworkEnabled = true,
             TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
-            TeamLabTunnelIp = "10.250.0.2"
+            TeamLabTunnelIp = "10.250.0.2",
+            TeamLabAgentVersion = "1.8.3-test",
+            TeamLabProtocolVersion = 3
         };
         context.WorkerNodes.Add(node);
         await context.SaveChangesAsync();
@@ -889,7 +986,9 @@ public class TeamLabDeploymentServiceTests
             CurrentVms = 1,
             TeamLabNetworkEnabled = true,
             TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
-            TeamLabTunnelIp = "10.250.0.2"
+            TeamLabTunnelIp = "10.250.0.2",
+            TeamLabAgentVersion = "1.8.3-test",
+            TeamLabProtocolVersion = 3
         };
         context.WorkerNodes.Add(node);
         await context.SaveChangesAsync();
@@ -907,6 +1006,92 @@ public class TeamLabDeploymentServiceTests
         var reloaded = await context.WorkerNodes.SingleAsync(n => n.Id == node.Id);
         Assert.Equal(0, reloaded.CurrentContainers);
         Assert.Equal(0, reloaded.CurrentVms);
+    }
+
+    [Fact]
+    public async Task ConfirmTeamLabCapacityAsync_ConfirmsShardSlotsOnTheirWorkerNodes()
+    {
+        await using var context = CreateContext();
+        var nodeA = new WorkerNode
+        {
+            Id = System.Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
+            Name = "teamlab-node-a",
+            HostAddress = "10.24.0.30",
+            Status = NodeStatus.Online,
+            IsSchedulable = true,
+            IsLocal = true,
+            Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+            MaxContainers = 4,
+            MaxVms = 2,
+            ReservedContainers = 1,
+            ReservedVms = 1,
+            TeamLabNetworkEnabled = true,
+            TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
+            TeamLabTunnelIp = "10.250.0.2",
+            TeamLabAgentVersion = "1.8.3-test",
+            TeamLabProtocolVersion = 3
+        };
+        var nodeB = new WorkerNode
+        {
+            Id = System.Guid.Parse("ffffffff-ffff-ffff-ffff-ffffffffffff"),
+            Name = "teamlab-node-b",
+            HostAddress = "10.24.0.31",
+            Status = NodeStatus.Online,
+            IsSchedulable = true,
+            IsLocal = true,
+            Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+            MaxContainers = 4,
+            MaxVms = 2,
+            ReservedContainers = 1,
+            ReservedVms = 0,
+            TeamLabNetworkEnabled = true,
+            TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
+            TeamLabTunnelIp = "10.250.0.3",
+            TeamLabAgentVersion = "1.8.3-test",
+            TeamLabProtocolVersion = 3
+        };
+        context.WorkerNodes.AddRange(nodeA, nodeB);
+        await context.SaveChangesAsync();
+        var service = CreateDeploymentService(context);
+        var runtime = new TeamLabRuntime
+        {
+            Id = 12,
+            WorkerNodeId = nodeA.Id,
+            Shards =
+            [
+                new TeamLabRuntimeShard
+                {
+                    WorkerNodeId = nodeA.Id,
+                    Assets =
+                    [
+                        new TeamLabRuntimeAsset { Kind = TeamLabResourceKind.Docker, Status = TeamLabRuntimeStatus.Scheduled },
+                        new TeamLabRuntimeAsset { Kind = TeamLabResourceKind.Vm, Status = TeamLabRuntimeStatus.Scheduled }
+                    ]
+                },
+                new TeamLabRuntimeShard
+                {
+                    WorkerNodeId = nodeB.Id,
+                    Assets =
+                    [
+                        new TeamLabRuntimeAsset { Kind = TeamLabResourceKind.Docker, Status = TeamLabRuntimeStatus.Scheduled }
+                    ]
+                }
+            ]
+        };
+
+        await service.ConfirmTeamLabCapacityAsync(runtime,
+            new TeamLabAssetSlotCount(DockerSlots: 2, VmSlots: 1),
+            CancellationToken.None);
+
+        var reloadedA = await context.WorkerNodes.SingleAsync(n => n.Id == nodeA.Id);
+        var reloadedB = await context.WorkerNodes.SingleAsync(n => n.Id == nodeB.Id);
+        Assert.Equal(1, reloadedA.CurrentContainers);
+        Assert.Equal(1, reloadedA.CurrentVms);
+        Assert.Equal(0, reloadedA.ReservedContainers);
+        Assert.Equal(0, reloadedA.ReservedVms);
+        Assert.Equal(1, reloadedB.CurrentContainers);
+        Assert.Equal(0, reloadedB.CurrentVms);
+        Assert.Equal(0, reloadedB.ReservedContainers);
     }
 
     [Fact]
@@ -1355,6 +1540,7 @@ public class TeamLabDeploymentServiceTests
         Assert.Contains("tl123-data", resources);
         Assert.Contains("tlr123", resources);
         Assert.Contains("tlwg123", resources);
+        Assert.Contains("tlrf123", resources);
     }
 
     [Fact]
@@ -1377,6 +1563,7 @@ public class TeamLabDeploymentServiceTests
         Assert.All(serviceNames, service => Assert.Contains(service, resources));
         Assert.Contains(names.RouterNamespace, resources);
         Assert.Contains(names.WireGuardInterface, resources);
+        Assert.Contains("tlrf123", resources);
     }
 
     [Fact]
@@ -1509,6 +1696,72 @@ public class TeamLabDeploymentServiceTests
             containerId => containerId.StartsWith("container-", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task DeployQueuedRuntimeAsync_DeploysEachShardOnItsPlannedWorkerNode()
+    {
+        await using var context = CreateContext();
+        var nodeA = Guid.Parse("aaaaaaaa-1111-1111-1111-aaaaaaaaaaaa");
+        var nodeB = Guid.Parse("bbbbbbbb-2222-2222-2222-bbbbbbbbbbbb");
+        await SeedTwoNetworkTeamLabRuntimeAsync(context, nodeA, nodeB);
+        var agent = new RecordingTeamLabAgentClient();
+        var service = CreateDeploymentService(context, agent);
+
+        var result = await service.DeployQueuedRuntimeAsync(runtimeId: 1, CancellationToken.None);
+
+        Assert.True(result.Success, result.Message);
+        var entryBridge = agent.BridgeCalls.Single(call => call.Request.BridgeName.Contains("entry"));
+        var dataBridge = agent.BridgeCalls.Single(call => call.Request.BridgeName.Contains("data"));
+        var entryNode = entryBridge.NodeId;
+        var dataNode = dataBridge.NodeId;
+        var fabricIpByNode = new Dictionary<Guid, string>
+        {
+            [nodeA] = "10.250.0.2",
+            [nodeB] = "10.250.0.3"
+        };
+        Assert.NotEqual(entryNode, dataNode);
+        Assert.Contains(agent.ContainerCreates, call => call.NodeId == entryNode && call.Config.Image.Contains("portal"));
+        Assert.Contains(agent.ContainerCreates, call => call.NodeId == dataNode && call.Config.Image.Contains("api"));
+        Assert.DoesNotContain(agent.ContainerCreates, call => call.NodeId == entryNode && call.Config.Image.Contains("api"));
+        Assert.DoesNotContain(agent.ContainerCreates, call => call.NodeId == dataNode && call.Config.Image.Contains("portal"));
+        Assert.Contains(agent.FabricApplyCalls, call =>
+            call.NodeId == entryNode &&
+            call.Request.NamespaceName == "tlr1" &&
+            (call.Request.LocalRoutes ?? []).Any(route =>
+                route.TargetCidr == entryBridge.Request.Cidr) &&
+            (call.Request.Routes ?? []).Any(route =>
+                route.TargetCidr == dataBridge.Request.Cidr &&
+                route.GatewayIp == fabricIpByNode[dataNode] &&
+                !string.IsNullOrWhiteSpace(route.SourceIp) &&
+                !route.SourceIp.StartsWith("169.254.", StringComparison.Ordinal)));
+        Assert.Contains(agent.FabricApplyCalls, call =>
+            call.NodeId == dataNode &&
+            call.Request.NamespaceName == "tlr1" &&
+            (call.Request.LocalRoutes ?? []).Any(route =>
+                route.TargetCidr == dataBridge.Request.Cidr) &&
+            (call.Request.Routes ?? []).Any(route =>
+                route.TargetCidr == entryBridge.Request.Cidr &&
+                route.GatewayIp == fabricIpByNode[entryNode] &&
+                !string.IsNullOrWhiteSpace(route.SourceIp) &&
+                !route.SourceIp.StartsWith("169.254.", StringComparison.Ordinal)));
+        var entryFabric = agent.FabricApplyCalls.Single(call => call.NodeId == entryNode);
+        var dataFabric = agent.FabricApplyCalls.Single(call => call.NodeId == dataNode);
+        Assert.NotEqual(entryFabric.Request.NamespaceHostAddressCidr, dataFabric.Request.NamespaceHostAddressCidr);
+        Assert.NotEqual(entryFabric.Request.NamespacePeerAddressCidr, dataFabric.Request.NamespacePeerAddressCidr);
+        Assert.Contains(agent.FlowStartCalls, call =>
+            call.NodeId == entryNode && call.Request.NetworkKey == "entry" && call.Request.InterfaceName == entryBridge.Request.BridgeName);
+        Assert.Contains(agent.FlowStartCalls, call =>
+            call.NodeId == dataNode && call.Request.NetworkKey == "data" && call.Request.InterfaceName == dataBridge.Request.BridgeName);
+
+        var runtime = await context.TeamLabRuntimes
+            .Include(r => r.Shards)
+            .Include(r => r.Assets)
+            .SingleAsync(r => r.Id == 1);
+        Assert.Equal(TeamLabRuntimeStatus.Running, runtime.Status);
+        Assert.All(runtime.Shards, shard => Assert.True(shard.RouteVersion > 0));
+        Assert.Contains(runtime.Assets, asset => asset.TopologyKey == "portal" && asset.WorkerNodeId == entryNode);
+        Assert.Contains(runtime.Assets, asset => asset.TopologyKey == "database" && asset.WorkerNodeId == dataNode);
+    }
+
     private static DockerImageRegistryService CreateDockerRegistryService(string address)
     {
         var services = new ServiceCollection().BuildServiceProvider();
@@ -1565,6 +1818,7 @@ public class TeamLabDeploymentServiceTests
                 new EphemeralDataProtectionProvider(),
                 Options.Create(new PublicUdpGatewayConfig { PublicEndpoint = "203.195.157.191" }),
                 Options.Create(new ContainerProvider { PublicEntry = "203.195.157.191" })),
+            new TeamLabTrafficFlowService(context, agentClient, NullLogger<TeamLabTrafficFlowService>.Instance),
             new RecordingPublicUdpGatewayProvider(),
             Options.Create(new TeamLabNetworkConfig()),
             capacity,
@@ -1614,6 +1868,7 @@ public class TeamLabDeploymentServiceTests
             HostAddress = "10.24.0.30",
             AuthToken = "token",
             Status = NodeStatus.Online,
+            IsLocal = true,
             IsSchedulable = true,
             Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
             MaxContainers = 8,
@@ -1621,7 +1876,9 @@ public class TeamLabDeploymentServiceTests
             CurrentContainers = 2,
             TeamLabNetworkEnabled = true,
             TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
-            TeamLabTunnelIp = "10.250.0.2"
+            TeamLabTunnelIp = "10.250.0.2",
+            TeamLabAgentVersion = "1.8.3-test",
+            TeamLabProtocolVersion = 3
         });
         context.ImageTemplates.AddRange(templateA, templateB);
         context.PenetrationConfigs.Add(new PenetrationConfig
@@ -1661,6 +1918,82 @@ public class TeamLabDeploymentServiceTests
         });
         await context.SaveChangesAsync();
     }
+
+    private static async Task SeedTwoNetworkTeamLabRuntimeAsync(AppDbContext context, Guid nodeA, Guid nodeB)
+    {
+        await SeedTwoDockerTeamLabRuntimeAsync(context, nodeA);
+        context.WorkerNodes.Add(new WorkerNode
+        {
+            Id = nodeB,
+            Name = "teamlab-node-b",
+            HostAddress = "10.24.0.31",
+            AuthToken = "token",
+            Status = NodeStatus.Online,
+            IsLocal = true,
+            IsSchedulable = true,
+            Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+            MaxContainers = 1,
+            MaxVms = 2,
+            TeamLabNetworkEnabled = true,
+            TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
+            TeamLabTunnelIp = "10.250.0.3",
+            TeamLabAgentVersion = "1.8.3-test",
+            TeamLabProtocolVersion = 3
+        });
+
+        var runtime = await context.TeamLabRuntimes.SingleAsync(r => r.Id == 1);
+        runtime.WorkerNodeId = nodeA;
+        var primary = await context.WorkerNodes.SingleAsync(n => n.Id == nodeA);
+        primary.MaxContainers = 1;
+        primary.CurrentContainers = 0;
+        context.PenetrationPublishedSnapshots.Single().SnapshotJson = BuildTwoNetworkDockerSnapshotJson(101, 102);
+        await context.SaveChangesAsync();
+    }
+
+    private static string BuildTwoNetworkDockerSnapshotJson(int templateAId, int templateBId) =>
+        JsonSerializer.Serialize(new PenetrationConfigModel
+        {
+            GameId = 1,
+            BaseCidr = "10.90.0.0/16",
+            TeamSubnetPrefix = 24,
+            NetworkSubnetPrefix = 28,
+            PublishedVersion = 1,
+            Status = PenetrationDeploymentStatus.Published,
+            Networks =
+            [
+                new PenetrationNetworkModel { Id = 1, TopologyKey = "entry", Name = "Entry", OrderIndex = 0 },
+                new PenetrationNetworkModel { Id = 2, TopologyKey = "data", Name = "Data", OrderIndex = 1 }
+            ],
+            Nodes =
+            [
+                new PenetrationNodeModel
+                {
+                    Id = 1,
+                    TopologyKey = "portal",
+                    Name = "Portal",
+                    NetworkId = 1,
+                    ImageTemplateId = templateAId,
+                    CpuCount = 1,
+                    MemoryLimit = 128,
+                    StorageLimit = 128,
+                    ExposePort = 80,
+                    OrderIndex = 10
+                },
+                new PenetrationNodeModel
+                {
+                    Id = 2,
+                    TopologyKey = "database",
+                    Name = "Database",
+                    NetworkId = 2,
+                    ImageTemplateId = templateBId,
+                    CpuCount = 1,
+                    MemoryLimit = 128,
+                    StorageLimit = 128,
+                    ExposePort = 5432,
+                    OrderIndex = 20
+                }
+            ]
+        }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
     private static string BuildTwoDockerSnapshotJson(int templateAId, int templateBId) =>
         JsonSerializer.Serialize(new PenetrationConfigModel
@@ -1797,6 +2130,18 @@ public class TeamLabDeploymentServiceTests
         public override Task<TeamLabDryRunResponse?> CleanupTeamLabAsync(Guid nodeId,
             TeamLabCleanupRequest request, CancellationToken token) =>
             Task.FromResult<TeamLabDryRunResponse?>(Ok("cleanup"));
+
+        public override Task<TeamLabDryRunResponse?> ApplyTeamLabFabricAsync(Guid nodeId,
+            TeamLabFabricApplyRequest request, CancellationToken token) =>
+            Task.FromResult<TeamLabDryRunResponse?>(Ok("fabric"));
+
+        public override Task<TeamLabFlowResponse?> StartTeamLabFlowMetadataAsync(Guid nodeId,
+            TeamLabFlowStartRequest request, CancellationToken token) =>
+            Task.FromResult<TeamLabFlowResponse?>(new TeamLabFlowResponse(true, false, "flow", [], []));
+
+        public override Task<TeamLabFlowResponse?> StopTeamLabFlowMetadataAsync(Guid nodeId,
+            TeamLabFlowStopRequest request, CancellationToken token) =>
+            Task.FromResult<TeamLabFlowResponse?>(new TeamLabFlowResponse(true, false, "flow", [], []));
     }
 
     private sealed class BlockingTeamLabAgentClient : TestTeamLabAgentClientBase
@@ -1845,6 +2190,46 @@ public class TeamLabDeploymentServiceTests
     }
 
     private sealed class NoopTeamLabAgentClient : TestTeamLabAgentClientBase;
+
+    private sealed class RecordingTeamLabAgentClient : TestTeamLabAgentClientBase
+    {
+        public List<(Guid NodeId, TeamLabBridgeRequest Request)> BridgeCalls { get; } = [];
+        public List<(Guid NodeId, ContainerConfig Config)> ContainerCreates { get; } = [];
+        public List<(Guid NodeId, TeamLabFabricApplyRequest Request)> FabricApplyCalls { get; } = [];
+        public List<(Guid NodeId, TeamLabFlowStartRequest Request)> FlowStartCalls { get; } = [];
+
+        public override Task<TeamLabDryRunResponse?> CreateTeamLabBridgeAsync(Guid nodeId,
+            TeamLabBridgeRequest request, CancellationToken token)
+        {
+            BridgeCalls.Add((nodeId, request));
+            return base.CreateTeamLabBridgeAsync(nodeId, request, token);
+        }
+
+        public override Task<AgentCreateContainerResponse> CreateContainerOrThrowAsync(Guid nodeId,
+            ContainerConfig config, CancellationToken token)
+        {
+            ContainerCreates.Add((nodeId, config));
+            return Task.FromResult(new AgentCreateContainerResponse
+            {
+                ContainerId = $"container-{config.Image}",
+                Port = config.ExposedPort
+            });
+        }
+
+        public override Task<TeamLabDryRunResponse?> ApplyTeamLabFabricAsync(Guid nodeId,
+            TeamLabFabricApplyRequest request, CancellationToken token)
+        {
+            FabricApplyCalls.Add((nodeId, request));
+            return base.ApplyTeamLabFabricAsync(nodeId, request, token);
+        }
+
+        public override Task<TeamLabFlowResponse?> StartTeamLabFlowMetadataAsync(Guid nodeId,
+            TeamLabFlowStartRequest request, CancellationToken token)
+        {
+            FlowStartCalls.Add((nodeId, request));
+            return Task.FromResult<TeamLabFlowResponse?>(new TeamLabFlowResponse(true, false, "flow", [], []));
+        }
+    }
 
     private sealed class OneFailsAfterParallelStartTeamLabAgentClient : TestTeamLabAgentClientBase
     {

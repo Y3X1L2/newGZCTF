@@ -88,6 +88,38 @@ export enum PenetrationDeploymentEventLevel {
   Error = 'Error',
 }
 
+export enum TeamLabRuntimeStatus {
+  Pending = 'Pending',
+  Planning = 'Planning',
+  Scheduled = 'Scheduled',
+  Deploying = 'Deploying',
+  Probing = 'Probing',
+  Running = 'Running',
+  Failed = 'Failed',
+  CleanupPending = 'CleanupPending',
+  Stopped = 'Stopped',
+  Destroying = 'Destroying',
+  Destroyed = 'Destroyed',
+}
+
+export enum TeamLabResourceKind {
+  Docker = 'Docker',
+  Vm = 'Vm',
+  RouterNamespace = 'RouterNamespace',
+  DhcpDnsService = 'DhcpDnsService',
+  WireGuard = 'WireGuard',
+  PublicUdpMapping = 'PublicUdpMapping',
+}
+
+export enum TeamLabTrafficCaptureStatus {
+  Pending = 'Pending',
+  Running = 'Running',
+  Stopping = 'Stopping',
+  Completed = 'Completed',
+  Failed = 'Failed',
+  Expired = 'Expired',
+}
+
 export interface PenetrationConfigModel {
   gameId: number
   baseCidr: string
@@ -316,6 +348,108 @@ export interface PenetrationTeamEnvironmentModel {
   events: PenetrationDeploymentEventModel[]
   runtimeNodes: PenetrationRuntimeNodeModel[]
   runtimeRoutes: PenetrationRuntimeRouteModel[]
+  teamLabShards: TeamLabRuntimeShardSummaryModel[]
+  teamLabNetworks: TeamLabRuntimeNetworkSummaryModel[]
+  teamLabAssets: TeamLabRuntimeAssetSummaryModel[]
+  teamLabCaptureJobs: TeamLabTrafficCaptureJobSummaryModel[]
+  teamLabTrafficFlows: TeamLabTrafficFlowSummaryModel[]
+}
+
+export interface TeamLabRuntimeShardSummaryModel {
+  id: number
+  workerNodeId: string
+  workerNodeName: string
+  status: TeamLabRuntimeStatus
+  routeVersion: number
+  networkKeys: string[]
+  assetKeys: string[]
+  lastError?: string | null
+}
+
+export interface TeamLabRuntimeNetworkSummaryModel {
+  id: number
+  shardId?: number | null
+  workerNodeId?: string | null
+  workerNodeName: string
+  topologyKey: string
+  name: string
+  cidr: string
+  gatewayIp: string
+  bridgeName: string
+}
+
+export interface TeamLabRuntimeAssetSummaryModel {
+  id: number
+  shardId?: number | null
+  workerNodeId?: string | null
+  workerNodeName: string
+  kind: TeamLabResourceKind
+  topologyKey: string
+  name: string
+  runtimeResourceId?: string | null
+  sourceTemplateId?: number | null
+  image?: string | null
+  networkKey?: string | null
+  ipAddress?: string | null
+  macAddress?: string | null
+  interfaceSummaryJson: string
+  status: TeamLabRuntimeStatus
+  lastError?: string | null
+}
+
+export interface TeamLabTrafficCaptureJobSummaryModel {
+  id: number
+  runtimeId: number
+  shardId?: number | null
+  networkId?: number | null
+  workerNodeId?: string | null
+  workerNodeName: string
+  status: TeamLabTrafficCaptureStatus
+  scope: string
+  filePath?: string | null
+  maxBytes: number
+  maxSeconds: number
+  capturedBytes: number
+  lastError?: string | null
+  createdAt: number
+  startedAt?: number | null
+  completedAt?: number | null
+  expiresAt?: number | null
+}
+
+export interface TeamLabCaptureStartModel {
+  networkTopologyKey?: string | null
+  shardId?: number | null
+  maxSeconds: number
+  maxBytes: number
+  retentionSeconds: number
+}
+
+export interface TeamLabTrafficCaptureResultModel {
+  success: boolean
+  message: string
+  job?: TeamLabTrafficCaptureJobSummaryModel | null
+}
+
+export interface TeamLabTrafficFlowSummaryModel {
+  shardId?: number | null
+  networkId?: number | null
+  workerNodeId?: string | null
+  workerNodeName: string
+  networkName: string
+  sourceIp: string
+  sourcePort?: number | null
+  destinationIp: string
+  destinationPort?: number | null
+  protocol: string
+  bytes: number
+  capturedAt: number
+}
+
+export interface TeamLabTrafficFlowRefreshResultModel {
+  success: boolean
+  message: string
+  importedCount: number
 }
 
 export interface PenetrationRuntimeNodeModel {
@@ -609,6 +743,46 @@ export const penetrationAdminApi = {
       method: 'GET',
       query: { count, skip },
       format: 'json',
+      ...params,
+    }),
+  getTeamLabCaptures: (gameId: number, teamId: number, params: RequestParams = {}) =>
+    request<TeamLabTrafficCaptureJobSummaryModel[], RequestResponse>({
+      path: `/api/admin/teamlab/games/${gameId}/teams/${teamId}/captures`,
+      method: 'GET',
+      format: 'json',
+      ...params,
+    }),
+  startTeamLabCapture: (gameId: number, teamId: number, data: TeamLabCaptureStartModel, params: RequestParams = {}) =>
+    request<TeamLabTrafficCaptureResultModel, RequestResponse>({
+      path: `/api/admin/teamlab/games/${gameId}/teams/${teamId}/captures/start`,
+      method: 'POST',
+      body: data,
+      type: json,
+      format: 'json',
+      ...params,
+    }),
+  stopTeamLabCapture: (gameId: number, teamId: number, jobId: number, params: RequestParams = {}) =>
+    request<TeamLabTrafficCaptureResultModel, RequestResponse>({
+      path: `/api/admin/teamlab/games/${gameId}/teams/${teamId}/captures/${jobId}/stop`,
+      method: 'POST',
+      format: 'json',
+      ...params,
+    }),
+  refreshTeamLabCapture: (gameId: number, teamId: number, jobId: number, params: RequestParams = {}) =>
+    request<TeamLabTrafficCaptureResultModel, RequestResponse>({
+      path: `/api/admin/teamlab/games/${gameId}/teams/${teamId}/captures/${jobId}/status`,
+      method: 'POST',
+      format: 'json',
+      ...params,
+    }),
+  getTeamLabCaptureDownloadUrl: (gameId: number, teamId: number, jobId: number) =>
+    `/api/admin/teamlab/games/${gameId}/teams/${teamId}/captures/${jobId}/download`,
+
+  refreshTeamLabFlows: (gameId: number, teamId: number, params: RequestParams = {}) =>
+    request<TeamLabTrafficFlowRefreshResultModel, RequestResponse>({
+      path: `/api/admin/teamlab/games/${gameId}/teams/${teamId}/flows/refresh`,
+      method: 'POST',
+      secure: true,
       ...params,
     }),
 }

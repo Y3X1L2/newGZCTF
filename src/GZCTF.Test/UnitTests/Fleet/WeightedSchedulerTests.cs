@@ -277,9 +277,33 @@ public class WeightedSchedulerTests
         node.TeamLabNetworkEnabled = true;
         node.TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy;
         node.TeamLabTunnelIp = "10.250.0.10";
+        node.TeamLabAgentVersion = "1.8.3-test";
+        node.TeamLabProtocolVersion = 3;
 
         Assert.Equal(node.Id, WeightedScheduler.SelectOptimalTeamLabNode([node])?.Id);
         Assert.Null(WeightedScheduler.GetTeamLabUnschedulableReason(node));
+    }
+
+    [Fact]
+    public void SelectOptimalTeamLabNode_RejectsProtocolVersionWithoutNamespaceUplink()
+    {
+        var node = new WorkerNode
+        {
+            Id = Guid.NewGuid(),
+            Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+            Status = NodeStatus.Online,
+            IsLocal = true,
+            IsSchedulable = true,
+            TeamLabNetworkEnabled = true,
+            TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
+            TeamLabTunnelIp = "10.250.0.10",
+            TeamLabAgentVersion = "1.8.3-test",
+            TeamLabProtocolVersion = 2
+        };
+
+        Assert.Null(WeightedScheduler.SelectOptimalTeamLabNode([node]));
+        Assert.Equal("TeamLab Agent protocol is incompatible; TeamLab Fabric namespace uplink requires protocol v3",
+            WeightedScheduler.GetTeamLabUnschedulableReason(node));
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Net.Mime;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
@@ -216,6 +217,66 @@ public class AgentClient
         TeamLabDhcpDnsProbeRequest request, CancellationToken token) =>
         await PostTeamLabAsync<TeamLabDhcpDnsProbeRequest, TeamLabDryRunResponse>(nodeId,
             "/api/teamlab/dhcp-dns/probe", request, token);
+
+    public virtual async Task<TeamLabDryRunResponse?> ApplyTeamLabFabricAsync(Guid nodeId,
+        TeamLabFabricApplyRequest request, CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabFabricApplyRequest, TeamLabDryRunResponse>(nodeId,
+            "/api/teamlab/fabric/apply", request, token);
+
+    public virtual async Task<TeamLabCaptureResponse?> StartTeamLabCaptureAsync(Guid nodeId,
+        TeamLabCaptureStartRequest request, CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabCaptureStartRequest, TeamLabCaptureResponse>(nodeId,
+            "/api/teamlab/capture/start", request, token);
+
+    public virtual async Task<TeamLabCaptureResponse?> StopTeamLabCaptureAsync(Guid nodeId,
+        TeamLabCaptureStopRequest request, CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabCaptureStopRequest, TeamLabCaptureResponse>(nodeId,
+            "/api/teamlab/capture/stop", request, token);
+
+    public virtual async Task<TeamLabCaptureResponse?> GetTeamLabCaptureStatusAsync(Guid nodeId,
+        TeamLabCaptureStatusRequest request, CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabCaptureStatusRequest, TeamLabCaptureResponse>(nodeId,
+            "/api/teamlab/capture/status", request, token);
+
+    public virtual async Task<TeamLabFlowResponse?> StartTeamLabFlowMetadataAsync(Guid nodeId,
+        TeamLabFlowStartRequest request, CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabFlowStartRequest, TeamLabFlowResponse>(nodeId,
+            "/api/teamlab/flows/start", request, token);
+
+    public virtual async Task<TeamLabFlowResponse?> StopTeamLabFlowMetadataAsync(Guid nodeId,
+        TeamLabFlowStopRequest request, CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabFlowStopRequest, TeamLabFlowResponse>(nodeId,
+            "/api/teamlab/flows/stop", request, token);
+
+    public virtual async Task<TeamLabFlowResponse?> GetTeamLabFlowMetadataSnapshotAsync(Guid nodeId,
+        TeamLabFlowSnapshotRequest request, CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabFlowSnapshotRequest, TeamLabFlowResponse>(nodeId,
+            "/api/teamlab/flows/snapshot", request, token);
+
+    public virtual async Task<TeamLabCaptureDownloadResult?> DownloadTeamLabCaptureAsync(Guid nodeId,
+        int runtimeId, int jobId, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null) return TeamLabCaptureDownloadResult.Failed($"Fleet node {nodeId} was not found.");
+
+        var client = BuildClient(node);
+        var path = $"/api/teamlab/capture/{runtimeId}/{jobId}/download";
+        var response = await client.GetAsync(path, HttpCompletionOption.ResponseHeadersRead, token);
+        if (!response.IsSuccessStatusCode)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync(token);
+            return TeamLabCaptureDownloadResult.Failed(
+                $"Agent TeamLab capture download failed: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+        }
+
+        var stream = await response.Content.ReadAsStreamAsync(token);
+        var fileName = response.Content.Headers.ContentDisposition?.FileNameStar
+                       ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"')
+                       ?? $"teamlab-capture-{runtimeId}-{jobId}.pcap";
+        var contentType = response.Content.Headers.ContentType?.ToString() ?? MediaTypeNames.Application.Octet;
+        var length = response.Content.Headers.ContentLength;
+        return TeamLabCaptureDownloadResult.FromStream(stream, fileName, contentType, length, response);
+    }
 
     private async Task<TResponse?> PostTeamLabAsync<TRequest, TResponse>(Guid nodeId, string path, TRequest request,
         CancellationToken token)
@@ -615,11 +676,30 @@ public record TeamLabStatusResponse(
     bool Available,
     bool Enable,
     bool DryRun,
+    string AgentVersion,
+    int ProtocolVersion,
     bool HasIpCommand,
+    bool HasDockerCommand,
+    bool HasKvmCommand,
     bool HasWireGuardCommand,
     bool HasIptablesCommand,
+    bool HasNftCommand,
+    bool HasTcpdumpCommand,
+    bool HasDumpcapCommand,
+    TeamLabToolCapabilityReport Capabilities,
     DateTimeOffset CheckedAt,
     string? Message = null);
+
+public record TeamLabToolCapabilityReport(
+    bool Docker,
+    bool Kvm,
+    bool KvmDevice,
+    bool CpuVirtualization,
+    bool WireGuard,
+    bool Iptables,
+    bool Nftables,
+    bool Tcpdump,
+    bool Dumpcap);
 
 public record TeamLabDryRunResponse(
     bool Success,
@@ -639,7 +719,8 @@ public record TeamLabRouterInterfaceRequest(
 
 public record TeamLabStaticRouteRequest(
     string TargetCidr,
-    string GatewayIp);
+    string GatewayIp,
+    string SourceIp = "");
 
 public record TeamLabRouterRequest(
     int RuntimeId,
@@ -715,3 +796,92 @@ public record TeamLabDhcpDnsProbeRequest(
     string GatewayIp,
     string Hostname,
     bool DryRun = true);
+
+public record TeamLabFabricApplyRequest(
+    int RuntimeId,
+    int RouteVersion,
+    string FabricIp,
+    string? NamespaceName = null,
+    string NamespaceHostAddressCidr = "",
+    string NamespacePeerAddressCidr = "",
+    TeamLabStaticRouteRequest[]? LocalRoutes = null,
+    TeamLabStaticRouteRequest[]? Routes = null,
+    bool DryRun = true);
+
+public record TeamLabCaptureStartRequest(
+    int RuntimeId,
+    int JobId,
+    string Scope,
+    string InterfaceName,
+    int MaxSeconds,
+    long MaxBytes,
+    bool DryRun = true);
+
+public record TeamLabCaptureStopRequest(
+    int RuntimeId,
+    int JobId,
+    bool DryRun = true);
+
+public record TeamLabCaptureStatusRequest(
+    int RuntimeId,
+    int JobId,
+    bool DryRun = true);
+
+public record TeamLabCaptureResponse(
+    bool Success,
+    bool DryRun,
+    string Message,
+    string? FilePath,
+    long CapturedBytes,
+    string[] Commands);
+
+public record TeamLabFlowStartRequest(
+    int RuntimeId,
+    int? ShardId,
+    int? NetworkId,
+    string NetworkKey,
+    string InterfaceName,
+    bool DryRun = true);
+
+public record TeamLabFlowStopRequest(
+    int RuntimeId,
+    string NetworkKey,
+    bool DryRun = true);
+
+public record TeamLabFlowSnapshotRequest(
+    int RuntimeId,
+    string NetworkKey,
+    bool DryRun = true);
+
+public record TeamLabFlowSample(
+    DateTimeOffset CapturedAt,
+    string SourceIp,
+    int? SourcePort,
+    string DestinationIp,
+    int? DestinationPort,
+    string Protocol,
+    long Bytes);
+
+public record TeamLabFlowResponse(
+    bool Success,
+    bool DryRun,
+    string Message,
+    TeamLabFlowSample[] Samples,
+    string[] Commands);
+
+public sealed record TeamLabCaptureDownloadResult(
+    bool Success,
+    string Message,
+    Stream? Stream,
+    string FileName,
+    string ContentType,
+    long? Length,
+    IDisposable? Owner)
+{
+    public static TeamLabCaptureDownloadResult Failed(string message) =>
+        new(false, message, null, string.Empty, MediaTypeNames.Application.Octet, null, null);
+
+    public static TeamLabCaptureDownloadResult FromStream(Stream stream, string fileName, string contentType,
+        long? length, IDisposable? owner) =>
+        new(true, string.Empty, stream, fileName, contentType, length, owner);
+}

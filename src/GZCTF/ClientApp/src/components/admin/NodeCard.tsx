@@ -36,6 +36,9 @@ export interface NodeInfo {
   teamLabTunnelLastError?: string | null
   teamLabTunnelConfigVersion?: number
   canHostTeamLab?: boolean
+  canHostTeamLabFabric?: boolean
+  canHostTeamLabDocker?: boolean
+  canHostTeamLabVm?: boolean
 }
 
 const statusMap: Record<
@@ -90,6 +93,10 @@ function pressureColor(value: number) {
   return 'teal'
 }
 
+function canUseTeamLab(node: NodeInfo) {
+  return Boolean(node.canHostTeamLabDocker || node.canHostTeamLabVm || node.canHostTeamLabFabric || node.canHostTeamLab)
+}
+
 function portPoolName(mode?: string | null) {
   if (mode === 'nginx') return '公网转发池'
   if (mode === 'docker') return 'Docker 端口池'
@@ -101,7 +108,7 @@ function portPoolName(mode?: string | null) {
 function teamLabStatusMeta(node: NodeInfo): { label: string; detail: string; tone: YinyuStatusTone } {
   const key = normalizeKey(node.teamLabTunnelStatus)
 
-  if (node.canHostTeamLab) {
+  if (canUseTeamLab(node)) {
     return {
       label: 'VPN 靶场网络可调度',
       detail: node.teamLabTunnelIp ? `隧道地址 ${node.teamLabTunnelIp}` : '隧道已健康，等待调度',
@@ -290,7 +297,7 @@ export function NodeCard({
                 {teamLab.label}
               </Text>
             </Group>
-            <YinyuStatusPill tone={teamLab.tone} state={node.canHostTeamLab ? 'running' : 'idle'}>
+            <YinyuStatusPill tone={teamLab.tone} state={canUseTeamLab(node) ? 'running' : 'idle'}>
               TeamLab
             </YinyuStatusPill>
           </Group>

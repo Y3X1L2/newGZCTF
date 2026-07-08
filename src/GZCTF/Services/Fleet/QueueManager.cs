@@ -1,5 +1,6 @@
 using GZCTF.Models.Data;
 using GZCTF.Services.Concurrency;
+using GZCTF.Services.TeamLab;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Services.Fleet;
@@ -49,12 +50,7 @@ public class QueueManager
                 continue;
             }
 
-            var reservation = await capacity.TryReserveAsync(new FleetCapacityRequest(
-                GetRequiredCapability(ticket),
-                ticket.DockerSlots,
-                ticket.VmSlots,
-                PreferredNodeId: await ResolvePreferredNodeIdAsync(context, ticket, token),
-                RequireTeamLab: ticket.Kind == DeploymentQueueKind.TeamLabRuntime), token);
+            var reservation = await ReserveTicketCapacityAsync(context, capacity, ticket, token);
 
             if (!reservation.Success || reservation.NodeId is not { } nodeId)
             {
@@ -76,7 +72,8 @@ public class QueueManager
             }
 
             await context.SaveChangesAsync(token);
-            executableTickets.Add(new ReservedQueueTicket(ticket.Id, nodeId, ticket.DockerSlots, ticket.VmSlots));
+            executableTickets.Add(new ReservedQueueTicket(ticket.Id, nodeId, ticket.DockerSlots, ticket.VmSlots,
+                ticket.Kind == DeploymentQueueKind.TeamLabRuntime));
         }
 
         if (executableTickets.Count == 0)
@@ -90,46 +87,15 @@ public class QueueManager
     {
         try
         {
+            if (reserved.IsTeamLabRuntime)
+            {
+                await ExecuteReservedTicketBodyAsync(reserved, token);
+                return true;
+            }
+
             await _executionGate.RunAsync(reserved.NodeId, async executionToken =>
             {
-                using var scope = _scopeFactory.CreateScope();
-                var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                var capacity = scope.ServiceProvider.GetRequiredService<FleetCapacityReservationService>();
-                var executor = scope.ServiceProvider.GetRequiredService<DeploymentExecutionService>();
-                var ticket = await context.DeploymentQueueTickets
-                    .Include(t => t.DeploymentTarget)
-                    .FirstOrDefaultAsync(t => t.Id == reserved.TicketId, executionToken);
-
-                if (ticket is null)
-                {
-                    await capacity.ReleaseAsync(reserved.NodeId, reserved.DockerSlots, reserved.VmSlots, executionToken);
-                    _logger.LogWarning("Reserved deployment queue ticket {TicketId} disappeared before execution.",
-                        reserved.TicketId);
-                    return;
-                }
-
-                if (ticket.Status != DeploymentQueueTicketStatus.Creating)
-                    return;
-
-                if (!await IsTicketStillDeployableAsync(context, ticket, executionToken))
-                {
-                    await capacity.ReleaseAsync(reserved.NodeId, reserved.DockerSlots, reserved.VmSlots,
-                        executionToken);
-                    ticket.Status = DeploymentQueueTicketStatus.Cancelled;
-                    ticket.CompletedAt = DateTimeOffset.UtcNow;
-                    ticket.ErrorMessage = "Deployment queue ticket is not deployable anymore.";
-                    await context.SaveChangesAsync(executionToken);
-                    return;
-                }
-
-                var execution = await executor.ExecuteAsync(ticket, executionToken);
-                if (execution.Success)
-                    await CompleteTicketAsync(capacity, ticket, reserved.NodeId, executionToken);
-                else
-                    await FailTicketAsync(context, capacity, ticket, reserved.NodeId, execution.ErrorMessage,
-                        executionToken);
-
-                await context.SaveChangesAsync(executionToken);
+                await ExecuteReservedTicketBodyAsync(reserved, executionToken);
             }, token);
 
             return true;
@@ -146,10 +112,50 @@ public class QueueManager
         }
     }
 
-    static async Task CompleteTicketAsync(FleetCapacityReservationService capacity, DeploymentQueueTicket ticket,
-        Guid nodeId, CancellationToken token)
+    async Task ExecuteReservedTicketBodyAsync(ReservedQueueTicket reserved, CancellationToken token)
     {
-        await capacity.ConfirmAsync(nodeId, ticket.DockerSlots, ticket.VmSlots, token);
+        using var scope = _scopeFactory.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var capacity = scope.ServiceProvider.GetRequiredService<FleetCapacityReservationService>();
+        var executor = scope.ServiceProvider.GetRequiredService<DeploymentExecutionService>();
+        var ticket = await context.DeploymentQueueTickets
+            .Include(t => t.DeploymentTarget)
+            .FirstOrDefaultAsync(t => t.Id == reserved.TicketId, token);
+
+        if (ticket is null)
+        {
+            await ReleaseReservedTicketCapacityAsync(context, capacity, reserved, token);
+            _logger.LogWarning("Reserved deployment queue ticket {TicketId} disappeared before execution.",
+                reserved.TicketId);
+            return;
+        }
+
+        if (ticket.Status != DeploymentQueueTicketStatus.Creating)
+            return;
+
+        if (!await IsTicketStillDeployableAsync(context, ticket, token))
+        {
+            await ReleaseReservedTicketCapacityAsync(context, capacity, reserved, token);
+            ticket.Status = DeploymentQueueTicketStatus.Cancelled;
+            ticket.CompletedAt = DateTimeOffset.UtcNow;
+            ticket.ErrorMessage = "Deployment queue ticket is not deployable anymore.";
+            await context.SaveChangesAsync(token);
+            return;
+        }
+
+        var execution = await executor.ExecuteAsync(ticket, token);
+        if (execution.Success)
+            await CompleteTicketAsync(context, capacity, ticket, reserved, token);
+        else
+            await FailTicketAsync(context, capacity, ticket, reserved, execution.ErrorMessage, token);
+
+        await context.SaveChangesAsync(token);
+    }
+
+    static async Task CompleteTicketAsync(AppDbContext context, FleetCapacityReservationService capacity,
+        DeploymentQueueTicket ticket, ReservedQueueTicket reserved, CancellationToken token)
+    {
+        await ConfirmReservedTicketCapacityAsync(context, capacity, ticket, reserved, token);
         ticket.Status = DeploymentQueueTicketStatus.Completed;
         ticket.CompletedAt = DateTimeOffset.UtcNow;
         ticket.ErrorMessage = null;
@@ -162,9 +168,9 @@ public class QueueManager
     }
 
     static async Task FailTicketAsync(AppDbContext context, FleetCapacityReservationService capacity,
-        DeploymentQueueTicket ticket, Guid nodeId, string? errorMessage, CancellationToken token)
+        DeploymentQueueTicket ticket, ReservedQueueTicket reserved, string? errorMessage, CancellationToken token)
     {
-        await capacity.ReleaseAsync(nodeId, ticket.DockerSlots, ticket.VmSlots, token);
+        await ReleaseReservedTicketCapacityAsync(context, capacity, reserved, token);
         ticket.Status = DeploymentQueueTicketStatus.Failed;
         ticket.CompletedAt = DateTimeOffset.UtcNow;
         ticket.ErrorMessage = TrimError(errorMessage);
@@ -186,15 +192,95 @@ public class QueueManager
             .FirstOrDefaultAsync(t => t.Id == reserved.TicketId, token);
         if (ticket is null)
         {
-            await capacity.ReleaseAsync(reserved.NodeId, reserved.DockerSlots, reserved.VmSlots, token);
+            await ReleaseReservedTicketCapacityAsync(context, capacity, reserved, token);
             return;
         }
 
         if (ticket.Status != DeploymentQueueTicketStatus.Creating)
             return;
 
-        await FailTicketAsync(context, capacity, ticket, reserved.NodeId, ex.Message, token);
+        await FailTicketAsync(context, capacity, ticket, reserved, ex.Message, token);
         await context.SaveChangesAsync(token);
+    }
+
+    static async Task<FleetCapacityReservationResult> ReserveTicketCapacityAsync(AppDbContext context,
+        FleetCapacityReservationService capacity, DeploymentQueueTicket ticket, CancellationToken token)
+    {
+        if (ticket.Kind == DeploymentQueueKind.TeamLabRuntime && ticket.TeamLabRuntimeId is { } runtimeId)
+        {
+            var shardSlots = await LoadTeamLabShardSlotsAsync(context, runtimeId,
+                new TeamLabAssetSlotCount(ticket.DockerSlots, ticket.VmSlots), token);
+            if (shardSlots.Count == 0)
+                return FleetCapacityReservationResult.Failed("TeamLab runtime has no planned shard capacity.");
+
+            var reservation = await capacity.TryReserveBatchAsync(
+                shardSlots.Select(slot => new FleetCapacityBatchItem(slot.WorkerNodeId, slot.DockerSlots,
+                    slot.VmSlots)).ToArray(),
+                requireTeamLab: true,
+                token);
+            if (!reservation.Success)
+                return FleetCapacityReservationResult.Failed(reservation.Message);
+
+            var primaryNodeId = await ResolvePreferredNodeIdAsync(context, ticket, token);
+            return reservation.Reservations.FirstOrDefault(r => r.NodeId == primaryNodeId) ??
+                   reservation.Reservations.First();
+        }
+
+        return await capacity.TryReserveAsync(new FleetCapacityRequest(
+            GetRequiredCapability(ticket),
+            ticket.DockerSlots,
+            ticket.VmSlots,
+            PreferredNodeId: await ResolvePreferredNodeIdAsync(context, ticket, token),
+            RequireTeamLab: false), token);
+    }
+
+    static async Task ConfirmReservedTicketCapacityAsync(AppDbContext context,
+        FleetCapacityReservationService capacity, DeploymentQueueTicket ticket, ReservedQueueTicket reserved,
+        CancellationToken token)
+    {
+        if (reserved.IsTeamLabRuntime && ticket.TeamLabRuntimeId is { } runtimeId)
+        {
+            var shardSlots = await LoadTeamLabShardSlotsAsync(context, runtimeId,
+                new TeamLabAssetSlotCount(ticket.DockerSlots, ticket.VmSlots), token);
+            foreach (var slot in shardSlots)
+                await capacity.ConfirmAsync(slot.WorkerNodeId, slot.DockerSlots, slot.VmSlots, token);
+            return;
+        }
+
+        await capacity.ConfirmAsync(reserved.NodeId, reserved.DockerSlots, reserved.VmSlots, token);
+    }
+
+    static async Task ReleaseReservedTicketCapacityAsync(AppDbContext context, FleetCapacityReservationService capacity,
+        ReservedQueueTicket reserved, CancellationToken token)
+    {
+        if (reserved.IsTeamLabRuntime)
+        {
+            var ticket = await context.DeploymentQueueTickets
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == reserved.TicketId, token);
+            if (ticket?.TeamLabRuntimeId is { } runtimeId)
+            {
+                var shardSlots = await LoadTeamLabShardSlotsAsync(context, runtimeId,
+                    new TeamLabAssetSlotCount(ticket.DockerSlots, ticket.VmSlots), token);
+                foreach (var slot in shardSlots)
+                    await capacity.ReleaseAsync(slot.WorkerNodeId, slot.DockerSlots, slot.VmSlots, token);
+                return;
+            }
+        }
+
+        await capacity.ReleaseAsync(reserved.NodeId, reserved.DockerSlots, reserved.VmSlots, token);
+    }
+
+    static async Task<IReadOnlyList<TeamLabShardSlotCount>> LoadTeamLabShardSlotsAsync(AppDbContext context,
+        int runtimeId, TeamLabAssetSlotCount fallbackSlots, CancellationToken token)
+    {
+        var runtime = await context.TeamLabRuntimes
+            .AsNoTracking()
+            .Include(runtime => runtime.Shards)
+                .ThenInclude(shard => shard.Assets)
+            .SingleOrDefaultAsync(runtime => runtime.Id == runtimeId, token);
+
+        return runtime is null ? [] : TeamLabDeploymentService.CountShardSlots(runtime, fallbackSlots);
     }
 
     static NodeCapability GetRequiredCapability(DeploymentQueueTicket ticket)
@@ -249,5 +335,6 @@ public class QueueManager
         return message.Length <= 1024 ? message : message[..1024];
     }
 
-    sealed record ReservedQueueTicket(Guid TicketId, Guid NodeId, int DockerSlots, int VmSlots);
+    sealed record ReservedQueueTicket(Guid TicketId, Guid NodeId, int DockerSlots, int VmSlots,
+        bool IsTeamLabRuntime = false);
 }

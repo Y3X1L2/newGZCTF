@@ -80,6 +80,17 @@ public class TeamLabPenetrationUxContractTests
     }
 
     [Fact]
+    public void TeamLab_RuntimeRouteCompilation_DoesNotRequireLegacyDualHomedRouterAsset()
+    {
+        var content = File.ReadAllText(ResolveRepoPath("src/GZCTF/Services/PenetrationService.cs"));
+
+        Assert.Contains("TeamLab Fabric runtime route", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("FindRouteNode(config, interfacesByNode, pair.Source.Network.Id, pair.Target.Network.Id)", content,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("缺少同时连接两个网段且允许路由", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TeamLab_AdminEditor_DoesNotOfferHintOnlyRouteMode()
     {
         var content = File.ReadAllText(ResolveRepoPath("src/GZCTF/ClientApp/src/pages/admin/games/[id]/Penetration.tsx"));

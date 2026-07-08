@@ -31,6 +31,8 @@ public class HeartbeatWorker : BackgroundService
                 var memLoad = GetMemoryLoad();
                 var containers = await docker.GetContainerCountAsync(token);
                 var vms = await kvm.GetVmCountAsync(token);
+                var teamLab = scope.ServiceProvider.GetRequiredService<TeamLabNetworkService>();
+                var teamLabStatus = await teamLab.GetStatusAsync(token);
                 await kvm.RestoreRdpProxiesAsync(token);
 
                 var payload = new
@@ -39,7 +41,12 @@ public class HeartbeatWorker : BackgroundService
                     MemoryLoad = memLoad,
                     CurrentContainers = containers,
                     CurrentVms = vms,
-                    UsedPorts = 0
+                    UsedPorts = 0,
+                    AgentVersion = teamLabStatus.AgentVersion,
+                    TeamLabProtocolVersion = teamLabStatus.ProtocolVersion,
+                    TeamLabFabricIp = (string?)null,
+                    TeamLabFabricStatus = 0,
+                    TeamLabCapabilities = teamLabStatus.Capabilities
                 };
 
                 var url = $"{_config.ServerUrl}/api/v1/nodes/{_config.NodeId}/heartbeat";

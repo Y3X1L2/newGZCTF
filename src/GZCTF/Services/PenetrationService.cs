@@ -813,26 +813,43 @@ public class PenetrationService(
             .OrderBy(e => e.Team.Name)
             .ToArrayAsync(token);
 
-        return rows.Select(e => new PenetrationTeamEnvironmentModel
+        var teamLabRuntimes = await context.TeamLabRuntimes.AsNoTracking()
+            .Where(r => r.GameId == gameId && r.Status != TeamLabRuntimeStatus.Destroyed)
+            .Include(r => r.WorkerNode)
+            .Include(r => r.Shards).ThenInclude(s => s.WorkerNode)
+            .Include(r => r.Shards).ThenInclude(s => s.Networks)
+            .Include(r => r.Shards).ThenInclude(s => s.Assets)
+            .Include(r => r.Networks).ThenInclude(n => n.WorkerNode)
+            .Include(r => r.Assets).ThenInclude(a => a.WorkerNode)
+            .Include(r => r.TrafficCaptureJobs).ThenInclude(job => job.WorkerNode)
+            .Include(r => r.TrafficFlows).ThenInclude(flow => flow.WorkerNode)
+            .ToDictionaryAsync(r => r.TeamId, token);
+
+        return rows.Select(e =>
         {
-            EnvironmentId = e.Id,
-            TeamId = e.TeamId,
-            TeamName = e.Team.Name,
-            WorkerNodeId = e.NodeId,
-            WorkerNodeName = e.Node == null ? null : e.Node.Name,
-            NetworkPrefix = e.NetworkPrefix,
-            TeamIndex = e.TeamIndex,
-            PublishedVersion = e.PublishedVersion,
-            Status = e.Status,
-            ResetCount = e.ResetCount,
-            RuntimeNodeCount = e.RuntimeNodes.Count,
-            CreatedAt = e.CreatedAt,
-            UpdatedAt = e.UpdatedAt,
-            LastError = e.LastError,
-            CleanupRetryCount = e.CleanupRetryCount,
-            NextCleanupAt = e.NextCleanupAt,
-            LastCleanupAttemptAt = e.LastCleanupAttemptAt,
-            RuntimeNodes = e.RuntimeNodes
+            teamLabRuntimes.TryGetValue(e.TeamId, out var teamLabRuntime);
+            return new PenetrationTeamEnvironmentModel
+            {
+                EnvironmentId = e.Id,
+                TeamId = e.TeamId,
+                TeamName = e.Team.Name,
+                WorkerNodeId = teamLabRuntime?.WorkerNodeId ?? e.NodeId,
+                WorkerNodeName = teamLabRuntime?.WorkerNode?.Name ?? e.Node?.Name,
+                NetworkPrefix = string.IsNullOrWhiteSpace(teamLabRuntime?.NetworkPrefix)
+                    ? e.NetworkPrefix
+                    : teamLabRuntime.NetworkPrefix,
+                TeamIndex = e.TeamIndex,
+                PublishedVersion = teamLabRuntime?.PublishedVersion ?? e.PublishedVersion,
+                Status = e.Status,
+                ResetCount = e.ResetCount,
+                RuntimeNodeCount = e.RuntimeNodes.Count,
+                CreatedAt = e.CreatedAt,
+                UpdatedAt = teamLabRuntime?.UpdatedAt ?? e.UpdatedAt,
+                LastError = teamLabRuntime?.LastError ?? e.LastError,
+                CleanupRetryCount = e.CleanupRetryCount,
+                NextCleanupAt = e.NextCleanupAt,
+                LastCleanupAttemptAt = e.LastCleanupAttemptAt,
+                RuntimeNodes = e.RuntimeNodes
                 .OrderBy(r => r.TopologyNode.OrderIndex)
                 .Select(r => new PenetrationRuntimeNodeModel
                 {
@@ -853,7 +870,7 @@ public class PenetrationService(
                     PublicHost = null,
                     InterfaceSummary = r.InterfaceSummary
                 }).ToList(),
-            RuntimeRoutes = e.RuntimeRoutes
+                RuntimeRoutes = e.RuntimeRoutes
                 .OrderBy(r => r.Id)
                 .Select(r => new PenetrationRuntimeRouteModel
                 {
@@ -875,7 +892,7 @@ public class PenetrationService(
                     CreatedAt = r.CreatedAt,
                     AppliedAt = r.AppliedAt
                 }).ToList(),
-            Events = e.DeploymentEvents
+                Events = e.DeploymentEvents
                 .OrderByDescending(ev => ev.CreatedAt)
                 .Take(20)
                 .Select(ev => new PenetrationDeploymentEventModel
@@ -891,7 +908,108 @@ public class PenetrationService(
                     Detail = ev.Detail,
                     UserId = ev.UserId,
                     CreatedAt = ev.CreatedAt
-                }).ToList()
+                }).ToList(),
+                TeamLabShards = teamLabRuntime?.Shards
+                .OrderBy(s => s.WorkerNode?.Name ?? string.Empty)
+                .ThenBy(s => s.Id)
+                .Select(s => new TeamLabRuntimeShardSummaryModel
+                {
+                    Id = s.Id,
+                    WorkerNodeId = s.WorkerNodeId,
+                    WorkerNodeName = s.WorkerNode?.Name ?? string.Empty,
+                    Status = s.Status,
+                    RouteVersion = s.RouteVersion,
+                    NetworkKeys = s.Networks
+                        .Select(network => network.TopologyKey)
+                        .OrderBy(key => key, StringComparer.Ordinal)
+                        .ToArray(),
+                    AssetKeys = s.Assets
+                        .Select(asset => asset.TopologyKey)
+                        .OrderBy(key => key, StringComparer.Ordinal)
+                        .ToArray(),
+                    LastError = s.LastError
+                }).ToList() ?? [],
+                TeamLabNetworks = teamLabRuntime?.Networks
+                .OrderBy(network => network.Name)
+                .Select(network => new TeamLabRuntimeNetworkSummaryModel
+                {
+                    Id = network.Id,
+                    ShardId = network.ShardId,
+                    WorkerNodeId = network.WorkerNodeId,
+                    WorkerNodeName = network.WorkerNode?.Name ?? string.Empty,
+                    TopologyKey = network.TopologyKey,
+                    Name = network.Name,
+                    Cidr = network.Cidr,
+                    GatewayIp = network.GatewayIp,
+                    BridgeName = network.BridgeName
+                }).ToList() ?? [],
+                TeamLabAssets = teamLabRuntime?.Assets
+                .OrderBy(asset => asset.Name)
+                .Select(asset => new TeamLabRuntimeAssetSummaryModel
+                {
+                    Id = asset.Id,
+                    ShardId = asset.ShardId,
+                    WorkerNodeId = asset.WorkerNodeId,
+                    WorkerNodeName = asset.WorkerNode?.Name ?? string.Empty,
+                    Kind = asset.Kind,
+                    TopologyKey = asset.TopologyKey,
+                    Name = asset.Name,
+                    RuntimeResourceId = asset.RuntimeResourceId,
+                    SourceTemplateId = asset.SourceTemplateId,
+                    Image = asset.Image,
+                    NetworkKey = asset.NetworkKey,
+                    IpAddress = asset.IpAddress,
+                    MacAddress = asset.MacAddress,
+                    InterfaceSummaryJson = asset.InterfaceSummaryJson,
+                    Status = asset.Status,
+                    LastError = asset.LastError
+                }).ToList() ?? [],
+                TeamLabCaptureJobs = teamLabRuntime?.TrafficCaptureJobs
+                .OrderByDescending(job => job.CreatedAt)
+                .Take(20)
+                .Select(job => new TeamLabTrafficCaptureJobSummaryModel
+                {
+                    Id = job.Id,
+                    RuntimeId = job.RuntimeId,
+                    ShardId = job.ShardId,
+                    NetworkId = job.NetworkId,
+                    WorkerNodeId = job.WorkerNodeId,
+                    WorkerNodeName = job.WorkerNode?.Name ?? string.Empty,
+                    Status = job.Status,
+                    Scope = job.Scope,
+                    FilePath = job.FilePath,
+                    MaxBytes = job.MaxBytes,
+                    MaxSeconds = job.MaxSeconds,
+                    CapturedBytes = job.CapturedBytes,
+                    LastError = job.LastError,
+                    CreatedAt = job.CreatedAt,
+                    StartedAt = job.StartedAt,
+                    CompletedAt = job.CompletedAt,
+                    ExpiresAt = job.ExpiresAt
+                }).ToList() ?? [],
+                TeamLabTrafficFlows = teamLabRuntime?.TrafficFlows
+                .OrderByDescending(flow => flow.CapturedAt)
+                .Take(50)
+                .Select(flow =>
+                {
+                    var network = teamLabRuntime.Networks.FirstOrDefault(network => network.Id == flow.NetworkId);
+                    return new TeamLabTrafficFlowSummaryModel
+                    {
+                        ShardId = flow.ShardId,
+                        NetworkId = flow.NetworkId,
+                        WorkerNodeId = flow.WorkerNodeId,
+                        WorkerNodeName = flow.WorkerNode?.Name ?? string.Empty,
+                        NetworkName = network?.Name ?? string.Empty,
+                        SourceIp = flow.SourceIp,
+                        SourcePort = flow.SourcePort,
+                        DestinationIp = flow.DestinationIp,
+                        DestinationPort = flow.DestinationPort,
+                        Protocol = flow.Protocol,
+                        Bytes = flow.Bytes,
+                        CapturedAt = flow.CapturedAt
+                    };
+                }).ToList() ?? []
+            };
         }).ToArray();
     }
 
@@ -2317,49 +2435,33 @@ public class PenetrationService(
                     continue;
                 }
 
-                var routeNode = FindRouteNode(config, interfacesByNode, pair.Source.Network.Id, pair.Target.Network.Id);
-                if (routeNode is null)
+                var fabricSourceEndpoints = ResolveEndpointNodes(edge.SourceKind, edge.SourceId, edge.SourceNodeId,
+                    interfacesByNetwork.GetValueOrDefault(pair.Source.Network.Id) ?? [], -1);
+                var fabricTargetEndpoints = ResolveEndpointNodes(edge.TargetKind, edge.TargetId, edge.TargetNodeId,
+                    interfacesByNetwork.GetValueOrDefault(pair.Target.Network.Id) ?? [], -1);
+
+                if (fabricSourceEndpoints.Count == 0 || fabricTargetEndpoints.Count == 0)
                 {
                     plans.Add(RuntimeRoutePlan.Unsupported(edge, label,
-                        $"无法连接“{pair.Source.Network.Name}”到“{pair.Target.Network.Name}”：缺少同时连接两个网段且允许路由的跳板/防火墙节点。"));
+                        $"TeamLab Fabric route cannot connect {pair.Source.Network.Name} to {pair.Target.Network.Name}: source or target network has no runtime endpoint."));
                     continue;
                 }
 
-                if (!interfacesByNode.TryGetValue(routeNode.Id, out var routeInterfaces))
-                {
-                    plans.Add(RuntimeRoutePlan.Unsupported(edge, label, $"路由节点“{routeNode.Name}”没有运行期网卡。"));
-                    continue;
-                }
-
-                var sourceRouteInterface = SelectRouteInterface(routeInterfaces, pair.Source.Network.Id);
-                var targetRouteInterface = SelectRouteInterface(routeInterfaces, pair.Target.Network.Id);
-                var sourceEndpointNodes = ResolveEndpointNodes(edge.SourceKind, edge.SourceId, edge.SourceNodeId,
-                    interfacesByNetwork.GetValueOrDefault(pair.Source.Network.Id) ?? [], routeNode.Id);
-                var targetEndpointNodes = ResolveEndpointNodes(edge.TargetKind, edge.TargetId, edge.TargetNodeId,
-                    interfacesByNetwork.GetValueOrDefault(pair.Target.Network.Id) ?? [], routeNode.Id);
-
-                if (sourceEndpointNodes.Count == 0 || targetEndpointNodes.Count == 0)
-                {
-                    plans.Add(RuntimeRoutePlan.Unsupported(edge, label,
-                        $"无法连接“{pair.Source.Network.Name}”到“{pair.Target.Network.Name}”：源或目标网段缺少除路由节点以外的可探测端点。"));
-                    continue;
-                }
-
-                var commandSummary =
-                    $"源端点: ip route replace {targetRouteInterface.Cidr} via {sourceRouteInterface.IpAddress}; 路由节点: sysctl net.ipv4.ip_forward=1; 目标端点: ip route replace {sourceRouteInterface.Cidr} via {targetRouteInterface.IpAddress}";
                 plans.Add(new RuntimeRoutePlan(
                     edge,
                     label,
                     PenetrationRouteStatus.RoutePlanned,
-                    routeNode,
+                    null,
                     pair.Source,
                     pair.Target,
-                    sourceRouteInterface,
-                    targetRouteInterface,
-                    sourceEndpointNodes,
-                    targetEndpointNodes,
-                    commandSummary,
-                    $"将通过“{routeNode.Name}”启用“{pair.Source.Network.Name}”与“{pair.Target.Network.Name}”的网络级可达性；首版会写入反向路由保证回包，协议/端口仅作为说明，不做运行期阻断。"));
+                    null,
+                    null,
+                    fabricSourceEndpoints,
+                    fabricTargetEndpoints,
+                    $"TeamLab Fabric runtime route: allow {pair.Source.Cidr} <-> {pair.Target.Cidr}; endpoint containers receive static routes during attach.",
+                    $"TeamLab Fabric will allow network-level reachability between {pair.Source.Network.Name} and {pair.Target.Network.Name}; protocol and port are descriptive only."));
+                continue;
+
             }
         }
 
@@ -3257,11 +3359,8 @@ public class PenetrationService(
 
         public bool IsExecutable =>
             Status == PenetrationRouteStatus.RoutePlanned &&
-            RouteNode is not null &&
             SourceInterface is not null &&
-            TargetInterface is not null &&
-            SourceRouteInterface is not null &&
-            TargetRouteInterface is not null;
+            TargetInterface is not null;
 
         public string? PairKey =>
             SourceInterface is null || TargetInterface is null

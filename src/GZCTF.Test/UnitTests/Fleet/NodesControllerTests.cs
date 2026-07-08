@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -216,11 +216,33 @@ public class NodesControllerTests
         Assert.Contains("install_docker", script);
         Assert.Contains("docker info", script);
         Assert.Contains("install_kvm", script);
-        Assert.Contains("qemu-kvm", script);
+        Assert.Contains("qemu-system-x86", script);
+        Assert.DoesNotContain("apt)\n      install_pkgs qemu-kvm", script);
         Assert.Contains("libvirt", script);
+        Assert.Contains("install_teamlab_network_tools", script);
+        Assert.Contains("wireguard-tools", script);
+        Assert.Contains("nftables", script);
+        Assert.Contains("tcpdump", script);
+        Assert.Contains("genisoimage", script);
+        Assert.Contains("xorriso", script);
+        Assert.Contains("cloud-image-utils", script);
+        Assert.Contains("KVM hardware: unavailable", script);
         Assert.Contains("install_dotnet_runtime", script);
         Assert.Contains("dotnet-install.sh", script);
         Assert.Contains("self-contained", script);
+    }
+
+    [Fact]
+    public void BuildKvmCapabilityCheckScript_RequiresHardwareVirtualizationAndLibvirt()
+    {
+        var script = NodeDeployService.BuildKvmCapabilityCheckScript("sudo -n");
+
+        Assert.Contains("test -e /dev/kvm", script);
+        Assert.Contains("vmx|svm", script);
+        Assert.Contains("sudo -n virsh -c qemu:///system list", script);
+        Assert.Contains("NO_KVM_HARDWARE", script);
+        Assert.Contains("NO_KVM_LIBVIRT", script);
+        Assert.Contains("KVM_OK", script);
     }
 
     [Fact]
@@ -261,6 +283,24 @@ public class NodesControllerTests
         Assert.Contains("\"TeamLab\"", json);
         Assert.Contains("\"Enable\": true", json);
         Assert.Contains("\"DryRun\": false", json);
+    }
+
+    [Fact]
+    public void BuildAgentConfigJson_DefaultsToExecutableTeamLabMutation()
+    {
+        var node = new WorkerNode
+        {
+            Id = Guid.Parse("2e361192-0b30-4244-ad7c-fa7947ea8f41"),
+            AuthToken = "token",
+            AgentPort = 5101
+        };
+
+        var json = NodeDeployService.BuildAgentConfigJson("http://server:18082/", node);
+
+        using var doc = JsonDocument.Parse(json);
+        var teamLab = doc.RootElement.GetProperty("TeamLab");
+        Assert.True(teamLab.GetProperty("Enable").GetBoolean());
+        Assert.False(teamLab.GetProperty("DryRun").GetBoolean());
     }
 
     [Fact]
@@ -589,6 +629,78 @@ public class NodesControllerTests
         Assert.Equal(1, reloaded.CurrentVms);
         Assert.Equal(0, reloaded.ReservedContainers);
         Assert.Equal(0, reloaded.ReservedVms);
+    }
+
+    [Fact]
+    public async Task Heartbeat_PersistsTeamLabAgentVersionsAndCapabilities()
+    {
+        await using var context = CreateContext();
+        var node = new WorkerNode
+        {
+            Id = Guid.Parse("dddddddd-eeee-ffff-aaaa-bbbbbbbbbbbb"),
+            Name = "remote-node",
+            HostAddress = "10.24.0.30",
+            AuthToken = "node-token",
+            Status = NodeStatus.Online,
+            Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+            IsLocal = false,
+            TeamLabNetworkEnabled = true
+        };
+        context.WorkerNodes.Add(node);
+        await context.SaveChangesAsync();
+        var services = new ServiceCollection()
+            .AddSingleton(context)
+            .AddLogging()
+            .AddSingleton<IDistributedLockService>(
+                _ => new LocalSemaphoreLock(NullLogger<LocalSemaphoreLock>.Instance))
+            .AddScoped<FleetCapacityReservationService>()
+            .BuildServiceProvider();
+        var controller = new NodesController(
+            new InMemoryNodeRepository(context),
+            context,
+            services.GetRequiredService<IServiceScopeFactory>(),
+            Options.Create(new ContainerProvider()),
+            new PortAllocationService(new ConfigurationBuilder().Build(),
+                Options.Create(new ContainerProvider()),
+                NullLogger<PortAllocationService>.Instance),
+            NullLogger<NodesController>.Instance);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext()
+        };
+        controller.HttpContext.RequestServices = services;
+        controller.Request.Headers.Authorization = "Bearer node-token";
+
+        var result = await controller.Heartbeat(node.Id, new HeartbeatRequest
+        {
+            CpuLoad = 0.1f,
+            MemoryLoad = 0.2f,
+            CurrentContainers = 1,
+            CurrentVms = 0,
+            UsedPorts = 3,
+            AgentVersion = "1.8.3-test",
+            TeamLabProtocolVersion = 3,
+            TeamLabFabricIp = "10.251.0.3",
+            TeamLabFabricStatus = TeamLabFabricStatus.Healthy,
+            TeamLabCapabilities = new TeamLabNodeCapabilityReport
+            {
+                Docker = true,
+                Kvm = true,
+                WireGuard = true,
+                Iptables = true,
+                Nftables = true,
+                Tcpdump = true,
+                Dumpcap = false
+            }
+        });
+
+        Assert.IsType<OkResult>(result);
+        var reloaded = await context.WorkerNodes.SingleAsync(n => n.Id == node.Id);
+        Assert.Equal("1.8.3-test", reloaded.TeamLabAgentVersion);
+        Assert.Equal(3, reloaded.TeamLabProtocolVersion);
+        Assert.Equal("10.251.0.3", reloaded.TeamLabFabricIp);
+        Assert.Equal(TeamLabFabricStatus.Healthy, reloaded.TeamLabFabricStatus);
+        Assert.Contains("\"tcpdump\":true", reloaded.TeamLabCapabilitiesJson, StringComparison.OrdinalIgnoreCase);
     }
 
     static AppDbContext CreateContext()

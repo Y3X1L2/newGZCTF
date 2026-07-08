@@ -53,12 +53,53 @@ public class WeightedScheduler
     internal static bool CanHostTeamLab(WorkerNode node) =>
         GetTeamLabUnschedulableReason(node) is null;
 
+    internal static bool CanHostTeamLabFabric(WorkerNode node) =>
+        GetTeamLabFabricUnschedulableReason(node) is null;
+
+    internal static bool CanHostTeamLabDocker(WorkerNode node) =>
+        GetTeamLabAssetHostUnschedulableReason(node, requiresDocker: true, requiresVm: false) is null;
+
+    internal static bool CanHostTeamLabVm(WorkerNode node) =>
+        GetTeamLabAssetHostUnschedulableReason(node, requiresDocker: false, requiresVm: true) is null;
+
     internal static string? GetTeamLabUnschedulableReason(WorkerNode node)
     {
         var baseReason = GetUnschedulableReason(node, NodeCapability.Docker | NodeCapability.Kvm);
         if (baseReason is not null)
             return baseReason;
 
+        return GetTeamLabDataPlaneUnschedulableReason(node);
+    }
+
+    internal static string? GetTeamLabAssetHostUnschedulableReason(
+        WorkerNode node,
+        bool requiresDocker,
+        bool requiresVm)
+    {
+        var required = NodeCapability.None;
+        if (requiresDocker)
+            required |= NodeCapability.Docker;
+        if (requiresVm)
+            required |= NodeCapability.Kvm;
+
+        var baseReason = GetUnschedulableReason(node, required);
+        if (baseReason is not null)
+            return baseReason;
+
+        return GetTeamLabDataPlaneUnschedulableReason(node);
+    }
+
+    internal static string? GetTeamLabFabricUnschedulableReason(WorkerNode node)
+    {
+        var baseReason = GetUnschedulableReason(node, NodeCapability.None);
+        if (baseReason is not null)
+            return baseReason;
+
+        return GetTeamLabDataPlaneUnschedulableReason(node);
+    }
+
+    static string? GetTeamLabDataPlaneUnschedulableReason(WorkerNode node)
+    {
         if (!node.TeamLabNetworkEnabled)
             return "TeamLab network is not enabled";
 
@@ -70,6 +111,12 @@ public class WeightedScheduler
 
         if (!IsValidIpv4Address(node.TeamLabTunnelIp.Trim()))
             return "TeamLab tunnel IP is invalid";
+
+        if (node.TeamLabProtocolVersion < 3)
+            return "TeamLab Agent protocol is incompatible; TeamLab Fabric namespace uplink requires protocol v3";
+
+        if (string.IsNullOrWhiteSpace(node.TeamLabAgentVersion))
+            return "TeamLab Agent version is not reported";
 
         return null;
     }

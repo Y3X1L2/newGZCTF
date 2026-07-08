@@ -45,4 +45,59 @@ public class TeamLabController(TeamLabNetworkService service) : ControllerBase
     public async Task<IActionResult> ProbeDhcpDns([FromBody] TeamLabDhcpDnsProbeRequest request,
         CancellationToken token) =>
         Ok(await service.ProbeDhcpDnsAsync(request, token));
+
+    [HttpPost("fabric/apply")]
+    public async Task<IActionResult> ApplyFabric([FromBody] TeamLabFabricApplyRequest request,
+        CancellationToken token) =>
+        Ok(await service.ApplyFabricAsync(request, token));
+
+    [HttpPost("capture/start")]
+    public async Task<IActionResult> StartCapture([FromBody] TeamLabCaptureStartRequest request,
+        CancellationToken token) =>
+        Ok(await service.StartCaptureAsync(request, token));
+
+    [HttpPost("capture/stop")]
+    public async Task<IActionResult> StopCapture([FromBody] TeamLabCaptureStopRequest request,
+        CancellationToken token) =>
+        Ok(await service.StopCaptureAsync(request, token));
+
+    [HttpPost("capture/status")]
+    public async Task<IActionResult> CaptureStatus([FromBody] TeamLabCaptureStatusRequest request,
+        CancellationToken token) =>
+        Ok(await service.GetCaptureStatusAsync(request));
+
+    [HttpGet("capture/{runtimeId:int}/{jobId:int}/download")]
+    public IActionResult DownloadCapture(int runtimeId, int jobId)
+    {
+        string path;
+        try
+        {
+            path = TeamLabNetworkService.ResolveCaptureFilePath(runtimeId, jobId);
+        }
+        catch (ArgumentOutOfRangeException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
+        if (!System.IO.File.Exists(path))
+            return NotFound(new { message = "TeamLab capture file was not found." });
+
+        return PhysicalFile(path, "application/vnd.tcpdump.pcap", $"teamlab-capture-{runtimeId}-{jobId}.pcap",
+            enableRangeProcessing: true);
+    }
+
+    [HttpPost("flows/start")]
+    public async Task<IActionResult> StartFlowMetadata([FromBody] TeamLabFlowStartRequest request,
+        CancellationToken token) =>
+        Ok(await service.StartFlowMetadataAsync(request, token));
+
+    [HttpPost("flows/stop")]
+    public async Task<IActionResult> StopFlowMetadata([FromBody] TeamLabFlowStopRequest request,
+        CancellationToken token) =>
+        Ok(await service.StopFlowMetadataAsync(request, token));
+
+    [HttpPost("flows/snapshot")]
+    public async Task<IActionResult> FlowMetadataSnapshot([FromBody] TeamLabFlowSnapshotRequest request,
+        CancellationToken token) =>
+        Ok(await service.GetFlowMetadataSnapshotAsync(request, token));
 }

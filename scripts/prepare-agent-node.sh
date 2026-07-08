@@ -177,7 +177,11 @@ install_kvm() {
       virtinst \
       qemu-system-x86 \
       qemu-utils \
-      bridge-utils
+      bridge-utils \
+      dnsmasq-base \
+      genisoimage \
+      xorriso \
+      cloud-image-utils
   fi
 
   if [[ "$check_only" -eq 0 ]]; then
@@ -193,6 +197,11 @@ install_kvm() {
     mkdir -p "$images_dir"
     chmod 755 "$(dirname "$images_dir")" "$images_dir"
   fi
+}
+
+install_teamlab_network_tools() {
+  log "Installing TeamLab VPN/network tools"
+  apt_install wireguard-tools nftables iptables tcpdump dnsmasq-base
 }
 
 print_status() {
@@ -226,6 +235,20 @@ print_status() {
     echo "KVM device: missing"
   fi
 
+  if grep -Eq '(^flags|^Features).* (vmx|svm)( |$)' /proc/cpuinfo 2>/dev/null; then
+    echo "CPU virtualization flag: present"
+  else
+    echo "CPU virtualization flag: missing"
+  fi
+
+  command -v wg >/dev/null 2>&1 && echo "WireGuard: $(wg --version 2>/dev/null || echo installed)" || echo "WireGuard: missing"
+  command -v tcpdump >/dev/null 2>&1 && echo "tcpdump: $(tcpdump --version 2>/dev/null | head -n 1 || echo installed)" || echo "tcpdump: missing"
+  if command -v genisoimage >/dev/null 2>&1 || command -v xorriso >/dev/null 2>&1; then
+    echo "cloud-init seed ISO tool: present"
+  else
+    echo "cloud-init seed ISO tool: missing"
+  fi
+
   if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qi active; then
     warn "ufw is active. Allow the agent port and challenge public ports as needed."
   fi
@@ -238,6 +261,7 @@ main() {
   if [[ "$need_docker" -eq 1 ]]; then install_docker; fi
   if [[ "$need_dotnet" -eq 1 ]]; then install_dotnet; fi
   if [[ "$need_kvm" -eq 1 ]]; then install_kvm; fi
+  install_teamlab_network_tools
 
   print_status
   log "Node prerequisites are ready. Add this server in the GZCTF admin node page."

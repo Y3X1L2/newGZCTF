@@ -5,6 +5,7 @@ using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System.Text.Json.Serialization;
+using System.Text.Json;
 
 namespace GZCTF.Services.TeamLab;
 
@@ -24,6 +25,32 @@ public sealed record TeamLabRuntimeUdpMappingModel(
                 mapping.WorkerWireGuardPort, mapping.RuleVersion, mapping.IsSynced, mapping.LastSyncError);
 }
 
+public sealed record TeamLabRuntimeShardModel(
+    int Id,
+    Guid WorkerNodeId,
+    string WorkerNodeName,
+    TeamLabRuntimeStatus Status,
+    int RouteVersion,
+    string[] NetworkKeys,
+    string[] AssetKeys,
+    string? LastError)
+{
+    public static TeamLabRuntimeShardModel FromShard(TeamLabRuntimeShard shard) =>
+        new(
+            shard.Id,
+            shard.WorkerNodeId,
+            shard.WorkerNode?.Name ?? string.Empty,
+            shard.Status,
+            shard.RouteVersion,
+            shard.Networks.Select(network => network.TopologyKey)
+                .OrderBy(key => key, StringComparer.Ordinal)
+                .ToArray(),
+            shard.Assets.Select(asset => asset.TopologyKey)
+                .OrderBy(key => key, StringComparer.Ordinal)
+                .ToArray(),
+            shard.LastError);
+}
+
 public sealed record TeamLabRuntimeModel(
     int Id,
     int GameId,
@@ -36,7 +63,8 @@ public sealed record TeamLabRuntimeModel(
     string? LastError,
     DateTimeOffset CreatedAt,
     DateTimeOffset? UpdatedAt,
-    TeamLabRuntimeUdpMappingModel? PublicUdpMapping)
+    TeamLabRuntimeUdpMappingModel? PublicUdpMapping,
+    IReadOnlyList<TeamLabRuntimeShardModel> Shards)
 {
     public static TeamLabRuntimeModel? FromRuntime(TeamLabRuntime? runtime) =>
         runtime is null
@@ -44,7 +72,8 @@ public sealed record TeamLabRuntimeModel(
             : new TeamLabRuntimeModel(runtime.Id, runtime.GameId, runtime.TeamId, runtime.PublishedVersion,
                 runtime.WorkerNodeId, runtime.NetworkPrefix, runtime.Status, runtime.IsOpenToPlayers,
                 runtime.LastError, runtime.CreatedAt, runtime.UpdatedAt,
-                TeamLabRuntimeUdpMappingModel.FromMapping(runtime.PublicUdpMapping));
+                TeamLabRuntimeUdpMappingModel.FromMapping(runtime.PublicUdpMapping),
+                runtime.Shards.Select(TeamLabRuntimeShardModel.FromShard).ToArray());
 }
 
 public sealed record TeamLabPlanResult(bool Success, string Message, [property: JsonIgnore] TeamLabRuntime? Runtime)
@@ -94,7 +123,10 @@ public class TeamLabPlanService(
         runtime.PublishedVersion == publishedVersion &&
         runtime.WorkerNodeId.HasValue &&
         runtime.PublicUdpMapping is not null &&
-        !string.IsNullOrWhiteSpace(runtime.NetworkPrefix);
+        !string.IsNullOrWhiteSpace(runtime.NetworkPrefix) &&
+        runtime.Shards.Count > 0 &&
+        runtime.Networks.Count > 0 &&
+        runtime.Assets.Count > 0;
 
     public static int? ResolvePublishedVersion(PenetrationConfig? config)
     {
@@ -119,6 +151,9 @@ public class TeamLabPlanService(
 
         var runtime = await context.TeamLabRuntimes
             .Include(r => r.PublicUdpMapping)
+            .Include(r => r.Shards).ThenInclude(s => s.WorkerNode)
+            .Include(r => r.Networks)
+            .Include(r => r.Assets)
             .FirstOrDefaultAsync(r => r.GameId == gameId && r.TeamId == teamId, token);
 
         if (runtime is not null && runtime.Status is TeamLabRuntimeStatus.Running
@@ -144,18 +179,51 @@ public class TeamLabPlanService(
         runtime.PublishedVersion = publishedVersion.Value;
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
 
-        var nodes = await context.WorkerNodes.AsNoTracking().ToListAsync(token);
-        var nodeResult = SelectNode(nodes, runtime.WorkerNodeId);
-        if (!nodeResult.Success || nodeResult.Node is null)
+        var topology = await LoadPublishedTopologyAsync(gameId, publishedVersion.Value, token);
+        if (!topology.Success || topology.Config is null)
         {
             runtime.Status = TeamLabRuntimeStatus.Failed;
-            runtime.LastError = nodeResult.Message;
-            AddEvent(runtime, "plan", TeamLabEventLevel.Error, nodeResult.Message);
+            runtime.LastError = topology.Message;
+            AddEvent(runtime, "plan", TeamLabEventLevel.Error, topology.Message);
             await context.SaveChangesAsync(token);
-            logger.SystemLog($"TeamLab runtime plan failed: game={gameId}, team={teamId}, runtime={runtime.Id}, error={nodeResult.Message}",
+            logger.SystemLog($"TeamLab runtime plan failed: game={gameId}, team={teamId}, runtime={runtime.Id}, error={topology.Message}",
                 TaskStatus.Failed, LogLevel.Warning);
-            return new TeamLabPlanResult(false, nodeResult.Message, runtime);
+            return new TeamLabPlanResult(false, topology.Message, runtime);
         }
+
+        var templates = await context.ImageTemplates.AsNoTracking()
+            .Where(t => topology.Config.Nodes.Select(n => n.ImageTemplateId).Contains(t.Id))
+            .ToDictionaryAsync(t => t.Id, token);
+        var runtimeCidr = AllocateRuntimeCidr(_config.RuntimeNetworkBaseCidr, _config.TeamSubnetPrefixLength, runtime.Id);
+        var assetPlan = TeamLabAssetPlanService.BuildPublishedAssetPlan(topology.Config, runtime.Id, teamIndex: 0,
+            templates, runtimeCidr);
+        if (!assetPlan.Success)
+        {
+            runtime.Status = TeamLabRuntimeStatus.Failed;
+            runtime.LastError = assetPlan.Message;
+            AddEvent(runtime, "plan", TeamLabEventLevel.Error, assetPlan.Message);
+            await context.SaveChangesAsync(token);
+            return new TeamLabPlanResult(false, assetPlan.Message, runtime);
+        }
+
+        var nodes = await context.WorkerNodes.AsNoTracking().ToListAsync(token);
+        var shardPlan = TeamLabShardPlanner.PlanShards(assetPlan.Networks, assetPlan.Assets, nodes);
+        if (!shardPlan.Success)
+        {
+            runtime.Status = TeamLabRuntimeStatus.Failed;
+            runtime.LastError = shardPlan.Message;
+            AddEvent(runtime, "plan", TeamLabEventLevel.Error, shardPlan.Message);
+            await context.SaveChangesAsync(token);
+            logger.SystemLog($"TeamLab runtime plan failed: game={gameId}, team={teamId}, runtime={runtime.Id}, error={shardPlan.Message}",
+                TaskStatus.Failed, LogLevel.Warning);
+            return new TeamLabPlanResult(false, shardPlan.Message, runtime);
+        }
+
+        var primaryShard = shardPlan.Shards
+            .OrderBy(shard => shard.NetworkKeys.Contains("entry", StringComparer.Ordinal) ? 0 : 1)
+            .ThenBy(shard => shard.WorkerNodeName, StringComparer.Ordinal)
+            .First();
+        var primaryNode = nodes.Single(node => node.Id == primaryShard.WorkerNodeId);
 
         var usedPublicPorts = await context.TeamLabPublicUdpMappings.AsNoTracking()
             .Where(m => m.RuntimeId != runtime.Id)
@@ -191,8 +259,8 @@ public class TeamLabPlanService(
             return new TeamLabPlanResult(false, message, runtime);
         }
 
-        runtime.WorkerNodeId = nodeResult.Node.Id;
-        runtime.NetworkPrefix = AllocateRuntimeCidr(_config.RuntimeNetworkBaseCidr, _config.TeamSubnetPrefixLength, runtime.Id);
+        runtime.WorkerNodeId = primaryNode.Id;
+        runtime.NetworkPrefix = runtimeCidr;
         runtime.LastError = null;
         runtime.Status = TeamLabRuntimeStatus.Scheduled;
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
@@ -205,22 +273,145 @@ public class TeamLabPlanService(
 
         runtime.PublicUdpMapping.PublicUdpPort = publicPort.Value;
         runtime.PublicUdpMapping.WorkerWireGuardPort = workerPort.Value;
-        runtime.PublicUdpMapping.WorkerTunnelIp = nodeResult.Node.TeamLabTunnelIp ?? string.Empty;
+        runtime.PublicUdpMapping.WorkerTunnelIp = primaryNode.TeamLabTunnelIp ?? string.Empty;
         runtime.PublicUdpMapping.IsSynced = false;
 
+        ApplyShardPlan(runtime, shardPlan, assetPlan);
+
         AddEvent(runtime, "plan", TeamLabEventLevel.Success,
-            $"TeamLab runtime planned on node {nodeResult.Node.Name} with UDP {publicPort.Value}.");
+            $"TeamLab runtime planned across {shardPlan.Shards.Count} shard(s) with UDP {publicPort.Value}.");
         await context.SaveChangesAsync(token);
 
         logger.LogInformation("Planned TeamLab runtime {RuntimeId} for game {GameId}, team {TeamId} on node {NodeId}.",
             runtime.Id, gameId, teamId, runtime.WorkerNodeId);
-        logger.SystemLog($"TeamLab runtime planned: game={gameId}, team={teamId}, runtime={runtime.Id}, node={nodeResult.Node.Name}, udp={publicPort.Value}.",
+        logger.SystemLog($"TeamLab runtime planned: game={gameId}, team={teamId}, runtime={runtime.Id}, shards={shardPlan.Shards.Count}, udp={publicPort.Value}.",
             TaskStatus.Success, LogLevel.Information);
         return new TeamLabPlanResult(true, "TeamLab runtime planned.", runtime);
     }
 
     private static void AddEvent(TeamLabRuntime runtime, string stage, TeamLabEventLevel level, string message) =>
         runtime.Events.Add(new TeamLabEvent { Stage = stage, Level = level, Message = message });
+
+    private async Task<TeamLabPublishedTopologyResult> LoadPublishedTopologyAsync(int gameId, int publishedVersion,
+        CancellationToken token)
+    {
+        var snapshot = await context.PenetrationPublishedSnapshots.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.GameId == gameId && s.PublishedVersion == publishedVersion, token);
+        if (snapshot is null)
+            return TeamLabPublishedTopologyResult.Failed("TeamLab published topology snapshot was not found.");
+
+        var templateIds = ExtractTemplateIds(snapshot.SnapshotJson);
+        var templates = await context.ImageTemplates.AsNoTracking()
+            .Where(t => templateIds.Contains(t.Id))
+            .ToDictionaryAsync(t => t.Id, token);
+
+        return TeamLabPublishedTopologyService.ParsePublishedSnapshot(gameId, publishedVersion,
+            snapshot.SnapshotJson, templates);
+    }
+
+    private static HashSet<int> ExtractTemplateIds(string snapshotJson)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(snapshotJson);
+            if (!TryGetPropertyIgnoreCase(doc.RootElement, "nodes", out var nodes) ||
+                nodes.ValueKind != JsonValueKind.Array)
+                return [];
+
+            return nodes.EnumerateArray()
+                .Select(node => TryGetPropertyIgnoreCase(node, "imageTemplateId", out var templateId) &&
+                                templateId.ValueKind == JsonValueKind.Number
+                    ? templateId.GetInt32()
+                    : 0)
+                .Where(id => id > 0)
+                .ToHashSet();
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    private static bool TryGetPropertyIgnoreCase(JsonElement element, string name, out JsonElement value)
+    {
+        foreach (var property in element.EnumerateObject())
+        {
+            if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                value = property.Value;
+                return true;
+            }
+        }
+
+        value = default;
+        return false;
+    }
+
+    private static void ApplyShardPlan(TeamLabRuntime runtime, TeamLabShardPlanResult shardPlan,
+        TeamLabPublishedAssetPlanResult assetPlan)
+    {
+        runtime.Shards.Clear();
+        runtime.Networks.Clear();
+        runtime.Assets.Clear();
+
+        var networkByKey = assetPlan.Networks.ToDictionary(network => network.TopologyKey, StringComparer.Ordinal);
+        var assetsByKey = assetPlan.Assets.ToDictionary(asset => asset.TopologyKey, StringComparer.Ordinal);
+
+        foreach (var plan in shardPlan.Shards)
+        {
+            var shard = new TeamLabRuntimeShard
+            {
+                Runtime = runtime,
+                RuntimeId = runtime.Id,
+                WorkerNodeId = plan.WorkerNodeId,
+                Status = TeamLabRuntimeStatus.Scheduled,
+                RouteVersion = 1,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+            runtime.Shards.Add(shard);
+
+            foreach (var networkKey in plan.NetworkKeys)
+            {
+                var spec = networkByKey[networkKey];
+                runtime.Networks.Add(new TeamLabRuntimeNetwork
+                {
+                    Runtime = runtime,
+                    RuntimeId = runtime.Id,
+                    Shard = shard,
+                    WorkerNodeId = plan.WorkerNodeId,
+                    TopologyKey = spec.TopologyKey,
+                    Name = spec.Name,
+                    Cidr = spec.Cidr,
+                    GatewayIp = spec.GatewayIp,
+                    BridgeName = spec.BridgeName
+                });
+            }
+
+            foreach (var assetKey in plan.AssetKeys)
+            {
+                var spec = assetsByKey[assetKey];
+                var primary = spec.Interfaces.FirstOrDefault(i => i.IsPrimary) ?? spec.Interfaces.FirstOrDefault();
+                runtime.Assets.Add(new TeamLabRuntimeAsset
+                {
+                    Runtime = runtime,
+                    RuntimeId = runtime.Id,
+                    Shard = shard,
+                    WorkerNodeId = plan.WorkerNodeId,
+                    Kind = spec.Kind == TeamLabAssetSpecKind.Docker ? TeamLabResourceKind.Docker : TeamLabResourceKind.Vm,
+                    TopologyKey = spec.TopologyKey,
+                    Name = spec.Name,
+                    SourceTemplateId = spec.SourceTemplateId,
+                    Image = spec.Image,
+                    NetworkKey = primary?.NetworkKey,
+                    IpAddress = primary?.IpAddress,
+                    MacAddress = primary?.MacAddress,
+                    InterfaceSummaryJson = JsonSerializer.Serialize(spec.Interfaces, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+                    Status = TeamLabRuntimeStatus.Scheduled
+                });
+            }
+        }
+    }
 
     private static string AllocateRuntimeCidr(string baseCidr, int prefixLength, int runtimeId)
     {

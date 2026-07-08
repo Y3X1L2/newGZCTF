@@ -36,6 +36,16 @@ public enum TeamLabEventLevel : byte
     Error = 3
 }
 
+public enum TeamLabTrafficCaptureStatus : byte
+{
+    Pending = 0,
+    Running = 1,
+    Stopping = 2,
+    Completed = 3,
+    Failed = 4,
+    Expired = 5
+}
+
 [Index(nameof(GameId), nameof(TeamId), IsUnique = true)]
 [Index(nameof(WorkerNodeId))]
 public class TeamLabRuntime
@@ -68,6 +78,8 @@ public class TeamLabRuntime
 
     public WorkerNode? WorkerNode { get; set; }
 
+    public List<TeamLabRuntimeShard> Shards { get; set; } = [];
+
     public List<TeamLabRuntimeNetwork> Networks { get; set; } = [];
 
     public List<TeamLabRuntimeAsset> Assets { get; set; } = [];
@@ -77,6 +89,38 @@ public class TeamLabRuntime
     public TeamLabPublicUdpMapping? PublicUdpMapping { get; set; }
 
     public List<TeamLabEvent> Events { get; set; } = [];
+
+    public List<TeamLabTrafficFlow> TrafficFlows { get; set; } = [];
+
+    public List<TeamLabTrafficCaptureJob> TrafficCaptureJobs { get; set; } = [];
+}
+
+[Index(nameof(RuntimeId), nameof(WorkerNodeId), IsUnique = true)]
+public class TeamLabRuntimeShard
+{
+    [Key] public int Id { get; set; }
+
+    public int RuntimeId { get; set; }
+
+    public Guid WorkerNodeId { get; set; }
+
+    public TeamLabRuntimeStatus Status { get; set; } = TeamLabRuntimeStatus.Pending;
+
+    public int RouteVersion { get; set; }
+
+    [MaxLength(1024)] public string? LastError { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public DateTimeOffset? UpdatedAt { get; set; }
+
+    public TeamLabRuntime Runtime { get; set; } = null!;
+
+    public WorkerNode WorkerNode { get; set; } = null!;
+
+    public List<TeamLabRuntimeNetwork> Networks { get; set; } = [];
+
+    public List<TeamLabRuntimeAsset> Assets { get; set; } = [];
 }
 
 [Index(nameof(RuntimeId), nameof(TopologyKey), IsUnique = true)]
@@ -85,6 +129,10 @@ public class TeamLabRuntimeNetwork
     [Key] public int Id { get; set; }
 
     public int RuntimeId { get; set; }
+
+    public int? ShardId { get; set; }
+
+    public Guid? WorkerNodeId { get; set; }
 
     [MaxLength(64)] public string TopologyKey { get; set; } = string.Empty;
 
@@ -97,6 +145,10 @@ public class TeamLabRuntimeNetwork
     [MaxLength(128)] public string BridgeName { get; set; } = string.Empty;
 
     public TeamLabRuntime Runtime { get; set; } = null!;
+
+    public TeamLabRuntimeShard? Shard { get; set; }
+
+    public WorkerNode? WorkerNode { get; set; }
 }
 
 [Index(nameof(RuntimeId), nameof(Kind), nameof(TopologyKey))]
@@ -105,6 +157,10 @@ public class TeamLabRuntimeAsset
     [Key] public int Id { get; set; }
 
     public int RuntimeId { get; set; }
+
+    public int? ShardId { get; set; }
+
+    public Guid? WorkerNodeId { get; set; }
 
     public TeamLabResourceKind Kind { get; set; }
 
@@ -131,6 +187,10 @@ public class TeamLabRuntimeAsset
     [MaxLength(1024)] public string? LastError { get; set; }
 
     public TeamLabRuntime Runtime { get; set; } = null!;
+
+    public TeamLabRuntimeShard? Shard { get; set; }
+
+    public WorkerNode? WorkerNode { get; set; }
 }
 
 [Index(nameof(RuntimeId), nameof(Revoked))]
@@ -212,4 +272,86 @@ public class TeamLabEvent
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public TeamLabRuntime Runtime { get; set; } = null!;
+}
+
+[Index(nameof(RuntimeId), nameof(CapturedAt))]
+[Index(nameof(ShardId), nameof(CapturedAt))]
+public class TeamLabTrafficFlow
+{
+    [Key] public long Id { get; set; }
+
+    public int RuntimeId { get; set; }
+
+    public int? ShardId { get; set; }
+
+    public int? NetworkId { get; set; }
+
+    public Guid? WorkerNodeId { get; set; }
+
+    [MaxLength(64)] public string SourceIp { get; set; } = string.Empty;
+
+    public int? SourcePort { get; set; }
+
+    [MaxLength(64)] public string DestinationIp { get; set; } = string.Empty;
+
+    public int? DestinationPort { get; set; }
+
+    [MaxLength(16)] public string Protocol { get; set; } = string.Empty;
+
+    public long Bytes { get; set; }
+
+    public DateTimeOffset CapturedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public TeamLabRuntime Runtime { get; set; } = null!;
+
+    public TeamLabRuntimeShard? Shard { get; set; }
+
+    public TeamLabRuntimeNetwork? Network { get; set; }
+
+    public WorkerNode? WorkerNode { get; set; }
+}
+
+[Index(nameof(RuntimeId), nameof(Status))]
+[Index(nameof(ShardId), nameof(Status))]
+public class TeamLabTrafficCaptureJob
+{
+    [Key] public int Id { get; set; }
+
+    public int RuntimeId { get; set; }
+
+    public int? ShardId { get; set; }
+
+    public int? NetworkId { get; set; }
+
+    public Guid? WorkerNodeId { get; set; }
+
+    public TeamLabTrafficCaptureStatus Status { get; set; } = TeamLabTrafficCaptureStatus.Pending;
+
+    [MaxLength(64)] public string Scope { get; set; } = string.Empty;
+
+    [MaxLength(512)] public string? FilePath { get; set; }
+
+    public long MaxBytes { get; set; }
+
+    public int MaxSeconds { get; set; }
+
+    public long CapturedBytes { get; set; }
+
+    [MaxLength(1024)] public string? LastError { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public DateTimeOffset? StartedAt { get; set; }
+
+    public DateTimeOffset? CompletedAt { get; set; }
+
+    public DateTimeOffset? ExpiresAt { get; set; }
+
+    public TeamLabRuntime Runtime { get; set; } = null!;
+
+    public TeamLabRuntimeShard? Shard { get; set; }
+
+    public TeamLabRuntimeNetwork? Network { get; set; }
+
+    public WorkerNode? WorkerNode { get; set; }
 }

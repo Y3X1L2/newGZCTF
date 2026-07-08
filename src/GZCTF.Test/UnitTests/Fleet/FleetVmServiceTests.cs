@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
@@ -7,6 +8,7 @@ using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
+using GZCTF.Services;
 using GZCTF.Services.Concurrency;
 using GZCTF.Services.Fleet;
 using GZCTF.Services.Vm;
@@ -138,9 +140,38 @@ public class FleetVmServiceTests
         Assert.DoesNotContain("flag{must-not-be-used}", ticket.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task DestroyVmAsync_RemovesGuacamoleConnectionAndClearsAccessFields()
+    {
+        await using var context = CreateContext();
+        var node = SeedKvmNode(context, maxVms: 2, currentVms: 1);
+        var vm = new VmInstance
+        {
+            Id = Guid.Parse("4b61fba5-f6a6-43cf-b3f4-4873c3d2d105"),
+            ChallengeId = 9,
+            UserId = Guid.Parse("09d1cd51-f835-47d8-8e34-4ca6d84c94f5"),
+            VmName = "vm-c9-u1",
+            NodeId = node.Id,
+            Status = VmInstanceStatus.Running,
+            GuacamoleConnectionId = "conn-1",
+            RdpUrl = "http://guac/#/client/conn-1",
+            IpAddress = "10.24.0.30"
+        };
+        var guacamole = new RecordingGuacamoleService();
+        var service = CreateService(context, node, new DeploymentQueueStateAccessor(), guacamole: guacamole);
+
+        await service.DestroyVmAsync(vm, CancellationToken.None);
+
+        Assert.Equal(VmInstanceStatus.Destroyed, vm.Status);
+        Assert.Contains("conn-1", guacamole.DeletedConnections);
+        Assert.Null(vm.GuacamoleConnectionId);
+        Assert.Null(vm.RdpUrl);
+    }
+
     static FleetVmService CreateService(AppDbContext context, WorkerNode node,
         DeploymentQueueStateAccessor queueState,
-        DeploymentExecutionContextAccessor? executionContext = null)
+        DeploymentExecutionContextAccessor? executionContext = null,
+        GuacamoleService? guacamole = null)
     {
         var nodeRepo = new Mock<INodeRepository>();
         nodeRepo.Setup(r => r.GetNodeByIdAsync(node.Id, It.IsAny<CancellationToken>()))
@@ -188,6 +219,7 @@ public class FleetVmServiceTests
             CreateAgentClientMock(),
             nodeRepo.Object,
             new RecordingVmProvider(),
+            guacamole ?? new RecordingGuacamoleService(),
             Options.Create(new KvmSettings()),
             context,
             queueState,
@@ -298,5 +330,28 @@ public class FleetVmServiceTests
 
         public Task<bool> IsRunningAsync(string vmName, CancellationToken token) =>
             Task.FromResult(true);
+    }
+
+    sealed class RecordingGuacamoleService : GuacamoleService
+    {
+        public RecordingGuacamoleService()
+            : base(new TestHttpClientFactory(),
+                Options.Create(new GuacamoleSettings { GuacamoleAuthToken = "token" }),
+                NullLogger<GuacamoleService>.Instance)
+        {
+        }
+
+        public List<string> DeletedConnections { get; } = [];
+
+        public override Task<bool> DeleteConnectionAsync(string connectionId, CancellationToken token = default)
+        {
+            DeletedConnections.Add(connectionId);
+            return Task.FromResult(true);
+        }
+    }
+
+    sealed class TestHttpClientFactory : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new();
     }
 }
