@@ -1,9 +1,12 @@
 import {
+  Accordion,
   ActionIcon,
   Alert,
   Badge,
   Box,
   Button,
+  Divider,
+  Drawer,
   FileInput,
   FileButton,
   Group,
@@ -11,6 +14,7 @@ import {
   NumberInput,
   Pagination,
   Progress,
+  ScrollArea,
   Select,
   SimpleGrid,
   Stack,
@@ -26,6 +30,8 @@ import { showNotification } from '@mantine/notifications'
 import {
   mdiArchiveArrowUpOutline,
   mdiArchiveOutline,
+  mdiAccountMultipleOutline,
+  mdiAccountPlusOutline,
   mdiArrowLeft,
   mdiBookOpenPageVariantOutline,
   mdiCheck,
@@ -34,6 +40,7 @@ import {
   mdiCubeOutline,
   mdiDownloadOutline,
   mdiDocker,
+  mdiEyeOutline,
   mdiFileImportOutline,
   mdiMagnify,
   mdiOpenInNew,
@@ -70,6 +77,10 @@ import {
   TrainingCourseEditModel,
   TrainingCourseEnrollmentPolicy,
   TrainingCourseEnrollmentStatus,
+  TrainingCourseStudentLearningDetailModel,
+  TrainingCourseStudentLearningSummaryModel,
+  TrainingCourseTeacherCandidateModel,
+  TrainingCourseTeacherRole,
   TrainingCourseModel,
   TrainingCourseLocalImageImportModel,
   TrainingCourseResourceEditModel,
@@ -178,7 +189,12 @@ const challengeCategoryOptions = Object.values(ChallengeCategory).map((value) =>
 const challengeTypeOptions = Object.values(ChallengeType).map((value) => ({ value, label: value }))
 const environmentOptions = Object.values(EnvironmentType).map((value) => ({ value, label: value }))
 const networkModeOptions = Object.values(NetworkMode).map((value) => ({ value, label: value }))
-const courseTabValues = ['intro', 'chapters', 'resources', 'students', 'environments', 'challenges', 'theory-bank', 'homework']
+const courseTabValues = ['intro', 'chapters', 'resources', 'students', 'teachers', 'environments', 'challenges', 'theory-bank', 'homework']
+
+const teacherRoleOptions = [
+  { value: TrainingCourseTeacherRole.Teacher, label: '授课教师' },
+  { value: TrainingCourseTeacherRole.Owner, label: '负责人' },
+]
 
 const formatSize = (bytes: number) => {
   if (!Number.isFinite(bytes) || bytes <= 0) return '-'
@@ -192,6 +208,22 @@ const formatSize = (bytes: number) => {
   return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`
 }
 
+const percentOf = (done: number, total: number) => (total > 0 ? Math.max(0, Math.min(100, Math.round((done / total) * 100))) : 0)
+
+const formatTime = (value?: number | string | null) => {
+  if (!value) return '-'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString()
+}
+
+const teacherRoleText = (role: TrainingCourseTeacherRole | string) =>
+  role === TrainingCourseTeacherRole.Owner ? '负责人' : '授课教师'
+
+const optionIndexesText = (options: string[], indexes: number[]) =>
+  indexes.length
+    ? indexes.map((index) => `${index + 1}. ${options[index] ?? `选项 ${index + 1}`}`).join('；')
+    : '未作答'
+
 const CourseDetail: FC = () => {
   const { courseId } = useParams()
   const location = useLocation()
@@ -199,9 +231,12 @@ const CourseDetail: FC = () => {
   const id = Number(courseId)
   const [course, setCourse] = useState<TrainingCourseModel | null>(null)
   const [enrollments, setEnrollments] = useState<Awaited<ReturnType<typeof trainingCourseAdminApi.enrollments>>['data']>([])
+  const [learningSummaries, setLearningSummaries] = useState<TrainingCourseStudentLearningSummaryModel[]>([])
   const [activeTab, setActiveTab] = useState<string | null>('intro')
   const [editOpened, setEditOpened] = useState(false)
   const [resourceOpened, setResourceOpened] = useState(false)
+  const [teacherOpened, setTeacherOpened] = useState(false)
+  const [studentDetailOpened, setStudentDetailOpened] = useState(false)
   const [dockerRegisterOpened, setDockerRegisterOpened] = useState(false)
   const [dockerUploadOpened, setDockerUploadOpened] = useState(false)
   const [vmUploadOpened, setVmUploadOpened] = useState(false)
@@ -210,6 +245,12 @@ const CourseDetail: FC = () => {
   const [editingChallengeId, setEditingChallengeId] = useState<number | null>(null)
   const [editingChallengeDetail, setEditingChallengeDetail] = useState<TrainingCourseChallengeEditDetailModel | null>(null)
   const [challengeAttachmentFile, setChallengeAttachmentFile] = useState<File | null>(null)
+  const [studentLearningDetail, setStudentLearningDetail] = useState<TrainingCourseStudentLearningDetailModel | null>(null)
+  const [studentLearningLoading, setStudentLearningLoading] = useState(false)
+  const [teacherCandidates, setTeacherCandidates] = useState<TrainingCourseTeacherCandidateModel[]>([])
+  const [teacherKeyword, setTeacherKeyword] = useState('')
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null)
+  const [selectedTeacherRole, setSelectedTeacherRole] = useState<TrainingCourseTeacherRole>(TrainingCourseTeacherRole.Teacher)
   const [courseDraft, setCourseDraft] = useState<TrainingCourseEditModel>(emptyCourseDraft())
   const [resourceDraft, setResourceDraft] = useState<TrainingCourseResourceEditModel>(emptyResourceDraft())
   const [challengeDraft, setChallengeDraft] = useState<TrainingCourseChallengeCreateModel>(emptyChallengeDraft())
@@ -257,10 +298,34 @@ const CourseDetail: FC = () => {
   const courseStatus = course ? trainingCourseStatus(course) : null
   const progressPercent = course ? trainingCourseProgress(course) : 0
   const studentPageSize = 6
-  const studentPageCount = Math.max(1, Math.ceil(enrollments.length / studentPageSize))
-  const visibleEnrollments = useMemo(
-    () => enrollments.slice((studentPage - 1) * studentPageSize, studentPage * studentPageSize),
-    [enrollments, studentPage]
+  const studentProgressRows = useMemo(
+    () =>
+      learningSummaries.length
+        ? learningSummaries
+        : enrollments.map((enrollment) => ({
+            userId: enrollment.userId,
+            userName: enrollment.userName,
+            realName: enrollment.realName,
+            stdNumber: enrollment.stdNumber,
+            enrollmentStatus: enrollment.status,
+            completedChapterCount: enrollment.completedChapterCount,
+            totalChapterCount: enrollment.totalChapterCount,
+            challengeSolvedCount: 0,
+            challengeTotalCount: 0,
+            theorySubmittedCount: 0,
+            theoryPassedCount: 0,
+            theoryTotalCount: 0,
+            theoryScore: 0,
+            theoryMaxScore: 0,
+            progressStatus: enrollment.progressStatus,
+            lastActivityAt: enrollment.progressUpdatedAt,
+          })),
+    [enrollments, learningSummaries]
+  )
+  const studentPageCount = Math.max(1, Math.ceil(studentProgressRows.length / studentPageSize))
+  const visibleStudentProgressRows = useMemo(
+    () => studentProgressRows.slice((studentPage - 1) * studentPageSize, studentPage * studentPageSize),
+    [studentProgressRows, studentPage]
   )
 
   const load = async () => {
@@ -278,8 +343,15 @@ const CourseDetail: FC = () => {
         enrollmentPolicy: res.data.enrollmentPolicy,
       })
       if (res.data.canManageEnrollments) {
-        const enrollmentRes = await trainingCourseAdminApi.enrollments(id)
+        const [enrollmentRes, learningRes] = await Promise.all([
+          trainingCourseAdminApi.enrollments(id),
+          trainingCourseAdminApi.learningSummaries(id),
+        ])
         setEnrollments(enrollmentRes.data)
+        setLearningSummaries(learningRes.data)
+      } else {
+        setEnrollments([])
+        setLearningSummaries([])
       }
       if (res.data.canEdit) {
         const [courseTemplateRes, registryRes] = await Promise.all([
@@ -353,6 +425,74 @@ const CourseDetail: FC = () => {
       await load()
     } catch (e) {
       showErrorMsg(e, t)
+    }
+  }
+
+  const openStudentDetail = async (userId: string) => {
+    if (!course) return
+    setStudentDetailOpened(true)
+    setStudentLearningLoading(true)
+    setStudentLearningDetail(null)
+    try {
+      const res = await trainingCourseAdminApi.studentLearningDetail(course.id, userId)
+      setStudentLearningDetail(res.data)
+    } catch (e) {
+      showErrorMsg(e, t)
+      setStudentDetailOpened(false)
+    } finally {
+      setStudentLearningLoading(false)
+    }
+  }
+
+  const searchTeacherCandidates = async (keyword = teacherKeyword) => {
+    if (!course || !course.canManageTeachers) return
+    try {
+      const res = await trainingCourseAdminApi.teacherCandidates(course.id, keyword.trim() || undefined)
+      setTeacherCandidates(res.data)
+    } catch (e) {
+      showErrorMsg(e, t)
+    }
+  }
+
+  const openTeacherModal = () => {
+    setTeacherKeyword('')
+    setSelectedTeacherId(null)
+    setSelectedTeacherRole(TrainingCourseTeacherRole.Teacher)
+    setTeacherOpened(true)
+    void searchTeacherCandidates('')
+  }
+
+  const addCourseTeacher = async () => {
+    if (!course || !selectedTeacherId) return
+    setSaving(true)
+    try {
+      await trainingCourseAdminApi.addTeacher(course.id, {
+        teacherId: selectedTeacherId,
+        role: selectedTeacherRole,
+      })
+      showNotification({ color: 'teal', message: '授课教师已更新。' })
+      setSelectedTeacherId(null)
+      await load()
+      await searchTeacherCandidates()
+    } catch (e) {
+      showErrorMsg(e, t)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const removeCourseTeacher = async (teacherId: string) => {
+    if (!course) return
+    setSaving(true)
+    try {
+      await trainingCourseAdminApi.removeTeacher(course.id, teacherId)
+      showNotification({ color: 'teal', message: '授课教师已移除。' })
+      await load()
+      await searchTeacherCandidates()
+    } catch (e) {
+      showErrorMsg(e, t)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -710,6 +850,7 @@ const CourseDetail: FC = () => {
                 <Tabs.Tab value="chapters">课程列表</Tabs.Tab>
                 <Tabs.Tab value="resources">课程资源</Tabs.Tab>
                 {course.canManageEnrollments ? <Tabs.Tab value="students">学员管理</Tabs.Tab> : null}
+                {course.canEdit ? <Tabs.Tab value="teachers">授课教师</Tabs.Tab> : null}
                 {course.canEdit ? <Tabs.Tab value="environments">环境模板</Tabs.Tab> : null}
                 {course.canEdit ? <Tabs.Tab value="challenges">题目管理</Tabs.Tab> : null}
                 {course.canEdit ? <Tabs.Tab value="theory-bank">理论题库</Tabs.Tab> : null}
@@ -870,18 +1011,95 @@ const CourseDetail: FC = () => {
                         <Table.Td>
                           <Group gap="xs">
                             <ActionIcon
+                              aria-label="查看学员学习详情"
+                              title="查看学员学习详情"
+                              variant="light"
+                              onClick={() => openStudentDetail(enrollment.userId)}
+                            >
+                              <Icon path={mdiEyeOutline} size={0.86} />
+                            </ActionIcon>
+                            <ActionIcon
+                              aria-label="通过报名"
+                              title="通过报名"
                               color="green"
                               onClick={() => reviewEnrollment(enrollment.userId, TrainingCourseEnrollmentStatus.Approved)}
                             >
                               <Icon path={mdiCheck} size={0.86} />
                             </ActionIcon>
                             <ActionIcon
+                              aria-label="拒绝报名"
+                              title="拒绝报名"
                               color="red"
                               onClick={() => reviewEnrollment(enrollment.userId, TrainingCourseEnrollmentStatus.Rejected)}
                             >
                               <Icon path={mdiClose} size={0.86} />
                             </ActionIcon>
                           </Group>
+                        </Table.Td>
+                      </Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
+              </Table.ScrollContainer>
+            </YinyuPanel>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="teachers" pt="md">
+            <YinyuPanel p="lg">
+              <Group justify="space-between" mb="md">
+                <Stack gap={2}>
+                  <Title order={3}>授课教师</Title>
+                  <Text size="sm" c="dimmed">
+                    负责人可以添加其他老师共同维护课程内容、题目和学员数据。
+                  </Text>
+                </Stack>
+                {course.canManageTeachers ? (
+                  <Button leftSection={<Icon path={mdiAccountPlusOutline} size={0.82} />} onClick={openTeacherModal}>
+                    添加教师
+                  </Button>
+                ) : null}
+              </Group>
+              <Table.ScrollContainer minWidth={760}>
+                <Table verticalSpacing="sm">
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>教师</Table.Th>
+                      <Table.Th>角色</Table.Th>
+                      <Table.Th>加入时间</Table.Th>
+                      <Table.Th>操作</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {course.teachers.map((teacher) => (
+                      <Table.Tr key={teacher.teacherId}>
+                        <Table.Td>
+                          <Text fw={800}>{teacher.realName || teacher.userName}</Text>
+                          <Text size="xs" c="dimmed">
+                            {teacher.userName}
+                          </Text>
+                        </Table.Td>
+                        <Table.Td>
+                          <Badge color={teacher.role === TrainingCourseTeacherRole.Owner ? 'teal' : 'blue'} variant="light">
+                            {teacherRoleText(teacher.role)}
+                          </Badge>
+                        </Table.Td>
+                        <Table.Td>{formatTime(teacher.assignedAt)}</Table.Td>
+                        <Table.Td>
+                          {course.canManageTeachers ? (
+                            <ActionIcon
+                              aria-label="移除授课教师"
+                              title="移除授课教师"
+                              color="red"
+                              variant="light"
+                              onClick={() => removeCourseTeacher(teacher.teacherId)}
+                            >
+                              <Icon path={mdiTrashCanOutline} size={0.86} />
+                            </ActionIcon>
+                          ) : (
+                            <Text size="sm" c="dimmed">
+                              -
+                            </Text>
+                          )}
                         </Table.Td>
                       </Table.Tr>
                     ))}
@@ -1032,10 +1250,17 @@ const CourseDetail: FC = () => {
                         ) : null}
                       </Stack>
                       <Group gap={6} wrap="nowrap">
-                        <ActionIcon variant="light" onClick={() => openEditCourseChallenge(challenge.exerciseChallengeId)}>
+                        <ActionIcon
+                          aria-label="编辑课程题目"
+                          title="编辑课程题目"
+                          variant="light"
+                          onClick={() => openEditCourseChallenge(challenge.exerciseChallengeId)}
+                        >
                           <Icon path={mdiPencilOutline} size={0.86} />
                         </ActionIcon>
                         <ActionIcon
+                          aria-label="删除课程题目"
+                          title="删除课程题目"
                           color="red"
                           onClick={() =>
                             trainingCourseAdminApi
@@ -1128,21 +1353,31 @@ const CourseDetail: FC = () => {
                   {course.canManageEnrollments ? (
                     <>
                       <Stack gap="xs" className="yy-training-student-progress-list">
-                        {visibleEnrollments.map((enrollment) => {
-                          const status = enrollmentStatusInfo(enrollment.status)
-                          const total = enrollment.totalChapterCount || course.totalChapterCount || course.chapterCount || 0
-                          const completed = enrollment.completedChapterCount ?? 0
-                          const percent = total > 0 ? Math.max(0, Math.min(100, Math.round((completed / total) * 100))) : 0
+                        {visibleStudentProgressRows.map((summary) => {
+                          const status = enrollmentStatusInfo(summary.enrollmentStatus)
+                          const total = summary.totalChapterCount || course.totalChapterCount || course.chapterCount || 0
+                          const completed = summary.completedChapterCount ?? 0
+                          const percent = percentOf(completed, total)
 
                           return (
-                            <div key={enrollment.userId} className="yy-training-student-progress-row">
+                            <div
+                              key={summary.userId}
+                              className="yy-training-student-progress-row"
+                              role="button"
+                              tabIndex={0}
+                              style={{ cursor: 'pointer' }}
+                              onClick={() => openStudentDetail(summary.userId)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') void openStudentDetail(summary.userId)
+                              }}
+                            >
                               <Group justify="space-between" align="flex-start" gap="xs" wrap="nowrap">
                                 <Stack gap={1} miw={0}>
                                   <Text fw={900} lineClamp={1}>
-                                    {enrollment.realName || enrollment.userName}
+                                    {summary.realName || summary.userName}
                                   </Text>
                                   <Text size="xs" c="dimmed" lineClamp={1}>
-                                    {enrollment.stdNumber || enrollment.userName}
+                                    {summary.stdNumber || summary.userName}
                                   </Text>
                                 </Stack>
                                 <Badge color={status.color} variant="light">
@@ -1160,10 +1395,18 @@ const CourseDetail: FC = () => {
                                 </Group>
                                 <Progress value={percent} radius="xl" size="sm" color="teal" />
                               </Box>
+                              <Group gap={6} mt="xs">
+                                <Badge size="xs" variant="light">
+                                  实验 {summary.challengeSolvedCount}/{summary.challengeTotalCount}
+                                </Badge>
+                                <Badge size="xs" variant="light">
+                                  理论 {summary.theorySubmittedCount}/{summary.theoryTotalCount}
+                                </Badge>
+                              </Group>
                             </div>
                           )
                         })}
-                        {enrollments.length === 0 ? (
+                        {studentProgressRows.length === 0 ? (
                           <Text size="sm" c="dimmed">
                             暂无学员报名。
                           </Text>
@@ -1190,6 +1433,315 @@ const CourseDetail: FC = () => {
           </div>
         </Tabs>
       </Box>
+
+      <Drawer
+        opened={studentDetailOpened}
+        onClose={() => setStudentDetailOpened(false)}
+        title="学员学习详情"
+        position="right"
+        size="min(72rem, calc(100vw - 1.5rem))"
+        padding="lg"
+        scrollAreaComponent={ScrollArea.Autosize}
+        classNames={{
+          content: 'yy-training-student-detail-drawer-content',
+          header: 'yy-training-student-detail-drawer-header',
+          title: 'yy-training-student-detail-drawer-title',
+          body: 'yy-training-student-detail-drawer-body',
+        }}
+      >
+        {studentLearningLoading ? (
+          <Text c="dimmed">正在加载学习详情...</Text>
+        ) : studentLearningDetail ? (
+          <Stack gap="md">
+            <YinyuPanel p="md">
+              <Stack gap="sm">
+                <Group justify="space-between" align="flex-start">
+                  <Stack gap={2}>
+                    <Title order={3}>{studentLearningDetail.realName || studentLearningDetail.userName}</Title>
+                    <Text size="sm" c="dimmed">
+                      {studentLearningDetail.stdNumber || studentLearningDetail.userName}
+                    </Text>
+                  </Stack>
+                  <Badge color={enrollmentStatusInfo(studentLearningDetail.enrollmentStatus).color} variant="light">
+                    {enrollmentStatusInfo(studentLearningDetail.enrollmentStatus).label}
+                  </Badge>
+                </Group>
+                <Box className="yy-training-course-progress">
+                  <Group justify="space-between" mb={5}>
+                    <Text size="xs" c="dimmed" fw={800}>
+                      课程进度
+                    </Text>
+                    <Text size="xs" fw={950}>
+                      {studentLearningDetail.completedChapterCount}/{studentLearningDetail.totalChapterCount}
+                    </Text>
+                  </Group>
+                  <Progress
+                    value={percentOf(studentLearningDetail.completedChapterCount, studentLearningDetail.totalChapterCount)}
+                    radius="xl"
+                    size="sm"
+                    color="teal"
+                  />
+                </Box>
+                <Group gap="xs">
+                  <Badge variant="light">
+                    实验 {studentLearningDetail.challengeSolvedCount}/{studentLearningDetail.challengeTotalCount}
+                  </Badge>
+                  <Badge variant="light">
+                    理论 {studentLearningDetail.theorySubmittedCount}/{studentLearningDetail.theoryTotalCount}
+                  </Badge>
+                  <Badge variant="light">
+                    理论得分 {studentLearningDetail.theoryScore}/{studentLearningDetail.theoryMaxScore}
+                  </Badge>
+                  <Badge variant="light">最后学习 {formatTime(studentLearningDetail.lastActivityAt)}</Badge>
+                </Group>
+              </Stack>
+            </YinyuPanel>
+
+            <Accordion multiple variant="separated">
+              {studentLearningDetail.chapters.map((chapter) => (
+                <Accordion.Item key={chapter.chapterId} value={String(chapter.chapterId)}>
+                  <Accordion.Control>
+                    <Group justify="space-between" pr="md">
+                      <Stack gap={2}>
+                        <Text fw={900}>{chapter.title}</Text>
+                        <Text size="xs" c="dimmed">
+                          {chapter.summary || '暂无章节摘要'}
+                        </Text>
+                      </Stack>
+                      <Badge color={chapter.completedAt ? 'teal' : 'gray'} variant="light">
+                        {chapter.completedAt ? '已完成' : '未完成'}
+                      </Badge>
+                    </Group>
+                  </Accordion.Control>
+                  <Accordion.Panel>
+                    <Stack gap="md">
+                      {chapter.theory ? (
+                        <YinyuPanel p="md">
+                          <Stack gap="sm">
+                            <Group justify="space-between">
+                              <Stack gap={2}>
+                                <Text fw={900}>{chapter.theory.title}</Text>
+                                <Text size="xs" c="dimmed">
+                                  {chapter.theory.questionCount} 题 / {chapter.theory.totalScore} 分 / 及格线{' '}
+                                  {chapter.theory.passRate}%
+                                </Text>
+                              </Stack>
+                              <Badge color={chapter.theory.passed ? 'teal' : chapter.theory.status ? 'yellow' : 'gray'} variant="light">
+                                {chapter.theory.passed
+                                  ? '已通过'
+                                  : chapter.theory.status
+                                    ? `${chapter.theory.score ?? 0}/${chapter.theory.totalScore}`
+                                    : '未提交'}
+                              </Badge>
+                            </Group>
+                            {chapter.theory.answers.length > 0 ? (
+                              <Table.ScrollContainer minWidth={640}>
+                                <Table verticalSpacing="sm" style={{ tableLayout: 'fixed' }}>
+                                  <colgroup>
+                                    <col style={{ width: '52%' }} />
+                                    <col style={{ width: '18%' }} />
+                                    <col style={{ width: '22%' }} />
+                                    <col style={{ width: '8%' }} />
+                                  </colgroup>
+                                  <Table.Thead>
+                                    <Table.Tr>
+                                      <Table.Th>题目</Table.Th>
+                                      <Table.Th>学生答案</Table.Th>
+                                      <Table.Th>正确答案</Table.Th>
+                                      <Table.Th>得分</Table.Th>
+                                    </Table.Tr>
+                                  </Table.Thead>
+                                  <Table.Tbody>
+                                    {chapter.theory.answers.map((answer) => (
+                                      <Table.Tr key={answer.questionId}>
+                                        <Table.Td>
+                                          <Text fw={800} lineClamp={2}>
+                                            {answer.title}
+                                          </Text>
+                                          <Text size="xs" c="dimmed">
+                                            {answer.type}
+                                          </Text>
+                                        </Table.Td>
+                                        <Table.Td>
+                                          <Text size="sm" c={answer.isCorrect ? 'teal' : 'red'} style={{ overflowWrap: 'anywhere' }}>
+                                            {optionIndexesText(answer.options, answer.selectedIndexes)}
+                                          </Text>
+                                        </Table.Td>
+                                        <Table.Td>
+                                          <Text size="sm" style={{ overflowWrap: 'anywhere' }}>
+                                            {optionIndexesText(answer.options, answer.answerIndexes)}
+                                          </Text>
+                                        </Table.Td>
+                                        <Table.Td>
+                                          {answer.score}/{answer.maxScore}
+                                        </Table.Td>
+                                      </Table.Tr>
+                                    ))}
+                                  </Table.Tbody>
+                                </Table>
+                              </Table.ScrollContainer>
+                            ) : (
+                              <Text size="sm" c="dimmed">
+                                学员尚未提交该测试。
+                              </Text>
+                            )}
+                          </Stack>
+                        </YinyuPanel>
+                      ) : null}
+
+                      {chapter.challenges.length > 0 ? (
+                        <YinyuPanel p="md">
+                          <Stack gap="sm">
+                            <Group gap="xs">
+                              <Icon path={mdiAccountMultipleOutline} size={0.9} />
+                              <Text fw={900}>章节实验</Text>
+                            </Group>
+                            <Table.ScrollContainer minWidth={680}>
+                              <Table verticalSpacing="sm" style={{ tableLayout: 'fixed' }}>
+                                <colgroup>
+                                  <col style={{ width: '34%' }} />
+                                  <col style={{ width: '14%' }} />
+                                  <col style={{ width: '10%' }} />
+                                  <col style={{ width: '22%' }} />
+                                  <col style={{ width: '20%' }} />
+                                </colgroup>
+                                <Table.Thead>
+                                  <Table.Tr>
+                                    <Table.Th>题目</Table.Th>
+                                    <Table.Th>状态</Table.Th>
+                                    <Table.Th>提交</Table.Th>
+                                    <Table.Th>实例入口</Table.Th>
+                                    <Table.Th>最后提交</Table.Th>
+                                  </Table.Tr>
+                                </Table.Thead>
+                                <Table.Tbody>
+                                  {chapter.challenges.map((challenge) => (
+                                    <Table.Tr key={challenge.exerciseChallengeId}>
+                                      <Table.Td>
+                                        <Text fw={800}>{challenge.displayTitle || challenge.title}</Text>
+                                        <Text size="xs" c="dimmed">
+                                          {challenge.category} / {challenge.type}
+                                        </Text>
+                                      </Table.Td>
+                                      <Table.Td>
+                                        <Badge color={challenge.solved ? 'teal' : 'gray'} variant="light">
+                                          {challenge.solved ? '已完成' : '未完成'}
+                                        </Badge>
+                                      </Table.Td>
+                                      <Table.Td>
+                                        {challenge.acceptedSubmissionCount}/{challenge.submissionCount}
+                                      </Table.Td>
+                                      <Table.Td>
+                                        {challenge.instanceEntry && (challenge.instanceEntry.startsWith('http') || challenge.instanceEntry.includes(':')) ? (
+                                          <Button
+                                            component="a"
+                                            href={
+                                              challenge.instanceEntry.startsWith('http')
+                                                ? challenge.instanceEntry
+                                                : `http://${challenge.instanceEntry}`
+                                            }
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            size="xs"
+                                            variant="light"
+                                          >
+                                            打开
+                                          </Button>
+                                        ) : challenge.instanceEntry ? (
+                                          <Text size="xs" ff="monospace" c="dimmed">
+                                            {challenge.instanceEntry}
+                                          </Text>
+                                        ) : (
+                                          <Text size="sm" c="dimmed">
+                                            -
+                                          </Text>
+                                        )}
+                                      </Table.Td>
+                                      <Table.Td>
+                                        <Text size="sm">{challenge.lastStatus ?? '-'}</Text>
+                                        <Text size="xs" c="dimmed">
+                                          {formatTime(challenge.lastSubmittedAt)}
+                                        </Text>
+                                      </Table.Td>
+                                    </Table.Tr>
+                                  ))}
+                                </Table.Tbody>
+                              </Table>
+                            </Table.ScrollContainer>
+                          </Stack>
+                        </YinyuPanel>
+                      ) : (
+                        <Text size="sm" c="dimmed">
+                          本章节未配置实验题。
+                        </Text>
+                      )}
+                    </Stack>
+                  </Accordion.Panel>
+                </Accordion.Item>
+              ))}
+            </Accordion>
+          </Stack>
+        ) : (
+          <Text c="dimmed">请选择学员查看详情。</Text>
+        )}
+      </Drawer>
+
+      <Modal opened={teacherOpened} onClose={() => setTeacherOpened(false)} title="添加授课教师" size="lg">
+        <Stack>
+          <Group align="flex-end">
+            <TextInput
+              label="搜索用户"
+              placeholder="用户名、姓名、邮箱或 ID"
+              value={teacherKeyword}
+              onChange={(event) => setTeacherKeyword(event.currentTarget.value)}
+              style={{ flex: 1 }}
+            />
+            <Button variant="light" leftSection={<Icon path={mdiMagnify} size={0.82} />} onClick={() => searchTeacherCandidates()}>
+              搜索
+            </Button>
+          </Group>
+          <Select
+            label="候选教师"
+            placeholder="选择 Teacher/Admin/SuperAdmin 用户"
+            searchable
+            value={selectedTeacherId}
+            onChange={setSelectedTeacherId}
+            data={teacherCandidates.map((candidate) => ({
+              value: candidate.userId,
+              label: `${candidate.realName || candidate.userName} (${candidate.userName}) · ${candidate.role}${
+                candidate.alreadyTeacher ? ' · 已在课程中' : ''
+              }`,
+              disabled: candidate.alreadyTeacher,
+            }))}
+          />
+          <Select
+            label="课程角色"
+            value={selectedTeacherRole}
+            data={teacherRoleOptions}
+            onChange={(value) => setSelectedTeacherRole((value as TrainingCourseTeacherRole) ?? TrainingCourseTeacherRole.Teacher)}
+          />
+          <Group justify="flex-end">
+            <Button loading={saving} disabled={!selectedTeacherId} onClick={addCourseTeacher}>
+              添加到课程
+            </Button>
+          </Group>
+          <Divider />
+          <Stack gap="xs">
+            <Text fw={900}>当前授课教师</Text>
+            {course.teachers.map((teacher) => (
+              <Group key={teacher.teacherId} justify="space-between">
+                <Stack gap={0}>
+                  <Text fw={800}>{teacher.realName || teacher.userName}</Text>
+                  <Text size="xs" c="dimmed">
+                    {teacher.userName}
+                  </Text>
+                </Stack>
+                <Badge variant="light">{teacherRoleText(teacher.role)}</Badge>
+              </Group>
+            ))}
+          </Stack>
+        </Stack>
+      </Modal>
 
       <Modal opened={editOpened} onClose={() => setEditOpened(false)} title="编辑课程" size="lg">
         <Stack>

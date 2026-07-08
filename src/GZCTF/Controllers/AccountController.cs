@@ -1,5 +1,7 @@
 ﻿using System.Net.Mime;
+using System.Globalization;
 using GZCTF.Middlewares;
+using GZCTF.Models;
 using GZCTF.Models.Internal;
 using GZCTF.Models.Request.Account;
 using GZCTF.Repositories.Interface;
@@ -26,13 +28,84 @@ public class AccountController(
     IHostEnvironment environment,
     ICaptchaService captcha,
     IConfigService configService,
+    PortalSsoService portalSsoService,
     IOptionsSnapshot<AccountPolicy> accountPolicy,
     IOptionsSnapshot<GlobalConfig> globalConfig,
+    IOptionsSnapshot<PortalSsoConfig> portalSsoConfig,
     UserManager<UserInfo> userManager,
     SignInManager<UserInfo> signInManager,
     ILogger<AccountController> logger,
     IStringLocalizer<Program> localizer) : ControllerBase
 {
+    /// <summary>
+    /// Login through the unified portal IAM service.
+    /// </summary>
+    /// <param name="portalToken">Token passed by the portal dashboard.</param>
+    /// <param name="returnUrl">Local URL to redirect to after login.</param>
+    /// <param name="token"></param>
+    /// <response code="302">SSO login successful</response>
+    /// <response code="400">Invalid request</response>
+    /// <response code="401">Portal token rejected</response>
+    /// <response code="403">Portal account does not have access</response>
+    [HttpGet("/api/account/portal-sso")]
+    [ProducesResponseType(StatusCodes.Status302Found)]
+    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> PortalSso(
+        [FromQuery(Name = "portal_token")] string? portalToken,
+        [FromQuery] string? returnUrl = "/",
+        CancellationToken token = default)
+    {
+        if (string.IsNullOrWhiteSpace(portalToken))
+            return BadRequest(new RequestResponse("Missing portal token."));
+
+        var redirectUrl = NormalizePortalReturnUrl(returnUrl);
+        if (redirectUrl is null)
+            return BadRequest(new RequestResponse("Invalid return URL."));
+
+        var profileResult = await portalSsoService.GetProfileAsync(portalToken, token);
+        if (!profileResult.Succeeded || profileResult.Profile?.User is null)
+            return RequestResponse.Result(profileResult.Error ?? "Portal SSO login failed.", profileResult.StatusCode);
+
+        var portalUser = profileResult.Profile.User;
+        var loginProvider = NormalizeLoginProvider(portalSsoConfig.Value.LoginProvider);
+        var providerKey = portalUser.Id.ToString(CultureInfo.InvariantCulture);
+
+        var user = await userManager.FindByLoginAsync(loginProvider, providerKey);
+        if (user is null)
+        {
+            var (createdUser, errors) = await FindOrCreatePortalUser(portalUser, loginProvider, providerKey);
+            if (createdUser is null)
+                return HandleIdentityError(errors ?? []);
+
+            user = createdUser;
+        }
+
+        if (user.Role == Role.Banned)
+            return Unauthorized(new RequestResponse(localizer[nameof(Resources.Program.Account_UserDisabled)],
+                StatusCodes.Status401Unauthorized));
+
+        if (portalSsoConfig.Value.UpdateUserProfileOnLogin)
+            UpdatePortalUserInfo(user, portalUser);
+
+        user.EmailConfirmed = true;
+        user.LastSignedInUtc = DateTimeOffset.UtcNow;
+        user.UpdateByHttpContext(HttpContext);
+
+        var updateResult = await userManager.UpdateAsync(user);
+        if (!updateResult.Succeeded)
+            return HandleIdentityError(updateResult.Errors);
+
+        await signInManager.SignOutAsync();
+        await signInManager.SignInAsync(user, true);
+
+        logger.LogInformation("Portal SSO user {PortalUserId} signed in as local user {UserId}.",
+            portalUser.Id, user.Id);
+
+        return LocalRedirect(redirectUrl);
+    }
+
     /// <summary>
     /// User registration
     /// </summary>
@@ -561,6 +634,119 @@ public class AccountController(
             TaskStatus.Success);
 
         return Ok(avatar.Url());
+    }
+
+    private async Task<(UserInfo? User, IEnumerable<IdentityError>? Errors)> FindOrCreatePortalUser(
+        PortalSsoUser portalUser,
+        string loginProvider,
+        string providerKey)
+    {
+        var userName = BuildPortalUserName(portalUser.Id);
+        var email = BuildPortalEmail(portalUser.Id);
+        var user = new UserInfo
+        {
+            UserName = userName,
+            Email = email,
+            EmailConfirmed = true,
+            RegisterTimeUtc = DateTimeOffset.UtcNow,
+            LastSignedInUtc = DateTimeOffset.UtcNow,
+            Role = MapPortalRole(portalUser.RoleCode)
+        };
+        UpdatePortalUserInfo(user, portalUser);
+        user.UpdateByHttpContext(HttpContext);
+
+        var createResult = await userManager.CreateAsync(user);
+        if (!createResult.Succeeded)
+        {
+            var linkedUser = await userManager.FindByLoginAsync(loginProvider, providerKey);
+            if (linkedUser is not null)
+                return (linkedUser, null);
+
+            return (null, createResult.Errors);
+        }
+
+        return await EnsurePortalLogin(user, loginProvider, providerKey);
+    }
+
+    private async Task<(UserInfo? User, IEnumerable<IdentityError>? Errors)> EnsurePortalLogin(
+        UserInfo user,
+        string loginProvider,
+        string providerKey)
+    {
+        var logins = await userManager.GetLoginsAsync(user);
+        if (logins.Any(login => login.LoginProvider == loginProvider && login.ProviderKey == providerKey))
+            return (user, null);
+
+        var loginResult = await userManager.AddLoginAsync(user,
+            new UserLoginInfo(loginProvider, providerKey, "Portal IAM"));
+
+        if (loginResult.Succeeded)
+            return (user, null);
+
+        // A concurrent request may have created the binding after the first lookup.
+        var linkedUser = await userManager.FindByLoginAsync(loginProvider, providerKey);
+        return linkedUser is not null ? (linkedUser, null) : (null, loginResult.Errors);
+    }
+
+    private void UpdatePortalUserInfo(UserInfo user, PortalSsoUser portalUser)
+    {
+        user.RealName = TruncateUserData(string.IsNullOrWhiteSpace(portalUser.RealName)
+            ? portalUser.UserName
+            : portalUser.RealName);
+        user.Role = MapPortalRole(portalUser.RoleCode);
+    }
+
+    private string BuildPortalUserName(int portalUserId)
+    {
+        var suffix = portalUserId.ToString(CultureInfo.InvariantCulture);
+        var userName = $"iam_{suffix}";
+
+        return userName.Length <= Limits.MaxUserNameLength
+            ? userName
+            : $"iam_{suffix[^Math.Min(11, suffix.Length)..]}";
+    }
+
+    private string BuildPortalEmail(int portalUserId)
+    {
+        var domain = portalSsoConfig.Value.DefaultEmailDomain.Trim().TrimStart('@');
+        if (string.IsNullOrWhiteSpace(domain) || domain.Contains('@', StringComparison.Ordinal))
+            domain = "sso.local";
+
+        return $"portal-{portalUserId.ToString(CultureInfo.InvariantCulture)}@{domain}";
+    }
+
+    private static string NormalizeLoginProvider(string? loginProvider) =>
+        string.IsNullOrWhiteSpace(loginProvider) ? "PortalIAM" : loginProvider.Trim();
+
+    private static string? NormalizePortalReturnUrl(string? returnUrl)
+    {
+        if (string.IsNullOrWhiteSpace(returnUrl))
+            return "/";
+
+        returnUrl = returnUrl.Trim();
+
+        if (!returnUrl.StartsWith("/", StringComparison.Ordinal) ||
+            returnUrl.StartsWith("//", StringComparison.Ordinal) ||
+            returnUrl.StartsWith("/\\", StringComparison.Ordinal))
+            return null;
+
+        return returnUrl;
+    }
+
+    private static Role MapPortalRole(string roleCode) =>
+        roleCode.Trim().ToLowerInvariant() switch
+        {
+            "super_admin" => Role.SuperAdmin,
+            "ctf_admin" => Role.Admin,
+            "teacher" => Role.Teacher,
+            "student" => Role.Student,
+            _ => Role.Student
+        };
+
+    private static string TruncateUserData(string? value)
+    {
+        value = value?.Trim() ?? string.Empty;
+        return value.Length <= Limits.MaxUserDataLength ? value : value[..Limits.MaxUserDataLength];
     }
 
     private string GetEmailLink(string action, string token, string? email)

@@ -330,6 +330,98 @@ export interface TrainingCourseEnrollmentModel {
   progressUpdatedAt?: number | null
 }
 
+export interface TrainingCourseTeacherCandidateModel {
+  userId: string
+  userName: string
+  realName: string
+  stdNumber: string
+  email?: string | null
+  role: Role
+  alreadyTeacher: boolean
+}
+
+export interface TrainingCourseStudentLearningSummaryModel {
+  userId: string
+  userName: string
+  realName: string
+  stdNumber: string
+  enrollmentStatus: TrainingCourseEnrollmentStatus
+  completedChapterCount: number
+  totalChapterCount: number
+  challengeSolvedCount: number
+  challengeTotalCount: number
+  theorySubmittedCount: number
+  theoryPassedCount: number
+  theoryTotalCount: number
+  theoryScore: number
+  theoryMaxScore: number
+  progressStatus?: TrainingCourseProgressStatus | null
+  lastActivityAt?: number | null
+}
+
+export interface TrainingCourseStudentLearningDetailModel extends TrainingCourseStudentLearningSummaryModel {
+  chapters: TrainingCourseStudentChapterLearningModel[]
+}
+
+export interface TrainingCourseStudentChapterLearningModel {
+  chapterId: number
+  title: string
+  summary: string
+  order: number
+  isPublished: boolean
+  progressStatus?: TrainingCourseProgressStatus | null
+  completedAt?: number | null
+  theory?: TrainingCourseStudentTheoryLearningModel | null
+  challenges: TrainingCourseStudentChallengeLearningModel[]
+}
+
+export interface TrainingCourseStudentChallengeLearningModel {
+  exerciseChallengeId: number
+  title: string
+  displayTitle?: string | null
+  category: ChallengeCategory
+  type: ChallengeType
+  environment: EnvironmentType
+  isRequired: boolean
+  solved: boolean
+  submissionCount: number
+  acceptedSubmissionCount: number
+  lastStatus?: AnswerResult | null
+  lastSubmittedAt?: number | null
+  lastIpAddress?: string | null
+  instanceEntry?: string | null
+  instanceStopAt?: number | null
+}
+
+export interface TrainingCourseStudentTheoryLearningModel {
+  paperId: number
+  title: string
+  isPublished: boolean
+  questionCount: number
+  totalScore: number
+  passRate: number
+  status?: TheoryAnswerSheetStatus | null
+  score?: number | null
+  passed?: boolean | null
+  correctCount: number
+  submittedAt?: number | null
+  answers: TrainingCourseStudentTheoryAnswerDetailModel[]
+}
+
+export interface TrainingCourseStudentTheoryAnswerDetailModel {
+  questionId: number
+  type: TheoryQuestionType
+  title: string
+  content: string
+  options: string[]
+  answerIndexes: number[]
+  selectedIndexes: number[]
+  isCorrect?: boolean | null
+  score: number
+  maxScore: number
+  order: number
+}
+
 export interface TrainingCourseResourceModel {
   id: number
   courseId: number
@@ -1029,12 +1121,31 @@ export const trainingCourseAdminApi = {
       method: 'GET',
     }),
 
+  learningSummaries: (courseId: number) =>
+    request<TrainingCourseStudentLearningSummaryModel[], unknown>({
+      path: `/api/admin/training/courses/${courseId}/learning-summaries`,
+      method: 'GET',
+    }),
+
+  studentLearningDetail: (courseId: number, userId: string) =>
+    request<TrainingCourseStudentLearningDetailModel, unknown>({
+      path: `/api/admin/training/courses/${courseId}/students/${userId}/learning`,
+      method: 'GET',
+    }),
+
   reviewEnrollment: (courseId: number, userId: string, data: TrainingCourseEnrollmentReviewModel) =>
     request<void, unknown>({
       path: `/api/admin/training/courses/${courseId}/enrollments/${userId}`,
       method: 'PUT',
       body: data,
       type: ContentType.Json,
+    }),
+
+  teacherCandidates: (courseId: number, keyword?: string) =>
+    request<TrainingCourseTeacherCandidateModel[], unknown>({
+      path: `/api/admin/training/courses/${courseId}/teacher-candidates`,
+      method: 'GET',
+      query: { keyword },
     }),
 
   addTeacher: (courseId: number, data: { teacherId: string; role: TrainingCourseTeacherRole }) =>

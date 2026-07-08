@@ -283,6 +283,181 @@ public class TrainingCourseEnrollmentModel
         };
 }
 
+public class TrainingCourseTeacherCandidateModel
+{
+    public Guid UserId { get; set; }
+
+    public string UserName { get; set; } = string.Empty;
+
+    public string RealName { get; set; } = string.Empty;
+
+    public string StdNumber { get; set; } = string.Empty;
+
+    public string? Email { get; set; }
+
+    public Role Role { get; set; }
+
+    public bool AlreadyTeacher { get; set; }
+
+    public static TrainingCourseTeacherCandidateModel FromUser(UserInfo user, bool alreadyTeacher) =>
+        new()
+        {
+            UserId = user.Id,
+            UserName = user.UserName ?? string.Empty,
+            RealName = user.RealName,
+            StdNumber = user.StdNumber,
+            Email = user.Email,
+            Role = user.Role,
+            AlreadyTeacher = alreadyTeacher
+        };
+}
+
+public class TrainingCourseStudentLearningSummaryModel
+{
+    public Guid UserId { get; set; }
+
+    public string UserName { get; set; } = string.Empty;
+
+    public string RealName { get; set; } = string.Empty;
+
+    public string StdNumber { get; set; } = string.Empty;
+
+    public TrainingCourseEnrollmentStatus EnrollmentStatus { get; set; }
+
+    public int CompletedChapterCount { get; set; }
+
+    public int TotalChapterCount { get; set; }
+
+    public int ChallengeSolvedCount { get; set; }
+
+    public int ChallengeTotalCount { get; set; }
+
+    public int TheorySubmittedCount { get; set; }
+
+    public int TheoryPassedCount { get; set; }
+
+    public int TheoryTotalCount { get; set; }
+
+    public int TheoryScore { get; set; }
+
+    public int TheoryMaxScore { get; set; }
+
+    public TrainingCourseProgressStatus? ProgressStatus { get; set; }
+
+    public DateTimeOffset? LastActivityAt { get; set; }
+}
+
+public class TrainingCourseStudentLearningDetailModel : TrainingCourseStudentLearningSummaryModel
+{
+    public List<TrainingCourseStudentChapterLearningModel> Chapters { get; set; } = [];
+}
+
+public class TrainingCourseStudentChapterLearningModel
+{
+    public int ChapterId { get; set; }
+
+    public string Title { get; set; } = string.Empty;
+
+    public string Summary { get; set; } = string.Empty;
+
+    public int Order { get; set; }
+
+    public bool IsPublished { get; set; }
+
+    public TrainingCourseProgressStatus? ProgressStatus { get; set; }
+
+    public DateTimeOffset? CompletedAt { get; set; }
+
+    public TrainingCourseStudentTheoryLearningModel? Theory { get; set; }
+
+    public List<TrainingCourseStudentChallengeLearningModel> Challenges { get; set; } = [];
+}
+
+public class TrainingCourseStudentChallengeLearningModel
+{
+    public int ExerciseChallengeId { get; set; }
+
+    public string Title { get; set; } = string.Empty;
+
+    public string? DisplayTitle { get; set; }
+
+    public ChallengeCategory Category { get; set; }
+
+    public ChallengeType Type { get; set; }
+
+    public EnvironmentType Environment { get; set; }
+
+    public bool IsRequired { get; set; }
+
+    public bool Solved { get; set; }
+
+    public int SubmissionCount { get; set; }
+
+    public int AcceptedSubmissionCount { get; set; }
+
+    public AnswerResult? LastStatus { get; set; }
+
+    public DateTimeOffset? LastSubmittedAt { get; set; }
+
+    public string? LastIpAddress { get; set; }
+
+    public string? InstanceEntry { get; set; }
+
+    public DateTimeOffset? InstanceStopAt { get; set; }
+}
+
+public class TrainingCourseStudentTheoryLearningModel
+{
+    public int PaperId { get; set; }
+
+    public string Title { get; set; } = string.Empty;
+
+    public bool IsPublished { get; set; }
+
+    public int QuestionCount { get; set; }
+
+    public int TotalScore { get; set; }
+
+    public int PassRate { get; set; }
+
+    public TheoryAnswerSheetStatus? Status { get; set; }
+
+    public int? Score { get; set; }
+
+    public bool? Passed { get; set; }
+
+    public int CorrectCount { get; set; }
+
+    public DateTimeOffset? SubmittedAt { get; set; }
+
+    public List<TrainingCourseStudentTheoryAnswerDetailModel> Answers { get; set; } = [];
+}
+
+public class TrainingCourseStudentTheoryAnswerDetailModel
+{
+    public int QuestionId { get; set; }
+
+    public TheoryQuestionType Type { get; set; }
+
+    public string Title { get; set; } = string.Empty;
+
+    public string Content { get; set; } = string.Empty;
+
+    public List<string> Options { get; set; } = [];
+
+    public List<int> AnswerIndexes { get; set; } = [];
+
+    public List<int> SelectedIndexes { get; set; } = [];
+
+    public bool? IsCorrect { get; set; }
+
+    public int Score { get; set; }
+
+    public int MaxScore { get; set; }
+
+    public int Order { get; set; }
+}
+
 public class TrainingCourseResourceModel
 {
     public int Id { get; set; }

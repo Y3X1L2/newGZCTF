@@ -38,6 +38,7 @@ internal static class ServicesExtension
             builder.AddConfig<AccountPolicy>();
             builder.AddConfig<GlobalConfig>();
             builder.AddConfig<ManagedConfig>();
+            builder.AddConfig<PortalSsoConfig>();
             builder.AddConfig<ContainerPolicy>();
             builder.AddConfig<ContainerProvider>();
             builder.AddConfig<TeamLabNetworkConfig>();
@@ -122,6 +123,7 @@ internal static class ServicesExtension
             builder.Services.AddScoped<GamePhaseService>();
             builder.Services.AddScoped<TheoryExamService>();
             builder.Services.AddScoped<PenetrationService>();
+            builder.Services.AddScoped<PortalSsoService>();
             builder.Services.AddHostedService<PenetrationCleanupService>();
 
             builder.Services.AddHostedService<FlagChecker>();
@@ -209,6 +211,12 @@ internal static class ServicesExtension
                 options.JsonSerializerOptions.ConfigCustomSerializerOptions();
             });
             builder.Services.AddHttpClient("GuacamoleClient", client =>
+            {
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(
+                    new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+            });
+            builder.Services.AddHttpClient("PortalSso", client =>
             {
                 client.DefaultRequestHeaders.Accept.Clear();
                 client.DefaultRequestHeaders.Accept.Add(

@@ -296,6 +296,104 @@ public class TrainingCourseAdminController(
         course.UpdatedAt = DateTimeOffset.UtcNow;
     }
 
+    private async Task<List<TrainingCourseStudentLearningSummaryModel>> BuildLearningSummaries(
+        int courseId,
+        Guid[]? userFilter,
+        CancellationToken token)
+    {
+        var enrollmentsQuery = context.TrainingCourseEnrollments
+            .AsNoTracking()
+            .Include(e => e.User)
+            .Where(e => e.CourseId == courseId);
+
+        if (userFilter is { Length: > 0 })
+            enrollmentsQuery = enrollmentsQuery.Where(e => userFilter.Contains(e.UserId));
+
+        var enrollments = await enrollmentsQuery
+            .OrderBy(e => e.Status)
+            .ThenBy(e => e.User.RealName)
+            .ThenBy(e => e.User.UserName)
+            .ToArrayAsync(token);
+        var userIds = enrollments.Select(e => e.UserId).ToArray();
+        if (userIds.Length == 0)
+            return [];
+
+        var totalChapterCount = await context.TrainingCourseChapters
+            .CountAsync(c => c.CourseId == courseId && c.IsPublished, token);
+        var challengeIds = await context.TrainingCourseChallenges
+            .Where(c => c.CourseId == courseId)
+            .Select(c => c.ExerciseChallengeId)
+            .ToArrayAsync(token);
+        var challengeTotal = challengeIds.Length;
+        var paperIds = await context.TrainingCourseChapterTheoryPapers
+            .Where(p => p.CourseId == courseId && p.IsPublished)
+            .Select(p => p.Id)
+            .ToArrayAsync(token);
+        var theoryTotal = paperIds.Length;
+
+        var progresses = await context.TrainingCourseProgresses
+            .AsNoTracking()
+            .Where(p => p.CourseId == courseId && userIds.Contains(p.UserId))
+            .ToDictionaryAsync(p => p.UserId, token);
+        var submissions = await context.TrainingCourseSubmissions
+            .AsNoTracking()
+            .Where(s => s.CourseId == courseId && userIds.Contains(s.UserId))
+            .ToArrayAsync(token);
+        var sheets = await context.TrainingCourseChapterTheorySheets
+            .AsNoTracking()
+            .Where(s => s.CourseId == courseId && userIds.Contains(s.UserId) && paperIds.Contains(s.PaperId))
+            .ToArrayAsync(token);
+
+        var submissionsByUser = submissions
+            .GroupBy(s => s.UserId)
+            .ToDictionary(g => g.Key, g => g.ToArray());
+        var sheetsByUser = sheets
+            .GroupBy(s => s.UserId)
+            .ToDictionary(g => g.Key, g => g.ToArray());
+
+        return enrollments.Select(enrollment =>
+        {
+            var progress = progresses.GetValueOrDefault(enrollment.UserId);
+            var userSubmissions = submissionsByUser.GetValueOrDefault(enrollment.UserId) ?? [];
+            var userSheets = sheetsByUser.GetValueOrDefault(enrollment.UserId) ?? [];
+            var submittedSheets = userSheets.Where(s => s.Status == TheoryAnswerSheetStatus.Submitted).ToArray();
+            var solvedCount = userSubmissions
+                .Where(s => s.Status == AnswerResult.Accepted)
+                .Select(s => s.ExerciseChallengeId)
+                .Distinct()
+                .Count();
+
+            return new TrainingCourseStudentLearningSummaryModel
+            {
+                UserId = enrollment.UserId,
+                UserName = enrollment.User.UserName ?? string.Empty,
+                RealName = enrollment.User.RealName,
+                StdNumber = enrollment.User.StdNumber,
+                EnrollmentStatus = enrollment.Status,
+                CompletedChapterCount = progress?.CompletedChapterCount ?? 0,
+                TotalChapterCount = progress?.TotalChapterCount ?? totalChapterCount,
+                ChallengeSolvedCount = solvedCount,
+                ChallengeTotalCount = progress?.ChallengeTotalCount ?? challengeTotal,
+                TheorySubmittedCount = submittedSheets.Length,
+                TheoryPassedCount = submittedSheets.Count(s => s.Passed),
+                TheoryTotalCount = theoryTotal,
+                TheoryScore = submittedSheets.Sum(s => s.Score),
+                TheoryMaxScore = submittedSheets.Sum(s => s.MaxScore),
+                ProgressStatus = progress?.Status,
+                LastActivityAt = MaxDate(
+                    progress?.UpdatedAt,
+                    userSubmissions.Select(s => (DateTimeOffset?)s.SubmittedAt).DefaultIfEmpty().Max(),
+                    userSheets.Select(s => (DateTimeOffset?)s.UpdatedAt).DefaultIfEmpty().Max())
+            };
+        }).ToList();
+    }
+
+    private static DateTimeOffset? MaxDate(params DateTimeOffset?[] values)
+    {
+        var max = values.Where(v => v.HasValue).Select(v => v!.Value).DefaultIfEmpty().Max();
+        return max == default ? null : max;
+    }
+
     [HttpGet]
     [ProducesResponseType(typeof(TrainingCourseModel[]), StatusCodes.Status200OK)]
     public async Task<IActionResult> Courses(CancellationToken token = default)
@@ -476,6 +574,217 @@ public class TrainingCourseAdminController(
             .ToArray());
     }
 
+    [HttpGet("{courseId:int}/learning-summaries")]
+    [ProducesResponseType(typeof(TrainingCourseStudentLearningSummaryModel[]), StatusCodes.Status200OK)]
+    public async Task<IActionResult> LearningSummaries([FromRoute] int courseId, CancellationToken token = default)
+    {
+        var actor = await CurrentUser();
+        if (!await CanEditCourse(actor, courseId, token))
+            return NotFound();
+
+        return Ok(await BuildLearningSummaries(courseId, null, token));
+    }
+
+    [HttpGet("{courseId:int}/students/{userId:guid}/learning")]
+    [ProducesResponseType(typeof(TrainingCourseStudentLearningDetailModel), StatusCodes.Status200OK)]
+    public async Task<IActionResult> StudentLearningDetail(
+        [FromRoute] int courseId,
+        [FromRoute] Guid userId,
+        CancellationToken token = default)
+    {
+        var actor = await CurrentUser();
+        if (!await CanEditCourse(actor, courseId, token))
+            return NotFound();
+
+        var summary = (await BuildLearningSummaries(courseId, [userId], token)).SingleOrDefault();
+        if (summary is null)
+            return NotFound();
+
+        var chapters = await context.TrainingCourseChapters
+            .AsNoTracking()
+            .Where(c => c.CourseId == courseId && c.IsPublished)
+            .OrderBy(c => c.Order)
+            .ThenBy(c => c.Id)
+            .ToArrayAsync(token);
+        var chapterIds = chapters.Select(c => c.Id).ToArray();
+
+        var chapterProgresses = await context.TrainingChapterProgresses
+            .AsNoTracking()
+            .Where(p => p.CourseId == courseId && p.UserId == userId && chapterIds.Contains(p.ChapterId))
+            .ToDictionaryAsync(p => p.ChapterId, token);
+        var chapterChallengeLinks = await context.TrainingCourseChapterChallenges
+            .AsNoTracking()
+            .Include(c => c.CourseChallenge)
+            .ThenInclude(c => c.ExerciseChallenge)
+            .Where(c => c.CourseId == courseId && chapterIds.Contains(c.ChapterId))
+            .OrderBy(c => c.Order)
+            .ToArrayAsync(token);
+        var challengeIds = chapterChallengeLinks.Select(c => c.ExerciseChallengeId).Distinct().ToArray();
+        var submissions = await context.TrainingCourseSubmissions
+            .AsNoTracking()
+            .Where(s => s.CourseId == courseId && s.UserId == userId && challengeIds.Contains(s.ExerciseChallengeId))
+            .OrderByDescending(s => s.SubmittedAt)
+            .ToArrayAsync(token);
+        var submissionsByChallenge = submissions
+            .GroupBy(s => s.ExerciseChallengeId)
+            .ToDictionary(g => g.Key, g => g.ToArray());
+        var instances = await context.ExerciseInstances
+            .AsNoTracking()
+            .Include(i => i.Container)
+            .Where(i => i.UserId == userId && challengeIds.Contains(i.ExerciseId))
+            .ToDictionaryAsync(i => i.ExerciseId, token);
+
+        var papers = await context.TrainingCourseChapterTheoryPapers
+            .AsNoTracking()
+            .Include(p => p.Questions)
+            .Where(p => p.CourseId == courseId && chapterIds.Contains(p.ChapterId))
+            .ToArrayAsync(token);
+        var paperIds = papers.Select(p => p.Id).ToArray();
+        var sheets = paperIds.Length == 0
+            ? Array.Empty<TrainingCourseChapterTheorySheet>()
+            : await context.TrainingCourseChapterTheorySheets
+                .AsNoTracking()
+                .Include(s => s.Answers)
+                .Where(s => s.CourseId == courseId && s.UserId == userId && paperIds.Contains(s.PaperId))
+                .ToArrayAsync(token);
+        var papersByChapter = papers.ToDictionary(p => p.ChapterId);
+        var sheetsByPaper = sheets.ToDictionary(s => s.PaperId);
+        var challengeLinksByChapter = chapterChallengeLinks
+            .GroupBy(c => c.ChapterId)
+            .ToDictionary(g => g.Key, g => g.ToArray());
+
+        var detail = new TrainingCourseStudentLearningDetailModel
+        {
+            UserId = summary.UserId,
+            UserName = summary.UserName,
+            RealName = summary.RealName,
+            StdNumber = summary.StdNumber,
+            EnrollmentStatus = summary.EnrollmentStatus,
+            CompletedChapterCount = summary.CompletedChapterCount,
+            TotalChapterCount = summary.TotalChapterCount,
+            ChallengeSolvedCount = summary.ChallengeSolvedCount,
+            ChallengeTotalCount = summary.ChallengeTotalCount,
+            TheorySubmittedCount = summary.TheorySubmittedCount,
+            TheoryPassedCount = summary.TheoryPassedCount,
+            TheoryTotalCount = summary.TheoryTotalCount,
+            TheoryScore = summary.TheoryScore,
+            TheoryMaxScore = summary.TheoryMaxScore,
+            ProgressStatus = summary.ProgressStatus,
+            LastActivityAt = summary.LastActivityAt
+        };
+
+        detail.Chapters = chapters.Select(chapter =>
+        {
+            var progress = chapterProgresses.GetValueOrDefault(chapter.Id);
+            var theory = BuildStudentTheoryModel(
+                papersByChapter.GetValueOrDefault(chapter.Id),
+                sheetsByPaper);
+            var chapterChallenges = challengeLinksByChapter.GetValueOrDefault(chapter.Id) ??
+                                    Array.Empty<TrainingCourseChapterChallenge>();
+
+            return new TrainingCourseStudentChapterLearningModel
+            {
+                ChapterId = chapter.Id,
+                Title = chapter.Title,
+                Summary = chapter.Summary,
+                Order = chapter.Order,
+                IsPublished = chapter.IsPublished,
+                ProgressStatus = progress?.Status,
+                CompletedAt = progress?.CompletedAt,
+                Theory = theory,
+                Challenges = chapterChallenges.Select(link =>
+                    BuildStudentChallengeModel(
+                        link,
+                        submissionsByChallenge.GetValueOrDefault(link.ExerciseChallengeId) ??
+                        Array.Empty<TrainingCourseSubmission>(),
+                        instances.GetValueOrDefault(link.ExerciseChallengeId))).ToList()
+            };
+        }).ToList();
+
+        return Ok(detail);
+    }
+
+    private static TrainingCourseStudentTheoryLearningModel? BuildStudentTheoryModel(
+        TrainingCourseChapterTheoryPaper? paper,
+        Dictionary<int, TrainingCourseChapterTheorySheet> sheetsByPaper)
+    {
+        if (paper is null)
+            return null;
+
+        var sheet = sheetsByPaper.GetValueOrDefault(paper.Id);
+        var answersByQuestion = sheet?.Answers.ToDictionary(a => a.PaperQuestionId) ??
+                                new Dictionary<int, TrainingCourseChapterTheoryAnswer>();
+        var submitted = sheet?.Status == TheoryAnswerSheetStatus.Submitted;
+
+        return new TrainingCourseStudentTheoryLearningModel
+        {
+            PaperId = paper.Id,
+            Title = paper.Title,
+            IsPublished = paper.IsPublished,
+            QuestionCount = paper.Questions.Count,
+            TotalScore = paper.Questions.Sum(q => q.Score),
+            PassRate = paper.PassRate,
+            Status = sheet?.Status,
+            Score = submitted ? sheet?.Score : null,
+            Passed = submitted ? sheet?.Passed : null,
+            CorrectCount = submitted ? sheet!.Answers.Count(a => a.IsCorrect == true) : 0,
+            SubmittedAt = sheet?.SubmittedAt,
+            Answers = submitted
+                ? paper.Questions
+                    .OrderBy(q => q.Order)
+                    .Select(q =>
+                    {
+                        var answer = answersByQuestion.GetValueOrDefault(q.Id);
+                        return new TrainingCourseStudentTheoryAnswerDetailModel
+                        {
+                            QuestionId = q.Id,
+                            Type = q.Type,
+                            Title = q.Title,
+                            Content = q.Content,
+                            Options = q.Options,
+                            AnswerIndexes = q.AnswerIndexes,
+                            SelectedIndexes = answer?.SelectedIndexes ?? [],
+                            IsCorrect = answer?.IsCorrect,
+                            Score = answer?.Score ?? 0,
+                            MaxScore = q.Score,
+                            Order = q.Order
+                        };
+                    }).ToList()
+                : []
+        };
+    }
+
+    private static TrainingCourseStudentChallengeLearningModel BuildStudentChallengeModel(
+        TrainingCourseChapterChallenge link,
+        TrainingCourseSubmission[] submissions,
+        ExerciseInstance? instance)
+    {
+        var last = submissions.OrderByDescending(s => s.SubmittedAt).FirstOrDefault();
+        var acceptedCount = submissions.Count(s => s.Status == AnswerResult.Accepted);
+        var challenge = link.CourseChallenge.ExerciseChallenge;
+
+        return new TrainingCourseStudentChallengeLearningModel
+        {
+            ExerciseChallengeId = link.ExerciseChallengeId,
+            Title = challenge.Title,
+            DisplayTitle = link.CourseChallenge.DisplayTitle,
+            Category = challenge.Category,
+            Type = challenge.Type,
+            Environment = challenge.Environment,
+            IsRequired = link.CourseChallenge.IsRequired,
+            Solved = acceptedCount > 0,
+            SubmissionCount = submissions.Length,
+            AcceptedSubmissionCount = acceptedCount,
+            LastStatus = last?.Status,
+            LastSubmittedAt = last?.SubmittedAt,
+            LastIpAddress = last?.IpAddress,
+            InstanceEntry = instance?.Container is { Status: ContainerStatus.Running } container ? container.Entry : null,
+            InstanceStopAt = instance?.Container is { Status: ContainerStatus.Running } runningContainer
+                ? runningContainer.ExpectStopAt
+                : null
+        };
+    }
+
     [HttpPut("{courseId:int}/enrollments/{userId:guid}")]
     public async Task<IActionResult> ReviewEnrollment(
         [FromRoute] int courseId,
@@ -504,6 +813,43 @@ public class TrainingCourseAdminController(
         logger.SystemLog($"Reviewed training course enrollment: course={courseId}, user={userId}, status={model.Status}.",
             TaskStatus.Success, LogLevel.Information);
         return Ok();
+    }
+
+    [HttpGet("{courseId:int}/teacher-candidates")]
+    [ProducesResponseType(typeof(TrainingCourseTeacherCandidateModel[]), StatusCodes.Status200OK)]
+    public async Task<IActionResult> TeacherCandidates(
+        [FromRoute] int courseId,
+        [FromQuery] string? keyword = null,
+        CancellationToken token = default)
+    {
+        var actor = await CurrentUser();
+        var course = await CourseQuery().SingleOrDefaultAsync(c => c.Id == courseId, token);
+        if (course is null)
+            return NotFound();
+        if (!await CanManageTeachers(actor, course, token))
+            return Forbid();
+
+        var teacherIds = course.Teachers.Select(t => t.TeacherId).ToHashSet();
+        var query = context.Users.AsNoTracking().Where(u => u.Role >= Role.Teacher);
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var key = keyword.Trim().ToLower();
+            query = query.Where(u =>
+                u.UserName!.ToLower().Contains(key) ||
+                u.RealName.ToLower().Contains(key) ||
+                u.StdNumber.ToLower().Contains(key) ||
+                u.Email!.ToLower().Contains(key) ||
+                u.Id.ToString().ToLower().Contains(key));
+        }
+
+        var users = await query
+            .OrderBy(u => u.Role)
+            .ThenBy(u => u.RealName)
+            .ThenBy(u => u.UserName)
+            .Take(30)
+            .ToArrayAsync(token);
+
+        return Ok(users.Select(u => TrainingCourseTeacherCandidateModel.FromUser(u, teacherIds.Contains(u.Id))).ToArray());
     }
 
     [HttpPost("{courseId:int}/teachers")]

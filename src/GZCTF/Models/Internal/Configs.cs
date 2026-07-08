@@ -62,6 +62,53 @@ public class AccountPolicy
 }
 
 /// <summary>
+/// Portal single sign-on configuration
+/// </summary>
+public class PortalSsoConfig
+{
+    /// <summary>
+    /// Enable login through the external portal IAM service.
+    /// </summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>
+    /// IAM profile endpoint, for example http://192.168.20.150:8001/iam/v1/auth/profile.
+    /// </summary>
+    public string ProfileEndpoint { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Local email domain used when IAM does not provide an email.
+    /// </summary>
+    public string DefaultEmailDomain { get; set; } = "sso.local";
+
+    /// <summary>
+    /// Identity login provider name used for binding IAM users to local users.
+    /// </summary>
+    public string LoginProvider { get; set; } = "PortalIAM";
+
+    /// <summary>
+    /// Require the IAM profile to include the CTF platform entry.
+    /// </summary>
+    public bool RequireCtfPlatform { get; set; } = true;
+
+    /// <summary>
+    /// Platform code expected from IAM.
+    /// </summary>
+    public string CtfPlatformCode { get; set; } = "ctf-competition";
+
+    /// <summary>
+    /// Profile request timeout in seconds.
+    /// </summary>
+    [Range(1, 60)]
+    public int TimeoutSeconds { get; set; } = 8;
+
+    /// <summary>
+    /// Update local display fields and role on each portal login.
+    /// </summary>
+    public bool UpdateUserProfileOnLogin { get; set; } = true;
+}
+
+/// <summary>
 /// Container policy
 /// </summary>
 public class ContainerPolicy

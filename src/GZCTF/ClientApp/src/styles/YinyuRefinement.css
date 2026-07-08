@@ -8424,6 +8424,49 @@ body:has(.yy-training-page) .signal-field {
   white-space: nowrap;
 }
 
+.yy-training-student-detail-drawer-content {
+  width: min(72rem, calc(100vw - 1.5rem));
+  max-width: calc(100vw - 1.5rem);
+}
+
+.yy-training-student-detail-drawer-header {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  min-height: 4.25rem;
+  padding: 1rem 1.35rem 0.95rem;
+  border-bottom: 1px solid rgba(107, 238, 177, 0.18);
+  background:
+    radial-gradient(ellipse at 14% 0%, rgba(107, 238, 177, 0.12), transparent 48%),
+    linear-gradient(180deg, rgba(12, 22, 18, 0.98), rgba(8, 15, 13, 0.94));
+  backdrop-filter: blur(1.1rem);
+  box-shadow: 0 1rem 1.4rem rgba(0, 0, 0, 0.28);
+}
+
+.yy-training-student-detail-drawer-title {
+  line-height: 1.16;
+}
+
+.yy-training-student-detail-drawer-body {
+  padding-top: 1rem;
+}
+
+.yy-training-student-detail-drawer-body .mantine-Table-table {
+  width: 100%;
+}
+
+.yy-training-student-detail-drawer-body .mantine-Table-th,
+.yy-training-student-detail-drawer-body .mantine-Table-td {
+  min-width: 0;
+  white-space: normal;
+  vertical-align: top;
+}
+
+.yy-training-student-detail-drawer-body .mantine-Table-th:last-child,
+.yy-training-student-detail-drawer-body .mantine-Table-td:last-child {
+  white-space: nowrap;
+}
+
 .yy-training-chapter-link {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 0.62rem;
