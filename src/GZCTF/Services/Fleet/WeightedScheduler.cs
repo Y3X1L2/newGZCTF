@@ -47,6 +47,19 @@ public class WeightedScheduler
         return best.Node;
     }
 
+    public static WorkerNode? SelectOptimalTeamLabFabricNode(IEnumerable<WorkerNode> nodes)
+    {
+        var scored = nodes
+            .Where(CanHostTeamLabFabric)
+            .Select(n => new { Node = n, Score = CalculateScore(n) })
+            .OrderByDescending(x => x.Score)
+            .ToList();
+
+        var best = scored.FirstOrDefault();
+        if (best is null || best.Score < MinimumSchedulableScore) return null;
+        return best.Node;
+    }
+
     internal static bool CanHost(WorkerNode node, NodeCapability required) =>
         GetUnschedulableReason(node, required) is null;
 

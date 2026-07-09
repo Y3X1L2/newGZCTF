@@ -32,7 +32,7 @@ import {
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import dayjs from 'dayjs'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AdminPage } from '@Components/admin/AdminPage'
 import { CleanupButton } from '@Components/admin/CleanupButton'
 import { NodeCard, NodeInfo } from '@Components/admin/NodeCard'
@@ -48,11 +48,11 @@ import { YinyuStatusText } from '@Components/yinyu/YinyuReactBits'
 import { enableTeamLabNetwork } from '@Utils/TeamLabApi'
 
 type StatusFilter = 'all' | 'online' | 'offline' | 'busy' | 'error'
-type ResourceTypeFilter = 'all' | 'container' | 'vm' | 'pentest'
+type ResourceTypeFilter = 'all' | 'container' | 'vm' | 'pentest' | 'teamlab'
 type ResourceStatusFilter = 'all' | 'active' | 'history'
 
 interface NodeResourceItem {
-  kind: 'container' | 'vm' | 'pentest'
+  kind: 'container' | 'vm' | 'pentest' | 'teamlab'
   id: string
   name: string
   status: string
@@ -89,6 +89,7 @@ interface NodeResourceListResponse {
   containerCount: number
   vmCount: number
   pentestCount: number
+  teamLabCount: number
   items: NodeResourceItem[]
 }
 
@@ -105,6 +106,22 @@ const statusKeys: Record<string, StatusFilter> = {
 
 function statusKey(status: string | number | undefined): StatusFilter {
   return statusKeys[String(status ?? '').toLowerCase()] ?? 'error'
+}
+
+function canUseTeamLab(node: NodeInfo) {
+  return Boolean(node.canHostTeamLabDocker || node.canHostTeamLabVm || node.canHostTeamLabFabric || node.canHostTeamLab)
+}
+
+function sortNodesStable(nodes: NodeInfo[]) {
+  return [...nodes].sort((left, right) => {
+    const localOrder = Number(Boolean(right.isLocal)) - Number(Boolean(left.isLocal))
+    if (localOrder !== 0) return localOrder
+
+    const nameOrder = (left.name || left.hostAddress || '').localeCompare(right.name || right.hostAddress || '', 'zh-Hans-CN')
+    if (nameOrder !== 0) return nameOrder
+
+    return left.id.localeCompare(right.id)
+  })
 }
 
 function portPoolLabel(node: NodeInfo) {
@@ -127,7 +144,7 @@ function portPoolLabel(node: NodeInfo) {
 function teamLabStatusLabel(node: NodeInfo) {
   const status = String(node.teamLabTunnelStatus ?? '').toLowerCase()
 
-  if (node.canHostTeamLab) return '可调度'
+  if (canUseTeamLab(node)) return '可调度'
   if (!node.teamLabNetworkEnabled && status !== '2' && status !== 'probing') return '未启用'
   if (status === '2' || status === 'probing') return '待验证'
   if (status === '4' || status === 'error') return '异常'
@@ -137,7 +154,7 @@ function teamLabStatusLabel(node: NodeInfo) {
 function teamLabStatusTone(node: NodeInfo): YinyuStatusTone {
   const status = String(node.teamLabTunnelStatus ?? '').toLowerCase()
 
-  if (node.canHostTeamLab) return 'success'
+  if (canUseTeamLab(node)) return 'success'
   if (status === '2' || status === 'probing') return 'warm'
   if (status === '4' || status === 'error') return 'danger'
   return 'neutral'
@@ -341,7 +358,8 @@ function resourceEntry(item: NodeResourceItem) {
 function resourceKindLabel(item: NodeResourceItem) {
   if (item.kind === 'container') return '容器'
   if (item.kind === 'vm') return '虚拟机'
-  return '综合渗透'
+  if (item.kind === 'teamlab') return 'TeamLab'
+  return '渗透资产'
 }
 
 function resourceKindTone(item: NodeResourceItem): YinyuStatusTone {
@@ -353,6 +371,7 @@ function resourceKindTone(item: NodeResourceItem): YinyuStatusTone {
 function resourceKindIcon(item: NodeResourceItem) {
   if (item.kind === 'container') return mdiDocker
   if (item.kind === 'vm') return mdiConsoleNetworkOutline
+  if (item.kind === 'teamlab') return mdiServerNetwork
   return mdiShieldSearch
 }
 
@@ -469,11 +488,13 @@ function NodeResourcePanel({
   const [type, setType] = useState<ResourceTypeFilter>('all')
   const [status, setStatus] = useState<ResourceStatusFilter>('all')
   const [page, setPage] = useState(1)
+  const hasLoadedResources = useRef(false)
   const pageSize = 8
 
-  const loadResources = useCallback(async () => {
+  const loadResources = useCallback(async (silent = false) => {
     if (!node) return
-    setLoading(true)
+    const wasFirstLoad = !hasLoadedResources.current
+    if (!silent || wasFirstLoad) setLoading(true)
     try {
       const params = new URLSearchParams({
         type,
@@ -488,12 +509,14 @@ function NodeResourcePanel({
         notifications.show({ title: '资源读取失败', message: '无法获取该节点的运行资源', color: 'red' })
       }
     } finally {
-      setLoading(false)
+      hasLoadedResources.current = true
+      if (!silent || wasFirstLoad) setLoading(false)
     }
   }, [node, page, status, type])
 
   useEffect(() => {
     setPage(1)
+    hasLoadedResources.current = false
   }, [node?.id, status, type])
 
   useEffect(() => {
@@ -505,6 +528,14 @@ function NodeResourcePanel({
   useEffect(() => {
     loadResources()
   }, [loadResources, version])
+
+  useEffect(() => {
+    if (!node) return
+    const interval = window.setInterval(() => {
+      loadResources(true)
+    }, 15000)
+    return () => window.clearInterval(interval)
+  }, [loadResources, node])
 
   const destroyResource = async (item: NodeResourceItem) => {
     const actionLabel = item.kind === 'pentest' ? '清理该队伍的综合渗透环境' : `销毁 ${resourceKindLabel(item)}`
@@ -665,7 +696,7 @@ function NodeResourcePanel({
             </Text>
           </Stack>
           <Group gap="xs">
-            <Button variant="default" leftSection={<Icon path={mdiRefresh} size={0.78} />} onClick={loadResources}>
+            <Button variant="default" leftSection={<Icon path={mdiRefresh} size={0.78} />} onClick={() => loadResources()}>
               刷新资源
             </Button>
           </Group>
@@ -751,11 +782,12 @@ function NodeResourcePanel({
           </Group>
         </div>
 
-        <SimpleGrid cols={{ base: 2, md: 4 }}>
+        <SimpleGrid cols={{ base: 2, md: 5 }}>
           <YinyuMetricTile label="运行中" value={data?.runningCount ?? 0} detail="active" tone="success" />
           <YinyuMetricTile label="容器记录" value={data?.containerCount ?? 0} detail="docker" tone="neutral" />
           <YinyuMetricTile label="虚拟机记录" value={data?.vmCount ?? 0} detail="kvm" tone="warm" />
           <YinyuMetricTile label="渗透资产" value={data?.pentestCount ?? 0} detail="pentest" tone="neutral" />
+          <YinyuMetricTile label="TeamLab" value={data?.teamLabCount ?? 0} detail="fabric" tone="neutral" />
         </SimpleGrid>
 
         <Group justify="space-between" align="end" className="yy-node-resource-toolbar">
@@ -769,6 +801,7 @@ function NodeResourcePanel({
                 { value: 'container', label: '容器' },
                 { value: 'vm', label: '虚拟机' },
                 { value: 'pentest', label: '综合渗透' },
+                { value: 'teamlab', label: 'TeamLab' },
               ]}
               w={150}
             />
@@ -830,19 +863,24 @@ export default function NodesPage() {
   const [filter, setFilter] = useState<StatusFilter>('all')
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [resourceVersion, setResourceVersion] = useState(0)
+  const [syncingNodeIds, setSyncingNodeIds] = useState<string[]>([])
+  const hasLoadedNodes = useRef(false)
 
-  const loadNodes = useCallback(async () => {
+  const loadNodes = useCallback(async (silent = false) => {
+    const wasFirstLoad = !hasLoadedNodes.current
+    if (!silent && wasFirstLoad) setIsLoading(true)
     try {
       const res = await fetch('/api/v1/nodes')
-      if (res.ok) setNodes(await res.json())
+      if (res.ok) setNodes(sortNodesStable(await res.json()))
     } finally {
-      setIsLoading(false)
+      hasLoadedNodes.current = true
+      if (!silent || wasFirstLoad) setIsLoading(false)
     }
   }, [])
 
   useEffect(() => {
     loadNodes()
-    const interval = setInterval(loadNodes, 15000)
+    const interval = setInterval(() => loadNodes(true), 15000)
     return () => clearInterval(interval)
   }, [loadNodes])
 
@@ -918,6 +956,33 @@ export default function NodesPage() {
     }
   }
 
+  const syncAgent = async (node: NodeInfo) => {
+    setSyncingNodeIds((ids) => (ids.includes(node.id) ? ids : [...ids, node.id]))
+    try {
+      const res = await fetch(`/api/v1/nodes/${node.id}/sync-agent`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        notifications.show({
+          title: '同步已下发',
+          message: data.message || '节点 Agent 正在同步最新版本并重启。',
+          color: 'green',
+        })
+        await loadNodes()
+      } else {
+        notifications.show({
+          title: '同步失败',
+          message: data.message || '无法同步节点 Agent，请检查节点在线状态。',
+          color: 'red',
+          autoClose: 9000,
+        })
+      }
+    } catch {
+      notifications.show({ title: '同步失败', message: '网络错误', color: 'red' })
+    } finally {
+      setSyncingNodeIds((ids) => ids.filter((id) => id !== node.id))
+    }
+  }
+
   return (
     <AdminPage>
       <Stack data-testid="nodes-page" gap="lg" w="100%">
@@ -929,7 +994,7 @@ export default function NodesPage() {
             </Text>
           </Stack>
           <Group wrap="nowrap" style={{ overflowX: 'auto' }}>
-            <Button variant="default" leftSection={<Icon path={mdiRefresh} size={0.8} />} onClick={loadNodes}>
+            <Button variant="default" leftSection={<Icon path={mdiRefresh} size={0.8} />} onClick={() => loadNodes()}>
               刷新
             </Button>
             <CleanupButton onCleanup={loadNodes} />
@@ -990,19 +1055,35 @@ export default function NodesPage() {
                     rightSection={
                       <Group gap={4} wrap="nowrap">
                         {!node.isLocal && (
-                          <Tooltip label="删除节点">
-                            <ActionIcon
-                              color="red"
-                              variant="subtle"
-                              size="sm"
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                handleDeleteNode(node.id, node.name || node.hostAddress)
-                              }}
-                            >
-                              <Icon path={mdiDeleteOutline} size={0.82} />
-                            </ActionIcon>
-                          </Tooltip>
+                          <>
+                            <Tooltip label="同步最新版本">
+                              <ActionIcon
+                                color="blue"
+                                variant="subtle"
+                                size="sm"
+                                loading={syncingNodeIds.includes(node.id)}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  syncAgent(node)
+                                }}
+                              >
+                                <Icon path={mdiProgressWrench} size={0.82} />
+                              </ActionIcon>
+                            </Tooltip>
+                            <Tooltip label="删除节点">
+                              <ActionIcon
+                                color="red"
+                                variant="subtle"
+                                size="sm"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  handleDeleteNode(node.id, node.name || node.hostAddress)
+                                }}
+                              >
+                                <Icon path={mdiDeleteOutline} size={0.82} />
+                              </ActionIcon>
+                            </Tooltip>
+                          </>
                         )}
                       </Group>
                     }

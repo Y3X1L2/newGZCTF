@@ -434,7 +434,7 @@ export const ScoreboardTable: FC<ScoreboardProps> = ({ divisionId, setDivisionId
           >
             <div style={{ width: tableMinWidth }} />
           </div>
-          <div ref={scrollRef} className={cx(classes.scoreboardScrollContainer, misc.noScrollBars)} onScroll={syncTableScroll}>
+          <div ref={scrollRef} className={classes.scoreboardScrollContainer} onScroll={syncTableScroll}>
             <Table className={classes.table} style={{ minWidth: tableMinWidth }}>
               <TableHeader {...scoreboard?.challenges} />
               <Table.Tbody>

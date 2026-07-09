@@ -43,6 +43,7 @@ public class NodeResourceListResponse
     public int ContainerCount { get; set; }
     public int VmCount { get; set; }
     public int PentestCount { get; set; }
+    public int TeamLabCount { get; set; }
     public List<NodeResourceItemModel> Items { get; set; } = [];
 }
 

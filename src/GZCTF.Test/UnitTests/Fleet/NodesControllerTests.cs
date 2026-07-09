@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -216,6 +218,9 @@ public class NodesControllerTests
         Assert.Contains("install_docker", script);
         Assert.Contains("docker info", script);
         Assert.Contains("install_kvm", script);
+        Assert.Contains("kvm_ready()", script);
+        Assert.Contains("teamlab_tools_ready()", script);
+        Assert.Contains("install_missing_pkgs", script);
         Assert.Contains("qemu-system-x86", script);
         Assert.DoesNotContain("apt)\n      install_pkgs qemu-kvm", script);
         Assert.Contains("libvirt", script);
@@ -226,6 +231,7 @@ public class NodesControllerTests
         Assert.Contains("genisoimage", script);
         Assert.Contains("xorriso", script);
         Assert.Contains("cloud-image-utils", script);
+        Assert.Contains("cmp -s \"$tmp\" /etc/docker/daemon.json", script);
         Assert.Contains("KVM hardware: unavailable", script);
         Assert.Contains("install_dotnet_runtime", script);
         Assert.Contains("dotnet-install.sh", script);
@@ -335,6 +341,9 @@ public class NodesControllerTests
 
         Assert.Contains("wget -q -O \"$tmp\"", script);
         Assert.Contains("curl -fsSL", script);
+        Assert.Contains("expected_sha=", script);
+        Assert.Contains("sha256sum", script);
+        Assert.Contains("Agent binary already matches expected sha256", script);
         Assert.Contains("/tmp/gzctf-agent-2e3611920b304244ad7cfa7947ea8f41", script);
         Assert.DoesNotContain("elif", script);
         Assert.DoesNotContain("\r", script);
@@ -357,6 +366,8 @@ public class NodesControllerTests
         Assert.Contains("sudo -n systemctl daemon-reload", script);
         Assert.Contains("sudo -n systemctl enable gzctf-agent >/dev/null 2>&1 || true", script);
         Assert.Contains("sudo -n systemctl stop gzctf-agent >/dev/null 2>&1 || true", script);
+        Assert.Contains("/tmp/gzctf-agent-changed", script);
+        Assert.Contains("systemctl is-active --quiet gzctf-agent", script);
         Assert.Contains("pgrep -f '(^|/)(gzctf-agent|GZCTF.Agent|manual-agent)( |$)'", script);
         Assert.Contains("sudo -n systemctl restart gzctf-agent", script);
         Assert.DoesNotContain("sudo -n systemctl restart gzctf-agent || true", script);
@@ -418,7 +429,12 @@ public class NodesControllerTests
         await context.SaveChangesAsync();
         var controller = new DeploymentTargetsController(context,
             new DeploymentQueueService(context, NullLogger<DeploymentQueueService>.Instance),
+            new DeploymentQueueViewService(context),
             NullLogger<DeploymentTargetsController>.Instance);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext()
+        };
 
         var result = await controller.List();
         var ok = Assert.IsType<OkObjectResult>(result);
@@ -429,6 +445,94 @@ public class NodesControllerTests
         Assert.DoesNotContain("RegistryAuth", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("wg-private", json, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("safe error", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task DeploymentTargetsController_List_ParsesDockerCreatePayloadWithStringEnum()
+    {
+        await using var context = CreateContext();
+        context.Games.Add(new Game { Id = 23, Title = "CTF题库" });
+        context.Teams.Add(new Team { Id = 18, Name = "whoami" });
+        context.GameChallenges.Add(new GameChallenge
+        {
+            Id = 80,
+            GameId = 23,
+            Title = "aes90",
+            Category = ChallengeCategory.Crypto
+        });
+        context.DeploymentTargets.Add(new DeploymentTarget
+        {
+            Type = TargetType.Docker,
+            Action = TargetAction.Create,
+            Status = TargetStatus.Completed,
+            Payload = """
+                      {"Image":"10.24.0.28:5000/ctf/pwn/aes1:v1","TeamId":"18","ChallengeId":80,"GameId":23,"UserId":"019ea9c1-8aca-7680-ba85-24b7a9b135d8","ExposedPort":1337,"Flag":"flag{secret}","NetworkMode":"Open","AdditionalNetworkNames":[],"NetworkSubnets":{},"EnvironmentVariables":{},"DnsServers":[],"NetworkAttachments":[]}
+                      """
+        });
+        await context.SaveChangesAsync();
+        var controller = new DeploymentTargetsController(context,
+            new DeploymentQueueService(context, NullLogger<DeploymentQueueService>.Instance),
+            new DeploymentQueueViewService(context),
+            NullLogger<DeploymentTargetsController>.Instance);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext()
+        };
+
+        var result = await controller.List();
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var list = Assert.IsType<DeploymentQueueListResult>(ok.Value);
+        var item = Assert.Single(list.Items);
+        var json = JsonSerializer.Serialize(ok.Value);
+
+        Assert.Equal("whoami #18", item.OwnerLabel);
+        Assert.Equal("CTF题库 #23", item.GameLabel);
+        Assert.Equal("aes90 #80", item.ChallengeLabel);
+        Assert.Equal("whoami #18 / CTF题库 #23 / aes90 #80", item.RequestLabel);
+        Assert.Equal("10.24.0.28:5000/ctf/pwn/aes1:v1", item.Image);
+        Assert.DoesNotContain("flag{secret}", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task DeploymentTargetsController_List_ReturnsRequestedPage()
+    {
+        await using var context = CreateContext();
+        var baseTime = DateTimeOffset.Parse("2026-07-09T00:00:00Z");
+        for (var i = 0; i < 5; i++)
+        {
+            context.DeploymentTargets.Add(new DeploymentTarget
+            {
+                Id = Guid.Parse($"00000000-0000-0000-0000-00000000000{i + 1}"),
+                Type = TargetType.Docker,
+                Action = TargetAction.Create,
+                Status = TargetStatus.Completed,
+                CreatedAt = baseTime.AddMinutes(i)
+            });
+        }
+
+        await context.SaveChangesAsync();
+        var controller = new DeploymentTargetsController(context,
+            new DeploymentQueueService(context, NullLogger<DeploymentQueueService>.Instance),
+            new DeploymentQueueViewService(context),
+            NullLogger<DeploymentTargetsController>.Instance);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext()
+        };
+
+        var result = await controller.List(page: 2, pageSize: 2);
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var list = Assert.IsType<DeploymentQueueListResult>(ok.Value);
+
+        Assert.Equal(5, list.Total);
+        Assert.Equal(2, list.Page);
+        Assert.Equal(2, list.PageSize);
+        Assert.Equal(
+            [
+                Guid.Parse("00000000-0000-0000-0000-000000000003"),
+                Guid.Parse("00000000-0000-0000-0000-000000000002")
+            ],
+            list.Items.Select(i => i.Id).ToArray());
     }
 
     [Fact]
@@ -477,7 +581,12 @@ public class NodesControllerTests
             NullLogger<DeploymentQueueService>.Instance);
         var controller = new DeploymentTargetsController(context,
             queue,
+            new DeploymentQueueViewService(context),
             NullLogger<DeploymentTargetsController>.Instance);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext()
+        };
 
         var result = await controller.Cancel(target.Id);
 
@@ -686,6 +795,8 @@ public class NodesControllerTests
             {
                 Docker = true,
                 Kvm = true,
+                KvmDevice = true,
+                CpuVirtualization = true,
                 WireGuard = true,
                 Iptables = true,
                 Nftables = true,
@@ -700,7 +811,168 @@ public class NodesControllerTests
         Assert.Equal(3, reloaded.TeamLabProtocolVersion);
         Assert.Equal("10.251.0.3", reloaded.TeamLabFabricIp);
         Assert.Equal(TeamLabFabricStatus.Healthy, reloaded.TeamLabFabricStatus);
+        Assert.Equal(NodeCapability.Docker | NodeCapability.Kvm, reloaded.Capabilities);
         Assert.Contains("\"tcpdump\":true", reloaded.TeamLabCapabilitiesJson, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Heartbeat_DoesNotGrantKvm_WhenDeviceOrCpuVirtualizationIsMissing()
+    {
+        await using var context = CreateContext();
+        var node = new WorkerNode
+        {
+            Id = Guid.Parse("dddddddd-eeee-ffff-aaaa-bbbbbbbbbbbb"),
+            Name = "remote-node",
+            HostAddress = "10.24.0.30",
+            AuthToken = "node-token",
+            Status = NodeStatus.Online,
+            Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+            IsLocal = false
+        };
+        context.WorkerNodes.Add(node);
+        await context.SaveChangesAsync();
+        var services = new ServiceCollection()
+            .AddSingleton(context)
+            .AddLogging()
+            .AddSingleton<IDistributedLockService>(
+                _ => new LocalSemaphoreLock(NullLogger<LocalSemaphoreLock>.Instance))
+            .AddScoped<FleetCapacityReservationService>()
+            .BuildServiceProvider();
+        var controller = new NodesController(
+            new InMemoryNodeRepository(context),
+            context,
+            services.GetRequiredService<IServiceScopeFactory>(),
+            Options.Create(new ContainerProvider()),
+            new PortAllocationService(new ConfigurationBuilder().Build(),
+                Options.Create(new ContainerProvider()),
+                NullLogger<PortAllocationService>.Instance),
+            NullLogger<NodesController>.Instance);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext()
+        };
+        controller.HttpContext.RequestServices = services;
+        controller.Request.Headers.Authorization = "Bearer node-token";
+
+        var result = await controller.Heartbeat(node.Id, new HeartbeatRequest
+        {
+            CpuLoad = 0.1f,
+            MemoryLoad = 0.2f,
+            CurrentContainers = 1,
+            CurrentVms = 0,
+            UsedPorts = 3,
+            TeamLabCapabilities = new TeamLabNodeCapabilityReport
+            {
+                Docker = true,
+                Kvm = true,
+                KvmDevice = false,
+                CpuVirtualization = true,
+                WireGuard = true,
+                Iptables = true,
+                Nftables = false,
+                Tcpdump = true,
+                Dumpcap = false
+            }
+        });
+
+        Assert.IsType<OkResult>(result);
+        var reloaded = await context.WorkerNodes.SingleAsync(n => n.Id == node.Id);
+        Assert.Equal(NodeCapability.Docker, reloaded.Capabilities);
+    }
+
+    [Fact]
+    public async Task List_ReportsTeamLabDockerCapability_WhenKvmIsMissing()
+    {
+        await using var context = CreateContext();
+        context.WorkerNodes.Add(new WorkerNode
+        {
+            Id = Guid.Parse("eeeeeeee-ffff-aaaa-bbbb-cccccccccccc"),
+            Name = "docker-fabric-node",
+            HostAddress = "10.24.0.31",
+            AuthToken = "node-token",
+            Status = NodeStatus.Online,
+            LastHeartbeat = DateTimeOffset.UtcNow,
+            Capabilities = NodeCapability.Docker,
+            IsSchedulable = true,
+            TeamLabNetworkEnabled = true,
+            TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
+            TeamLabTunnelIp = "10.250.0.31",
+            TeamLabAgentVersion = "1.8.3-test",
+            TeamLabProtocolVersion = 3,
+            MaxContainers = 5,
+            MaxVms = 0
+        });
+        await context.SaveChangesAsync();
+        var services = new ServiceCollection()
+            .AddSingleton(context)
+            .AddLogging()
+            .BuildServiceProvider();
+        var controller = CreateNodesController(context, services);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { RequestServices = services }
+        };
+
+        var result = await controller.List();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(ok.Value));
+        var node = Assert.Single(doc.RootElement.EnumerateArray());
+        Assert.False(node.GetProperty("CanHostTeamLab").GetBoolean());
+        Assert.True(node.GetProperty("CanHostTeamLabFabric").GetBoolean());
+        Assert.True(node.GetProperty("CanHostTeamLabDocker").GetBoolean());
+        Assert.False(node.GetProperty("CanHostTeamLabVm").GetBoolean());
+        var capabilities = node.GetProperty("SchedulableCapabilities").EnumerateArray()
+            .Select(item => item.GetString())
+            .ToArray();
+        Assert.Contains("TeamLabNetwork", capabilities);
+        Assert.Contains("TeamLabDocker", capabilities);
+        Assert.DoesNotContain("TeamLabVm", capabilities);
+    }
+
+    [Fact]
+    public async Task SyncAgent_DelegatesLatestDownloadUrlToAgent()
+    {
+        await using var context = CreateContext();
+        var agentDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "agent");
+        Directory.CreateDirectory(agentDir);
+        await File.WriteAllBytesAsync(Path.Combine(agentDir, "gzctf-agent"), [1, 2, 3, 4]);
+        var nodeId = Guid.Parse("ffffffff-aaaa-bbbb-cccc-dddddddddddd");
+        context.WorkerNodes.Add(new WorkerNode
+        {
+            Id = nodeId,
+            Name = "remote-node",
+            HostAddress = "10.24.0.31",
+            AuthToken = "node-token",
+            Status = NodeStatus.Online,
+            Capabilities = NodeCapability.Docker,
+            AgentPort = 5001
+        });
+        await context.SaveChangesAsync();
+        var agent = new RecordingAgentClient();
+        var services = new ServiceCollection()
+            .AddSingleton(context)
+            .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
+            .AddSingleton<AgentClient>(agent)
+            .AddLogging()
+            .BuildServiceProvider();
+        var controller = CreateNodesController(context, services);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { RequestServices = services }
+        };
+        controller.Request.Scheme = "http";
+        controller.Request.Host = new HostString("10.24.0.27");
+
+        var result = await controller.SyncAgent(nodeId);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(ok.Value);
+        Assert.Contains("Agent sync requested", json, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(nodeId, agent.NodeId);
+        Assert.Equal("http://10.24.0.27/api/agent/download", agent.Request?.DownloadUrl);
+        Assert.True(agent.Request?.Restart);
+        Assert.False(string.IsNullOrWhiteSpace(agent.Request?.ExpectedSha256));
     }
 
     static AppDbContext CreateContext()
@@ -712,6 +984,17 @@ public class NodesControllerTests
 
         return new AppDbContext(options);
     }
+
+    static NodesController CreateNodesController(AppDbContext context, IServiceProvider services) =>
+        new(
+            new InMemoryNodeRepository(context),
+            context,
+            services.GetRequiredService<IServiceScopeFactory>(),
+            Options.Create(new ContainerProvider()),
+            new PortAllocationService(new ConfigurationBuilder().Build(),
+                Options.Create(new ContainerProvider()),
+                NullLogger<PortAllocationService>.Instance),
+            NullLogger<NodesController>.Instance);
 
     private sealed class InMemoryNodeRepository(AppDbContext context) : INodeRepository
     {
@@ -726,5 +1009,27 @@ public class NodesControllerTests
 
         public Task<int> MarkStaleNodesOfflineAsync(TimeSpan timeout, CancellationToken token) =>
             Task.FromResult(0);
+    }
+
+    private sealed class RecordingAgentClient : AgentClient
+    {
+        public RecordingAgentClient() : base(
+            new ServiceCollection().AddHttpClient().BuildServiceProvider().GetRequiredService<IHttpClientFactory>(),
+            new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<AgentClient>.Instance)
+        {
+        }
+
+        public Guid? NodeId { get; private set; }
+        public AgentSyncRequest? Request { get; private set; }
+
+        public override Task<AgentSyncResponse> SyncAgentAsync(Guid nodeId, AgentSyncRequest request,
+            CancellationToken token)
+        {
+            NodeId = nodeId;
+            Request = request;
+            return Task.FromResult(new AgentSyncResponse(true, "Agent sync requested.", "1.8.3-test"));
+        }
     }
 }

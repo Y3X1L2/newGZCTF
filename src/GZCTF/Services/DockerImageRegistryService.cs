@@ -601,6 +601,10 @@ fi
         if (!string.IsNullOrWhiteSpace(configured))
             candidates.Add(configured);
 
+        var fixedRegistry = NormalizeRegistryAddress(DockerRegistrySettings.FixedAddress);
+        if (!string.IsNullOrWhiteSpace(fixedRegistry))
+            candidates.Add(fixedRegistry);
+
         foreach (var migration in migrations)
         {
             AddRegistryCandidate(candidates, migration.SourceRegistry);
@@ -634,6 +638,10 @@ fi
         var configured = NormalizeRegistryAddress(_settings.NormalizedAddress);
         if (!string.IsNullOrWhiteSpace(configured))
             candidates.Add(configured);
+
+        var fixedRegistry = NormalizeRegistryAddress(DockerRegistrySettings.FixedAddress);
+        if (!string.IsNullOrWhiteSpace(fixedRegistry))
+            candidates.Add(fixedRegistry);
 
         foreach (var image in templateImages)
             AddRegistryCandidateFromImage(candidates, image);

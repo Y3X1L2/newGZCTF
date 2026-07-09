@@ -1,6 +1,6 @@
 namespace GZCTF.Services.Fleet;
 
-public sealed record DeploymentExecutionContext(Guid TargetNodeId, bool CapacityReserved);
+public sealed record DeploymentExecutionContext(Guid TargetNodeId, bool CapacityReserved, Guid? DeploymentTargetId = null);
 
 public class DeploymentExecutionContextAccessor
 {

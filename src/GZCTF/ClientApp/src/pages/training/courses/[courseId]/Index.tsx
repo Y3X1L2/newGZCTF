@@ -2,6 +2,7 @@ import {
   Accordion,
   ActionIcon,
   Alert,
+  Avatar,
   Badge,
   Box,
   Button,
@@ -26,6 +27,8 @@ import {
   Textarea,
   Title,
 } from '@mantine/core'
+import { modals } from '@mantine/modals'
+import { useDebouncedValue } from '@mantine/hooks'
 import { showNotification } from '@mantine/notifications'
 import {
   mdiArchiveArrowUpOutline,
@@ -79,6 +82,7 @@ import {
   TrainingCourseEnrollmentStatus,
   TrainingCourseStudentLearningDetailModel,
   TrainingCourseStudentLearningSummaryModel,
+  TrainingCourseStudentCandidateModel,
   TrainingCourseTeacherCandidateModel,
   TrainingCourseTeacherRole,
   TrainingCourseModel,
@@ -224,6 +228,8 @@ const optionIndexesText = (options: string[], indexes: number[]) =>
     ? indexes.map((index) => `${index + 1}. ${options[index] ?? `选项 ${index + 1}`}`).join('；')
     : '未作答'
 
+const theoryScoreText = (score: number | null | undefined, totalScore: number) => `${score ?? '--'}/${totalScore}`
+
 const CourseDetail: FC = () => {
   const { courseId } = useParams()
   const location = useLocation()
@@ -236,6 +242,7 @@ const CourseDetail: FC = () => {
   const [editOpened, setEditOpened] = useState(false)
   const [resourceOpened, setResourceOpened] = useState(false)
   const [teacherOpened, setTeacherOpened] = useState(false)
+  const [studentOpened, setStudentOpened] = useState(false)
   const [studentDetailOpened, setStudentDetailOpened] = useState(false)
   const [dockerRegisterOpened, setDockerRegisterOpened] = useState(false)
   const [dockerUploadOpened, setDockerUploadOpened] = useState(false)
@@ -247,8 +254,13 @@ const CourseDetail: FC = () => {
   const [challengeAttachmentFile, setChallengeAttachmentFile] = useState<File | null>(null)
   const [studentLearningDetail, setStudentLearningDetail] = useState<TrainingCourseStudentLearningDetailModel | null>(null)
   const [studentLearningLoading, setStudentLearningLoading] = useState(false)
+  const [studentCandidates, setStudentCandidates] = useState<TrainingCourseStudentCandidateModel[]>([])
+  const [studentKeyword, setStudentKeyword] = useState('')
+  const [debouncedStudentKeyword] = useDebouncedValue(studentKeyword, 300)
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
   const [teacherCandidates, setTeacherCandidates] = useState<TrainingCourseTeacherCandidateModel[]>([])
   const [teacherKeyword, setTeacherKeyword] = useState('')
+  const [debouncedTeacherKeyword] = useDebouncedValue(teacherKeyword, 300)
   const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null)
   const [selectedTeacherRole, setSelectedTeacherRole] = useState<TrainingCourseTeacherRole>(TrainingCourseTeacherRole.Teacher)
   const [courseDraft, setCourseDraft] = useState<TrainingCourseEditModel>(emptyCourseDraft())
@@ -403,6 +415,29 @@ const CourseDetail: FC = () => {
 
   const saveCourse = async () => persistCourse(true)
 
+  const deleteCourse = async () => {
+    if (!course) return
+    modals.openConfirmModal({
+      title: '删除课程',
+      children: (
+        <Text size="sm">
+          确认删除「{course.title}」？课程内章节、报名、学习记录和课程专属题目会被删除，环境模板只会解绑。
+        </Text>
+      ),
+      labels: { confirm: '删除', cancel: '取消' },
+      confirmProps: { color: 'red' },
+      onConfirm: async () => {
+        try {
+          await trainingCourseAdminApi.deleteCourse(course.id)
+          showNotification({ color: 'green', message: '课程已删除。' })
+          navigate('/training')
+        } catch (e) {
+          showErrorMsg(e, t)
+        }
+      },
+    })
+  }
+
   const saveResource = async () => {
     if (!course || !resourceDraft.title.trim()) return
     setSaving(true)
@@ -425,6 +460,39 @@ const CourseDetail: FC = () => {
       await load()
     } catch (e) {
       showErrorMsg(e, t)
+    }
+  }
+
+  const searchStudentCandidates = async (keyword = studentKeyword) => {
+    if (!course || !course.canManageEnrollments) return
+    try {
+      const res = await trainingCourseAdminApi.studentCandidates(course.id, keyword.trim() || undefined)
+      setStudentCandidates(res.data)
+    } catch (e) {
+      showErrorMsg(e, t)
+    }
+  }
+
+  const openStudentModal = () => {
+    setStudentKeyword('')
+    setSelectedStudentId(null)
+    setStudentOpened(true)
+  }
+
+  const addCourseStudent = async () => {
+    if (!course || !selectedStudentId) return
+    setSaving(true)
+    try {
+      await trainingCourseAdminApi.addEnrollment(course.id, { userId: selectedStudentId })
+      showNotification({ color: 'teal', message: '学员已添加到课程。' })
+      setSelectedStudentId(null)
+      setStudentKeyword('')
+      await load()
+      await searchStudentCandidates('')
+    } catch (e) {
+      showErrorMsg(e, t)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -459,7 +527,6 @@ const CourseDetail: FC = () => {
     setSelectedTeacherId(null)
     setSelectedTeacherRole(TrainingCourseTeacherRole.Teacher)
     setTeacherOpened(true)
-    void searchTeacherCandidates('')
   }
 
   const addCourseTeacher = async () => {
@@ -742,6 +809,16 @@ const CourseDetail: FC = () => {
     if (studentPage > studentPageCount) setStudentPage(studentPageCount)
   }, [studentPage, studentPageCount])
 
+  useEffect(() => {
+    if (!studentOpened || !course?.canManageEnrollments) return
+    void searchStudentCandidates(debouncedStudentKeyword)
+  }, [course?.id, course?.canManageEnrollments, debouncedStudentKeyword, studentOpened])
+
+  useEffect(() => {
+    if (!teacherOpened || !course?.canManageTeachers) return
+    void searchTeacherCandidates(debouncedTeacherKeyword)
+  }, [course?.id, course?.canManageTeachers, debouncedTeacherKeyword, teacherOpened])
+
   if (!course) {
     return (
       <WithNavBar isLoading width="min(112rem, calc(100vw - 4rem))">
@@ -837,12 +914,22 @@ const CourseDetail: FC = () => {
                     )}
                   </>
                 ) : null}
+                {course.canDelete ? (
+                  <Button
+                    color="red"
+                    variant="light"
+                    leftSection={<Icon path={mdiTrashCanOutline} size={0.82} />}
+                    onClick={deleteCourse}
+                  >
+                    删除课程
+                  </Button>
+                ) : null}
               </Group>
             </Stack>
           </div>
         </YinyuPanel>
 
-        <Tabs value={activeTab} onChange={handleTabChange} className="yy-course-tabs yy-training-detail-tabs">
+        <Tabs value={activeTab} onChange={handleTabChange} keepMounted={false} className="yy-course-tabs yy-training-detail-tabs">
           <div className="yy-training-detail-grid">
             <main className="yy-training-detail-main">
               <Tabs.List>
@@ -984,9 +1071,14 @@ const CourseDetail: FC = () => {
 
           <Tabs.Panel value="students" pt="md">
             <YinyuPanel p="lg">
-              <Title order={3} mb="md">
-                学员管理
-              </Title>
+              <Group justify="space-between" mb="md">
+                <Title order={3}>学员管理</Title>
+                {course.canManageEnrollments ? (
+                  <Button leftSection={<Icon path={mdiAccountPlusOutline} size={0.82} />} onClick={openStudentModal}>
+                    添加学员
+                  </Button>
+                ) : null}
+              </Group>
               <Table.ScrollContainer minWidth={820}>
                 <Table verticalSpacing="sm">
                   <Table.Thead>
@@ -1522,15 +1614,15 @@ const CourseDetail: FC = () => {
                               <Stack gap={2}>
                                 <Text fw={900}>{chapter.theory.title}</Text>
                                 <Text size="xs" c="dimmed">
-                                  {chapter.theory.questionCount} 题 / {chapter.theory.totalScore} 分 / 及格线{' '}
-                                  {chapter.theory.passRate}%
+                                  {chapter.theory.questionCount} 题 / {chapter.theory.totalScore} 分 / 得分{' '}
+                                  {theoryScoreText(chapter.theory.score, chapter.theory.totalScore)} / 及格线 {chapter.theory.passRate}%
                                 </Text>
                               </Stack>
                               <Badge color={chapter.theory.passed ? 'teal' : chapter.theory.status ? 'yellow' : 'gray'} variant="light">
                                 {chapter.theory.passed
-                                  ? '已通过'
+                                  ? `已通过 ${theoryScoreText(chapter.theory.score, chapter.theory.totalScore)}`
                                   : chapter.theory.status
-                                    ? `${chapter.theory.score ?? 0}/${chapter.theory.totalScore}`
+                                    ? theoryScoreText(chapter.theory.score, chapter.theory.totalScore)
                                     : '未提交'}
                               </Badge>
                             </Group>
@@ -1686,6 +1778,71 @@ const CourseDetail: FC = () => {
         )}
       </Drawer>
 
+      <Modal opened={studentOpened} onClose={() => setStudentOpened(false)} title="添加学员" size="lg">
+        <Stack>
+          <Group align="flex-end">
+            <TextInput
+              label="搜索学员"
+              placeholder="用户名、姓名、学号、邮箱或 ID"
+              value={studentKeyword}
+              onChange={(event) => setStudentKeyword(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') void searchStudentCandidates()
+              }}
+              style={{ flex: 1 }}
+            />
+            <Button variant="light" leftSection={<Icon path={mdiMagnify} size={0.82} />} onClick={() => searchStudentCandidates()}>
+              搜索
+            </Button>
+          </Group>
+          <ScrollArea.Autosize mah={320}>
+            <Stack gap="xs">
+              {studentCandidates.map((candidate) => {
+                const selected = selectedStudentId === candidate.userId
+                return (
+                  <Button
+                    key={candidate.userId}
+                    variant={selected ? 'light' : 'subtle'}
+                    color={candidate.alreadyEnrolled ? 'gray' : selected ? 'teal' : undefined}
+                    disabled={candidate.alreadyEnrolled}
+                    justify="flex-start"
+                    h="auto"
+                    py="xs"
+                    onClick={() => setSelectedStudentId(candidate.userId)}
+                  >
+                    <Group gap="sm" wrap="nowrap">
+                      <Avatar src={candidate.avatar} radius="xl" size={34}>
+                        {(candidate.realName || candidate.userName || '?').slice(0, 1)}
+                      </Avatar>
+                      <Stack gap={0} align="flex-start">
+                        <Text fw={800}>{candidate.realName || candidate.userName}</Text>
+                        <Text size="xs" c="dimmed">
+                          {candidate.userName} {candidate.stdNumber ? ` / ${candidate.stdNumber}` : ''}
+                          {candidate.alreadyEnrolled ? ' / 已在课程中' : ''}
+                        </Text>
+                      </Stack>
+                    </Group>
+                  </Button>
+                )
+              })}
+              {studentCandidates.length === 0 ? (
+                <Text size="sm" c="dimmed" ta="center" py="md">
+                  暂无匹配学员
+                </Text>
+              ) : null}
+            </Stack>
+          </ScrollArea.Autosize>
+          <Group justify="flex-end">
+            <Button variant="subtle" onClick={() => setStudentOpened(false)}>
+              取消
+            </Button>
+            <Button loading={saving} disabled={!selectedStudentId} onClick={addCourseStudent}>
+              添加到课程
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
       <Modal opened={teacherOpened} onClose={() => setTeacherOpened(false)} title="添加授课教师" size="lg">
         <Stack>
           <Group align="flex-end">
@@ -1765,6 +1922,18 @@ const CourseDetail: FC = () => {
             minRows={8}
             value={courseDraft.description}
             onChange={(e) => setCourseDraft({ ...courseDraft, description: e.currentTarget.value })}
+          />
+          <Switch
+            label="课程报名审核"
+            checked={courseDraft.enrollmentPolicy === TrainingCourseEnrollmentPolicy.TeacherApproval}
+            onChange={(event) =>
+              setCourseDraft({
+                ...courseDraft,
+                enrollmentPolicy: event.currentTarget.checked
+                  ? TrainingCourseEnrollmentPolicy.TeacherApproval
+                  : TrainingCourseEnrollmentPolicy.AutoApprove,
+              })
+            }
           />
           <Group justify="space-between">
             <FileButton

@@ -343,6 +343,42 @@ public class WeightedSchedulerTests
     }
 
     [Fact]
+    public void TeamLabDockerCapability_DoesNotRequireKvm()
+    {
+        var node = new WorkerNode
+        {
+            Id = Guid.NewGuid(),
+            Capabilities = NodeCapability.Docker,
+            Status = NodeStatus.Online,
+            IsLocal = false,
+            LastHeartbeat = DateTimeOffset.UtcNow,
+            IsSchedulable = true,
+            TeamLabNetworkEnabled = true,
+            TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
+            TeamLabTunnelIp = "10.250.0.31",
+            TeamLabAgentVersion = "1.8.3-test",
+            TeamLabProtocolVersion = 3,
+            CurrentContainers = 0,
+            MaxContainers = 2,
+            CurrentVms = 0,
+            MaxVms = 0
+        };
+
+        Assert.True(WeightedScheduler.CanHostTeamLabFabric(node));
+        Assert.True(WeightedScheduler.CanHostTeamLabDocker(node));
+        Assert.False(WeightedScheduler.CanHostTeamLabVm(node));
+        Assert.False(WeightedScheduler.CanHostTeamLab(node));
+        Assert.Null(WeightedScheduler.GetTeamLabAssetHostUnschedulableReason(
+            node,
+            requiresDocker: true,
+            requiresVm: false));
+        Assert.Contains("Kvm", WeightedScheduler.GetTeamLabAssetHostUnschedulableReason(
+            node,
+            requiresDocker: false,
+            requiresVm: true));
+    }
+
+    [Fact]
     public void ReservedDockerCapacity_RejectsNodeAtConfiguredContainerLimit()
     {
         var node = new WorkerNode

@@ -57,8 +57,15 @@ public class NodesController : ControllerBase
             request.NodeName, HttpContext.RequestAborted, requestBaseUrl);
 
         if (!result.Success)
+        {
+            _logger.SystemLog($"Worker node registration failed: host={request.HostAddress}, message={result.Message}.",
+                TaskStatus.Failed, LogLevel.Warning);
             return BadRequest(new { message = result.Message });
+        }
 
+        _logger.SystemLog(
+            $"Worker node registered or updated: node={result.NodeName ?? request.NodeName ?? request.HostAddress}, id={result.NodeId}, host={request.HostAddress}, capabilities={result.Capabilities}.",
+            TaskStatus.Success, LogLevel.Information);
         return Ok(result);
     }
 
@@ -174,6 +181,7 @@ public class NodesController : ControllerBase
         var includeContainers = normalizedType is "all" or "container" or "containers";
         var includeVms = normalizedType is "all" or "vm" or "vms";
         var includePentest = normalizedType is "all" or "pentest" or "penetration";
+        var includeTeamLab = normalizedType is "all" or "teamlab";
 
         var resources = new List<NodeResourceItemModel>();
         var pentestContainerIds = new HashSet<Guid>();
@@ -247,6 +255,18 @@ public class NodesController : ControllerBase
             resources.AddRange(vmResources);
         }
 
+        if (includeTeamLab)
+        {
+            var assets = await _context.TeamLabRuntimeAssets.AsNoTracking()
+                .Where(a => a.WorkerNodeId == id || (a.WorkerNodeId == null && a.Shard != null && a.Shard.WorkerNodeId == id))
+                .Include(a => a.Runtime).ThenInclude(r => r.Game)
+                .Include(a => a.Runtime).ThenInclude(r => r.Team)
+                .Include(a => a.Shard)
+                .ToListAsync(token);
+
+            resources.AddRange(assets.Select(ToNodeTeamLabResource));
+        }
+
         if (normalizedStatus == "active")
             resources = resources.Where(r => r.IsActive).ToList();
         else if (normalizedStatus == "history")
@@ -272,6 +292,7 @@ public class NodesController : ControllerBase
             ContainerCount = resources.Count(r => r.Kind == "container"),
             VmCount = resources.Count(r => r.Kind == "vm"),
             PentestCount = resources.Count(r => r.Kind == "pentest"),
+            TeamLabCount = resources.Count(r => r.Kind == "teamlab"),
             Items = items
         });
     }
@@ -371,6 +392,8 @@ public class NodesController : ControllerBase
         _context.WorkerNodes.Remove(node);
         await _context.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
+        _logger.SystemLog($"Worker node deregistered: node={node.Name}, id={node.Id}, host={node.HostAddress}, force={force}.",
+            TaskStatus.Success, LogLevel.Information);
 
         return NoContent();
     }
@@ -523,6 +546,9 @@ public class NodesController : ControllerBase
             return BadRequest(new { message = "镜像仓库已固定为 10.24.0.28:5000，节点管理不再支持切换存储服务器。" });
 
         await _context.SaveChangesAsync(token);
+        _logger.SystemLog(
+            $"Worker node updated: node={node.Name}, id={node.Id}, schedulable={node.IsSchedulable}, maxContainers={node.MaxContainers}, maxVms={node.MaxVms}.",
+            TaskStatus.Success, LogLevel.Information);
 
         return Ok(new
         {
@@ -547,7 +573,51 @@ public class NodesController : ControllerBase
             ? await service.EnableDryRunAsync(node, token)
             : await service.MarkHealthyAsync(node, request.TunnelIp ?? string.Empty, token);
 
+        _logger.SystemLog(
+            $"Worker node TeamLab network {(request.DryRun ? "checked" : "enabled")}: node={node.Name}, id={node.Id}, success={result.Success}, message={result.Message}.",
+            result.Success ? TaskStatus.Success : TaskStatus.Failed,
+            result.Success ? LogLevel.Information : LogLevel.Warning);
+
         return result.Success ? Ok(result) : BadRequest(result);
+    }
+
+    [HttpPost("{id:guid}/sync-agent")]
+    [RequireAdmin]
+    public async Task<IActionResult> SyncAgent(Guid id)
+    {
+        var token = HttpContext.RequestAborted;
+        var node = await _context.WorkerNodes.AsNoTracking().FirstOrDefaultAsync(n => n.Id == id, token);
+        if (node is null) return NotFound();
+        if (node.IsLocal)
+            return BadRequest(new { message = "Local node is updated together with the platform deployment." });
+
+        var requestBaseUrl = $"{Request.Scheme}://{Request.Host}{Request.PathBase}";
+        var serverUrl = NodeDeployService.ResolveServerUrl(
+            HttpContext.RequestServices.GetRequiredService<IConfiguration>(),
+            requestBaseUrl);
+        var agentClient = HttpContext.RequestServices.GetRequiredService<AgentClient>();
+
+        try
+        {
+            var result = await agentClient.SyncAgentAsync(id,
+                new AgentSyncRequest(
+                    $"{serverUrl.TrimEnd('/')}/api/agent/download",
+                    NodeDeployService.ComputeAgentBinarySha256()),
+                token);
+            _logger.SystemLog(
+                $"Worker node Agent sync requested: node={node.Name}, id={node.Id}, success={result.Success}, message={result.Message}.",
+                result.Success ? TaskStatus.Pending : TaskStatus.Failed,
+                result.Success ? LogLevel.Information : LogLevel.Warning);
+            return result.Success ? Ok(result) : BadRequest(result);
+        }
+        catch (Exception ex) when (ex is AgentClientException or HttpRequestException or TaskCanceledException)
+        {
+            _logger.LogWarning(ex, "Agent sync failed on node {NodeId}", id);
+            _logger.SystemLog(
+                $"Worker node Agent sync failed: node={node.Name}, id={node.Id}, error={ex.Message}.",
+                TaskStatus.Failed, LogLevel.Warning);
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPost("{id:guid}/heartbeat")]
@@ -598,8 +668,15 @@ public class NodesController : ControllerBase
         if (request.TeamLabFabricStatus.HasValue)
             node.TeamLabFabricStatus = request.TeamLabFabricStatus.Value;
         if (request.TeamLabCapabilities is not null)
+        {
             node.TeamLabCapabilitiesJson = JsonSerializer.Serialize(request.TeamLabCapabilities,
                 new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            node.Capabilities = WorkerNodeCapabilityHelper.FromTeamLabReport(
+                request.TeamLabCapabilities.Docker,
+                request.TeamLabCapabilities.Kvm,
+                request.TeamLabCapabilities.KvmDevice,
+                request.TeamLabCapabilities.CpuVirtualization);
+        }
         await _context.SaveChangesAsync();
 
         var capacity = HttpContext.RequestServices.GetRequiredService<FleetCapacityReservationService>();
@@ -884,6 +961,51 @@ public class NodesController : ControllerBase
         };
     }
 
+    static NodeResourceItemModel ToNodeTeamLabResource(TeamLabRuntimeAsset asset)
+    {
+        var runtime = asset.Runtime;
+        var active = asset.Status is TeamLabRuntimeStatus.Pending
+            or TeamLabRuntimeStatus.Planning
+            or TeamLabRuntimeStatus.Scheduled
+            or TeamLabRuntimeStatus.Deploying
+            or TeamLabRuntimeStatus.Probing
+            or TeamLabRuntimeStatus.Running
+            or TeamLabRuntimeStatus.CleanupPending
+            or TeamLabRuntimeStatus.Destroying;
+        var startedAt = runtime.CreatedAt;
+        var stoppedAt = active ? null : runtime.UpdatedAt;
+        var provider = asset.Shard is null
+            ? asset.Kind.ToString()
+            : $"{asset.Kind} / shard {asset.Shard.Id}";
+
+        return new NodeResourceItemModel
+        {
+            Kind = "teamlab",
+            Id = asset.Id.ToString(),
+            Name = string.IsNullOrWhiteSpace(asset.Name) ? asset.TopologyKey : asset.Name,
+            Status = asset.Status.ToString(),
+            IsActive = active,
+            StartedAt = startedAt,
+            ExpectedStopAt = null,
+            StoppedAt = stoppedAt,
+            Duration = FormatDuration(startedAt, stoppedAt ?? DateTimeOffset.UtcNow),
+            Image = asset.Image,
+            RuntimeId = ShortenRuntimeId(asset.RuntimeResourceId ?? asset.TopologyKey),
+            Entry = asset.IpAddress,
+            Ip = asset.IpAddress,
+            Port = null,
+            GameId = runtime.GameId,
+            GameTitle = runtime.Game.Title,
+            ChallengeId = null,
+            ChallengeTitle = asset.Name,
+            ChallengeCategory = "TeamLab",
+            TeamId = runtime.TeamId,
+            TeamName = runtime.Team.Name,
+            ProviderName = provider,
+            OsType = asset.Kind.ToString()
+        };
+    }
+
     static string ShortenRuntimeId(string id) =>
         string.IsNullOrWhiteSpace(id) || id.Length <= 12 ? id : id[..12];
 
@@ -910,47 +1032,27 @@ public class DeploymentTargetsController : ControllerBase
 {
     private readonly AppDbContext _context;
     private readonly DeploymentQueueService _queue;
+    private readonly DeploymentQueueViewService _queueView;
     private readonly ILogger<DeploymentTargetsController> _logger;
 
     public DeploymentTargetsController(AppDbContext context, DeploymentQueueService queue,
+        DeploymentQueueViewService queueView,
         ILogger<DeploymentTargetsController> logger)
     {
         _context = context;
         _queue = queue;
+        _queueView = queueView;
         _logger = logger;
     }
 
     [HttpGet]
     [RequireAdmin]
     public async Task<IActionResult> List(
-        [FromQuery] TargetStatus? status = null,
+        [FromQuery] string? status = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
-        page = Math.Max(1, page);
-        pageSize = Math.Clamp(pageSize, 1, 100);
-
-        var query = _context.DeploymentTargets.AsQueryable();
-
-        if (status.HasValue)
-            query = query.Where(t => t.Status == status.Value);
-
-        var total = await query.CountAsync();
-        var items = await query
-            .OrderByDescending(t => t.CreatedAt)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(t => new
-            {
-                t.Id, t.TargetNodeId, t.Type, t.Action, t.Status,
-                TargetNodeName = t.TargetNode == null ? null : t.TargetNode.Name,
-                TargetNodeHost = t.TargetNode == null ? null : t.TargetNode.HostAddress,
-                t.ResultPort, t.ResultHost,
-                t.CreatedAt, t.CompletedAt, t.ErrorMessage
-            })
-            .ToListAsync();
-
-        return Ok(new { total, page, pageSize, items });
+        return Ok(await _queueView.ListAsync(status, page, pageSize, HttpContext.RequestAborted));
     }
 
     [HttpGet("{id:guid}")]
@@ -975,9 +1077,24 @@ public class DeploymentTargetsController : ControllerBase
     [RequireAdmin]
     public async Task<IActionResult> Cancel(Guid id)
     {
+        var token = HttpContext?.RequestAborted ?? CancellationToken.None;
+        var ticket = await _context.DeploymentQueueTickets
+            .Include(t => t.TargetNode)
+            .Include(t => t.DeploymentTarget).ThenInclude(t => t!.TargetNode)
+            .SingleOrDefaultAsync(t => t.Id == id, token);
+        if (ticket is not null)
+        {
+            await _queue.CancelAsync(ticket.Id, "Deployment queue ticket was cancelled by administrator.", token);
+            var node = ticket.TargetNode ?? ticket.DeploymentTarget?.TargetNode;
+            _logger.SystemLog(
+                $"Deployment queue ticket {ticket.Id} cancelled by administrator: kind={ticket.Kind}, game={ticket.GameId}, team={ticket.OwnerTeamId}, user={ticket.OwnerUserId}, challenge={ticket.ChallengeId}, node={node?.Name ?? node?.HostAddress ?? "unassigned"}.",
+                TaskStatus.Exit, LogLevel.Information);
+            return NoContent();
+        }
+
         var target = await _context.DeploymentTargets
             .Include(t => t.TargetNode)
-            .SingleOrDefaultAsync(t => t.Id == id);
+            .SingleOrDefaultAsync(t => t.Id == id, token);
         if (target is null) return NotFound();
         if (target.Status == TargetStatus.Pending ||
             target.Status == TargetStatus.Assigned ||
@@ -994,7 +1111,6 @@ public class DeploymentTargetsController : ControllerBase
                 .FirstOrDefaultAsync();
             if (activeTicket is not null)
             {
-                var token = HttpContext?.RequestAborted ?? CancellationToken.None;
                 await _queue.CancelAsync(activeTicket.Id, "Deployment target was cancelled by administrator.",
                     token);
                 _logger.SystemLogDeploymentTarget("cancelled", target, target.TargetNode);

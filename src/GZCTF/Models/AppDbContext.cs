@@ -46,6 +46,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
     public DbSet<ApiToken> ApiTokens { get; set; } = null!;
     public DbSet<ImageTemplate> ImageTemplates { get; set; } = null!;
+    public DbSet<ImageDistributionRecord> ImageDistributionRecords { get; set; } = null!;
     public DbSet<DockerRegistryMigrationTask> DockerRegistryMigrationTasks { get; set; } = null!;
     public DbSet<DockerRegistryMigrationItem> DockerRegistryMigrationItems { get; set; } = null!;
     public DbSet<VmInstance> VmInstances => Set<VmInstance>();
@@ -734,6 +735,30 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .WithMany()
                 .HasForeignKey(e => e.TrainingCourseId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<ImageDistributionRecord>(entity =>
+        {
+            entity.Property(e => e.ImageType)
+                .HasConversion<byte>();
+
+            entity.Property(e => e.Status)
+                .HasConversion<byte>();
+
+            entity.Property(e => e.References)
+                .HasConversion(GetJsonConverter<List<ImageDistributionReference>>())
+                .Metadata
+                .SetValueComparer(GetEnumerableComparer<List<ImageDistributionReference>, ImageDistributionReference>());
+
+            entity.HasOne(e => e.ImageTemplate)
+                .WithMany()
+                .HasForeignKey(e => e.ImageTemplateId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.WorkerNode)
+                .WithMany()
+                .HasForeignKey(e => e.WorkerNodeId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<DockerRegistryMigrationTask>(entity =>

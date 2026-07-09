@@ -282,6 +282,35 @@ public class TeamLabDeploymentServiceTests
     }
 
     [Fact]
+    public async Task BuildResolvedNativeDockerContainerConfig_RewritesManagedRegistryReferenceForAgent()
+    {
+        var workerNodeId = System.Guid.NewGuid();
+        var spec = new TeamLabAssetSpec(
+            TeamLabAssetSpecKind.Docker,
+            TopologyKey: "pwn",
+            Name: "Pwn",
+            SourceTemplateId: 114,
+            Image: "10.24.0.28:5000/ctf/pwn/21:latest",
+            CpuCount: 10,
+            MemoryLimit: 512,
+            StorageLimit: 256,
+            ExposePort: 80,
+            InfrastructureRole: null,
+            StartPriority: 50,
+            Interfaces:
+            [
+                new TeamLabAssetInterfaceSpec("asset", "service", "tl12-service", "eth0", "10.90.0.3", 28,
+                    "02:42:ac:10:00:02", IsPrimary: true, RemoveDefaultRoute: false)
+            ]);
+        var registry = CreateDockerRegistryService("10.24.0.99:5000");
+
+        var config = await TeamLabDeploymentService.BuildResolvedNativeDockerContainerConfigAsync(
+            spec, teamId: 7, workerNodeId, flag: null, registry, CancellationToken.None);
+
+        Assert.Equal("10.24.0.99:5000/ctf/pwn/21:latest", config.Image);
+    }
+
+    [Fact]
     public void ResolveDeploymentMode_AlwaysUsesNativePublishedTopologyForTeamLab()
     {
         var mode = TeamLabDeploymentService.ResolveDeploymentMode(new PenetrationTeamEnvironment
@@ -1764,8 +1793,11 @@ public class TeamLabDeploymentServiceTests
 
     private static DockerImageRegistryService CreateDockerRegistryService(string address)
     {
-        var services = new ServiceCollection().BuildServiceProvider();
-        var scopeFactory = services.GetRequiredService<IServiceScopeFactory>();
+        var services = new ServiceCollection();
+        services.AddSingleton(CreateContext());
+        services.AddLogging();
+        var provider = services.BuildServiceProvider();
+        var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
         var agentClient = new AgentClient(
             new StaticHttpClientFactory(),
             scopeFactory,
@@ -1802,6 +1834,7 @@ public class TeamLabDeploymentServiceTests
             Options.Create(new TeamLabNetworkConfig()),
             NullLogger<TeamLabPlanService>.Instance);
         var registry = CreateDockerRegistryService("10.24.0.28:5000");
+        var imageDistribution = CreateImageDistributionService(context, agentClient);
         var lockService = new GZCTF.Services.Concurrency.LocalSemaphoreLock(
             NullLogger<GZCTF.Services.Concurrency.LocalSemaphoreLock>.Instance);
         var capacity = new FleetCapacityReservationService(
@@ -1814,6 +1847,7 @@ public class TeamLabDeploymentServiceTests
             planService,
             agentClient,
             registry,
+            imageDistribution,
             new TeamLabWireGuardService(
                 new EphemeralDataProtectionProvider(),
                 Options.Create(new PublicUdpGatewayConfig { PublicEndpoint = "203.195.157.191" }),
@@ -1824,6 +1858,46 @@ public class TeamLabDeploymentServiceTests
             capacity,
             new DeploymentQueueService(context, NullLogger<DeploymentQueueService>.Instance),
             NullLogger<TeamLabDeploymentService>.Instance);
+    }
+
+    private static ImageDistributionService CreateImageDistributionService(AppDbContext context, AgentClient agentClient)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(context);
+        services.AddLogging();
+        var provider = services.BuildServiceProvider();
+        var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
+        var dockerRegistry = new DockerImageRegistryService(
+            Options.Create(new DockerRegistrySettings { Address = "10.24.0.28:5000" }),
+            scopeFactory,
+            agentClient,
+            NullLogger<DockerImageRegistryService>.Instance);
+        var vmRegistry = new Moq.Mock<VmImageRegistryService>(
+            Options.Create(new DockerRegistrySettings { Address = "10.24.0.28:5000" }),
+            new StaticHttpClientFactory(),
+            NullLogger<VmImageRegistryService>.Instance);
+        vmRegistry
+            .Setup(r => r.EnsureArtifactAsync(Moq.It.IsAny<ImageTemplate>(), Moq.It.IsAny<CancellationToken>()))
+            .Returns<ImageTemplate, CancellationToken>((template, _) =>
+            {
+                var hash = template.ImageHash ?? new string('a', 64);
+                return Task.FromResult(new VmImageArtifactReference(
+                    "10.24.0.28:5000",
+                    $"ctf/gzctf/vm-template/{template.Id}",
+                    hash,
+                    $"sha256:{hash}"));
+            });
+        var artifacts = new VmArtifactStore(
+            Options.Create(new DockerRegistrySettings { Address = "10.24.0.28:5000" }),
+            vmRegistry.Object,
+            NullLogger<VmArtifactStore>.Instance);
+
+        return new ImageDistributionService(
+            context,
+            agentClient,
+            dockerRegistry,
+            artifacts,
+            NullLogger<ImageDistributionService>.Instance);
     }
 
     private static async Task SeedTwoDockerTeamLabRuntimeAsync(AppDbContext context, Guid nodeId)
@@ -2142,6 +2216,14 @@ public class TeamLabDeploymentServiceTests
         public override Task<TeamLabFlowResponse?> StopTeamLabFlowMetadataAsync(Guid nodeId,
             TeamLabFlowStopRequest request, CancellationToken token) =>
             Task.FromResult<TeamLabFlowResponse?>(new TeamLabFlowResponse(true, false, "flow", [], []));
+
+        public override Task PullDockerImageAsync(Guid nodeId, string image, string? registryAuth,
+            CancellationToken token) =>
+            Task.CompletedTask;
+
+        public override Task<AgentVmImageDownloadResult> DownloadVmImageAsync(Guid nodeId, int templateId,
+            string hash, string? downloadUrl = null, long? expectedSize = null, CancellationToken token = default) =>
+            Task.FromResult(AgentVmImageDownloadResult.Ok(false, true, expectedSize, $"sha256:{hash}"));
     }
 
     private sealed class BlockingTeamLabAgentClient : TestTeamLabAgentClientBase

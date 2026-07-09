@@ -7,5 +7,20 @@ namespace GZCTF.Agent.Controllers;
 public class StatusController : ControllerBase
 {
     [HttpGet]
-    public IActionResult Get() => Ok(new { status = "healthy", timestamp = DateTimeOffset.UtcNow });
+    public async Task<IActionResult> Get(CancellationToken token)
+    {
+        string? binarySha256 = null;
+        const string installedPath = "/usr/local/bin/gzctf-agent";
+        if (System.IO.File.Exists(installedPath))
+            binarySha256 = await Services.AgentMaintenanceService.ComputeFileSha256Async(installedPath, token);
+
+        return Ok(new
+        {
+            status = "healthy",
+            timestamp = DateTimeOffset.UtcNow,
+            agentVersion = typeof(StatusController).Assembly.GetName().Version?.ToString(),
+            protocolVersion = 3,
+            binarySha256
+        });
+    }
 }

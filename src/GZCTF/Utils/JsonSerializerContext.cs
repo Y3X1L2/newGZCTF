@@ -24,6 +24,7 @@ namespace GZCTF.Utils;
 [JsonSerializable(typeof(AnswerResult))]
 [JsonSerializable(typeof(List<string>))]
 [JsonSerializable(typeof(List<int>))]
+[JsonSerializable(typeof(List<ImageDistributionReference>))]
 [JsonSerializable(typeof(HashSet<string>))]
 [JsonSerializable(typeof(DockerRegistryOptions))]
 [JsonSerializable(typeof(GameMetadata))]

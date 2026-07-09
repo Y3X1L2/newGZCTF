@@ -23,6 +23,14 @@ This document tracks the July 2026 logging coverage pass for deployment queue, T
 - Added missing training direction update log.
 - Added training course management logs for draft/publish/archive flow, enrollment review, teacher changes, chapter/resource/theory paper/question/template/challenge changes.
 - Added training learner logs for check-in, enrollment/cancel, chapter completion, chapter theory submission, course container renewal/destruction.
+- Added `DeploymentQueueViewService` so the deployment queue page now aggregates queue tickets and historical deployment targets into readable rows: owner/team or user, game, challenge, image/template, target node name/host, type, action, status, capacity slots, queue position, result, and error.
+- Added Docker lifecycle deployment target rows for container destruction and lifetime extension; extension operations are displayed as `延期 ...` instead of a misleading generic start action.
+- Added VM destruction deployment target rows with node, challenge, owner, result, success, and failure state.
+- Added system logs for deployment queue ticket creation/reuse/cancel/recovery/assignment/start/completion/failure.
+- Added system logs for worker node register/update/deregister, TeamLab network check/enable, and Agent self-sync request/failure.
+- Expanded node resource visibility to include TeamLab runtime assets alongside containers, VMs, and legacy penetration resources.
+- Updated the admin node page to use stable node sorting and silent polling so heartbeat refresh does not force full-page reloads or reorder cards unexpectedly.
+- Updated the deployment queue page columns so request identity, image/template, node name, type, action, status, resource slots, and errors are directly readable.
 
 ## Deliberately Not Logged
 
@@ -42,3 +50,8 @@ This document tracks the July 2026 logging coverage pass for deployment queue, T
   - Result: pass, 190 tests.
 - `git diff --check -- <logging-related files>`
   - Result: pass.
+- `dotnet build src/GZCTF/GZCTF.csproj --no-restore -p:UseSharedCompilation=false`
+  - Result: pass on 2026-07-08.
+  - Existing warnings remain: EF nullable value-converter warnings and one pre-existing nullable warning in `TeamController`.
+- `pnpm check` from `src/GZCTF/ClientApp`
+  - Result: pass on 2026-07-08.

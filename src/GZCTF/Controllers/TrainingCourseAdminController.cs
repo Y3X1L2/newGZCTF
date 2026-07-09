@@ -5,6 +5,8 @@ using GZCTF.Models.Request.Training;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Services.Container.Manager;
+using GZCTF.Services.Fleet;
+using GZCTF.Services.Training;
 using GZCTF.Services.Vm;
 using GZCTF.Storage;
 using GZCTF.Utils;
@@ -30,6 +32,30 @@ public class TrainingCourseAdminController(
 {
     private async Task<UserInfo> CurrentUser() =>
         await userManager.GetUserAsync(User) ?? throw new InvalidOperationException("Current user is missing.");
+
+    void QueueCourseImageDistribution(int courseId, int? templateId, string reason)
+    {
+        if (!templateId.HasValue)
+            return;
+
+        _ = Task.Run(async () =>
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var distribution = scope.ServiceProvider.GetRequiredService<ImageDistributionService>();
+            var scopedLogger = scope.ServiceProvider.GetRequiredService<ILogger<TrainingCourseAdminController>>();
+            try
+            {
+                await distribution.DistributeTemplateAsync(templateId.Value,
+                    ImageDistributionReference.TrainingCourse(courseId), CancellationToken.None);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or IOException)
+            {
+                scopedLogger.LogWarning(ex,
+                    "Failed to queue training image distribution for course {CourseId}, template {TemplateId} after {Reason}.",
+                    courseId, templateId.Value, reason);
+            }
+        });
+    }
 
     private IQueryable<TrainingCourse> CourseQuery() =>
         context.TrainingCourses
@@ -57,6 +83,9 @@ public class TrainingCourseAdminController(
             t.CourseId == course.Id &&
             t.TeacherId == actor.Id &&
             t.Role == TrainingCourseTeacherRole.Owner, token);
+
+    private static bool CanDeleteCourse(UserInfo actor, TrainingCourse course) =>
+        TrainingCourseAccessPolicy.CanDelete(actor, course);
 
     private async Task<TrainingCourse?> EditableCourse(UserInfo actor, int courseId, CancellationToken token)
     {
@@ -399,7 +428,8 @@ public class TrainingCourseAdminController(
     public async Task<IActionResult> Courses(CancellationToken token = default)
     {
         var actor = await CurrentUser();
-        var query = CourseQuery();
+        var query = CourseQuery()
+            .Where(c => c.Status != TrainingCourseStatus.Archived);
         if (actor.Role < Role.Admin)
             query = query.Where(c => c.Teachers.Any(t => t.TeacherId == actor.Id));
 
@@ -412,6 +442,7 @@ public class TrainingCourseAdminController(
                                course.CreatedById == actor.Id ||
                                course.Teachers.Any(t => t.TeacherId == actor.Id && t.Role == TrainingCourseTeacherRole.Owner),
             canManageEnrollments: true,
+            canDelete: CanDeleteCourse(actor, course),
             includeDetail: false)).ToArray();
 
         return Ok(models);
@@ -432,6 +463,7 @@ public class TrainingCourseAdminController(
             canEdit: true,
             canManageTeachers: await CanManageTeachers(actor, course, token),
             canManageEnrollments: true,
+            canDelete: CanDeleteCourse(actor, course),
             includeDetail: true));
     }
 
@@ -469,6 +501,7 @@ public class TrainingCourseAdminController(
             canEdit: true,
             canManageTeachers: true,
             canManageEnrollments: true,
+            canDelete: true,
             includeDetail: true));
     }
 
@@ -543,6 +576,65 @@ public class TrainingCourseAdminController(
         await context.SaveChangesAsync(token);
         logger.SystemLog($"Moved training course {course.Title} to draft.", TaskStatus.Success, LogLevel.Information);
         return Ok();
+    }
+
+    [HttpDelete("{courseId:int}")]
+    public async Task<IActionResult> DeleteCourse([FromRoute] int courseId, CancellationToken token = default)
+    {
+        var actor = await CurrentUser();
+        var course = await CourseQuery().SingleOrDefaultAsync(c => c.Id == courseId, token);
+        if (course is null)
+            return NotFound();
+        if (!CanDeleteCourse(actor, course))
+            return Forbid();
+
+        await DeleteCourseOwnedChallenges(courseId, token);
+
+        await context.ImageTemplates
+            .Where(t => t.TrainingCourseId == courseId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(t => t.TrainingCourseId, (int?)null), token);
+        await context.TrainingCourseChapters
+            .Where(c => c.CourseId == courseId && c.ParentId != null)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.ParentId, (int?)null), token);
+        context.TrainingCourses.Remove(course);
+        await context.SaveChangesAsync(token);
+        logger.SystemLog($"Deleted training course {course.Title}.", TaskStatus.Success, LogLevel.Information);
+        return Ok();
+    }
+
+    private async Task DeleteCourseOwnedChallenges(int courseId, CancellationToken token)
+    {
+        var challenges = await context.ExerciseChallenges
+            .Include(c => c.Attachment)
+            .ThenInclude(a => a!.LocalFile)
+            .Where(c => c.TrainingCourseId == courseId)
+            .ToArrayAsync(token);
+
+        if (challenges.Length == 0)
+            return;
+
+        var challengeIds = challenges.Select(c => c.Id).ToArray();
+        await context.TrainingCourseSubmissions
+            .Where(s => s.CourseId == courseId && challengeIds.Contains(s.ExerciseChallengeId))
+            .ExecuteDeleteAsync(token);
+        await context.TrainingCourseChapterChallenges
+            .Where(c => c.CourseId == courseId && challengeIds.Contains(c.ExerciseChallengeId))
+            .ExecuteDeleteAsync(token);
+        await context.ExerciseInstances
+            .Where(i => challengeIds.Contains(i.ExerciseId))
+            .ExecuteDeleteAsync(token);
+        await context.FlagContexts
+            .Where(f => f.ExerciseId.HasValue && challengeIds.Contains(f.ExerciseId.Value))
+            .ExecuteDeleteAsync(token);
+        await context.TrainingCourseChallenges
+            .Where(c => c.CourseId == courseId && challengeIds.Contains(c.ExerciseChallengeId))
+            .ExecuteDeleteAsync(token);
+
+        foreach (var challenge in challenges)
+        {
+            await blobRepository.DeleteAttachment(challenge.Attachment, token);
+            context.ExerciseChallenges.Remove(challenge);
+        }
     }
 
     [HttpGet("{courseId:int}/enrollments")]
@@ -813,6 +905,101 @@ public class TrainingCourseAdminController(
         logger.SystemLog($"Reviewed training course enrollment: course={courseId}, user={userId}, status={model.Status}.",
             TaskStatus.Success, LogLevel.Information);
         return Ok();
+    }
+
+    [HttpGet("{courseId:int}/student-candidates")]
+    [ProducesResponseType(typeof(TrainingCourseStudentCandidateModel[]), StatusCodes.Status200OK)]
+    public async Task<IActionResult> StudentCandidates(
+        [FromRoute] int courseId,
+        [FromQuery] string? keyword = null,
+        CancellationToken token = default)
+    {
+        var actor = await CurrentUser();
+        if (!await CanEditCourse(actor, courseId, token))
+            return NotFound();
+
+        var enrolledIds = await context.TrainingCourseEnrollments
+            .AsNoTracking()
+            .Where(e => e.CourseId == courseId)
+            .Select(e => e.UserId)
+            .ToArrayAsync(token);
+        var enrolledSet = enrolledIds.ToHashSet();
+
+        var query = context.Users.AsNoTracking()
+            .Where(u => u.Role == Role.Student);
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var key = keyword.Trim().ToLower();
+            query = query.Where(u =>
+                u.UserName!.ToLower().Contains(key) ||
+                u.RealName.ToLower().Contains(key) ||
+                u.StdNumber.ToLower().Contains(key) ||
+                u.Email!.ToLower().Contains(key) ||
+                u.Id.ToString().ToLower().Contains(key));
+        }
+
+        var users = await query
+            .OrderBy(u => enrolledIds.Contains(u.Id))
+            .ThenBy(u => u.RealName)
+            .ThenBy(u => u.UserName)
+            .Take(30)
+            .ToArrayAsync(token);
+
+        return Ok(users.Select(u => TrainingCourseStudentCandidateModel.FromUser(u, enrolledSet.Contains(u.Id))).ToArray());
+    }
+
+    [HttpPost("{courseId:int}/enrollments")]
+    [ProducesResponseType(typeof(TrainingCourseEnrollmentModel), StatusCodes.Status200OK)]
+    public async Task<IActionResult> AddEnrollment(
+        [FromRoute] int courseId,
+        [FromBody] TrainingCourseStudentEnrollModel model,
+        CancellationToken token = default)
+    {
+        var actor = await CurrentUser();
+        if (!await CanEditCourse(actor, courseId, token))
+            return NotFound();
+
+        var user = await context.Users.SingleOrDefaultAsync(u => u.Id == model.UserId, token);
+        if (user is null || user.Role != Role.Student)
+            return BadRequest(new RequestResponse("只能添加学员账号。"));
+
+        var enrollment = await context.TrainingCourseEnrollments
+            .Include(e => e.User)
+            .SingleOrDefaultAsync(e => e.CourseId == courseId && e.UserId == model.UserId, token);
+        if (enrollment is null)
+        {
+            enrollment = new TrainingCourseEnrollment
+            {
+                CourseId = courseId,
+                UserId = model.UserId,
+                User = user,
+                Status = TrainingCourseEnrollmentStatus.Approved,
+                ReviewComment = "Teacher added",
+                ReviewedById = actor.Id,
+                ReviewedAt = DateTimeOffset.UtcNow,
+                RequestedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+            context.TrainingCourseEnrollments.Add(enrollment);
+        }
+        else
+        {
+            enrollment.User = user;
+            enrollment.Status = TrainingCourseEnrollmentStatus.Approved;
+            enrollment.ReviewComment = string.Empty;
+            enrollment.ReviewedById = actor.Id;
+            enrollment.ReviewedAt = DateTimeOffset.UtcNow;
+            enrollment.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        await context.SaveChangesAsync(token);
+        var totalChapterCount = await context.TrainingCourseChapters
+            .CountAsync(c => c.CourseId == courseId && c.IsPublished, token);
+        var progress = await context.TrainingCourseProgresses
+            .SingleOrDefaultAsync(p => p.CourseId == courseId && p.UserId == model.UserId, token);
+        logger.SystemLog($"Added training course enrollment: course={courseId}, user={user.UserName}.",
+            TaskStatus.Success, LogLevel.Information);
+        return Ok(TrainingCourseEnrollmentModel.FromEnrollment(enrollment, progress, totalChapterCount));
     }
 
     [HttpGet("{courseId:int}/teacher-candidates")]
@@ -1746,6 +1933,7 @@ public class TrainingCourseAdminController(
         await context.SaveChangesAsync(token);
         logger.SystemLog($"Attached training course image template {template.Id}: course={courseId}.",
             TaskStatus.Success, LogLevel.Information);
+        QueueCourseImageDistribution(courseId, template.Id, "training template attach");
         return Ok();
     }
 
@@ -1818,6 +2006,7 @@ public class TrainingCourseAdminController(
         await transaction.CommitAsync(token);
         logger.SystemLog($"Created training course challenge {exercise.Title}: course={courseId}, challenge={exercise.Id}.",
             TaskStatus.Success, LogLevel.Information);
+        QueueCourseImageDistribution(courseId, exercise.ImageTemplateId, "training challenge create");
 
         return Ok(TrainingCourseChallengeModel.FromChallenge(link, model.ChapterId));
     }
@@ -1888,6 +2077,7 @@ public class TrainingCourseAdminController(
         await transaction.CommitAsync(token);
         logger.SystemLog($"Updated training course challenge {link.ExerciseChallenge.Title}: course={courseId}, challenge={exerciseChallengeId}.",
             TaskStatus.Success, LogLevel.Information);
+        QueueCourseImageDistribution(courseId, link.ExerciseChallenge.ImageTemplateId, "training challenge update");
 
         return await CourseChallengeEditDetail(courseId, exerciseChallengeId, token);
     }
@@ -1937,6 +2127,7 @@ public class TrainingCourseAdminController(
         await context.SaveChangesAsync(token);
         logger.SystemLog($"Attached training course challenge {model.ExerciseChallengeId}: course={courseId}.",
             TaskStatus.Success, LogLevel.Information);
+        QueueCourseImageDistribution(courseId, challenge.ImageTemplateId, "training challenge attach");
         return Ok();
     }
 

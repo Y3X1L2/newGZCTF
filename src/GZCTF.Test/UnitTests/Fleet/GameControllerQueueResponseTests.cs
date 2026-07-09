@@ -36,4 +36,45 @@ public class GameControllerQueueResponseTests
         Assert.DoesNotContain("flag{", text, StringComparison.OrdinalIgnoreCase);
         Assert.Null(queueState.ConsumeQueued());
     }
+
+    [Fact]
+    public void BuildVmCreateFallback_ReturnsConcreteError_WhenVmCreationFailedAfterScheduling()
+    {
+        var queueState = new DeploymentQueueStateAccessor();
+
+        var result = GameController.BuildVmCreateFallback(queueState,
+            "Node worker-1 failed to ensure VM template windows from storage");
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        var text = badRequest.Value!.ToString();
+        Assert.Contains("failed to ensure VM template", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("No KVM node available", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BuildVmCreateAccepted_ReturnsAcceptedCreatingStatusWithQueue()
+    {
+        var status = new DeploymentQueueStatusModel(
+            Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            DeploymentQueueKind.Vm,
+            DeploymentQueueTicketStatus.Pending,
+            null,
+            null,
+            QueuePosition: 1,
+            PeopleAhead: 0,
+            ErrorMessage: null,
+            DateTimeOffset.Parse("2026-07-06T00:00:00Z"),
+            StartedAt: null,
+            CompletedAt: null);
+
+        var result = GameController.BuildVmCreateAccepted(
+            Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            status);
+
+        var accepted = Assert.IsType<AcceptedResult>(result);
+        var text = accepted.Value!.ToString();
+        Assert.Contains("Creating", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("image-pending", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("queue", text, StringComparison.OrdinalIgnoreCase);
+    }
 }

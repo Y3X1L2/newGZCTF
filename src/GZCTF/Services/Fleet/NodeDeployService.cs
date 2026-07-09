@@ -96,6 +96,7 @@ public class NodeDeployService
 
             var serverUrl = ResolveServerUrl(_config, serverUrlOverride);
             var dotnetRoot = DetectDotnetRoot(ssh);
+            RunChecked(ssh, "rm -f /tmp/gzctf-agent-changed", "Reset agent change marker");
 
             var configJson = BuildAgentConfigJson(serverUrl, node,
                 _config["ContainerProvider:PublicEntry"],
@@ -104,14 +105,15 @@ public class NodeDeployService
                 _config["ContainerProvider:DockerConfig:ChallengeNetwork"],
                 teamLabEnable: true,
                 teamLabDryRun: false);
-            WriteRemoteFile(ssh, sudo, "/etc/gzctf-agent/appsettings.json", configJson,
+            WriteRemoteFileIfChanged(ssh, sudo, "/etc/gzctf-agent/appsettings.json", configJson,
                 "Write agent configuration");
             remoteInstallStarted = true;
 
             var agentUrl = $"{serverUrl.TrimEnd('/')}/api/agent/download";
-            RunChecked(ssh, BuildAgentInstallScript(agentUrl, node.Id, sudo), "Install agent binary");
+            RunChecked(ssh, BuildAgentInstallScript(agentUrl, node.Id, sudo, ComputeAgentBinarySha256()),
+                "Install agent binary");
 
-            WriteRemoteFile(ssh, sudo, "/etc/systemd/system/gzctf-agent.service",
+            WriteRemoteFileIfChanged(ssh, sudo, "/etc/systemd/system/gzctf-agent.service",
                 BuildAgentServiceContent(dotnetRoot), "Write agent systemd unit");
 
             RunDiagnostic(ssh, BuildAgentStartScript(sudo), "Start agent service");
@@ -307,6 +309,19 @@ install_pkgs() {
   esac
 }
 
+install_missing_pkgs() {
+  missing=()
+  for cmd in "$@"; do
+    bin="${cmd%%:*}"
+    pkg="${cmd#*:}"
+    if ! need_cmd "$bin"; then
+      missing+=("$pkg")
+    fi
+  done
+  [ "${#missing[@]}" -eq 0 ] && return
+  install_pkgs "${missing[@]}"
+}
+
 try_install_pkgs() {
   install_pkgs "$@" >/dev/null 2>&1
 }
@@ -323,10 +338,10 @@ install_apt_pkg_fallback() {
 
 install_base() {
   case "$pm" in
-    apt) install_pkgs ca-certificates curl wget gnupg lsb-release iproute2 iptables nftables procps tar gzip coreutils python3 ;;
-    dnf|yum) install_pkgs ca-certificates curl wget gnupg2 iproute iptables nftables procps-ng tar gzip coreutils python3 ;;
-    zypper) install_pkgs ca-certificates curl wget gpg2 iproute2 iptables nftables procps tar gzip coreutils python3 ;;
-    pacman) install_pkgs ca-certificates curl wget gnupg iproute2 iptables nftables procps-ng tar gzip coreutils python ;;
+    apt) install_missing_pkgs curl:curl wget:wget gpg:gnupg ip:iproute2 iptables:iptables nft:nftables ps:procps tar:tar gzip:gzip sha256sum:coreutils python3:python3 ;;
+    dnf|yum) install_missing_pkgs curl:curl wget:wget gpg:gnupg2 ip:iproute iptables:iptables nft:nftables ps:procps-ng tar:tar gzip:gzip sha256sum:coreutils python3:python3 ;;
+    zypper) install_missing_pkgs curl:curl wget:wget gpg:gpg2 ip:iproute2 iptables:iptables nft:nftables ps:procps tar:tar gzip:gzip sha256sum:coreutils python3:python3 ;;
+    pacman) install_missing_pkgs curl:curl wget:wget gpg:gnupg ip:iproute2 iptables:iptables nft:nftables ps:procps-ng tar:tar gzip:gzip sha256sum:coreutils python:python ;;
   esac
 }
 
@@ -458,6 +473,11 @@ PY
 EOF
   fi
 
+  if [ -f /etc/docker/daemon.json ] && cmp -s "$tmp" /etc/docker/daemon.json; then
+    rm -f "$tmp"
+    return
+  fi
+
   run_sudo install -m 0644 "$tmp" /etc/docker/daemon.json
   rm -f "$tmp"
 
@@ -474,6 +494,12 @@ EOF
 }
 
 install_kvm() {
+  if kvm_ready; then
+    run_sudo mkdir -p /var/lib/gzctf/images /var/lib/libvirt/images
+    run_sudo chmod 755 /var/lib/gzctf /var/lib/gzctf/images 2>/dev/null || true
+    return
+  fi
+
   case "$pm" in
     apt)
       install_pkgs qemu-system-x86 qemu-utils libvirt-daemon-system libvirt-clients virtinst dnsmasq-base bridge-utils
@@ -506,6 +532,10 @@ install_kvm() {
 }
 
 install_teamlab_network_tools() {
+  if teamlab_tools_ready; then
+    return
+  fi
+
   case "$pm" in
     apt)
       install_pkgs wireguard-tools nftables iptables tcpdump genisoimage xorriso cloud-image-utils dnsmasq-base
@@ -520,6 +550,22 @@ install_teamlab_network_tools() {
       install_pkgs wireguard-tools nftables iptables-nft tcpdump xorriso cloud-image-utils dnsmasq || true
       ;;
   esac
+}
+
+kvm_ready() {
+  test -e /dev/kvm || return 1
+  grep -Eq '(^flags|^Features).* (vmx|svm)( |$)' /proc/cpuinfo 2>/dev/null || return 1
+  need_cmd virsh || return 1
+  need_cmd virt-install || return 1
+  need_cmd qemu-img || return 1
+  run_sudo virsh -c qemu:///system list >/dev/null 2>&1 || return 1
+}
+
+teamlab_tools_ready() {
+  need_cmd wg || return 1
+  { need_cmd iptables || need_cmd nft; } || return 1
+  need_cmd tcpdump || return 1
+  { need_cmd genisoimage || need_cmd mkisofs || need_cmd xorriso || need_cmd cloud-localds; } || return 1
 }
 
 print_capability_summary() {
@@ -664,11 +710,15 @@ WantedBy=multi-user.target
     internal static string BuildAgentStartScript(string sudo) => $$"""
 {{sudo}} systemctl daemon-reload
 {{sudo}} systemctl enable gzctf-agent >/dev/null 2>&1 || true
-{{sudo}} systemctl stop gzctf-agent >/dev/null 2>&1 || true
-for pid in $(pgrep -f '(^|/)(gzctf-agent|GZCTF.Agent|manual-agent)( |$)' || true); do
-  {{sudo}} kill "$pid" >/dev/null 2>&1 || true
-done
-sleep 1
+if [ -f /tmp/gzctf-agent-changed ]; then
+  {{sudo}} systemctl stop gzctf-agent >/dev/null 2>&1 || true
+  for pid in $(pgrep -f '(^|/)(gzctf-agent|GZCTF.Agent|manual-agent)( |$)' || true); do
+    {{sudo}} kill "$pid" >/dev/null 2>&1 || true
+  done
+  sleep 1
+elif {{sudo}} systemctl is-active --quiet gzctf-agent; then
+  exit 0
+fi
 restart_status=0
 restart_output="$({{sudo}} systemctl restart gzctf-agent 2>&1)" || restart_status=$?
 for i in $(seq 1 20); do
@@ -815,22 +865,33 @@ exit 1
         "break; " +
         "done";
 
-    internal static string BuildAgentInstallScript(string agentUrl, Guid nodeId, string sudo) =>
+    internal static string BuildAgentInstallScript(string agentUrl, Guid nodeId, string sudo,
+        string? expectedSha256 = null) =>
         NormalizeShellScript($$"""
 tmp="/tmp/gzctf-agent-{{nodeId:N}}"
+expected_sha={{BashQuote(expectedSha256 ?? string.Empty)}}
+if [ -n "$expected_sha" ] && command -v sha256sum >/dev/null 2>&1 && [ -x /usr/local/bin/gzctf-agent ]; then
+  current_sha="$(sha256sum /usr/local/bin/gzctf-agent | awk '{print $1}')"
+  [ "$current_sha" = "$expected_sha" ] && { echo "Agent binary already matches expected sha256"; exit 0; }
+fi
 rm -f "$tmp"
 download_status=127
 command -v wget >/dev/null 2>&1 && wget -q -O "$tmp" {{BashQuote(agentUrl)}} && download_status=0
 [ "$download_status" -eq 0 ] || { command -v curl >/dev/null 2>&1 && curl -fsSL {{BashQuote(agentUrl)}} -o "$tmp" && download_status=0; }
 [ "$download_status" -eq 0 ] || { echo "wget or curl is required to download the agent" >&2; exit 127; }
 test -s "$tmp"
+if [ -n "$expected_sha" ] && command -v sha256sum >/dev/null 2>&1; then
+  downloaded_sha="$(sha256sum "$tmp" | awk '{print $1}')"
+  [ "$downloaded_sha" = "$expected_sha" ] || { echo "Downloaded agent sha256 mismatch: expected $expected_sha got $downloaded_sha" >&2; exit 1; }
+fi
 chmod +x "$tmp"
 {{sudo}} install -m 0755 "$tmp" /usr/local/bin/gzctf-agent
+touch /tmp/gzctf-agent-changed
 rm -f "$tmp"
 {{sudo}} test -x /usr/local/bin/gzctf-agent
 """);
 
-    private static void WriteRemoteFile(SshClient ssh, string sudo, string remotePath, string content, string step)
+    private static void WriteRemoteFileIfChanged(SshClient ssh, string sudo, string remotePath, string content, string step)
     {
         var tmp = $"/tmp/gzctf-agent-{Guid.NewGuid():N}";
         RunChecked(ssh, $$"""
@@ -838,9 +899,24 @@ cat > {{BashQuote(tmp)}} <<'GZCTFEOF'
 {{content}}
 GZCTFEOF
 {{sudo}} mkdir -p {{BashQuote(Path.GetDirectoryName(remotePath) ?? "/")}}
+if {{sudo}} test -f {{BashQuote(remotePath)}} && {{sudo}} cmp -s {{BashQuote(tmp)}} {{BashQuote(remotePath)}}; then
+  rm -f {{BashQuote(tmp)}}
+  exit 0
+fi
 {{sudo}} install -m 0644 {{BashQuote(tmp)}} {{BashQuote(remotePath)}}
+touch /tmp/gzctf-agent-changed
 rm -f {{BashQuote(tmp)}}
 """, step);
+    }
+
+    internal static string? ComputeAgentBinarySha256()
+    {
+        var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "agent", "gzctf-agent");
+        if (!File.Exists(path))
+            return null;
+
+        using var stream = File.OpenRead(path);
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)).ToLowerInvariant();
     }
 
     private static SshCommand RunChecked(SshClient ssh, string command, string step)

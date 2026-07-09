@@ -54,6 +54,7 @@ public class TeamLabDeploymentService(
     TeamLabPlanService planService,
     AgentClient agentClient,
     DockerImageRegistryService dockerRegistry,
+    ImageDistributionService imageDistribution,
     TeamLabWireGuardService wireGuardService,
     TeamLabTrafficFlowService trafficFlowService,
     IPublicUdpGatewayProvider publicUdpGatewayProvider,
@@ -345,9 +346,8 @@ public class TeamLabDeploymentService(
         int teamId, Guid workerNodeId, string? flag, DockerImageRegistryService dockerRegistry,
         CancellationToken token, IReadOnlyList<TeamLabRuntimeNetworkSpec>? networks = null)
     {
-        await Task.CompletedTask;
         var config = BuildNativeDockerContainerConfig(spec, teamId, workerNodeId, flag, networks);
-        config.Image = dockerRegistry.ResolveInternalImageReferenceForConfiguredRegistry(config.Image);
+        config.Image = await dockerRegistry.ResolveImageReferenceAsync(config.Image, token);
         return config;
     }
 
@@ -934,6 +934,7 @@ public class TeamLabDeploymentService(
                 workerNodeId, flag, dockerRegistry, token, plan.Networks);
             containerConfig.EnvironmentVariables = BuildNativeEnvironmentVariables(config, asset.TopologyKey,
                 plan, gameId, teamId, publishedVersion);
+            await imageDistribution.EnsureDockerImageOnNodeAsync(containerConfig.Image, workerNodeId, token);
             var container = await agentClient.CreateContainerOrThrowAsync(workerNodeId, containerConfig, token);
             trackCreatedContainer(container.ContainerId);
 
@@ -958,6 +959,13 @@ public class TeamLabDeploymentService(
         }
 
         var vmRequest = BuildNativeVmRequest(runtimeId, asset, flag);
+        if (asset.SourceTemplateId is { } vmTemplateId)
+        {
+            var imageReady = await imageDistribution.EnsureVmTemplateOnNodeAsync(vmTemplateId, workerNodeId, token);
+            if (!imageReady.Success)
+                throw new InvalidOperationException(imageReady.Message);
+            vmRequest.ImageEnsured = true;
+        }
         logger.LogInformation("TeamLab VM {VmName} init config prepared: cloudInit={CloudInitEnabled}, os={OsType}, interfaces={InterfaceCount}.",
             vmRequest.VmName, vmRequest.CloudInit?.Enabled == true, vmRequest.CloudInit?.OsType, vmRequest.Interfaces.Count);
         var vm = await agentClient.CreateVmAsync(workerNodeId, vmRequest, token);

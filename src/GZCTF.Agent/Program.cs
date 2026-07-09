@@ -13,6 +13,7 @@ builder.Services.AddSingleton<DockerService>();
 builder.Services.AddSingleton<KvmService>();
 builder.Services.AddSingleton<TeamLabCommandRunner>();
 builder.Services.AddSingleton<TeamLabNetworkService>();
+builder.Services.AddSingleton<AgentMaintenanceService>();
 builder.Services.AddHostedService<HeartbeatWorker>();
 
 builder.Services.AddControllers();

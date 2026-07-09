@@ -6,11 +6,13 @@ import {
   Modal,
   SimpleGrid,
   Stack,
+  Switch,
   Text,
   TextInput,
   Textarea,
   Title,
 } from '@mantine/core'
+import { modals } from '@mantine/modals'
 import { showNotification } from '@mantine/notifications'
 import {
   mdiBookOpenPageVariantOutline,
@@ -19,11 +21,13 @@ import {
   mdiPlus,
   mdiSchoolOutline,
   mdiShieldSearch,
+  mdiTrashCanOutline,
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
-import React, { FC, useEffect, useMemo, useState } from 'react'
+import React, { FC, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
+import useSWR from 'swr'
 import { WithNavBar } from '@Components/WithNavbar'
 import { RequireRole } from '@Components/WithRole'
 import {
@@ -65,9 +69,20 @@ const courseMatches = (course: TrainingCourseModel, keywords: RegExp) =>
 const courseRecentTime = (course: TrainingCourseModel) =>
   course.lastStudiedAt ?? (course.progressStatus ? course.updatedAt : 0)
 
+const trainingCoursesKey = 'training:home:courses'
+const trainingOverviewKey = 'training:home:overview'
+
+const fetchTrainingCourses = async () => {
+  const res = await trainingCourseApi.courses()
+  return res.data.filter((course) => course.status !== TrainingCourseStatus.Archived)
+}
+
+const fetchTrainingOverview = async () => {
+  const res = await trainingCourseApi.overview()
+  return res.data
+}
+
 const Training: FC = () => {
-  const [courses, setCourses] = useState<TrainingCourseModel[]>([])
-  const [overview, setOverview] = useState<TrainingPersonalOverviewModel | null>(null)
   const [createOpened, setCreateOpened] = useState(false)
   const [draft, setDraft] = useState<TrainingCourseEditModel>(emptyCourseDraft())
   const [saving, setSaving] = useState(false)
@@ -76,6 +91,28 @@ const Training: FC = () => {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const canCreate = RequireRole(Role.Teacher, user?.role)
+  const {
+    data: courses = [],
+    error: coursesError,
+    mutate: mutateCourses,
+  } = useSWR<TrainingCourseModel[]>(trainingCoursesKey, fetchTrainingCourses)
+  const {
+    data: overview = null,
+    error: overviewError,
+    mutate: mutateOverview,
+  } = useSWR<TrainingPersonalOverviewModel | null>(trainingOverviewKey, fetchTrainingOverview)
+
+  useEffect(() => {
+    if (coursesError) showErrorMsg(coursesError, t)
+  }, [coursesError, t])
+
+  useEffect(() => {
+    if (overviewError) showErrorMsg(overviewError, t)
+  }, [overviewError, t])
+
+  const reload = useCallback(async () => {
+    await Promise.all([mutateCourses(), mutateOverview()])
+  }, [mutateCourses, mutateOverview])
 
   const teachingCourses = useMemo(() => courses.filter((course) => course.canEdit), [courses])
   const learningCourses = useMemo(
@@ -102,20 +139,7 @@ const Training: FC = () => {
     [learningCourses]
   )
 
-  const load = async () => {
-    try {
-      const [courseRes, overviewRes] = await Promise.all([
-        trainingCourseApi.courses(),
-        trainingCourseApi.overview(),
-      ])
-      setCourses(courseRes.data)
-      setOverview(overviewRes.data)
-    } catch (e) {
-      showErrorMsg(e, t)
-    }
-  }
-
-  const submitCreate = async () => {
+  const submitCreate = useCallback(async () => {
     if (!draft.title.trim()) return
     setSaving(true)
     try {
@@ -127,57 +151,104 @@ const Training: FC = () => {
       showNotification({ color: 'green', title: '课程已创建', message: draft.title.trim() })
       setCreateOpened(false)
       setDraft(emptyCourseDraft())
+      await reload()
       navigate(`/training/courses/${res.data.id}`)
     } catch (e) {
       showErrorMsg(e, t)
     } finally {
       setSaving(false)
     }
-  }
+  }, [draft, navigate, reload, t])
 
-  const checkIn = async () => {
+  const checkIn = useCallback(async () => {
     setChecking(true)
     try {
       const res = await trainingCourseApi.checkIn()
-      setOverview(res.data)
+      await mutateOverview(res.data, { revalidate: false })
       showNotification({ color: 'green', title: '签到完成', message: '今天的学习记录已写入概览。' })
     } catch (e) {
       showErrorMsg(e, t)
     } finally {
       setChecking(false)
     }
-  }
+  }, [mutateOverview, t])
 
-  const archiveCourse = async (course: TrainingCourseModel) => {
+  const archiveCourse = useCallback(async (course: TrainingCourseModel) => {
     try {
       await trainingCourseAdminApi.archive(course.id)
       showNotification({ color: 'orange', title: '课程已归档', message: course.title })
-      await load()
+      await reload()
     } catch (e) {
       showErrorMsg(e, t)
     }
-  }
+  }, [reload, t])
 
-  const courseArchiveAction = (course: TrainingCourseModel) =>
-    canCreate && course.canEdit && course.status === TrainingCourseStatus.Draft ? (
-      <ActionIcon
-        variant="light"
-        color="orange"
-        aria-label="归档课程"
-        title="归档课程"
-        onClick={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          void archiveCourse(course)
-        }}
-      >
-        <Icon path={mdiArchiveOutline} size={0.78} />
-      </ActionIcon>
-    ) : null
+  const deleteCourse = useCallback(async (course: TrainingCourseModel) => {
+    modals.openConfirmModal({
+      title: '删除课程',
+      children: (
+        <Text size="sm">
+          确认删除「{course.title}」？课程内章节、报名、学习记录和课程专属题目会被删除，环境模板只会解绑。
+        </Text>
+      ),
+      labels: { confirm: '删除', cancel: '取消' },
+      confirmProps: { color: 'red' },
+      onConfirm: async () => {
+        try {
+          await trainingCourseAdminApi.deleteCourse(course.id)
+          showNotification({ color: 'green', title: '课程已删除', message: course.title })
+          await reload()
+        } catch (e) {
+          showErrorMsg(e, t)
+        }
+      },
+    })
+  }, [reload, t])
 
-  useEffect(() => {
-    void load()
-  }, [])
+  const courseCardAction = useCallback((course: TrainingCourseModel) => {
+    if (!canCreate) return null
+    const actions = []
+
+    if (course.canEdit && course.status === TrainingCourseStatus.Draft) {
+      actions.push(
+        <ActionIcon
+          key="archive"
+          variant="light"
+          color="orange"
+          aria-label="归档课程"
+          title="归档课程"
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            void archiveCourse(course)
+          }}
+        >
+          <Icon path={mdiArchiveOutline} size={0.78} />
+        </ActionIcon>
+      )
+    }
+
+    if (course.canDelete) {
+      actions.push(
+        <ActionIcon
+          key="delete"
+          variant="light"
+          color="red"
+          aria-label="删除课程"
+          title="删除课程"
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            void deleteCourse(course)
+          }}
+        >
+          <Icon path={mdiTrashCanOutline} size={0.78} />
+        </ActionIcon>
+      )
+    }
+
+    return actions.length ? <Group gap={6}>{actions}</Group> : null
+  }, [archiveCourse, canCreate, deleteCourse])
 
   const showcase = canCreate ? teachingCourses : learningCourses
 
@@ -247,7 +318,7 @@ const Training: FC = () => {
                       course={course}
                       featured
                       actionLabel={canCreate ? '管理课程' : '继续学习'}
-                      extraAction={courseArchiveAction(course)}
+                      extraAction={courseCardAction(course)}
                     />
                   ))}
                 </SimpleGrid>
@@ -271,7 +342,7 @@ const Training: FC = () => {
                     course={course}
                     compact
                     actionLabel={canCreate ? '编辑课程' : '继续'}
-                    extraAction={courseArchiveAction(course)}
+                    extraAction={courseCardAction(course)}
                   />
                 ))}
               </SimpleGrid>
@@ -290,7 +361,7 @@ const Training: FC = () => {
               </Group>
               <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="md" className="yy-training-course-grid">
                 {courses.map((course) => (
-                  <TrainingCourseCard key={course.id} course={course} extraAction={courseArchiveAction(course)} />
+                  <TrainingCourseCard key={course.id} course={course} extraAction={courseCardAction(course)} />
                 ))}
               </SimpleGrid>
               {courses.length === 0 ? (
@@ -332,6 +403,18 @@ const Training: FC = () => {
             minRows={6}
             value={draft.description}
             onChange={(event) => setDraft({ ...draft, description: event.currentTarget.value })}
+          />
+          <Switch
+            label="课程报名审核"
+            checked={draft.enrollmentPolicy === TrainingCourseEnrollmentPolicy.TeacherApproval}
+            onChange={(event) =>
+              setDraft({
+                ...draft,
+                enrollmentPolicy: event.currentTarget.checked
+                  ? TrainingCourseEnrollmentPolicy.TeacherApproval
+                  : TrainingCourseEnrollmentPolicy.AutoApprove,
+              })
+            }
           />
           <Group justify="flex-end">
             <Button variant="subtle" onClick={() => setCreateOpened(false)}>

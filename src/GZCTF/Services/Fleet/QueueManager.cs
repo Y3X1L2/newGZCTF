@@ -72,6 +72,9 @@ public class QueueManager
             }
 
             await context.SaveChangesAsync(token);
+            _logger.SystemLog(
+                $"Deployment queue ticket assigned: ticket={ticket.Id}, kind={ticket.Kind}, node={nodeId}, dockerSlots={ticket.DockerSlots}, vmSlots={ticket.VmSlots}.",
+                TaskStatus.Pending, LogLevel.Information);
             executableTickets.Add(new ReservedQueueTicket(ticket.Id, nodeId, ticket.DockerSlots, ticket.VmSlots,
                 ticket.Kind == DeploymentQueueKind.TeamLabRuntime));
         }
@@ -133,6 +136,10 @@ public class QueueManager
         if (ticket.Status != DeploymentQueueTicketStatus.Creating)
             return;
 
+        _logger.SystemLog(
+            $"Deployment queue ticket started: ticket={ticket.Id}, kind={ticket.Kind}, node={reserved.NodeId}, dockerSlots={reserved.DockerSlots}, vmSlots={reserved.VmSlots}.",
+            TaskStatus.Pending, LogLevel.Information);
+
         if (!await IsTicketStillDeployableAsync(context, ticket, token))
         {
             await ReleaseReservedTicketCapacityAsync(context, capacity, reserved, token);
@@ -140,14 +147,27 @@ public class QueueManager
             ticket.CompletedAt = DateTimeOffset.UtcNow;
             ticket.ErrorMessage = "Deployment queue ticket is not deployable anymore.";
             await context.SaveChangesAsync(token);
+            _logger.SystemLog(
+                $"Deployment queue ticket cancelled before execution: ticket={ticket.Id}, kind={ticket.Kind}.",
+                TaskStatus.Exit, LogLevel.Warning);
             return;
         }
 
         var execution = await executor.ExecuteAsync(ticket, token);
         if (execution.Success)
+        {
             await CompleteTicketAsync(context, capacity, ticket, reserved, token);
+            _logger.SystemLog(
+                $"Deployment queue ticket completed: ticket={ticket.Id}, kind={ticket.Kind}, node={reserved.NodeId}.",
+                TaskStatus.Success, LogLevel.Information);
+        }
         else
+        {
             await FailTicketAsync(context, capacity, ticket, reserved, execution.ErrorMessage, token);
+            _logger.SystemLog(
+                $"Deployment queue ticket failed: ticket={ticket.Id}, kind={ticket.Kind}, node={reserved.NodeId}, error={ticket.ErrorMessage}.",
+                TaskStatus.Failed, LogLevel.Warning);
+        }
 
         await context.SaveChangesAsync(token);
     }
@@ -201,6 +221,9 @@ public class QueueManager
 
         await FailTicketAsync(context, capacity, ticket, reserved, ex.Message, token);
         await context.SaveChangesAsync(token);
+        _logger.SystemLog(
+            $"Deployment queue ticket failed with exception: ticket={ticket.Id}, kind={ticket.Kind}, node={reserved.NodeId}, error={ticket.ErrorMessage}.",
+            TaskStatus.Failed, LogLevel.Warning);
     }
 
     static async Task<FleetCapacityReservationResult> ReserveTicketCapacityAsync(AppDbContext context,

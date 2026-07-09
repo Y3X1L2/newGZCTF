@@ -302,3 +302,77 @@ E2E runtime 56 在 27/31 均升级到 protocol v3 后，失败形态从 `Network
 下一步：
 - 运行 `artifacts/teamlab_multinode_accept_runner.py` 做真实多节点 E2E。
 - 验收重点：多 shard 分布、跨节点 L3 reachability、玩家黑盒工作区、VPN 只暴露入口网段、flag 提交、flow metadata、PCAP 下载、reset、destroy cleanup。
+
+## 2026-07-08 node agent sync prerequisite
+
+本轮先完成多节点修复前置工作，不继续扩大真实 E2E：
+- 远端 `main` 已先同步到 10.24.0.27 当前部署基线：`4814daa6 feat: align deployed TeamLab multinode runtime`。
+- 主平台新增 `POST /api/v1/nodes/{id}/sync-agent`，用于从节点管理界面触发远程 Agent 同步最新版本。
+- Agent 新增 `POST /api/maintenance/sync-agent`，由 Agent 自己从主平台 `/api/agent/download` 下载最新二进制，备份旧文件，原子替换 `/usr/local/bin/gzctf-agent`，并延迟重启 `gzctf-agent` 服务。
+- 同步流程不保存也不复用 SSH 密码，避免把一键注册凭据长期落库。
+- 节点管理页新增远程节点“同步最新版本”按钮，触发后显示 loading、通知结果并刷新节点。
+- TeamLab 可调度判定进一步拆分：
+  - `TeamLabNetwork/Fabric` 只要求节点在线、可调度、VPN/Fabric 健康、Agent protocol v3。
+  - `TeamLabDocker` 要求 Docker + Fabric。
+  - `TeamLabVm` 要求 KVM + Fabric。
+  - 缺 KVM 不再导致 Docker-only TeamLab 节点在 UI 或入口选择中被判定为不可调度。
+- `TeamLabPlanService.SelectNode` 改为选择 Fabric-capable 节点，真实资产落点仍由 `TeamLabShardPlanner` 按 Docker/KVM 能力分别放置。
+
+已验证：
+- `dotnet test src/GZCTF.Test/GZCTF.Test.csproj --no-restore --filter "FullyQualifiedName~WeightedSchedulerTests|FullyQualifiedName~NodesControllerTests|FullyQualifiedName~TeamLabPlanServiceTests|FullyQualifiedName~TeamLabShardPlannerTests" -p:UseSharedCompilation=false -m:1`
+  - 结果：76/76 通过。
+- `dotnet build src/GZCTF.Agent/GZCTF.Agent.csproj --no-restore -p:UseSharedCompilation=false`
+  - 结果：通过，0 warning，0 error。
+- `dotnet build src/GZCTF/GZCTF.csproj --no-restore -p:UseSharedCompilation=false`
+  - 结果：通过，0 warning，0 error。
+- `pnpm exec tsc -p tsconfig.app.json --noEmit`（工作目录 `src/GZCTF/ClientApp`）
+  - 结果：通过。
+
+下一步：
+- 发布主平台后，优先用节点管理“同步最新版本”按钮更新 10.24.0.31 等 Worker Agent。
+- 继续定位多节点组网剩余问题，但要先确认所有参与节点 Agent 版本/协议一致，避免旧 Agent 干扰判断。
+
+## 2026-07-09 node capability, registry closure, and bootstrap acceleration
+
+本轮按“节点能力纠偏、存储服务器闭环与注册加速修复计划”完成代码级实现，尚未做服务器部署。
+
+已完成：
+- 节点能力纠偏只采用 Agent 心跳/探测实况反写，不做保守保留或复杂重试：
+  - Docker 能力来自 Agent `docker == true`。
+  - KVM 能力必须同时满足 `kvm == true && kvmDevice == true && cpuVirtualization == true`。
+  - `NodesController.Heartbeat` 和 `NodeTunnelService.ProbeNodeAsync` 复用同一个能力换算 helper，避免 UI、调度、手动探测结论不一致。
+- Docker 镜像链路补齐：
+  - 普通 CTF、培训、AWDP、TeamLab Docker、管理员测试容器均在下发 Agent/ContainerManager 前解析受管镜像引用。
+  - `gzctf-internal://...` 和固定 Registry 历史引用 `10.24.0.28:5000/...` 都会转为当前固定平台 Registry 地址。
+  - 固定存储服务器仍为 `10.24.0.28:5000`，不恢复节点管理的存储服务器切换功能。
+- VM 镜像链路补齐：
+  - 新增 `VmImageRegistryService`，把 qcow2 作为 OCI artifact 推送到固定 Registry。
+  - VM 上传/本地导入后尝试补推 Registry artifact；远端 VM 创建前强制执行“确保 Registry 有模板 -> 确保目标 Agent 本地有模板”。
+  - Agent `/api/images/download-vm` 优先从 Registry artifact 拉取、校验 sha256、临时文件原子替换；旧 `downloadUrl` 仅作为迁移兜底。
+  - `AgentClient.DownloadVmImageAsync` 返回结构化结果，失败不再静默吞掉；Fleet VM 创建失败会释放容量并写入部署目标错误。
+- Agent 自同步增强：
+  - 主平台同步请求携带当前 Agent 二进制 sha256。
+  - Agent 本地 hash 一致时直接返回“已是最新”，不下载、不覆盖、不重启。
+  - 下载后先校验 hash，再原子替换并延迟重启。
+  - `/api/status` 返回 `agentVersion`、`protocolVersion`、`binarySha256`。
+- 节点注册脚本加速：
+  - base/KVM/TeamLab 网络工具均改为“缺什么装什么”。
+  - KVM 满足 `/dev/kvm + virsh + virt-install + qemu-img + libvirt qemu:///system` 时跳过包安装。
+  - WireGuard/tcpdump/cloud-init seed 工具齐全时跳过重复安装。
+  - Docker daemon.json 内容无变化时不重启 Docker。
+  - Agent 二进制、配置、systemd unit 内容无变化时不覆盖、不重启。
+
+已验证：
+- `dotnet test src/GZCTF.Test/GZCTF.Test.csproj --no-restore --filter "FullyQualifiedName~FleetVmServiceTests|FullyQualifiedName~NodesControllerTests"`
+  - 结果：41/41 通过。
+- `dotnet test src/GZCTF.Test/GZCTF.Test.csproj --no-restore --filter "FullyQualifiedName~Fleet|FullyQualifiedName~TeamLab|FullyQualifiedName~DockerImageRegistry|FullyQualifiedName~EditControllerTests"`
+  - 结果：339/339 通过。
+- 窄测试补充：
+  - `TeamLabDeploymentServiceTests.BuildResolvedNativeDockerContainerConfig_RewritesManagedRegistryReferenceForAgent`
+  - `EditControllerTests.CreateTestContainer_ResolvesManagedDockerImageBeforeCreatingContainer`
+  - 结果：2/2 通过。
+
+待最终验收：
+- 重新发布 10.24.0.27 后，重新注册或等待 10.24.0.31 心跳，确认 Docker+KVM 能力按实况恢复。
+- 删除 Worker 本地某个 VM 模板 qcow2 后启动 Linux/Windows VM，确认 Agent 从 `10.24.0.28:5000` 拉取并校验模板。
+- 新注册节点 Docker/KVM/TeamLab 工具齐全时，确认注册流程不会重复重装 Docker/KVM，也不会无意义重启 Docker/Agent。

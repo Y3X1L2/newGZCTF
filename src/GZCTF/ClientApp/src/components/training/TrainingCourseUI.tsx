@@ -18,7 +18,7 @@ import {
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import clsx from 'clsx'
-import React, { FC, ReactNode } from 'react'
+import React, { memo, ReactNode, useMemo } from 'react'
 import { Link } from 'react-router'
 import { YinyuGradientText } from '@Components/yinyu/YinyuReactBits'
 import { YinyuPanel } from '@Components/yinyu/YinyuUI'
@@ -55,39 +55,43 @@ export const trainingTeacherNames = (course: TrainingCourseModel) =>
 export const trainingTags = (course: TrainingCourseModel, fallback = '培训') =>
   course.tags.length ? course.tags : [fallback]
 
-export const TrainingStatusText: FC<{
+export const TrainingStatusText = memo<{
   children: ReactNode
   tone?: TrainingTone
   className?: string
   vertical?: boolean
-}> = ({ children, tone = 'brand', className, vertical = false }) => (
+}>(({ children, tone = 'brand', className, vertical = false }) => (
   <YinyuGradientText tone={tone} className={clsx('yy-training-status-text', vertical && 'is-vertical', className)}>
     {children}
   </YinyuGradientText>
-)
+))
 
-export const TrainingTagLine: FC<{ tags: string[]; max?: number; className?: string }> = ({
+export const TrainingTagLine = memo<{ tags: string[]; max?: number; className?: string }>(function TrainingTagLine({
   tags,
   max = 4,
   className,
-}) => (
-  <span className={clsx('yy-training-tag-line', className)}>
-    {tags.slice(0, max).map((tag, index) => (
-      <React.Fragment key={`${tag}-${index}`}>
-        {index > 0 ? <span className="yy-training-tag-separator">/</span> : null}
-        <span>{tag}</span>
-      </React.Fragment>
-    ))}
-  </span>
-)
+}) {
+  const visibleTags = useMemo(() => tags.slice(0, max), [max, tags])
 
-export const TrainingMetricTile: FC<{
+  return (
+    <span className={clsx('yy-training-tag-line', className)}>
+      {visibleTags.map((tag, index) => (
+        <React.Fragment key={`${tag}-${index}`}>
+          {index > 0 ? <span className="yy-training-tag-separator">/</span> : null}
+          <span>{tag}</span>
+        </React.Fragment>
+      ))}
+    </span>
+  )
+})
+
+export const TrainingMetricTile = memo<{
   icon: string
   label: string
   value: ReactNode
   hint?: ReactNode
   tone?: TrainingTone
-}> = ({ icon, label, value, hint, tone = 'brand' }) => (
+}>(({ icon, label, value, hint, tone = 'brand' }) => (
   <article className="yy-training-metric-tile">
     <ThemeIcon variant="light" radius="lg" size="lg" className={`yy-training-metric-icon is-${tone}`}>
       <Icon path={icon} size={0.86} />
@@ -106,15 +110,15 @@ export const TrainingMetricTile: FC<{
       ) : null}
     </Stack>
   </article>
-)
+))
 
-export const TrainingCourseCard: FC<{
+export const TrainingCourseCard = memo<{
   course: TrainingCourseModel
   compact?: boolean
   featured?: boolean
   actionLabel?: string
   extraAction?: ReactNode
-}> = ({ course, compact = false, featured = false, actionLabel, extraAction }) => {
+}>(({ course, compact = false, featured = false, actionLabel, extraAction }) => {
   const status = trainingCourseStatus(course)
   const progress = trainingCourseProgress(course)
   const total = course.totalChapterCount || course.chapterCount || 0
@@ -184,13 +188,13 @@ export const TrainingCourseCard: FC<{
       </YinyuPanel>
     </Link>
   )
-}
+})
 
-export const TrainingEmptyState: FC<{
+export const TrainingEmptyState = memo<{
   title: string
   description?: string
   action?: ReactNode
-}> = ({ title, description, action }) => (
+}>(({ title, description, action }) => (
   <YinyuPanel p="lg" className="yy-training-empty-state">
     <Stack align="center" gap="sm">
       <ThemeIcon size="xl" radius="xl" variant="light">
@@ -207,15 +211,28 @@ export const TrainingEmptyState: FC<{
       {action}
     </Stack>
   </YinyuPanel>
-)
+))
 
-export const TrainingProgressSummary: FC<{
+export const TrainingProgressSummary = memo<{
   courses: TrainingCourseModel[]
   overview?: TrainingPersonalOverviewModel | null
   canCreate?: boolean
-}> = ({ courses, overview, canCreate = false }) => {
-  const learning = courses.filter((course) => course.canLearn || course.progressStatus)
-  const pending = courses.filter((course) => course.enrollmentStatus === TrainingCourseEnrollmentStatus.Pending)
+}>(({ courses, overview, canCreate = false }) => {
+  const courseStats = useMemo(() => {
+    let learningCount = 0
+    let pendingCount = 0
+    let editableCount = 0
+    let completedCount = 0
+
+    for (const course of courses) {
+      if (course.canLearn || course.progressStatus) learningCount += 1
+      if (course.canEdit) editableCount += 1
+      if (course.enrollmentStatus === TrainingCourseEnrollmentStatus.Pending) pendingCount += 1
+      if (course.progressStatus === TrainingCourseProgressStatus.Completed) completedCount += 1
+    }
+
+    return { learningCount, pendingCount, editableCount, completedCount }
+  }, [courses])
   const average = overview?.averageProgress ?? 0
 
   return (
@@ -223,7 +240,7 @@ export const TrainingProgressSummary: FC<{
       <TrainingMetricTile
         icon={mdiBookOpenPageVariantOutline}
         label={canCreate ? '授课课程' : '已加入课程'}
-        value={canCreate ? courses.filter((course) => course.canEdit).length : (overview?.joinedCourseCount ?? learning.length)}
+        value={canCreate ? courseStats.editableCount : (overview?.joinedCourseCount ?? courseStats.learningCount)}
         hint={`${overview?.visibleCourseCount ?? courses.length} 门可见课程`}
         tone="ongoing"
       />
@@ -231,29 +248,29 @@ export const TrainingProgressSummary: FC<{
       <TrainingMetricTile
         icon={mdiCheckCircleOutline}
         label="已完成"
-        value={overview?.completedCourseCount ?? courses.filter((course) => course.progressStatus === TrainingCourseProgressStatus.Completed).length}
+        value={overview?.completedCourseCount ?? courseStats.completedCount}
         hint={`${overview?.completedChapterCount ?? 0}/${overview?.totalChapterCount ?? 0} 章节`}
         tone="ongoing"
       />
       <TrainingMetricTile
         icon={mdiClockOutline}
         label={canCreate ? '待审核报名' : '待审核'}
-        value={pending.length}
+        value={courseStats.pendingCount}
         hint={canCreate ? '需要老师处理' : '等待老师通过'}
-        tone={pending.length ? 'coming' : 'silver'}
+        tone={courseStats.pendingCount ? 'coming' : 'silver'}
       />
     </div>
   )
-}
+})
 
-export const TrainingActivityHeatmap: FC<{ activity?: TrainingActivityPointModel[] }> = ({ activity = [] }) => (
+export const TrainingActivityHeatmap = memo<{ activity?: TrainingActivityPointModel[] }>(({ activity = [] }) => (
   <TrainingContributionCalendar activity={activity} compact />
-)
+))
 
-export const TrainingOverviewPanel: FC<{
+export const TrainingOverviewPanel = memo<{
   overview?: TrainingPersonalOverviewModel | null
   todoCourses: TrainingCourseModel[]
-}> = ({ overview, todoCourses }) => {
+}>(({ overview, todoCourses }) => {
   const ctfText = `${overview?.ctfSolvedChallenges ?? 0}/${overview?.ctfTotalChallenges ?? 0}`
   const theoryText = `${overview?.theoryCompletedModules ?? 0}/${overview?.theoryTotalModules ?? 0}`
 
@@ -318,13 +335,13 @@ export const TrainingOverviewPanel: FC<{
       </Stack>
     </YinyuPanel>
   )
-}
+})
 
-export const TrainingCheckInCard: FC<{
+export const TrainingCheckInCard = memo<{
   overview?: TrainingPersonalOverviewModel | null
   checking?: boolean
   onCheckIn: () => void
-}> = ({ overview, checking = false, onCheckIn }) => (
+}>(({ overview, checking = false, onCheckIn }) => (
   <YinyuPanel p="md" className="yy-training-checkin-card">
     <Stack gap="xs">
       <Group gap="xs" wrap="nowrap">
@@ -352,4 +369,4 @@ export const TrainingCheckInCard: FC<{
       </Button>
     </Stack>
   </YinyuPanel>
-)
+))

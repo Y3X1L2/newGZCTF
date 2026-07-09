@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { FC, useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import type { TrainingActivityPointModel } from '@Utils/TrainingApi'
 import { buildTrainingContributionModel, formatDateKey } from './trainingActivity'
 
@@ -29,16 +29,17 @@ const describeDay = (day: ReturnType<typeof buildTrainingContributionModel>['wee
 const formatCompactDate = (date: Date) => `${date.getMonth() + 1}/${date.getDate()}`
 const COMPACT_WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 
-export const TrainingContributionCalendar: FC<TrainingContributionCalendarProps> = ({
+export const TrainingContributionCalendar = memo(function TrainingContributionCalendar({
   activity = [],
   compact = false,
   days,
   className,
-}) => {
+}: TrainingContributionCalendarProps) {
   const model = useMemo(
     () => buildTrainingContributionModel(activity, { days: days ?? (compact ? 42 : 371), compact }),
     [activity, compact, days]
   )
+  const todayKey = useMemo(() => formatDateKey(new Date()), [])
 
   if (compact) {
     const compactDays = model.weeks
@@ -55,7 +56,7 @@ export const TrainingContributionCalendar: FC<TrainingContributionCalendarProps>
         <div className="yy-training-contribution-rail" role="list">
           {compactDays.map((day) => {
             const point = day.activity
-            const isToday = day.key === formatDateKey(new Date())
+            const isToday = day.key === todayKey
             return (
               <span
                 key={day.key}
@@ -109,7 +110,7 @@ export const TrainingContributionCalendar: FC<TrainingContributionCalendarProps>
           >
             {model.weeks.flatMap((week) =>
               week.days.map((day) => {
-                const isToday = day.key === formatDateKey(new Date())
+                const isToday = day.key === todayKey
                 return (
                   <span
                     key={day.key}
@@ -138,4 +139,4 @@ export const TrainingContributionCalendar: FC<TrainingContributionCalendarProps>
       ) : null}
     </div>
   )
-}
+})

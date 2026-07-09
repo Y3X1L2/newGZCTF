@@ -96,6 +96,8 @@ internal static class ServicesExtension
             builder.Services.AddScoped<IDivisionRepository, DivisionRepository>();
             builder.Services.AddScoped<IAwdpRepository, AwdpRepository>();
             builder.Services.AddScoped<DockerImageRegistryService>();
+            builder.Services.AddScoped<VmImageRegistryService>();
+            builder.Services.AddScoped<VmArtifactStore>();
 
             builder.Services.AddScoped<AwdpScriptRunner>();
             builder.Services.AddScoped<AwdpInstanceService>();
@@ -135,6 +137,7 @@ internal static class ServicesExtension
             builder.Services.AddScoped<WeightedScheduler>();
             builder.Services.AddScoped<FleetCapacityReservationService>();
             builder.Services.AddScoped<DeploymentQueueService>();
+            builder.Services.AddScoped<DeploymentQueueViewService>();
             builder.Services.AddScoped<DeploymentQueueStateAccessor>();
             builder.Services.AddScoped<DeploymentExecutionContextAccessor>();
             builder.Services.AddScoped<DeploymentExecutionService>();
@@ -142,6 +145,7 @@ internal static class ServicesExtension
             builder.Services.AddSingleton<NodeExecutionGate>();
             builder.Services.AddSingleton<QueueManager>();
             builder.Services.AddScoped<ImageDistributionService>();
+            builder.Services.AddHostedService<ImageDistributionReconcileService>();
             builder.Services.AddHostedService<FleetHealthCheckService>();
             builder.Services.AddHostedService<QueueProcessingService>();
 

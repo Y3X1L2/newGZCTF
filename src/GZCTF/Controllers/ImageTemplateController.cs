@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using GZCTF.Models.Data;
 using GZCTF.Services;
+using GZCTF.Services.Fleet;
 using GZCTF.Services.Vm;
 using GZCTF.Storage;
 using GZCTF.Middlewares;
@@ -479,7 +480,8 @@ public class ImageTemplateController : ControllerBase
         if (!System.IO.File.Exists(fullPath))
             return NotFound(new { message = "Image file not found" });
 
-        return PhysicalFile(fullPath, "application/octet-stream", Path.GetFileName(fullPath));
+        Response.Headers.AcceptRanges = "bytes";
+        return PhysicalFile(fullPath, "application/octet-stream", Path.GetFileName(fullPath), enableRangeProcessing: true);
     }
 
     private void QueueDistribution(int templateId)

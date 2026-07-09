@@ -98,7 +98,8 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         if (schedule.Target is not null)
         {
             schedule.Target.Status = TargetStatus.Creating;
-            _logger.SystemLogDeploymentTarget("creating", schedule.Target, node);
+            _logger.SystemLogDeploymentTarget("image-distribution", schedule.Target, node,
+                "ensuring Docker image on worker from storage registry");
         }
 
         if (node?.IsLocal == true)
@@ -154,6 +155,15 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             PreferredNodeId = config.PreferredNodeId,
             FleetCapacityReserved = config.FleetCapacityReserved
         };
+        if (!await EnsureDockerImageReadyAsync(nodeId.Value, remoteConfig.Image, schedule.Target, node, context, token))
+        {
+            if (node is not null)
+                ReleaseReservedCapacity(node, NodeCapability.Docker);
+            return null;
+        }
+
+        _logger.SystemLogDeploymentTarget("container-creating", schedule.Target, node,
+            "Docker image is ready on worker");
         var result = await _agentClient.CreateContainerAsync(nodeId.Value, remoteConfig, token);
 
         if (result is null)
@@ -246,7 +256,17 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             return localContainer;
         }
 
-        _logger.SystemLogDeploymentTarget("creating", target, selectedNode);
+        _logger.SystemLogDeploymentTarget("image-distribution", target, selectedNode,
+            "ensuring Docker image on worker from storage registry");
+        if (!await EnsureDockerImageReadyAsync(selectedNode.Id, config.Image, target, selectedNode, context, token))
+        {
+            if (!config.FleetCapacityReserved)
+                ReleaseReservedCapacity(selectedNode, NodeCapability.Docker);
+            return null;
+        }
+
+        _logger.SystemLogDeploymentTarget("container-creating", target, selectedNode,
+            "Docker image is ready on worker");
         var result = await _agentClient.CreateContainerOrThrowAsync(selectedNode.Id, config, token);
         if (result is null)
         {
@@ -470,6 +490,28 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         }
 
         await context.SaveChangesAsync(token);
+    }
+
+    async Task<bool> EnsureDockerImageReadyAsync(Guid nodeId, string image, DeploymentTarget? target,
+        WorkerNode? node, AppDbContext context, CancellationToken token)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var distribution = scope.ServiceProvider.GetRequiredService<ImageDistributionService>();
+            await distribution.EnsureDockerImageOnNodeAsync(image, nodeId, token);
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or AgentClientException or HttpRequestException)
+        {
+            var nodeName = node?.Name ?? nodeId.ToString();
+            var message = $"Node {nodeName} failed to ensure Docker image {image} from storage registry: {ex.Message}";
+            _logger.LogWarning(ex, "Failed to ensure Docker image {Image} on node {NodeId}", image, nodeId);
+            FailDeploymentTarget(target, message);
+            await SaveFleetStateAsync(context, "fail Docker deployment image distribution", token);
+            _logger.SystemLogDeploymentTarget("failed", target, node, message);
+            return false;
+        }
     }
 
     static void ResolveWorkerNodeConcurrencyEntry(EntityEntry entry)

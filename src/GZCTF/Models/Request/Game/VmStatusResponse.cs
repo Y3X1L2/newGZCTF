@@ -1,3 +1,5 @@
+using GZCTF.Services.Fleet;
+
 namespace GZCTF.Models.Request.Game;
 
 /// <summary>
@@ -14,6 +16,21 @@ public class VmStatusResponse
     /// Current status: Creating, Running, Stopped, Destroyed, Error
     /// </summary>
     public string Status { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Current deployment stage: image-pending, image-pulling, vm-creating, vm-booting, ready, error
+    /// </summary>
+    public string? Stage { get; set; }
+
+    /// <summary>
+    /// Human-readable deployment stage label
+    /// </summary>
+    public string? StageMessage { get; set; }
+
+    /// <summary>
+    /// Deployment queue status when the VM is waiting or being created
+    /// </summary>
+    public DeploymentQueueStatusModel? Queue { get; set; }
 
     /// <summary>
     /// VM IP address (null if not yet assigned)

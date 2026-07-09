@@ -6,6 +6,7 @@ using GZCTF.Models.Request.Edit;
 using GZCTF.Models.Request.Game;
 using GZCTF.Models.Request.Info;
 using GZCTF.Repositories.Interface;
+using GZCTF.Services;
 using GZCTF.Services.Cache;
 using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Fleet;
@@ -44,7 +45,9 @@ public class EditController(
     GameExportService exportService,
     GameImportService importService,
     IDivisionRepository divisionRepository,
-    IStringLocalizer<Program> localizer) : Controller
+    IStringLocalizer<Program> localizer,
+    DockerImageRegistryService dockerRegistry,
+    IServiceScopeFactory scopeFactory) : Controller
 {
     bool HasContainerRuntimeConfig(GameChallenge challenge) =>
         challenge.Environment != EnvironmentType.Docker ||
@@ -69,6 +72,26 @@ public class EditController(
 
     BadRequestObjectResult WindowsVmRuntimeConfigError() =>
         BadRequest(new RequestResponse("Windows 虚拟机题目必须选择就绪的 Windows 镜像模板。"));
+
+    void QueueGameImageDistribution(int gameId, string reason)
+    {
+        _ = Task.Run(async () =>
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var distribution = scope.ServiceProvider.GetRequiredService<ImageDistributionService>();
+            var scopedLogger = scope.ServiceProvider.GetRequiredService<ILogger<EditController>>();
+            try
+            {
+                await distribution.DistributeGameAsync(gameId, CancellationToken.None);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or IOException)
+            {
+                scopedLogger.LogWarning(ex,
+                    "Failed to queue image distribution for game {GameId} after {Reason}.",
+                    gameId, reason);
+            }
+        });
+    }
 
     /// <summary>
     /// Add Post
@@ -259,6 +282,7 @@ public class EditController(
 
         game.Update(model);
         await gameRepository.UpdateGame(game, token);
+        QueueGameImageDistribution(game.Id, "game update");
 
         return Ok(GameInfoModel.FromGame(game));
     }
@@ -626,6 +650,7 @@ public class EditController(
             }, token);
 
         await cacheHelper.FlushScoreboardCache(id, token);
+        QueueGameImageDistribution(game.Id, "challenge create");
 
         return Ok(ChallengeEditDetailModel.FromChallenge(res));
     }
@@ -804,6 +829,7 @@ public class EditController(
 
         // Always flush scoreboard
         await cacheHelper.FlushScoreboardCache(game.Id, token);
+        QueueGameImageDistribution(game.Id, "challenge update");
 
         return Ok(ChallengeEditDetailModel.FromChallenge(res));
     }
@@ -837,7 +863,7 @@ public class EditController(
         if (!HasContainerRuntimeConfig(challenge))
             return ContainerRuntimeConfigError();
 
-        var image = challenge.ContainerImage!;
+        var image = await dockerRegistry.ResolveImageReferenceAsync(challenge.ContainerImage!, token);
         var exposedPort = challenge.ExposePort!.Value;
         var user = await userManager.GetUserAsync(User);
 

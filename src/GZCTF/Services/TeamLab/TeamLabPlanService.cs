@@ -94,7 +94,7 @@ public class TeamLabPlanService(
         var candidates = targetNodeId.HasValue
             ? nodes.Where(n => n.Id == targetNodeId.Value).ToList()
             : nodes.ToList();
-        var node = WeightedScheduler.SelectOptimalTeamLabNode(candidates);
+        var node = WeightedScheduler.SelectOptimalTeamLabFabricNode(candidates);
         return node is null
             ? new TeamLabPlanNodeResult(false, targetNodeId.HasValue
                 ? "The WorkerNode that hosts the deployed penetration environment is not a healthy TeamLabNetwork node."

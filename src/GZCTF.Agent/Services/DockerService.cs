@@ -474,6 +474,24 @@ public class DockerService
             new Progress<JSONMessage>(), token);
     }
 
+    public async Task DeleteImageAsync(string image, CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(image))
+            throw new InvalidOperationException("Docker image is required.");
+
+        try
+        {
+            await _client.Images.DeleteImageAsync(image,
+                new ImageDeleteParameters { Force = false, NoPrune = false }, token);
+        }
+        catch (DockerImageNotFoundException)
+        {
+        }
+        catch (DockerApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+        }
+    }
+
     public async Task EnsureRegistryAsync(int port, CancellationToken token)
     {
         const string containerName = "gzctf-internal-registry";

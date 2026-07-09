@@ -340,6 +340,16 @@ export interface TrainingCourseTeacherCandidateModel {
   alreadyTeacher: boolean
 }
 
+export interface TrainingCourseStudentCandidateModel {
+  userId: string
+  userName: string
+  realName: string
+  stdNumber: string
+  email?: string | null
+  avatar?: string | null
+  alreadyEnrolled: boolean
+}
+
 export interface TrainingCourseStudentLearningSummaryModel {
   userId: string
   userName: string
@@ -480,6 +490,7 @@ export interface TrainingCourseModel extends TrainingCourseEditModel {
   canEdit: boolean
   canManageTeachers: boolean
   canManageEnrollments: boolean
+  canDelete: boolean
   chapterCount: number
   resourceCount: number
   enrollmentCount: number
@@ -1115,6 +1126,12 @@ export const trainingCourseAdminApi = {
       method: 'POST',
     }),
 
+  deleteCourse: (courseId: number) =>
+    request<void, unknown>({
+      path: `/api/admin/training/courses/${courseId}`,
+      method: 'DELETE',
+    }),
+
   enrollments: (courseId: number) =>
     request<TrainingCourseEnrollmentModel[], unknown>({
       path: `/api/admin/training/courses/${courseId}/enrollments`,
@@ -1137,6 +1154,21 @@ export const trainingCourseAdminApi = {
     request<void, unknown>({
       path: `/api/admin/training/courses/${courseId}/enrollments/${userId}`,
       method: 'PUT',
+      body: data,
+      type: ContentType.Json,
+    }),
+
+  studentCandidates: (courseId: number, keyword?: string) =>
+    request<TrainingCourseStudentCandidateModel[], unknown>({
+      path: `/api/admin/training/courses/${courseId}/student-candidates`,
+      method: 'GET',
+      query: { keyword },
+    }),
+
+  addEnrollment: (courseId: number, data: { userId: string }) =>
+    request<TrainingCourseEnrollmentModel, unknown>({
+      path: `/api/admin/training/courses/${courseId}/enrollments`,
+      method: 'POST',
       body: data,
       type: ContentType.Json,
     }),

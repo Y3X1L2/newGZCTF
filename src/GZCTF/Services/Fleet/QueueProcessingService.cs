@@ -7,7 +7,7 @@ public class QueueProcessingService : BackgroundService
     private readonly QueueManager _queueManager;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<QueueProcessingService> _logger;
-    private static readonly TimeSpan ProcessInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ProcessInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan CreatingRecoveryThreshold = TimeSpan.FromMinutes(10);
 
     public QueueProcessingService(QueueManager queueManager, IServiceScopeFactory scopeFactory,

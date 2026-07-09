@@ -72,9 +72,10 @@ public class TrainingCourseController(
 
     private IQueryable<TrainingCourse> VisibleCourseQuery(UserInfo user) =>
         CourseQuery()
-            .Where(c => c.Status == TrainingCourseStatus.Published ||
+            .Where(c => c.Status != TrainingCourseStatus.Archived &&
+                        (c.Status == TrainingCourseStatus.Published ||
                         user.Role >= Role.Admin ||
-                        c.Teachers.Any(t => t.TeacherId == user.Id));
+                        c.Teachers.Any(t => t.TeacherId == user.Id)));
 
     private async Task<TrainingPersonalOverviewModel> BuildOverview(UserInfo user, CancellationToken token)
     {
@@ -516,13 +517,14 @@ public class TrainingCourseController(
             var canLearn = await CanLearnCourse(user, course, token);
             models.Add(TrainingCourseModel.FromCourse(
                 course,
-                enrollment,
-                progresses.GetValueOrDefault(course.Id),
-                canLearn,
-                canEdit,
-                canManageTeachers,
-                canEdit,
-                false));
+                enrollment: enrollment,
+                progress: progresses.GetValueOrDefault(course.Id),
+                canLearn: canLearn,
+                canEdit: canEdit,
+                canManageTeachers: canManageTeachers,
+                canManageEnrollments: canEdit,
+                canDelete: false,
+                includeDetail: false));
         }
 
         return Ok(models.ToArray());
@@ -581,13 +583,14 @@ public class TrainingCourseController(
         var includeDetail = canLearn || canEdit || user.Role >= Role.Admin;
         var model = TrainingCourseModel.FromCourse(
             course,
-            enrollment,
-            progress,
-            canLearn,
-            canEdit,
-            canManageTeachers,
-            canEdit || user.Role >= Role.Admin,
-            includeDetail);
+            enrollment: enrollment,
+            progress: progress,
+            canLearn: canLearn,
+            canEdit: canEdit,
+            canManageTeachers: canManageTeachers,
+            canManageEnrollments: canEdit || user.Role >= Role.Admin,
+            canDelete: false,
+            includeDetail: includeDetail);
 
         if (model.Chapters.Count > 0)
         {

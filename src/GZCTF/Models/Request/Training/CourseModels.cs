@@ -47,6 +47,11 @@ public class TrainingCourseTeacherEditModel
     public TrainingCourseTeacherRole Role { get; set; } = TrainingCourseTeacherRole.Teacher;
 }
 
+public class TrainingCourseStudentEnrollModel
+{
+    public Guid UserId { get; set; }
+}
+
 public class TrainingCourseChapterEditModel
 {
     public int? ParentId { get; set; }
@@ -309,6 +314,35 @@ public class TrainingCourseTeacherCandidateModel
             Email = user.Email,
             Role = user.Role,
             AlreadyTeacher = alreadyTeacher
+        };
+}
+
+public class TrainingCourseStudentCandidateModel
+{
+    public Guid UserId { get; set; }
+
+    public string UserName { get; set; } = string.Empty;
+
+    public string RealName { get; set; } = string.Empty;
+
+    public string StdNumber { get; set; } = string.Empty;
+
+    public string? Email { get; set; }
+
+    public string? Avatar { get; set; }
+
+    public bool AlreadyEnrolled { get; set; }
+
+    public static TrainingCourseStudentCandidateModel FromUser(UserInfo user, bool alreadyEnrolled) =>
+        new()
+        {
+            UserId = user.Id,
+            UserName = user.UserName ?? string.Empty,
+            RealName = user.RealName,
+            StdNumber = user.StdNumber,
+            Email = user.Email,
+            Avatar = user.AvatarUrl,
+            AlreadyEnrolled = alreadyEnrolled
         };
 }
 
@@ -1004,6 +1038,8 @@ public class TrainingCourseModel
 
     public bool CanManageEnrollments { get; set; }
 
+    public bool CanDelete { get; set; }
+
     public int ChapterCount { get; set; }
 
     public int ResourceCount { get; set; }
@@ -1038,6 +1074,7 @@ public class TrainingCourseModel
         bool canEdit = false,
         bool canManageTeachers = false,
         bool canManageEnrollments = false,
+        bool canDelete = false,
         bool includeDetail = false) =>
         new()
         {
@@ -1055,6 +1092,7 @@ public class TrainingCourseModel
             CanEdit = canEdit,
             CanManageTeachers = canManageTeachers,
             CanManageEnrollments = canManageEnrollments,
+            CanDelete = canDelete,
             ChapterCount = course.Chapters.Count(c => c.IsPublished || canEdit),
             ResourceCount = course.Resources.Count(r => r.IsVisible || canEdit),
             EnrollmentCount = course.Enrollments.Count(e => e.Status == TrainingCourseEnrollmentStatus.Approved),

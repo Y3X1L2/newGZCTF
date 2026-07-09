@@ -93,6 +93,19 @@ public class DownloadVmImageRequest
 {
     public int? TemplateId { get; set; }
     public string Hash { get; set; } = string.Empty;
+    public long? ExpectedSize { get; set; }
     public string DownloadUrl { get; set; } = string.Empty;
     public string AuthToken { get; set; } = string.Empty;
+    public string? RegistryAddress { get; set; }
+    public string? Repository { get; set; }
+    public string? Tag { get; set; }
+    public string? Digest { get; set; }
 }
+
+public record DownloadVmImageResponse(
+    bool Success,
+    string Message,
+    bool AlreadyExists,
+    bool Verified,
+    long? Size,
+    string? Digest);

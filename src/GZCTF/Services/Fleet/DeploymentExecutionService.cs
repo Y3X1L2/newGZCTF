@@ -212,7 +212,8 @@ public class DeploymentExecutionService
         var cpu = ResolveVmCpu(challenge?.CPUCount);
 
         var previousNode = vm.NodeId;
-        using var _ = _executionContext.Push(new DeploymentExecutionContext(nodeId, CapacityReserved: true));
+        using var _ = _executionContext.Push(new DeploymentExecutionContext(nodeId, CapacityReserved: true,
+            ticket.DeploymentTargetId));
         var result = await _fleetVmService.CreateVmAsync(vm, templateId, templatePath, memory, cpu, flag: null, token);
 
         if (result is null || vm.Status == VmInstanceStatus.Error)

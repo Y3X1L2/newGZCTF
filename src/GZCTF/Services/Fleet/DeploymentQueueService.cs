@@ -53,6 +53,9 @@ public class DeploymentQueueService
         {
             var existingStatus = await GetStatusAsync(existing.Id, token)
                 ?? DeploymentQueueStatusModel.FromTicket(existing, queuePosition: 0);
+            _logger.SystemLog(
+                $"Deployment queue ticket reused: ticket={existing.Id}, kind={existing.Kind}, status={existing.Status}, ownerTeam={existing.OwnerTeamId}, ownerUser={existing.OwnerUserId}, game={existing.GameId}, challenge={existing.ChallengeId}.",
+                TaskStatus.Pending, LogLevel.Information);
             return DeploymentQueueResult.FromStatus(existingStatus, reusedExistingTicket: true);
         }
 
@@ -61,6 +64,9 @@ public class DeploymentQueueService
         await _context.SaveChangesAsync(token);
 
         _logger.LogInformation("Deployment queue ticket {TicketId} created for {Kind}", ticket.Id, ticket.Kind);
+        _logger.SystemLog(
+            $"Deployment queue ticket created: ticket={ticket.Id}, kind={ticket.Kind}, ownerTeam={ticket.OwnerTeamId}, ownerUser={ticket.OwnerUserId}, game={ticket.GameId}, challenge={ticket.ChallengeId}, dockerSlots={ticket.DockerSlots}, vmSlots={ticket.VmSlots}.",
+            TaskStatus.Pending, LogLevel.Information);
 
         var status = await GetStatusAsync(ticket.Id, token)
             ?? DeploymentQueueStatusModel.FromTicket(ticket, queuePosition: 0);
@@ -117,6 +123,10 @@ public class DeploymentQueueService
             await _capacity.ReleaseAsync(reservedNodeId, dockerSlots, vmSlots, token);
         else
             await _context.SaveChangesAsync(token);
+
+        _logger.SystemLog(
+            $"Deployment queue ticket cancelled: ticket={ticket.Id}, kind={ticket.Kind}, node={nodeId}, reason={ticket.ErrorMessage}.",
+            TaskStatus.Exit, LogLevel.Information);
     }
 
     public async Task CancelTeamLabRuntimeAsync(int runtimeId, string reason, CancellationToken token)
@@ -160,6 +170,10 @@ public class DeploymentQueueService
 
             if (_capacity is not null && nodeId is { } reservedNodeId)
                 await _capacity.ReleaseAsync(reservedNodeId, dockerSlots, vmSlots, token);
+
+            _logger.SystemLog(
+                $"Deployment queue ticket recovered from stale Creating state: ticket={ticket.Id}, kind={ticket.Kind}, node={nodeId}.",
+                TaskStatus.Failed, LogLevel.Warning);
         }
 
         if (_capacity is null)

@@ -6,6 +6,7 @@ using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Container.Manager;
+using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Services.Fleet;
 
@@ -253,6 +254,43 @@ public class AgentClient
         await PostTeamLabAsync<TeamLabFlowSnapshotRequest, TeamLabFlowResponse>(nodeId,
             "/api/teamlab/flows/snapshot", request, token);
 
+    public virtual async Task<AgentSyncResponse> SyncAgentAsync(Guid nodeId, AgentSyncRequest request,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null)
+            return new AgentSyncResponse(false, $"Fleet node {nodeId} was not found.", null);
+
+        var client = BuildClient(node);
+        var body = JsonSerializer.Serialize(request);
+        HttpResponseMessage response;
+        try
+        {
+            response = await client.PostAsync("/api/maintenance/sync-agent",
+                new StringContent(body, Encoding.UTF8, "application/json"), token);
+        }
+        catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
+        {
+            throw new AgentClientException(
+                $"Agent sync request timed out on node {node.Name} ({node.HostAddress}).", ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new AgentClientException(
+                $"Agent sync request failed on node {node.Name} ({node.HostAddress}): {ex.Message}", ex);
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync(token);
+            throw new AgentClientException(
+                $"Agent sync failed on node {node.Name} ({node.HostAddress}): {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+        }
+
+        return await response.Content.ReadFromJsonAsync<AgentSyncResponse>(token)
+               ?? new AgentSyncResponse(false, "Agent returned an empty sync response.", null);
+    }
+
     public virtual async Task<TeamLabCaptureDownloadResult?> DownloadTeamLabCaptureAsync(Guid nodeId,
         int runtimeId, int jobId, CancellationToken token)
     {
@@ -418,6 +456,21 @@ public class AgentClient
         var node = await GetNodeAsync(nodeId, token);
         if (node is null) return null;
 
+        if (request.TemplateId.HasValue && !request.ImageEnsured)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var template = await context.ImageTemplates.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == request.TemplateId.Value, token);
+            if (template is null || string.IsNullOrWhiteSpace(template.ImageHash))
+                throw new AgentClientException($"VM template {request.TemplateId.Value} is missing or has no image hash.");
+
+            var download = await DownloadVmImageAsync(nodeId, template.Id, template.ImageHash, token: token);
+            if (!download.Success)
+                throw new AgentClientException(
+                    $"Agent VM image ensure failed on node {node.Name} ({node.HostAddress}) for template {template.Name} ({template.Id}): {download.Message}");
+        }
+
         var client = BuildClient(node);
         var body = JsonSerializer.Serialize(request);
         var response = await client.PostAsync("/api/vms/create", new StringContent(body, Encoding.UTF8, "application/json"), token);
@@ -481,10 +534,11 @@ public class AgentClient
         }
     }
 
-    public async Task PullDockerImageAsync(Guid nodeId, string image, string? registryAuth, CancellationToken token)
+    public virtual async Task PullDockerImageAsync(Guid nodeId, string image, string? registryAuth, CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
-        if (node is null) return;
+        if (node is null)
+            throw new AgentClientException($"Fleet node {nodeId} was not found.");
 
         var client = BuildClient(node);
         var body = JsonSerializer.Serialize(new { image, registryAuth });
@@ -493,8 +547,41 @@ public class AgentClient
         if (!response.IsSuccessStatusCode)
         {
             var responseBody = await response.Content.ReadAsStringAsync(token);
-            _logger.LogWarning("Agent Docker image pull failed on node {NodeId}: {Status}. Body: {Body}",
-                nodeId, response.StatusCode, TrimResponseBody(responseBody));
+            throw new AgentClientException(
+                $"Agent Docker image pull failed on node {node.Name} ({node.HostAddress}) for image {image}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+        }
+    }
+
+    public virtual async Task DeleteDockerImageAsync(Guid nodeId, string image, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null)
+            throw new AgentClientException($"Fleet node {nodeId} was not found.");
+
+        var client = BuildClient(node);
+        var response = await client.DeleteAsync($"/api/images/docker?image={Uri.EscapeDataString(image)}", token);
+        if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync(token);
+            throw new AgentClientException(
+                $"Agent Docker image cleanup failed on node {node.Name} ({node.HostAddress}) for image {image}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+        }
+    }
+
+    public virtual async Task DeleteVmImageAsync(Guid nodeId, int templateId, string hash, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null)
+            throw new AgentClientException($"Fleet node {nodeId} was not found.");
+
+        var path = $"/api/images/vm/{templateId}?hash={Uri.EscapeDataString(hash)}";
+        var client = BuildClient(node);
+        var response = await client.DeleteAsync(path, token);
+        if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync(token);
+            throw new AgentClientException(
+                $"Agent VM image cleanup failed on node {node.Name} ({node.HostAddress}) for template {templateId}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
         }
     }
 
@@ -540,28 +627,78 @@ public class AgentClient
         }
     }
 
-    public async Task DownloadVmImageAsync(Guid nodeId, int templateId, string hash, CancellationToken token)
+    public virtual async Task<AgentVmImageDownloadResult> DownloadVmImageAsync(Guid nodeId, int templateId, string hash,
+        string? downloadUrl = null, long? expectedSize = null, CancellationToken token = default)
     {
         var node = await GetNodeAsync(nodeId, token);
-        if (node is null) return;
+        if (node is null)
+            return AgentVmImageDownloadResult.Failed($"Fleet node {nodeId} was not found.");
+
+        VmArtifactDownload artifact;
+        if (!string.IsNullOrWhiteSpace(downloadUrl))
+        {
+            artifact = new VmArtifactDownload(downloadUrl, hash, expectedSize ?? 0);
+        }
+        else
+        {
+            var serverUrl = NodeDeployService.ResolveServerUrl(_config).TrimEnd('/');
+            artifact = new VmArtifactDownload(
+                $"{serverUrl}/api/v1/image-templates/download/{hash}?nodeId={nodeId}",
+                hash,
+                0);
+        }
 
         var client = BuildClient(node);
-        var serverUrl = NodeDeployService.ResolveServerUrl(_config);
+        client.Timeout = TimeSpan.FromHours(2);
+        var registryReference = BuildVmRegistryReference(templateId, hash);
+
         var body = JsonSerializer.Serialize(new
         {
             templateId,
-            hash,
-            downloadUrl = $"{serverUrl.TrimEnd('/')}/api/v1/image-templates/download/{hash}?nodeId={nodeId}",
-            authToken = node.AuthToken
+            hash = artifact.Sha256,
+            expectedSize = artifact.Size > 0 ? artifact.Size : (long?)null,
+            downloadUrl = artifact.DownloadUrl,
+            authToken = node.AuthToken,
+            registryAddress = registryReference.RegistryAddress,
+            repository = registryReference.Repository,
+            tag = registryReference.Tag,
+            digest = registryReference.Digest
         });
         var response = await client.PostAsync("/api/images/download-vm",
             new StringContent(body, Encoding.UTF8, "application/json"), token);
         if (!response.IsSuccessStatusCode)
         {
             var responseBody = await response.Content.ReadAsStringAsync(token);
-            _logger.LogWarning("Agent VM image download failed on node {NodeId}: {Status}. Body: {Body}",
-                nodeId, response.StatusCode, TrimResponseBody(responseBody));
+            return AgentVmImageDownloadResult.Failed(
+                $"Agent VM image download failed on node {node.Name} ({node.HostAddress}) for template {templateId}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
         }
+
+        var result = await response.Content.ReadFromJsonAsync<AgentVmImageDownloadResult>(token);
+        return result ?? AgentVmImageDownloadResult.Failed(
+            $"Agent returned an empty VM image download response on node {node.Name} ({node.HostAddress}).");
+    }
+
+    VmImageArtifactReference BuildVmRegistryReference(int templateId, string hash)
+    {
+        var settings = _config.GetSection(nameof(DockerRegistrySettings)).Get<DockerRegistrySettings>()
+                       ?? new DockerRegistrySettings();
+        var address = settings.NormalizedAddress;
+        var ns = settings.NormalizedNamespace;
+        var repository = string.IsNullOrWhiteSpace(ns)
+            ? $"gzctf/vm-template/{templateId}"
+            : $"{ns}/gzctf/vm-template/{templateId}";
+        var digest = NormalizeSha256Digest(hash);
+        return new VmImageArtifactReference(address, repository, digest, $"sha256:{digest}");
+    }
+
+    static string NormalizeSha256Digest(string hash)
+    {
+        var value = hash.Trim();
+        if (value.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
+            value = value["sha256:".Length..];
+        if (value.Length != 64)
+            throw new AgentClientException("VM image sha256 digest is invalid.");
+        return value.ToLowerInvariant();
     }
 
     static string TrimResponseBody(string? body)
@@ -597,6 +734,7 @@ public class AgentCreateVmRequest
 {
     public int? TemplateId { get; set; }
     public string? TemplatePath { get; set; }
+    public bool ImageEnsured { get; set; }
     public string VmName { get; set; } = string.Empty;
     public int Memory { get; set; } = 2048;
     public int Cpu { get; set; } = 2;
@@ -670,6 +808,31 @@ public class AgentVmIpResponse
     public int? RdpPort { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? Diagnostic { get; set; }
+}
+
+public record AgentSyncRequest(
+    string DownloadUrl,
+    string? ExpectedSha256 = null,
+    bool Restart = true);
+
+public record AgentSyncResponse(
+    bool Success,
+    string Message,
+    string? AgentVersion);
+
+public record AgentVmImageDownloadResult(
+    bool Success,
+    string Message,
+    bool AlreadyExists,
+    bool Verified,
+    long? Size,
+    string? Digest)
+{
+    public static AgentVmImageDownloadResult Ok(bool alreadyExists, bool verified, long? size, string? digest) =>
+        new(true, alreadyExists ? "Image already exists" : "Image ready", alreadyExists, verified, size, digest);
+
+    public static AgentVmImageDownloadResult Failed(string message) =>
+        new(false, message, false, false, null, null);
 }
 
 public record TeamLabStatusResponse(

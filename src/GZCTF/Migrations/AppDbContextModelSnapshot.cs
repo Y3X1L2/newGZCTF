@@ -1564,6 +1564,58 @@ namespace GZCTF.Migrations
                     b.ToTable("IRInstances");
                 });
 
+            modelBuilder.Entity("GZCTF.Models.Data.ImageDistributionRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("ImageHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("ImageTemplateId")
+                        .HasColumnType("integer");
+
+                    b.Property<byte>("ImageType")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTimeOffset?>("LastCheckedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ReferenceCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("References")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<byte>("Status")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid>("WorkerNodeId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("WorkerNodeId");
+
+                    b.HasIndex("ImageTemplateId", "WorkerNodeId")
+                        .IsUnique();
+
+                    b.ToTable("ImageDistributionRecords");
+                });
+
             modelBuilder.Entity("GZCTF.Models.Data.ImageTemplate", b =>
                 {
                     b.Property<int>("Id")
@@ -6200,6 +6252,25 @@ namespace GZCTF.Migrations
                     b.Navigation("TimeSlot");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.ImageDistributionRecord", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.ImageTemplate", "ImageTemplate")
+                        .WithMany()
+                        .HasForeignKey("ImageTemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.WorkerNode", "WorkerNode")
+                        .WithMany()
+                        .HasForeignKey("WorkerNodeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ImageTemplate");
+
+                    b.Navigation("WorkerNode");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.ImageTemplate", b =>

@@ -64,6 +64,34 @@ public class TeamLabPlanServiceTests
     }
 
     [Fact]
+    public void SelectNode_AllowsDockerOnlyNodeForFabricEntrySelection()
+    {
+        var node = new WorkerNode
+        {
+            Id = Guid.NewGuid(),
+            Status = NodeStatus.Online,
+            IsLocal = false,
+            LastHeartbeat = DateTimeOffset.UtcNow,
+            IsSchedulable = true,
+            Capabilities = NodeCapability.Docker,
+            TeamLabNetworkEnabled = true,
+            TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
+            TeamLabTunnelIp = "10.250.0.31",
+            TeamLabAgentVersion = "1.8.3-test",
+            TeamLabProtocolVersion = 3,
+            CurrentContainers = 0,
+            MaxContainers = 4,
+            CurrentVms = 0,
+            MaxVms = 0
+        };
+
+        var result = TeamLabPlanService.SelectNode([node]);
+
+        Assert.True(result.Success);
+        Assert.Equal(node.Id, result.Node?.Id);
+    }
+
+    [Fact]
     public void SelectNode_WhenTargetNodeIsProvided_OnlySelectsThatNode()
     {
         var penetrationNodeId = Guid.NewGuid();
