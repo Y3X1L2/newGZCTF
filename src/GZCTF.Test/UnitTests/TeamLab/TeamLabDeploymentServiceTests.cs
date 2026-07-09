@@ -1709,6 +1709,24 @@ public class TeamLabDeploymentServiceTests
     }
 
     [Fact]
+    public async Task DeployQueuedRuntimeAsync_PreparesDockerImagesBeforeParallelContainerCreates()
+    {
+        await using var context = CreateContext();
+        var nodeId = Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee");
+        await SeedTwoDockerTeamLabRuntimeAsync(context, nodeId);
+        var agent = new PullConcurrencyRecordingTeamLabAgentClient();
+        var service = CreateDeploymentService(context, agent);
+
+        var result = await service.DeployQueuedRuntimeAsync(runtimeId: 1, CancellationToken.None);
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal(2, agent.PullCount);
+        Assert.Equal(1, agent.MaxConcurrentPulls);
+        Assert.Equal(2, agent.CreateCount);
+        Assert.True(agent.AllPullsCompletedBeforeFirstCreate);
+    }
+
+    [Fact]
     public async Task DeployQueuedRuntimeAsync_CleansAlreadyCreatedParallelAssetsWhenOneAssetFails()
     {
         await using var context = CreateContext();
@@ -1789,6 +1807,26 @@ public class TeamLabDeploymentServiceTests
         Assert.All(runtime.Shards, shard => Assert.True(shard.RouteVersion > 0));
         Assert.Contains(runtime.Assets, asset => asset.TopologyKey == "portal" && asset.WorkerNodeId == entryNode);
         Assert.Contains(runtime.Assets, asset => asset.TopologyKey == "database" && asset.WorkerNodeId == dataNode);
+    }
+
+    [Fact]
+    public async Task DeployQueuedRuntimeAsync_DoesNotCreateCompatibilityRuntimeNodesForSnapshotOnlyTopology()
+    {
+        await using var context = CreateContext();
+        var nodeA = Guid.Parse("aaaaaaaa-1111-1111-1111-aaaaaaaaaaaa");
+        var nodeB = Guid.Parse("bbbbbbbb-2222-2222-2222-bbbbbbbbbbbb");
+        await SeedTwoNetworkTeamLabRuntimeAsync(context, nodeA, nodeB);
+        var service = CreateDeploymentService(context, new RecordingTeamLabAgentClient());
+
+        var result = await service.DeployQueuedRuntimeAsync(runtimeId: 1, CancellationToken.None);
+
+        Assert.True(result.Success, result.Message);
+        var environment = await context.PenetrationTeamEnvironments
+            .Include(e => e.RuntimeNodes)
+            .SingleAsync(e => e.GameId == 1 && e.TeamId == 1);
+        Assert.Empty(environment.RuntimeNodes);
+        Assert.Equal(2, await context.TeamLabRuntimeAssets.CountAsync(a =>
+            a.RuntimeId == 1 && a.Kind == TeamLabResourceKind.Docker));
     }
 
     private static DockerImageRegistryService CreateDockerRegistryService(string address)
@@ -2272,6 +2310,52 @@ public class TeamLabDeploymentServiceTests
     }
 
     private sealed class NoopTeamLabAgentClient : TestTeamLabAgentClientBase;
+
+    private sealed class PullConcurrencyRecordingTeamLabAgentClient : TestTeamLabAgentClientBase
+    {
+        int _activePulls;
+        int _pullCount;
+        int _createCount;
+        int _completedPulls;
+        bool _createStartedBeforeAllPullsCompleted;
+
+        public int PullCount => Volatile.Read(ref _pullCount);
+        public int CreateCount => Volatile.Read(ref _createCount);
+        public int MaxConcurrentPulls { get; private set; }
+        public bool AllPullsCompletedBeforeFirstCreate => !_createStartedBeforeAllPullsCompleted;
+
+        public override async Task PullDockerImageAsync(Guid nodeId, string image, string? registryAuth,
+            CancellationToken token)
+        {
+            var active = Interlocked.Increment(ref _activePulls);
+            MaxConcurrentPulls = Math.Max(MaxConcurrentPulls, active);
+            Interlocked.Increment(ref _pullCount);
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(50), token);
+            }
+            finally
+            {
+                Interlocked.Increment(ref _completedPulls);
+                Interlocked.Decrement(ref _activePulls);
+            }
+        }
+
+        public override Task<AgentCreateContainerResponse> CreateContainerOrThrowAsync(Guid nodeId,
+            ContainerConfig config, CancellationToken token)
+        {
+            if (Volatile.Read(ref _completedPulls) != Volatile.Read(ref _pullCount))
+                _createStartedBeforeAllPullsCompleted = true;
+
+            Interlocked.Increment(ref _createCount);
+            return Task.FromResult(new AgentCreateContainerResponse
+            {
+                ContainerId = $"container-{config.Image}",
+                Port = config.ExposedPort
+            });
+        }
+    }
 
     private sealed class RecordingTeamLabAgentClient : TestTeamLabAgentClientBase
     {

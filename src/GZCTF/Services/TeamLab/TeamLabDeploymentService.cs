@@ -925,16 +925,19 @@ public class TeamLabDeploymentService(
     async Task<TeamLabNativeAssetCreationResult> CreateNativeAssetAsync(Guid workerNodeId, int runtimeId,
         PenetrationConfig config, TeamLabPublishedAssetPlanResult plan, TeamLabRuntimeRouteMatrix routeMatrix,
         TeamLabAssetSpec asset, int gameId, int teamId, int publishedVersion, string vpnClientAddress,
+        IReadOnlyDictionary<string, string> preparedDockerImages,
         Action<string> trackCreatedContainer, Action<string> trackCreatedVm, CancellationToken token)
     {
         var flag = BuildPrimaryFlag(config, asset.TopologyKey, gameId, teamId, publishedVersion);
         if (asset.Kind == TeamLabAssetSpecKind.Docker)
         {
-            var containerConfig = await BuildResolvedNativeDockerContainerConfigAsync(asset, teamId,
-                workerNodeId, flag, dockerRegistry, token, plan.Networks);
+            if (!preparedDockerImages.TryGetValue(asset.TopologyKey, out var preparedImage))
+                throw new InvalidOperationException($"Docker image for TeamLab asset {asset.Name} was not prepared.");
+
+            var containerConfig = BuildNativeDockerContainerConfig(asset, teamId, workerNodeId, flag, plan.Networks);
+            containerConfig.Image = preparedImage;
             containerConfig.EnvironmentVariables = BuildNativeEnvironmentVariables(config, asset.TopologyKey,
                 plan, gameId, teamId, publishedVersion);
-            await imageDistribution.EnsureDockerImageOnNodeAsync(containerConfig.Image, workerNodeId, token);
             var container = await agentClient.CreateContainerOrThrowAsync(workerNodeId, containerConfig, token);
             trackCreatedContainer(container.ContainerId);
 
@@ -959,13 +962,8 @@ public class TeamLabDeploymentService(
         }
 
         var vmRequest = BuildNativeVmRequest(runtimeId, asset, flag);
-        if (asset.SourceTemplateId is { } vmTemplateId)
-        {
-            var imageReady = await imageDistribution.EnsureVmTemplateOnNodeAsync(vmTemplateId, workerNodeId, token);
-            if (!imageReady.Success)
-                throw new InvalidOperationException(imageReady.Message);
+        if (asset.SourceTemplateId is not null)
             vmRequest.ImageEnsured = true;
-        }
         logger.LogInformation("TeamLab VM {VmName} init config prepared: cloudInit={CloudInitEnabled}, os={OsType}, interfaces={InterfaceCount}.",
             vmRequest.VmName, vmRequest.CloudInit?.Enabled == true, vmRequest.CloudInit?.OsType, vmRequest.Interfaces.Count);
         var vm = await agentClient.CreateVmAsync(workerNodeId, vmRequest, token);
@@ -983,6 +981,40 @@ public class TeamLabDeploymentService(
             BuildRuntimeAssetRecord(asset, vm.VmName),
             null,
             vm.VmName);
+    }
+
+    async Task<IReadOnlyDictionary<string, string>> PrepareNativeAssetImagesAsync(
+        IReadOnlyList<TeamLabAssetSpec> assets, IReadOnlyList<TeamLabRuntimeShardDeployment> shardDeployments,
+        CancellationToken token)
+    {
+        var preparedDockerImages = new Dictionary<string, string>(StringComparer.Ordinal);
+        var ensuredDockerImages = new HashSet<string>(StringComparer.Ordinal);
+        var ensuredVmTemplates = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var asset in assets)
+        {
+            var shard = ResolveAssetShard(asset, shardDeployments);
+            if (asset.Kind == TeamLabAssetSpecKind.Docker)
+            {
+                var resolvedImage = await dockerRegistry.ResolveImageReferenceAsync(asset.Image, token);
+                preparedDockerImages[asset.TopologyKey] = resolvedImage;
+                if (ensuredDockerImages.Add($"{shard.WorkerNodeId:N}|{resolvedImage}"))
+                    await imageDistribution.EnsureDockerImageOnNodeAsync(resolvedImage, shard.WorkerNodeId, token);
+                continue;
+            }
+
+            if (asset.SourceTemplateId is not { } vmTemplateId)
+                continue;
+
+            if (!ensuredVmTemplates.Add($"{shard.WorkerNodeId:N}|{vmTemplateId}"))
+                continue;
+
+            var imageReady = await imageDistribution.EnsureVmTemplateOnNodeAsync(vmTemplateId, shard.WorkerNodeId, token);
+            if (!imageReady.Success)
+                throw new InvalidOperationException(imageReady.Message);
+        }
+
+        return preparedDockerImages;
     }
 
     private async Task<TeamLabDeploymentResult> DeployNativeRuntimeAsync(TeamLabRuntime runtime, int gameId, int teamId,
@@ -1207,14 +1239,16 @@ public class TeamLabDeploymentService(
         {
             foreach (var assetGroup in plan.Assets.GroupBy(asset => asset.StartPriority).OrderBy(group => group.Key))
             {
-                var assetResults = await Task.WhenAll(assetGroup
+                var orderedAssets = assetGroup
                     .OrderBy(asset => asset.TopologyKey, StringComparer.Ordinal)
-                    .Select(asset =>
+                    .ToArray();
+                var preparedDockerImages = await PrepareNativeAssetImagesAsync(orderedAssets, shardDeployments, token);
+                var assetResults = await Task.WhenAll(orderedAssets.Select(asset =>
                     {
                         var shard = ResolveAssetShard(asset, shardDeployments);
                         return CreateNativeAssetAsync(shard.WorkerNodeId, runtime.Id,
                         topology.Config, plan, routeMatrix, asset, gameId, teamId, runtime.PublishedVersion,
-                        vpnClientAddress,
+                        vpnClientAddress, preparedDockerImages,
                         containerId => TrackCreatedContainer(shard.WorkerNodeId, containerId),
                         vmName => TrackCreatedVm(shard.WorkerNodeId, vmName), token);
                     }));
@@ -1773,8 +1807,20 @@ public class TeamLabDeploymentService(
         environment.LastError = null;
         environment.UpdatedAt = DateTimeOffset.UtcNow;
 
+        var persistedNodeIdsByKey = await context.PenetrationNodes.AsNoTracking()
+            .Where(node => node.ConfigId == config.Id)
+            .Select(node => new { node.TopologyKey, node.Id })
+            .ToDictionaryAsync(node => node.TopologyKey, node => node.Id, StringComparer.Ordinal, token);
+        foreach (var staleRuntimeNode in environment.RuntimeNodes
+                     .Where(node => !persistedNodeIdsByKey.ContainsKey(node.TopologyNodeKey))
+                     .ToArray())
+            context.PenetrationRuntimeNodes.Remove(staleRuntimeNode);
+
         foreach (var node in config.Nodes)
         {
+            if (!persistedNodeIdsByKey.TryGetValue(node.TopologyKey, out var persistedNodeId))
+                continue;
+
             var asset = plan.Assets.FirstOrDefault(a => a.TopologyKey == node.TopologyKey);
             if (asset is null) continue;
 
@@ -1784,7 +1830,7 @@ public class TeamLabDeploymentService(
             {
                 runtimeNode = new PenetrationRuntimeNode
                 {
-                    TopologyNodeId = node.Id,
+                    TopologyNodeId = persistedNodeId,
                     TopologyNodeKey = node.TopologyKey,
                     CreatedAt = DateTimeOffset.UtcNow
                 };
@@ -1792,7 +1838,7 @@ public class TeamLabDeploymentService(
             }
 
             var primary = asset.Interfaces.FirstOrDefault(i => i.IsPrimary) ?? asset.Interfaces.FirstOrDefault();
-            runtimeNode.TopologyNodeId = node.Id;
+            runtimeNode.TopologyNodeId = persistedNodeId;
             runtimeNode.TopologyNodeKey = node.TopologyKey;
             runtimeNode.NetworkName = primary?.NetworkKey ?? string.Empty;
             runtimeNode.IpAddress = primary?.IpAddress ?? string.Empty;
