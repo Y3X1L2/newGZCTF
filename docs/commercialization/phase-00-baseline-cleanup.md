@@ -458,7 +458,9 @@ git commit -m "docs: freeze commercialization domain terminology"
 ## Task 5: Phase 0 开发验收与生产切换门禁
 
 **Files:**
+- Modify: `docs/commercialization/phase-00-baseline-cleanup.md`
 - Modify: `docs/platform-commercialization-audit-progress.md`
+- Modify: `docs/platform-commercialization-master-plan.md`
 
 - [x] **Step 1: 验证 EF 模型和 migration**
 
@@ -493,7 +495,9 @@ psql "$ConnectionStrings__Database" --file scripts/migrations/phase-00-legacy-da
 - [x] **Step 4: 更新进度并提交阶段验收记录**
 
 ```powershell
-git add docs/platform-commercialization-audit-progress.md
+git add docs/commercialization/phase-00-baseline-cleanup.md `
+  docs/platform-commercialization-audit-progress.md `
+  docs/platform-commercialization-master-plan.md
 git commit -m "docs: record phase zero acceptance"
 ```
 
