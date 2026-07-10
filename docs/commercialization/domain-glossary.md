@@ -100,9 +100,11 @@
 Phase 0 退出前运行：
 
 ```powershell
-rg -n -g '!src/GZCTF/Migrations/**' -g '!src/GZCTF/wwwroot/**' -g '!artifacts/**' `
-  "IRCheckpoint|IRInstance|ScenarioInstance|TrainingDirection|TrainingModule" `
+$legacySurface = 'IRChallenge|IRCheckpoint|IRInstance|ScenarioInstance|ScenarioTimelineEntry|TrainingDirection|TrainingModule|TrainingCtfSubmission|TheoryTrainingPlan|TheoryTrainingSession|Training(Admin)?Controller|api/training/(catalog|overview|modules|ctf/modules|theory/modules)'
+rg -ni -g '!src/GZCTF/Migrations/**' -g '!src/GZCTF/wwwroot/**' -g '!artifacts/**' `
+  $legacySurface `
   src/GZCTF src/GZCTF.Agent tests/e2e
+dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter FullyQualifiedName~LegacySurfaceRemovalTests
 ```
 
-预期结果：无产品运行代码或活动 e2e 命中。历史 EF migration、Phase 0 迁移验证、负向删除门禁、禁用术语登记和明确标记的审计记录可以引用旧名称，但不得形成可执行兼容面。
+预期结果：文本扫描无产品运行代码或活动 e2e 命中，负向删除门禁通过。大小写不敏感扫描覆盖 PascalCase 类型、camelCase DTO/UI 字段、旧控制器名和旧 API 子路由；反射门禁精确覆盖 `Stage` 等通用词命名的已删除类型和控制器根路由。历史 EF migration、Phase 0 迁移验证、负向删除门禁、禁用术语登记和明确标记的审计记录可以引用旧名称，但不得形成可执行兼容面。

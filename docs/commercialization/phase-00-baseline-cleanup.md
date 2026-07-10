@@ -420,6 +420,7 @@ git commit -m "refactor: remove legacy training and scenario ui"
 - Modify: `docs/platform-commercialization-audit-progress.md`
 - Modify: `src/GZCTF/Models/Internal/Configs.cs`
 - Modify: `src/GZCTF/Extensions/Startup/ServicesExtension.cs`
+- Modify: `src/GZCTF.Test/UnitTests/Phase/LegacySurfaceRemovalTests.cs`
 - Modify: `src/GZCTF.Test/UnitTests/TeamLab/PublicUdpGatewayProviderTests.cs`
 - Modify: `src/GZCTF.Test/UnitTests/TeamLab/TeamLabCommandBuilderTests.cs`
 
@@ -437,12 +438,14 @@ rg -n -g '!docs/archive/**' -g '!src/GZCTF/Migrations/**' -g '!src/GZCTF/wwwroot
 - [x] **Step 2: 检查禁用术语**
 
 ```powershell
-rg -n -g '!src/GZCTF/Migrations/**' -g '!src/GZCTF/wwwroot/**' -g '!artifacts/**' `
-  "IRCheckpoint|IRInstance|ScenarioInstance|TrainingDirection|TrainingModule" `
+$legacySurface = 'IRChallenge|IRCheckpoint|IRInstance|ScenarioInstance|ScenarioTimelineEntry|TrainingDirection|TrainingModule|TrainingCtfSubmission|TheoryTrainingPlan|TheoryTrainingSession|Training(Admin)?Controller|api/training/(catalog|overview|modules|ctf/modules|theory/modules)'
+rg -ni -g '!src/GZCTF/Migrations/**' -g '!src/GZCTF/wwwroot/**' -g '!artifacts/**' `
+  $legacySurface `
   src/GZCTF src/GZCTF.Agent tests/e2e
+dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter FullyQualifiedName~LegacySurfaceRemovalTests
 ```
 
-Expected: 无产品运行代码或活动 e2e 命中。历史 migration、Phase 0 迁移验证、负向删除门禁、禁用术语登记和审计记录是升级、迁移与防回流证据，不参与运行时门禁，也不得提供可执行兼容面。
+Expected: 文本扫描无产品运行代码或活动 e2e 命中，负向删除门禁通过。大小写不敏感扫描覆盖类型、camelCase DTO/UI 字段、旧控制器名和旧 API 子路由；反射门禁精确覆盖 `Stage` 等通用词命名的已删除类型和控制器根路由。历史 migration、Phase 0 迁移验证、负向删除门禁、禁用术语登记和审计记录是升级、迁移与防回流证据，不参与运行时门禁，也不得提供可执行兼容面。
 
 - [x] **Step 3: 提交术语冻结**
 

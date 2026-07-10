@@ -184,4 +184,5 @@
 - Task 4 已完成活动文档与术语冻结：乱码 code point gate 零命中，运行时源码、Agent 与活动 e2e 的禁用类型和 `dry-run` 占位零命中。
 - 总纲已按代码事实更新为 25 个 Controller、88 个 DbSet、`AppDbContext` 1745 行；课程培训只保留 `TrainingCourse` 运行聚合，历史 migration 继续作为升级证据。
 - `PublicUdpGatewayConfig.Provider` 的无效占位默认值已改为正式 `nftables` provider；历史 Phase 注释改为职责说明，不改变运行逻辑；TeamLab 网关专项测试 38 项通过。
+- Task 4 质量复审补强了防回流门禁：文本扫描改为大小写不敏感并覆盖旧 DTO/UI 字段、控制器名和 API 子路由，反射测试只允许当前两个课程 route root，并继续精确禁止 `Stage` 等已删除 runtime 类型。
 - 下一步执行 Task 5 总体验收；仍未部署、未连接或修改生产数据库。

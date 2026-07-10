@@ -66,9 +66,14 @@ public class LegacySurfaceRemovalTests
             .Where(template => !string.IsNullOrWhiteSpace(template))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        Assert.DoesNotContain("api/training", routeRoots);
-        Assert.DoesNotContain("api/admin/training", routeRoots);
-        Assert.Contains("api/training/courses", routeRoots);
-        Assert.Contains("api/admin/training/courses", routeRoots);
+        var trainingRouteRoots = routeRoots
+            .Where(route => route!.StartsWith("api/training", StringComparison.OrdinalIgnoreCase) ||
+                            route.StartsWith("api/admin/training", StringComparison.OrdinalIgnoreCase))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        Assert.True(trainingRouteRoots.SetEquals([
+            "api/training/courses",
+            "api/admin/training/courses"
+        ]), $"Unexpected training route roots: {string.Join(", ", trainingRouteRoots.Order())}");
     }
 }
