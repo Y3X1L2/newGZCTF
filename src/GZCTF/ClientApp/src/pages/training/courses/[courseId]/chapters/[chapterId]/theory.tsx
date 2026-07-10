@@ -17,7 +17,15 @@ import {
   UnstyledButton,
 } from '@mantine/core'
 import { showNotification } from '@mantine/notifications'
-import { mdiArrowLeft, mdiArrowLeftBold, mdiArrowRightBold, mdiCheck, mdiContentSaveOutline, mdiSendCheckOutline } from '@mdi/js'
+import {
+  mdiArrowLeft,
+  mdiArrowLeftBold,
+  mdiArrowRightBold,
+  mdiCheck,
+  mdiContentSaveOutline,
+  mdiRefresh,
+  mdiSendCheckOutline,
+} from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { FC, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
@@ -151,6 +159,7 @@ const ChapterTheoryPage: FC = () => {
   const [currentIndex, setCurrentIndex] = useState(0)
 
   const submitted = paper?.status === TheoryAnswerSheetStatus.Submitted
+  const canReview = submitted && paper?.showCorrectAnswerAfterSubmit === true
   const questions = useMemo(() => [...(paper?.questions ?? [])].sort((a, b) => a.order - b.order), [paper?.questions])
   const answeredCount = useMemo(
     () => questions.filter((question) => (answers[question.id]?.length ?? 0) > 0).length,
@@ -159,7 +168,7 @@ const ChapterTheoryPage: FC = () => {
   const unansweredCount = questions.length - answeredCount
   const questionById = useMemo(() => new Map(questions.map((question) => [question.id, question])), [questions])
   const reviewItems = useMemo(() => {
-    if (!submitted) return []
+    if (!canReview) return []
 
     return questions.map((question, index) => {
       const selected = answers[question.id] ?? []
@@ -174,7 +183,7 @@ const ChapterTheoryPage: FC = () => {
         isCorrect,
       }
     })
-  }, [answers, questions, submitted])
+  }, [answers, canReview, questions])
   const wrongReviewItems = reviewItems.filter((item) => !item.isCorrect)
   const correctCount = reviewItems.length - wrongReviewItems.length
   const reviewRate = reviewItems.length ? Math.round((correctCount / reviewItems.length) * 100) : 0
@@ -240,6 +249,22 @@ const ChapterTheoryPage: FC = () => {
     }
   }
 
+  const retry = async () => {
+    if (!paper?.allowRetake || !submitted) return
+    setLoading(true)
+    try {
+      const res = await trainingCourseApi.retryChapterTheory(courseNum, chapterNum)
+      setPaper(res.data)
+      setAnswers({})
+      setCurrentIndex(0)
+      showNotification({ color: 'teal', message: '已开始新的作答', icon: <Icon path={mdiRefresh} size={1} /> })
+    } catch (err) {
+      showErrorMsg(err, (key) => key)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const currentQuestion = questions[currentIndex]
   const goToQuestion = (index: number) => setCurrentIndex(Math.min(Math.max(index, 0), questions.length - 1))
   const currentAnswered = currentQuestion ? (answers[currentQuestion.id]?.length ?? 0) > 0 : false
@@ -289,6 +314,7 @@ const ChapterTheoryPage: FC = () => {
                     <Badge variant="light">{answeredCount} / {questions.length} 已作答</Badge>
                     <Badge variant="light" color="violet">总分 {paper.totalScore}</Badge>
                     <Badge variant="light" color="teal">及格线 {paper.passRate}%</Badge>
+                    {paper.attemptNumber ? <Badge variant="light">第 {paper.attemptNumber} 次作答</Badge> : null}
                     {submitted ? (
                       <Badge color={paper.passed ? 'green' : 'yellow'}>
                         得分 {paper.score ?? 0} / {paper.totalScore} · {paper.passed ? '已通过' : '未通过'}
@@ -297,6 +323,16 @@ const ChapterTheoryPage: FC = () => {
                   </Group>
                 </Stack>
                 <Group className="yy-theory-actions">
+                  {submitted && paper.allowRetake ? (
+                    <Button
+                      variant="outline"
+                      disabled={loading}
+                      leftSection={<Icon path={mdiRefresh} size={1} />}
+                      onClick={retry}
+                    >
+                      重新作答
+                    </Button>
+                  ) : null}
                   <Button
                     variant="outline"
                     disabled={submitted || loading}
@@ -347,7 +383,7 @@ const ChapterTheoryPage: FC = () => {
               </Alert>
             ) : null}
 
-            {submitted ? (
+            {canReview ? (
               <YinyuPanel p="md" className="yy-theory-review-summary">
                 <div className="yy-theory-review-layout">
                   <Group justify="space-between" align="flex-start" wrap="wrap">
@@ -469,7 +505,9 @@ const ChapterTheoryPage: FC = () => {
                         const active = index === currentIndex
                         const reviewQuestion = questionById.get(question.id)
                         const correct =
-                          submitted && reviewQuestion ? isAnswerCorrect(answers[question.id] ?? [], reviewQuestion.answerIndexes) : false
+                          canReview && reviewQuestion
+                            ? isAnswerCorrect(answers[question.id] ?? [], reviewQuestion.answerIndexes)
+                            : false
 
                         return (
                           <Tooltip key={question.id} label={`${index + 1}. ${theoryQuestionTypeLabel(question.type)}`}>
@@ -478,7 +516,7 @@ const ChapterTheoryPage: FC = () => {
                               data-active={active || undefined}
                               data-answered={answered || undefined}
                               data-correct={correct || undefined}
-                              data-wrong={submitted && !correct ? true : undefined}
+                              data-wrong={canReview && !correct ? true : undefined}
                               onClick={() => goToQuestion(index)}
                             >
                               <span className="yy-theory-node-number">{index + 1}</span>

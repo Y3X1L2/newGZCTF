@@ -29,10 +29,12 @@ public interface IExerciseInstanceRepository : IRepository
     /// <param name="user">当前用户</param>
     /// <param name="instance">当前实例</param>
     /// <param name="answer">当前提交</param>
+    /// <param name="courseId">当前课程 ID</param>
     /// <param name="flagId">多 Flag 题目的目标 Flag ID</param>
     /// <param name="token"></param>
     /// <returns></returns>
     public Task<(AnswerResult Status, int? FlagId)> VerifyAnswer(UserInfo user, ExerciseInstance instance, string answer,
+        int courseId,
         int? flagId = null,
         CancellationToken token = default);
 

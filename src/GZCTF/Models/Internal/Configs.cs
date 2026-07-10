@@ -624,7 +624,7 @@ public class PublicUdpGatewayConfig
     /// </summary>
     public bool Enable { get; set; }
 
-    public string Provider { get; set; } = "dry-run";
+    public string Provider { get; set; } = "nftables";
     public string PublicEndpoint { get; set; } = string.Empty;
     public string NftTable { get; set; } = "inet gzctf_teamlab";
     public string IptablesBinaryPath { get; set; } = "iptables";

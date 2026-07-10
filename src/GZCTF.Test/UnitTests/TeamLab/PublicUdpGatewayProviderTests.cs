@@ -12,6 +12,12 @@ namespace GZCTF.Test.UnitTests.TeamLab;
 public class PublicUdpGatewayProviderTests
 {
     [Fact]
+    public void Config_DefaultProvider_IsNftables()
+    {
+        Assert.Equal("nftables", new PublicUdpGatewayConfig().Provider);
+    }
+
+    [Fact]
     public async Task DisabledProvider_MarksRuleUnsyncedAndRefusesToReportSuccess()
     {
         var provider = new PublicUdpGatewayProvider(

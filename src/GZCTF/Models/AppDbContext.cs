@@ -54,12 +54,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<DeploymentTarget> DeploymentTargets { get; set; } = null!;
     public DbSet<DeploymentQueueTicket> DeploymentQueueTickets { get; set; } = null!;
     public DbSet<GamePhase> GamePhases => Set<GamePhase>();
-    public DbSet<TimeSlot> TimeSlots { get; set; } = null!;
-    public DbSet<ScoringRule> ScoringRules { get; set; } = null!;
-    public DbSet<Stage> Stages { get; set; } = null!;
-    public DbSet<ScenarioInstance> ScenarioInstances { get; set; } = null!;
-    public DbSet<IRCheckpoint> IRCheckpoints { get; set; } = null!;
-    public DbSet<IRInstance> IRInstances { get; set; } = null!;
     public DbSet<TheoryQuestionBankItem> TheoryQuestionBankItems { get; set; } = null!;
     public DbSet<TheoryPaper> TheoryPapers { get; set; } = null!;
     public DbSet<TheoryPaperQuestion> TheoryPaperQuestions { get; set; } = null!;
@@ -86,17 +80,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<PenetrationRuntimeRoute> PenetrationRuntimeRoutes { get; set; } = null!;
     public DbSet<PenetrationSubmission> PenetrationSubmissions { get; set; } = null!;
     public DbSet<PenetrationResetRecord> PenetrationResetRecords { get; set; } = null!;
-    public DbSet<TrainingDirection> TrainingDirections { get; set; } = null!;
-    public DbSet<TrainingModule> TrainingModules { get; set; } = null!;
-    public DbSet<TrainingModuleVisibility> TrainingModuleVisibilities { get; set; } = null!;
-    public DbSet<TrainingModuleChallenge> TrainingModuleChallenges { get; set; } = null!;
-    public DbSet<TrainingCtfSubmission> TrainingCtfSubmissions { get; set; } = null!;
-    public DbSet<TheoryTrainingPlan> TheoryTrainingPlans { get; set; } = null!;
-    public DbSet<TheoryTrainingPlanQuestion> TheoryTrainingPlanQuestions { get; set; } = null!;
-    public DbSet<TheoryTrainingSession> TheoryTrainingSessions { get; set; } = null!;
-    public DbSet<TheoryTrainingSessionQuestion> TheoryTrainingSessionQuestions { get; set; } = null!;
-    public DbSet<TrainingArticleProgress> TrainingArticleProgresses { get; set; } = null!;
-    public DbSet<TrainingModuleProgress> TrainingModuleProgresses { get; set; } = null!;
     public DbSet<TrainingCourse> TrainingCourses { get; set; } = null!;
     public DbSet<TrainingCourseTeacher> TrainingCourseTeachers { get; set; } = null!;
     public DbSet<TrainingCourseEnrollment> TrainingCourseEnrollments { get; set; } = null!;
@@ -129,6 +112,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
             v => JsonSerializer.Deserialize<T>(v, JsonOptions)
         );
 
+    private static ValueConverter<T, string> GetRequiredJsonConverter<T>() where T : class, new() =>
+        new(
+            v => JsonSerializer.Serialize(v, JsonOptions),
+            v => JsonSerializer.Deserialize<T>(v, JsonOptions) ?? new()
+        );
+
     private static ValueComparer<TList> GetEnumerableComparer<TList, T>()
         where T : notnull
         where TList : IEnumerable<T>, new() =>
@@ -146,8 +135,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
         var listComparer = GetEnumerableComparer<List<string>, string>();
         var intListConverter = GetJsonConverter<List<int>>();
         var intListComparer = GetEnumerableComparer<List<int>, int>();
-        var trainingRuleConverter = GetJsonConverter<TrainingCompletionRule>();
-        var theoryQuestionTypeListConverter = GetJsonConverter<List<TheoryQuestionType>>();
+        var trainingChapterCompletionPolicyConverter = GetRequiredJsonConverter<TrainingChapterCompletionPolicy>();
         var theoryQuestionTypeListComparer = GetEnumerableComparer<List<TheoryQuestionType>, TheoryQuestionType>();
 
         builder.Entity<UserInfo>(entity =>
@@ -1032,243 +1020,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
             entity.HasOne(v => v.Challenge).WithMany().HasForeignKey(v => v.ChallengeId).OnDelete(DeleteBehavior.Cascade);
         });
 
-        builder.Entity<TrainingDirection>(entity =>
-        {
-            entity.Property(e => e.Type)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.HasOne(e => e.CreatedBy)
-                .WithMany()
-                .HasForeignKey(e => e.CreatedById)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            entity.HasMany(e => e.Modules)
-                .WithOne(e => e.Direction)
-                .HasForeignKey(e => e.DirectionId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        builder.Entity<TrainingModule>(entity =>
-        {
-            entity.Property(e => e.Type)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.Property(e => e.ArticleContentType)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.Property(e => e.CompletionRule)
-                .HasConversion(trainingRuleConverter);
-
-            entity.HasOne(e => e.Parent)
-                .WithMany(e => e.Children)
-                .HasForeignKey(e => e.ParentId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            entity.HasOne(e => e.EnvironmentTemplate)
-                .WithMany()
-                .HasForeignKey(e => e.EnvironmentTemplateId)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            entity.HasOne(e => e.CreatedBy)
-                .WithMany()
-                .HasForeignKey(e => e.CreatedById)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            entity.HasOne(e => e.UpdatedBy)
-                .WithMany()
-                .HasForeignKey(e => e.UpdatedById)
-                .OnDelete(DeleteBehavior.SetNull);
-        });
-
-        builder.Entity<TrainingModuleVisibility>(entity =>
-        {
-            entity.Property(e => e.VisibilityType)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.HasOne(e => e.Module)
-                .WithMany(e => e.Visibilities)
-                .HasForeignKey(e => e.ModuleId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.Group)
-                .WithMany()
-                .HasForeignKey(e => e.GroupId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.CreatedBy)
-                .WithMany()
-                .HasForeignKey(e => e.CreatedById)
-                .OnDelete(DeleteBehavior.SetNull);
-        });
-
-        builder.Entity<TrainingModuleChallenge>(entity =>
-        {
-            entity.HasOne(e => e.Module)
-                .WithMany(e => e.Challenges)
-                .HasForeignKey(e => e.ModuleId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.ExerciseChallenge)
-                .WithMany()
-                .HasForeignKey(e => e.ExerciseChallengeId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.CreatedBy)
-                .WithMany()
-                .HasForeignKey(e => e.CreatedById)
-                .OnDelete(DeleteBehavior.SetNull);
-        });
-
-        builder.Entity<TrainingCtfSubmission>(entity =>
-        {
-            entity.Property(e => e.Status)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.HasOne(e => e.Module)
-                .WithMany()
-                .HasForeignKey(e => e.ModuleId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.ExerciseChallenge)
-                .WithMany()
-                .HasForeignKey(e => e.ExerciseChallengeId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.User)
-                .WithMany()
-                .HasForeignKey(e => e.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.Flag)
-                .WithMany()
-                .HasForeignKey(e => e.FlagId)
-                .OnDelete(DeleteBehavior.SetNull);
-        });
-
-        builder.Entity<TheoryTrainingPlan>(entity =>
-        {
-            entity.Property(e => e.Mode)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.Property(e => e.QuestionTypes)
-                .HasConversion(theoryQuestionTypeListConverter)
-                .Metadata
-                .SetValueComparer(theoryQuestionTypeListComparer);
-
-            entity.HasOne(e => e.Module)
-                .WithOne(e => e.TheoryPlan)
-                .HasForeignKey<TheoryTrainingPlan>(e => e.ModuleId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.CreatedBy)
-                .WithMany()
-                .HasForeignKey(e => e.CreatedById)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            entity.HasOne(e => e.UpdatedBy)
-                .WithMany()
-                .HasForeignKey(e => e.UpdatedById)
-                .OnDelete(DeleteBehavior.SetNull);
-        });
-
-        builder.Entity<TheoryTrainingPlanQuestion>(entity =>
-        {
-            entity.HasOne(e => e.Plan)
-                .WithMany(e => e.Questions)
-                .HasForeignKey(e => e.PlanId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.SourceQuestion)
-                .WithMany()
-                .HasForeignKey(e => e.SourceQuestionId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        builder.Entity<TheoryTrainingSession>(entity =>
-        {
-            entity.Property(e => e.Status)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.HasOne(e => e.Plan)
-                .WithMany()
-                .HasForeignKey(e => e.PlanId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.Module)
-                .WithMany()
-                .HasForeignKey(e => e.ModuleId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.User)
-                .WithMany()
-                .HasForeignKey(e => e.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasMany(e => e.Questions)
-                .WithOne(e => e.Session)
-                .HasForeignKey(e => e.SessionId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        builder.Entity<TheoryTrainingSessionQuestion>(entity =>
-        {
-            entity.Property(e => e.Type)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.Property(e => e.Options)
-                .HasConversion(listConverter)
-                .Metadata
-                .SetValueComparer(listComparer);
-
-            entity.Property(e => e.AnswerIndexes)
-                .HasConversion(intListConverter)
-                .Metadata
-                .SetValueComparer(intListComparer);
-
-            entity.Property(e => e.SelectedIndexes)
-                .HasConversion(intListConverter)
-                .Metadata
-                .SetValueComparer(intListComparer);
-        });
-
-        builder.Entity<TrainingArticleProgress>(entity =>
-        {
-            entity.HasOne(e => e.Module)
-                .WithMany()
-                .HasForeignKey(e => e.ModuleId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.User)
-                .WithMany()
-                .HasForeignKey(e => e.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        builder.Entity<TrainingModuleProgress>(entity =>
-        {
-            entity.Property(e => e.Status)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.HasOne(e => e.Module)
-                .WithMany()
-                .HasForeignKey(e => e.ModuleId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.User)
-                .WithMany()
-                .HasForeignKey(e => e.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
         builder.Entity<TrainingCourse>(entity =>
         {
             entity.Property(e => e.Status)
@@ -1373,6 +1124,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
             entity.Property(e => e.VideoProvider)
                 .HasConversion<string>()
                 .HasMaxLength(32);
+
+            entity.Property(e => e.CompletionPolicy)
+                .HasConversion(trainingChapterCompletionPolicyConverter);
 
             entity.HasOne(e => e.Parent)
                 .WithMany(e => e.Children)
@@ -1559,6 +1313,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
 
         builder.Entity<TrainingCourseChapterTheoryQuestion>(entity =>
         {
+            entity.HasQueryFilter(question => !question.IsArchived);
+
             entity.Property(e => e.Type)
                 .HasConversion<string>()
                 .HasMaxLength(32);
@@ -1615,6 +1371,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
         {
             entity.Property(e => e.SelectedIndexes)
                 .HasConversion(intListConverter)
+                .Metadata
+                .SetValueComparer(intListComparer);
+
+            entity.Property(e => e.QuestionType)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.Property(e => e.QuestionOptions)
+                .HasConversion(GetRequiredJsonConverter<List<string>>())
+                .Metadata
+                .SetValueComparer(listComparer);
+
+            entity.Property(e => e.CorrectAnswerIndexes)
+                .HasConversion(GetRequiredJsonConverter<List<int>>())
                 .Metadata
                 .SetValueComparer(intListComparer);
 

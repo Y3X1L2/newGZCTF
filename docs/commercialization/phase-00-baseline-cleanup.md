@@ -10,11 +10,38 @@
 
 ---
 
+## 实施进度
+
+更新时间：2026-07-10
+
+- 当前状态：Phase 0 开发、全量验收与双 reviewer 终审已完成，未发现剩余阻断或重要问题。生产数据库备份、审计和 migration 应用保留为显式部署门禁。
+- 工作分支：`codex/phase-0-baseline-cleanup`。
+- 隔离工作区：`D:\newgz\newGZCTF-phase0`。
+- 基线验证：`dotnet test src/GZCTF.Test/GZCTF.Test.csproj --no-restore` 通过，577 项测试全部通过；`pnpm check` 通过。
+- 告警门禁：基线有 17 条 nullable warning；Task 2 当前构建为 13 条，未新增告警。
+- Task 2 结果：`TrainingCourseController.BuildOverview` 已完全切换到课程、章节、课程提交和课程理论答卷事实，不再读取旧模块表。
+- Task 2 结果：`TimeSlot`、`ScoringRule`、IR/Scenario 实体、旧培训 Controller、DTO、DbSet 和当前模型快照已清退；历史 migration 保留。
+- Task 2 结果：PostgreSQL Testcontainers 已验证旧课程树、组报名、实践提交、两次理论作答和阅读百分比守恒，目标 EF 模型无 pending changes。
+- Task 2 质量修正：理论重做改为显式状态转换，GET 不再自动创建下一次 attempt；章节完成策略进入新课程章节编辑合约，不保留旧培训配置入口。
+- Task 3 结果：旧管理员培训页、旧 CTF/理论模块页和四个废弃 e2e 已删除；学员组 API 已拆出为独立 `StudentGroupApi`，没有把旧模块逻辑合并进新课程页面。
+- Task 3 结果：新课程前端已接入章节完成策略、理论重做、答案显示策略和 attempt 信息；locale 校验、TypeScript strict check 与活动源码遗留扫描通过。
+- Task 4 结果：活动源码和 e2e 的禁用术语、乱码、历史阶段注释与 `dry-run` 占位扫描通过；总纲、术语表和模块边界已更新为 Phase 0 完成后的唯一运行模型。
+- Task 5 结果：幂等 migration 脚本、4 项 PostgreSQL 迁移守恒、585 项后端单元测试、前端 production build、EF snapshot 和 production bundle 遗留面门禁全部通过；已发布 Random 计划无法冻结任何候选题时 contract migration 明确失败并回滚。
+- 数据边界：本轮完成迁移代码、审计脚本和可重复集成验证；未收到部署指令前，不连接生产数据库、不执行生产备份、不应用 contract migration。
+
+任务状态：
+
+- [x] Task 1：建立遗留面清单和失败测试
+- [x] Task 2：原子完成旧培训迁移和后端 contract 切换
+- [x] Task 3：删除旧前端和失效 e2e
+- [x] Task 4：冻结术语并清理活动文档
+- [x] Task 5：Phase 0 开发验收与生产切换门禁
+
 ## 0. 代码事实与退出边界
 
-当前代码事实：
+Phase 0 实施前的代码基线：
 
-- `Models/Data/IREntities.cs` 仍定义 `IRCheckpoint` 和 `IRInstance`，`AppDbContext` 仍暴露对应 DbSet。
+- `Models/Data/IREntities.cs` 仍定义 `IRCheckpoint` 和 `IRInstance`，`TimeSlot.cs`、`ScoringRule.cs` 仍保留同一废弃子系统的辅助实体，`AppDbContext` 仍暴露对应 DbSet。
 - `Models/Data/ScenarioEntities.cs` 仍定义 Stage、timeline 和 instance 体系，当前没有有效 Controller 或前端入口。
 - `TrainingController`、`TrainingAdminController`、`TrainingDirection/TrainingModule`、`TrainingModels` 和旧培训前端 API 仍可运行，不能直接删表。
 - 新 `TrainingCourse` 体系已具备课程、章节、题目绑定、理论试卷、提交和进度实体，可以承接旧培训数据。
@@ -34,12 +61,13 @@ Phase 0 不删除历史 `Migrations/*.cs`；删除历史 migration 会破坏从�
 | TrainingModuleChallenge | TrainingCourseChallenge + TrainingCourseChapterChallenge | 每个旧绑定同时建立课程级绑定和章节级绑定。 |
 | TrainingCtfSubmission | TrainingCourseSubmission | 使用 module-to-course 和 module-to-chapter 映射写入。 |
 | TheoryTrainingPlan | TrainingCourseChapterTheoryPaper | 每个理论计划归属其模块对应章节，并保留 `PassRate`、`AllowRetake` 和提交后答案可见策略。 |
-| TheoryTrainingPlanQuestion | TrainingCourseTheoryQuestion + TrainingCourseChapterTheoryQuestion | 从 `TheoryQuestionBankItem` 复制课程题和试卷题快照，不能让课程继续依赖旧计划。 |
+| Manual TheoryTrainingPlanQuestion | TrainingCourseTheoryQuestion + 活动 TrainingCourseChapterTheoryQuestion | 从当前 plan question 和题库复制课程题与活动试卷题，不能让课程继续依赖旧计划。 |
+| Random TheoryTrainingPlan | TrainingCourseTheoryQuestion + 活动 TrainingCourseChapterTheoryQuestion | 有历史作答时冻结最新一次非空 session 的题目快照；从未生成题目时按题库过滤条件和题目 ID 确定性选取 `QuestionCount` 道题。 |
 | TheoryTrainingSession | TrainingCourseChapterTheorySheet | 按用户、章节和尝试序号迁移全部 session，保留状态、得分、总分和提交时间。 |
-| TheoryTrainingSessionQuestion | TrainingCourseChapterTheoryAnswer | 按迁移后的 paper question 映射保留作答和判题结果。 |
-| TrainingArticleProgress | TrainingChapterProgress | 保留 `ReadPercent`；100 映射为 Completed，1-99 映射为 Learning，0 映射为 NotStarted。 |
+| TheoryTrainingSessionQuestion | 归档 TrainingCourseChapterTheoryQuestion + TrainingCourseChapterTheoryAnswer | 每个历史 session question 建立归档试卷题；answer 独立保存题型、题干、正文、选项、正确答案、分值和顺序快照，不依赖当前题库。 |
+| TrainingArticleProgress | TrainingChapterProgress | 保留 `ReadPercent`；旧模块总体进度为 Completed 时映射 Completed，其余有阅读或实践事实时映射 Learning。 |
 | TrainingModuleProgress | TrainingCourseProgress | 按课程内所有章节、题目和理论 sheet 重新聚合，旧汇总值只用于迁移校验。 |
-| TrainingModuleVisibility | EnrollmentPolicy + Enrollment | AllStudents 映射 Open；GroupOnly 为当前组员建立 Approved enrollment。 |
+| TrainingModuleVisibility | EnrollmentPolicy + Enrollment | AllStudents 映射 AutoApprove；GroupOnly 为当前组员建立 Approved enrollment。 |
 
 每个旧 module 迁入 chapter 时必须复制 `Title, Summary, ArticleContent -> Content, ArticleContentType -> ContentType, Order, IsPublished, CreatedById, UpdatedById, CreatedAt, UpdatedAt`。根 module 额外向 course 复制 `Title, Slug, Summary, CoverFileHash, CreatedById, UpdatedById, CreatedAt, UpdatedAt, PublishedAt`；其 direction/type 写入 course tags。`TrainingCompletionRule` 逐字段写入 chapter 的目标 `TrainingChapterCompletionPolicy`，不能按新系统默认值覆盖。
 
@@ -48,8 +76,8 @@ Phase 0 不删除历史 `Migrations/*.cs`；删除历史 migration 会破坏从�
 1. 同一根模块子树的可见性集合必须一致，避免课程级报名扩大章节访问范围。
 2. `EnvironmentTemplateId` 非空的模块必须存在引用同一模板的 `ExerciseChallenge` 绑定；旧字段本身不形成运行环境。
 3. `TrainingModule.Slug` 在迁移后的课程范围内必须唯一；冲突时使用 `{slug}-{moduleId}`，空值使用 `course-{moduleId}`。
-4. 缺失用户、题目、Flag 或理论题来源的外键必须在迁移前报告并修复，禁止静默丢行。
-5. 每个 `TheoryTrainingSessionQuestion.SourceQuestionId` 必须能映射到同模块 plan question；无法映射的历史快照必须先修复，不能丢弃作答。
+4. 缺失用户、模块、计划、练习题或 Flag 的强制外键必须在迁移前报告并修复，禁止静默丢行；已置空的理论题来源不阻塞迁移，历史 session question 快照是题目事实来源。
+5. 活动试卷题与历史归档题必须分离；教师后续编辑只能替换活动题，已被答卷引用的题目转为归档，禁止级联删除历史答案。
 6. 同一用户同一模块的多次理论 session 按 `CreatedAt, Id` 生成从 1 开始的稳定 attempt number；目标表必须允许保留全部尝试。
 7. 迁移完成后旧表只允许在同一个 migration 事务中被删除，不能留下双写窗口。
 
@@ -68,7 +96,7 @@ Phase 0 不删除历史 `Migrations/*.cs`；删除历史 migration 会破坏从�
 - Create: `scripts/migrations/phase-00-legacy-data-audit.sql`
 - Modify: `docs/platform-commercialization-audit-progress.md`
 
-- [ ] **Step 1: 写运行时遗留类型失败测试**
+- [x] **Step 1: 写运行时遗留类型失败测试**
 
 测试通过反射和 Controller route 扫描锁定必须删除的类型与路由：
 
@@ -106,7 +134,7 @@ public class LegacySurfaceRemovalTests
 }
 ```
 
-- [ ] **Step 2: 运行测试确认当前失败**
+- [x] **Step 2: 运行测试确认当前失败**
 
 Run:
 
@@ -116,7 +144,7 @@ dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter FullyQualifiedName~LegacyS
 
 Expected: FAIL，失败列表包含 IR、Scenario 和旧 Training 类型。
 
-- [ ] **Step 3: 写数据库审计 SQL**
+- [x] **Step 3: 写数据库审计 SQL**
 
 `phase-00-legacy-data-audit.sql` 必须输出旧表行数、孤儿外键、可见性冲突和未绑定环境模板：
 
@@ -163,7 +191,7 @@ WHERE m."EnvironmentTemplateId" IS NOT NULL
   );
 ```
 
-- [ ] **Step 4: 提交遗留基线测试**
+- [x] **Step 4: 提交遗留基线测试**
 
 ```powershell
 git add src/GZCTF.Test/UnitTests/Phase/LegacySurfaceRemovalTests.cs src/GZCTF.Integration.Test/Tests/Database/LegacyTrainingMigrationTests.cs scripts/migrations/phase-00-legacy-data-audit.sql docs/platform-commercialization-audit-progress.md
@@ -179,6 +207,8 @@ git commit -m "test: define phase zero legacy removal gates"
 - Modify: `src/GZCTF.Integration.Test/Tests/Database/LegacyTrainingMigrationTests.cs`
 - Delete: `src/GZCTF/Models/Data/IREntities.cs`
 - Delete: `src/GZCTF/Models/Data/ScenarioEntities.cs`
+- Delete: `src/GZCTF/Models/Data/TimeSlot.cs`
+- Delete: `src/GZCTF/Models/Data/ScoringRule.cs`
 - Modify: `src/GZCTF/Models/Data/Training.cs`
 - Modify: `src/GZCTF/Models/AppDbContext.cs`
 - Delete: `src/GZCTF/Controllers/TrainingController.cs`
@@ -191,7 +221,7 @@ git commit -m "test: define phase zero legacy removal gates"
 - Modify: `src/GZCTF/Utils/JsonSerializerContext.cs`
 - Modify: `src/GZCTF/Extensions/Startup/ServicesExtension.cs`
 
-- [ ] **Step 1: 在 PostgreSQL integration test 中播种完整旧培训子树**
+- [x] **Step 1: 在 PostgreSQL integration test 中播种完整旧培训子树**
 
 测试数据必须覆盖父子章节、组可见性、实践题提交、同一用户两次理论作答和部分文章进度：
 
@@ -228,7 +258,7 @@ public async Task ContractMigration_PreservesLegacyTrainingFactsAndDropsLegacyTa
 }
 ```
 
-- [ ] **Step 2: 运行 integration test 确认缺少 migration**
+- [x] **Step 2: 运行 integration test 确认缺少 migration**
 
 ```powershell
 dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj --filter FullyQualifiedName~LegacyTrainingMigrationTests
@@ -236,7 +266,7 @@ dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj --filter Fu
 
 Expected: FAIL，旧表仍存在且目标课程数据为空。
 
-- [ ] **Step 3: 先把运行时代码切到唯一目标模型**
+- [x] **Step 3: 先把运行时代码切到唯一目标模型**
 
 从 `Training.cs` 删除旧实体区并删除 IR/Scenario 文件、旧 Controller、DTO、DbSet 和 ModelBuilder 配置。目标模型同时补齐迁移所需的非丢失字段：
 
@@ -272,9 +302,9 @@ public class TrainingChapterCompletionPolicy
 }
 ```
 
-`TrainingCourseController` 查询当前试卷时选择最新 attempt；已提交且试卷允许重做时创建 `AttemptNumber + 1`，否则返回最新记录。删除当前 `(UserId, ChapterId)` 唯一索引，禁止通过覆盖旧 sheet 实现重做。章节完成判定统一读取 CompletionPolicy：按策略校验阅读百分比、全部必做题或要求数量以及理论通过率，禁止继续硬编码“全部必做题 + 已发布试卷”。
+`TrainingCourseController` 查询当前试卷时只返回最新 attempt，不得由 GET 隐式创建记录；已提交且试卷允许重做时，只有显式调用 `/retry` 才创建 `AttemptNumber + 1`。删除当前 `(UserId, ChapterId)` 唯一索引，禁止通过覆盖旧 sheet 实现重做。章节完成判定统一读取 CompletionPolicy：按策略校验阅读百分比、全部必做题或要求数量以及理论通过率，禁止继续硬编码“全部必做题 + 已发布试卷”。
 
-- [ ] **Step 4: 生成并完善 contract migration**
+- [x] **Step 4: 生成并完善 contract migration**
 
 ```powershell
 dotnet ef migrations add RemoveLegacyIrScenarioTraining --project src/GZCTF/GZCTF.csproj --startup-project src/GZCTF/GZCTF.csproj
@@ -320,11 +350,11 @@ BEGIN
 END $$;
 ```
 
-- [ ] **Step 5: 清理仍有效字段中的遗留语义**
+- [x] **Step 5: 清理仍有效字段中的遗留语义**
 
 保留通用字段但删除 IR 专属注释：`ImageTemplate.ContainsMalware` 定义为镜像安全分类，`Challenge.OsType` 定义为目标环境操作系统提示。不得改变字段存储语义。
 
-- [ ] **Step 6: 运行 migration、后端和边界测试**
+- [x] **Step 6: 运行 migration、后端和边界测试**
 
 ```powershell
 dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj --filter FullyQualifiedName~LegacyTrainingMigrationTests
@@ -333,7 +363,7 @@ dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter "FullyQualifiedName~Legacy
 
 Expected: PASS，目标事实数量与旧数据一致，全部理论尝试仍可查询，旧表和旧 runtime 类型不存在。
 
-- [ ] **Step 7: 提交原子 contract 切换**
+- [x] **Step 7: 提交原子 contract 切换**
 
 ```powershell
 git add src/GZCTF src/GZCTF.Test src/GZCTF.Integration.Test
@@ -344,23 +374,29 @@ git commit -m "refactor: migrate and remove legacy training runtime"
 
 **Files:**
 - Modify: `src/GZCTF/ClientApp/src/utils/TrainingApi.ts`
+- Create: `src/GZCTF/ClientApp/src/utils/StudentGroupApi.ts`
+- Delete: `src/GZCTF/ClientApp/src/pages/admin/training.tsx`
 - Delete: `src/GZCTF/ClientApp/src/pages/training/ctf/modules/[moduleId]/challenges.tsx`
 - Delete: `src/GZCTF/ClientApp/src/pages/training/theory/modules/[moduleId]/session.tsx`
-- Modify: `src/GZCTF/ClientApp/src/hooks/useUser.tsx`
+- Modify: `src/GZCTF/ClientApp/src/components/admin/UserEditModal.tsx`
+- Modify: `src/GZCTF/ClientApp/src/pages/admin/Users.tsx`
+- Modify: `src/GZCTF/ClientApp/src/components/training/TrainingChapterEditor.tsx`
+- Modify: `src/GZCTF/ClientApp/src/pages/training/courses/[courseId]/chapters/[chapterId]/theory.tsx`
+- Modify: `src/GZCTF/ClientApp/src/pages/training/courses/[courseId]/chapters/[chapterId]/theory-edit.tsx`
 - Delete: `tests/e2e/ir-challenge.spec.ts`
 - Delete: `tests/e2e/scenario-create.spec.ts`
 - Delete: `tests/e2e/scenario-play.spec.ts`
 - Delete: `tests/e2e/topology-editor.spec.ts`
 
-- [ ] **Step 1: 删除旧 TrainingApi 类型和方法**
+- [x] **Step 1: 删除旧 TrainingApi 类型和方法**
 
 删除所有请求 `/api/training/catalog`、`/api/training/overview`、`/api/training/modules`、`/api/training/ctf/modules` 和 `/api/training/theory/modules` 的 DTO 与方法。保留 `/api/training/courses` 和 `/api/admin/training/courses` 方法。
 
-- [ ] **Step 2: 删除文件路由页面和废弃 e2e**
+- [x] **Step 2: 删除文件路由页面和废弃 e2e**
 
-删除旧模块页面及四个废弃用例，不添加重定向页面。TeamLab 当前有效测试由 `src/GZCTF.Test/UnitTests/TeamLab` 和 Phase 3 新 e2e 承担。
+删除旧模块页面、混合旧模块管理与学员组管理的管理员页面及四个废弃用例，不添加重定向页面。通用学员组 API 独立拆分，旧方向、模块、可见性、统计和理论 session 逻辑不迁移。TeamLab 当前有效测试由 `src/GZCTF.Test/UnitTests/TeamLab` 和 Phase 3 新 e2e 承担。
 
-- [ ] **Step 3: 校验前端类型和 locale**
+- [x] **Step 3: 校验前端类型和 locale**
 
 ```powershell
 pnpm --dir src/GZCTF/ClientApp validate:locales
@@ -369,7 +405,7 @@ pnpm --dir src/GZCTF/ClientApp check
 
 Expected: 两条命令退出码均为 0。
 
-- [ ] **Step 4: 提交前端清理**
+- [x] **Step 4: 提交前端清理**
 
 ```powershell
 git add src/GZCTF/ClientApp tests/e2e
@@ -380,41 +416,54 @@ git commit -m "refactor: remove legacy training and scenario ui"
 
 **Files:**
 - Modify: `docs/commercialization/domain-glossary.md`
+- Modify: `docs/commercialization/module-boundary-map.md`
+- Modify: `docs/commercialization/phase-00-baseline-cleanup.md`
 - Modify: `docs/platform-commercialization-master-plan.md`
 - Modify: `docs/platform-commercialization-audit-progress.md`
-- Modify: active source files reported by the mojibake scan
+- Modify: `src/GZCTF/Models/Internal/Configs.cs`
+- Modify: `src/GZCTF/Extensions/Startup/ServicesExtension.cs`
+- Modify: `src/GZCTF.Test/UnitTests/Phase/LegacySurfaceRemovalTests.cs`
+- Modify: `src/GZCTF.Test/UnitTests/TeamLab/PublicUdpGatewayProviderTests.cs`
+- Modify: `src/GZCTF.Test/UnitTests/TeamLab/TeamLabCommandBuilderTests.cs`
 
-- [ ] **Step 1: 扫描乱码和历史阶段文案**
+- [x] **Step 1: 扫描乱码和历史阶段文案**
 
 ```powershell
-rg -n -g '!docs/archive/**' -g '!src/GZCTF/Migrations/**' -g '!src/GZCTF/wwwroot/**' \
-  "锟|鈥|Phase [0-9]|dry-run|IRChallenge|ScenarioInstance" src docs tests
+$badEncoding = ([char]0x951f) + '|' + ([char]0x9225) + '|' + ([char]0xfffd)
+rg -n -g '!docs/archive/**' -g '!src/GZCTF/Migrations/**' -g '!src/GZCTF/wwwroot/**' $badEncoding src docs tests
+rg -n -g '!docs/archive/**' -g '!src/GZCTF/Migrations/**' -g '!src/GZCTF/wwwroot/**' `
+  "Phase [0-9]|dry-run|IRChallenge|ScenarioInstance" src docs tests
 ```
 
 逐条判断命中：运行时乱码直接修正；当前总纲中的 Phase 标题保留；历史过程说明移入 `docs/archive/pre-commercial-reset-20260709`。
 
-- [ ] **Step 2: 检查禁用术语**
+- [x] **Step 2: 检查禁用术语**
 
 ```powershell
-rg -n -g '!src/GZCTF/Migrations/**' -g '!docs/archive/**' -g '!artifacts/**' \
-  "IRCheckpoint|IRInstance|ScenarioInstance|TrainingDirection|TrainingModule" src tests docs
+$legacySurface = 'IRChallenge|IRCheckpoint|IRInstance|ScenarioInstance|ScenarioTimelineEntry|TrainingDirection|TrainingModule|TrainingCtfSubmission|TheoryTrainingPlan|TheoryTrainingSession|Training(Admin)?Controller|api/training/(catalog|overview|modules|ctf/modules|theory/modules)'
+rg -ni -g '!src/GZCTF/Migrations/**' -g '!src/GZCTF/wwwroot/**' -g '!artifacts/**' `
+  $legacySurface `
+  src/GZCTF src/GZCTF.Agent tests/e2e
+dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter FullyQualifiedName~LegacySurfaceRemovalTests
 ```
 
-Expected: 无命中。
+Expected: 文本扫描无产品运行代码或活动 e2e 命中，负向删除门禁通过。大小写不敏感扫描覆盖类型、camelCase DTO/UI 字段、旧控制器名和旧 API 子路由；反射门禁精确覆盖 `Stage` 等通用词命名的已删除类型和控制器根路由。历史 migration、Phase 0 迁移验证、负向删除门禁、禁用术语登记和审计记录是升级、迁移与防回流证据，不参与运行时门禁，也不得提供可执行兼容面。
 
-- [ ] **Step 3: 提交术语冻结**
+- [x] **Step 3: 提交术语冻结**
 
 ```powershell
 git add docs src tests
 git commit -m "docs: freeze commercialization domain terminology"
 ```
 
-## Task 5: Phase 0 总体验收
+## Task 5: Phase 0 开发验收与生产切换门禁
 
 **Files:**
+- Modify: `docs/commercialization/phase-00-baseline-cleanup.md`
 - Modify: `docs/platform-commercialization-audit-progress.md`
+- Modify: `docs/platform-commercialization-master-plan.md`
 
-- [ ] **Step 1: 验证 EF 模型和 migration**
+- [x] **Step 1: 验证 EF 模型和 migration**
 
 ```powershell
 dotnet ef migrations script --idempotent --project src/GZCTF/GZCTF.csproj --startup-project src/GZCTF/GZCTF.csproj --output artifacts/phase-00-idempotent.sql
@@ -423,7 +472,7 @@ dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj --filter Fu
 
 Expected: migration script 生成成功，integration test PASS。
 
-- [ ] **Step 2: 运行后端、前端和 e2e 静态门禁**
+- [x] **Step 2: 运行后端、前端和 e2e 静态门禁**
 
 ```powershell
 dotnet test src/GZCTF.Test/GZCTF.Test.csproj
@@ -433,7 +482,7 @@ git diff --check
 
 Expected: 全部退出码为 0。
 
-- [ ] **Step 3: 生产切换前执行数据保护**
+- [ ] **Step 3: 生产切换时执行数据保护（部署门禁，不在开发分支执行）**
 
 ```bash
 pg_dump --format=custom --file=phase00-before-cleanup.dump "$ConnectionStrings__Database"
@@ -442,10 +491,14 @@ psql "$ConnectionStrings__Database" --file scripts/migrations/phase-00-legacy-da
 
 必须保存备份文件 SHA-256、审计 SQL 输出、migration 版本和恢复演练结果。任何前置约束不满足时禁止应用 contract migration。
 
-- [ ] **Step 4: 更新进度并提交阶段验收记录**
+该步骤只有收到明确部署指令并确认维护窗口后才能执行。未执行该步骤不阻塞开发分支完成，但严格阻塞生产 migration 应用。
+
+- [x] **Step 4: 更新进度并提交阶段验收记录**
 
 ```powershell
-git add docs/platform-commercialization-audit-progress.md
+git add docs/commercialization/phase-00-baseline-cleanup.md `
+  docs/platform-commercialization-audit-progress.md `
+  docs/platform-commercialization-master-plan.md
 git commit -m "docs: record phase zero acceptance"
 ```
 

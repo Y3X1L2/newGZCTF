@@ -33,28 +33,29 @@
 | `src/GZCTF.Test` | 单元测试 | Fleet、TeamLab、VM、镜像、Guacamole、Transfer、TrainingCourseAccessPolicy 已有测试。 |
 | `src/GZCTF.Integration.Test` | 集成测试 | 普通 CTF、计分、导入导出、认证、仓储层覆盖扎实。 |
 | `src/GZCTF.AppHost` | 本地编排辅助 | 支持本地开发依赖编排。 |
-| `tests/e2e` | Playwright e2e | 仍有旧 IR/Scenario 测试文件，必须纳入清理范围。 |
+| `tests/e2e` | Playwright e2e | Phase 0 已删除旧 IR/Scenario 与旧拓扑编辑器用例，当前保留提交计分用例。 |
 
 ### 2.2 主站后端结构
 
 | 目录 | 职责 | 商业化判断 |
 | --- | --- | --- |
-| `Controllers` | HTTP API 入口 | 27 个控制器，课程、比赛、节点、题目编辑控制器承载业务逻辑过多。 |
-| `Models/Data` | EF Core 实体 | 业务域覆盖完整，但旧 IR/Scenario、旧培训、新课程、TeamLab、Penetration 并存。 |
+| `Controllers` | HTTP API 入口 | 25 个控制器，课程、比赛、节点、题目编辑控制器承载业务逻辑过多。 |
+| `Models/Data` | EF Core 实体 | Phase 0 已清除旧 IR/Scenario 与旧培训实体；当前覆盖课程、TeamLab、Penetration、Fleet、VM 和既有比赛域。 |
 | `Models/Request` | DTO、请求模型、响应模型 | 外部 API 化前需要统一鉴权、重复调用语义、错误、任务状态、审计字段。 |
 | `Services` | 业务服务 | Fleet、TeamLab、VM、Container、Transfer、Cache、AWDP 已有子域，多个服务文件超过 700 行。 |
 | `Repositories` | 仓储封装 | 普通 CTF 主链路成熟，自研模块仍有 Controller 直接组织复杂查询。 |
 | `Extensions` | 启动注册、缓存、SignalR、遥测、存储、服务注册 | Redis、队列、后台服务、Nginx、端口租约、节点注册集中在启动扩展。 |
-| `Migrations` | EF 迁移 | 旧模型仍进入当前快照，清理必须走迁移脚本。 |
+| `Migrations` | EF 迁移 | 历史 migration 保留数据库演进事实；当前快照只包含 Phase 0 目标模型。 |
 | `Hubs` | SignalR 推送 | 当前主要服务比赛事件、日志、实时状态。 |
 
 当前最大控制器：
 
-- `TrainingCourseAdminController.cs`：2186 行。
+- `TrainingCourseAdminController.cs`：2215 行。
 - `GameController.cs`：1920 行。
 - `EditController.cs`：1252 行。
+- `TrainingCourseController.cs`：1216 行。
 - `NodesController.cs`：1183 行。
-- `TrainingCourseController.cs`：1116 行。
+- `AdminController.cs`：952 行。
 - `AccountController.cs`：759 行。
 
 当前最大服务：
@@ -86,9 +87,10 @@ Agent 当前具备商业化基础，但能力协商和版本协议仍需规范�
 | 位置 | 职责 | 当前事实 |
 | --- | --- | --- |
 | `src/pages` | 文件路由页面 | `vite-plugin-pages` 自动生成路由，复杂业务继续堆在页面文件。 |
-| `src/components` | 公共组件 | 145 个文件、24762 行；存在业务组件、展示组件、动效组件、数据 hook 混放。 |
+| `src/components` | 公共组件 | 145 个文件、24830 行；存在业务组件、展示组件、动效组件、数据 hook 混放。 |
 | `src/hooks` | 前端 hooks | 8 个文件、388 行；业务域 hook 不完整。 |
-| `src/utils` | API 工具、缓存、消息、格式化 | `TrainingApi.ts` 1208 行，`Api.ts` 6310 行。 |
+| `src/Api.ts` | 生成 API 客户端 | 当前 6613 行，后端 OpenAPI 变更会直接扩大前端类型影响面。 |
+| `src/utils` | 领域 API、缓存、消息、格式化 | `TrainingApi.ts` 961 行，学员组 API 已拆为独立文件。 |
 | `src/styles` | 全局样式、CSS module、页面样式 | 54 个文件、20453 行；`YinyuRefinement.css` 9001 行。 |
 
 当前最大页面：
@@ -100,7 +102,6 @@ Agent 当前具备商业化基础，但能力协商和版本协议仍需规范�
 - `admin/images/Index.tsx`：859 行。
 - `admin/games/[id]/challenges/[challengeId]/index.tsx`：858 行。
 - `admin/games/[id]/TheoryPaper.tsx`：840 行。
-- `admin/training.tsx`：777 行。
 
 当前最大组件和样式：
 
@@ -125,13 +126,13 @@ Agent 当前具备商业化基础，但能力协商和版本协议仍需规范�
 | `src/GZCTF.Test/UnitTests/Transfer` | 导入导出、权限、题目迁移。 |
 | `src/GZCTF.Test/UnitTests/Training` | 课程访问策略。 |
 | `src/GZCTF.Integration.Test` | 普通比赛、计分、参赛、导入导出、认证、仓储。 |
-| `tests/e2e` | 旧 IR/Scenario 与 topology editor 测试残留。 |
+| `tests/e2e` | 当前仅保留提交计分用例；Phase 0 已删除验证废弃产品概念的用例。 |
 
 后续验收不能只依赖单元测试。商业化验收必须包含真实 Docker、Linux VM、Windows VM、TeamLab 多网段、多节点、镜像预分发、Redis、数据库写入和前端交互。
 
 ## 3. 当前数据库结构
 
-`AppDbContext` 当前维护 105 个 `DbSet`，`OnModelCreating` 约 1990 行。数据库已经覆盖平台全部核心域，但领域边界和生命周期策略需要重构。
+`AppDbContext` 当前维护 88 个 `DbSet`，文件共 1761 行。数据库已经覆盖平台全部核心域，但领域边界和生命周期策略需要重构。
 
 ### 3.1 实体分组
 
@@ -139,16 +140,14 @@ Agent 当前具备商业化基础，但能力协商和版本协议仍需规范�
 | --- | --- |
 | 站点与审计 | `Posts`、`Configs`、`Logs`、`Files`、`Attachments`、`DataProtectionKeys` |
 | 用户、队伍、分组 | `Teams`、`TeamJoinRequests`、`StudentGroups`、`StudentGroupMembers`、`StudentGroupManagers`、`UserParticipations` |
-| 普通 CTF | `Games`、`Divisions`、`CheatInfo`、`Containers`、`GameEvents`、`Submissions`、`GameNotices`、`FlagContexts`、`Participations`、`GameInstances`、`GameChallenges`、`FirstSolves`、`GamePhases`、`TimeSlots`、`ScoringRules` |
+| 普通 CTF | `Games`、`Divisions`、`CheatInfo`、`Containers`、`GameEvents`、`Submissions`、`GameNotices`、`FlagContexts`、`Participations`、`GameInstances`、`GameChallenges`、`FirstSolves`、`GamePhases` |
 | 练习 | `ExerciseInstances`、`ExerciseChallenges`、`ExerciseDependencies` |
 | API 与 token | `ApiTokens` |
 | 镜像、节点、部署 | `ImageTemplates`、`ImageDistributionRecords`、`DockerRegistryMigrationTasks`、`DockerRegistryMigrationItems`、`VmInstances`、`WorkerNodes`、`DeploymentTargets`、`DeploymentQueueTickets` |
-| 旧 IR/Scenario | `Stages`、`ScenarioInstances`、`IRCheckpoints`、`IRInstances` |
 | 理论题 | `TheoryQuestionBankItems`、`TheoryPapers`、`TheoryPaperQuestions`、`TheoryAnswerSheets`、`TheorySubmissionAnswers` |
 | AWDP | `AwdpServices`、`AwdpServiceInstances`、`AwdpRounds`、`AwdpFlags`、`AwdpCheckerTasks`、`AwdpPatchSubmissions`、`AwdpResetRecords`、`AwdpRecoveryRecords` |
 | Penetration 编辑与旧运行 | `PenetrationConfigs`、`PenetrationPublishedSnapshots`、`PenetrationNetworks`、`PenetrationNodes`、`PenetrationInterfaces`、`PenetrationEdges`、`PenetrationScoreItems`、`PenetrationTeamEnvironments`、`PenetrationDeploymentEvents`、`PenetrationRuntimeNodes`、`PenetrationRuntimeRoutes`、`PenetrationSubmissions`、`PenetrationResetRecords` |
-| 旧培训 | `TrainingDirections`、`TrainingModules`、`TrainingModuleVisibilities`、`TrainingModuleChallenges`、`TrainingCtfSubmissions`、`TheoryTrainingPlans`、`TheoryTrainingPlanQuestions`、`TheoryTrainingSessions`、`TheoryTrainingSessionQuestions`、`TrainingArticleProgresses`、`TrainingModuleProgresses` |
-| 新课程培训 | `TrainingCourses`、`TrainingCourseTeachers`、`TrainingCourseEnrollments`、`TrainingCourseChapters`、`TrainingCourseResources`、`TrainingCourseChallenges`、`TrainingCourseChapterChallenges`、`TrainingCourseSubmissions`、`TrainingCourseProgresses`、`TrainingCheckIns`、`TrainingChapterProgresses`、`TrainingCourseTheoryQuestions`、`TrainingCourseChapterTheoryPapers`、`TrainingCourseChapterTheoryQuestions`、`TrainingCourseChapterTheorySheets`、`TrainingCourseChapterTheoryAnswers` |
+| 课程培训 | `TrainingCourses`、`TrainingCourseTeachers`、`TrainingCourseEnrollments`、`TrainingCourseChapters`、`TrainingCourseResources`、`TrainingCourseChallenges`、`TrainingCourseChapterChallenges`、`TrainingCourseSubmissions`、`TrainingCourseProgresses`、`TrainingCheckIns`、`TrainingChapterProgresses`、`TrainingCourseTheoryQuestions`、`TrainingCourseChapterTheoryPapers`、`TrainingCourseChapterTheoryQuestions`、`TrainingCourseChapterTheorySheets`、`TrainingCourseChapterTheoryAnswers` |
 | TeamLab 运行时 | `TeamLabRuntimes`、`TeamLabRuntimeShards`、`TeamLabRuntimeNetworks`、`TeamLabRuntimeAssets`、`TeamLabVpnPeerRuntimes`、`TeamLabPublicUdpMappings`、`TeamLabEvents`、`TeamLabTrafficFlows`、`TeamLabTrafficCaptureJobs` |
 
 ### 3.2 关键实体关系
@@ -164,13 +163,12 @@ Agent 当前具备商业化基础，但能力协商和版本协议仍需规范�
 - `TeamLabRuntimeNetwork` 以 `RuntimeId + TopologyKey` 建立运行时网段事实。
 - `TeamLabPublicUdpMapping` 约束 runtime 和公网 UDP 端口唯一。
 - `TheoryQuestionBankItem` 当前以类型和题库名为主要检索入口，tag 尚未进入正式模型。
-- `TrainingCourse` 新课程体系与 `TrainingDirection/TrainingModule` 旧体系并存，必须迁移并删除旧体系入口。
+- `TrainingCourse` 是课程培训唯一运行聚合；旧课程树只存在于历史 migration 和 Phase 0 迁移验证中。
 
 ### 3.3 数据库风险
 
-- `AppDbContext` 同时承载成熟 CTF、旧培训、新课程、旧 IR/Scenario、Penetration、TeamLab、AWDP，迁移审查成本高。
-- 旧 IR/Scenario 表仍在当前模型中，产品语义已经不成立。
-- 旧培训和新课程双轨导致课程、题目、进度、理论测试口径不统一。
+- `AppDbContext` 仍同时承载 CTF、课程、Penetration、TeamLab、AWDP、Fleet 和 VM，单文件配置集中导致迁移审查成本高。
+- 历史 migration 包含已删除模型，数据库升级链必须保留，但运行时模型、当前快照和业务 API 不得重新引用这些类型。
 - 高频数据表缺少完整生命周期策略：TeamLab 流量、部署队列、节点指标、日志、AWDP 轮次数据必须按数据量设计索引、聚合、保留和归档。
 - VM 抽象不足，`EnvironmentType.WindowsVM` 阻碍 Linux SSH、Windows RDP、TeamLab VM 统一建模。
 
@@ -198,7 +196,7 @@ Agent 当前具备商业化基础，但能力协商和版本协议仍需规范�
 | CTF 比赛 | Game、Participation、Submission、GameChallenge、Scoreboard | 不直接管理节点命令和 Agent 调用。 |
 | 内容资产 | QuestionPool、ImageTemplate、Attachment、FlagContext、导入导出任务 | 不直接写比赛提交和课程进度。 |
 | 练习 | ExerciseChallenge、ExerciseInstance、练习进度 | 不复用比赛参赛关系表达练习状态。 |
-| 培训课程 | TrainingCourse、章节、资源、报名、课程题、学习进度 | 不继续依赖旧 TrainingModule 表达新课程。 |
+| 培训课程 | TrainingCourse、章节、资源、报名、课程题、学习进度 | 不恢复已删除的旧课程聚合。 |
 | 理论题 | 题库、tag、试卷、答题卡、答案 | 不把 tag 塞进题库名。 |
 | VM | VmInstance、VM 模板、OS 类型、访问协议、访问端点 | 不用 `WindowsVM` 表达全部 VM。 |
 | Fleet 运行底座 | WorkerNode、DeploymentQueueTicket、ImageDistributionRecord、容量预留 | 不把 TeamLab 特例绕过队列、日志和镜像分发。 |
@@ -243,7 +241,7 @@ Docker 模板以 `10.24.0.28:5000` 作为 Registry 主副本，Agent 创建容�
 
 ### 5.6 培训与理论链路
 
-新课程体系覆盖课程、教师、报名、章节、资源、课程题、章节题、提交、进度、签到、章节理论测试。旧培训体系仍通过 `TrainingController`、`TrainingAdminController`、旧前端页面和旧实体存在。理论题已有题库、试卷、答题卡和提交答案，但 tag 模型和索引需要成为正式结构。
+课程体系覆盖课程、教师、报名、章节、资源、课程题、章节题、提交、进度、签到和章节理论测试。Phase 0 已删除旧培训 Controller、页面、实体、路由和枚举；理论题已有题库、试卷、答题卡和提交答案，但 tag 模型和索引需要成为正式结构。
 
 ### 5.7 AWDP 链路
 
@@ -261,8 +259,6 @@ AWDP 已有服务、服务实例、轮次、Flag、Checker、Patch、重置、�
 
 | 技术债 | 证据 | 影响 | 处理阶段 |
 | --- | --- | --- | --- |
-| 旧 IR/Scenario 独立系统残留 | 当前 DbSet、实体、迁移快照、e2e 文件仍存在 | 干扰题目方向模型，误导后续开发 | Phase 0 |
-| 旧培训与新课程双轨 | `TrainingDirection/TrainingModule` 与 `TrainingCourse` 同时存在 | 课程、题目、进度、理论测试口径不统一 | Phase 0 |
 | 整体架构边界不稳 | Controller、服务、页面、Agent 均有跨层职责 | 多人开发容易互相覆盖和重复建模 | Phase 1 |
 | 练习入口缺失 | `ExerciseController.cs` 只有空壳，模型已有 | 首页和常态训练无法闭环 | Phase 11 |
 | 前端样式控制权分散 | 全局 `yy-*`、CSS module、inline style、Mantine `classNames` 并存 | 全局设计语言无法低成本切换 | Phase 2 |
@@ -367,6 +363,8 @@ Phase 编号表示依赖顺序，不表示所有团队串行开发。满足前�
 ### Phase 0：基线清理与术语冻结
 
 紧迫性：最高。
+
+状态：开发实施与本地验收完成，等待分支集成；生产数据保护与 migration 应用属于部署门禁。
 
 前置依赖：无。
 
@@ -624,17 +622,17 @@ Phase 编号表示依赖顺序，不表示所有团队串行开发。满足前�
 
 范围：
 
-- 在 Phase 0 已完成的数据迁移和唯一课程模型上推进产品能力，不恢复旧 TrainingModule 双轨。
+- 在 Phase 0 已完成的数据迁移和唯一课程模型上推进产品能力，不恢复已删除的旧课程聚合。
 - 课程审核、免审、教师、学员、课程删除、归档隐藏、学习状态、理论测试得分闭环。
 - 培训题目接入题目池和内容资产隔离规则。
 - 理论题 tag、索引、题库筛选和章节理论测试复用统一理论模型。
 - 培训详情页按前端组件边界拆分，重组件按需加载，列表和 Drawer 不截断。
 
-代码范围：`TrainingCourseAdminController.cs`、`TrainingCourseController.cs`、旧 `Training*` 控制器、新课程前端、理论题前端。
+代码范围：`TrainingCourseAdminController.cs`、`TrainingCourseController.cs`、课程前端、理论题前端。
 
 交付文档：`docs/commercialization/phase-12-training-theory-productization.md`。
 
-验收重点：课程管理符合教师和管理员权限；旧培训入口完成迁移；课程题和理论测试数据口径统一。
+验收重点：课程管理符合教师和管理员权限；课程题和理论测试数据口径统一；不得恢复 Phase 0 已删除入口。
 
 ### Phase 13：AWDP 3D 态势感知
 
@@ -694,7 +692,7 @@ Phase 编号表示依赖顺序，不表示所有团队串行开发。满足前�
 - Linux SSH 不能早于 VM 抽象。
 - TeamLab 多节点、Windows VM、流量观测闭环不能绕过 TeamLab 架构底座、运行底座、VM 抽象和可观测模型。
 - 题目池不能绕过 scoped token、课程/比赛/练习隔离规则和全局模板所有权。
-- 旧 IR/Scenario 和旧培训清理不能拖到业务功能完成后处理。
+- Phase 0 已完成旧体系清理；后续阶段不得恢复已删除实体、路由、页面或兼容 DTO。
 
 ## 11. 开发规范
 

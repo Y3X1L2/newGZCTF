@@ -96,7 +96,7 @@ public class ImageTemplate
     public string? ErrorMessage { get; set; }
 
     /// <summary>
-    /// Whether this image contains known malware (for IR challenges)
+    /// Whether this image is classified as containing known malware
     /// </summary>
     public bool ContainsMalware { get; set; }
 

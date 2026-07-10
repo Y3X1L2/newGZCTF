@@ -272,7 +272,7 @@ export const TrainingOverviewPanel = memo<{
   todoCourses: TrainingCourseModel[]
 }>(({ overview, todoCourses }) => {
   const ctfText = `${overview?.ctfSolvedChallenges ?? 0}/${overview?.ctfTotalChallenges ?? 0}`
-  const theoryText = `${overview?.theoryCompletedModules ?? 0}/${overview?.theoryTotalModules ?? 0}`
+  const theoryText = `${overview?.theoryPassedAssessments ?? 0}/${overview?.theoryTotalAssessments ?? 0}`
 
   return (
     <YinyuPanel p="lg" className="yy-training-insight-card">

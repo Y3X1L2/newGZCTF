@@ -157,3 +157,45 @@
 - 最终自审已修正镜像引用旧 JSON 类型清退、旧 `IDistributedLockService` 接口删除和节点指标生命周期登记三处跨任务缺口。
 - Phase 0、1、3、4、5 的文件路径状态机检查通过；Phase 4/5 主计划与配套文档已通过总纲需求词覆盖、占位符、代码块、UTF-8、尾随空白和 Git whitespace 检查。
 - 本轮只编写计划和配套契约，未实施 Phase 4/5 代码、未提交、未推送、未部署。
+
+## 2026-07-10 Phase 0 实施
+
+- 已按 `executing-plans` 流程创建隔离工作区 `D:\newgz\newGZCTF-phase0`，分支为 `codex/phase-0-baseline-cleanup`；`main` 保持不变。
+- 依赖恢复完成；后端基线单元测试 577 项全部通过，前端 TypeScript strict check 通过。
+- 基线后端编译有 17 条既有 nullable warning，Phase 0 不得新增编译告警。
+- 代码复核确认 `TrainingCourseController.BuildOverview` 仍读取旧 `TrainingModuleProgresses` 和 `TrainingModules`，该耦合已纳入 Task 2 的唯一目标模型切换范围。
+- 当前开始 Task 1：建立遗留 runtime/API 边界失败测试、PostgreSQL 数据前置审计脚本和迁移集成测试骨架。
+- 本轮尚未部署，尚未连接或修改生产数据库。
+- Task 1 红灯已确认：`LegacySurfaceRemovalTests` 两项均因遗留类型和旧 route root 存在而失败；`LegacyTrainingMigrationTests` 因 Phase 0 migration 尚未注册而失败，失败原因与规格一致。
+- 活动代码复核补充 `TimeSlot` 和 `ScoringRule`：两者除 `AppDbContext` 外只被 IR/Scenario 实体引用，已纳入 Task 2 清退范围，避免数据库和 runtime 留下半套 Scenario 基础设施。
+- `scripts/migrations/phase-00-legacy-data-audit.sql` 已覆盖旧表行数、可见性冲突、模板绑定缺口、slug 冲突、理论快照映射和核心孤儿关系检查。
+- Task 1 完成，开始 Task 2 的目标模型字段、迁移守恒和后端 contract 切换。
+- Task 2 已删除旧 IR/Scenario/Training runtime 类型、DbSet、Controller 和 DTO；旧培训不与新课程合并运行，只通过一次性 contract migration 迁入 `TrainingCourse` 聚合。
+- migration 集成测试已在 PostgreSQL 16 Testcontainers 上通过，验证父子章节、组报名、实践提交、理论试卷、两次作答、答案快照和 37% 阅读进度守恒，并确认全部旧表删除。
+- `TrainingCourseController.BuildOverview`、提交次数限制、学习详情和章节完成判断已切换为课程事实；当前运行时源码扫描不再包含旧实体引用，历史 EF migration 按升级链要求保留。
+- 差异审查修正理论 attempt 状态机：读取已提交答卷不再隐式创建重做记录，重做改为显式 API；章节完成策略已进入新课程章节编辑合约。
+- EF `has-pending-model-changes` 通过；专项后端测试 7 项通过；当前编译 13 条既有 nullable warning，低于 17 条基线且无新增警告。
+- Task 2 全量后端门禁通过：582 项单元测试和 PostgreSQL migration 集成测试全部通过；Task 2 已完成原子提交，下一步进入 Task 3 前端旧培训清理。
+- 本轮仍未部署，未连接或修改生产数据库。
+- Task 3 已删除旧 `trainingApi`、旧方向/模块/可见性/理论 session DTO、旧管理员培训页、两个旧学员模块页和四个废弃 e2e。
+- `StudentGroup` 是课程与用户管理仍在使用的通用能力，已从旧 `trainingAdminApi` 拆到独立 `StudentGroupApi`；没有迁移旧模块管理逻辑，也没有保留失效 route。
+- 新课程 UI 已补齐章节完成策略、理论重做和答案显示策略；课程概览字段从旧 `theory*Modules` 术语切换为 assessment 口径。
+- Task 3 验证通过：locale JSON、TypeScript strict、后端构建、遗留面测试、活动源码旧培训 route/类型扫描和 `git diff --check` 均通过。
+- Task 4 已完成活动文档与术语冻结：乱码 code point gate 零命中，运行时源码、Agent 与活动 e2e 的禁用类型和 `dry-run` 占位零命中。
+- 总纲已按代码事实更新为 25 个 Controller、88 个 DbSet；课程培训只保留 `TrainingCourse` 运行聚合，历史 migration 继续作为升级证据。
+- `PublicUdpGatewayConfig.Provider` 的无效占位默认值已改为正式 `nftables` provider；历史 Phase 注释改为职责说明，不改变运行逻辑；TeamLab 网关专项测试 38 项通过。
+- Task 4 质量复审补强了防回流门禁：文本扫描改为大小写不敏感并覆盖旧 DTO/UI 字段、控制器名和 API 子路由，反射测试只允许当前两个课程 route root，并继续精确禁止 `Stage` 等已删除 runtime 类型。
+- Task 5 初次生成幂等 migration 脚本并完成本地验收；全分支终审发现 Random 计划和历史题目快照缺口后，该验收被重新打开。
+- PostgreSQL 迁移守恒测试首次被本地缺失 `testcontainers/ryuk:0.14.0` 且 Docker Desktop 直连 Docker Hub 超时阻断；确认测试自身显式 dispose 后，仅对测试进程禁用 Ryuk，未修改项目代码掩盖环境问题。
+- 初次后端全量单元测试和前端 locale、strict TypeScript、production build 通过，共转换 4810 个模块。
+- EF `has-pending-model-changes` 通过；当前 snapshot 和 production bundle 的旧表、旧类型、旧 API/DTO 字符串门禁均为零命中；构建后工作树没有生成资产漂移。
+- Phase 0 开发实施与本地验收完成。生产数据库备份、审计 SQL、恢复演练和 contract migration 应用仍是部署门禁，本轮未部署、未连接或修改生产数据库。
+- Phase 0 全分支终审未通过：旧 Random 理论计划不写 `TheoryTrainingPlanQuestions`，当前 contract migration 会因历史 session question 无映射而回滚；历史题目快照也未独立于当前题库保存。
+- 已补两个 PostgreSQL 回归用例并确认红灯：有历史随机作答时 migration 抛出 `Phase 0 found an unmapped legacy theory answer snapshot`；无历史作答的随机计划迁移后缺少可冻结的活动题目结构。原手工计划迁移用例继续通过。
+- 修复边界已冻结：随机计划冻结为确定性静态试卷；历史 session question 迁为归档 paper question，并将题干、正文、选项、正确答案、分值和顺序快照写入 answer；当前创建、编辑、计分和展示只消费非归档题，历史答卷消费自身快照。
+- 终审修复绿灯：Manual 计划、已有 Random session、未开始 Random 计划三项 PostgreSQL migration 用例全部通过；历史答卷展示与活动/归档题隔离专项 7 项通过，EF 无 pending model changes，编译保持 13 条既有 warning。
+- Random 与历史快照修复后的首轮幂等脚本为 316732 字节，SHA-256 为 `9B5C0C34AA4F1480C1FA83E06FA00372CB90D8F597E03C460F6175BCED015FD6`；后端全量单元测试 585 项、前端 production build、runtime/bundle/snapshot 遗留面和 `git diff --check` 全部通过。
+- 当前总纲事实为 25 个 Controller、88 个 DbSet、`AppDbContext` 1761 行；本轮仍未部署、未连接或修改生产数据库。
+- 独立迁移复审发现已发布、未启动的 Random 计划在题库候选为 0 时会迁成可直接通过的空卷；新增 `ContractMigration_RejectsPublishedUnstartedRandomPlanWithoutCandidates` 后先确认迁移未失败的红灯，再在 contract migration 中加入事务内前置校验。
+- 修复后 Manual、已有 Random session、正常未启动 Random、已发布 Random 零候选拒绝四项 PostgreSQL 迁移用例全部通过；新幂等脚本为 317440 字节，SHA-256 为 `59A0EB29BFF0C30FBEFC512F175BE8E9F161A9FA0100E83A98644D62A8775BC9`。
+- 两位独立 reviewer 均已给出 `APPROVED`：原终审核实 Random/历史快照/显式 retry 三项缺口关闭；迁移质量复审核实零候选校验位置、条件、事务回滚和回归测试正确。Phase 0 未发现剩余阻断或重要问题。

@@ -66,7 +66,7 @@ Phase 1 迁入 Identity API token、外部 API 基础和 ImageTemplate 参考链
 | Content | Challenge 基础、QuestionPool、ImageTemplate、Attachment、FlagContext、镜像绑定查询 | 题目资产、镜像目录、附件和导入任务 | 比赛计分、课程进度、runtime 调度 |
 | Ctf | Game、Participation、GameChallenge、Submission、Scoreboard | 比赛生命周期、参赛、普通 CTF 提交与计分 | Agent 调用、TeamLab 拓扑 |
 | Exercise | ExerciseChallenge、ExerciseInstance、练习进度 | 常态练习生命周期 | 使用 Participation 表达练习状态 |
-| Training | TrainingCourse、Chapter、Enrollment、课程题绑定、课程提交、课程进度 | 课程管理和学习流程 | 拥有 ImageTemplate 主副本、复用旧 TrainingModule |
+| Training | TrainingCourse、Chapter、Enrollment、课程题绑定、课程提交、课程进度 | 课程管理和学习流程 | 持有 ImageTemplate 主副本；恢复已删除的旧课程聚合 |
 | Theory | 理论题库、tag、试卷、答题卡、答案 | 理论题检索、组卷、判题 | 用题库名代替 tag |
 | Runtime | DeploymentQueueTicket、容量预留、部署阶段、运行操作 | 统一排队、取消、状态、恢复和容量接口 | 题目计分、课程权限 |
 | VM | VmInstance、VmAccessEndpoint、VM 初始化和探测状态 | VM 创建、访问、停止、销毁 | Windows 专属类型代表全部 VM |

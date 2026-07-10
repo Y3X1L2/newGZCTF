@@ -130,7 +130,7 @@ internal static class ServicesExtension
 
             builder.Services.AddHostedService<FlagChecker>();
 
-            // Phase 3 fleet services
+            // Fleet control-plane services
             builder.Services.AddScoped<INodeRepository, NodeRepository>();
             builder.Services.AddScoped<NodeDeployService>();
             builder.Services.AddScoped<FleetManager>();
@@ -168,7 +168,7 @@ internal static class ServicesExtension
             builder.Services.AddScoped<TeamLabTrafficCaptureService>();
             builder.Services.AddScoped<TeamLabTrafficFlowService>();
 
-            // Phase 7 security: distributed lock
+            // Cross-node coordination requires a shared lock in Fleet mode.
             if (builder.Configuration.GetValue<string>("RunMode") == "Fleet")
                 builder.Services.AddSingleton<IDistributedLockService, RedisDistributedLock>();
             else

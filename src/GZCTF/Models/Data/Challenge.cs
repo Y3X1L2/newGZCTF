@@ -103,7 +103,7 @@ public class Challenge
     public uint ConcurrencyToken { get; set; }
 
     /// <summary>
-    /// OS type for the target environment (Windows or Linux), used by IR challenges
+    /// OS type hint for the target environment (Windows or Linux)
     /// </summary>
     public string? OsType { get; set; } = "Linux";
 

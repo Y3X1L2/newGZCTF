@@ -276,16 +276,6 @@ public enum TheoryAnswerSheetStatus : byte
 }
 
 /// <summary>
-/// Training content family
-/// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter<TrainingType>))]
-public enum TrainingType : byte
-{
-    Ctf = 0,
-    Theory = 1
-}
-
-/// <summary>
 /// Training article format
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<TrainingArticleContentType>))]
@@ -293,28 +283,6 @@ public enum TrainingArticleContentType : byte
 {
     Markdown = 0,
     Html = 1
-}
-
-/// <summary>
-/// Training visibility scope
-/// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter<TrainingVisibilityType>))]
-public enum TrainingVisibilityType : byte
-{
-    GroupOnly = 0,
-    AllStudents = 1
-}
-
-/// <summary>
-/// Student training module progress status
-/// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter<TrainingModuleProgressStatus>))]
-public enum TrainingModuleProgressStatus : byte
-{
-    NotStarted = 0,
-    Reading = 1,
-    Practicing = 2,
-    Completed = 3
 }
 
 /// <summary>
@@ -391,26 +359,6 @@ public enum TrainingCourseProgressStatus : byte
     NotStarted = 0,
     Learning = 1,
     Completed = 2
-}
-
-/// <summary>
-/// Theory training paper generation mode
-/// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter<TheoryTrainingMode>))]
-public enum TheoryTrainingMode : byte
-{
-    Random = 0,
-    Manual = 1
-}
-
-/// <summary>
-/// Training theory session status
-/// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter<TheoryTrainingSessionStatus>))]
-public enum TheoryTrainingSessionStatus : byte
-{
-    Draft = 0,
-    Submitted = 1
 }
 
 /// <summary>
