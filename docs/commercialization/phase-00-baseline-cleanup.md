@@ -14,7 +14,7 @@
 
 更新时间：2026-07-10
 
-- 当前状态：执行中，Task 1 至 Task 4 已完成，下一步实施 Task 5 总体验收。
+- 当前状态：Phase 0 开发实施与本地验收完成；生产数据库备份、审计和 migration 应用保留为显式部署门禁。
 - 工作分支：`codex/phase-0-baseline-cleanup`。
 - 隔离工作区：`D:\newgz\newGZCTF-phase0`。
 - 基线验证：`dotnet test src/GZCTF.Test/GZCTF.Test.csproj --no-restore` 通过，577 项测试全部通过；`pnpm check` 通过。
@@ -26,6 +26,7 @@
 - Task 3 结果：旧管理员培训页、旧 CTF/理论模块页和四个废弃 e2e 已删除；学员组 API 已拆出为独立 `StudentGroupApi`，没有把旧模块逻辑合并进新课程页面。
 - Task 3 结果：新课程前端已接入章节完成策略、理论重做、答案显示策略和 attempt 信息；locale 校验、TypeScript strict check 与活动源码遗留扫描通过。
 - Task 4 结果：活动源码和 e2e 的禁用术语、乱码、历史阶段注释与 `dry-run` 占位扫描通过；总纲、术语表和模块边界已更新为 Phase 0 完成后的唯一运行模型。
+- Task 5 结果：幂等 migration 脚本、PostgreSQL 迁移守恒、583 项后端单元测试、前端 production build、EF snapshot 和 production bundle 遗留面门禁全部通过。
 - 数据边界：本轮完成迁移代码、审计脚本和可重复集成验证；未收到部署指令前，不连接生产数据库、不执行生产备份、不应用 contract migration。
 
 任务状态：
@@ -34,7 +35,7 @@
 - [x] Task 2：原子完成旧培训迁移和后端 contract 切换
 - [x] Task 3：删除旧前端和失效 e2e
 - [x] Task 4：冻结术语并清理活动文档
-- [ ] Task 5：Phase 0 总体验收
+- [x] Task 5：Phase 0 开发验收与生产切换门禁
 
 ## 0. 代码事实与退出边界
 
@@ -454,12 +455,12 @@ git add docs src tests
 git commit -m "docs: freeze commercialization domain terminology"
 ```
 
-## Task 5: Phase 0 总体验收
+## Task 5: Phase 0 开发验收与生产切换门禁
 
 **Files:**
 - Modify: `docs/platform-commercialization-audit-progress.md`
 
-- [ ] **Step 1: 验证 EF 模型和 migration**
+- [x] **Step 1: 验证 EF 模型和 migration**
 
 ```powershell
 dotnet ef migrations script --idempotent --project src/GZCTF/GZCTF.csproj --startup-project src/GZCTF/GZCTF.csproj --output artifacts/phase-00-idempotent.sql
@@ -468,7 +469,7 @@ dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj --filter Fu
 
 Expected: migration script 生成成功，integration test PASS。
 
-- [ ] **Step 2: 运行后端、前端和 e2e 静态门禁**
+- [x] **Step 2: 运行后端、前端和 e2e 静态门禁**
 
 ```powershell
 dotnet test src/GZCTF.Test/GZCTF.Test.csproj
@@ -478,7 +479,7 @@ git diff --check
 
 Expected: 全部退出码为 0。
 
-- [ ] **Step 3: 生产切换前执行数据保护**
+- [ ] **Step 3: 生产切换时执行数据保护（部署门禁，不在开发分支执行）**
 
 ```bash
 pg_dump --format=custom --file=phase00-before-cleanup.dump "$ConnectionStrings__Database"
@@ -487,7 +488,9 @@ psql "$ConnectionStrings__Database" --file scripts/migrations/phase-00-legacy-da
 
 必须保存备份文件 SHA-256、审计 SQL 输出、migration 版本和恢复演练结果。任何前置约束不满足时禁止应用 contract migration。
 
-- [ ] **Step 4: 更新进度并提交阶段验收记录**
+该步骤只有收到明确部署指令并确认维护窗口后才能执行。未执行该步骤不阻塞开发分支完成，但严格阻塞生产 migration 应用。
+
+- [x] **Step 4: 更新进度并提交阶段验收记录**
 
 ```powershell
 git add docs/platform-commercialization-audit-progress.md

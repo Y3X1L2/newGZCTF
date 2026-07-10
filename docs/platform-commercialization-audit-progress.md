@@ -185,4 +185,8 @@
 - 总纲已按代码事实更新为 25 个 Controller、88 个 DbSet、`AppDbContext` 1745 行；课程培训只保留 `TrainingCourse` 运行聚合，历史 migration 继续作为升级证据。
 - `PublicUdpGatewayConfig.Provider` 的无效占位默认值已改为正式 `nftables` provider；历史 Phase 注释改为职责说明，不改变运行逻辑；TeamLab 网关专项测试 38 项通过。
 - Task 4 质量复审补强了防回流门禁：文本扫描改为大小写不敏感并覆盖旧 DTO/UI 字段、控制器名和 API 子路由，反射测试只允许当前两个课程 route root，并继续精确禁止 `Stage` 等已删除 runtime 类型。
-- 下一步执行 Task 5 总体验收；仍未部署、未连接或修改生产数据库。
+- Task 5 已生成 309406 字节的幂等 migration 脚本，SHA-256 为 `3A1734E26C1A4AABB6EF38969AE223E91E83376AAE6448D0AD8B663446F7B91F`；脚本包含 `20260710100000_RemoveLegacyIrScenarioTraining`。
+- PostgreSQL 迁移守恒测试首次被本地缺失 `testcontainers/ryuk:0.14.0` 且 Docker Desktop 直连 Docker Hub 超时阻断；确认测试自身显式 dispose 后，仅对测试进程禁用 Ryuk，迁移测试 1 项通过，未修改项目代码掩盖环境问题。
+- 后端全量单元测试 583 项通过；前端 locale、strict TypeScript 和 production build 通过，共转换 4810 个模块。
+- EF `has-pending-model-changes` 通过；当前 snapshot 和 production bundle 的旧表、旧类型、旧 API/DTO 字符串门禁均为零命中；构建后工作树没有生成资产漂移。
+- Phase 0 开发实施与本地验收完成。生产数据库备份、审计 SQL、恢复演练和 contract migration 应用仍是部署门禁，本轮未部署、未连接或修改生产数据库。
