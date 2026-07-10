@@ -14,7 +14,7 @@
 
 更新时间：2026-07-10
 
-- 当前状态：执行中，Task 1 至 Task 3 已完成，下一步实施 Task 4。
+- 当前状态：执行中，Task 1 至 Task 4 已完成，下一步实施 Task 5 总体验收。
 - 工作分支：`codex/phase-0-baseline-cleanup`。
 - 隔离工作区：`D:\newgz\newGZCTF-phase0`。
 - 基线验证：`dotnet test src/GZCTF.Test/GZCTF.Test.csproj --no-restore` 通过，577 项测试全部通过；`pnpm check` 通过。
@@ -25,6 +25,7 @@
 - Task 2 质量修正：理论重做改为显式状态转换，GET 不再自动创建下一次 attempt；章节完成策略进入新课程章节编辑合约，不保留旧培训配置入口。
 - Task 3 结果：旧管理员培训页、旧 CTF/理论模块页和四个废弃 e2e 已删除；学员组 API 已拆出为独立 `StudentGroupApi`，没有把旧模块逻辑合并进新课程页面。
 - Task 3 结果：新课程前端已接入章节完成策略、理论重做、答案显示策略和 attempt 信息；locale 校验、TypeScript strict check 与活动源码遗留扫描通过。
+- Task 4 结果：活动源码和 e2e 的禁用术语、乱码、历史阶段注释与 `dry-run` 占位扫描通过；总纲、术语表和模块边界已更新为 Phase 0 完成后的唯一运行模型。
 - 数据边界：本轮完成迁移代码、审计脚本和可重复集成验证；未收到部署指令前，不连接生产数据库、不执行生产备份、不应用 contract migration。
 
 任务状态：
@@ -32,12 +33,12 @@
 - [x] Task 1：建立遗留面清单和失败测试
 - [x] Task 2：原子完成旧培训迁移和后端 contract 切换
 - [x] Task 3：删除旧前端和失效 e2e
-- [ ] Task 4：冻结术语并清理活动文档
+- [x] Task 4：冻结术语并清理活动文档
 - [ ] Task 5：Phase 0 总体验收
 
 ## 0. 代码事实与退出边界
 
-当前代码事实：
+Phase 0 实施前的代码基线：
 
 - `Models/Data/IREntities.cs` 仍定义 `IRCheckpoint` 和 `IRInstance`，`TimeSlot.cs`、`ScoringRule.cs` 仍保留同一废弃子系统的辅助实体，`AppDbContext` 仍暴露对应 DbSet。
 - `Models/Data/ScenarioEntities.cs` 仍定义 Stage、timeline 和 instance 体系，当前没有有效 Controller 或前端入口。
@@ -413,29 +414,37 @@ git commit -m "refactor: remove legacy training and scenario ui"
 
 **Files:**
 - Modify: `docs/commercialization/domain-glossary.md`
+- Modify: `docs/commercialization/module-boundary-map.md`
+- Modify: `docs/commercialization/phase-00-baseline-cleanup.md`
 - Modify: `docs/platform-commercialization-master-plan.md`
 - Modify: `docs/platform-commercialization-audit-progress.md`
-- Modify: active source files reported by the mojibake scan
+- Modify: `src/GZCTF/Models/Internal/Configs.cs`
+- Modify: `src/GZCTF/Extensions/Startup/ServicesExtension.cs`
+- Modify: `src/GZCTF.Test/UnitTests/TeamLab/PublicUdpGatewayProviderTests.cs`
+- Modify: `src/GZCTF.Test/UnitTests/TeamLab/TeamLabCommandBuilderTests.cs`
 
-- [ ] **Step 1: 扫描乱码和历史阶段文案**
+- [x] **Step 1: 扫描乱码和历史阶段文案**
 
 ```powershell
-rg -n -g '!docs/archive/**' -g '!src/GZCTF/Migrations/**' -g '!src/GZCTF/wwwroot/**' \
-  "锟|鈥|Phase [0-9]|dry-run|IRChallenge|ScenarioInstance" src docs tests
+$badEncoding = ([char]0x951f) + '|' + ([char]0x9225) + '|' + ([char]0xfffd)
+rg -n -g '!docs/archive/**' -g '!src/GZCTF/Migrations/**' -g '!src/GZCTF/wwwroot/**' $badEncoding src docs tests
+rg -n -g '!docs/archive/**' -g '!src/GZCTF/Migrations/**' -g '!src/GZCTF/wwwroot/**' `
+  "Phase [0-9]|dry-run|IRChallenge|ScenarioInstance" src docs tests
 ```
 
 逐条判断命中：运行时乱码直接修正；当前总纲中的 Phase 标题保留；历史过程说明移入 `docs/archive/pre-commercial-reset-20260709`。
 
-- [ ] **Step 2: 检查禁用术语**
+- [x] **Step 2: 检查禁用术语**
 
 ```powershell
-rg -n -g '!src/GZCTF/Migrations/**' -g '!docs/archive/**' -g '!artifacts/**' \
-  "IRCheckpoint|IRInstance|ScenarioInstance|TrainingDirection|TrainingModule" src tests docs
+rg -n -g '!src/GZCTF/Migrations/**' -g '!src/GZCTF/wwwroot/**' -g '!artifacts/**' `
+  "IRCheckpoint|IRInstance|ScenarioInstance|TrainingDirection|TrainingModule" `
+  src/GZCTF src/GZCTF.Agent tests/e2e
 ```
 
-Expected: 无命中。
+Expected: 无产品运行代码或活动 e2e 命中。历史 migration、Phase 0 迁移验证、负向删除门禁、禁用术语登记和审计记录是升级、迁移与防回流证据，不参与运行时门禁，也不得提供可执行兼容面。
 
-- [ ] **Step 3: 提交术语冻结**
+- [x] **Step 3: 提交术语冻结**
 
 ```powershell
 git add docs src tests

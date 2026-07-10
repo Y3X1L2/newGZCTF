@@ -181,4 +181,7 @@
 - `StudentGroup` 是课程与用户管理仍在使用的通用能力，已从旧 `trainingAdminApi` 拆到独立 `StudentGroupApi`；没有迁移旧模块管理逻辑，也没有保留失效 route。
 - 新课程 UI 已补齐章节完成策略、理论重做和答案显示策略；课程概览字段从旧 `theory*Modules` 术语切换为 assessment 口径。
 - Task 3 验证通过：locale JSON、TypeScript strict、后端构建、遗留面测试、活动源码旧培训 route/类型扫描和 `git diff --check` 均通过。
-- 下一步执行 Task 4 活动文档与术语冻结；仍未部署或修改生产数据库。
+- Task 4 已完成活动文档与术语冻结：乱码 code point gate 零命中，运行时源码、Agent 与活动 e2e 的禁用类型和 `dry-run` 占位零命中。
+- 总纲已按代码事实更新为 25 个 Controller、88 个 DbSet、`AppDbContext` 1745 行；课程培训只保留 `TrainingCourse` 运行聚合，历史 migration 继续作为升级证据。
+- `PublicUdpGatewayConfig.Provider` 的无效占位默认值已改为正式 `nftables` provider；历史 Phase 注释改为职责说明，不改变运行逻辑；TeamLab 网关专项测试 38 项通过。
+- 下一步执行 Task 5 总体验收；仍未部署、未连接或修改生产数据库。

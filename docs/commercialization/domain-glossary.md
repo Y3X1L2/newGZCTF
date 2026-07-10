@@ -13,6 +13,7 @@
 3. 历史命名不能通过 alias、兼容 DTO 或重复路由长期保留。
 4. 迁移期名称转换只允许存在于对应 Phase 的数据迁移代码中，阶段退出前删除运行时适配代码。
 5. 本表标记为“目标”的术语在对应 Phase 实现前不能伪装成现有能力。
+6. 已删除术语只允许用于历史 migration、迁移验证、负向删除门禁、禁用术语登记和审计记录，不得形成可执行兼容面。
 
 ## 2. 身份与参与关系
 
@@ -51,12 +52,12 @@
 
 | 术语 | 定义 | 所有者 | 当前状态 |
 | --- | --- | --- | --- |
-| TrainingCourse | 可发布、报名、授课和追踪学习进度的课程聚合根。 | Training | 当前 `TrainingCourse` 体系是唯一目标模型。 |
+| TrainingCourse | 可发布、报名、授课和追踪学习进度的课程聚合根。 | Training | 当前唯一运行课程模型。 |
 | TrainingCourseChapter | 课程内可嵌套的章节，承载正文、视频、题目绑定和理论试卷。 | Training | 当前实体已存在。 |
 | Enrollment | 用户与课程的报名关系。 | Training | 审核策略属于课程，不属于全局用户。 |
 | CourseProgress | 用户在课程内的聚合进度。 | Training | 由章节、实践题和理论测试事实计算。 |
-| TrainingDirection | 旧培训分类聚合。 | 无 | 废弃；Phase 0 数据迁移后删除。 |
-| TrainingModule | 旧培训内容聚合。 | 无 | 废弃；Phase 0 迁移为课程和章节后删除。 |
+| TrainingDirection | 旧培训分类聚合。 | 无 | 已删除；仅历史 migration、迁移验证、负向删除门禁、禁用术语登记和审计记录可引用。 |
+| TrainingModule | 旧培训内容聚合。 | 无 | 已删除；仅历史 migration、迁移验证、负向删除门禁、禁用术语登记和审计记录可引用。 |
 
 ## 6. TeamLab 组网基座
 
@@ -99,8 +100,9 @@
 Phase 0 退出前运行：
 
 ```powershell
-rg -n -g '!src/GZCTF/Migrations/**' -g '!docs/archive/**' -g '!artifacts/**' \
-  "IRCheckpoint|IRInstance|ScenarioInstance|TrainingDirection|TrainingModule" src tests docs
+rg -n -g '!src/GZCTF/Migrations/**' -g '!src/GZCTF/wwwroot/**' -g '!artifacts/**' `
+  "IRCheckpoint|IRInstance|ScenarioInstance|TrainingDirection|TrainingModule" `
+  src/GZCTF src/GZCTF.Agent tests/e2e
 ```
 
-预期结果：无运行时代码、活动测试或活动文档命中。历史 EF migration 和归档文档不参与运行时术语检查。
+预期结果：无产品运行代码或活动 e2e 命中。历史 EF migration、Phase 0 迁移验证、负向删除门禁、禁用术语登记和明确标记的审计记录可以引用旧名称，但不得形成可执行兼容面。
