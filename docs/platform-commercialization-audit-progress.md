@@ -157,3 +157,16 @@
 - 最终自审已修正镜像引用旧 JSON 类型清退、旧 `IDistributedLockService` 接口删除和节点指标生命周期登记三处跨任务缺口。
 - Phase 0、1、3、4、5 的文件路径状态机检查通过；Phase 4/5 主计划与配套文档已通过总纲需求词覆盖、占位符、代码块、UTF-8、尾随空白和 Git whitespace 检查。
 - 本轮只编写计划和配套契约，未实施 Phase 4/5 代码、未提交、未推送、未部署。
+
+## 2026-07-10 Phase 0 实施
+
+- 已按 `executing-plans` 流程创建隔离工作区 `D:\newgz\newGZCTF-phase0`，分支为 `codex/phase-0-baseline-cleanup`；`main` 保持不变。
+- 依赖恢复完成；后端基线单元测试 577 项全部通过，前端 TypeScript strict check 通过。
+- 基线后端编译有 17 条既有 nullable warning，Phase 0 不得新增编译告警。
+- 代码复核确认 `TrainingCourseController.BuildOverview` 仍读取旧 `TrainingModuleProgresses` 和 `TrainingModules`，该耦合已纳入 Task 2 的唯一目标模型切换范围。
+- 当前开始 Task 1：建立遗留 runtime/API 边界失败测试、PostgreSQL 数据前置审计脚本和迁移集成测试骨架。
+- 本轮尚未部署，尚未连接或修改生产数据库。
+- Task 1 红灯已确认：`LegacySurfaceRemovalTests` 两项均因遗留类型和旧 route root 存在而失败；`LegacyTrainingMigrationTests` 因 Phase 0 migration 尚未注册而失败，失败原因与规格一致。
+- 活动代码复核补充 `TimeSlot` 和 `ScoringRule`：两者除 `AppDbContext` 外只被 IR/Scenario 实体引用，已纳入 Task 2 清退范围，避免数据库和 runtime 留下半套 Scenario 基础设施。
+- `scripts/migrations/phase-00-legacy-data-audit.sql` 已覆盖旧表行数、可见性冲突、模板绑定缺口、slug 冲突、理论快照映射和核心孤儿关系检查。
+- Task 1 完成，开始 Task 2 的目标模型字段、迁移守恒和后端 contract 切换。

@@ -10,11 +10,32 @@
 
 ---
 
+## 实施进度
+
+更新时间：2026-07-10
+
+- 当前状态：执行中，Task 1 已完成，正在实施 Task 2。
+- 工作分支：`codex/phase-0-baseline-cleanup`。
+- 隔离工作区：`D:\newgz\newGZCTF-phase0`。
+- 基线验证：`dotnet test src/GZCTF.Test/GZCTF.Test.csproj --no-restore` 通过，577 项测试全部通过；`pnpm check` 通过。
+- 基线告警：后端编译存在 17 条 nullable warning，均在 Phase 0 改动前存在；本阶段不得新增告警。
+- 代码事实偏差：`TrainingCourseController.BuildOverview` 仍读取 `TrainingModuleProgresses` 和 `TrainingModules`。Task 2 删除旧培训模型时必须同步切换为课程事实查询，并以测试锁定概览语义。
+- 遗留面补充：`TimeSlot` 与 `ScoringRule` 在活动代码中只被 IR/Scenario 实体和 `AppDbContext` 引用，属于同一废弃子系统；Task 2 必须同步删除实体、DbSet 和数据库表。
+- 数据边界：本轮完成迁移代码、审计脚本和可重复集成验证；未收到部署指令前，不连接生产数据库、不执行生产备份、不应用 contract migration。
+
+任务状态：
+
+- [x] Task 1：建立遗留面清单和失败测试
+- [ ] Task 2：原子完成旧培训迁移和后端 contract 切换（执行中）
+- [ ] Task 3：删除旧前端和失效 e2e
+- [ ] Task 4：冻结术语并清理活动文档
+- [ ] Task 5：Phase 0 总体验收
+
 ## 0. 代码事实与退出边界
 
 当前代码事实：
 
-- `Models/Data/IREntities.cs` 仍定义 `IRCheckpoint` 和 `IRInstance`，`AppDbContext` 仍暴露对应 DbSet。
+- `Models/Data/IREntities.cs` 仍定义 `IRCheckpoint` 和 `IRInstance`，`TimeSlot.cs`、`ScoringRule.cs` 仍保留同一废弃子系统的辅助实体，`AppDbContext` 仍暴露对应 DbSet。
 - `Models/Data/ScenarioEntities.cs` 仍定义 Stage、timeline 和 instance 体系，当前没有有效 Controller 或前端入口。
 - `TrainingController`、`TrainingAdminController`、`TrainingDirection/TrainingModule`、`TrainingModels` 和旧培训前端 API 仍可运行，不能直接删表。
 - 新 `TrainingCourse` 体系已具备课程、章节、题目绑定、理论试卷、提交和进度实体，可以承接旧培训数据。
@@ -68,7 +89,7 @@ Phase 0 不删除历史 `Migrations/*.cs`；删除历史 migration 会破坏从�
 - Create: `scripts/migrations/phase-00-legacy-data-audit.sql`
 - Modify: `docs/platform-commercialization-audit-progress.md`
 
-- [ ] **Step 1: 写运行时遗留类型失败测试**
+- [x] **Step 1: 写运行时遗留类型失败测试**
 
 测试通过反射和 Controller route 扫描锁定必须删除的类型与路由：
 
@@ -106,7 +127,7 @@ public class LegacySurfaceRemovalTests
 }
 ```
 
-- [ ] **Step 2: 运行测试确认当前失败**
+- [x] **Step 2: 运行测试确认当前失败**
 
 Run:
 
@@ -116,7 +137,7 @@ dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter FullyQualifiedName~LegacyS
 
 Expected: FAIL，失败列表包含 IR、Scenario 和旧 Training 类型。
 
-- [ ] **Step 3: 写数据库审计 SQL**
+- [x] **Step 3: 写数据库审计 SQL**
 
 `phase-00-legacy-data-audit.sql` 必须输出旧表行数、孤儿外键、可见性冲突和未绑定环境模板：
 
@@ -163,7 +184,7 @@ WHERE m."EnvironmentTemplateId" IS NOT NULL
   );
 ```
 
-- [ ] **Step 4: 提交遗留基线测试**
+- [x] **Step 4: 提交遗留基线测试**
 
 ```powershell
 git add src/GZCTF.Test/UnitTests/Phase/LegacySurfaceRemovalTests.cs src/GZCTF.Integration.Test/Tests/Database/LegacyTrainingMigrationTests.cs scripts/migrations/phase-00-legacy-data-audit.sql docs/platform-commercialization-audit-progress.md
@@ -179,6 +200,8 @@ git commit -m "test: define phase zero legacy removal gates"
 - Modify: `src/GZCTF.Integration.Test/Tests/Database/LegacyTrainingMigrationTests.cs`
 - Delete: `src/GZCTF/Models/Data/IREntities.cs`
 - Delete: `src/GZCTF/Models/Data/ScenarioEntities.cs`
+- Delete: `src/GZCTF/Models/Data/TimeSlot.cs`
+- Delete: `src/GZCTF/Models/Data/ScoringRule.cs`
 - Modify: `src/GZCTF/Models/Data/Training.cs`
 - Modify: `src/GZCTF/Models/AppDbContext.cs`
 - Delete: `src/GZCTF/Controllers/TrainingController.cs`
