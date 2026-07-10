@@ -1,0 +1,159 @@
+# 商业化总纲审计进度记录
+
+更新时间：2026-07-10
+
+## 目标
+
+本文件记录 `platform-commercialization-master-plan.md` 重写前的结构审计事实、发现和写作进度，防止上下文压缩导致信息丢失。最终交付文件仍是 `docs/platform-commercialization-master-plan.md`。
+
+## 已确认输入
+
+- 用户需求文件：`d:\Downloads\平台后续开发需求.md`。
+- 当前仓库：`D:\newgz\newGZCTF-main`。
+- 当前分支：`main`。
+- CodeGraph 索引规模：1011 个文件、27262 个节点、79249 条边。
+- 总纲目标：商业级网络安全综合演练平台，面向长期运营和高峰几百队在线场景。
+
+## 已确认硬性要求
+
+- 总纲开头必须先呈现项目结构、代码结构、数据库结构和运行链路。
+- 阶段编排必须体现紧迫性、前置依赖、并行边界、清理顺序和开发收益。
+- 数据库治理、Redis 缓存、高并发调度、审计日志必须拆成独立阶段。
+- 前端整体设计语言将重构；除首页大改外，其他页面总体布局保持稳定。
+- 前端重构必须遵循 react-best-practices 原则。
+- 前端验收必须达到高度组件化和模块化，设计语言通过公共组件层和全局样式层切换，页面内不得散落视觉样式。
+- TeamLab 组网能力属于最高紧迫度，必须前置架构底座解耦，不能拖到后期才解除与 Penetration 超大服务和页面的绑定。
+- 总纲必须补足平台整体架构解耦和模块化设计，不能只列业务需求。
+- 后续文档调整必须以当前代码为唯一事实来源。
+- 旧 IR/Scenario 独立模块、旧培训体系、失效页面和旧组网概念不能长期兼容保留。
+- 文档不得使用降低确定性的泛化表述、占坑标记和未完成标记。
+
+## 已确认项目结构事实
+
+- 主站项目：`src/GZCTF`。
+- Agent 项目：`src/GZCTF.Agent`。
+- AppHost 项目：`src/GZCTF.AppHost`。
+- 单元测试：`src/GZCTF.Test`。
+- 集成测试：`src/GZCTF.Integration.Test`。
+- 前端项目：`src/GZCTF/ClientApp`。
+- 主站发布流程会构建前端并发布 Agent 单文件到 `agent/gzctf-agent`。
+
+## 已确认数据库事实
+
+- `AppDbContext` 维护 105 个 `DbSet`。
+- `OnModelCreating` 约 1990 行，集中承载大量实体关系、唯一索引和删除行为。
+- 数据实体覆盖站点配置、用户队伍、CTF、练习、培训、理论题、AWDP、镜像、节点、部署队列、VM、TeamLab、Penetration、旧 IR/Scenario。
+- 新旧培训实体并存：旧 `TrainingDirection/TrainingModule` 与新 `TrainingCourse` 体系同时存在。
+- TeamLab runtime 已有 shard、network、asset、traffic flow、capture job 数据模型。
+- 旧 IR/Scenario 独立实体和迁移快照仍存在。
+- `DeploymentQueueTicket` 已存在 active identity 过滤唯一索引，队列具备“同一运行对象不重复创建活动任务”的数据库边界。
+- TeamLab runtime 已存在 `(GameId, TeamId)` 唯一语义，shard/network/asset 均有运行时归属字段，适合继续做 runtime 事实表。
+- 当前 `EnvironmentType` 仍以 `WindowsVM` 表达 VM 类环境，Linux VM SSH 需要拆出 OS 类型和访问协议。
+
+## 已确认架构热点
+
+- `PenetrationService.cs`、`TeamLabDeploymentService.cs`、`TrainingCourseAdminController.cs`、`Penetration.tsx`、课程详情页、节点管理页属于重点拆分对象。
+- TeamLab runtime 已具备分片模型，但部署链路仍与 Penetration 编辑模型耦合。
+- 普通部署队列具备并行执行、容量预留和 Redis 锁；TeamLab 路径仍需要统一纳入同一套运行底座。
+- 前端存在超大 API 文件、超大页面、超大样式文件，后续风格重构必须先建立组件与数据请求边界。
+- 当前控制器共 27 个，行数集中在 `TrainingCourseAdminController.cs`、`GameController.cs`、`EditController.cs`、`NodesController.cs`、`TrainingCourseController.cs`、`AccountController.cs`。
+- 服务层行数集中在 `PenetrationService.cs`、`TeamLabDeploymentService.cs`、`AgentClient.cs`、`NodeDeployService.cs`、`DockerManager.cs`、`DockerImageRegistryService.cs`、`FleetContainerManager.cs`。
+- Agent 行数集中在 `TeamLabNetworkService.cs`、`DockerService.cs`、`KvmService.cs`、`ImageController.cs`。
+- 前端超大页面集中在课程详情、渗透编排、节点管理、Teams、镜像管理、题目编辑、理论试卷、AWDP 服务。
+- e2e 测试仍包含 `ir-challenge.spec.ts`、`scenario-create.spec.ts`、`scenario-play.spec.ts`、`topology-editor.spec.ts`，与清理旧 IR/Scenario 的产品方向冲突。
+
+## 已确认运行时事实
+
+- `ServicesExtension` 注册了 CacheHelper、QueueManager、QueueProcessingService、FleetHealthCheckService、ImageDistributionReconcileService、PortLeaseRefreshService、NginxSyncService、VmReadyService、LocalNodeRegistrar、LocalNodeMetricsService。
+- Redis 用于分布式缓存、SignalR backplane、Fleet 分布式锁和端口分配；无 Redis 时存在内存缓存或本地锁 fallback，但 Fleet 模式下 Redis 不可达会影响并发安全。
+- `QueueManager`、`FleetCapacityReservationService`、`NodeExecutionGate`、`DeploymentExecutionService` 构成普通环境创建的并发运行底座。
+- `ImageDistributionService` 和 `ImageDistributionRecord` 已形成镜像预分发基础，后续要完善引用释放、节点缓存清理和启动兜底阶段展示。
+- Agent 已具备 Docker、KVM、TeamLab 网络、镜像下载、状态、维护接口，后续要把能力协商和版本控制从硬编码升级为协议能力表。
+
+## 已确认前端事实
+
+- 前端使用 Vite、React 19、Mantine 9、SWR、vite-plugin-pages。
+- 前端 build 先执行 locale 校验和 TypeScript strict check，再执行 Vite build。
+- 路由由 `src/pages/**/*.tsx` 自动生成，复杂页面容易把业务状态堆在页面文件中。
+- 已使用 SWR，但课程详情、组网管理、节点管理仍需拆分 hook、组件和延迟渲染边界。
+- 视觉重构需要先建立设计系统和组件层，避免在每个页面重复修样式。
+- `ClientApp/src/components` 当前 145 个文件、24762 行；其中 `YinyuReactBits.tsx` 1520 行，`useCTFScreenData.ts` 1070 行，`GridScan.tsx` 925 行，`useScreenData.ts` 881 行。
+- `ClientApp/src/styles` 当前 54 个文件、20453 行；其中 `YinyuRefinement.css` 9001 行，`YinyuDesignLab.css` 2822 行，`YinyuTheme.css` 1960 行。
+- 页面、组件和样式中同时存在全局 `yy-*` class、CSS module、inline style、Mantine classNames，说明当前样式入口分散，不能低成本切换全局设计语言。
+- Phase 2 的验收标准必须从“页面变好看”改为“样式控制权收敛到设计 token、Mantine theme、公共组件、组件级样式模块”。
+
+## 2026-07-10 组网与整体架构复核
+
+- `Services/TeamLab` 当前 11 个文件、4830 行；`Services/Fleet` 当前 32 个文件、7941 行。
+- `TeamLabDeploymentService.cs` 2451 行，仍同时承载部署、分片、路由、资产、镜像、VM init、事实记录、清理和容量释放。
+- `TeamLabPublishedTopologyService`、`TeamLabAssetPlanService`、`TeamLabPlanService`、`TeamLabDeploymentService` 仍直接使用 `PenetrationConfig`、`PenetrationNode`、`PenetrationNetwork`、`PenetrationEdge`。
+- `PenetrationService.cs` 3447 行，仍同时承载编辑模型、发布快照、计划、运行摘要、运行路由、计分和兼容状态。
+- TeamLab 已有 `TeamLabRuntime`、`TeamLabRuntimeShard`、`TeamLabRuntimeNetwork`、`TeamLabRuntimeAsset`、`TeamLabTrafficFlow`、`TeamLabTrafficCaptureJob`，说明运行事实模型已成形；短板是拓扑/发布/计划/部署仍绑定 Penetration 编辑模型。
+- 总体架构必须按展示层、API 层、应用服务层、领域服务层、运行编排层、数据缓存层、Agent 执行层、观测审计层拆分职责。
+
+## 2026-07-10 总纲规划流复审
+
+- 当前总纲已经覆盖功能域和技术基础，但阶段列表缺少交付波次、关键路径、阶段准入、阶段退出、迁移切换和旧代码删除门槛。
+- `GZCTF.csproj` 的 `PublishFrontend` 与 `PublishFleetAgent` 会在主站发布时联动构建前端和 Agent；当前是源码目录分离，不是独立制品和独立发布契约。
+- `ApiTokenController` 当前使用 `[RequireAdmin]`，`ApiToken` 未提供 scope/permission 模型；现状不能满足出题人创建个人受限 token 并调用批量导入接口。
+- 当前已有 OpenTelemetry metrics、tracing、Redis instrumentation、health check 和 Prometheus endpoint；观测阶段应复用现有底座，不应只规划日志页面。
+- `DeploymentQueueService` 已具备 active identity 去重、排队位置、取消、陈旧 Creating 恢复和容量释放；调度重构应围绕统一任务语义扩展，不能另建平行队列。
+- 总纲需要明确四条开发主线：架构治理主线、运行控制面主线、TeamLab 主线、产品体验主线。
+- Phase 编号必须表达真实优先级：VM 抽象和 TeamLab 商业闭环应早于题目池、练习、培训和 AWDP。
+- 临时迁移适配器只能存在于同一交付波次，波次退出前必须删除；禁止形成永久双轨。
+- 每个阶段需要统一退出门槛：代码边界、数据迁移、自动测试、真实环境验收、观测接入、运维文档、旧代码删除全部完成。
+
+## 当前写作状态
+
+- 进度记录文件已建立。
+- 控制器、服务、实体、Agent、前端路由、测试和遗留模块已完成总纲级审计。
+- `docs/platform-commercialization-master-plan.md` 已整体重写。
+- 已完成禁用泛化词扫描，当前无命中。
+- 已完成文档标题结构检查，当前覆盖审计基线、代码结构、数据库结构、功能链路、技术债、商业化目标、解耦主线、阶段编排、并行边界、开发规范和阶段文档清单。
+- 已完成 UTF-8 读取检查，中文显示正常。
+- 2026-07-10 追加需求已完成代码事实复核。
+- `docs/platform-commercialization-master-plan.md` 已更新：新增整体架构分层，强化前端全局样式层验收，将 TeamLab 拆为 Phase 3 架构底座前置解耦和 Phase 9 商业化闭环。
+- 已完成禁用泛化词扫描，当前无命中。
+- 已完成 Phase 引用、标题结构和 diff 空白检查。
+- 总纲规划流已升级为 Wave A-E、TeamLab 关键路径、阶段准入/退出、技术路线分支、迁移删除规则、需求覆盖矩阵和统一 SLI。
+
+## 2026-07-10 Phase 0、1、3 计划编写
+
+- 用户已确认采用“实质迁移后彻底切换”的路线，不接受仅写规范、永久适配器或长期双轨。
+- Phase 0 计划必须处理真实遗留：IR/Scenario 当前无有效 Controller 和前端入口，但实体、DbSet、模型快照和旧 e2e 仍存在；旧 `TrainingDirection/TrainingModule` 仍有完整 Controller、前端 API 和页面，必须迁移数据后删除。
+- Phase 1 计划必须交付可执行架构底座：正式 API token authentication scheme、scope/action/resource 权限、外部版本化 API、统一错误、幂等、异步操作、审计、OpenAPI 契约检查和架构依赖门禁。
+- Phase 1 必须以镜像模板上传或注册作为真实纵向参考链路，禁止只创建空接口和说明文档；批量题目生命周期留给 Phase 10。
+- Phase 3 按“基座与产品分离”设计：Penetration 只保留赛制、目标、计分和提交；TeamLab 独立拥有拓扑、发布版本、计划、runtime 和执行 API。
+- Phase 3 交付可供外部平台调用的 TeamLab 控制面；Phase 9 在该控制面上完成多节点、Windows、全流量观测、恢复和商业级容量验收。
+- 当前开始编写总纲列出的 Phase 0、1、3 主计划及其配套术语、模块边界和 API 合约文档。
+- 已完成 `docs/commercialization/phase-00-baseline-cleanup.md` 和 `domain-glossary.md`：旧培训采用 root module -> course、module -> chapter 的可校验迁移，IR/Scenario 只备份审计后清退，历史 EF migration 保留。
+- 已完成 `phase-01-architecture-domain-api-contract.md`、`external-api-standard.md` 和 `module-boundary-map.md`：采用模块化单体、opaque scoped token、正式 authentication scheme、ProblemDetails、幂等、持久化 operation、镜像 API 参考链路和架构/OpenAPI 门禁。
+- 已完成 `phase-03-teamlab-foundation-decoupling.md` 和 `teamlab-api-foundation-contract.md`：TeamLab 独立拥有 topology/release/plan/runtime；Penetration 只拥有 objective/submission/score/binding；外部与内部调用共用 application contracts、ApiOperation 和 DeploymentQueueTicket。
+- Phase 3 新增关键地址模型：topology 保存 RFC1918 address pool、runtime prefix 和 host offset；实际 CIDR 通过 PostgreSQL `cidr` active lease GiST exclusion constraint 分配，防止不同 runtime 的 Fabric route 冲突。
+- 已补充 Phase 0、1、3 的维护窗口、数据库备份、应用/数据库联合回滚和不可逆 contract migration 边界。
+- 已将强化后的 Phase 1 与 Phase 3 关键方向同步回 `platform-commercialization-master-plan.md`。
+- 最终原子性审计已修正 Phase 0：数据库迁移、旧后端删除和 EF snapshot 必须在同一可构建提交切换；理论多次尝试、阅读百分比和章节完成策略均有目标字段，禁止静默丢失。
+- 最终原子性审计已修正 Phase 1：token 领域、认证授权、管理 API 和前端管理入口在同一纵向任务切换；旧 TokenService、Repository、权限旁路和 restore 同步删除，不产生跨任务编译断点。
+- Phase 1 operation 已补充 PostgreSQL lease claim、handler registry 和模块 durable job；镜像导入通过 `ImageImportJob` 在主站重启后恢复，通用 operation 表不保存业务 secret。
+- Domain/Infrastructure 边界已复核：Domain 不使用 EF Core attribute；主键、索引、`cidr` 和 PostgreSQL exclusion constraint 均归 Infrastructure persistence configuration。
+- Phase 3 已补充 `ITeamLabNodeExecutor` 端口和 Agent adapter，application service 不直接依赖 AgentClient；外部 HTTP 与内部 Penetration adapter 共用同一 application service、operation、queue 和 runtime facts。
+- Phase 3 reset 语义已冻结为稳定 runtime public ID、递增 generation、旧 grant 撤销、历史 facts 保留；overlay 使用持久化 Data Protection key ring 加密并在注入完成后清除密文。
+- Phase 3 runtime entity namespace 搬迁与全部 C# 调用方更新被合并为同一 orchestration 任务，避免 expand migration 后出现不可构建中间状态。
+- 总纲交叉引用已修正：旧培训只在 Phase 0 迁移一次；Phase 10 复用 Phase 1 Identity contracts，不重新引用已删除的 TokenService；Phase 3 退出必须删除旧组网双轨和两个超大服务。
+- 三份主计划已完成文件路径状态机检查、占位符扫描、Markdown code fence 检查和 `git diff --check`；当前无缺失路径、重复创建、占位符、不平衡代码块或空白错误。
+- Phase 0、1、3 计划编写与最终自审完成，等待用户选择执行方式；本轮未实施代码、未提交、未推送、未部署。
+
+## 2026-07-10 Phase 4、5 计划编写
+
+- 已完成 `docs/commercialization/phase-04-database-governance.md` 和 `database-index-and-lifecycle-audit.md`。
+- Phase 4 冻结 PostgreSQL 事实边界：首轮只对已确认高频追加的 `Logs` 和 `TeamLabTrafficFlows` 做原生时间分区，其他 operational history 使用复合/partial index 和受限批量清理，不无依据扩大分区范围。
+- Phase 4 补齐核心查询索引、Participation/课程进度/理论尝试/镜像引用唯一约束、Theory tag 正式关系、镜像引用 JSON 关系化、时间游标、聚合事实、治理运行记录和 expand-migrate-contract 迁移。
+- 自动保留策略只覆盖明确登记的 operational data；Submission、Participation、课程进度、理论答题和 AWDP 比赛事实明确禁止按隐式时间默认值删除。
+- 已完成 `docs/commercialization/phase-05-redis-cache-high-frequency-data.md` 和 `cache-invalidation-map.md`。
+- Phase 5 将 Redis 用途固定为 cache、lock、lease、stream、SignalR 和可丢失 queue wake-up；DeploymentQueueTicket、ApiOperation、runtime 和全部业务事实继续由 PostgreSQL 持有。
+- Phase 5 使用单一异步 Redis connection provider、HybridCache、PostgreSQL projection revision、owner-safe lease、节点 live state、TeamLab flow Stream/batch persistence，删除自研 CacheMaker、散落 cache request channel 和旧 RedisDistributedLock。
+- Redis 故障语义已冻结：缓存旁路；部署队列继续 PostgreSQL polling；TeamLab flow 进入有界本机缓冲；节点 metrics 进入批量数据库 fallback；公网端口和 production distributed lock fail closed。
+- 已修正跨 Phase 路径：Phase 5 使用 Phase 3 搬迁后的 `Modules/TeamLab/Infrastructure/NodeTunnelService.cs`；部署队列前端使用现有 `pages/admin/queue/Index.tsx`。
+- 最终自审已修正镜像引用旧 JSON 类型清退、旧 `IDistributedLockService` 接口删除和节点指标生命周期登记三处跨任务缺口。
+- Phase 0、1、3、4、5 的文件路径状态机检查通过；Phase 4/5 主计划与配套文档已通过总纲需求词覆盖、占位符、代码块、UTF-8、尾随空白和 Git whitespace 检查。
+- 本轮只编写计划和配套契约，未实施 Phase 4/5 代码、未提交、未推送、未部署。
