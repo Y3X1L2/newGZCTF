@@ -182,11 +182,17 @@
 - 新课程 UI 已补齐章节完成策略、理论重做和答案显示策略；课程概览字段从旧 `theory*Modules` 术语切换为 assessment 口径。
 - Task 3 验证通过：locale JSON、TypeScript strict、后端构建、遗留面测试、活动源码旧培训 route/类型扫描和 `git diff --check` 均通过。
 - Task 4 已完成活动文档与术语冻结：乱码 code point gate 零命中，运行时源码、Agent 与活动 e2e 的禁用类型和 `dry-run` 占位零命中。
-- 总纲已按代码事实更新为 25 个 Controller、88 个 DbSet、`AppDbContext` 1745 行；课程培训只保留 `TrainingCourse` 运行聚合，历史 migration 继续作为升级证据。
+- 总纲已按代码事实更新为 25 个 Controller、88 个 DbSet；课程培训只保留 `TrainingCourse` 运行聚合，历史 migration 继续作为升级证据。
 - `PublicUdpGatewayConfig.Provider` 的无效占位默认值已改为正式 `nftables` provider；历史 Phase 注释改为职责说明，不改变运行逻辑；TeamLab 网关专项测试 38 项通过。
 - Task 4 质量复审补强了防回流门禁：文本扫描改为大小写不敏感并覆盖旧 DTO/UI 字段、控制器名和 API 子路由，反射测试只允许当前两个课程 route root，并继续精确禁止 `Stage` 等已删除 runtime 类型。
-- Task 5 已生成 309406 字节的幂等 migration 脚本，SHA-256 为 `3A1734E26C1A4AABB6EF38969AE223E91E83376AAE6448D0AD8B663446F7B91F`；脚本包含 `20260710100000_RemoveLegacyIrScenarioTraining`。
-- PostgreSQL 迁移守恒测试首次被本地缺失 `testcontainers/ryuk:0.14.0` 且 Docker Desktop 直连 Docker Hub 超时阻断；确认测试自身显式 dispose 后，仅对测试进程禁用 Ryuk，迁移测试 1 项通过，未修改项目代码掩盖环境问题。
-- 后端全量单元测试 583 项通过；前端 locale、strict TypeScript 和 production build 通过，共转换 4810 个模块。
+- Task 5 初次生成幂等 migration 脚本并完成本地验收；全分支终审发现 Random 计划和历史题目快照缺口后，该验收被重新打开。
+- PostgreSQL 迁移守恒测试首次被本地缺失 `testcontainers/ryuk:0.14.0` 且 Docker Desktop 直连 Docker Hub 超时阻断；确认测试自身显式 dispose 后，仅对测试进程禁用 Ryuk，未修改项目代码掩盖环境问题。
+- 初次后端全量单元测试和前端 locale、strict TypeScript、production build 通过，共转换 4810 个模块。
 - EF `has-pending-model-changes` 通过；当前 snapshot 和 production bundle 的旧表、旧类型、旧 API/DTO 字符串门禁均为零命中；构建后工作树没有生成资产漂移。
 - Phase 0 开发实施与本地验收完成。生产数据库备份、审计 SQL、恢复演练和 contract migration 应用仍是部署门禁，本轮未部署、未连接或修改生产数据库。
+- Phase 0 全分支终审未通过：旧 Random 理论计划不写 `TheoryTrainingPlanQuestions`，当前 contract migration 会因历史 session question 无映射而回滚；历史题目快照也未独立于当前题库保存。
+- 已补两个 PostgreSQL 回归用例并确认红灯：有历史随机作答时 migration 抛出 `Phase 0 found an unmapped legacy theory answer snapshot`；无历史作答的随机计划迁移后缺少可冻结的活动题目结构。原手工计划迁移用例继续通过。
+- 修复边界已冻结：随机计划冻结为确定性静态试卷；历史 session question 迁为归档 paper question，并将题干、正文、选项、正确答案、分值和顺序快照写入 answer；当前创建、编辑、计分和展示只消费非归档题，历史答卷消费自身快照。
+- 终审修复绿灯：Manual 计划、已有 Random session、未开始 Random 计划三项 PostgreSQL migration 用例全部通过；历史答卷展示与活动/归档题隔离专项 7 项通过，EF 无 pending model changes，编译保持 13 条既有 warning。
+- 修复后幂等脚本为 316732 字节，SHA-256 为 `9B5C0C34AA4F1480C1FA83E06FA00372CB90D8F597E03C460F6175BCED015FD6`；后端全量单元测试 585 项、前端 production build、runtime/bundle/snapshot 遗留面和 `git diff --check` 全部通过。
+- 当前总纲事实为 25 个 Controller、88 个 DbSet、`AppDbContext` 1761 行；本轮仍未部署、未连接或修改生产数据库。

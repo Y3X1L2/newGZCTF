@@ -50,10 +50,10 @@
 
 当前最大控制器：
 
-- `TrainingCourseAdminController.cs`：2203 行。
+- `TrainingCourseAdminController.cs`：2215 行。
 - `GameController.cs`：1920 行。
 - `EditController.cs`：1252 行。
-- `TrainingCourseController.cs`：1191 行。
+- `TrainingCourseController.cs`：1216 行。
 - `NodesController.cs`：1183 行。
 - `AdminController.cs`：952 行。
 - `AccountController.cs`：759 行。
@@ -132,7 +132,7 @@ Agent 当前具备商业化基础，但能力协商和版本协议仍需规范�
 
 ## 3. 当前数据库结构
 
-`AppDbContext` 当前维护 88 个 `DbSet`，文件共 1745 行。数据库已经覆盖平台全部核心域，但领域边界和生命周期策略需要重构。
+`AppDbContext` 当前维护 88 个 `DbSet`，文件共 1761 行。数据库已经覆盖平台全部核心域，但领域边界和生命周期策略需要重构。
 
 ### 3.1 实体分组
 

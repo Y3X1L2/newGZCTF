@@ -50,11 +50,81 @@ public partial class RemoveLegacyIrScenarioTraining : Migration
             nullable: false,
             defaultValue: 0);
 
+        migrationBuilder.AddColumn<bool>(
+            name: "IsArchived",
+            table: "TrainingCourseChapterTheoryQuestions",
+            type: "boolean",
+            nullable: false,
+            defaultValue: false);
+
+        migrationBuilder.AddColumn<string>(
+            name: "CorrectAnswerIndexes",
+            table: "TrainingCourseChapterTheoryAnswers",
+            type: "text",
+            nullable: false,
+            defaultValue: "[]");
+
+        migrationBuilder.AddColumn<int>(
+            name: "MaxScore",
+            table: "TrainingCourseChapterTheoryAnswers",
+            type: "integer",
+            nullable: false,
+            defaultValue: 0);
+
+        migrationBuilder.AddColumn<string>(
+            name: "QuestionContent",
+            table: "TrainingCourseChapterTheoryAnswers",
+            type: "text",
+            nullable: false,
+            defaultValue: "");
+
+        migrationBuilder.AddColumn<int>(
+            name: "QuestionOrder",
+            table: "TrainingCourseChapterTheoryAnswers",
+            type: "integer",
+            nullable: false,
+            defaultValue: 0);
+
+        migrationBuilder.AddColumn<string>(
+            name: "QuestionOptions",
+            table: "TrainingCourseChapterTheoryAnswers",
+            type: "text",
+            nullable: false,
+            defaultValue: "[]");
+
+        migrationBuilder.AddColumn<string>(
+            name: "QuestionTitle",
+            table: "TrainingCourseChapterTheoryAnswers",
+            type: "text",
+            nullable: false,
+            defaultValue: "");
+
+        migrationBuilder.AddColumn<string>(
+            name: "QuestionType",
+            table: "TrainingCourseChapterTheoryAnswers",
+            type: "character varying(32)",
+            maxLength: 32,
+            nullable: false,
+            defaultValue: "SingleChoice");
+
         migrationBuilder.CreateIndex(
             name: "IX_TrainingCourseChapterTheorySheets_UserId_ChapterId_AttemptN~",
             table: "TrainingCourseChapterTheorySheets",
             columns: ["UserId", "ChapterId", "AttemptNumber"],
             unique: true);
+
+        migrationBuilder.Sql("""
+            UPDATE "TrainingCourseChapterTheoryAnswers" answer
+            SET "QuestionType" = question."Type",
+                "QuestionTitle" = question."Title",
+                "QuestionContent" = question."Content",
+                "QuestionOptions" = question."Options",
+                "CorrectAnswerIndexes" = question."AnswerIndexes",
+                "MaxScore" = question."Score",
+                "QuestionOrder" = question."Order"
+            FROM "TrainingCourseChapterTheoryQuestions" question
+            WHERE question."Id" = answer."PaperQuestionId";
+            """);
 
         migrationBuilder.Sql("""
             DO $$
@@ -104,19 +174,6 @@ public partial class RemoveLegacyIrScenarioTraining : Migration
                     RAISE EXCEPTION 'Phase 0 found an unbound legacy environment template';
                 END IF;
 
-                IF EXISTS (
-                    SELECT 1
-                    FROM "TheoryTrainingSessionQuestions" session_question
-                    JOIN "TheoryTrainingSessions" session
-                      ON session."Id" = session_question."SessionId"
-                    LEFT JOIN "TheoryTrainingPlanQuestions" plan_question
-                      ON plan_question."PlanId" = session."PlanId"
-                     AND plan_question."SourceQuestionId" = session_question."SourceQuestionId"
-                    WHERE session_question."SourceQuestionId" IS NULL
-                       OR plan_question."SourceQuestionId" IS NULL
-                ) THEN
-                    RAISE EXCEPTION 'Phase 0 found an unmapped legacy theory answer snapshot';
-                END IF;
             END $$;
 
             CREATE TEMP TABLE phase00_baseline (
@@ -125,6 +182,7 @@ public partial class RemoveLegacyIrScenarioTraining : Migration
                 chapter_challenge_count bigint NOT NULL,
                 submission_count bigint NOT NULL,
                 paper_count bigint NOT NULL,
+                course_question_count bigint NOT NULL,
                 paper_question_count bigint NOT NULL,
                 sheet_count bigint NOT NULL,
                 answer_count bigint NOT NULL
@@ -136,6 +194,7 @@ public partial class RemoveLegacyIrScenarioTraining : Migration
                    (SELECT count(*) FROM "TrainingCourseChapterChallenges"),
                    (SELECT count(*) FROM "TrainingCourseSubmissions"),
                    (SELECT count(*) FROM "TrainingCourseChapterTheoryPapers"),
+                   (SELECT count(*) FROM "TrainingCourseTheoryQuestions"),
                    (SELECT count(*) FROM "TrainingCourseChapterTheoryQuestions"),
                    (SELECT count(*) FROM "TrainingCourseChapterTheorySheets"),
                    (SELECT count(*) FROM "TrainingCourseChapterTheoryAnswers");
@@ -322,39 +381,129 @@ public partial class RemoveLegacyIrScenarioTraining : Migration
             FROM "TrainingCtfSubmissions" submission
             JOIN phase00_chapter_map chapter_map ON chapter_map.old_module_id = submission."ModuleId";
 
-            CREATE TEMP TABLE phase00_course_question_map (
+            CREATE TEMP TABLE phase00_active_question_source (
+                active_question_key bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
                 old_plan_id integer NOT NULL,
-                source_question_id integer NOT NULL,
-                new_question_id integer NOT NULL UNIQUE,
-                PRIMARY KEY (old_plan_id, source_question_id)
+                source_question_id integer,
+                question_type text NOT NULL,
+                bank_name text NOT NULL,
+                title text NOT NULL,
+                content text NOT NULL,
+                options text NOT NULL,
+                answer_indexes text NOT NULL,
+                score integer NOT NULL,
+                question_order integer NOT NULL,
+                new_course_question_id integer,
+                new_paper_question_id integer
             ) ON COMMIT DROP;
 
-            INSERT INTO phase00_course_question_map
-            SELECT plan_question."PlanId",
+            INSERT INTO phase00_active_question_source
+                (old_plan_id, source_question_id, question_type, bank_name, title, content, options,
+                 answer_indexes, score, question_order)
+            SELECT plan."Id",
                    plan_question."SourceQuestionId",
-                   nextval(pg_get_serial_sequence('"TrainingCourseTheoryQuestions"', 'Id'))::integer
-            FROM "TheoryTrainingPlanQuestions" plan_question
-            ORDER BY plan_question."PlanId", plan_question."Order", plan_question."SourceQuestionId";
-
-            INSERT INTO "TrainingCourseTheoryQuestions"
-                ("Id", "CourseId", "Type", "BankName", "Title", "Content", "Options", "AnswerIndexes",
-                 "CreatedById", "UpdatedById", "CreatedAt", "UpdatedAt")
-            SELECT question_map.new_question_id,
-                   chapter_map.new_course_id,
                    source."Type",
                    coalesce(nullif(plan."BankName", ''), source."BankName"),
                    source."Title",
                    source."Content",
                    source."Options",
                    source."AnswerIndexes",
+                   plan_question."Score",
+                   plan_question."Order"
+            FROM "TheoryTrainingPlans" plan
+            JOIN "TheoryTrainingPlanQuestions" plan_question ON plan_question."PlanId" = plan."Id"
+            JOIN "TheoryQuestionBankItems" source ON source."Id" = plan_question."SourceQuestionId"
+            WHERE plan."Mode" = 'Manual';
+
+            INSERT INTO phase00_active_question_source
+                (old_plan_id, source_question_id, question_type, bank_name, title, content, options,
+                 answer_indexes, score, question_order)
+            SELECT plan."Id",
+                   session_question."SourceQuestionId",
+                   session_question."Type",
+                   coalesce(nullif(plan."BankName", ''), 'Migrated'),
+                   session_question."Title",
+                   session_question."Content",
+                   session_question."Options",
+                   session_question."AnswerIndexes",
+                   session_question."Score",
+                   session_question."Order"
+            FROM "TheoryTrainingPlans" plan
+            JOIN LATERAL (
+                SELECT session."Id"
+                FROM "TheoryTrainingSessions" session
+                WHERE session."PlanId" = plan."Id"
+                  AND EXISTS (
+                      SELECT 1
+                      FROM "TheoryTrainingSessionQuestions" session_question
+                      WHERE session_question."SessionId" = session."Id"
+                  )
+                ORDER BY session."CreatedAt" DESC, session."Id" DESC
+                LIMIT 1
+            ) latest_session ON TRUE
+            JOIN "TheoryTrainingSessionQuestions" session_question
+              ON session_question."SessionId" = latest_session."Id"
+            WHERE plan."Mode" = 'Random';
+
+            INSERT INTO phase00_active_question_source
+                (old_plan_id, source_question_id, question_type, bank_name, title, content, options,
+                 answer_indexes, score, question_order)
+            SELECT plan."Id",
+                   selected."Id",
+                   selected."Type",
+                   selected."BankName",
+                   selected."Title",
+                   selected."Content",
+                   selected."Options",
+                   selected."AnswerIndexes",
+                   1,
+                   selected.question_order
+            FROM "TheoryTrainingPlans" plan
+            JOIN LATERAL (
+                SELECT source.*,
+                       (row_number() OVER (ORDER BY source."Id") - 1)::integer AS question_order
+                FROM "TheoryQuestionBankItems" source
+                WHERE (nullif(plan."BankName", '') IS NULL OR source."BankName" = plan."BankName")
+                  AND (
+                      coalesce(jsonb_array_length(nullif(plan."QuestionTypes", '')::jsonb), 0) = 0
+                      OR nullif(plan."QuestionTypes", '')::jsonb ? source."Type"
+                  )
+                ORDER BY source."Id"
+                LIMIT greatest(plan."QuestionCount", 0)
+            ) selected ON TRUE
+            WHERE plan."Mode" = 'Random'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM "TheoryTrainingSessions" session
+                  JOIN "TheoryTrainingSessionQuestions" session_question
+                    ON session_question."SessionId" = session."Id"
+                  WHERE session."PlanId" = plan."Id"
+              );
+
+            UPDATE phase00_active_question_source
+            SET new_course_question_id = nextval(
+                    pg_get_serial_sequence('"TrainingCourseTheoryQuestions"', 'Id'))::integer,
+                new_paper_question_id = nextval(
+                    pg_get_serial_sequence('"TrainingCourseChapterTheoryQuestions"', 'Id'))::integer;
+
+            INSERT INTO "TrainingCourseTheoryQuestions"
+                ("Id", "CourseId", "Type", "BankName", "Title", "Content", "Options", "AnswerIndexes",
+                 "CreatedById", "UpdatedById", "CreatedAt", "UpdatedAt")
+            SELECT active.new_course_question_id,
+                   chapter_map.new_course_id,
+                   active.question_type,
+                   active.bank_name,
+                   active.title,
+                   active.content,
+                   active.options,
+                   active.answer_indexes,
                    plan."CreatedById",
                    plan."UpdatedById",
                    plan."CreatedAt",
                    plan."UpdatedAt"
-            FROM phase00_course_question_map question_map
-            JOIN "TheoryTrainingPlans" plan ON plan."Id" = question_map.old_plan_id
-            JOIN phase00_chapter_map chapter_map ON chapter_map.old_module_id = plan."ModuleId"
-            JOIN "TheoryQuestionBankItems" source ON source."Id" = question_map.source_question_id;
+            FROM phase00_active_question_source active
+            JOIN "TheoryTrainingPlans" plan ON plan."Id" = active.old_plan_id
+            JOIN phase00_chapter_map chapter_map ON chapter_map.old_module_id = plan."ModuleId";
 
             CREATE TEMP TABLE phase00_paper_map (
                 old_plan_id integer PRIMARY KEY,
@@ -387,41 +536,61 @@ public partial class RemoveLegacyIrScenarioTraining : Migration
             JOIN "TheoryTrainingPlans" plan ON plan."Id" = paper_map.old_plan_id
             JOIN phase00_chapter_map chapter_map ON chapter_map.old_module_id = plan."ModuleId";
 
-            CREATE TEMP TABLE phase00_paper_question_map (
-                old_plan_id integer NOT NULL,
-                source_question_id integer NOT NULL,
-                new_paper_question_id integer NOT NULL UNIQUE,
-                PRIMARY KEY (old_plan_id, source_question_id)
+            INSERT INTO "TrainingCourseChapterTheoryQuestions"
+                ("Id", "PaperId", "SourceQuestionId", "Type", "Title", "Content", "Options", "AnswerIndexes",
+                 "Score", "Order", "IsArchived")
+            SELECT active.new_paper_question_id,
+                   paper_map.new_paper_id,
+                   active.new_course_question_id,
+                   active.question_type,
+                   active.title,
+                   active.content,
+                   active.options,
+                   active.answer_indexes,
+                   active.score,
+                   active.question_order,
+                   FALSE
+            FROM phase00_active_question_source active
+            JOIN phase00_paper_map paper_map ON paper_map.old_plan_id = active.old_plan_id;
+
+            CREATE TEMP TABLE phase00_session_question_map (
+                old_session_question_id integer PRIMARY KEY,
+                new_paper_question_id integer NOT NULL UNIQUE
             ) ON COMMIT DROP;
 
-            INSERT INTO phase00_paper_question_map
-            SELECT plan_question."PlanId",
-                   plan_question."SourceQuestionId",
+            INSERT INTO phase00_session_question_map
+            SELECT session_question."Id",
                    nextval(pg_get_serial_sequence('"TrainingCourseChapterTheoryQuestions"', 'Id'))::integer
-            FROM "TheoryTrainingPlanQuestions" plan_question
-            ORDER BY plan_question."PlanId", plan_question."Order", plan_question."SourceQuestionId";
+            FROM "TheoryTrainingSessionQuestions" session_question
+            ORDER BY session_question."SessionId", session_question."Order", session_question."Id";
 
             INSERT INTO "TrainingCourseChapterTheoryQuestions"
-                ("Id", "PaperId", "SourceQuestionId", "Type", "Title", "Content", "Options", "AnswerIndexes", "Score", "Order")
-            SELECT paper_question_map.new_paper_question_id,
+                ("Id", "PaperId", "SourceQuestionId", "Type", "Title", "Content", "Options", "AnswerIndexes",
+                 "Score", "Order", "IsArchived")
+            SELECT session_question_map.new_paper_question_id,
                    paper_map.new_paper_id,
-                   course_question_map.new_question_id,
-                   source."Type",
-                   source."Title",
-                   source."Content",
-                   source."Options",
-                   source."AnswerIndexes",
-                   plan_question."Score",
-                   plan_question."Order"
-            FROM phase00_paper_question_map paper_question_map
-            JOIN phase00_paper_map paper_map ON paper_map.old_plan_id = paper_question_map.old_plan_id
-            JOIN phase00_course_question_map course_question_map
-              ON course_question_map.old_plan_id = paper_question_map.old_plan_id
-             AND course_question_map.source_question_id = paper_question_map.source_question_id
-            JOIN "TheoryTrainingPlanQuestions" plan_question
-              ON plan_question."PlanId" = paper_question_map.old_plan_id
-             AND plan_question."SourceQuestionId" = paper_question_map.source_question_id
-            JOIN "TheoryQuestionBankItems" source ON source."Id" = paper_question_map.source_question_id;
+                   active_match.new_course_question_id,
+                   session_question."Type",
+                   session_question."Title",
+                   session_question."Content",
+                   session_question."Options",
+                   session_question."AnswerIndexes",
+                   session_question."Score",
+                   session_question."Order",
+                   TRUE
+            FROM "TheoryTrainingSessionQuestions" session_question
+            JOIN phase00_session_question_map session_question_map
+              ON session_question_map.old_session_question_id = session_question."Id"
+            JOIN "TheoryTrainingSessions" session ON session."Id" = session_question."SessionId"
+            JOIN phase00_paper_map paper_map ON paper_map.old_plan_id = session."PlanId"
+            LEFT JOIN LATERAL (
+                SELECT active.new_course_question_id
+                FROM phase00_active_question_source active
+                WHERE active.old_plan_id = session."PlanId"
+                  AND active.source_question_id IS NOT DISTINCT FROM session_question."SourceQuestionId"
+                ORDER BY active.active_question_key
+                LIMIT 1
+            ) active_match ON TRUE;
 
             CREATE TEMP TABLE phase00_sheet_map (
                 old_session_id integer PRIMARY KEY,
@@ -463,19 +632,27 @@ public partial class RemoveLegacyIrScenarioTraining : Migration
             JOIN phase00_chapter_map chapter_map ON chapter_map.old_module_id = session."ModuleId";
 
             INSERT INTO "TrainingCourseChapterTheoryAnswers"
-                ("Id", "SheetId", "PaperQuestionId", "SelectedIndexes", "IsCorrect", "Score")
+                ("Id", "SheetId", "PaperQuestionId", "SelectedIndexes", "IsCorrect", "Score",
+                 "QuestionType", "QuestionTitle", "QuestionContent", "QuestionOptions", "CorrectAnswerIndexes",
+                 "MaxScore", "QuestionOrder")
             SELECT nextval(pg_get_serial_sequence('"TrainingCourseChapterTheoryAnswers"', 'Id'))::integer,
                    sheet_map.new_sheet_id,
-                   paper_question_map.new_paper_question_id,
+                   session_question_map.new_paper_question_id,
                    session_question."SelectedIndexes",
                    session_question."IsCorrect",
-                   CASE WHEN session_question."IsCorrect" THEN session_question."Score" ELSE 0 END
+                   CASE WHEN session_question."IsCorrect" THEN session_question."Score" ELSE 0 END,
+                   session_question."Type",
+                   session_question."Title",
+                   session_question."Content",
+                   session_question."Options",
+                   session_question."AnswerIndexes",
+                   session_question."Score",
+                   session_question."Order"
             FROM "TheoryTrainingSessionQuestions" session_question
             JOIN "TheoryTrainingSessions" session ON session."Id" = session_question."SessionId"
             JOIN phase00_sheet_map sheet_map ON sheet_map.old_session_id = session."Id"
-            JOIN phase00_paper_question_map paper_question_map
-              ON paper_question_map.old_plan_id = session."PlanId"
-             AND paper_question_map.source_question_id = session_question."SourceQuestionId";
+            JOIN phase00_session_question_map session_question_map
+              ON session_question_map.old_session_question_id = session_question."Id";
 
             INSERT INTO "TrainingChapterProgresses"
                 ("ChapterId", "UserId", "CourseId", "Status", "ReadPercent", "StartedAt", "CompletedAt", "UpdatedAt")
@@ -603,8 +780,13 @@ public partial class RemoveLegacyIrScenarioTraining : Migration
                    <> (SELECT count(*) FROM "TheoryTrainingPlans") THEN
                     RAISE EXCEPTION 'Phase 0 theory paper count mismatch';
                 END IF;
+                IF (SELECT count(*) FROM "TrainingCourseTheoryQuestions") - baseline.course_question_count
+                   <> (SELECT count(*) FROM phase00_active_question_source) THEN
+                    RAISE EXCEPTION 'Phase 0 course theory question count mismatch';
+                END IF;
                 IF (SELECT count(*) FROM "TrainingCourseChapterTheoryQuestions") - baseline.paper_question_count
-                   <> (SELECT count(*) FROM "TheoryTrainingPlanQuestions") THEN
+                   <> (SELECT count(*) FROM phase00_active_question_source)
+                      + (SELECT count(*) FROM "TheoryTrainingSessionQuestions") THEN
                     RAISE EXCEPTION 'Phase 0 theory question count mismatch';
                 END IF;
                 IF (SELECT count(*) FROM "TrainingCourseChapterTheorySheets") - baseline.sheet_count

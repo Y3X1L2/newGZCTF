@@ -3860,11 +3860,38 @@ namespace GZCTF.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("CorrectAnswerIndexes")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<bool?>("IsCorrect")
                         .HasColumnType("boolean");
 
+                    b.Property<int>("MaxScore")
+                        .HasColumnType("integer");
+
                     b.Property<int>("PaperQuestionId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("QuestionContent")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("QuestionOptions")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("QuestionOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("QuestionTitle")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("QuestionType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.Property<int>("Score")
                         .HasColumnType("integer");
@@ -3959,6 +3986,9 @@ namespace GZCTF.Migrations
                     b.Property<string>("Content")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Options")
                         .IsRequired()

@@ -818,8 +818,6 @@ public class TrainingCourseAdminController(
             return null;
 
         var sheet = sheetsByPaper.GetValueOrDefault(paper.Id);
-        var answersByQuestion = sheet?.Answers.ToDictionary(a => a.PaperQuestionId) ??
-                                new Dictionary<int, TrainingCourseChapterTheoryAnswer>();
         var submitted = sheet?.Status == TheoryAnswerSheetStatus.Submitted;
 
         return new TrainingCourseStudentTheoryLearningModel
@@ -827,8 +825,8 @@ public class TrainingCourseAdminController(
             PaperId = paper.Id,
             Title = paper.Title,
             IsPublished = paper.IsPublished,
-            QuestionCount = paper.Questions.Count,
-            TotalScore = paper.Questions.Sum(q => q.Score),
+            QuestionCount = paper.ActiveQuestions.Count(),
+            TotalScore = paper.ActiveQuestions.Sum(question => question.Score),
             PassRate = paper.PassRate,
             Status = sheet?.Status,
             Score = submitted ? sheet?.Score : null,
@@ -836,25 +834,22 @@ public class TrainingCourseAdminController(
             CorrectCount = submitted ? sheet!.Answers.Count(a => a.IsCorrect == true) : 0,
             SubmittedAt = sheet?.SubmittedAt,
             Answers = submitted
-                ? paper.Questions
-                    .OrderBy(q => q.Order)
-                    .Select(q =>
+                ? sheet!.Answers
+                    .OrderBy(answer => answer.QuestionOrder)
+                    .ThenBy(answer => answer.Id)
+                    .Select(answer => new TrainingCourseStudentTheoryAnswerDetailModel
                     {
-                        var answer = answersByQuestion.GetValueOrDefault(q.Id);
-                        return new TrainingCourseStudentTheoryAnswerDetailModel
-                        {
-                            QuestionId = q.Id,
-                            Type = q.Type,
-                            Title = q.Title,
-                            Content = q.Content,
-                            Options = q.Options,
-                            AnswerIndexes = q.AnswerIndexes,
-                            SelectedIndexes = answer?.SelectedIndexes ?? [],
-                            IsCorrect = answer?.IsCorrect,
-                            Score = answer?.Score ?? 0,
-                            MaxScore = q.Score,
-                            Order = q.Order
-                        };
+                        QuestionId = answer.PaperQuestionId,
+                        Type = answer.QuestionType,
+                        Title = answer.QuestionTitle,
+                        Content = answer.QuestionContent,
+                        Options = answer.QuestionOptions,
+                        AnswerIndexes = answer.CorrectAnswerIndexes,
+                        SelectedIndexes = answer.SelectedIndexes,
+                        IsCorrect = answer.IsCorrect,
+                        Score = answer.Score,
+                        MaxScore = answer.MaxScore,
+                        Order = answer.QuestionOrder
                     }).ToList()
                 : []
         };
@@ -1613,8 +1608,24 @@ public class TrainingCourseAdminController(
         paper.UpdatedById = actor.Id;
         paper.UpdatedAt = DateTimeOffset.UtcNow;
 
-        context.TrainingCourseChapterTheoryQuestions.RemoveRange(paper.Questions);
-        paper.Questions = model.Questions
+        var activeQuestions = paper.ActiveQuestions.ToArray();
+        var activeQuestionIds = activeQuestions.Select(question => question.Id).Where(id => id > 0).ToArray();
+        var referencedQuestionIds = activeQuestionIds.Length == 0
+            ? []
+            : await context.TrainingCourseChapterTheoryAnswers
+                .Where(answer => activeQuestionIds.Contains(answer.PaperQuestionId))
+                .Select(answer => answer.PaperQuestionId)
+                .Distinct()
+                .ToArrayAsync(token);
+        var referencedQuestionIdSet = referencedQuestionIds.ToHashSet();
+
+        foreach (var question in activeQuestions.Where(question => referencedQuestionIdSet.Contains(question.Id)))
+            question.IsArchived = true;
+
+        context.TrainingCourseChapterTheoryQuestions.RemoveRange(
+            activeQuestions.Where(question => !referencedQuestionIdSet.Contains(question.Id)));
+        paper.Questions = paper.Questions.Where(question => question.IsArchived).ToList();
+        paper.Questions.AddRange(model.Questions
             .OrderBy(q => q.Order > 0 ? q.Order : int.MaxValue)
             .Select((q, index) => new TrainingCourseChapterTheoryQuestion
             {
@@ -1625,9 +1636,10 @@ public class TrainingCourseAdminController(
                 Options = q.Options,
                 AnswerIndexes = TheoryExamService.NormalizeIndexes(q.AnswerIndexes),
                 Score = q.Score,
-                Order = q.Order > 0 ? q.Order : index + 1
+                Order = q.Order > 0 ? q.Order : index + 1,
+                IsArchived = false
             })
-            .ToList();
+            .ToList());
 
         if (paper.Id == 0)
             context.TrainingCourseChapterTheoryPapers.Add(paper);

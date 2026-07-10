@@ -1313,6 +1313,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
 
         builder.Entity<TrainingCourseChapterTheoryQuestion>(entity =>
         {
+            entity.HasQueryFilter(question => !question.IsArchived);
+
             entity.Property(e => e.Type)
                 .HasConversion<string>()
                 .HasMaxLength(32);
@@ -1369,6 +1371,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
         {
             entity.Property(e => e.SelectedIndexes)
                 .HasConversion(intListConverter)
+                .Metadata
+                .SetValueComparer(intListComparer);
+
+            entity.Property(e => e.QuestionType)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.Property(e => e.QuestionOptions)
+                .HasConversion(GetRequiredJsonConverter<List<string>>())
+                .Metadata
+                .SetValueComparer(listComparer);
+
+            entity.Property(e => e.CorrectAnswerIndexes)
+                .HasConversion(GetRequiredJsonConverter<List<int>>())
                 .Metadata
                 .SetValueComparer(intListComparer);
 

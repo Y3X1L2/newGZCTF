@@ -78,17 +78,31 @@ GROUP BY target_slug
 HAVING count(*) > 1
 ORDER BY target_slug;
 
-SELECT session_question."Id" AS session_question_id,
-       session_question."SessionId",
-       session_question."SourceQuestionId"
-FROM "TheoryTrainingSessionQuestions" session_question
-JOIN "TheoryTrainingSessions" session ON session."Id" = session_question."SessionId"
-LEFT JOIN "TheoryTrainingPlanQuestions" plan_question
-       ON plan_question."PlanId" = session."PlanId"
-      AND plan_question."SourceQuestionId" = session_question."SourceQuestionId"
-WHERE session_question."SourceQuestionId" IS NULL
-   OR plan_question."SourceQuestionId" IS NULL
-ORDER BY session_question."Id";
+SELECT plan."Id" AS plan_id,
+       plan."Mode",
+       plan."QuestionCount" AS configured_question_count,
+       (SELECT count(*) FROM "TheoryTrainingPlanQuestions" plan_question
+        WHERE plan_question."PlanId" = plan."Id") AS manual_question_count,
+       (SELECT count(*) FROM "TheoryTrainingSessions" session
+        WHERE session."PlanId" = plan."Id") AS session_count,
+       (SELECT count(*)
+        FROM "TheoryTrainingSessions" session
+        JOIN "TheoryTrainingSessionQuestions" session_question
+          ON session_question."SessionId" = session."Id"
+        WHERE session."PlanId" = plan."Id") AS snapshot_question_count,
+       (SELECT count(*)
+        FROM "TheoryQuestionBankItems" source
+        WHERE (nullif(plan."BankName", '') IS NULL OR source."BankName" = plan."BankName")
+          AND (
+              coalesce(jsonb_array_length(nullif(plan."QuestionTypes", '')::jsonb), 0) = 0
+              OR nullif(plan."QuestionTypes", '')::jsonb ? source."Type"
+          )) AS current_bank_candidate_count
+FROM "TheoryTrainingPlans" plan
+ORDER BY plan."Id";
+
+SELECT count(*) AS detached_snapshot_question_count
+FROM "TheoryTrainingSessionQuestions"
+WHERE "SourceQuestionId" IS NULL;
 
 SELECT 'TrainingModules.DirectionId' AS relation_name, count(*) AS orphan_count
 FROM "TrainingModules" child

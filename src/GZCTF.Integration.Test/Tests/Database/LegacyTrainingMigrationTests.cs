@@ -90,6 +90,104 @@ public sealed class LegacyTrainingMigrationTests : IAsyncLifetime
             Assert.False(await TableExistsAsync(migrated, table), $"Legacy table {table} still exists.");
     }
 
+    [Fact]
+    public async Task ContractMigration_PreservesRandomSessionQuestionSnapshots()
+    {
+        await using (var context = CreateContext())
+        {
+            var migrator = context.Database.GetService<IMigrator>();
+            await migrator.MigrateAsync(PreviousMigration);
+            await SeedLegacyRandomTheoryAsync(context, includeSessions: true);
+            await migrator.MigrateAsync(PhaseZeroMigration);
+        }
+
+        await using var connection = new NpgsqlConnection(_postgres.GetConnectionString());
+        await connection.OpenAsync();
+
+        await using (var activeCommand = connection.CreateCommand())
+        {
+            activeCommand.CommandText = """
+                SELECT question."Title", question."Score"
+                FROM "TrainingCourseChapterTheoryQuestions" question
+                WHERE NOT question."IsArchived"
+                ORDER BY question."Order", question."Id"
+                """;
+            await using var reader = await activeCommand.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal("Latest random two", reader.GetString(0));
+            Assert.Equal(5, reader.GetInt32(1));
+            Assert.False(await reader.ReadAsync());
+        }
+
+        await using (var snapshotCommand = connection.CreateCommand())
+        {
+            snapshotCommand.CommandText = """
+                SELECT sheet."AttemptNumber",
+                       answer."QuestionTitle",
+                       answer."QuestionContent",
+                       answer."QuestionOptions",
+                       answer."CorrectAnswerIndexes",
+                       answer."MaxScore",
+                       answer."QuestionOrder",
+                       paper_question."IsArchived"
+                FROM "TrainingCourseChapterTheoryAnswers" answer
+                JOIN "TrainingCourseChapterTheorySheets" sheet ON sheet."Id" = answer."SheetId"
+                JOIN "TrainingCourseChapterTheoryQuestions" paper_question
+                  ON paper_question."Id" = answer."PaperQuestionId"
+                ORDER BY sheet."AttemptNumber"
+                """;
+            await using var reader = await snapshotCommand.ExecuteReaderAsync();
+
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal(1, reader.GetInt32(0));
+            Assert.Equal("Historical random one", reader.GetString(1));
+            Assert.Equal("Historical content one", reader.GetString(2));
+            Assert.Equal("[\"old-zero\",\"old-one\"]", reader.GetString(3));
+            Assert.Equal("[1]", reader.GetString(4));
+            Assert.Equal(3, reader.GetInt32(5));
+            Assert.Equal(0, reader.GetInt32(6));
+            Assert.True(reader.GetBoolean(7));
+
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal(2, reader.GetInt32(0));
+            Assert.Equal("Latest random two", reader.GetString(1));
+            Assert.Equal("Latest content two", reader.GetString(2));
+            Assert.Equal("[\"latest-zero\",\"latest-one\"]", reader.GetString(3));
+            Assert.Equal("[0]", reader.GetString(4));
+            Assert.Equal(5, reader.GetInt32(5));
+            Assert.Equal(0, reader.GetInt32(6));
+            Assert.True(reader.GetBoolean(7));
+            Assert.False(await reader.ReadAsync());
+        }
+    }
+
+    [Fact]
+    public async Task ContractMigration_FreezesUnstartedRandomPlanFromCurrentBank()
+    {
+        await using (var context = CreateContext())
+        {
+            var migrator = context.Database.GetService<IMigrator>();
+            await migrator.MigrateAsync(PreviousMigration);
+            await SeedLegacyRandomTheoryAsync(context, includeSessions: false);
+            await migrator.MigrateAsync(PhaseZeroMigration);
+        }
+
+        await using var connection = new NpgsqlConnection(_postgres.GetConnectionString());
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT question."Title", question."Score"
+            FROM "TrainingCourseChapterTheoryQuestions" question
+            WHERE NOT question."IsArchived"
+            ORDER BY question."Order", question."Id"
+            """;
+        await using var reader = await command.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal("Current bank one", reader.GetString(0));
+        Assert.Equal(1, reader.GetInt32(1));
+        Assert.False(await reader.ReadAsync());
+    }
+
     private static readonly Guid SeedUserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 
     private static readonly string[] RemovedTables =
@@ -232,6 +330,80 @@ public sealed class LegacyTrainingMigrationTests : IAsyncLifetime
                 ("ModuleId", "UserId", "Status", "ChallengeSolvedCount", "ChallengeTotalCount", "TheoryBestScore", "TheoryBestPassRate", "StartedAt", "CompletedAt", "UpdatedAt")
             VALUES
                 (1102, {{SeedUserId}}, 'Reading', 1, 1, 10, 100, {{createdAt.AddHours(1)}}, NULL, {{createdAt.AddHours(4)}});
+            """);
+    }
+
+    private static async Task SeedLegacyRandomTheoryAsync(AppDbContext context, bool includeSessions)
+    {
+        var user = new UserInfo
+        {
+            Id = SeedUserId,
+            UserName = "phase0random",
+            NormalizedUserName = "PHASE0RANDOM",
+            Email = "phase-zero-random@example.test",
+            NormalizedEmail = "PHASE-ZERO-RANDOM@EXAMPLE.TEST",
+            EmailConfirmed = true,
+            Role = Role.Student,
+            RegisterTimeUtc = DateTimeOffset.Parse("2026-01-01T00:00:00Z")
+        };
+        var firstQuestion = new TheoryQuestionBankItem
+        {
+            Type = TheoryQuestionType.SingleChoice,
+            BankName = "RandomLegacy",
+            Title = "Current bank one",
+            Content = "Current content one",
+            Options = ["current-zero", "current-one"],
+            AnswerIndexes = [0]
+        };
+        var secondQuestion = new TheoryQuestionBankItem
+        {
+            Type = TheoryQuestionType.SingleChoice,
+            BankName = "RandomLegacy",
+            Title = "Current bank two",
+            Content = "Current content two",
+            Options = ["current-zero", "current-one"],
+            AnswerIndexes = [1]
+        };
+
+        context.Users.Add(user);
+        context.TheoryQuestionBankItems.AddRange(firstQuestion, secondQuestion);
+        await context.SaveChangesAsync();
+
+        var createdAt = DateTimeOffset.Parse("2026-03-01T00:00:00Z");
+        await context.Database.ExecuteSqlInterpolatedAsync($$"""
+            INSERT INTO "TrainingDirections"
+                ("Id", "Type", "Key", "Title", "Description", "Icon", "Color", "Order", "IsEnabled", "CreatedById", "CreatedAt", "UpdatedAt")
+            VALUES
+                (2001, 'Theory', 'random-theory', 'Random Theory', 'Legacy random direction', 'brain', '#00aa77', 0, TRUE, {{SeedUserId}}, {{createdAt}}, {{createdAt}});
+
+            INSERT INTO "TrainingModules"
+                ("Id", "DirectionId", "ParentId", "Type", "Title", "Slug", "Summary", "ArticleContent", "ArticleContentType", "CoverFileHash", "EnvironmentTemplateId", "CompletionRule", "IsPublished", "PublishedAt", "Order", "CreatedById", "UpdatedById", "CreatedAt", "UpdatedAt")
+            VALUES
+                (2101, 2001, NULL, 'Theory', 'Random Root', 'random-root', 'Random summary', 'Random content', 'Markdown', NULL, NULL,
+                 '{"RequireArticleRead":true,"RequireAllRequiredChallenges":true,"RequiredChallengeCount":0,"TheoryPassRate":60}',
+                 TRUE, {{createdAt}}, 0, {{SeedUserId}}, {{SeedUserId}}, {{createdAt}}, {{createdAt}});
+
+            INSERT INTO "TheoryTrainingPlans"
+                ("Id", "ModuleId", "Title", "Description", "Mode", "QuestionCount", "BankName", "QuestionTypes", "PassRate", "AllowRetake", "ShowCorrectAnswerAfterSubmit", "IsPublished", "CreatedById", "UpdatedById", "CreatedAt", "UpdatedAt")
+            VALUES
+                (2401, 2101, 'Random legacy paper', 'Random legacy description', 'Random', 1, 'RandomLegacy', '["SingleChoice"]', 60, TRUE, TRUE, TRUE, {{SeedUserId}}, {{SeedUserId}}, {{createdAt}}, {{createdAt}});
+            """);
+
+        if (!includeSessions)
+            return;
+
+        await context.Database.ExecuteSqlInterpolatedAsync($$"""
+            INSERT INTO "TheoryTrainingSessions"
+                ("Id", "PlanId", "ModuleId", "UserId", "Status", "Score", "MaxScore", "CorrectCount", "TotalCount", "CreatedAt", "SubmittedAt")
+            VALUES
+                (2501, 2401, 2101, {{SeedUserId}}, 'Submitted', 3, 3, 1, 1, {{createdAt.AddHours(1)}}, {{createdAt.AddHours(1).AddMinutes(5)}}),
+                (2502, 2401, 2101, {{SeedUserId}}, 'Submitted', 0, 5, 0, 1, {{createdAt.AddHours(2)}}, {{createdAt.AddHours(2).AddMinutes(5)}});
+
+            INSERT INTO "TheoryTrainingSessionQuestions"
+                ("Id", "SessionId", "SourceQuestionId", "Type", "Title", "Content", "Options", "AnswerIndexes", "SelectedIndexes", "IsCorrect", "Score", "Order")
+            VALUES
+                (2601, 2501, {{firstQuestion.Id}}, 'SingleChoice', 'Historical random one', 'Historical content one', '["old-zero","old-one"]', '[1]', '[1]', TRUE, 3, 0),
+                (2602, 2502, {{secondQuestion.Id}}, 'SingleChoice', 'Latest random two', 'Latest content two', '["latest-zero","latest-one"]', '[0]', '[1]', FALSE, 5, 0);
             """);
     }
 

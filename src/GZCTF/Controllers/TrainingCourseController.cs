@@ -439,7 +439,7 @@ public class TrainingCourseController(
             PaperId = paper.Id,
             UserId = user.Id,
             AttemptNumber = attemptNumber,
-            MaxScore = paper.Questions.Sum(question => question.Score)
+            MaxScore = paper.ActiveQuestions.Sum(question => question.Score)
         };
         context.TrainingCourseChapterTheorySheets.Add(sheet);
         await context.SaveChangesAsync(token);
@@ -451,10 +451,40 @@ public class TrainingCourseController(
         TrainingCourseChapterTheoryPaper paper,
         List<TheoryAnswerModel> answers)
     {
-        var questions = paper.Questions.ToDictionary(q => q.Id);
         var incoming = answers
             .GroupBy(a => a.PaperQuestionId)
             .ToDictionary(g => g.Key, g => TheoryExamService.NormalizeIndexes(g.Last().SelectedIndexes));
+
+        if (sheet.Answers.Count > 0)
+        {
+            var snapshotAnswers = sheet.Answers.ToDictionary(answer => answer.PaperQuestionId);
+            foreach (var (questionId, selected) in incoming)
+            {
+                if (!snapshotAnswers.TryGetValue(questionId, out var answer))
+                    return $"Question {questionId} does not belong to this answer sheet.";
+
+                if (selected.Any(index => index < 0 || index >= answer.QuestionOptions.Count))
+                    return $"Answer index is out of range for question {questionId}.";
+
+                if (answer.QuestionType is TheoryQuestionType.SingleChoice or TheoryQuestionType.TrueFalse &&
+                    selected.Count > 1)
+                    return $"Question {questionId} accepts only one answer.";
+            }
+
+            foreach (var answer in sheet.Answers)
+            {
+                answer.SelectedIndexes = incoming.GetValueOrDefault(answer.PaperQuestionId, []);
+                answer.IsCorrect = null;
+                answer.Score = 0;
+            }
+
+            sheet.PaperId = paper.Id;
+            sheet.MaxScore = sheet.Answers.Sum(answer => answer.MaxScore);
+            sheet.UpdatedAt = DateTimeOffset.UtcNow;
+            return null;
+        }
+
+        var questions = paper.ActiveQuestions.ToDictionary(question => question.Id);
 
         foreach (var (questionId, selected) in incoming)
         {
@@ -468,8 +498,6 @@ public class TrainingCourseController(
                 return $"Question {questionId} accepts only one answer.";
         }
 
-        sheet.Answers.RemoveAll(a => !incoming.ContainsKey(a.PaperQuestionId));
-
         foreach (var question in questions.Values)
         {
             var selected = incoming.GetValueOrDefault(question.Id, []);
@@ -477,6 +505,7 @@ public class TrainingCourseController(
             if (answer is null)
             {
                 answer = new TrainingCourseChapterTheoryAnswer { PaperQuestionId = question.Id };
+                answer.CaptureQuestion(question);
                 sheet.Answers.Add(answer);
             }
 
@@ -486,7 +515,7 @@ public class TrainingCourseController(
         }
 
         sheet.PaperId = paper.Id;
-        sheet.MaxScore = paper.Questions.Sum(q => q.Score);
+        sheet.MaxScore = questions.Values.Sum(question => question.Score);
         sheet.UpdatedAt = DateTimeOffset.UtcNow;
         return null;
     }
@@ -495,24 +524,20 @@ public class TrainingCourseController(
         TrainingCourseChapterTheorySheet sheet,
         TrainingCourseChapterTheoryPaper paper)
     {
-        var answers = sheet.Answers.ToDictionary(a => a.PaperQuestionId);
         var score = 0;
 
-        foreach (var question in paper.Questions)
+        foreach (var answer in sheet.Answers)
         {
-            if (!answers.TryGetValue(question.Id, out var answer))
-                continue;
-
             var selected = TheoryExamService.NormalizeIndexes(answer.SelectedIndexes);
-            var correct = selected.SequenceEqual(TheoryExamService.NormalizeIndexes(question.AnswerIndexes));
+            var correct = selected.SequenceEqual(TheoryExamService.NormalizeIndexes(answer.CorrectAnswerIndexes));
             answer.SelectedIndexes = selected;
             answer.IsCorrect = correct;
-            answer.Score = correct ? question.Score : 0;
+            answer.Score = correct ? answer.MaxScore : 0;
             score += answer.Score;
         }
 
         sheet.Score = score;
-        sheet.MaxScore = paper.Questions.Sum(q => q.Score);
+        sheet.MaxScore = sheet.Answers.Sum(answer => answer.MaxScore);
         sheet.Status = TheoryAnswerSheetStatus.Submitted;
         sheet.SubmittedAt = DateTimeOffset.UtcNow;
         sheet.UpdatedAt = sheet.SubmittedAt.Value;

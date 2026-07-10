@@ -14,7 +14,7 @@
 
 更新时间：2026-07-10
 
-- 当前状态：Phase 0 开发实施与本地验收完成；生产数据库备份、审计和 migration 应用保留为显式部署门禁。
+- 当前状态：全分支终审修复已通过全量回归，等待独立复审。生产数据库备份、审计和 migration 应用保留为显式部署门禁。
 - 工作分支：`codex/phase-0-baseline-cleanup`。
 - 隔离工作区：`D:\newgz\newGZCTF-phase0`。
 - 基线验证：`dotnet test src/GZCTF.Test/GZCTF.Test.csproj --no-restore` 通过，577 项测试全部通过；`pnpm check` 通过。
@@ -26,7 +26,7 @@
 - Task 3 结果：旧管理员培训页、旧 CTF/理论模块页和四个废弃 e2e 已删除；学员组 API 已拆出为独立 `StudentGroupApi`，没有把旧模块逻辑合并进新课程页面。
 - Task 3 结果：新课程前端已接入章节完成策略、理论重做、答案显示策略和 attempt 信息；locale 校验、TypeScript strict check 与活动源码遗留扫描通过。
 - Task 4 结果：活动源码和 e2e 的禁用术语、乱码、历史阶段注释与 `dry-run` 占位扫描通过；总纲、术语表和模块边界已更新为 Phase 0 完成后的唯一运行模型。
-- Task 5 结果：幂等 migration 脚本、PostgreSQL 迁移守恒、583 项后端单元测试、前端 production build、EF snapshot 和 production bundle 遗留面门禁全部通过。
+- Task 5 结果：幂等 migration 脚本、3 项 PostgreSQL 迁移守恒、585 项后端单元测试、前端 production build、EF snapshot 和 production bundle 遗留面门禁全部通过。
 - 数据边界：本轮完成迁移代码、审计脚本和可重复集成验证；未收到部署指令前，不连接生产数据库、不执行生产备份、不应用 contract migration。
 
 任务状态：
@@ -61,12 +61,13 @@ Phase 0 不删除历史 `Migrations/*.cs`；删除历史 migration 会破坏从�
 | TrainingModuleChallenge | TrainingCourseChallenge + TrainingCourseChapterChallenge | 每个旧绑定同时建立课程级绑定和章节级绑定。 |
 | TrainingCtfSubmission | TrainingCourseSubmission | 使用 module-to-course 和 module-to-chapter 映射写入。 |
 | TheoryTrainingPlan | TrainingCourseChapterTheoryPaper | 每个理论计划归属其模块对应章节，并保留 `PassRate`、`AllowRetake` 和提交后答案可见策略。 |
-| TheoryTrainingPlanQuestion | TrainingCourseTheoryQuestion + TrainingCourseChapterTheoryQuestion | 从 `TheoryQuestionBankItem` 复制课程题和试卷题快照，不能让课程继续依赖旧计划。 |
+| Manual TheoryTrainingPlanQuestion | TrainingCourseTheoryQuestion + 活动 TrainingCourseChapterTheoryQuestion | 从当前 plan question 和题库复制课程题与活动试卷题，不能让课程继续依赖旧计划。 |
+| Random TheoryTrainingPlan | TrainingCourseTheoryQuestion + 活动 TrainingCourseChapterTheoryQuestion | 有历史作答时冻结最新一次非空 session 的题目快照；从未生成题目时按题库过滤条件和题目 ID 确定性选取 `QuestionCount` 道题。 |
 | TheoryTrainingSession | TrainingCourseChapterTheorySheet | 按用户、章节和尝试序号迁移全部 session，保留状态、得分、总分和提交时间。 |
-| TheoryTrainingSessionQuestion | TrainingCourseChapterTheoryAnswer | 按迁移后的 paper question 映射保留作答和判题结果。 |
-| TrainingArticleProgress | TrainingChapterProgress | 保留 `ReadPercent`；100 映射为 Completed，1-99 映射为 Learning，0 映射为 NotStarted。 |
+| TheoryTrainingSessionQuestion | 归档 TrainingCourseChapterTheoryQuestion + TrainingCourseChapterTheoryAnswer | 每个历史 session question 建立归档试卷题；answer 独立保存题型、题干、正文、选项、正确答案、分值和顺序快照，不依赖当前题库。 |
+| TrainingArticleProgress | TrainingChapterProgress | 保留 `ReadPercent`；旧模块总体进度为 Completed 时映射 Completed，其余有阅读或实践事实时映射 Learning。 |
 | TrainingModuleProgress | TrainingCourseProgress | 按课程内所有章节、题目和理论 sheet 重新聚合，旧汇总值只用于迁移校验。 |
-| TrainingModuleVisibility | EnrollmentPolicy + Enrollment | AllStudents 映射 Open；GroupOnly 为当前组员建立 Approved enrollment。 |
+| TrainingModuleVisibility | EnrollmentPolicy + Enrollment | AllStudents 映射 AutoApprove；GroupOnly 为当前组员建立 Approved enrollment。 |
 
 每个旧 module 迁入 chapter 时必须复制 `Title, Summary, ArticleContent -> Content, ArticleContentType -> ContentType, Order, IsPublished, CreatedById, UpdatedById, CreatedAt, UpdatedAt`。根 module 额外向 course 复制 `Title, Slug, Summary, CoverFileHash, CreatedById, UpdatedById, CreatedAt, UpdatedAt, PublishedAt`；其 direction/type 写入 course tags。`TrainingCompletionRule` 逐字段写入 chapter 的目标 `TrainingChapterCompletionPolicy`，不能按新系统默认值覆盖。
 
@@ -75,8 +76,8 @@ Phase 0 不删除历史 `Migrations/*.cs`；删除历史 migration 会破坏从�
 1. 同一根模块子树的可见性集合必须一致，避免课程级报名扩大章节访问范围。
 2. `EnvironmentTemplateId` 非空的模块必须存在引用同一模板的 `ExerciseChallenge` 绑定；旧字段本身不形成运行环境。
 3. `TrainingModule.Slug` 在迁移后的课程范围内必须唯一；冲突时使用 `{slug}-{moduleId}`，空值使用 `course-{moduleId}`。
-4. 缺失用户、题目、Flag 或理论题来源的外键必须在迁移前报告并修复，禁止静默丢行。
-5. 每个 `TheoryTrainingSessionQuestion.SourceQuestionId` 必须能映射到同模块 plan question；无法映射的历史快照必须先修复，不能丢弃作答。
+4. 缺失用户、模块、计划、练习题或 Flag 的强制外键必须在迁移前报告并修复，禁止静默丢行；已置空的理论题来源不阻塞迁移，历史 session question 快照是题目事实来源。
+5. 活动试卷题与历史归档题必须分离；教师后续编辑只能替换活动题，已被答卷引用的题目转为归档，禁止级联删除历史答案。
 6. 同一用户同一模块的多次理论 session 按 `CreatedAt, Id` 生成从 1 开始的稳定 attempt number；目标表必须允许保留全部尝试。
 7. 迁移完成后旧表只允许在同一个 migration 事务中被删除，不能留下双写窗口。
 
@@ -301,7 +302,7 @@ public class TrainingChapterCompletionPolicy
 }
 ```
 
-`TrainingCourseController` 查询当前试卷时选择最新 attempt；已提交且试卷允许重做时创建 `AttemptNumber + 1`，否则返回最新记录。删除当前 `(UserId, ChapterId)` 唯一索引，禁止通过覆盖旧 sheet 实现重做。章节完成判定统一读取 CompletionPolicy：按策略校验阅读百分比、全部必做题或要求数量以及理论通过率，禁止继续硬编码“全部必做题 + 已发布试卷”。
+`TrainingCourseController` 查询当前试卷时只返回最新 attempt，不得由 GET 隐式创建记录；已提交且试卷允许重做时，只有显式调用 `/retry` 才创建 `AttemptNumber + 1`。删除当前 `(UserId, ChapterId)` 唯一索引，禁止通过覆盖旧 sheet 实现重做。章节完成判定统一读取 CompletionPolicy：按策略校验阅读百分比、全部必做题或要求数量以及理论通过率，禁止继续硬编码“全部必做题 + 已发布试卷”。
 
 - [x] **Step 4: 生成并完善 contract migration**
 

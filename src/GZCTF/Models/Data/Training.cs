@@ -282,9 +282,13 @@ public class TrainingCourseChapterTheoryPaper
 
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public int TotalScore => Questions.Sum(q => q.Score);
+    public int TotalScore => ActiveQuestions.Sum(q => q.Score);
 
     public List<TrainingCourseChapterTheoryQuestion> Questions { get; set; } = [];
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public IEnumerable<TrainingCourseChapterTheoryQuestion> ActiveQuestions =>
+        Questions.Where(question => !question.IsArchived);
 }
 
 [Index(nameof(PaperId))]
@@ -318,6 +322,8 @@ public class TrainingCourseChapterTheoryQuestion
     public int Score { get; set; } = 1;
 
     public int Order { get; set; }
+
+    public bool IsArchived { get; set; }
 }
 
 [Index(nameof(CourseId))]
@@ -389,6 +395,32 @@ public class TrainingCourseChapterTheoryAnswer
     public bool? IsCorrect { get; set; }
 
     public int Score { get; set; }
+
+    public TheoryQuestionType QuestionType { get; set; }
+
+    [Required]
+    public string QuestionTitle { get; set; } = string.Empty;
+
+    public string QuestionContent { get; set; } = string.Empty;
+
+    public List<string> QuestionOptions { get; set; } = [];
+
+    public List<int> CorrectAnswerIndexes { get; set; } = [];
+
+    public int MaxScore { get; set; }
+
+    public int QuestionOrder { get; set; }
+
+    public void CaptureQuestion(TrainingCourseChapterTheoryQuestion question)
+    {
+        QuestionType = question.Type;
+        QuestionTitle = question.Title;
+        QuestionContent = question.Content;
+        QuestionOptions = [.. question.Options];
+        CorrectAnswerIndexes = [.. question.AnswerIndexes];
+        MaxScore = question.Score;
+        QuestionOrder = question.Order;
+    }
 }
 
 [Index(nameof(CourseId), nameof(Order))]

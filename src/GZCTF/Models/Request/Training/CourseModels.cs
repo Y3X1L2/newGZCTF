@@ -806,8 +806,8 @@ public class TrainingCourseChapterTheorySummaryModel
             ChapterId = paper.ChapterId,
             Title = paper.Title,
             IsPublished = paper.IsPublished,
-            QuestionCount = paper.Questions.Count,
-            TotalScore = paper.Questions.Sum(q => q.Score),
+            QuestionCount = paper.ActiveQuestions.Count(),
+            TotalScore = paper.ActiveQuestions.Sum(q => q.Score),
             PassRate = paper.PassRate,
             AllowRetake = paper.AllowRetake,
             ShowCorrectAnswerAfterSubmit = paper.ShowCorrectAnswerAfterSubmit,
@@ -862,8 +862,8 @@ public class TrainingCourseChapterTheoryPaperDetailModel : TrainingCourseChapter
             IsPublished = paper.IsPublished,
             PublishedAt = paper.PublishedAt,
             UpdatedAt = paper.UpdatedAt,
-            TotalScore = paper.Questions.Sum(q => q.Score),
-            Questions = paper.Questions
+            TotalScore = paper.ActiveQuestions.Sum(q => q.Score),
+            Questions = paper.ActiveQuestions
                 .OrderBy(q => q.Order)
                 .Select(q => new TrainingCourseTheoryPaperQuestionEditModel
                 {
@@ -913,6 +913,21 @@ public class TrainingCourseChapterTheoryPlayerQuestionModel
             Score = question.Score,
             Order = question.Order,
             AnswerIndexes = revealAnswer ? question.AnswerIndexes : null
+        };
+
+    public static TrainingCourseChapterTheoryPlayerQuestionModel FromAnswer(
+        TrainingCourseChapterTheoryAnswer answer,
+        bool revealAnswer) =>
+        new()
+        {
+            Id = answer.PaperQuestionId,
+            Type = answer.QuestionType,
+            Title = answer.QuestionTitle,
+            Content = answer.QuestionContent,
+            Options = answer.QuestionOptions,
+            Score = answer.MaxScore,
+            Order = answer.QuestionOrder,
+            AnswerIndexes = revealAnswer ? answer.CorrectAnswerIndexes : null
         };
 }
 
@@ -965,7 +980,9 @@ public class TrainingCourseChapterTheoryPlayerPaperModel
             ChapterId = paper.ChapterId,
             Title = paper.Title,
             Description = paper.Description,
-            TotalScore = paper.Questions.Sum(q => q.Score),
+            TotalScore = sheet?.Answers.Count > 0
+                ? sheet.MaxScore
+                : paper.ActiveQuestions.Sum(q => q.Score),
             PassRate = paper.PassRate,
             AllowRetake = paper.AllowRetake,
             ShowCorrectAnswerAfterSubmit = paper.ShowCorrectAnswerAfterSubmit,
@@ -975,10 +992,18 @@ public class TrainingCourseChapterTheoryPlayerPaperModel
             Passed = sheet?.Status == TheoryAnswerSheetStatus.Submitted ? sheet.Passed : null,
             SubmittedAt = sheet?.SubmittedAt,
             UpdatedAt = sheet?.UpdatedAt,
-            Questions = paper.Questions
-                .OrderBy(q => q.Order)
-                .Select(q => TrainingCourseChapterTheoryPlayerQuestionModel.FromQuestion(q, revealAnswer))
-                .ToList(),
+            Questions = sheet?.Answers.Count > 0
+                ? sheet.Answers
+                    .OrderBy(answer => answer.QuestionOrder)
+                    .ThenBy(answer => answer.Id)
+                    .Select(answer => TrainingCourseChapterTheoryPlayerQuestionModel.FromAnswer(answer, revealAnswer))
+                    .ToList()
+                : paper.ActiveQuestions
+                    .OrderBy(question => question.Order)
+                    .ThenBy(question => question.Id)
+                    .Select(question =>
+                        TrainingCourseChapterTheoryPlayerQuestionModel.FromQuestion(question, revealAnswer))
+                    .ToList(),
             Answers = sheet?.Answers
                 .Select(a => new TheoryAnswerModel
                 {
