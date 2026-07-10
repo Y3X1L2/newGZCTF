@@ -14,7 +14,7 @@
 
 更新时间：2026-07-10
 
-- 当前状态：全分支终审修复已通过全量回归，等待独立复审。生产数据库备份、审计和 migration 应用保留为显式部署门禁。
+- 当前状态：Phase 0 开发、全量验收与双 reviewer 终审已完成，未发现剩余阻断或重要问题。生产数据库备份、审计和 migration 应用保留为显式部署门禁。
 - 工作分支：`codex/phase-0-baseline-cleanup`。
 - 隔离工作区：`D:\newgz\newGZCTF-phase0`。
 - 基线验证：`dotnet test src/GZCTF.Test/GZCTF.Test.csproj --no-restore` 通过，577 项测试全部通过；`pnpm check` 通过。
@@ -26,7 +26,7 @@
 - Task 3 结果：旧管理员培训页、旧 CTF/理论模块页和四个废弃 e2e 已删除；学员组 API 已拆出为独立 `StudentGroupApi`，没有把旧模块逻辑合并进新课程页面。
 - Task 3 结果：新课程前端已接入章节完成策略、理论重做、答案显示策略和 attempt 信息；locale 校验、TypeScript strict check 与活动源码遗留扫描通过。
 - Task 4 结果：活动源码和 e2e 的禁用术语、乱码、历史阶段注释与 `dry-run` 占位扫描通过；总纲、术语表和模块边界已更新为 Phase 0 完成后的唯一运行模型。
-- Task 5 结果：幂等 migration 脚本、3 项 PostgreSQL 迁移守恒、585 项后端单元测试、前端 production build、EF snapshot 和 production bundle 遗留面门禁全部通过。
+- Task 5 结果：幂等 migration 脚本、4 项 PostgreSQL 迁移守恒、585 项后端单元测试、前端 production build、EF snapshot 和 production bundle 遗留面门禁全部通过；已发布 Random 计划无法冻结任何候选题时 contract migration 明确失败并回滚。
 - 数据边界：本轮完成迁移代码、审计脚本和可重复集成验证；未收到部署指令前，不连接生产数据库、不执行生产备份、不应用 contract migration。
 
 任务状态：

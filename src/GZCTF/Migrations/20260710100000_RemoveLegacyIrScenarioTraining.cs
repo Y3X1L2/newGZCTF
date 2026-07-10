@@ -480,6 +480,30 @@ public partial class RemoveLegacyIrScenarioTraining : Migration
                   WHERE session."PlanId" = plan."Id"
               );
 
+            DO $$
+            DECLARE
+                invalid_plan_id integer;
+            BEGIN
+                SELECT plan."Id"
+                INTO invalid_plan_id
+                FROM "TheoryTrainingPlans" plan
+                WHERE plan."Mode" = 'Random'
+                  AND plan."IsPublished"
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM phase00_active_question_source active
+                      WHERE active.old_plan_id = plan."Id"
+                  )
+                ORDER BY plan."Id"
+                LIMIT 1;
+
+                IF invalid_plan_id IS NOT NULL THEN
+                    RAISE EXCEPTION
+                        'Phase 0 found a published random theory plan without candidate questions (plan id: %).',
+                        invalid_plan_id;
+                END IF;
+            END $$;
+
             UPDATE phase00_active_question_source
             SET new_course_question_id = nextval(
                     pg_get_serial_sequence('"TrainingCourseTheoryQuestions"', 'Id'))::integer,

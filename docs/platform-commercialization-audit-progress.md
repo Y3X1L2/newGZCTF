@@ -194,5 +194,8 @@
 - 已补两个 PostgreSQL 回归用例并确认红灯：有历史随机作答时 migration 抛出 `Phase 0 found an unmapped legacy theory answer snapshot`；无历史作答的随机计划迁移后缺少可冻结的活动题目结构。原手工计划迁移用例继续通过。
 - 修复边界已冻结：随机计划冻结为确定性静态试卷；历史 session question 迁为归档 paper question，并将题干、正文、选项、正确答案、分值和顺序快照写入 answer；当前创建、编辑、计分和展示只消费非归档题，历史答卷消费自身快照。
 - 终审修复绿灯：Manual 计划、已有 Random session、未开始 Random 计划三项 PostgreSQL migration 用例全部通过；历史答卷展示与活动/归档题隔离专项 7 项通过，EF 无 pending model changes，编译保持 13 条既有 warning。
-- 修复后幂等脚本为 316732 字节，SHA-256 为 `9B5C0C34AA4F1480C1FA83E06FA00372CB90D8F597E03C460F6175BCED015FD6`；后端全量单元测试 585 项、前端 production build、runtime/bundle/snapshot 遗留面和 `git diff --check` 全部通过。
+- Random 与历史快照修复后的首轮幂等脚本为 316732 字节，SHA-256 为 `9B5C0C34AA4F1480C1FA83E06FA00372CB90D8F597E03C460F6175BCED015FD6`；后端全量单元测试 585 项、前端 production build、runtime/bundle/snapshot 遗留面和 `git diff --check` 全部通过。
 - 当前总纲事实为 25 个 Controller、88 个 DbSet、`AppDbContext` 1761 行；本轮仍未部署、未连接或修改生产数据库。
+- 独立迁移复审发现已发布、未启动的 Random 计划在题库候选为 0 时会迁成可直接通过的空卷；新增 `ContractMigration_RejectsPublishedUnstartedRandomPlanWithoutCandidates` 后先确认迁移未失败的红灯，再在 contract migration 中加入事务内前置校验。
+- 修复后 Manual、已有 Random session、正常未启动 Random、已发布 Random 零候选拒绝四项 PostgreSQL 迁移用例全部通过；新幂等脚本为 317440 字节，SHA-256 为 `59A0EB29BFF0C30FBEFC512F175BE8E9F161A9FA0100E83A98644D62A8775BC9`。
+- 两位独立 reviewer 均已给出 `APPROVED`：原终审核实 Random/历史快照/显式 retry 三项缺口关闭；迁移质量复审核实零候选校验位置、条件、事务回滚和回归测试正确。Phase 0 未发现剩余阻断或重要问题。

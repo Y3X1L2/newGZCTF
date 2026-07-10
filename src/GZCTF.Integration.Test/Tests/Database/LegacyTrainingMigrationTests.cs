@@ -188,6 +188,20 @@ public sealed class LegacyTrainingMigrationTests : IAsyncLifetime
         Assert.False(await reader.ReadAsync());
     }
 
+    [Fact]
+    public async Task ContractMigration_RejectsPublishedUnstartedRandomPlanWithoutCandidates()
+    {
+        await using var context = CreateContext();
+        var migrator = context.Database.GetService<IMigrator>();
+        await migrator.MigrateAsync(PreviousMigration);
+        await SeedLegacyRandomTheoryAsync(context, includeSessions: false, includeBankQuestions: false);
+
+        var exception = await Assert.ThrowsAsync<PostgresException>(
+            () => migrator.MigrateAsync(PhaseZeroMigration));
+
+        Assert.Contains("published random theory plan without candidate questions", exception.MessageText);
+    }
+
     private static readonly Guid SeedUserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 
     private static readonly string[] RemovedTables =
@@ -333,7 +347,10 @@ public sealed class LegacyTrainingMigrationTests : IAsyncLifetime
             """);
     }
 
-    private static async Task SeedLegacyRandomTheoryAsync(AppDbContext context, bool includeSessions)
+    private static async Task SeedLegacyRandomTheoryAsync(
+        AppDbContext context,
+        bool includeSessions,
+        bool includeBankQuestions = true)
     {
         var user = new UserInfo
         {
@@ -366,7 +383,8 @@ public sealed class LegacyTrainingMigrationTests : IAsyncLifetime
         };
 
         context.Users.Add(user);
-        context.TheoryQuestionBankItems.AddRange(firstQuestion, secondQuestion);
+        if (includeBankQuestions)
+            context.TheoryQuestionBankItems.AddRange(firstQuestion, secondQuestion);
         await context.SaveChangesAsync();
 
         var createdAt = DateTimeOffset.Parse("2026-03-01T00:00:00Z");
