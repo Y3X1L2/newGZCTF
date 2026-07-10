@@ -11,6 +11,11 @@ public class TheoryExamService(AppDbContext context)
 
     public static bool IsTheoryGame(Game game) => game.GameType is GameType.Theory or GameType.Mixed;
 
+    public static bool CanStartCourseTheoryRetake(
+        TrainingCourseChapterTheoryPaper paper,
+        TrainingCourseChapterTheorySheet latestSheet) =>
+        paper.AllowRetake && latestSheet.Status == TheoryAnswerSheetStatus.Submitted;
+
     public string? NormalizeAndValidate(TheoryQuestionEditModel model, int? score = null)
     {
         model.BankName = string.IsNullOrWhiteSpace(model.BankName) ? DefaultBankName : model.BankName.Trim();

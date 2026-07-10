@@ -378,7 +378,15 @@ public class TrainingCourseAdminController(
             .ToDictionary(g => g.Key, g => g.ToArray());
         var sheetsByUser = sheets
             .GroupBy(s => s.UserId)
-            .ToDictionary(g => g.Key, g => g.ToArray());
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .GroupBy(sheet => sheet.PaperId)
+                    .Select(attempts => attempts
+                        .OrderByDescending(sheet => sheet.AttemptNumber)
+                        .ThenByDescending(sheet => sheet.Id)
+                        .First())
+                    .ToArray());
 
         return enrollments.Select(enrollment =>
         {
@@ -740,7 +748,11 @@ public class TrainingCourseAdminController(
                 .Where(s => s.CourseId == courseId && s.UserId == userId && paperIds.Contains(s.PaperId))
                 .ToArrayAsync(token);
         var papersByChapter = papers.ToDictionary(p => p.ChapterId);
-        var sheetsByPaper = sheets.ToDictionary(s => s.PaperId);
+        var sheetsByPaper = sheets
+            .GroupBy(sheet => sheet.PaperId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderByDescending(sheet => sheet.AttemptNumber).ThenByDescending(sheet => sheet.Id).First());
         var challengeLinksByChapter = chapterChallengeLinks
             .GroupBy(c => c.ChapterId)
             .ToDictionary(g => g.Key, g => g.ToArray());
@@ -781,7 +793,9 @@ public class TrainingCourseAdminController(
                 Summary = chapter.Summary,
                 Order = chapter.Order,
                 IsPublished = chapter.IsPublished,
+                CompletionPolicy = chapter.CompletionPolicy,
                 ProgressStatus = progress?.Status,
+                ReadPercent = progress?.ReadPercent ?? 0,
                 CompletedAt = progress?.CompletedAt,
                 Theory = theory,
                 Challenges = chapterChallenges.Select(link =>
@@ -1256,6 +1270,7 @@ public class TrainingCourseAdminController(
         chapter.Summary = model.Summary.Trim();
         chapter.Content = model.Content;
         chapter.ContentType = model.ContentType;
+        chapter.CompletionPolicy = model.CompletionPolicy;
         chapter.VideoProvider = model.VideoProvider;
         chapter.VideoUrl = string.IsNullOrWhiteSpace(model.VideoUrl) ? null : model.VideoUrl.Trim();
         chapter.VideoFileId = videoFile?.Id;
@@ -1591,6 +1606,8 @@ public class TrainingCourseAdminController(
         paper.Title = model.Title.Trim();
         paper.Description = model.Description.Trim();
         paper.PassRate = Math.Clamp(model.PassRate, 1, 100);
+        paper.AllowRetake = model.AllowRetake;
+        paper.ShowCorrectAnswerAfterSubmit = model.ShowCorrectAnswerAfterSubmit;
         paper.IsPublished = model.IsPublished;
         paper.PublishedAt = model.IsPublished ? paper.PublishedAt ?? DateTimeOffset.UtcNow : null;
         paper.UpdatedById = actor.Id;

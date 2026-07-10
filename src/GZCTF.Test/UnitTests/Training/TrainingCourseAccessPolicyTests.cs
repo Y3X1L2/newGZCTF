@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using GZCTF.Models.Data;
+using GZCTF.Services;
 using GZCTF.Services.Training;
 using GZCTF.Utils;
 using Xunit;
@@ -9,6 +10,21 @@ namespace GZCTF.Test.UnitTests.Training;
 
 public class TrainingCourseAccessPolicyTests
 {
+    [Theory]
+    [InlineData(true, TheoryAnswerSheetStatus.Submitted, true)]
+    [InlineData(false, TheoryAnswerSheetStatus.Submitted, false)]
+    [InlineData(true, TheoryAnswerSheetStatus.Draft, false)]
+    public void CanStartCourseTheoryRetake_RequiresEnabledSubmittedAttempt(
+        bool allowRetake,
+        TheoryAnswerSheetStatus status,
+        bool expected)
+    {
+        var paper = new TrainingCourseChapterTheoryPaper { AllowRetake = allowRetake };
+        var sheet = new TrainingCourseChapterTheorySheet { Status = status };
+
+        Assert.Equal(expected, TheoryExamService.CanStartCourseTheoryRetake(paper, sheet));
+    }
+
     [Fact]
     public void IsVisibleInList_ExcludesArchivedCourses()
     {

@@ -170,3 +170,10 @@
 - 活动代码复核补充 `TimeSlot` 和 `ScoringRule`：两者除 `AppDbContext` 外只被 IR/Scenario 实体引用，已纳入 Task 2 清退范围，避免数据库和 runtime 留下半套 Scenario 基础设施。
 - `scripts/migrations/phase-00-legacy-data-audit.sql` 已覆盖旧表行数、可见性冲突、模板绑定缺口、slug 冲突、理论快照映射和核心孤儿关系检查。
 - Task 1 完成，开始 Task 2 的目标模型字段、迁移守恒和后端 contract 切换。
+- Task 2 已删除旧 IR/Scenario/Training runtime 类型、DbSet、Controller 和 DTO；旧培训不与新课程合并运行，只通过一次性 contract migration 迁入 `TrainingCourse` 聚合。
+- migration 集成测试已在 PostgreSQL 16 Testcontainers 上通过，验证父子章节、组报名、实践提交、理论试卷、两次作答、答案快照和 37% 阅读进度守恒，并确认全部旧表删除。
+- `TrainingCourseController.BuildOverview`、提交次数限制、学习详情和章节完成判断已切换为课程事实；当前运行时源码扫描不再包含旧实体引用，历史 EF migration 按升级链要求保留。
+- 差异审查修正理论 attempt 状态机：读取已提交答卷不再隐式创建重做记录，重做改为显式 API；章节完成策略已进入新课程章节编辑合约。
+- EF `has-pending-model-changes` 通过；专项后端测试 7 项通过；当前编译 13 条既有 nullable warning，低于 17 条基线且无新增警告。
+- Task 2 全量后端门禁通过：582 项单元测试和 PostgreSQL migration 集成测试全部通过；Task 2 已完成原子提交，下一步进入 Task 3 前端旧培训清理。
+- 本轮仍未部署，未连接或修改生产数据库。

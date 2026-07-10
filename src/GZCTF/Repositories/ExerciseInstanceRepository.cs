@@ -271,6 +271,7 @@ public class ExerciseInstanceRepository(
             ActiveQueueStatuses.Contains(t.Status), token);
 
     public async Task<(AnswerResult Status, int? FlagId)> VerifyAnswer(UserInfo user, ExerciseInstance instance, string answer,
+        int courseId,
         int? flagId = null,
         CancellationToken token = default)
     {
@@ -312,8 +313,9 @@ public class ExerciseInstanceRepository(
 
         if (targetFlag.MaxAttempts > 0)
         {
-            var attemptCount = await Context.TrainingCtfSubmissions.CountAsync(s =>
+            var attemptCount = await Context.TrainingCourseSubmissions.CountAsync(s =>
                 s.UserId == user.Id &&
+                s.CourseId == courseId &&
                 s.ExerciseChallengeId == instance.ExerciseId &&
                 s.FlagId == targetFlag.Id, token);
             if (attemptCount >= targetFlag.MaxAttempts)

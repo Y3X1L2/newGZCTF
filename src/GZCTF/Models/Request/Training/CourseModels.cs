@@ -1,7 +1,63 @@
 using System.ComponentModel.DataAnnotations;
 using GZCTF.Models.Request.Game;
+using GZCTF.Models.Request.Shared;
 
 namespace GZCTF.Models.Request.Training;
+
+public class TrainingCheckInModel
+{
+    public DateOnly Date { get; set; }
+
+    public DateTimeOffset CheckedAt { get; set; }
+
+    public bool IsToday { get; set; }
+}
+
+public class TrainingActivityPointModel
+{
+    public DateOnly Date { get; set; }
+
+    public int StudyActions { get; set; }
+
+    public int CompletedChapters { get; set; }
+
+    public int AcceptedChallenges { get; set; }
+
+    public bool CheckedIn { get; set; }
+}
+
+public class TrainingPersonalOverviewModel
+{
+    public int VisibleCourseCount { get; set; }
+
+    public int JoinedCourseCount { get; set; }
+
+    public int CompletedCourseCount { get; set; }
+
+    public int AverageProgress { get; set; }
+
+    public int CompletedChapterCount { get; set; }
+
+    public int TotalChapterCount { get; set; }
+
+    public int CtfSolvedChallenges { get; set; }
+
+    public int CtfTotalChallenges { get; set; }
+
+    public int TheoryCompletedModules { get; set; }
+
+    public int TheoryTotalModules { get; set; }
+
+    public int CheckInDays { get; set; }
+
+    public int CurrentCheckInStreak { get; set; }
+
+    public bool CheckedInToday { get; set; }
+
+    public List<TrainingCheckInModel> CheckIns { get; set; } = [];
+
+    public List<TrainingActivityPointModel> Activity { get; set; } = [];
+}
 
 public class TrainingCourseEditModel
 {
@@ -66,6 +122,8 @@ public class TrainingCourseChapterEditModel
     public string Content { get; set; } = string.Empty;
 
     public TrainingArticleContentType ContentType { get; set; } = TrainingArticleContentType.Markdown;
+
+    public TrainingChapterCompletionPolicy CompletionPolicy { get; set; } = new();
 
     public TrainingCourseVideoProvider VideoProvider { get; set; } = TrainingCourseVideoProvider.None;
 
@@ -398,7 +456,11 @@ public class TrainingCourseStudentChapterLearningModel
 
     public bool IsPublished { get; set; }
 
+    public TrainingChapterCompletionPolicy CompletionPolicy { get; set; } = new();
+
     public TrainingCourseProgressStatus? ProgressStatus { get; set; }
+
+    public int ReadPercent { get; set; }
 
     public DateTimeOffset? CompletedAt { get; set; }
 
@@ -693,6 +755,10 @@ public class TrainingCourseChapterTheoryPaperEditModel
     [Range(1, 100)]
     public int PassRate { get; set; } = 60;
 
+    public bool AllowRetake { get; set; } = true;
+
+    public bool ShowCorrectAnswerAfterSubmit { get; set; } = true;
+
     public bool IsPublished { get; set; }
 
     public List<TrainingCourseTheoryPaperQuestionEditModel> Questions { get; set; } = [];
@@ -716,6 +782,12 @@ public class TrainingCourseChapterTheorySummaryModel
 
     public int PassRate { get; set; }
 
+    public bool AllowRetake { get; set; }
+
+    public bool ShowCorrectAnswerAfterSubmit { get; set; }
+
+    public int? AttemptNumber { get; set; }
+
     public TheoryAnswerSheetStatus? Status { get; set; }
 
     public int? Score { get; set; }
@@ -737,6 +809,9 @@ public class TrainingCourseChapterTheorySummaryModel
             QuestionCount = paper.Questions.Count,
             TotalScore = paper.Questions.Sum(q => q.Score),
             PassRate = paper.PassRate,
+            AllowRetake = paper.AllowRetake,
+            ShowCorrectAnswerAfterSubmit = paper.ShowCorrectAnswerAfterSubmit,
+            AttemptNumber = sheet?.AttemptNumber,
             Status = sheet?.Status,
             Score = sheet?.Status == TheoryAnswerSheetStatus.Submitted ? sheet.Score : null,
             Passed = sheet?.Status == TheoryAnswerSheetStatus.Submitted ? sheet.Passed : null,
@@ -766,6 +841,8 @@ public class TrainingCourseChapterTheoryPaperDetailModel : TrainingCourseChapter
             Title = $"{chapter.Title} 课后测试",
             Description = string.Empty,
             PassRate = 60,
+            AllowRetake = true,
+            ShowCorrectAnswerAfterSubmit = true,
             IsPublished = false,
             Questions = [],
             TotalScore = 0
@@ -780,6 +857,8 @@ public class TrainingCourseChapterTheoryPaperDetailModel : TrainingCourseChapter
             Title = paper.Title,
             Description = paper.Description,
             PassRate = paper.PassRate,
+            AllowRetake = paper.AllowRetake,
+            ShowCorrectAnswerAfterSubmit = paper.ShowCorrectAnswerAfterSubmit,
             IsPublished = paper.IsPublished,
             PublishedAt = paper.PublishedAt,
             UpdatedAt = paper.UpdatedAt,
@@ -853,6 +932,10 @@ public class TrainingCourseChapterTheoryPlayerPaperModel
 
     public int PassRate { get; set; }
 
+    public bool AllowRetake { get; set; }
+
+    public int? AttemptNumber { get; set; }
+
     public TheoryAnswerSheetStatus? Status { get; set; }
 
     public int? Score { get; set; }
@@ -871,7 +954,8 @@ public class TrainingCourseChapterTheoryPlayerPaperModel
         TrainingCourseChapterTheoryPaper paper,
         TrainingCourseChapterTheorySheet? sheet)
     {
-        var revealAnswer = sheet?.Status == TheoryAnswerSheetStatus.Submitted;
+        var revealAnswer = sheet?.Status == TheoryAnswerSheetStatus.Submitted &&
+                           paper.ShowCorrectAnswerAfterSubmit;
         return new TrainingCourseChapterTheoryPlayerPaperModel
         {
             PaperId = paper.Id,
@@ -881,6 +965,8 @@ public class TrainingCourseChapterTheoryPlayerPaperModel
             Description = paper.Description,
             TotalScore = paper.Questions.Sum(q => q.Score),
             PassRate = paper.PassRate,
+            AllowRetake = paper.AllowRetake,
+            AttemptNumber = sheet?.AttemptNumber,
             Status = sheet?.Status,
             Score = sheet?.Status == TheoryAnswerSheetStatus.Submitted ? sheet.Score : null,
             Passed = sheet?.Status == TheoryAnswerSheetStatus.Submitted ? sheet.Passed : null,
@@ -971,7 +1057,11 @@ public class TrainingCourseChapterModel
 
     public bool IsPublished { get; set; }
 
+    public TrainingChapterCompletionPolicy CompletionPolicy { get; set; } = new();
+
     public TrainingCourseProgressStatus? ProgressStatus { get; set; }
+
+    public int ReadPercent { get; set; }
 
     public DateTimeOffset? CompletedAt { get; set; }
 
@@ -999,7 +1089,9 @@ public class TrainingCourseChapterModel
             VideoFileUrl = revealContent ? chapter.VideoFile?.Url() : null,
             Order = chapter.Order,
             IsPublished = chapter.IsPublished,
+            CompletionPolicy = chapter.CompletionPolicy,
             ProgressStatus = progress?.Status,
+            ReadPercent = progress?.ReadPercent ?? 0,
             CompletedAt = progress?.CompletedAt,
             Challenges = challenges?.ToList() ?? [],
             TheoryPaper = theoryPaper
@@ -1144,11 +1236,39 @@ public class TrainingCourseSubmitResultModel
     public bool CourseCompleted { get; set; }
 }
 
-public class TrainingCourseChallengeDetailModel : TrainingCtfChallengeDetailModel
+public class TrainingCourseChallengeDetailModel
 {
     public int CourseId { get; set; }
 
     public int? ChapterId { get; set; }
+
+    public int Id { get; set; }
+
+    public string Title { get; set; } = string.Empty;
+
+    public string Content { get; set; } = string.Empty;
+
+    public ChallengeCategory Category { get; set; }
+
+    public ChallengeType Type { get; set; }
+
+    public EnvironmentType Environment { get; set; }
+
+    public List<string>? Hints { get; set; }
+
+    public Difficulty Difficulty { get; set; }
+
+    public List<string>? Tags { get; set; } = [];
+
+    public bool Solved { get; set; }
+
+    public int Attempts { get; set; }
+
+    public int Limit { get; set; }
+
+    public List<FlagStepInfo>? Flags { get; set; }
+
+    public ClientFlagContext Context { get; set; } = new();
 
     public static TrainingCourseChallengeDetailModel FromInstance(
         int courseId,
@@ -1157,26 +1277,40 @@ public class TrainingCourseChallengeDetailModel : TrainingCtfChallengeDetailMode
         int attempts,
         bool solved)
     {
-        var baseModel = TrainingCtfChallengeDetailModel.FromInstance(courseId, instance, attempts, solved);
         return new TrainingCourseChallengeDetailModel
         {
             CourseId = courseId,
             ChapterId = chapterId,
-            Id = baseModel.Id,
-            ModuleId = courseId,
-            Title = baseModel.Title,
-            Content = baseModel.Content,
-            Category = baseModel.Category,
-            Type = baseModel.Type,
-            Environment = baseModel.Environment,
-            Hints = baseModel.Hints,
-            Difficulty = baseModel.Difficulty,
-            Tags = baseModel.Tags,
-            Solved = baseModel.Solved,
-            Attempts = baseModel.Attempts,
-            Limit = baseModel.Limit,
-            Flags = baseModel.Flags,
-            Context = baseModel.Context
+            Id = instance.ExerciseId,
+            Title = instance.Exercise.Title,
+            Content = instance.Exercise.Content,
+            Category = instance.Exercise.Category,
+            Type = instance.Exercise.Type,
+            Environment = instance.Exercise.Environment,
+            Hints = instance.Exercise.Hints,
+            Difficulty = instance.Exercise.Difficulty,
+            Tags = instance.Exercise.Tags,
+            Solved = solved,
+            Attempts = attempts,
+            Limit = instance.Exercise.SubmissionLimit,
+            Flags = instance.Exercise.Flags is { Count: > 1 }
+                ? instance.Exercise.Flags
+                    .OrderBy(flag => flag.OrderIndex)
+                    .Select(flag => new FlagStepInfo
+                    {
+                        Id = flag.Id,
+                        OrderIndex = flag.OrderIndex,
+                        Description = flag.Description
+                    })
+                    .ToList()
+                : null,
+            Context = new ClientFlagContext
+            {
+                InstanceEntry = instance.Container?.Entry,
+                CloseTime = instance.Container?.ExpectStopAt,
+                Url = instance.AttachmentUrl,
+                FileSize = instance.Attachment?.FileSize
+            }
         };
     }
 }

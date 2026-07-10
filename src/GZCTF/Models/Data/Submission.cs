@@ -5,6 +5,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Models.Data;
 
+public enum ScoringSubmissionType : byte
+{
+    Flag = 0,
+    Writeup = 1,
+    IP = 2,
+    Credential = 3,
+    Custom = 4
+}
+
 [Index(nameof(UserId))]
 [Index(nameof(TeamId), nameof(ChallengeId), nameof(GameId))]
 public class Submission

@@ -80,9 +80,6 @@ public class TrainingCourseController(
     private async Task<TrainingPersonalOverviewModel> BuildOverview(UserInfo user, CancellationToken token)
     {
         var courses = await VisibleCourseQuery(user).ToArrayAsync(token);
-        var groupIds = context.StudentGroupMembers
-            .Where(m => m.StudentId == user.Id)
-            .Select(m => m.GroupId);
         var editableCourseIds = await context.TrainingCourseTeachers
             .Where(t => t.TeacherId == user.Id)
             .Select(t => t.CourseId)
@@ -103,18 +100,16 @@ public class TrainingCourseController(
         var submissions = await context.TrainingCourseSubmissions
             .Where(s => s.UserId == user.Id && learnableCourseIds.Contains(s.CourseId))
             .ToArrayAsync(token);
-        var moduleProgresses = await context.TrainingModuleProgresses
-            .Include(p => p.Module)
-            .Where(p => p.UserId == user.Id)
-            .ToArrayAsync(token);
-        var visibleTheoryTotal = await context.TrainingModules.CountAsync(m =>
-            m.IsPublished &&
-            m.Type == TrainingType.Theory &&
-            m.Direction.IsEnabled &&
-            (user.Role >= Role.Teacher ||
-             m.Visibilities.Any(v =>
-                 v.VisibilityType == TrainingVisibilityType.AllStudents ||
-                 v.GroupId.HasValue && groupIds.Contains(v.GroupId.Value))), token);
+        var visibleTheoryTotal = await context.TrainingCourseChapterTheoryPapers.CountAsync(paper =>
+            paper.IsPublished && learnableCourseIds.Contains(paper.CourseId), token);
+        var completedTheoryTotal = await context.TrainingCourseChapterTheorySheets
+            .Where(sheet => sheet.UserId == user.Id &&
+                            learnableCourseIds.Contains(sheet.CourseId) &&
+                            sheet.Status == TheoryAnswerSheetStatus.Submitted &&
+                            sheet.Passed)
+            .Select(sheet => new { sheet.CourseId, sheet.ChapterId })
+            .Distinct()
+            .CountAsync(token);
         var activityDays = 371;
         var since = Today().AddDays(-(activityDays - 1));
         var checkIns = await context.TrainingCheckIns
@@ -183,8 +178,7 @@ public class TrainingCourseController(
             TotalChapterCount = totalChapters,
             CtfSolvedChallenges = ctfSolved,
             CtfTotalChallenges = ctfTotal,
-            TheoryCompletedModules = moduleProgresses.Count(p =>
-                p.Module.Type == TrainingType.Theory && p.Status == TrainingModuleProgressStatus.Completed),
+            TheoryCompletedModules = completedTheoryTotal,
             TheoryTotalModules = visibleTheoryTotal,
             CheckInDays = await context.TrainingCheckIns.CountAsync(c => c.UserId == user.Id, token),
             CurrentCheckInStreak = streak,
@@ -240,22 +234,7 @@ public class TrainingCourseController(
                         p.Status == TrainingCourseProgressStatus.Completed)
             .Select(p => p.ChapterId)
             .ToArrayAsync(token);
-        var theoryRequiredChapterIds = await context.TrainingCourseChapterTheoryPapers
-            .Where(p => p.CourseId == course.Id && p.IsPublished && publishedChapterIds.Contains(p.ChapterId))
-            .Select(p => p.ChapterId)
-            .ToArrayAsync(token);
-        var theoryPassedChapterIds = await context.TrainingCourseChapterTheorySheets
-            .Where(s => s.UserId == user.Id &&
-                        s.CourseId == course.Id &&
-                        s.Status == TheoryAnswerSheetStatus.Submitted &&
-                        s.Passed &&
-                        publishedChapterIds.Contains(s.ChapterId))
-            .Select(s => s.ChapterId)
-            .ToArrayAsync(token);
-        var theoryRequiredSet = theoryRequiredChapterIds.ToHashSet();
-        var theoryPassedSet = theoryPassedChapterIds.ToHashSet();
-        var completedChapters = completedChapterIds.Count(id =>
-            !theoryRequiredSet.Contains(id) || theoryPassedSet.Contains(id));
+        var completedChapters = completedChapterIds.Length;
 
         var challengeIds = await context.TrainingCourseChallenges
             .Where(c => c.CourseId == course.Id)
@@ -289,64 +268,96 @@ public class TrainingCourseController(
         return progress;
     }
 
+    private async Task<TrainingChapterProgress> EnsureChapterProgress(
+        UserInfo user,
+        int courseId,
+        int chapterId,
+        CancellationToken token)
+    {
+        var progress = await context.TrainingChapterProgresses
+            .SingleOrDefaultAsync(item => item.ChapterId == chapterId && item.UserId == user.Id, token);
+        if (progress is not null)
+            return progress;
+
+        progress = new TrainingChapterProgress
+        {
+            ChapterId = chapterId,
+            CourseId = courseId,
+            UserId = user.Id,
+            StartedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        context.TrainingChapterProgresses.Add(progress);
+        return progress;
+    }
+
     private async Task<bool> MarkChapterCompletedIfReady(
         UserInfo user,
         int courseId,
         int chapterId,
         CancellationToken token)
     {
-        var requiredChallengeIds = await context.TrainingCourseChapterChallenges
-            .Where(c => c.ChapterId == chapterId)
-            .Join(context.TrainingCourseChallenges.Where(c => c.CourseId == courseId && c.IsRequired),
-                c => new { c.CourseId, c.ExerciseChallengeId },
-                c => new { c.CourseId, c.ExerciseChallengeId },
-                (chapterChallenge, _) => chapterChallenge.ExerciseChallengeId)
+        var chapter = await context.TrainingCourseChapters
+            .AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Id == chapterId && item.CourseId == courseId, token);
+        if (chapter is null)
+            return false;
+
+        var policy = chapter.CompletionPolicy;
+        var progress = await EnsureChapterProgress(user, courseId, chapterId, token);
+        if (policy.RequireContentRead && progress.ReadPercent < 100)
+            return false;
+
+        var challengeLinks = await context.TrainingCourseChapterChallenges
+            .Where(link => link.ChapterId == chapterId && link.CourseId == courseId)
+            .Join(
+                context.TrainingCourseChallenges.Where(link => link.CourseId == courseId),
+                chapterLink => new { chapterLink.CourseId, chapterLink.ExerciseChallengeId },
+                courseLink => new { courseLink.CourseId, courseLink.ExerciseChallengeId },
+                (chapterLink, courseLink) => new
+                {
+                    chapterLink.ExerciseChallengeId,
+                    courseLink.IsRequired
+                })
             .Distinct()
             .ToArrayAsync(token);
 
-        if (requiredChallengeIds.Length > 0)
-        {
-            var solvedIds = await context.TrainingCourseSubmissions
-                .Where(s => s.CourseId == courseId &&
-                            s.UserId == user.Id &&
-                            s.Status == AnswerResult.Accepted &&
-                            requiredChallengeIds.Contains(s.ExerciseChallengeId))
-                .Select(s => s.ExerciseChallengeId)
-                .Distinct()
-                .ToArrayAsync(token);
+        var candidateChallengeIds = policy.RequireAllRequiredChallenges
+            ? challengeLinks.Where(link => link.IsRequired).Select(link => link.ExerciseChallengeId).ToArray()
+            : challengeLinks.Select(link => link.ExerciseChallengeId).ToArray();
+        var requiredChallengeCount = policy.RequireAllRequiredChallenges
+            ? candidateChallengeIds.Length
+            : Math.Min(Math.Max(policy.RequiredChallengeCount, 0), candidateChallengeIds.Length);
 
-            if (requiredChallengeIds.Except(solvedIds).Any())
+        if (requiredChallengeCount > 0)
+        {
+            var solvedCount = await context.TrainingCourseSubmissions
+                .Where(submission => submission.CourseId == courseId &&
+                                     submission.UserId == user.Id &&
+                                     submission.Status == AnswerResult.Accepted &&
+                                     candidateChallengeIds.Contains(submission.ExerciseChallengeId))
+                .Select(submission => submission.ExerciseChallengeId)
+                .Distinct()
+                .CountAsync(token);
+            if (solvedCount < requiredChallengeCount)
                 return false;
         }
 
         var theoryPaper = await context.TrainingCourseChapterTheoryPapers
             .AsNoTracking()
-            .SingleOrDefaultAsync(p => p.CourseId == courseId && p.ChapterId == chapterId && p.IsPublished, token);
+            .SingleOrDefaultAsync(paper =>
+                paper.CourseId == courseId && paper.ChapterId == chapterId && paper.IsPublished, token);
         if (theoryPaper is not null)
         {
-            var passed = await context.TrainingCourseChapterTheorySheets.AnyAsync(s =>
-                s.CourseId == courseId &&
-                s.ChapterId == chapterId &&
-                s.UserId == user.Id &&
-                s.Status == TheoryAnswerSheetStatus.Submitted &&
-                s.Passed, token);
-
+            var requiredPassRate = Math.Clamp(policy.TheoryPassRate, 0, 100);
+            var passed = await context.TrainingCourseChapterTheorySheets.AnyAsync(sheet =>
+                sheet.CourseId == courseId &&
+                sheet.ChapterId == chapterId &&
+                sheet.UserId == user.Id &&
+                sheet.Status == TheoryAnswerSheetStatus.Submitted &&
+                (sheet.MaxScore == 0 || sheet.Score * 100 >= sheet.MaxScore * requiredPassRate), token);
             if (!passed)
                 return false;
-        }
-
-        var progress = await context.TrainingChapterProgresses
-            .SingleOrDefaultAsync(p => p.ChapterId == chapterId && p.UserId == user.Id, token);
-        if (progress is null)
-        {
-            progress = new TrainingChapterProgress
-            {
-                ChapterId = chapterId,
-                CourseId = courseId,
-                UserId = user.Id,
-                StartedAt = DateTimeOffset.UtcNow
-            };
-            context.TrainingChapterProgresses.Add(progress);
         }
 
         progress.Status = TrainingCourseProgressStatus.Completed;
@@ -402,20 +413,33 @@ public class TrainingCourseController(
         TrainingCourseChapterTheoryPaper paper,
         CancellationToken token)
     {
-        var sheet = await context.TrainingCourseChapterTheorySheets
-            .Include(s => s.Answers)
-            .SingleOrDefaultAsync(s => s.ChapterId == paper.ChapterId && s.UserId == user.Id, token);
+        var latestSheet = await context.TrainingCourseChapterTheorySheets
+            .Include(sheet => sheet.Answers)
+            .Where(sheet => sheet.ChapterId == paper.ChapterId && sheet.UserId == user.Id)
+            .OrderByDescending(sheet => sheet.AttemptNumber)
+            .ThenByDescending(sheet => sheet.Id)
+            .FirstOrDefaultAsync(token);
 
-        if (sheet is not null)
-            return sheet;
+        if (latestSheet is not null)
+            return latestSheet;
 
-        sheet = new TrainingCourseChapterTheorySheet
+        return await CreateTheorySheet(user, paper, 1, token);
+    }
+
+    private async Task<TrainingCourseChapterTheorySheet> CreateTheorySheet(
+        UserInfo user,
+        TrainingCourseChapterTheoryPaper paper,
+        int attemptNumber,
+        CancellationToken token)
+    {
+        var sheet = new TrainingCourseChapterTheorySheet
         {
             CourseId = paper.CourseId,
             ChapterId = paper.ChapterId,
             PaperId = paper.Id,
             UserId = user.Id,
-            MaxScore = paper.Questions.Sum(q => q.Score)
+            AttemptNumber = attemptNumber,
+            MaxScore = paper.Questions.Sum(question => question.Score)
         };
         context.TrainingCourseChapterTheorySheets.Add(sheet);
         await context.SaveChangesAsync(token);
@@ -607,7 +631,11 @@ public class TrainingCourseController(
                     .AsNoTracking()
                     .Where(s => s.UserId == user.Id && paperIds.Contains(s.PaperId))
                     .ToArrayAsync(token);
-            var sheetsByPaperId = sheets.ToDictionary(s => s.PaperId);
+            var sheetsByPaperId = sheets
+                .GroupBy(sheet => sheet.PaperId)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.OrderByDescending(sheet => sheet.AttemptNumber).ThenByDescending(sheet => sheet.Id).First());
             var papersByChapterId = papers.ToDictionary(
                 p => p.ChapterId,
                 p => TrainingCourseChapterTheorySummaryModel.FromPaper(
@@ -735,7 +763,10 @@ public class TrainingCourseController(
         var theorySheet = theoryPaper is null
             ? null
             : await context.TrainingCourseChapterTheorySheets
-                .SingleOrDefaultAsync(s => s.ChapterId == chapterId && s.UserId == user.Id, token);
+                .Where(sheet => sheet.ChapterId == chapterId && sheet.UserId == user.Id)
+                .OrderByDescending(sheet => sheet.AttemptNumber)
+                .ThenByDescending(sheet => sheet.Id)
+                .FirstOrDefaultAsync(token);
         var theorySummary = theoryPaper is null
             ? null
             : TrainingCourseChapterTheorySummaryModel.FromPaper(theoryPaper, theorySheet);
@@ -761,9 +792,19 @@ public class TrainingCourseController(
         if (chapter is null)
             return NotFound();
 
+        var readingProgress = await EnsureChapterProgress(user, courseId, chapterId, token);
+        readingProgress.ReadPercent = 100;
+        if (readingProgress.Status == TrainingCourseProgressStatus.NotStarted)
+            readingProgress.Status = TrainingCourseProgressStatus.Learning;
+        readingProgress.UpdatedAt = DateTimeOffset.UtcNow;
+
         var completed = await MarkChapterCompletedIfReady(user, courseId, chapterId, token);
         if (!completed)
+        {
+            await RecalculateProgress(user, course, token);
+            await context.SaveChangesAsync(token);
             return BadRequest(new RequestResponse("章节必做实验或课后测试尚未完成。"));
+        }
 
         await RecalculateProgress(user, course, token);
         await context.SaveChangesAsync(token);
@@ -825,6 +866,40 @@ public class TrainingCourseController(
             return NotFound(new RequestResponse("课后测试尚未发布。", StatusCodes.Status404NotFound));
 
         var sheet = await GetOrCreateTheorySheet(user, paper, token);
+        return Ok(TrainingCourseChapterTheoryPlayerPaperModel.FromPaper(paper, sheet));
+    }
+
+    [HttpPost("{courseId:int}/chapters/{chapterId:int}/theory/retry")]
+    [ProducesResponseType(typeof(TrainingCourseChapterTheoryPlayerPaperModel), StatusCodes.Status200OK)]
+    public async Task<IActionResult> RetryChapterTheory(
+        [FromRoute] int courseId,
+        [FromRoute] int chapterId,
+        CancellationToken token = default)
+    {
+        var user = await CurrentUser();
+        var course = await CourseQuery().SingleOrDefaultAsync(c => c.Id == courseId, token);
+        if (course is null)
+            return NotFound();
+        if (!await CanLearnCourse(user, course, token))
+            return Forbid();
+
+        var paper = await context.TrainingCourseChapterTheoryPapers
+            .Include(p => p.Questions)
+            .SingleOrDefaultAsync(p => p.CourseId == courseId && p.ChapterId == chapterId && p.IsPublished, token);
+        if (paper is null)
+            return NotFound(new RequestResponse("课后测试尚未发布。", StatusCodes.Status404NotFound));
+
+        var latestSheet = await context.TrainingCourseChapterTheorySheets
+            .Where(sheet => sheet.ChapterId == chapterId && sheet.UserId == user.Id)
+            .OrderByDescending(sheet => sheet.AttemptNumber)
+            .ThenByDescending(sheet => sheet.Id)
+            .FirstOrDefaultAsync(token);
+        if (latestSheet is null || latestSheet.Status != TheoryAnswerSheetStatus.Submitted)
+            return BadRequest(new RequestResponse("当前答卷尚未提交，不能开始重做。"));
+        if (!TheoryExamService.CanStartCourseTheoryRetake(paper, latestSheet))
+            return BadRequest(new RequestResponse("该课后测试不允许重做。"));
+
+        var sheet = await CreateTheorySheet(user, paper, latestSheet.AttemptNumber + 1, token);
         return Ok(TrainingCourseChapterTheoryPlayerPaperModel.FromPaper(paper, sheet));
     }
 
@@ -1076,7 +1151,7 @@ public class TrainingCourseController(
         if (instance.Exercise.SubmissionLimit > 0 && attempts >= instance.Exercise.SubmissionLimit)
             return BadRequest(new RequestResponse("该课程题目的提交次数已用完。"));
 
-        var verify = await exerciseInstanceRepository.VerifyAnswer(user, instance, answer, model.FlagId, token);
+        var verify = await exerciseInstanceRepository.VerifyAnswer(user, instance, answer, courseId, model.FlagId, token);
         var submission = new TrainingCourseSubmission
         {
             CourseId = courseId,
