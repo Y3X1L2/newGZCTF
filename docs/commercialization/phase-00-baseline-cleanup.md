@@ -14,7 +14,7 @@
 
 更新时间：2026-07-10
 
-- 当前状态：执行中，Task 1、Task 2 已完成，下一步实施 Task 3。
+- 当前状态：执行中，Task 1 至 Task 3 已完成，下一步实施 Task 4。
 - 工作分支：`codex/phase-0-baseline-cleanup`。
 - 隔离工作区：`D:\newgz\newGZCTF-phase0`。
 - 基线验证：`dotnet test src/GZCTF.Test/GZCTF.Test.csproj --no-restore` 通过，577 项测试全部通过；`pnpm check` 通过。
@@ -23,13 +23,15 @@
 - Task 2 结果：`TimeSlot`、`ScoringRule`、IR/Scenario 实体、旧培训 Controller、DTO、DbSet 和当前模型快照已清退；历史 migration 保留。
 - Task 2 结果：PostgreSQL Testcontainers 已验证旧课程树、组报名、实践提交、两次理论作答和阅读百分比守恒，目标 EF 模型无 pending changes。
 - Task 2 质量修正：理论重做改为显式状态转换，GET 不再自动创建下一次 attempt；章节完成策略进入新课程章节编辑合约，不保留旧培训配置入口。
+- Task 3 结果：旧管理员培训页、旧 CTF/理论模块页和四个废弃 e2e 已删除；学员组 API 已拆出为独立 `StudentGroupApi`，没有把旧模块逻辑合并进新课程页面。
+- Task 3 结果：新课程前端已接入章节完成策略、理论重做、答案显示策略和 attempt 信息；locale 校验、TypeScript strict check 与活动源码遗留扫描通过。
 - 数据边界：本轮完成迁移代码、审计脚本和可重复集成验证；未收到部署指令前，不连接生产数据库、不执行生产备份、不应用 contract migration。
 
 任务状态：
 
 - [x] Task 1：建立遗留面清单和失败测试
 - [x] Task 2：原子完成旧培训迁移和后端 contract 切换
-- [ ] Task 3：删除旧前端和失效 e2e
+- [x] Task 3：删除旧前端和失效 e2e
 - [ ] Task 4：冻结术语并清理活动文档
 - [ ] Task 5：Phase 0 总体验收
 
@@ -369,23 +371,29 @@ git commit -m "refactor: migrate and remove legacy training runtime"
 
 **Files:**
 - Modify: `src/GZCTF/ClientApp/src/utils/TrainingApi.ts`
+- Create: `src/GZCTF/ClientApp/src/utils/StudentGroupApi.ts`
+- Delete: `src/GZCTF/ClientApp/src/pages/admin/training.tsx`
 - Delete: `src/GZCTF/ClientApp/src/pages/training/ctf/modules/[moduleId]/challenges.tsx`
 - Delete: `src/GZCTF/ClientApp/src/pages/training/theory/modules/[moduleId]/session.tsx`
-- Modify: `src/GZCTF/ClientApp/src/hooks/useUser.tsx`
+- Modify: `src/GZCTF/ClientApp/src/components/admin/UserEditModal.tsx`
+- Modify: `src/GZCTF/ClientApp/src/pages/admin/Users.tsx`
+- Modify: `src/GZCTF/ClientApp/src/components/training/TrainingChapterEditor.tsx`
+- Modify: `src/GZCTF/ClientApp/src/pages/training/courses/[courseId]/chapters/[chapterId]/theory.tsx`
+- Modify: `src/GZCTF/ClientApp/src/pages/training/courses/[courseId]/chapters/[chapterId]/theory-edit.tsx`
 - Delete: `tests/e2e/ir-challenge.spec.ts`
 - Delete: `tests/e2e/scenario-create.spec.ts`
 - Delete: `tests/e2e/scenario-play.spec.ts`
 - Delete: `tests/e2e/topology-editor.spec.ts`
 
-- [ ] **Step 1: 删除旧 TrainingApi 类型和方法**
+- [x] **Step 1: 删除旧 TrainingApi 类型和方法**
 
 删除所有请求 `/api/training/catalog`、`/api/training/overview`、`/api/training/modules`、`/api/training/ctf/modules` 和 `/api/training/theory/modules` 的 DTO 与方法。保留 `/api/training/courses` 和 `/api/admin/training/courses` 方法。
 
-- [ ] **Step 2: 删除文件路由页面和废弃 e2e**
+- [x] **Step 2: 删除文件路由页面和废弃 e2e**
 
-删除旧模块页面及四个废弃用例，不添加重定向页面。TeamLab 当前有效测试由 `src/GZCTF.Test/UnitTests/TeamLab` 和 Phase 3 新 e2e 承担。
+删除旧模块页面、混合旧模块管理与学员组管理的管理员页面及四个废弃用例，不添加重定向页面。通用学员组 API 独立拆分，旧方向、模块、可见性、统计和理论 session 逻辑不迁移。TeamLab 当前有效测试由 `src/GZCTF.Test/UnitTests/TeamLab` 和 Phase 3 新 e2e 承担。
 
-- [ ] **Step 3: 校验前端类型和 locale**
+- [x] **Step 3: 校验前端类型和 locale**
 
 ```powershell
 pnpm --dir src/GZCTF/ClientApp validate:locales
@@ -394,7 +402,7 @@ pnpm --dir src/GZCTF/ClientApp check
 
 Expected: 两条命令退出码均为 0。
 
-- [ ] **Step 4: 提交前端清理**
+- [x] **Step 4: 提交前端清理**
 
 ```powershell
 git add src/GZCTF/ClientApp tests/e2e

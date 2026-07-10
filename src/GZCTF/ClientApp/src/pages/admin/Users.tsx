@@ -41,7 +41,7 @@ import { showErrorMsg } from '@Utils/Shared'
 import { useArrayResponse } from '@Hooks/useArrayResponse'
 import { useUser } from '@Hooks/useUser'
 import api, { Role, UserInfoModel } from '@Api'
-import { StudentGroupBriefModel, trainingAdminApi } from '@Utils/TrainingApi'
+import { StudentGroupBriefModel, studentGroupAdminApi } from '@Utils/StudentGroupApi'
 import tableClasses from '@Styles/Table.module.css'
 
 const ITEM_COUNT_PER_PAGE = 30
@@ -126,7 +126,7 @@ const Users: FC = () => {
   useEffect(() => {
     const fetchGroups = async () => {
       try {
-        const res = await trainingAdminApi.groups()
+        const res = await studentGroupAdminApi.groups()
         setGroups(res.data)
       } catch (err) {
         showErrorMsg(err, t)

@@ -24,7 +24,7 @@ import { YinyuModalBody } from '@Components/yinyu/YinyuUI'
 import { isValidPhoneNumber, showErrorMsg } from '@Utils/Shared'
 import { useUser } from '@Hooks/useUser'
 import api, { AdminUserInfoModel, Role, UserInfoModel } from '@Api'
-import { StudentGroupBriefModel, trainingAdminApi } from '@Utils/TrainingApi'
+import { StudentGroupBriefModel, studentGroupAdminApi } from '@Utils/StudentGroupApi'
 
 export const RoleColorMap = new Map<Role, string>([
   [Role.SuperAdmin, 'grape'],
@@ -94,7 +94,7 @@ export const UserEditModal: FC<UserEditModalProps> = (props) => {
   useEffect(() => {
     const loadGroups = async () => {
       try {
-        const res = await trainingAdminApi.groups()
+        const res = await studentGroupAdminApi.groups()
         setGroups(res.data)
       } catch (e) {
         showErrorMsg(e, t)

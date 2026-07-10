@@ -44,9 +44,9 @@ public class TrainingPersonalOverviewModel
 
     public int CtfTotalChallenges { get; set; }
 
-    public int TheoryCompletedModules { get; set; }
+    public int TheoryPassedAssessments { get; set; }
 
-    public int TheoryTotalModules { get; set; }
+    public int TheoryTotalAssessments { get; set; }
 
     public int CheckInDays { get; set; }
 
@@ -934,6 +934,8 @@ public class TrainingCourseChapterTheoryPlayerPaperModel
 
     public bool AllowRetake { get; set; }
 
+    public bool ShowCorrectAnswerAfterSubmit { get; set; }
+
     public int? AttemptNumber { get; set; }
 
     public TheoryAnswerSheetStatus? Status { get; set; }
@@ -966,6 +968,7 @@ public class TrainingCourseChapterTheoryPlayerPaperModel
             TotalScore = paper.Questions.Sum(q => q.Score),
             PassRate = paper.PassRate,
             AllowRetake = paper.AllowRetake,
+            ShowCorrectAnswerAfterSubmit = paper.ShowCorrectAnswerAfterSubmit,
             AttemptNumber = sheet?.AttemptNumber,
             Status = sheet?.Status,
             Score = sheet?.Status == TheoryAnswerSheetStatus.Submitted ? sheet.Score : null,

@@ -43,6 +43,12 @@ const emptyChapterDraft = (): TrainingCourseChapterEditModel => ({
   summary: '',
   content: '',
   contentType: 'Markdown',
+  completionPolicy: {
+    requireContentRead: true,
+    requireAllRequiredChallenges: true,
+    requiredChallengeCount: 0,
+    theoryPassRate: 80,
+  },
   videoProvider: TrainingCourseVideoProvider.None,
   videoUrl: null,
   videoFileHash: null,
@@ -96,6 +102,7 @@ export const TrainingChapterEditor: FC<{ mode: 'create' | 'edit' }> = ({ mode })
           summary: chapter.summary,
           content: chapter.content,
           contentType: chapter.contentType,
+          completionPolicy: chapter.completionPolicy,
           videoProvider: chapter.videoProvider,
           videoUrl: chapter.videoUrl ?? null,
           videoFileHash: null,
@@ -283,6 +290,67 @@ const SimpleChapterFields: FC<{
       value={draft.content}
       onChange={(event) => setDraft((current) => ({ ...current, content: event.currentTarget.value }))}
     />
+    <Group grow align="flex-end">
+      <Switch
+        label="完成前需读完正文"
+        checked={draft.completionPolicy.requireContentRead}
+        onChange={(event) =>
+          setDraft((current) => ({
+            ...current,
+            completionPolicy: {
+              ...current.completionPolicy,
+              requireContentRead: event.currentTarget.checked,
+            },
+          }))
+        }
+      />
+      <Switch
+        label="需完成全部必做实验"
+        checked={draft.completionPolicy.requireAllRequiredChallenges}
+        onChange={(event) =>
+          setDraft((current) => ({
+            ...current,
+            completionPolicy: {
+              ...current.completionPolicy,
+              requireAllRequiredChallenges: event.currentTarget.checked,
+            },
+          }))
+        }
+      />
+    </Group>
+    <Group grow>
+      <NumberInput
+        label="要求完成实验数"
+        min={0}
+        disabled={draft.completionPolicy.requireAllRequiredChallenges}
+        value={draft.completionPolicy.requiredChallengeCount}
+        onChange={(value) =>
+          setDraft((current) => ({
+            ...current,
+            completionPolicy: {
+              ...current.completionPolicy,
+              requiredChallengeCount: Math.max(0, Number(value) || 0),
+            },
+          }))
+        }
+      />
+      <NumberInput
+        label="理论通过率"
+        min={0}
+        max={100}
+        suffix="%"
+        value={draft.completionPolicy.theoryPassRate}
+        onChange={(value) =>
+          setDraft((current) => ({
+            ...current,
+            completionPolicy: {
+              ...current.completionPolicy,
+              theoryPassRate: Math.min(100, Math.max(0, Number(value) || 0)),
+            },
+          }))
+        }
+      />
+    </Group>
     <Group grow>
       <NumberInput
         label="排序"

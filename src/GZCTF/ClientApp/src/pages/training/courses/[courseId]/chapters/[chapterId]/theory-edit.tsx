@@ -166,6 +166,8 @@ const ChapterTheoryEditPage: FC = () => {
         title: paper.title.trim(),
         description: paper.description,
         passRate: Math.round(passRate),
+        allowRetake: paper.allowRetake,
+        showCorrectAnswerAfterSubmit: paper.showCorrectAnswerAfterSubmit,
         isPublished: publish ?? paper.isPublished,
         questions: normalizeOrder(paper.questions).map((question, index) => ({ ...question, order: index + 1 })),
       })
@@ -242,6 +244,20 @@ const ChapterTheoryEditPage: FC = () => {
                   value={paper.description}
                   onChange={(event) => setPaper({ ...paper, description: event.currentTarget.value })}
                 />
+                <Group grow>
+                  <Switch
+                    label="允许重做"
+                    checked={paper.allowRetake}
+                    onChange={(event) => setPaper({ ...paper, allowRetake: event.currentTarget.checked })}
+                  />
+                  <Switch
+                    label="提交后显示正确答案"
+                    checked={paper.showCorrectAnswerAfterSubmit}
+                    onChange={(event) =>
+                      setPaper({ ...paper, showCorrectAnswerAfterSubmit: event.currentTarget.checked })
+                    }
+                  />
+                </Group>
                 <Group justify="space-between">
                   <Group gap="xs">
                     <Badge variant="light" color={paper.isPublished ? 'green' : 'yellow'}>
