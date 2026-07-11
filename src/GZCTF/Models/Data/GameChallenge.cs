@@ -91,7 +91,6 @@ public class GameChallenge : Challenge
         {
             ContainerImage = model.ContainerImage?.Trim() ?? ContainerImage;
             ExposePort = model.ExposePort ?? ExposePort;
-            ImageTemplateId = null;
         }
         else
         {
@@ -99,7 +98,7 @@ public class GameChallenge : Challenge
             ExposePort = null;
         }
 
-        ImageTemplateId = Environment == EnvironmentType.WindowsVM
+        ImageTemplateId = Environment is EnvironmentType.Docker or EnvironmentType.WindowsVM
             ? model.ImageTemplateId ?? ImageTemplateId
             : null;
 

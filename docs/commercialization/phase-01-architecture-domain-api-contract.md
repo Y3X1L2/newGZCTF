@@ -1,6 +1,6 @@
 # Phase 1 Architecture, Domain and API Contract Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> 执行原则：按业务闭环集中实现，阶段末统一审查；不采用低价值的逐函数红灯/绿灯循环。
 
 **Goal:** 建立可执行的模块化单体边界、正式 scoped API token 认证和一条可恢复的外部镜像 API 纵向链路，为 Phase 2-14 提供稳定契约。
 
@@ -14,7 +14,7 @@
 
 更新时间：2026-07-11
 
-- 当前状态：Task 1-7 全部完成，Phase 1 本地开发与验收结束。
+- 当前状态：Task 1-8 全部完成；总纲要求的比赛题目单个/批量外部 API 已闭环。
 - 当前工作区：`D:\newgz\newGZCTF-main`；Phase 1 完整改动已从只读隔离工作区机械迁移并通过 patch-id 校验。
 - 起始基线：`main` 提交 `957ad7fe`，Phase 0 已合并。
 - 当前验证：生产项目构建 0 warning / 0 error；后端单元测试 629/629；集成测试 220/220；前端 locale、TypeScript strict check 和 production build 通过；EF 无 pending model changes；OpenAPI 兼容门禁通过。
@@ -29,6 +29,7 @@
 - [x] Task 5：打通外部镜像 API 参考链路
 - [x] Task 6：固定 OpenAPI 和 API 兼容门禁
 - [x] Task 7：Phase 1 总体验收
+- [x] Task 8：闭环比赛题目单个/批量导入、查询、删除与完整 API 指导文档
 
 已落地事实：
 
@@ -48,6 +49,12 @@
 - Docker/Testcontainers 权限已恢复；PostgreSQL 专项、真实 Docker 容器链路、全量单元测试 629/629 和全量集成测试 220/220 通过。
 - Task 7 的 7 项终审缺口全部关闭：Docker 子进程取消会终止进程树；模板删除具备持久化意图和崩溃恢复；比赛/课程失效分发引用自动对账；外部镜像 GET/DELETE 使用独立 scope；Docker reference 仅允许固定内部 Registry 或解析为公网地址的无凭据公开 Registry；`ApiOperation` 身份字段具有外键；所有 `/api/open/v1` 请求强制写入脱敏持久化审计。
 - 最终增量迁移为 `20260711072936_CompletePhaseOneDurabilityAndAudit`，只新增外部请求审计表、`ApiOperation` 外键和必要索引。
+- 复核总纲后确认原交付存在范围缺口：镜像 API 参考链路已完成，但总纲要求的题目创建、批量导入、销毁和任务状态尚未落地；Task 8 用独立 `Modules/Ctf` 外部 API 切片补齐，不提前引入 Phase 10 题目池。
+- Task 8 新增 `challenges:read/write/delete`、显式 `game:{id}` 授权、比赛所有者事实、1-100 题原子批量导入、轻量分页、完整详情、单题/批量删除和 operation 结果；新增迁移为 `20260711115423_CompletePhaseOneChallengeApi`。
+- 题目写操作使用持久化 `ChallengeMutationJob`；事务提交后清除包含 Flag 的请求正文，重启恢复时通过持久化结果避免重复建题或误删。
+- 删除先禁用题目、取消活动部署票据、排空节点执行门，再确认 Docker、VM 和测试环境真实销毁，最后删除数据库事实；队列取消后的迟到创建不会覆盖 Cancelled 终态。
+- Docker 题目必须绑定已注册且 Ready 的全局镜像模板；节点分发写入 `ImageDistributionRecord` 和比赛引用，删除题目后重建该比赛的有效引用。
+- Task 8 按当前执行约束完成一次独立静态质量审查并修复全部 8 项确认问题；通过 EF migration 构建和一次真实 OpenAPI 文档生成，未重复运行全量门禁。
 
 ---
 
@@ -719,9 +726,22 @@ git commit -m "docs: record phase one acceptance"
 - token scope、resource grant、配额、撤销和审计均有 PostgreSQL/Redis 事实与自动测试。
 - 外部 API 使用 `/api/open/v1`、ProblemDetails、Idempotency-Key 和持久化 operation。
 - 镜像导入参考链路可在服务重启后恢复，不包含 fire-and-forget `Task.Run`。
+- 比赛题目可通过个人受限 Token 完成单个/批量导入、查询和销毁；批量结果、幂等、恢复、审计、运行资源清理和镜像分发形成闭环。
 - ImageTemplate 是全局资产，课程使用 binding，删除规则通过测试。
 - module boundary 和 OpenAPI contract 在 CI 中可执行。
 - Phase 3 可以直接复用 actor、scope、operation、错误和架构边界，不再设计第二套 API 基础。
+
+## Task 8：闭环比赛题目外部 API
+
+- [x] 新增 `Modules/Ctf` 的 Contracts、Application、Domain、Infrastructure 和 Open API Controller，不暴露旧 `EditController` DTO。
+- [x] `POST /api/open/v1/games/{gameId}/challenges` 支持单题导入。
+- [x] `POST /api/open/v1/games/{gameId}/challenges/batch` 支持 1-100 题整批语义校验和事务原子创建。
+- [x] `GET` 列表使用游标和轻量摘要，详情接口单独返回内容、Flag 和附件。
+- [x] 单题和批量删除先关闭运行资源，再删除题目事实；不存在 ID 作为幂等 `missing` 结果返回。
+- [x] operation 查询返回 `externalId -> challengeId`、deleted 和 missing 结果。
+- [x] 教师只能给自己拥有的比赛签发具体 grant；管理员才能签发 `game:*` 或 `*:*`。
+- [x] Docker 题目只接受已注册 Ready 模板，Windows VM 使用一次批量模板校验。
+- [x] 更新 OpenAPI 快照、外部 API 标准、模块边界图和 `open-api-v1-guide.md` 完整使用手册。
 
 ## 切换与回滚
 

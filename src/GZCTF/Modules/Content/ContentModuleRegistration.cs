@@ -7,6 +7,7 @@ using GZCTF.Modules.Penetration.Infrastructure;
 using GZCTF.Modules.Training.Infrastructure;
 using GZCTF.Modules.Training.Application;
 using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Identity.Application;
 
 namespace GZCTF.Modules.Content;
 
@@ -35,6 +36,7 @@ public static class ContentModuleRegistration
         services.AddScoped<IApiOperationHandler, ImageImportOperationHandler>();
         services.AddHostedService<ImageImportStagingReconcileService>();
         services.AddHostedService<ImageTemplateDeletionReconcileService>();
+        services.AddScoped<IApiTokenResourceGrantPolicy, ImageApiTokenResourceGrantPolicy>();
         return services;
     }
 }

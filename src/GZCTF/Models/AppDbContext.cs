@@ -12,6 +12,7 @@ using ApiTokenResourceGrantEntity = GZCTF.Modules.Identity.Domain.ApiTokenResour
 using ApiTokenScopeGrantEntity = GZCTF.Modules.Identity.Domain.ApiTokenScopeGrant;
 using TrainingCourseImageTemplateBindingEntity = GZCTF.Modules.Training.Domain.TrainingCourseImageTemplateBinding;
 using ImageImportJobEntity = GZCTF.Modules.Content.Domain.ImageImportJob;
+using ChallengeMutationJobEntity = GZCTF.Modules.Ctf.Domain.ChallengeMutationJob;
 using ExternalApiRequestAuditEntity = GZCTF.Modules.Audit.Domain.ExternalApiRequestAudit;
 
 namespace GZCTF.Models;
@@ -59,6 +60,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<ExternalApiRequestAuditEntity> ExternalApiRequestAudits { get; set; } = null!;
     public DbSet<TrainingCourseImageTemplateBindingEntity> TrainingCourseImageTemplateBindings { get; set; } = null!;
     public DbSet<ImageImportJobEntity> ImageImportJobs { get; set; } = null!;
+    public DbSet<ChallengeMutationJobEntity> ChallengeMutationJobs { get; set; } = null!;
     public DbSet<ImageTemplate> ImageTemplates { get; set; } = null!;
     public DbSet<ImageDistributionRecord> ImageDistributionRecords { get; set; } = null!;
     public DbSet<DockerRegistryMigrationTask> DockerRegistryMigrationTasks { get; set; } = null!;

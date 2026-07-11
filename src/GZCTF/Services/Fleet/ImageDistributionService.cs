@@ -82,7 +82,7 @@ public class ImageDistributionService(
             .Where(c => c.GameId == gameId &&
                         (c.Type == ChallengeType.StaticContainer ||
                          c.Type == ChallengeType.DynamicContainer))
-            .Select(c => c.Environment == EnvironmentType.WindowsVM ? c.ImageTemplateId : null)
+            .Select(c => c.ImageTemplateId)
             .ToArrayAsync(token);
 
         var dockerImages = await context.GameChallenges.AsNoTracking()
@@ -90,6 +90,7 @@ public class ImageDistributionService(
                         (c.Type == ChallengeType.StaticContainer ||
                          c.Type == ChallengeType.DynamicContainer) &&
                         c.Environment == EnvironmentType.Docker &&
+                        c.ImageTemplateId == null &&
                         !string.IsNullOrWhiteSpace(c.ContainerImage))
             .Select(c => c.ContainerImage!)
             .Distinct()
@@ -264,18 +265,21 @@ public class ImageDistributionService(
     async Task DistributeDockerImageAsync(string image, ImageDistributionReference reference, CancellationToken token)
     {
         var resolved = await dockerRegistry.ResolveImageReferenceAsync(image, token);
-        var pseudoTemplate = new ImageTemplate
-        {
-            Id = 0,
-            Name = resolved,
-            ImageType = ImageType.Docker,
-            RegistryUrl = resolved,
-            ImageHash = resolved,
-            Status = ImageStatus.Ready
-        };
-        var nodes = await GetCapableNodesAsync(pseudoTemplate, token);
-        foreach (var node in nodes)
-            await agentClient.PullDockerImageAsync(node.Id, resolved, null, token);
+        var template = await context.ImageTemplates.AsNoTracking()
+            .Where(item => item.ImageType == ImageType.Docker &&
+                           item.Status == ImageStatus.Ready &&
+                           item.RegistryUrl == resolved)
+            .OrderBy(item => item.Id)
+            .FirstOrDefaultAsync(token);
+        if (template is null)
+            throw new InvalidOperationException(
+                $"Docker image {resolved} is not registered as a ready platform image template.");
+
+        var records = await DistributeTemplateAsync(template.Id, reference, token);
+        var failed = records.FirstOrDefault(record => record.Status == ImageDistributionStatus.Failed);
+        if (failed is not null)
+            throw new InvalidOperationException(failed.ErrorMessage ??
+                                                $"Docker image {resolved} could not be distributed.");
     }
 
     async Task<ImageDistributionRecord> EnsureTemplateOnNodeAsync(ImageTemplate template, WorkerNode node,

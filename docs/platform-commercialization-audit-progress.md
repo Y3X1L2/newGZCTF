@@ -202,7 +202,7 @@
 
 ## 2026-07-11 Phase 1 实施进度
 
-- Phase 1 Task 1-7 实现与本地验收全部完成；未部署、未连接或修改生产数据库。
+- Phase 1 Task 1-8 实现完成；未部署、未连接或修改生产数据库。
 - scoped API token 已原子替换旧 token：独立 authentication scheme、scope/resource grant、Redis 配额、撤销和一次性 secret 展示均已落地；旧 `TokenService`、管理员 token 旁路和 restore 入口已删除。
 - 外部 `/api/open/v1` 已统一使用 ProblemDetails、Idempotency-Key、持久化 `ApiOperation` 和独立 OpenAPI 文档；镜像 reference/archive 导入不使用 fire-and-forget，服务重启后可恢复。
 - `ApiOperation` claim 保留 `FOR UPDATE SKIP LOCKED`；claim、renew、progress、complete、retry/fail 已统一改为 PostgreSQL `CURRENT_TIMESTAMP` 与相对 duration，消除多主机时钟偏差。
@@ -215,3 +215,11 @@
 - Task 7 的 7 项终审缺口全部关闭：Docker 子进程取消终止进程树；模板删除意图可恢复；失效比赛/课程分发引用自动 reconcile；外部镜像 GET/DELETE 与 `images:delete` scope 落地；Registry 来源拒绝私网、回环和链路本地地址；operation 身份字段建立外键；所有外部 API 请求写入独立脱敏审计表。
 - 外部 DELETE 已验证课程引用时返回 `409 application/problem+json` 和稳定 `asset_in_use`，解绑后返回 204；私网 Registry 引用返回 `422 image_reference_forbidden`。
 - 最终增量迁移为 `20260711072936_CompletePhaseOneDurabilityAndAudit`；Phase 1 本轮不部署生产环境。
+- 总纲复核发现原 Task 1-7 只交付镜像纵向 API，没有交付总纲明确要求的题目单个/批量 API；该缺口已作为 Task 8 关闭。
+- 新增 `/api/open/v1/games/{gameId}/challenges` 单题导入、1-100 题原子批量导入、游标分页、详情、单题删除和批量删除；全部写操作返回可恢复 `ApiOperation`，结果包含调用方 `externalId` 到平台题目 ID 的稳定映射。
+- 比赛新增 `OwnerId` 事实；教师只能签发自己比赛的具体 grant，管理员才能签发比赛或全局通配 grant。旧比赛没有所有者时由管理员签发具体授权，不做猜测性数据回填。
+- 题目删除已闭环活动队列取消、节点执行门排空、Docker/VM/测试环境销毁确认、附件和 Flag 清理、计分缓存刷新及镜像引用重建，避免数据库级联掩盖节点孤儿资源。
+- Docker 题目绑定已注册 Ready 的全局 `ImageTemplate`；分发不再使用无主伪模板，节点状态和比赛引用进入 `ImageDistributionRecord`，后台 reconcile 可继续处理失败事实。
+- Task 8 数据迁移为 `20260711115423_CompletePhaseOneChallengeApi`，新增比赛所有者字段和持久化 `ChallengeMutationJobs`。
+- 完整调用文档为 `docs/commercialization/open-api-v1-guide.md`；机器契约 `docs/commercialization/openapi/open-v1.json` 已由真实运行时 OpenAPI 生成并包含全部新增路径。
+- 按本轮约束只执行一次独立静态质量审查；确认的授权越界、运行资源孤儿、operation 终态、Docker 分发事实、附件清理、契约缺失、空值/非法枚举和 VM 模板 N+1 共 8 项问题均已直接修复。EF migration 构建成功，OpenAPI 契约生成专项 1/1 通过；未重复执行全量门禁。

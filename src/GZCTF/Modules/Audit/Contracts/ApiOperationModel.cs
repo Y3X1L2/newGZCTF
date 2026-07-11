@@ -1,4 +1,5 @@
 using GZCTF.Modules.Audit.Domain;
+using System.Text.Json;
 
 namespace GZCTF.Modules.Audit.Contracts;
 
@@ -15,12 +16,13 @@ public sealed record ApiOperationModel(
     int AttemptCount,
     string? ErrorCode,
     string? ErrorDetail,
+    JsonElement? Result,
     DateTimeOffset CreatedAt,
     DateTimeOffset? StartedAt,
     DateTimeOffset UpdatedAt,
     DateTimeOffset? CompletedAt)
 {
-    public static ApiOperationModel FromEntity(ApiOperation operation) => new(
+    public static ApiOperationModel FromEntity(ApiOperation operation, JsonElement? result = null) => new(
         operation.Id,
         operation.Kind,
         operation.Status,
@@ -33,6 +35,7 @@ public sealed record ApiOperationModel(
         operation.AttemptCount,
         operation.ErrorCode,
         operation.ErrorDetail,
+        result,
         operation.CreatedAt,
         operation.StartedAt,
         operation.UpdatedAt,

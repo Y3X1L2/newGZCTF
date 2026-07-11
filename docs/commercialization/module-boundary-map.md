@@ -56,7 +56,7 @@ src/GZCTF/
     ServiceRegistration.cs
 ```
 
-Phase 1 迁入 Identity API token、外部 API 基础和 ImageTemplate 参考链路。其他模块在各自主责 Phase 迁移；架构测试从 Phase 1 起禁止增加新的跨界依赖，并为每项现存依赖绑定唯一清理 Phase。
+Phase 1 迁入 Identity API token、外部 API 基础、ImageTemplate 参考链路和 CTF 比赛题目外部导入切片。其他模块在各自主责 Phase 迁移；架构测试从 Phase 1 起禁止增加新的跨界依赖，并为每项现存依赖绑定唯一清理 Phase。
 
 ## 3. 模块所有权
 
@@ -130,6 +130,7 @@ Phase 1 迁入 Identity API token、外部 API 基础和 ImageTemplate 参考链
 | --- | --- | --- | --- |
 | Identity | IssueApiToken、RevokeApiToken | GetActor、ListTokenGrants | token.issued、token.revoked |
 | Content | ImportImage、DeleteImage | GetImage、CheckImageReferences | image.import、image.delete |
+| Ctf | ImportGameChallenges、DeleteGameChallenges | ListGameChallenges、GetGameChallenge | ctf.challenge-mutation.v1 |
 | Runtime | EnqueueDeployment、CancelDeployment | GetQueueStatus | deployment lifecycle |
 | TeamLab | PublishTopology、CreateRuntime、DestroyRuntime | GetPlan、GetRuntime、GetTraffic | TeamLabEvent + ApiOperation |
 | Penetration | SubmitObjective、ResetWorkspace | GetWorkspace、GetScoreboard | submission + gameplay audit |

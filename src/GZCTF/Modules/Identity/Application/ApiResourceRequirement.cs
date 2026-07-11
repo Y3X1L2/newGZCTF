@@ -2,7 +2,10 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace GZCTF.Modules.Identity.Application;
 
-public sealed record ApiResourceRequirement(string ResourceType, string ResourceId) : IAuthorizationRequirement;
+public sealed record ApiResourceRequirement(
+    string ResourceType,
+    string ResourceId,
+    bool RequireExplicitGrant = false) : IAuthorizationRequirement;
 
 public static class ApiTokenResourceClaim
 {
@@ -33,19 +36,24 @@ public sealed class ApiResourceAuthorizationHandler : AuthorizationHandler<ApiRe
         AuthorizationHandlerContext context,
         ApiResourceRequirement requirement)
     {
-        var grants = context.User.FindAll(ApiTokenClaimTypes.Resource).ToArray();
+        var requiredType = requirement.ResourceType.Trim().ToLowerInvariant();
+        var grants = context.User.FindAll(ApiTokenClaimTypes.Resource)
+            .Select(claim => ApiTokenResourceClaim.TryParse(claim.Value, out var type, out var id)
+                ? (Type: type, Id: id)
+                : (Type: string.Empty, Id: string.Empty))
+            .Where(grant => string.Equals(grant.Type, requiredType, StringComparison.Ordinal) || grant.Type == "*")
+            .ToArray();
         if (grants.Length == 0)
         {
-            context.Succeed(requirement);
+            if (!requirement.RequireExplicitGrant)
+                context.Succeed(requirement);
             return Task.CompletedTask;
         }
 
-        var requiredType = requirement.ResourceType.Trim().ToLowerInvariant();
         var requiredId = requirement.ResourceId.Trim();
-        if (grants.Any(claim =>
-                ApiTokenResourceClaim.TryParse(claim.Value, out var type, out var id) &&
-                (string.Equals(type, requiredType, StringComparison.Ordinal) || type == "*") &&
-                (string.Equals(id, requiredId, StringComparison.Ordinal) || id == "*")))
+        if (grants.Any(grant =>
+                (string.Equals(grant.Type, requiredType, StringComparison.Ordinal) || grant.Type == "*") &&
+                (string.Equals(grant.Id, requiredId, StringComparison.Ordinal) || grant.Id == "*")))
             context.Succeed(requirement);
 
         return Task.CompletedTask;

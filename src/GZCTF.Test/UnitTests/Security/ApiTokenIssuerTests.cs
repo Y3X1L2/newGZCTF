@@ -75,7 +75,10 @@ public class ApiTokenIssuerTests
     [Fact]
     public async Task IssueAsync_RejectsScopesOutsideTeacherGrantSet()
     {
-        var issuer = new ApiTokenIssuer(new InMemoryApiTokenStore(), new ApiTokenSecretHasher());
+        var issuer = new ApiTokenIssuer(
+            new InMemoryApiTokenStore(),
+            new ApiTokenSecretHasher(),
+            [new AllowResourcePolicy("image")]);
 
         await Assert.ThrowsAsync<ApiTokenScopeException>(() => issuer.IssueAsync(
             new ActorContext(TeacherId, Role.Teacher),
@@ -104,7 +107,10 @@ public class ApiTokenIssuerTests
     [Fact]
     public async Task IssueAsync_NormalizesResourcesBeforeDeduplication()
     {
-        var issuer = new ApiTokenIssuer(new InMemoryApiTokenStore(), new ApiTokenSecretHasher());
+        var issuer = new ApiTokenIssuer(
+            new InMemoryApiTokenStore(),
+            new ApiTokenSecretHasher(),
+            [new AllowResourcePolicy("image")]);
 
         var issued = await issuer.IssueAsync(
             new ActorContext(TeacherId, Role.Teacher),
@@ -177,5 +183,15 @@ public class ApiTokenIssuerTests
                 Token.LastUsedAt = usedAt;
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class AllowResourcePolicy(string resourceType) : IApiTokenResourceGrantPolicy
+    {
+        public string ResourceType { get; } = resourceType;
+
+        public Task<bool> CanGrantAsync(
+            ActorContext actor,
+            string resourceId,
+            CancellationToken cancellationToken) => Task.FromResult(true);
     }
 }

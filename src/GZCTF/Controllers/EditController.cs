@@ -183,7 +183,12 @@ public class EditController(
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> AddGame([FromBody] GameInfoModel model, CancellationToken token)
     {
-        var game = await gameRepository.CreateGame(new Game().Update(model), token);
+        var user = await userManager.GetUserAsync(User);
+        if (user is null)
+            return Unauthorized();
+
+        var game = new Game { OwnerId = user.Id }.Update(model);
+        game = await gameRepository.CreateGame(game, token);
 
         if (game is null)
             return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Game_CreationFailed)]));

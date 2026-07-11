@@ -17,6 +17,14 @@ public partial class Game
     [Required]
     public int Id { get; set; }
 
+    [JsonIgnore]
+    [MemoryPackIgnore]
+    public Guid? OwnerId { get; set; }
+
+    [JsonIgnore]
+    [MemoryPackIgnore]
+    public UserInfo? Owner { get; set; }
+
     /// <summary>
     /// Game title
     /// </summary>

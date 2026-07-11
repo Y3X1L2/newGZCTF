@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Ctf.Contracts;
 using GZCTF.Models.Request.Account;
 using GZCTF.Models.Request.Admin;
 using GZCTF.Models.Request.Edit;
@@ -175,6 +176,13 @@ namespace GZCTF.Utils;
 [JsonSerializable(typeof(ApiTokenResponse))]
 [JsonSerializable(typeof(ApiTokenModel[]))]
 [JsonSerializable(typeof(ApiOperationModel))]
+[JsonSerializable(typeof(OpenChallengeImportModel))]
+[JsonSerializable(typeof(OpenChallengeBatchImportModel))]
+[JsonSerializable(typeof(OpenChallengeBatchDeleteModel))]
+[JsonSerializable(typeof(OpenChallengeModel))]
+[JsonSerializable(typeof(OpenChallengeSummaryModel))]
+[JsonSerializable(typeof(OpenChallengePageModel))]
+[JsonSerializable(typeof(OpenChallengeMutationResult))]
 internal sealed partial class AppJsonSerializerContext : JsonSerializerContext;
 
 public class DateTimeOffsetJsonConverter : JsonConverter<DateTimeOffset>

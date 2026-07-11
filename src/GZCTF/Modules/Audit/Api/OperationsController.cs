@@ -14,7 +14,9 @@ namespace GZCTF.Modules.Audit.Api;
 [Route("api/open/v1/operations")]
 [Authorize(Policy = "scope:" + ApiTokenScopes.OperationsRead)]
 [Produces(MediaTypeNames.Application.Json)]
-public sealed class OperationsController(ApiOperationService operations) : ControllerBase
+public sealed class OperationsController(
+    ApiOperationService operations,
+    IEnumerable<IApiOperationResultProvider>? resultProviders = null) : ControllerBase
 {
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status200OK)]
@@ -39,6 +41,11 @@ public sealed class OperationsController(ApiOperationService operations) : Contr
         if (operation is null)
             throw new ApiOperationNotFoundException();
 
-        return Ok(ApiOperationModel.FromEntity(operation));
+        var provider = (resultProviders ?? []).SingleOrDefault(item =>
+            string.Equals(item.Kind, operation.Kind, StringComparison.Ordinal));
+        var operationResult = provider is null
+            ? null
+            : await provider.GetResultAsync(operation.Id, cancellationToken);
+        return Ok(ApiOperationModel.FromEntity(operation, operationResult));
     }
 }

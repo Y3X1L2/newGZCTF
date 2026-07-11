@@ -18,7 +18,10 @@ public sealed record ApiTokenIssueResult(ApiTokenEntity Token, string PlainTextT
 
 public sealed class ApiTokenScopeException(string message) : InvalidOperationException(message);
 
-public sealed class ApiTokenIssuer(IApiTokenStore store, IApiTokenSecretHasher secretHasher)
+public sealed class ApiTokenIssuer(
+    IApiTokenStore store,
+    IApiTokenSecretHasher secretHasher,
+    IEnumerable<IApiTokenResourceGrantPolicy>? resourcePolicies = null)
 {
     public async Task<ApiTokenIssueResult> IssueAsync(
         ActorContext actor,
@@ -62,9 +65,27 @@ public sealed class ApiTokenIssuer(IApiTokenStore store, IApiTokenSecretHasher s
             throw new ArgumentException("A token cannot contain more than 128 resource grants.", nameof(command));
         if (resources.Any(resource => resource.ResourceType.Length is < 1 or > 64 ||
                                       resource.ResourceId.Length is < 1 or > 128 ||
-                                      resource.ResourceType.Any(character =>
+                                      resource.ResourceType != "*" && resource.ResourceType.Any(character =>
                                           !char.IsAsciiLetterOrDigit(character) && character is not '-' and not '_' and not '.')))
             throw new ArgumentException("A resource grant contains an invalid type or identifier.", nameof(command));
+
+        var policies = (resourcePolicies ?? []).ToDictionary(
+            policy => policy.ResourceType,
+            StringComparer.Ordinal);
+        foreach (var resource in resources)
+        {
+            if (resource.ResourceType == "*")
+            {
+                if (actor.Role < Role.Admin || resource.ResourceId != "*")
+                    throw new ApiTokenScopeException("Only administrators can grant global resource access.");
+                continue;
+            }
+
+            if (!policies.TryGetValue(resource.ResourceType, out var policy) ||
+                !await policy.CanGrantAsync(actor, resource.ResourceId, cancellationToken))
+                throw new ApiTokenScopeException(
+                    $"The actor cannot grant access to resource '{resource.ResourceType}:{resource.ResourceId}'.");
+        }
 
         var token = new ApiTokenEntity
         {

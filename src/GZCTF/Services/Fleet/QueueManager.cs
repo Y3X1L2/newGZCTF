@@ -154,6 +154,16 @@ public class QueueManager
         }
 
         var execution = await executor.ExecuteAsync(ticket, token);
+        await context.Entry(ticket).ReloadAsync(token);
+        if (ticket.Status == DeploymentQueueTicketStatus.Cancelled)
+        {
+            _logger.SystemLog(
+                $"Deployment queue ticket completed after cancellation and was left cancelled: ticket={ticket.Id}, kind={ticket.Kind}.",
+                TaskStatus.Exit,
+                LogLevel.Warning);
+            return;
+        }
+
         if (execution.Success)
         {
             await CompleteTicketAsync(context, capacity, ticket, reserved, token);

@@ -90,9 +90,8 @@ public class GameChallengeRepository(
 
         await LoadFlags(challenge, token);
 
-        // only dynamic attachment challenge's flag contexts have attachment
-        if (challenge.Type == ChallengeType.DynamicAttachment)
-            foreach (var flag in challenge.Flags)
+        foreach (var flag in challenge.Flags)
+            if (flag.Attachment is not null)
                 await blobRepository.DeleteAttachment(flag.Attachment, token);
 
         Context.RemoveRange(challenge.Flags);

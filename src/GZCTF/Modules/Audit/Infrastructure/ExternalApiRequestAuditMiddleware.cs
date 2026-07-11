@@ -104,15 +104,22 @@ public sealed class ExternalApiRequestAuditMiddleware(
 
     private static (string? Type, string? Id) ResolveResource(HttpContext context)
     {
-        var id = context.Request.RouteValues["imageTemplateId"]?.ToString() ??
-                 context.Request.RouteValues["id"]?.ToString();
-        if (id is null)
-            return (null, null);
-        return context.Request.Path.StartsWithSegments("/api/open/v1/images", StringComparison.OrdinalIgnoreCase)
-            ? ("image", id)
-            : context.Request.Path.StartsWithSegments("/api/open/v1/operations", StringComparison.OrdinalIgnoreCase)
-                ? ("operation", id)
-                : (null, id);
+        if (context.Request.Path.StartsWithSegments(
+                "/api/open/v1/games", StringComparison.OrdinalIgnoreCase))
+        {
+            var challengeId = context.Request.RouteValues["challengeId"]?.ToString();
+            return challengeId is not null
+                ? ("challenge", challengeId)
+                : ("game", context.Request.RouteValues["gameId"]?.ToString());
+        }
+
+        if (context.Request.Path.StartsWithSegments(
+                "/api/open/v1/images", StringComparison.OrdinalIgnoreCase))
+            return ("image", context.Request.RouteValues["imageTemplateId"]?.ToString());
+        if (context.Request.Path.StartsWithSegments(
+                "/api/open/v1/operations", StringComparison.OrdinalIgnoreCase))
+            return ("operation", context.Request.RouteValues["id"]?.ToString());
+        return (null, null);
     }
 
     private static Guid? ParseGuidClaim(ClaimsPrincipal principal, string claimType) =>

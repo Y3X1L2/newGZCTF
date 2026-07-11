@@ -7,6 +7,351 @@
     "version": "v1"
   },
   "paths": {
+    "/api/open/v1/games/{gameId}/challenges": {
+      "get": {
+        "tags": [
+          "OpenChallenges"
+        ],
+        "operationId": "OpenChallenges_List",
+        "parameters": [
+          {
+            "name": "gameId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50,
+              "maximum": 100.0,
+              "minimum": 1.0
+            },
+            "x-position": 2
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenChallengePageModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "OpenChallenges"
+        ],
+        "operationId": "OpenChallenges_ImportOne",
+        "parameters": [
+          {
+            "name": "gameId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenChallengeImportModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/games/{gameId}/challenges/{challengeId}": {
+      "get": {
+        "tags": [
+          "OpenChallenges"
+        ],
+        "operationId": "OpenChallenges_Get",
+        "parameters": [
+          {
+            "name": "gameId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "challengeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenChallengeModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "OpenChallenges"
+        ],
+        "operationId": "OpenChallenges_Delete",
+        "parameters": [
+          {
+            "name": "gameId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "challengeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/games/{gameId}/challenges/batch": {
+      "post": {
+        "tags": [
+          "OpenChallenges"
+        ],
+        "operationId": "OpenChallenges_ImportBatch",
+        "parameters": [
+          {
+            "name": "gameId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenChallengeBatchImportModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/games/{gameId}/challenges/batch-delete": {
+      "post": {
+        "tags": [
+          "OpenChallenges"
+        ],
+        "operationId": "OpenChallenges_DeleteBatch",
+        "parameters": [
+          {
+            "name": "gameId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenChallengeBatchDeleteModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
     "/api/open/v1/images/docker-references": {
       "post": {
         "tags": [
@@ -274,6 +619,385 @@
   },
   "components": {
     "schemas": {
+      "OpenChallengePageModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenChallengeSummaryModel"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "OpenChallengeSummaryModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/components/schemas/ChallengeCategory"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ChallengeType"
+          },
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "deadlineUtc": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "originalScore": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "environment": {
+            "$ref": "#/components/schemas/EnvironmentType"
+          },
+          "imageTemplateId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        }
+      },
+      "ChallengeCategory": {
+        "type": "string",
+        "description": "Challenge category",
+        "x-enumNames": [
+          "Misc",
+          "Crypto",
+          "Pwn",
+          "Web",
+          "Reverse",
+          "Blockchain",
+          "Forensics",
+          "Hardware",
+          "Mobile",
+          "PPC",
+          "AI",
+          "Pentest",
+          "OSINT",
+          "IR"
+        ],
+        "enum": [
+          "Misc",
+          "Crypto",
+          "Pwn",
+          "Web",
+          "Reverse",
+          "Blockchain",
+          "Forensics",
+          "Hardware",
+          "Mobile",
+          "PPC",
+          "AI",
+          "Pentest",
+          "OSINT",
+          "IR"
+        ]
+      },
+      "ChallengeType": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "StaticAttachment",
+          "StaticContainer",
+          "DynamicAttachment",
+          "DynamicContainer"
+        ],
+        "enum": [
+          "StaticAttachment",
+          "StaticContainer",
+          "DynamicAttachment",
+          "DynamicContainer"
+        ]
+      },
+      "EnvironmentType": {
+        "type": "string",
+        "description": "Environment type for challenge deployment",
+        "x-enumNames": [
+          "None",
+          "Docker",
+          "WindowsVM"
+        ],
+        "enum": [
+          "None",
+          "Docker",
+          "WindowsVM"
+        ]
+      },
+      "OpenChallengeModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/components/schemas/ChallengeCategory"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ChallengeType"
+          },
+          "hints": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "deadlineUtc": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "submissionLimit": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "originalScore": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "minScoreRate": {
+            "type": "number",
+            "format": "double"
+          },
+          "difficulty": {
+            "type": "number",
+            "format": "double"
+          },
+          "disableBloodBonus": {
+            "type": "boolean"
+          },
+          "flagTemplate": {
+            "type": "string",
+            "nullable": true
+          },
+          "environment": {
+            "$ref": "#/components/schemas/EnvironmentType"
+          },
+          "containerImage": {
+            "type": "string",
+            "nullable": true
+          },
+          "exposePort": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "imageTemplateId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "cpuCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "memoryLimit": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "storageLimit": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "networkMode": {
+            "$ref": "#/components/schemas/NetworkMode"
+          },
+          "enableTrafficCapture": {
+            "type": "boolean"
+          },
+          "fileName": {
+            "type": "string",
+            "nullable": true
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenChallengeFlagInfoModel"
+            }
+          },
+          "attachment": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/OpenChallengeAttachmentInfoModel"
+              }
+            ]
+          }
+        }
+      },
+      "NetworkMode": {
+        "type": "string",
+        "description": "Container network mode",
+        "x-enumNames": [
+          "Open",
+          "Isolated",
+          "Custom"
+        ],
+        "enum": [
+          "Open",
+          "Isolated",
+          "Custom"
+        ]
+      },
+      "OpenChallengeFlagInfoModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "flag": {
+            "type": "string"
+          },
+          "orderIndex": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "scoreMode": {
+            "$ref": "#/components/schemas/FlagScoreMode"
+          },
+          "fixedScore": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "attachmentHash": {
+            "type": "string",
+            "nullable": true
+          },
+          "answerType": {
+            "$ref": "#/components/schemas/AnswerType"
+          },
+          "customName": {
+            "type": "string",
+            "nullable": true
+          },
+          "attachment": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/OpenChallengeAttachmentInfoModel"
+              }
+            ]
+          }
+        }
+      },
+      "FlagScoreMode": {
+        "type": "string",
+        "description": "Flag score mode",
+        "x-enumNames": [
+          "InheritDecay",
+          "FixedScore"
+        ],
+        "enum": [
+          "InheritDecay",
+          "FixedScore"
+        ]
+      },
+      "AnswerType": {
+        "type": "string",
+        "description": "Answer type for challenge submission",
+        "x-enumNames": [
+          "Flag",
+          "File",
+          "Custom"
+        ],
+        "enum": [
+          "Flag",
+          "File",
+          "Custom"
+        ]
+      },
+      "OpenChallengeAttachmentInfoModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/FileType"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "FileType": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "None",
+          "Local",
+          "Remote"
+        ],
+        "enum": [
+          "None",
+          "Local",
+          "Remote"
+        ]
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "additionalProperties": {
+          "nullable": true
+        },
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "ApiOperationModel": {
         "type": "object",
         "additionalProperties": false,
@@ -324,6 +1048,9 @@
             "type": "string",
             "nullable": true
           },
+          "result": {
+            "nullable": true
+          },
           "createdAt": {
             "type": "integer",
             "format": "uint64"
@@ -359,6 +1086,266 @@
           2,
           3
         ]
+      },
+      "OpenChallengeImportModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "externalId",
+          "title",
+          "content",
+          "flags"
+        ],
+        "properties": {
+          "externalId": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 1000000,
+            "minLength": 1
+          },
+          "category": {
+            "$ref": "#/components/schemas/ChallengeCategory"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ChallengeType"
+          },
+          "hints": {
+            "type": "array",
+            "maxItems": 100,
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "deadlineUtc": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "submissionLimit": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 10000.0,
+            "minimum": 0.0
+          },
+          "originalScore": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1000000.0,
+            "minimum": 1.0
+          },
+          "minScoreRate": {
+            "type": "number",
+            "format": "double",
+            "maximum": 1.0,
+            "minimum": 0.0
+          },
+          "difficulty": {
+            "type": "number",
+            "format": "double",
+            "maximum": 1000000.0,
+            "minimum": 0.01
+          },
+          "disableBloodBonus": {
+            "type": "boolean"
+          },
+          "flagTemplate": {
+            "type": "string",
+            "maxLength": 120,
+            "nullable": true
+          },
+          "environment": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/EnvironmentType"
+              }
+            ]
+          },
+          "containerImage": {
+            "type": "string",
+            "maxLength": 512,
+            "nullable": true
+          },
+          "exposePort": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "nullable": true
+          },
+          "imageTemplateId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "cpuCount": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1024.0,
+            "minimum": 1.0
+          },
+          "memoryLimit": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1048576.0,
+            "minimum": 32.0
+          },
+          "storageLimit": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1048576.0,
+            "minimum": 0.0
+          },
+          "networkMode": {
+            "$ref": "#/components/schemas/NetworkMode"
+          },
+          "enableTrafficCapture": {
+            "type": "boolean"
+          },
+          "fileName": {
+            "type": "string",
+            "maxLength": 256,
+            "nullable": true
+          },
+          "flags": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/OpenChallengeFlagModel"
+            }
+          },
+          "attachment": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/OpenChallengeAttachmentModel"
+              }
+            ]
+          }
+        }
+      },
+      "OpenChallengeFlagModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "flag"
+        ],
+        "properties": {
+          "flag": {
+            "type": "string",
+            "maxLength": 127,
+            "minLength": 1
+          },
+          "orderIndex": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 10000.0,
+            "minimum": 0.0
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 512,
+            "nullable": true
+          },
+          "scoreMode": {
+            "$ref": "#/components/schemas/FlagScoreMode"
+          },
+          "fixedScore": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1000000.0,
+            "minimum": 0.0
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 100000.0,
+            "minimum": 0.0
+          },
+          "attachmentHash": {
+            "type": "string",
+            "maxLength": 128,
+            "nullable": true
+          },
+          "answerType": {
+            "$ref": "#/components/schemas/AnswerType"
+          },
+          "customName": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true
+          },
+          "attachment": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/OpenChallengeAttachmentModel"
+              }
+            ]
+          }
+        }
+      },
+      "OpenChallengeAttachmentModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "remoteUrl"
+        ],
+        "properties": {
+          "remoteUrl": {
+            "type": "string",
+            "maxLength": 2048,
+            "minLength": 1
+          }
+        }
+      },
+      "OpenChallengeBatchImportModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/OpenChallengeImportModel"
+            }
+          }
+        }
+      },
+      "OpenChallengeBatchDeleteModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "challengeIds"
+        ],
+        "properties": {
+          "challengeIds": {
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
       },
       "DockerImageReferenceImportModel": {
         "type": "object",
@@ -477,35 +1464,6 @@
           2,
           3
         ]
-      },
-      "ProblemDetails": {
-        "type": "object",
-        "additionalProperties": {
-          "nullable": true
-        },
-        "properties": {
-          "type": {
-            "type": "string",
-            "nullable": true
-          },
-          "title": {
-            "type": "string",
-            "nullable": true
-          },
-          "status": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "detail": {
-            "type": "string",
-            "nullable": true
-          },
-          "instance": {
-            "type": "string",
-            "nullable": true
-          }
-        }
       }
     },
     "securitySchemes": {
