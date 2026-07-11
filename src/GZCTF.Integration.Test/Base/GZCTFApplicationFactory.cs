@@ -1,9 +1,14 @@
 using GZCTF.Models;
+using GZCTF.Integration.Test.Tests.Api.Fixtures;
+using GZCTF.Modules.Identity.Application;
+using GZCTF.Modules.Content.Application;
 using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Container.Provider;
+using GZCTF.Services.Fleet;
 using GZCTF.Storage;
 using GZCTF.Storage.Interface;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +18,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Testcontainers.K3s;
 using Testcontainers.Minio;
 using Testcontainers.PostgreSql;
+using Testcontainers.Redis;
 using Xunit;
 
 namespace GZCTF.Integration.Test.Base;
@@ -27,10 +33,13 @@ namespace GZCTF.Integration.Test.Base;
 // ReSharper disable once InconsistentNaming
 public class GZCTFApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgresContainer = new PostgreSqlBuilder("postgres:alpine")
+    private readonly PostgreSqlContainer _postgresContainer = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("gzctf_test")
         .WithUsername("postgres")
         .WithPassword("postgres")
+        .WithCleanUp(true)
+        .Build();
+    private readonly RedisContainer _redisContainer = new RedisBuilder("redis:7-alpine")
         .WithCleanUp(true)
         .Build();
 
@@ -43,6 +52,7 @@ public class GZCTFApplicationFactory : WebApplicationFactory<Program>, IAsyncLif
     private readonly bool _useMinioStorage;
 
     private string? _connectionString;
+    private string? _redisConnectionString;
     private string? _storageConnectionString;
     private string? _kubeConfigPath;
     private readonly string _testId = Guid.NewGuid().ToString("N")[..8];
@@ -115,6 +125,7 @@ public class GZCTFApplicationFactory : WebApplicationFactory<Program>, IAsyncLif
             var configDict = new Dictionary<string, string?>
             {
                 ["ConnectionStrings:Database"] = _connectionString,
+                ["ConnectionStrings:RedisCache"] = _redisConnectionString,
                 ["ConnectionStrings:Storage"] = _storageConnectionString ?? "disk://path=./files/test",
                 ["DisableRateLimit"] = "true",
                 ["CaptchaConfig:Provider"] = "None",
@@ -156,6 +167,27 @@ public class GZCTFApplicationFactory : WebApplicationFactory<Program>, IAsyncLif
 
         builder.ConfigureTestServices(services =>
         {
+            services.Configure<RequestLocalizationOptions>(options =>
+                options.SetDefaultCulture("en-US"));
+            services.AddControllers().AddApplicationPart(typeof(Tests.Api.Fixtures.ScopedApiProbeController).Assembly);
+            services.AddSingleton<FaultInjectingApiTokenRateLimitStore>(provider =>
+                new FaultInjectingApiTokenRateLimitStore(
+                    provider.GetRequiredService<GZCTF.Modules.Identity.Infrastructure.ApiTokenRateLimitStore>()));
+            services.Replace(ServiceDescriptor.Singleton<IApiTokenRateLimitStore>(provider =>
+                provider.GetRequiredService<FaultInjectingApiTokenRateLimitStore>()));
+            services.AddSingleton<ApiOperationHandlerExecutionRecorder>();
+            services.AddScoped<GZCTF.Modules.Audit.Application.IApiOperationHandler,
+                Tests.Api.Fixtures.CompletingApiOperationHandler>();
+            services.RemoveAll<IImageImportExecutor>();
+            services.AddSingleton<Tests.Api.Fixtures.FakeImageImportExecutor>();
+            services.AddSingleton<IImageImportExecutor>(provider =>
+                provider.GetRequiredService<Tests.Api.Fixtures.FakeImageImportExecutor>());
+            services.RemoveAll<IImageTemplateArtifactCleaner>();
+            services.AddScoped<IImageTemplateArtifactCleaner,
+                Tests.Api.Fixtures.FakeImageTemplateArtifactCleaner>();
+            services.RemoveAll<AgentClient>();
+            services.AddSingleton<AgentClient, Tests.Api.Fixtures.FakeAgentClient>();
+
             // Replace the DbContext with our test connection string
             services.RemoveAll<DbContextOptions<AppDbContext>>();
             services.AddDbContext<AppDbContext>(options =>
@@ -247,6 +279,7 @@ public class GZCTFApplicationFactory : WebApplicationFactory<Program>, IAsyncLif
 
         // Start PostgresSQL container
         tasks.Add(InitializePostgresAsync());
+        tasks.Add(InitializeRedisAsync());
 
         await Task.WhenAll(tasks);
 
@@ -266,6 +299,7 @@ public class GZCTFApplicationFactory : WebApplicationFactory<Program>, IAsyncLif
     {
         // Dispose containers
         await _postgresContainer.DisposeAsync();
+        await _redisContainer.DisposeAsync();
 
         if (_minioContainer is not null)
             await _minioContainer.DisposeAsync();
@@ -289,6 +323,18 @@ public class GZCTFApplicationFactory : WebApplicationFactory<Program>, IAsyncLif
             }
         }
     }
+
+    private async Task InitializeRedisAsync()
+    {
+        await _redisContainer.StartAsync();
+        _redisConnectionString = _redisContainer.GetConnectionString();
+    }
+
+    public void SetApiTokenRateLimitAvailability(bool available) =>
+        Services.GetRequiredService<FaultInjectingApiTokenRateLimitStore>().Available = available;
+
+    public string DatabaseConnectionString => _connectionString
+        ?? throw new InvalidOperationException("The integration database is not initialized.");
 }
 
 /// <summary>

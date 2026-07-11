@@ -1,0 +1,98 @@
+name: Quality
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: true
+  TESTCONTAINERS_RYUK_DISABLED: true
+  OPENAPI_CURRENT_PATH: ${{ github.workspace }}/artifacts/openapi/open-v1.current.json
+
+jobs:
+  quality:
+    name: Build and verify contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: src/GZCTF/ClientApp/pnpm-lock.yaml
+
+      - name: Restore backend dependencies
+        run: dotnet restore src/GZCTF.slnx
+
+      - name: Build backend
+        run: dotnet build src/GZCTF.slnx --configuration Release --no-restore
+
+      - name: Run backend unit tests
+        run: dotnet test src/GZCTF.Test/GZCTF.Test.csproj --configuration Release --no-build
+
+      - name: Prepare Testcontainers images
+        run: |
+          docker pull postgres:16-alpine
+          docker pull redis:7-alpine
+
+      - name: Run backend integration tests
+        run: dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj --configuration Release --no-build
+
+      - name: Install frontend dependencies
+        working-directory: src/GZCTF/ClientApp
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        working-directory: src/GZCTF/ClientApp
+        run: pnpm build
+
+      - name: Resolve committed OpenAPI baseline
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          baseline="$RUNNER_TEMP/open-v1.baseline.json"
+          contract="docs/commercialization/openapi/open-v1.json"
+          if [ -n "$BASE_SHA" ] &&
+             [ "$BASE_SHA" != "0000000000000000000000000000000000000000" ] &&
+             git cat-file -e "$BASE_SHA:$contract" 2>/dev/null; then
+            git show "$BASE_SHA:$contract" > "$baseline"
+          else
+            cp "$contract" "$baseline"
+          fi
+          echo "OPENAPI_BASELINE_PATH=$baseline" >> "$GITHUB_ENV"
+
+      - name: Verify OpenAPI backward compatibility
+        shell: pwsh
+        run: >-
+          ./scripts/verify-openapi-contract.ps1
+          -BaselinePath "$env:OPENAPI_BASELINE_PATH"
+          -CurrentPath "$env:OPENAPI_CURRENT_PATH"

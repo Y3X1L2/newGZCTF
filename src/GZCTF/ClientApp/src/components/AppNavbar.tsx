@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router'
 import { LogoBox } from '@Components/LogoBox'
 import { WsrxManager } from '@Components/WsrxManager'
+import { RequireRole } from '@Components/WithRole'
 import { useConfig } from '@Hooks/useConfig'
 import { useUser } from '@Hooks/useUser'
 import { ContainerPortMappingType, Role } from '@Api'
@@ -72,11 +73,7 @@ export const AppNavbar: FC = () => {
 
   const { user } = useUser()
   const { config } = useConfig()
-  const isTeacherOrAbove =
-    user?.role === Role.Teacher ||
-    user?.role === Role.Monitor ||
-    user?.role === Role.Admin ||
-    user?.role === Role.SuperAdmin
+  const isTeacherOrAbove = RequireRole(Role.Teacher, user?.role)
 
   const items: NavbarItem[] = [
     { icon: mdiHomeVariantOutline, label: 'common.tab.home', link: '/' },

@@ -151,7 +151,7 @@ public class GameWorkflowTests(GZCTFApplicationFactory factory)
             $"/api/Game/{game.Id}/Challenges/{challenge1.Id}",
             new FlagSubmitModel { Flag = "flag{alpha_solution}" });
         submit1Response.EnsureSuccessStatusCode();
-        var submission1Id = await submit1Response.Content.ReadFromJsonAsync<int>();
+        var submission1Id = (await submit1Response.Content.ReadFromJsonAsync<FlagSubmitResultModel>())!.Id;
         Assert.True(submission1Id > 0);
 
         // Verify submission status
@@ -370,7 +370,7 @@ public class GameWorkflowTests(GZCTFApplicationFactory factory)
             $"/api/Game/{game.Id}/Challenges/{challenge.Id}",
             new FlagSubmitModel { Flag = "flag{wrong_answer}" });
         wrongSubmitResponse.EnsureSuccessStatusCode();
-        var wrongSubmissionId = await wrongSubmitResponse.Content.ReadFromJsonAsync<int>();
+        var wrongSubmissionId = (await wrongSubmitResponse.Content.ReadFromJsonAsync<FlagSubmitResultModel>())!.Id;
 
         // Initial status will be FlagSubmitted, but may quickly change to WrongAnswer
         var wrongStatusResponse = await client.GetAsync(
@@ -386,13 +386,22 @@ public class GameWorkflowTests(GZCTFApplicationFactory factory)
             $"/api/Game/{game.Id}/Challenges/{challenge.Id}",
             new FlagSubmitModel { Flag = "flag{correct_answer}" });
         correctSubmitResponse.EnsureSuccessStatusCode();
-        var correctSubmissionId = await correctSubmitResponse.Content.ReadFromJsonAsync<int>();
+        var correctSubmissionId = (await correctSubmitResponse.Content.ReadFromJsonAsync<FlagSubmitResultModel>())!.Id;
 
         var correctStatusResponse = await client.GetAsync(
             $"/api/Game/{game.Id}/Challenges/{challenge.Id}/Status/{correctSubmissionId}");
         correctStatusResponse.EnsureSuccessStatusCode();
         var correctStatus = await correctStatusResponse.Content.ReadFromJsonAsync<AnswerResult>();
-        Assert.Equal(AnswerResult.FlagSubmitted, correctStatus);
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(5);
+        while (correctStatus == AnswerResult.FlagSubmitted && DateTimeOffset.UtcNow < deadline)
+        {
+            await Task.Delay(100);
+            correctStatusResponse = await client.GetAsync(
+                $"/api/Game/{game.Id}/Challenges/{challenge.Id}/Status/{correctSubmissionId}");
+            correctStatusResponse.EnsureSuccessStatusCode();
+            correctStatus = await correctStatusResponse.Content.ReadFromJsonAsync<AnswerResult>();
+        }
+        Assert.Equal(AnswerResult.Accepted, correctStatus);
 
         // Test 3: Verify team appears on scoreboard
         var scoreboardResponse = await client.GetAsync($"/api/Game/{game.Id}/Scoreboard");
@@ -404,9 +413,9 @@ public class GameWorkflowTests(GZCTFApplicationFactory factory)
             item.TryGetProperty("id", out var id) && id.GetInt32() == team.Id);
 
         Assert.NotEqual(default, teamScoreItem);
-        // Score field exists (even if 0 due to async processing)
+        // The accepted submission must be reflected in the scoreboard.
         Assert.True(teamScoreItem.TryGetProperty("score", out var score));
-        Assert.Equal(0, score.GetInt32());
+        Assert.True(score.GetInt32() > 0);
     }
 
     /// <summary>
@@ -442,14 +451,14 @@ public class GameWorkflowTests(GZCTFApplicationFactory factory)
         var submit1Response = await client1.PostAsJsonAsync($"/api/Game/{game.Id}/Challenges/{challenge1.Id}",
             new FlagSubmitModel { Flag = "flag{one}" });
         submit1Response.EnsureSuccessStatusCode();
-        var submission1Id = await submit1Response.Content.ReadFromJsonAsync<int>();
+        var submission1Id = (await submit1Response.Content.ReadFromJsonAsync<FlagSubmitResultModel>())!.Id;
         Assert.True(submission1Id > 0);
 
         // Submit second challenge for team 1
         var submit2Response = await client1.PostAsJsonAsync($"/api/Game/{game.Id}/Challenges/{challenge2.Id}",
             new FlagSubmitModel { Flag = "flag{two}" });
         submit2Response.EnsureSuccessStatusCode();
-        var submission2Id = await submit2Response.Content.ReadFromJsonAsync<int>();
+        var submission2Id = (await submit2Response.Content.ReadFromJsonAsync<FlagSubmitResultModel>())!.Id;
         Assert.True(submission2Id > 0);
 
         // Team 2 solves only challenge 1
@@ -461,7 +470,7 @@ public class GameWorkflowTests(GZCTFApplicationFactory factory)
         var submit3Response = await client2.PostAsJsonAsync($"/api/Game/{game.Id}/Challenges/{challenge1.Id}",
             new FlagSubmitModel { Flag = "flag{one}" });
         submit3Response.EnsureSuccessStatusCode();
-        var submission3Id = await submit3Response.Content.ReadFromJsonAsync<int>();
+        var submission3Id = (await submit3Response.Content.ReadFromJsonAsync<FlagSubmitResultModel>())!.Id;
         Assert.True(submission3Id > 0);
 
         // Verify scoreboard contains both teams
@@ -563,7 +572,7 @@ public class GameWorkflowTests(GZCTFApplicationFactory factory)
                 $"/api/Game/{game.Id}/Challenges/{challenge.Id}",
                 new FlagSubmitModel { Flag = $"flag{{wrong_{i}}}" });
             wrongSubmitResponse.EnsureSuccessStatusCode();
-            var wrongSubmissionId = await wrongSubmitResponse.Content.ReadFromJsonAsync<int>();
+            var wrongSubmissionId = (await wrongSubmitResponse.Content.ReadFromJsonAsync<FlagSubmitResultModel>())!.Id;
             Assert.True(wrongSubmissionId > 0);
 
             // Check status - should be FlagSubmitted initially
@@ -581,7 +590,7 @@ public class GameWorkflowTests(GZCTFApplicationFactory factory)
             $"/api/Game/{game.Id}/Challenges/{challenge.Id}",
             new FlagSubmitModel { Flag = "flag{correct_flag}" });
         correctSubmitResponse.EnsureSuccessStatusCode();
-        var correctSubmissionId = await correctSubmitResponse.Content.ReadFromJsonAsync<int>();
+        var correctSubmissionId = (await correctSubmitResponse.Content.ReadFromJsonAsync<FlagSubmitResultModel>())!.Id;
         Assert.True(correctSubmissionId > 0);
 
         var correctStatusResponse = await client.GetAsync(
@@ -662,7 +671,7 @@ public class GameWorkflowTests(GZCTFApplicationFactory factory)
             new FlagSubmitModel { Flag = seededChallenge.Flag });
         submitResponse.EnsureSuccessStatusCode();
 
-        var submissionId = await submitResponse.Content.ReadFromJsonAsync<int>();
+        var submissionId = (await submitResponse.Content.ReadFromJsonAsync<FlagSubmitResultModel>())!.Id;
         Assert.True(submissionId > 0);
 
         var statusResponse = await client.GetAsync(

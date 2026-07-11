@@ -1,10 +1,13 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
+using GZCTF.Modules.Identity.Infrastructure;
 
 namespace GZCTF.Extensions.Startup;
 
 internal static class IdentityExtension
 {
+    private const string RequestScheme = "GzctfRequest";
+
     extension(WebApplicationBuilder builder)
     {
         public void ConfigureIdentity()
@@ -13,8 +16,17 @@ internal static class IdentityExtension
 
             builder.Services.AddAuthentication(o =>
                 {
-                    o.DefaultScheme = IdentityConstants.ApplicationScheme;
+                    o.DefaultAuthenticateScheme = RequestScheme;
+                    o.DefaultChallengeScheme = RequestScheme;
                     o.DefaultSignInScheme = IdentityConstants.ExternalScheme;
+                })
+                .AddPolicyScheme(RequestScheme, null, options =>
+                {
+                    options.ForwardDefaultSelector = context =>
+                        context.Request.Path.StartsWithSegments(
+                            "/api/open/v1", StringComparison.OrdinalIgnoreCase)
+                            ? ApiTokenDefaults.Scheme
+                            : IdentityConstants.ApplicationScheme;
                 })
                 .AddIdentityCookies(options =>
                 {

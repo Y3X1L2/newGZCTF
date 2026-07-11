@@ -15,6 +15,7 @@ public class AwdpRoundService(
 {
     readonly ConcurrentDictionary<int, CancellationTokenSource> _gameLoops = new();
     readonly CancellationTokenSource _shutdown = new();
+    int _stopped;
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -33,6 +34,9 @@ public class AwdpRoundService(
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
+        if (Interlocked.Exchange(ref _stopped, 1) != 0)
+            return Task.CompletedTask;
+
         _shutdown.Cancel();
         foreach (var loop in _gameLoops.Values)
             loop.Cancel();
@@ -405,6 +409,7 @@ public class AwdpRoundService(
 
     public void Dispose()
     {
+        Interlocked.Exchange(ref _stopped, 1);
         _shutdown.Dispose();
         foreach (var loop in _gameLoops.Values)
             loop.Dispose();

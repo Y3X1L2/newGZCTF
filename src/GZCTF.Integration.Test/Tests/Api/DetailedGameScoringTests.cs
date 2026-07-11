@@ -209,6 +209,7 @@ public class DetailedGameScoringTests(GZCTFApplicationFactory factory)
 
         const string password = "Scoreboard@Test123";
         var teams = new List<TestDataSeeder.SeededTeam>();
+        string? scoreboardUserName = null;
 
         // Create 5 teams
         for (var i = 1; i <= 5; i++)
@@ -216,6 +217,7 @@ public class DetailedGameScoringTests(GZCTFApplicationFactory factory)
             var userName = TestDataSeeder.RandomName();
             var user = await TestDataSeeder.CreateUserAsync(factory.Services,
                 userName, password);
+            scoreboardUserName ??= user.UserName;
             var team = await TestDataSeeder.CreateTeamAsync(factory.Services, user.Id, $"Scoreboard Team {i}");
             teams.Add(team);
 
@@ -237,6 +239,12 @@ public class DetailedGameScoringTests(GZCTFApplicationFactory factory)
 
         // Retrieve scoreboard
         using var scoreboardClient = factory.CreateClient();
+        using (var loginResponse = await scoreboardClient.PostAsJsonAsync(
+                   "/api/Account/LogIn",
+                   new LoginModel { UserName = scoreboardUserName!, Password = password }))
+        {
+            loginResponse.EnsureSuccessStatusCode();
+        }
         var scoreboard = await WaitForScoreboard(scoreboardClient, game.Id, expectedTeamCount: teams.Count);
 
         Assert.True(scoreboard.TryGetProperty("items", out var items));

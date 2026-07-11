@@ -96,12 +96,8 @@ public class InternalController : ControllerBase
                 m.IsSynced,
                 m.LastSyncError));
 
-    async Task<bool> IsAuthorizedSyncRequest()
-    {
-        return await ContextHelper.HasValidToken(HttpContext)
-               || await ContextHelper.HasAdmin(HttpContext)
-               || HasConfiguredSyncToken(Request);
-    }
+    async Task<bool> IsAuthorizedSyncRequest() =>
+        await ContextHelper.HasAdmin(HttpContext) || HasConfiguredSyncToken(Request);
 
     bool HasConfiguredSyncToken(HttpRequest request)
     {

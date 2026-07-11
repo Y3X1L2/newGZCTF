@@ -23,49 +23,6 @@ namespace GZCTF.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("GZCTF.Models.Data.ApiToken", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasComment("The unique identifier for the token.");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasComment("The timestamp when the token was created.");
-
-                    b.Property<Guid>("CreatorId")
-                        .HasColumnType("uuid")
-                        .HasComment("The ID of the user who created the token.");
-
-                    b.Property<DateTimeOffset?>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasComment("The timestamp when the token expires. A null value means it never expires.");
-
-                    b.Property<bool>("IsRevoked")
-                        .HasColumnType("boolean")
-                        .HasComment("Indicates whether the token has been revoked.");
-
-                    b.Property<DateTimeOffset?>("LastUsedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasComment("The timestamp when the token was last used.");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasComment("A user-friendly name for the token.");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatorId");
-
-                    b.ToTable("ApiTokens", t =>
-                        {
-                            t.HasComment("Stores API tokens for programmatic access.");
-                        });
-                });
-
             modelBuilder.Entity("GZCTF.Models.Data.Attachment", b =>
                 {
                     b.Property<int>("Id")
@@ -1532,6 +1489,9 @@ namespace GZCTF.Migrations
                     b.Property<bool>("ContainsMalware")
                         .HasColumnType("boolean");
 
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Description")
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
@@ -1577,19 +1537,16 @@ namespace GZCTF.Migrations
                     b.Property<byte>("Status")
                         .HasColumnType("smallint");
 
-                    b.Property<int?>("TrainingCourseId")
-                        .HasColumnType("integer");
-
                     b.Property<DateTimeOffset>("UploadedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedById");
+
                     b.HasIndex("Name");
 
                     b.HasIndex("Status");
-
-                    b.HasIndex("TrainingCourseId");
 
                     b.ToTable("ImageTemplates");
                 });
@@ -4710,6 +4667,353 @@ namespace GZCTF.Migrations
                     b.ToTable("WorkerNodes");
                 });
 
+            modelBuilder.Entity("GZCTF.Modules.Audit.Domain.ApiOperation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ApiTokenId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("CurrentProgress")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid?>("DeploymentQueueTicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ErrorDetail")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset?>("LeaseExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LeaseOwner")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ResourceId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ResourceType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("RouteKey")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Stage")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset?>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("TotalProgress")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("DeploymentQueueTicketId");
+
+                    b.HasIndex("Status", "LeaseExpiresAt")
+                        .HasFilter("\"Status\" = 1");
+
+                    b.HasIndex("Status", "NextAttemptAt")
+                        .HasFilter("\"Status\" = 0");
+
+                    b.HasIndex("ApiTokenId", "RouteKey", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.ToTable("ApiOperations", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Audit.Domain.ExternalApiRequestAudit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ApiTokenId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("DurationMilliseconds")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<bool?>("IdempotencyReused")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid?>("OperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RemoteIp")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<long>("RequestBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ResourceId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ResourceType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<long>("ResponseBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("RouteKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Scopes")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<int>("StatusCode")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TraceId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("ApiTokenId");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("OperationId");
+
+                    b.HasIndex("TraceId");
+
+                    b.ToTable("ExternalApiRequestAudits", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Content.Domain.ImageImportJob", b =>
+                {
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("ContentLength")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExpectedDigest")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int?>("ImageTemplateId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("OriginalFileName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("RequestedName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<byte>("RequestedOsType")
+                        .HasColumnType("smallint");
+
+                    b.Property<byte>("RequestedTemplateKind")
+                        .HasColumnType("smallint");
+
+                    b.Property<int>("SourceKind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SourceReference")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("StagedPath")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.HasKey("OperationId");
+
+                    b.HasIndex("ImageTemplateId");
+
+                    b.HasIndex("CreatedById", "RequestedName");
+
+                    b.ToTable("ImageImportJobs", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Identity.Domain.ApiToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("RequestsPerMinute")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("SecretHash")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("bytea");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatorId");
+
+                    b.ToTable("ApiTokens", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Identity.Domain.ApiTokenResourceGrant", b =>
+                {
+                    b.Property<Guid>("TokenId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResourceType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ResourceId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("TokenId", "ResourceType", "ResourceId");
+
+                    b.ToTable("ApiTokenResourceGrants", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Identity.Domain.ApiTokenScopeGrant", b =>
+                {
+                    b.Property<Guid>("TokenId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Scope")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("TokenId", "Scope");
+
+                    b.ToTable("ApiTokenScopeGrants", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Training.Domain.TrainingCourseImageTemplateBinding", b =>
+                {
+                    b.Property<int>("CourseId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ImageTemplateId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("AddedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AddedById")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("CourseId", "ImageTemplateId");
+
+                    b.HasIndex("AddedById");
+
+                    b.HasIndex("ImageTemplateId");
+
+                    b.ToTable("TrainingCourseImageTemplateBindings", (string)null);
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
                 {
                     b.Property<int>("Id")
@@ -4872,17 +5176,6 @@ namespace GZCTF.Migrations
                     b.HasIndex("TeamsId");
 
                     b.ToTable("TeamUserInfo");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.ApiToken", b =>
-                {
-                    b.HasOne("GZCTF.Models.Data.UserInfo", "Creator")
-                        .WithMany()
-                        .HasForeignKey("CreatorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Creator");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.Attachment", b =>
@@ -5298,7 +5591,7 @@ namespace GZCTF.Migrations
                     b.HasOne("GZCTF.Models.Data.FlagContext", "FlagContext")
                         .WithMany()
                         .HasForeignKey("FlagId")
-                        .OnDelete(DeleteBehavior.SetNull)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("GZCTF.Models.Data.Participation", "Participation")
@@ -5480,12 +5773,12 @@ namespace GZCTF.Migrations
 
             modelBuilder.Entity("GZCTF.Models.Data.ImageTemplate", b =>
                 {
-                    b.HasOne("GZCTF.Models.Data.TrainingCourse", "TrainingCourse")
+                    b.HasOne("GZCTF.Models.Data.UserInfo", "CreatedBy")
                         .WithMany()
-                        .HasForeignKey("TrainingCourseId")
+                        .HasForeignKey("CreatedById")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.Navigation("TrainingCourse");
+                    b.Navigation("CreatedBy");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.Participation", b =>
@@ -5594,7 +5887,7 @@ namespace GZCTF.Migrations
                     b.HasOne("GZCTF.Models.Data.ImageTemplate", "ImageTemplate")
                         .WithMany()
                         .HasForeignKey("ImageTemplateId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("GZCTF.Models.Data.PenetrationNetwork", "Network")
                         .WithMany("Nodes")
@@ -6638,6 +6931,109 @@ namespace GZCTF.Migrations
                     b.Navigation("Node");
                 });
 
+            modelBuilder.Entity("GZCTF.Modules.Audit.Domain.ApiOperation", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.UserInfo", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GZCTF.Modules.Identity.Domain.ApiToken", null)
+                        .WithMany()
+                        .HasForeignKey("ApiTokenId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.DeploymentQueueTicket", null)
+                        .WithMany()
+                        .HasForeignKey("DeploymentQueueTicketId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Audit.Domain.ExternalApiRequestAudit", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.UserInfo", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GZCTF.Modules.Identity.Domain.ApiToken", null)
+                        .WithMany()
+                        .HasForeignKey("ApiTokenId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GZCTF.Modules.Audit.Domain.ApiOperation", null)
+                        .WithMany()
+                        .HasForeignKey("OperationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Content.Domain.ImageImportJob", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.UserInfo", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GZCTF.Models.Data.ImageTemplate", null)
+                        .WithMany()
+                        .HasForeignKey("ImageTemplateId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GZCTF.Modules.Audit.Domain.ApiOperation", null)
+                        .WithOne()
+                        .HasForeignKey("GZCTF.Modules.Content.Domain.ImageImportJob", "OperationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Identity.Domain.ApiToken", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.UserInfo", null)
+                        .WithMany()
+                        .HasForeignKey("CreatorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Identity.Domain.ApiTokenResourceGrant", b =>
+                {
+                    b.HasOne("GZCTF.Modules.Identity.Domain.ApiToken", null)
+                        .WithMany("Resources")
+                        .HasForeignKey("TokenId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Identity.Domain.ApiTokenScopeGrant", b =>
+                {
+                    b.HasOne("GZCTF.Modules.Identity.Domain.ApiToken", null)
+                        .WithMany("Scopes")
+                        .HasForeignKey("TokenId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Training.Domain.TrainingCourseImageTemplateBinding", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.UserInfo", null)
+                        .WithMany()
+                        .HasForeignKey("AddedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GZCTF.Models.Data.TrainingCourse", null)
+                        .WithMany()
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.ImageTemplate", null)
+                        .WithMany()
+                        .HasForeignKey("ImageTemplateId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", null)
@@ -6900,6 +7296,13 @@ namespace GZCTF.Migrations
             modelBuilder.Entity("GZCTF.Models.Data.UserInfo", b =>
                 {
                     b.Navigation("Submissions");
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Identity.Domain.ApiToken", b =>
+                {
+                    b.Navigation("Resources");
+
+                    b.Navigation("Scopes");
                 });
 #pragma warning restore 612, 618
         }

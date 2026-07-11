@@ -1,5 +1,8 @@
 using System.Reflection;
+using GZCTF.Infrastructure.Api;
 using GZCTF.Hubs;
+using GZCTF.Modules.Identity.Infrastructure;
+using GZCTF.Modules.Audit.Infrastructure;
 using Scalar.AspNetCore;
 using Serilog;
 
@@ -91,12 +94,16 @@ internal static class AppExtensions
                 app.UseHsts();
             }
 
+            app.UseMiddleware<ExternalApiRequestAuditMiddleware>();
+            app.UseMiddleware<ExternalApiExceptionHandler>();
+
             app.UseRouting();
 
             if (app.Configuration.GetValue<bool>("DisableRateLimit") is not true)
                 app.UseRateLimiter();
 
             app.UseAuthentication();
+            app.UseMiddleware<ApiTokenRateLimitMiddleware>();
             app.UseAuthorization();
 
             if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("RequestLogging"))

@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using GZCTF.Models.Internal;
+using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Models.Request.Account;
 using GZCTF.Models.Request.Admin;
 using GZCTF.Models.Request.Edit;
@@ -163,15 +164,17 @@ namespace GZCTF.Utils;
 [JsonSerializable(typeof(GameDetailModel))]
 [JsonSerializable(typeof(ParticipationInfoModel[]))]
 [JsonSerializable(typeof(ChallengeDetailModel))]
+[JsonSerializable(typeof(FlagSubmitResultModel))]
 [JsonSerializable(typeof(BasicWriteupInfoModel))]
 [JsonSerializable(typeof(PostInfoModel[]))]
 [JsonSerializable(typeof(ClientConfig))]
 [JsonSerializable(typeof(ClientCaptchaInfoModel))]
 [JsonSerializable(typeof(TeamInfoModel))]
 [JsonSerializable(typeof(TeamInfoModel[]))]
-[JsonSerializable(typeof(ApiToken))]
+[JsonSerializable(typeof(ApiTokenModel))]
 [JsonSerializable(typeof(ApiTokenResponse))]
-[JsonSerializable(typeof(ApiToken[]))]
+[JsonSerializable(typeof(ApiTokenModel[]))]
+[JsonSerializable(typeof(ApiOperationModel))]
 internal sealed partial class AppJsonSerializerContext : JsonSerializerContext;
 
 public class DateTimeOffsetJsonConverter : JsonConverter<DateTimeOffset>

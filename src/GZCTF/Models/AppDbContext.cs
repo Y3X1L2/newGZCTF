@@ -5,6 +5,14 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using GZCTF.Modules;
+using ApiOperationEntity = GZCTF.Modules.Audit.Domain.ApiOperation;
+using ApiTokenEntity = GZCTF.Modules.Identity.Domain.ApiToken;
+using ApiTokenResourceGrantEntity = GZCTF.Modules.Identity.Domain.ApiTokenResourceGrant;
+using ApiTokenScopeGrantEntity = GZCTF.Modules.Identity.Domain.ApiTokenScopeGrant;
+using TrainingCourseImageTemplateBindingEntity = GZCTF.Modules.Training.Domain.TrainingCourseImageTemplateBinding;
+using ImageImportJobEntity = GZCTF.Modules.Content.Domain.ImageImportJob;
+using ExternalApiRequestAuditEntity = GZCTF.Modules.Audit.Domain.ExternalApiRequestAudit;
 
 namespace GZCTF.Models;
 
@@ -44,7 +52,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<UserParticipation> UserParticipations { get; set; } = null!;
     public DbSet<ExerciseDependency> ExerciseDependencies { get; set; } = null!;
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
-    public DbSet<ApiToken> ApiTokens { get; set; } = null!;
+    public DbSet<ApiTokenEntity> ApiTokens { get; set; } = null!;
+    public DbSet<ApiTokenScopeGrantEntity> ApiTokenScopeGrants { get; set; } = null!;
+    public DbSet<ApiTokenResourceGrantEntity> ApiTokenResourceGrants { get; set; } = null!;
+    public DbSet<ApiOperationEntity> ApiOperations { get; set; } = null!;
+    public DbSet<ExternalApiRequestAuditEntity> ExternalApiRequestAudits { get; set; } = null!;
+    public DbSet<TrainingCourseImageTemplateBindingEntity> TrainingCourseImageTemplateBindings { get; set; } = null!;
+    public DbSet<ImageImportJobEntity> ImageImportJobs { get; set; } = null!;
     public DbSet<ImageTemplate> ImageTemplates { get; set; } = null!;
     public DbSet<ImageDistributionRecord> ImageDistributionRecords { get; set; } = null!;
     public DbSet<DockerRegistryMigrationTask> DockerRegistryMigrationTasks { get; set; } = null!;
@@ -128,12 +142,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.ApplyConfigurationsFromAssembly(typeof(ModuleAssemblyMarker).Assembly,
+            type => type.Namespace?.StartsWith("GZCTF.Modules", StringComparison.Ordinal) == true);
 
         // var setConverter = GetJsonConverter<HashSet<string>>();
         // var setComparer = GetEnumerableComparer<HashSet<string>, string>();
         var listConverter = GetJsonConverter<List<string>>();
+        var requiredListConverter = GetRequiredJsonConverter<List<string>>();
         var listComparer = GetEnumerableComparer<List<string>, string>();
-        var intListConverter = GetJsonConverter<List<int>>();
+        var intListConverter = GetRequiredJsonConverter<List<int>>();
         var intListComparer = GetEnumerableComparer<List<int>, int>();
         var trainingChapterCompletionPolicyConverter = GetRequiredJsonConverter<TrainingChapterCompletionPolicy>();
         var theoryQuestionTypeListComparer = GetEnumerableComparer<List<TheoryQuestionType>, TheoryQuestionType>();
@@ -575,7 +592,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
             entity.HasOne(e => e.FlagContext)
                 .WithMany()
                 .HasForeignKey(e => e.FlagId)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<UserParticipation>(entity =>
@@ -605,7 +622,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .HasMaxLength(128);
 
             entity.Property(e => e.Options)
-                .HasConversion(listConverter)
+                .HasConversion(requiredListConverter)
                 .Metadata
                 .SetValueComparer(listComparer);
 
@@ -635,7 +652,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .HasMaxLength(32);
 
             entity.Property(e => e.Options)
-                .HasConversion(listConverter)
+                .HasConversion(requiredListConverter)
                 .Metadata
                 .SetValueComparer(listComparer);
 
@@ -698,31 +715,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        builder.Entity<ApiToken>(entity =>
-        {
-            entity.HasOne(e => e.Creator)
-                .WithMany()
-                .HasForeignKey(e => e.CreatorId)
-                .OnDelete(DeleteBehavior.Restrict);
-        });
-
         builder.Entity<LogModel>(entity =>
         {
             entity.Property(e => e.Status)
                 .HasConversion<string>()
                 .HasMaxLength(Limits.MaxLogStatusLength);
-        });
-
-        builder.Entity<ImageTemplate>(entity =>
-        {
-            entity.HasIndex(e => e.Name);
-            entity.HasIndex(e => e.Status);
-            entity.HasIndex(e => e.TrainingCourseId);
-
-            entity.HasOne(e => e.TrainingCourse)
-                .WithMany()
-                .HasForeignKey(e => e.TrainingCourseId)
-                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<ImageDistributionRecord>(entity =>
@@ -734,7 +731,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .HasConversion<byte>();
 
             entity.Property(e => e.References)
-                .HasConversion(GetJsonConverter<List<ImageDistributionReference>>())
+                .HasConversion(GetRequiredJsonConverter<List<ImageDistributionReference>>())
                 .Metadata
                 .SetValueComparer(GetEnumerableComparer<List<ImageDistributionReference>, ImageDistributionReference>());
 
@@ -832,7 +829,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
             entity.HasOne(e => e.ImageTemplate)
                 .WithMany()
                 .HasForeignKey(e => e.ImageTemplateId)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<PenetrationInterface>(entity =>
@@ -1031,7 +1028,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .HasMaxLength(32);
 
             entity.Property(e => e.Tags)
-                .HasConversion(listConverter)
+                .HasConversion(requiredListConverter)
                 .Metadata
                 .SetValueComparer(listComparer);
 
@@ -1278,7 +1275,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .HasMaxLength(32);
 
             entity.Property(e => e.Options)
-                .HasConversion(listConverter)
+                .HasConversion(requiredListConverter)
                 .Metadata
                 .SetValueComparer(listComparer);
 
@@ -1320,7 +1317,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .HasMaxLength(32);
 
             entity.Property(e => e.Options)
-                .HasConversion(listConverter)
+                .HasConversion(requiredListConverter)
                 .Metadata
                 .SetValueComparer(listComparer);
 

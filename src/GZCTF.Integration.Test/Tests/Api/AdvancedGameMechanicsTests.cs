@@ -91,7 +91,7 @@ public class AdvancedGameMechanicsTests(GZCTFApplicationFactory factory, ITestOu
                 $"/api/Game/{game.Id}/Challenges/{challengeId}",
                 new FlagSubmitModel { Flag = $"flag{{wrong_{i}}}" });
             submitResponse.EnsureSuccessStatusCode();
-            var submissionId = await submitResponse.Content.ReadFromJsonAsync<int>();
+            var submissionId = (await submitResponse.Content.ReadFromJsonAsync<FlagSubmitResultModel>())!.Id;
             Assert.True(submissionId > 0);
         }
 
@@ -651,6 +651,7 @@ public class AdvancedGameMechanicsTests(GZCTFApplicationFactory factory, ITestOu
                 Content = "Dynamic container challenge with echo",
                 Category = ChallengeCategory.Misc,
                 Type = ChallengeType.DynamicContainer,
+                Environment = EnvironmentType.Docker,
                 ContainerImage = "ghcr.io/gzctf/challenge-base/echo:latest",
                 ExposePort = 70,
                 FlagTemplate = "flag{The quick brown fox jumps over the lazy dog}",
@@ -689,8 +690,12 @@ public class AdvancedGameMechanicsTests(GZCTFApplicationFactory factory, ITestOu
         Assert.NotEqual(JsonValueKind.Null, challengeDetail.ValueKind);
 
         // 2. Post to create a container
+        await using var localScheduling =
+            await ContainerHelper.EnableLocalNodeSchedulingAsync(factory.Services);
         var createContainerResponse = await client.PostAsync($"/api/Game/{game.Id}/Container/{challengeId}", null);
-        createContainerResponse.EnsureSuccessStatusCode();
+        Assert.True(
+            createContainerResponse.IsSuccessStatusCode,
+            await createContainerResponse.Content.ReadAsStringAsync());
         var containerInfo = await createContainerResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.NotEqual(JsonValueKind.Null, containerInfo.ValueKind);
 
@@ -733,7 +738,7 @@ public class AdvancedGameMechanicsTests(GZCTFApplicationFactory factory, ITestOu
             new FlagSubmitModel { Flag = flag });
         submitResponse.EnsureSuccessStatusCode();
 
-        var submissionId = await submitResponse.Content.ReadFromJsonAsync<int>();
+        var submissionId = (await submitResponse.Content.ReadFromJsonAsync<FlagSubmitResultModel>())!.Id;
         Assert.True(submissionId > 0);
 
         // Poll submission status until it's accepted or timeout

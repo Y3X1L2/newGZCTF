@@ -6,7 +6,11 @@ namespace GZCTF.Services.Vm;
 
 public interface IArchiveExtractor
 {
-    Task<ArchiveExtractResult> ExtractAndRegisterAsync(string archivePath, string originalFileName, CancellationToken token);
+    Task<ArchiveExtractResult> ExtractAndRegisterAsync(
+        string archivePath,
+        string originalFileName,
+        Guid createdById,
+        CancellationToken token);
 }
 
 public class ArchiveExtractResult
@@ -31,7 +35,11 @@ public class ArchiveExtractor : IArchiveExtractor
         _storagePath = configuration.GetValue<string>("KvmSettings:ImageStoragePath") ?? "./images";
     }
 
-    public async Task<ArchiveExtractResult> ExtractAndRegisterAsync(string archivePath, string originalFileName, CancellationToken token)
+    public async Task<ArchiveExtractResult> ExtractAndRegisterAsync(
+        string archivePath,
+        string originalFileName,
+        Guid createdById,
+        CancellationToken token)
     {
         var guid = Guid.NewGuid().ToString("N");
         var extractDir = Path.Combine(_storagePath, guid);
@@ -135,6 +143,7 @@ public class ArchiveExtractor : IArchiveExtractor
                 FileSize = fileSize,
                 Status = ImageStatus.Ready,
                 UploadedAt = DateTimeOffset.UtcNow,
+                CreatedById = createdById
             };
 
             _context.ImageTemplates.Add(template);

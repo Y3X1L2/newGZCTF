@@ -21,6 +21,7 @@
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="coverlet.msbuild" />
     <PackageReference Include="Moq" />
+    <PackageReference Include="NetArchTest.Rules" />
   </ItemGroup>
 
   <ItemGroup>

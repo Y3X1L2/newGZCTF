@@ -263,10 +263,6 @@ public class ManagedConfig
     /// </summary>
     public X25519KeyPair ApiEncryption { get; set; } = new();
 
-    /// <summary>
-    /// Api token configuration
-    /// </summary>
-    public Ed25519KeyPair ApiToken { get; set; } = new();
 }
 
 /// <summary>

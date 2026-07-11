@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Localization;
 using Serilog;
+using GZCTF.Infrastructure.Api;
 
 namespace GZCTF;
 
@@ -77,8 +78,23 @@ public class Server
         var error = context.ModelState.Values.Where(v => v.Errors.Count > 0)
             .Select(v => v.Errors.FirstOrDefault()?.ErrorMessage).FirstOrDefault();
 
-        return RequestResponse.Result(error is [_, ..]
+        var detail = error is [_, ..]
             ? error
-            : localizer[nameof(Resources.Program.Model_ValidationFailed)]);
+            : localizer[nameof(Resources.Program.Model_ValidationFailed)].Value;
+        if (!context.HttpContext.Request.Path.StartsWithSegments(
+                "/api/open/v1", StringComparison.OrdinalIgnoreCase))
+            return RequestResponse.Result(detail);
+
+        var result = new ObjectResult(ExternalApiProblemDetails.Create(
+            context.HttpContext,
+            StatusCodes.Status400BadRequest,
+            "validation_failed",
+            "The request is invalid.",
+            detail))
+        {
+            StatusCode = StatusCodes.Status400BadRequest
+        };
+        result.ContentTypes.Add("application/problem+json");
+        return result;
     }
 }

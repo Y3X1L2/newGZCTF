@@ -134,7 +134,7 @@ public class PracticeModeDeadlineTests(GZCTFApplicationFactory factory)
             flagSubmitModel);
 
         submitResponse2.EnsureSuccessStatusCode();
-        var submissionId = await submitResponse2.Content.ReadFromJsonAsync<int>();
+        var submissionId = (await submitResponse2.Content.ReadFromJsonAsync<FlagSubmitResultModel>())!.Id;
         await Task.Delay(300);
 
         // Verify submission status
@@ -160,7 +160,7 @@ public class PracticeModeDeadlineTests(GZCTFApplicationFactory factory)
             flagSubmitModel2);
 
         submitResponse3.EnsureSuccessStatusCode();
-        var submissionId2 = await submitResponse3.Content.ReadFromJsonAsync<int>();
+        var submissionId2 = (await submitResponse3.Content.ReadFromJsonAsync<FlagSubmitResultModel>())!.Id;
         await Task.Delay(300);
 
         var statusResponse2 =
@@ -214,7 +214,7 @@ public class PracticeModeDeadlineTests(GZCTFApplicationFactory factory)
         var submitResponse1 = await client1.PostAsJsonAsync($"/api/Game/{game.Id}/Challenges/{challenge.Id}",
             new FlagSubmitModel { Flag = "flag{scoreboard}" });
         submitResponse1.EnsureSuccessStatusCode();
-        var submissionId1 = await submitResponse1.Content.ReadFromJsonAsync<int>();
+        var submissionId1 = (await submitResponse1.Content.ReadFromJsonAsync<FlagSubmitResultModel>())!.Id;
         await Task.Delay(300);
 
         using var client2 = factory.CreateClient();
@@ -224,7 +224,7 @@ public class PracticeModeDeadlineTests(GZCTFApplicationFactory factory)
         var submitResponse2 = await client2.PostAsJsonAsync($"/api/Game/{game.Id}/Challenges/{challenge.Id}",
             new FlagSubmitModel { Flag = "flag{scoreboard}" });
         submitResponse2.EnsureSuccessStatusCode();
-        var submissionId2 = await submitResponse2.Content.ReadFromJsonAsync<int>();
+        var submissionId2 = (await submitResponse2.Content.ReadFromJsonAsync<FlagSubmitResultModel>())!.Id;
         await Task.Delay(300);
 
         // Verify both submissions are accepted
@@ -267,7 +267,7 @@ public class PracticeModeDeadlineTests(GZCTFApplicationFactory factory)
         var submitResponse3 = await client3.PostAsJsonAsync($"/api/Game/{game.Id}/Challenges/{challenge2.Id}",
             new FlagSubmitModel { Flag = "flag{after_deadline}" });
         submitResponse3.EnsureSuccessStatusCode();
-        var submissionId3 = await submitResponse3.Content.ReadFromJsonAsync<int>();
+        var submissionId3 = (await submitResponse3.Content.ReadFromJsonAsync<FlagSubmitResultModel>())!.Id;
         await Task.Delay(300);
 
         // Verify submission is accepted

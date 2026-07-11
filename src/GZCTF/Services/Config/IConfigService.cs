@@ -46,11 +46,6 @@ public interface IConfigService
     public string? DecryptApiData(string cipherText);
 
     /// <summary>
-    /// Get the ApiToken signature context.
-    /// </summary>
-    public Task<SignatureContext> GetApiTokenContext(CancellationToken token = default);
-
-    /// <summary>
     /// Get the XOR key from configuration.
     /// </summary>
     public byte[] GetXorKey();

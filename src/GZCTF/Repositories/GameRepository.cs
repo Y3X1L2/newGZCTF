@@ -466,7 +466,7 @@ public class GameRepository(
             }
 
             // Track challenge-level solver teams for SolvedCount
-            if (scoreEligible)
+            if (affectDynamicScore)
             {
                 if (!challengeSolverTeams.ContainsKey(snapshot.ChallengeId))
                     challengeSolverTeams[snapshot.ChallengeId] = [];

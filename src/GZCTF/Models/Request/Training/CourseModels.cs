@@ -1039,8 +1039,6 @@ public class TrainingCourseImageTemplateModel
 
     public DateTimeOffset UploadedAt { get; set; }
 
-    public int? TrainingCourseId { get; set; }
-
     public static TrainingCourseImageTemplateModel FromTemplate(ImageTemplate template) =>
         new()
         {
@@ -1054,8 +1052,7 @@ public class TrainingCourseImageTemplateModel
             ErrorMessage = template.ErrorMessage,
             ImageHash = template.ImageHash,
             RegistryUrl = template.RegistryUrl,
-            UploadedAt = template.UploadedAt,
-            TrainingCourseId = template.TrainingCourseId
+            UploadedAt = template.UploadedAt
         };
 }
 

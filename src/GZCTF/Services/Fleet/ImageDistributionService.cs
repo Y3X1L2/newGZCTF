@@ -13,32 +13,82 @@ public class ImageDistributionService(
     static readonly NodeCapability DockerCapability = NodeCapability.Docker;
     static readonly NodeCapability VmCapability = NodeCapability.Kvm;
 
-    public async Task DistributeToCapableNodesAsync(ImageTemplate template, CancellationToken token) =>
-        await DistributeTemplateAsync(template.Id, null, token);
+    public async Task<IReadOnlyList<ImageDistributionRecord>> DistributeToCapableNodesAsync(
+        ImageTemplate template,
+        CancellationToken token,
+        ImageDistributionReference? reference = null)
+    {
+        var persisted = context.Entry(template).State == EntityState.Detached
+            ? await context.ImageTemplates.SingleOrDefaultAsync(item => item.Id == template.Id, token)
+            : template;
+        if (persisted is null)
+            throw new InvalidOperationException($"Image template {template.Id} was not found.");
+        if (persisted.Status == ImageStatus.Deleting)
+            throw new InvalidOperationException($"Image template {template.Id} is being deleted.");
 
-    public async Task DistributeTemplateAsync(int templateId, ImageDistributionReference? reference,
+        persisted.Status = ImageStatus.Importing;
+        persisted.ErrorMessage = null;
+        await context.SaveChangesAsync(token);
+
+        var records = await DistributeTemplateAsync(template.Id, reference, token);
+        if (records.Count == 0)
+        {
+            var imageKind = template.ImageType == ImageType.Docker ? "Docker" : "KVM";
+            var message = $"No online schedulable {imageKind} node is available for image template " +
+                          $"{template.Name} ({template.Id}).";
+            persisted.Status = ImageStatus.Error;
+            persisted.ErrorMessage = TrimError(message);
+            await context.SaveChangesAsync(token);
+            throw new InvalidOperationException(message);
+        }
+
+        var failures = records
+            .Where(record => record.Status == ImageDistributionStatus.Failed)
+            .Select(record => record.ErrorMessage)
+            .Where(message => !string.IsNullOrWhiteSpace(message))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        persisted.Status = failures.Length == 0 ? ImageStatus.Ready : ImageStatus.Error;
+        persisted.ErrorMessage = failures.Length == 0
+            ? null
+            : TrimError(string.Join("; ", failures));
+        await context.SaveChangesAsync(token);
+        if (failures.Length > 0)
+            throw new InvalidOperationException(persisted.ErrorMessage);
+
+        return records;
+    }
+
+    public async Task<IReadOnlyList<ImageDistributionRecord>> DistributeTemplateAsync(
+        int templateId,
+        ImageDistributionReference? reference,
         CancellationToken token)
     {
         var template = await context.ImageTemplates.AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == templateId, token);
-        if (template is null)
-            return;
+        if (template is null || template.Status == ImageStatus.Deleting)
+            return [];
 
         var nodes = await GetCapableNodesAsync(template, token);
+        List<ImageDistributionRecord> records = [];
         foreach (var node in nodes)
-            await EnsureTemplateOnNodeAsync(template, node, reference, token);
+            records.Add(await EnsureTemplateOnNodeAsync(template, node, reference, token));
+        return records;
     }
 
     public async Task DistributeGameAsync(int gameId, CancellationToken token)
     {
         var templateIds = await context.GameChallenges.AsNoTracking()
-            .Where(c => c.GameId == gameId && c.Type.IsContainer())
+            .Where(c => c.GameId == gameId &&
+                        (c.Type == ChallengeType.StaticContainer ||
+                         c.Type == ChallengeType.DynamicContainer))
             .Select(c => c.Environment == EnvironmentType.WindowsVM ? c.ImageTemplateId : null)
             .ToArrayAsync(token);
 
         var dockerImages = await context.GameChallenges.AsNoTracking()
             .Where(c => c.GameId == gameId &&
-                        c.Type.IsContainer() &&
+                        (c.Type == ChallengeType.StaticContainer ||
+                         c.Type == ChallengeType.DynamicContainer) &&
                         c.Environment == EnvironmentType.Docker &&
                         !string.IsNullOrWhiteSpace(c.ContainerImage))
             .Select(c => c.ContainerImage!)
@@ -55,8 +105,19 @@ public class ImageDistributionService(
     public async Task ReleaseGameReferencesAsync(int gameId, CancellationToken token) =>
         await ReleaseReferenceAsync(ImageDistributionReference.Game(gameId), token);
 
+    public Task ReleaseTrainingCourseReferencesAsync(int courseId, CancellationToken token) =>
+        ReleaseReferenceAsync(ImageDistributionReference.TrainingCourse(courseId), token);
+
+    public Task ReleaseTrainingCourseTemplateReferenceAsync(
+        int courseId,
+        int templateId,
+        CancellationToken token) =>
+        ReleaseReferenceAsync(ImageDistributionReference.TrainingCourse(courseId), token, templateId);
+
     public async Task CleanupUnreferencedAsync(CancellationToken token)
     {
+        await ReconcileReferencesAsync(token);
+
         var records = await context.ImageDistributionRecords
             .Include(r => r.WorkerNode)
             .Include(r => r.ImageTemplate)
@@ -77,12 +138,99 @@ public class ImageDistributionService(
         await context.SaveChangesAsync(token);
     }
 
+    public async Task ReconcileReferencesAsync(CancellationToken token)
+    {
+        var records = (await context.ImageDistributionRecords
+                .Where(record => record.ReferenceCount > 0 ||
+                                 record.Status == ImageDistributionStatus.CleanupPending)
+                .ToArrayAsync(token))
+            .Where(record => record.References.Count > 0)
+            .ToArray();
+        if (records.Length == 0)
+            return;
+
+        var gameIds = records.SelectMany(record => record.References)
+            .Where(reference => reference.Kind == ImageDistributionReferenceKind.Game)
+            .Select(reference => reference.Id)
+            .Distinct()
+            .ToArray();
+        var courseIds = records.SelectMany(record => record.References)
+            .Where(reference => reference.Kind == ImageDistributionReferenceKind.TrainingCourse)
+            .Select(reference => reference.Id)
+            .Distinct()
+            .ToArray();
+
+        var gameReferences = (await context.GameChallenges.AsNoTracking()
+                .Where(challenge => gameIds.Contains(challenge.GameId) && challenge.ImageTemplateId.HasValue)
+                .Select(challenge => new { challenge.GameId, TemplateId = challenge.ImageTemplateId!.Value })
+                .Distinct()
+                .ToArrayAsync(token))
+            .Select(reference => (reference.GameId, reference.TemplateId))
+            .ToHashSet();
+        var courseReferences = (await context.TrainingCourseImageTemplateBindings.AsNoTracking()
+                .Where(binding => courseIds.Contains(binding.CourseId))
+                .Select(binding => new { binding.CourseId, binding.ImageTemplateId })
+                .ToArrayAsync(token))
+            .Select(reference => (reference.CourseId, reference.ImageTemplateId))
+            .ToHashSet();
+
+        foreach (var record in records)
+        {
+            var validReferences = record.References.Where(reference => reference.Kind switch
+            {
+                ImageDistributionReferenceKind.Game =>
+                    gameReferences.Contains((reference.Id, record.ImageTemplateId)),
+                ImageDistributionReferenceKind.TrainingCourse =>
+                    courseReferences.Contains((reference.Id, record.ImageTemplateId)),
+                _ => false
+            }).ToList();
+            if (validReferences.Count == record.References.Count)
+            {
+                record.ReferenceCount = Math.Max(record.ReferenceCount, validReferences.Count);
+                continue;
+            }
+
+            record.References = validReferences;
+            record.ReferenceCount = validReferences.Count;
+            if (record.ReferenceCount == 0)
+                record.Status = ImageDistributionStatus.CleanupPending;
+        }
+
+        await context.SaveChangesAsync(token);
+    }
+
+    public async Task CleanupTemplateForDeletionAsync(int templateId, CancellationToken token)
+    {
+        var records = await context.ImageDistributionRecords
+            .Include(record => record.WorkerNode)
+            .Include(record => record.ImageTemplate)
+            .Where(record => record.ImageTemplateId == templateId)
+            .ToArrayAsync(token);
+
+        foreach (var record in records)
+        {
+            record.ReferenceCount = 0;
+            record.References = [];
+            record.Status = ImageDistributionStatus.CleanupPending;
+            await CleanupRecordAsync(record, token, removeOnSuccess: false);
+        }
+
+        await context.SaveChangesAsync(token);
+        var failure = records.FirstOrDefault(record =>
+            record.Status == ImageDistributionStatus.Failed ||
+            !string.IsNullOrWhiteSpace(record.ErrorMessage));
+        if (failure is not null)
+            throw new InvalidOperationException(
+                failure.ErrorMessage ??
+                $"Image template {templateId} cache cleanup is incomplete on node {failure.WorkerNodeId}.");
+    }
+
     public async Task<AgentVmImageDownloadResult> EnsureVmTemplateOnNodeAsync(int templateId, Guid nodeId,
         CancellationToken token)
     {
         var template = await context.ImageTemplates.AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == templateId, token);
-        if (template is null)
+        if (template is null || template.Status != ImageStatus.Ready)
             return AgentVmImageDownloadResult.Failed($"VM template {templateId} was not found.");
 
         var node = await context.WorkerNodes.AsNoTracking()
@@ -187,7 +335,7 @@ public class ImageDistributionService(
             record.ErrorMessage = null;
             record.LastCheckedAt = DateTimeOffset.UtcNow;
         }
-        catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidOperationException)
+        catch (Exception ex) when (IsDistributionFailure(ex, token))
         {
             record.Status = ImageDistributionStatus.Failed;
             record.ErrorMessage = TrimError(
@@ -201,12 +349,19 @@ public class ImageDistributionService(
         return record;
     }
 
-    async Task ReleaseReferenceAsync(ImageDistributionReference reference, CancellationToken token)
+    async Task ReleaseReferenceAsync(
+        ImageDistributionReference reference,
+        CancellationToken token,
+        int? templateId = null)
     {
-        var records = (await context.ImageDistributionRecords
+        var query = context.ImageDistributionRecords
             .Include(r => r.WorkerNode)
             .Include(r => r.ImageTemplate)
-            .ToArrayAsync(token))
+            .AsQueryable();
+        if (templateId.HasValue)
+            query = query.Where(record => record.ImageTemplateId == templateId.Value);
+
+        var records = (await query.ToArrayAsync(token))
             .Where(r => r.References.Contains(reference))
             .ToArray();
 
@@ -228,7 +383,10 @@ public class ImageDistributionService(
         await context.SaveChangesAsync(token);
     }
 
-    async Task CleanupRecordAsync(ImageDistributionRecord record, CancellationToken token)
+    async Task CleanupRecordAsync(
+        ImageDistributionRecord record,
+        CancellationToken token,
+        bool removeOnSuccess = true)
     {
         try
         {
@@ -253,9 +411,16 @@ public class ImageDistributionService(
                     record.ImageHash, token);
             }
 
-            context.ImageDistributionRecords.Remove(record);
+            if (removeOnSuccess)
+                context.ImageDistributionRecords.Remove(record);
+            else
+            {
+                record.Status = ImageDistributionStatus.CleanupPending;
+                record.ErrorMessage = null;
+                record.LastCheckedAt = DateTimeOffset.UtcNow;
+            }
         }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        catch (Exception ex) when (IsDistributionFailure(ex, token))
         {
             record.Status = ImageDistributionStatus.Failed;
             record.ErrorMessage = TrimError($"Image cache cleanup failed: {ex.Message}");
@@ -323,4 +488,12 @@ public class ImageDistributionService(
 
     static string TrimError(string message) =>
         message.Length <= 1024 ? message : message[..1024];
+
+    static bool IsDistributionFailure(Exception exception, CancellationToken callerToken) =>
+        exception switch
+        {
+            OperationCanceledException => !callerToken.IsCancellationRequested,
+            HttpRequestException or IOException or InvalidOperationException or AgentClientException => true,
+            _ => false
+        };
 }

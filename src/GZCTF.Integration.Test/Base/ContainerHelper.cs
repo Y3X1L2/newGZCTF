@@ -20,6 +20,31 @@ public static class ContainerHelper
     private const int MaxAttempts = 30;
     private const int DelayMs = 2000;
 
+    public static async Task SetLocalNodeSchedulingAsync(
+        IServiceProvider serviceProvider,
+        bool isSchedulable)
+    {
+        using var scope = serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await context.WorkerNodes
+            .Where(node => node.IsLocal)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(node => node.IsSchedulable, isSchedulable));
+    }
+
+    public static async Task<IAsyncDisposable> EnableLocalNodeSchedulingAsync(
+        IServiceProvider serviceProvider)
+    {
+        await SetLocalNodeSchedulingAsync(serviceProvider, true);
+        return new LocalNodeSchedulingScope(serviceProvider);
+    }
+
+    private sealed class LocalNodeSchedulingScope(IServiceProvider serviceProvider) : IAsyncDisposable
+    {
+        public async ValueTask DisposeAsync() =>
+            await SetLocalNodeSchedulingAsync(serviceProvider, false);
+    }
+
     /// <summary>
     /// Wait for admin test container to be ready
     /// </summary>
@@ -71,8 +96,10 @@ public static class ContainerHelper
         output.WriteLine(
             $"🔍 Waiting for user container for challenge {challengeId}, participation {participationId}...");
 
-        var instance = await context.GameInstances.FirstOrDefaultAsync(i =>
-            i.ChallengeId == challengeId && i.ParticipationId == participationId);
+        var instance = await context.GameInstances
+            .Include(i => i.Container)
+            .FirstOrDefaultAsync(i =>
+                i.ChallengeId == challengeId && i.ParticipationId == participationId);
 
         if (instance?.Container == null)
             throw new InvalidOperationException(

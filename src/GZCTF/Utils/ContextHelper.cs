@@ -1,5 +1,4 @@
 ﻿using System.Security.Claims;
-using GZCTF.Services.Token;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Primitives;
 using Microsoft.Net.Http.Headers;
@@ -61,22 +60,6 @@ public static class ContextHelper
 
         var dbContext = context.RequestServices.GetRequiredService<AppDbContext>();
         return await dbContext.Users.AnyAsync(i => i.Id == id && i.Role >= privilege);
-    }
-
-    /// <summary>
-    /// Checks if the current request has a valid token.
-    /// </summary>
-    /// <param name="context">The request context.</param>
-    /// <returns></returns>
-    public static async Task<bool> HasValidToken(HttpContext context)
-    {
-        var value = context.Request.Headers.Authorization.FirstOrDefault()?.Split(' ');
-
-        if (value is not ["Bearer", { Length: > 0 } token])
-            return false;
-
-        var tokenService = context.RequestServices.GetRequiredService<ITokenService>();
-        return await tokenService.ValidateToken(token);
     }
 
     /// <summary>

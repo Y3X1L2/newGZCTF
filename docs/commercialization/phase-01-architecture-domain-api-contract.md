@@ -10,6 +10,47 @@
 
 ---
 
+## 实施进度
+
+更新时间：2026-07-11
+
+- 当前状态：Task 1-7 全部完成，Phase 1 本地开发与验收结束。
+- 当前工作区：`D:\newgz\newGZCTF-main`；Phase 1 完整改动已从只读隔离工作区机械迁移并通过 patch-id 校验。
+- 起始基线：`main` 提交 `957ad7fe`，Phase 0 已合并。
+- 当前验证：生产项目构建 0 warning / 0 error；后端单元测试 629/629；集成测试 220/220；前端 locale、TypeScript strict check 和 production build 通过；EF 无 pending model changes；OpenAPI 兼容门禁通过。
+- 生产边界：Phase 1 未部署、未连接或修改生产数据库。
+
+任务状态：
+
+- [x] Task 1：建立模块目录和架构门禁
+- [x] Task 2：原子切换 scoped API token、认证授权和管理入口
+- [x] Task 3：建立统一 ProblemDetails、幂等和 operation
+- [x] Task 4：修正 ImageTemplate 所有权和课程引用
+- [x] Task 5：打通外部镜像 API 参考链路
+- [x] Task 6：固定 OpenAPI 和 API 兼容门禁
+- [x] Task 7：Phase 1 总体验收
+
+已落地事实：
+
+- 架构门禁以真实 `Identity` 模块为非空样本，不创建占位 Controller 或空业务层。
+- scoped token 已原子替换旧 `payload.signature` 实现；旧验证器、管理员旁路、配置项和 restore API 已删除。
+- 数据迁移实际编号为 `20260710124029_AddScopedApiTokens`；历史 token 迁移后一律撤销，不保留双轨兼容。
+- scoped token、架构、幂等和模板所有权专项 20/20；镜像生命周期、Registry 删除、Penetration 快照引用和 operation worker 专项 30/30。
+- OpenAPI 重新生成时发现并修正 `GameController.Submit` 的错误响应声明，真实响应固定为 `FlagSubmitResultModel`。
+- Task 2 独立复审发现并修复 5 项缺陷：创建者降权后 token 失效、resource grant 参与授权、Redis 配额先于使用时间写入、资源规范化与边界校验、Application/Infrastructure 依赖门禁。
+- Task 3 迁移实际编号为 `20260710140008_AddApiOperations`；PostgreSQL claim 使用 `FOR UPDATE SKIP LOCKED`，lease 续约、过期接管和 stale owner 防写均已进入实现与集成测试。
+- operation 的 claim、renew、progress、complete、retry/fail 全部使用 PostgreSQL `CURRENT_TIMESTAMP` 和相对 duration，接口不再接受主机绝对时间。
+- 镜像导入状态按 `Importing -> Ready/Error` 闭环；零可调度节点、Agent 超时和节点失败不会误报成功，成功重试恢复 `Ready`。
+- 模板删除先在 Serializable 事务中写入 `Deleting` 意图，再清理节点缓存、Registry manifest 和 VM 本地源文件；清理失败保留意图和错误，后台 reconciler 幂等恢复。
+- Penetration 模板引用同时检查当前拓扑和发布快照；损坏快照 fail-closed，防止误删仍可能被部署的模板。
+- OpenAPI comparator 已覆盖 security scheme、OAuth flow/scope 和 operation/path/root security，26 个 breaking 与 11 个 additive 自测通过。
+- `dotnet ef migrations has-pending-model-changes`、OpenAPI baseline 自比较和 `git diff --check` 均通过。
+- Docker/Testcontainers 权限已恢复；PostgreSQL 专项、真实 Docker 容器链路、全量单元测试 629/629 和全量集成测试 220/220 通过。
+- Task 7 的 7 项终审缺口全部关闭：Docker 子进程取消会终止进程树；模板删除具备持久化意图和崩溃恢复；比赛/课程失效分发引用自动对账；外部镜像 GET/DELETE 使用独立 scope；Docker reference 仅允许固定内部 Registry 或解析为公网地址的无凭据公开 Registry；`ApiOperation` 身份字段具有外键；所有 `/api/open/v1` 请求强制写入脱敏持久化审计。
+- 最终增量迁移为 `20260711072936_CompletePhaseOneDurabilityAndAudit`，只新增外部请求审计表、`ApiOperation` 外键和必要索引。
+
+---
+
 ## 0. 完成后的可观察效果
 
 - 教师和出题人可以创建自己的受限 token，创建响应只显示一次 secret。
@@ -634,7 +675,7 @@ git commit -m "test: lock external api v1 contract"
 **Files:**
 - Modify: `docs/platform-commercialization-audit-progress.md`
 
-- [ ] **Step 1: 运行架构、安全和 API tests**
+- [x] **Step 1: 运行架构、安全和 API tests**
 
 ```powershell
 dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter "FullyQualifiedName~Architecture|FullyQualifiedName~ApiToken|FullyQualifiedName~Idempotency|FullyQualifiedName~ImageTemplateOwnership"
@@ -643,7 +684,7 @@ dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj --filter "F
 
 Expected: 全部 PASS。
 
-- [ ] **Step 2: 运行全量构建**
+- [x] **Step 2: 运行全量构建**
 
 ```powershell
 dotnet test src/GZCTF.Test/GZCTF.Test.csproj
@@ -654,7 +695,7 @@ git diff --check
 
 Expected: 全部退出码为 0。
 
-- [ ] **Step 3: 执行真实 API 验收**
+- [x] **Step 3: 执行真实 API 验收**
 
 1. 教师创建仅含 `images:write operations:read` 的 token。
 2. 注册 `10.24.0.28:5000` 中的 Docker 镜像，确认返回 202。
@@ -663,7 +704,9 @@ Expected: 全部退出码为 0。
 5. 使用 token 请求管理员用户 API，确认 401/403。
 6. 删除仍被课程引用的模板，确认 `409 asset_in_use`。
 
-- [ ] **Step 4: 更新进度并提交**
+上述链路已由真实 ASP.NET Core 测试主机、PostgreSQL 16 Testcontainers、Redis 配额替身和服务重启恢复用例完成自动验收；本轮未部署生产环境。
+
+- [x] **Step 4: 更新进度并提交**
 
 ```powershell
 git add docs/platform-commercialization-audit-progress.md

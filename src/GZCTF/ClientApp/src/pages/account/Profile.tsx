@@ -17,19 +17,21 @@ import {
 } from '@mantine/core'
 import { Dropzone } from '@mantine/dropzone'
 import { notifications, showNotification, updateNotification } from '@mantine/notifications'
-import { mdiCheck, mdiClose } from '@mdi/js'
+import { mdiCheck, mdiClose, mdiKeyVariant } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { FC, useEffect, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
+import { Link } from 'react-router'
 import { PasswordChangeModal } from '@Components/PasswordChangeModal'
 import { WithNavBar } from '@Components/WithNavbar'
+import { RequireRole } from '@Components/WithRole'
 import { YinyuHexField, YinyuModalBody } from '@Components/yinyu/YinyuUI'
 import { isValidPhoneNumber, showErrorMsg, tryGetErrorMsg } from '@Utils/Shared'
 import { IMAGE_MIME_TYPES } from '@Utils/Shared'
 import { useIsMobile } from '@Utils/ThemeOverride'
 import { usePageTitle } from '@Hooks/usePageTitle'
 import { useUser } from '@Hooks/useUser'
-import api, { ProfileUpdateModel } from '@Api'
+import api, { ProfileUpdateModel, Role } from '@Api'
 import misc from '@Styles/Misc.module.css'
 
 const Profile: FC = () => {
@@ -221,6 +223,19 @@ const Profile: FC = () => {
         />
         <Box m="auto" w="100%">
           <Grid grow>
+            {RequireRole(Role.Teacher, user?.role) ? (
+              <Grid.Col span={4}>
+                <Button
+                  component={Link}
+                  to="/account/tokens"
+                  fullWidth
+                  variant="outline"
+                  leftSection={<Icon path={mdiKeyVariant} size={0.85} />}
+                >
+                  API Token
+                </Button>
+              </Grid.Col>
+            ) : null}
             <Grid.Col span={4}>
               <Button fullWidth variant="outline" disabled={disabled} onClick={() => setMailEditOpened(true)}>
                 {t('account.button.update_email')}

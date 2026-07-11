@@ -1,6 +1,6 @@
 # 商业化总纲审计进度记录
 
-更新时间：2026-07-10
+更新时间：2026-07-11
 
 ## 目标
 
@@ -199,3 +199,19 @@
 - 独立迁移复审发现已发布、未启动的 Random 计划在题库候选为 0 时会迁成可直接通过的空卷；新增 `ContractMigration_RejectsPublishedUnstartedRandomPlanWithoutCandidates` 后先确认迁移未失败的红灯，再在 contract migration 中加入事务内前置校验。
 - 修复后 Manual、已有 Random session、正常未启动 Random、已发布 Random 零候选拒绝四项 PostgreSQL 迁移用例全部通过；新幂等脚本为 317440 字节，SHA-256 为 `59A0EB29BFF0C30FBEFC512F175BE8E9F161A9FA0100E83A98644D62A8775BC9`。
 - 两位独立 reviewer 均已给出 `APPROVED`：原终审核实 Random/历史快照/显式 retry 三项缺口关闭；迁移质量复审核实零候选校验位置、条件、事务回滚和回归测试正确。Phase 0 未发现剩余阻断或重要问题。
+
+## 2026-07-11 Phase 1 实施进度
+
+- Phase 1 Task 1-7 实现与本地验收全部完成；未部署、未连接或修改生产数据库。
+- scoped API token 已原子替换旧 token：独立 authentication scheme、scope/resource grant、Redis 配额、撤销和一次性 secret 展示均已落地；旧 `TokenService`、管理员 token 旁路和 restore 入口已删除。
+- 外部 `/api/open/v1` 已统一使用 ProblemDetails、Idempotency-Key、持久化 `ApiOperation` 和独立 OpenAPI 文档；镜像 reference/archive 导入不使用 fire-and-forget，服务重启后可恢复。
+- `ApiOperation` claim 保留 `FOR UPDATE SKIP LOCKED`；claim、renew、progress、complete、retry/fail 已统一改为 PostgreSQL `CURRENT_TIMESTAMP` 与相对 duration，消除多主机时钟偏差。
+- `ImageTemplate` 已成为带创建者的全局资产，课程通过 binding 引用；培训 Docker 导入复用统一应用服务，不保留第二套 archive/reference pipeline。
+- 镜像导入状态闭环为 `Importing -> Ready/Error`；零可调度节点、Agent timeout、节点分发失败均形成明确失败，成功重试恢复 `Ready`。
+- 模板删除先在 Serializable 事务中持久化 `Deleting` 意图，再清理节点缓存、内部 Docker/VM OCI 主副本和 VM 本地源文件；任一清理失败保留意图、错误和分发事实，后台 reconciler 幂等恢复。
+- 模板引用门禁已覆盖 CTF、练习、课程、Penetration 当前拓扑和发布快照；损坏发布快照 fail-closed，避免误删仍可能被部署的模板。
+- OpenAPI comparator 已覆盖 security schemes、OAuth flows/scopes 和 root/path/operation security；26 个 breaking 与 11 个 additive 自测通过。
+- 当前门禁：生产项目构建 0 warning / 0 error；单元测试 629/629；全量集成测试 220/220；前端 locale、strict TypeScript 和 production build 通过；EF 无 pending model changes；OpenAPI 26 个 breaking 与 11 个 additive comparator 自测、旧快照兼容比较和当前快照验证通过。
+- Task 7 的 7 项终审缺口全部关闭：Docker 子进程取消终止进程树；模板删除意图可恢复；失效比赛/课程分发引用自动 reconcile；外部镜像 GET/DELETE 与 `images:delete` scope 落地；Registry 来源拒绝私网、回环和链路本地地址；operation 身份字段建立外键；所有外部 API 请求写入独立脱敏审计表。
+- 外部 DELETE 已验证课程引用时返回 `409 application/problem+json` 和稳定 `asset_in_use`，解绑后返回 204；私网 Registry 引用返回 `422 image_reference_forbidden`。
+- 最终增量迁移为 `20260711072936_CompletePhaseOneDurabilityAndAudit`；Phase 1 本轮不部署生产环境。

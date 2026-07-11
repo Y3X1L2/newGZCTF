@@ -309,6 +309,7 @@ const buildScoreboard = (scenario: DemoScenario, timedSubmissions: TimedSubmissi
     team.lastSubmissionTime = submission.time
     team.solvedChallenges.push({
       id: challenge.id,
+      flagId: challenge.id,
       score: challenge.score,
       time: submission.time,
       type: submissionType,
@@ -348,6 +349,7 @@ const buildScoreboard = (scenario: DemoScenario, timedSubmissions: TimedSubmissi
       score: challenge.score,
       solved: accepted.length,
       title: challenge.title,
+      totalFlags: 1,
     }
 
     groups[challenge.category] ??= []

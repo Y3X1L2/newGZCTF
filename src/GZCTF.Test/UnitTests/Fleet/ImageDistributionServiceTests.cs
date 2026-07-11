@@ -79,6 +79,122 @@ public class ImageDistributionServiceTests
     }
 
     [Fact]
+    public async Task DistributeToCapableNodesAsync_MarksTemplateErrorAndThrowsWhenNodeFails()
+    {
+        await using var context = CreateContext();
+        SeedNode(context, "docker-node", NodeCapability.Docker);
+        var template = SeedDockerTemplate(context);
+        await context.SaveChangesAsync();
+        var agent = new RecordingAgentClient
+        {
+            DockerPullException = new HttpRequestException("registry unavailable")
+        };
+        var service = CreateService(context, agent);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.DistributeToCapableNodesAsync(template, CancellationToken.None));
+
+        var record = await context.ImageDistributionRecords.SingleAsync();
+        Assert.Equal(ImageDistributionStatus.Failed, record.Status);
+        Assert.Equal(ImageStatus.Error, template.Status);
+        Assert.Contains("docker-node", template.ErrorMessage);
+        Assert.Contains("registry unavailable", exception.Message);
+    }
+
+    [Fact]
+    public async Task DistributeToCapableNodesAsync_MarksTemplateErrorWhenNoCapableNodeExists()
+    {
+        await using var context = CreateContext();
+        SeedNode(context, "kvm-only", NodeCapability.Kvm);
+        var template = SeedDockerTemplate(context);
+        template.Status = ImageStatus.Importing;
+        await context.SaveChangesAsync();
+        var service = CreateService(context, new RecordingAgentClient());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.DistributeToCapableNodesAsync(template, CancellationToken.None));
+
+        Assert.Equal(ImageStatus.Error, template.Status);
+        Assert.Contains("no online schedulable Docker node", exception.Message,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("no online schedulable Docker node", template.ErrorMessage,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(await context.ImageDistributionRecords.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task DistributeToCapableNodesAsync_RecordsTimeoutAsFailedDistribution()
+    {
+        await using var context = CreateContext();
+        SeedNode(context, "docker-node", NodeCapability.Docker);
+        var template = SeedDockerTemplate(context);
+        await context.SaveChangesAsync();
+        var agent = new RecordingAgentClient
+        {
+            DockerPullException = new TaskCanceledException("agent request timed out")
+        };
+        var service = CreateService(context, agent);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.DistributeToCapableNodesAsync(template, CancellationToken.None));
+
+        var record = await context.ImageDistributionRecords.SingleAsync();
+        Assert.Equal(ImageDistributionStatus.Failed, record.Status);
+        Assert.Contains("timed out", record.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("timed out", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(ImageStatus.Error, template.Status);
+    }
+
+    [Fact]
+    public async Task DistributeToCapableNodesAsync_PropagatesCallerCancellationWithoutFailedRecord()
+    {
+        await using var context = CreateContext();
+        SeedNode(context, "docker-node", NodeCapability.Docker);
+        var template = SeedDockerTemplate(context);
+        await context.SaveChangesAsync();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var agent = new RecordingAgentClient
+        {
+            DockerPullException = new OperationCanceledException(cancellation.Token)
+        };
+        var service = CreateService(context, agent);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.DistributeToCapableNodesAsync(template, cancellation.Token));
+
+        Assert.NotEqual(ImageStatus.Error, template.Status);
+        Assert.DoesNotContain(await context.ImageDistributionRecords.ToArrayAsync(),
+            record => record.Status == ImageDistributionStatus.Failed);
+    }
+
+    [Fact]
+    public async Task DistributeToCapableNodesAsync_SuccessfulRetryRestoresTemplateReady()
+    {
+        await using var context = CreateContext();
+        SeedNode(context, "docker-node", NodeCapability.Docker);
+        var template = SeedDockerTemplate(context);
+        await context.SaveChangesAsync();
+        var agent = new RecordingAgentClient
+        {
+            DockerPullException = new HttpRequestException("temporary registry failure")
+        };
+        var service = CreateService(context, agent);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.DistributeToCapableNodesAsync(template, CancellationToken.None));
+        Assert.Equal(ImageStatus.Error, template.Status);
+
+        agent.DockerPullException = null;
+        var records = await service.DistributeToCapableNodesAsync(template, CancellationToken.None);
+
+        Assert.Equal(ImageStatus.Ready, template.Status);
+        Assert.Null(template.ErrorMessage);
+        var record = Assert.Single(records);
+        Assert.Equal(ImageDistributionStatus.Ready, record.Status);
+    }
+
+    [Fact]
     public async Task ReleaseGameReferencesAsync_DoesNotDeleteCacheStillReferencedByAnotherGame()
     {
         await using var context = CreateContext();
@@ -160,6 +276,33 @@ public class ImageDistributionServiceTests
         Assert.Equal(ImageDistributionStatus.CleanupPending, record.Status);
         Assert.Equal(0, record.ReferenceCount);
         Assert.Empty(agent.DeletedVmNodes);
+    }
+
+    [Fact]
+    public async Task ReconcileReferencesAsync_RemovesReferencesToDeletedResources()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, "kvm-node", NodeCapability.Kvm);
+        var template = SeedVmTemplate(context);
+        context.ImageDistributionRecords.Add(new ImageDistributionRecord
+        {
+            ImageTemplateId = template.Id,
+            WorkerNodeId = node.Id,
+            ImageHash = template.ImageHash!,
+            ImageType = template.ImageType,
+            Status = ImageDistributionStatus.Ready,
+            ReferenceCount = 1,
+            References = [ImageDistributionReference.Game(999)]
+        });
+        await context.SaveChangesAsync();
+        var service = CreateService(context, new RecordingAgentClient());
+
+        await service.ReconcileReferencesAsync(CancellationToken.None);
+
+        var record = await context.ImageDistributionRecords.SingleAsync();
+        Assert.Empty(record.References);
+        Assert.Equal(0, record.ReferenceCount);
+        Assert.Equal(ImageDistributionStatus.CleanupPending, record.Status);
     }
 
     static ImageDistributionService CreateService(AppDbContext context, RecordingAgentClient agent)
@@ -270,6 +413,7 @@ public class ImageDistributionServiceTests
         public List<Guid> PulledDockerNodes { get; } = [];
         public List<Guid> DownloadedVmNodes { get; } = [];
         public List<Guid> DeletedVmNodes { get; } = [];
+        public Exception? DockerPullException { get; set; }
 
         public RecordingAgentClient() : base(
             new Mock<IHttpClientFactory>().Object,
@@ -281,6 +425,8 @@ public class ImageDistributionServiceTests
 
         public override Task PullDockerImageAsync(Guid nodeId, string image, string? registryAuth, CancellationToken token)
         {
+            if (DockerPullException is not null)
+                throw DockerPullException;
             PulledDockerNodes.Add(nodeId);
             return Task.CompletedTask;
         }

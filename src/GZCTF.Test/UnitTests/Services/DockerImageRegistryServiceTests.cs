@@ -1,5 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
+using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
 using GZCTF.Models.Internal;
 using GZCTF.Services;
 using GZCTF.Services.Fleet;
@@ -62,7 +66,46 @@ public class DockerImageRegistryServiceTests
             service.BuildInternalImageReference(repository, "v1"));
     }
 
-    static DockerImageRegistryService CreateService(string address, string ns)
+    [Fact]
+    public async Task DeleteManagedImageAsync_DeletesManifestByResolvedDigest()
+    {
+        var handler = new RecordingHandler();
+        var service = CreateService("10.24.0.28:5000", "ctf", handler);
+
+        await service.DeleteManagedImageAsync(
+            "gzctf-internal://ctf/imports/demo:latest",
+            CancellationToken.None);
+
+        Assert.Collection(handler.Requests,
+            request =>
+            {
+                Assert.Equal(HttpMethod.Head, request.Method);
+                Assert.Equal("http://10.24.0.28:5000/v2/ctf/imports/demo/manifests/latest", request.Uri);
+            },
+            request =>
+            {
+                Assert.Equal(HttpMethod.Delete, request.Method);
+                Assert.Equal(
+                    "http://10.24.0.28:5000/v2/ctf/imports/demo/manifests/sha256%3Aabc",
+                    request.Uri);
+            });
+    }
+
+    [Fact]
+    public async Task DeleteManagedImageAsync_DoesNotDeleteExternalImage()
+    {
+        var handler = new RecordingHandler();
+        var service = CreateService("10.24.0.28:5000", "ctf", handler);
+
+        await service.DeleteManagedImageAsync("ghcr.io/example/demo:latest", CancellationToken.None);
+
+        Assert.Empty(handler.Requests);
+    }
+
+    static DockerImageRegistryService CreateService(
+        string address,
+        string ns,
+        HttpMessageHandler? handler = null)
     {
         var services = new ServiceCollection().BuildServiceProvider();
         var scopeFactory = services.GetRequiredService<IServiceScopeFactory>();
@@ -76,11 +119,31 @@ public class DockerImageRegistryServiceTests
             Options.Create(new DockerRegistrySettings { Address = address, Namespace = ns }),
             scopeFactory,
             agentClient,
-            NullLogger<DockerImageRegistryService>.Instance);
+            NullLogger<DockerImageRegistryService>.Instance,
+            handler is null ? null : new StaticHttpClientFactory(handler));
     }
 
-    sealed class StaticHttpClientFactory : IHttpClientFactory
+    sealed class StaticHttpClientFactory(HttpMessageHandler? handler = null) : IHttpClientFactory
     {
-        public HttpClient CreateClient(string name) => new();
+        public HttpClient CreateClient(string name) =>
+            handler is null ? new HttpClient() : new HttpClient(handler, disposeHandler: false);
+    }
+
+    sealed class RecordingHandler : HttpMessageHandler
+    {
+        public List<(HttpMethod Method, string Uri)> Requests { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            Requests.Add((request.Method, request.RequestUri!.ToString()));
+            var response = request.Method == HttpMethod.Head
+                ? new HttpResponseMessage(HttpStatusCode.OK)
+                : new HttpResponseMessage(HttpStatusCode.Accepted);
+            if (request.Method == HttpMethod.Head)
+                response.Headers.TryAddWithoutValidation("Docker-Content-Digest", "sha256:abc");
+            return Task.FromResult(response);
+        }
     }
 }

@@ -1,0 +1,520 @@
+{
+  "x-generator": "NSwag v14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))",
+  "openapi": "3.0.0",
+  "info": {
+    "title": "YINYU CTF Platform Open API",
+    "description": "YINYU CTF Platform external API contract",
+    "version": "v1"
+  },
+  "paths": {
+    "/api/open/v1/images/docker-references": {
+      "post": {
+        "tags": [
+          "OpenImages"
+        ],
+        "operationId": "OpenImages_RegisterDockerReference",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DockerImageReferenceImportModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/images/docker-archives": {
+      "post": {
+        "tags": [
+          "OpenImages"
+        ],
+        "operationId": "OpenImages_RegisterDockerArchive",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file",
+                  "name"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "nullable": false
+                  },
+                  "name": {
+                    "type": "string",
+                    "nullable": false
+                  },
+                  "sourceImage": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "osType": {
+                    "$ref": "#/components/schemas/OSType"
+                  },
+                  "expectedDigest": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/images/{imageTemplateId}": {
+      "get": {
+        "tags": [
+          "OpenImages"
+        ],
+        "operationId": "OpenImages_Get",
+        "parameters": [
+          {
+            "name": "imageTemplateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenImageTemplateModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "OpenImages"
+        ],
+        "operationId": "OpenImages_Delete",
+        "parameters": [
+          {
+            "name": "imageTemplateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/operations/{id}": {
+      "get": {
+        "tags": [
+          "Operations"
+        ],
+        "operationId": "Operations_Get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiOperationModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ApiOperationStatus"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "resourceType": {
+            "type": "string",
+            "nullable": true
+          },
+          "resourceId": {
+            "type": "string",
+            "nullable": true
+          },
+          "deploymentQueueTicketId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "currentProgress": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalProgress": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "attemptCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "errorCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "errorDetail": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "startedAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "completedAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          }
+        }
+      },
+      "ApiOperationStatus": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Pending",
+          "Running",
+          "Succeeded",
+          "Failed"
+        ],
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "DockerImageReferenceImportModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "registryUrl"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1
+          },
+          "registryUrl": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1
+          },
+          "osType": {
+            "$ref": "#/components/schemas/OSType"
+          },
+          "expectedDigest": {
+            "type": "string",
+            "maxLength": 128,
+            "nullable": true
+          }
+        }
+      },
+      "OSType": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Linux",
+          "Windows"
+        ],
+        "enum": [
+          0,
+          1
+        ]
+      },
+      "OpenImageTemplateModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "osType": {
+            "$ref": "#/components/schemas/OSType"
+          },
+          "imageType": {
+            "$ref": "#/components/schemas/ImageType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ImageStatus"
+          },
+          "registryUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "fileSize": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "imageHash": {
+            "type": "string",
+            "nullable": true
+          },
+          "uploadedAt": {
+            "type": "integer",
+            "format": "uint64"
+          }
+        }
+      },
+      "ImageType": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Docker",
+          "Qcow2",
+          "Ova",
+          "Vmdk"
+        ],
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "ImageStatus": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Ready",
+          "Importing",
+          "Error",
+          "Deleting"
+        ],
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "additionalProperties": {
+          "nullable": true
+        },
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "GzctfApiToken": {
+        "type": "http",
+        "description": "Scoped GZCTF API token",
+        "scheme": "bearer",
+        "bearerFormat": "GZCTF API token"
+      }
+    }
+  }
+}

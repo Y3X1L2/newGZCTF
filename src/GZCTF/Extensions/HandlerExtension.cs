@@ -2,6 +2,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
+using GZCTF.Infrastructure.Api;
 using GZCTF.Models.Internal;
 using GZCTF.Providers;
 using GZCTF.Services.Cache;
@@ -72,6 +73,14 @@ public static class HandlerExtension
             {
                 app.MapFallback(context =>
                 {
+                    if (context.Request.Path.StartsWithSegments(
+                            "/api/open/v1", StringComparison.OrdinalIgnoreCase))
+                        return ExternalApiProblemDetails.WriteAsync(
+                            context,
+                            StatusCodes.Status404NotFound,
+                            "endpoint_not_found",
+                            "The API endpoint was not found.");
+
                     context.Response.StatusCode = StatusCodes.Status404NotFound;
                     context.Response.ContentType = MediaTypeNames.Text.Html;
                     return Task.CompletedTask;
@@ -185,6 +194,20 @@ public static class HandlerExtension
         IOptionsSnapshot<GlobalConfig> globalConfig,
         CancellationToken token = default)
     {
+        if (context.Request.Path.StartsWithSegments(
+                "/api/open/v1", StringComparison.OrdinalIgnoreCase))
+        {
+            var problem = ExternalApiProblemDetails.Create(
+                context,
+                StatusCodes.Status404NotFound,
+                "endpoint_not_found",
+                "The API endpoint was not found.");
+            return Results.Json(
+                problem,
+                statusCode: StatusCodes.Status404NotFound,
+                contentType: "application/problem+json");
+        }
+
         if (context.Request.Method != HttpMethods.Get && context.Request.Method != HttpMethods.Head)
             return Results.StatusCode(StatusCodes.Status405MethodNotAllowed);
 

@@ -6,6 +6,7 @@ import {
   mdiFileDocumentOutline,
   mdiFlagOutline,
   mdiImageOutline,
+  mdiKeyVariant,
   mdiServerNetwork,
   mdiSitemapOutline,
 } from '@mdi/js'
@@ -47,6 +48,7 @@ export const WithAdminTab: FC<AdminTabProps> = ({ head, headProps, children }) =
       { icon: mdiAccountGroupOutline, title: t('admin.tab.teams'), path: 'teams', requiredRole: Role.Admin },
       { icon: mdiServerNetwork, title: '节点管理', path: 'nodes', requiredRole: Role.Admin },
       { icon: mdiClipboardListOutline, title: '部署队列', path: 'queue', requiredRole: Role.Admin },
+      { icon: mdiKeyVariant, title: 'API Token', path: 'tokens', requiredRole: Role.Admin },
       { icon: mdiFileDocumentOutline, title: t('admin.tab.logs'), path: 'logs', requiredRole: Role.Admin },
       { icon: mdiSitemapOutline, title: t('admin.tab.settings'), path: 'settings', requiredRole: Role.Admin },
     ],

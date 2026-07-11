@@ -1,5 +1,8 @@
 using System.Net.Mime;
+using GZCTF.Composition;
 using GZCTF.Middlewares;
+using GZCTF.Modules.Identity.Infrastructure;
+using GZCTF.Infrastructure.Api;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories;
 using GZCTF.Repositories.Interface;
@@ -14,13 +17,14 @@ using GZCTF.Services.CronJob;
 using GZCTF.Services.Fleet;
 using GZCTF.Services.Mail;
 using GZCTF.Services.TeamLab;
-using GZCTF.Services.Token;
 using GZCTF.Services.Transfer;
 using GZCTF.Services.Vm;
 using GZCTF.Storage;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.Http.Resilience;
+using NSwag;
+using NSwag.Generation.Processors.Security;
 
 namespace GZCTF.Extensions.Startup;
 
@@ -76,13 +80,11 @@ internal static class ServicesExtension
             builder.Services.AddContainerService(builder.Configuration);
 
             builder.Services.AddScoped<IConfigService, ConfigService>();
-            builder.Services.AddScoped<ITokenService, TokenService>();
             builder.Services.AddScoped<ILogRepository, LogRepository>();
             builder.Services.AddScoped<IBlobRepository, BlobRepository>();
             builder.Services.AddScoped<IPostRepository, PostRepository>();
             builder.Services.AddScoped<IGameRepository, GameRepository>();
             builder.Services.AddScoped<ITeamRepository, TeamRepository>();
-            builder.Services.AddScoped<IApiTokenRepository, ApiTokenRepository>();
             builder.Services.AddScoped<IContainerRepository, ContainerRepository>();
             builder.Services.AddScoped<IGameEventRepository, GameEventRepository>();
             builder.Services.AddScoped<ICheatInfoRepository, CheatInfoRepository>();
@@ -185,6 +187,7 @@ internal static class ServicesExtension
             builder.Services.AddHostedService<CronJobService>();
             builder.Services.AddHostedService<LocalNodeRegistrar>();
             builder.Services.AddHostedService<LocalNodeMetricsService>();
+            builder.Services.AddPlatformModules(builder.Configuration);
         }
 
         internal void AddWebServices()
@@ -247,6 +250,29 @@ internal static class ServicesExtension
                 settings.SchemaSettings.TypeMappers.Add(new OpenApiDateTimeOffsetToUIntMapper());
                 settings.SchemaSettings.TypeMappers.Add(new OpenApiIPAddressToStringMapper());
                 settings.SchemaSettings.ReflectionService = new GenericsSystemTextJsonReflectionService();
+            });
+
+            builder.Services.AddOpenApiDocument(settings =>
+            {
+                settings.DocumentName = "open-v1";
+                settings.ApiGroupNames = ["open-v1"];
+                settings.Version = "v1";
+                settings.Title = "YINYU CTF Platform Open API";
+                settings.Description = "YINYU CTF Platform external API contract";
+                settings.UseControllerSummaryAsTagDescription = true;
+                settings.SchemaSettings.TypeMappers.Add(new OpenApiDateTimeOffsetToUIntMapper());
+                settings.SchemaSettings.TypeMappers.Add(new OpenApiIPAddressToStringMapper());
+                settings.SchemaSettings.ReflectionService = new GenericsSystemTextJsonReflectionService();
+                settings.AddSecurity(ApiTokenDefaults.Scheme, new OpenApiSecurityScheme
+                {
+                    Type = OpenApiSecuritySchemeType.Http,
+                    Scheme = "bearer",
+                    BearerFormat = "GZCTF API token",
+                    Description = "Scoped GZCTF API token"
+                });
+                settings.OperationProcessors.Add(
+                    new AspNetCoreOperationSecurityScopeProcessor(ApiTokenDefaults.Scheme));
+                settings.OperationProcessors.Add(new OpenApiContractOperationProcessor());
             });
         }
     }

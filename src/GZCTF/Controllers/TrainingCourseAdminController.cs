@@ -1,10 +1,15 @@
 using GZCTF.Middlewares;
+using GZCTF.Modules.Training.Domain;
+using GZCTF.Modules.Training.Application;
+using GZCTF.Modules.Identity.Application;
+using GZCTF.Modules.Content.Application;
+using GZCTF.Modules.Content.Contracts;
+using GZCTF.Modules.Audit.Application;
 using GZCTF.Models.Request.Edit;
 using GZCTF.Models.Request.Game;
 using GZCTF.Models.Request.Training;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
-using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Fleet;
 using GZCTF.Services.Training;
 using GZCTF.Services.Vm;
@@ -27,34 +32,72 @@ public class TrainingCourseAdminController(
     IBlobRepository blobRepository,
     DockerImageRegistryService dockerRegistry,
     TheoryExamService theoryService,
-    IServiceScopeFactory scopeFactory,
+    TrainingCourseDeletionService courseDeletion,
+    ImageDistributionService imageDistribution,
+    ImageImportApplicationService imageImports,
     ILogger<TrainingCourseAdminController> logger) : ControllerBase
 {
     private async Task<UserInfo> CurrentUser() =>
         await userManager.GetUserAsync(User) ?? throw new InvalidOperationException("Current user is missing.");
 
-    void QueueCourseImageDistribution(int courseId, int? templateId, string reason)
+    private IQueryable<ImageTemplate> CourseTemplates(int courseId) =>
+        context.TrainingCourseImageTemplateBindings
+            .Where(binding => binding.CourseId == courseId)
+            .Join(
+                context.ImageTemplates,
+                binding => binding.ImageTemplateId,
+                template => template.Id,
+                (_, template) => template);
+
+    private Task<bool> CourseHasTemplateAsync(int courseId, int templateId, CancellationToken token) =>
+        context.TrainingCourseImageTemplateBindings.AnyAsync(
+            binding => binding.CourseId == courseId && binding.ImageTemplateId == templateId,
+            token);
+
+    private async Task BindTemplateAsync(
+        int courseId,
+        int templateId,
+        Guid actorId,
+        CancellationToken token)
+    {
+        if (await CourseHasTemplateAsync(courseId, templateId, token))
+            return;
+
+        context.TrainingCourseImageTemplateBindings.Add(new TrainingCourseImageTemplateBinding
+        {
+            CourseId = courseId,
+            ImageTemplateId = templateId,
+            AddedById = actorId
+        });
+        await context.SaveChangesAsync(token);
+    }
+
+    async Task DistributeCourseImageAsync(
+        int courseId,
+        int? templateId,
+        string reason,
+        CancellationToken token)
     {
         if (!templateId.HasValue)
             return;
 
-        _ = Task.Run(async () =>
+        try
         {
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var distribution = scope.ServiceProvider.GetRequiredService<ImageDistributionService>();
-            var scopedLogger = scope.ServiceProvider.GetRequiredService<ILogger<TrainingCourseAdminController>>();
-            try
-            {
-                await distribution.DistributeTemplateAsync(templateId.Value,
-                    ImageDistributionReference.TrainingCourse(courseId), CancellationToken.None);
-            }
-            catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or IOException)
-            {
-                scopedLogger.LogWarning(ex,
-                    "Failed to queue training image distribution for course {CourseId}, template {TemplateId} after {Reason}.",
-                    courseId, templateId.Value, reason);
-            }
-        });
+            var template = await context.ImageTemplates.SingleAsync(
+                item => item.Id == templateId.Value,
+                token);
+            await imageDistribution.DistributeToCapableNodesAsync(
+                template,
+                token,
+                ImageDistributionReference.TrainingCourse(courseId));
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or IOException or AgentClientException)
+        {
+            logger.LogWarning(ex,
+                "Failed to distribute training image for course {CourseId}, template {TemplateId} after {Reason}.",
+                courseId, templateId.Value, reason);
+            throw;
+        }
     }
 
     private IQueryable<TrainingCourse> CourseQuery() =>
@@ -145,8 +188,8 @@ public class TrainingCourseAdminController(
 
         if (model.ImageTemplateId.HasValue)
         {
-            var ownsTemplate = await context.ImageTemplates.AnyAsync(t =>
-                t.Id == model.ImageTemplateId.Value && t.TrainingCourseId == courseId, token);
+            var ownsTemplate = await CourseHasTemplateAsync(
+                courseId, model.ImageTemplateId.Value, token);
             if (!ownsTemplate)
                 return BadRequest(new RequestResponse("只能使用当前课程的环境模板。"));
         }
@@ -273,38 +316,6 @@ public class TrainingCourseAdminController(
             ExerciseChallengeId = exerciseChallengeId,
             Order = order
         });
-    }
-
-    private async Task QueueCourseDockerPull(int templateId, string registryUrl, string imageName, string? registryAuth)
-    {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var scopedContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var scopedOrchestrator = scope.ServiceProvider.GetRequiredService<ContainerOrchestrator>();
-
-        try
-        {
-            await scopedOrchestrator.PullImageFromRegistryAsync(registryUrl, imageName, registryAuth);
-            await scopedContext.ImageTemplates
-                .Where(t => t.Id == templateId)
-                .ExecuteUpdateAsync(updates => updates
-                    .SetProperty(t => t.Status, ImageStatus.Ready)
-                    .SetProperty(t => t.ErrorMessage, (string?)null));
-        }
-        catch (Exception ex)
-        {
-            await scopedContext.ImageTemplates
-                .Where(t => t.Id == templateId)
-                .ExecuteUpdateAsync(updates => updates
-                    .SetProperty(t => t.Status, ImageStatus.Error)
-                    .SetProperty(t => t.ErrorMessage, TruncateError(ex.Message)));
-            logger.LogWarning(ex, "Failed to pull course Docker image template {TemplateId}", templateId);
-        }
-    }
-
-    private static string TruncateError(string? message)
-    {
-        var value = string.IsNullOrWhiteSpace(message) ? "Docker image operation failed." : message.Trim();
-        return value.Length <= 1024 ? value : value[..1024];
     }
 
     private static void FillCourse(TrainingCourse course, TrainingCourseEditModel model, UserInfo actor)
@@ -590,59 +601,15 @@ public class TrainingCourseAdminController(
     public async Task<IActionResult> DeleteCourse([FromRoute] int courseId, CancellationToken token = default)
     {
         var actor = await CurrentUser();
-        var course = await CourseQuery().SingleOrDefaultAsync(c => c.Id == courseId, token);
-        if (course is null)
+        var result = await courseDeletion.DeleteAsync(
+            courseId, new ActorContext(actor.Id, actor.Role), token);
+        if (result.Status == TrainingCourseDeletionStatus.NotFound)
             return NotFound();
-        if (!CanDeleteCourse(actor, course))
+        if (result.Status == TrainingCourseDeletionStatus.Forbidden)
             return Forbid();
 
-        await DeleteCourseOwnedChallenges(courseId, token);
-
-        await context.ImageTemplates
-            .Where(t => t.TrainingCourseId == courseId)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(t => t.TrainingCourseId, (int?)null), token);
-        await context.TrainingCourseChapters
-            .Where(c => c.CourseId == courseId && c.ParentId != null)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.ParentId, (int?)null), token);
-        context.TrainingCourses.Remove(course);
-        await context.SaveChangesAsync(token);
-        logger.SystemLog($"Deleted training course {course.Title}.", TaskStatus.Success, LogLevel.Information);
+        logger.SystemLog($"Deleted training course {result.Title}.", TaskStatus.Success, LogLevel.Information);
         return Ok();
-    }
-
-    private async Task DeleteCourseOwnedChallenges(int courseId, CancellationToken token)
-    {
-        var challenges = await context.ExerciseChallenges
-            .Include(c => c.Attachment)
-            .ThenInclude(a => a!.LocalFile)
-            .Where(c => c.TrainingCourseId == courseId)
-            .ToArrayAsync(token);
-
-        if (challenges.Length == 0)
-            return;
-
-        var challengeIds = challenges.Select(c => c.Id).ToArray();
-        await context.TrainingCourseSubmissions
-            .Where(s => s.CourseId == courseId && challengeIds.Contains(s.ExerciseChallengeId))
-            .ExecuteDeleteAsync(token);
-        await context.TrainingCourseChapterChallenges
-            .Where(c => c.CourseId == courseId && challengeIds.Contains(c.ExerciseChallengeId))
-            .ExecuteDeleteAsync(token);
-        await context.ExerciseInstances
-            .Where(i => challengeIds.Contains(i.ExerciseId))
-            .ExecuteDeleteAsync(token);
-        await context.FlagContexts
-            .Where(f => f.ExerciseId.HasValue && challengeIds.Contains(f.ExerciseId.Value))
-            .ExecuteDeleteAsync(token);
-        await context.TrainingCourseChallenges
-            .Where(c => c.CourseId == courseId && challengeIds.Contains(c.ExerciseChallengeId))
-            .ExecuteDeleteAsync(token);
-
-        foreach (var challenge in challenges)
-        {
-            await blobRepository.DeleteAttachment(challenge.Attachment, token);
-            context.ExerciseChallenges.Remove(challenge);
-        }
     }
 
     [HttpGet("{courseId:int}/enrollments")]
@@ -1658,8 +1625,7 @@ public class TrainingCourseAdminController(
         if (!await CanEditCourse(actor, courseId, token))
             return NotFound();
 
-        var templates = await context.ImageTemplates
-            .Where(t => t.TrainingCourseId == courseId)
+        var templates = await CourseTemplates(courseId)
             .OrderByDescending(t => t.UploadedAt)
             .ToArrayAsync(token);
 
@@ -1694,37 +1660,36 @@ public class TrainingCourseAdminController(
             return NotFound();
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
+        if (!string.IsNullOrWhiteSpace(model.RegistryAuth))
+            return BadRequest(new RequestResponse("持久化镜像导入不接受明文 Registry 凭据。"));
 
-        var pullTarget = DockerImageReference.ResolvePullTarget(model.Name, model.RegistryUrl);
-        var imageReference = pullTarget.FullImage;
-        var name = model.Name.Trim();
-
-        var existingTemplate = await context.ImageTemplates.FirstOrDefaultAsync(t =>
-            t.ImageType == ImageType.Docker &&
-            t.TrainingCourseId == courseId &&
-            (t.Name == name || t.RegistryUrl == imageReference), token);
-        if (existingTemplate is not null && existingTemplate.Status != ImageStatus.Error)
-            return BadRequest(new RequestResponse("当前课程已存在同名或同 Registry URL 的 Docker 模板。"));
-
-        var template = existingTemplate ?? new ImageTemplate { ImageType = ImageType.Docker };
-        template.Name = name;
-        template.OSType = model.OSType;
-        template.RegistryUrl = imageReference;
-        template.RegistryAuth = model.RegistryAuth;
-        template.Status = ImageStatus.Importing;
-        template.ErrorMessage = null;
-        template.UploadedAt = DateTimeOffset.UtcNow;
-        template.TrainingCourseId = courseId;
-
-        if (existingTemplate is null)
-            context.ImageTemplates.Add(template);
-        await context.SaveChangesAsync(token);
-
-        _ = Task.Run(() => QueueCourseDockerPull(template.Id, pullTarget.RegistryUrl, pullTarget.ImageName, model.RegistryAuth));
-        logger.SystemLog($"Registered training course Docker template {template.Name}: course={courseId}, template={template.Id}.",
-            TaskStatus.Pending, LogLevel.Information);
-
-        return Ok(TrainingCourseImageTemplateModel.FromTemplate(template));
+        try
+        {
+            var imported = await imageImports.ImportDockerReferenceNowAsync(
+                new ActorContext(actor.Id, actor.Role),
+                new DockerImageReferenceImportCommand(
+                    model.Name,
+                    model.RegistryUrl,
+                    model.OSType,
+                    null),
+                token);
+            var template = await context.ImageTemplates.SingleAsync(
+                item => item.Id == imported.Id, token);
+            await BindTemplateAsync(courseId, template.Id, actor.Id, token);
+            await DistributeCourseImageAsync(
+                courseId, template.Id, "training Docker reference import", token);
+            logger.SystemLog($"Imported training course Docker template {template.Name}: course={courseId}, template={template.Id}.",
+                TaskStatus.Success, LogLevel.Information);
+            return Ok(TrainingCourseImageTemplateModel.FromTemplate(template));
+        }
+        catch (ApiContractException ex)
+        {
+            return StatusCode(ex.StatusCode, new RequestResponse(ex.Message));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new RequestResponse(ex.Message));
+        }
     }
 
     [HttpPost("{courseId:int}/image-templates/upload-docker")]
@@ -1734,8 +1699,6 @@ public class TrainingCourseAdminController(
         [FromRoute] int courseId,
         [FromForm] IFormFile file,
         [FromForm] string name,
-        [FromForm] string repository,
-        [FromForm] string tag,
         [FromForm] string? sourceImage,
         [FromForm] OSType osType,
         CancellationToken token = default)
@@ -1746,66 +1709,26 @@ public class TrainingCourseAdminController(
 
         if (file is null || file.Length == 0)
             return BadRequest(new RequestResponse("未选择 Docker 镜像包。"));
-        if (file.Length > dockerRegistry.MaxUploadSizeBytes)
-            return BadRequest(new RequestResponse("Docker 镜像包超过服务器允许大小。"));
-        if (string.IsNullOrWhiteSpace(name))
-            return BadRequest(new RequestResponse("模板显示名称不能为空。"));
-
-        var fileName = file.FileName.ToLowerInvariant();
-        var ext = Path.GetExtension(fileName);
-        if (fileName.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase))
-            ext = ".tar.gz";
-        else if (fileName.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase))
-            ext = ".tgz";
-        if (ext is not ".tar" and not ".tar.gz" and not ".tgz")
-            return BadRequest(new RequestResponse("仅支持 .tar、.tar.gz、.tgz 格式的 Docker 镜像包。"));
-
-        string targetImage;
-        try
-        {
-            targetImage = dockerRegistry.BuildInternalImageReference(repository, tag);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new RequestResponse(ex.Message));
-        }
-
-        var displayName = name.Trim();
-        var existingTemplate = await context.ImageTemplates.FirstOrDefaultAsync(t =>
-            t.ImageType == ImageType.Docker &&
-            t.TrainingCourseId == courseId &&
-            (t.Name == displayName || t.RegistryUrl == targetImage), token);
-        if (existingTemplate is not null && existingTemplate.Status != ImageStatus.Error)
-            return BadRequest(new RequestResponse("当前课程已存在同名或同 Registry URL 的 Docker 模板。"));
-
-        var tempDir = Path.Combine(Path.GetTempPath(), "gzctf_course_docker_uploads", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDir);
-        var archivePath = Path.Combine(tempDir, $"image{ext}");
 
         try
         {
-            await using (var stream = file.OpenReadStream())
-            await using (var fs = System.IO.File.Create(archivePath))
-                await stream.CopyToAsync(fs, token);
-
-            var result = await dockerRegistry.ImportArchiveAsync(archivePath, repository, tag, sourceImage, token);
-            var template = existingTemplate ?? new ImageTemplate { ImageType = ImageType.Docker };
-            template.Name = displayName;
-            template.OSType = osType;
-            template.RegistryUrl = result.FullImage;
-            template.RegistryAuth = null;
-            template.Status = ImageStatus.Ready;
-            template.ErrorMessage = null;
-            template.UploadedAt = DateTimeOffset.UtcNow;
-            template.FileSize = file.Length;
-            template.ImageHash = result.ImageId?.Replace("sha256:", string.Empty, StringComparison.OrdinalIgnoreCase);
-            template.OriginalArchiveName = file.FileName;
-            template.Description = $"Course image loaded from {result.SourceImage}";
-            template.TrainingCourseId = courseId;
-
-            if (existingTemplate is null)
-                context.ImageTemplates.Add(template);
-            await context.SaveChangesAsync(token);
+            await using var stream = file.OpenReadStream();
+            var imported = await imageImports.ImportDockerArchiveNowAsync(
+                new ActorContext(actor.Id, actor.Role),
+                stream,
+                file.FileName,
+                file.Length,
+                new DockerImageArchiveImportCommand(
+                    name,
+                    sourceImage,
+                    osType,
+                    null),
+                token);
+            var template = await context.ImageTemplates.SingleAsync(
+                item => item.Id == imported.Id, token);
+            await BindTemplateAsync(courseId, template.Id, actor.Id, token);
+            await DistributeCourseImageAsync(
+                courseId, template.Id, "training Docker archive import", token);
             logger.SystemLog($"Uploaded training course Docker template {template.Name}: course={courseId}, template={template.Id}.",
                 TaskStatus.Success, LogLevel.Information);
 
@@ -1815,9 +1738,9 @@ public class TrainingCourseAdminController(
         {
             return BadRequest(new RequestResponse(ex.Message));
         }
-        finally
+        catch (ApiContractException ex)
         {
-            try { Directory.Delete(tempDir, true); } catch { /* best effort cleanup */ }
+            return StatusCode(ex.StatusCode, new RequestResponse(ex.Message));
         }
     }
 
@@ -1837,9 +1760,10 @@ public class TrainingCourseAdminController(
         try
         {
             var template = await imageStorage.SaveImageAsync(file);
-            template.TrainingCourseId = courseId;
+            template.CreatedById = actor.Id;
             context.ImageTemplates.Add(template);
             await context.SaveChangesAsync(token);
+            await BindTemplateAsync(courseId, template.Id, actor.Id, token);
             logger.SystemLog($"Uploaded training course VM template {template.Name}: course={courseId}, template={template.Id}.",
                 TaskStatus.Success, LogLevel.Information);
             return Ok(TrainingCourseImageTemplateModel.FromTemplate(template));
@@ -1882,12 +1806,12 @@ public class TrainingCourseAdminController(
             await using (var fs = System.IO.File.Create(archivePath))
                 await stream.CopyToAsync(fs, token);
 
-            var result = await archiveExtractor.ExtractAndRegisterAsync(archivePath, file.FileName, token);
+            var result = await archiveExtractor.ExtractAndRegisterAsync(
+                archivePath, file.FileName, actor.Id, token);
             if (!result.Success || result.Template is null)
                 return BadRequest(new RequestResponse(result.Error ?? "VM 归档处理失败。"));
 
-            result.Template.TrainingCourseId = courseId;
-            await context.SaveChangesAsync(token);
+            await BindTemplateAsync(courseId, result.Template.Id, actor.Id, token);
             logger.SystemLog($"Uploaded training course VM archive template {result.Template.Name}: course={courseId}, template={result.Template.Id}.",
                 TaskStatus.Success, LogLevel.Information);
             return Ok(TrainingCourseImageTemplateModel.FromTemplate(result.Template));
@@ -1923,9 +1847,9 @@ public class TrainingCourseAdminController(
         try
         {
             var importer = HttpContext.RequestServices.GetRequiredService<LocalImageImporter>();
-            var template = await importer.ImportFromLocalPathAsync(model.LocalPath, model.DisplayName);
-            template.TrainingCourseId = courseId;
-            await context.SaveChangesAsync(token);
+            var template = await importer.ImportFromLocalPathAsync(
+                model.LocalPath, model.DisplayName, actor.Id, token);
+            await BindTemplateAsync(courseId, template.Id, actor.Id, token);
             logger.SystemLog($"Imported training course local image template {template.Name}: course={courseId}, template={template.Id}.",
                 TaskStatus.Success, LogLevel.Information);
             return Ok(TrainingCourseImageTemplateModel.FromTemplate(template));
@@ -1953,16 +1877,15 @@ public class TrainingCourseAdminController(
         var template = await context.ImageTemplates.SingleOrDefaultAsync(t => t.Id == model.TemplateId, token);
         if (template is null)
             return BadRequest(new RequestResponse("环境模板不存在。"));
-        if (!template.TrainingCourseId.HasValue && actor.Role < Role.Admin)
+        if (template.Status != ImageStatus.Ready)
+            return BadRequest(new RequestResponse("环境模板尚未就绪。"));
+        if (actor.Role < Role.Admin && template.CreatedById != actor.Id)
             return Forbid();
-        if (template.TrainingCourseId.HasValue && template.TrainingCourseId.Value != courseId)
-            return BadRequest(new RequestResponse("该环境模板已属于其他课程。"));
 
-        template.TrainingCourseId = courseId;
-        await context.SaveChangesAsync(token);
+        await BindTemplateAsync(courseId, template.Id, actor.Id, token);
         logger.SystemLog($"Attached training course image template {template.Id}: course={courseId}.",
             TaskStatus.Success, LogLevel.Information);
-        QueueCourseImageDistribution(courseId, template.Id, "training template attach");
+        await DistributeCourseImageAsync(courseId, template.Id, "training template attach", token);
         return Ok();
     }
 
@@ -1976,19 +1899,19 @@ public class TrainingCourseAdminController(
         if (!await CanEditCourse(actor, courseId, token))
             return NotFound();
 
-        var template = await context.ImageTemplates.SingleOrDefaultAsync(t => t.Id == templateId, token);
-        if (template is null)
+        var binding = await context.TrainingCourseImageTemplateBindings.SingleOrDefaultAsync(item =>
+            item.CourseId == courseId && item.ImageTemplateId == templateId, token);
+        if (binding is null)
             return NotFound();
-        if (template.TrainingCourseId != courseId)
-            return BadRequest(new RequestResponse("该环境模板不属于当前课程。"));
 
         var inUse = await context.ExerciseChallenges.AnyAsync(c =>
             c.TrainingCourseId == courseId && c.ImageTemplateId == templateId, token);
         if (inUse)
             return BadRequest(new RequestResponse("该环境模板正在被课程题目使用，不能移除。"));
 
-        context.ImageTemplates.Remove(template);
+        context.TrainingCourseImageTemplateBindings.Remove(binding);
         await context.SaveChangesAsync(token);
+        await imageDistribution.ReleaseTrainingCourseTemplateReferenceAsync(courseId, templateId, token);
         logger.SystemLog($"Detached training course image template {templateId}: course={courseId}.",
             TaskStatus.Success, LogLevel.Information);
         return Ok();
@@ -2035,7 +1958,8 @@ public class TrainingCourseAdminController(
         await transaction.CommitAsync(token);
         logger.SystemLog($"Created training course challenge {exercise.Title}: course={courseId}, challenge={exercise.Id}.",
             TaskStatus.Success, LogLevel.Information);
-        QueueCourseImageDistribution(courseId, exercise.ImageTemplateId, "training challenge create");
+        await DistributeCourseImageAsync(
+            courseId, exercise.ImageTemplateId, "training challenge create", token);
 
         return Ok(TrainingCourseChallengeModel.FromChallenge(link, model.ChapterId));
     }
@@ -2106,7 +2030,8 @@ public class TrainingCourseAdminController(
         await transaction.CommitAsync(token);
         logger.SystemLog($"Updated training course challenge {link.ExerciseChallenge.Title}: course={courseId}, challenge={exerciseChallengeId}.",
             TaskStatus.Success, LogLevel.Information);
-        QueueCourseImageDistribution(courseId, link.ExerciseChallenge.ImageTemplateId, "training challenge update");
+        await DistributeCourseImageAsync(
+            courseId, link.ExerciseChallenge.ImageTemplateId, "training challenge update", token);
 
         return await CourseChallengeEditDetail(courseId, exerciseChallengeId, token);
     }
@@ -2156,7 +2081,8 @@ public class TrainingCourseAdminController(
         await context.SaveChangesAsync(token);
         logger.SystemLog($"Attached training course challenge {model.ExerciseChallengeId}: course={courseId}.",
             TaskStatus.Success, LogLevel.Information);
-        QueueCourseImageDistribution(courseId, challenge.ImageTemplateId, "training challenge attach");
+        await DistributeCourseImageAsync(
+            courseId, challenge.ImageTemplateId, "training challenge attach", token);
         return Ok();
     }
 

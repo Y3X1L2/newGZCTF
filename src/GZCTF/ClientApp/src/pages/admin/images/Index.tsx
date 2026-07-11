@@ -110,6 +110,8 @@ const statusConfig: Record<string, { label: string; color: string; semantic: str
   importing: { label: '导入中', color: 'violet', semantic: 'importing' },
   '2': { label: '异常', color: 'red', semantic: 'error' },
   error: { label: '异常', color: 'red', semantic: 'error' },
+  '3': { label: '删除中', color: 'orange', semantic: 'deleting' },
+  deleting: { label: '删除中', color: 'orange', semantic: 'deleting' },
 }
 
 function normalizeKey(value: string | number | undefined | null) {
@@ -273,15 +275,13 @@ function UploadDockerArchiveModal({
   registry?: DockerRegistryInfo
 }) {
   const [name, setName] = useState('')
-  const [repository, setRepository] = useState('')
-  const [tag, setTag] = useState('latest')
   const [sourceImage, setSourceImage] = useState('')
   const [osType, setOsType] = useState<string>('0')
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async () => {
-    if (!file || !name.trim() || !repository.trim()) return
+    if (!file || !name.trim()) return
     if (!registry?.enabled) {
       notifications.show({ title: '未配置 Registry', message: '请先在服务器配置内网 Docker Registry 地址', color: 'red' })
       return
@@ -292,8 +292,6 @@ function UploadDockerArchiveModal({
       const formData = new FormData()
       formData.append('file', file)
       formData.append('name', name.trim())
-      formData.append('repository', repository.trim())
-      formData.append('tag', tag.trim() || 'latest')
       formData.append('sourceImage', sourceImage.trim())
       formData.append('osType', osType)
 
@@ -307,8 +305,6 @@ function UploadDockerArchiveModal({
           color: 'green',
         })
         setName('')
-        setRepository('')
-        setTag('latest')
         setSourceImage('')
         setOsType('0')
         setFile(null)
@@ -354,27 +350,6 @@ function UploadDockerArchiveModal({
             onChange={(event) => setName(event.currentTarget.value)}
             placeholder="web-flag-demo"
           />
-          <Group grow>
-            <TextInput
-              label="仓库路径"
-              required
-              value={repository}
-              onChange={(event) => setRepository(event.currentTarget.value)}
-              placeholder="web/flag-demo"
-              description={
-                registry?.enabled
-                  ? `最终地址会自动加上 ${registry.address}${registry.namespace ? `/${registry.namespace}` : ''} 前缀。`
-                  : '最终地址会使用服务器配置的内网 Registry 前缀。'
-              }
-            />
-            <TextInput
-              label="Tag"
-              required
-              value={tag}
-              onChange={(event) => setTag(event.currentTarget.value)}
-              placeholder="v1"
-            />
-          </Group>
           <TextInput
             label="源镜像名"
             value={sourceImage}

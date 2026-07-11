@@ -159,7 +159,7 @@ public class ImageStorage
     /// </summary>
     /// <param name="image">The image template entity to delete.</param>
     /// <exception cref="ImageStorageException">Thrown when the file cannot be deleted.</exception>
-    public async Task DeleteImageAsync(ImageTemplate image)
+    public virtual async Task DeleteImageAsync(ImageTemplate image)
     {
         ArgumentNullException.ThrowIfNull(image);
 

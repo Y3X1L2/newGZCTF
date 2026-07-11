@@ -61,6 +61,50 @@ public class VmImageRegistryService(
         return reference;
     }
 
+    public virtual async Task DeleteArtifactAsync(ImageTemplate template, CancellationToken token = default)
+    {
+        if (template.ImageType == ImageType.Docker || string.IsNullOrWhiteSpace(template.ImageHash))
+            return;
+
+        var reference = BuildReference(template);
+        var client = httpClientFactory.CreateClient();
+        var manifestUrl =
+            $"http://{reference.RegistryAddress}/v2/{reference.Repository}/manifests/{reference.Tag}";
+        using var head = new HttpRequestMessage(HttpMethod.Head, manifestUrl);
+        head.Headers.Accept.ParseAdd(ManifestMediaType);
+        using var headResponse = await client.SendAsync(head, token);
+        if (headResponse.StatusCode == HttpStatusCode.NotFound)
+            return;
+        if (!headResponse.IsSuccessStatusCode)
+        {
+            var body = await headResponse.Content.ReadAsStringAsync(token);
+            throw new InvalidOperationException(
+                $"Failed to resolve VM template artifact {reference.Repository}:{reference.Tag} from " +
+                $"{reference.RegistryAddress}: {(int)headResponse.StatusCode} {headResponse.StatusCode}. {Trim(body)}");
+        }
+
+        if (!headResponse.Headers.TryGetValues("Docker-Content-Digest", out var digestValues))
+            throw new InvalidOperationException(
+                $"Registry {reference.RegistryAddress} did not return Docker-Content-Digest for " +
+                $"{reference.Repository}:{reference.Tag}.");
+        var manifestDigest = digestValues.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(manifestDigest))
+            throw new InvalidOperationException(
+                $"Registry {reference.RegistryAddress} returned an empty manifest digest for " +
+                $"{reference.Repository}:{reference.Tag}.");
+
+        using var response = await client.DeleteAsync(
+            $"http://{reference.RegistryAddress}/v2/{reference.Repository}/manifests/" +
+            Uri.EscapeDataString(manifestDigest), token);
+        if (!response.IsSuccessStatusCode && response.StatusCode != HttpStatusCode.NotFound)
+        {
+            var body = await response.Content.ReadAsStringAsync(token);
+            throw new InvalidOperationException(
+                $"Failed to delete VM template artifact {reference.Repository}@{manifestDigest} from " +
+                $"{reference.RegistryAddress}: {(int)response.StatusCode} {response.StatusCode}. {Trim(body)}");
+        }
+    }
+
     string BuildRepository(int templateId)
     {
         var ns = _settings.NormalizedNamespace;

@@ -21,7 +21,8 @@ public enum ImageStatus : byte
 {
     Ready = 0,
     Importing = 1,
-    Error = 2
+    Error = 2,
+    Deleting = 3
 }
 
 public class ImageTemplate
@@ -112,11 +113,8 @@ public class ImageTemplate
     [MaxLength(256)]
     public string? OriginalArchiveName { get; set; }
 
-    /// <summary>
-    /// Owning training course. Null means global template.
-    /// </summary>
-    public int? TrainingCourseId { get; set; }
+    public Guid? CreatedById { get; set; }
 
     [JsonIgnore]
-    public TrainingCourse? TrainingCourse { get; set; }
+    public UserInfo? CreatedBy { get; set; }
 }

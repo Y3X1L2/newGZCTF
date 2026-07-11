@@ -17,6 +17,7 @@
     <PackageVersion Include="KubernetesClient" Version="19.0.2" />
     <PackageVersion Include="MailKit" Version="4.15.1" />
     <PackageVersion Include="MemoryPack" Version="1.21.4" />
+    <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
     <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.5" />
     <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.5" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.5" />
@@ -68,6 +69,7 @@
     <PackageVersion Include="Testcontainers.K3s" Version="4.11.0" />
     <PackageVersion Include="Testcontainers.Minio" Version="4.11.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.11.0" />
+    <PackageVersion Include="Testcontainers.Redis" Version="4.11.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="xunit.runner.console" Version="2.9.3" />

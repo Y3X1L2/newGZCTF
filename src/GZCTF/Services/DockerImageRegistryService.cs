@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Net;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using GZCTF.Models;
 using GZCTF.Models.Data;
@@ -10,11 +12,16 @@ using Microsoft.Extensions.Options;
 
 namespace GZCTF.Services;
 
-public sealed record DockerImageUploadResult(string FullImage, string SourceImage, string? ImageId);
+public sealed record DockerImageUploadResult(
+    string FullImage,
+    string SourceImage,
+    string? ImageId,
+    string? Digest = null);
 
 public class DockerImageRegistryService
 {
     public const string InternalReferencePrefix = "gzctf-internal://";
+    private static readonly TimeSpan DockerCommandTimeout = TimeSpan.FromMinutes(30);
 
     static readonly Regex RepositoryRegex = new("^[a-z0-9]+(?:[._/-][a-z0-9]+)*$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -25,16 +32,19 @@ public class DockerImageRegistryService
     readonly IServiceScopeFactory _scopeFactory;
     readonly AgentClient _agentClient;
     readonly ILogger<DockerImageRegistryService> _logger;
+    readonly IHttpClientFactory? _httpClientFactory;
 
     public DockerImageRegistryService(IOptions<DockerRegistrySettings> options,
         IServiceScopeFactory scopeFactory,
         AgentClient agentClient,
-        ILogger<DockerImageRegistryService> logger)
+        ILogger<DockerImageRegistryService> logger,
+        IHttpClientFactory? httpClientFactory = null)
     {
         _settings = options.Value;
         _scopeFactory = scopeFactory;
         _agentClient = agentClient;
         _logger = logger;
+        _httpClientFactory = httpClientFactory;
     }
 
     public long MaxUploadSizeBytes => _settings.MaxUploadSizeBytes;
@@ -232,18 +242,57 @@ public class DockerImageRegistryService
         await RunDockerAsync(["tag", loadedImage, targetImage], token);
         await RunDockerAsync(["push", targetImage], token);
 
+        var (imageId, digest) = await InspectImageAsync(targetImage, token);
+        return new DockerImageUploadResult(storedImage, loadedImage, imageId, digest);
+    }
+
+    public async Task<DockerImageUploadResult> ImportReferenceAsync(
+        string sourceImage,
+        string repository,
+        string tag,
+        CancellationToken token)
+    {
+        var source = sourceImage.Trim();
+        if (string.IsNullOrWhiteSpace(source) || source.Any(char.IsWhiteSpace))
+            throw new InvalidOperationException("Docker image reference is invalid.");
+
+        var endpoint = await EnsureActiveRegistryAsync(token);
+        var storedImage = BuildInternalImageReference(repository, tag);
+        var targetImage = BuildImageReferenceForRegistry(endpoint.Address, repository, tag);
+        await RunDockerAsync(["pull", source], token);
+        await RunDockerAsync(["tag", source, targetImage], token);
+        await RunDockerAsync(["push", targetImage], token);
+
+        var (imageId, digest) = await InspectImageAsync(targetImage, token);
+        return new DockerImageUploadResult(storedImage, source, imageId, digest);
+    }
+
+    async Task<(string? ImageId, string? Digest)> InspectImageAsync(
+        string image,
+        CancellationToken token)
+    {
         string? imageId = null;
+        string? digest = null;
         try
         {
-            var inspect = await RunDockerAsync(["image", "inspect", targetImage, "--format", "{{.Id}}"], token);
-            imageId = inspect.Output.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim();
+            var inspect = await RunDockerAsync(
+                ["image", "inspect", image, "--format", "{{.Id}}"], token);
+            imageId = inspect.Output.Trim().Split(
+                '\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim();
+
+            var repoDigests = await RunDockerAsync(
+                ["image", "inspect", image, "--format", "{{json .RepoDigests}}"], token);
+            var references = JsonSerializer.Deserialize<string[]>(repoDigests.Output.Trim()) ?? [];
+            digest = references
+                .Select(reference => reference[(reference.LastIndexOf('@') + 1)..])
+                .FirstOrDefault(value => value.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase));
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            _logger.LogDebug(ex, "Failed to inspect pushed Docker image {Image}", targetImage);
+            _logger.LogDebug(exception, "Failed to inspect imported Docker image {Image}", image);
         }
 
-        return new DockerImageUploadResult(storedImage, loadedImage, imageId);
+        return (imageId, digest);
     }
 
     public async Task<string> ResolveImageTemplateReferenceAsync(string imageName, string? registryOrImage,
@@ -288,6 +337,50 @@ public class DockerImageRegistryService
         }
 
         return normalized;
+    }
+
+    public virtual async Task DeleteManagedImageAsync(string? image, CancellationToken token = default)
+    {
+        if (!TryGetInternalImagePath(NormalizeRegistryAddress(image), out var internalPath))
+            return;
+
+        var separator = internalPath.LastIndexOf(':');
+        var slash = internalPath.LastIndexOf('/');
+        var repository = separator > slash ? internalPath[..separator] : internalPath;
+        var reference = separator > slash ? internalPath[(separator + 1)..] : "latest";
+        var address = RegistryAddress;
+        if (string.IsNullOrWhiteSpace(address))
+            throw new InvalidOperationException("Internal Docker registry address is not configured.");
+
+        using var fallbackClient = _httpClientFactory is null ? new HttpClient() : null;
+        var client = _httpClientFactory?.CreateClient() ?? fallbackClient!;
+        var manifestUrl = $"http://{address}/v2/{repository}/manifests/{Uri.EscapeDataString(reference)}";
+        using var head = new HttpRequestMessage(HttpMethod.Head, manifestUrl);
+        head.Headers.Accept.ParseAdd("application/vnd.docker.distribution.manifest.v2+json");
+        head.Headers.Accept.ParseAdd("application/vnd.oci.image.manifest.v1+json");
+        using var headResponse = await client.SendAsync(head, token);
+        if (headResponse.StatusCode == HttpStatusCode.NotFound)
+            return;
+        if (!headResponse.IsSuccessStatusCode)
+            throw new InvalidOperationException(
+                $"Failed to resolve Docker manifest {repository}:{reference} from {address}: " +
+                $"{(int)headResponse.StatusCode} {headResponse.StatusCode}.");
+
+        if (!headResponse.Headers.TryGetValues("Docker-Content-Digest", out var digestValues))
+            throw new InvalidOperationException(
+                $"Registry {address} did not return Docker-Content-Digest for {repository}:{reference}.");
+        var digest = digestValues.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(digest))
+            throw new InvalidOperationException(
+                $"Registry {address} returned an empty manifest digest for {repository}:{reference}.");
+
+        using var deleteResponse = await client.DeleteAsync(
+            $"http://{address}/v2/{repository}/manifests/{Uri.EscapeDataString(digest)}",
+            token);
+        if (!deleteResponse.IsSuccessStatusCode && deleteResponse.StatusCode != HttpStatusCode.NotFound)
+            throw new InvalidOperationException(
+                $"Failed to delete Docker manifest {repository}@{digest} from {address}: " +
+                $"{(int)deleteResponse.StatusCode} {deleteResponse.StatusCode}.");
     }
 
     public async Task<bool> IsManagedImageReferenceAsync(string? image, CancellationToken token = default)
@@ -750,71 +843,37 @@ fi
 
     async Task<DockerCommandResult> RunDockerAsync(IReadOnlyList<string> arguments, CancellationToken token)
     {
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "docker",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }
-        };
-
-        foreach (var argument in arguments)
-            process.StartInfo.ArgumentList.Add(NormalizeShellArgument(argument));
-
         _logger.LogInformation("Running docker {Arguments}", string.Join(' ', arguments));
-        process.Start();
+        var result = await ProcessExecution.RunAsync(
+            "docker",
+            arguments.Select(NormalizeShellArgument).ToArray(),
+            DockerCommandTimeout,
+            token);
 
-        var outputTask = process.StandardOutput.ReadToEndAsync(token);
-        var errorTask = process.StandardError.ReadToEndAsync(token);
-        await process.WaitForExitAsync(token);
-
-        var output = await outputTask;
-        var error = await errorTask;
-
-        if (process.ExitCode != 0)
+        if (result.ExitCode != 0)
         {
             _logger.LogWarning("docker {Arguments} failed with exit code {ExitCode}: {Error}",
-                string.Join(' ', arguments), process.ExitCode, error.Trim());
-            throw new InvalidOperationException(string.IsNullOrWhiteSpace(error)
-                ? $"docker command failed with exit code {process.ExitCode}"
-                : error.Trim());
+                string.Join(' ', arguments), result.ExitCode, result.Error.Trim());
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(result.Error)
+                ? $"docker command failed with exit code {result.ExitCode}"
+                : result.Error.Trim());
         }
 
-        return new DockerCommandResult(output, error);
+        return new DockerCommandResult(result.Output, result.Error);
     }
 
     static async Task RunProcessAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeout,
         CancellationToken token)
     {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
-        cts.CancelAfter(timeout);
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = fileName,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }
-        };
-        foreach (var argument in arguments)
-            process.StartInfo.ArgumentList.Add(NormalizeShellArgument(argument));
-        process.Start();
-        var outputTask = process.StandardOutput.ReadToEndAsync(cts.Token);
-        var errorTask = process.StandardError.ReadToEndAsync(cts.Token);
-        await process.WaitForExitAsync(cts.Token);
-        var output = await outputTask;
-        var error = await errorTask;
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException(string.IsNullOrWhiteSpace(error)
-                ? $"{fileName} exited with code {process.ExitCode}: {output.Trim()}"
-                : error.Trim());
+        var result = await ProcessExecution.RunAsync(
+            fileName,
+            arguments.Select(NormalizeShellArgument).ToArray(),
+            timeout,
+            token);
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(result.Error)
+                ? $"{fileName} exited with code {result.ExitCode}: {result.Output.Trim()}"
+                : result.Error.Trim());
     }
 
     static string NormalizeShellArgument(string argument) => argument.Replace("\r\n", "\n").Replace("\r", "\n");

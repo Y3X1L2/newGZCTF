@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using GZCTF.Integration.Test.Base;
 using GZCTF.Models;
 using GZCTF.Models.Data;
@@ -23,6 +24,7 @@ namespace GZCTF.Integration.Test.Tests.Api;
 [Collection(nameof(IntegrationTestCollection))]
 public class EditControllerTests(GZCTFApplicationFactory factory, ITestOutputHelper output)
 {
+    private static readonly JsonSerializerOptions ApiJsonOptions = CreateApiJsonOptions();
     /// <summary>
     /// Test GetGameChallenges returns challenges with scores from scoreboard when available
     /// </summary>
@@ -238,7 +240,7 @@ public class EditControllerTests(GZCTFApplicationFactory factory, ITestOutputHel
         var createResponse = await adminClient.PostAsJsonAsync("/api/Edit/Games", model);
         createResponse.EnsureSuccessStatusCode();
 
-        var created = await createResponse.Content.ReadFromJsonAsync<GameInfoModel>();
+        var created = await createResponse.Content.ReadFromJsonAsync<GameInfoModel>(ApiJsonOptions);
         Assert.NotNull(created);
         Assert.True(created.IsTest);
 
@@ -266,7 +268,7 @@ public class EditControllerTests(GZCTFApplicationFactory factory, ITestOutputHel
 
         var gameResponse = await adminClient.GetAsync($"/api/Edit/Games/{seededGame.Id}");
         gameResponse.EnsureSuccessStatusCode();
-        var gameInfo = await gameResponse.Content.ReadFromJsonAsync<GameInfoModel>();
+        var gameInfo = await gameResponse.Content.ReadFromJsonAsync<GameInfoModel>(ApiJsonOptions);
 
         Assert.NotNull(gameInfo);
         Assert.False(gameInfo.IsTest);
@@ -276,7 +278,7 @@ public class EditControllerTests(GZCTFApplicationFactory factory, ITestOutputHel
         var updateResponse = await adminClient.PutAsJsonAsync($"/api/Edit/Games/{seededGame.Id}", gameInfo);
         updateResponse.EnsureSuccessStatusCode();
 
-        var updated = await updateResponse.Content.ReadFromJsonAsync<GameInfoModel>();
+        var updated = await updateResponse.Content.ReadFromJsonAsync<GameInfoModel>(ApiJsonOptions);
         Assert.NotNull(updated);
         Assert.True(updated.IsTest);
 
@@ -569,6 +571,7 @@ public class EditControllerTests(GZCTFApplicationFactory factory, ITestOutputHel
             {
                 Title = "Container Challenge",
                 Type = ChallengeType.DynamicContainer,
+                Environment = EnvironmentType.Docker,
                 GameId = game.Id,
                 IsEnabled = true,
                 ContainerImage = "ghcr.io/gzctf/challenge-base/echo:latest",
@@ -586,10 +589,14 @@ public class EditControllerTests(GZCTFApplicationFactory factory, ITestOutputHel
         loginResponse.EnsureSuccessStatusCode();
 
         // Act: Create test container
+        await using var localScheduling =
+            await ContainerHelper.EnableLocalNodeSchedulingAsync(factory.Services);
         var createContainerResponse = await adminClient.PostAsync(
             $"/api/Edit/Games/{game.Id}/Challenges/{challenge.Id}/Container", null);
 
-        Assert.True(createContainerResponse.IsSuccessStatusCode);
+        Assert.True(
+            createContainerResponse.IsSuccessStatusCode,
+            await createContainerResponse.Content.ReadAsStringAsync());
 
         // Try to wait for admin test container if available
         await ContainerHelper.WaitAdminContainerAsync(factory.Services, challenge.Id, output);
@@ -755,5 +762,12 @@ public class EditControllerTests(GZCTFApplicationFactory factory, ITestOutputHel
             .Where(p => p.GameId == gameId)
             .ToListAsync();
         Assert.Empty(participationsAfterDelete);
+    }
+
+    private static JsonSerializerOptions CreateApiJsonOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.Converters.Add(new DateTimeOffsetJsonConverter());
+        return options;
     }
 }

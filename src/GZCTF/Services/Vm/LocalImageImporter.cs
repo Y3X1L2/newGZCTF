@@ -37,10 +37,14 @@ public class LocalImageImporter
     /// </summary>
     /// <param name="localPath">Filesystem path to the VM image or directory</param>
     /// <param name="displayName">Human-readable name (default: filename without extension)</param>
+    /// <param name="createdById">User creating the global image template</param>
     /// <param name="token">Cancellation token</param>
     /// <returns>Created ImageTemplate entity</returns>
     public async Task<ImageTemplate> ImportFromLocalPathAsync(
-        string localPath, string? displayName = null, CancellationToken token = default)
+        string localPath,
+        string? displayName,
+        Guid createdById,
+        CancellationToken token = default)
     {
         _logger.LogInformation("Importing VM image from local path: {Path}", localPath);
 
@@ -133,7 +137,8 @@ public class LocalImageImporter
             FileSize = fileInfo.Length,
             UploadedAt = DateTimeOffset.UtcNow,
             Status = ImageStatus.Ready,
-            Description = "Imported from local storage"
+            Description = "Imported from local storage",
+            CreatedById = createdById
         };
 
         _context.ImageTemplates.Add(template);

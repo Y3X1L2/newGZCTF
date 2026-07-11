@@ -270,8 +270,6 @@ const CourseDetail: FC = () => {
   const [localImportDraft, setLocalImportDraft] = useState<TrainingCourseLocalImageImportModel>(emptyLocalImportDraft())
   const [dockerArchiveFile, setDockerArchiveFile] = useState<File | null>(null)
   const [dockerArchiveName, setDockerArchiveName] = useState('')
-  const [dockerArchiveRepository, setDockerArchiveRepository] = useState('')
-  const [dockerArchiveTag, setDockerArchiveTag] = useState('latest')
   const [dockerArchiveSourceImage, setDockerArchiveSourceImage] = useState('')
   const [dockerArchiveOsType, setDockerArchiveOsType] = useState('0')
   const [vmFile, setVmFile] = useState<File | null>(null)
@@ -604,14 +602,12 @@ const CourseDetail: FC = () => {
   }
 
   const uploadDockerTemplate = async () => {
-    if (!course || !dockerArchiveFile || !dockerArchiveName.trim() || !dockerArchiveRepository.trim()) return
+    if (!course || !dockerArchiveFile || !dockerArchiveName.trim()) return
     setUploading(true)
     try {
       const formData = new FormData()
       formData.append('file', dockerArchiveFile)
       formData.append('name', dockerArchiveName.trim())
-      formData.append('repository', dockerArchiveRepository.trim())
-      formData.append('tag', dockerArchiveTag.trim() || 'latest')
       formData.append('sourceImage', dockerArchiveSourceImage.trim())
       formData.append('osType', dockerArchiveOsType)
 
@@ -624,8 +620,6 @@ const CourseDetail: FC = () => {
       showNotification({ color: 'teal', message: 'Docker 镜像包已导入课程。' })
       setDockerArchiveFile(null)
       setDockerArchiveName('')
-      setDockerArchiveRepository('')
-      setDockerArchiveTag('latest')
       setDockerArchiveSourceImage('')
       setDockerArchiveOsType('0')
       setDockerUploadOpened(false)
@@ -2061,16 +2055,6 @@ const CourseDetail: FC = () => {
             onChange={(e) => setDockerArchiveName(e.currentTarget.value)}
             placeholder="web-flag-demo"
           />
-          <Group grow>
-            <TextInput
-              label="仓库路径"
-              required
-              value={dockerArchiveRepository}
-              onChange={(e) => setDockerArchiveRepository(e.currentTarget.value)}
-              placeholder="training/course-web-demo"
-            />
-            <TextInput label="Tag" value={dockerArchiveTag} onChange={(e) => setDockerArchiveTag(e.currentTarget.value)} placeholder="latest" />
-          </Group>
           <TextInput
             label="源镜像名"
             value={dockerArchiveSourceImage}

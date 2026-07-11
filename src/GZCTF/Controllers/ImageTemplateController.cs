@@ -7,8 +7,13 @@ using GZCTF.Services.Fleet;
 using GZCTF.Services.Vm;
 using GZCTF.Storage;
 using GZCTF.Middlewares;
+using GZCTF.Modules.Content.Application;
+using GZCTF.Modules.Content.Contracts;
+using GZCTF.Modules.Identity.Application;
+using GZCTF.Modules.Audit.Application;
 using GZCTF.Utils;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,20 +32,34 @@ public class ImageTemplateController : ControllerBase
     private readonly ImageStorage _storage;
     private readonly IArchiveExtractor _archiveExtractor;
     private readonly DockerImageRegistryService _dockerRegistry;
-    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly UserManager<UserInfo> _userManager;
+    private readonly ImageTemplateDeletionService _deletionService;
+    private readonly ImageImportApplicationService _imageImports;
+    private readonly ImageDistributionService _imageDistribution;
     private readonly ILogger<ImageTemplateController> _logger;
 
     public ImageTemplateController(AppDbContext context, ImageStorage storage, IArchiveExtractor archiveExtractor,
-        DockerImageRegistryService dockerRegistry, IServiceScopeFactory scopeFactory,
+        DockerImageRegistryService dockerRegistry,
+        UserManager<UserInfo> userManager, ImageTemplateDeletionService deletionService,
+        ImageImportApplicationService imageImports, ImageDistributionService imageDistribution,
         ILogger<ImageTemplateController> logger)
     {
         _context = context;
         _storage = storage;
         _archiveExtractor = archiveExtractor;
         _dockerRegistry = dockerRegistry;
-        _scopeFactory = scopeFactory;
+        _userManager = userManager;
+        _deletionService = deletionService;
+        _imageImports = imageImports;
+        _imageDistribution = imageDistribution;
         _logger = logger;
     }
+
+    private async Task<UserInfo> CurrentUser() =>
+        await _userManager.GetUserAsync(User) ?? throw new InvalidOperationException("Current user is missing.");
+
+    private static bool CanManageTemplate(UserInfo actor, ImageTemplate template) =>
+        actor.Role >= Role.Admin || template.CreatedById == actor.Id;
 
     /// <summary>
     /// Upload a VM disk image file.
@@ -55,14 +74,17 @@ public class ImageTemplateController : ControllerBase
 
         try
         {
+            var actor = await CurrentUser();
             var imageTemplate = await _storage.SaveImageAsync(file);
+            imageTemplate.CreatedById = actor.Id;
             _context.ImageTemplates.Add(imageTemplate);
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Image template {Name} (ID:{Id}) uploaded by {User}",
                 imageTemplate.Name, imageTemplate.Id, User.Identity?.Name);
 
-            QueueDistribution(imageTemplate.Id);
+            await _imageDistribution.DistributeToCapableNodesAsync(
+                imageTemplate, HttpContext.RequestAborted);
 
             return CreatedAtAction(nameof(GetById), new { id = imageTemplate.Id }, new
             {
@@ -89,8 +111,10 @@ public class ImageTemplateController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
-        var query = _context.ImageTemplates
-            .Where(t => t.TrainingCourseId == null);
+        var actor = await CurrentUser();
+        var query = _context.ImageTemplates.AsQueryable();
+        if (actor.Role < Role.Admin)
+            query = query.Where(template => template.CreatedById == null || template.CreatedById == actor.Id);
 
         if (osType.HasValue)
             query = query.Where(t => t.OSType == osType.Value);
@@ -125,7 +149,11 @@ public class ImageTemplateController : ControllerBase
     [RequireTeacher]
     public async Task<IActionResult> GetById(int id)
     {
-        var template = await _context.ImageTemplates.FindAsync(id);
+        var actor = await CurrentUser();
+        var template = await _context.ImageTemplates.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Id == id &&
+                                          (actor.Role >= Role.Admin ||
+                                           item.CreatedById == null || item.CreatedById == actor.Id));
         if (template is null)
             return NotFound();
 
@@ -161,10 +189,13 @@ public class ImageTemplateController : ControllerBase
 
         try
         {
+            var actor = await CurrentUser();
             var importer = HttpContext.RequestServices.GetRequiredService<Services.Vm.LocalImageImporter>();
-            var template = await importer.ImportFromLocalPathAsync(request.LocalPath, request.DisplayName);
+            var template = await importer.ImportFromLocalPathAsync(
+                request.LocalPath, request.DisplayName, actor.Id);
 
-            QueueDistribution(template.Id);
+            await _imageDistribution.DistributeToCapableNodesAsync(
+                template, HttpContext.RequestAborted);
 
             return Ok(new
             {
@@ -192,62 +223,35 @@ public class ImageTemplateController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var pullTarget = DockerImageReference.ResolvePullTarget(request.Name, request.RegistryUrl);
-        var imageReference = pullTarget.FullImage;
+        var actor = await CurrentUser();
+        if (!string.IsNullOrWhiteSpace(request.RegistryAuth))
+            return BadRequest(new
+            {
+                message = "Durable image imports do not accept persisted registry credentials."
+            });
 
-        var existingTemplate = await _context.ImageTemplates
-            .FirstOrDefaultAsync(t => t.ImageType == ImageType.Docker &&
-                                      (t.Name == request.Name || t.RegistryUrl == imageReference), token);
-        if (existingTemplate is not null && existingTemplate.Status != ImageStatus.Error)
-            return BadRequest(new { message = "同名或同 Registry URL 的 Docker 模板已存在" });
-
-        var template = existingTemplate ?? new ImageTemplate { ImageType = ImageType.Docker };
-        template.Name = request.Name;
-        template.OSType = request.OSType;
-        template.RegistryUrl = imageReference;
-        template.RegistryAuth = request.RegistryAuth;
-        template.Status = ImageStatus.Importing;
-        template.ErrorMessage = null;
-        template.UploadedAt = DateTimeOffset.UtcNow;
-
-        if (existingTemplate is null)
-            _context.ImageTemplates.Add(template);
-        await _context.SaveChangesAsync(token);
-
-        var imageName = pullTarget.ImageName;
-        var registryUrl = pullTarget.RegistryUrl;
-        var registryAuth = request.RegistryAuth;
-        var templateId = template.Id;
-        _ = Task.Run(async () =>
+        try
         {
-            using var scope = _scopeFactory.CreateScope();
-            var ctx = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            try
-            {
-                var orchestrator = scope.ServiceProvider.GetRequiredService<ContainerOrchestrator>();
-                await orchestrator.PullImageFromRegistryAsync(registryUrl, imageName, registryAuth);
-                var t = await ctx.ImageTemplates.FindAsync(templateId);
-                if (t is not null)
-                {
-                    t.Status = ImageStatus.Ready;
-                    t.ErrorMessage = null;
-                    await ctx.SaveChangesAsync();
-                }
-            }
-            catch (Exception ex)
-            {
-                var t = await ctx.ImageTemplates.FindAsync(templateId);
-                if (t is not null)
-                {
-                    t.Status = ImageStatus.Error;
-                    t.ErrorMessage = TruncateError(ex.Message);
-                    await ctx.SaveChangesAsync();
-                }
-                _logger.LogWarning(ex, "Failed to pull Docker image: {Image}", pullTarget.FullImage);
-            }
-        });
-
-        return Ok(new { template.Id, template.Name, template.OSType, template.ImageType });
+            var source = DockerImageReference.ResolvePullTarget(
+                request.Name, request.RegistryUrl).FullImage;
+            var imported = await _imageImports.ImportDockerReferenceNowAsync(
+                new ActorContext(actor.Id, actor.Role),
+                new DockerImageReferenceImportCommand(
+                    request.Name, source, request.OSType, null),
+                token);
+            var template = await _context.ImageTemplates.SingleAsync(
+                item => item.Id == imported.Id, token);
+            await _imageDistribution.DistributeToCapableNodesAsync(template, token);
+            return Ok(new { template.Id, template.Name, template.OSType, template.ImageType });
+        }
+        catch (ApiOperationTerminalException exception)
+        {
+            return Conflict(new { message = exception.Message, code = exception.Code });
+        }
+        catch (ApiContractException exception)
+        {
+            return BadRequest(new { message = exception.Message, code = exception.Code });
+        }
     }
 
     [HttpGet("docker-registry")]
@@ -274,72 +278,31 @@ public class ImageTemplateController : ControllerBase
     public async Task<IActionResult> UploadDockerArchive(
         [FromForm] IFormFile file,
         [FromForm] string name,
-        [FromForm] string repository,
-        [FromForm] string tag,
         [FromForm] string? sourceImage,
         [FromForm] OSType osType,
         CancellationToken token)
     {
+        var actor = await CurrentUser();
         if (file is null || file.Length == 0)
             return BadRequest(new { message = "No file provided" });
-        if (file.Length > _dockerRegistry.MaxUploadSizeBytes)
-            return BadRequest(new { message = "Docker archive exceeds configured upload size limit" });
-        if (string.IsNullOrWhiteSpace(name))
-            return BadRequest(new { message = "Template display name is required" });
-
-        var fileName = file.FileName.ToLowerInvariant();
-        var ext = Path.GetExtension(fileName);
-        if (fileName.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase))
-            ext = ".tar.gz";
-        else if (fileName.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase))
-            ext = ".tgz";
-
-        if (ext is not ".tar" and not ".tar.gz" and not ".tgz")
-            return BadRequest(new { message = "Unsupported Docker archive format. Allowed: .tar, .tar.gz, .tgz" });
-
-        string targetImage;
-        try
-        {
-            targetImage = await _dockerRegistry.BuildInternalImageReferenceAsync(repository, tag, token);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-
-        var existingTemplate = await _context.ImageTemplates
-            .FirstOrDefaultAsync(t => t.ImageType == ImageType.Docker &&
-                                      (t.Name == name.Trim() || t.RegistryUrl == targetImage), token);
-        if (existingTemplate is not null && existingTemplate.Status != ImageStatus.Error)
-            return BadRequest(new { message = "同名或同 Registry URL 的 Docker 模板已存在" });
-
-        var tempDir = Path.Combine(Path.GetTempPath(), "gzctf_docker_uploads", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDir);
-        var archivePath = Path.Combine(tempDir, $"image{ext}");
 
         try
         {
-            await using (var stream = file.OpenReadStream())
-            await using (var fs = System.IO.File.Create(archivePath))
-                await stream.CopyToAsync(fs, token);
-
-            var result = await _dockerRegistry.ImportArchiveAsync(archivePath, repository, tag, sourceImage, token);
-            var template = existingTemplate ?? new ImageTemplate { ImageType = ImageType.Docker };
-            template.Name = name.Trim();
-            template.OSType = osType;
-            template.RegistryUrl = result.FullImage;
-            template.RegistryAuth = null;
-            template.Status = ImageStatus.Ready;
-            template.ErrorMessage = null;
-            template.UploadedAt = DateTimeOffset.UtcNow;
-            template.FileSize = file.Length;
-            template.ImageHash = result.ImageId?.Replace("sha256:", string.Empty, StringComparison.OrdinalIgnoreCase);
-            template.OriginalArchiveName = file.FileName;
-            template.Description = $"Internal registry image loaded from {result.SourceImage}";
-
-            if (existingTemplate is null)
-                _context.ImageTemplates.Add(template);
-            await _context.SaveChangesAsync(token);
+            await using var stream = file.OpenReadStream();
+            var imported = await _imageImports.ImportDockerArchiveNowAsync(
+                new ActorContext(actor.Id, actor.Role),
+                stream,
+                file.FileName,
+                file.Length,
+                new DockerImageArchiveImportCommand(
+                    name,
+                    sourceImage,
+                    osType,
+                    null),
+                token);
+            var template = await _context.ImageTemplates.SingleAsync(
+                item => item.Id == imported.Id, token);
+            await _imageDistribution.DistributeToCapableNodesAsync(template, token);
 
             return Ok(new
             {
@@ -360,12 +323,13 @@ public class ImageTemplateController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            _logger.LogWarning(ex, "Docker archive upload failed for {TargetImage}", targetImage);
+            _logger.LogWarning(ex, "Docker archive upload failed for {TemplateName}", name);
             return BadRequest(new { message = ex.Message });
         }
-        finally
+        catch (ApiContractException ex)
         {
-            try { Directory.Delete(tempDir, true); } catch { /* best effort cleanup */ }
+            _logger.LogWarning(ex, "Docker archive upload rejected for {TemplateName}", name);
+            return StatusCode(ex.StatusCode, new { message = ex.Message, code = ex.Code });
         }
     }
 
@@ -377,6 +341,7 @@ public class ImageTemplateController : ControllerBase
     [RequireTeacher]
     public async Task<IActionResult> UploadArchive(IFormFile file, CancellationToken token)
     {
+        var actor = await CurrentUser();
         if (file is null || file.Length == 0)
             return BadRequest(new { message = "No file provided" });
 
@@ -403,12 +368,13 @@ public class ImageTemplateController : ControllerBase
             await using (var fs = System.IO.File.Create(archivePath))
                 await stream.CopyToAsync(fs, token);
 
-            var result = await _archiveExtractor.ExtractAndRegisterAsync(archivePath, file.FileName, token);
+            var result = await _archiveExtractor.ExtractAndRegisterAsync(
+                archivePath, file.FileName, actor.Id, token);
 
             if (!result.Success)
                 return BadRequest(new { message = result.Error });
 
-            QueueDistribution(result.Template!.Id);
+            await _imageDistribution.DistributeToCapableNodesAsync(result.Template!, token);
 
             return Ok(new { result.Template!.Id, result.Template.Name, result.Template.OSType, result.Template.ImageType, result.Template.FileSize });
         }
@@ -424,27 +390,22 @@ public class ImageTemplateController : ControllerBase
     /// </summary>
     [HttpDelete("{id:int}")]
     [RequireTeacher]
-    public async Task<IActionResult> Delete(int id)
+    public async Task<IActionResult> Delete(int id, CancellationToken token)
     {
-        var template = await _context.ImageTemplates.FindAsync(id);
-        if (template is null)
-            return NotFound();
-
-        var inUse = await _context.GameChallenges.AnyAsync(c => c.ImageTemplateId == id) ||
-                    await _context.ExerciseChallenges.AnyAsync(c => c.ImageTemplateId == id) ||
-                    await _context.PenetrationNodes.AnyAsync(n => n.ImageTemplateId == id);
-
-        if (inUse)
-            return BadRequest(new { message = "该模板正在被题目使用，无法删除" });
-
-        await _storage.DeleteImageAsync(template);
-        _context.ImageTemplates.Remove(template);
-        await _context.SaveChangesAsync();
-
-        _logger.LogInformation("Image template {Name} (ID:{Id}) deleted by {User}",
-            template.Name, id, User.Identity?.Name);
-
-        return NoContent();
+        var actor = await CurrentUser();
+        var result = await _deletionService.DeleteAsync(
+            id, new ActorContext(actor.Id, actor.Role), token);
+        return result.Status switch
+        {
+            ImageTemplateDeleteStatus.NotFound => NotFound(),
+            ImageTemplateDeleteStatus.Forbidden => Forbid(),
+            ImageTemplateDeleteStatus.InUse => Conflict(new
+            {
+                message = "该模板仍被业务资源引用，无法删除。",
+                references = result.References
+            }),
+            _ => NoContent()
+        };
     }
 
     [HttpGet("download/{hash}")]
@@ -484,31 +445,6 @@ public class ImageTemplateController : ControllerBase
         return PhysicalFile(fullPath, "application/octet-stream", Path.GetFileName(fullPath), enableRangeProcessing: true);
     }
 
-    private void QueueDistribution(int templateId)
-    {
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                using var scope = _scopeFactory.CreateScope();
-                var ctx = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                var distributor = scope.ServiceProvider.GetService<Services.Fleet.ImageDistributionService>();
-                if (distributor is null)
-                    return;
-
-                var template = await ctx.ImageTemplates.AsNoTracking().FirstOrDefaultAsync(t => t.Id == templateId);
-                if (template is null)
-                    return;
-
-                await distributor.DistributeToCapableNodesAsync(template, CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Image distribution task failed for template {TemplateId}", templateId);
-            }
-        });
-    }
-
     private static bool TryGetBearerToken(HttpRequest request, out string token)
     {
         token = string.Empty;
@@ -534,11 +470,6 @@ public class ImageTemplateController : ControllerBase
                CryptographicOperations.FixedTimeEquals(leftBytes, rightBytes);
     }
 
-    private static string TruncateError(string? message)
-    {
-        var value = string.IsNullOrWhiteSpace(message) ? "Docker image operation failed." : message.Trim();
-        return value.Length <= 1024 ? value : value[..1024];
-    }
 }
 
 public class DockerRegisterRequest

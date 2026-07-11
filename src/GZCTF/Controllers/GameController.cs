@@ -1045,7 +1045,7 @@ public class GameController(
     [RequireUser]
     [HttpPost("{id:int}/Challenges/{challengeId:int}")]
     [EnableRateLimiting(nameof(RateLimiter.LimitPolicy.Submit))]
-    [ProducesResponseType(typeof(int), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(FlagSubmitResultModel), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Submit([FromRoute] int id, [FromRoute] int challengeId,
@@ -1161,7 +1161,12 @@ public class GameController(
                 logger.LogErrorMessage(ex, "Failed to publish submission side effects.");
             }
 
-            return Ok(new { submission.Id, Status = result.AnsRes, BloodType = result.SubType });
+            return Ok(new FlagSubmitResultModel
+            {
+                Id = submission.Id,
+                Status = result.AnsRes,
+                BloodType = result.SubType
+            });
         }
 
         return StatusCode(StatusCodes.Status409Conflict,

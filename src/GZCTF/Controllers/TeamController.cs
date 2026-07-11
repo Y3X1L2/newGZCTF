@@ -616,8 +616,10 @@ public partial class TeamController(
                     StatusCodes.Status404NotFound));
 
             var user = await userManager.GetUserAsync(User);
+            if (user is null)
+                return Unauthorized();
 
-            if (team.Members.All(m => m.Id != user!.Id))
+            if (team.Members.All(m => m.Id != user.Id))
                 return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.User_LeaveNotInTeam)]));
 
             if (!TeamPolicy.CanCaptainLeave(team, user.Id))
@@ -626,8 +628,8 @@ public partial class TeamController(
             if (team.Locked && await teamRepository.AnyActiveGame(team, token))
                 return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Team_Locked)]));
 
-            team.Members.Remove(user!);
-            await participationRepository.RemoveUserParticipations(user!, team, token);
+            team.Members.Remove(user);
+            await participationRepository.RemoveUserParticipations(user, team, token);
 
             await teamRepository.SaveAsync(token);
             await trans.CommitAsync(token);
