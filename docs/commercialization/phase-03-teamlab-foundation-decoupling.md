@@ -10,6 +10,17 @@
 
 ---
 
+## 执行进度（2026-07-11）
+
+- 当前分支：`codex/phase-3-teamlab-foundation`，基线为 `c83d3135`。
+- Phase 2 由其他协作者并行开发；Phase 3 不重写视觉语言，只处理 TeamLab/Penetration 契约边界和必要调用改造。
+- 验收节奏调整为四个大单元：独立领域基座、runtime 编排、Penetration/API 接入、contract migration 与最终验收。每个大单元末集中测试，不执行逐小步骤红灯/绿灯循环。
+- 已核实当前事实：TeamLab application module 尚不存在；`TeamLabRuntime` 仍以 `GameId + TeamId` 标识；`TeamLabDeploymentService` 仍直接生成 Penetration Flag；`PenetrationService` 与 `TeamLabDeploymentService` 分别约 160 KB 和 119 KB；前端 `PenetrationApi.ts` 仍混合玩法与 TeamLab runtime 契约。
+- 大单元 1：已完成并通过聚合验证。已新增独立 topology/network/asset/interface/connection/release/network lease 模型、Penetration objective/binding 模型、canonical release codec、RFC1918 validator、乐观 revision、能力感知 plan 和 expand migration；旧 runtime 已补 PublicId、release、generation、entry shard、access grant 和 secret envelope 扩展字段。验证结果：`TeamLabFoundation*` 6/6 通过，生产与测试项目 0 编译错误。
+- 当前状态：开始大单元 2，迁移 runtime 编排、队列身份、节点执行端口和 overlay。
+
+---
+
 ## 0. 当前代码事实
 
 - `TeamLabRuntime`、Shard、Network、Asset、TrafficFlow 和 CaptureJob 已存在，运行事实基础可复用。

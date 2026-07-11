@@ -14,6 +14,16 @@ using TrainingCourseImageTemplateBindingEntity = GZCTF.Modules.Training.Domain.T
 using ImageImportJobEntity = GZCTF.Modules.Content.Domain.ImageImportJob;
 using ChallengeMutationJobEntity = GZCTF.Modules.Ctf.Domain.ChallengeMutationJob;
 using ExternalApiRequestAuditEntity = GZCTF.Modules.Audit.Domain.ExternalApiRequestAudit;
+using TeamLabTopologyEntity = GZCTF.Modules.TeamLab.Domain.TeamLabTopology;
+using TeamLabTopologyNetworkEntity = GZCTF.Modules.TeamLab.Domain.TeamLabTopologyNetwork;
+using TeamLabTopologyAssetEntity = GZCTF.Modules.TeamLab.Domain.TeamLabTopologyAsset;
+using TeamLabTopologyInterfaceEntity = GZCTF.Modules.TeamLab.Domain.TeamLabTopologyInterface;
+using TeamLabTopologyConnectionEntity = GZCTF.Modules.TeamLab.Domain.TeamLabTopologyConnection;
+using TeamLabTopologyReleaseEntity = GZCTF.Modules.TeamLab.Domain.TeamLabTopologyRelease;
+using TeamLabNetworkLeaseEntity = GZCTF.Modules.TeamLab.Domain.TeamLabNetworkLease;
+using PenetrationObjectiveEntity = GZCTF.Modules.Penetration.Domain.PenetrationObjective;
+using PenetrationGameLabBindingEntity = GZCTF.Modules.Penetration.Domain.PenetrationGameLabBinding;
+using PenetrationTeamRuntimeBindingEntity = GZCTF.Modules.Penetration.Domain.PenetrationTeamRuntimeBinding;
 
 namespace GZCTF.Models;
 
@@ -96,6 +106,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<PenetrationRuntimeRoute> PenetrationRuntimeRoutes { get; set; } = null!;
     public DbSet<PenetrationSubmission> PenetrationSubmissions { get; set; } = null!;
     public DbSet<PenetrationResetRecord> PenetrationResetRecords { get; set; } = null!;
+    public DbSet<PenetrationObjectiveEntity> PenetrationObjectives => Set<PenetrationObjectiveEntity>();
+    public DbSet<PenetrationGameLabBindingEntity> PenetrationGameLabBindings => Set<PenetrationGameLabBindingEntity>();
+    public DbSet<PenetrationTeamRuntimeBindingEntity> PenetrationTeamRuntimeBindings => Set<PenetrationTeamRuntimeBindingEntity>();
     public DbSet<TrainingCourse> TrainingCourses { get; set; } = null!;
     public DbSet<TrainingCourseTeacher> TrainingCourseTeachers { get; set; } = null!;
     public DbSet<TrainingCourseEnrollment> TrainingCourseEnrollments { get; set; } = null!;
@@ -121,6 +134,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TeamLabEvent> TeamLabEvents => Set<TeamLabEvent>();
     public DbSet<TeamLabTrafficFlow> TeamLabTrafficFlows => Set<TeamLabTrafficFlow>();
     public DbSet<TeamLabTrafficCaptureJob> TeamLabTrafficCaptureJobs => Set<TeamLabTrafficCaptureJob>();
+    public DbSet<TeamLabAccessGrant> TeamLabAccessGrants => Set<TeamLabAccessGrant>();
+    public DbSet<TeamLabRuntimeSecretEnvelope> TeamLabRuntimeSecretEnvelopes => Set<TeamLabRuntimeSecretEnvelope>();
+    public DbSet<TeamLabTopologyEntity> TeamLabTopologies => Set<TeamLabTopologyEntity>();
+    public DbSet<TeamLabTopologyNetworkEntity> TeamLabTopologyNetworks => Set<TeamLabTopologyNetworkEntity>();
+    public DbSet<TeamLabTopologyAssetEntity> TeamLabTopologyAssets => Set<TeamLabTopologyAssetEntity>();
+    public DbSet<TeamLabTopologyInterfaceEntity> TeamLabTopologyInterfaces => Set<TeamLabTopologyInterfaceEntity>();
+    public DbSet<TeamLabTopologyConnectionEntity> TeamLabTopologyConnections => Set<TeamLabTopologyConnectionEntity>();
+    public DbSet<TeamLabTopologyReleaseEntity> TeamLabTopologyReleases => Set<TeamLabTopologyReleaseEntity>();
+    public DbSet<TeamLabNetworkLeaseEntity> TeamLabNetworkLeases => Set<TeamLabNetworkLeaseEntity>();
 
     private static ValueConverter<T?, string> GetJsonConverter<T>() where T : class, new() =>
         new(
@@ -995,6 +1017,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .WithMany()
                 .HasForeignKey(e => e.ScoreItemId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne<PenetrationObjectiveEntity>()
+                .WithMany()
+                .HasForeignKey(e => e.ObjectiveId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             entity.Navigation(e => e.Team).AutoInclude();
             entity.Navigation(e => e.User).AutoInclude();

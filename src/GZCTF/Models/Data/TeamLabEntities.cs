@@ -46,11 +46,30 @@ public enum TeamLabTrafficCaptureStatus : byte
     Expired = 5
 }
 
+public enum TeamLabAccessGrantType : byte
+{
+    WireGuard = 0
+}
+
 [Index(nameof(GameId), nameof(TeamId), IsUnique = true)]
 [Index(nameof(WorkerNodeId))]
 public class TeamLabRuntime
 {
     [Key] public int Id { get; set; }
+
+    public Guid PublicId { get; set; } = Guid.CreateVersion7();
+
+    public Guid? TopologyReleaseId { get; set; }
+
+    public Guid? CreatedById { get; set; }
+
+    public int Generation { get; set; } = 1;
+
+    [MaxLength(256)] public string? ExternalReference { get; set; }
+
+    [MaxLength(128)] public string CreateRequestHash { get; set; } = string.Empty;
+
+    public int? EntryShardId { get; set; }
 
     public int GameId { get; set; }
 
@@ -86,6 +105,10 @@ public class TeamLabRuntime
 
     public List<TeamLabVpnPeerRuntime> VpnPeers { get; set; } = [];
 
+    public List<TeamLabAccessGrant> AccessGrants { get; set; } = [];
+
+    public List<TeamLabRuntimeSecretEnvelope> SecretEnvelopes { get; set; } = [];
+
     public TeamLabPublicUdpMapping? PublicUdpMapping { get; set; }
 
     public List<TeamLabEvent> Events { get; set; } = [];
@@ -95,12 +118,16 @@ public class TeamLabRuntime
     public List<TeamLabTrafficCaptureJob> TrafficCaptureJobs { get; set; } = [];
 }
 
-[Index(nameof(RuntimeId), nameof(WorkerNodeId), IsUnique = true)]
+[Index(nameof(RuntimeId), nameof(Generation), nameof(WorkerNodeId), IsUnique = true)]
 public class TeamLabRuntimeShard
 {
     [Key] public int Id { get; set; }
 
+    public Guid PublicId { get; set; } = Guid.CreateVersion7();
+
     public int RuntimeId { get; set; }
+
+    public int Generation { get; set; } = 1;
 
     public Guid WorkerNodeId { get; set; }
 
@@ -123,12 +150,16 @@ public class TeamLabRuntimeShard
     public List<TeamLabRuntimeAsset> Assets { get; set; } = [];
 }
 
-[Index(nameof(RuntimeId), nameof(TopologyKey), IsUnique = true)]
+[Index(nameof(RuntimeId), nameof(Generation), nameof(TopologyKey), IsUnique = true)]
 public class TeamLabRuntimeNetwork
 {
     [Key] public int Id { get; set; }
 
     public int RuntimeId { get; set; }
+
+    public int Generation { get; set; } = 1;
+
+    public long? NetworkLeaseId { get; set; }
 
     public int? ShardId { get; set; }
 
@@ -151,12 +182,14 @@ public class TeamLabRuntimeNetwork
     public WorkerNode? WorkerNode { get; set; }
 }
 
-[Index(nameof(RuntimeId), nameof(Kind), nameof(TopologyKey))]
+[Index(nameof(RuntimeId), nameof(Generation), nameof(Kind), nameof(TopologyKey))]
 public class TeamLabRuntimeAsset
 {
     [Key] public int Id { get; set; }
 
     public int RuntimeId { get; set; }
+
+    public int Generation { get; set; } = 1;
 
     public int? ShardId { get; set; }
 
@@ -225,6 +258,68 @@ public class TeamLabVpnPeerRuntime
     public TeamLabRuntime Runtime { get; set; } = null!;
 }
 
+[Index(nameof(RuntimeId), nameof(Generation), nameof(Revoked))]
+public class TeamLabAccessGrant
+{
+    [Key] public int Id { get; set; }
+
+    public Guid PublicId { get; set; } = Guid.CreateVersion7();
+
+    public int RuntimeId { get; set; }
+
+    public int Generation { get; set; } = 1;
+
+    public TeamLabAccessGrantType Type { get; set; } = TeamLabAccessGrantType.WireGuard;
+
+    [MaxLength(64)] public string ClientAddress { get; set; } = string.Empty;
+
+    [MaxLength(256)] public string Endpoint { get; set; } = string.Empty;
+
+    [MaxLength(512)] public string AllowedIps { get; set; } = string.Empty;
+
+    [MaxLength(64)] public string Dns { get; set; } = string.Empty;
+
+    [MaxLength(128)] public string PublicKey { get; set; } = string.Empty;
+
+    [MaxLength(1024)] public string ProtectedPrivateKey { get; set; } = string.Empty;
+
+    [MaxLength(128)] public string ServerPublicKey { get; set; } = string.Empty;
+
+    [MaxLength(1024)] public string ProtectedServerPrivateKey { get; set; } = string.Empty;
+
+    public bool Revoked { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public DateTimeOffset? ExpiresAt { get; set; }
+
+    public DateTimeOffset? RevokedAt { get; set; }
+
+    public TeamLabRuntime Runtime { get; set; } = null!;
+}
+
+[Index(nameof(RuntimeId), nameof(Generation), IsUnique = true)]
+public class TeamLabRuntimeSecretEnvelope
+{
+    [Key] public long Id { get; set; }
+
+    public int RuntimeId { get; set; }
+
+    public int Generation { get; set; } = 1;
+
+    public string? ProtectedPayload { get; set; }
+
+    [MaxLength(128)] public string PayloadHash { get; set; } = string.Empty;
+
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public DateTimeOffset? ConsumedAt { get; set; }
+
+    public DateTimeOffset ExpiresAt { get; set; }
+
+    public TeamLabRuntime Runtime { get; set; } = null!;
+}
+
 [Index(nameof(RuntimeId), IsUnique = true)]
 [Index(nameof(PublicUdpPort), IsUnique = true)]
 public class TeamLabPublicUdpMapping
@@ -232,6 +327,8 @@ public class TeamLabPublicUdpMapping
     [Key] public int Id { get; set; }
 
     public int RuntimeId { get; set; }
+
+    public int Generation { get; set; } = 1;
 
     public int PublicUdpPort { get; set; }
 
@@ -254,6 +351,8 @@ public class TeamLabEvent
     [Key] public int Id { get; set; }
 
     public int RuntimeId { get; set; }
+
+    public int Generation { get; set; } = 1;
 
     [MaxLength(64)] public string Stage { get; set; } = string.Empty;
 
@@ -282,6 +381,8 @@ public class TeamLabTrafficFlow
 
     public int RuntimeId { get; set; }
 
+    public int Generation { get; set; } = 1;
+
     public int? ShardId { get; set; }
 
     public int? NetworkId { get; set; }
@@ -300,6 +401,12 @@ public class TeamLabTrafficFlow
 
     public long Bytes { get; set; }
 
+    public long Packets { get; set; }
+
+    public DateTimeOffset FirstSeenAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public DateTimeOffset LastSeenAt { get; set; } = DateTimeOffset.UtcNow;
+
     public DateTimeOffset CapturedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public TeamLabRuntime Runtime { get; set; } = null!;
@@ -317,7 +424,11 @@ public class TeamLabTrafficCaptureJob
 {
     [Key] public int Id { get; set; }
 
+    public Guid PublicId { get; set; } = Guid.CreateVersion7();
+
     public int RuntimeId { get; set; }
+
+    public int Generation { get; set; } = 1;
 
     public int? ShardId { get; set; }
 

@@ -613,6 +613,8 @@ public class PenetrationSubmission
 
     public int ScoreItemId { get; set; }
 
+    public int? ObjectiveId { get; set; }
+
     public int PublishedVersion { get; set; }
 
     [MaxLength(64)]
