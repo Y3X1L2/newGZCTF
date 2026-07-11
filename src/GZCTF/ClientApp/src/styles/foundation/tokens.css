@@ -1,0 +1,138 @@
+:root {
+  color-scheme: dark;
+
+  --yy-color-bg-canvas: #050706;
+  --yy-color-bg-raised: #0b0f0d;
+  --yy-color-surface-0: rgba(11, 15, 13, 0.74);
+  --yy-color-surface-1: rgba(18, 21, 18, 0.8);
+  --yy-color-surface-2: rgba(24, 28, 24, 0.86);
+  --yy-color-surface-3: #171c18;
+  --yy-color-border-default: rgba(221, 229, 223, 0.105);
+  --yy-color-border-strong: rgba(221, 229, 223, 0.2);
+  --yy-color-text-primary: #f4f7f5;
+  --yy-color-text-secondary: rgba(221, 229, 223, 0.68);
+  --yy-color-text-quiet: rgba(221, 229, 223, 0.42);
+  --yy-color-accent-brand: #6beeb1;
+  --yy-color-accent-brand-strong: #42f49d;
+  --yy-color-accent-brand-soft: rgba(107, 238, 177, 0.13);
+  --yy-color-accent-brand-line: rgba(107, 238, 177, 0.34);
+  --yy-color-accent-info: #9fb7ff;
+  --yy-color-accent-warning: #e8d08d;
+  --yy-color-accent-warning-soft: rgba(232, 208, 141, 0.1);
+  --yy-color-accent-danger: #ff7f91;
+  --yy-color-accent-danger-soft: rgba(255, 127, 145, 0.1);
+
+  --yy-font-sans: Lexend, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  --yy-font-display: 'Soft Aurora', Lexend, 'Segoe UI Variable Display', 'Microsoft YaHei UI', sans-serif;
+  --yy-font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  --yy-font-size-xs: 0.75rem;
+  --yy-font-size-sm: 0.875rem;
+  --yy-font-size-md: 1rem;
+  --yy-font-size-lg: 1.125rem;
+  --yy-font-size-xl: 1.375rem;
+  --yy-font-size-2xl: 1.75rem;
+
+  --yy-space-1: 0.25rem;
+  --yy-space-2: 0.5rem;
+  --yy-space-3: 0.75rem;
+  --yy-space-4: 1rem;
+  --yy-space-5: 1.5rem;
+  --yy-space-6: 2rem;
+  --yy-space-7: 3rem;
+  --yy-space-8: 4rem;
+  --yy-density-compact: 0.75rem;
+  --yy-density-default: 1rem;
+  --yy-density-comfortable: 1.5rem;
+
+  --yy-radius-sm: 4px;
+  --yy-radius-md: 8px;
+  --yy-radius-lg: 8px;
+  --yy-shadow-surface: 0 1.25rem 3.6rem rgba(0, 0, 0, 0.3);
+  --yy-shadow-overlay: 0 28px 88px rgba(0, 0, 0, 0.36);
+  --yy-shadow-focus: 0 0 0 3px rgba(107, 238, 177, 0.24);
+
+  --yy-motion-fast: 160ms;
+  --yy-motion-normal: 240ms;
+  --yy-motion-slow: 420ms;
+  --yy-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --yy-ease-emphasized: cubic-bezier(0.2, 0, 0, 1.2);
+
+  --yy-page-max-width: 1500px;
+  --yy-page-gutter: clamp(1rem, 2vw, 2rem);
+  --yy-sidebar-width: 88px;
+  --yy-header-height: 72px;
+  --yy-z-background: 0;
+  --yy-z-content: 1;
+  --yy-z-header: 100;
+  --yy-z-overlay: 1000;
+  --yy-z-toast: 5000;
+
+  --yy-title-glow: 0 0 2rem rgba(107, 238, 177, 0.2), 0 0 2.3rem rgba(185, 173, 209, 0.12),
+    0 1rem 2.6rem rgba(0, 0, 0, 0.44);
+  --yy-hex-border: rgba(107, 238, 177, 0.22);
+  --yy-hex-border-hot: rgba(107, 238, 177, 0.72);
+  --yy-gradient-brand: #ffffff 0%, #e4fff2 16%, #78f8be 34%, #f5fffa 50%, #b9add1 66%, #f5fffa 82%, #9affd2 100%;
+  --yy-gradient-signal: #f5fff9 0%, #9dffd5 22%, #42f49d 48%, #d8fff0 70%, #ffffff 100%;
+  --yy-gradient-silver: #ffffff 0%, #dde5df 24%, #73837d 43%, #f4f7f5 60%, #b9add1 78%, #ffffff 100%;
+  --yy-gradient-coming: #fff9de 0%, #d8c48a 28%, #dcffe9 52%, #78f8be 74%, #ffffff 100%;
+  --yy-gradient-ended: #f4f7f5 0%, #dde5df 24%, #73837d 48%, #cfd8d2 70%, #ffffff 100%;
+  --yy-gradient-danger: #fff1ed 0%, #e7a190 24%, #c8645d 48%, #f6ded8 72%, #ffffff 100%;
+
+  /* Compatibility aliases for the existing visual layer. */
+  --bg: var(--yy-color-bg-canvas);
+  --surface-0: var(--yy-color-surface-0);
+  --surface-1: var(--yy-color-surface-1);
+  --surface-2: var(--yy-color-surface-2);
+  --surface-3: var(--yy-color-surface-3);
+  --line: var(--yy-color-border-default);
+  --line-strong: var(--yy-color-border-strong);
+  --text: var(--yy-color-text-primary);
+  --muted: var(--yy-color-text-secondary);
+  --quiet: var(--yy-color-text-quiet);
+  --green: var(--yy-color-accent-brand);
+  --green-2: var(--yy-color-accent-brand-strong);
+  --green-soft: var(--yy-color-accent-brand-soft);
+  --green-line: var(--yy-color-accent-brand-line);
+  --warm: var(--yy-color-accent-warning);
+  --warm-soft: var(--yy-color-accent-warning-soft);
+  --danger: var(--yy-color-accent-danger);
+  --danger-soft: var(--yy-color-accent-danger-soft);
+  --blue: var(--yy-color-accent-info);
+  --shadow: var(--yy-shadow-overlay);
+  --radius: var(--yy-radius-md);
+  --container: min(var(--yy-page-max-width), calc(100% - (var(--yy-page-gutter) * 2)));
+  --signal-flow: rgba(107, 238, 177, 0.22);
+  --signal-flow-soft: rgba(185, 173, 209, 0.085);
+  --signal-white: rgba(221, 229, 223, 0.13);
+  --font-display: var(--yy-font-display);
+  --font-mono: var(--yy-font-mono);
+
+  font-family: var(--yy-font-sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+@media (max-width: 47.99em) {
+  :root {
+    --yy-page-gutter: 0.75rem;
+    --yy-density-default: 0.875rem;
+    --yy-density-comfortable: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --yy-motion-fast: 0ms;
+    --yy-motion-normal: 0ms;
+    --yy-motion-slow: 0ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

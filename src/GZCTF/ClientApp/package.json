@@ -8,10 +8,13 @@
     "lint": "oxlint --fix",
     "check": "tsc --noEmit --strict --project tsconfig.app.json",
     "validate:locales": "node scripts/validate-locales.mjs",
-    "build": "pnpm validate:locales && pnpm check && vite build",
+    "build": "pnpm validate:locales && pnpm check && pnpm check:architecture && vite build && node scripts/create-artifact-manifest.mjs && node scripts/check-bundle-budget.mjs",
+    "build:artifact": "pnpm build",
+    "check:architecture": "node scripts/check-frontend-architecture.mjs",
+    "check:bundle": "node scripts/check-bundle-budget.mjs",
     "preview": "vite preview",
     "prettier": "prettier --write src --write plugins --write *.mjs --write *.mts",
-    "genapi": "swagger-typescript-api generate -p http://localhost:8080/openapi/v1.json -t template -o src --module-name-first-tag --sort-routes"
+    "genapi": "swagger-typescript-api generate -p http://localhost:8080/openapi/v1.json -t template -o src/generated --module-name-first-tag --sort-routes"
   },
   "dependencies": {
     "@babel/core": "^7.29.0",

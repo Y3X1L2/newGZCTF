@@ -9,7 +9,8 @@
     "moduleResolution": "bundler",
     "noEmit": true,
     "paths": {
-      "@Api": ["./src/Api.ts"],
+      "@Api": ["./src/api-client/index.ts"],
+      "@Api/*": ["./src/Api/*"],
       "@App": ["./src/App"],
       "@Components/*": ["./src/components/*"],
       "@Hooks/*": ["./src/hooks/*"],

@@ -16,7 +16,7 @@ import {
   TeamLabRuntimeStatus,
   TeamLabTrafficCaptureStatus,
   penetrationAdminApi,
-} from '../../../../Api/PenetrationApi'
+} from '@Api/PenetrationApi'
 
 type Props = {
   gameId: number

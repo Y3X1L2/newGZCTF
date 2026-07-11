@@ -1,0 +1,23 @@
+.coverFrame {
+  position: relative;
+  min-width: 0;
+}
+
+.coverImage {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (min-width: 72.001em) and (max-width: 92em) {
+  .heroGrid {
+    grid-template-columns: minmax(16rem, 28rem) minmax(0, 1fr) !important;
+  }
+
+  .coverFrame {
+    max-width: 28rem;
+  }
+}

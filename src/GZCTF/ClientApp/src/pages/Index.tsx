@@ -13,6 +13,7 @@ import { useConfig } from '@Hooks/useConfig'
 import { showErrorMsg } from '@Utils/Shared'
 import { usePageTitle } from '@Hooks/usePageTitle'
 import api, { PostInfoModel } from '@Api'
+import classes from './Index.module.css'
 
 const HOME_GAME_COUNT = 5
 const HOME_NOTICE_COUNT = 4
@@ -118,7 +119,7 @@ const Home: FC = () => {
       <section className="original-home yy-page-frame yy-home-page yy-home-recomposed">
         <div className="home-title-row yy-home-title-row">
           <BrandMark src={config.logoUrl} />
-          <h1 className="yy-brand-title yy-home-brand-heading">
+          <h1 className={`${classes.brandHeading} yy-brand-title yy-home-brand-heading`}>
             <span>
               <YinyuGradientText tone="silver">{platformName}</YinyuGradientText>
             </span>

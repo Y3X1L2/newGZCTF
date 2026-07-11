@@ -21,8 +21,8 @@ env:
   OPENAPI_CURRENT_PATH: ${{ github.workspace }}/artifacts/openapi/open-v1.current.json
 
 jobs:
-  quality:
-    name: Build and verify contracts
+  backend:
+    name: Backend and contract quality
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -36,18 +36,6 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: src/GZCTF/ClientApp/pnpm-lock.yaml
 
       - name: Restore backend dependencies
         run: dotnet restore src/GZCTF.slnx
@@ -65,14 +53,6 @@ jobs:
 
       - name: Run backend integration tests
         run: dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj --configuration Release --no-build
-
-      - name: Install frontend dependencies
-        working-directory: src/GZCTF/ClientApp
-        run: pnpm install --frozen-lockfile
-
-      - name: Build frontend
-        working-directory: src/GZCTF/ClientApp
-        run: pnpm build
 
       - name: Resolve committed OpenAPI baseline
         shell: bash
@@ -96,3 +76,41 @@ jobs:
           ./scripts/verify-openapi-contract.ps1
           -BaselinePath "$env:OPENAPI_BASELINE_PATH"
           -CurrentPath "$env:OPENAPI_CURRENT_PATH"
+
+  frontend:
+    name: Frontend quality and artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: src/GZCTF/ClientApp/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: src/GZCTF/ClientApp
+        run: pnpm install --frozen-lockfile
+
+      - name: Build versioned frontend artifact
+        working-directory: src/GZCTF/ClientApp
+        run: pnpm build:artifact
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gzctf-client-${{ github.sha }}
+          path: src/GZCTF/ClientApp/build
+          if-no-files-found: error

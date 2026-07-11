@@ -1,0 +1,18 @@
+{
+  "maxInlineStyles": 208,
+  "maxYinyuClassReferences": 862,
+  "maxGlobalCssLines": 13727,
+  "pageLineBudgets": {
+    "src/pages/training/courses/[courseId]/Index.tsx": 10,
+    "src/pages/admin/games/[id]/Penetration.tsx": 10,
+    "src/pages/admin/nodes/Index.tsx": 10
+  },
+  "componentLineBudgets": {
+    "src/components/admin/nodes/NodesPage.tsx": 350,
+    "src/components/admin/nodes/NodeResourcePanel.tsx": 700,
+    "src/components/training/course-detail/CourseDetailPage.tsx": 1900,
+    "src/components/topology/penetration/PenetrationAdminPage.tsx": 1150,
+    "src/components/topology/penetration/penetrationTopologyModel.tsx": 1200,
+    "src/components/topology/penetration/TeamLabRuntimeObservability.tsx": 750
+  }
+}

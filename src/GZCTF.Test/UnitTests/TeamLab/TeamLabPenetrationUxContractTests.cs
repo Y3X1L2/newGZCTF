@@ -7,7 +7,7 @@ namespace GZCTF.Test.UnitTests.TeamLab;
 public class TeamLabPenetrationUxContractTests
 {
     [Theory]
-    [InlineData("src/GZCTF/ClientApp/src/pages/admin/games/[id]/Penetration.tsx",
+    [InlineData("src/GZCTF/ClientApp/src/components/topology/penetration/penetrationTopologyModel.tsx",
         "公网入口区", "外网入口服务", "外网接入点", "Public / Edge", "edge-gateway", "入口节点",
         "发布宿主端口", "一键生成企业多级内网", "入口可达", "VPN 初始网段", "{{node:nm-node",
         "DMZ / 初始业务区", "dmz-service", "安全域", "访问策略")]
@@ -27,7 +27,7 @@ public class TeamLabPenetrationUxContractTests
     [Fact]
     public void TeamLab_AdminEditor_DoesNotExposeDeprecatedPublicOrEntryOptions()
     {
-        var content = File.ReadAllText(ResolveRepoPath("src/GZCTF/ClientApp/src/pages/admin/games/[id]/Penetration.tsx"));
+        var content = ReadTeamLabAdminFrontend();
 
         Assert.DoesNotContain("[PenetrationZoneType.Public]", content, StringComparison.Ordinal);
         Assert.DoesNotContain("[PenetrationNodeType.Entry]", content, StringComparison.Ordinal);
@@ -70,7 +70,8 @@ public class TeamLabPenetrationUxContractTests
     [Fact]
     public void TeamLab_AdminOneClickPreset_UsesDeployableRuntimeRoutesByDefault()
     {
-        var content = File.ReadAllText(ResolveRepoPath("src/GZCTF/ClientApp/src/pages/admin/games/[id]/Penetration.tsx"));
+        var content = File.ReadAllText(ResolveRepoPath(
+            "src/GZCTF/ClientApp/src/components/topology/penetration/penetrationTopologyModel.tsx"));
 
         Assert.Contains("const edge = (id: number, sourceKey: string, targetKey: string, label: string, description: string, priority: number) => ({",
             content, StringComparison.Ordinal);
@@ -93,7 +94,7 @@ public class TeamLabPenetrationUxContractTests
     [Fact]
     public void TeamLab_AdminEditor_DoesNotOfferHintOnlyRouteMode()
     {
-        var content = File.ReadAllText(ResolveRepoPath("src/GZCTF/ClientApp/src/pages/admin/games/[id]/Penetration.tsx"));
+        var content = ReadTeamLabAdminFrontend();
 
         Assert.DoesNotContain("PenetrationEnforcementMode.HintOnly", content, StringComparison.Ordinal);
         Assert.DoesNotContain("Object.values(PenetrationEnforcementMode)", content, StringComparison.Ordinal);
@@ -175,4 +176,10 @@ public class TeamLabPenetrationUxContractTests
 
         throw new FileNotFoundException($"Could not locate repository file {relativePath}.");
     }
+
+    static string ReadTeamLabAdminFrontend() => string.Join("\n",
+        File.ReadAllText(ResolveRepoPath(
+            "src/GZCTF/ClientApp/src/components/topology/penetration/PenetrationAdminPage.tsx")),
+        File.ReadAllText(ResolveRepoPath(
+            "src/GZCTF/ClientApp/src/components/topology/penetration/penetrationTopologyModel.tsx")));
 }

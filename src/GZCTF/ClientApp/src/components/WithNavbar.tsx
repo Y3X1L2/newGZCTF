@@ -74,14 +74,13 @@ export const WithNavBar: FC<WithNavBarProps> = ({
             ) : null}
             {withHeader && <IconHeader px={isMobile ? '2%' : '10%'} sticky={stickyHeader} />}
             <Box
-              w={isTeamRoute ? '100%' : (width ?? (isMobile ? '96%' : '80%'))}
+              w={isTeamRoute ? '100%' : (width ?? 'var(--container)')}
+              maw="100%"
+              miw={0}
               data-team-content={isTeamRoute || undefined}
               data-training-chapter-content={isTrainingChapterRoute || undefined}
               data-game-entry-content={isGameEntryRoute || undefined}
               className={classes.content}
-              style={{
-                zIndex: 20,
-              }}
             >
               {children}
             </Box>

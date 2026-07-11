@@ -229,6 +229,7 @@
 
 .main {
   width: 100%;
+  min-width: 0;
   align-items: center;
   position: relative;
   z-index: 10;
@@ -251,6 +252,9 @@
 .content {
   position: relative;
   z-index: 20;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 0;
 }
 
