@@ -81,17 +81,13 @@ public class InternalController : ControllerBase
         IQueryable<TeamLabPublicUdpMapping> mappings) =>
         mappings
             .Where(m => m.Runtime.Status == TeamLabRuntimeStatus.Running
-                        && m.Runtime.IsOpenToPlayers
-                        && m.Runtime.WorkerNodeId != null)
+                        && m.Runtime.IsOpenToPlayers)
             .OrderBy(m => m.PublicUdpPort)
             .Select(m => new TeamLabUdpMappingEntry(
                 m.PublicUdpPort,
                 m.WorkerTunnelIp,
                 m.WorkerWireGuardPort,
-                m.RuntimeId,
-                m.Runtime.GameId,
-                m.Runtime.TeamId,
-                m.Runtime.WorkerNodeId!.Value,
+                m.Runtime.PublicId,
                 m.RuleVersion,
                 m.IsSynced,
                 m.LastSyncError));

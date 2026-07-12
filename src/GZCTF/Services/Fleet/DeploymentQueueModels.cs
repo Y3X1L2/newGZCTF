@@ -2,6 +2,9 @@ using GZCTF.Models.Data;
 
 namespace GZCTF.Services.Fleet;
 
+public sealed record TeamLabAssetSlotCount(int DockerSlots, int VmSlots);
+public sealed record TeamLabShardSlotCount(Guid WorkerNodeId, int DockerSlots, int VmSlots);
+
 public sealed record DeploymentQueueRequest(
     DeploymentQueueKind Kind,
     int? OwnerTeamId,
@@ -11,7 +14,12 @@ public sealed record DeploymentQueueRequest(
     Guid? VmInstanceId,
     int? TeamLabRuntimeId,
     int DockerSlots,
-    int VmSlots)
+    int VmSlots,
+    Guid? ApiOperationId = null,
+    string? SubjectType = null,
+    string? SubjectPublicId = null,
+    string? SubjectDisplayName = null,
+    string? ResourceDisplayName = null)
 {
     public static DeploymentQueueRequest GameContainer(int gameId, int teamId, int challengeId) =>
         new(DeploymentQueueKind.GameContainer, teamId, null, gameId, challengeId,
@@ -25,9 +33,18 @@ public sealed record DeploymentQueueRequest(
         new(DeploymentQueueKind.Vm, null, userId, gameId, challengeId,
             vmInstanceId, null, 0, 1);
 
-    public static DeploymentQueueRequest TeamLab(int gameId, int teamId, int runtimeId, int dockerSlots, int vmSlots) =>
-        new(DeploymentQueueKind.TeamLabRuntime, teamId, null, gameId, null,
-            null, runtimeId, dockerSlots, vmSlots);
+    public static DeploymentQueueRequest TeamLab(
+        int runtimeId,
+        int dockerSlots,
+        int vmSlots,
+        Guid? ownerUserId = null,
+        Guid? apiOperationId = null,
+        Guid? runtimePublicId = null,
+        string? subjectDisplayName = null,
+        string? resourceDisplayName = null) =>
+        new(DeploymentQueueKind.TeamLabRuntime, null, ownerUserId, null, null,
+            null, runtimeId, dockerSlots, vmSlots, apiOperationId,
+            "teamlab-runtime", runtimePublicId?.ToString("D"), subjectDisplayName, resourceDisplayName);
 }
 
 public sealed record DeploymentQueueStatusModel(

@@ -3,7 +3,7 @@ using GZCTF.Modules.Content.Contracts;
 using GZCTF.Modules.Content.Infrastructure;
 using GZCTF.Modules.Ctf.Infrastructure;
 using GZCTF.Modules.Exercise.Infrastructure;
-using GZCTF.Modules.Penetration.Infrastructure;
+using GZCTF.Modules.TeamLab.Infrastructure;
 using GZCTF.Modules.Training.Infrastructure;
 using GZCTF.Modules.Training.Application;
 using GZCTF.Modules.Audit.Application;
@@ -23,7 +23,7 @@ public static class ContentModuleRegistration
         services.AddScoped<IImageTemplateReferenceProvider, CtfImageTemplateReferenceProvider>();
         services.AddScoped<IImageTemplateReferenceProvider, ExerciseImageTemplateReferenceProvider>();
         services.AddScoped<IImageTemplateReferenceProvider, TrainingImageTemplateReferenceProvider>();
-        services.AddScoped<IImageTemplateReferenceProvider, PenetrationImageTemplateReferenceProvider>();
+        services.AddScoped<IImageTemplateReferenceProvider, TeamLabImageTemplateReferenceProvider>();
         services.AddScoped<ITrainingCourseDeletionStore, EfTrainingCourseDeletionStore>();
         services.AddScoped<TrainingCourseDeletionService>();
         services.AddScoped<IImageImportSubmissionStore, EfImageImportSubmissionStore>();

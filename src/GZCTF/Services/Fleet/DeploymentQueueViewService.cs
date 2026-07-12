@@ -166,17 +166,13 @@ public class DeploymentQueueViewService(AppDbContext context)
             .Where(t => templateIds.Contains(t.Id))
             .Select(t => new { t.Id, t.Name, t.RegistryUrl, t.LocalFilePath })
             .ToDictionaryAsync(t => t.Id, t => ResolveTemplateLabel(t.Name, t.RegistryUrl, t.LocalFilePath), token);
-        var runtimes = await context.TeamLabRuntimes.AsNoTracking()
-            .Where(r => runtimeIds.Contains(r.Id))
-            .Include(r => r.Game)
-            .Include(r => r.Team)
-            .Select(r => new
-            {
-                r.Id,
-                GameTitle = r.Game.Title,
-                TeamName = r.Team.Name
-            })
-            .ToDictionaryAsync(r => r.Id, r => (r.GameTitle, r.TeamName), token);
+        var runtimes = await (
+                from binding in context.PenetrationTeamRuntimeBindings.AsNoTracking()
+                join game in context.Games.AsNoTracking() on binding.GameId equals game.Id
+                join team in context.Teams.AsNoTracking() on binding.TeamId equals team.Id
+                where runtimeIds.Contains(binding.RuntimeId)
+                select new { binding.RuntimeId, GameTitle = game.Title, TeamName = team.Name })
+            .ToDictionaryAsync(r => r.RuntimeId, r => (r.GameTitle, r.TeamName), token);
 
         return new DeploymentQueueLookup(games, challenges, teams, users, templates, runtimes);
     }

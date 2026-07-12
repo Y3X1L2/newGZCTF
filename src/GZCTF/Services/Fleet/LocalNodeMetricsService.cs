@@ -54,12 +54,12 @@ public class LocalNodeMetricsService : BackgroundService
             vm => vm.Status == VmInstanceStatus.Running
                 && (!vm.NodeId.HasValue || vm.NodeId == localNode.Id), token);
         var runningTeamLabDockerAssets = await context.TeamLabRuntimeAssets.CountAsync(
-            a => a.Runtime.WorkerNodeId == localNode.Id
+            a => (a.WorkerNodeId == localNode.Id || a.Shard!.WorkerNodeId == localNode.Id)
                  && a.Runtime.Status == TeamLabRuntimeStatus.Running
                  && a.Kind == TeamLabResourceKind.Docker
                  && a.Status == TeamLabRuntimeStatus.Running, token);
         var runningTeamLabVmAssets = await context.TeamLabRuntimeAssets.CountAsync(
-            a => a.Runtime.WorkerNodeId == localNode.Id
+            a => (a.WorkerNodeId == localNode.Id || a.Shard!.WorkerNodeId == localNode.Id)
                  && a.Runtime.Status == TeamLabRuntimeStatus.Running
                  && a.Kind == TeamLabResourceKind.Vm
                  && a.Status == TeamLabRuntimeStatus.Running, token);

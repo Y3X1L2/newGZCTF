@@ -679,9 +679,6 @@ public class NodesControllerTests
         context.TeamLabRuntimes.Add(new TeamLabRuntime
         {
             Id = 93,
-            Game = game,
-            Team = team,
-            WorkerNodeId = node.Id,
             Status = TeamLabRuntimeStatus.Running,
             Assets =
             [
@@ -689,12 +686,14 @@ public class NodesControllerTests
                 {
                     Name = "docker",
                     Kind = TeamLabResourceKind.Docker,
+                    WorkerNodeId = node.Id,
                     Status = TeamLabRuntimeStatus.Running
                 },
                 new TeamLabRuntimeAsset
                 {
                     Name = "vm",
                     Kind = TeamLabResourceKind.Vm,
+                    WorkerNodeId = node.Id,
                     Status = TeamLabRuntimeStatus.Running
                 }
             ]

@@ -631,10 +631,7 @@ public sealed record TeamLabUdpMappingEntry(
     int PublicUdpPort,
     string WorkerTunnelIp,
     int WorkerWireGuardPort,
-    int RuntimeId,
-    int GameId,
-    int TeamId,
-    Guid WorkerNodeId,
+    Guid RuntimeId,
     int RuleVersion,
     bool IsSynced,
     string? LastSyncError);

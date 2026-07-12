@@ -214,9 +214,6 @@ public class WorkerNodeTests
                 new TeamLabRuntime
                 {
                     Id = 21,
-                    Game = game,
-                    Team = team,
-                    WorkerNodeId = nodeId,
                     Status = TeamLabRuntimeStatus.Running,
                     Assets =
                     [
@@ -224,18 +221,21 @@ public class WorkerNodeTests
                         {
                             Name = "docker-running",
                             Kind = TeamLabResourceKind.Docker,
+                            WorkerNodeId = nodeId,
                             Status = TeamLabRuntimeStatus.Running
                         },
                         new TeamLabRuntimeAsset
                         {
                             Name = "vm-running",
                             Kind = TeamLabResourceKind.Vm,
+                            WorkerNodeId = nodeId,
                             Status = TeamLabRuntimeStatus.Running
                         },
                         new TeamLabRuntimeAsset
                         {
                             Name = "docker-destroyed",
                             Kind = TeamLabResourceKind.Docker,
+                            WorkerNodeId = nodeId,
                             Status = TeamLabRuntimeStatus.Destroyed
                         }
                     ]
@@ -243,9 +243,6 @@ public class WorkerNodeTests
                 new TeamLabRuntime
                 {
                     Id = 22,
-                    Game = game,
-                    Team = team,
-                    WorkerNodeId = nodeId,
                     Status = TeamLabRuntimeStatus.Destroyed,
                     Assets =
                     [
@@ -253,6 +250,7 @@ public class WorkerNodeTests
                         {
                             Name = "docker-runtime-destroyed",
                             Kind = TeamLabResourceKind.Docker,
+                            WorkerNodeId = nodeId,
                             Status = TeamLabRuntimeStatus.Running
                         }
                     ]

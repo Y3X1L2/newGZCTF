@@ -89,126 +89,6 @@ export enum StudentGroupManagerRole {
   Assistant = "Assistant",
 }
 
-export enum TeamLabTrafficCaptureStatus {
-  Pending = 0,
-  Running = 1,
-  Stopping = 2,
-  Completed = 3,
-  Failed = 4,
-  Expired = 5,
-}
-
-export enum TeamLabResourceKind {
-  Docker = 0,
-  Vm = 1,
-  RouterNamespace = 2,
-  DhcpDnsService = 3,
-  WireGuard = 4,
-  PublicUdpMapping = 5,
-}
-
-export enum TeamLabRuntimeStatus {
-  Pending = 0,
-  Planning = 1,
-  Scheduled = 2,
-  Deploying = 3,
-  Probing = 4,
-  Running = 5,
-  Failed = 6,
-  CleanupPending = 7,
-  Stopped = 8,
-  Destroying = 9,
-  Destroyed = 10,
-}
-
-export enum PenetrationDeploymentEventLevel {
-  Info = "Info",
-  Success = "Success",
-  Warning = "Warning",
-  Error = "Error",
-}
-
-export enum PenetrationRuntimeStatus {
-  Pending = "Pending",
-  Running = "Running",
-  Stopped = "Stopped",
-  Failed = "Failed",
-  CreatingNetworks = "CreatingNetworks",
-  CreatingContainers = "CreatingContainers",
-  CleanupPending = "CleanupPending",
-  Orphaned = "Orphaned",
-  ManualCleanupRequired = "ManualCleanupRequired",
-}
-
-export enum PenetrationRouteStatus {
-  HintOnly = "HintOnly",
-  RoutePlanned = "RoutePlanned",
-  RouteApplied = "RouteApplied",
-  RouteFailed = "RouteFailed",
-  Unsupported = "Unsupported",
-}
-
-export enum PenetrationEnforcementMode {
-  HintOnly = "HintOnly",
-  RuntimeRoute = "RuntimeRoute",
-  Both = "Both",
-}
-
-export enum PenetrationPolicyAction {
-  Allow = "Allow",
-  Deny = "Deny",
-}
-
-export enum PenetrationProtocol {
-  Tcp = "Tcp",
-  Udp = "Udp",
-  Icmp = "Icmp",
-  Any = "Any",
-}
-
-export enum PenetrationPolicyScope {
-  Node = "Node",
-  Network = "Network",
-}
-
-export enum PenetrationNodeType {
-  Entry = "Entry",
-  Web = "Web",
-  Database = "Database",
-  JumpHost = "JumpHost",
-  Internal = "Internal",
-  DomainControllerReserved = "DomainControllerReserved",
-  Custom = "Custom",
-  Bastion = "Bastion",
-  FirewallRouter = "FirewallRouter",
-  Service = "Service",
-}
-
-export enum PenetrationDefaultPolicy {
-  DenyAll = "DenyAll",
-  AllowInternal = "AllowInternal",
-}
-
-export enum PenetrationZoneType {
-  Public = "Public",
-  Dmz = "Dmz",
-  Business = "Business",
-  Data = "Data",
-  Operations = "Operations",
-  Management = "Management",
-  Custom = "Custom",
-}
-
-export enum PenetrationDeploymentStatus {
-  Draft = "Draft",
-  Published = "Published",
-  Deploying = "Deploying",
-  Running = "Running",
-  Partial = "Partial",
-  Stopped = "Stopped",
-  Failed = "Failed",
-}
-
 export enum CaptchaProvider {
   None = "None",
   HashPow = "HashPow",
@@ -246,24 +126,6 @@ export enum Difficulty {
   Hard = "Hard",
   Expert = "Expert",
   Insane = "Insane",
-}
-
-export enum ImageStatus {
-  Ready = 0,
-  Importing = 1,
-  Error = 2,
-}
-
-export enum ImageType {
-  Docker = 0,
-  Qcow2 = 1,
-  Ova = 2,
-  Vmdk = 3,
-}
-
-export enum OSType {
-  Linux = 0,
-  Windows = 1,
 }
 
 export enum TeamLabFabricStatus {
@@ -338,51 +200,11 @@ export enum SubmissionType {
   Normal = "Normal",
 }
 
-/** Environment type for challenge deployment */
-export enum EnvironmentType {
-  None = "None",
-  Docker = "Docker",
-  WindowsVM = "WindowsVM",
-}
-
-/** Container network mode */
-export enum NetworkMode {
-  Open = "Open",
-  Isolated = "Isolated",
-  Custom = "Custom",
-}
-
-/** Answer type for challenge submission */
-export enum AnswerType {
-  Flag = "Flag",
-  File = "File",
-  Custom = "Custom",
-}
-
-/** Flag score mode */
-export enum FlagScoreMode {
-  InheritDecay = "InheritDecay",
-  FixedScore = "FixedScore",
-}
-
 /** Container status */
 export enum ContainerStatus {
   Pending = "Pending",
   Running = "Running",
   Destroyed = "Destroyed",
-}
-
-export enum FileType {
-  None = "None",
-  Local = "Local",
-  Remote = "Remote",
-}
-
-export enum ChallengeType {
-  StaticAttachment = "StaticAttachment",
-  StaticContainer = "StaticContainer",
-  DynamicAttachment = "DynamicAttachment",
-  DynamicContainer = "DynamicContainer",
 }
 
 /** Game participant permission */
@@ -478,24 +300,6 @@ export enum AwdpRoundStatus {
   Finished = "Finished",
 }
 
-/** Challenge category */
-export enum ChallengeCategory {
-  Misc = "Misc",
-  Crypto = "Crypto",
-  Pwn = "Pwn",
-  Web = "Web",
-  Reverse = "Reverse",
-  Blockchain = "Blockchain",
-  Forensics = "Forensics",
-  Hardware = "Hardware",
-  Mobile = "Mobile",
-  PPC = "PPC",
-  AI = "AI",
-  Pentest = "Pentest",
-  OSINT = "OSINT",
-  IR = "IR",
-}
-
 export enum ParticipationStatus {
   Pending = "Pending",
   Accepted = "Accepted",
@@ -533,6 +337,856 @@ export enum RegisterStatus {
   LoggedIn = "LoggedIn",
   AdminConfirmationRequired = "AdminConfirmationRequired",
   EmailConfirmationRequired = "EmailConfirmationRequired",
+}
+
+export enum ImageStatus {
+  Ready = 0,
+  Importing = 1,
+  Error = 2,
+  Deleting = 3,
+}
+
+export enum ImageType {
+  Docker = 0,
+  Qcow2 = 1,
+  Ova = 2,
+  Vmdk = 3,
+}
+
+export enum OSType {
+  Linux = 0,
+  Windows = 1,
+}
+
+export enum ApiOperationStatus {
+  Pending = 0,
+  Running = 1,
+  Succeeded = 2,
+  Failed = 3,
+}
+
+export enum FileType {
+  None = "None",
+  Local = "Local",
+  Remote = "Remote",
+}
+
+/** Answer type for challenge submission */
+export enum AnswerType {
+  Flag = "Flag",
+  File = "File",
+  Custom = "Custom",
+}
+
+/** Flag score mode */
+export enum FlagScoreMode {
+  InheritDecay = "InheritDecay",
+  FixedScore = "FixedScore",
+}
+
+/** Container network mode */
+export enum NetworkMode {
+  Open = "Open",
+  Isolated = "Isolated",
+  Custom = "Custom",
+}
+
+/** Environment type for challenge deployment */
+export enum EnvironmentType {
+  None = "None",
+  Docker = "Docker",
+  WindowsVM = "WindowsVM",
+}
+
+export enum ChallengeType {
+  StaticAttachment = "StaticAttachment",
+  StaticContainer = "StaticContainer",
+  DynamicAttachment = "DynamicAttachment",
+  DynamicContainer = "DynamicContainer",
+}
+
+/** Challenge category */
+export enum ChallengeCategory {
+  Misc = "Misc",
+  Crypto = "Crypto",
+  Pwn = "Pwn",
+  Web = "Web",
+  Reverse = "Reverse",
+  Blockchain = "Blockchain",
+  Forensics = "Forensics",
+  Hardware = "Hardware",
+  Mobile = "Mobile",
+  PPC = "PPC",
+  AI = "AI",
+  Pentest = "Pentest",
+  OSINT = "OSINT",
+  IR = "IR",
+}
+
+export enum TeamLabTrafficCaptureStatus {
+  Pending = 0,
+  Running = 1,
+  Stopping = 2,
+  Completed = 3,
+  Failed = 4,
+  Expired = 5,
+}
+
+export enum TeamLabHealthCheckKind {
+  Tcp = 0,
+  Http = 1,
+}
+
+export enum TeamLabEventLevel {
+  Info = 0,
+  Success = 1,
+  Warning = 2,
+  Error = 3,
+}
+
+export enum TeamLabAssetKind {
+  Docker = 0,
+  Vm = 1,
+}
+
+export enum TeamLabRuntimeStatus {
+  Pending = 0,
+  Planning = 1,
+  Scheduled = 2,
+  Deploying = 3,
+  Probing = 4,
+  Running = 5,
+  Failed = 6,
+  CleanupPending = 7,
+  Stopped = 8,
+  Destroying = 9,
+  Destroyed = 10,
+}
+
+export interface CreateTeamLabRuntimeModel {
+  /** @format guid */
+  releaseId?: string;
+  externalReference?: string | null;
+  constraints?: TeamLabRuntimeConstraintsModel | null;
+  overlays?: TeamLabRuntimeOverlayModel[] | null;
+}
+
+export interface TeamLabRuntimeConstraintsModel {
+  preferredRegion?: string | null;
+  requiredCapabilities?: string[];
+}
+
+export interface TeamLabRuntimeOverlayModel {
+  assetKey?: string;
+  environment?: Record<string, string>;
+  secrets?: Record<string, string>;
+}
+
+export interface TeamLabRuntimeProjectionModel {
+  /** @format guid */
+  id?: string;
+  /** @format guid */
+  releaseId?: string;
+  /** @format int32 */
+  generation?: number;
+  status?: TeamLabRuntimeStatus;
+  stage?: string;
+  openForAccess?: boolean;
+  shards?: TeamLabRuntimeShardProjectionModel[];
+  networks?: TeamLabRuntimeNetworkProjectionModel[];
+  assets?: TeamLabRuntimeAssetProjectionModel[];
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  updatedAt?: number | null;
+  error?: string | null;
+}
+
+export interface TeamLabRuntimeShardProjectionModel {
+  /** @format guid */
+  id?: string;
+  status?: TeamLabRuntimeStatus;
+  networkKeys?: string[];
+  assetKeys?: string[];
+  error?: string | null;
+}
+
+export interface TeamLabRuntimeNetworkProjectionModel {
+  key?: string;
+  name?: string;
+  cidr?: string;
+  gatewayIp?: string;
+}
+
+export interface TeamLabRuntimeAssetProjectionModel {
+  key?: string;
+  name?: string;
+  kind?: TeamLabAssetKind;
+  runtimeResourceId?: string | null;
+  primaryIp?: string | null;
+  status?: TeamLabRuntimeStatus;
+  error?: string | null;
+}
+
+export interface ResetTeamLabRuntimeModel {
+  overlays?: TeamLabRuntimeOverlayModel[] | null;
+  /** @format guid */
+  releaseId?: string | null;
+}
+
+export interface TeamLabRuntimeEventModel {
+  /** @format int64 */
+  cursor?: number;
+  /** @format int32 */
+  generation?: number;
+  stage?: string;
+  level?: TeamLabEventLevel;
+  message?: string;
+  objectType?: string | null;
+  objectId?: string | null;
+  /** @format uint64 */
+  createdAt?: number;
+}
+
+export interface TeamLabAccessGrantModel {
+  /** @format guid */
+  id?: string;
+  type?: string;
+  clientAddress?: string;
+  endpoint?: string;
+  allowedIps?: string;
+  dns?: string;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  expiresAt?: number | null;
+  configurationDownloadUrl?: string | null;
+}
+
+export interface TeamLabAccessGrantCreateModel {
+  type?: string;
+}
+
+export interface TeamLabCapabilitiesModel {
+  apiVersion?: string;
+  topologySchemaVersions?: number[];
+  assetKinds?: TeamLabAssetKind[];
+  networkModel?: string;
+  features?: TeamLabFeatureCapabilitiesModel;
+  limits?: TeamLabContractLimitsModel;
+}
+
+export interface TeamLabFeatureCapabilitiesModel {
+  multiNode?: boolean;
+  linuxVm?: boolean;
+  windowsVm?: boolean;
+  trafficFlows?: boolean;
+  onDemandPcap?: boolean;
+}
+
+export interface TeamLabContractLimitsModel {
+  /** @format int32 */
+  networksPerTopology?: number;
+  /** @format int32 */
+  assetsPerTopology?: number;
+  /** @format int32 */
+  interfacesPerAsset?: number;
+}
+
+export interface TeamLabTopologyDetailModel {
+  /** @format guid */
+  id?: string;
+  /** @format int32 */
+  revision?: number;
+  /** @format int32 */
+  schemaVersion?: number;
+  definition?: TeamLabTopologyDefinitionModel;
+  editor?: TeamLabTopologyEditorModel;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  updatedAt?: number;
+}
+
+export interface TeamLabTopologyDefinitionModel {
+  name?: string;
+  networks?: TeamLabTopologyNetworkModel[];
+  assets?: TeamLabTopologyAssetModel[];
+  connections?: TeamLabTopologyConnectionModel[];
+}
+
+export interface TeamLabTopologyNetworkModel {
+  key?: string;
+  name?: string;
+  addressPool?: TeamLabAddressPoolModel;
+  isEntry?: boolean;
+  /** @format int32 */
+  orderIndex?: number;
+}
+
+export interface TeamLabAddressPoolModel {
+  poolCidr?: string;
+  /** @format int32 */
+  runtimePrefixLength?: number;
+}
+
+export interface TeamLabTopologyAssetModel {
+  key?: string;
+  name?: string;
+  kind?: TeamLabAssetKind;
+  /** @format int32 */
+  imageTemplateId?: number;
+  resources?: TeamLabAssetResourceModel;
+  interfaces?: TeamLabTopologyInterfaceModel[];
+  routingEnabled?: boolean;
+  /** @format int32 */
+  exposePort?: number | null;
+  environment?: Record<string, string>;
+  startCommand?: string | null;
+  healthCheck?: TeamLabHealthCheckModel | null;
+  /** @format int32 */
+  orderIndex?: number;
+}
+
+export interface TeamLabAssetResourceModel {
+  /** @format int32 */
+  cpuUnits?: number;
+  /** @format int32 */
+  memoryMiB?: number;
+  /** @format int32 */
+  storageMiB?: number;
+}
+
+export interface TeamLabTopologyInterfaceModel {
+  key?: string;
+  networkKey?: string;
+  /** @format int32 */
+  hostOffset?: number;
+  primary?: boolean;
+  /** @format int32 */
+  orderIndex?: number;
+}
+
+export interface TeamLabHealthCheckModel {
+  kind?: TeamLabHealthCheckKind;
+  /** @format int32 */
+  port?: number;
+}
+
+export interface TeamLabTopologyConnectionModel {
+  key?: string;
+  fromNetworkKey?: string;
+  toNetworkKey?: string;
+  viaAssetKey?: string;
+}
+
+export interface TeamLabTopologyEditorModel {
+  networks?: Record<string, TeamLabEditorItemModel>;
+  assets?: Record<string, TeamLabEditorItemModel>;
+}
+
+export interface TeamLabEditorItemModel {
+  /** @format double */
+  x?: number;
+  /** @format double */
+  y?: number;
+  /** @format double */
+  width?: number | null;
+  /** @format double */
+  height?: number | null;
+  collapsed?: boolean;
+}
+
+export interface CreateTeamLabTopologyModel {
+  name?: string;
+  networks?: TeamLabTopologyNetworkModel[];
+  assets?: TeamLabTopologyAssetModel[];
+  connections?: TeamLabTopologyConnectionModel[];
+  editor?: TeamLabTopologyEditorModel | null;
+}
+
+export interface TeamLabTopologySummaryModel {
+  /** @format guid */
+  id?: string;
+  name?: string;
+  /** @format int32 */
+  revision?: number;
+  /** @format int32 */
+  schemaVersion?: number;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  updatedAt?: number;
+}
+
+export interface UpdateTeamLabTopologyModel {
+  /** @format int32 */
+  revision?: number;
+  name?: string;
+  networks?: TeamLabTopologyNetworkModel[];
+  assets?: TeamLabTopologyAssetModel[];
+  connections?: TeamLabTopologyConnectionModel[];
+  editor?: TeamLabTopologyEditorModel | null;
+}
+
+export interface TeamLabValidationResultModel {
+  valid?: boolean;
+  issues?: TeamLabValidationIssueModel[];
+}
+
+export interface TeamLabValidationIssueModel {
+  code?: string;
+  path?: string;
+  message?: string;
+}
+
+export interface TeamLabReleaseModel {
+  /** @format guid */
+  id?: string;
+  /** @format guid */
+  topologyId?: string;
+  /** @format int32 */
+  version?: number;
+  /** @format int32 */
+  sourceRevision?: number;
+  /** @format int32 */
+  schemaVersion?: number;
+  contentHash?: string;
+  /** @format guid */
+  publishedBy?: string | null;
+  /** @format uint64 */
+  publishedAt?: number;
+}
+
+export interface PublishTeamLabTopologyModel {
+  /** @format int32 */
+  revision?: number;
+}
+
+export interface TeamLabPlanModel {
+  /** @format guid */
+  topologyId?: string;
+  /** @format guid */
+  releaseId?: string;
+  networks?: TeamLabPlanNetworkModel[];
+  assets?: TeamLabPlanAssetModel[];
+  shards?: TeamLabPlanShardModel[];
+  /** @format int32 */
+  crossShardConnections?: number;
+  requiredCapabilities?: string[];
+  warnings?: string[];
+  planHash?: string;
+}
+
+export interface TeamLabPlanNetworkModel {
+  key?: string;
+  name?: string;
+  candidateCidr?: string;
+  isEntry?: boolean;
+}
+
+export interface TeamLabPlanAssetModel {
+  key?: string;
+  name?: string;
+  kind?: TeamLabAssetKind;
+  /** @format int32 */
+  imageTemplateId?: number;
+  resources?: TeamLabAssetResourceModel;
+  interfaces?: TeamLabPlanInterfaceModel[];
+  routingEnabled?: boolean;
+}
+
+export interface TeamLabPlanInterfaceModel {
+  key?: string;
+  networkKey?: string;
+  /** @format int32 */
+  hostOffset?: number;
+  primary?: boolean;
+}
+
+export interface TeamLabPlanShardModel {
+  key?: string;
+  networkKeys?: string[];
+  assetKeys?: string[];
+  /** @format int32 */
+  dockerSlots?: number;
+  /** @format int32 */
+  vmSlots?: number;
+}
+
+export interface TeamLabTrafficFlowPageModel {
+  items?: TeamLabTrafficFlowProjectionModel[];
+  nextCursor?: string | null;
+}
+
+export interface TeamLabTrafficFlowProjectionModel {
+  cursor?: string;
+  /** @format guid */
+  shardId?: string;
+  networkKey?: string;
+  sourceIp?: string;
+  /** @format int32 */
+  sourcePort?: number | null;
+  destinationIp?: string;
+  /** @format int32 */
+  destinationPort?: number | null;
+  protocol?: string;
+  /** @format int64 */
+  bytes?: number;
+  /** @format int64 */
+  packets?: number;
+  /** @format uint64 */
+  firstSeen?: number;
+  /** @format uint64 */
+  lastSeen?: number;
+}
+
+export interface TeamLabCaptureModel {
+  /** @format guid */
+  id?: string;
+  status?: TeamLabTrafficCaptureStatus;
+  scope?: string;
+  networkKey?: string | null;
+  /** @format int64 */
+  maxBytes?: number;
+  /** @format int32 */
+  maxSeconds?: number;
+  /** @format int64 */
+  capturedBytes?: number;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  startedAt?: number | null;
+  /** @format uint64 */
+  completedAt?: number | null;
+  /** @format uint64 */
+  expiresAt?: number | null;
+  error?: string | null;
+}
+
+export interface CreateTeamLabCaptureModel {
+  scope?: string;
+  networkKey?: string | null;
+  /** @format int32 */
+  maxSeconds?: number;
+  /** @format int64 */
+  maxBytes?: number;
+  /** @format int32 */
+  expiresInSeconds?: number;
+}
+
+export interface OpenChallengePageModel {
+  items?: OpenChallengeSummaryModel[];
+  nextCursor?: string | null;
+}
+
+export interface OpenChallengeSummaryModel {
+  /** @format int32 */
+  id?: number;
+  title?: string;
+  /** Challenge category */
+  category?: ChallengeCategory;
+  type?: ChallengeType;
+  isEnabled?: boolean;
+  /** @format uint64 */
+  deadlineUtc?: number | null;
+  /** @format int32 */
+  originalScore?: number;
+  /** Environment type for challenge deployment */
+  environment?: EnvironmentType;
+  /** @format int32 */
+  imageTemplateId?: number | null;
+}
+
+export interface OpenChallengeModel {
+  /** @format int32 */
+  id?: number;
+  title?: string;
+  content?: string;
+  /** Challenge category */
+  category?: ChallengeCategory;
+  type?: ChallengeType;
+  hints?: string[];
+  isEnabled?: boolean;
+  /** @format uint64 */
+  deadlineUtc?: number | null;
+  /** @format int32 */
+  submissionLimit?: number;
+  /** @format int32 */
+  originalScore?: number;
+  /** @format double */
+  minScoreRate?: number;
+  /** @format double */
+  difficulty?: number;
+  disableBloodBonus?: boolean;
+  flagTemplate?: string | null;
+  /** Environment type for challenge deployment */
+  environment?: EnvironmentType;
+  containerImage?: string | null;
+  /** @format int32 */
+  exposePort?: number | null;
+  /** @format int32 */
+  imageTemplateId?: number | null;
+  /** @format int32 */
+  cpuCount?: number;
+  /** @format int32 */
+  memoryLimit?: number;
+  /** @format int32 */
+  storageLimit?: number;
+  /** Container network mode */
+  networkMode?: NetworkMode;
+  enableTrafficCapture?: boolean;
+  fileName?: string | null;
+  flags?: OpenChallengeFlagInfoModel[];
+  attachment?: OpenChallengeAttachmentInfoModel | null;
+}
+
+export interface OpenChallengeFlagInfoModel {
+  /** @format int32 */
+  id?: number;
+  flag?: string;
+  /** @format int32 */
+  orderIndex?: number;
+  description?: string | null;
+  /** Flag score mode */
+  scoreMode?: FlagScoreMode;
+  /** @format int32 */
+  fixedScore?: number;
+  /** @format int32 */
+  maxAttempts?: number;
+  attachmentHash?: string | null;
+  /** Answer type for challenge submission */
+  answerType?: AnswerType;
+  customName?: string | null;
+  attachment?: OpenChallengeAttachmentInfoModel | null;
+}
+
+export interface OpenChallengeAttachmentInfoModel {
+  type?: FileType;
+  url?: string;
+}
+
+export interface ProblemDetails {
+  type?: string | null;
+  title?: string | null;
+  /** @format int32 */
+  status?: number | null;
+  detail?: string | null;
+  instance?: string | null;
+  [key: string]: any;
+}
+
+export interface ApiOperationModel {
+  /** @format guid */
+  id?: string;
+  kind?: string;
+  status?: ApiOperationStatus;
+  stage?: string;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  /** @format guid */
+  deploymentQueueTicketId?: string | null;
+  /** @format int64 */
+  currentProgress?: number;
+  /** @format int64 */
+  totalProgress?: number;
+  /** @format int32 */
+  attemptCount?: number;
+  errorCode?: string | null;
+  errorDetail?: string | null;
+  result?: any;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  startedAt?: number | null;
+  /** @format uint64 */
+  updatedAt?: number;
+  /** @format uint64 */
+  completedAt?: number | null;
+}
+
+export interface OpenChallengeImportModel {
+  /**
+   * @minLength 1
+   * @maxLength 128
+   */
+  externalId: string;
+  /**
+   * @minLength 1
+   * @maxLength 256
+   */
+  title: string;
+  /**
+   * @minLength 1
+   * @maxLength 1000000
+   */
+  content: string;
+  /** Challenge category */
+  category?: ChallengeCategory;
+  type?: ChallengeType;
+  /** @maxItems 100 */
+  hints?: string[] | null;
+  isEnabled?: boolean;
+  /** @format uint64 */
+  deadlineUtc?: number | null;
+  /**
+   * @format int32
+   * @min 0
+   * @max 10000
+   */
+  submissionLimit?: number;
+  /**
+   * @format int32
+   * @min 1
+   * @max 1000000
+   */
+  originalScore?: number;
+  /**
+   * @format double
+   * @min 0
+   * @max 1
+   */
+  minScoreRate?: number;
+  /**
+   * @format double
+   * @min 0.01
+   * @max 1000000
+   */
+  difficulty?: number;
+  disableBloodBonus?: boolean;
+  /** @maxLength 120 */
+  flagTemplate?: string | null;
+  environment?: EnvironmentType | null;
+  /** @maxLength 512 */
+  containerImage?: string | null;
+  /**
+   * @format int32
+   * @min 1
+   * @max 65535
+   */
+  exposePort?: number | null;
+  /** @format int32 */
+  imageTemplateId?: number | null;
+  /**
+   * @format int32
+   * @min 1
+   * @max 1024
+   */
+  cpuCount?: number;
+  /**
+   * @format int32
+   * @min 32
+   * @max 1048576
+   */
+  memoryLimit?: number;
+  /**
+   * @format int32
+   * @min 0
+   * @max 1048576
+   */
+  storageLimit?: number;
+  /** Container network mode */
+  networkMode?: NetworkMode;
+  enableTrafficCapture?: boolean;
+  /** @maxLength 256 */
+  fileName?: string | null;
+  /** @maxItems 100 */
+  flags: OpenChallengeFlagModel[];
+  attachment?: OpenChallengeAttachmentModel | null;
+}
+
+export interface OpenChallengeFlagModel {
+  /**
+   * @minLength 1
+   * @maxLength 127
+   */
+  flag: string;
+  /**
+   * @format int32
+   * @min 0
+   * @max 10000
+   */
+  orderIndex?: number;
+  /** @maxLength 512 */
+  description?: string | null;
+  /** Flag score mode */
+  scoreMode?: FlagScoreMode;
+  /**
+   * @format int32
+   * @min 0
+   * @max 1000000
+   */
+  fixedScore?: number;
+  /**
+   * @format int32
+   * @min 0
+   * @max 100000
+   */
+  maxAttempts?: number;
+  /** @maxLength 128 */
+  attachmentHash?: string | null;
+  /** Answer type for challenge submission */
+  answerType?: AnswerType;
+  /** @maxLength 64 */
+  customName?: string | null;
+  attachment?: OpenChallengeAttachmentModel | null;
+}
+
+export interface OpenChallengeAttachmentModel {
+  /**
+   * @minLength 1
+   * @maxLength 2048
+   */
+  remoteUrl: string;
+}
+
+export interface OpenChallengeBatchImportModel {
+  /**
+   * @maxItems 100
+   * @minItems 1
+   */
+  items: OpenChallengeImportModel[];
+}
+
+export interface OpenChallengeBatchDeleteModel {
+  /**
+   * @maxItems 100
+   * @minItems 1
+   */
+  challengeIds: number[];
+}
+
+export interface DockerImageReferenceImportModel {
+  /**
+   * @minLength 1
+   * @maxLength 256
+   */
+  name: string;
+  /**
+   * @minLength 1
+   * @maxLength 512
+   */
+  registryUrl: string;
+  osType?: OSType;
+  /** @maxLength 128 */
+  expectedDigest?: string | null;
+}
+
+export interface OpenImageTemplateModel {
+  /** @format int32 */
+  id?: number;
+  name?: string;
+  osType?: OSType;
+  imageType?: ImageType;
+  status?: ImageStatus;
+  registryUrl?: string | null;
+  /** @format int64 */
+  fileSize?: number;
+  description?: string | null;
+  errorMessage?: string | null;
+  imageHash?: string | null;
+  /** @format uint64 */
+  uploadedAt?: number;
 }
 
 export interface ApiTokenResponse {
@@ -584,16 +1238,6 @@ export interface ApiTokenCreateModel {
   requestsPerMinute?: number;
   /** @format uint64 */
   expiresAt?: number | null;
-}
-
-export interface ProblemDetails {
-  type?: string | null;
-  title?: string | null;
-  /** @format int32 */
-  status?: number | null;
-  detail?: string | null;
-  instance?: string | null;
-  [key: string]: any;
 }
 
 /** Request response */
@@ -3042,24 +3686,46 @@ export interface BloodBonus {
   noBonus?: boolean;
 }
 
+/** Represents a user in the identity system */
 export interface IdentityUserOfGuid {
-  /** @format guid */
+  /**
+   * Gets or sets the primary key for this user.
+   * @format guid
+   */
   id?: string;
+  /** Gets or sets the user name for this user. */
   userName?: string | null;
+  /** Gets or sets the normalized user name for this user. */
   normalizedUserName?: string | null;
+  /** Gets or sets the email address for this user. */
   email?: string | null;
+  /** Gets or sets the normalized email address for this user. */
   normalizedEmail?: string | null;
+  /** Gets or sets a flag indicating if a user has confirmed their email address. */
   emailConfirmed?: boolean;
+  /** Gets or sets a salted and hashed representation of the password for this user. */
   passwordHash?: string | null;
+  /** A random value that must change whenever a users credentials change (password changed, login removed) */
   securityStamp?: string | null;
+  /** A random value that must change whenever a user is persisted to the store */
   concurrencyStamp?: string | null;
+  /** Gets or sets a telephone number for the user. */
   phoneNumber?: string | null;
+  /** Gets or sets a flag indicating if a user has confirmed their telephone address. */
   phoneNumberConfirmed?: boolean;
+  /** Gets or sets a flag indicating if two factor authentication is enabled for this user. */
   twoFactorEnabled?: boolean;
-  /** @format uint64 */
+  /**
+   * Gets or sets the date and time, in UTC, when any user lockout ends.
+   * @format uint64
+   */
   lockoutEnd?: number | null;
+  /** Gets or sets a flag indicating if the user could be locked out. */
   lockoutEnabled?: boolean;
-  /** @format int32 */
+  /**
+   * Gets or sets the number of failed login attempts for the current user.
+   * @format int32
+   */
   accessFailedCount?: number;
 }
 
@@ -3412,11 +4078,8 @@ export interface ImageTemplate {
    * @maxLength 256
    */
   originalArchiveName?: string | null;
-  /**
-   * Owning training course. Null means global template.
-   * @format int32
-   */
-  trainingCourseId?: number | null;
+  /** @format guid */
+  createdById?: string | null;
 }
 
 export type ExerciseChallenge = Challenge & {
@@ -3651,6 +4314,19 @@ export interface FlagStepInfo {
   description?: string | null;
 }
 
+/** Flag submission result */
+export interface FlagSubmitResultModel {
+  /**
+   * Submission ID
+   * @format int32
+   */
+  id: number;
+  /** Answer verification result */
+  status: AnswerResult;
+  /** Blood rank awarded by this submission */
+  bloodType: SubmissionType;
+}
+
 /** Flag submission */
 export interface FlagSubmitModel {
   /**
@@ -3663,14 +4339,6 @@ export interface FlagSubmitModel {
    * @format int32
    */
   flagId?: number | null;
-}
-
-/** Flag submission result */
-export interface FlagSubmitResultModel {
-  /** @format int32 */
-  id: number;
-  status: AnswerResult;
-  bloodType: SubmissionType;
 }
 
 /** Game writeup submission information */
@@ -3923,623 +4591,40 @@ export interface TeamLabNodeCapabilityReport {
   dumpcap?: boolean;
 }
 
-export interface PenetrationConfigModel {
-  /** @format int32 */
-  gameId?: number;
-  baseCidr?: string;
-  /** @format int32 */
-  teamSubnetPrefix?: number;
-  /** @format int32 */
-  networkSubnetPrefix?: number;
+export interface BindPenetrationTopologyModel {
+  /** @format guid */
+  topologyId?: string;
+}
+
+export interface ReplacePenetrationObjectivesModel {
   /** @format int32 */
   maxResetCount?: number;
-  /** @format int32 */
-  publishedVersion?: number;
-  status?: PenetrationDeploymentStatus;
-  networks?: PenetrationNetworkModel[];
-  nodes?: PenetrationNodeModel[];
-  interfaces?: PenetrationInterfaceModel[];
-  edges?: PenetrationEdgeModel[];
+  objectives?: PenetrationObjectiveWriteModel[];
 }
 
-export interface PenetrationNetworkModel {
-  /** @format int32 */
-  id?: number;
-  topologyKey?: string;
-  /** @minLength 1 */
-  name: string;
-  slug?: string;
-  cidr?: string | null;
-  zoneType?: PenetrationZoneType;
-  /** @format int32 */
-  trustLevel?: number;
-  description?: string | null;
-  defaultPolicy?: PenetrationDefaultPolicy;
-  /** @format int32 */
-  orderIndex?: number;
-  isEntry?: boolean;
-  /** @format double */
-  positionX?: number;
-  /** @format double */
-  positionY?: number;
-  /** @format double */
-  width?: number;
-  /** @format double */
-  height?: number;
-  collapsed?: boolean;
-  previewCidr?: string | null;
-}
-
-export interface PenetrationNodeModel {
-  /** @format int32 */
-  id?: number;
-  topologyKey?: string;
-  /** @format int32 */
-  networkId?: number;
-  /** @minLength 1 */
-  name: string;
-  description?: string | null;
-  playerAlias?: string | null;
-  playerDescription?: string | null;
-  nodeType?: PenetrationNodeType;
-  /** @format int32 */
-  imageTemplateId?: number | null;
-  imageName?: string | null;
-  /** @format int32 */
-  cpuCount?: number;
-  /** @format int32 */
-  memoryLimit?: number;
-  /** @format int32 */
-  storageLimit?: number;
-  /** @format int32 */
-  exposePort?: number;
-  isEntry?: boolean;
-  publishPort?: boolean;
-  allowRouting?: boolean;
-  staticIp?: string | null;
-  environmentVariables?: Record<string, string>;
-  startCommand?: string | null;
-  healthCheck?: string | null;
-  reservedAdRole?: string | null;
-  /** @format double */
-  positionX?: number;
-  /** @format double */
-  positionY?: number;
-  /** @format int32 */
-  orderIndex?: number;
-  previewIp?: string | null;
-  interfaces?: PenetrationInterfaceModel[];
-  scoreItems?: PenetrationScoreItemModel[];
-}
-
-export interface PenetrationInterfaceModel {
-  /** @format int32 */
-  id?: number;
-  topologyKey?: string;
-  /** @format int32 */
-  nodeId?: number;
-  /** @format int32 */
-  networkId?: number;
-  name?: string;
-  staticIp?: string | null;
-  previewIp?: string | null;
-  isPrimary?: boolean;
-  isManagement?: boolean;
-  /** @format int32 */
-  orderIndex?: number;
-}
-
-export interface PenetrationScoreItemModel {
-  /** @format int32 */
-  id?: number;
-  topologyKey?: string;
-  /** @minLength 1 */
-  title: string;
+export interface PenetrationObjectiveWriteModel {
+  key?: string;
+  assetKey?: string;
+  title?: string;
   description?: string | null;
   category?: string;
   /** @format int32 */
   score?: number;
-  isDynamic?: boolean;
+  dynamic?: boolean;
   staticFlag?: string | null;
   flagTemplate?: string | null;
   /** @format int32 */
   maxAttempts?: number;
-  isVisible?: boolean;
-  isCheckpoint?: boolean;
-  prerequisiteItemIds?: number[];
+  visible?: boolean;
+  checkpoint?: boolean;
+  prerequisiteKeys?: string[] | null;
   /** @format int32 */
   orderIndex?: number;
 }
 
-export interface PenetrationEdgeModel {
-  /** @format int32 */
-  id?: number;
-  topologyKey?: string;
-  /** @format int32 */
-  sourceNodeId?: number;
-  /** @format int32 */
-  targetNodeId?: number;
-  sourceKind?: PenetrationPolicyScope;
-  /** @format int32 */
-  sourceId?: number;
-  targetKind?: PenetrationPolicyScope;
-  /** @format int32 */
-  targetId?: number;
-  protocol?: PenetrationProtocol;
-  portRange?: string;
-  policyAction?: PenetrationPolicyAction;
-  isRouteHint?: boolean;
-  enforcementMode?: PenetrationEnforcementMode;
-  /** @format int32 */
-  priority?: number;
-  label?: string | null;
-  description?: string | null;
-}
-
-export interface PenetrationValidationModel {
-  valid?: boolean;
-  errors?: string[];
-  warnings?: string[];
-}
-
-export interface PenetrationPlanModel {
-  /** @format int32 */
-  gameId?: number;
-  /** @format int32 */
-  teamCount?: number;
-  sampleTeamPrefix?: string;
-  validation?: PenetrationValidationModel;
-  networks?: PenetrationPlanNetworkModel[];
-  nodes?: PenetrationPlanNodeModel[];
-  policies?: PenetrationPlanPolicyModel[];
-  flags?: PenetrationPlanFlagModel[];
-  deploymentSteps?: string[];
-}
-
-export interface PenetrationPlanNetworkModel {
-  /** @format int32 */
-  networkId?: number;
-  networkName?: string;
-  slug?: string;
-  zoneType?: PenetrationZoneType;
-  cidr?: string;
-  defaultPolicy?: PenetrationDefaultPolicy;
-  isInternal?: boolean;
-}
-
-export interface PenetrationPlanNodeModel {
-  /** @format int32 */
-  nodeId?: number;
-  nodeName?: string;
-  nodeType?: PenetrationNodeType;
-  image?: string;
-  publishPort?: boolean;
-  /** @format int32 */
-  exposePort?: number;
-  interfaces?: PenetrationPlanInterfaceModel[];
-  adminAccessHint?: string | null;
-}
-
-export interface PenetrationPlanInterfaceModel {
-  /** @format int32 */
-  interfaceId?: number;
-  name?: string;
-  /** @format int32 */
-  networkId?: number;
-  networkName?: string;
-  networkSlug?: string;
-  cidr?: string;
-  ipAddress?: string;
-  isPrimary?: boolean;
-  isManagement?: boolean;
-  isInternal?: boolean;
-}
-
-export interface PenetrationPlanPolicyModel {
-  /** @format int32 */
-  policyId?: number;
-  label?: string;
-  source?: string;
-  target?: string;
-  protocol?: PenetrationProtocol;
-  portRange?: string;
-  action?: PenetrationPolicyAction;
-  isRouteHint?: boolean;
-  enforcementMode?: PenetrationEnforcementMode;
-  routeStatus?: PenetrationRouteStatus;
-  runtimeSummary?: string;
-  routeNodeName?: string | null;
-  sourceNetworkName?: string | null;
-  targetNetworkName?: string | null;
-  gatewayIp?: string | null;
-  compileMessage?: string | null;
-  isExecutable?: boolean;
-}
-
-export interface PenetrationPlanFlagModel {
-  /** @format int32 */
-  scoreItemId?: number;
-  /** @format int32 */
-  nodeId?: number;
-  nodeName?: string;
-  title?: string;
-  category?: string;
-  /** @format int32 */
-  score?: number;
-  isDynamic?: boolean;
-  preview?: string;
-}
-
-export interface PenetrationAdminAccessModel {
-  /** @format int32 */
-  runtimeNodeId?: number;
-  /** @format int32 */
-  teamId?: number;
-  teamName?: string;
-  /** @format int32 */
-  nodeId?: number;
-  nodeName?: string;
-  status?: PenetrationRuntimeStatus;
-  workerNodeName?: string;
-  containerId?: string;
-  internalIp?: string;
-  interfaceSummary?: string;
-  host?: string | null;
-  /** @format int32 */
-  publicPort?: number | null;
-  url?: string | null;
-  /** @format int32 */
-  exposePort?: number;
-}
-
-export interface PenetrationScoreboardItemModel {
-  /** @format int32 */
-  rank?: number;
-  /** @format int32 */
-  teamId?: number;
-  teamName?: string;
-  /** @format int32 */
-  score?: number;
-  /** @format int32 */
-  solvedCount?: number;
-  /** @format uint64 */
-  lastSubmissionTime?: number;
-}
-
-export interface PenetrationTeamEnvironmentModel {
-  /** @format int32 */
-  environmentId?: number;
-  /** @format int32 */
-  teamId?: number;
-  teamName?: string;
-  /** @format guid */
-  workerNodeId?: string | null;
-  workerNodeName?: string | null;
-  networkPrefix?: string;
-  /** @format int32 */
-  teamIndex?: number;
-  /** @format int32 */
-  publishedVersion?: number;
-  status?: PenetrationRuntimeStatus;
-  /** @format int32 */
-  resetCount?: number;
-  /** @format int32 */
-  runtimeNodeCount?: number;
-  /** @format uint64 */
-  createdAt?: number;
-  /** @format uint64 */
-  updatedAt?: number | null;
-  lastError?: string | null;
-  /** @format int32 */
-  cleanupRetryCount?: number;
-  /** @format uint64 */
-  nextCleanupAt?: number | null;
-  /** @format uint64 */
-  lastCleanupAttemptAt?: number | null;
-  events?: PenetrationDeploymentEventModel[];
-  runtimeNodes?: PenetrationRuntimeNodeModel[];
-  runtimeRoutes?: PenetrationRuntimeRouteModel[];
-  teamLabShards?: TeamLabRuntimeShardSummaryModel[];
-  teamLabNetworks?: TeamLabRuntimeNetworkSummaryModel[];
-  teamLabAssets?: TeamLabRuntimeAssetSummaryModel[];
-  teamLabCaptureJobs?: TeamLabTrafficCaptureJobSummaryModel[];
-  teamLabTrafficFlows?: TeamLabTrafficFlowSummaryModel[];
-}
-
-export interface PenetrationDeploymentEventModel {
-  /** @format int32 */
-  id?: number;
-  /** @format int32 */
-  environmentId?: number;
-  /** @format int32 */
-  teamId?: number;
-  teamName?: string;
-  stage?: string;
-  level?: PenetrationDeploymentEventLevel;
-  message?: string;
-  nodeName?: string | null;
-  detail?: string | null;
-  /** @format guid */
-  userId?: string | null;
-  /** @format uint64 */
-  createdAt?: number;
-}
-
-export interface PenetrationRuntimeNodeModel {
-  /** @format int32 */
-  runtimeNodeId?: number;
-  /** @format int32 */
-  topologyNodeId?: number;
-  topologyNodeKey?: string;
-  nodeName?: string;
-  networkName?: string;
-  ipAddress?: string;
-  adminAccessUrl?: string | null;
-  /** @format int32 */
-  publicPort?: number | null;
-  status?: PenetrationRuntimeStatus;
-  /** @format uint64 */
-  createdAt?: number;
-  /** @format guid */
-  containerGuid?: string | null;
-  containerId?: string | null;
-  containerStatus?: ContainerStatus | null;
-  image?: string | null;
-  publicHost?: string | null;
-  interfaceSummary?: string;
-}
-
-export interface PenetrationRuntimeRouteModel {
-  /** @format int32 */
-  id?: number;
-  edgeTopologyKey?: string;
-  label?: string;
-  enforcementMode?: PenetrationEnforcementMode;
-  status?: PenetrationRouteStatus;
-  routeNodeKey?: string | null;
-  routeNodeName?: string | null;
-  sourceNetworkName?: string | null;
-  targetNetworkName?: string | null;
-  sourceCidr?: string | null;
-  targetCidr?: string | null;
-  gatewayIp?: string | null;
-  commandSummary?: string | null;
-  message?: string | null;
-  isExecutable?: boolean;
-  /** @format uint64 */
-  createdAt?: number;
-  /** @format uint64 */
-  appliedAt?: number | null;
-}
-
-export interface TeamLabRuntimeShardSummaryModel {
-  /** @format int32 */
-  id?: number;
-  /** @format guid */
-  workerNodeId?: string;
-  workerNodeName?: string;
-  status?: TeamLabRuntimeStatus;
-  /** @format int32 */
-  routeVersion?: number;
-  networkKeys?: string[];
-  assetKeys?: string[];
-  lastError?: string | null;
-}
-
-export interface TeamLabRuntimeNetworkSummaryModel {
-  /** @format int32 */
-  id?: number;
-  /** @format int32 */
-  shardId?: number | null;
-  /** @format guid */
-  workerNodeId?: string | null;
-  workerNodeName?: string;
-  topologyKey?: string;
-  name?: string;
-  cidr?: string;
-  gatewayIp?: string;
-  bridgeName?: string;
-}
-
-export interface TeamLabRuntimeAssetSummaryModel {
-  /** @format int32 */
-  id?: number;
-  /** @format int32 */
-  shardId?: number | null;
-  /** @format guid */
-  workerNodeId?: string | null;
-  workerNodeName?: string;
-  kind?: TeamLabResourceKind;
-  topologyKey?: string;
-  name?: string;
-  runtimeResourceId?: string | null;
-  /** @format int32 */
-  sourceTemplateId?: number | null;
-  image?: string | null;
-  networkKey?: string | null;
-  ipAddress?: string | null;
-  macAddress?: string | null;
-  interfaceSummaryJson?: string;
-  status?: TeamLabRuntimeStatus;
-  lastError?: string | null;
-}
-
-export interface TeamLabTrafficCaptureJobSummaryModel {
-  /** @format int32 */
-  id?: number;
-  /** @format int32 */
-  runtimeId?: number;
-  /** @format int32 */
-  shardId?: number | null;
-  /** @format int32 */
-  networkId?: number | null;
-  /** @format guid */
-  workerNodeId?: string | null;
-  workerNodeName?: string;
-  status?: TeamLabTrafficCaptureStatus;
-  scope?: string;
-  filePath?: string | null;
-  /** @format int64 */
-  maxBytes?: number;
-  /** @format int32 */
-  maxSeconds?: number;
-  /** @format int64 */
-  capturedBytes?: number;
-  lastError?: string | null;
-  /** @format uint64 */
-  createdAt?: number;
-  /** @format uint64 */
-  startedAt?: number | null;
-  /** @format uint64 */
-  completedAt?: number | null;
-  /** @format uint64 */
-  expiresAt?: number | null;
-}
-
-export interface TeamLabTrafficFlowSummaryModel {
-  /** @format int32 */
-  shardId?: number | null;
-  /** @format int32 */
-  networkId?: number | null;
-  /** @format guid */
-  workerNodeId?: string | null;
-  workerNodeName?: string;
-  networkName?: string;
-  sourceIp?: string;
-  /** @format int32 */
-  sourcePort?: number | null;
-  destinationIp?: string;
-  /** @format int32 */
-  destinationPort?: number | null;
-  protocol?: string;
-  /** @format int64 */
-  bytes?: number;
-  /** @format uint64 */
-  capturedAt?: number;
-}
-
-/** List response */
-export interface ArrayResponseOfPenetrationDeploymentEventModel {
-  /** Data */
-  data: PenetrationDeploymentEventModel[];
-  /**
-   * Data length
-   * @format int32
-   */
-  length: number;
-  /**
-   * Total length
-   * @format int32
-   */
-  total?: number;
-}
-
-/** List response */
-export interface ArrayResponseOfPenetrationSubmissionLogModel {
-  /** Data */
-  data: PenetrationSubmissionLogModel[];
-  /**
-   * Data length
-   * @format int32
-   */
-  length: number;
-  /**
-   * Total length
-   * @format int32
-   */
-  total?: number;
-}
-
-export interface PenetrationSubmissionLogModel {
-  /** @format int32 */
-  id?: number;
-  /** @format uint64 */
-  time?: number;
-  /** @format int32 */
-  teamId?: number;
-  teamName?: string;
-  userName?: string;
-  nodeName?: string;
-  itemTitle?: string;
-  category?: string;
-  /** @format int32 */
-  score?: number;
-  /** Judgement result */
-  status?: AnswerResult;
-}
-
-export interface PenetrationWorkspaceModel {
-  /** @format int32 */
-  gameId?: number;
-  /** @format int32 */
-  teamId?: number;
-  teamName?: string;
-  status?: PenetrationRuntimeStatus;
-  /** @format int32 */
-  resetCount?: number;
-  /** @format int32 */
-  maxResetCount?: number;
-  nodes?: PenetrationWorkspaceNodeModel[];
-}
-
-export interface PenetrationWorkspaceNodeModel {
-  /** @format int32 */
-  id?: number;
-  /** @format int32 */
-  networkId?: number;
-  topologyKey?: string;
-  name?: string;
-  description?: string | null;
-  nodeType?: PenetrationNodeType;
-  runtimeStatus?: PenetrationRuntimeStatus;
-  scoreItems?: PenetrationWorkspaceScoreItemModel[];
-}
-
-export interface PenetrationWorkspaceScoreItemModel {
-  /** @format int32 */
-  id?: number;
-  topologyKey?: string;
-  title?: string;
-  description?: string | null;
-  category?: string;
-  /** @format int32 */
-  score?: number;
-  solved?: boolean;
-  /** @format int32 */
-  attempts?: number;
-  /** @format int32 */
-  maxAttempts?: number;
-  isCheckpoint?: boolean;
-  prerequisiteItemIds?: number[];
-  prerequisiteItemKeys?: string[];
-}
-
-export interface TeamLabClientConfigModel {
-  /** @format int32 */
-  gameId?: number;
-  /** @format int32 */
-  teamId?: number;
-  teamName?: string;
-  endpoint?: string;
-  clientAddress?: string;
-  allowedIPs?: string;
-  dns?: string;
-  /** @format int32 */
-  configVersion?: number;
-  fileName?: string;
-  configText?: string;
-}
-
-export interface PenetrationSubmitResultModel {
-  accepted?: boolean;
-  /** @format int32 */
-  score?: number;
-  message?: string;
-}
-
 export interface PenetrationSubmitModel {
   /** @format int32 */
-  scoreItemId?: number;
+  objectiveId?: number;
   /** @minLength 1 */
   flag: string;
 }
@@ -4668,18 +4753,6 @@ export interface SignatureVerifyModel {
    * @minLength 1
    */
   publicKey: string;
-}
-
-export interface TeamLabCaptureStartModel {
-  networkTopologyKey?: string | null;
-  /** @format int32 */
-  shardId?: number | null;
-  /** @format int32 */
-  maxSeconds?: number;
-  /** @format int64 */
-  maxBytes?: number;
-  /** @format int32 */
-  retentionSeconds?: number;
 }
 
 export type TheoryQuestionBankItemModel = TheoryQuestionEditModel & {
@@ -5321,8 +5394,6 @@ export interface TrainingCourseImageTemplateModel {
   registryUrl?: string | null;
   /** @format uint64 */
   uploadedAt?: number;
-  /** @format int32 */
-  trainingCourseId?: number | null;
 }
 
 export interface TrainingCourseDockerRegisterModel {
@@ -5569,6 +5640,11 @@ export interface TrainingCourseSubmitResultModel {
   courseCompleted?: boolean;
 }
 
+export interface RequiredProbeModel {
+  /** @minLength 1 */
+  value: string;
+}
+
 import { apiLanguage } from "@Utils/I18n";
 import type {
   AxiosInstance,
@@ -5754,6 +5830,2006 @@ import useSWR, { MutatorOptions, SWRConfiguration, mutate } from "swr";
 export class Api<
   SecurityDataType extends unknown,
 > extends HttpClient<SecurityDataType> {
+  openTeamLabRuntimes = {
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabRuntimes
+     * @name OpenTeamLabRuntimesCreate
+     * @request POST:/api/open/v1/teamlab/runtimes
+     */
+    openTeamLabRuntimesCreate: (
+      data: CreateTeamLabRuntimeModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/teamlab/runtimes`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabRuntimes
+     * @name OpenTeamLabRuntimesCreateAccessGrant
+     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants
+     */
+    openTeamLabRuntimesCreateAccessGrant: (
+      runtimeId: string,
+      data: TeamLabAccessGrantCreateModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabAccessGrantModel, any>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/access-grants`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabRuntimes
+     * @name OpenTeamLabRuntimesDestroy
+     * @request DELETE:/api/open/v1/teamlab/runtimes/{runtimeId}
+     */
+    openTeamLabRuntimesDestroy: (
+      runtimeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}`,
+        method: "DELETE",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabRuntimes
+     * @name OpenTeamLabRuntimesDownloadAccessConfiguration
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants/{grantId}/download
+     */
+    openTeamLabRuntimesDownloadAccessConfiguration: (
+      runtimeId: string,
+      grantId: string,
+      query?: {
+        token?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/access-grants/${grantId}/download`,
+        method: "GET",
+        query: query,
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabRuntimes
+     * @name OpenTeamLabRuntimesDownloadAccessConfiguration
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants/{grantId}/download
+     */
+    useOpenTeamLabRuntimesDownloadAccessConfiguration: (
+      runtimeId: string,
+      grantId: string,
+      query?: {
+        token?: string;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch
+          ? [
+              `/api/open/v1/teamlab/runtimes/${runtimeId}/access-grants/${grantId}/download`,
+              query,
+            ]
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabRuntimes
+     * @name OpenTeamLabRuntimesDownloadAccessConfiguration
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants/{grantId}/download
+     */
+    mutateOpenTeamLabRuntimesDownloadAccessConfiguration: (
+      runtimeId: string,
+      grantId: string,
+      query?: {
+        token?: string;
+      },
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        [
+          `/api/open/v1/teamlab/runtimes/${runtimeId}/access-grants/${grantId}/download`,
+          query,
+        ],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabRuntimes
+     * @name OpenTeamLabRuntimesEvents
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/events
+     */
+    openTeamLabRuntimesEvents: (
+      runtimeId: string,
+      query?: {
+        /**
+         * @format int64
+         * @default 0
+         */
+        after?: number;
+        /**
+         * @format int32
+         * @min 1
+         * @max 200
+         * @default 100
+         */
+        limit?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRuntimeEventModel[], any>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/events`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabRuntimes
+     * @name OpenTeamLabRuntimesEvents
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/events
+     */
+    useOpenTeamLabRuntimesEvents: (
+      runtimeId: string,
+      query?: {
+        /**
+         * @format int64
+         * @default 0
+         */
+        after?: number;
+        /**
+         * @format int32
+         * @min 1
+         * @max 200
+         * @default 100
+         */
+        limit?: number;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabRuntimeEventModel[], any>(
+        doFetch
+          ? [`/api/open/v1/teamlab/runtimes/${runtimeId}/events`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabRuntimes
+     * @name OpenTeamLabRuntimesEvents
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/events
+     */
+    mutateOpenTeamLabRuntimesEvents: (
+      runtimeId: string,
+      query?: {
+        /**
+         * @format int64
+         * @default 0
+         */
+        after?: number;
+        /**
+         * @format int32
+         * @min 1
+         * @max 200
+         * @default 100
+         */
+        limit?: number;
+      },
+      data?: TeamLabRuntimeEventModel[] | Promise<TeamLabRuntimeEventModel[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabRuntimeEventModel[]>(
+        [`/api/open/v1/teamlab/runtimes/${runtimeId}/events`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabRuntimes
+     * @name OpenTeamLabRuntimesGet
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}
+     */
+    openTeamLabRuntimesGet: (runtimeId: string, params: RequestParams = {}) =>
+      this.request<TeamLabRuntimeProjectionModel, any>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabRuntimes
+     * @name OpenTeamLabRuntimesGet
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}
+     */
+    useOpenTeamLabRuntimesGet: (
+      runtimeId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabRuntimeProjectionModel, any>(
+        doFetch ? `/api/open/v1/teamlab/runtimes/${runtimeId}` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabRuntimes
+     * @name OpenTeamLabRuntimesGet
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}
+     */
+    mutateOpenTeamLabRuntimesGet: (
+      runtimeId: string,
+      data?:
+        | TeamLabRuntimeProjectionModel
+        | Promise<TeamLabRuntimeProjectionModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabRuntimeProjectionModel>(
+        `/api/open/v1/teamlab/runtimes/${runtimeId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabRuntimes
+     * @name OpenTeamLabRuntimesReset
+     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/reset
+     */
+    openTeamLabRuntimesReset: (
+      runtimeId: string,
+      data: ResetTeamLabRuntimeModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/reset`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabRuntimes
+     * @name OpenTeamLabRuntimesRevokeAccessGrant
+     * @request DELETE:/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants/{grantId}
+     */
+    openTeamLabRuntimesRevokeAccessGrant: (
+      runtimeId: string,
+      grantId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/access-grants/${grantId}`,
+        method: "DELETE",
+        ...params,
+      }),
+  };
+  openTeamLabTopologies = {
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesCapabilities
+     * @request GET:/api/open/v1/teamlab/capabilities
+     */
+    openTeamLabTopologiesCapabilities: (params: RequestParams = {}) =>
+      this.request<TeamLabCapabilitiesModel, any>({
+        path: `/api/open/v1/teamlab/capabilities`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesCapabilities
+     * @request GET:/api/open/v1/teamlab/capabilities
+     */
+    useOpenTeamLabTopologiesCapabilities: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabCapabilitiesModel, any>(
+        doFetch ? `/api/open/v1/teamlab/capabilities` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesCapabilities
+     * @request GET:/api/open/v1/teamlab/capabilities
+     */
+    mutateOpenTeamLabTopologiesCapabilities: (
+      data?: TeamLabCapabilitiesModel | Promise<TeamLabCapabilitiesModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabCapabilitiesModel>(
+        `/api/open/v1/teamlab/capabilities`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesCreate
+     * @request POST:/api/open/v1/teamlab/topologies
+     */
+    openTeamLabTopologiesCreate: (
+      data: CreateTeamLabTopologyModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabTopologyDetailModel, any>({
+        path: `/api/open/v1/teamlab/topologies`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesDelete
+     * @request DELETE:/api/open/v1/teamlab/topologies/{topologyId}
+     */
+    openTeamLabTopologiesDelete: (
+      topologyId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/teamlab/topologies/${topologyId}`,
+        method: "DELETE",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesGet
+     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}
+     */
+    openTeamLabTopologiesGet: (
+      topologyId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabTopologyDetailModel, any>({
+        path: `/api/open/v1/teamlab/topologies/${topologyId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesGet
+     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}
+     */
+    useOpenTeamLabTopologiesGet: (
+      topologyId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabTopologyDetailModel, any>(
+        doFetch ? `/api/open/v1/teamlab/topologies/${topologyId}` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesGet
+     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}
+     */
+    mutateOpenTeamLabTopologiesGet: (
+      topologyId: string,
+      data?: TeamLabTopologyDetailModel | Promise<TeamLabTopologyDetailModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabTopologyDetailModel>(
+        `/api/open/v1/teamlab/topologies/${topologyId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesGetRelease
+     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}/releases/{releaseId}
+     */
+    openTeamLabTopologiesGetRelease: (
+      topologyId: string,
+      releaseId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabReleaseModel, any>({
+        path: `/api/open/v1/teamlab/topologies/${topologyId}/releases/${releaseId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesGetRelease
+     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}/releases/{releaseId}
+     */
+    useOpenTeamLabTopologiesGetRelease: (
+      topologyId: string,
+      releaseId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabReleaseModel, any>(
+        doFetch
+          ? `/api/open/v1/teamlab/topologies/${topologyId}/releases/${releaseId}`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesGetRelease
+     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}/releases/{releaseId}
+     */
+    mutateOpenTeamLabTopologiesGetRelease: (
+      topologyId: string,
+      releaseId: string,
+      data?: TeamLabReleaseModel | Promise<TeamLabReleaseModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabReleaseModel>(
+        `/api/open/v1/teamlab/topologies/${topologyId}/releases/${releaseId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesList
+     * @request GET:/api/open/v1/teamlab/topologies
+     */
+    openTeamLabTopologiesList: (params: RequestParams = {}) =>
+      this.request<TeamLabTopologySummaryModel[], any>({
+        path: `/api/open/v1/teamlab/topologies`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesList
+     * @request GET:/api/open/v1/teamlab/topologies
+     */
+    useOpenTeamLabTopologiesList: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabTopologySummaryModel[], any>(
+        doFetch ? `/api/open/v1/teamlab/topologies` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesList
+     * @request GET:/api/open/v1/teamlab/topologies
+     */
+    mutateOpenTeamLabTopologiesList: (
+      data?:
+        | TeamLabTopologySummaryModel[]
+        | Promise<TeamLabTopologySummaryModel[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabTopologySummaryModel[]>(
+        `/api/open/v1/teamlab/topologies`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesListReleases
+     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}/releases
+     */
+    openTeamLabTopologiesListReleases: (
+      topologyId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabReleaseModel[], any>({
+        path: `/api/open/v1/teamlab/topologies/${topologyId}/releases`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesListReleases
+     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}/releases
+     */
+    useOpenTeamLabTopologiesListReleases: (
+      topologyId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabReleaseModel[], any>(
+        doFetch
+          ? `/api/open/v1/teamlab/topologies/${topologyId}/releases`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesListReleases
+     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}/releases
+     */
+    mutateOpenTeamLabTopologiesListReleases: (
+      topologyId: string,
+      data?: TeamLabReleaseModel[] | Promise<TeamLabReleaseModel[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabReleaseModel[]>(
+        `/api/open/v1/teamlab/topologies/${topologyId}/releases`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesPlan
+     * @request POST:/api/open/v1/teamlab/topologies/{topologyId}/releases/{releaseId}/plan
+     */
+    openTeamLabTopologiesPlan: (
+      topologyId: string,
+      releaseId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabPlanModel, any>({
+        path: `/api/open/v1/teamlab/topologies/${topologyId}/releases/${releaseId}/plan`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesPublish
+     * @request POST:/api/open/v1/teamlab/topologies/{topologyId}/releases
+     */
+    openTeamLabTopologiesPublish: (
+      topologyId: string,
+      data: PublishTeamLabTopologyModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabReleaseModel, any>({
+        path: `/api/open/v1/teamlab/topologies/${topologyId}/releases`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesUpdate
+     * @request PUT:/api/open/v1/teamlab/topologies/{topologyId}
+     */
+    openTeamLabTopologiesUpdate: (
+      topologyId: string,
+      data: UpdateTeamLabTopologyModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabTopologyDetailModel, any>({
+        path: `/api/open/v1/teamlab/topologies/${topologyId}`,
+        method: "PUT",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTopologies
+     * @name OpenTeamLabTopologiesValidate
+     * @request POST:/api/open/v1/teamlab/topologies/{topologyId}/validate
+     */
+    openTeamLabTopologiesValidate: (
+      topologyId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabValidationResultModel, any>({
+        path: `/api/open/v1/teamlab/topologies/${topologyId}/validate`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+  };
+  openTeamLabTraffic = {
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTraffic
+     * @name OpenTeamLabTrafficDownloadCapture
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}/download
+     */
+    openTeamLabTrafficDownloadCapture: (
+      runtimeId: string,
+      captureId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/captures/${captureId}/download`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTraffic
+     * @name OpenTeamLabTrafficDownloadCapture
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}/download
+     */
+    useOpenTeamLabTrafficDownloadCapture: (
+      runtimeId: string,
+      captureId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch
+          ? `/api/open/v1/teamlab/runtimes/${runtimeId}/captures/${captureId}/download`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTraffic
+     * @name OpenTeamLabTrafficDownloadCapture
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}/download
+     */
+    mutateOpenTeamLabTrafficDownloadCapture: (
+      runtimeId: string,
+      captureId: string,
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        `/api/open/v1/teamlab/runtimes/${runtimeId}/captures/${captureId}/download`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTraffic
+     * @name OpenTeamLabTrafficGetCapture
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}
+     */
+    openTeamLabTrafficGetCapture: (
+      runtimeId: string,
+      captureId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabCaptureModel, any>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/captures/${captureId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTraffic
+     * @name OpenTeamLabTrafficGetCapture
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}
+     */
+    useOpenTeamLabTrafficGetCapture: (
+      runtimeId: string,
+      captureId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabCaptureModel, any>(
+        doFetch
+          ? `/api/open/v1/teamlab/runtimes/${runtimeId}/captures/${captureId}`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTraffic
+     * @name OpenTeamLabTrafficGetCapture
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}
+     */
+    mutateOpenTeamLabTrafficGetCapture: (
+      runtimeId: string,
+      captureId: string,
+      data?: TeamLabCaptureModel | Promise<TeamLabCaptureModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabCaptureModel>(
+        `/api/open/v1/teamlab/runtimes/${runtimeId}/captures/${captureId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTraffic
+     * @name OpenTeamLabTrafficGetFlows
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/traffic/flows
+     */
+    openTeamLabTrafficGetFlows: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 200
+         * @default 100
+         */
+        limit?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabTrafficFlowPageModel, any>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/traffic/flows`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTraffic
+     * @name OpenTeamLabTrafficGetFlows
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/traffic/flows
+     */
+    useOpenTeamLabTrafficGetFlows: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 200
+         * @default 100
+         */
+        limit?: number;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabTrafficFlowPageModel, any>(
+        doFetch
+          ? [`/api/open/v1/teamlab/runtimes/${runtimeId}/traffic/flows`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTraffic
+     * @name OpenTeamLabTrafficGetFlows
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/traffic/flows
+     */
+    mutateOpenTeamLabTrafficGetFlows: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 200
+         * @default 100
+         */
+        limit?: number;
+      },
+      data?: TeamLabTrafficFlowPageModel | Promise<TeamLabTrafficFlowPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabTrafficFlowPageModel>(
+        [`/api/open/v1/teamlab/runtimes/${runtimeId}/traffic/flows`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTraffic
+     * @name OpenTeamLabTrafficStartCapture
+     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/captures
+     */
+    openTeamLabTrafficStartCapture: (
+      runtimeId: string,
+      data: CreateTeamLabCaptureModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabCaptureModel, any>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/captures`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenTeamLabTraffic
+     * @name OpenTeamLabTrafficStopCapture
+     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}/stop
+     */
+    openTeamLabTrafficStopCapture: (
+      runtimeId: string,
+      captureId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabCaptureModel, any>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/captures/${captureId}/stop`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+  };
+  openChallenges = {
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesDelete
+     * @request DELETE:/api/open/v1/games/{gameId}/challenges/{challengeId}
+     */
+    openChallengesDelete: (
+      gameId: number,
+      challengeId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/games/${gameId}/challenges/${challengeId}`,
+        method: "DELETE",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesDeleteBatch
+     * @request POST:/api/open/v1/games/{gameId}/challenges/batch-delete
+     */
+    openChallengesDeleteBatch: (
+      gameId: number,
+      data: OpenChallengeBatchDeleteModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/games/${gameId}/challenges/batch-delete`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesGet
+     * @request GET:/api/open/v1/games/{gameId}/challenges/{challengeId}
+     */
+    openChallengesGet: (
+      gameId: number,
+      challengeId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<OpenChallengeModel, ProblemDetails>({
+        path: `/api/open/v1/games/${gameId}/challenges/${challengeId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesGet
+     * @request GET:/api/open/v1/games/{gameId}/challenges/{challengeId}
+     */
+    useOpenChallengesGet: (
+      gameId: number,
+      challengeId: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenChallengeModel, ProblemDetails>(
+        doFetch
+          ? `/api/open/v1/games/${gameId}/challenges/${challengeId}`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesGet
+     * @request GET:/api/open/v1/games/{gameId}/challenges/{challengeId}
+     */
+    mutateOpenChallengesGet: (
+      gameId: number,
+      challengeId: number,
+      data?: OpenChallengeModel | Promise<OpenChallengeModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenChallengeModel>(
+        `/api/open/v1/games/${gameId}/challenges/${challengeId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesImportBatch
+     * @request POST:/api/open/v1/games/{gameId}/challenges/batch
+     */
+    openChallengesImportBatch: (
+      gameId: number,
+      data: OpenChallengeBatchImportModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/games/${gameId}/challenges/batch`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesImportOne
+     * @request POST:/api/open/v1/games/{gameId}/challenges
+     */
+    openChallengesImportOne: (
+      gameId: number,
+      data: OpenChallengeImportModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/games/${gameId}/challenges`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesList
+     * @request GET:/api/open/v1/games/{gameId}/challenges
+     */
+    openChallengesList: (
+      gameId: number,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<OpenChallengePageModel, any>({
+        path: `/api/open/v1/games/${gameId}/challenges`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesList
+     * @request GET:/api/open/v1/games/{gameId}/challenges
+     */
+    useOpenChallengesList: (
+      gameId: number,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenChallengePageModel, any>(
+        doFetch ? [`/api/open/v1/games/${gameId}/challenges`, query] : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesList
+     * @request GET:/api/open/v1/games/{gameId}/challenges
+     */
+    mutateOpenChallengesList: (
+      gameId: number,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      data?: OpenChallengePageModel | Promise<OpenChallengePageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenChallengePageModel>(
+        [`/api/open/v1/games/${gameId}/challenges`, query],
+        data,
+        options,
+      ),
+  };
+  openImages = {
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesDelete
+     * @request DELETE:/api/open/v1/images/{imageTemplateId}
+     */
+    openImagesDelete: (imageTemplateId: number, params: RequestParams = {}) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/open/v1/images/${imageTemplateId}`,
+        method: "DELETE",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesGet
+     * @request GET:/api/open/v1/images/{imageTemplateId}
+     */
+    openImagesGet: (imageTemplateId: number, params: RequestParams = {}) =>
+      this.request<OpenImageTemplateModel, ProblemDetails>({
+        path: `/api/open/v1/images/${imageTemplateId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesGet
+     * @request GET:/api/open/v1/images/{imageTemplateId}
+     */
+    useOpenImagesGet: (
+      imageTemplateId: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenImageTemplateModel, ProblemDetails>(
+        doFetch ? `/api/open/v1/images/${imageTemplateId}` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesGet
+     * @request GET:/api/open/v1/images/{imageTemplateId}
+     */
+    mutateOpenImagesGet: (
+      imageTemplateId: number,
+      data?: OpenImageTemplateModel | Promise<OpenImageTemplateModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenImageTemplateModel>(
+        `/api/open/v1/images/${imageTemplateId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesRegisterDockerArchive
+     * @request POST:/api/open/v1/images/docker-archives
+     */
+    openImagesRegisterDockerArchive: (
+      data: {
+        /** @format binary */
+        file?: File | null;
+        name?: string | null;
+        sourceImage?: string | null;
+        osType?: OSType;
+        expectedDigest?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/images/docker-archives`,
+        method: "POST",
+        body: data,
+        type: ContentType.FormData,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesRegisterDockerReference
+     * @request POST:/api/open/v1/images/docker-references
+     */
+    openImagesRegisterDockerReference: (
+      data: DockerImageReferenceImportModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/images/docker-references`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+  };
+  operations = {
+    /**
+     * No description
+     *
+     * @tags Operations
+     * @name OperationsGet
+     * @request GET:/api/open/v1/operations/{id}
+     */
+    operationsGet: (id: string, params: RequestParams = {}) =>
+      this.request<ApiOperationModel, ProblemDetails>({
+        path: `/api/open/v1/operations/${id}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Operations
+     * @name OperationsGet
+     * @request GET:/api/open/v1/operations/{id}
+     */
+    useOperationsGet: (
+      id: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<ApiOperationModel, ProblemDetails>(
+        doFetch ? `/api/open/v1/operations/${id}` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Operations
+     * @name OperationsGet
+     * @request GET:/api/open/v1/operations/{id}
+     */
+    mutateOperationsGet: (
+      id: string,
+      data?: ApiOperationModel | Promise<ApiOperationModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<ApiOperationModel>(`/api/open/v1/operations/${id}`, data, options),
+  };
+  teamLabAdminRuntime = {
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeDownloadCapture
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/captures/{captureId}/download
+     */
+    teamLabAdminRuntimeDownloadCapture: (
+      runtimeId: string,
+      captureId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/captures/${captureId}/download`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeDownloadCapture
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/captures/{captureId}/download
+     */
+    useTeamLabAdminRuntimeDownloadCapture: (
+      runtimeId: string,
+      captureId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch
+          ? `/api/admin/teamlab/runtimes/${runtimeId}/captures/${captureId}/download`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeDownloadCapture
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/captures/{captureId}/download
+     */
+    mutateTeamLabAdminRuntimeDownloadCapture: (
+      runtimeId: string,
+      captureId: string,
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        `/api/admin/teamlab/runtimes/${runtimeId}/captures/${captureId}/download`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeEvents
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/events
+     */
+    teamLabAdminRuntimeEvents: (
+      runtimeId: string,
+      query?: {
+        /**
+         * @format int64
+         * @default 0
+         */
+        after?: number;
+        /**
+         * @format int32
+         * @default 100
+         */
+        limit?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRuntimeEventModel[], any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/events`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeEvents
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/events
+     */
+    useTeamLabAdminRuntimeEvents: (
+      runtimeId: string,
+      query?: {
+        /**
+         * @format int64
+         * @default 0
+         */
+        after?: number;
+        /**
+         * @format int32
+         * @default 100
+         */
+        limit?: number;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabRuntimeEventModel[], any>(
+        doFetch
+          ? [`/api/admin/teamlab/runtimes/${runtimeId}/events`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeEvents
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/events
+     */
+    mutateTeamLabAdminRuntimeEvents: (
+      runtimeId: string,
+      query?: {
+        /**
+         * @format int64
+         * @default 0
+         */
+        after?: number;
+        /**
+         * @format int32
+         * @default 100
+         */
+        limit?: number;
+      },
+      data?: TeamLabRuntimeEventModel[] | Promise<TeamLabRuntimeEventModel[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabRuntimeEventModel[]>(
+        [`/api/admin/teamlab/runtimes/${runtimeId}/events`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeFlows
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/traffic/flows
+     */
+    teamLabAdminRuntimeFlows: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @default 100
+         */
+        limit?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabTrafficFlowPageModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/traffic/flows`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeFlows
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/traffic/flows
+     */
+    useTeamLabAdminRuntimeFlows: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @default 100
+         */
+        limit?: number;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabTrafficFlowPageModel, any>(
+        doFetch
+          ? [`/api/admin/teamlab/runtimes/${runtimeId}/traffic/flows`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeFlows
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/traffic/flows
+     */
+    mutateTeamLabAdminRuntimeFlows: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @default 100
+         */
+        limit?: number;
+      },
+      data?: TeamLabTrafficFlowPageModel | Promise<TeamLabTrafficFlowPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabTrafficFlowPageModel>(
+        [`/api/admin/teamlab/runtimes/${runtimeId}/traffic/flows`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeGet
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}
+     */
+    teamLabAdminRuntimeGet: (runtimeId: string, params: RequestParams = {}) =>
+      this.request<TeamLabRuntimeProjectionModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeGet
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}
+     */
+    useTeamLabAdminRuntimeGet: (
+      runtimeId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabRuntimeProjectionModel, any>(
+        doFetch ? `/api/admin/teamlab/runtimes/${runtimeId}` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeGet
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}
+     */
+    mutateTeamLabAdminRuntimeGet: (
+      runtimeId: string,
+      data?:
+        | TeamLabRuntimeProjectionModel
+        | Promise<TeamLabRuntimeProjectionModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabRuntimeProjectionModel>(
+        `/api/admin/teamlab/runtimes/${runtimeId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeGetCapture
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/captures/{captureId}
+     */
+    teamLabAdminRuntimeGetCapture: (
+      runtimeId: string,
+      captureId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabCaptureModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/captures/${captureId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeGetCapture
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/captures/{captureId}
+     */
+    useTeamLabAdminRuntimeGetCapture: (
+      runtimeId: string,
+      captureId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabCaptureModel, any>(
+        doFetch
+          ? `/api/admin/teamlab/runtimes/${runtimeId}/captures/${captureId}`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeGetCapture
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/captures/{captureId}
+     */
+    mutateTeamLabAdminRuntimeGetCapture: (
+      runtimeId: string,
+      captureId: string,
+      data?: TeamLabCaptureModel | Promise<TeamLabCaptureModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabCaptureModel>(
+        `/api/admin/teamlab/runtimes/${runtimeId}/captures/${captureId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeStartCapture
+     * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/captures
+     */
+    teamLabAdminRuntimeStartCapture: (
+      runtimeId: string,
+      data: CreateTeamLabCaptureModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabCaptureModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/captures`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeStopCapture
+     * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/captures/{captureId}/stop
+     */
+    teamLabAdminRuntimeStopCapture: (
+      runtimeId: string,
+      captureId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabCaptureModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/captures/${captureId}/stop`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+  };
+  teamLabAdminTopology = {
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyCapabilities
+     * @request GET:/api/admin/teamlab/capabilities
+     */
+    teamLabAdminTopologyCapabilities: (params: RequestParams = {}) =>
+      this.request<TeamLabCapabilitiesModel, any>({
+        path: `/api/admin/teamlab/capabilities`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyCapabilities
+     * @request GET:/api/admin/teamlab/capabilities
+     */
+    useTeamLabAdminTopologyCapabilities: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabCapabilitiesModel, any>(
+        doFetch ? `/api/admin/teamlab/capabilities` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyCapabilities
+     * @request GET:/api/admin/teamlab/capabilities
+     */
+    mutateTeamLabAdminTopologyCapabilities: (
+      data?: TeamLabCapabilitiesModel | Promise<TeamLabCapabilitiesModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabCapabilitiesModel>(
+        `/api/admin/teamlab/capabilities`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyCreate
+     * @request POST:/api/admin/teamlab/topologies
+     */
+    teamLabAdminTopologyCreate: (
+      data: CreateTeamLabTopologyModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabTopologyDetailModel, any>({
+        path: `/api/admin/teamlab/topologies`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyDelete
+     * @request DELETE:/api/admin/teamlab/topologies/{topologyId}
+     */
+    teamLabAdminTopologyDelete: (
+      topologyId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/admin/teamlab/topologies/${topologyId}`,
+        method: "DELETE",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyGet
+     * @request GET:/api/admin/teamlab/topologies/{topologyId}
+     */
+    teamLabAdminTopologyGet: (topologyId: string, params: RequestParams = {}) =>
+      this.request<TeamLabTopologyDetailModel, any>({
+        path: `/api/admin/teamlab/topologies/${topologyId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyGet
+     * @request GET:/api/admin/teamlab/topologies/{topologyId}
+     */
+    useTeamLabAdminTopologyGet: (
+      topologyId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabTopologyDetailModel, any>(
+        doFetch ? `/api/admin/teamlab/topologies/${topologyId}` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyGet
+     * @request GET:/api/admin/teamlab/topologies/{topologyId}
+     */
+    mutateTeamLabAdminTopologyGet: (
+      topologyId: string,
+      data?: TeamLabTopologyDetailModel | Promise<TeamLabTopologyDetailModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabTopologyDetailModel>(
+        `/api/admin/teamlab/topologies/${topologyId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyList
+     * @request GET:/api/admin/teamlab/topologies
+     */
+    teamLabAdminTopologyList: (params: RequestParams = {}) =>
+      this.request<TeamLabTopologySummaryModel[], any>({
+        path: `/api/admin/teamlab/topologies`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyList
+     * @request GET:/api/admin/teamlab/topologies
+     */
+    useTeamLabAdminTopologyList: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabTopologySummaryModel[], any>(
+        doFetch ? `/api/admin/teamlab/topologies` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyList
+     * @request GET:/api/admin/teamlab/topologies
+     */
+    mutateTeamLabAdminTopologyList: (
+      data?:
+        | TeamLabTopologySummaryModel[]
+        | Promise<TeamLabTopologySummaryModel[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabTopologySummaryModel[]>(
+        `/api/admin/teamlab/topologies`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyPlan
+     * @request POST:/api/admin/teamlab/topologies/{topologyId}/releases/{releaseId}/plan
+     */
+    teamLabAdminTopologyPlan: (
+      topologyId: string,
+      releaseId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabPlanModel, any>({
+        path: `/api/admin/teamlab/topologies/${topologyId}/releases/${releaseId}/plan`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyPublish
+     * @request POST:/api/admin/teamlab/topologies/{topologyId}/releases
+     */
+    teamLabAdminTopologyPublish: (
+      topologyId: string,
+      data: PublishTeamLabTopologyModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabReleaseModel, any>({
+        path: `/api/admin/teamlab/topologies/${topologyId}/releases`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyReleases
+     * @request GET:/api/admin/teamlab/topologies/{topologyId}/releases
+     */
+    teamLabAdminTopologyReleases: (
+      topologyId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabReleaseModel[], any>({
+        path: `/api/admin/teamlab/topologies/${topologyId}/releases`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyReleases
+     * @request GET:/api/admin/teamlab/topologies/{topologyId}/releases
+     */
+    useTeamLabAdminTopologyReleases: (
+      topologyId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabReleaseModel[], any>(
+        doFetch ? `/api/admin/teamlab/topologies/${topologyId}/releases` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyReleases
+     * @request GET:/api/admin/teamlab/topologies/{topologyId}/releases
+     */
+    mutateTeamLabAdminTopologyReleases: (
+      topologyId: string,
+      data?: TeamLabReleaseModel[] | Promise<TeamLabReleaseModel[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabReleaseModel[]>(
+        `/api/admin/teamlab/topologies/${topologyId}/releases`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyUpdate
+     * @request PUT:/api/admin/teamlab/topologies/{topologyId}
+     */
+    teamLabAdminTopologyUpdate: (
+      topologyId: string,
+      data: UpdateTeamLabTopologyModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabTopologyDetailModel, any>({
+        path: `/api/admin/teamlab/topologies/${topologyId}`,
+        method: "PUT",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyValidate
+     * @request POST:/api/admin/teamlab/topologies/{topologyId}/validate
+     */
+    teamLabAdminTopologyValidate: (
+      topologyId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabValidationResultModel, any>({
+        path: `/api/admin/teamlab/topologies/${topologyId}/validate`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+  };
   apiTokens = {
     /**
      * No description
@@ -10692,8 +12768,6 @@ export class Api<
         Name?: string | null;
         FileName?: string | null;
         name?: string | null;
-        repository?: string | null;
-        tag?: string | null;
         sourceImage?: string | null;
         osType?: OSType;
       },
@@ -11546,17 +13620,37 @@ export class Api<
      * No description
      *
      * @tags PenetrationAdmin
-     * @name PenetrationAdminCancelDeploy
-     * @request POST:/api/admin/pentest/games/{gameId}/deploy/cancel
+     * @name PenetrationAdminActivateRelease
+     * @request POST:/api/admin/pentest/games/{gameId}/releases/{releaseId}/activate
      */
-    penetrationAdminCancelDeploy: (
+    penetrationAdminActivateRelease: (
       gameId: number,
+      releaseId: string,
       params: RequestParams = {},
     ) =>
-      this.request<RequestResponse, RequestResponse>({
-        path: `/api/admin/pentest/games/${gameId}/deploy/cancel`,
+      this.request<Blob, any>({
+        path: `/api/admin/pentest/games/${gameId}/releases/${releaseId}/activate`,
         method: "POST",
-        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
+     * @name PenetrationAdminBind
+     * @request PUT:/api/admin/pentest/games/{gameId}/binding
+     */
+    penetrationAdminBind: (
+      gameId: number,
+      data: BindPenetrationTopologyModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/admin/pentest/games/${gameId}/binding`,
+        method: "PUT",
+        body: data,
+        type: ContentType.Json,
         ...params,
       }),
 
@@ -11572,10 +13666,9 @@ export class Api<
       teamId: number,
       params: RequestParams = {},
     ) =>
-      this.request<RequestResponse, RequestResponse>({
+      this.request<Blob, any>({
         path: `/api/admin/pentest/games/${gameId}/teams/${teamId}/cleanup`,
         method: "POST",
-        format: "json",
         ...params,
       }),
 
@@ -11586,19 +13679,10 @@ export class Api<
      * @name PenetrationAdminDeploy
      * @request POST:/api/admin/pentest/games/{gameId}/deploy
      */
-    penetrationAdminDeploy: (
-      gameId: number,
-      query?: {
-        /** @default false */
-        force?: boolean;
-      },
-      params: RequestParams = {},
-    ) =>
-      this.request<RequestResponse, RequestResponse>({
+    penetrationAdminDeploy: (gameId: number, params: RequestParams = {}) =>
+      this.request<Blob, any>({
         path: `/api/admin/pentest/games/${gameId}/deploy`,
         method: "POST",
-        query: query,
-        format: "json",
         ...params,
       }),
 
@@ -11606,30 +13690,29 @@ export class Api<
      * No description
      *
      * @tags PenetrationAdmin
-     * @name PenetrationAdminGetAccess
-     * @request GET:/api/admin/pentest/games/{gameId}/access
+     * @name PenetrationAdminGetBinding
+     * @request GET:/api/admin/pentest/games/{gameId}/binding
      */
-    penetrationAdminGetAccess: (gameId: number, params: RequestParams = {}) =>
-      this.request<PenetrationAdminAccessModel[], RequestResponse>({
-        path: `/api/admin/pentest/games/${gameId}/access`,
+    penetrationAdminGetBinding: (gameId: number, params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/api/admin/pentest/games/${gameId}/binding`,
         method: "GET",
-        format: "json",
         ...params,
       }),
     /**
      * No description
      *
      * @tags PenetrationAdmin
-     * @name PenetrationAdminGetAccess
-     * @request GET:/api/admin/pentest/games/{gameId}/access
+     * @name PenetrationAdminGetBinding
+     * @request GET:/api/admin/pentest/games/{gameId}/binding
      */
-    usePenetrationAdminGetAccess: (
+    usePenetrationAdminGetBinding: (
       gameId: number,
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
-      useSWR<PenetrationAdminAccessModel[], RequestResponse>(
-        doFetch ? `/api/admin/pentest/games/${gameId}/access` : null,
+      useSWR<Blob, any>(
+        doFetch ? `/api/admin/pentest/games/${gameId}/binding` : null,
         options,
       ),
 
@@ -11637,50 +13720,43 @@ export class Api<
      * No description
      *
      * @tags PenetrationAdmin
-     * @name PenetrationAdminGetAccess
-     * @request GET:/api/admin/pentest/games/{gameId}/access
+     * @name PenetrationAdminGetBinding
+     * @request GET:/api/admin/pentest/games/{gameId}/binding
      */
-    mutatePenetrationAdminGetAccess: (
+    mutatePenetrationAdminGetBinding: (
       gameId: number,
-      data?:
-        | PenetrationAdminAccessModel[]
-        | Promise<PenetrationAdminAccessModel[]>,
+      data?: Blob | Promise<Blob>,
       options?: MutatorOptions,
     ) =>
-      mutate<PenetrationAdminAccessModel[]>(
-        `/api/admin/pentest/games/${gameId}/access`,
-        data,
-        options,
-      ),
+      mutate<Blob>(`/api/admin/pentest/games/${gameId}/binding`, data, options),
 
     /**
      * No description
      *
      * @tags PenetrationAdmin
-     * @name PenetrationAdminGetConfig
-     * @request GET:/api/admin/pentest/games/{gameId}
+     * @name PenetrationAdminGetRuntimes
+     * @request GET:/api/admin/pentest/games/{gameId}/runtimes
      */
-    penetrationAdminGetConfig: (gameId: number, params: RequestParams = {}) =>
-      this.request<PenetrationConfigModel, RequestResponse>({
-        path: `/api/admin/pentest/games/${gameId}`,
+    penetrationAdminGetRuntimes: (gameId: number, params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/api/admin/pentest/games/${gameId}/runtimes`,
         method: "GET",
-        format: "json",
         ...params,
       }),
     /**
      * No description
      *
      * @tags PenetrationAdmin
-     * @name PenetrationAdminGetConfig
-     * @request GET:/api/admin/pentest/games/{gameId}
+     * @name PenetrationAdminGetRuntimes
+     * @request GET:/api/admin/pentest/games/{gameId}/runtimes
      */
-    usePenetrationAdminGetConfig: (
+    usePenetrationAdminGetRuntimes: (
       gameId: number,
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
-      useSWR<PenetrationConfigModel, RequestResponse>(
-        doFetch ? `/api/admin/pentest/games/${gameId}` : null,
+      useSWR<Blob, any>(
+        doFetch ? `/api/admin/pentest/games/${gameId}/runtimes` : null,
         options,
       ),
 
@@ -11688,148 +13764,19 @@ export class Api<
      * No description
      *
      * @tags PenetrationAdmin
-     * @name PenetrationAdminGetConfig
-     * @request GET:/api/admin/pentest/games/{gameId}
+     * @name PenetrationAdminGetRuntimes
+     * @request GET:/api/admin/pentest/games/{gameId}/runtimes
      */
-    mutatePenetrationAdminGetConfig: (
+    mutatePenetrationAdminGetRuntimes: (
       gameId: number,
-      data?: PenetrationConfigModel | Promise<PenetrationConfigModel>,
+      data?: Blob | Promise<Blob>,
       options?: MutatorOptions,
     ) =>
-      mutate<PenetrationConfigModel>(
-        `/api/admin/pentest/games/${gameId}`,
+      mutate<Blob>(
+        `/api/admin/pentest/games/${gameId}/runtimes`,
         data,
         options,
       ),
-
-    /**
-     * No description
-     *
-     * @tags PenetrationAdmin
-     * @name PenetrationAdminGetDeploymentEvents
-     * @request GET:/api/admin/pentest/games/{gameId}/deployment-events
-     */
-    penetrationAdminGetDeploymentEvents: (
-      gameId: number,
-      query?: {
-        /**
-         * @format int32
-         * @min 1
-         * @max 200
-         * @default 50
-         */
-        count?: number;
-        /**
-         * @format int32
-         * @default 0
-         */
-        skip?: number;
-        /** @format int32 */
-        environmentId?: number | null;
-      },
-      params: RequestParams = {},
-    ) =>
-      this.request<
-        ArrayResponseOfPenetrationDeploymentEventModel,
-        RequestResponse
-      >({
-        path: `/api/admin/pentest/games/${gameId}/deployment-events`,
-        method: "GET",
-        query: query,
-        format: "json",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags PenetrationAdmin
-     * @name PenetrationAdminGetDeploymentEvents
-     * @request GET:/api/admin/pentest/games/{gameId}/deployment-events
-     */
-    usePenetrationAdminGetDeploymentEvents: (
-      gameId: number,
-      query?: {
-        /**
-         * @format int32
-         * @min 1
-         * @max 200
-         * @default 50
-         */
-        count?: number;
-        /**
-         * @format int32
-         * @default 0
-         */
-        skip?: number;
-        /** @format int32 */
-        environmentId?: number | null;
-      },
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<ArrayResponseOfPenetrationDeploymentEventModel, RequestResponse>(
-        doFetch
-          ? [`/api/admin/pentest/games/${gameId}/deployment-events`, query]
-          : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags PenetrationAdmin
-     * @name PenetrationAdminGetDeploymentEvents
-     * @request GET:/api/admin/pentest/games/{gameId}/deployment-events
-     */
-    mutatePenetrationAdminGetDeploymentEvents: (
-      gameId: number,
-      query?: {
-        /**
-         * @format int32
-         * @min 1
-         * @max 200
-         * @default 50
-         */
-        count?: number;
-        /**
-         * @format int32
-         * @default 0
-         */
-        skip?: number;
-        /** @format int32 */
-        environmentId?: number | null;
-      },
-      data?:
-        | ArrayResponseOfPenetrationDeploymentEventModel
-        | Promise<ArrayResponseOfPenetrationDeploymentEventModel>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<ArrayResponseOfPenetrationDeploymentEventModel>(
-        [`/api/admin/pentest/games/${gameId}/deployment-events`, query],
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags PenetrationAdmin
-     * @name PenetrationAdminGetPlan
-     * @request POST:/api/admin/pentest/games/{gameId}/plan
-     */
-    penetrationAdminGetPlan: (
-      gameId: number,
-      data: PenetrationConfigModel,
-      params: RequestParams = {},
-    ) =>
-      this.request<PenetrationPlanModel, RequestResponse>({
-        path: `/api/admin/pentest/games/${gameId}/plan`,
-        method: "POST",
-        body: data,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
 
     /**
      * No description
@@ -11842,10 +13789,9 @@ export class Api<
       gameId: number,
       params: RequestParams = {},
     ) =>
-      this.request<PenetrationScoreboardItemModel[], RequestResponse>({
+      this.request<Blob, any>({
         path: `/api/admin/pentest/games/${gameId}/scoreboard`,
         method: "GET",
-        format: "json",
         ...params,
       }),
     /**
@@ -11860,7 +13806,7 @@ export class Api<
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
-      useSWR<PenetrationScoreboardItemModel[], RequestResponse>(
+      useSWR<Blob, any>(
         doFetch ? `/api/admin/pentest/games/${gameId}/scoreboard` : null,
         options,
       ),
@@ -11874,12 +13820,10 @@ export class Api<
      */
     mutatePenetrationAdminGetScoreboard: (
       gameId: number,
-      data?:
-        | PenetrationScoreboardItemModel[]
-        | Promise<PenetrationScoreboardItemModel[]>,
+      data?: Blob | Promise<Blob>,
       options?: MutatorOptions,
     ) =>
-      mutate<PenetrationScoreboardItemModel[]>(
+      mutate<Blob>(
         `/api/admin/pentest/games/${gameId}/scoreboard`,
         data,
         options,
@@ -11897,7 +13841,7 @@ export class Api<
       query?: {
         /**
          * @format int32
-         * @min 0
+         * @min 1
          * @max 100
          * @default 50
          */
@@ -11910,14 +13854,10 @@ export class Api<
       },
       params: RequestParams = {},
     ) =>
-      this.request<
-        ArrayResponseOfPenetrationSubmissionLogModel,
-        RequestResponse
-      >({
+      this.request<Blob, any>({
         path: `/api/admin/pentest/games/${gameId}/submissions`,
         method: "GET",
         query: query,
-        format: "json",
         ...params,
       }),
     /**
@@ -11932,7 +13872,7 @@ export class Api<
       query?: {
         /**
          * @format int32
-         * @min 0
+         * @min 1
          * @max 100
          * @default 50
          */
@@ -11946,7 +13886,7 @@ export class Api<
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
-      useSWR<ArrayResponseOfPenetrationSubmissionLogModel, RequestResponse>(
+      useSWR<Blob, any>(
         doFetch
           ? [`/api/admin/pentest/games/${gameId}/submissions`, query]
           : null,
@@ -11965,7 +13905,7 @@ export class Api<
       query?: {
         /**
          * @format int32
-         * @min 0
+         * @min 1
          * @max 100
          * @default 50
          */
@@ -11976,144 +13916,14 @@ export class Api<
          */
         skip?: number;
       },
-      data?:
-        | ArrayResponseOfPenetrationSubmissionLogModel
-        | Promise<ArrayResponseOfPenetrationSubmissionLogModel>,
+      data?: Blob | Promise<Blob>,
       options?: MutatorOptions,
     ) =>
-      mutate<ArrayResponseOfPenetrationSubmissionLogModel>(
+      mutate<Blob>(
         [`/api/admin/pentest/games/${gameId}/submissions`, query],
         data,
         options,
       ),
-
-    /**
-     * No description
-     *
-     * @tags PenetrationAdmin
-     * @name PenetrationAdminGetTeamAccess
-     * @request GET:/api/admin/pentest/games/{gameId}/teams/{teamId}/access
-     */
-    penetrationAdminGetTeamAccess: (
-      gameId: number,
-      teamId: number,
-      params: RequestParams = {},
-    ) =>
-      this.request<PenetrationAdminAccessModel[], RequestResponse>({
-        path: `/api/admin/pentest/games/${gameId}/teams/${teamId}/access`,
-        method: "GET",
-        format: "json",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags PenetrationAdmin
-     * @name PenetrationAdminGetTeamAccess
-     * @request GET:/api/admin/pentest/games/{gameId}/teams/{teamId}/access
-     */
-    usePenetrationAdminGetTeamAccess: (
-      gameId: number,
-      teamId: number,
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<PenetrationAdminAccessModel[], RequestResponse>(
-        doFetch
-          ? `/api/admin/pentest/games/${gameId}/teams/${teamId}/access`
-          : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags PenetrationAdmin
-     * @name PenetrationAdminGetTeamAccess
-     * @request GET:/api/admin/pentest/games/{gameId}/teams/{teamId}/access
-     */
-    mutatePenetrationAdminGetTeamAccess: (
-      gameId: number,
-      teamId: number,
-      data?:
-        | PenetrationAdminAccessModel[]
-        | Promise<PenetrationAdminAccessModel[]>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<PenetrationAdminAccessModel[]>(
-        `/api/admin/pentest/games/${gameId}/teams/${teamId}/access`,
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags PenetrationAdmin
-     * @name PenetrationAdminGetTeamEnvironments
-     * @request GET:/api/admin/pentest/games/{gameId}/environments
-     */
-    penetrationAdminGetTeamEnvironments: (
-      gameId: number,
-      params: RequestParams = {},
-    ) =>
-      this.request<PenetrationTeamEnvironmentModel[], RequestResponse>({
-        path: `/api/admin/pentest/games/${gameId}/environments`,
-        method: "GET",
-        format: "json",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags PenetrationAdmin
-     * @name PenetrationAdminGetTeamEnvironments
-     * @request GET:/api/admin/pentest/games/{gameId}/environments
-     */
-    usePenetrationAdminGetTeamEnvironments: (
-      gameId: number,
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<PenetrationTeamEnvironmentModel[], RequestResponse>(
-        doFetch ? `/api/admin/pentest/games/${gameId}/environments` : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags PenetrationAdmin
-     * @name PenetrationAdminGetTeamEnvironments
-     * @request GET:/api/admin/pentest/games/{gameId}/environments
-     */
-    mutatePenetrationAdminGetTeamEnvironments: (
-      gameId: number,
-      data?:
-        | PenetrationTeamEnvironmentModel[]
-        | Promise<PenetrationTeamEnvironmentModel[]>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<PenetrationTeamEnvironmentModel[]>(
-        `/api/admin/pentest/games/${gameId}/environments`,
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags PenetrationAdmin
-     * @name PenetrationAdminPublish
-     * @request POST:/api/admin/pentest/games/{gameId}/publish
-     */
-    penetrationAdminPublish: (gameId: number, params: RequestParams = {}) =>
-      this.request<PenetrationConfigModel, RequestResponse>({
-        path: `/api/admin/pentest/games/${gameId}/publish`,
-        method: "POST",
-        format: "json",
-        ...params,
-      }),
 
     /**
      * No description
@@ -12127,10 +13937,9 @@ export class Api<
       teamId: number,
       params: RequestParams = {},
     ) =>
-      this.request<RequestResponse, RequestResponse>({
+      this.request<Blob, any>({
         path: `/api/admin/pentest/games/${gameId}/teams/${teamId}/rebuild`,
         method: "POST",
-        format: "json",
         ...params,
       }),
 
@@ -12138,56 +13947,19 @@ export class Api<
      * No description
      *
      * @tags PenetrationAdmin
-     * @name PenetrationAdminRebuildTeamByRuntimeNode
-     * @request POST:/api/admin/pentest/runtime-nodes/{runtimeNodeId}/rebuild-team
+     * @name PenetrationAdminReplaceObjectives
+     * @request PUT:/api/admin/pentest/games/{gameId}/objectives
      */
-    penetrationAdminRebuildTeamByRuntimeNode: (
-      runtimeNodeId: number,
-      params: RequestParams = {},
-    ) =>
-      this.request<RequestResponse, RequestResponse>({
-        path: `/api/admin/pentest/runtime-nodes/${runtimeNodeId}/rebuild-team`,
-        method: "POST",
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags PenetrationAdmin
-     * @name PenetrationAdminRestartRuntimeNode
-     * @request POST:/api/admin/pentest/runtime-nodes/{runtimeNodeId}/restart
-     */
-    penetrationAdminRestartRuntimeNode: (
-      runtimeNodeId: number,
-      params: RequestParams = {},
-    ) =>
-      this.request<RequestResponse, RequestResponse>({
-        path: `/api/admin/pentest/runtime-nodes/${runtimeNodeId}/restart`,
-        method: "POST",
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags PenetrationAdmin
-     * @name PenetrationAdminSaveConfig
-     * @request PUT:/api/admin/pentest/games/{gameId}
-     */
-    penetrationAdminSaveConfig: (
+    penetrationAdminReplaceObjectives: (
       gameId: number,
-      data: PenetrationConfigModel,
+      data: ReplacePenetrationObjectivesModel,
       params: RequestParams = {},
     ) =>
-      this.request<PenetrationConfigModel, RequestResponse>({
-        path: `/api/admin/pentest/games/${gameId}`,
+      this.request<Blob, any>({
+        path: `/api/admin/pentest/games/${gameId}/objectives`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
-        format: "json",
         ...params,
       }),
 
@@ -12199,35 +13971,102 @@ export class Api<
      * @request POST:/api/admin/pentest/games/{gameId}/stop
      */
     penetrationAdminStop: (gameId: number, params: RequestParams = {}) =>
-      this.request<RequestResponse, RequestResponse>({
+      this.request<Blob, any>({
         path: `/api/admin/pentest/games/${gameId}/stop`,
         method: "POST",
-        format: "json",
+        ...params,
+      }),
+  };
+  penetrationPlayer = {
+    /**
+     * No description
+     *
+     * @tags PenetrationPlayer
+     * @name PenetrationPlayerCreateAccessGrant
+     * @request POST:/api/pentest/games/{gameId}/access-grants
+     */
+    penetrationPlayerCreateAccessGrant: (
+      gameId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/pentest/games/${gameId}/access-grants`,
+        method: "POST",
         ...params,
       }),
 
     /**
      * No description
      *
-     * @tags PenetrationAdmin
-     * @name PenetrationAdminValidate
-     * @request POST:/api/admin/pentest/games/{gameId}/validate
+     * @tags PenetrationPlayer
+     * @name PenetrationPlayerDownloadAccessGrant
+     * @request GET:/api/pentest/games/{gameId}/access-grants/{grantId}/download
      */
-    penetrationAdminValidate: (
+    penetrationPlayerDownloadAccessGrant: (
       gameId: number,
-      data: PenetrationConfigModel,
+      grantId: string,
+      query?: {
+        token?: string;
+      },
       params: RequestParams = {},
     ) =>
-      this.request<PenetrationValidationModel, RequestResponse>({
-        path: `/api/admin/pentest/games/${gameId}/validate`,
-        method: "POST",
-        body: data,
-        type: ContentType.Json,
-        format: "json",
+      this.request<Blob, any>({
+        path: `/api/pentest/games/${gameId}/access-grants/${grantId}/download`,
+        method: "GET",
+        query: query,
         ...params,
       }),
-  };
-  penetrationPlayer = {
+    /**
+     * No description
+     *
+     * @tags PenetrationPlayer
+     * @name PenetrationPlayerDownloadAccessGrant
+     * @request GET:/api/pentest/games/{gameId}/access-grants/{grantId}/download
+     */
+    usePenetrationPlayerDownloadAccessGrant: (
+      gameId: number,
+      grantId: string,
+      query?: {
+        token?: string;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch
+          ? [
+              `/api/pentest/games/${gameId}/access-grants/${grantId}/download`,
+              query,
+            ]
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags PenetrationPlayer
+     * @name PenetrationPlayerDownloadAccessGrant
+     * @request GET:/api/pentest/games/{gameId}/access-grants/{grantId}/download
+     */
+    mutatePenetrationPlayerDownloadAccessGrant: (
+      gameId: number,
+      grantId: string,
+      query?: {
+        token?: string;
+      },
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        [
+          `/api/pentest/games/${gameId}/access-grants/${grantId}/download`,
+          query,
+        ],
+        data,
+        options,
+      ),
+
     /**
      * No description
      *
@@ -12239,10 +14078,9 @@ export class Api<
       gameId: number,
       params: RequestParams = {},
     ) =>
-      this.request<PenetrationScoreboardItemModel[], RequestResponse>({
+      this.request<Blob, any>({
         path: `/api/pentest/games/${gameId}/scoreboard`,
         method: "GET",
-        format: "json",
         ...params,
       }),
     /**
@@ -12257,7 +14095,7 @@ export class Api<
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
-      useSWR<PenetrationScoreboardItemModel[], RequestResponse>(
+      useSWR<Blob, any>(
         doFetch ? `/api/pentest/games/${gameId}/scoreboard` : null,
         options,
       ),
@@ -12271,68 +14109,9 @@ export class Api<
      */
     mutatePenetrationPlayerGetScoreboard: (
       gameId: number,
-      data?:
-        | PenetrationScoreboardItemModel[]
-        | Promise<PenetrationScoreboardItemModel[]>,
+      data?: Blob | Promise<Blob>,
       options?: MutatorOptions,
-    ) =>
-      mutate<PenetrationScoreboardItemModel[]>(
-        `/api/pentest/games/${gameId}/scoreboard`,
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags PenetrationPlayer
-     * @name PenetrationPlayerGetTeamLabVpnConfig
-     * @request GET:/api/pentest/games/{gameId}/teamlab/vpn-config
-     */
-    penetrationPlayerGetTeamLabVpnConfig: (
-      gameId: number,
-      params: RequestParams = {},
-    ) =>
-      this.request<TeamLabClientConfigModel, RequestResponse>({
-        path: `/api/pentest/games/${gameId}/teamlab/vpn-config`,
-        method: "GET",
-        format: "json",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags PenetrationPlayer
-     * @name PenetrationPlayerGetTeamLabVpnConfig
-     * @request GET:/api/pentest/games/{gameId}/teamlab/vpn-config
-     */
-    usePenetrationPlayerGetTeamLabVpnConfig: (
-      gameId: number,
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<TeamLabClientConfigModel, RequestResponse>(
-        doFetch ? `/api/pentest/games/${gameId}/teamlab/vpn-config` : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags PenetrationPlayer
-     * @name PenetrationPlayerGetTeamLabVpnConfig
-     * @request GET:/api/pentest/games/{gameId}/teamlab/vpn-config
-     */
-    mutatePenetrationPlayerGetTeamLabVpnConfig: (
-      gameId: number,
-      data?: TeamLabClientConfigModel | Promise<TeamLabClientConfigModel>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<TeamLabClientConfigModel>(
-        `/api/pentest/games/${gameId}/teamlab/vpn-config`,
-        data,
-        options,
-      ),
+    ) => mutate<Blob>(`/api/pentest/games/${gameId}/scoreboard`, data, options),
 
     /**
      * No description
@@ -12345,10 +14124,9 @@ export class Api<
       gameId: number,
       params: RequestParams = {},
     ) =>
-      this.request<PenetrationWorkspaceModel, RequestResponse>({
+      this.request<Blob, any>({
         path: `/api/pentest/games/${gameId}/workspace`,
         method: "GET",
-        format: "json",
         ...params,
       }),
     /**
@@ -12363,7 +14141,7 @@ export class Api<
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
-      useSWR<PenetrationWorkspaceModel, RequestResponse>(
+      useSWR<Blob, any>(
         doFetch ? `/api/pentest/games/${gameId}/workspace` : null,
         options,
       ),
@@ -12377,14 +14155,9 @@ export class Api<
      */
     mutatePenetrationPlayerGetWorkspace: (
       gameId: number,
-      data?: PenetrationWorkspaceModel | Promise<PenetrationWorkspaceModel>,
+      data?: Blob | Promise<Blob>,
       options?: MutatorOptions,
-    ) =>
-      mutate<PenetrationWorkspaceModel>(
-        `/api/pentest/games/${gameId}/workspace`,
-        data,
-        options,
-      ),
+    ) => mutate<Blob>(`/api/pentest/games/${gameId}/workspace`, data, options),
 
     /**
      * No description
@@ -12394,10 +14167,9 @@ export class Api<
      * @request POST:/api/pentest/games/{gameId}/reset
      */
     penetrationPlayerReset: (gameId: number, params: RequestParams = {}) =>
-      this.request<RequestResponse, RequestResponse>({
+      this.request<Blob, any>({
         path: `/api/pentest/games/${gameId}/reset`,
         method: "POST",
-        format: "json",
         ...params,
       }),
 
@@ -12413,12 +14185,11 @@ export class Api<
       data: PenetrationSubmitModel,
       params: RequestParams = {},
     ) =>
-      this.request<PenetrationSubmitResultModel, RequestResponse>({
+      this.request<Blob, any>({
         path: `/api/pentest/games/${gameId}/submit`,
         method: "POST",
         body: data,
         type: ContentType.Json,
-        format: "json",
         ...params,
       }),
   };
@@ -13178,378 +14949,6 @@ export class Api<
         method: "POST",
         body: data,
         type: ContentType.Json,
-        ...params,
-      }),
-  };
-  teamLabAdmin = {
-    /**
-     * No description
-     *
-     * @tags TeamLabAdmin
-     * @name TeamLabAdminCaptures
-     * @request GET:/api/admin/teamlab/games/{gameId}/teams/{teamId}/captures
-     */
-    teamLabAdminCaptures: (
-      gameId: number,
-      teamId: number,
-      params: RequestParams = {},
-    ) =>
-      this.request<Blob, any>({
-        path: `/api/admin/teamlab/games/${gameId}/teams/${teamId}/captures`,
-        method: "GET",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags TeamLabAdmin
-     * @name TeamLabAdminCaptures
-     * @request GET:/api/admin/teamlab/games/{gameId}/teams/{teamId}/captures
-     */
-    useTeamLabAdminCaptures: (
-      gameId: number,
-      teamId: number,
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<Blob, any>(
-        doFetch
-          ? `/api/admin/teamlab/games/${gameId}/teams/${teamId}/captures`
-          : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags TeamLabAdmin
-     * @name TeamLabAdminCaptures
-     * @request GET:/api/admin/teamlab/games/{gameId}/teams/{teamId}/captures
-     */
-    mutateTeamLabAdminCaptures: (
-      gameId: number,
-      teamId: number,
-      data?: Blob | Promise<Blob>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<Blob>(
-        `/api/admin/teamlab/games/${gameId}/teams/${teamId}/captures`,
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags TeamLabAdmin
-     * @name TeamLabAdminDeploy
-     * @request POST:/api/admin/teamlab/games/{gameId}/teams/{teamId}/deploy
-     */
-    teamLabAdminDeploy: (
-      gameId: number,
-      teamId: number,
-      params: RequestParams = {},
-    ) =>
-      this.request<Blob, any>({
-        path: `/api/admin/teamlab/games/${gameId}/teams/${teamId}/deploy`,
-        method: "POST",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags TeamLabAdmin
-     * @name TeamLabAdminDestroy
-     * @request POST:/api/admin/teamlab/games/{gameId}/teams/{teamId}/destroy
-     */
-    teamLabAdminDestroy: (
-      gameId: number,
-      teamId: number,
-      params: RequestParams = {},
-    ) =>
-      this.request<Blob, any>({
-        path: `/api/admin/teamlab/games/${gameId}/teams/${teamId}/destroy`,
-        method: "POST",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags TeamLabAdmin
-     * @name TeamLabAdminDownloadCapture
-     * @request GET:/api/admin/teamlab/games/{gameId}/teams/{teamId}/captures/{jobId}/download
-     */
-    teamLabAdminDownloadCapture: (
-      gameId: number,
-      teamId: number,
-      jobId: number,
-      params: RequestParams = {},
-    ) =>
-      this.request<Blob, any>({
-        path: `/api/admin/teamlab/games/${gameId}/teams/${teamId}/captures/${jobId}/download`,
-        method: "GET",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags TeamLabAdmin
-     * @name TeamLabAdminDownloadCapture
-     * @request GET:/api/admin/teamlab/games/{gameId}/teams/{teamId}/captures/{jobId}/download
-     */
-    useTeamLabAdminDownloadCapture: (
-      gameId: number,
-      teamId: number,
-      jobId: number,
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<Blob, any>(
-        doFetch
-          ? `/api/admin/teamlab/games/${gameId}/teams/${teamId}/captures/${jobId}/download`
-          : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags TeamLabAdmin
-     * @name TeamLabAdminDownloadCapture
-     * @request GET:/api/admin/teamlab/games/{gameId}/teams/{teamId}/captures/{jobId}/download
-     */
-    mutateTeamLabAdminDownloadCapture: (
-      gameId: number,
-      teamId: number,
-      jobId: number,
-      data?: Blob | Promise<Blob>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<Blob>(
-        `/api/admin/teamlab/games/${gameId}/teams/${teamId}/captures/${jobId}/download`,
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags TeamLabAdmin
-     * @name TeamLabAdminEvents
-     * @request GET:/api/admin/teamlab/games/{gameId}/teams/{teamId}/events
-     */
-    teamLabAdminEvents: (
-      gameId: number,
-      teamId: number,
-      params: RequestParams = {},
-    ) =>
-      this.request<Blob, any>({
-        path: `/api/admin/teamlab/games/${gameId}/teams/${teamId}/events`,
-        method: "GET",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags TeamLabAdmin
-     * @name TeamLabAdminEvents
-     * @request GET:/api/admin/teamlab/games/{gameId}/teams/{teamId}/events
-     */
-    useTeamLabAdminEvents: (
-      gameId: number,
-      teamId: number,
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<Blob, any>(
-        doFetch
-          ? `/api/admin/teamlab/games/${gameId}/teams/${teamId}/events`
-          : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags TeamLabAdmin
-     * @name TeamLabAdminEvents
-     * @request GET:/api/admin/teamlab/games/{gameId}/teams/{teamId}/events
-     */
-    mutateTeamLabAdminEvents: (
-      gameId: number,
-      teamId: number,
-      data?: Blob | Promise<Blob>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<Blob>(
-        `/api/admin/teamlab/games/${gameId}/teams/${teamId}/events`,
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags TeamLabAdmin
-     * @name TeamLabAdminFlows
-     * @request GET:/api/admin/teamlab/games/{gameId}/teams/{teamId}/flows
-     */
-    teamLabAdminFlows: (
-      gameId: number,
-      teamId: number,
-      query?: {
-        /** @format int32 */
-        count?: number;
-      },
-      params: RequestParams = {},
-    ) =>
-      this.request<Blob, any>({
-        path: `/api/admin/teamlab/games/${gameId}/teams/${teamId}/flows`,
-        method: "GET",
-        query: query,
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags TeamLabAdmin
-     * @name TeamLabAdminFlows
-     * @request GET:/api/admin/teamlab/games/{gameId}/teams/{teamId}/flows
-     */
-    useTeamLabAdminFlows: (
-      gameId: number,
-      teamId: number,
-      query?: {
-        /** @format int32 */
-        count?: number;
-      },
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<Blob, any>(
-        doFetch
-          ? [`/api/admin/teamlab/games/${gameId}/teams/${teamId}/flows`, query]
-          : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags TeamLabAdmin
-     * @name TeamLabAdminFlows
-     * @request GET:/api/admin/teamlab/games/{gameId}/teams/{teamId}/flows
-     */
-    mutateTeamLabAdminFlows: (
-      gameId: number,
-      teamId: number,
-      query?: {
-        /** @format int32 */
-        count?: number;
-      },
-      data?: Blob | Promise<Blob>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<Blob>(
-        [`/api/admin/teamlab/games/${gameId}/teams/${teamId}/flows`, query],
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags TeamLabAdmin
-     * @name TeamLabAdminPlan
-     * @request POST:/api/admin/teamlab/games/{gameId}/teams/{teamId}/plan
-     */
-    teamLabAdminPlan: (
-      gameId: number,
-      teamId: number,
-      params: RequestParams = {},
-    ) =>
-      this.request<Blob, any>({
-        path: `/api/admin/teamlab/games/${gameId}/teams/${teamId}/plan`,
-        method: "POST",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags TeamLabAdmin
-     * @name TeamLabAdminRefreshCaptureStatus
-     * @request POST:/api/admin/teamlab/games/{gameId}/teams/{teamId}/captures/{jobId}/status
-     */
-    teamLabAdminRefreshCaptureStatus: (
-      gameId: number,
-      teamId: number,
-      jobId: number,
-      params: RequestParams = {},
-    ) =>
-      this.request<Blob, any>({
-        path: `/api/admin/teamlab/games/${gameId}/teams/${teamId}/captures/${jobId}/status`,
-        method: "POST",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags TeamLabAdmin
-     * @name TeamLabAdminRefreshFlows
-     * @request POST:/api/admin/teamlab/games/{gameId}/teams/{teamId}/flows/refresh
-     */
-    teamLabAdminRefreshFlows: (
-      gameId: number,
-      teamId: number,
-      params: RequestParams = {},
-    ) =>
-      this.request<Blob, any>({
-        path: `/api/admin/teamlab/games/${gameId}/teams/${teamId}/flows/refresh`,
-        method: "POST",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags TeamLabAdmin
-     * @name TeamLabAdminStartCapture
-     * @request POST:/api/admin/teamlab/games/{gameId}/teams/{teamId}/captures/start
-     */
-    teamLabAdminStartCapture: (
-      gameId: number,
-      teamId: number,
-      data: TeamLabCaptureStartModel,
-      params: RequestParams = {},
-    ) =>
-      this.request<Blob, any>({
-        path: `/api/admin/teamlab/games/${gameId}/teams/${teamId}/captures/start`,
-        method: "POST",
-        body: data,
-        type: ContentType.Json,
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags TeamLabAdmin
-     * @name TeamLabAdminStopCapture
-     * @request POST:/api/admin/teamlab/games/{gameId}/teams/{teamId}/captures/{jobId}/stop
-     */
-    teamLabAdminStopCapture: (
-      gameId: number,
-      teamId: number,
-      jobId: number,
-      params: RequestParams = {},
-    ) =>
-      this.request<Blob, any>({
-        path: `/api/admin/teamlab/games/${gameId}/teams/${teamId}/captures/${jobId}/stop`,
-        method: "POST",
         ...params,
       }),
   };
@@ -15341,8 +16740,6 @@ export class Api<
         Name?: string | null;
         FileName?: string | null;
         name?: string | null;
-        repository?: string | null;
-        tag?: string | null;
         sourceImage?: string | null;
         osType?: OSType;
       },
@@ -16019,6 +17416,258 @@ export class Api<
         body: data,
         type: ContentType.Json,
         format: "json",
+        ...params,
+      }),
+  };
+  scopedApiProbe = {
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeConflictProblem
+     * @request GET:/api/open/v1/test/problems/conflict
+     */
+    scopedApiProbeConflictProblem: (params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/test/problems/conflict`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeConflictProblem
+     * @request GET:/api/open/v1/test/problems/conflict
+     */
+    useScopedApiProbeConflictProblem: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? `/api/open/v1/test/problems/conflict` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeConflictProblem
+     * @request GET:/api/open/v1/test/problems/conflict
+     */
+    mutateScopedApiProbeConflictProblem: (
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) => mutate<Blob>(`/api/open/v1/test/problems/conflict`, data, options),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeExternalWrite
+     * @request POST:/api/open/v1/test/images-write
+     */
+    scopedApiProbeExternalWrite: (params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/test/images-write`,
+        method: "POST",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeRateLimit
+     * @request GET:/api/open/v1/test/rate-limit
+     */
+    scopedApiProbeRateLimit: (params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/test/rate-limit`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeRateLimit
+     * @request GET:/api/open/v1/test/rate-limit
+     */
+    useScopedApiProbeRateLimit: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? `/api/open/v1/test/rate-limit` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeRateLimit
+     * @request GET:/api/open/v1/test/rate-limit
+     */
+    mutateScopedApiProbeRateLimit: (
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) => mutate<Blob>(`/api/open/v1/test/rate-limit`, data, options),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeRead
+     * @request GET:/test/scopes/images-read
+     */
+    scopedApiProbeRead: (params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/test/scopes/images-read`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeRead
+     * @request GET:/test/scopes/images-read
+     */
+    useScopedApiProbeRead: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(doFetch ? `/test/scopes/images-read` : null, options),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeRead
+     * @request GET:/test/scopes/images-read
+     */
+    mutateScopedApiProbeRead: (
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) => mutate<Blob>(`/test/scopes/images-read`, data, options),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeResource
+     * @request GET:/test/resources/{resourceId}
+     */
+    scopedApiProbeResource: (resourceId: string, params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/test/resources/${resourceId}`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeResource
+     * @request GET:/test/resources/{resourceId}
+     */
+    useScopedApiProbeResource: (
+      resourceId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? `/test/resources/${resourceId}` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeResource
+     * @request GET:/test/resources/{resourceId}
+     */
+    mutateScopedApiProbeResource: (
+      resourceId: string,
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) => mutate<Blob>(`/test/resources/${resourceId}`, data, options),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeUnknown
+     * @request GET:/api/open/v1/test/problems/unknown
+     */
+    scopedApiProbeUnknown: (params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/test/problems/unknown`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeUnknown
+     * @request GET:/api/open/v1/test/problems/unknown
+     */
+    useScopedApiProbeUnknown: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? `/api/open/v1/test/problems/unknown` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeUnknown
+     * @request GET:/api/open/v1/test/problems/unknown
+     */
+    mutateScopedApiProbeUnknown: (
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) => mutate<Blob>(`/api/open/v1/test/problems/unknown`, data, options),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeValidateModel
+     * @request POST:/api/open/v1/test/model-validation
+     */
+    scopedApiProbeValidateModel: (
+      data: RequiredProbeModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/test/model-validation`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeWrite
+     * @request POST:/test/scopes/images-write
+     */
+    scopedApiProbeWrite: (params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/test/scopes/images-write`,
+        method: "POST",
         ...params,
       }),
   };

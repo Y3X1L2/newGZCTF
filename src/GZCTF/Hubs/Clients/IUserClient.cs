@@ -1,4 +1,4 @@
-using GZCTF.Models.Request.Game;
+using GZCTF.Modules.Penetration.Contracts;
 
 namespace GZCTF.Hubs.Clients;
 

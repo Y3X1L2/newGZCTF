@@ -35,7 +35,7 @@ public sealed class TeamLabRuntimeNetworkFoundationEntityConfiguration : IEntity
 {
     public void Configure(EntityTypeBuilder<TeamLabRuntimeNetwork> builder)
     {
-        builder.HasOne<TeamLabNetworkLease>()
+        builder.HasOne(item => item.NetworkLease)
             .WithOne()
             .HasForeignKey<TeamLabRuntimeNetwork>(item => item.NetworkLeaseId)
             .OnDelete(DeleteBehavior.Restrict);

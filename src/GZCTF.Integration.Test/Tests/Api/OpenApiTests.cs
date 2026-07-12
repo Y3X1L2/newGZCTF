@@ -26,6 +26,11 @@ public class OpenApiTests(GZCTFApplicationFactory factory, ITestOutputHelper out
         response.EnsureSuccessStatusCode();
 
         var content = await response.Content.ReadAsStringAsync();
+        if (Environment.GetEnvironmentVariable("OPENAPI_MAIN_CURRENT_PATH") is { Length: > 0 } outputPath)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
+            await File.WriteAllTextAsync(outputPath, content);
+        }
         output.WriteLine($"Response length: {content.Length} bytes");
 
         // Assert - should be valid JSON

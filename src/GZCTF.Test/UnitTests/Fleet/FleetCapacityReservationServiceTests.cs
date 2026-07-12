@@ -189,10 +189,7 @@ public class FleetCapacityReservationServiceTests
             reservedContainers: 1, reservedVms: 1);
         var runtime = new TeamLabRuntime
         {
-            GameId = 7,
-            TeamId = 11,
-            Status = TeamLabRuntimeStatus.Probing,
-            WorkerNodeId = node.Id
+            Status = TeamLabRuntimeStatus.Probing
         };
         context.TeamLabRuntimes.Add(runtime);
         await context.SaveChangesAsync();

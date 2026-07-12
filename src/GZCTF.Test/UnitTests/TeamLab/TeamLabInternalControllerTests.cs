@@ -26,7 +26,7 @@ public class TeamLabInternalControllerTests
     [Fact]
     public void BuildTeamLabUdpMappings_ReturnsOnlyOpenRunningMappingsWithSyncState()
     {
-        var workerNodeId = Guid.Parse("02ec0080-77ef-4030-b075-4bce445ea2f3");
+        var firstRuntimeId = Guid.Parse("01900000-0000-7000-8000-000000000007");
         var mappings = new List<TeamLabPublicUdpMapping>
         {
             new()
@@ -40,9 +40,7 @@ public class TeamLabInternalControllerTests
                 Runtime = new TeamLabRuntime
                 {
                     Id = 7,
-                    GameId = 32,
-                    TeamId = 33,
-                    WorkerNodeId = workerNodeId,
+                    PublicId = firstRuntimeId,
                     Status = TeamLabRuntimeStatus.Running,
                     IsOpenToPlayers = true
                 }
@@ -58,9 +56,7 @@ public class TeamLabInternalControllerTests
                 Runtime = new TeamLabRuntime
                 {
                     Id = 8,
-                    GameId = 32,
-                    TeamId = 34,
-                    WorkerNodeId = workerNodeId,
+                    PublicId = Guid.Parse("01900000-0000-7000-8000-000000000008"),
                     Status = TeamLabRuntimeStatus.Running,
                     IsOpenToPlayers = true
                 }
@@ -76,9 +72,7 @@ public class TeamLabInternalControllerTests
                 Runtime = new TeamLabRuntime
                 {
                     Id = 9,
-                    GameId = 32,
-                    TeamId = 35,
-                    WorkerNodeId = workerNodeId,
+                    PublicId = Guid.Parse("01900000-0000-7000-8000-000000000009"),
                     Status = TeamLabRuntimeStatus.Scheduled,
                     IsOpenToPlayers = false
                 }
@@ -93,10 +87,7 @@ public class TeamLabInternalControllerTests
         Assert.Equal(32007, item.PublicUdpPort);
         Assert.Equal("10.24.0.27", item.WorkerTunnelIp);
         Assert.Equal(42007, item.WorkerWireGuardPort);
-        Assert.Equal(7, item.RuntimeId);
-        Assert.Equal(32, item.GameId);
-        Assert.Equal(33, item.TeamId);
-        Assert.Equal(workerNodeId, item.WorkerNodeId);
+        Assert.Equal(firstRuntimeId, item.RuntimeId);
         Assert.Equal(3, item.RuleVersion);
         Assert.True(item.IsSynced);
 

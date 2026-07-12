@@ -1,12 +1,11 @@
 using System.ComponentModel.DataAnnotations;
 using System.Net.Mime;
 using GZCTF.Middlewares;
-using GZCTF.Models.Request.Game;
+using GZCTF.Modules.Penetration.Application;
+using GZCTF.Modules.Penetration.Contracts;
 using GZCTF.Repositories.Interface;
-using GZCTF.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace GZCTF.Controllers;
 
@@ -14,267 +13,121 @@ namespace GZCTF.Controllers;
 [ApiController]
 [Route("api/admin/pentest")]
 [Produces(MediaTypeNames.Application.Json)]
-[ProducesResponseType(typeof(RequestResponse), StatusCodes.Status400BadRequest)]
-[ProducesResponseType(typeof(RequestResponse), StatusCodes.Status401Unauthorized)]
-[ProducesResponseType(typeof(RequestResponse), StatusCodes.Status403Forbidden)]
-public class PenetrationAdminController(
-    IGameRepository gameRepository,
-    UserManager<UserInfo> userManager,
-    PenetrationService penetrationService) : ControllerBase
+public sealed class PenetrationAdminController(
+    IGameRepository games,
+    UserManager<UserInfo> users,
+    PenetrationTeamLabAdapter adapter,
+    PenetrationObjectiveService objectives) : ControllerBase
 {
-    [HttpGet("games/{gameId:int}")]
-    [ProducesResponseType(typeof(PenetrationConfigModel), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetConfig([FromRoute] int gameId, CancellationToken token)
+    [HttpGet("games/{gameId:int}/binding")]
+    public async Task<IActionResult> GetBinding(int gameId, CancellationToken cancellationToken)
     {
-        var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
-        if (validation.Result is not null)
-            return validation.Result;
-
-        return Ok(await penetrationService.GetOrCreateConfig(gameId, token));
+        var error = await ValidateGameAsync(gameId, cancellationToken);
+        if (error is not null) return error;
+        var binding = await adapter.GetBindingAsync(gameId, cancellationToken);
+        return binding is null ? NotFound(new RequestResponse("The game has no TeamLab topology binding.")) : Ok(binding);
     }
 
-    [HttpPut("games/{gameId:int}")]
-    [ProducesResponseType(typeof(PenetrationConfigModel), StatusCodes.Status200OK)]
-    public async Task<IActionResult> SaveConfig([FromRoute] int gameId,
-        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] PenetrationConfigModel? model,
-        CancellationToken token)
+    [HttpPut("games/{gameId:int}/binding")]
+    public async Task<IActionResult> Bind(int gameId, BindPenetrationTopologyModel model, CancellationToken cancellationToken)
     {
-        var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
-        if (validation.Result is not null)
-            return validation.Result;
-
-        if (model is null)
-            return BadRequest(new RequestResponse("渗透编排配置不能为空。"));
-
-        try
-        {
-            return Ok(await penetrationService.SaveConfig(gameId, model, token));
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new RequestResponse(ex.Message));
-        }
+        var error = await ValidateGameAsync(gameId, cancellationToken);
+        if (error is not null) return error;
+        return Ok(await adapter.BindAsync(gameId, model.TopologyId, cancellationToken));
     }
 
-    [HttpPost("games/{gameId:int}/validate")]
-    [ProducesResponseType(typeof(PenetrationValidationModel), StatusCodes.Status200OK)]
-    public async Task<IActionResult> Validate([FromRoute] int gameId,
-        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] PenetrationConfigModel? model,
-        CancellationToken token)
+    [HttpPut("games/{gameId:int}/objectives")]
+    public async Task<IActionResult> ReplaceObjectives(
+        int gameId,
+        ReplacePenetrationObjectivesModel model,
+        CancellationToken cancellationToken)
     {
-        var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
-        if (validation.Result is not null)
-            return validation.Result;
-
-        return Ok(model is null
-            ? await penetrationService.Validate(gameId, token)
-            : await penetrationService.ValidateModel(gameId, model, token));
+        var error = await ValidateGameAsync(gameId, cancellationToken);
+        if (error is not null) return error;
+        return Ok(await objectives.ReplaceAsync(gameId, model, cancellationToken));
     }
 
-    [HttpPost("games/{gameId:int}/plan")]
-    [ProducesResponseType(typeof(PenetrationPlanModel), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetPlan([FromRoute] int gameId,
-        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] PenetrationConfigModel? model,
-        CancellationToken token)
+    [HttpPost("games/{gameId:int}/releases/{releaseId:guid}/activate")]
+    public async Task<IActionResult> ActivateRelease(int gameId, Guid releaseId, CancellationToken cancellationToken)
     {
-        var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
-        if (validation.Result is not null)
-            return validation.Result;
-
-        return Ok(model is null
-            ? await penetrationService.GetPlan(gameId, token)
-            : await penetrationService.GetPlan(gameId, model, token));
-    }
-
-    [HttpPost("games/{gameId:int}/publish")]
-    [ProducesResponseType(typeof(PenetrationConfigModel), StatusCodes.Status200OK)]
-    public async Task<IActionResult> Publish([FromRoute] int gameId, CancellationToken token)
-    {
-        var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
-        if (validation.Result is not null)
-            return validation.Result;
-
-        try
-        {
-            return Ok(await penetrationService.Publish(gameId, token));
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new RequestResponse(ex.Message));
-        }
+        var error = await ValidateGameAsync(gameId, cancellationToken);
+        if (error is not null) return error;
+        return Ok(await adapter.ActivateReleaseAsync(gameId, releaseId, cancellationToken));
     }
 
     [HttpPost("games/{gameId:int}/deploy")]
-    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status200OK)]
-    public async Task<IActionResult> Deploy([FromRoute] int gameId, [FromQuery] bool force = false,
-        CancellationToken token = default)
+    public async Task<IActionResult> Deploy(int gameId, CancellationToken cancellationToken)
     {
-        var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
-        if (validation.Result is not null)
-            return validation.Result;
-
-        var actor = await userManager.GetUserAsync(User);
-        var result = await penetrationService.DeployGame(gameId, force, token, actor?.Id);
-        return result.Success ? Ok(new RequestResponse(result.Message, StatusCodes.Status200OK))
-            : BadRequest(new RequestResponse(result.Message));
-    }
-
-    [HttpPost("games/{gameId:int}/deploy/cancel")]
-    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status200OK)]
-    public async Task<IActionResult> CancelDeploy([FromRoute] int gameId, CancellationToken token)
-    {
-        var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
-        if (validation.Result is not null)
-            return validation.Result;
-
-        var result = await penetrationService.CancelDeployment(gameId, token);
-        return result.Success ? Ok(new RequestResponse(result.Message, StatusCodes.Status200OK))
-            : BadRequest(new RequestResponse(result.Message));
+        var error = await ValidateGameAsync(gameId, cancellationToken);
+        if (error is not null) return error;
+        var actor = await users.GetUserAsync(User);
+        if (actor is null) return Unauthorized(new RequestResponse("Login required."));
+        var result = await adapter.DeployGameAsync(gameId, actor.Id, cancellationToken);
+        return Accepted(new { message = $"Queued {result.Created} team runtime(s); reused {result.Reused}." });
     }
 
     [HttpPost("games/{gameId:int}/stop")]
-    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status200OK)]
-    public async Task<IActionResult> Stop([FromRoute] int gameId, CancellationToken token)
+    public async Task<IActionResult> Stop(int gameId, CancellationToken cancellationToken)
     {
-        var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
-        if (validation.Result is not null)
-            return validation.Result;
-
-        var actor = await userManager.GetUserAsync(User);
-        var result = await penetrationService.StopGame(gameId, token, actor?.Id);
-        return result.Success ? Ok(new RequestResponse(result.Message, StatusCodes.Status200OK))
-            : BadRequest(new RequestResponse(result.Message));
+        var error = await ValidateGameAsync(gameId, cancellationToken);
+        if (error is not null) return error;
+        await adapter.DestroyGameAsync(gameId, cancellationToken);
+        return Ok(new RequestResponse("All TeamLab runtimes were destroyed.", StatusCodes.Status200OK));
     }
 
     [HttpPost("games/{gameId:int}/teams/{teamId:int}/rebuild")]
-    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status200OK)]
-    public async Task<IActionResult> RebuildTeam([FromRoute] int gameId, [FromRoute] int teamId,
-        CancellationToken token)
+    public async Task<IActionResult> RebuildTeam(int gameId, int teamId, CancellationToken cancellationToken)
     {
-        var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
-        if (validation.Result is not null)
-            return validation.Result;
-
-        var actor = await userManager.GetUserAsync(User);
-        var result = await penetrationService.RebuildTeam(gameId, teamId, true, actor?.Id, token);
-        return result.Success ? Ok(new RequestResponse(result.Message, StatusCodes.Status200OK))
-            : BadRequest(new RequestResponse(result.Message));
+        var error = await ValidateGameAsync(gameId, cancellationToken);
+        if (error is not null) return error;
+        var actor = await users.GetUserAsync(User);
+        if (actor is null) return Unauthorized(new RequestResponse("Login required."));
+        var result = await adapter.ResetTeamAsync(gameId, teamId, actor.Id, true, cancellationToken);
+        return Accepted(new { runtimeId = result.RuntimePublicId, result.Reused });
     }
 
     [HttpPost("games/{gameId:int}/teams/{teamId:int}/cleanup")]
-    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status200OK)]
-    public async Task<IActionResult> CleanupTeam([FromRoute] int gameId, [FromRoute] int teamId,
-        CancellationToken token)
+    public async Task<IActionResult> CleanupTeam(int gameId, int teamId, CancellationToken cancellationToken)
     {
-        var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
-        if (validation.Result is not null)
-            return validation.Result;
-
-        var actor = await userManager.GetUserAsync(User);
-        var result = await penetrationService.CleanupTeamEnvironment(gameId, teamId, token, actor?.Id);
-        return result.Success ? Ok(new RequestResponse(result.Message, StatusCodes.Status200OK))
-            : BadRequest(new RequestResponse(result.Message));
-    }
-
-    [HttpGet("games/{gameId:int}/teams/{teamId:int}/access")]
-    [ProducesResponseType(typeof(PenetrationAdminAccessModel[]), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetTeamAccess([FromRoute] int gameId, [FromRoute] int teamId,
-        CancellationToken token)
-    {
-        var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
-        if (validation.Result is not null)
-            return validation.Result;
-
-        return Ok(await penetrationService.GetAdminAccess(gameId, teamId, token));
-    }
-
-    [HttpGet("games/{gameId:int}/access")]
-    [ProducesResponseType(typeof(PenetrationAdminAccessModel[]), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAccess([FromRoute] int gameId, CancellationToken token)
-    {
-        var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
-        if (validation.Result is not null)
-            return validation.Result;
-
-        return Ok(await penetrationService.GetAdminAccess(gameId, 0, token));
-    }
-
-    [HttpPost("runtime-nodes/{runtimeNodeId:int}/restart")]
-    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status200OK)]
-    public async Task<IActionResult> RestartRuntimeNode([FromRoute] int runtimeNodeId, CancellationToken token)
-    {
-        var result = await penetrationService.RestartRuntimeNode(runtimeNodeId, token);
-        return result.Success ? Ok(new RequestResponse(result.Message, StatusCodes.Status200OK))
-            : BadRequest(new RequestResponse(result.Message));
-    }
-
-    [HttpPost("runtime-nodes/{runtimeNodeId:int}/rebuild-team")]
-    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status200OK)]
-    public async Task<IActionResult> RebuildTeamByRuntimeNode([FromRoute] int runtimeNodeId, CancellationToken token)
-    {
-        var result = await penetrationService.RebuildTeamByRuntimeNode(runtimeNodeId, token);
-        return result.Success ? Ok(new RequestResponse(result.Message, StatusCodes.Status200OK))
-            : BadRequest(new RequestResponse(result.Message));
+        var error = await ValidateGameAsync(gameId, cancellationToken);
+        if (error is not null) return error;
+        await adapter.DestroyTeamAsync(gameId, teamId, cancellationToken);
+        return Ok(new RequestResponse("The TeamLab runtime was destroyed.", StatusCodes.Status200OK));
     }
 
     [HttpGet("games/{gameId:int}/scoreboard")]
-    [ProducesResponseType(typeof(PenetrationScoreboardItemModel[]), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetScoreboard([FromRoute] int gameId, CancellationToken token)
+    public async Task<IActionResult> GetScoreboard(int gameId, CancellationToken cancellationToken)
     {
-        var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
-        if (validation.Result is not null)
-            return validation.Result;
-
-        return Ok(await penetrationService.GetScoreboard(gameId, token));
+        var error = await ValidateGameAsync(gameId, cancellationToken);
+        return error ?? Ok(await objectives.GetScoreboardAsync(gameId, cancellationToken));
     }
 
-    [HttpGet("games/{gameId:int}/environments")]
-    [ProducesResponseType(typeof(PenetrationTeamEnvironmentModel[]), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetTeamEnvironments([FromRoute] int gameId, CancellationToken token)
+    [HttpGet("games/{gameId:int}/runtimes")]
+    public async Task<IActionResult> GetRuntimes(int gameId, CancellationToken cancellationToken)
     {
-        var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
-        if (validation.Result is not null)
-            return validation.Result;
-
-        return Ok(await penetrationService.GetTeamEnvironments(gameId, token));
-    }
-
-    [HttpGet("games/{gameId:int}/deployment-events")]
-    [ProducesResponseType(typeof(ArrayResponse<PenetrationDeploymentEventModel>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetDeploymentEvents([FromRoute] int gameId,
-        [FromQuery][Range(1, 200)] int count = 50, [FromQuery] int skip = 0,
-        [FromQuery] int? environmentId = null, CancellationToken token = default)
-    {
-        var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
-        if (validation.Result is not null)
-            return validation.Result;
-
-        return Ok(await penetrationService.GetDeploymentEvents(gameId, count, skip, environmentId, token));
+        var error = await ValidateGameAsync(gameId, cancellationToken);
+        return error ?? Ok(await adapter.ListRuntimesAsync(gameId, cancellationToken));
     }
 
     [HttpGet("games/{gameId:int}/submissions")]
-    [ProducesResponseType(typeof(ArrayResponse<PenetrationSubmissionLogModel>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetSubmissions([FromRoute] int gameId,
-        [FromQuery][Range(0, 100)] int count = 50, [FromQuery] int skip = 0,
-        CancellationToken token = default)
+    public async Task<IActionResult> GetSubmissions(
+        int gameId,
+        [FromQuery, Range(1, 100)] int count = 50,
+        [FromQuery] int skip = 0,
+        CancellationToken cancellationToken = default)
     {
-        var validation = await ValidatePentestGame(gameId, allowMixed: true, token);
-        if (validation.Result is not null)
-            return validation.Result;
-
-        return Ok(await penetrationService.GetSubmissionLogs(gameId, count, skip, token));
+        var error = await ValidateGameAsync(gameId, cancellationToken);
+        return error ?? Ok(await objectives.GetSubmissionLogsAsync(gameId, count, skip, cancellationToken));
     }
 
-    private async Task<(Game? Game, IActionResult? Result)> ValidatePentestGame(int gameId, bool allowMixed,
-        CancellationToken token)
+    private async Task<IActionResult?> ValidateGameAsync(int gameId, CancellationToken cancellationToken)
     {
-        var game = await gameRepository.GetGameById(gameId, token);
-        if (game is null)
-            return (null, NotFound(new RequestResponse("Game not found.", StatusCodes.Status404NotFound)));
-
-        if (game.GameType != GameType.Penetration && !(allowMixed && game.GameType == GameType.Mixed))
-            return (null, BadRequest(new RequestResponse("This game does not support penetration topology.")));
-
-        return (game, null);
+        var game = await games.GetGameById(gameId, cancellationToken);
+        if (game is null) return NotFound(new RequestResponse("Game not found."));
+        if (game.GameType is not GameType.Penetration and not GameType.Mixed)
+            return BadRequest(new RequestResponse("This game does not support penetration objectives."));
+        return null;
     }
 }
+
+public sealed record BindPenetrationTopologyModel(Guid TopologyId);

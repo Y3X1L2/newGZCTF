@@ -508,8 +508,8 @@ public class GameController(
             .Select(s => new
             {
                 Submission = s,
-                NodeName = s.ScoreItem.Node.Name,
-                ItemTitle = s.ScoreItem.Title
+                NodeName = s.Objective.TopologyAssetKey,
+                ItemTitle = s.Objective.Title
             })
             .ToArrayAsync(token);
 

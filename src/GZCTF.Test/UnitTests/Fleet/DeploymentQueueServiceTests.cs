@@ -47,13 +47,11 @@ public class DeploymentQueueTicketTests
     public void ActiveIdentity_IsStableForTeamLabRuntime()
     {
         var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(
-            gameId: 7,
-            teamId: 3,
             runtimeId: 18,
             dockerSlots: 4,
             vmSlots: 2));
 
-        Assert.Equal("teamlab-runtime:7:3:18", ticket.ActiveIdentity);
+        Assert.Equal("teamlab-runtime:18", ticket.ActiveIdentity);
         Assert.Equal(4, ticket.DockerSlots);
         Assert.Equal(2, ticket.VmSlots);
     }
@@ -145,8 +143,6 @@ public class DeploymentQueueServiceTests
         var node = SeedNode(context, currentContainers: 2, currentVms: 1,
             reservedContainers: 2, reservedVms: 1);
         var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(
-            gameId: 1,
-            teamId: 2,
             runtimeId: 3,
             dockerSlots: 2,
             vmSlots: 1));
@@ -350,15 +346,24 @@ public class DeploymentQueueManagerTests
         var runtime = new TeamLabRuntime
         {
             Id = 12,
-            GameId = 5,
-            TeamId = 7,
-            WorkerNodeId = plannedNode.Id,
-            Status = TeamLabRuntimeStatus.Scheduled
+            EntryShardId = 1201,
+            Status = TeamLabRuntimeStatus.Scheduled,
+            Shards =
+            [
+                new TeamLabRuntimeShard
+                {
+                    Id = 1201,
+                    WorkerNodeId = plannedNode.Id,
+                    Assets =
+                    [
+                        new TeamLabRuntimeAsset { Kind = TeamLabResourceKind.Docker },
+                        new TeamLabRuntimeAsset { Kind = TeamLabResourceKind.Docker }
+                    ]
+                }
+            ]
         };
         context.TeamLabRuntimes.Add(runtime);
         var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(
-            gameId: 5,
-            teamId: 7,
             runtimeId: runtime.Id,
             dockerSlots: 2,
             vmSlots: 0));
@@ -387,14 +392,13 @@ public class DeploymentQueueManagerTests
         var runtime = new TeamLabRuntime
         {
             Id = 21,
-            GameId = 5,
-            TeamId = 7,
-            WorkerNodeId = primaryNode.Id,
+            EntryShardId = 2101,
             Status = TeamLabRuntimeStatus.Scheduled,
             Shards =
             [
                 new TeamLabRuntimeShard
                 {
+                    Id = 2101,
                     WorkerNodeId = primaryNode.Id,
                     Assets =
                     [
@@ -423,8 +427,6 @@ public class DeploymentQueueManagerTests
         };
         context.TeamLabRuntimes.Add(runtime);
         var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(
-            gameId: 5,
-            teamId: 7,
             runtimeId: runtime.Id,
             dockerSlots: 2,
             vmSlots: 0));
@@ -452,15 +454,10 @@ public class DeploymentQueueManagerTests
         var runtime = new TeamLabRuntime
         {
             Id = 12,
-            GameId = 5,
-            TeamId = 7,
-            WorkerNodeId = node.Id,
             Status = TeamLabRuntimeStatus.Destroyed
         };
         context.TeamLabRuntimes.Add(runtime);
         var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(
-            gameId: 5,
-            teamId: 7,
             runtimeId: runtime.Id,
             dockerSlots: 2,
             vmSlots: 0));
@@ -692,8 +689,6 @@ public class DeploymentExecutionServiceTests
         await using var context = CreateContext();
         var service = new DeploymentExecutionService(context, NullLogger<DeploymentExecutionService>.Instance);
         var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(
-            gameId: 1,
-            teamId: 2,
             runtimeId: 3,
             dockerSlots: 2,
             vmSlots: 1));
@@ -706,21 +701,17 @@ public class DeploymentExecutionServiceTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_FailsTeamLabTicket_WhenIdentityDoesNotMatchRuntime()
+    public async Task ExecuteAsync_FailsTeamLabTicket_WhenRuntimeExecutorIsUnavailable()
     {
         await using var context = CreateContext();
         context.TeamLabRuntimes.Add(new TeamLabRuntime
         {
             Id = 3,
-            GameId = 99,
-            TeamId = 88,
             Status = TeamLabRuntimeStatus.Scheduled
         });
         await context.SaveChangesAsync();
         var service = new DeploymentExecutionService(context, NullLogger<DeploymentExecutionService>.Instance);
         var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(
-            gameId: 1,
-            teamId: 2,
             runtimeId: 3,
             dockerSlots: 2,
             vmSlots: 1));
@@ -728,7 +719,7 @@ public class DeploymentExecutionServiceTests
         var result = await service.ExecuteAsync(ticket, CancellationToken.None);
 
         Assert.False(result.Success);
-        Assert.Contains("identity", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("executor", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Payload", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
     }
 

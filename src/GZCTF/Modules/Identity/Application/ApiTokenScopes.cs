@@ -9,6 +9,13 @@ public static class ApiTokenScopes
     public const string ChallengesRead = "challenges:read";
     public const string ChallengesWrite = "challenges:write";
     public const string ChallengesDelete = "challenges:delete";
+    public const string TeamLabTopologiesRead = "teamlab.topologies:read";
+    public const string TeamLabTopologiesWrite = "teamlab.topologies:write";
+    public const string TeamLabRuntimesRead = "teamlab.runtimes:read";
+    public const string TeamLabRuntimesWrite = "teamlab.runtimes:write";
+    public const string TeamLabTrafficRead = "teamlab.traffic:read";
+    public const string TeamLabCaptureRead = "teamlab.capture:read";
+    public const string TeamLabCaptureWrite = "teamlab.capture:write";
 
     public static readonly IReadOnlySet<string> TeacherScopes = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -18,7 +25,14 @@ public static class ApiTokenScopes
         OperationsRead,
         ChallengesRead,
         ChallengesWrite,
-        ChallengesDelete
+        ChallengesDelete,
+        TeamLabTopologiesRead,
+        TeamLabTopologiesWrite,
+        TeamLabRuntimesRead,
+        TeamLabRuntimesWrite,
+        TeamLabTrafficRead,
+        TeamLabCaptureRead,
+        TeamLabCaptureWrite
     };
 
     public static readonly IReadOnlySet<string> All = TeacherScopes;

@@ -119,10 +119,9 @@ public class DeploymentQueueService
             }
         }
 
-        if (shouldReleaseCapacity && _capacity is not null && nodeId is { } reservedNodeId)
-            await _capacity.ReleaseAsync(reservedNodeId, dockerSlots, vmSlots, token);
-        else
-            await _context.SaveChangesAsync(token);
+        if (shouldReleaseCapacity)
+            await ReleaseTicketCapacityAsync(ticket, nodeId, dockerSlots, vmSlots, token);
+        await _context.SaveChangesAsync(token);
 
         _logger.SystemLog(
             $"Deployment queue ticket cancelled: ticket={ticket.Id}, kind={ticket.Kind}, node={nodeId}, reason={ticket.ErrorMessage}.",
@@ -168,18 +167,39 @@ public class DeploymentQueueService
                 ticket.DeploymentTarget.CompletedAt = ticket.CompletedAt;
             }
 
-            if (_capacity is not null && nodeId is { } reservedNodeId)
-                await _capacity.ReleaseAsync(reservedNodeId, dockerSlots, vmSlots, token);
+            await ReleaseTicketCapacityAsync(ticket, nodeId, dockerSlots, vmSlots, token);
 
             _logger.SystemLog(
                 $"Deployment queue ticket recovered from stale Creating state: ticket={ticket.Id}, kind={ticket.Kind}, node={nodeId}.",
                 TaskStatus.Failed, LogLevel.Warning);
         }
 
-        if (_capacity is null)
-            await _context.SaveChangesAsync(token);
+        await _context.SaveChangesAsync(token);
 
         return tickets.Count;
+    }
+
+    async Task ReleaseTicketCapacityAsync(
+        DeploymentQueueTicket ticket,
+        Guid? nodeId,
+        int dockerSlots,
+        int vmSlots,
+        CancellationToken token)
+    {
+        if (_capacity is null) return;
+        if (ticket.Kind == DeploymentQueueKind.TeamLabRuntime && ticket.TeamLabRuntimeId is { } runtimeId)
+        {
+            var shardSlots = await TeamLabCapacityFacts.LoadAsync(_context, runtimeId, token);
+            if (shardSlots.Length > 0)
+            {
+                foreach (var slot in shardSlots)
+                    await _capacity.ReleaseAsync(slot.WorkerNodeId, slot.DockerSlots, slot.VmSlots, token);
+                return;
+            }
+        }
+
+        if (nodeId is { } reservedNodeId)
+            await _capacity.ReleaseAsync(reservedNodeId, dockerSlots, vmSlots, token);
     }
 
     async Task<int> GetQueuePositionAsync(DeploymentQueueTicket ticket, CancellationToken token)

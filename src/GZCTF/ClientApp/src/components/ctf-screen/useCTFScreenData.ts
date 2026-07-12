@@ -23,8 +23,8 @@ import {
 } from '../../Api/AwdpApi'
 import {
   penetrationAdminApi,
+  PenetrationObjectiveModel,
   PenetrationScoreboardItemModel,
-  PenetrationScoreItemModel,
   PenetrationSubmissionLogModel,
 } from '../../Api/PenetrationApi'
 import { theoryAdminApi, theoryPlayerApi, TheoryPaperDetailModel, TheoryScoreboardItemModel } from '../../Api/TheoryApi'
@@ -270,7 +270,7 @@ export const useCTFScreenData = (numId: number) => {
   const [awdpAttackLogs, setAwdpAttackLogs] = useState<AwdpAttackLogItem[]>([])
   const [pentestScoreboard, setPentestScoreboard] = useState<PenetrationScoreboardItemModel[]>([])
   const [pentestSubmissions, setPentestSubmissions] = useState<PenetrationSubmissionLogModel[]>([])
-  const [pentestScoreItems, setPentestScoreItems] = useState<PenetrationScoreItemModel[]>([])
+  const [pentestScoreItems, setPentestScoreItems] = useState<PenetrationObjectiveModel[]>([])
   const [prevRankMap, setPrevRankMap] = useState(new Map<number, number>())
   const scoreboardSnapshotRef = useRef(new Map<number, { rank: number; score: number }>())
 
@@ -459,7 +459,7 @@ export const useCTFScreenData = (numId: number) => {
       const theorySubmittedAt = theory?.submittedAt ?? 0
       const commonSubmittedAt = base?.lastSubmissionTime ?? 0
       const awdpSubmittedAt = awdpLastTimeByTeam.get(teamName) ?? 0
-      const pentestSubmittedAt = pentest?.lastSubmissionTime ?? 0
+      const pentestSubmittedAt = pentest?.lastSubmissionTime ? Date.parse(pentest.lastSubmissionTime) : 0
 
       return {
         id: teamId,
@@ -564,19 +564,19 @@ export const useCTFScreenData = (numId: number) => {
       return
     }
 
-    const [scoreboardResult, submissionsResult, configResult] = await Promise.allSettled([
+    const [scoreboardResult, submissionsResult, bindingResult] = await Promise.allSettled([
       penetrationAdminApi.getScoreboard(numId),
       penetrationAdminApi.getSubmissions(numId, MAX_SUBMISSIONS, 0),
-      penetrationAdminApi.getConfig(numId),
+      penetrationAdminApi.getBinding(numId),
     ])
 
     setPentestScoreboard(scoreboardResult.status === 'fulfilled' ? scoreboardResult.value.data ?? [] : [])
     setPentestSubmissions(
-      submissionsResult.status === 'fulfilled' ? submissionsResult.value.data?.data ?? [] : []
+      submissionsResult.status === 'fulfilled' ? submissionsResult.value.data?.items ?? [] : []
     )
     setPentestScoreItems(
-      configResult.status === 'fulfilled'
-        ? (configResult.value.data?.nodes ?? []).flatMap((node) => node.scoreItems ?? []).filter((item) => item.isVisible)
+      bindingResult.status === 'fulfilled'
+        ? bindingResult.value.data.objectives.filter((item) => item.visible)
         : []
     )
   }, [canLoadPentestScoreboard, numId])
@@ -835,7 +835,7 @@ export const useCTFScreenData = (numId: number) => {
         const solvedKeys = new Set(
           pentestSubmissions
             .filter((item) => item.status === AnswerResult.Accepted)
-            .map((item) => `${item.category}:${item.itemTitle}`)
+            .map((item) => `${item.category}:${item.objectiveTitle}`)
         )
         const pentestCategoryMap = new Map<string, { total: number; solved: number }>()
         pentestScoreItems.forEach((item) => {
@@ -960,18 +960,23 @@ export const useCTFScreenData = (numId: number) => {
 
     const pentestEvents = pentestSubmissions
       .filter((log) => log.status === AnswerResult.Accepted)
-      .filter((log) => !ctfEventKeys.has(solveEventKey(log.teamName, `[渗透] ${log.nodeName} / ${log.itemTitle}`, log.time)))
+      .filter((log) => !ctfEventKeys.has(solveEventKey(
+        log.teamName,
+        `[渗透] ${log.assetKey} / ${log.objectiveTitle}`,
+        Date.parse(log.time)
+      )))
       .map((log, index) => {
         const teamIndex = teams.findIndex(t => t.name === log.teamName) ?? index
+        const submittedAt = Date.parse(log.time)
         return {
           id: `pentest-${log.id}-${log.time}-${log.teamName}`,
           team: log.teamName || 'Unknown',
           teamColor: TEAM_COLORS[teamIndex % TEAM_COLORS.length],
-          challenge: `${log.nodeName} / ${log.itemTitle}`,
+          challenge: `${log.assetKey} / ${log.objectiveTitle}`,
           category: log.category || 'Penetration',
           points: log.score ?? 0,
-          time: formatTimeAgo(log.time, now),
-          sortTime: log.time,
+          time: formatTimeAgo(submittedAt, now),
+          sortTime: submittedAt,
           isFirst: false,
         }
       })
@@ -998,7 +1003,7 @@ export const useCTFScreenData = (numId: number) => {
     const awdpCount = isAwdpScoreGame ? awdpServices.length : 0
     const theoryCount = isTheoryScoreGame ? theoryQuestionCount : 0
     const pentestCount = isPentestScoreGame
-      ? pentestScoreItems.length || Math.max(0, new Set(pentestSubmissions.map((item) => item.itemTitle)).size)
+      ? pentestScoreItems.length || Math.max(0, new Set(pentestSubmissions.map((item) => item.objectiveTitle)).size)
       : 0
     return ctfCount + awdpCount + theoryCount + pentestCount
   }, [

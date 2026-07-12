@@ -20,9 +20,14 @@ public class DeploymentQueueTicket
     public int? ChallengeId { get; set; }
     public Guid? VmInstanceId { get; set; }
     public int? TeamLabRuntimeId { get; set; }
+    public Guid? ApiOperationId { get; set; }
     public int DockerSlots { get; set; }
     public int VmSlots { get; set; }
     [MaxLength(256)] public string ActiveIdentity { get; set; } = string.Empty;
+    [MaxLength(64)] public string? SubjectType { get; set; }
+    [MaxLength(128)] public string? SubjectPublicId { get; set; }
+    [MaxLength(256)] public string? SubjectDisplayName { get; set; }
+    [MaxLength(256)] public string? ResourceDisplayName { get; set; }
     [MaxLength(1024)] public string? ErrorMessage { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? AssignedAt { get; set; }
@@ -44,9 +49,14 @@ public class DeploymentQueueTicket
         ChallengeId = request.ChallengeId,
         VmInstanceId = request.VmInstanceId,
         TeamLabRuntimeId = request.TeamLabRuntimeId,
+        ApiOperationId = request.ApiOperationId,
         DockerSlots = Math.Max(0, request.DockerSlots),
         VmSlots = Math.Max(0, request.VmSlots),
-        ActiveIdentity = BuildActiveIdentity(request)
+        ActiveIdentity = BuildActiveIdentity(request),
+        SubjectType = request.SubjectType,
+        SubjectPublicId = request.SubjectPublicId,
+        SubjectDisplayName = request.SubjectDisplayName,
+        ResourceDisplayName = request.ResourceDisplayName
     };
 
     public static string BuildActiveIdentity(DeploymentQueueRequest request) => request.Kind switch
@@ -58,7 +68,7 @@ public class DeploymentQueueTicket
         DeploymentQueueKind.Vm =>
             $"vm:{Required(request.GameId)}:{Required(request.OwnerUserId)}:{Required(request.ChallengeId)}:{Required(request.VmInstanceId)}",
         DeploymentQueueKind.TeamLabRuntime =>
-            $"teamlab-runtime:{Required(request.GameId)}:{Required(request.OwnerTeamId)}:{Required(request.TeamLabRuntimeId)}",
+            $"teamlab-runtime:{Required(request.TeamLabRuntimeId)}",
         _ => throw new ArgumentOutOfRangeException(nameof(request), request.Kind, "Unknown deployment queue kind.")
     };
 

@@ -924,11 +924,11 @@ public class GameRepository(
     {
         var acceptedSolves = await Context.PenetrationSubmissions.AsNoTracking()
             .Where(s => s.GameId == gameId && s.Status == AnswerResult.Accepted)
-            .Select(s => new { s.TeamId, s.ScoreItemId, s.Score, s.SubmittedAt })
+            .Select(s => new { s.TeamId, s.ObjectiveId, s.Score, s.SubmittedAt })
             .ToArrayAsync(token);
 
         var firstSolves = acceptedSolves
-            .GroupBy(s => new { s.TeamId, s.ScoreItemId })
+            .GroupBy(s => new { s.TeamId, s.ObjectiveId })
             .Select(g => g.OrderBy(s => s.SubmittedAt).First());
 
         Dictionary<int, PenetrationScoreState> states = [];

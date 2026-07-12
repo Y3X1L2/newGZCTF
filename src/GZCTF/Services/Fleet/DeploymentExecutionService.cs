@@ -1,6 +1,6 @@
 using GZCTF.Models.Data;
 using GZCTF.Repositories.Interface;
-using GZCTF.Services.TeamLab;
+using GZCTF.Modules.TeamLab.Application;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Services.Fleet;
@@ -19,7 +19,7 @@ public class DeploymentExecutionService
     readonly IExerciseInstanceRepository _exerciseInstances;
     readonly DeploymentExecutionContextAccessor _executionContext;
     readonly FleetVmService? _fleetVmService;
-    readonly TeamLabDeploymentService? _teamLabDeployment;
+    readonly ITeamLabRuntimeApplicationService? _teamLabRuntime;
     readonly ILogger<DeploymentExecutionService> _logger;
 
     public DeploymentExecutionService(
@@ -28,7 +28,7 @@ public class DeploymentExecutionService
         IExerciseInstanceRepository exerciseInstances,
         DeploymentExecutionContextAccessor executionContext,
         FleetVmService fleetVmService,
-        TeamLabDeploymentService teamLabDeployment,
+        ITeamLabRuntimeApplicationService teamLabRuntime,
         ILogger<DeploymentExecutionService> logger)
     {
         _context = context;
@@ -36,7 +36,7 @@ public class DeploymentExecutionService
         _exerciseInstances = exerciseInstances;
         _executionContext = executionContext;
         _fleetVmService = fleetVmService;
-        _teamLabDeployment = teamLabDeployment;
+        _teamLabRuntime = teamLabRuntime;
         _logger = logger;
     }
 
@@ -47,7 +47,7 @@ public class DeploymentExecutionService
         _exerciseInstances = null!;
         _executionContext = new DeploymentExecutionContextAccessor();
         _fleetVmService = null;
-        _teamLabDeployment = null;
+        _teamLabRuntime = null;
         _logger = logger;
     }
 
@@ -60,7 +60,7 @@ public class DeploymentExecutionService
         _exerciseInstances = null!;
         _executionContext = executionContext;
         _fleetVmService = fleetVmService;
-        _teamLabDeployment = null;
+        _teamLabRuntime = null;
         _logger = logger;
     }
 
@@ -230,10 +230,8 @@ public class DeploymentExecutionService
     async Task<DeploymentExecutionResult> ExecuteTeamLabRuntimeAsync(DeploymentQueueTicket ticket,
         CancellationToken token)
     {
-        if (ticket.TeamLabRuntimeId is not { } runtimeId ||
-            ticket.GameId is not { } gameId ||
-            ticket.OwnerTeamId is not { } teamId)
-            return DeploymentExecutionResult.Failed("TeamLab runtime queue ticket is missing required identity fields.");
+        if (ticket.TeamLabRuntimeId is not { } runtimeId)
+            return DeploymentExecutionResult.Failed("TeamLab runtime queue ticket is missing its runtime identity.");
 
         var runtime = await _context.TeamLabRuntimes
             .AsNoTracking()
@@ -241,13 +239,10 @@ public class DeploymentExecutionService
         if (runtime is null)
             return DeploymentExecutionResult.Failed($"TeamLab runtime {runtimeId} was not found.");
 
-        if (runtime.GameId != gameId || runtime.TeamId != teamId)
-            return DeploymentExecutionResult.Failed("TeamLab runtime queue ticket identity does not match the runtime.");
-
-        if (_teamLabDeployment is null)
+        if (_teamLabRuntime is null)
             return DeploymentExecutionResult.Failed("TeamLab runtime queue executor is not available.");
 
-        var result = await _teamLabDeployment.DeployQueuedRuntimeAsync(runtimeId, token);
+        var result = await _teamLabRuntime.ExecuteQueuedAsync(runtimeId, token);
         return result.Success
             ? DeploymentExecutionResult.Completed()
             : DeploymentExecutionResult.Failed(result.Message);

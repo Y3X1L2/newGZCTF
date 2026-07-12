@@ -158,6 +158,16 @@
 - Phase 0、1、3、4、5 的文件路径状态机检查通过；Phase 4/5 主计划与配套文档已通过总纲需求词覆盖、占位符、代码块、UTF-8、尾随空白和 Git whitespace 检查。
 - 本轮只编写计划和配套契约，未实施 Phase 4/5 代码、未提交、未推送、未部署。
 
+## 2026-07-11 Phase 3 实施
+
+- 当前分支 `codex/phase-3-teamlab-foundation`，基线 `c83d3135`；Phase 2 由另一协作者并行实施，当前工作树未混入其改动。
+- 独立 TeamLab topology/release/plan/runtime 基座、新 runtime 编排链路、Penetration adapter、内外 API、流量采集和前端契约切换已经完成。
+- TeamLab application 不直接依赖 AgentClient；节点动作统一通过 `ITeamLabNodeExecutor`，Penetration 只保留 objective、submission、scoreboard、reset policy 和 TeamLab binding。
+- 旧 `PenetrationService`、旧 `TeamLabDeploymentService` 及 topology snapshot、environment、runtime node、runtime route 双轨已经从生产源码删除，不保留永久兼容层。
+- `TeamLabRuntime` 已删除 GameId、TeamId、WorkerNodeId、PublishedVersion 和 NetworkPrefix；节点管理与部署队列按 binding 投影比赛/队伍显示，独立 TeamLab runtime 不携带比赛语义。
+- contract migration 已生成并增加破坏性 DDL 前置校验；reset record 通过 game/team binding 从 environment ID 重映射到 runtime ID，缺失 release/objective/runtime facts 时迁移中止。
+- 当前生产项目编译结果为 0 warning / 0 error。下一检查点为新契约测试、PostgreSQL migration 集成测试、OpenAPI、前端 build、acceptance runbook 和一次独立质量审查。
+
 ## 2026-07-10 Phase 0 实施
 
 - 已按 `executing-plans` 流程创建隔离工作区 `D:\newgz\newGZCTF-phase0`，分支为 `codex/phase-0-baseline-cleanup`；`main` 保持不变。
@@ -223,3 +233,12 @@
 - Task 8 数据迁移为 `20260711115423_CompletePhaseOneChallengeApi`，新增比赛所有者字段和持久化 `ChallengeMutationJobs`。
 - 完整调用文档为 `docs/commercialization/open-api-v1-guide.md`；机器契约 `docs/commercialization/openapi/open-v1.json` 已由真实运行时 OpenAPI 生成并包含全部新增路径。
 - 按本轮约束只执行一次独立静态质量审查；确认的授权越界、运行资源孤儿、operation 终态、Docker 分发事实、附件清理、契约缺失、空值/非法枚举和 VM 模板 N+1 共 8 项问题均已直接修复。EF migration 构建成功，OpenAPI 契约生成专项 1/1 通过；未重复执行全量门禁。
+
+## 2026-07-12 Phase 3 最终收口
+
+- 单次独立质量审查确认的 9 项问题已全部关闭：Destroyed runtime 重建、稳定 runtime owner、active release reset、grant 重签、对象授权、多分片容量、connection 路由隔离、flow 增量游标、capture 幂等和自动完成。
+- TeamLab 容量事实按 current generation 的 shard/assets 批量读取；预留、确认、取消、stale recovery 和 reconcile 不再把多分片总量归到入口节点，也不产生按票据 N+1 查询。
+- 单节点和多节点 router namespace 均应用完整源/目标网段允许矩阵；未声明 connection 的网段被拒绝，远端 Fabric 只下发允许路径。
+- 流量元数据使用 Agent 字节游标增量读取，network cursor 独立持久化；PCAP 使用真实 PID 状态完成，外部创建抓包持久化 Idempotency-Key，dumpcap 文件上限单位已修正。
+- 最终门禁：解决方案 0 warning / 0 error；单元测试 476/476；PostgreSQL 16 contract migration 2/2；EF 无 pending model changes；OpenAPI 26 breaking/11 additive comparator、自身快照和兼容比较通过；前端 locale、strict TypeScript、production build 通过。
+- 全量集成测试的 TeamLab、迁移和 OpenAPI 均通过；仅发现 2 个 Phase 1 resource-grant 测试夹具在签发前缺少管理员授权事实，修正夹具后对应 2/2 通过。Phase 3 未部署、未连接或修改生产服务器。

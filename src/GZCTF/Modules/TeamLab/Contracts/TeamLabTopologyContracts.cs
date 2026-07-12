@@ -48,18 +48,33 @@ public sealed record TeamLabTopologyDefinitionModel(
     IReadOnlyList<TeamLabTopologyAssetModel> Assets,
     IReadOnlyList<TeamLabTopologyConnectionModel> Connections);
 
+public sealed record TeamLabEditorItemModel(
+    double X,
+    double Y,
+    double? Width = null,
+    double? Height = null,
+    bool Collapsed = false);
+
+public sealed record TeamLabTopologyEditorModel(
+    IReadOnlyDictionary<string, TeamLabEditorItemModel> Networks,
+    IReadOnlyDictionary<string, TeamLabEditorItemModel> Assets);
+
 public sealed record CreateTeamLabTopologyModel(
     string Name,
     IReadOnlyList<TeamLabTopologyNetworkModel> Networks,
     IReadOnlyList<TeamLabTopologyAssetModel> Assets,
-    IReadOnlyList<TeamLabTopologyConnectionModel> Connections);
+    IReadOnlyList<TeamLabTopologyConnectionModel> Connections,
+    TeamLabTopologyEditorModel? Editor = null);
 
 public sealed record UpdateTeamLabTopologyModel(
     int Revision,
     string Name,
     IReadOnlyList<TeamLabTopologyNetworkModel> Networks,
     IReadOnlyList<TeamLabTopologyAssetModel> Assets,
-    IReadOnlyList<TeamLabTopologyConnectionModel> Connections);
+    IReadOnlyList<TeamLabTopologyConnectionModel> Connections,
+    TeamLabTopologyEditorModel? Editor = null);
+
+public sealed record PublishTeamLabTopologyModel(int Revision);
 
 public sealed record TeamLabTopologySummaryModel(
     Guid Id,
@@ -74,6 +89,7 @@ public sealed record TeamLabTopologyDetailModel(
     int Revision,
     int SchemaVersion,
     TeamLabTopologyDefinitionModel Definition,
+    TeamLabTopologyEditorModel Editor,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 

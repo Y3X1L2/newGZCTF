@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using System.Text.RegularExpressions;
 using GZCTF.Agent.Models;
 using Microsoft.Extensions.Options;
@@ -450,6 +451,7 @@ public partial class TeamLabNetworkService(
 
         var localRoutes = request.LocalRoutes ?? [];
         var routes = request.Routes ?? [];
+        var forwardPolicies = request.ForwardPolicies ?? [];
         foreach (var route in localRoutes.Concat(routes))
         {
             validation = ValidateCidr(route.TargetCidr, nameof(route.TargetCidr));
@@ -463,6 +465,13 @@ public partial class TeamLabNetworkService(
                 validation = ValidateIp(route.SourceIp, nameof(route.SourceIp));
                 if (validation is not null) return Failure(validation, request.DryRun);
             }
+        }
+        foreach (var policy in forwardPolicies)
+        {
+            validation = ValidateCidr(policy.SourceCidr, nameof(policy.SourceCidr));
+            if (validation is not null) return Failure(validation, request.DryRun);
+            validation = ValidateCidr(policy.DestinationCidr, nameof(policy.DestinationCidr));
+            if (validation is not null) return Failure(validation, request.DryRun);
         }
 
         var hasNamespaceUplink = !string.IsNullOrWhiteSpace(request.NamespaceName);
@@ -504,6 +513,7 @@ public partial class TeamLabNetworkService(
             commands.Add($"ip netns exec {namespaceName} ip link set {namespaceInterface} up");
             commands.Add("sysctl -w net.ipv4.ip_forward=1");
             commands.Add($"ip netns exec {namespaceName} sysctl -w net.ipv4.ip_forward=1");
+            commands.AddRange(BuildNamespaceForwardPolicyCommands(namespaceName, forwardPolicies));
             commands.AddRange(BuildFabricForwardAclCommands(request.RuntimeId, hostInterface, localRoutes, routes));
             commands.AddRange(NormalizeRoutes(localRoutes)
                 .Select(route => $"ip route replace {route.TargetCidr} via {route.GatewayIp} dev {hostInterface}"));
@@ -527,6 +537,23 @@ public partial class TeamLabNetworkService(
 
     private static string BuildRouteSourceClause(TeamLabStaticRouteRequest route) =>
         string.IsNullOrWhiteSpace(route.SourceIp) ? "" : $" src {route.SourceIp}";
+
+    private static IEnumerable<string> BuildNamespaceForwardPolicyCommands(
+        string namespaceName,
+        IEnumerable<TeamLabForwardPolicyRequest> policies)
+    {
+        const string chain = "TEAMLAB-POLICY";
+        yield return $"ip netns exec {namespaceName} iptables -N {chain} 2>/dev/null || true";
+        yield return $"ip netns exec {namespaceName} iptables -F {chain}";
+        yield return $"ip netns exec {namespaceName} iptables -C FORWARD -j {chain} 2>/dev/null || ip netns exec {namespaceName} iptables -I FORWARD 1 -j {chain}";
+        yield return $"ip netns exec {namespaceName} iptables -A {chain} -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT";
+
+        foreach (var policy in policies
+                     .OrderBy(item => item.Allow ? 0 : 1)
+                     .ThenBy(item => item.SourceCidr, StringComparer.Ordinal)
+                     .ThenBy(item => item.DestinationCidr, StringComparer.Ordinal))
+            yield return $"ip netns exec {namespaceName} iptables -A {chain} -s {policy.SourceCidr} -d {policy.DestinationCidr} -j {(policy.Allow ? "ACCEPT" : "REJECT")}";
+    }
 
     private static IEnumerable<string> BuildFabricForwardAclCommands(int runtimeId, string hostInterface,
         TeamLabStaticRouteRequest[] localRoutes, TeamLabStaticRouteRequest[] remoteRoutes)
@@ -587,10 +614,13 @@ public partial class TeamLabNetworkService(
         var directory = ResolveCaptureDirectory(request.RuntimeId, request.JobId);
         var filePath = ResolveCaptureFilePath(request.RuntimeId, request.JobId);
         var pidFile = $"{directory}/capture.pid";
+        var sizeKb = Math.Max(1, (request.MaxBytes + 1024 - 1) / 1024);
         var sizeMb = Math.Max(1, (request.MaxBytes + 1024 * 1024 - 1) / (1024 * 1024));
-        var captureCommand = HasCommand("dumpcap")
-            ? $"dumpcap -q -i {ShellQuote(request.InterfaceName)} -a duration:{request.MaxSeconds} -a filesize:{sizeMb} -w {ShellQuote(filePath)} >/dev/null 2>&1 & echo $! > {ShellQuote(pidFile)}"
-            : $"timeout {request.MaxSeconds} tcpdump -i {ShellQuote(request.InterfaceName)} -s 0 -U -w {ShellQuote(filePath)} -C {sizeMb} -W 1 >/dev/null 2>&1 & echo $! > {ShellQuote(pidFile)}";
+        var captureProcess = HasCommand("dumpcap")
+            ? $"dumpcap -q -i {ShellQuote(request.InterfaceName)} -a duration:{request.MaxSeconds} -a filesize:{sizeKb} -w {ShellQuote(filePath)} >/dev/null 2>&1"
+            : $"timeout {request.MaxSeconds} tcpdump -i {ShellQuote(request.InterfaceName)} -s 0 -U -w {ShellQuote(filePath)} -C {sizeMb} -W 1 >/dev/null 2>&1";
+        var captureCommand =
+            $"({captureProcess}; rm -f {ShellQuote(pidFile)}) & echo $! > {ShellQuote(pidFile)}";
         var commands = new[]
         {
             $"mkdir -p {ShellQuote(directory)}",
@@ -601,6 +631,7 @@ public partial class TeamLabNetworkService(
 
         var result = await ExecuteOrPlanAsync(commands, request.DryRun, token);
         return new TeamLabCaptureResponse(result.Success, result.DryRun, result.Message, filePath, 0,
+            result.Success && !result.DryRun,
             result.Commands);
     }
 
@@ -620,7 +651,7 @@ public partial class TeamLabNetworkService(
         };
         var result = await ExecuteOrPlanAsync(commands, request.DryRun, token);
         var capturedBytes = File.Exists(filePath) ? new FileInfo(filePath).Length : 0;
-        return new TeamLabCaptureResponse(result.Success, result.DryRun, result.Message, filePath, capturedBytes,
+        return new TeamLabCaptureResponse(result.Success, result.DryRun, result.Message, filePath, capturedBytes, false,
             result.Commands);
     }
 
@@ -632,10 +663,11 @@ public partial class TeamLabNetworkService(
         var directory = ResolveCaptureDirectory(request.RuntimeId, request.JobId);
         var filePath = ResolveCaptureFilePath(request.RuntimeId, request.JobId);
         var pidFile = $"{directory}/capture.pid";
-        var running = File.Exists(pidFile);
+        var running = IsCaptureProcessRunning(pidFile);
+        if (!running && File.Exists(pidFile)) File.Delete(pidFile);
         var capturedBytes = File.Exists(filePath) ? new FileInfo(filePath).Length : 0;
         return Task.FromResult(new TeamLabCaptureResponse(true, _config.DryRun || request.DryRun || !_config.Enable,
-            running ? "Capture is running." : "Capture is not running.", filePath, capturedBytes, []));
+            running ? "Capture is running." : "Capture is complete.", filePath, capturedBytes, running, []));
     }
 
     public static string ResolveCaptureFilePath(int runtimeId, int jobId)
@@ -679,7 +711,7 @@ public partial class TeamLabNetworkService(
             captureCommand
         };
         var result = await ExecuteOrPlanAsync(commands, request.DryRun, token);
-        return new TeamLabFlowResponse(result.Success, result.DryRun, result.Message, [], result.Commands);
+        return new TeamLabFlowResponse(result.Success, result.DryRun, result.Message, 0, [], result.Commands);
     }
 
     public async Task<TeamLabFlowResponse> StopFlowMetadataAsync(TeamLabFlowStopRequest request,
@@ -699,7 +731,7 @@ public partial class TeamLabNetworkService(
             $"rm -rf {ShellQuote(directory)} 2>/dev/null || true"
         };
         var result = await ExecuteOrPlanAsync(commands, request.DryRun, token);
-        return new TeamLabFlowResponse(result.Success, result.DryRun, result.Message, [], result.Commands);
+        return new TeamLabFlowResponse(result.Success, result.DryRun, result.Message, 0, [], result.Commands);
     }
 
     public Task<TeamLabFlowResponse> GetFlowMetadataSnapshotAsync(TeamLabFlowSnapshotRequest request,
@@ -715,11 +747,11 @@ public partial class TeamLabNetworkService(
         var logFile = ResolveFlowLogPath(request.RuntimeId, request.NetworkKey);
         if (!File.Exists(logFile))
             return Task.FromResult(new TeamLabFlowResponse(true, _config.DryRun || request.DryRun || !_config.Enable,
-                "Flow metadata log does not exist yet.", [], []));
+                "Flow metadata log does not exist yet.", request.AfterCursor, [], []));
 
-        var samples = ReadRecentFlowSamples(logFile, token).ToArray();
+        var (nextCursor, samples) = ReadFlowSamples(logFile, request.AfterCursor, token);
         return Task.FromResult(new TeamLabFlowResponse(true, _config.DryRun || request.DryRun || !_config.Enable,
-            $"Loaded {samples.Length} flow metadata sample(s).", samples, []));
+            $"Loaded {samples.Length} flow metadata sample(s).", nextCursor, samples, []));
     }
 
     public static string ResolveFlowLogPath(int runtimeId, string networkKey) =>
@@ -736,19 +768,44 @@ public partial class TeamLabNetworkService(
         return $"/run/gzctf-teamlab/flow-{runtimeId}-{networkKey}";
     }
 
-    private static IEnumerable<TeamLabFlowSample> ReadRecentFlowSamples(string logFile, CancellationToken token)
+    private static (long NextCursor, TeamLabFlowSample[] Samples) ReadFlowSamples(
+        string logFile,
+        long afterCursor,
+        CancellationToken token)
     {
         const int maxLines = 500;
-        var lines = File.ReadLines(logFile)
-            .Reverse()
-            .Take(maxLines)
-            .Reverse();
-        foreach (var line in lines)
+        const int maxLineBytes = 64 * 1024;
+        using var stream = new FileStream(logFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        var start = afterCursor >= 0 && afterCursor <= stream.Length ? afterCursor : 0;
+        stream.Seek(start, SeekOrigin.Begin);
+        var cursor = start;
+        var nextCursor = start;
+        var buffer = new byte[8192];
+        var line = new List<byte>(512);
+        var samples = new List<TeamLabFlowSample>(maxLines);
+        while (samples.Count < maxLines)
         {
             token.ThrowIfCancellationRequested();
-            if (TryParseTcpdumpFlowLine(line, out var sample))
-                yield return sample;
+            var read = stream.Read(buffer, 0, buffer.Length);
+            if (read == 0) break;
+            for (var index = 0; index < read && samples.Count < maxLines; index++)
+            {
+                cursor++;
+                if (buffer[index] == (byte)'\n')
+                {
+                    var text = Encoding.UTF8.GetString(line.ToArray()).TrimEnd('\r');
+                    if (TryParseTcpdumpFlowLine(text, out var sample))
+                        samples.Add(sample with { Cursor = cursor });
+                    line.Clear();
+                    nextCursor = cursor;
+                }
+                else if (line.Count < maxLineBytes)
+                {
+                    line.Add(buffer[index]);
+                }
+            }
         }
+        return (nextCursor, samples.ToArray());
     }
 
     public static bool TryParseTcpdumpFlowLine(string line, out TeamLabFlowSample sample)
@@ -787,7 +844,7 @@ public partial class TeamLabNetworkService(
         if (!IsStrictIpv4(sourceIp) || !IsStrictIpv4(destinationIp))
             return false;
 
-        sample = new TeamLabFlowSample(capturedAt.ToUniversalTime(), sourceIp, sourcePort, destinationIp,
+        sample = new TeamLabFlowSample(0, capturedAt.ToUniversalTime(), sourceIp, sourcePort, destinationIp,
             destinationPort, protocol, bytes);
         return true;
     }
@@ -880,10 +937,19 @@ public partial class TeamLabNetworkService(
         new(false, _config.DryRun || requestDryRun || !_config.Enable, message, []);
 
     private TeamLabCaptureResponse CaptureFailure(string message, bool requestDryRun) =>
-        new(false, _config.DryRun || requestDryRun || !_config.Enable, message, null, 0, []);
+        new(false, _config.DryRun || requestDryRun || !_config.Enable, message, null, 0, false, []);
 
     private TeamLabFlowResponse FlowFailure(string message, bool requestDryRun) =>
-        new(false, _config.DryRun || requestDryRun || !_config.Enable, message, [], []);
+        new(false, _config.DryRun || requestDryRun || !_config.Enable, message, 0, [], []);
+
+    private static bool IsCaptureProcessRunning(string pidFile)
+    {
+        if (!File.Exists(pidFile) ||
+            !int.TryParse(File.ReadAllText(pidFile).Trim(), out var processId) ||
+            processId <= 0)
+            return false;
+        return Directory.Exists($"/proc/{processId}");
+    }
 
     private static string? ValidateLinuxName(string value, string field)
     {

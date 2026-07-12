@@ -2,180 +2,142 @@ using System.Net.Mime;
 using GZCTF.Extensions;
 using GZCTF.Middlewares;
 using GZCTF.Models;
-using GZCTF.Models.Request.Game;
+using GZCTF.Modules.Penetration.Application;
+using GZCTF.Modules.Penetration.Contracts;
+using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Repositories.Interface;
-using GZCTF.Services;
 using GZCTF.Services.Config;
-using GZCTF.Services.TeamLab;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Controllers;
 
 [ApiController]
 [Route("api/pentest")]
 [Produces(MediaTypeNames.Application.Json)]
-[ProducesResponseType(typeof(RequestResponse), StatusCodes.Status400BadRequest)]
-[ProducesResponseType(typeof(RequestResponse), StatusCodes.Status401Unauthorized)]
-[ProducesResponseType(typeof(RequestResponse), StatusCodes.Status403Forbidden)]
-public class PenetrationPlayerController(
-    UserManager<UserInfo> userManager,
-    IGameRepository gameRepository,
-    IParticipationRepository participationRepository,
-    PenetrationService penetrationService,
+public sealed class PenetrationPlayerController(
+    UserManager<UserInfo> users,
+    IGameRepository games,
+    IParticipationRepository participations,
     AppDbContext context,
-    TeamLabWireGuardService teamLabWireGuardService,
-    IConfigService configService) : ControllerBase
+    PenetrationWorkspaceService workspaces,
+    PenetrationObjectiveService objectives,
+    PenetrationTeamLabAdapter adapter,
+    TeamLabAccessGrantService access,
+    IConfigService config) : ControllerBase
 {
     [RequireUser]
     [HttpGet("games/{gameId:int}/workspace")]
-    [ProducesResponseType(typeof(PenetrationWorkspaceModel), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetWorkspace([FromRoute] int gameId, CancellationToken token)
+    public async Task<IActionResult> GetWorkspace(int gameId, CancellationToken cancellationToken)
     {
-        var ctx = await GetContextInfo(gameId, token: token);
-        if (ctx.Result is not null)
-            return ctx.Result;
-
-        var workspace = await penetrationService.GetWorkspace(gameId, ctx.Participation!.TeamId, token);
+        var actor = await GetContextAsync(gameId, true, cancellationToken);
+        if (actor.Error is not null) return actor.Error;
+        var workspace = await workspaces.GetAsync(gameId, actor.Participation!.TeamId, cancellationToken);
         return workspace is null
-            ? NotFound(new RequestResponse("Penetration environment is not deployed.", StatusCodes.Status404NotFound))
+            ? NotFound(new RequestResponse("Penetration environment is not deployed."))
             : Ok(workspace);
     }
 
     [RequireUser]
-    [HttpGet("games/{gameId:int}/teamlab/vpn-config")]
-    [ProducesResponseType(typeof(TeamLabClientConfigModel), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetTeamLabVpnConfig([FromRoute] int gameId, CancellationToken token)
+    [HttpPost("games/{gameId:int}/access-grants")]
+    public async Task<IActionResult> CreateAccessGrant(int gameId, CancellationToken cancellationToken)
     {
-        var ctx = await GetContextInfo(gameId, token: token);
-        if (ctx.Result is not null)
-            return ctx.Result;
+        var actor = await GetContextAsync(gameId, true, cancellationToken);
+        if (actor.Error is not null) return actor.Error;
+        var runtimeId = await ResolveRuntimePublicIdAsync(gameId, actor.Participation!.TeamId, cancellationToken);
+        var grant = await access.CreateAsync(runtimeId, cancellationToken);
+        var downloadToken = grant.ConfigurationDownloadUrl?.Split("token=", 2, StringSplitOptions.None).ElementAtOrDefault(1);
+        var playerDownloadUrl = string.IsNullOrWhiteSpace(downloadToken)
+            ? null
+            : $"/api/pentest/games/{gameId}/access-grants/{grant.Id:D}/download?token={Uri.EscapeDataString(downloadToken)}";
+        return Created(string.Empty, grant with { ConfigurationDownloadUrl = playerDownloadUrl });
+    }
 
-        var runtime = await context.TeamLabRuntimes.AsNoTracking()
-            .Include(r => r.Team)
-            .Include(r => r.VpnPeers)
-            .Include(r => r.PublicUdpMapping)
-            .FirstOrDefaultAsync(r => r.GameId == gameId && r.TeamId == ctx.Participation!.TeamId, token);
-
-        if (runtime is null)
-            return NotFound(new RequestResponse("TeamLab VPN environment is not deployed.", StatusCodes.Status404NotFound));
-
-        var model = teamLabWireGuardService.BuildClientConfigModel(runtime);
-        return model is null
-            ? NotFound(new RequestResponse("TeamLab VPN configuration is not ready.", StatusCodes.Status404NotFound))
-            : Ok(model);
+    [RequireUser]
+    [HttpGet("games/{gameId:int}/access-grants/{grantId:guid}/download")]
+    public async Task<IActionResult> DownloadAccessGrant(
+        int gameId,
+        Guid grantId,
+        [FromQuery] string token,
+        CancellationToken cancellationToken)
+    {
+        var actor = await GetContextAsync(gameId, true, cancellationToken);
+        if (actor.Error is not null) return actor.Error;
+        var runtimeId = await ResolveRuntimePublicIdAsync(gameId, actor.Participation!.TeamId, cancellationToken);
+        var download = await access.ConsumeConfigurationAsync(runtimeId, grantId, token, cancellationToken);
+        return File(System.Text.Encoding.UTF8.GetBytes(download.Configuration),
+            "application/x-wireguard-profile", download.FileName);
     }
 
     [RequireUser]
     [HttpPost("games/{gameId:int}/submit")]
     [EnableRateLimiting(nameof(RateLimiter.LimitPolicy.Submit))]
-    [ProducesResponseType(typeof(PenetrationSubmitResultModel), StatusCodes.Status200OK)]
-    public async Task<IActionResult> Submit([FromRoute] int gameId, [FromBody] PenetrationSubmitModel model,
-        CancellationToken token)
+    public async Task<IActionResult> Submit(
+        int gameId,
+        PenetrationSubmitModel model,
+        CancellationToken cancellationToken)
     {
-        var flag = configService.DecryptApiData(model.Flag)?.Trim() ?? model.Flag.Trim();
-        if (string.IsNullOrWhiteSpace(flag))
-            return BadRequest(new RequestResponse("Flag is required."));
-
-        if (flag.Length > Limits.MaxFlagLength)
-            return BadRequest(new RequestResponse("Flag is too long."));
-
-        var ctx = await GetContextInfo(gameId, token: token);
-        if (ctx.Result is not null)
-            return ctx.Result;
-
-        var result = await penetrationService.Submit(gameId, ctx.Participation!.TeamId, ctx.Participation.Id,
-            ctx.User!.Id, new PenetrationSubmitModel { ScoreItemId = model.ScoreItemId, Flag = flag }, token);
-        return Ok(result);
+        var flag = config.DecryptApiData(model.Flag)?.Trim() ?? model.Flag.Trim();
+        if (string.IsNullOrWhiteSpace(flag) || flag.Length > Limits.MaxFlagLength)
+            return BadRequest(new RequestResponse("Flag is required and must satisfy the length limit."));
+        var actor = await GetContextAsync(gameId, true, cancellationToken);
+        if (actor.Error is not null) return actor.Error;
+        return Ok(await objectives.SubmitAsync(
+            gameId, actor.Participation!.TeamId, actor.Participation.Id, actor.User!.Id,
+            model with { Flag = flag }, cancellationToken));
     }
 
     [RequireUser]
     [HttpPost("games/{gameId:int}/reset")]
     [EnableRateLimiting(nameof(RateLimiter.LimitPolicy.Container))]
-    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status200OK)]
-    public async Task<IActionResult> Reset([FromRoute] int gameId, CancellationToken token)
+    public async Task<IActionResult> Reset(int gameId, CancellationToken cancellationToken)
     {
-        var ctx = await GetContextInfo(gameId, token: token);
-        if (ctx.Result is not null)
-            return ctx.Result;
-
-        var result = await penetrationService.RebuildTeam(gameId, ctx.Participation!.TeamId, false, ctx.User!.Id, token);
-        return result.Success ? Ok(new RequestResponse(result.Message, StatusCodes.Status200OK))
-            : BadRequest(new RequestResponse(result.Message));
+        var actor = await GetContextAsync(gameId, true, cancellationToken);
+        if (actor.Error is not null) return actor.Error;
+        var result = await adapter.ResetTeamAsync(
+            gameId, actor.Participation!.TeamId, actor.User!.Id, false, cancellationToken);
+        return Accepted(new { runtimeId = result.RuntimePublicId });
     }
 
     [RequireUser]
     [HttpGet("games/{gameId:int}/scoreboard")]
-    [ProducesResponseType(typeof(PenetrationScoreboardItemModel[]), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetScoreboard([FromRoute] int gameId, CancellationToken token)
+    public async Task<IActionResult> GetScoreboard(int gameId, CancellationToken cancellationToken)
     {
-        var ctx = await GetContextInfo(gameId, denyAfterEnded: false, allowTeacherMonitor: true, token: token);
-        if (ctx.Result is not null)
-            return ctx.Result;
-
-        return Ok(await penetrationService.GetScoreboard(gameId, token));
+        var actor = await GetContextAsync(gameId, false, cancellationToken);
+        return actor.Error ?? Ok(await objectives.GetScoreboardAsync(gameId, cancellationToken));
     }
 
-    async Task<ContextInfo> GetContextInfo(int gameId, bool denyAfterEnded = true,
-        bool requireParticipation = true, bool allowTeacherMonitor = false, CancellationToken token = default)
+    private async Task<Guid> ResolveRuntimePublicIdAsync(int gameId, int teamId, CancellationToken cancellationToken) =>
+        await context.PenetrationTeamRuntimeBindings.AsNoTracking()
+            .Where(item => item.GameId == gameId && item.TeamId == teamId)
+            .Select(item => context.TeamLabRuntimes.Where(runtime => runtime.Id == item.RuntimeId)
+                .Select(runtime => runtime.PublicId).Single())
+            .SingleAsync(cancellationToken);
+
+    private async Task<PlayerContext> GetContextAsync(
+        int gameId,
+        bool denyAfterEnded,
+        CancellationToken cancellationToken)
     {
-        ContextInfo res = new()
-        {
-            User = await userManager.GetUserAsync(User),
-            Game = await gameRepository.GetGameById(gameId, token)
-        };
-
-        if (res.Game is null)
-            return res.WithResult(NotFound(new RequestResponse("Game not found.", StatusCodes.Status404NotFound)));
-
-        if (res.Game.GameType is not GameType.Penetration and not GameType.Mixed)
-            return res.WithResult(BadRequest(new RequestResponse("The game is not a penetration or mixed game.")));
-
-        if (DateTimeOffset.UtcNow < res.Game.StartTimeUtc)
-            return res.WithResult(BadRequest(new RequestResponse("The game has not started.",
-                ErrorCodes.GameNotStarted)));
-
-        if (denyAfterEnded && !res.Game.PracticeMode && res.Game.EndTimeUtc < DateTimeOffset.UtcNow)
-            return res.WithResult(BadRequest(new RequestResponse("The game has ended.", ErrorCodes.GameEnded)));
-
-        if (!requireParticipation && res.User is null)
-            return res.WithResult(Unauthorized(new RequestResponse("Login required.",
-                StatusCodes.Status401Unauthorized)));
-
-        if (!requireParticipation && (!allowTeacherMonitor || res.User!.Role >= Role.Teacher))
-            return res;
-
-        if (res.User is null)
-            return res.WithResult(Unauthorized(new RequestResponse("Login required.",
-                StatusCodes.Status401Unauthorized)));
-
-        var part = await participationRepository.GetParticipation(res.User.Id, res.Game.Id, token);
-        if (part is null)
-            return res.WithResult(StatusCode(StatusCodes.Status403Forbidden,
-                new RequestResponse("You have not participated in this game.", StatusCodes.Status403Forbidden)));
-
-        res.Participation = part;
-
-        if (part.Status != ParticipationStatus.Accepted)
-            return res.WithResult(StatusCode(StatusCodes.Status403Forbidden,
-                new RequestResponse("Your participation has not been accepted.", StatusCodes.Status403Forbidden)));
-
-        return res;
+        var user = await users.GetUserAsync(User);
+        var game = await games.GetGameById(gameId, cancellationToken);
+        if (game is null) return new(null, null, NotFound(new RequestResponse("Game not found.")));
+        if (game.GameType is not GameType.Penetration and not GameType.Mixed)
+            return new(null, null, BadRequest(new RequestResponse("The game has no penetration module.")));
+        if (DateTimeOffset.UtcNow < game.StartTimeUtc)
+            return new(null, null, BadRequest(new RequestResponse("The game has not started.", ErrorCodes.GameNotStarted)));
+        if (denyAfterEnded && !game.PracticeMode && game.EndTimeUtc < DateTimeOffset.UtcNow)
+            return new(null, null, BadRequest(new RequestResponse("The game has ended.", ErrorCodes.GameEnded)));
+        if (user is null) return new(null, null, Unauthorized(new RequestResponse("Login required.")));
+        if (!denyAfterEnded && user.Role >= Role.Teacher) return new(user, null, null);
+        var participation = await participations.GetParticipation(user.Id, gameId, cancellationToken);
+        if (participation?.Status != ParticipationStatus.Accepted)
+            return new(user, null, StatusCode(StatusCodes.Status403Forbidden,
+                new RequestResponse("Accepted participation is required.")));
+        return new(user, participation, null);
     }
 
-    sealed class ContextInfo
-    {
-        public Game? Game;
-        public Participation? Participation;
-        public UserInfo? User;
-        public IActionResult? Result;
-
-        public ContextInfo WithResult(IActionResult result)
-        {
-            Result = result;
-            return this;
-        }
-    }
+    private sealed record PlayerContext(UserInfo? User, Participation? Participation, IActionResult? Error);
 }

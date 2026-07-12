@@ -184,32 +184,6 @@ public class NodesController : ControllerBase
         var includeTeamLab = normalizedType is "all" or "teamlab";
 
         var resources = new List<NodeResourceItemModel>();
-        var pentestContainerIds = new HashSet<Guid>();
-
-        if (includePentest)
-        {
-            var runtimes = await _context.PenetrationRuntimeNodes.AsNoTracking()
-                .Where(r => r.Environment.NodeId == id)
-                .Include(r => r.Environment).ThenInclude(e => e.Team)
-                .Include(r => r.Environment).ThenInclude(e => e.Game)
-                .Include(r => r.TopologyNode)
-                .Include(r => r.Container)
-                .ToListAsync(token);
-
-            pentestContainerIds = runtimes
-                .Where(r => r.ContainerId.HasValue)
-                .Select(r => r.ContainerId!.Value)
-                .ToHashSet();
-            resources.AddRange(runtimes.Select(ToNodePentestResource));
-        }
-        else if (includeContainers)
-        {
-            pentestContainerIds = (await _context.PenetrationRuntimeNodes.AsNoTracking()
-                    .Where(r => r.Environment.NodeId == id && r.ContainerId.HasValue)
-                    .Select(r => r.ContainerId!.Value)
-                    .ToArrayAsync(token))
-                .ToHashSet();
-        }
 
         if (includeContainers)
         {
@@ -219,9 +193,7 @@ public class NodesController : ControllerBase
                 .Include(c => c.GameInstance).ThenInclude(i => i!.Participation).ThenInclude(p => p.Team)
                 .ToListAsync(token);
 
-            resources.AddRange(containers
-                .Where(c => !pentestContainerIds.Contains(c.Id))
-                .Select(ToNodeContainerResource));
+            resources.AddRange(containers.Select(ToNodeContainerResource));
         }
 
         if (includeVms)
@@ -255,16 +227,29 @@ public class NodesController : ControllerBase
             resources.AddRange(vmResources);
         }
 
-        if (includeTeamLab)
+        if (includePentest || includeTeamLab)
         {
             var assets = await _context.TeamLabRuntimeAssets.AsNoTracking()
                 .Where(a => a.WorkerNodeId == id || (a.WorkerNodeId == null && a.Shard != null && a.Shard.WorkerNodeId == id))
-                .Include(a => a.Runtime).ThenInclude(r => r.Game)
-                .Include(a => a.Runtime).ThenInclude(r => r.Team)
+                .Include(a => a.Runtime)
                 .Include(a => a.Shard)
                 .ToListAsync(token);
+            var runtimeIds = assets.Select(asset => asset.RuntimeId).Distinct().ToArray();
+            var bindings = await (
+                    from binding in _context.PenetrationTeamRuntimeBindings.AsNoTracking()
+                    join game in _context.Games.AsNoTracking() on binding.GameId equals game.Id
+                    join team in _context.Teams.AsNoTracking() on binding.TeamId equals team.Id
+                    where runtimeIds.Contains(binding.RuntimeId)
+                    select new NodeTeamLabBindingView(
+                        binding.RuntimeId, binding.GameId, game.Title, binding.TeamId, team.Name))
+                .ToDictionaryAsync(item => item.RuntimeId, token);
 
-            resources.AddRange(assets.Select(ToNodeTeamLabResource));
+            foreach (var asset in assets)
+            {
+                bindings.TryGetValue(asset.RuntimeId, out var binding);
+                if ((binding is null && includeTeamLab) || (binding is not null && includePentest))
+                    resources.Add(ToNodeTeamLabResource(asset, binding));
+            }
         }
 
         if (normalizedStatus == "active")
@@ -318,7 +303,7 @@ public class NodesController : ControllerBase
                     message = cleanup.Message,
                     cleanup.ActiveContainers,
                     cleanup.ActiveVms,
-                    cleanup.ActivePentestEnvironments
+                    cleanup.ActiveTeamLabRuntimes
                 });
 
             node = await _nodeRepo.GetNodeByIdAsync(id, token);
@@ -331,18 +316,15 @@ public class NodesController : ControllerBase
             .CountAsync(v => v.NodeId == id &&
                              (v.Status == VmInstanceStatus.Creating ||
                               v.Status == VmInstanceStatus.Running), token);
-        var activePentestEnvironments = await _context.PenetrationTeamEnvironments.AsNoTracking()
-            .CountAsync(e => e.NodeId == id &&
-                             e.Status != PenetrationRuntimeStatus.Stopped &&
-                             e.Status != PenetrationRuntimeStatus.Failed, token);
+        var activeTeamLabRuntimes = await CountActiveTeamLabRuntimesAsync(id, token);
 
-        if (activeContainers > 0 || activeVms > 0 || activePentestEnvironments > 0)
+        if (activeContainers > 0 || activeVms > 0 || activeTeamLabRuntimes > 0)
             return BadRequest(new
             {
                 message = "该节点仍承载运行资源，请先停止或清理后再注销。",
                 activeContainers,
                 activeVms,
-                activePentestEnvironments
+                activeTeamLabRuntimes
             });
 
         await using var transaction = await _context.Database.BeginTransactionAsync(token);
@@ -384,11 +366,6 @@ public class NodesController : ControllerBase
         foreach (var vm in await _context.VmInstances.Where(v => v.NodeId == id).ToListAsync(token))
             vm.NodeId = null;
 
-        foreach (var environment in await _context.PenetrationTeamEnvironments
-                     .Where(e => e.NodeId == id)
-                     .ToListAsync(token))
-            environment.NodeId = null;
-
         _context.WorkerNodes.Remove(node);
         await _context.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
@@ -401,33 +378,32 @@ public class NodesController : ControllerBase
     async Task<NodeForceCleanupResult> ForceCleanupNodeResources(Guid nodeId, CancellationToken token)
     {
         var errors = new List<string>();
-        var pentest = HttpContext.RequestServices.GetRequiredService<PenetrationService>();
+        var runtimes = HttpContext.RequestServices.GetRequiredService<GZCTF.Modules.TeamLab.Application.ITeamLabRuntimeApplicationService>();
         var containerManager = HttpContext.RequestServices.GetRequiredService<IContainerManager>();
         var fleetVm = HttpContext.RequestServices.GetRequiredService<FleetVmService>();
         var nginxProxySync = HttpContext.RequestServices.GetRequiredService<INginxProxySyncService>();
 
-        var environments = await _context.PenetrationTeamEnvironments
+        var runtimeIds = await _context.TeamLabRuntimeShards
             .AsNoTracking()
-            .Where(e => e.NodeId == nodeId &&
-                        e.Status != PenetrationRuntimeStatus.Stopped &&
-                        e.Status != PenetrationRuntimeStatus.Failed)
-            .Select(e => new { e.GameId, e.TeamId })
+            .Where(shard => shard.WorkerNodeId == nodeId && shard.Status != TeamLabRuntimeStatus.Destroyed)
+            .Select(shard => shard.Runtime.PublicId)
+            .Distinct()
             .ToArrayAsync(token);
 
-        foreach (var environment in environments)
+        foreach (var runtimeId in runtimeIds)
         {
             try
             {
-                var result = await pentest.CleanupTeamEnvironment(environment.GameId, environment.TeamId, token);
-                if (!result.Success)
-                    errors.Add($"渗透环境 {environment.GameId}/{environment.TeamId} 清理失败：{result.Message}");
+                var result = await runtimes.DestroyAsync(runtimeId, token);
+                if (result.Status != TeamLabRuntimeStatus.Destroyed)
+                    errors.Add($"TeamLab runtime {runtimeId:D} 清理失败：{result.Error}");
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex,
-                    "Force deregister failed to cleanup penetration environment on node {NodeId}, game {GameId}, team {TeamId}.",
-                    nodeId, environment.GameId, environment.TeamId);
-                errors.Add($"渗透环境 {environment.GameId}/{environment.TeamId} 清理异常：{ex.Message}");
+                    "Force deregister failed to cleanup TeamLab runtime {RuntimeId} on node {NodeId}.",
+                    runtimeId, nodeId);
+                errors.Add($"TeamLab runtime {runtimeId:D} 清理异常：{ex.Message}");
             }
         }
 
@@ -442,11 +418,6 @@ public class NodesController : ControllerBase
                 await containerManager.DestroyContainerAsync(container, token);
                 if (container.Status == ContainerStatus.Destroyed)
                 {
-                    await _context.PenetrationRuntimeNodes
-                        .Where(r => r.ContainerId == container.Id)
-                        .ExecuteUpdateAsync(s => s
-                            .SetProperty(r => r.ContainerId, (Guid?)null)
-                            .SetProperty(r => r.Status, PenetrationRuntimeStatus.Stopped), token);
                     await _context.GameInstances
                         .Where(i => i.ContainerId == container.Id)
                         .ExecuteUpdateAsync(s => s.SetProperty(i => i.ContainerId, (Guid?)null), token);
@@ -501,21 +472,28 @@ public class NodesController : ControllerBase
             .CountAsync(v => v.NodeId == nodeId &&
                              (v.Status == VmInstanceStatus.Creating ||
                               v.Status == VmInstanceStatus.Running), token);
-        var activePentestEnvironments = await _context.PenetrationTeamEnvironments.AsNoTracking()
-            .CountAsync(e => e.NodeId == nodeId &&
-                             e.Status != PenetrationRuntimeStatus.Stopped &&
-                             e.Status != PenetrationRuntimeStatus.Failed, token);
+        var activeTeamLabRuntimes = await CountActiveTeamLabRuntimesAsync(nodeId, token);
 
-        if (activeContainers > 0 || activeVms > 0 || activePentestEnvironments > 0)
+        if (activeContainers > 0 || activeVms > 0 || activeTeamLabRuntimes > 0)
         {
             errors.Insert(0, "强制注销前仍有资源未确认清理，节点已暂停调度但不会注销。");
-            return new(false, string.Join('\n', errors), activeContainers, activeVms, activePentestEnvironments);
+            return new(false, string.Join('\n', errors), activeContainers, activeVms, activeTeamLabRuntimes);
         }
 
         return new(true,
             errors.Count == 0 ? "节点资源已清理。" : $"节点资源已清理，期间有可忽略提示：{string.Join('\n', errors)}",
-            activeContainers, activeVms, activePentestEnvironments);
+            activeContainers, activeVms, activeTeamLabRuntimes);
     }
+
+    Task<int> CountActiveTeamLabRuntimesAsync(Guid nodeId, CancellationToken token) =>
+        _context.TeamLabRuntimeShards.AsNoTracking()
+            .Where(shard => shard.WorkerNodeId == nodeId &&
+                            shard.Status != TeamLabRuntimeStatus.Stopped &&
+                            shard.Status != TeamLabRuntimeStatus.Failed &&
+                            shard.Status != TeamLabRuntimeStatus.Destroyed)
+            .Select(shard => shard.RuntimeId)
+            .Distinct()
+            .CountAsync(token);
 
     [HttpPatch("{id:guid}")]
     [RequireAdmin]
@@ -640,13 +618,15 @@ public class NodesController : ControllerBase
             return Forbid();
 
         var runningTeamLabDockerAssets = await _context.TeamLabRuntimeAssets.CountAsync(
-            a => (a.WorkerNodeId == node.Id || (a.WorkerNodeId == null && a.Runtime.WorkerNodeId == node.Id))
+            a => (a.WorkerNodeId == node.Id ||
+                  (a.WorkerNodeId == null && a.Shard != null && a.Shard.WorkerNodeId == node.Id))
                  && a.Runtime.Status == TeamLabRuntimeStatus.Running
                  && a.Kind == TeamLabResourceKind.Docker
                  && a.Status == TeamLabRuntimeStatus.Running,
             HttpContext.RequestAborted);
         var runningTeamLabVmAssets = await _context.TeamLabRuntimeAssets.CountAsync(
-            a => (a.WorkerNodeId == node.Id || (a.WorkerNodeId == null && a.Runtime.WorkerNodeId == node.Id))
+            a => (a.WorkerNodeId == node.Id ||
+                  (a.WorkerNodeId == null && a.Shard != null && a.Shard.WorkerNodeId == node.Id))
                  && a.Runtime.Status == TeamLabRuntimeStatus.Running
                  && a.Kind == TeamLabResourceKind.Vm
                  && a.Status == TeamLabRuntimeStatus.Running,
@@ -917,51 +897,9 @@ public class NodesController : ControllerBase
         };
     }
 
-    static NodeResourceItemModel ToNodePentestResource(PenetrationRuntimeNode runtime)
-    {
-        var environment = runtime.Environment;
-        var container = runtime.Container;
-        var topologyNode = runtime.TopologyNode;
-        var active = runtime.Status is PenetrationRuntimeStatus.Pending
-            or PenetrationRuntimeStatus.Running
-            or PenetrationRuntimeStatus.CreatingNetworks
-            or PenetrationRuntimeStatus.CreatingContainers
-            or PenetrationRuntimeStatus.CleanupPending
-            or PenetrationRuntimeStatus.Orphaned
-            or PenetrationRuntimeStatus.ManualCleanupRequired;
-        var status = runtime.Status.ToString();
-
-        if (container is not null && container.Status is ContainerStatus.Destroyed)
-            active = false;
-
-        return new NodeResourceItemModel
-        {
-            Kind = "pentest",
-            Id = runtime.Id.ToString(),
-            Name = topologyNode?.Name ?? runtime.TopologyNodeKey,
-            Status = status,
-            IsActive = active,
-            StartedAt = runtime.CreatedAt,
-            ExpectedStopAt = null,
-            StoppedAt = active ? null : environment.UpdatedAt,
-            Duration = FormatDuration(runtime.CreatedAt, active ? DateTimeOffset.UtcNow : environment.UpdatedAt ?? runtime.CreatedAt),
-            Image = container?.Image,
-            RuntimeId = ShortenRuntimeId(container?.ContainerId ?? runtime.TopologyNodeKey),
-            Entry = runtime.AdminAccessUrl,
-            Ip = runtime.IpAddress,
-            Port = runtime.PublicPort,
-            GameId = environment.GameId,
-            GameTitle = environment.Game.Title,
-            ChallengeId = topologyNode?.Id,
-            ChallengeTitle = topologyNode?.Name,
-            ChallengeCategory = "综合渗透",
-            TeamId = environment.TeamId,
-            TeamName = environment.Team.Name,
-            ProviderName = runtime.NetworkName
-        };
-    }
-
-    static NodeResourceItemModel ToNodeTeamLabResource(TeamLabRuntimeAsset asset)
+    static NodeResourceItemModel ToNodeTeamLabResource(
+        TeamLabRuntimeAsset asset,
+        NodeTeamLabBindingView? binding)
     {
         var runtime = asset.Runtime;
         var active = asset.Status is TeamLabRuntimeStatus.Pending
@@ -980,7 +918,7 @@ public class NodesController : ControllerBase
 
         return new NodeResourceItemModel
         {
-            Kind = "teamlab",
+            Kind = binding is null ? "teamlab" : "pentest",
             Id = asset.Id.ToString(),
             Name = string.IsNullOrWhiteSpace(asset.Name) ? asset.TopologyKey : asset.Name,
             Status = asset.Status.ToString(),
@@ -990,17 +928,17 @@ public class NodesController : ControllerBase
             StoppedAt = stoppedAt,
             Duration = FormatDuration(startedAt, stoppedAt ?? DateTimeOffset.UtcNow),
             Image = asset.Image,
-            RuntimeId = ShortenRuntimeId(asset.RuntimeResourceId ?? asset.TopologyKey),
+            RuntimeId = runtime.PublicId.ToString("D"),
             Entry = asset.IpAddress,
             Ip = asset.IpAddress,
             Port = null,
-            GameId = runtime.GameId,
-            GameTitle = runtime.Game.Title,
+            GameId = binding?.GameId,
+            GameTitle = binding?.GameTitle,
             ChallengeId = null,
             ChallengeTitle = asset.Name,
             ChallengeCategory = "TeamLab",
-            TeamId = runtime.TeamId,
-            TeamName = runtime.Team.Name,
+            TeamId = binding?.TeamId,
+            TeamName = binding?.TeamName,
             ProviderName = provider,
             OsType = asset.Kind.ToString()
         };
@@ -1178,6 +1116,8 @@ public class TeamLabNodeCapabilityReport
 }
 
 record NodeForceCleanupResult(bool Success, string Message, int ActiveContainers, int ActiveVms,
-    int ActivePentestEnvironments);
+    int ActiveTeamLabRuntimes);
+
+record NodeTeamLabBindingView(int RuntimeId, int GameId, string GameTitle, int TeamId, string TeamName);
 
 record PublicPortPool(int? Start, int? End, int Total, string Mode);

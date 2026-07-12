@@ -635,7 +635,7 @@ public sealed class OpenImageApiTests(GZCTFApplicationFactory factory) : IAsyncL
             Email = $"open-image-{suffix}@example.test",
             NormalizedEmail = $"OPEN-IMAGE-{suffix.ToUpperInvariant()}@EXAMPLE.TEST",
             EmailConfirmed = true,
-            Role = Role.Teacher,
+            Role = resources is { Count: > 0 } ? Role.Admin : Role.Teacher,
             RegisterTimeUtc = DateTimeOffset.UtcNow
         };
         var created = await userManager.CreateAsync(user, TestPassword);

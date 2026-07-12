@@ -24,6 +24,7 @@ using TeamLabNetworkLeaseEntity = GZCTF.Modules.TeamLab.Domain.TeamLabNetworkLea
 using PenetrationObjectiveEntity = GZCTF.Modules.Penetration.Domain.PenetrationObjective;
 using PenetrationGameLabBindingEntity = GZCTF.Modules.Penetration.Domain.PenetrationGameLabBinding;
 using PenetrationTeamRuntimeBindingEntity = GZCTF.Modules.Penetration.Domain.PenetrationTeamRuntimeBinding;
+using TeamLabRuntimeOperationJobEntity = GZCTF.Modules.TeamLab.Domain.TeamLabRuntimeOperationJob;
 
 namespace GZCTF.Models;
 
@@ -93,17 +94,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<AwdpPatchSubmission> AwdpPatchSubmissions { get; set; } = null!;
     public DbSet<AwdpResetRecord> AwdpResetRecords { get; set; } = null!;
     public DbSet<AwdpRecoveryRecord> AwdpRecoveryRecords { get; set; } = null!;
-    public DbSet<PenetrationConfig> PenetrationConfigs { get; set; } = null!;
-    public DbSet<PenetrationPublishedSnapshot> PenetrationPublishedSnapshots { get; set; } = null!;
-    public DbSet<PenetrationNetwork> PenetrationNetworks { get; set; } = null!;
-    public DbSet<PenetrationNode> PenetrationNodes { get; set; } = null!;
-    public DbSet<PenetrationInterface> PenetrationInterfaces { get; set; } = null!;
-    public DbSet<PenetrationEdge> PenetrationEdges { get; set; } = null!;
-    public DbSet<PenetrationScoreItem> PenetrationScoreItems { get; set; } = null!;
-    public DbSet<PenetrationTeamEnvironment> PenetrationTeamEnvironments { get; set; } = null!;
-    public DbSet<PenetrationDeploymentEvent> PenetrationDeploymentEvents { get; set; } = null!;
-    public DbSet<PenetrationRuntimeNode> PenetrationRuntimeNodes { get; set; } = null!;
-    public DbSet<PenetrationRuntimeRoute> PenetrationRuntimeRoutes { get; set; } = null!;
     public DbSet<PenetrationSubmission> PenetrationSubmissions { get; set; } = null!;
     public DbSet<PenetrationResetRecord> PenetrationResetRecords { get; set; } = null!;
     public DbSet<PenetrationObjectiveEntity> PenetrationObjectives => Set<PenetrationObjectiveEntity>();
@@ -143,6 +133,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TeamLabTopologyConnectionEntity> TeamLabTopologyConnections => Set<TeamLabTopologyConnectionEntity>();
     public DbSet<TeamLabTopologyReleaseEntity> TeamLabTopologyReleases => Set<TeamLabTopologyReleaseEntity>();
     public DbSet<TeamLabNetworkLeaseEntity> TeamLabNetworkLeases => Set<TeamLabNetworkLeaseEntity>();
+    public DbSet<TeamLabRuntimeOperationJobEntity> TeamLabRuntimeOperationJobs => Set<TeamLabRuntimeOperationJobEntity>();
 
     private static ValueConverter<T?, string> GetJsonConverter<T>() where T : class, new() =>
         new(
@@ -794,204 +785,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        builder.Entity<PenetrationConfig>(entity =>
-        {
-            entity.Property(e => e.Status)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.HasOne(e => e.Game)
-                .WithOne()
-                .HasForeignKey<PenetrationConfig>(e => e.GameId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        builder.Entity<PenetrationPublishedSnapshot>(entity =>
-        {
-            entity.HasOne(e => e.Game)
-                .WithMany()
-                .HasForeignKey(e => e.GameId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        builder.Entity<PenetrationNetwork>(entity =>
-        {
-            entity.HasIndex(e => new { e.ConfigId, e.TopologyKey }).IsUnique();
-
-            entity.Property(e => e.ZoneType)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.Property(e => e.DefaultPolicy)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.HasOne(e => e.Config)
-                .WithMany(e => e.Networks)
-                .HasForeignKey(e => e.ConfigId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        builder.Entity<PenetrationNode>(entity =>
-        {
-            entity.HasIndex(e => new { e.ConfigId, e.TopologyKey }).IsUnique();
-
-            entity.Property(e => e.NodeType)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.HasOne(e => e.Config)
-                .WithMany(e => e.Nodes)
-                .HasForeignKey(e => e.ConfigId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.Network)
-                .WithMany(e => e.Nodes)
-                .HasForeignKey(e => e.NetworkId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.ImageTemplate)
-                .WithMany()
-                .HasForeignKey(e => e.ImageTemplateId)
-                .OnDelete(DeleteBehavior.Restrict);
-        });
-
-        builder.Entity<PenetrationInterface>(entity =>
-        {
-            entity.HasIndex(e => new { e.NodeId, e.TopologyKey }).IsUnique();
-
-            entity.HasOne(e => e.Node)
-                .WithMany(e => e.Interfaces)
-                .HasForeignKey(e => e.NodeId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.Network)
-                .WithMany(e => e.Interfaces)
-                .HasForeignKey(e => e.NetworkId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        builder.Entity<PenetrationEdge>(entity =>
-        {
-            entity.HasIndex(e => new { e.ConfigId, e.TopologyKey }).IsUnique();
-
-            entity.Property(e => e.SourceKind)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.Property(e => e.TargetKind)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.Property(e => e.Protocol)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.Property(e => e.PolicyAction)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.Property(e => e.EnforcementMode)
-                .HasConversion<string>()
-                .HasMaxLength(32)
-                .HasDefaultValue(PenetrationEnforcementMode.HintOnly);
-
-            entity.Property(e => e.Priority)
-                .HasDefaultValue(100);
-
-            entity.HasOne(e => e.Config)
-                .WithMany(e => e.Edges)
-                .HasForeignKey(e => e.ConfigId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        builder.Entity<PenetrationScoreItem>(entity =>
-        {
-            entity.HasIndex(e => new { e.NodeId, e.TopologyKey }).IsUnique();
-
-            entity.Property(e => e.IsCheckpoint)
-                .HasDefaultValue(false);
-
-            entity.HasOne(e => e.Node)
-                .WithMany(e => e.ScoreItems)
-                .HasForeignKey(e => e.NodeId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        builder.Entity<PenetrationTeamEnvironment>(entity =>
-        {
-            entity.Property(e => e.Status)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.HasOne(e => e.Game)
-                .WithMany()
-                .HasForeignKey(e => e.GameId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.Team)
-                .WithMany()
-                .HasForeignKey(e => e.TeamId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        builder.Entity<PenetrationDeploymentEvent>(entity =>
-        {
-            entity.Property(e => e.Level)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.HasOne(e => e.Environment)
-                .WithMany(e => e.DeploymentEvents)
-                .HasForeignKey(e => e.EnvironmentId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        builder.Entity<PenetrationRuntimeNode>(entity =>
-        {
-            entity.Property(e => e.Status)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.HasOne(e => e.Environment)
-                .WithMany(e => e.RuntimeNodes)
-                .HasForeignKey(e => e.EnvironmentId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.TopologyNode)
-                .WithMany()
-                .HasForeignKey(e => e.TopologyNodeId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.Container)
-                .WithMany()
-                .HasForeignKey(e => e.ContainerId)
-                .OnDelete(DeleteBehavior.SetNull);
-        });
-
-        builder.Entity<PenetrationRuntimeRoute>(entity =>
-        {
-            entity.Property(e => e.EnforcementMode)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.Property(e => e.Status)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.HasOne(e => e.Environment)
-                .WithMany(e => e.RuntimeRoutes)
-                .HasForeignKey(e => e.EnvironmentId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
         builder.Entity<PenetrationSubmission>(entity =>
         {
             entity.Property(e => e.Status)
                 .HasConversion<string>()
                 .HasMaxLength(32);
 
-            entity.HasIndex(e => new { e.GameId, e.TeamId, e.PublishedVersion, e.ScoreItemTopologyKey });
+            entity.HasIndex(e => new { e.GameId, e.TeamId, e.ObjectiveId });
 
             entity.HasOne(e => e.Game)
                 .WithMany()
@@ -1013,26 +813,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .HasForeignKey(e => e.ParticipationId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            entity.HasOne(e => e.ScoreItem)
-                .WithMany()
-                .HasForeignKey(e => e.ScoreItemId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne<PenetrationObjectiveEntity>()
+            entity.HasOne(e => e.Objective)
                 .WithMany()
                 .HasForeignKey(e => e.ObjectiveId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.Navigation(e => e.Team).AutoInclude();
             entity.Navigation(e => e.User).AutoInclude();
-            entity.Navigation(e => e.ScoreItem).AutoInclude();
+            entity.Navigation(e => e.Objective).AutoInclude();
         });
 
         builder.Entity<PenetrationResetRecord>(entity =>
         {
-            entity.HasOne(e => e.Environment)
+            entity.HasOne(e => e.Runtime)
                 .WithMany()
-                .HasForeignKey(e => e.EnvironmentId)
+                .HasForeignKey(e => e.RuntimeId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasOne(e => e.User)
@@ -1608,21 +1403,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
 
         builder.Entity<TeamLabRuntime>(entity =>
         {
-            entity.HasOne(e => e.Game)
-                .WithMany()
-                .HasForeignKey(e => e.GameId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.Team)
-                .WithMany()
-                .HasForeignKey(e => e.TeamId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.WorkerNode)
-                .WithMany()
-                .HasForeignKey(e => e.WorkerNodeId)
-                .OnDelete(DeleteBehavior.SetNull);
-
             entity.Property(e => e.Status)
                 .HasConversion<byte>();
         });

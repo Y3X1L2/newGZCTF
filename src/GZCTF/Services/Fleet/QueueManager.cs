@@ -1,6 +1,5 @@
 using GZCTF.Models.Data;
 using GZCTF.Services.Concurrency;
-using GZCTF.Services.TeamLab;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Services.Fleet;
@@ -241,9 +240,8 @@ public class QueueManager
     {
         if (ticket.Kind == DeploymentQueueKind.TeamLabRuntime && ticket.TeamLabRuntimeId is { } runtimeId)
         {
-            var shardSlots = await LoadTeamLabShardSlotsAsync(context, runtimeId,
-                new TeamLabAssetSlotCount(ticket.DockerSlots, ticket.VmSlots), token);
-            if (shardSlots.Count == 0)
+            var shardSlots = await TeamLabCapacityFacts.LoadAsync(context, runtimeId, token);
+            if (shardSlots.Length == 0)
                 return FleetCapacityReservationResult.Failed("TeamLab runtime has no planned shard capacity.");
 
             var reservation = await capacity.TryReserveBatchAsync(
@@ -273,8 +271,7 @@ public class QueueManager
     {
         if (reserved.IsTeamLabRuntime && ticket.TeamLabRuntimeId is { } runtimeId)
         {
-            var shardSlots = await LoadTeamLabShardSlotsAsync(context, runtimeId,
-                new TeamLabAssetSlotCount(ticket.DockerSlots, ticket.VmSlots), token);
+            var shardSlots = await TeamLabCapacityFacts.LoadAsync(context, runtimeId, token);
             foreach (var slot in shardSlots)
                 await capacity.ConfirmAsync(slot.WorkerNodeId, slot.DockerSlots, slot.VmSlots, token);
             return;
@@ -293,8 +290,7 @@ public class QueueManager
                 .FirstOrDefaultAsync(t => t.Id == reserved.TicketId, token);
             if (ticket?.TeamLabRuntimeId is { } runtimeId)
             {
-                var shardSlots = await LoadTeamLabShardSlotsAsync(context, runtimeId,
-                    new TeamLabAssetSlotCount(ticket.DockerSlots, ticket.VmSlots), token);
+                var shardSlots = await TeamLabCapacityFacts.LoadAsync(context, runtimeId, token);
                 foreach (var slot in shardSlots)
                     await capacity.ReleaseAsync(slot.WorkerNodeId, slot.DockerSlots, slot.VmSlots, token);
                 return;
@@ -302,18 +298,6 @@ public class QueueManager
         }
 
         await capacity.ReleaseAsync(reserved.NodeId, reserved.DockerSlots, reserved.VmSlots, token);
-    }
-
-    static async Task<IReadOnlyList<TeamLabShardSlotCount>> LoadTeamLabShardSlotsAsync(AppDbContext context,
-        int runtimeId, TeamLabAssetSlotCount fallbackSlots, CancellationToken token)
-    {
-        var runtime = await context.TeamLabRuntimes
-            .AsNoTracking()
-            .Include(runtime => runtime.Shards)
-                .ThenInclude(shard => shard.Assets)
-            .SingleOrDefaultAsync(runtime => runtime.Id == runtimeId, token);
-
-        return runtime is null ? [] : TeamLabDeploymentService.CountShardSlots(runtime, fallbackSlots);
     }
 
     static NodeCapability GetRequiredCapability(DeploymentQueueTicket ticket)
@@ -353,10 +337,12 @@ public class QueueManager
         if (ticket.Kind != DeploymentQueueKind.TeamLabRuntime || ticket.TeamLabRuntimeId is not { } runtimeId)
             return null;
 
-        return await context.TeamLabRuntimes
-            .AsNoTracking()
+        return await context.TeamLabRuntimes.AsNoTracking()
             .Where(runtime => runtime.Id == runtimeId)
-            .Select(runtime => runtime.WorkerNodeId)
+            .Select(runtime => runtime.Shards
+                .Where(shard => shard.Generation == runtime.Generation && shard.Id == runtime.EntryShardId)
+                .Select(shard => (Guid?)shard.WorkerNodeId)
+                .FirstOrDefault())
             .SingleOrDefaultAsync(token);
     }
 

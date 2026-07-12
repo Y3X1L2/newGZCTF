@@ -102,7 +102,7 @@ public class ReviewFindingRegressionTests
             CurrentContainers = 2,
             ReservedContainers = 2
         };
-        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(1, 2, 3, dockerSlots: 2, vmSlots: 0));
+        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(3, dockerSlots: 2, vmSlots: 0));
         ticket.Status = DeploymentQueueTicketStatus.Creating;
         ticket.TargetNodeId = node.Id;
         ticket.StartedAt = DateTimeOffset.UtcNow - TimeSpan.FromMinutes(30);

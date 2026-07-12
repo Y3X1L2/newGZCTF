@@ -299,6 +299,11 @@ public class TeamLabCommandBuilderTests
             [
                 new TeamLabStaticRouteRequest("10.180.53.48/28", "10.24.0.27", "10.77.10.1")
             ],
+            ForwardPolicies:
+            [
+                new TeamLabForwardPolicyRequest("10.77.10.0/24", "10.180.53.48/28", true),
+                new TeamLabForwardPolicyRequest("10.77.10.0/24", "192.168.50.0/24", false)
+            ],
             DryRun: true), CancellationToken.None);
 
         Assert.True(result.Success);
@@ -322,6 +327,12 @@ public class TeamLabCommandBuilderTests
         Assert.Contains(result.Commands,
             command => command.Contains("--comment gzctf-teamlab-runtime-123") &&
                        command.Contains("-o tlrf123 -s 10.77.10.0/24 -j ACCEPT"));
+        Assert.Contains(result.Commands,
+            command => command.Contains("ip netns exec tlr123 iptables -A TEAMLAB-POLICY") &&
+                       command.Contains("-s 10.77.10.0/24 -d 10.180.53.48/28 -j ACCEPT"));
+        Assert.Contains(result.Commands,
+            command => command.Contains("ip netns exec tlr123 iptables -A TEAMLAB-POLICY") &&
+                       command.Contains("-s 10.77.10.0/24 -d 192.168.50.0/24 -j REJECT"));
     }
 
     [Fact]

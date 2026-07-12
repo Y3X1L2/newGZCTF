@@ -126,9 +126,7 @@ internal static class ServicesExtension
 
             builder.Services.AddScoped<GamePhaseService>();
             builder.Services.AddScoped<TheoryExamService>();
-            builder.Services.AddScoped<PenetrationService>();
             builder.Services.AddScoped<PortalSsoService>();
-            builder.Services.AddHostedService<PenetrationCleanupService>();
 
             builder.Services.AddHostedService<FlagChecker>();
 
@@ -163,12 +161,7 @@ internal static class ServicesExtension
             builder.Services.AddSingleton<GuacamoleService>();
             builder.Services.AddHostedService<VmReadyService>();
             builder.Services.AddScoped<NodeTunnelService>();
-            builder.Services.AddScoped<TeamLabWireGuardService>();
             builder.Services.AddScoped<IPublicUdpGatewayProvider, PublicUdpGatewayProvider>();
-            builder.Services.AddScoped<TeamLabPlanService>();
-            builder.Services.AddScoped<TeamLabDeploymentService>();
-            builder.Services.AddScoped<TeamLabTrafficCaptureService>();
-            builder.Services.AddScoped<TeamLabTrafficFlowService>();
 
             // Cross-node coordination requires a shared lock in Fleet mode.
             if (builder.Configuration.GetValue<string>("RunMode") == "Fleet")

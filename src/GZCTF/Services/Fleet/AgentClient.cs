@@ -969,7 +969,13 @@ public record TeamLabFabricApplyRequest(
     string NamespacePeerAddressCidr = "",
     TeamLabStaticRouteRequest[]? LocalRoutes = null,
     TeamLabStaticRouteRequest[]? Routes = null,
+    TeamLabForwardPolicyRequest[]? ForwardPolicies = null,
     bool DryRun = true);
+
+public record TeamLabForwardPolicyRequest(
+    string SourceCidr,
+    string DestinationCidr,
+    bool Allow);
 
 public record TeamLabCaptureStartRequest(
     int RuntimeId,
@@ -996,6 +1002,7 @@ public record TeamLabCaptureResponse(
     string Message,
     string? FilePath,
     long CapturedBytes,
+    bool Running,
     string[] Commands);
 
 public record TeamLabFlowStartRequest(
@@ -1014,9 +1021,11 @@ public record TeamLabFlowStopRequest(
 public record TeamLabFlowSnapshotRequest(
     int RuntimeId,
     string NetworkKey,
+    long AfterCursor = 0,
     bool DryRun = true);
 
 public record TeamLabFlowSample(
+    long Cursor,
     DateTimeOffset CapturedAt,
     string SourceIp,
     int? SourcePort,
@@ -1029,6 +1038,7 @@ public record TeamLabFlowResponse(
     bool Success,
     bool DryRun,
     string Message,
+    long NextCursor,
     TeamLabFlowSample[] Samples,
     string[] Commands);
 

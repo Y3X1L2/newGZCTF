@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 using GZCTF.Controllers;
-using GZCTF.Models.Request.Game;
+using GZCTF.Modules.Penetration.Contracts;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Xunit;
@@ -18,13 +18,13 @@ public class TeamLabPlayerWorkspaceContractTests
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Select(p => p.Name)
             .ToHashSet(StringComparer.Ordinal);
-        var nodeProperties = typeof(PenetrationWorkspaceNodeModel)
+        var objectiveProperties = typeof(PenetrationWorkspaceObjectiveModel)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Select(p => p.Name)
             .ToHashSet(StringComparer.Ordinal);
 
         Assert.DoesNotContain("AttackGraph", workspaceProperties);
-        Assert.DoesNotContain("FogState", nodeProperties);
+        Assert.DoesNotContain("FogState", objectiveProperties);
     }
 
     [Fact]
@@ -34,7 +34,7 @@ public class TeamLabPlayerWorkspaceContractTests
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Select(p => p.Name)
             .ToHashSet(StringComparer.Ordinal);
-        var nodeProperties = typeof(PenetrationWorkspaceNodeModel)
+        var objectiveProperties = typeof(PenetrationWorkspaceObjectiveModel)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Select(p => p.Name)
             .ToHashSet(StringComparer.Ordinal);
@@ -43,11 +43,11 @@ public class TeamLabPlayerWorkspaceContractTests
         Assert.DoesNotContain("EntryPoints", workspaceProperties);
         Assert.DoesNotContain("Networks", workspaceProperties);
         Assert.DoesNotContain("Policies", workspaceProperties);
-        Assert.DoesNotContain("IpAddress", nodeProperties);
-        Assert.DoesNotContain("IsEntry", nodeProperties);
-        Assert.DoesNotContain("Interfaces", nodeProperties);
-        Assert.DoesNotContain("PositionX", nodeProperties);
-        Assert.DoesNotContain("PositionY", nodeProperties);
+        Assert.DoesNotContain("IpAddress", objectiveProperties);
+        Assert.DoesNotContain("IsEntry", objectiveProperties);
+        Assert.DoesNotContain("Interfaces", objectiveProperties);
+        Assert.DoesNotContain("PositionX", objectiveProperties);
+        Assert.DoesNotContain("PositionY", objectiveProperties);
     }
 
     [Fact]

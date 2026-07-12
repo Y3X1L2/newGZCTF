@@ -51,15 +51,13 @@ public enum TeamLabAccessGrantType : byte
     WireGuard = 0
 }
 
-[Index(nameof(GameId), nameof(TeamId), IsUnique = true)]
-[Index(nameof(WorkerNodeId))]
 public class TeamLabRuntime
 {
     [Key] public int Id { get; set; }
 
     public Guid PublicId { get; set; } = Guid.CreateVersion7();
 
-    public Guid? TopologyReleaseId { get; set; }
+    public Guid TopologyReleaseId { get; set; }
 
     public Guid? CreatedById { get; set; }
 
@@ -71,16 +69,6 @@ public class TeamLabRuntime
 
     public int? EntryShardId { get; set; }
 
-    public int GameId { get; set; }
-
-    public int TeamId { get; set; }
-
-    public int PublishedVersion { get; set; }
-
-    public Guid? WorkerNodeId { get; set; }
-
-    [MaxLength(64)] public string NetworkPrefix { get; set; } = string.Empty;
-
     public TeamLabRuntimeStatus Status { get; set; } = TeamLabRuntimeStatus.Pending;
 
     public bool IsOpenToPlayers { get; set; }
@@ -90,12 +78,6 @@ public class TeamLabRuntime
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public DateTimeOffset? UpdatedAt { get; set; }
-
-    public Game Game { get; set; } = null!;
-
-    public Team Team { get; set; } = null!;
-
-    public WorkerNode? WorkerNode { get; set; }
 
     public List<TeamLabRuntimeShard> Shards { get; set; } = [];
 
@@ -175,11 +157,15 @@ public class TeamLabRuntimeNetwork
 
     [MaxLength(128)] public string BridgeName { get; set; } = string.Empty;
 
+    public long FlowCursor { get; set; }
+
     public TeamLabRuntime Runtime { get; set; } = null!;
 
     public TeamLabRuntimeShard? Shard { get; set; }
 
     public WorkerNode? WorkerNode { get; set; }
+
+    public GZCTF.Modules.TeamLab.Domain.TeamLabNetworkLease? NetworkLease { get; set; }
 }
 
 [Index(nameof(RuntimeId), nameof(Generation), nameof(Kind), nameof(TopologyKey))]
@@ -287,6 +273,8 @@ public class TeamLabAccessGrant
 
     [MaxLength(1024)] public string ProtectedServerPrivateKey { get; set; } = string.Empty;
 
+    [MaxLength(128)] public string DownloadTokenHash { get; set; } = string.Empty;
+
     public bool Revoked { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -294,6 +282,8 @@ public class TeamLabAccessGrant
     public DateTimeOffset? ExpiresAt { get; set; }
 
     public DateTimeOffset? RevokedAt { get; set; }
+
+    public DateTimeOffset? ConfigurationConsumedAt { get; set; }
 
     public TeamLabRuntime Runtime { get; set; } = null!;
 }
@@ -375,6 +365,8 @@ public class TeamLabEvent
 
 [Index(nameof(RuntimeId), nameof(CapturedAt))]
 [Index(nameof(ShardId), nameof(CapturedAt))]
+[Index(nameof(RuntimeId), nameof(Generation), nameof(NetworkId), nameof(SourceCursor),
+    Name = "UX_TeamLabFlow_SourceCursor", IsUnique = true)]
 public class TeamLabTrafficFlow
 {
     [Key] public long Id { get; set; }
@@ -382,6 +374,8 @@ public class TeamLabTrafficFlow
     public int RuntimeId { get; set; }
 
     public int Generation { get; set; } = 1;
+
+    public long SourceCursor { get; set; }
 
     public int? ShardId { get; set; }
 
@@ -420,6 +414,8 @@ public class TeamLabTrafficFlow
 
 [Index(nameof(RuntimeId), nameof(Status))]
 [Index(nameof(ShardId), nameof(Status))]
+[Index(nameof(RuntimeId), nameof(Generation), nameof(IdempotencyKeyHash),
+    Name = "UX_TeamLabCapture_Idempotency", IsUnique = true)]
 public class TeamLabTrafficCaptureJob
 {
     [Key] public int Id { get; set; }
@@ -439,6 +435,10 @@ public class TeamLabTrafficCaptureJob
     public TeamLabTrafficCaptureStatus Status { get; set; } = TeamLabTrafficCaptureStatus.Pending;
 
     [MaxLength(64)] public string Scope { get; set; } = string.Empty;
+
+    [MaxLength(64)] public string? IdempotencyKeyHash { get; set; }
+
+    [MaxLength(64)] public string? RequestHash { get; set; }
 
     [MaxLength(512)] public string? FilePath { get; set; }
 

@@ -11,6 +11,7 @@ public sealed class TeamLabTopologyEntityConfiguration : IEntityTypeConfiguratio
         builder.ToTable("TeamLabTopologies");
         builder.HasKey(item => item.Id);
         builder.Property(item => item.Name).HasMaxLength(128);
+        builder.Property(item => item.EditorMetadataJson).HasColumnType("jsonb");
         builder.HasIndex(item => item.PublicId).IsUnique();
         builder.HasIndex(item => item.OwnerUserId);
         builder.HasOne<UserInfo>()

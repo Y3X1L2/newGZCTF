@@ -37,6 +37,7 @@ public sealed class TeamLabTopologyApplicationService(
             model.Name, model.Networks, model.Assets, model.Connections));
         await RequireValidAsync(definition, cancellationToken);
         var topology = BuildTopology(definition, actorUserId);
+        topology.EditorMetadataJson = SerializeEditor(NormalizeEditor(model.Editor, definition));
         context.TeamLabTopologies.Add(topology);
         await context.SaveChangesAsync(cancellationToken);
         return ToDetail(topology);
@@ -85,6 +86,7 @@ public sealed class TeamLabTopologyApplicationService(
             .Where(item => item.Id == identity.Id && item.Revision == model.Revision)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(item => item.Name, definition.Name)
+                .SetProperty(item => item.EditorMetadataJson, SerializeEditor(NormalizeEditor(model.Editor, definition)))
                 .SetProperty(item => item.Revision, item => item.Revision + 1)
                 .SetProperty(item => item.UpdatedAt, now), cancellationToken);
         if (updated == 0)
@@ -393,7 +395,57 @@ public sealed class TeamLabTopologyApplicationService(
     }
 
     private static TeamLabTopologyDetailModel ToDetail(TeamLabTopology topology) =>
-        new(topology.PublicId, topology.Revision, topology.SchemaVersion, ToDefinition(topology), topology.CreatedAt, topology.UpdatedAt);
+        new(topology.PublicId, topology.Revision, topology.SchemaVersion, ToDefinition(topology),
+            DeserializeEditor(topology.EditorMetadataJson), topology.CreatedAt, topology.UpdatedAt);
+
+    private static TeamLabTopologyEditorModel NormalizeEditor(
+        TeamLabTopologyEditorModel? editor,
+        TeamLabTopologyDefinitionModel definition)
+    {
+        var networkKeys = definition.Networks.Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
+        var assetKeys = definition.Assets.Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
+        return new TeamLabTopologyEditorModel(
+            NormalizeEditorItems(editor?.Networks, networkKeys),
+            NormalizeEditorItems(editor?.Assets, assetKeys));
+    }
+
+    private static IReadOnlyDictionary<string, TeamLabEditorItemModel> NormalizeEditorItems(
+        IReadOnlyDictionary<string, TeamLabEditorItemModel>? items,
+        IReadOnlySet<string> allowedKeys) =>
+        (items ?? new Dictionary<string, TeamLabEditorItemModel>())
+        .Where(pair => allowedKeys.Contains(pair.Key) && IsFinite(pair.Value.X) && IsFinite(pair.Value.Y))
+        .ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value with
+            {
+                X = Math.Clamp(pair.Value.X, -100000, 100000),
+                Y = Math.Clamp(pair.Value.Y, -100000, 100000),
+                Width = NormalizeDimension(pair.Value.Width),
+                Height = NormalizeDimension(pair.Value.Height)
+            },
+            StringComparer.Ordinal);
+
+    private static double? NormalizeDimension(double? value) =>
+        value is { } number && IsFinite(number) ? Math.Clamp(number, 80, 4000) : null;
+
+    private static bool IsFinite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
+
+    private static string SerializeEditor(TeamLabTopologyEditorModel editor) => JsonSerializer.Serialize(editor);
+
+    private static TeamLabTopologyEditorModel DeserializeEditor(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<TeamLabTopologyEditorModel>(json)
+                   ?? new TeamLabTopologyEditorModel(new Dictionary<string, TeamLabEditorItemModel>(),
+                       new Dictionary<string, TeamLabEditorItemModel>());
+        }
+        catch (JsonException)
+        {
+            return new TeamLabTopologyEditorModel(new Dictionary<string, TeamLabEditorItemModel>(),
+                new Dictionary<string, TeamLabEditorItemModel>());
+        }
+    }
 
     private static IReadOnlyDictionary<string, string> DeserializeEnvironment(string json)
     {

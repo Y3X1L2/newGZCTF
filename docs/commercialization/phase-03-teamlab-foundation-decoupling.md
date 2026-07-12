@@ -17,7 +17,13 @@
 - 验收节奏调整为四个大单元：独立领域基座、runtime 编排、Penetration/API 接入、contract migration 与最终验收。每个大单元末集中测试，不执行逐小步骤红灯/绿灯循环。
 - 已核实当前事实：TeamLab application module 尚不存在；`TeamLabRuntime` 仍以 `GameId + TeamId` 标识；`TeamLabDeploymentService` 仍直接生成 Penetration Flag；`PenetrationService` 与 `TeamLabDeploymentService` 分别约 160 KB 和 119 KB；前端 `PenetrationApi.ts` 仍混合玩法与 TeamLab runtime 契约。
 - 大单元 1：已完成并通过聚合验证。已新增独立 topology/network/asset/interface/connection/release/network lease 模型、Penetration objective/binding 模型、canonical release codec、RFC1918 validator、乐观 revision、能力感知 plan 和 expand migration；旧 runtime 已补 PublicId、release、generation、entry shard、access grant 和 secret envelope 扩展字段。验证结果：`TeamLabFoundation*` 6/6 通过，生产与测试项目 0 编译错误。
-- 当前状态：开始大单元 2，迁移 runtime 编排、队列身份、节点执行端口和 overlay。
+- 大单元 2：已完成新运行链路并通过聚合验证。TeamLab 队列身份只依赖 runtime；新增 planner、orchestrator、shard deployment、route application、cleanup、projection、Agent executor adapter、generation reset、加密 operation payload 和一次性 WireGuard access grant。验证结果：`TeamLabRuntimeFoundation*` 4/4 通过，生产与测试项目 0 编译错误。
+- 大单元 3：已完成 Penetration 标准调用方、内外 API、流量采集、动态 Flag runtime overlay、一次性 VPN grant、管理端四任务区、玩家端和大屏数据源切换。`TeamLabApi.ts` 与 `PenetrationApi.ts` 已拆分，前端 strict check 通过；生产后端曾在该检查点以 0 warning / 0 error 通过。
+- 大单元 4 contract migration：进行中。已删除旧 Penetration topology/environment/runtime node/runtime route 实体、DbSet、服务、控制器、DTO 和对应旧实现测试；`TeamLabRuntime` 已去除 GameId、TeamId、WorkerNodeId、PublishedVersion、NetworkPrefix，节点资源与部署队列通过 `PenetrationTeamRuntimeBinding` 投影比赛上下文。
+- 数据库收缩迁移已生成：`20260711170329_RemovePenetrationTopologyRuntimeCompatibility`。迁移在删除旧表前校验 active environment binding、submission objective、runtime release/entry/network/asset facts，并把 reset record 从旧 environment ID 显式重映射到 runtime ID；不使用空 UUID 或 objective 0 掩盖脏数据。
+- 大单元 4 contract migration 与生成物已完成：PostgreSQL 16 contract migration 2/2、后端单元测试 475/475、OpenAPI snapshot/comparator、前端 strict build 和 `git diff --check` 曾在最终审查前全部通过；`open-v1.json`、`ClientApp/src/Api.ts` 与 acceptance runbook 已生成。
+- 最终质量审查已由单个 Agent 完成并确认 9 项有效缺陷。2026-07-12 已完成代码修复：Destroyed runtime 可进入新 generation；Penetration runtime owner 与操作者解耦；reset 显式采用 active release；访问授权可重新签发且历史空 token grant 在迁移中撤销；管理 runtime/traffic/capture 增加对象级授权；容量按 current-generation shard facts 预留、释放和 reconcile；connection graph 同时约束单节点与多节点路由；flow 改为 Agent 增量游标；capture 接入幂等键和真实进程完成状态。
+- 新增可靠性迁移 `20260712053756_PersistTeamLabFlowCursor` 与 `20260712054103_CompleteTeamLabRuntimeReliability`，持久化 network flow cursor、flow source cursor 与 capture idempotency facts。当前解决方案编译为 0 warning / 0 error；首次全量测试暴露 5 个同源容量恢复断点，已按 shard 归属事实修复。
 
 ---
 

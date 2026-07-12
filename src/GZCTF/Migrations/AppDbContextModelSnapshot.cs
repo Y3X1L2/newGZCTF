@@ -538,6 +538,9 @@ namespace GZCTF.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<Guid?>("ApiOperationId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset?>("AssignedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -572,11 +575,27 @@ namespace GZCTF.Migrations
                     b.Property<Guid?>("OwnerUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ResourceDisplayName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
                     b.Property<DateTimeOffset?>("StartedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<byte>("Status")
                         .HasColumnType("smallint");
+
+                    b.Property<string>("SubjectDisplayName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("SubjectPublicId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("SubjectType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<Guid?>("TargetNodeId")
                         .HasColumnType("uuid");
@@ -1675,466 +1694,6 @@ namespace GZCTF.Migrations
                     b.ToTable("Participations");
                 });
 
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationConfig", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("BaseCidr")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<DateTimeOffset?>("DeployedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("GameId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("MaxResetCount")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("NetworkSubnetPrefix")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset?>("PublishedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("PublishedVersion")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<int>("TeamSubnetPrefix")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("GameId")
-                        .IsUnique();
-
-                    b.ToTable("PenetrationConfigs");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationDeploymentEvent", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Detail")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
-
-                    b.Property<int>("EnvironmentId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Level")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("Message")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("NodeName")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("Stage")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EnvironmentId", "CreatedAt");
-
-                    b.ToTable("PenetrationDeploymentEvents");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationEdge", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("ConfigId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<string>("EnforcementMode")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasDefaultValue("HintOnly");
-
-                    b.Property<bool>("IsRouteHint")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Label")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("PolicyAction")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("PortRange")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<int>("Priority")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(100);
-
-                    b.Property<string>("Protocol")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<int>("SourceId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("SourceKind")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<int>("SourceNodeId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("TargetId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("TargetKind")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<int>("TargetNodeId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("TopologyKey")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ConfigId");
-
-                    b.HasIndex("ConfigId", "TopologyKey")
-                        .IsUnique();
-
-                    b.ToTable("PenetrationEdges");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationInterface", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<bool>("IsManagement")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsPrimary")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<int>("NetworkId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("NodeId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("OrderIndex")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("StaticIp")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("TopologyKey")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("NetworkId");
-
-                    b.HasIndex("NodeId");
-
-                    b.HasIndex("NodeId", "TopologyKey")
-                        .IsUnique();
-
-                    b.ToTable("PenetrationInterfaces");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationNetwork", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Cidr")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<bool>("Collapsed")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("ConfigId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("DefaultPolicy")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<double>("Height")
-                        .HasColumnType("double precision");
-
-                    b.Property<bool>("IsEntry")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<int>("OrderIndex")
-                        .HasColumnType("integer");
-
-                    b.Property<double>("PositionX")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("PositionY")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("Slug")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("TopologyKey")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<int>("TrustLevel")
-                        .HasColumnType("integer");
-
-                    b.Property<double>("Width")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("ZoneType")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ConfigId");
-
-                    b.HasIndex("ConfigId", "TopologyKey")
-                        .IsUnique();
-
-                    b.ToTable("PenetrationNetworks");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationNode", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<bool>("AllowRouting")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("ConfigId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("CpuCount")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<string>("EnvironmentVariables")
-                        .IsRequired()
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.Property<int>("ExposePort")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("HealthCheck")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<string>("ImageName")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<int?>("ImageTemplateId")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsEntry")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("MemoryLimit")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<int>("NetworkId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("NodeType")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<int>("OrderIndex")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("PlayerAlias")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("PlayerDescription")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<double>("PositionX")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("PositionY")
-                        .HasColumnType("double precision");
-
-                    b.Property<bool>("PublishPort")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("ReservedAdRole")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("StartCommand")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<string>("StaticIp")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<int>("StorageLimit")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("TopologyKey")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ConfigId");
-
-                    b.HasIndex("ImageTemplateId");
-
-                    b.HasIndex("NetworkId");
-
-                    b.HasIndex("ConfigId", "TopologyKey")
-                        .IsUnique();
-
-                    b.ToTable("PenetrationNodes");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationPublishedSnapshot", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("GameId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("PublishedVersion")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("SnapshotHash")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("SnapshotJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("GameId", "PublishedVersion")
-                        .IsUnique();
-
-                    b.ToTable("PenetrationPublishedSnapshots");
-                });
-
             modelBuilder.Entity("GZCTF.Models.Data.PenetrationResetRecord", b =>
                 {
                     b.Property<int>("Id")
@@ -2146,240 +1705,22 @@ namespace GZCTF.Migrations
                     b.Property<bool>("ByAdmin")
                         .HasColumnType("boolean");
 
-                    b.Property<int>("EnvironmentId")
-                        .HasColumnType("integer");
-
                     b.Property<DateTimeOffset>("ResetAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RuntimeId")
+                        .HasColumnType("integer");
 
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EnvironmentId");
+                    b.HasIndex("RuntimeId");
 
                     b.HasIndex("UserId");
 
                     b.ToTable("PenetrationResetRecords");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationRuntimeNode", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AdminAccessUrl")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<Guid?>("ContainerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("EnvironmentId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("InterfaceSummary")
-                        .IsRequired()
-                        .HasMaxLength(4096)
-                        .HasColumnType("character varying(4096)");
-
-                    b.Property<string>("IpAddress")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("NetworkName")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<int?>("PublicPort")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<int>("TopologyNodeId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("TopologyNodeKey")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ContainerId");
-
-                    b.HasIndex("EnvironmentId");
-
-                    b.HasIndex("TopologyNodeId");
-
-                    b.ToTable("PenetrationRuntimeNodes");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationRuntimeRoute", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTimeOffset?>("AppliedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CommandSummary")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("EdgeTopologyKey")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("EnforcementMode")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<int>("EnvironmentId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("GatewayIp")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("Label")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("Message")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
-
-                    b.Property<string>("RouteNodeKey")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("RouteNodeName")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("SourceCidr")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("SourceNetworkName")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("TargetCidr")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("TargetNetworkName")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EdgeTopologyKey");
-
-                    b.HasIndex("EnvironmentId");
-
-                    b.ToTable("PenetrationRuntimeRoutes");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationScoreItem", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
-
-                    b.Property<string>("FlagTemplate")
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<bool>("IsCheckpoint")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<bool>("IsDynamic")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsVisible")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("MaxAttempts")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("NodeId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("OrderIndex")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("PrerequisiteItemIds")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<int>("Score")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("StaticFlag")
-                        .HasMaxLength(127)
-                        .HasColumnType("character varying(127)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("TopologyKey")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("NodeId");
-
-                    b.HasIndex("NodeId", "TopologyKey")
-                        .IsUnique();
-
-                    b.ToTable("PenetrationScoreItems");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.PenetrationSubmission", b =>
@@ -2398,25 +1739,14 @@ namespace GZCTF.Migrations
                     b.Property<int>("GameId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("ObjectiveId")
+                    b.Property<int>("ObjectiveId")
                         .HasColumnType("integer");
 
                     b.Property<int>("ParticipationId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("PublishedVersion")
-                        .HasColumnType("integer");
-
                     b.Property<int>("Score")
                         .HasColumnType("integer");
-
-                    b.Property<int>("ScoreItemId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ScoreItemTopologyKey")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -2438,84 +1768,13 @@ namespace GZCTF.Migrations
 
                     b.HasIndex("ParticipationId");
 
-                    b.HasIndex("ScoreItemId");
-
                     b.HasIndex("TeamId");
 
                     b.HasIndex("UserId");
 
-                    b.HasIndex("GameId", "TeamId", "ScoreItemId");
-
-                    b.HasIndex("GameId", "TeamId", "PublishedVersion", "ScoreItemTopologyKey");
+                    b.HasIndex("GameId", "TeamId", "ObjectiveId");
 
                     b.ToTable("PenetrationSubmissions");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationTeamEnvironment", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("CleanupRetryCount")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("GameId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset?>("LastCleanupAttemptAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("LastError")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
-
-                    b.Property<string>("NetworkPrefix")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<DateTimeOffset?>("NextCleanupAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("NodeId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("PublishedVersion")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("ResetCount")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<int>("TeamId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("TeamIndex")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("NodeId");
-
-                    b.HasIndex("TeamId");
-
-                    b.HasIndex("GameId", "TeamId")
-                        .IsUnique();
-
-                    b.ToTable("PenetrationTeamEnvironments");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.Post", b =>
@@ -2839,6 +2098,9 @@ namespace GZCTF.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<DateTimeOffset?>("ConfigurationConsumedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2846,6 +2108,11 @@ namespace GZCTF.Migrations
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<string>("DownloadTokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<string>("Endpoint")
                         .IsRequired()
@@ -3027,9 +2294,6 @@ namespace GZCTF.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<int>("GameId")
-                        .HasColumnType("integer");
-
                     b.Property<int>("Generation")
                         .HasColumnType("integer");
 
@@ -3040,31 +2304,17 @@ namespace GZCTF.Migrations
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
 
-                    b.Property<string>("NetworkPrefix")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
-
-                    b.Property<int>("PublishedVersion")
-                        .HasColumnType("integer");
 
                     b.Property<byte>("Status")
                         .HasColumnType("smallint");
 
-                    b.Property<int>("TeamId")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid?>("TopologyReleaseId")
+                    b.Property<Guid>("TopologyReleaseId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("WorkerNodeId")
-                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
@@ -3073,18 +2323,11 @@ namespace GZCTF.Migrations
                     b.HasIndex("PublicId")
                         .IsUnique();
 
-                    b.HasIndex("TeamId");
-
                     b.HasIndex("TopologyReleaseId");
-
-                    b.HasIndex("WorkerNodeId");
 
                     b.HasIndex("CreatedById", "ExternalReference")
                         .IsUnique()
                         .HasFilter("\"ExternalReference\" IS NOT NULL");
-
-                    b.HasIndex("GameId", "TeamId")
-                        .IsUnique();
 
                     b.ToTable("TeamLabRuntimes");
                 });
@@ -3185,6 +2428,9 @@ namespace GZCTF.Migrations
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<long>("FlowCursor")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("GatewayIp")
                         .IsRequired()
@@ -3343,6 +2589,10 @@ namespace GZCTF.Migrations
                     b.Property<int>("Generation")
                         .HasColumnType("integer");
 
+                    b.Property<string>("IdempotencyKeyHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("LastError")
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
@@ -3358,6 +2608,10 @@ namespace GZCTF.Migrations
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("RequestHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<int>("RuntimeId")
                         .HasColumnType("integer");
@@ -3388,6 +2642,9 @@ namespace GZCTF.Migrations
                     b.HasIndex("RuntimeId", "Status");
 
                     b.HasIndex("ShardId", "Status");
+
+                    b.HasIndex(new[] { "RuntimeId", "Generation", "IdempotencyKeyHash" }, "UX_TeamLabCapture_Idempotency")
+                        .IsUnique();
 
                     b.ToTable("TeamLabTrafficCaptureJobs");
                 });
@@ -3440,6 +2697,9 @@ namespace GZCTF.Migrations
                     b.Property<int?>("ShardId")
                         .HasColumnType("integer");
 
+                    b.Property<long>("SourceCursor")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("SourceIp")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -3460,6 +2720,9 @@ namespace GZCTF.Migrations
                     b.HasIndex("RuntimeId", "CapturedAt");
 
                     b.HasIndex("ShardId", "CapturedAt");
+
+                    b.HasIndex(new[] { "RuntimeId", "Generation", "NetworkId", "SourceCursor" }, "UX_TeamLabFlow_SourceCursor")
+                        .IsUnique();
 
                     b.ToTable("TeamLabTrafficFlows");
                 });
@@ -5398,6 +4661,46 @@ namespace GZCTF.Migrations
                     b.ToTable("TeamLabNetworkLeases", (string)null);
                 });
 
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabRuntimeOperationJob", b =>
+                {
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte>("Kind")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ProtectedPayload")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ResultJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<int?>("RuntimeId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("RuntimePublicId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("OperationId");
+
+                    b.HasIndex("RuntimeId");
+
+                    b.HasIndex("RuntimePublicId");
+
+                    b.ToTable("TeamLabRuntimeOperationJobs", (string)null);
+                });
+
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabTopology", b =>
                 {
                     b.Property<int>("Id")
@@ -5408,6 +4711,10 @@ namespace GZCTF.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EditorMetadataJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -6506,111 +5813,11 @@ namespace GZCTF.Migrations
                     b.Navigation("Writeup");
                 });
 
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationConfig", b =>
-                {
-                    b.HasOne("GZCTF.Models.Data.Game", "Game")
-                        .WithOne()
-                        .HasForeignKey("GZCTF.Models.Data.PenetrationConfig", "GameId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Game");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationDeploymentEvent", b =>
-                {
-                    b.HasOne("GZCTF.Models.Data.PenetrationTeamEnvironment", "Environment")
-                        .WithMany("DeploymentEvents")
-                        .HasForeignKey("EnvironmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Environment");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationEdge", b =>
-                {
-                    b.HasOne("GZCTF.Models.Data.PenetrationConfig", "Config")
-                        .WithMany("Edges")
-                        .HasForeignKey("ConfigId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Config");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationInterface", b =>
-                {
-                    b.HasOne("GZCTF.Models.Data.PenetrationNetwork", "Network")
-                        .WithMany("Interfaces")
-                        .HasForeignKey("NetworkId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GZCTF.Models.Data.PenetrationNode", "Node")
-                        .WithMany("Interfaces")
-                        .HasForeignKey("NodeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Network");
-
-                    b.Navigation("Node");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationNetwork", b =>
-                {
-                    b.HasOne("GZCTF.Models.Data.PenetrationConfig", "Config")
-                        .WithMany("Networks")
-                        .HasForeignKey("ConfigId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Config");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationNode", b =>
-                {
-                    b.HasOne("GZCTF.Models.Data.PenetrationConfig", "Config")
-                        .WithMany("Nodes")
-                        .HasForeignKey("ConfigId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GZCTF.Models.Data.ImageTemplate", "ImageTemplate")
-                        .WithMany()
-                        .HasForeignKey("ImageTemplateId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("GZCTF.Models.Data.PenetrationNetwork", "Network")
-                        .WithMany("Nodes")
-                        .HasForeignKey("NetworkId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Config");
-
-                    b.Navigation("ImageTemplate");
-
-                    b.Navigation("Network");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationPublishedSnapshot", b =>
-                {
-                    b.HasOne("GZCTF.Models.Data.Game", "Game")
-                        .WithMany()
-                        .HasForeignKey("GameId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Game");
-                });
-
             modelBuilder.Entity("GZCTF.Models.Data.PenetrationResetRecord", b =>
                 {
-                    b.HasOne("GZCTF.Models.Data.PenetrationTeamEnvironment", "Environment")
+                    b.HasOne("GZCTF.Models.Data.TeamLabRuntime", "Runtime")
                         .WithMany()
-                        .HasForeignKey("EnvironmentId")
+                        .HasForeignKey("RuntimeId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -6619,57 +5826,9 @@ namespace GZCTF.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.Navigation("Environment");
+                    b.Navigation("Runtime");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationRuntimeNode", b =>
-                {
-                    b.HasOne("GZCTF.Models.Data.Container", "Container")
-                        .WithMany()
-                        .HasForeignKey("ContainerId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("GZCTF.Models.Data.PenetrationTeamEnvironment", "Environment")
-                        .WithMany("RuntimeNodes")
-                        .HasForeignKey("EnvironmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GZCTF.Models.Data.PenetrationNode", "TopologyNode")
-                        .WithMany()
-                        .HasForeignKey("TopologyNodeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Container");
-
-                    b.Navigation("Environment");
-
-                    b.Navigation("TopologyNode");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationRuntimeRoute", b =>
-                {
-                    b.HasOne("GZCTF.Models.Data.PenetrationTeamEnvironment", "Environment")
-                        .WithMany("RuntimeRoutes")
-                        .HasForeignKey("EnvironmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Environment");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationScoreItem", b =>
-                {
-                    b.HasOne("GZCTF.Models.Data.PenetrationNode", "Node")
-                        .WithMany("ScoreItems")
-                        .HasForeignKey("NodeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Node");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.PenetrationSubmission", b =>
@@ -6680,20 +5839,15 @@ namespace GZCTF.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("GZCTF.Modules.Penetration.Domain.PenetrationObjective", null)
+                    b.HasOne("GZCTF.Modules.Penetration.Domain.PenetrationObjective", "Objective")
                         .WithMany()
                         .HasForeignKey("ObjectiveId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("GZCTF.Models.Data.Participation", "Participation")
                         .WithMany()
                         .HasForeignKey("ParticipationId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GZCTF.Models.Data.PenetrationScoreItem", "ScoreItem")
-                        .WithMany()
-                        .HasForeignKey("ScoreItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -6711,38 +5865,13 @@ namespace GZCTF.Migrations
 
                     b.Navigation("Game");
 
-                    b.Navigation("Participation");
+                    b.Navigation("Objective");
 
-                    b.Navigation("ScoreItem");
+                    b.Navigation("Participation");
 
                     b.Navigation("Team");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationTeamEnvironment", b =>
-                {
-                    b.HasOne("GZCTF.Models.Data.Game", "Game")
-                        .WithMany()
-                        .HasForeignKey("GameId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GZCTF.Models.Data.WorkerNode", "Node")
-                        .WithMany()
-                        .HasForeignKey("NodeId");
-
-                    b.HasOne("GZCTF.Models.Data.Team", "Team")
-                        .WithMany()
-                        .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Game");
-
-                    b.Navigation("Node");
-
-                    b.Navigation("Team");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.Post", b =>
@@ -6955,33 +6084,11 @@ namespace GZCTF.Migrations
                         .HasForeignKey("EntryShardId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("GZCTF.Models.Data.Game", "Game")
-                        .WithMany()
-                        .HasForeignKey("GameId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GZCTF.Models.Data.Team", "Team")
-                        .WithMany()
-                        .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("GZCTF.Modules.TeamLab.Domain.TeamLabTopologyRelease", null)
                         .WithMany()
                         .HasForeignKey("TopologyReleaseId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("GZCTF.Models.Data.WorkerNode", "WorkerNode")
-                        .WithMany()
-                        .HasForeignKey("WorkerNodeId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Game");
-
-                    b.Navigation("Team");
-
-                    b.Navigation("WorkerNode");
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.TeamLabRuntimeAsset", b =>
@@ -7011,7 +6118,7 @@ namespace GZCTF.Migrations
 
             modelBuilder.Entity("GZCTF.Models.Data.TeamLabRuntimeNetwork", b =>
                 {
-                    b.HasOne("GZCTF.Modules.TeamLab.Domain.TeamLabNetworkLease", null)
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.TeamLabNetworkLease", "NetworkLease")
                         .WithOne()
                         .HasForeignKey("GZCTF.Models.Data.TeamLabRuntimeNetwork", "NetworkLeaseId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -7031,6 +6138,8 @@ namespace GZCTF.Migrations
                         .WithMany()
                         .HasForeignKey("WorkerNodeId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("NetworkLease");
 
                     b.Navigation("Runtime");
 
@@ -7836,6 +6945,20 @@ namespace GZCTF.Migrations
                     b.Navigation("TopologyNetwork");
                 });
 
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabRuntimeOperationJob", b =>
+                {
+                    b.HasOne("GZCTF.Modules.Audit.Domain.ApiOperation", null)
+                        .WithOne()
+                        .HasForeignKey("GZCTF.Modules.TeamLab.Domain.TeamLabRuntimeOperationJob", "OperationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.TeamLabRuntime", null)
+                        .WithMany()
+                        .HasForeignKey("RuntimeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabTopology", b =>
                 {
                     b.HasOne("GZCTF.Models.Data.UserInfo", null)
@@ -8078,38 +7201,6 @@ namespace GZCTF.Migrations
                     b.Navigation("Members");
 
                     b.Navigation("Submissions");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationConfig", b =>
-                {
-                    b.Navigation("Edges");
-
-                    b.Navigation("Networks");
-
-                    b.Navigation("Nodes");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationNetwork", b =>
-                {
-                    b.Navigation("Interfaces");
-
-                    b.Navigation("Nodes");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationNode", b =>
-                {
-                    b.Navigation("Interfaces");
-
-                    b.Navigation("ScoreItems");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.PenetrationTeamEnvironment", b =>
-                {
-                    b.Navigation("DeploymentEvents");
-
-                    b.Navigation("RuntimeNodes");
-
-                    b.Navigation("RuntimeRoutes");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.StudentGroup", b =>

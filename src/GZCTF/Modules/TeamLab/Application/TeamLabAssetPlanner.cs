@@ -102,8 +102,20 @@ public static class TeamLabAssetPlanner
             $"sha256:{Convert.ToHexStringLower(SHA256.HashData(hashPayload))}");
     }
 
-    private static IReadOnlyList<Placement>? Place(
-        IReadOnlyList<NetworkGroup> groups,
+    internal static IReadOnlyList<TeamLabInternalPlacement>? BuildPlacement(
+        TeamLabTopologyDefinitionModel definition,
+        IReadOnlyList<TeamLabPlanningNodeSnapshot> nodes)
+    {
+        var groups = BuildGroups(definition).OrderByDescending(group => group.IsEntry)
+            .ThenByDescending(group => group.VmSlots)
+            .ThenByDescending(group => group.DockerSlots)
+            .ThenBy(group => group.Key, StringComparer.Ordinal)
+            .ToArray();
+        return Place(groups, nodes);
+    }
+
+    private static IReadOnlyList<TeamLabInternalPlacement>? Place(
+        IReadOnlyList<TeamLabInternalNetworkGroup> groups,
         IReadOnlyList<TeamLabPlanningNodeSnapshot> nodes)
     {
         var candidates = nodes.OrderBy(item => item.Name, StringComparer.Ordinal).ThenBy(item => item.Id).ToArray();
@@ -115,9 +127,9 @@ public static class TeamLabAssetPlanner
             .ThenBy(node => node.Id)
             .FirstOrDefault();
         if (single is not null)
-            return [new Placement(single, groups.ToList())];
+            return [new TeamLabInternalPlacement(single, groups.ToList())];
 
-        var placements = new List<Placement>();
+        var placements = new List<TeamLabInternalPlacement>();
         foreach (var group in groups)
         {
             var selected = candidates.Select(node =>
@@ -138,7 +150,7 @@ public static class TeamLabAssetPlanner
             var targetPlacement = selected.Placement;
             if (targetPlacement is null)
             {
-                targetPlacement = new Placement(selected.Node, []);
+                targetPlacement = new TeamLabInternalPlacement(selected.Node, []);
                 placements.Add(targetPlacement);
             }
             targetPlacement.Groups.Add(group);
@@ -158,7 +170,7 @@ public static class TeamLabAssetPlanner
         250 * (1 - (float)dockerSlots / Math.Max(node.AvailableDockerSlots, 1)) +
         250 * (1 - (float)vmSlots / Math.Max(node.AvailableVmSlots, 1));
 
-    private static IReadOnlyList<NetworkGroup> BuildGroups(TeamLabTopologyDefinitionModel definition)
+    private static IReadOnlyList<TeamLabInternalNetworkGroup> BuildGroups(TeamLabTopologyDefinitionModel definition)
     {
         var parent = definition.Networks.ToDictionary(item => item.Key, item => item.Key, StringComparer.Ordinal);
         foreach (var asset in definition.Assets)
@@ -173,7 +185,7 @@ public static class TeamLabAssetPlanner
                 var networkSet = networkKeys.ToHashSet(StringComparer.Ordinal);
                 var groupAssets = definition.Assets.Where(asset => asset.Interfaces.Any(iface => networkSet.Contains(iface.NetworkKey)))
                     .OrderBy(item => item.Key, StringComparer.Ordinal).ToArray();
-                return new NetworkGroup(
+                return new TeamLabInternalNetworkGroup(
                     string.Join(',', networkKeys),
                     networkKeys,
                     groupAssets.Select(item => item.Key).ToArray(),
@@ -207,7 +219,7 @@ public static class TeamLabAssetPlanner
         return $"{address}/{prefixLength}";
     }
 
-    private sealed record NetworkGroup(
+    internal sealed record TeamLabInternalNetworkGroup(
         string Key,
         IReadOnlyList<string> NetworkKeys,
         IReadOnlyList<string> AssetKeys,
@@ -215,5 +227,7 @@ public static class TeamLabAssetPlanner
         int VmSlots,
         bool IsEntry);
 
-    private sealed record Placement(TeamLabPlanningNodeSnapshot Node, List<NetworkGroup> Groups);
+    internal sealed record TeamLabInternalPlacement(
+        TeamLabPlanningNodeSnapshot Node,
+        List<TeamLabInternalNetworkGroup> Groups);
 }

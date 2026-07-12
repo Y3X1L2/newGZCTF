@@ -45,7 +45,7 @@ import {
   YinyuStatusTone,
 } from '@Components/yinyu/YinyuUI'
 import { YinyuStatusText } from '@Components/yinyu/YinyuReactBits'
-import { enableTeamLabNetwork } from '@Utils/TeamLabApi'
+import { enableTeamLabNetwork } from '@Utils/NodeTeamLabApi'
 
 type StatusFilter = 'all' | 'online' | 'offline' | 'busy' | 'error'
 type ResourceTypeFilter = 'all' | 'container' | 'vm' | 'pentest' | 'teamlab'

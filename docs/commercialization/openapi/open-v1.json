@@ -7,6 +7,1161 @@
     "version": "v1"
   },
   "paths": {
+    "/api/open/v1/teamlab/runtimes": {
+      "post": {
+        "tags": [
+          "OpenTeamLabRuntimes"
+        ],
+        "operationId": "OpenTeamLabRuntimes_Create",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTeamLabRuntimeModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}": {
+      "get": {
+        "tags": [
+          "OpenTeamLabRuntimes"
+        ],
+        "operationId": "OpenTeamLabRuntimes_Get",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabRuntimeProjectionModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "OpenTeamLabRuntimes"
+        ],
+        "operationId": "OpenTeamLabRuntimes_Destroy",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/reset": {
+      "post": {
+        "tags": [
+          "OpenTeamLabRuntimes"
+        ],
+        "operationId": "OpenTeamLabRuntimes_Reset",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetTeamLabRuntimeModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/events": {
+      "get": {
+        "tags": [
+          "OpenTeamLabRuntimes"
+        ],
+        "operationId": "OpenTeamLabRuntimes_Events",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "default": 0
+            },
+            "x-position": 2
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100,
+              "maximum": 200.0,
+              "minimum": 1.0
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TeamLabRuntimeEventModel"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants": {
+      "post": {
+        "tags": [
+          "OpenTeamLabRuntimes"
+        ],
+        "operationId": "OpenTeamLabRuntimes_CreateAccessGrant",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamLabAccessGrantCreateModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabAccessGrantModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants/{grantId}/download": {
+      "get": {
+        "tags": [
+          "OpenTeamLabRuntimes"
+        ],
+        "operationId": "OpenTeamLabRuntimes_DownloadAccessConfiguration",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "grantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants/{grantId}": {
+      "delete": {
+        "tags": [
+          "OpenTeamLabRuntimes"
+        ],
+        "operationId": "OpenTeamLabRuntimes_RevokeAccessGrant",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "grantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/capabilities": {
+      "get": {
+        "tags": [
+          "OpenTeamLabTopologies"
+        ],
+        "operationId": "OpenTeamLabTopologies_Capabilities",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabCapabilitiesModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/topologies": {
+      "post": {
+        "tags": [
+          "OpenTeamLabTopologies"
+        ],
+        "operationId": "OpenTeamLabTopologies_Create",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTeamLabTopologyModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabTopologyDetailModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "OpenTeamLabTopologies"
+        ],
+        "operationId": "OpenTeamLabTopologies_List",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TeamLabTopologySummaryModel"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/topologies/{topologyId}": {
+      "get": {
+        "tags": [
+          "OpenTeamLabTopologies"
+        ],
+        "operationId": "OpenTeamLabTopologies_Get",
+        "parameters": [
+          {
+            "name": "topologyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabTopologyDetailModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "OpenTeamLabTopologies"
+        ],
+        "operationId": "OpenTeamLabTopologies_Update",
+        "parameters": [
+          {
+            "name": "topologyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTeamLabTopologyModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabTopologyDetailModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "OpenTeamLabTopologies"
+        ],
+        "operationId": "OpenTeamLabTopologies_Delete",
+        "parameters": [
+          {
+            "name": "topologyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/topologies/{topologyId}/validate": {
+      "post": {
+        "tags": [
+          "OpenTeamLabTopologies"
+        ],
+        "operationId": "OpenTeamLabTopologies_Validate",
+        "parameters": [
+          {
+            "name": "topologyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabValidationResultModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/topologies/{topologyId}/releases": {
+      "post": {
+        "tags": [
+          "OpenTeamLabTopologies"
+        ],
+        "operationId": "OpenTeamLabTopologies_Publish",
+        "parameters": [
+          {
+            "name": "topologyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishTeamLabTopologyModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabReleaseModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "OpenTeamLabTopologies"
+        ],
+        "operationId": "OpenTeamLabTopologies_ListReleases",
+        "parameters": [
+          {
+            "name": "topologyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TeamLabReleaseModel"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/topologies/{topologyId}/releases/{releaseId}": {
+      "get": {
+        "tags": [
+          "OpenTeamLabTopologies"
+        ],
+        "operationId": "OpenTeamLabTopologies_GetRelease",
+        "parameters": [
+          {
+            "name": "topologyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "releaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabReleaseModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/topologies/{topologyId}/releases/{releaseId}/plan": {
+      "post": {
+        "tags": [
+          "OpenTeamLabTopologies"
+        ],
+        "operationId": "OpenTeamLabTopologies_Plan",
+        "parameters": [
+          {
+            "name": "topologyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "releaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabPlanModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/traffic/flows": {
+      "get": {
+        "tags": [
+          "OpenTeamLabTraffic"
+        ],
+        "operationId": "OpenTeamLabTraffic_GetFlows",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 2
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100,
+              "maximum": 200.0,
+              "minimum": 1.0
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabTrafficFlowPageModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/captures": {
+      "post": {
+        "tags": [
+          "OpenTeamLabTraffic"
+        ],
+        "operationId": "OpenTeamLabTraffic_StartCapture",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTeamLabCaptureModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabCaptureModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}": {
+      "get": {
+        "tags": [
+          "OpenTeamLabTraffic"
+        ],
+        "operationId": "OpenTeamLabTraffic_GetCapture",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "captureId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabCaptureModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}/stop": {
+      "post": {
+        "tags": [
+          "OpenTeamLabTraffic"
+        ],
+        "operationId": "OpenTeamLabTraffic_StopCapture",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "captureId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabCaptureModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}/download": {
+      "get": {
+        "tags": [
+          "OpenTeamLabTraffic"
+        ],
+        "operationId": "OpenTeamLabTraffic_DownloadCapture",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "captureId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
     "/api/open/v1/games/{gameId}/challenges": {
       "get": {
         "tags": [
@@ -619,6 +1774,1215 @@
   },
   "components": {
     "schemas": {
+      "CreateTeamLabRuntimeModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "releaseId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "externalReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "constraints": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TeamLabRuntimeConstraintsModel"
+              }
+            ]
+          },
+          "overlays": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/TeamLabRuntimeOverlayModel"
+            }
+          }
+        }
+      },
+      "TeamLabRuntimeConstraintsModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "preferredRegion": {
+            "type": "string",
+            "nullable": true
+          },
+          "requiredCapabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "TeamLabRuntimeOverlayModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "assetKey": {
+            "type": "string"
+          },
+          "environment": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "secrets": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "TeamLabRuntimeProjectionModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "releaseId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "generation": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TeamLabRuntimeStatus"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "openForAccess": {
+            "type": "boolean"
+          },
+          "shards": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabRuntimeShardProjectionModel"
+            }
+          },
+          "networks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabRuntimeNetworkProjectionModel"
+            }
+          },
+          "assets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabRuntimeAssetProjectionModel"
+            }
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TeamLabRuntimeStatus": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Pending",
+          "Planning",
+          "Scheduled",
+          "Deploying",
+          "Probing",
+          "Running",
+          "Failed",
+          "CleanupPending",
+          "Stopped",
+          "Destroying",
+          "Destroyed"
+        ],
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ]
+      },
+      "TeamLabRuntimeShardProjectionModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TeamLabRuntimeStatus"
+          },
+          "networkKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "assetKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TeamLabRuntimeNetworkProjectionModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "cidr": {
+            "type": "string"
+          },
+          "gatewayIp": {
+            "type": "string"
+          }
+        }
+      },
+      "TeamLabRuntimeAssetProjectionModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TeamLabAssetKind"
+          },
+          "runtimeResourceId": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryIp": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/TeamLabRuntimeStatus"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TeamLabAssetKind": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Docker",
+          "Vm"
+        ],
+        "enum": [
+          0,
+          1
+        ]
+      },
+      "ResetTeamLabRuntimeModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "overlays": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/TeamLabRuntimeOverlayModel"
+            }
+          },
+          "releaseId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          }
+        }
+      },
+      "TeamLabRuntimeEventModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "generation": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "level": {
+            "$ref": "#/components/schemas/TeamLabEventLevel"
+          },
+          "message": {
+            "type": "string"
+          },
+          "objectType": {
+            "type": "string",
+            "nullable": true
+          },
+          "objectId": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "uint64"
+          }
+        }
+      },
+      "TeamLabEventLevel": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Info",
+          "Success",
+          "Warning",
+          "Error"
+        ],
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "TeamLabAccessGrantModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "type": {
+            "type": "string"
+          },
+          "clientAddress": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "allowedIps": {
+            "type": "string"
+          },
+          "dns": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "configurationDownloadUrl": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TeamLabAccessGrantCreateModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "TeamLabCapabilitiesModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "topologySchemaVersions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "assetKinds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabAssetKind"
+            }
+          },
+          "networkModel": {
+            "type": "string"
+          },
+          "features": {
+            "$ref": "#/components/schemas/TeamLabFeatureCapabilitiesModel"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/TeamLabContractLimitsModel"
+          }
+        }
+      },
+      "TeamLabFeatureCapabilitiesModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "multiNode": {
+            "type": "boolean"
+          },
+          "linuxVm": {
+            "type": "boolean"
+          },
+          "windowsVm": {
+            "type": "boolean"
+          },
+          "trafficFlows": {
+            "type": "boolean"
+          },
+          "onDemandPcap": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TeamLabContractLimitsModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "networksPerTopology": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "assetsPerTopology": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "interfacesPerAsset": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "TeamLabTopologyDetailModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/TeamLabTopologyDefinitionModel"
+          },
+          "editor": {
+            "$ref": "#/components/schemas/TeamLabTopologyEditorModel"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "uint64"
+          }
+        }
+      },
+      "TeamLabTopologyDefinitionModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "networks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyNetworkModel"
+            }
+          },
+          "assets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyAssetModel"
+            }
+          },
+          "connections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyConnectionModel"
+            }
+          }
+        }
+      },
+      "TeamLabTopologyNetworkModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "addressPool": {
+            "$ref": "#/components/schemas/TeamLabAddressPoolModel"
+          },
+          "isEntry": {
+            "type": "boolean"
+          },
+          "orderIndex": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "TeamLabAddressPoolModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "poolCidr": {
+            "type": "string"
+          },
+          "runtimePrefixLength": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "TeamLabTopologyAssetModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TeamLabAssetKind"
+          },
+          "imageTemplateId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "resources": {
+            "$ref": "#/components/schemas/TeamLabAssetResourceModel"
+          },
+          "interfaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyInterfaceModel"
+            }
+          },
+          "routingEnabled": {
+            "type": "boolean"
+          },
+          "exposePort": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "environment": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "startCommand": {
+            "type": "string",
+            "nullable": true
+          },
+          "healthCheck": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TeamLabHealthCheckModel"
+              }
+            ]
+          },
+          "orderIndex": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "TeamLabAssetResourceModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cpuUnits": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "memoryMiB": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "storageMiB": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "TeamLabTopologyInterfaceModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "networkKey": {
+            "type": "string"
+          },
+          "hostOffset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "primary": {
+            "type": "boolean"
+          },
+          "orderIndex": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "TeamLabHealthCheckModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/TeamLabHealthCheckKind"
+          },
+          "port": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "TeamLabHealthCheckKind": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Tcp",
+          "Http"
+        ],
+        "enum": [
+          0,
+          1
+        ]
+      },
+      "TeamLabTopologyConnectionModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "fromNetworkKey": {
+            "type": "string"
+          },
+          "toNetworkKey": {
+            "type": "string"
+          },
+          "viaAssetKey": {
+            "type": "string"
+          }
+        }
+      },
+      "TeamLabTopologyEditorModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "networks": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TeamLabEditorItemModel"
+            }
+          },
+          "assets": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TeamLabEditorItemModel"
+            }
+          }
+        }
+      },
+      "TeamLabEditorItemModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
+          },
+          "width": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "height": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "collapsed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CreateTeamLabTopologyModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "networks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyNetworkModel"
+            }
+          },
+          "assets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyAssetModel"
+            }
+          },
+          "connections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyConnectionModel"
+            }
+          },
+          "editor": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TeamLabTopologyEditorModel"
+              }
+            ]
+          }
+        }
+      },
+      "TeamLabTopologySummaryModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "uint64"
+          }
+        }
+      },
+      "UpdateTeamLabTopologyModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "networks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyNetworkModel"
+            }
+          },
+          "assets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyAssetModel"
+            }
+          },
+          "connections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyConnectionModel"
+            }
+          },
+          "editor": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TeamLabTopologyEditorModel"
+              }
+            ]
+          }
+        }
+      },
+      "TeamLabValidationResultModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabValidationIssueModel"
+            }
+          }
+        }
+      },
+      "TeamLabValidationIssueModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "TeamLabReleaseModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "topologyId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sourceRevision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "contentHash": {
+            "type": "string"
+          },
+          "publishedBy": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "publishedAt": {
+            "type": "integer",
+            "format": "uint64"
+          }
+        }
+      },
+      "PublishTeamLabTopologyModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "TeamLabPlanModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "topologyId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "releaseId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "networks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabPlanNetworkModel"
+            }
+          },
+          "assets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabPlanAssetModel"
+            }
+          },
+          "shards": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabPlanShardModel"
+            }
+          },
+          "crossShardConnections": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "requiredCapabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "planHash": {
+            "type": "string"
+          }
+        }
+      },
+      "TeamLabPlanNetworkModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "candidateCidr": {
+            "type": "string"
+          },
+          "isEntry": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TeamLabPlanAssetModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TeamLabAssetKind"
+          },
+          "imageTemplateId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "resources": {
+            "$ref": "#/components/schemas/TeamLabAssetResourceModel"
+          },
+          "interfaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabPlanInterfaceModel"
+            }
+          },
+          "routingEnabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TeamLabPlanInterfaceModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "networkKey": {
+            "type": "string"
+          },
+          "hostOffset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "primary": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TeamLabPlanShardModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "networkKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "assetKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "dockerSlots": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "vmSlots": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "TeamLabTrafficFlowPageModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTrafficFlowProjectionModel"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TeamLabTrafficFlowProjectionModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "type": "string"
+          },
+          "shardId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "networkKey": {
+            "type": "string"
+          },
+          "sourceIp": {
+            "type": "string"
+          },
+          "sourcePort": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "destinationIp": {
+            "type": "string"
+          },
+          "destinationPort": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "packets": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "firstSeen": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "lastSeen": {
+            "type": "integer",
+            "format": "uint64"
+          }
+        }
+      },
+      "TeamLabCaptureModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TeamLabTrafficCaptureStatus"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "networkKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "maxBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "maxSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "capturedBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "startedAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "completedAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TeamLabTrafficCaptureStatus": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Pending",
+          "Running",
+          "Stopping",
+          "Completed",
+          "Failed",
+          "Expired"
+        ],
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "CreateTeamLabCaptureModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scope": {
+            "type": "string"
+          },
+          "networkKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "maxSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "expiresInSeconds": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "OpenChallengePageModel": {
         "type": "object",
         "additionalProperties": false,

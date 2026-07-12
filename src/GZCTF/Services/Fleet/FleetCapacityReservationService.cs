@@ -328,7 +328,9 @@ public class FleetCapacityReservationService
             }
 
             var activeQueueSlots = await _context.DeploymentQueueTickets
-                .Where(t => t.TargetNodeId == nodeId && ActiveQueueStatuses.Contains(t.Status))
+                .Where(t => t.Kind != DeploymentQueueKind.TeamLabRuntime &&
+                            t.TargetNodeId == nodeId &&
+                            ActiveQueueStatuses.Contains(t.Status))
                 .GroupBy(_ => 1)
                 .Select(g => new
                 {
@@ -336,6 +338,49 @@ public class FleetCapacityReservationService
                     Vm = g.Sum(t => t.VmSlots)
                 })
                 .FirstOrDefaultAsync(token);
+
+            var activeTeamLabTickets = await _context.DeploymentQueueTickets.AsNoTracking()
+                .Where(ticket => ticket.Kind == DeploymentQueueKind.TeamLabRuntime &&
+                                 ActiveQueueStatuses.Contains(ticket.Status))
+                .Select(ticket => new
+                {
+                    ticket.TeamLabRuntimeId,
+                    ticket.TargetNodeId,
+                    ticket.DockerSlots,
+                    ticket.VmSlots
+                })
+                .ToArrayAsync(token);
+            var teamLabDocker = 0;
+            var teamLabVm = 0;
+            var teamLabFacts = await TeamLabCapacityFacts.LoadManyAsync(
+                _context,
+                activeTeamLabTickets
+                    .Where(ticket => ticket.TeamLabRuntimeId != null)
+                    .Select(ticket => ticket.TeamLabRuntimeId!.Value)
+                    .ToArray(),
+                token);
+            foreach (var ticket in activeTeamLabTickets)
+            {
+                var shardSlots = ticket.TeamLabRuntimeId is { } runtimeId
+                    ? teamLabFacts.GetValueOrDefault(runtimeId) ?? []
+                    : [];
+                if (shardSlots.Length == 0)
+                {
+                    if (ticket.TargetNodeId == nodeId)
+                    {
+                        teamLabDocker += ticket.DockerSlots;
+                        teamLabVm += ticket.VmSlots;
+                    }
+                    continue;
+                }
+
+                var local = shardSlots.FirstOrDefault(slot => slot.WorkerNodeId == nodeId);
+                if (local is not null)
+                {
+                    teamLabDocker += local.DockerSlots;
+                    teamLabVm += local.VmSlots;
+                }
+            }
 
             var activeTargetSlots = await _context.DeploymentTargets
                 .Where(t => t.TargetNodeId == nodeId &&
@@ -350,8 +395,14 @@ public class FleetCapacityReservationService
                 })
                 .FirstOrDefaultAsync(token);
 
-            node.ReservedContainers = Math.Max(0, (activeQueueSlots?.Docker ?? 0) + (activeTargetSlots?.Docker ?? 0));
-            node.ReservedVms = Math.Max(0, (activeQueueSlots?.Vm ?? 0) + (activeTargetSlots?.Vm ?? 0));
+            node.ReservedContainers = Math.Max(0,
+                (activeQueueSlots?.Docker ?? 0) +
+                teamLabDocker +
+                (activeTargetSlots?.Docker ?? 0));
+            node.ReservedVms = Math.Max(0,
+                (activeQueueSlots?.Vm ?? 0) +
+                teamLabVm +
+                (activeTargetSlots?.Vm ?? 0));
 
             try
             {

@@ -196,7 +196,7 @@ public sealed class ScopedApiTokenAuthenticationTests(GZCTFApplicationFactory fa
             Email = $"phase1-{suffix}@example.test",
             NormalizedEmail = $"PHASE1-{suffix.ToUpperInvariant()}@EXAMPLE.TEST",
             EmailConfirmed = true,
-            Role = Role.Teacher,
+            Role = resources is { Count: > 0 } ? Role.Admin : Role.Teacher,
             RegisterTimeUtc = DateTimeOffset.UtcNow
         };
         context.Users.Add(user);
