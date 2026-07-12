@@ -162,6 +162,6 @@ public sealed class ImageTemplateOwnershipMigrationTests : IAsyncLifetime
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseNpgsql($"{_postgres.GetConnectionString()};Include Error Detail=true")
             .Options;
-        return new AppDbContext(options);
+        return new AppDbContext(options) { SuppressProjectionRevisionBumps = true };
     }
 }

@@ -13,6 +13,7 @@ public sealed class DataRetentionOptions
     [Range(1, 3650)] public int ApiOperationDays { get; set; } = 90;
     [Range(1, 3650)] public int TeamLabEventDays { get; set; } = 180;
     [Range(1, 3650)] public int GovernanceRunDays { get; set; } = 365;
+    [Range(1, 3650)] public int WorkerNodeMetricDays { get; set; } = 180;
     [Range(100, 20000)] public int DeleteBatchSize { get; set; } = 1000;
     [Range(1, 1440)] public int IntervalMinutes { get; set; } = 60;
     [Range(0, 3600)] public int StartupDelaySeconds { get; set; } = 90;

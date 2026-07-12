@@ -285,6 +285,7 @@ public class GZCTFApplicationFactory : WebApplicationFactory<Program>, IAsyncLif
 
         // Set environment variable so it's available during configuration
         Environment.SetEnvironmentVariable("GZCTF_ConnectionStrings__Database", _connectionString);
+        Environment.SetEnvironmentVariable("GZCTF_ConnectionStrings__RedisCache", _redisConnectionString);
 
         // Ensure the database is created and migrated
         // We do this after container is fully started
@@ -308,6 +309,8 @@ public class GZCTFApplicationFactory : WebApplicationFactory<Program>, IAsyncLif
             await _k3sContainer.DisposeAsync();
 
         await base.DisposeAsync();
+        Environment.SetEnvironmentVariable("GZCTF_ConnectionStrings__Database", null);
+        Environment.SetEnvironmentVariable("GZCTF_ConnectionStrings__RedisCache", null);
 
         // Clean up test directory
         var testProjectDir = Path.Combine(Directory.GetCurrentDirectory(), $"test-{_testId}");

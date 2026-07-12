@@ -1,7 +1,7 @@
 ﻿using System.Security.Cryptography;
 using GZCTF.Models.Internal;
 using GZCTF.Models.Request.Info;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
 
@@ -98,7 +98,7 @@ public sealed class HashPow(IOptions<CaptchaConfig>? options, IDistributedCache 
         if (ans.Length != AnswerLength * 2)
             return false;
 
-        var key = CacheKey.HashPow(id);
+        var key = RuntimeCacheKeys.HashPow(id);
         var challenge = await cache.GetAsync(key, token);
         if (challenge is null)
             return false;

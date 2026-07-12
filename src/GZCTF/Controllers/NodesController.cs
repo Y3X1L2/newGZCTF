@@ -8,6 +8,8 @@ using GZCTF.Middlewares;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Models.Request.Admin;
+using GZCTF.Modules.Runtime.Application;
+using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Services.Container.Manager;
@@ -74,6 +76,7 @@ public class NodesController : ControllerBase
     public async Task<IActionResult> List()
     {
         var nodes = await _nodeRepo.GetAllNodesAsync(HttpContext.RequestAborted);
+        await OverlayLiveStateAsync(nodes, HttpContext.RequestAborted);
         var now = DateTimeOffset.UtcNow;
         var portPool = GetPublicPortPool();
         var publicPortUsage = await GetPublicPortUsageAsync(portPool, HttpContext.RequestAborted);
@@ -120,6 +123,7 @@ public class NodesController : ControllerBase
     {
         var node = await _nodeRepo.GetNodeByIdAsync(id, HttpContext.RequestAborted);
         if (node is null) return NotFound();
+        await OverlayLiveStateAsync([node], HttpContext.RequestAborted);
         var now = DateTimeOffset.UtcNow;
         var portPool = GetPublicPortPool();
         var publicPortUsage = await GetPublicPortUsageAsync(portPool, HttpContext.RequestAborted);
@@ -617,6 +621,12 @@ public class NodesController : ControllerBase
         if (!FixedTimeEquals(authToken, node.AuthToken))
             return Forbid();
 
+        var receivedAt = DateTimeOffset.UtcNow;
+        var observedAt = request.ObservedAt ?? receivedAt;
+        var sequence = request.Sequence > 0
+            ? request.Sequence
+            : Math.Max(node.LiveMetricSequence + 1, receivedAt.ToUnixTimeMilliseconds());
+
         var runningTeamLabDockerAssets = await _context.TeamLabRuntimeAssets.CountAsync(
             a => (a.WorkerNodeId == node.Id ||
                   (a.WorkerNodeId == null && a.Shard != null && a.Shard.WorkerNodeId == node.Id))
@@ -632,36 +642,80 @@ public class NodesController : ControllerBase
                  && a.Status == TeamLabRuntimeStatus.Running,
             HttpContext.RequestAborted);
 
-        node.CpuLoad = request.CpuLoad;
-        node.MemoryLoad = request.MemoryLoad;
-        node.CurrentContainers = request.CurrentContainers + runningTeamLabDockerAssets;
-        node.CurrentVms = request.CurrentVms + runningTeamLabVmAssets;
-        node.UsedPorts = request.UsedPorts;
-        node.LastHeartbeat = DateTimeOffset.UtcNow;
-        node.Status = NodeStatus.Online;
-        if (!string.IsNullOrWhiteSpace(request.AgentVersion))
-            node.TeamLabAgentVersion = request.AgentVersion.Trim();
-        if (request.TeamLabProtocolVersion.HasValue)
-            node.TeamLabProtocolVersion = Math.Max(0, request.TeamLabProtocolVersion.Value);
-        if (!string.IsNullOrWhiteSpace(request.TeamLabFabricIp))
-            node.TeamLabFabricIp = request.TeamLabFabricIp.Trim();
-        if (request.TeamLabFabricStatus.HasValue)
-            node.TeamLabFabricStatus = request.TeamLabFabricStatus.Value;
-        if (request.TeamLabCapabilities is not null)
-        {
-            node.TeamLabCapabilitiesJson = JsonSerializer.Serialize(request.TeamLabCapabilities,
-                new JsonSerializerOptions(JsonSerializerDefaults.Web));
-            node.Capabilities = WorkerNodeCapabilityHelper.FromTeamLabReport(
-                request.TeamLabCapabilities.Docker,
-                request.TeamLabCapabilities.Kvm,
-                request.TeamLabCapabilities.KvmDevice,
-                request.TeamLabCapabilities.CpuVirtualization);
-        }
-        await _context.SaveChangesAsync();
+        var capabilityChanged = ApplyReportedCapabilities(node, request);
+        if (capabilityChanged)
+            await _context.SaveChangesAsync(HttpContext.RequestAborted);
 
-        var capacity = HttpContext.RequestServices.GetRequiredService<FleetCapacityReservationService>();
-        await capacity.ReconcileReservedAsync(node.Id, HttpContext.RequestAborted);
-        return Ok();
+        var liveStateStore = HttpContext.RequestServices.GetRequiredService<INodeLiveStateStore>();
+        var writeResult = await liveStateStore.WriteAsync(new NodeLiveState(
+                node.Id,
+                sequence,
+                observedAt,
+                receivedAt,
+                request.CpuLoad,
+                request.MemoryLoad,
+                request.CurrentContainers + runningTeamLabDockerAssets,
+                request.CurrentVms + runningTeamLabVmAssets,
+                request.UsedPorts),
+            HttpContext.RequestAborted);
+        if (!writeResult.Accepted)
+            return Ok(new { accepted = false, reason = "stale-sequence" });
+
+        return Ok(new { accepted = true, buffered = writeResult.UsedFallback });
+    }
+
+    async Task OverlayLiveStateAsync(IReadOnlyCollection<WorkerNode> nodes, CancellationToken token)
+    {
+        var liveStateStore = HttpContext.RequestServices.GetService<INodeLiveStateStore>();
+        if (liveStateStore is null || nodes.Count == 0)
+            return;
+
+        var states = await liveStateStore.GetManyAsync(nodes.Select(node => node.Id).ToArray(), token);
+        var now = DateTimeOffset.UtcNow;
+        foreach (var node in nodes)
+        {
+            if (states.TryGetValue(node.Id, out var state))
+                WeightedScheduler.ApplyLiveState(node, state, now, liveStateStore.FreshnessTtl);
+        }
+    }
+
+    static bool ApplyReportedCapabilities(WorkerNode node, HeartbeatRequest request)
+    {
+        var changed = false;
+        if (!string.IsNullOrWhiteSpace(request.AgentVersion))
+            changed |= SetIfChanged(node.TeamLabAgentVersion, request.AgentVersion.Trim(),
+                value => node.TeamLabAgentVersion = value);
+        if (request.TeamLabProtocolVersion.HasValue)
+            changed |= SetIfChanged(node.TeamLabProtocolVersion, Math.Max(0, request.TeamLabProtocolVersion.Value),
+                value => node.TeamLabProtocolVersion = value);
+        if (!string.IsNullOrWhiteSpace(request.TeamLabFabricIp))
+            changed |= SetIfChanged(node.TeamLabFabricIp, request.TeamLabFabricIp.Trim(),
+                value => node.TeamLabFabricIp = value);
+        if (request.TeamLabFabricStatus.HasValue)
+            changed |= SetIfChanged(node.TeamLabFabricStatus, request.TeamLabFabricStatus.Value,
+                value => node.TeamLabFabricStatus = value);
+        if (request.TeamLabCapabilities is null)
+            return changed;
+
+        var capabilitiesJson = JsonSerializer.Serialize(request.TeamLabCapabilities,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        changed |= SetIfChanged(node.TeamLabCapabilitiesJson, capabilitiesJson,
+            value => node.TeamLabCapabilitiesJson = value);
+        var capabilities = WorkerNodeCapabilityHelper.FromTeamLabReport(
+            request.TeamLabCapabilities.Docker,
+            request.TeamLabCapabilities.Kvm,
+            request.TeamLabCapabilities.KvmDevice,
+            request.TeamLabCapabilities.CpuVirtualization);
+        changed |= SetIfChanged(node.Capabilities, capabilities, value => node.Capabilities = value);
+        return changed;
+    }
+
+    static bool SetIfChanged<T>(T current, T next, Action<T> assign)
+    {
+        if (EqualityComparer<T>.Default.Equals(current, next))
+            return false;
+        assign(next);
+        return true;
     }
 
     [HttpDelete("vms/{instanceId:guid}")]
@@ -1097,6 +1151,8 @@ public class EnableTeamLabNetworkRequest
 
 public class HeartbeatRequest
 {
+    public long Sequence { get; set; }
+    public DateTimeOffset? ObservedAt { get; set; }
     public float CpuLoad { get; set; }
     public float MemoryLoad { get; set; }
     public int CurrentContainers { get; set; }

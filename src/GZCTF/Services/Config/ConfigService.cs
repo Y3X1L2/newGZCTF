@@ -2,8 +2,8 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using GZCTF.Models.Internal;
+using GZCTF.Infrastructure.Cache;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
 using ConfigModel = GZCTF.Models.Data.Config;
 
@@ -11,7 +11,8 @@ namespace GZCTF.Services.Config;
 
 public class ConfigService(
     AppDbContext context,
-    IDistributedCache cache,
+    IPlatformCache cache,
+    CachePolicyCatalog cachePolicies,
     ILogger<ConfigService> logger,
     IOptionsSnapshot<GlobalConfig> globalConfig,
     IOptionsSnapshot<ManagedConfig> managedConfig,
@@ -79,7 +80,7 @@ public class ConfigService(
 
         // flush cache
         foreach (var key in cacheKeys)
-            await cache.RemoveAsync(key, token);
+            await cache.InvalidateAsync(cachePolicies.GetRequired(key), "global", token);
     }
 
     private static bool IsSensitiveConfig(string key) =>

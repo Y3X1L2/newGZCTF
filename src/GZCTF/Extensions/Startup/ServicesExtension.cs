@@ -3,14 +3,14 @@ using GZCTF.Composition;
 using GZCTF.Middlewares;
 using GZCTF.Modules.Identity.Infrastructure;
 using GZCTF.Infrastructure.Api;
+using GZCTF.Infrastructure.Cache;
+using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
-using GZCTF.Services.Cache;
 using GZCTF.Services.Config;
 
-using GZCTF.Services.Concurrency;
 using GZCTF.Services.Container;
 using GZCTF.Services.CronJob;
 
@@ -23,6 +23,7 @@ using GZCTF.Storage;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.Http.Resilience;
+using Microsoft.Extensions.Options;
 using NSwag;
 using NSwag.Generation.Processors.Security;
 
@@ -114,8 +115,9 @@ internal static class ServicesExtension
             builder.Services.AddScoped<GameImportService>();
 
             builder.Services.AddChannel<Submission>();
-            builder.Services.AddChannel<CacheRequest>();
-            builder.Services.AddSingleton<CacheHelper>();
+            builder.Services.AddSingleton<CachePolicyCatalog>();
+            builder.Services.AddScoped<IProjectionRevisionStore, ProjectionRevisionStore>();
+            builder.Services.AddScoped<IPlatformCache, PlatformCache>();
             builder.Services.AddSingleton<IMailSender, MailSender>();
 
             builder.Services.AddSingleton<ImageStorage>();
@@ -163,11 +165,13 @@ internal static class ServicesExtension
             builder.Services.AddScoped<NodeTunnelService>();
             builder.Services.AddScoped<IPublicUdpGatewayProvider, PublicUdpGatewayProvider>();
 
-            // Cross-node coordination requires a shared lock in Fleet mode.
-            if (builder.Configuration.GetValue<string>("RunMode") == "Fleet")
-                builder.Services.AddSingleton<IDistributedLockService, RedisDistributedLock>();
-            else
-                builder.Services.AddSingleton<IDistributedLockService, LocalSemaphoreLock>();
+            builder.Services.AddSingleton<RedisDistributedLeaseProvider>();
+            builder.Services.AddSingleton<LocalDevelopmentLeaseProvider>();
+            builder.Services.AddSingleton<IDistributedLeaseProvider>(serviceProvider =>
+                serviceProvider.GetRequiredService<IOptions<RedisRuntimeOptions>>().Value.Mode ==
+                RedisRuntimeMode.Distributed
+                    ? serviceProvider.GetRequiredService<RedisDistributedLeaseProvider>()
+                    : serviceProvider.GetRequiredService<LocalDevelopmentLeaseProvider>());
 
             // Nginx proxy: port allocation service (Redis-backed with local fallback)
             builder.Services.AddSingleton<IPortAllocationService, PortAllocationService>();
@@ -176,7 +180,6 @@ internal static class ServicesExtension
             builder.Services.AddHostedService(sp => sp.GetRequiredService<NginxSyncService>());
             builder.Services.AddHostedService<PortLeaseRefreshService>();
 
-            builder.Services.AddHostedService<CacheMaker>();
             builder.Services.AddHostedService<CronJobService>();
             builder.Services.AddHostedService<LocalNodeRegistrar>();
             builder.Services.AddHostedService<LocalNodeMetricsService>();

@@ -1,10 +1,10 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using GZCTF.Models.Internal;
+using GZCTF.Infrastructure.Cache;
+using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
-using GZCTF.Services.Cache;
-using GZCTF.Services.Concurrency;
 using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
@@ -16,7 +16,7 @@ namespace GZCTF.Repositories;
 [ExcludeFromCodeCoverage(Justification = "Exercise feature not yet implemented")]
 public class ExerciseInstanceRepository(
     AppDbContext context,
-    CacheHelper cacheHelper,
+    IPlatformCache platformCache,
     IContainerManager service,
     IContainerRepository containerRepository,
     IOptionsSnapshot<ContainerPolicy> containerPolicy,
@@ -24,7 +24,7 @@ public class ExerciseInstanceRepository(
     INginxProxySyncService nginxProxySync,
     DeploymentQueueStateAccessor deploymentQueueState,
     DeploymentExecutionContextAccessor deploymentExecutionContext,
-    IDistributedLockService lockService,
+    IDistributedLeaseProvider lockService,
     ILogger<ExerciseInstanceRepository> logger,
     IStringLocalizer<Program> localizer
 ) : RepositoryBase(context),
@@ -175,9 +175,12 @@ public class ExerciseInstanceRepository(
         if (instance.Container is not null)
             return new TaskResult<Container>(TaskStatus.Success, instance.Container);
 
-        using var ownerLock = await lockService.AcquireAsync(
+        await using var ownerLock = await lockService.AcquireAsync(
             BuildContainerLimitLockKey(user.Id),
-            TimeSpan.FromSeconds(10));
+            TimeSpan.FromSeconds(10),
+            cancellationToken: token);
+        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(token, ownerLock.LeaseLost);
+        token = leaseCancellation.Token;
 
         if (instance.ContainerId is not null && instance.Container is null)
             await Context.Entry(instance).Reference(e => e.Container).LoadAsync(token);
@@ -353,11 +356,9 @@ public class ExerciseInstanceRepository(
     }
 
     private Task<bool> IsExerciseAvailable(CancellationToken token = default) =>
-        cacheHelper.GetOrCreateAsync(logger, CacheKey.ExerciseAvailable, entry =>
-        {
-            entry.SlidingExpiration = TimeSpan.FromHours(24);
-            return Context.ExerciseChallenges.AnyAsync(e => e.IsEnabled && e.TrainingCourseId == null, token);
-        }, token: token);
+        platformCache.GetOrCreateAsync(CachePolicyCatalog.ExerciseAvailability, "global",
+            async ct => await Context.ExerciseChallenges.AnyAsync(
+                e => e.IsEnabled && e.TrainingCourseId == null, ct), token).AsTask();
 
     internal async Task MarkSolved(ExerciseInstance instance, CancellationToken token = default)
     {

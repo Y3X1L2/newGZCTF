@@ -26,6 +26,9 @@ public class WorkerNode
     public int MaxVms { get; set; } = 5;
     public int UsedPorts { get; set; }
     public int TotalPorts { get; set; } = 28231;
+    public long LiveMetricSequence { get; set; }
+    public DateTimeOffset? LiveMetricObservedAt { get; set; }
+    public DateTimeOffset? LiveMetricReceivedAt { get; set; }
     public DateTimeOffset RegisteredAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? LastHeartbeat { get; set; }
     [MaxLength(512)] public string? Labels { get; set; }

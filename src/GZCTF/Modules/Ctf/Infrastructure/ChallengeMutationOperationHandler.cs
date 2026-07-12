@@ -5,7 +5,7 @@ using GZCTF.Modules.Ctf.Application;
 using GZCTF.Modules.Ctf.Contracts;
 using GZCTF.Modules.Ctf.Domain;
 using GZCTF.Repositories.Interface;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,7 +19,7 @@ public sealed class ChallengeMutationOperationHandler(
     DeploymentQueueService deploymentQueue,
     NodeExecutionGate executionGate,
     FleetVmService fleetVm,
-    CacheHelper cache,
+    IPlatformCache cache,
     ImageDistributionService distribution,
     ILogger<ChallengeMutationOperationHandler> logger) : IApiOperationHandler
 {
@@ -370,7 +370,7 @@ public sealed class ChallengeMutationOperationHandler(
     {
         try
         {
-            await cache.FlushScoreboardCache(gameId, cancellationToken);
+            await cache.InvalidateAsync(CachePolicyCatalog.Scoreboard, gameId.ToString(), cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException ||
                                           !cancellationToken.IsCancellationRequested)

@@ -1,5 +1,4 @@
 using GZCTF.Models.Data;
-using GZCTF.Services.Concurrency;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Services.Fleet;
@@ -7,16 +6,15 @@ namespace GZCTF.Services.Fleet;
 public class QueueManager
 {
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IDistributedLockService _lockService;
     private readonly NodeExecutionGate _executionGate;
     private readonly ILogger<QueueManager> _logger;
     private const int DefaultBatchSize = 20;
+    private static readonly TimeSpan ClaimTimeout = TimeSpan.FromMinutes(2);
 
-    public QueueManager(IServiceScopeFactory scopeFactory, IDistributedLockService lockService,
+    public QueueManager(IServiceScopeFactory scopeFactory,
         NodeExecutionGate executionGate, ILogger<QueueManager> logger)
     {
         _scopeFactory = scopeFactory;
-        _lockService = lockService;
         _executionGate = executionGate;
         _logger = logger;
     }
@@ -27,19 +25,30 @@ public class QueueManager
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var capacity = scope.ServiceProvider.GetRequiredService<FleetCapacityReservationService>();
 
-        var pendingTickets = await context.DeploymentQueueTickets
-            .Include(t => t.DeploymentTarget)
+        var staleClaimCutoff = DateTimeOffset.UtcNow - ClaimTimeout;
+        await RequeueStaleClaimsAsync(context, staleClaimCutoff, token);
+
+        var pendingTicketIds = await context.DeploymentQueueTickets
+            .AsNoTracking()
             .Where(t => t.Status == DeploymentQueueTicketStatus.Pending)
             .OrderBy(t => t.CreatedAt)
             .Take(DefaultBatchSize)
+            .Select(t => t.Id)
             .ToListAsync(token);
 
         var executableTickets = new List<ReservedQueueTicket>();
-        foreach (var ticket in pendingTickets)
+        foreach (var ticketId in pendingTicketIds)
         {
             if (token.IsCancellationRequested)
                 break;
 
+            var claimedAt = DateTimeOffset.UtcNow;
+            if (!await TryClaimTicketAsync(context, ticketId, claimedAt, token))
+                continue;
+
+            var ticket = await context.DeploymentQueueTickets
+                .Include(t => t.DeploymentTarget)
+                .SingleAsync(t => t.Id == ticketId, token);
             if (!await IsTicketStillDeployableAsync(context, ticket, token))
             {
                 ticket.Status = DeploymentQueueTicketStatus.Cancelled;
@@ -55,6 +64,9 @@ public class QueueManager
             {
                 _logger.LogDebug("Still no capacity for deployment queue ticket {TicketId}: {Message}",
                     ticket.Id, reservation.Message);
+                ticket.Status = DeploymentQueueTicketStatus.Pending;
+                ticket.AssignedAt = null;
+                await context.SaveChangesAsync(token);
                 continue;
             }
 
@@ -83,6 +95,56 @@ public class QueueManager
 
         var results = await Task.WhenAll(executableTickets.Select(ticket => ExecuteReservedTicketAsync(ticket, token)));
         return results.Count(processed => processed);
+    }
+
+    internal static async Task<bool> TryClaimTicketAsync(
+        AppDbContext context,
+        Guid ticketId,
+        DateTimeOffset claimedAt,
+        CancellationToken token)
+    {
+        if (context.Database.IsRelational())
+            return await context.DeploymentQueueTickets
+                .Where(t => t.Id == ticketId && t.Status == DeploymentQueueTicketStatus.Pending)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(t => t.Status, DeploymentQueueTicketStatus.Assigned)
+                    .SetProperty(t => t.AssignedAt, claimedAt), token) == 1;
+
+        var ticket = await context.DeploymentQueueTickets
+            .SingleOrDefaultAsync(t => t.Id == ticketId, token);
+        if (ticket?.Status != DeploymentQueueTicketStatus.Pending)
+            return false;
+        ticket.Status = DeploymentQueueTicketStatus.Assigned;
+        ticket.AssignedAt = claimedAt;
+        await context.SaveChangesAsync(token);
+        return true;
+    }
+
+    private static async Task RequeueStaleClaimsAsync(
+        AppDbContext context,
+        DateTimeOffset staleClaimCutoff,
+        CancellationToken token)
+    {
+        var query = context.DeploymentQueueTickets
+            .Where(t => t.Status == DeploymentQueueTicketStatus.Assigned &&
+                        t.TargetNodeId == null && t.AssignedAt < staleClaimCutoff);
+        if (context.Database.IsRelational())
+        {
+            await query.ExecuteUpdateAsync(setters => setters
+                .SetProperty(t => t.Status, DeploymentQueueTicketStatus.Pending)
+                .SetProperty(t => t.AssignedAt, (DateTimeOffset?)null), token);
+            return;
+        }
+
+        var staleTickets = await query.ToListAsync(token);
+        foreach (var ticket in staleTickets)
+        {
+            ticket.Status = DeploymentQueueTicketStatus.Pending;
+            ticket.AssignedAt = null;
+        }
+
+        if (staleTickets.Count > 0)
+            await context.SaveChangesAsync(token);
     }
 
     async Task<bool> ExecuteReservedTicketAsync(ReservedQueueTicket reserved, CancellationToken token)

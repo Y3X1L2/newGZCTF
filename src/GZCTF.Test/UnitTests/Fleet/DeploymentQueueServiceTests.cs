@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -7,12 +7,12 @@ using System.Threading.Tasks;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Services.Fleet;
-using GZCTF.Services.Concurrency;
+using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Container.Manager;
 using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
@@ -165,7 +165,7 @@ public class DeploymentQueueServiceTests
 
     static DeploymentQueueService CreateService(AppDbContext context)
     {
-        var lockService = new LocalSemaphoreLock(NullLogger<LocalSemaphoreLock>.Instance);
+        var lockService = new LocalDevelopmentLeaseProvider();
         var capacity = new FleetCapacityReservationService(
             context,
             lockService,
@@ -533,13 +533,13 @@ public class DeploymentQueueManagerTests
     static QueueManager CreateQueueManager(string databaseName, DeploymentExecutionService executor,
         AppDbContext? sharedContext = null)
     {
-        var lockService = new LocalSemaphoreLock(NullLogger<LocalSemaphoreLock>.Instance);
+        var lockService = new LocalDevelopmentLeaseProvider();
         var services = new ServiceCollection();
         if (sharedContext is not null)
             services.AddSingleton(sharedContext);
         else
             services.AddDbContext<AppDbContext>(options => options.UseInMemoryDatabase(databaseName));
-        services.AddSingleton<IDistributedLockService>(lockService);
+        services.AddSingleton<IDistributedLeaseProvider>(lockService);
         services.AddScoped(_ => new FleetCapacityReservationService(
             sharedContext ?? _.GetRequiredService<AppDbContext>(),
             lockService,
@@ -553,7 +553,6 @@ public class DeploymentQueueManagerTests
 
         return new QueueManager(
             provider.GetRequiredService<IServiceScopeFactory>(),
-            lockService,
             provider.GetRequiredService<NodeExecutionGate>(),
             NullLogger<QueueManager>.Instance);
     }
@@ -895,7 +894,7 @@ public class ContainerOwnerLimitLockTests
         Assert.Equal(TaskStatus.Denied, result.Status);
     }
 
-    static GameInstanceRepository CreateGameRepository(AppDbContext context, IDistributedLockService lockService)
+    static GameInstanceRepository CreateGameRepository(AppDbContext context, IDistributedLeaseProvider lockService)
     {
         var services = CreateCommonServices(context, lockService);
         services.AddSingleton(Mock.Of<ICheatInfoRepository>());
@@ -905,7 +904,7 @@ public class ContainerOwnerLimitLockTests
         return ActivatorUtilities.CreateInstance<GameInstanceRepository>(services.BuildServiceProvider(), context);
     }
 
-    static ExerciseInstanceRepository CreateExerciseRepository(AppDbContext context, IDistributedLockService lockService)
+    static ExerciseInstanceRepository CreateExerciseRepository(AppDbContext context, IDistributedLeaseProvider lockService)
     {
         var services = CreateCommonServices(context, lockService);
         services.AddSingleton(Mock.Of<IStringLocalizer<Program>>());
@@ -913,11 +912,11 @@ public class ContainerOwnerLimitLockTests
         return ActivatorUtilities.CreateInstance<ExerciseInstanceRepository>(services.BuildServiceProvider(), context);
     }
 
-    static ServiceCollection CreateCommonServices(AppDbContext context, IDistributedLockService lockService)
+    static ServiceCollection CreateCommonServices(AppDbContext context, IDistributedLeaseProvider lockService)
     {
         var services = new ServiceCollection();
         services.AddSingleton(context);
-        services.AddSingleton<IDistributedLockService>(lockService);
+        services.AddSingleton<IDistributedLeaseProvider>(lockService);
         services.AddSingleton<IContainerManager, RecordingContainerManager>();
         services.AddSingleton(Mock.Of<IContainerRepository>());
         services.AddSingleton(Mock.Of<INginxProxySyncService>(s =>
@@ -926,8 +925,7 @@ public class ContainerOwnerLimitLockTests
         services.AddSingleton(new DeploymentExecutionContextAccessor());
         services.AddSingleton<IDistributedCache, MemoryDistributedCache>();
         services.AddSingleton<IMemoryCache, MemoryCache>();
-        services.AddSingleton(Channel.CreateUnbounded<CacheRequest>().Writer);
-        services.AddSingleton<CacheHelper>();
+        services.AddSingleton(Mock.Of<IPlatformCache>());
         services.AddSingleton(Options.Create(new ContainerPolicy
         {
             AutoDestroyOnLimitReached = false,
@@ -971,21 +969,25 @@ public class ContainerOwnerLimitLockTests
         return new AppDbContext(options);
     }
 
-    sealed class RecordingLockService : IDistributedLockService
+    sealed class RecordingLockService : IDistributedLeaseProvider
     {
         public List<string> AcquiredKeys { get; } = [];
 
-        public Task<IDisposable> AcquireAsync(string key, TimeSpan? timeout = null)
+        public ValueTask<IDistributedLease> AcquireAsync(string key, TimeSpan? timeout = null,
+            TimeSpan? leaseDuration = null, CancellationToken cancellationToken = default)
         {
             AcquiredKeys.Add(key);
-            return Task.FromResult<IDisposable>(new Releaser());
+            return ValueTask.FromResult<IDistributedLease>(new Releaser(key));
         }
 
-        sealed class Releaser : IDisposable
+        sealed class Releaser(string resource) : IDistributedLease
         {
-            public void Dispose()
-            {
-            }
+            public string Resource => resource;
+            public string OwnerToken => "test-owner";
+            public CancellationToken LeaseLost => CancellationToken.None;
+            public ValueTask<bool> RenewAsync(CancellationToken cancellationToken = default) =>
+                ValueTask.FromResult(true);
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         }
     }
 

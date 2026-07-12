@@ -1,17 +1,17 @@
 using GZCTF.Models.Request.Edit;
 using GZCTF.Repositories.Interface;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Repositories;
 
-public class DivisionRepository(AppDbContext context, CacheHelper cacheHelper)
+public class DivisionRepository(AppDbContext context, IPlatformCache cache)
     : RepositoryBase(context), IDivisionRepository
 {
     private async ValueTask FlushCache(int gameId, CancellationToken token = default)
     {
-        await cacheHelper.RemoveAsync(CacheKey.GameCache(gameId), token);
-        await cacheHelper.FlushScoreboardCache(gameId, token);
+        await cache.InvalidateAsync(CachePolicyCatalog.GameDetails, gameId.ToString(), token);
+        await cache.InvalidateAsync(CachePolicyCatalog.Scoreboard, gameId.ToString(), token);
     }
 
     public async Task<Division> CreateDivision(Game game, DivisionCreateModel model, CancellationToken token = default)

@@ -1,5 +1,5 @@
 ﻿using GZCTF.Models.Internal;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
@@ -17,7 +17,7 @@ public static class PrelaunchHelper
 
             var logger = serviceScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
             var context = serviceScope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var cache = serviceScope.ServiceProvider.GetRequiredService<IDistributedCache>();
+            var cache = serviceScope.ServiceProvider.GetRequiredService<IPlatformCache>();
 
             if (app.Configuration["xorKey"] is not { Length: > 0 })
                 ExitWithFatalMessage(StaticLocalizer[nameof(Resources.Program.Init_XorKeyNotSet)]);
@@ -117,32 +117,9 @@ public static class PrelaunchHelper
                 logger.SystemLog(StaticLocalizer[nameof(Resources.Program.Init_CaptureNotAvailable)],
                     TaskStatus.Failed, LogLevel.Warning);
 
-            if (!cache.CacheCheck(logger))
-                ExitWithFatalMessage(StaticLocalizer[nameof(Resources.Program.Init_InvalidCacheConfig)]);
-
-            await cache.RemoveAsync(CacheKey.Index);
-            await cache.RemoveAsync(CacheKey.ClientConfig);
-            await cache.RemoveAsync(CacheKey.CaptchaConfig);
-        }
-    }
-
-    extension(IDistributedCache cache)
-    {
-        private bool CacheCheck(ILogger<Program> logger)
-        {
-            var version = typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown";
-            var cacheVersion = $"GZCTF@{version}";
-
-            try
-            {
-                cache.SetString("_ValidCheck", cacheVersion);
-                return cache.GetString("_ValidCheck") == cacheVersion;
-            }
-            catch (Exception e)
-            {
-                logger.LogErrorMessage(e, StaticLocalizer[nameof(Resources.Program.Init_InvalidCacheConfig)]);
-                return false;
-            }
+            await cache.InvalidateAsync(CachePolicyCatalog.Index, "global");
+            await cache.InvalidateAsync(CachePolicyCatalog.ClientConfig, "global");
+            await cache.InvalidateAsync(CachePolicyCatalog.CaptchaConfig, "global");
         }
     }
 }

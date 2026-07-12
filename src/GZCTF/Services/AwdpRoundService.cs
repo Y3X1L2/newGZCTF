@@ -3,7 +3,7 @@ using GZCTF.Hubs;
 using GZCTF.Hubs.Clients;
 using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
@@ -91,7 +91,7 @@ public class AwdpRoundService(
         using var scope = scopeFactory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var repository = scope.ServiceProvider.GetRequiredService<IAwdpRepository>();
-        var cacheHelper = scope.ServiceProvider.GetRequiredService<CacheHelper>();
+        var cacheHelper = scope.ServiceProvider.GetRequiredService<IPlatformCache>();
         var hub = scope.ServiceProvider.GetRequiredService<IHubContext<MonitorHub, IMonitorClient>>();
         var services = await repository.GetServicesByGame(gameId, token);
 
@@ -112,7 +112,7 @@ public class AwdpRoundService(
             await instanceService.DestroyInstancesForGame(gameId, token);
         }
 
-        await cacheHelper.FlushScoreboardCache(gameId, token);
+        await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, gameId.ToString(), token);
 
         return wasRunning
             ? (true, "AWDP 比赛已停止，实例资源已清理")
@@ -186,7 +186,7 @@ public class AwdpRoundService(
         var repository = scope.ServiceProvider.GetRequiredService<IAwdpRepository>();
         var instanceService = scope.ServiceProvider.GetRequiredService<AwdpInstanceService>();
         var checkerService = scope.ServiceProvider.GetRequiredService<AwdpCheckerService>();
-        var cacheHelper = scope.ServiceProvider.GetRequiredService<CacheHelper>();
+        var cacheHelper = scope.ServiceProvider.GetRequiredService<IPlatformCache>();
         var hub = scope.ServiceProvider.GetRequiredService<IHubContext<MonitorHub, IMonitorClient>>();
 
         var game = await context.Games.FirstOrDefaultAsync(g => g.Id == gameId, token);
@@ -256,7 +256,7 @@ public class AwdpRoundService(
                 .ReceivedAwdpRoundChange(ToStatusModel(gameId, round, services));
 
             var checkerTasks = await checkerService.RunCheckerForRound(round, services, participations, token);
-            await cacheHelper.FlushScoreboardCache(gameId, token);
+            await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, gameId.ToString(), token);
             await BroadcastServiceStatus(gameId, services, checkerTasks, repository, hub, token);
 
             await DelayUntil(round.AttackPhaseStart.AddMinutes(attackMinutes), token);
@@ -278,7 +278,7 @@ public class AwdpRoundService(
             round.EndTime = DateTimeOffset.UtcNow;
             await context.SaveChangesAsync(token);
 
-            await cacheHelper.FlushScoreboardCache(gameId, token);
+            await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, gameId.ToString(), token);
             await hub.Clients.Group($"Game_{gameId}")
                 .ReceivedAwdpRoundChange(ToStatusModel(gameId, round, services));
 

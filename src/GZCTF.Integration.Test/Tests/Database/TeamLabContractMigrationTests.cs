@@ -111,7 +111,7 @@ public sealed class TeamLabContractMigrationTests : IAsyncLifetime
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseNpgsql($"{_postgres.GetConnectionString()};Include Error Detail=true")
             .Options;
-        return new AppDbContext(options);
+        return new AppDbContext(options) { SuppressProjectionRevisionBumps = true };
     }
 
     private static async Task<bool> TableExistsAsync(AppDbContext context, string tableName)

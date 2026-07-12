@@ -4,8 +4,8 @@ using GZCTF.Models.Internal;
 using GZCTF.Models.Request.Account;
 using GZCTF.Models.Request.Info;
 using GZCTF.Repositories.Interface;
+using GZCTF.Infrastructure.Cache;
 using GZCTF.Services;
-using GZCTF.Services.Cache;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Caching.Distributed;
@@ -20,12 +20,11 @@ namespace GZCTF.Controllers;
 [Route("api")]
 [ApiController]
 public class InfoController(
-    CacheHelper cacheHelper,
+    IPlatformCache platformCache,
     IDistributedCache cache,
     ICaptchaService captcha,
     IPostRepository postRepository,
     IServiceProvider serviceProvider,
-    ILogger<InfoController> logger,
     IOptionsSnapshot<CaptchaConfig> captchaConfig,
     IOptionsSnapshot<AccountPolicy> accountPolicy,
     IStringLocalizer<Program> localizer) : ControllerBase
@@ -116,12 +115,8 @@ public class InfoController(
     [ProducesResponseType(typeof(ClientConfig), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetClientConfig(CancellationToken token = default)
     {
-        var data = await cacheHelper.GetOrCreateAsync(logger, CacheKey.ClientConfig,
-            entry =>
-            {
-                entry.SlidingExpiration = TimeSpan.FromDays(7);
-                return Task.FromResult(ClientConfig.FromServiceProvider(serviceProvider));
-            }, token: token);
+        var data = await platformCache.GetOrCreateAsync(CachePolicyCatalog.ClientConfig, "global",
+            _ => ValueTask.FromResult(ClientConfig.FromServiceProvider(serviceProvider)), token);
 
         var lastModified = data.UpdateTimeUtc;
         var eTag = $"\"cfg-{lastModified.ToUnixTimeSeconds():X}\"";
@@ -141,14 +136,10 @@ public class InfoController(
     [ProducesResponseType(typeof(ClientCaptchaInfoModel), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetClientCaptchaInfo(CancellationToken token = default)
     {
-        var data = await cacheHelper.GetOrCreateAsync(logger, CacheKey.CaptchaConfig,
-            entry =>
-            {
-                entry.SlidingExpiration = TimeSpan.FromDays(7);
-                return Task.FromResult(accountPolicy.Value.UseCaptcha
+        var data = await platformCache.GetOrCreateAsync(CachePolicyCatalog.CaptchaConfig, "global",
+            _ => ValueTask.FromResult(accountPolicy.Value.UseCaptcha
                     ? captcha.ClientInfo()
-                    : new ClientCaptchaInfoModel());
-            }, token: token);
+                    : new ClientCaptchaInfoModel()), token);
 
         var lastModified = data.UpdateTimeUtc;
         var eTag = $"\"cap-{lastModified.ToUnixTimeSeconds():X}\"";
@@ -176,7 +167,7 @@ public class InfoController(
 
         var challenge = RandomNumberGenerator.GetBytes(8);
         var id = RandomNumberGenerator.GetHexString(12, true);
-        await cache.SetAsync(CacheKey.HashPow(id), challenge, PowChallengeCacheOptions, token);
+        await cache.SetAsync(RuntimeCacheKeys.HashPow(id), challenge, PowChallengeCacheOptions, token);
 
         return Ok(new HashPowChallenge
         {

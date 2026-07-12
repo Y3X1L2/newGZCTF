@@ -6,6 +6,7 @@ using GZCTF.Modules.Content.Application;
 using GZCTF.Modules.Content.Contracts;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Runtime.Domain;
+using GZCTF.Infrastructure.Cache;
 using GZCTF.Models.Request.Edit;
 using GZCTF.Models.Request.Game;
 using GZCTF.Models.Request.Training;
@@ -36,6 +37,7 @@ public class TrainingCourseAdminController(
     TrainingCourseDeletionService courseDeletion,
     ImageDistributionService imageDistribution,
     ImageImportApplicationService imageImports,
+    IProjectionRevisionStore projectionRevisions,
     ILogger<TrainingCourseAdminController> logger) : ControllerBase
 {
     private async Task<UserInfo> CurrentUser() =>
@@ -2106,6 +2108,7 @@ public class TrainingCourseAdminController(
         if (!linkExists && challenge?.TrainingCourseId != courseId)
             return NotFound();
 
+        await using var transaction = await context.Database.BeginTransactionAsync(token);
         if (challenge?.TrainingCourseId == courseId)
         {
             await blobRepository.DeleteAttachment(challenge.Attachment, token);
@@ -2135,6 +2138,9 @@ public class TrainingCourseAdminController(
         }
 
         await context.SaveChangesAsync(token);
+        await projectionRevisions.BumpAsync(
+            CachePolicyCatalog.TrainingStatistics.Name, "__global__", token);
+        await transaction.CommitAsync(token);
         logger.SystemLog($"Removed training course challenge {exerciseChallengeId}: course={courseId}.",
             TaskStatus.Success, LogLevel.Information);
         return Ok();

@@ -20,10 +20,11 @@ public class PortLeaseRefreshServiceTests
     public async Task RefreshOnceAsync_RefreshesActiveProxyPortsWithinNginxRange()
     {
         var repository = new Mock<IContainerRepository>();
+        var firstLease = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         repository.Setup(r => r.GetProxyPortMappingsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync([
-                new PortMappingEntry(30042, "10.24.0.30", 42762),
-                new PortMappingEntry(29999, "10.24.0.31", 42763)
+                new PortMappingEntry(30042, "10.24.0.30", 42762, firstLease),
+                new PortMappingEntry(29999, "10.24.0.31", 42763, Guid.NewGuid())
             ]);
         var allocator = new RecordingPortAllocator();
         var service = CreateService(repository.Object, allocator);
@@ -32,8 +33,7 @@ public class PortLeaseRefreshServiceTests
 
         var reservation = Assert.Single(allocator.ReservedPorts);
         Assert.Equal(30042, reservation.Port);
-        Assert.Contains("10.24.0.30", reservation.Owner, StringComparison.Ordinal);
-        Assert.Contains("42762", reservation.Owner, StringComparison.Ordinal);
+        Assert.Equal(firstLease, reservation.LeaseId);
     }
 
     static PortLeaseRefreshService CreateService(IContainerRepository repository, IPortAllocationService allocator)
@@ -60,20 +60,20 @@ public class PortLeaseRefreshServiceTests
 
     sealed class RecordingPortAllocator : IPortAllocationService
     {
-        public List<(int Port, string Owner)> ReservedPorts { get; } = [];
+        public List<(int Port, Guid LeaseId)> ReservedPorts { get; } = [];
         public bool IsRedisBacked => true;
         public PortAllocationRange CurrentRange => new(30000, 30099, "nginx", RequiresRedis: true);
 
-        public Task<int> AllocatePortAsync(Guid containerId, CancellationToken token = default) =>
-            Task.FromResult(0);
+        public Task<PortLease?> AllocatePortAsync(Guid containerId, CancellationToken token = default) =>
+            Task.FromResult<PortLease?>(null);
 
-        public Task ReleasePortAsync(int port, CancellationToken token = default) =>
-            Task.CompletedTask;
+        public Task<bool> ReleasePortAsync(int port, Guid leaseId, CancellationToken token = default) =>
+            Task.FromResult(true);
 
-        public Task ReserveExistingPortAsync(int port, string owner, CancellationToken token = default)
+        public Task<bool> ReserveExistingPortAsync(int port, Guid leaseId, CancellationToken token = default)
         {
-            ReservedPorts.Add((port, owner));
-            return Task.CompletedTask;
+            ReservedPorts.Add((port, leaseId));
+            return Task.FromResult(true);
         }
     }
 

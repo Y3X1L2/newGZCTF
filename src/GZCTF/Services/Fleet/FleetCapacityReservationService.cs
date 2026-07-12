@@ -1,6 +1,6 @@
 using GZCTF.Models;
 using GZCTF.Models.Data;
-using GZCTF.Services.Concurrency;
+using GZCTF.Infrastructure.Concurrency;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Services.Fleet;
@@ -59,10 +59,10 @@ public class FleetCapacityReservationService
     static readonly TimeSpan DeploymentTargetReservationTimeout = TimeSpan.FromMinutes(30);
 
     readonly AppDbContext _context;
-    readonly IDistributedLockService _lockService;
+    readonly IDistributedLeaseProvider _lockService;
     readonly ILogger<FleetCapacityReservationService> _logger;
 
-    public FleetCapacityReservationService(AppDbContext context, IDistributedLockService lockService,
+    public FleetCapacityReservationService(AppDbContext context, IDistributedLeaseProvider lockService,
         ILogger<FleetCapacityReservationService> logger)
     {
         _context = context;
@@ -79,7 +79,10 @@ public class FleetCapacityReservationService
         if (dockerSlots == 0 && vmSlots == 0)
             return FleetCapacityReservationResult.Failed("No capacity slots were requested.");
 
-        await using var _ = await AcquireSchedulerLockAsync();
+        await using var schedulerLease = await AcquireSchedulerLockAsync(token);
+        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            token, schedulerLease.LeaseLost);
+        token = leaseCancellation.Token;
 
         for (var attempt = 1; attempt <= 3; attempt++)
         {
@@ -134,7 +137,10 @@ public class FleetCapacityReservationService
         if (normalizedItems.Length == 0)
             return FleetCapacityBatchReservationResult.Failed("No capacity slots were requested.");
 
-        await using var _ = await AcquireSchedulerLockAsync();
+        await using var schedulerLease = await AcquireSchedulerLockAsync(token);
+        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            token, schedulerLease.LeaseLost);
+        token = leaseCancellation.Token;
 
         for (var attempt = 1; attempt <= 3; attempt++)
         {
@@ -205,7 +211,10 @@ public class FleetCapacityReservationService
         if (normalizedDockerSlots == 0 && normalizedVmSlots == 0)
             return;
 
-        await using var _ = await AcquireSchedulerLockAsync();
+        await using var schedulerLease = await AcquireSchedulerLockAsync(token);
+        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            token, schedulerLease.LeaseLost);
+        token = leaseCancellation.Token;
 
         for (var attempt = 1; attempt <= 3; attempt++)
         {
@@ -238,7 +247,10 @@ public class FleetCapacityReservationService
         if (normalizedDockerSlots == 0 && normalizedVmSlots == 0)
             return;
 
-        await using var _ = await AcquireSchedulerLockAsync();
+        await using var schedulerLease = await AcquireSchedulerLockAsync(token);
+        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            token, schedulerLease.LeaseLost);
+        token = leaseCancellation.Token;
 
         for (var attempt = 1; attempt <= 3; attempt++)
         {
@@ -271,7 +283,10 @@ public class FleetCapacityReservationService
         if (normalizedDockerSlots == 0 && normalizedVmSlots == 0)
             return;
 
-        await using var _ = await AcquireSchedulerLockAsync();
+        await using var schedulerLease = await AcquireSchedulerLockAsync(token);
+        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            token, schedulerLease.LeaseLost);
+        token = leaseCancellation.Token;
 
         for (var attempt = 1; attempt <= 3; attempt++)
         {
@@ -304,7 +319,10 @@ public class FleetCapacityReservationService
 
     public async Task ReconcileReservedAsync(Guid nodeId, CancellationToken token)
     {
-        await using var _ = await AcquireSchedulerLockAsync();
+        await using var schedulerLease = await AcquireSchedulerLockAsync(token);
+        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            token, schedulerLease.LeaseLost);
+        token = leaseCancellation.Token;
 
         for (var attempt = 1; attempt <= 3; attempt++)
         {
@@ -478,22 +496,7 @@ public class FleetCapacityReservationService
         200f * (1 - (float)node.AllocatedContainers / Math.Max(node.MaxContainers, 1)) +
         200f * (1 - (float)node.AllocatedVms / Math.Max(node.MaxVms, 1));
 
-    async ValueTask<IAsyncDisposable> AcquireSchedulerLockAsync()
-    {
-        var releaser = await _lockService.AcquireAsync("fleet:scheduler", TimeSpan.FromSeconds(10));
-        return new AsyncDisposableAdapter(releaser);
-    }
-
-    sealed class AsyncDisposableAdapter : IAsyncDisposable
-    {
-        readonly IDisposable _inner;
-
-        public AsyncDisposableAdapter(IDisposable inner) => _inner = inner;
-
-        public ValueTask DisposeAsync()
-        {
-            _inner.Dispose();
-            return ValueTask.CompletedTask;
-        }
-    }
+    async ValueTask<IDistributedLease> AcquireSchedulerLockAsync(CancellationToken token)
+        => await _lockService.AcquireAsync("fleet:scheduler", TimeSpan.FromSeconds(10),
+            cancellationToken: token);
 }

@@ -4,6 +4,18 @@ namespace GZCTF.Infrastructure.Persistence.Governance;
 
 public sealed class TerminalHistoryCleaner(AppDbContext context)
 {
+    public Task<int> CleanWorkerNodeMetricsAsync(DateTimeOffset cutoff, int batchSize,
+        CancellationToken cancellationToken) => context.Database.ExecuteSqlInterpolatedAsync($$"""
+        WITH candidates AS (
+            SELECT "WorkerNodeId", "WindowStart" FROM "WorkerNodeMetricSamples"
+            WHERE "WindowStart" < {{cutoff}}
+            ORDER BY "WindowStart", "WorkerNodeId" LIMIT {{batchSize}} FOR UPDATE SKIP LOCKED
+        )
+        DELETE FROM "WorkerNodeMetricSamples" target USING candidates
+        WHERE target."WorkerNodeId" = candidates."WorkerNodeId"
+          AND target."WindowStart" = candidates."WindowStart"
+        """, cancellationToken);
+
     public Task<int> CleanDeploymentTicketsAsync(DateTimeOffset cutoff, int batchSize,
         CancellationToken cancellationToken) => context.Database.ExecuteSqlInterpolatedAsync($$"""
         WITH candidates AS (

@@ -10,6 +10,45 @@
 
 ---
 
+## Implementation Progress
+
+### 2026-07-12 启动基线
+
+- 实施基线为 `b45eb9b`，Phase 4 数据库治理已闭环并推送至 `origin/main`；本阶段不部署、不连接或修改生产服务器。
+- 当前代码事实复核确认：Redis 连接仍由框架注册、`RedisDistributedLock`、`PortAllocationService` 和 API rate-limit store 分别创建；旧 `CacheMaker`/`CacheHelper` 双层缓存仍在；TeamLab flow 仍同步逐批查重落库；部署队列事实已在 PostgreSQL。
+- 按用户要求将 11 个任务合并为五个大单元实施和验收：Redis 底座与投影缓存、租约与队列协调、节点与 TeamLab 高频缓冲、迁移与运维、并发故障与全量退出门禁。大单元内部集中修改，完成后才运行对应验证。
+- 计划中的文件路径按 Phase 2/3/4 合并后的当前模块边界调整；不恢复已删除旧模块，不保留新旧缓存或锁实现的长期兼容双轨。
+- 当前状态：大单元 1 进行中，正在建立单一 Redis connection、typed cache policy、projection revision 和核心投影失效边界。
+
+### 2026-07-12 大单元 1-2 进度
+
+- 大单元 1 已完成：框架缓存、SignalR 和运行时组件共享异步单例 Redis provider；旧 `CacheMaker`、cache channel、handler 和 `CacheHelper` 已删除；排行榜、理论、培训及公共投影进入 typed policy catalog。
+- `AppDbContext` 在 PostgreSQL 业务保存事务内递增 scoreboard、theory 和 training projection revision；cache key 同时包含全局与资源 revision，Redis 失效失败不会重新命中旧事实。
+- 大单元 1 集中门禁通过：solution build 0 warning/0 error，Redis runtime 与 policy 专项 15/15。
+- 大单元 2 已完成生产代码：旧 `IDistributedLockService`、`LocalSemaphoreLock` 和 `RedisDistributedLock` 已删除；新 owner lease 支持续租、lease-lost、compare-owner renew/release 和 distributed fail-closed。
+- 公网端口租约增加持久 `PublicPortLeaseId`，分配、重建、Nginx 同步、刷新和销毁均按 port + owner 比较；缺 owner 的旧路径拒绝无条件释放。
+- 部署队列继续以 PostgreSQL ticket 为唯一事实，Redis wake-up 仅降低领取延迟；通知丢失时 1-5 秒退避轮询继续恢复。大单元 2 集中 build 为 0 warning/0 error。
+- 当前进入大单元 3：节点 live state、metric batch persistence 与 TeamLab flow stream/batch ingest。
+
+### 2026-07-12 大单元 3-4 进度
+
+- 大单元 3 已完成：节点身份/capability 与 live metric 分离；Agent 心跳携带单调 sequence 和 observed time；Redis latest hash 拒绝旧序列，metric stream 由固定 group 批量聚合为一分钟样本并写入 PostgreSQL。调度与节点管理读取 live state，Redis 缺失时回退 PostgreSQL checkpoint。
+- TeamLab flow collector 已改为有界 Redis Stream + PostgreSQL binary COPY 批写；查询只读 PostgreSQL，consumer 支持 pending reclaim，写库后才 ACK，Redis 故障时进入 DropOldest 本地缓冲并记录 dropped telemetry。
+- 大单元 3 集中验证通过：solution build 0 warning/0 error；节点、调度、heartbeat、flow fingerprint/batching/buffer 专项 59/59。
+- 大单元 4 migration `CompletePhaseFiveRedisGovernance` 已生成并验证：新增 projection revision、节点分钟指标、live checkpoint、public port owner lease；历史公网容器、节点 checkpoint、scoreboard/theory/training revision 已回填。
+- EF 模型一致性检查通过；隔离 PostgreSQL/Redis 集成验证 2/2，覆盖 migration 回填和跨 consumer pending reclaim。首次 Testcontainers 执行仅因 Docker Desktop 无法拉取 Ryuk 失败；使用已缓存镜像并禁用 Ryuk 后业务验证通过，容器由测试显式清理。
+- 当前进入大单元 5：运维脚本、基准、全量门禁和独立质量审查。本阶段仍未部署或连接生产服务器。
+
+### 2026-07-12 大单元 5 与开发闭环
+
+- 运维交付已完成：Redis 部署/恢复 runbook、keyspace/TTL/stream pending 检查脚本、k6 合成负载和可复现基准记录模板已纳入仓库；Redis 检查脚本已在隔离 Redis 7 容器验证。
+- 首轮独立质量审查发现 11 项；最终复核又识别出本地租约状态删除竞态、HybridCache 合并等待者的 factory 异常放大、`XAUTOCLAIM` 深层 pending 游标未推进三项更深并发边界。上述问题均已修复：本地 lease 状态按持有者和等待者引用计数，factory 异常向全部合并调用者传播且只执行一次，flow reclaim 按 consumer 保存 Redis `NextStartId`。
+- `QueueManager` 现以 PostgreSQL 条件更新 CAS 领取 ticket，容量预留继续由 owner lease 保护；新增真实 PostgreSQL 双 worker 并发测试，证明同一 ticket 只有一个领取者。所有受分布式 lease 保护的长操作均把 `LeaseLost` 合并到业务取消令牌，cron job 也可在 leader lease 丢失时停止。
+- 最终集中门禁通过：solution build `0 warning / 0 error`；单元测试 `508/508`；PostgreSQL/Redis 完整集成测试 `226/226`；前端 strict TypeScript、EF pending-model、旧 Redis/cache/lock 残留扫描和 `git diff --check` 全部通过。最终复核新增补丁另通过并发租约/缓存 `3/3` 和 TeamLab 深层 pending reclaim `2/2` 专项验证。
+- Phase 5 代码开发完成，未部署、未连接或修改生产服务器。专用双主站环境的 k6 容量数字和 60 秒基础设施断网演练仍属于部署环境验收；本机未安装 k6，基准文档不得记录虚构结果，该项在预发布环境执行后补充证据。
+
+---
+
 ## 0. 当前代码事实与冻结决策
 
 - `AppBuilderExtensions` 同时配置 `IDistributedCache` 与 SignalR backplane；`RedisDistributedLock` 和 `PortAllocationService` 又分别同步 `ConnectionMultiplexer.Connect`，形成多连接、多故障语义和启动阻塞。
@@ -281,9 +320,9 @@ lease acquire 使用 `SET key owner NX PX`；renew/release 使用 compare-owner 
 
 allocate 返回 `PortLease(Port, OwnerToken, ExpiresAt)`；容器映射事实保存 owner token 的 SHA-256 或独立 lease ID，不保存可复用明文 token。release 和 reconcile 必须同时匹配 port 与 owner。`ReserveExistingPortAsync` 改为 compare-or-create，存在其他 owner 时报告冲突并 fail closed。
 
-- [ ] **Step 4: cron 与 QueueManager 使用新合约**
+- [ ] **Step 4: cron、容量预留与队列领取使用正确并发合约**
 
-cron lock 使用 lease provider；QueueManager 只在 claim/容量预留短事务持锁。PostgreSQL unique/row lock 继续保护 ticket，lease 丢失时终止当前 claim 并让下次 polling 恢复。
+cron 和容量预留使用 owner lease provider，lease 丢失时取消受保护操作。QueueManager 不使用粗粒度全局锁，ticket 通过 PostgreSQL `Pending -> Assigned` 条件更新 CAS 原子领取；领取者中断后由超时 claim 回收，下次 polling 恢复。
 
 - [ ] **Step 5: 运行测试并提交**
 
@@ -365,7 +404,7 @@ Expected: PASS；节点身份与实时指标的事实边界清晰。
 
 - [ ] **Step 3: 实现 consumer group**
 
-stream 使用固定 consumer group；worker 先读取新消息，再 reclaim 超时 pending。每批最多 1000 条或等待 200ms；成功批写后 ACK，失败保留 pending 并指数退避。stream 使用近似 MAXLEN 保护内存，trim 前保证 pending 不被删除。
+stream 使用固定 consumer group；worker 优先 reclaim 超时 pending，并为 pending 预留批次配额，避免持续新流量导致旧消息饥饿。每批最多 1000 条或等待 200ms；成功批写后 ACK，失败保留 pending 并指数退避。stream 使用近似 MAXLEN 保护内存，trim 前保证 pending 不被删除。
 
 - [ ] **Step 4: 实现 PostgreSQL 批写**
 

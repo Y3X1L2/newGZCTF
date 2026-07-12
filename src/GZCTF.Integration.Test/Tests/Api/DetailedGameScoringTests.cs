@@ -4,7 +4,7 @@ using System.Text.Json;
 using GZCTF.Integration.Test.Base;
 using GZCTF.Models.Request.Account;
 using GZCTF.Models.Request.Game;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using GZCTF.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -310,8 +310,8 @@ public class DetailedGameScoringTests(GZCTFApplicationFactory factory)
     private async Task FlushScoreboardCache(int gameId)
     {
         using var scope = factory.Services.CreateScope();
-        var cacheHelper = scope.ServiceProvider.GetRequiredService<CacheHelper>();
-        await cacheHelper.FlushScoreboardCache(gameId, CancellationToken.None);
+        var cache = scope.ServiceProvider.GetRequiredService<IPlatformCache>();
+        await cache.InvalidateAsync(CachePolicyCatalog.Scoreboard, gameId.ToString(), CancellationToken.None);
     }
 
     /// <summary>

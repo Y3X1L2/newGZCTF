@@ -163,8 +163,11 @@ public class NginxSyncService : IHostedService, INginxProxySyncService, IDisposa
             .ToArray();
 
         foreach (var mapping in filteredMappings)
-            await portAllocator.ReserveExistingPortAsync(mapping.PublicPort, $"nginx-sync:{mapping.IP}:{mapping.Port}",
-                token);
+        {
+            if (!await portAllocator.ReserveExistingPortAsync(mapping.PublicPort, mapping.LeaseId, token))
+                throw new InvalidOperationException(
+                    $"Public port owner conflict for port {mapping.PublicPort}; Nginx sync aborted.");
+        }
 
         // Generate a stream include fragment by default. The main nginx.conf should contain:
         // stream { include /etc/nginx/conf.d/stream-dynamic.conf; }
@@ -177,7 +180,7 @@ public class NginxSyncService : IHostedService, INginxProxySyncService, IDisposa
         configBuilder.AppendLine($"{indent}map $server_port $upstream_addr {{");
         configBuilder.AppendLine($"{indent}    default 127.0.0.1:1;  # blackhole for unmapped ports");
 
-        foreach (var (publicPort, ip, port) in filteredMappings)
+        foreach (var (publicPort, ip, port, _) in filteredMappings)
         {
             if (!string.IsNullOrEmpty(ip))
                 configBuilder.AppendLine($"{indent}    {publicPort} {ip}:{port};");

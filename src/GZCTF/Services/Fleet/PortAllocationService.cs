@@ -1,201 +1,167 @@
-using System.Net.Sockets;
 using System.Net;
+using System.Net.Sockets;
+using GZCTF.Infrastructure.Cache;
 using GZCTF.Models.Internal;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 
 namespace GZCTF.Services.Fleet;
 
-/// <summary>
-/// 端口分配服务，使用 Redis Lua 脚本原子分配端口。
-/// Redis 不可用时降级为本地端口扫描（仅适用于单节点模式）。
-/// </summary>
-public class PortAllocationService : IPortAllocationService, IDisposable
+public sealed class PortAllocationService(
+    IRedisConnectionProvider connections,
+    RedisKeyspace keyspace,
+    RedisTelemetry telemetry,
+    IOptions<ContainerProvider> containerProvider,
+    ILogger<PortAllocationService> logger) : IPortAllocationService
 {
-    private readonly ILogger<PortAllocationService> _logger;
-    private readonly IConnectionMultiplexer? _redis;
-    private readonly IDatabase? _database;
-    private readonly int _portStart;
-    private readonly int _portEnd;
-    private readonly string _mode;
-    private readonly bool _requiresRedis;
-
-    // 原子分配端口的 Lua 脚本：遍历端口段，找到第一个未被占用的端口并设置
-    private static readonly LuaScript AllocateScript = LuaScript.Prepare(@"
-        for port = @start, @end do
-            local key = 'gzctf:port:' .. port
-            if redis.call('SETNX', key, @containerId) == 1 then
-                redis.call('EXPIRE', key, 7200)
+    private static readonly TimeSpan LeaseDuration = TimeSpan.FromHours(2);
+    private static readonly LuaScript AllocateScript = LuaScript.Prepare("""
+        for port = @start, @finish do
+            local key = @prefix .. ':' .. port
+            if redis.call('set', key, @owner, 'NX', 'PX', @ttl) then
                 return port
             end
         end
         return 0
-    ");
-
+        """);
     private static readonly LuaScript ReleaseScript = LuaScript.Prepare(
-        "redis.call('DEL', 'gzctf:port:' .. @port)");
+        "if redis.call('get', @key) == @owner then return redis.call('del', @key) else return 0 end");
+    private static readonly LuaScript ReserveScript = LuaScript.Prepare("""
+        local current = redis.call('get', @key)
+        if not current then
+            redis.call('set', @key, @owner, 'PX', @ttl)
+            return 1
+        end
+        if current == @owner then
+            redis.call('pexpire', @key, @ttl)
+            return 1
+        end
+        return 0
+        """);
 
-    public bool IsRedisBacked => _database is not null;
+    private readonly int _portStart = ResolveRange(containerProvider.Value).Start;
+    private readonly int _portEnd = ResolveRange(containerProvider.Value).End;
+    private readonly string _mode = ResolveRange(containerProvider.Value).Mode;
+    private readonly bool _requiresRedis = ResolveRange(containerProvider.Value).RequiresRedis;
 
+    public bool IsRedisBacked => connections.IsConfigured;
     public PortAllocationRange CurrentRange => new(_portStart, _portEnd, _mode, _requiresRedis);
 
-    public PortAllocationService(
-        IConfiguration config,
-        IOptions<ContainerProvider> containerProvider,
-        ILogger<PortAllocationService> logger)
+    public async Task<PortLease?> AllocatePortAsync(Guid containerId, CancellationToken token = default)
     {
-        _logger = logger;
-
-        var providerConfig = containerProvider.Value;
-        var nginxConfig = providerConfig.NginxProxyConfig;
-        var dockerConfig = providerConfig.DockerConfig;
-        if (nginxConfig?.Enable == true)
-        {
-            _portStart = nginxConfig.ListenPortStart;
-            _portEnd = nginxConfig.ListenPortEnd;
-            _mode = "nginx";
-            _requiresRedis = true;
-        }
-        else
-        {
-            _portStart = dockerConfig?.PublicPortStart ?? 30000;
-            _portEnd = dockerConfig?.PublicPortEnd ?? 30999;
-            _mode = dockerConfig?.PublicPortStart is null || dockerConfig.PublicPortEnd is null
-                ? "docker-random"
-                : "docker";
-        }
-
-        var connectionString = config.GetConnectionString("RedisCache");
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            if (_requiresRedis)
-                logger.LogError("Nginx proxy mode is enabled, but RedisCache is not configured; public port allocation will fail");
-            else
-                logger.LogWarning("PortAllocationService is using local fallback because RedisCache is not configured");
-            return;
-        }
-
-        try
-        {
-            _redis = ConnectionMultiplexer.Connect(connectionString);
-            _database = _redis.GetDatabase();
-            logger.LogInformation("PortAllocationService initialized with Redis backing, port range {Start}-{End}",
-                _portStart, _portEnd);
-        }
-        catch (Exception ex)
-        {
-            logger.LogCritical(ex, "PortAllocationService failed to connect to Redis, falling back to local port scan");
-        }
-    }
-
-    public async Task<int> AllocatePortAsync(Guid containerId, CancellationToken token = default)
-    {
-        if (_database is not null)
+        var leaseId = Guid.CreateVersion7();
+        var connection = await GetConnectionAsync(token);
+        if (connection is not null)
         {
             try
             {
-                var result = (long)await _database.ScriptEvaluateAsync(AllocateScript, new
+                var prefix = keyspace.CreateTagged(RedisKeyPurpose.Lease, "port", "public").ToString();
+                var result = (long)await connection.GetDatabase().ScriptEvaluateAsync(AllocateScript, new
                 {
                     start = _portStart,
-                    end = _portEnd,
-                    containerId = containerId.ToString()
+                    finish = _portEnd,
+                    prefix,
+                    owner = Owner(leaseId),
+                    ttl = (long)LeaseDuration.TotalMilliseconds
                 });
-
                 if (result > 0)
                 {
-                    _logger.LogDebug("Allocated port {Port} for container {ContainerId} via Redis",
-                        result, containerId);
-                    return (int)result;
+                    telemetry.RecordOperation(RedisTelemetryPurpose.Lease, RedisTelemetryStatus.Success);
+                    return new((int)result, leaseId, DateTimeOffset.UtcNow + LeaseDuration);
                 }
 
-                _logger.LogWarning("No available port in range {Start}-{End} (Redis allocation exhausted)",
-                    _portStart, _portEnd);
-                return 0;
+                logger.LogWarning("Public port lease range {Start}-{End} is exhausted", _portStart, _portEnd);
+                return null;
             }
-            catch (Exception ex)
+            catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                if (_requiresRedis)
-                {
-                    _logger.LogError(ex,
-                        "Redis port allocation failed while Nginx proxy mode is enabled; refusing local fallback to avoid duplicate public ports");
-                    return 0;
-                }
-
-                _logger.LogWarning(ex, "Redis port allocation failed, falling back to local scan");
+                telemetry.RecordOperation(RedisTelemetryPurpose.Lease, RedisTelemetryStatus.Failure);
+                if (_requiresRedis || connections.Mode == RedisRuntimeMode.Distributed)
+                    throw new InvalidOperationException("Redis public port allocation failed closed.", exception);
+                logger.LogWarning(exception, "Redis public port allocation failed; using single-instance scan");
             }
         }
 
-        if (_requiresRedis)
-        {
-            _logger.LogError("Nginx proxy mode requires RedisCache for public port allocation");
-            return 0;
-        }
+        if (_requiresRedis || connections.Mode == RedisRuntimeMode.Distributed)
+            throw new InvalidOperationException("Public port allocation requires a healthy Redis lease backend.");
 
-        // 降级：本地端口扫描
-        return await AllocateLocalAsync(token);
+        var localPort = await AllocateLocalAsync(token);
+        return localPort == 0 ? null : new(localPort, leaseId, DateTimeOffset.UtcNow + LeaseDuration);
     }
 
-    public async Task ReleasePortAsync(int port, CancellationToken token = default)
+    public async Task<bool> ReleasePortAsync(int port, Guid leaseId, CancellationToken token = default)
     {
-        if (port <= 0)
-            return;
+        if (port <= 0 || leaseId == Guid.Empty)
+            return false;
+        var connection = await GetConnectionAsync(token);
+        if (connection is null)
+            return !_requiresRedis && connections.Mode != RedisRuntimeMode.Distributed;
 
-        if (_database is not null)
+        var released = (long)await connection.GetDatabase().ScriptEvaluateAsync(ReleaseScript, new
         {
-            try
-            {
-                await _database.ScriptEvaluateAsync(ReleaseScript, new { port });
-                _logger.LogDebug("Released port {Port} via Redis", port);
-                return;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Redis port release failed for port {Port}", port);
-            }
-        }
-
-        // 本地模式无需释放
-        await Task.CompletedTask;
+            key = PortKey(port),
+            owner = Owner(leaseId)
+        }) == 1;
+        telemetry.RecordOperation(RedisTelemetryPurpose.Lease,
+            released ? RedisTelemetryStatus.Success : RedisTelemetryStatus.Failure);
+        if (!released)
+            logger.LogWarning("Public port {Port} was not released because the owner lease did not match", port);
+        return released;
     }
 
-    public async Task ReserveExistingPortAsync(int port, string owner, CancellationToken token = default)
+    public async Task<bool> ReserveExistingPortAsync(int port, Guid leaseId,
+        CancellationToken token = default)
     {
-        if (port < _portStart || port > _portEnd)
-            return;
+        if (port < _portStart || port > _portEnd || leaseId == Guid.Empty)
+            return false;
+        var connection = await GetConnectionAsync(token);
+        if (connection is null)
+            return !_requiresRedis && connections.Mode != RedisRuntimeMode.Distributed;
 
-        if (_database is not null)
+        var reserved = (long)await connection.GetDatabase().ScriptEvaluateAsync(ReserveScript, new
         {
-            try
-            {
-                var key = $"gzctf:port:{port}";
-                await _database.StringSetAsync(key, owner, TimeSpan.FromHours(2));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Redis port reservation refresh failed for port {Port}", port);
-            }
-        }
-
-        await Task.CompletedTask;
+            key = PortKey(port),
+            owner = Owner(leaseId),
+            ttl = (long)LeaseDuration.TotalMilliseconds
+        }) == 1;
+        if (!reserved)
+            logger.LogError("Public port {Port} is owned by another lease; reservation failed closed", port);
+        return reserved;
     }
 
-    /// <summary>
-    /// 本地端口扫描降级方案（仅适用于单节点，无法跨节点协调）
-    /// </summary>
-    async Task<int> AllocateLocalAsync(CancellationToken token)
+    private async ValueTask<IConnectionMultiplexer?> GetConnectionAsync(CancellationToken token)
+    {
+        try
+        {
+            return await connections.GetAsync(token);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            if (_requiresRedis || connections.Mode == RedisRuntimeMode.Distributed)
+                throw;
+            logger.LogWarning(exception, "Redis lease backend is unavailable in single-instance mode");
+            return null;
+        }
+    }
+
+    private RedisKey PortKey(int port) =>
+        keyspace.CreateTagged(RedisKeyPurpose.Lease, "port", "public", port.ToString());
+
+    private static string Owner(Guid leaseId) => leaseId.ToString("N");
+
+    private async Task<int> AllocateLocalAsync(CancellationToken token)
     {
         for (var port = _portStart; port <= _portEnd; port++)
         {
             token.ThrowIfCancellationRequested();
             if (IsTcpPortAvailable(port))
                 return port;
+            await Task.Yield();
         }
-
-        _logger.LogWarning("No available local port in range {Start}-{End}", _portStart, _portEnd);
         return 0;
     }
 
-    static bool IsTcpPortAvailable(int port)
+    private static bool IsTcpPortAvailable(int port)
     {
         try
         {
@@ -209,5 +175,13 @@ public class PortAllocationService : IPortAllocationService, IDisposable
         }
     }
 
-    public void Dispose() => _redis?.Dispose();
+    private static PortAllocationRange ResolveRange(ContainerProvider provider)
+    {
+        if (provider.NginxProxyConfig?.Enable == true)
+            return new(provider.NginxProxyConfig.ListenPortStart, provider.NginxProxyConfig.ListenPortEnd,
+                "nginx", true);
+        var docker = provider.DockerConfig;
+        return new(docker?.PublicPortStart ?? 30000, docker?.PublicPortEnd ?? 30999,
+            docker?.PublicPortStart is null || docker.PublicPortEnd is null ? "docker-random" : "docker", false);
+    }
 }

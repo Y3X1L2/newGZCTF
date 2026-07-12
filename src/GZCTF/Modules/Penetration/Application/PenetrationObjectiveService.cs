@@ -9,8 +9,8 @@ using GZCTF.Modules.Penetration.Contracts;
 using GZCTF.Modules.Penetration.Domain;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Repositories.Interface;
-using GZCTF.Services.Cache;
-using GZCTF.Services.Concurrency;
+using GZCTF.Infrastructure.Cache;
+using GZCTF.Infrastructure.Concurrency;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,8 +18,8 @@ namespace GZCTF.Modules.Penetration.Application;
 
 public sealed class PenetrationObjectiveService(
     AppDbContext context,
-    CacheHelper cache,
-    IDistributedLockService locks,
+    IPlatformCache cache,
+    IDistributedLeaseProvider locks,
     IGameEventRepository events,
     IHubContext<UserHub, IUserClient> hub,
     ILogger<PenetrationObjectiveService> logger)
@@ -131,7 +131,12 @@ public sealed class PenetrationObjectiveService(
             .Where(item => item.Id == runtime.TopologyReleaseId)
             .Select(item => item.Version)
             .SingleAsync(cancellationToken);
-        using (await locks.AcquireAsync($"penetration:submit:{gameId}:{teamId}:{objective.Id}", TimeSpan.FromSeconds(5)))
+        await using var submissionLease = await locks.AcquireAsync(
+            $"penetration:submit:{gameId}:{teamId}:{objective.Id}",
+            TimeSpan.FromSeconds(5), cancellationToken: cancellationToken);
+        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken, submissionLease.LeaseLost);
+        cancellationToken = leaseCancellation.Token;
         {
             var alreadySolved = await context.PenetrationSubmissions.AnyAsync(item =>
                 item.GameId == gameId && item.TeamId == teamId && item.ObjectiveId == objective.Id &&
@@ -181,7 +186,8 @@ public sealed class PenetrationObjectiveService(
             };
             context.PenetrationSubmissions.Add(submission);
             await context.SaveChangesAsync(cancellationToken);
-            if (accepted) await cache.FlushScoreboardCache(gameId, cancellationToken);
+            if (accepted)
+                await cache.InvalidateAsync(CachePolicyCatalog.Scoreboard, gameId.ToString(), cancellationToken);
             await PublishSideEffectsAsync(submission, objective, runtime.PublicId, cancellationToken);
             return new(accepted, submission.Score, accepted ? "Flag 正确。" : "Flag 错误。");
         }

@@ -3,6 +3,7 @@ using GZCTF.Middlewares;
 using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
+using GZCTF.Modules.Theory.Application;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -20,7 +21,8 @@ public class TheoryPlayerController(
     IGameRepository gameRepository,
     IParticipationRepository participationRepository,
     UserManager<UserInfo> userManager,
-    TheoryExamService theoryService) : ControllerBase
+    TheoryExamService theoryService,
+    TheoryStatisticsProjectionService statistics) : ControllerBase
 {
     [RequireUser]
     [HttpGet("games/{gameId:int}/paper")]
@@ -77,6 +79,7 @@ public class TheoryPlayerController(
         sheet.Status = TheoryAnswerSheetStatus.Draft;
         sheet.MaxScore = paper.Questions.Sum(q => q.Score);
         await context.SaveChangesAsync(token);
+        await statistics.InvalidateAsync(gameId, token);
 
         return Ok(TheoryPlayerPaperModel.FromPaper(paper, sheet));
     }
@@ -122,6 +125,7 @@ public class TheoryPlayerController(
                 new RequestResponse("Answer sheet has already been submitted.", StatusCodes.Status409Conflict));
         }
         await transaction.CommitAsync(token);
+        await statistics.InvalidateAsync(gameId, token);
 
         return Ok(TheoryPlayerPaperModel.FromPaper(paper, sheet));
     }
@@ -154,8 +158,7 @@ public class TheoryPlayerController(
                     new RequestResponse("Accepted participation is required.", StatusCodes.Status403Forbidden));
         }
 
-        var results = await theoryService.BuildResults(gameId, token);
-        return Ok(results.Scoreboard.ToArray());
+        return Ok(await statistics.GetScoreboardAsync(gameId, token));
     }
 
     private async Task<TheoryPaper?> GetPublishedPaper(int gameId, CancellationToken token) =>

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -7,7 +7,7 @@ using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
-using GZCTF.Services.Concurrency;
+using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -347,10 +347,9 @@ public class FleetCapacityReservationServiceTests
             .ReturnsAsync(() => context.WorkerNodes.First(n => n.Id == node.Id));
         nodeRepo.Setup(r => r.GetAllNodesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => context.WorkerNodes.ToList());
-        var lockService = new LocalSemaphoreLock(NullLogger<LocalSemaphoreLock>.Instance);
+        var lockService = new LocalDevelopmentLeaseProvider();
         var queue = new QueueManager(
             CreateScopeFactory(context, lockService),
-            lockService,
             CreateNodeExecutionGate(),
             NullLogger<QueueManager>.Instance);
         var capacity = new FleetCapacityReservationService(context, lockService,
@@ -421,10 +420,9 @@ public class FleetCapacityReservationServiceTests
             .ReturnsAsync(() => context.WorkerNodes.ToList());
         nodeRepo.Setup(r => r.GetNodeByIdAsync(node.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => context.WorkerNodes.First(n => n.Id == node.Id));
-        var lockService = new LocalSemaphoreLock(NullLogger<LocalSemaphoreLock>.Instance);
+        var lockService = new LocalDevelopmentLeaseProvider();
         var queue = new QueueManager(
             CreateScopeFactory(context, lockService),
-            lockService,
             CreateNodeExecutionGate(),
             NullLogger<QueueManager>.Instance);
         var capacity = new FleetCapacityReservationService(context, lockService,
@@ -446,7 +444,7 @@ public class FleetCapacityReservationServiceTests
     }
 
     static FleetCapacityReservationService CreateService(AppDbContext context) =>
-        new(context, new LocalSemaphoreLock(NullLogger<LocalSemaphoreLock>.Instance),
+        new(context, new LocalDevelopmentLeaseProvider(),
             NullLogger<FleetCapacityReservationService>.Instance);
 
     static NodeExecutionGate CreateNodeExecutionGate() =>
@@ -462,10 +460,9 @@ public class FleetCapacityReservationServiceTests
         nodeRepo.Setup(r => r.GetAllNodesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => context.WorkerNodes.ToList());
 
-        var lockService = new LocalSemaphoreLock(NullLogger<LocalSemaphoreLock>.Instance);
+        var lockService = new LocalDevelopmentLeaseProvider();
         var queue = new QueueManager(
             CreateScopeFactory(context, lockService),
-            lockService,
             CreateNodeExecutionGate(),
             NullLogger<QueueManager>.Instance);
         var capacity = new FleetCapacityReservationService(context, lockService,
@@ -481,7 +478,7 @@ public class FleetCapacityReservationServiceTests
             NullLogger<FleetManager>.Instance);
     }
 
-    static IServiceScopeFactory CreateScopeFactory(AppDbContext context, IDistributedLockService lockService)
+    static IServiceScopeFactory CreateScopeFactory(AppDbContext context, IDistributedLeaseProvider lockService)
     {
         var services = new ServiceCollection();
         services.AddSingleton(context);

@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Runtime.Application;
+using GZCTF.Modules.Runtime.Contracts;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Services.Fleet;
@@ -37,7 +39,7 @@ public class LocalNodeMetricsService : BackgroundService
     {
         using var scope = scopeFactory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var capacity = scope.ServiceProvider.GetRequiredService<FleetCapacityReservationService>();
+        var liveStateStore = scope.ServiceProvider.GetRequiredService<INodeLiveStateStore>();
         var localNode = await context.WorkerNodes.FirstOrDefaultAsync(n => n.IsLocal, token);
 
         if (localNode is null)
@@ -45,8 +47,6 @@ public class LocalNodeMetricsService : BackgroundService
 
         var metrics = await SystemMetricsSampler.SampleAsync(token);
 
-        localNode.CpuLoad = metrics.CpuLoad;
-        localNode.MemoryLoad = metrics.MemoryLoad;
         var runningContainers = await context.Containers.CountAsync(
             c => c.Status == ContainerStatus.Running
                 && (!c.NodeId.HasValue || c.NodeId == localNode.Id), token);
@@ -64,13 +64,21 @@ public class LocalNodeMetricsService : BackgroundService
                  && a.Kind == TeamLabResourceKind.Vm
                  && a.Status == TeamLabRuntimeStatus.Running, token);
 
-        localNode.CurrentContainers = runningContainers + runningTeamLabDockerAssets;
-        localNode.CurrentVms = runningVms + runningTeamLabVmAssets;
-        localNode.Status = NodeStatus.Online;
-        localNode.LastHeartbeat = DateTimeOffset.UtcNow;
+        var receivedAt = DateTimeOffset.UtcNow;
+        var sequence = Math.Max(localNode.LiveMetricSequence + 1, receivedAt.ToUnixTimeMilliseconds());
+        var result = await liveStateStore.WriteAsync(new NodeLiveState(
+            localNode.Id,
+            sequence,
+            receivedAt,
+            receivedAt,
+            metrics.CpuLoad,
+            metrics.MemoryLoad,
+            runningContainers + runningTeamLabDockerAssets,
+            runningVms + runningTeamLabVmAssets,
+            localNode.UsedPorts), token);
+        if (!result.Accepted)
+            return false;
 
-        await context.SaveChangesAsync(token);
-        await capacity.ReconcileReservedAsync(localNode.Id, token);
         return true;
     }
 

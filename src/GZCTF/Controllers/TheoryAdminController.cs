@@ -20,7 +20,8 @@ public class TheoryAdminController(
     AppDbContext context,
     IGameRepository gameRepository,
     TheoryExamService theoryService,
-    ITheoryQuestionCatalog questionCatalog) : ControllerBase
+    ITheoryQuestionCatalog questionCatalog,
+    TheoryStatisticsProjectionService statistics) : ControllerBase
 {
     [HttpGet("questions")]
     [ProducesResponseType(typeof(TheoryQuestionBankItemModel[]), StatusCodes.Status200OK)]
@@ -180,6 +181,7 @@ public class TheoryAdminController(
             context.TheoryPapers.Add(paper);
 
         await context.SaveChangesAsync(token);
+        await statistics.InvalidateAsync(paper.GameId, token);
 
         return Ok(TheoryPaperDetailModel.FromPaper(paper));
     }
@@ -205,6 +207,7 @@ public class TheoryAdminController(
         paper.PublishedAt ??= DateTimeOffset.UtcNow;
         paper.UpdatedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(token);
+        await statistics.InvalidateAsync(paper.GameId, token);
 
         return Ok(TheoryPaperDetailModel.FromPaper(paper));
     }

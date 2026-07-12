@@ -36,7 +36,10 @@ public sealed class DataRetentionPolicyCatalog
                 "delete-terminal-runtime-batched"),
             Policy("governance-run", "Audit", DataLifecycleMode.TerminalHistory,
                 value.GovernanceRunDays, null, PartitionGrain.None, value.DeleteBatchSize,
-                "delete-terminal-batched")
+                "delete-terminal-batched"),
+            Policy("worker-node-metric", "Runtime", DataLifecycleMode.TerminalHistory,
+                value.WorkerNodeMetricDays, null, PartitionGrain.None, value.DeleteBatchSize,
+                "delete-batched")
         };
 
         _policies = policies.ToDictionary(policy => policy.Name, StringComparer.Ordinal);

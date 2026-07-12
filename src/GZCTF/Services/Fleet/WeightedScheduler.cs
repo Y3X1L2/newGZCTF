@@ -1,5 +1,7 @@
 using System.Globalization;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Runtime.Application;
+using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Repositories.Interface;
 
 namespace GZCTF.Services.Fleet;
@@ -8,15 +10,29 @@ public class WeightedScheduler
 {
     private const float MinimumSchedulableScore = 200f;
     private readonly INodeRepository _nodeRepo;
+    private readonly INodeLiveStateStore _liveStateStore;
     private readonly ILogger<WeightedScheduler> _logger;
 
-    public WeightedScheduler(INodeRepository nodeRepo, ILogger<WeightedScheduler> logger)
-    { _nodeRepo = nodeRepo; _logger = logger; }
+    public WeightedScheduler(INodeRepository nodeRepo, ILogger<WeightedScheduler> logger,
+        INodeLiveStateStore liveStateStore)
+    {
+        _nodeRepo = nodeRepo;
+        _logger = logger;
+        _liveStateStore = liveStateStore;
+    }
 
     public async Task<Guid?> SelectOptimalNodeAsync(NodeCapability required, CancellationToken token)
     {
-        var nodes = await _nodeRepo.GetOnlineNodesAsync(token);
+        var nodes = await _nodeRepo.GetAllNodesAsync(token);
         if (nodes.Count == 0) return null;
+
+        var liveStates = await _liveStateStore.GetManyAsync(nodes.Select(node => node.Id).ToArray(), token);
+        var utcNow = DateTimeOffset.UtcNow;
+        foreach (var node in nodes)
+        {
+            if (liveStates.TryGetValue(node.Id, out var state))
+                ApplyLiveState(node, state, utcNow, _liveStateStore.FreshnessTtl);
+        }
 
         var best = SelectOptimalNode(nodes, required);
         return best?.Id;
@@ -170,6 +186,19 @@ public class WeightedScheduler
         + 500f * (1 - Math.Clamp(n.MemoryLoad, 0f, 1f))
         + 200f * (1 - (float)n.AllocatedContainers / Math.Max(n.MaxContainers, 1))
         + 200f * (1 - (float)n.AllocatedVms / Math.Max(n.MaxVms, 1));
+
+    internal static void ApplyLiveState(WorkerNode node, NodeLiveState state, DateTimeOffset utcNow,
+        TimeSpan freshnessTtl)
+    {
+        node.CpuLoad = state.CpuLoad;
+        node.MemoryLoad = state.MemoryLoad;
+        node.CurrentContainers = state.CurrentContainers;
+        node.CurrentVms = state.CurrentVms;
+        node.UsedPorts = state.UsedPorts;
+        node.LastHeartbeat = state.ReceivedAt;
+        if (state.IsFresh(utcNow, freshnessTtl))
+            node.Status = NodeStatus.Online;
+    }
 
     private static bool IsValidIpv4Address(string value)
     {

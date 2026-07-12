@@ -3,6 +3,7 @@ using GZCTF.Models.Internal;
 using GZCTF.Services.HealthCheck;
 using Npgsql;
 using GZCTF.Infrastructure.Persistence.Governance;
+using GZCTF.Infrastructure.Cache;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -21,7 +22,7 @@ public static class TelemetryExtension
             builder.Services.AddHealthChecks()
                 .AddApplicationLifecycleHealthCheck()
                 .AddCheck<StorageHealthCheck>("Storage")
-                .AddCheck<CacheHealthCheck>("Cache")
+                .AddCheck<RedisHealthCheck>("Redis")
                 .AddCheck<DatabaseHealthCheck>("Database");
 
             TelemetryConfig = builder.Configuration.GetSection("Telemetry").Get<TelemetryConfig>();
@@ -46,6 +47,7 @@ public static class TelemetryExtension
                 metrics.AddAWSInstrumentation();
                 metrics.AddMeter("Microsoft.Extensions.Diagnostics.HealthChecks");
                 metrics.AddMeter(DataGovernanceMetrics.MeterName);
+                metrics.AddMeter(RedisTelemetry.MeterName);
 
                 if (TelemetryConfig is { Prometheus.Enable: true })
                     metrics.AddPrometheusExporter(options =>

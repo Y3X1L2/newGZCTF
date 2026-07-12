@@ -1,11 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Models;
 using GZCTF.Models.Data;
-using GZCTF.Services.Concurrency;
+using GZCTF.Infrastructure.Concurrency;
+using GZCTF.Modules.Runtime.Application;
+using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Services.Fleet;
 using GZCTF.Services.TeamLab;
 using GZCTF.Utils;
@@ -167,8 +170,10 @@ public class WorkerNodeTests
         services.AddDbContext<AppDbContext>(options =>
             options.UseInMemoryDatabase(databaseName));
         services.AddLogging();
-        services.AddSingleton<IDistributedLockService>(
-            _ => new LocalSemaphoreLock(NullLogger<LocalSemaphoreLock>.Instance));
+        services.AddSingleton<IDistributedLeaseProvider>(
+            _ => new LocalDevelopmentLeaseProvider());
+        var liveStateStore = new RecordingNodeLiveStateStore();
+        services.AddSingleton<INodeLiveStateStore>(liveStateStore);
         services.AddScoped<FleetCapacityReservationService>();
         await using var provider = services.BuildServiceProvider();
 
@@ -262,13 +267,33 @@ public class WorkerNodeTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             CancellationToken.None));
 
-        using var verifyScope = provider.CreateScope();
-        var verifyContext = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var reloaded = await verifyContext.WorkerNodes.SingleAsync();
-        Assert.Equal(2, reloaded.CurrentContainers);
-        Assert.Equal(1, reloaded.CurrentVms);
-        Assert.Equal(0, reloaded.ReservedContainers);
-        Assert.Equal(0, reloaded.ReservedVms);
+        Assert.NotNull(liveStateStore.State);
+        Assert.Equal(2, liveStateStore.State.CurrentContainers);
+        Assert.Equal(1, liveStateStore.State.CurrentVms);
+    }
+
+    private sealed class RecordingNodeLiveStateStore : INodeLiveStateStore
+    {
+        public NodeLiveState? State { get; private set; }
+        public TimeSpan FreshnessTtl => TimeSpan.FromSeconds(120);
+
+        public ValueTask<NodeLiveStateWriteResult> WriteAsync(NodeLiveState state,
+            CancellationToken cancellationToken = default)
+        {
+            State = state;
+            return ValueTask.FromResult(NodeLiveStateWriteResult.Stored);
+        }
+
+        public ValueTask<NodeLiveState?> GetAsync(Guid workerNodeId,
+            CancellationToken cancellationToken = default) => ValueTask.FromResult(State);
+
+        public ValueTask<IReadOnlyDictionary<Guid, NodeLiveState>> GetManyAsync(
+            IReadOnlyCollection<Guid> workerNodeIds,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyDictionary<Guid, NodeLiveState>>(
+                State is null
+                    ? new Dictionary<Guid, NodeLiveState>()
+                    : new Dictionary<Guid, NodeLiveState> { [State.WorkerNodeId] = State });
     }
 }
 

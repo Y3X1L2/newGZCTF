@@ -328,7 +328,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         // Release only ports allocated from the central Nginx proxy pool.
         if (IsNginxProxyEnabled && container.PublicPort.HasValue &&
             string.Equals(container.PublicIP, PublicEntry, StringComparison.OrdinalIgnoreCase))
-            await ReleasePublicPortAsync(container.PublicPort.Value, token);
+            await ReleasePublicPortAsync(container.PublicPort.Value, container.PublicPortLeaseId, token);
 
         if (node is not null && container.Status == ContainerStatus.Destroyed)
         {
@@ -544,17 +544,17 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
     /// <summary>
     /// 通过 PortAllocationService 分配公网端口（Nginx 代理模式）
     /// </summary>
-    async Task<int?> AllocatePublicPortAsync(Guid containerId, CancellationToken token)
+    async Task<PortLease?> AllocatePublicPortAsync(Guid containerId, CancellationToken token)
     {
         try
         {
-            var port = await _portAllocator.AllocatePortAsync(containerId, token);
-            if (port == 0)
+            var lease = await _portAllocator.AllocatePortAsync(containerId, token);
+            if (lease is null)
             {
                 _logger.LogError("Port allocation failed: no available port in range");
                 return null;
             }
-            return port;
+            return lease;
         }
         catch (Exception ex)
         {
@@ -596,7 +596,8 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         container.IP = node.HostAddress;
         container.Port = workerHostPort;
         container.PublicIP = PublicEntry;
-        container.PublicPort = proxyPort.Value;
+        container.PublicPort = proxyPort.Port;
+        container.PublicPortLeaseId = proxyPort.LeaseId;
         return true;
     }
 
@@ -626,11 +627,16 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
     /// <summary>
     /// 通过 PortAllocationService 释放公网端口（Nginx 代理模式）
     /// </summary>
-    async Task ReleasePublicPortAsync(int port, CancellationToken token)
+    async Task ReleasePublicPortAsync(int port, Guid? leaseId, CancellationToken token)
     {
         try
         {
-            await _portAllocator.ReleasePortAsync(port, token);
+            if (leaseId is null)
+            {
+                _logger.LogWarning("Port {Port} has no owner lease identity and will not be released unsafely", port);
+                return;
+            }
+            await _portAllocator.ReleasePortAsync(port, leaseId.Value, token);
         }
         catch (Exception ex)
         {

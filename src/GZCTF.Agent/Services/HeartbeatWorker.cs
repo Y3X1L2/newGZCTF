@@ -8,6 +8,7 @@ public class HeartbeatWorker : BackgroundService
     private readonly IServiceProvider _sp;
     private readonly AgentConfig _config;
     private readonly ILogger<HeartbeatWorker> _logger;
+    private long _sequence = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
     public HeartbeatWorker(IServiceProvider sp, IOptions<AgentConfig> config, ILogger<HeartbeatWorker> logger)
     { _sp = sp; _config = config.Value; _logger = logger; }
@@ -37,6 +38,8 @@ public class HeartbeatWorker : BackgroundService
 
                 var payload = new
                 {
+                    Sequence = Interlocked.Increment(ref _sequence),
+                    ObservedAt = DateTimeOffset.UtcNow,
                     CpuLoad = cpuLoad,
                     MemoryLoad = memLoad,
                     CurrentContainers = containers,

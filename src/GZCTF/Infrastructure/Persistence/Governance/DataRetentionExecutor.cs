@@ -38,6 +38,8 @@ public sealed class DataRetentionExecutor(
             cleaner.CleanFlowAggregatesAsync, cancellationToken);
         await CleanAsync("governance-run", leaseOwner, now,
             cleaner.CleanGovernanceRunsAsync, cancellationToken);
+        await CleanAsync("worker-node-metric", leaseOwner, now,
+            cleaner.CleanWorkerNodeMetricsAsync, cancellationToken);
     }
 
     private async Task AggregateLogsAsync(string leaseOwner, DateTimeOffset now,

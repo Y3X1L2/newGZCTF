@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Models;
 using GZCTF.Models.Data;
-using GZCTF.Services.Concurrency;
+using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Services.Fleet;
 using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
@@ -121,7 +121,7 @@ public class ReviewFindingRegressionTests
 
     static DeploymentQueueService CreateQueueService(AppDbContext context)
     {
-        var lockService = new LocalSemaphoreLock(NullLogger<LocalSemaphoreLock>.Instance);
+        var lockService = new LocalDevelopmentLeaseProvider();
         var capacity = new FleetCapacityReservationService(context, lockService,
             NullLogger<FleetCapacityReservationService>.Instance);
         return new DeploymentQueueService(context, capacity, NullLogger<DeploymentQueueService>.Instance);

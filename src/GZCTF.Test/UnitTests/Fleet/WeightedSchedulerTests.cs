@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Runtime.Application;
+using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Fleet;
 using Moq;
@@ -21,8 +24,8 @@ public class WeightedSchedulerTests
             new() { Id = Guid.NewGuid(), CpuLoad = 0.1f, MemoryLoad = 0.2f, Capabilities = NodeCapability.Docker, Status = NodeStatus.Online, IsLocal = true },
         };
         var mock = new Mock<INodeRepository>();
-        mock.Setup(r => r.GetOnlineNodesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(nodes);
-        var scheduler = new WeightedScheduler(mock.Object, null!);
+        mock.Setup(r => r.GetAllNodesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(nodes);
+        var scheduler = new WeightedScheduler(mock.Object, null!, new StubNodeLiveStateStore());
 
         var selected = await scheduler.SelectOptimalNodeAsync(NodeCapability.Docker, CancellationToken.None);
         Assert.Equal(nodes[1].Id, selected);
@@ -36,8 +39,8 @@ public class WeightedSchedulerTests
             new() { Id = Guid.NewGuid(), Capabilities = NodeCapability.Docker, Status = NodeStatus.Online, IsLocal = true },
         };
         var mock = new Mock<INodeRepository>();
-        mock.Setup(r => r.GetOnlineNodesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(nodes);
-        var scheduler = new WeightedScheduler(mock.Object, null!);
+        mock.Setup(r => r.GetAllNodesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(nodes);
+        var scheduler = new WeightedScheduler(mock.Object, null!, new StubNodeLiveStateStore());
 
         var selected = await scheduler.SelectOptimalNodeAsync(NodeCapability.Kvm, CancellationToken.None);
         Assert.Null(selected);
@@ -47,8 +50,8 @@ public class WeightedSchedulerTests
     public async Task SelectOptimalNode_ReturnsNull_WhenNoOnlineNodes()
     {
         var mock = new Mock<INodeRepository>();
-        mock.Setup(r => r.GetOnlineNodesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<WorkerNode>());
-        var scheduler = new WeightedScheduler(mock.Object, null!);
+        mock.Setup(r => r.GetAllNodesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<WorkerNode>());
+        var scheduler = new WeightedScheduler(mock.Object, null!, new StubNodeLiveStateStore());
 
         var selected = await scheduler.SelectOptimalNodeAsync(NodeCapability.Docker, CancellationToken.None);
         Assert.Null(selected);
@@ -62,8 +65,8 @@ public class WeightedSchedulerTests
             new() { Id = Guid.NewGuid(), CpuLoad = 0.95f, MemoryLoad = 0.95f, CurrentContainers = 20, MaxContainers = 20, CurrentVms = 5, MaxVms = 5, Capabilities = NodeCapability.Docker, Status = NodeStatus.Online, IsLocal = true },
         };
         var mock = new Mock<INodeRepository>();
-        mock.Setup(r => r.GetOnlineNodesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(nodes);
-        var scheduler = new WeightedScheduler(mock.Object, null!);
+        mock.Setup(r => r.GetAllNodesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(nodes);
+        var scheduler = new WeightedScheduler(mock.Object, null!, new StubNodeLiveStateStore());
 
         var selected = await scheduler.SelectOptimalNodeAsync(NodeCapability.Docker, CancellationToken.None);
         Assert.Null(selected);
@@ -94,8 +97,8 @@ public class WeightedSchedulerTests
             },
         };
         var mock = new Mock<INodeRepository>();
-        mock.Setup(r => r.GetOnlineNodesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(nodes);
-        var scheduler = new WeightedScheduler(mock.Object, null!);
+        mock.Setup(r => r.GetAllNodesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(nodes);
+        var scheduler = new WeightedScheduler(mock.Object, null!, new StubNodeLiveStateStore());
 
         var selected = await scheduler.SelectOptimalNodeAsync(NodeCapability.Docker, CancellationToken.None);
 
@@ -122,6 +125,54 @@ public class WeightedSchedulerTests
         var second = WeightedScheduler.SelectOptimalNode([node], NodeCapability.Docker);
 
         Assert.Null(second);
+    }
+
+    [Fact]
+    public async Task SelectOptimalNode_UsesFreshLiveStateBeforePersistedCheckpoint()
+    {
+        var node = new WorkerNode
+        {
+            Id = Guid.NewGuid(),
+            Capabilities = NodeCapability.Docker,
+            Status = NodeStatus.Offline,
+            IsLocal = false,
+            LastHeartbeat = DateTimeOffset.UtcNow - TimeSpan.FromMinutes(5),
+            MaxContainers = 2
+        };
+        var repository = new Mock<INodeRepository>();
+        repository.Setup(item => item.GetAllNodesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([node]);
+        var now = DateTimeOffset.UtcNow;
+        var liveState = new NodeLiveState(node.Id, 10, now, now, 0.1f, 0.2f, 0, 0, 0);
+        var scheduler = new WeightedScheduler(repository.Object, null!,
+            new StubNodeLiveStateStore(new Dictionary<Guid, NodeLiveState> { [node.Id] = liveState }));
+
+        var selected = await scheduler.SelectOptimalNodeAsync(NodeCapability.Docker, CancellationToken.None);
+
+        Assert.Equal(node.Id, selected);
+    }
+
+    private sealed class StubNodeLiveStateStore(
+        IReadOnlyDictionary<Guid, NodeLiveState>? states = null) : INodeLiveStateStore
+    {
+        private readonly IReadOnlyDictionary<Guid, NodeLiveState> _states =
+            states ?? new Dictionary<Guid, NodeLiveState>();
+
+        public TimeSpan FreshnessTtl => TimeSpan.FromSeconds(120);
+
+        public ValueTask<NodeLiveStateWriteResult> WriteAsync(NodeLiveState state,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(NodeLiveStateWriteResult.Stored);
+
+        public ValueTask<NodeLiveState?> GetAsync(Guid workerNodeId,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(_states.GetValueOrDefault(workerNodeId));
+
+        public ValueTask<IReadOnlyDictionary<Guid, NodeLiveState>> GetManyAsync(
+            IReadOnlyCollection<Guid> workerNodeIds,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyDictionary<Guid, NodeLiveState>>(
+                _states.Where(item => workerNodeIds.Contains(item.Key)).ToDictionary());
     }
 
     [Fact]

@@ -7,7 +7,7 @@ using GZCTF.Models.Request.Game;
 using GZCTF.Models.Request.Info;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Fleet;
 using GZCTF.Services.Transfer;
@@ -29,7 +29,7 @@ namespace GZCTF.Controllers;
 [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status401Unauthorized)]
 [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status403Forbidden)]
 public class EditController(
-    CacheHelper cacheHelper,
+    IPlatformCache cacheHelper,
     UserManager<UserInfo> userManager,
     ILogger<EditController> logger,
     IPostRepository postRepository,
@@ -193,7 +193,7 @@ public class EditController(
         if (game is null)
             return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Game_CreationFailed)]));
 
-        await cacheHelper.FlushRecentGamesCache(token);
+        await cacheHelper.InvalidateAsync(CachePolicyCatalog.RecentGames, "global", token);
 
         return Ok(GameInfoModel.FromGame(game));
     }
@@ -654,7 +654,7 @@ public class EditController(
                 ImageTemplateId = environment == EnvironmentType.WindowsVM ? model.ImageTemplateId : null,
             }, token);
 
-        await cacheHelper.FlushScoreboardCache(id, token);
+        await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, id.ToString(), token);
         QueueGameImageDistribution(game.Id, "challenge create");
 
         return Ok(ChallengeEditDetailModel.FromChallenge(res));
@@ -698,7 +698,7 @@ public class EditController(
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> FlushScoreboardCache([FromRoute] int id, CancellationToken token)
     {
-        await cacheHelper.FlushScoreboardCache(id, token);
+        await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, id.ToString(), token);
         return Ok();
     }
 
@@ -833,7 +833,7 @@ public class EditController(
         await transaction.CommitAsync(token);
 
         // Always flush scoreboard
-        await cacheHelper.FlushScoreboardCache(game.Id, token);
+        await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, game.Id.ToString(), token);
         QueueGameImageDistribution(game.Id, "challenge update");
 
         return Ok(ChallengeEditDetailModel.FromChallenge(res));
@@ -957,7 +957,7 @@ public class EditController(
         await challengeRepository.RemoveChallenge(res, true, token);
 
         // Always flush scoreboard
-        await cacheHelper.FlushScoreboardCache(id, token);
+        await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, id.ToString(), token);
 
         return Ok();
     }
@@ -991,7 +991,7 @@ public class EditController(
 
         await challengeRepository.UpdateAttachment(challenge, model, token);
 
-        await cacheHelper.FlushScoreboardCache(id, token);
+        await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, id.ToString(), token);
 
         return Ok();
     }
@@ -1021,7 +1021,7 @@ public class EditController(
 
         await challengeRepository.AddFlags(challenge, models, token);
 
-        await cacheHelper.FlushScoreboardCache(id, token);
+        await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, id.ToString(), token);
 
         return Ok();
     }
@@ -1051,7 +1051,7 @@ public class EditController(
 
         var result = await challengeRepository.RemoveFlag(challenge, fId, token);
 
-        await cacheHelper.FlushScoreboardCache(id, token);
+        await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, id.ToString(), token);
 
         return Ok(result);
     }
@@ -1100,7 +1100,7 @@ public class EditController(
 
         await challengeRepository.SaveAsync(token);
 
-        await cacheHelper.FlushScoreboardCache(id, token);
+        await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, id.ToString(), token);
 
         return Ok();
     }
@@ -1227,7 +1227,7 @@ public class EditController(
                 return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Game_ImportFailed)]));
             }
 
-            await cacheHelper.FlushRecentGamesCache(token);
+            await cacheHelper.InvalidateAsync(CachePolicyCatalog.RecentGames, "global", token);
 
             logger.SystemLog(
                 StaticLocalizer[nameof(Resources.Program.Game_Imported), gameId, file.FileName]);

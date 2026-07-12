@@ -10,7 +10,7 @@ using GZCTF.Middlewares;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using GZCTF.Storage.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -82,7 +82,7 @@ public class ProxyController(
         if (!HttpContext.WebSockets.IsWebSocketRequest)
             return NoContent();
 
-        var key = CacheKey.ConnectionCount(id);
+        var key = RuntimeCacheKeys.ConnectionCount(id);
 
         if (!await IncreaseConnectionCount(key))
             return BadRequest(
@@ -223,7 +223,7 @@ public class ProxyController(
             if (stream is not null)
                 await stream.DisposeAsync();
 
-            await DecreaseConnectionCount(CacheKey.ConnectionCount(id));
+            await DecreaseConnectionCount(RuntimeCacheKeys.ConnectionCount(id));
         }
 
         return new EmptyResult();
@@ -328,7 +328,7 @@ public class ProxyController(
     /// <returns></returns>
     private async Task<bool> ValidateContainer(Guid id, CancellationToken token = default)
     {
-        var key = CacheKey.ConnectionCount(id);
+        var key = RuntimeCacheKeys.ConnectionCount(id);
         var bytes = await cache.GetAsync(key, token);
 
         // avoid DoS attack with cache -1

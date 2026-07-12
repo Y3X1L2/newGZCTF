@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Hosting;
+using GZCTF.Modules.Runtime.Application;
 
 namespace GZCTF.Services.Fleet;
 
@@ -7,14 +8,17 @@ public class QueueProcessingService : BackgroundService
     private readonly QueueManager _queueManager;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<QueueProcessingService> _logger;
-    private static readonly TimeSpan ProcessInterval = TimeSpan.FromSeconds(5);
+    private readonly IDeploymentQueueWakeup _wakeup;
+    private static readonly TimeSpan MinimumPollInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan MaximumPollInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan CreatingRecoveryThreshold = TimeSpan.FromMinutes(10);
 
     public QueueProcessingService(QueueManager queueManager, IServiceScopeFactory scopeFactory,
-        ILogger<QueueProcessingService> logger)
+        IDeploymentQueueWakeup wakeup, ILogger<QueueProcessingService> logger)
     {
         _queueManager = queueManager;
         _scopeFactory = scopeFactory;
+        _wakeup = wakeup;
         _logger = logger;
     }
 
@@ -22,13 +26,22 @@ public class QueueProcessingService : BackgroundService
     {
         await RecoverStaleCreatingTicketsAsync(stoppingToken);
 
+        var pollInterval = MinimumPollInterval;
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 var processed = await _queueManager.ProcessPendingAsync(stoppingToken);
                 if (processed > 0)
+                {
                     _logger.LogInformation("Processed {Count} queued deployment(s)", processed);
+                    pollInterval = MinimumPollInterval;
+                }
+                else
+                {
+                    pollInterval = TimeSpan.FromSeconds(Math.Min(MaximumPollInterval.TotalSeconds,
+                        pollInterval.TotalSeconds * 2));
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -39,7 +52,7 @@ public class QueueProcessingService : BackgroundService
                 _logger.LogError(ex, "Error processing deployment queue");
             }
 
-            await Task.Delay(ProcessInterval, stoppingToken);
+            await _wakeup.WaitAsync(pollInterval, stoppingToken);
         }
     }
 

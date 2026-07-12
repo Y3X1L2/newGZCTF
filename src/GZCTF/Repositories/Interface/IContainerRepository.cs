@@ -5,7 +5,7 @@ namespace GZCTF.Repositories.Interface;
 /// <summary>
 /// 端口映射信息（用于 Nginx 代理同步）
 /// </summary>
-public record PortMappingEntry(int PublicPort, string IP, int Port);
+public record PortMappingEntry(int PublicPort, string IP, int Port, Guid LeaseId);
 
 public interface IContainerRepository : IRepository
 {

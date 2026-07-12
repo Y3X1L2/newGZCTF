@@ -1,20 +1,23 @@
 ﻿using System.Reflection;
 using Cronos;
-using GZCTF.Services.Cache;
-using Microsoft.Extensions.Caching.Distributed;
+using GZCTF.Infrastructure.Concurrency;
 
 namespace GZCTF.Services.CronJob;
 
-public delegate Task CronJob(AsyncServiceScope scope, ILogger<CronJobService> logger);
+public delegate Task CronJob(
+    AsyncServiceScope scope,
+    ILogger<CronJobService> logger,
+    CancellationToken cancellationToken);
 
 public record CronJobEntry(CronJob Job, CronExpression Expression);
 
-public class CronJobService(IDistributedCache cache, IServiceScopeFactory provider, ILogger<CronJobService> logger)
+public class CronJobService(IDistributedLeaseProvider leases, IServiceScopeFactory provider,
+    ILogger<CronJobService> logger)
     : IHostedService, IDisposable
 {
     private readonly Dictionary<string, CronJobEntry> _jobs = [];
     private bool _disposed;
-    private bool _holdLock;
+    private IDistributedLease? _leaderLease;
     private Timer? _timer;
 
     public void Dispose()
@@ -109,26 +112,26 @@ public class CronJobService(IDistributedCache cache, IServiceScopeFactory provid
 
     private async Task<bool> TryHoldLock()
     {
-        if (_holdLock)
+        if (_leaderLease is { LeaseLost.IsCancellationRequested: false })
             return true;
-
-        var cronLock = await cache.GetAsync(CacheKey.CronJobLock);
-        if (cronLock is not null)
+        try
+        {
+            _leaderLease = await leases.AcquireAsync("cron-job-leader", TimeSpan.FromMilliseconds(250),
+                TimeSpan.FromMinutes(2));
+            return true;
+        }
+        catch (TimeoutException)
+        {
             return false;
-
-        await cache.SetAsync(CacheKey.CronJobLock, [],
-            new DistributedCacheEntryOptions { SlidingExpiration = TimeSpan.FromMinutes(2) });
-        _holdLock = true;
-        return true;
+        }
     }
 
     private async Task DropLock()
     {
-        if (!_holdLock)
+        if (_leaderLease is null)
             return;
-
-        await cache.RemoveAsync(CacheKey.CronJobLock);
-        _holdLock = false;
+        await _leaderLease.DisposeAsync();
+        _leaderLease = null;
     }
 
     private void LaunchWatchDog()
@@ -163,7 +166,14 @@ public class CronJobService(IDistributedCache cache, IServiceScopeFactory provid
         var last = now - TimeSpan.FromSeconds(30);
         List<Task> handles = [];
 
-        await cache.RefreshAsync(CacheKey.CronJobLock);
+        if (_leaderLease is null || _leaderLease.LeaseLost.IsCancellationRequested)
+        {
+            StopCronJob();
+            await DropLock();
+            LaunchWatchDog();
+            return;
+        }
+        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(_leaderLease.LeaseLost);
 
         lock (_jobs)
         {
@@ -179,7 +189,11 @@ public class CronJobService(IDistributedCache cache, IServiceScopeFactory provid
 
                     try
                     {
-                        await entry.Job(scope, logger);
+                        await entry.Job(scope, logger, leaseCancellation.Token);
+                    }
+                    catch (OperationCanceledException) when (leaseCancellation.IsCancellationRequested)
+                    {
+                        logger.LogWarning("Cron job {CronJob} stopped because the leader lease was lost.", job);
                     }
                     catch (Exception e)
                     {

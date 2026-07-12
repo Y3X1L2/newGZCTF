@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 using GZCTF.Middlewares;
 using GZCTF.Models.Request.Info;
 using GZCTF.Repositories.Interface;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -25,7 +25,7 @@ public partial class TeamController(
     ILogger<TeamController> logger,
     ITeamRepository teamRepository,
     IParticipationRepository participationRepository,
-    CacheHelper cacheHelper,
+    IPlatformCache cacheHelper,
     IStringLocalizer<Program> localizer) : ControllerBase
 {
     private const int MaxTeamsAllowed = 3;
@@ -783,6 +783,6 @@ public partial class TeamController(
     private async Task FlushTeamScoreboards(Team team, CancellationToken token)
     {
         foreach (var gameId in team.Participations.Select(participation => participation.GameId).Distinct())
-            await cacheHelper.FlushScoreboardCache(gameId, token);
+            await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, gameId.ToString(), token);
     }
 }

@@ -16,7 +16,8 @@ public sealed class DataRetentionPolicyCatalogTests
         [
             "participation", "submission", "training-progress", "theory-answer",
             "awdp-competition", "system-log", "teamlab-flow", "teamlab-flow-aggregate",
-            "deployment-ticket", "api-operation", "teamlab-event", "governance-run"
+            "deployment-ticket", "api-operation", "teamlab-event", "governance-run",
+            "worker-node-metric"
         ];
         Assert.Equal(expected.Order(), catalog.Policies.Select(policy => policy.Name).Order());
         Assert.All(catalog.Policies, policy =>

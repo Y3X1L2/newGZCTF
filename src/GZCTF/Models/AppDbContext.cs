@@ -32,10 +32,12 @@ using DataGovernanceRunEntity = GZCTF.Modules.Audit.Domain.DataGovernanceRun;
 using OperationalLogAggregateEntity = GZCTF.Modules.Audit.Domain.OperationalLogAggregate;
 using DeploymentLifecycleAggregateEntity = GZCTF.Modules.Audit.Domain.DeploymentLifecycleAggregate;
 using TeamLabTrafficFlowAggregateEntity = GZCTF.Modules.TeamLab.Domain.TeamLabTrafficFlowAggregate;
+using ProjectionRevisionEntity = GZCTF.Infrastructure.Cache.ProjectionRevision;
+using WorkerNodeMetricSampleEntity = GZCTF.Modules.Runtime.Domain.WorkerNodeMetricSample;
 
 namespace GZCTF.Models;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options) :
+public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     IdentityDbContext<UserInfo, IdentityRole<Guid>, Guid>(options), IDataProtectionKeyContext
 {
     public static readonly JsonSerializerOptions JsonOptions = new()
@@ -148,6 +150,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<OperationalLogAggregateEntity> OperationalLogAggregates => Set<OperationalLogAggregateEntity>();
     public DbSet<DeploymentLifecycleAggregateEntity> DeploymentLifecycleAggregates => Set<DeploymentLifecycleAggregateEntity>();
     public DbSet<TeamLabTrafficFlowAggregateEntity> TeamLabTrafficFlowAggregates => Set<TeamLabTrafficFlowAggregateEntity>();
+    public DbSet<ProjectionRevisionEntity> ProjectionRevisions => Set<ProjectionRevisionEntity>();
+    public DbSet<WorkerNodeMetricSampleEntity> WorkerNodeMetricSamples => Set<WorkerNodeMetricSampleEntity>();
 
     private static ValueConverter<T?, string> GetJsonConverter<T>() where T : class, new() =>
         new(
@@ -174,6 +178,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
         builder.HasPostgresExtension("pg_trgm");
         builder.ApplyConfigurationsFromAssembly(typeof(ModuleAssemblyMarker).Assembly,
             type => type.Namespace?.StartsWith("GZCTF.Modules", StringComparison.Ordinal) == true);
+        builder.ApplyConfiguration(new Infrastructure.Persistence.ProjectionRevisionEntityConfiguration());
 
         // var setConverter = GetJsonConverter<HashSet<string>>();
         // var setComparer = GetEnumerableComparer<HashSet<string>, string>();

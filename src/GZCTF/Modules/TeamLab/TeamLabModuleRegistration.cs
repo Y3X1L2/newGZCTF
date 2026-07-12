@@ -16,6 +16,12 @@ public static class TeamLabModuleRegistration
         services.AddScoped<TeamLabRuntimeProjectionService>();
         services.AddScoped<TeamLabAuthorizationService>();
         services.AddScoped<TeamLabTrafficApplicationService>();
+        services.AddSingleton<TeamLabTrafficLocalBuffer>();
+        services.AddSingleton<RedisTeamLabTrafficIngestor>();
+        services.AddSingleton<ITeamLabTrafficIngestor>(serviceProvider =>
+            serviceProvider.GetRequiredService<RedisTeamLabTrafficIngestor>());
+        services.AddScoped<PostgresTeamLabTrafficBatchWriter>();
+        services.AddHostedService<TeamLabTrafficPersistenceWorker>();
         services.AddScoped<ITeamLabNodeExecutor, AgentTeamLabNodeExecutor>();
         services.AddScoped<TeamLabRouteApplicationService>();
         services.AddScoped<TeamLabShardDeploymentService>();

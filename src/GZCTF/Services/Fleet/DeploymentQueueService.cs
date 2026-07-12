@@ -1,5 +1,7 @@
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Runtime.Application;
+using GZCTF.Modules.Runtime.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Services.Fleet;
@@ -27,11 +29,13 @@ public class DeploymentQueueService
     readonly AppDbContext _context;
     readonly FleetCapacityReservationService? _capacity;
     readonly ILogger<DeploymentQueueService> _logger;
+    readonly IDeploymentQueueWakeup _wakeup;
 
     public DeploymentQueueService(AppDbContext context, ILogger<DeploymentQueueService> logger)
     {
         _context = context;
         _logger = logger;
+        _wakeup = new PollingDeploymentQueueWakeup();
     }
 
     public DeploymentQueueService(AppDbContext context, FleetCapacityReservationService capacity,
@@ -39,6 +43,16 @@ public class DeploymentQueueService
     {
         _context = context;
         _capacity = capacity;
+        _logger = logger;
+        _wakeup = new PollingDeploymentQueueWakeup();
+    }
+
+    public DeploymentQueueService(AppDbContext context, FleetCapacityReservationService capacity,
+        IDeploymentQueueWakeup wakeup, ILogger<DeploymentQueueService> logger)
+    {
+        _context = context;
+        _capacity = capacity;
+        _wakeup = wakeup;
         _logger = logger;
     }
 
@@ -62,6 +76,7 @@ public class DeploymentQueueService
         var ticket = DeploymentQueueTicket.Create(request);
         _context.DeploymentQueueTickets.Add(ticket);
         await _context.SaveChangesAsync(token);
+        await _wakeup.NotifyAsync(ticket.Id, token);
 
         _logger.LogInformation("Deployment queue ticket {TicketId} created for {Kind}", ticket.Id, ticket.Kind);
         _logger.SystemLog(

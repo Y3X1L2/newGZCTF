@@ -1,4 +1,5 @@
 using GZCTF.Middlewares;
+using GZCTF.Infrastructure.Cache;
 using GZCTF.Models;
 using GZCTF.Models.Internal;
 using GZCTF.Models.Request.Game;
@@ -22,6 +23,7 @@ public class TrainingCourseController(
     IExerciseInstanceRepository exerciseInstanceRepository,
     IContainerRepository containerRepository,
     IConfigService configService,
+    IPlatformCache cache,
     IOptionsSnapshot<ContainerPolicy> containerPolicy,
     ILogger<TrainingCourseController> logger) : ControllerBase
 {
@@ -194,6 +196,10 @@ public class TrainingCourseController(
             Activity = activity
         };
     }
+
+    private ValueTask<TrainingPersonalOverviewModel> GetOverview(UserInfo user, CancellationToken token) =>
+        cache.GetOrCreateAsync(CachePolicyCatalog.TrainingStatistics, user.Id.ToString("N"),
+            async ct => await BuildOverview(user, ct), token);
 
     private async Task<TrainingCourseProgress> EnsureCourseProgress(
         UserInfo user,
@@ -584,7 +590,7 @@ public class TrainingCourseController(
     public async Task<IActionResult> Overview(CancellationToken token = default)
     {
         var user = await CurrentUser();
-        return Ok(await BuildOverview(user, token));
+        return Ok(await GetOverview(user, token));
     }
 
     [HttpPost("check-in")]
@@ -607,7 +613,7 @@ public class TrainingCourseController(
             logger.Log("Training check-in completed.", user, TaskStatus.Success);
         }
 
-        return Ok(await BuildOverview(user, token));
+        return Ok(await GetOverview(user, token));
     }
 
     [HttpGet("{courseId:int}")]

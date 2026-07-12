@@ -24,6 +24,30 @@ namespace GZCTF.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("GZCTF.Infrastructure.Cache.ProjectionRevision", b =>
+                {
+                    b.Property<string>("Projection")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ResourceKey")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Projection", "ResourceKey");
+
+                    b.HasIndex("UpdatedAt");
+
+                    b.ToTable("ProjectionRevisions", (string)null);
+                });
+
             modelBuilder.Entity("GZCTF.Models.Data.Attachment", b =>
                 {
                     b.Property<int>("Id")
@@ -515,6 +539,9 @@ namespace GZCTF.Migrations
 
                     b.Property<int?>("PublicPort")
                         .HasColumnType("integer");
+
+                    b.Property<Guid?>("PublicPortLeaseId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("StartedAt")
                         .HasColumnType("timestamp with time zone");
@@ -4124,6 +4151,15 @@ namespace GZCTF.Migrations
                     b.Property<DateTimeOffset?>("LastHeartbeat")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTimeOffset?>("LiveMetricObservedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LiveMetricReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("LiveMetricSequence")
+                        .HasColumnType("bigint");
+
                     b.Property<int>("MaxContainers")
                         .HasColumnType("integer");
 
@@ -4866,6 +4902,73 @@ namespace GZCTF.Migrations
                         .HasDatabaseName("UX_ImageDistributionReferences_Record_Kind_Resource");
 
                     b.ToTable("ImageDistributionReferences", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Runtime.Domain.WorkerNodeMetricSample", b =>
+                {
+                    b.Property<Guid>("WorkerNodeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("WindowStart")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double>("AverageContainers")
+                        .HasColumnType("double precision");
+
+                    b.Property<float>("AverageCpuLoad")
+                        .HasColumnType("real");
+
+                    b.Property<float>("AverageMemoryLoad")
+                        .HasColumnType("real");
+
+                    b.Property<double>("AverageUsedPorts")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("AverageVms")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTimeOffset>("FirstReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("FirstSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("LastReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("LastSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("MaximumContainers")
+                        .HasColumnType("integer");
+
+                    b.Property<float>("MaximumCpuLoad")
+                        .HasColumnType("real");
+
+                    b.Property<float>("MaximumMemoryLoad")
+                        .HasColumnType("real");
+
+                    b.Property<int>("MaximumUsedPorts")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MaximumVms")
+                        .HasColumnType("integer");
+
+                    b.Property<float>("MinimumCpuLoad")
+                        .HasColumnType("real");
+
+                    b.Property<float>("MinimumMemoryLoad")
+                        .HasColumnType("real");
+
+                    b.Property<int>("SampleCount")
+                        .HasColumnType("integer");
+
+                    b.HasKey("WorkerNodeId", "WindowStart");
+
+                    b.HasIndex("WindowStart", "WorkerNodeId")
+                        .HasDatabaseName("IX_WorkerNodeMetricSamples_Window_Node");
+
+                    b.ToTable("WorkerNodeMetricSamples", (string)null);
                 });
 
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabNetworkLease", b =>
@@ -7290,6 +7393,15 @@ namespace GZCTF.Migrations
                         .IsRequired();
 
                     b.Navigation("DistributionRecord");
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Runtime.Domain.WorkerNodeMetricSample", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.WorkerNode", null)
+                        .WithMany()
+                        .HasForeignKey("WorkerNodeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabNetworkLease", b =>

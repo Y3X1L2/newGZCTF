@@ -9,7 +9,7 @@ using GZCTF.Models.Request.Account;
 using GZCTF.Models.Request.Edit;
 using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using GZCTF.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using NPOI.SS.UserModel;
@@ -1407,8 +1407,8 @@ public class ScoreboardCalculationTests(GZCTFApplicationFactory factory, ITestOu
     private async Task FlushScoreboardCache(int gameId)
     {
         using var scope = factory.Services.CreateScope();
-        var cacheHelper = scope.ServiceProvider.GetRequiredService<CacheHelper>();
-        await cacheHelper.FlushScoreboardCache(gameId, CancellationToken.None);
+        var cache = scope.ServiceProvider.GetRequiredService<IPlatformCache>();
+        await cache.InvalidateAsync(CachePolicyCatalog.Scoreboard, gameId.ToString(), CancellationToken.None);
     }
 
     private async Task<ScoreboardSnapshot> GetScoreboard(
@@ -1441,7 +1441,9 @@ public class ScoreboardCalculationTests(GZCTFApplicationFactory factory, ITestOu
     private async Task<ScoreboardSnapshot> FetchScoreboardAsync(HttpClient client, int gameId)
     {
         var response = await client.GetAsync($"/api/Game/{gameId}/Scoreboard");
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+            Assert.Fail($"Scoreboard request failed with {(int)response.StatusCode}: " +
+                        await response.Content.ReadAsStringAsync());
 
         await using var stream = await response.Content.ReadAsStreamAsync();
         var payload = await JsonSerializer.DeserializeAsync<ScoreboardResponse>(stream, ScoreboardJsonOptions);

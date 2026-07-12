@@ -9,7 +9,7 @@ using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Fleet;
 using GZCTF.Services.Transfer;

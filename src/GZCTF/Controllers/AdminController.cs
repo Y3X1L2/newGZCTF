@@ -8,7 +8,7 @@ using GZCTF.Models.Request.Account;
 using GZCTF.Models.Request.Admin;
 using GZCTF.Models.Request.Info;
 using GZCTF.Repositories.Interface;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Config;
 using GZCTF.Storage.Interface;
 using Microsoft.AspNetCore.Identity;
@@ -33,7 +33,7 @@ public class AdminController(
     UserManager<UserInfo> userManager,
     ILogger<AdminController> logger,
     IBlobStorage storage,
-    CacheHelper cacheHelper,
+    IPlatformCache cacheHelper,
     IBlobRepository blobService,
     ILogRepository logRepository,
     IConfigService configService,
@@ -139,8 +139,8 @@ public class AdminController(
 
         HashSet<Config> configSet =
         [
-            new($"{nameof(GlobalConfig)}:{nameof(GlobalConfig.LogoHash)}", logo.Hash, [CacheKey.ClientConfig]),
-            new($"{nameof(GlobalConfig)}:{nameof(GlobalConfig.FaviconHash)}", favicon.Hash, [CacheKey.Favicon])
+            new($"{nameof(GlobalConfig)}:{nameof(GlobalConfig.LogoHash)}", logo.Hash, [CachePolicyNames.ClientConfig]),
+            new($"{nameof(GlobalConfig)}:{nameof(GlobalConfig.FaviconHash)}", favicon.Hash, [CachePolicyNames.Favicon])
         ];
 
         await configService.SaveConfigSet(configSet, token);
@@ -167,8 +167,8 @@ public class AdminController(
 
         HashSet<Config> configSet =
         [
-            new($"{nameof(GlobalConfig)}:{nameof(GlobalConfig.LogoHash)}", string.Empty, [CacheKey.ClientConfig]),
-            new($"{nameof(GlobalConfig)}:{nameof(GlobalConfig.FaviconHash)}", string.Empty, [CacheKey.Favicon])
+            new($"{nameof(GlobalConfig)}:{nameof(GlobalConfig.LogoHash)}", string.Empty, [CachePolicyNames.ClientConfig]),
+            new($"{nameof(GlobalConfig)}:{nameof(GlobalConfig.FaviconHash)}", string.Empty, [CachePolicyNames.Favicon])
         ];
 
         await configService.SaveConfigSet(configSet, token);
@@ -695,7 +695,7 @@ public class AdminController(
         await participationRepository.UpdateParticipation(participation, model, token);
 
         await transaction.CommitAsync(token);
-        await cacheHelper.FlushScoreboardCache(participation.GameId, token);
+        await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, participation.GameId.ToString(), token);
 
         return Ok();
     }

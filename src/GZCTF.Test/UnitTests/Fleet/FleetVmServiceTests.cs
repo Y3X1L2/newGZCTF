@@ -11,7 +11,7 @@ using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
-using GZCTF.Services.Concurrency;
+using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Services.Fleet;
 using GZCTF.Services.Vm;
 using GZCTF.Utils;
@@ -427,10 +427,10 @@ public class FleetVmServiceTests
         nodeRepo.Setup(r => r.GetOnlineNodesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => context.WorkerNodes.ToList());
 
-        var lockService = new LocalSemaphoreLock(NullLogger<LocalSemaphoreLock>.Instance);
+        var lockService = new LocalDevelopmentLeaseProvider();
         var services = new ServiceCollection();
         services.AddSingleton(context);
-        services.AddSingleton<IDistributedLockService>(lockService);
+        services.AddSingleton<IDistributedLeaseProvider>(lockService);
         services.AddScoped(_ => new FleetCapacityReservationService(
             context,
             lockService,
@@ -448,7 +448,6 @@ public class FleetVmServiceTests
         var provider = services.BuildServiceProvider();
         var queue = new QueueManager(
             provider.GetRequiredService<IServiceScopeFactory>(),
-            lockService,
             provider.GetRequiredService<NodeExecutionGate>(),
             NullLogger<QueueManager>.Instance);
         var capacity = new FleetCapacityReservationService(context, lockService,
@@ -542,10 +541,10 @@ public class FleetVmServiceTests
 
     static QueueManager CreateQueueManager(AppDbContext context, DeploymentExecutionService executor)
     {
-        var lockService = new LocalSemaphoreLock(NullLogger<LocalSemaphoreLock>.Instance);
+        var lockService = new LocalDevelopmentLeaseProvider();
         var services = new ServiceCollection();
         services.AddSingleton(context);
-        services.AddSingleton<IDistributedLockService>(lockService);
+        services.AddSingleton<IDistributedLeaseProvider>(lockService);
         services.AddScoped(_ => new FleetCapacityReservationService(
             context,
             lockService,
@@ -559,7 +558,6 @@ public class FleetVmServiceTests
         var provider = services.BuildServiceProvider();
         return new QueueManager(
             provider.GetRequiredService<IServiceScopeFactory>(),
-            lockService,
             provider.GetRequiredService<NodeExecutionGate>(),
             NullLogger<QueueManager>.Instance);
     }

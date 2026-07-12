@@ -1,7 +1,7 @@
 ﻿using GZCTF.Hubs;
 using GZCTF.Hubs.Clients;
 using GZCTF.Repositories.Interface;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,8 +9,7 @@ using Microsoft.EntityFrameworkCore;
 namespace GZCTF.Repositories;
 
 public class GameNoticeRepository(
-    CacheHelper cacheHelper,
-    ILogger<GameNoticeRepository> logger,
+    IPlatformCache cache,
     IHubContext<UserHub, IUserClient> hub,
     AppDbContext context) : RepositoryBase(context), IGameNoticeRepository
 {
@@ -19,7 +18,7 @@ public class GameNoticeRepository(
         await Context.AddAsync(notice, token);
         await SaveAsync(token);
 
-        await cacheHelper.RemoveAsync(CacheKey.GameNotice(notice.GameId), token);
+        await cache.InvalidateAsync(CachePolicyCatalog.GameNotices, notice.GameId.ToString(), token);
 
         await hub.Clients.Group($"Game_{notice.GameId}").ReceivedGameNotice(notice);
 
@@ -35,21 +34,20 @@ public class GameNoticeRepository(
         Context.GameNotices.FirstOrDefaultAsync(e => e.Id == noticeId && e.GameId == gameId, token);
 
     public Task<DataWithModifiedTime<GameNotice[]>> GetLatestNotices(int gameId, CancellationToken token = default)
-        => cacheHelper.GetOrCreateAsync(logger, CacheKey.GameNotice(gameId), async entry =>
+        => cache.GetOrCreateAsync(CachePolicyCatalog.GameNotices, gameId.ToString(), async ct =>
         {
-            entry.SlidingExpiration = TimeSpan.FromMinutes(30);
             var notices = await Context.GameNotices.Where(e => e.GameId == gameId)
                 .OrderByDescending(e => e.Type == NoticeType.Normal ? DateTimeOffset.UtcNow : e.PublishTimeUtc)
-                .Take(300).ToArrayAsync(token);
+                .Take(300).ToArrayAsync(ct);
             return new DataWithModifiedTime<GameNotice[]>(notices, DateTimeOffset.UtcNow);
-        }, token: token);
+        }, token).AsTask();
 
     public async Task RemoveNotice(GameNotice notice, CancellationToken token = default)
     {
         Context.Remove(notice);
         await SaveAsync(token);
 
-        await cacheHelper.RemoveAsync(CacheKey.GameNotice(notice.GameId), token);
+        await cache.InvalidateAsync(CachePolicyCatalog.GameNotices, notice.GameId.ToString(), token);
     }
 
     public async Task<GameNotice> UpdateNotice(GameNotice notice, CancellationToken token = default)
@@ -57,7 +55,7 @@ public class GameNoticeRepository(
         notice.PublishTimeUtc = DateTimeOffset.UtcNow;
         await SaveAsync(token);
 
-        await cacheHelper.RemoveAsync(CacheKey.GameNotice(notice.GameId), token);
+        await cache.InvalidateAsync(CachePolicyCatalog.GameNotices, notice.GameId.ToString(), token);
 
         return notice;
     }

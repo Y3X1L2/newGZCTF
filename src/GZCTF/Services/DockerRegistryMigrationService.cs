@@ -1,6 +1,6 @@
 using GZCTF.Models;
 using GZCTF.Models.Data;
-using GZCTF.Services.Concurrency;
+using GZCTF.Infrastructure.Concurrency;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Services;
@@ -8,14 +8,17 @@ namespace GZCTF.Services;
 public class DockerRegistryMigrationService(
     AppDbContext context,
     DockerImageRegistryService registry,
-    IDistributedLockService lockService,
+    IDistributedLeaseProvider lockService,
     ILogger<DockerRegistryMigrationService> logger)
 {
     static readonly TimeSpan LockTimeout = TimeSpan.FromSeconds(2);
 
     public async Task<DockerRegistryMigrationTask> CreateTaskAsync(Guid targetNodeId, CancellationToken token)
     {
-        using var migrationLock = await lockService.AcquireAsync("docker-registry:migration", LockTimeout);
+        await using var migrationLock = await lockService.AcquireAsync("docker-registry:migration", LockTimeout,
+            cancellationToken: token);
+        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(token, migrationLock.LeaseLost);
+        token = leaseCancellation.Token;
         var targetNode = await context.WorkerNodes.FirstOrDefaultAsync(n => n.Id == targetNodeId, token)
                          ?? throw new InvalidOperationException("目标节点不存在。");
 
@@ -80,7 +83,10 @@ public class DockerRegistryMigrationService(
 
     public async Task RunTaskAsync(Guid taskId, CancellationToken token)
     {
-        using var migrationLock = await lockService.AcquireAsync("docker-registry:migration", TimeSpan.FromSeconds(30));
+        await using var migrationLock = await lockService.AcquireAsync("docker-registry:migration",
+            TimeSpan.FromSeconds(30), cancellationToken: token);
+        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(token, migrationLock.LeaseLost);
+        token = leaseCancellation.Token;
         var task = await context.DockerRegistryMigrationTasks
             .Include(t => t.Items.OrderBy(i => i.CreatedAt))
             .FirstOrDefaultAsync(t => t.Id == taskId, token);

@@ -2,7 +2,7 @@
 using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Config;
 using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +11,7 @@ namespace GZCTF.Repositories;
 
 public class GameRepository(
     ILogger<GameRepository> logger,
-    CacheHelper cacheHelper,
+    IPlatformCache cache,
     IDivisionRepository divisionRepository,
     IGameChallengeRepository challengeRepository,
     IParticipationRepository participationRepository,
@@ -37,8 +37,8 @@ public class GameRepository(
         await Context.AddAsync(game, token);
         await SaveAsync(token);
 
-        await cacheHelper.FlushGameListCache(token);
-        await cacheHelper.FlushRecentGamesCache(token);
+        await cache.InvalidateAsync(CachePolicyCatalog.GameList, "global", token);
+        await cache.InvalidateAsync(CachePolicyCatalog.RecentGames, "global", token);
 
         return game;
     }
@@ -47,10 +47,10 @@ public class GameRepository(
     {
         await SaveAsync(token);
 
-        await cacheHelper.RemoveAsync(CacheKey.GameCache(game.Id), token);
-        await cacheHelper.FlushScoreboardCache(game.Id, token);
-        await cacheHelper.FlushRecentGamesCache(token);
-        await cacheHelper.FlushGameListCache(token);
+        await cache.InvalidateAsync(CachePolicyCatalog.GameDetails, game.Id.ToString(), token);
+        await cache.InvalidateAsync(CachePolicyCatalog.Scoreboard, game.Id.ToString(), token);
+        await cache.InvalidateAsync(CachePolicyCatalog.RecentGames, "global", token);
+        await cache.InvalidateAsync(CachePolicyCatalog.GameList, "global", token);
     }
 
     public string GetToken(Game game, Team team) => $"{team.Id}:{game.Sign($"GZCTF_TEAM_{team.Id}", _xorKey)}";
@@ -90,14 +90,10 @@ public class GameRepository(
 
     public async Task<DetailedGameInfoModel?> GetDetailedGameInfo(int gameId, CancellationToken token = default)
     {
-        var game = await cacheHelper.GetOrCreateAsync(logger, CacheKey.GameCache(gameId),
-            entry =>
-            {
-                entry.SlidingExpiration = TimeSpan.FromDays(2);
-                return Context.Games.AsNoTracking()
+        var game = await cache.GetOrCreateAsync(CachePolicyCatalog.GameDetails, gameId.ToString(),
+            async ct => await Context.Games.AsNoTracking()
                     .Include(g => g.Divisions)
-                    .FirstOrDefaultAsync(x => x.Id == gameId, token);
-            }, token: token);
+                    .FirstOrDefaultAsync(x => x.Id == gameId, ct), token);
 
         return game is null ? null : DetailedGameInfoModel.FromGame(game);
     }
@@ -112,24 +108,19 @@ public class GameRepository(
         if (skip + count > 100)
             return new(await FetchGameList(count, skip, token), total);
 
-        var games = await cacheHelper.GetOrCreateAsync(logger, CacheKey.GameList,
-            entry =>
-            {
-                entry.SlidingExpiration = TimeSpan.FromDays(2);
-                return FetchGameList(100, 0, token);
-            }, token: token);
+        var games = await cache.GetOrCreateAsync(CachePolicyCatalog.GameList, "global",
+            async ct => await FetchGameList(100, 0, ct), token);
 
         return new(games.Skip(skip).Take(count).ToArray(), total);
     }
 
     public Task<DataWithModifiedTime<BasicGameInfoModel[]>> GetRecentGames(CancellationToken token = default)
-        => cacheHelper.GetOrCreateAsync(logger, CacheKey.RecentGames,
-            async entry =>
+        => cache.GetOrCreateAsync(CachePolicyCatalog.RecentGames, "global",
+            async ct =>
             {
-                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1);
-                var games = await GenRecentGames(token);
+                var games = await GenRecentGames(ct);
                 return new DataWithModifiedTime<BasicGameInfoModel[]>(games, DateTimeOffset.UtcNow);
-            }, token: token);
+            }, token).AsTask();
 
     public Task<BasicGameInfoModel[]> GenRecentGames(CancellationToken token = default) =>
         // sort by following rules:
@@ -162,15 +153,14 @@ public class GameRepository(
             .ToArrayAsync(token);
 
     public Task<ScoreboardModel> GetScoreboard(Game game, CancellationToken token = default)
-        => cacheHelper.GetOrCreateAsync(logger, CacheKey.ScoreBoard(game.Id),
-            entry =>
-            {
-                entry.SlidingExpiration = TimeSpan.FromDays(7);
-                return GenScoreboard(game, token);
-            }, token: token);
+        => cache.GetOrCreateAsync(CachePolicyCatalog.Scoreboard, game.Id.ToString(),
+            async ct => await GenScoreboard(game, ct), token).AsTask();
 
-    public Task<ScoreboardModel?> TryGetScoreboard(int gameId, CancellationToken token = default)
-        => cacheHelper.GetAsync<ScoreboardModel>(CacheKey.ScoreBoard(gameId), token);
+    public async Task<ScoreboardModel?> TryGetScoreboard(int gameId, CancellationToken token = default)
+    {
+        var game = await GetGameById(gameId, token);
+        return game is null ? null : await GetScoreboard(game, token);
+    }
 
     public Task<bool> IsGameClosed(int gameId, CancellationToken token = default)
         => Context.Games.AnyAsync(game =>
@@ -242,10 +232,9 @@ public class GameRepository(
             await SaveAsync(token);
             await trans.CommitAsync(token);
 
-            await cacheHelper.FlushGameListCache(token);
-            await cacheHelper.FlushRecentGamesCache(token);
-
-            await cacheHelper.RemoveAsync(CacheKey.ScoreBoard(game.Id), token);
+            await cache.InvalidateAsync(CachePolicyCatalog.GameList, "global", token);
+            await cache.InvalidateAsync(CachePolicyCatalog.RecentGames, "global", token);
+            await cache.InvalidateAsync(CachePolicyCatalog.Scoreboard, game.Id.ToString(), token);
 
             return TaskStatus.Success;
         }

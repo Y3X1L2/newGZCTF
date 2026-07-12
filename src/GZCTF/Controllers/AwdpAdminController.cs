@@ -6,7 +6,7 @@ using GZCTF.Models;
 using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,7 +29,7 @@ public class AwdpAdminController(
     AwdpRoundService roundService,
     AwdpInstanceService instanceService,
     AwdpScoreService scoreService,
-    CacheHelper cacheHelper) : ControllerBase
+    IPlatformCache cacheHelper) : ControllerBase
 {
     [HttpGet("Games/{gameId:int}/Services")]
     [ProducesResponseType(typeof(AwdpServiceViewModel[]), StatusCodes.Status200OK)]
@@ -80,7 +80,7 @@ public class AwdpAdminController(
             return BadRequest(new RequestResponse("AWDP service name must be unique in the game."));
         }
 
-        await cacheHelper.FlushScoreboardCache(gameId, token);
+        await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, gameId.ToString(), token);
         return Ok(ToViewModel(service));
     }
 
@@ -112,7 +112,7 @@ public class AwdpAdminController(
             return BadRequest(new RequestResponse("AWDP service name must be unique in the game."));
         }
 
-        await cacheHelper.FlushScoreboardCache(service.GameId, token);
+        await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, service.GameId.ToString(), token);
         return Ok(ToViewModel(service));
     }
 
@@ -128,7 +128,7 @@ public class AwdpAdminController(
         var gameId = service.GameId;
         await instanceService.DestroyInstancesForService(service.Id, token);
         await awdpRepository.DeleteService(service, token);
-        await cacheHelper.FlushScoreboardCache(gameId, token);
+        await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, gameId.ToString(), token);
 
         return Ok();
     }

@@ -1,11 +1,10 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Net;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Modules.TeamLab.Contracts;
-using GZCTF.Services.Concurrency;
+using GZCTF.Infrastructure.Concurrency;
 using Microsoft.EntityFrameworkCore;
 using GZCTF.Infrastructure.Persistence.Queries;
 
@@ -14,7 +13,8 @@ namespace GZCTF.Modules.TeamLab.Application;
 public sealed class TeamLabTrafficApplicationService(
     AppDbContext context,
     ITeamLabNodeExecutor executor,
-    IDistributedLockService locks)
+    IDistributedLeaseProvider locks,
+    ITeamLabTrafficIngestor ingestor)
 {
     public async Task StartCollectorsAsync(TeamLabRuntime runtime, CancellationToken cancellationToken)
     {
@@ -40,7 +40,6 @@ public sealed class TeamLabTrafficApplicationService(
         CancellationToken cancellationToken)
     {
         var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
-        await RefreshAsync(runtime, cancellationToken);
         var cursor = DecodeCursor(after);
         var take = Math.Clamp(limit, 1, 200);
         var query = context.TeamLabTrafficFlows.AsNoTracking()
@@ -85,10 +84,14 @@ public sealed class TeamLabTrafficApplicationService(
         var normalizedKey = NormalizeIdempotencyKey(idempotencyKey);
         var keyHash = normalizedKey is null ? null : Hash(normalizedKey);
         var requestHash = keyHash is null ? null : Hash(JsonSerializer.Serialize(model));
-        using var idempotencyLock = keyHash is null
+        await using var idempotencyLock = keyHash is null
             ? null
             : await locks.AcquireAsync($"teamlab:capture:{runtime.Id}:{runtime.Generation}:{keyHash}",
-                TimeSpan.FromSeconds(10));
+                TimeSpan.FromSeconds(10), cancellationToken: cancellationToken);
+        using var leaseCancellation = idempotencyLock is null
+            ? null
+            : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, idempotencyLock.LeaseLost);
+        cancellationToken = leaseCancellation?.Token ?? cancellationToken;
         if (keyHash is not null)
         {
             var existing = await context.TeamLabTrafficCaptureJobs.Include(item => item.Network)
@@ -218,30 +221,88 @@ public sealed class TeamLabTrafficApplicationService(
         return await executor.DownloadCaptureAsync(job.WorkerNodeId.Value, runtime.Id, job.Id, cancellationToken);
     }
 
-    private async Task RefreshAsync(TeamLabRuntime runtime, CancellationToken cancellationToken)
+    internal async Task CollectAvailableFlowsAsync(CancellationToken cancellationToken)
     {
-        foreach (var network in runtime.Networks.Where(item => item.Generation == runtime.Generation && item.WorkerNodeId != null))
+        var networkIds = await context.TeamLabRuntimeNetworks.AsNoTracking()
+            .Where(item => item.WorkerNodeId != null &&
+                           item.Generation == item.Runtime.Generation &&
+                           item.Runtime.Status == TeamLabRuntimeStatus.Running)
+            .OrderBy(item => item.Id)
+            .Select(item => item.Id)
+            .ToArrayAsync(cancellationToken);
+
+        foreach (var networkId in networkIds)
         {
-            using var flowLock = await locks.AcquireAsync(
-                $"teamlab:flow:{runtime.Id}:{runtime.Generation}:{network.Id}",
-                TimeSpan.FromSeconds(10));
-            await context.Entry(network).ReloadAsync(cancellationToken);
-            var cursor = network.FlowCursor;
-            var result = await executor.GetFlowSnapshotAsync(
-                network.WorkerNodeId!.Value,
-                runtime.Id,
-                network.TopologyKey,
-                cursor,
-                cancellationToken);
-            if (!result.Success) continue;
-            context.TeamLabTrafficFlows.AddRange(result.Samples.Where(item =>
-                    item.Cursor > cursor &&
-                    !string.IsNullOrWhiteSpace(item.SourceIp) &&
-                    !string.IsNullOrWhiteSpace(item.DestinationIp))
-                .Select(item => CreateFlow(runtime, network, item)));
-            network.FlowCursor = Math.Max(cursor, result.NextCursor);
-            await context.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await CollectNetworkFlowsAsync(networkId, cancellationToken);
+            }
+            catch (TimeoutException)
+            {
+                // Another application instance owns this collector lease.
+            }
         }
+    }
+
+    private async Task CollectNetworkFlowsAsync(int networkId, CancellationToken cancellationToken)
+    {
+        await using var flowLock = await locks.AcquireAsync(
+            $"teamlab:flow:network:{networkId}",
+            TimeSpan.FromMilliseconds(100),
+            TimeSpan.FromSeconds(15),
+            cancellationToken);
+        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken, flowLock.LeaseLost);
+        cancellationToken = leaseCancellation.Token;
+        var network = await context.TeamLabRuntimeNetworks.AsNoTracking()
+            .Where(item => item.Id == networkId && item.WorkerNodeId != null &&
+                           item.Generation == item.Runtime.Generation &&
+                           item.Runtime.Status == TeamLabRuntimeStatus.Running)
+            .Select(item => new
+            {
+                item.Id,
+                item.RuntimeId,
+                item.Generation,
+                item.ShardId,
+                item.WorkerNodeId,
+                item.TopologyKey,
+                item.FlowCursor
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (network?.WorkerNodeId is not { } workerNodeId)
+            return;
+
+        var result = await executor.GetFlowSnapshotAsync(
+            workerNodeId,
+            network.RuntimeId,
+            network.TopologyKey,
+            network.FlowCursor,
+            cancellationToken);
+        if (!result.Success)
+            return;
+
+        var envelopes = result.Samples
+            .Where(item => item.Cursor > network.FlowCursor &&
+                           !string.IsNullOrWhiteSpace(item.SourceIp) &&
+                           !string.IsNullOrWhiteSpace(item.DestinationIp))
+            .Select(item => TeamLabTrafficEnvelope.Create(
+                network.RuntimeId,
+                network.Generation,
+                network.ShardId,
+                network.Id,
+                network.WorkerNodeId,
+                item))
+            .ToArray();
+        if (envelopes.Length > 0)
+            await ingestor.EnqueueAsync(envelopes, cancellationToken);
+
+        var nextCursor = Math.Max(network.FlowCursor, result.NextCursor);
+        if (nextCursor > network.FlowCursor)
+            await context.TeamLabRuntimeNetworks
+                .Where(item => item.Id == network.Id && item.Generation == network.Generation &&
+                               item.FlowCursor == network.FlowCursor)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.FlowCursor, nextCursor),
+                    cancellationToken);
     }
 
     private async Task<TeamLabRuntime> LoadRuntimeAsync(Guid runtimePublicId, CancellationToken cancellationToken) =>
@@ -297,56 +358,4 @@ public sealed class TeamLabTrafficApplicationService(
     private static string Hash(string value) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
-    private static TeamLabTrafficFlow CreateFlow(
-        TeamLabRuntime runtime,
-        TeamLabRuntimeNetwork network,
-        TeamLabNodeFlowSample sample)
-    {
-        var sourceIp = NormalizeIp(sample.SourceIp);
-        var destinationIp = NormalizeIp(sample.DestinationIp);
-        var protocol = sample.Protocol.Trim().ToUpperInvariant();
-        var capturedAt = sample.CapturedAt.ToUniversalTime();
-        var fingerprintInput = string.Join('|', runtime.Id, runtime.Generation, network.Id,
-            sourceIp, sample.SourcePort, destinationIp, sample.DestinationPort, protocol,
-            capturedAt.UtcTicks, sample.Bytes, 1);
-
-        return new TeamLabTrafficFlow
-        {
-            RuntimeId = runtime.Id,
-            Generation = runtime.Generation,
-            SourceCursor = sample.Cursor,
-            ShardId = network.ShardId,
-            NetworkId = network.Id,
-            WorkerNodeId = network.WorkerNodeId,
-            SourceIp = sourceIp,
-            SourcePrefix = ToPrivatePrefix(sourceIp),
-            SourcePort = sample.SourcePort,
-            DestinationIp = destinationIp,
-            DestinationPrefix = ToPrivatePrefix(destinationIp),
-            DestinationPort = sample.DestinationPort,
-            Protocol = protocol,
-            Bytes = sample.Bytes,
-            Packets = 1,
-            FirstSeenAt = capturedAt,
-            LastSeenAt = capturedAt,
-            CapturedAt = capturedAt,
-            Fingerprint = SHA256.HashData(Encoding.UTF8.GetBytes(fingerprintInput))
-        };
-    }
-
-    private static string NormalizeIp(string value) =>
-        IPAddress.TryParse(value.Trim(), out var address) ? address.ToString() : value.Trim();
-
-    private static string ToPrivatePrefix(string value)
-    {
-        if (!IPAddress.TryParse(value, out var address))
-            return "unknown";
-
-        var bytes = address.GetAddressBytes();
-        if (bytes.Length == 4)
-            return $"{bytes[0]}.{bytes[1]}.{bytes[2]}.0/24";
-
-        Array.Clear(bytes, 8, bytes.Length - 8);
-        return $"{new IPAddress(bytes)}/64";
-    }
 }

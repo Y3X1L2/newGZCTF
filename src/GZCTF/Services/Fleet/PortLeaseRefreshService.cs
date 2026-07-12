@@ -57,9 +57,8 @@ public class PortLeaseRefreshService : BackgroundService
         foreach (var mapping in mappings
                      .Where(m => m.PublicPort >= _config.ListenPortStart && m.PublicPort <= _config.ListenPortEnd))
         {
-            await allocator.ReserveExistingPortAsync(mapping.PublicPort,
-                $"external-nginx:{mapping.IP}:{mapping.Port}", token);
-            refreshed++;
+            if (await allocator.ReserveExistingPortAsync(mapping.PublicPort, mapping.LeaseId, token))
+                refreshed++;
         }
 
         _logger.LogDebug("Refreshed {Count} external Nginx public port lease(s).", refreshed);

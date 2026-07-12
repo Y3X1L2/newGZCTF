@@ -1,7 +1,7 @@
 using GZCTF.Models.Request.Admin;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Fleet;
 using System.Text.Json;
@@ -52,11 +52,12 @@ public class ContainerRepository(
         return await Context.Containers
             .Where(c => c.Status == ContainerStatus.Running
                         && c.PublicPort != null
+                        && c.PublicPortLeaseId != null
                         && c.PublicIP == publicEntry
                         && c.NodeId != null
                         && c.Node != null
                         && !c.IsProxy)
-            .Select(c => new PortMappingEntry(c.PublicPort!.Value, c.IP, c.Port))
+            .Select(c => new PortMappingEntry(c.PublicPort!.Value, c.IP, c.Port, c.PublicPortLeaseId!.Value))
             .ToArrayAsync(token);
     }
 
@@ -134,7 +135,7 @@ public class ContainerRepository(
                 return false;
             }
 
-            await cache.RemoveAsync(CacheKey.ConnectionCount(container.Id), token);
+            await cache.RemoveAsync(RuntimeCacheKeys.ConnectionCount(container.Id), token);
 
             await Context.GameInstances
                 .Where(i => i.ContainerId == container.Id)

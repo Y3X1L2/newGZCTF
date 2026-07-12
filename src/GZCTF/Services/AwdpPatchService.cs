@@ -5,7 +5,7 @@ using GZCTF.Hubs;
 using GZCTF.Hubs.Clients;
 using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Container.Manager;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -18,7 +18,7 @@ public class AwdpPatchService(
     IContainerPatchApplicator patchApplicator,
     AwdpScriptRunner scriptRunner,
     IGameEventRepository eventRepository,
-    CacheHelper cacheHelper,
+    IPlatformCache cacheHelper,
     IHubContext<MonitorHub, IMonitorClient> hub,
     ILogger<AwdpPatchService> logger)
 {
@@ -142,7 +142,7 @@ public class AwdpPatchService(
             Message = submission.Message
         });
 
-        await cacheHelper.FlushScoreboardCache(gameId, token);
+        await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, gameId.ToString(), token);
 
         logger.LogInformation(
             "AWDP patch verified: game={GameId}, team={TeamId}, service={ServiceId}, hash={Hash}, status={Status}",

@@ -12,8 +12,8 @@ using GZCTF.Models.Request.Admin;
 using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
-using GZCTF.Services.Concurrency;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
+using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Services.Config;
 using GZCTF.Services.Fleet;
 using GZCTF.Infrastructure.Persistence.Queries;
@@ -41,7 +41,7 @@ public class GameController(
     UserManager<UserInfo> userManager,
     AppDbContext dbContext,
 
-    CacheHelper cacheHelper,
+    IPlatformCache cacheHelper,
     IBlobStorage storage,
     IConfigService configService,
     IBlobRepository blobService,
@@ -58,7 +58,7 @@ public class GameController(
     IGameInstanceRepository gameInstanceRepository,
     IParticipationRepository participationRepository,
     GamePhaseService gamePhaseService,
-    IDistributedLockService lockService,
+    IDistributedLeaseProvider lockService,
     IOptionsSnapshot<ContainerPolicy> containerPolicy,
     IOptionsSnapshot<KvmSettings> kvmSettings,
     IStringLocalizer<Program> localizer) : ControllerBase
@@ -283,7 +283,7 @@ public class GameController(
             await participationRepository.UpdateParticipationStatus(part, ParticipationStatus.Accepted, token);
 
         await transaction.CommitAsync(token);
-        await cacheHelper.FlushScoreboardCache(part.GameId, token);
+        await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, part.GameId.ToString(), token);
 
         logger.Log(StaticLocalizer[nameof(Resources.Program.Game_JoinSucceeded), team.Name, game.Title], user,
             TaskStatus.Success);
@@ -1181,7 +1181,7 @@ public class GameController(
                     GameEvent.FromSubmission(submission, result.SubType, result.AnsRes, StaticLocalizer), token);
 
                 if (result.AnsRes == AnswerResult.Accepted)
-                    await cacheHelper.FlushScoreboardCache(id, token);
+                    await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, id.ToString(), token);
 
                 if (context.Game!.EndTimeUtc > DateTimeOffset.UtcNow
                     && result.SubType != SubmissionType.Unaccepted
@@ -1381,9 +1381,12 @@ public class GameController(
         // Route to VM if challenge uses Windows VM
         if (instance.Challenge.Environment == EnvironmentType.WindowsVM)
         {
-            using var vmCreateLock = await lockService.AcquireAsync(
+            await using var vmCreateLock = await lockService.AcquireAsync(
                 $"vm-create:{challengeId}:{context.User!.Id}",
-                TimeSpan.FromSeconds(10));
+                TimeSpan.FromSeconds(10),
+                cancellationToken: token);
+            using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(token, vmCreateLock.LeaseLost);
+            token = leaseCancellation.Token;
 
             var existingVm = await dbContext.VmInstances
                 .Where(v => v.ChallengeId == challengeId

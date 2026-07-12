@@ -86,6 +86,11 @@ public class Container
     public int? PublicPort { get; set; }
 
     /// <summary>
+    /// Stable owner identity used for compare-owner public port lease operations.
+    /// </summary>
+    public Guid? PublicPortLeaseId { get; set; }
+
+    /// <summary>
     /// Container instance access method
     /// </summary>
     [NotMapped]
@@ -172,5 +177,4 @@ internal record GameMetadata(
     int TeamId,
     string ContainerId,
     string? Flag);
-
 

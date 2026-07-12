@@ -1,7 +1,7 @@
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
-using GZCTF.Services.Concurrency;
+using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
@@ -21,7 +21,7 @@ public class GameInstanceRepository(
     INginxProxySyncService nginxProxySync,
     DeploymentQueueStateAccessor deploymentQueueState,
     DeploymentExecutionContextAccessor deploymentExecutionContext,
-    IDistributedLockService lockService,
+    IDistributedLeaseProvider lockService,
     ILogger<GameInstanceRepository> logger) : RepositoryBase(context), IGameInstanceRepository
 {
     static readonly DeploymentQueueTicketStatus[] ActiveQueueStatuses =
@@ -152,9 +152,12 @@ public class GameInstanceRepository(
         if (gameInstance.Container is not null)
             return new TaskResult<Container>(TaskStatus.Success, gameInstance.Container);
 
-        using var ownerLock = await lockService.AcquireAsync(
+        await using var ownerLock = await lockService.AcquireAsync(
             BuildContainerLimitLockKey(game.Id, team.Id),
-            TimeSpan.FromSeconds(10));
+            TimeSpan.FromSeconds(10),
+            cancellationToken: token);
+        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(token, ownerLock.LeaseLost);
+        token = leaseCancellation.Token;
 
         if (gameInstance.ContainerId is not null && gameInstance.Container is null)
             await Context.Entry(gameInstance).Reference(e => e.Container).LoadAsync(token);

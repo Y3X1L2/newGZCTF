@@ -71,6 +71,7 @@ public sealed class DatabaseGovernanceMigrationTests : IAsyncLifetime
 
         var node = new WorkerNode
         {
+            Id = Guid.CreateVersion7(),
             Name = "phase4-node",
             HostAddress = "10.24.0.200",
             AuthToken = "phase4-test-token",
@@ -101,7 +102,20 @@ public sealed class DatabaseGovernanceMigrationTests : IAsyncLifetime
             Options = ["A", "B"],
             AnswerIndexes = [0]
         };
-        context.AddRange(node, template, topology, release, question);
+        await context.Database.ExecuteSqlInterpolatedAsync($$"""
+            INSERT INTO "WorkerNodes"
+                ("Id", "AgentPort", "AuthToken", "Capabilities", "CpuLoad", "CurrentContainers",
+                 "CurrentVms", "HostAddress", "IsLocal", "IsSchedulable", "IsStorageNode",
+                 "MaxContainers", "MaxVms", "MemoryLoad", "Name", "RegisteredAt", "RegistryPort",
+                 "ReservedContainers", "ReservedVms", "Status", "TeamLabCapabilitiesJson",
+                 "TeamLabFabricStatus", "TeamLabNetworkEnabled", "TeamLabProtocolVersion",
+                 "TeamLabTunnelConfigVersion", "TeamLabTunnelStatus", "TotalPorts", "UsedPorts")
+            VALUES
+                ({{node.Id}}, 5001, {{node.AuthToken}}, {{(byte)node.Capabilities}}, 0, 0,
+                 0, {{node.HostAddress}}, false, true, false, 20, 5, 0, {{node.Name}}, CURRENT_TIMESTAMP,
+                 5000, 0, 0, 0, '{}', 0, false, 0, 0, 0, 28231, 0)
+            """);
+        context.AddRange(template, topology, release, question);
         await context.SaveChangesAsync();
 
         var runtime = new TeamLabRuntime

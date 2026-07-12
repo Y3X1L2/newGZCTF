@@ -1,6 +1,19 @@
 # 商业化总纲审计进度记录
 
-更新时间：2026-07-11
+更新时间：2026-07-12
+
+## 2026-07-12 Phase 5 实施启动
+
+- Phase 5 以提交 `b45eb9b` 为基线，目标是将 Redis 收敛为单连接、可审计、可降级的缓存、协调和高频数据缓冲底座，PostgreSQL 继续作为业务事实来源。
+- 已重新核实旧 `CacheMaker`/`CacheHelper`、分散 Redis connection、无 owner 端口 lease、节点 heartbeat 持久/实时状态混合、TeamLab flow 同步落库和 PostgreSQL queue polling 等当前实现。
+- 实施按五个大单元推进，只在大单元完成后集中验证；完成前执行一次独立 agent 质量审查并集中修复确认项。
+- 当前进入大单元 1：Redis 连接治理、typed HybridCache、projection revision 与核心投影接入。本阶段不部署生产。
+- Phase 5 大单元 1-2 已完成生产实现：单 Redis provider、typed HybridCache、事务内 projection revision、owner lease、端口归属和 PostgreSQL queue wake-up 已闭环；两次大单元集中 build 均达到 0 warning/0 error，缓存专项 15/15。
+- 当前进入大单元 3：节点 live state/metrics 与 TeamLab flow 高频缓冲。本阶段仍未部署或连接生产服务器。
+- Phase 5 大单元 3 已完成并通过 59 项专项验证：实时节点状态优先于 PostgreSQL checkpoint，旧序列不会覆盖 metric，也不会阻断 capability/version 持久事实更新；TeamLab flow 已切换为有界 stream、pending reclaim、binary COPY 批写和 PostgreSQL-only 查询。
+- Phase 5 大单元 4 已完成：`CompletePhaseFiveRedisGovernance` migration 回填端口 owner、投影 revision 和节点 checkpoint；EF pending-model 检查通过；PostgreSQL migration 与 Redis pending recovery 集成验证 2/2。
+- Phase 5 大单元 5 已完成代码闭环：runbook、keyspace/stream 检查脚本、k6 workload 和基准模板已落库；独立 agent 首轮与最终复核确认的队列 CAS、缓存恢复/factory、lease-lost、本地 lease 竞态、flow batching/reclaim cursor、Nginx owner 问题已全部修复。
+- 最终门禁通过：build 0 warning/0 error，单元测试 508/508，真实 PostgreSQL/Redis 集成测试 226/226，前端 strict TypeScript、EF 模型一致性、旧实现残留扫描、Git whitespace 均通过；复核补丁另通过并发租约/缓存 3/3、TeamLab 深层 pending reclaim 2/2。Phase 5 代码开发完成，仍未部署生产；专用双主站 k6 容量与基础设施故障演练保留为预发布环境验收证据。
 
 ## 目标
 

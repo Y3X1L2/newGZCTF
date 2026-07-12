@@ -13,22 +13,23 @@ public interface IPortAllocationService
     /// <param name="containerId">容器 ID，用于标识端口归属</param>
     /// <param name="token"></param>
     /// <returns>分配的端口号，0 表示无可用端口</returns>
-    Task<int> AllocatePortAsync(Guid containerId, CancellationToken token = default);
+    Task<PortLease?> AllocatePortAsync(Guid containerId, CancellationToken token = default);
 
     /// <summary>
     /// 释放已分配的端口
     /// </summary>
     /// <param name="port">端口号</param>
+    /// <param name="leaseId">持久化的租约归属标识</param>
     /// <param name="token"></param>
-    Task ReleasePortAsync(int port, CancellationToken token = default);
+    Task<bool> ReleasePortAsync(int port, Guid leaseId, CancellationToken token = default);
 
     /// <summary>
     /// Mark an existing port as occupied. Used to rebuild allocator state from DB after restart.
     /// </summary>
     /// <param name="port">端口号</param>
-    /// <param name="owner">端口归属描述</param>
+    /// <param name="leaseId">持久化的租约归属标识</param>
     /// <param name="token"></param>
-    Task ReserveExistingPortAsync(int port, string owner, CancellationToken token = default);
+    Task<bool> ReserveExistingPortAsync(int port, Guid leaseId, CancellationToken token = default);
 
     /// <summary>
     /// 是否启用 Redis 端口分配（否则降级为本地端口扫描）
@@ -42,3 +43,5 @@ public interface IPortAllocationService
 }
 
 public record PortAllocationRange(int Start, int End, string Mode, bool RequiresRedis);
+
+public sealed record PortLease(int Port, Guid LeaseId, DateTimeOffset ExpiresAt);

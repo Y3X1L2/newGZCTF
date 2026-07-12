@@ -7,7 +7,7 @@ using GZCTF.Models.Internal;
 using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Config;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -37,7 +37,7 @@ public class AwdpPlayerController(
     AwdpInstanceService instanceService,
     AwdpPatchService patchService,
     AwdpScoreService scoreService,
-    CacheHelper cacheHelper,
+    IPlatformCache cacheHelper,
     IConfigService configService) : ControllerBase
 {
     [HttpGet("Games/{gameId:int}/Status")]
@@ -122,7 +122,7 @@ public class AwdpPlayerController(
             ]
         }, token);
 
-        await cacheHelper.FlushScoreboardCache(gameId, token);
+        await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, gameId.ToString(), token);
 
         return Ok(new AwdpSubmitResultModel
         {

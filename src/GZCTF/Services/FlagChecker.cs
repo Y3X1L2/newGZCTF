@@ -1,6 +1,6 @@
 ﻿using System.Threading.Channels;
 using GZCTF.Repositories.Interface;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Services;
@@ -84,7 +84,7 @@ public class FlagChecker(
 
                 await using var scope = serviceScopeFactory.CreateAsyncScope();
 
-                var cacheHelper = scope.ServiceProvider.GetRequiredService<CacheHelper>();
+                var cacheHelper = scope.ServiceProvider.GetRequiredService<IPlatformCache>();
                 var eventRepository =
                     scope.ServiceProvider.GetRequiredService<IGameEventRepository>();
                 var instanceRepository =
@@ -121,7 +121,8 @@ public class FlagChecker(
                                     GameEvent.FromSubmission(item, type, ans, StaticLocalizer), token);
 
                                 // always flush the scoreboard
-                                await cacheHelper.FlushScoreboardCache(item.GameId, token);
+                                await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard,
+                                    item.GameId.ToString(), token);
                                 break;
                             }
                         default:

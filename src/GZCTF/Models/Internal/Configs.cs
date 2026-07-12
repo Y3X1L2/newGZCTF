@@ -4,7 +4,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json.Serialization;
 using GZCTF.Extensions;
-using GZCTF.Services.Cache;
+using GZCTF.Infrastructure.Cache;
 using MemoryPack;
 using Microsoft.Extensions.Options;
 using OpenTelemetry.Exporter;
@@ -47,7 +47,7 @@ public class AccountPolicy
     /// <summary>
     /// Use captcha verification
     /// </summary>
-    [CacheFlush(CacheKey.CaptchaConfig)]
+    [CacheFlush(CachePolicyNames.CaptchaConfig)]
     public bool UseCaptcha { get; set; }
 
     /// <summary>
@@ -126,7 +126,7 @@ public class ContainerPolicy
     /// <summary>
     /// Default container lifetime in minutes
     /// </summary>
-    [CacheFlush(CacheKey.ClientConfig)]
+    [CacheFlush(CachePolicyNames.ClientConfig)]
     [Range(1, 7200, ErrorMessageResourceName = nameof(Resources.Program.Model_OutOfRange),
         ErrorMessageResourceType = typeof(Resources.Program))]
     public int DefaultLifetime { get; set; } = 120;
@@ -134,7 +134,7 @@ public class ContainerPolicy
     /// <summary>
     /// Extension duration for each renewal in minutes
     /// </summary>
-    [CacheFlush(CacheKey.ClientConfig)]
+    [CacheFlush(CachePolicyNames.ClientConfig)]
     [Range(1, 7200, ErrorMessageResourceName = nameof(Resources.Program.Model_OutOfRange),
         ErrorMessageResourceType = typeof(Resources.Program))]
     public int ExtensionDuration { get; set; } = 120;
@@ -142,7 +142,7 @@ public class ContainerPolicy
     /// <summary>
     /// Renewal window before container stops in minutes
     /// </summary>
-    [CacheFlush(CacheKey.ClientConfig)]
+    [CacheFlush(CachePolicyNames.ClientConfig)]
     [Range(1, 360, ErrorMessageResourceName = nameof(Resources.Program.Model_OutOfRange),
         ErrorMessageResourceType = typeof(Resources.Program))]
     public int RenewalWindow { get; set; } = 10;
@@ -288,38 +288,38 @@ public class GlobalConfig
     /// <summary>
     /// Platform prefix name
     /// </summary>
-    [CacheFlush(CacheKey.Index)]
-    [CacheFlush(CacheKey.ClientConfig)]
+    [CacheFlush(CachePolicyNames.Index)]
+    [CacheFlush(CachePolicyNames.ClientConfig)]
     public string Title { get; set; } = "YINYU";
 
     /// <summary>
     /// Platform slogan
     /// </summary>
-    [CacheFlush(CacheKey.ClientConfig)]
+    [CacheFlush(CachePolicyNames.ClientConfig)]
     public string Slogan { get; set; } = JoinSlogans(DefaultSlogans);
 
     /// <summary>
     /// Site description information
     /// </summary>
-    [CacheFlush(CacheKey.Index)]
+    [CacheFlush(CachePolicyNames.Index)]
     public string? Description { get; set; } = DefaultDescription;
 
     /// <summary>
     /// Footer information
     /// </summary>
-    [CacheFlush(CacheKey.ClientConfig)]
+    [CacheFlush(CachePolicyNames.ClientConfig)]
     public string? FooterInfo { get; set; }
 
     /// <summary>
     /// Custom theme color
     /// </summary>
-    [CacheFlush(CacheKey.ClientConfig)]
+    [CacheFlush(CachePolicyNames.ClientConfig)]
     public string? CustomTheme { get; set; }
 
     /// <summary>
     /// Use asymmetric encryption for API requests
     /// </summary>
-    [CacheFlush(CacheKey.ClientConfig)]
+    [CacheFlush(CachePolicyNames.ClientConfig)]
     public bool ApiEncryption { get; set; }
 
     /// <summary>

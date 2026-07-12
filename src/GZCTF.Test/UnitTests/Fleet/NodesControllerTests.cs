@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -10,8 +10,11 @@ using GZCTF.Controllers;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
+using GZCTF.Modules.Runtime.Application;
+using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Repositories.Interface;
-using GZCTF.Services.Concurrency;
+using GZCTF.Infrastructure.Concurrency;
+using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Fleet;
 using GZCTF.Utils;
 using Microsoft.AspNetCore.Http;
@@ -64,9 +67,7 @@ public class NodesControllerTests
     [Fact]
     public void PortAllocationService_ReportsCurrentNginxAllocationRange()
     {
-        var config = new ConfigurationBuilder().Build();
-        using var allocator = new PortAllocationService(config,
-            Options.Create(new ContainerProvider
+        var allocator = CreatePortAllocator(new ContainerProvider
             {
                 NginxProxyConfig = new NginxProxyConfig
                 {
@@ -74,8 +75,7 @@ public class NodesControllerTests
                     ListenPortStart = 30000,
                     ListenPortEnd = 30059
                 }
-            }),
-            NullLogger<PortAllocationService>.Instance);
+            });
 
         Assert.Equal(30000, allocator.CurrentRange.Start);
         Assert.Equal(30059, allocator.CurrentRange.End);
@@ -390,31 +390,6 @@ public class NodesControllerTests
     }
 
     [Fact]
-    public async Task RedisDistributedLock_UsesLocalFallback_WhenRedisIsNotConfigured()
-    {
-        var config = new ConfigurationBuilder().Build();
-        using var locker = new RedisDistributedLock(config, NullLogger<RedisDistributedLock>.Instance);
-
-        using var handle = await locker.AcquireAsync("unit-test", TimeSpan.FromSeconds(1));
-
-        Assert.NotNull(handle);
-    }
-
-    [Fact]
-    public void RedisDistributedLock_FailsClosed_WhenConfiguredRedisIsUnreachable()
-    {
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["ConnectionStrings:RedisCache"] = "127.0.0.1:1,connectTimeout=50,abortConnect=true"
-            })
-            .Build();
-
-        Assert.Throws<InvalidOperationException>(() =>
-            new RedisDistributedLock(config, NullLogger<RedisDistributedLock>.Instance));
-    }
-
-    [Fact]
     public async Task DeploymentTargetsController_List_DoesNotExposeRawPayloadOrSecrets()
     {
         await using var context = CreateContext();
@@ -575,8 +550,7 @@ public class NodesControllerTests
         context.DeploymentQueueTickets.Add(ticket);
         await context.SaveChangesAsync();
         var capacity = new FleetCapacityReservationService(context,
-            new GZCTF.Services.Concurrency.LocalSemaphoreLock(
-                NullLogger<GZCTF.Services.Concurrency.LocalSemaphoreLock>.Instance),
+            new GZCTF.Infrastructure.Concurrency.LocalDevelopmentLeaseProvider(),
             NullLogger<FleetCapacityReservationService>.Instance);
         var queue = new DeploymentQueueService(context, capacity,
             NullLogger<DeploymentQueueService>.Instance);
@@ -631,8 +605,9 @@ public class NodesControllerTests
         var services = new ServiceCollection()
             .AddSingleton(context)
             .AddLogging()
-            .AddSingleton<IDistributedLockService>(
-                _ => new LocalSemaphoreLock(NullLogger<LocalSemaphoreLock>.Instance))
+            .AddSingleton<IDistributedLeaseProvider>(
+                _ => new LocalDevelopmentLeaseProvider())
+            .AddSingleton<INodeLiveStateStore, TestNodeLiveStateStore>()
             .AddScoped<FleetCapacityReservationService>()
             .BuildServiceProvider();
         var controller = new NodesController(
@@ -640,9 +615,7 @@ public class NodesControllerTests
             context,
             services.GetRequiredService<IServiceScopeFactory>(),
             Options.Create(new ContainerProvider()),
-            new PortAllocationService(new ConfigurationBuilder().Build(),
-                Options.Create(new ContainerProvider()),
-                NullLogger<PortAllocationService>.Instance),
+            CreatePortAllocator(new ContainerProvider()),
             NullLogger<NodesController>.Instance);
 
         var result = await controller.Deregister(node.Id);
@@ -703,8 +676,9 @@ public class NodesControllerTests
         var services = new ServiceCollection()
             .AddSingleton(context)
             .AddLogging()
-            .AddSingleton<IDistributedLockService>(
-                _ => new LocalSemaphoreLock(NullLogger<LocalSemaphoreLock>.Instance))
+            .AddSingleton<IDistributedLeaseProvider>(
+                _ => new LocalDevelopmentLeaseProvider())
+            .AddSingleton<INodeLiveStateStore, TestNodeLiveStateStore>()
             .AddScoped<FleetCapacityReservationService>()
             .BuildServiceProvider();
         var controller = new NodesController(
@@ -712,9 +686,7 @@ public class NodesControllerTests
             context,
             services.GetRequiredService<IServiceScopeFactory>(),
             Options.Create(new ContainerProvider()),
-            new PortAllocationService(new ConfigurationBuilder().Build(),
-                Options.Create(new ContainerProvider()),
-                NullLogger<PortAllocationService>.Instance),
+            CreatePortAllocator(new ContainerProvider()),
             NullLogger<NodesController>.Instance);
         controller.ControllerContext = new ControllerContext
         {
@@ -732,16 +704,16 @@ public class NodesControllerTests
             UsedPorts = 3
         });
 
-        Assert.IsType<OkResult>(result);
-        var reloaded = await context.WorkerNodes.SingleAsync(n => n.Id == node.Id);
-        Assert.Equal(2, reloaded.CurrentContainers);
-        Assert.Equal(1, reloaded.CurrentVms);
-        Assert.Equal(0, reloaded.ReservedContainers);
-        Assert.Equal(0, reloaded.ReservedVms);
+        Assert.IsType<OkObjectResult>(result);
+        var liveState = services.GetRequiredService<INodeLiveStateStore>();
+        var stored = await liveState.GetAsync(node.Id);
+        Assert.NotNull(stored);
+        Assert.Equal(2, stored.CurrentContainers);
+        Assert.Equal(1, stored.CurrentVms);
     }
 
     [Fact]
-    public async Task Heartbeat_PersistsTeamLabAgentVersionsAndCapabilities()
+    public async Task Heartbeat_PersistsCapabilitiesWhenMetricSequenceIsStale()
     {
         await using var context = CreateContext();
         var node = new WorkerNode
@@ -760,18 +732,21 @@ public class NodesControllerTests
         var services = new ServiceCollection()
             .AddSingleton(context)
             .AddLogging()
-            .AddSingleton<IDistributedLockService>(
-                _ => new LocalSemaphoreLock(NullLogger<LocalSemaphoreLock>.Instance))
+            .AddSingleton<IDistributedLeaseProvider>(
+                _ => new LocalDevelopmentLeaseProvider())
+            .AddSingleton<INodeLiveStateStore, TestNodeLiveStateStore>()
             .AddScoped<FleetCapacityReservationService>()
             .BuildServiceProvider();
+        var liveStateStore = services.GetRequiredService<INodeLiveStateStore>();
+        var observedAt = DateTimeOffset.UtcNow;
+        await liveStateStore.WriteAsync(new NodeLiveState(
+            node.Id, 100, observedAt, observedAt, 0.2f, 0.3f, 0, 0, 0));
         var controller = new NodesController(
             new InMemoryNodeRepository(context),
             context,
             services.GetRequiredService<IServiceScopeFactory>(),
             Options.Create(new ContainerProvider()),
-            new PortAllocationService(new ConfigurationBuilder().Build(),
-                Options.Create(new ContainerProvider()),
-                NullLogger<PortAllocationService>.Instance),
+            CreatePortAllocator(new ContainerProvider()),
             NullLogger<NodesController>.Instance);
         controller.ControllerContext = new ControllerContext
         {
@@ -782,6 +757,7 @@ public class NodesControllerTests
 
         var result = await controller.Heartbeat(node.Id, new HeartbeatRequest
         {
+            Sequence = 99,
             CpuLoad = 0.1f,
             MemoryLoad = 0.2f,
             CurrentContainers = 1,
@@ -805,7 +781,7 @@ public class NodesControllerTests
             }
         });
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         var reloaded = await context.WorkerNodes.SingleAsync(n => n.Id == node.Id);
         Assert.Equal("1.8.3-test", reloaded.TeamLabAgentVersion);
         Assert.Equal(3, reloaded.TeamLabProtocolVersion);
@@ -834,8 +810,9 @@ public class NodesControllerTests
         var services = new ServiceCollection()
             .AddSingleton(context)
             .AddLogging()
-            .AddSingleton<IDistributedLockService>(
-                _ => new LocalSemaphoreLock(NullLogger<LocalSemaphoreLock>.Instance))
+            .AddSingleton<IDistributedLeaseProvider>(
+                _ => new LocalDevelopmentLeaseProvider())
+            .AddSingleton<INodeLiveStateStore, TestNodeLiveStateStore>()
             .AddScoped<FleetCapacityReservationService>()
             .BuildServiceProvider();
         var controller = new NodesController(
@@ -843,9 +820,7 @@ public class NodesControllerTests
             context,
             services.GetRequiredService<IServiceScopeFactory>(),
             Options.Create(new ContainerProvider()),
-            new PortAllocationService(new ConfigurationBuilder().Build(),
-                Options.Create(new ContainerProvider()),
-                NullLogger<PortAllocationService>.Instance),
+            CreatePortAllocator(new ContainerProvider()),
             NullLogger<NodesController>.Instance);
         controller.ControllerContext = new ControllerContext
         {
@@ -875,7 +850,7 @@ public class NodesControllerTests
             }
         });
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<OkObjectResult>(result);
         var reloaded = await context.WorkerNodes.SingleAsync(n => n.Id == node.Id);
         Assert.Equal(NodeCapability.Docker, reloaded.Capabilities);
     }
@@ -975,6 +950,17 @@ public class NodesControllerTests
         Assert.False(string.IsNullOrWhiteSpace(agent.Request?.ExpectedSha256));
     }
 
+    static PortAllocationService CreatePortAllocator(ContainerProvider providerOptions)
+    {
+        var options = Options.Create(new RedisRuntimeOptions { Mode = RedisRuntimeMode.Disabled });
+        var telemetry = new RedisTelemetry();
+        var state = new RedisRuntimeState(options, telemetry);
+        var connections = new RedisConnectionProvider(options, state, telemetry,
+            NullLogger<RedisConnectionProvider>.Instance);
+        return new(connections, new RedisKeyspace(options), telemetry, Options.Create(providerOptions),
+            NullLogger<PortAllocationService>.Instance);
+    }
+
     static AppDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
@@ -991,9 +977,7 @@ public class NodesControllerTests
             context,
             services.GetRequiredService<IServiceScopeFactory>(),
             Options.Create(new ContainerProvider()),
-            new PortAllocationService(new ConfigurationBuilder().Build(),
-                Options.Create(new ContainerProvider()),
-                NullLogger<PortAllocationService>.Instance),
+            CreatePortAllocator(new ContainerProvider()),
             NullLogger<NodesController>.Instance);
 
     private sealed class InMemoryNodeRepository(AppDbContext context) : INodeRepository
@@ -1009,6 +993,46 @@ public class NodesControllerTests
 
         public Task<int> MarkStaleNodesOfflineAsync(TimeSpan timeout, CancellationToken token) =>
             Task.FromResult(0);
+    }
+
+    private sealed class TestNodeLiveStateStore : INodeLiveStateStore
+    {
+        private readonly Dictionary<Guid, NodeLiveState> _states = [];
+        private readonly object _gate = new();
+
+        public TimeSpan FreshnessTtl => TimeSpan.FromSeconds(120);
+
+        public ValueTask<NodeLiveStateWriteResult> WriteAsync(NodeLiveState state,
+            CancellationToken cancellationToken = default)
+        {
+            lock (_gate)
+            {
+                if (_states.TryGetValue(state.WorkerNodeId, out var current) &&
+                    current.Sequence >= state.Sequence)
+                    return ValueTask.FromResult(NodeLiveStateWriteResult.Rejected);
+                _states[state.WorkerNodeId] = state;
+            }
+
+            return ValueTask.FromResult(NodeLiveStateWriteResult.Stored);
+        }
+
+        public ValueTask<NodeLiveState?> GetAsync(Guid workerNodeId,
+            CancellationToken cancellationToken = default)
+        {
+            lock (_gate)
+                return ValueTask.FromResult(_states.GetValueOrDefault(workerNodeId));
+        }
+
+        public ValueTask<IReadOnlyDictionary<Guid, NodeLiveState>> GetManyAsync(
+            IReadOnlyCollection<Guid> workerNodeIds,
+            CancellationToken cancellationToken = default)
+        {
+            lock (_gate)
+            {
+                return ValueTask.FromResult<IReadOnlyDictionary<Guid, NodeLiveState>>(
+                    _states.Where(item => workerNodeIds.Contains(item.Key)).ToDictionary());
+            }
+        }
     }
 
     private sealed class RecordingAgentClient : AgentClient

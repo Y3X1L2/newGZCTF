@@ -3,9 +3,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
 using GZCTF.Infrastructure.Api;
+using GZCTF.Infrastructure.Cache;
 using GZCTF.Models.Internal;
 using GZCTF.Providers;
-using GZCTF.Services.Cache;
 using GZCTF.Storage.Interface;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
@@ -34,9 +34,6 @@ public static class HandlerExtension
         builder.Append(CspTemplateSuffix);
         return builder.ToString();
     }
-
-    private static readonly DistributedCacheEntryOptions
-        StaticCacheOptions = new() { SlidingExpiration = TimeSpan.FromDays(7) };
 
     private static readonly HashSet<string> SupportedCultures = Server.SupportedCultures
         .Select(c => c.ToLower()).ToHashSet();
@@ -96,19 +93,17 @@ public static class HandlerExtension
     private static string GetETag(StringSegment hash) => $"\"favicon-{hash}\"";
 
     private static async Task<IResult> FaviconHandler(
-        CacheHelper cache,
+        IPlatformCache cache,
         HttpContext context,
         IBlobStorage storage,
         IOptionsSnapshot<GlobalConfig> globalConfig,
         CancellationToken token = default)
     {
-        var hash = await cache.GetStringAsync(CacheKey.Favicon, token);
-        if (hash is null)
-        {
-            hash = globalConfig.Value.FaviconHash;
-            if (hash is null || !Codec.FileHashRegex().IsMatch(hash))
-                goto FallbackToDefaultIcon;
-        }
+        var hash = await cache.GetOrCreateAsync(CachePolicyCatalog.Favicon, "global", _ =>
+            ValueTask.FromResult(globalConfig.Value.FaviconHash is { } configured &&
+                                 Codec.FileHashRegex().IsMatch(configured)
+                ? configured
+                : Program.DefaultFaviconHash), token);
 
         var eTag = GetETag(hash[..8]);
         if (context.Request.Headers.IfNoneMatch == eTag)
@@ -121,7 +116,6 @@ public static class HandlerExtension
         if (!await storage.ExistsAsync(path, token))
             goto FallbackToDefaultIcon;
 
-        await cache.SetStringAsync(CacheKey.Favicon, hash, StaticCacheOptions, token);
         var stream = await storage.OpenReadAsync(path, token);
 
         return Results.File(
@@ -133,7 +127,7 @@ public static class HandlerExtension
     FallbackToDefaultIcon:
 
         eTag = GetETag(Program.DefaultFaviconHash[..8]);
-        await cache.SetStringAsync(CacheKey.Favicon, Program.DefaultFaviconHash, StaticCacheOptions, token);
+        await cache.InvalidateAsync(CachePolicyCatalog.Favicon, "global", token);
 
     SendDefaultIcon:
 
@@ -189,7 +183,7 @@ public static class HandlerExtension
     }
 
     private static async Task<IResult> IndexHandler(
-        CacheHelper cacheHelper,
+        IPlatformCache cache,
         HttpContext context,
         IOptionsSnapshot<GlobalConfig> globalConfig,
         CancellationToken token = default)
@@ -216,17 +210,14 @@ public static class HandlerExtension
             (path.StartsWith("/static/", StringComparison.OrdinalIgnoreCase) || Path.HasExtension(path)))
             return Results.NotFound();
 
-        var content = await cacheHelper.GetStringAsync(CacheKey.Index, token);
-
-        if (content is null)
+        var content = await cache.GetOrCreateAsync(CachePolicyCatalog.Index, "global", _ =>
         {
             var config = globalConfig.Value;
             var title = HtmlEncoder.Default.Encode(config.Platform);
             var description = HtmlEncoder.Default.Encode(config.Description ?? GlobalConfig.DefaultDescription);
-            content = _indexTemplate.Replace("%title%", title).Replace("%description%", description);
-
-            await cacheHelper.SetStringAsync(CacheKey.Index, content, StaticCacheOptions, token);
-        }
+            return ValueTask.FromResult(_indexTemplate.Replace("%title%", title)
+                .Replace("%description%", description));
+        }, token);
 
         var builder = new StringBuilder(content, content.Length + 200);
 

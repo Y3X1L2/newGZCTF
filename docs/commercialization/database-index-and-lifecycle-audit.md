@@ -33,6 +33,7 @@
 | TeamLabEvent | runtime/generation 时间线 | `(RuntimeId, Generation, CreatedAt DESC, Id DESC)` | terminal runtime 180 days |
 | TeamLabTrafficFlow | runtime/generation/window/网络查询 | 时间分区；`(RuntimeId, Generation, CapturedAt DESC, Id DESC)`；window 内 fingerprint unique | raw 7 days |
 | TeamLabTrafficFlowAggregate | runtime/network/协议趋势 | unique 完整聚合维度；`(RuntimeId, Generation, BucketStart)` | 180 days |
+| WorkerNodeMetricSample | 节点分钟级容量趋势 | unique `(WorkerNodeId, WindowStart)`；`(WindowStart, WorkerNodeId)` | 180 days |
 | LogModel | 时间/级别/logger | 月分区；`(TimeUtc DESC, Id DESC)`；`(Level, TimeUtc DESC, Id DESC)` | raw 30 days |
 | AwdpRound | 当前轮次和历史 | unique `(GameId, RoundNumber)`；active `(GameId, Status, RoundNumber DESC)` | owner managed |
 | AwdpCheckerTask | round/service/team 和状态重试 | unique `(RoundId, ServiceId, TeamId)`；`(Status, UpdatedAt, Id)` | owner managed |
@@ -47,6 +48,7 @@
 | api-operation | 90 天 | 不聚合 | terminal、超出幂等恢复窗口、无运行 job | SKIP LOCKED 分批删除 |
 | teamlab-event | 180 天 | 不聚合 | runtime terminal 且事件不属于当前 generation 排障窗口 | SKIP LOCKED 分批删除 |
 | governance-run | 365 天 | 不聚合 | terminal | SKIP LOCKED 分批删除 |
+| worker-node-metric | 180 天 | 不聚合 | 已持久化分钟样本 | SKIP LOCKED 分批删除 |
 
 上述值是可配置默认值，不是硬编码业务常量。任何缩短必须先完成备份/合规确认并记录配置变更审计。
 
@@ -79,4 +81,5 @@
 - `capture-query-plans.ps1` 只允许目标数据库名包含 benchmark/test/phase4/ci，使用 `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` 生成制品。
 - `assert-query-plans.ps1` 验证七类主查询使用目标索引、无大范围 Seq Scan，Logs/TeamLab flow 只访问一个命中分区。
 - `.github/workflows/quality.yml` 在独立 PostgreSQL 16 服务上迁移、播种并执行 query-plan contract，并上传 JSON plan artifact；PostgreSQL 17 Commercial 数据量结果单独记录，不将共享 runner 延迟作为容量结论。
+- `RedisGovernanceMigrationTests` 验证 Phase 5 projection revision、节点分钟指标和公网端口 owner lease 的迁移与历史事实回填；`TeamLabTrafficStreamTests` 验证写库前崩溃留下的 pending 可由其他 consumer reclaim。
 - `rehearse-pitr.ps1` 使用隔离 PostgreSQL 16、WAL archive 和 base backup 恢复至 Contract 前时间点，并校验 migration head 与升级前后标记事实。
