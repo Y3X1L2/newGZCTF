@@ -25,7 +25,7 @@
 | TrainingCourseProgress | 课程学员状态、最近学习 | unique `(CourseId, UserId)`；`(CourseId, Status, UpdatedAt DESC, UserId)` | owner managed |
 | TrainingChapterProgress | 学员章节状态 | unique `(ChapterId, UserId)`；`(UserId, UpdatedAt DESC)` | owner managed |
 | TheoryQuestion | type/tag/关键词/更新时间游标 | tag normalized unique；binding `(QuestionId, TagId)`；pg_trgm title/bank；`(Type, UpdatedAt DESC, Id DESC)` | owner managed |
-| TheoryAnswerSheet | 用户比赛尝试、结果榜 | unique `(UserId, GameId, AttemptNumber)`；`(GameId, Status, SubmittedAt DESC, Id DESC)` | owner managed |
+| TheoryAnswerSheet | 用户比赛单次答卷、结果榜 | unique `(UserId, GameId)`；`(GameId, Status, SubmittedAt DESC, Id DESC)` | owner managed |
 | DeploymentQueueTicket | active claim、节点队列、终态历史 | active identity partial unique；`(Status, CreatedAt, Id)`；`(TargetNodeId, Status, CreatedAt, Id)`；terminal completion partial index | terminal 180 days |
 | ApiOperation | 幂等、lease claim、用户 operation 历史 | idempotency unique；`(Status, NextAttemptAt, Id)`；`(ActorUserId, CreatedAt DESC, Id DESC)` | terminal 90 days |
 | ImageDistributionRecord | 模板/节点当前状态 | unique `(ImageTemplateId, WorkerNodeId)`；`(WorkerNodeId, Status, LastCheckedAt)` | current fact |
@@ -55,7 +55,7 @@
 - Logs 按 UTC 月分区；TeamLabTrafficFlows 按 UTC 日分区。
 - 应用始终提前创建当前和后续两个分区；缺失分区是 health degradation。
 - partition DDL 使用 PostgreSQL advisory transaction lock。
-- 分区 drop 之前必须存在成功聚合 `DataGovernanceRun`，其 window、source count 和 aggregate checksum 匹配。
+- 分区 drop 前必须对候选分区完整重聚合；日志的 source count 与聚合 count 必须一致，流量的 flow/packet/byte 总量必须一致。随后在分区写锁内复核 source count、runtime window 和分区级 `DataGovernanceRun`，任何迟到写入都会阻止删除。
 - default partition 只作为迁移保护，Phase 4 退出前必须为空；生产 steady state 不允许数据长期落入 default partition。
 
 ## 5. 查询计划验收
@@ -71,3 +71,12 @@
 - 数据治理 worker 只处理 catalog 中的 operational data set。
 - migration contract 切换后若需回滚，使用切换前数据库备份和 WAL 恢复；不依赖有损 Down migration 重建旧 JSON 或旧分区结构。
 - 每次治理运行保留行数、窗口、分区、错误码和耗时，可证明哪些数据在何时因何策略被处理。
+
+## 7. 可执行证据
+
+- `DatabaseGovernanceMigrationTests` 从 Phase 3 schema 播种旧镜像 JSON、跨月 Logs、跨日 TeamLab flow 和 Theory bank，再迁移到 latest；验证 count/checksum、关系回填、分区路由、聚合幂等、advisory lease、清理门槛和唯一约束。
+- `seed-commercial-baseline.sql` 提供 CI 与 Commercial 两档确定性合成数据，不读取生产信息。
+- `capture-query-plans.ps1` 只允许目标数据库名包含 benchmark/test/phase4/ci，使用 `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` 生成制品。
+- `assert-query-plans.ps1` 验证七类主查询使用目标索引、无大范围 Seq Scan，Logs/TeamLab flow 只访问一个命中分区。
+- `.github/workflows/quality.yml` 在独立 PostgreSQL 16 服务上迁移、播种并执行 query-plan contract，并上传 JSON plan artifact；PostgreSQL 17 Commercial 数据量结果单独记录，不将共享 runner 延迟作为容量结论。
+- `rehearse-pitr.ps1` 使用隔离 PostgreSQL 16、WAL archive 和 base backup 恢复至 Contract 前时间点，并校验 migration head 与升级前后标记事实。

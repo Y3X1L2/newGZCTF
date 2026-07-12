@@ -4,6 +4,7 @@ using GZCTF.Middlewares;
 using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
+using GZCTF.Modules.Theory.Application;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,27 +19,19 @@ namespace GZCTF.Controllers;
 public class TheoryAdminController(
     AppDbContext context,
     IGameRepository gameRepository,
-    TheoryExamService theoryService) : ControllerBase
+    TheoryExamService theoryService,
+    ITheoryQuestionCatalog questionCatalog) : ControllerBase
 {
     [HttpGet("questions")]
     [ProducesResponseType(typeof(TheoryQuestionBankItemModel[]), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetQuestions(
         [FromQuery] string? keyword,
+        [FromQuery] string[]? tag,
         [FromQuery][Range(0, 5000)] int count = 1000,
         [FromQuery] int skip = 0,
         CancellationToken token = default)
     {
-        var query = context.TheoryQuestionBankItems.AsNoTracking();
-
-        if (!string.IsNullOrWhiteSpace(keyword))
-            query = query.Where(q => q.Title.Contains(keyword) || q.Content.Contains(keyword));
-
-        query = query.OrderByDescending(q => q.UpdatedAt);
-
-        if (count > 0)
-            query = query.Skip(skip).Take(count);
-
-        var items = await query.ToArrayAsync(token);
+        var items = await questionCatalog.SearchAsync(keyword, tag ?? [], skip, count, token);
 
         return Ok(items.Select(TheoryQuestionBankItemModel.FromEntity).ToArray());
     }
@@ -53,6 +46,8 @@ public class TheoryAdminController(
 
         var item = theoryService.ToBankQuestion(model);
         context.TheoryQuestionBankItems.Add(item);
+        await context.SaveChangesAsync(token);
+        await questionCatalog.SetTagsAsync(item, model.Tags, token);
         await context.SaveChangesAsync(token);
 
         return Ok(TheoryQuestionBankItemModel.FromEntity(item));
@@ -70,11 +65,12 @@ public class TheoryAdminController(
         if (theoryService.NormalizeAndValidate(model) is { } error)
             return BadRequest(new RequestResponse(error));
 
-        var item = await context.TheoryQuestionBankItems.FirstOrDefaultAsync(q => q.Id == id, token);
+        var item = await questionCatalog.FindForUpdateAsync(id, token);
         if (item is null)
             return NotFound(new RequestResponse("Question not found.", StatusCodes.Status404NotFound));
 
         theoryService.ToBankQuestion(model, item);
+        await questionCatalog.SetTagsAsync(item, model.Tags, token);
         await context.SaveChangesAsync(token);
 
         return Ok(TheoryQuestionBankItemModel.FromEntity(item));

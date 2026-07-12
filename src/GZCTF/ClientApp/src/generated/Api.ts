@@ -1725,6 +1725,8 @@ export interface AdminUserInfoModel {
 
 /** Log information (Admin) */
 export interface LogMessageModel {
+  /** @format int64 */
+  id?: number;
   /**
    * Log time
    * @format uint64
@@ -1739,6 +1741,11 @@ export interface LogMessageModel {
   msg?: string | null;
   /** Task status */
   status?: TaskStatus | null;
+}
+
+export interface LogMessagePageModel {
+  items?: LogMessageModel[];
+  nextCursor?: string | null;
 }
 
 /** Modify the participation information */
@@ -3275,6 +3282,11 @@ export interface Submission {
   flagContext?: FlagContext | null;
 }
 
+export interface SubmissionPageModel {
+  items?: Submission[];
+  nextCursor?: string | null;
+}
+
 export interface FlagContext {
   /** @format int32 */
   id?: number;
@@ -4773,6 +4785,7 @@ export interface TheoryQuestionEditModel {
   content?: string;
   options?: string[];
   answerIndexes?: number[];
+  tags?: string[];
 }
 
 export type TheoryPaperDetailModel = TheoryPaperEditModel & {
@@ -8504,15 +8517,11 @@ export class Api<
          * @default 50
          */
         count?: number;
-        /**
-         * @format int32
-         * @default 0
-         */
-        skip?: number;
+        cursor?: string | null;
       },
       params: RequestParams = {},
     ) =>
-      this.request<LogMessageModel[], RequestResponse>({
+      this.request<LogMessagePageModel, RequestResponse>({
         path: `/api/admin/logs`,
         method: "GET",
         query: query,
@@ -8538,16 +8547,12 @@ export class Api<
          * @default 50
          */
         count?: number;
-        /**
-         * @format int32
-         * @default 0
-         */
-        skip?: number;
+        cursor?: string | null;
       },
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
-      useSWR<LogMessageModel[], RequestResponse>(
+      useSWR<LogMessagePageModel, RequestResponse>(
         doFetch ? [`/api/admin/logs`, query] : null,
         options,
       ),
@@ -8571,15 +8576,11 @@ export class Api<
          * @default 50
          */
         count?: number;
-        /**
-         * @format int32
-         * @default 0
-         */
-        skip?: number;
+        cursor?: string | null;
       },
-      data?: LogMessageModel[] | Promise<LogMessageModel[]>,
+      data?: LogMessagePageModel | Promise<LogMessagePageModel>,
       options?: MutatorOptions,
-    ) => mutate<LogMessageModel[]>([`/api/admin/logs`, query], data, options),
+    ) => mutate<LogMessagePageModel>([`/api/admin/logs`, query], data, options),
 
     /**
      * @description Use this API to update team participation status, review application, requires Admin permission
@@ -12159,20 +12160,16 @@ export class Api<
         type?: AnswerResult | null;
         /**
          * @format int32
-         * @min 0
+         * @min 1
          * @max 100
          * @default 100
          */
         count?: number;
-        /**
-         * @format int32
-         * @default 0
-         */
-        skip?: number;
+        cursor?: string | null;
       },
       params: RequestParams = {},
     ) =>
-      this.request<Submission[], RequestResponse>({
+      this.request<SubmissionPageModel, RequestResponse>({
         path: `/api/game/${id}/submissions`,
         method: "GET",
         query: query,
@@ -12194,21 +12191,17 @@ export class Api<
         type?: AnswerResult | null;
         /**
          * @format int32
-         * @min 0
+         * @min 1
          * @max 100
          * @default 100
          */
         count?: number;
-        /**
-         * @format int32
-         * @default 0
-         */
-        skip?: number;
+        cursor?: string | null;
       },
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
-      useSWR<Submission[], RequestResponse>(
+      useSWR<SubmissionPageModel, RequestResponse>(
         doFetch ? [`/api/game/${id}/submissions`, query] : null,
         options,
       ),
@@ -12228,21 +12221,17 @@ export class Api<
         type?: AnswerResult | null;
         /**
          * @format int32
-         * @min 0
+         * @min 1
          * @max 100
          * @default 100
          */
         count?: number;
-        /**
-         * @format int32
-         * @default 0
-         */
-        skip?: number;
+        cursor?: string | null;
       },
-      data?: Submission[] | Promise<Submission[]>,
+      data?: SubmissionPageModel | Promise<SubmissionPageModel>,
       options?: MutatorOptions,
     ) =>
-      mutate<Submission[]>(
+      mutate<SubmissionPageModel>(
         [`/api/game/${id}/submissions`, query],
         data,
         options,

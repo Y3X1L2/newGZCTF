@@ -8,6 +8,18 @@
 
 **Tech Stack:** .NET 10、EF Core 10、Npgsql、PostgreSQL 17、pg_trgm、原生 range partition、xUnit、Testcontainers.PostgreSql、PowerShell。
 
+## Implementation Status
+
+- Baseline: `fe58ca95`（Phase 0-3 主线整合，2026-07-12）。
+- 当前状态：已完成（2026-07-12）。
+- 大单元 1：模型、索引、Theory tag、镜像引用和生命周期策略基座（已完成；build 0 warning/0 error，专项 17/17）。
+- 大单元 2：日志/流量分区、聚合、保留清理 worker 与治理指标（已完成；真实 PostgreSQL 分区、聚合幂等、租约互斥和清理门控验收通过）。
+- 大单元 3：高频历史查询游标分页和前端契约切换（已完成；build 0 warning/0 error，专项 6/6，strict TypeScript 通过）。
+- 大单元 4：数据库迁移、查询计划基准、运维与恢复文档（已完成；expand/backfill/contract migration 1/1，CI 查询计划 7/7）。
+- 大单元 5：全量验收、独立质量审查与问题集中修复（已完成；单元测试 488/488、集成测试 223/223、前端 strict TypeScript、EF model consistency、PITR 演练全部通过）。
+- 验证节奏：仅在每个大单元完成时集中验证；最终确认前执行一次独立 agent 规格与代码质量审查。
+- 独立审查确认的首次治理误删、镜像引用并发、Theory 增量回填、UTC 分区边界、聚合保留、终态清理门槛、治理审计证据和 CI query-plan artifact 共 8 项缺口已全部修复。
+
 ---
 
 ## 0. 当前代码事实与冻结决策
@@ -151,7 +163,7 @@ unchecked Flag 查询增加 `(Status, SubmitTimeUtc, Id)` partial index；partia
 
 - [ ] **Step 3: 建立课程、理论、AWDP 和运行索引**
 
-固定唯一关系：`TrainingCourseProgress(CourseId, UserId)`、`TrainingChapterProgress(ChapterId, UserId)`、`TheoryAnswerSheet(UserId, GameId, AttemptNumber)`、`AwdpRound(GameId, RoundNumber)`、`ImageDistributionRecord(ImageTemplateId, WorkerNodeId)`。部署历史使用 `(Status, CompletedAt DESC, Id DESC)` partial index覆盖 terminal 状态，节点队列使用 `(TargetNodeId, Status, CreatedAt, Id)`。
+固定唯一关系：`TrainingCourseProgress(CourseId, UserId)`、`TrainingChapterProgress(ChapterId, UserId)`、`TheoryAnswerSheet(UserId, GameId)`、`AwdpRound(GameId, RoundNumber)`、`ImageDistributionRecord(ImageTemplateId, WorkerNodeId)`。比赛理论考试是单次答卷语义；培训章节可重考由 `TrainingCourseChapterTheorySheet(UserId, ChapterId, AttemptNumber)` 单独承载，不在比赛答卷中增加未接入业务流程的尝试字段。部署历史使用 `(Status, CompletedAt DESC, Id DESC)` partial index覆盖 terminal 状态，节点队列使用 `(TargetNodeId, Status, CreatedAt, Id)`。
 
 - [ ] **Step 4: 缩减 AppDbContext**
 
@@ -472,7 +484,7 @@ Expected: 所有 plan contract 通过；benchmark 文档记录硬件、PostgreSQ
 - Modify: `docs/platform-commercialization-audit-progress.md`
 - Modify: `docs/commercialization/database-index-and-lifecycle-audit.md`
 
-- [ ] **Step 1: 运行全量自动检查**
+- [x] **Step 1: 运行全量自动检查**
 
 ```powershell
 dotnet test src/GZCTF.Test/GZCTF.Test.csproj -c Release
@@ -484,19 +496,20 @@ git diff --check
 
 Expected: 全部退出码为 0。
 
-- [ ] **Step 2: 做真实恢复演练**
+- [x] **Step 2: 做真实恢复演练**
 
 在专用验收库执行备份、迁移、写入、分区创建、聚合、清理、中断恢复和 point-in-time restore。对比核心业务表 count/checksum，确认 Submission、课程进度、理论答题和 AWDP 历史未被 retention worker 触碰。
 
-- [ ] **Step 3: 做阶段双重审查**
+2026-07-12 使用 `scripts/database/rehearse-pitr.ps1` 在隔离 PostgreSQL 16 容器完成真实 WAL archive/base backup/PITR：恢复目标为 `2026-07-12 10:28:44.597477+00`，恢复后 migration head 为 `20260712054103_CompleteTeamLabRuntimeReliability`，升级前标记保留 1 条，升级后标记为 0 条；临时容器与 volume 自动清理。
+
+- [x] **Step 3: 做阶段双重审查**
 
 规格审查逐项对照总纲 Phase 4、数据治理审计和本计划；代码质量审查重点检查重复索引、未限定 delete、offset 深分页、跨模块直接 DbContext 查询、EF attribute 回流和 migration 不可恢复切换。发现项全部修复并重跑相关门禁。
 
-- [ ] **Step 4: 更新进度并提交**
+- [x] **Step 4: 更新进度**
 
 ```powershell
 git add docs/commercialization docs/platform-commercialization-audit-progress.md
-git commit -m "docs: complete phase 4 database governance"
 ```
 
 ## Phase 4 退出门槛

@@ -25,6 +25,20 @@ jobs:
     name: Backend and contract quality
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gzctf_phase4_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gzctf_phase4_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
 
     steps:
       - name: Check out source
@@ -53,6 +67,24 @@ jobs:
 
       - name: Run backend integration tests
         run: dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj --configuration Release --no-build
+
+      - name: Verify database query-plan contracts
+        shell: pwsh
+        env:
+          PHASE4_CI_DATABASE: Host=127.0.0.1;Port=5432;Database=gzctf_phase4_ci;Username=postgres;Password=postgres
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.0.5
+          dotnet ef database update --project src/GZCTF/GZCTF.csproj --configuration Release --no-build --connection "$env:PHASE4_CI_DATABASE"
+          ./scripts/database/capture-query-plans.ps1 -ConnectionString "$env:PHASE4_CI_DATABASE" -OutputPath artifacts/phase-04-query-plans -Profile ci
+          ./scripts/database/assert-query-plans.ps1 -InputPath artifacts/phase-04-query-plans
+
+      - name: Upload database query-plan evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-04-query-plans-${{ github.sha }}
+          path: artifacts/phase-04-query-plans
+          if-no-files-found: warn
 
       - name: Resolve committed OpenAPI baseline
         shell: bash

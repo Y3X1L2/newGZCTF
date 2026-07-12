@@ -17,6 +17,8 @@ public class TheoryQuestionEditModel
     public List<string> Options { get; set; } = [];
 
     public List<int> AnswerIndexes { get; set; } = [];
+
+    public List<string> Tags { get; set; } = [];
 }
 
 public class TheoryQuestionBankItemModel : TheoryQuestionEditModel
@@ -37,6 +39,8 @@ public class TheoryQuestionBankItemModel : TheoryQuestionEditModel
             Content = item.Content,
             Options = item.Options,
             AnswerIndexes = item.AnswerIndexes,
+            Tags = item.TagBindings.Select(binding => binding.Tag.DisplayName)
+                .Order(StringComparer.OrdinalIgnoreCase).ToList(),
             CreatedAt = item.CreatedAt,
             UpdatedAt = item.UpdatedAt
         };

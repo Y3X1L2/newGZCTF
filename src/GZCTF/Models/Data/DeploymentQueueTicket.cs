@@ -1,12 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using GZCTF.Services.Fleet;
-using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Models.Data;
 
-[Index(nameof(Status), nameof(CreatedAt))]
-[Index(nameof(TargetNodeId), nameof(Status))]
 public class DeploymentQueueTicket
 {
     [Key] public Guid Id { get; set; } = Guid.CreateVersion7();

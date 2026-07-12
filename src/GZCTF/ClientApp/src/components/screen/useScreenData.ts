@@ -250,7 +250,7 @@ export const useGameScreenData = (numId: number) => {
   }, [initialEvents])
 
   useEffect(() => {
-    if (initialSubmissions) setLiveSubmissions(trimList(initialSubmissions, MAX_SUBMISSIONS))
+    if (initialSubmissions?.items) setLiveSubmissions(trimList(initialSubmissions.items, MAX_SUBMISSIONS))
   }, [initialSubmissions])
 
   useEffect(() => {

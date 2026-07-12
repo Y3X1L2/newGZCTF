@@ -37,6 +37,7 @@ public sealed class TeamLabContractMigrationTests : IAsyncLifetime
             await migrator.MigrateAsync(FoundationMigration);
             await migrator.MigrateAsync(ContractMigration);
             await migrator.MigrateAsync(ReliabilityMigration);
+            await migrator.MigrateAsync();
         }
 
         await using var migrated = CreateContext();

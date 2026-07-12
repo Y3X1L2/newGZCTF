@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
+using GZCTF.Modules.Runtime.Domain;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Services.Fleet;
@@ -36,8 +37,8 @@ public class ImageDistributionServiceTests
         var agent = new RecordingAgentClient();
         var service = CreateService(context, agent);
 
-        await service.DistributeTemplateAsync(dockerTemplate.Id, ImageDistributionReference.Game(1), CancellationToken.None);
-        await service.DistributeTemplateAsync(vmTemplate.Id, ImageDistributionReference.Game(1), CancellationToken.None);
+        await service.DistributeTemplateAsync(dockerTemplate.Id, ImageDistributionReferenceKey.Game(1), CancellationToken.None);
+        await service.DistributeTemplateAsync(vmTemplate.Id, ImageDistributionReferenceKey.Game(1), CancellationToken.None);
 
         Assert.Equal(new[] { dockerNode.Id, hybridNode.Id }.OrderBy(x => x),
             agent.PulledDockerNodes.OrderBy(x => x));
@@ -64,17 +65,17 @@ public class ImageDistributionServiceTests
             ImageHash = template.ImageHash!,
             ImageType = template.ImageType,
             Status = ImageDistributionStatus.Ready,
-            ReferenceCount = 1
+            References = [Reference(ImageDistributionReferenceKind.Game, 1)]
         });
         await context.SaveChangesAsync();
         var agent = new RecordingAgentClient();
         var service = CreateService(context, agent);
 
-        await service.DistributeTemplateAsync(template.Id, ImageDistributionReference.Game(2), CancellationToken.None);
+        await service.DistributeTemplateAsync(template.Id, ImageDistributionReferenceKey.Game(2), CancellationToken.None);
 
         Assert.Empty(agent.PulledDockerNodes);
         var record = await context.ImageDistributionRecords.SingleAsync();
-        Assert.Equal(2, record.ReferenceCount);
+        Assert.Equal(2, await context.ImageDistributionReferences.CountAsync());
         Assert.Equal(ImageDistributionStatus.Ready, record.Status);
     }
 
@@ -207,12 +208,11 @@ public class ImageDistributionServiceTests
             ImageHash = template.ImageHash!,
             ImageType = template.ImageType,
             Status = ImageDistributionStatus.Ready,
-            ReferenceCount = 2,
-            References = new List<ImageDistributionReference>
-            {
-                ImageDistributionReference.Game(1),
-                ImageDistributionReference.Game(2)
-            }
+            References =
+            [
+                Reference(ImageDistributionReferenceKind.Game, 1),
+                Reference(ImageDistributionReferenceKind.Game, 2)
+            ]
         });
         await context.SaveChangesAsync();
         var agent = new RecordingAgentClient();
@@ -222,7 +222,7 @@ public class ImageDistributionServiceTests
 
         var record = await context.ImageDistributionRecords.SingleAsync();
         Assert.Equal(ImageDistributionStatus.Ready, record.Status);
-        Assert.Equal(1, record.ReferenceCount);
+        Assert.Single(await context.ImageDistributionReferences.ToArrayAsync());
         Assert.Empty(agent.DeletedVmNodes);
     }
 
@@ -260,11 +260,7 @@ public class ImageDistributionServiceTests
             ImageHash = template.ImageHash!,
             ImageType = template.ImageType,
             Status = ImageDistributionStatus.Ready,
-            ReferenceCount = 1,
-            References = new List<ImageDistributionReference>
-            {
-                ImageDistributionReference.Game(1)
-            }
+            References = [Reference(ImageDistributionReferenceKind.Game, 1)]
         });
         await context.SaveChangesAsync();
         var agent = new RecordingAgentClient();
@@ -274,7 +270,7 @@ public class ImageDistributionServiceTests
 
         var record = await context.ImageDistributionRecords.SingleAsync();
         Assert.Equal(ImageDistributionStatus.CleanupPending, record.Status);
-        Assert.Equal(0, record.ReferenceCount);
+        Assert.Empty(await context.ImageDistributionReferences.ToArrayAsync());
         Assert.Empty(agent.DeletedVmNodes);
     }
 
@@ -291,8 +287,7 @@ public class ImageDistributionServiceTests
             ImageHash = template.ImageHash!,
             ImageType = template.ImageType,
             Status = ImageDistributionStatus.Ready,
-            ReferenceCount = 1,
-            References = [ImageDistributionReference.Game(999)]
+            References = [Reference(ImageDistributionReferenceKind.Game, 999)]
         });
         await context.SaveChangesAsync();
         var service = CreateService(context, new RecordingAgentClient());
@@ -301,7 +296,7 @@ public class ImageDistributionServiceTests
 
         var record = await context.ImageDistributionRecords.SingleAsync();
         Assert.Empty(record.References);
-        Assert.Equal(0, record.ReferenceCount);
+        Assert.Empty(await context.ImageDistributionReferences.ToArrayAsync());
         Assert.Equal(ImageDistributionStatus.CleanupPending, record.Status);
     }
 
@@ -338,6 +333,12 @@ public class ImageDistributionServiceTests
             artifacts,
             NullLogger<ImageDistributionService>.Instance);
     }
+
+    static ImageDistributionReference Reference(ImageDistributionReferenceKind kind, int resourceId) => new()
+    {
+        Kind = kind,
+        ResourceId = resourceId
+    };
 
     static IServiceScopeFactory BuildScopeFactory(AppDbContext context)
     {

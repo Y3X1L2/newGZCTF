@@ -549,9 +549,6 @@ public class TrainingCourseSubmission
     public string IpAddress { get; set; } = string.Empty;
 }
 
-[PrimaryKey(nameof(CourseId), nameof(UserId))]
-[Index(nameof(UserId), nameof(Status))]
-[Index(nameof(UpdatedAt))]
 public class TrainingCourseProgress
 {
     public int CourseId { get; set; }
@@ -595,8 +592,6 @@ public class TrainingCheckIn
     public DateTimeOffset CheckedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
-[PrimaryKey(nameof(ChapterId), nameof(UserId))]
-[Index(nameof(UserId), nameof(CompletedAt))]
 public class TrainingChapterProgress
 {
     public int ChapterId { get; set; }

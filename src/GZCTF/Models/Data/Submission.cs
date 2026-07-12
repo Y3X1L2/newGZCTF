@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
-using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Models.Data;
 
@@ -14,8 +13,6 @@ public enum ScoringSubmissionType : byte
     Custom = 4
 }
 
-[Index(nameof(UserId))]
-[Index(nameof(TeamId), nameof(ChallengeId), nameof(GameId))]
 public class Submission
 {
     [Key]

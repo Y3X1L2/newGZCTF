@@ -987,10 +987,17 @@ public class DeploymentTargetsController : ControllerBase
     [RequireAdmin]
     public async Task<IActionResult> List(
         [FromQuery] string? status = null,
-        [FromQuery] int page = 1,
+        [FromQuery] string? cursor = null,
         [FromQuery] int pageSize = 20)
     {
-        return Ok(await _queueView.ListAsync(status, page, pageSize, HttpContext.RequestAborted));
+        try
+        {
+            return Ok(await _queueView.ListAsync(status, cursor, pageSize, HttpContext.RequestAborted));
+        }
+        catch (Infrastructure.Persistence.Queries.InvalidTimeCursorException)
+        {
+            return BadRequest(new { code = "invalid_cursor", message = "The pagination cursor is invalid." });
+        }
     }
 
     [HttpGet("{id:guid}")]

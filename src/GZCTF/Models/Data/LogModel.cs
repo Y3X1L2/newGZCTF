@@ -5,8 +5,7 @@ namespace GZCTF.Models.Data;
 
 public class LogModel
 {
-    [Key]
-    public int Id { get; set; }
+    public long Id { get; set; }
 
     [Required]
     public DateTimeOffset TimeUtc { get; set; }

@@ -651,11 +651,21 @@ public class AdminController(
     /// <response code="403">Forbidden</response>
     [HttpGet("Logs")]
     [RequireAdmin]
-    [ProducesResponseType(typeof(LogMessageModel[]), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(LogMessagePageModel), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Logs([FromQuery] string? level = "All",
         [FromQuery][Range(0, 1000)] int count = 50,
-        [FromQuery] int skip = 0, CancellationToken token = default) =>
-        Ok(await logRepository.GetLogs(skip, count, level, token));
+        [FromQuery] string? cursor = null, CancellationToken token = default)
+    {
+        try
+        {
+            return Ok(await logRepository.GetLogs(cursor, count, level, token));
+        }
+        catch (Infrastructure.Persistence.Queries.InvalidTimeCursorException)
+        {
+            return BadRequest(new RequestResponse("invalid_cursor", StatusCodes.Status400BadRequest));
+        }
+    }
 
     /// <summary>
     /// Update participation status

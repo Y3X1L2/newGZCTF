@@ -2,16 +2,15 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
+using GZCTF.Infrastructure.Persistence.Queries;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Services.Fleet;
 
 public sealed class DeploymentQueueListResult
 {
-    public int Total { get; set; }
-    public int Page { get; set; }
-    public int PageSize { get; set; }
     public List<DeploymentQueueItemModel> Items { get; set; } = [];
+    public string? NextCursor { get; set; }
 }
 
 public sealed class DeploymentQueueItemModel
@@ -54,61 +53,100 @@ public class DeploymentQueueViewService(AppDbContext context)
         Converters = { new JsonStringEnumConverter() }
     };
 
-    public async Task<DeploymentQueueListResult> ListAsync(string? status, int page, int pageSize,
+    public async Task<DeploymentQueueListResult> ListAsync(string? status, string? cursor, int pageSize,
         CancellationToken token)
     {
-        page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
         var normalizedStatus = NormalizeStatusFilter(status);
+        var decoded = string.IsNullOrWhiteSpace(cursor) ? (GuidTimeCursor?)null : GuidTimeCursor.Decode(cursor);
 
-        var tickets = await context.DeploymentQueueTickets
+        var ticketQuery = context.DeploymentQueueTickets
             .AsNoTracking()
             .Include(t => t.TargetNode)
             .Include(t => t.DeploymentTarget).ThenInclude(t => t!.TargetNode)
+            .AsQueryable();
+        ticketQuery = ApplyTicketStatus(ticketQuery, normalizedStatus);
+        if (decoded is { } ticketCursor)
+            ticketQuery = ticketQuery.Where(item => item.CreatedAt < ticketCursor.Time ||
+                item.CreatedAt == ticketCursor.Time && item.Id.CompareTo(ticketCursor.Id) < 0);
+        var tickets = await ticketQuery
             .OrderByDescending(t => t.CreatedAt)
-            .Take(1000)
+            .ThenByDescending(t => t.Id)
+            .Take(pageSize + 1)
             .ToListAsync(token);
 
-        var ticketTargetIds = tickets
-            .Where(t => t.DeploymentTargetId.HasValue)
-            .Select(t => t.DeploymentTargetId!.Value)
-            .ToHashSet();
-
-        var targets = await context.DeploymentTargets
+        var targetQuery = context.DeploymentTargets
             .AsNoTracking()
             .Include(t => t.TargetNode)
-            .Where(t => !ticketTargetIds.Contains(t.Id))
+            .Where(target => !context.DeploymentQueueTickets.Any(ticket =>
+                ticket.DeploymentTargetId == target.Id))
+            .AsQueryable();
+        targetQuery = ApplyTargetStatus(targetQuery, normalizedStatus);
+        if (decoded is { } targetCursor)
+            targetQuery = targetQuery.Where(item => item.CreatedAt < targetCursor.Time ||
+                item.CreatedAt == targetCursor.Time && item.Id.CompareTo(targetCursor.Id) < 0);
+        var targets = await targetQuery
             .OrderByDescending(t => t.CreatedAt)
-            .Take(1000)
+            .ThenByDescending(t => t.Id)
+            .Take(pageSize + 1)
             .ToListAsync(token);
 
-        var pendingPositions = tickets
-            .Where(t => t.Status == DeploymentQueueTicketStatus.Pending)
-            .OrderBy(t => t.CreatedAt)
-            .ThenBy(t => t.Id)
-            .Select((t, index) => new { t.Id, Position = index + 1 })
-            .ToDictionary(t => t.Id, t => t.Position);
+        var pendingTickets = await context.DeploymentQueueTickets.AsNoTracking()
+            .Where(item => item.Status == DeploymentQueueTicketStatus.Pending)
+            .OrderBy(item => item.CreatedAt).ThenBy(item => item.Id)
+            .Select(item => item.Id)
+            .ToArrayAsync(token);
+        var pendingPositions = pendingTickets
+            .Select((id, index) => new { Id = id, Position = index + 1 })
+            .ToDictionary(item => item.Id, item => item.Position);
 
         var rows = tickets.Select(t => DeploymentQueueSource.FromTicket(t,
                 pendingPositions.GetValueOrDefault(t.Id)))
             .Concat(targets.Select(DeploymentQueueSource.FromTarget))
-            .Where(row => normalizedStatus is null || row.StatusKey == normalizedStatus)
             .OrderByDescending(row => row.CreatedAt)
-            .ThenBy(row => row.Id)
+            .ThenByDescending(row => row.Id)
+            .Take(pageSize + 1)
             .ToArray();
 
-        var pageRows = rows.Skip((page - 1) * pageSize).Take(pageSize).ToArray();
+        var pageRows = rows.Take(pageSize).ToArray();
         var lookup = await BuildLookupAsync(pageRows, token);
         var items = pageRows.Select(row => BuildItem(row, lookup)).ToList();
+        var nextCursor = rows.Length > pageSize && pageRows.Length > 0
+            ? new GuidTimeCursor(pageRows[^1].CreatedAt, pageRows[^1].Id).Encode()
+            : null;
 
         return new DeploymentQueueListResult
         {
-            Total = rows.Length,
-            Page = page,
-            PageSize = pageSize,
-            Items = items
+            Items = items,
+            NextCursor = nextCursor
         };
     }
+
+    static IQueryable<DeploymentQueueTicket> ApplyTicketStatus(
+        IQueryable<DeploymentQueueTicket> query,
+        string? status) => status switch
+    {
+        "pending" => query.Where(item => item.Status == DeploymentQueueTicketStatus.Pending),
+        "assigned" => query.Where(item => item.Status == DeploymentQueueTicketStatus.Assigned),
+        "running" => query.Where(item => item.Status == DeploymentQueueTicketStatus.Creating),
+        "completed" => query.Where(item => item.Status == DeploymentQueueTicketStatus.Completed),
+        "failed" => query.Where(item => item.Status == DeploymentQueueTicketStatus.Failed),
+        "cancelled" => query.Where(item => item.Status == DeploymentQueueTicketStatus.Cancelled),
+        _ => query
+    };
+
+    static IQueryable<DeploymentTarget> ApplyTargetStatus(
+        IQueryable<DeploymentTarget> query,
+        string? status) => status switch
+    {
+        "pending" => query.Where(item => item.Status == TargetStatus.Pending),
+        "assigned" => query.Where(item => item.Status == TargetStatus.Assigned),
+        "running" => query.Where(item => item.Status == TargetStatus.Creating || item.Status == TargetStatus.Running),
+        "completed" => query.Where(item => item.Status == TargetStatus.Completed),
+        "failed" => query.Where(item => item.Status == TargetStatus.Failed),
+        "cancelled" => query.Where(item => item.Status == TargetStatus.Cancelled),
+        _ => query
+    };
 
     static string? NormalizeStatusFilter(string? status)
     {

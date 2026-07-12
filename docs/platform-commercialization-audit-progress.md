@@ -251,3 +251,32 @@
 - 删除 Phase 2 基于旧 Penetration topology DTO 的无引用 `penetrationTopologyModel.tsx`，未恢复 Phase 3 已清理的旧 UX 契约测试或 compatibility API；对应架构预算同步收紧到当前组件边界。
 - 整合验证通过：solution build 0 warning / 0 error，单元测试 476/476，PostgreSQL 全量集成测试 222/222，前端 locale/strict TypeScript/架构扫描/production build/bundle budget 全部通过，EF 无 pending model changes，OpenAPI 26 breaking/11 additive 自测及基线兼容性通过。
 - 本次仅完成代码合并与主线同步，未部署、未连接或修改生产服务器。
+
+## 2026-07-12 Phase 4 实施启动
+
+- 实施基线为 `fe58ca95`，`main` 与 `origin/main` 一致且工作树干净。
+- 已对照总纲、Phase 4 实施计划、数据库索引与生命周期审计和当前代码重新核实范围；计划目标仍成立，但文件路径按 Phase 2/3 合并后的当前模块结构执行，不恢复旧服务或兼容 DTO。
+- Phase 4 按五个大单元推进：模型与生命周期基座、高频数据治理、稳定游标查询、迁移与基准、全量验收与独立质量审查。
+- 当前进入大单元 1：模块化 persistence、核心索引与唯一约束、Theory tag 正式关系、镜像引用关系化、retention catalog 和治理运行事实。
+- 验证按大单元集中执行，不对每个小改动反复运行全量测试；本阶段不部署、不连接或修改生产服务器。
+- Phase 4 大单元 1 已完成：目标 persistence mapping 已迁入 Ctf/Training/Theory/Runtime/Awdp/Audit 模块；Participation、课程进度、理论答题、AWDP、部署队列和镜像分发的唯一约束与主查询索引已进入 EF model。
+- Theory tag 已成为规范化实体与关系，提供 trim/空白合并/大写唯一键、标签筛选和管理 API；镜像分发引用已删除 JSON 与 `ReferenceCount` 双事实，改用关系表唯一约束和精确释放。
+- retention catalog 显式登记 owner-managed 核心事实和自动治理数据集，配置通过 `ValidateOnStart`；`DataGovernanceRun` 作为后续 worker 的可恢复审计事实。
+- 大单元 1 集中验证通过：solution build 0 warning/0 error，数据库边界、retention、Theory tag 和镜像分发专项 17/17。当前进入大单元 2：分区、聚合、保留清理 worker 与治理指标。
+- Phase 4 大单元 2 代码完成：Logs 按月、TeamLab raw flow 按日的固定分区定义已建立；flow 写入生成规范化 RFC1918 前缀和 SHA-256 指纹；日志、flow 与部署生命周期聚合使用幂等 upsert。
+- 治理 worker 使用 PostgreSQL session advisory lease，固定执行分区准备、闭窗聚合、聚合事实校验门控、过期分区 drop 和终态 `SKIP LOCKED` 限批清理；核心业务事实不在 cleaner 的可达路径中。
+- 治理运行写入 `DataGovernanceRun`，错误正文限制 2048 字符；metrics 只使用固定 data set/operation 标签。solution build 0 warning/0 error。
+- 分区路由和 worker 恢复的真实 PostgreSQL 集成验收依赖大单元 4 的 expand-migrate-contract schema，已明确合并到该单元集中执行；当前进入大单元 3 游标查询链路。
+- Phase 4 大单元 3 已完成：日志使用 `(TimeUtc, Id)`、提交使用 `(SubmitTimeUtc, Id)`、部署队列使用 `(CreatedAt, Guid)`、TeamLab flow 使用 `(CapturedAt, Id)` 稳定游标；非法游标返回明确 `invalid_cursor`。
+- 管理端日志、部署队列和比赛提交监控通过 cursor 栈保留上一页/下一页体验，不再请求总数或计算深 OFFSET；大屏数据 hook 已同步消费 `items` 响应。
+- 大单元 3 集中验证通过：solution build 0 warning/0 error，游标与队列专项 6/6，前端 strict TypeScript 通过。当前进入大单元 4 schema migration、PostgreSQL 集成验收、查询计划和 runbook。
+- Phase 4 大单元 4 已完成：迁移重写为真正的 Expand/Backfill/Contract。Expand 不删除旧事实；Backfill 建立关系事实和时间分区影子表并校验；Contract 在维护锁窗复制增量、验证 count/checksum、原子切换并清理旧 JSON/旧表。Down 明确要求备份/PITR，不提供有损反向压缩。
+- PostgreSQL 16 迁移验收 1/1 通过：覆盖重复 Participation 拒绝与修正后恢复、旧镜像 JSON 双引用、长题库迁移 tag、跨月 Logs、跨日 TeamLab flow、分区路由、唯一约束、聚合幂等、advisory lease、终态清理和“无聚合证明不删分区”。
+- 查询计划基线已建立 CI/Commercial 两档确定性合成数据；全新数据库 latest migration 后播种 42.5 万条 CI 事实，Submission、Participation、课程进度、Theory tag、部署队列、Logs、TeamLab flow 共 7/7 JSON plan contract 通过，Logs/flow 均只访问命中分区。
+- 迁移与治理 runbook 已覆盖并发索引预建、维护窗口、磁盘/WAL、default partition、失败重试、治理指标和 PITR 恢复。当前进入大单元 5 全量门禁和一次独立质量审查；仍未部署、未连接或修改生产服务器。
+- Phase 4 大单元 5 已完成。独立质量审查确认的 8 项问题已全部关闭：首次治理只按 retention 起点聚合导致旧分区误删、镜像分发记录创建与最后引用释放竞态、Backfill/Contract 窗口 Theory tag 丢失、非 UTC session 分区边界漂移、日志与部署聚合无限增长、TeamLab/queue 终态清理条件不足、分区审计行数与迁移 checksum 证据不足、CI 查询计划未留存 artifact。
+- 分区删除现执行候选分区完整重聚合，日志核对 count，TeamLab flow 核对 flow/packet/byte，总量通过后在分区写锁内复核 source rows、分区级治理证明和 runtime terminal window；删除与 `PartitionName/RowsDeleted` 审计在同一事务提交。
+- 镜像模板/节点使用 PostgreSQL advisory transaction lock 串行化记录创建、引用增加和最后引用释放；Contract 锁窗内补跑 Theory tag 增量回填，Backfill/Contract 强制 UTC，迁移 checksum 覆盖完整 JSON row 内容。
+- 最终门禁通过：solution build 0 warning/0 error，单元测试 488/488，PostgreSQL 集成测试 223/223，前端 strict TypeScript 通过，EF 无 pending model changes，query-plan contract 7/7，`git diff --check` 通过。
+- 真实 PostgreSQL 16 PITR 演练通过：WAL archive/base backup 后执行 Phase 4 Contract，恢复至 `2026-07-12 10:28:44.597477+00`；migration head 回到 Phase 3，升级前标记计数 1、升级后标记计数 0。演练脚本为 `scripts/database/rehearse-pitr.ps1`，临时容器和 volume 已自动清理。
+- Phase 4 已闭环完成；本阶段未部署、未连接或修改生产服务器。

@@ -5,6 +5,7 @@ using GZCTF.Modules.Identity.Application;
 using GZCTF.Modules.Content.Application;
 using GZCTF.Modules.Content.Contracts;
 using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Runtime.Domain;
 using GZCTF.Models.Request.Edit;
 using GZCTF.Models.Request.Game;
 using GZCTF.Models.Request.Training;
@@ -89,7 +90,7 @@ public class TrainingCourseAdminController(
             await imageDistribution.DistributeToCapableNodesAsync(
                 template,
                 token,
-                ImageDistributionReference.TrainingCourse(courseId));
+                ImageDistributionReferenceKey.TrainingCourse(courseId));
         }
         catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or IOException or AgentClientException)
         {

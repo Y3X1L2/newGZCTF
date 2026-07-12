@@ -4,6 +4,8 @@ using GZCTF.Hubs.Clients;
 using GZCTF.Repositories.Interface;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using GZCTF.Infrastructure.Persistence.Queries;
+using GZCTF.Models.Request.Game;
 
 namespace GZCTF.Repositories;
 
@@ -33,19 +35,33 @@ public class SubmissionRepository(
         Context.Submissions.Where(s => s.Status == AnswerResult.FlagSubmitted)
             .AsNoTracking().Include(e => e.Game).ToArrayAsync(token);
 
-    public Task<Submission[]> GetSubmissions(Game game, AnswerResult? type = null, int count = 100, int skip = 0,
+    public async Task<SubmissionPageModel> GetSubmissions(
+        Game game,
+        AnswerResult? type = null,
+        int count = 100,
+        string? cursor = null,
+        CancellationToken token = default)
+    {
+        var take = Math.Clamp(count, 1, 100);
+        var query = GetSubmissionsByType(type).Where(item => item.GameId == game.Id);
+        if (!string.IsNullOrWhiteSpace(cursor))
+        {
+            var decoded = TimeCursor.Decode(cursor);
+            query = query.Where(item => item.SubmitTimeUtc < decoded.Time ||
+                                        item.SubmitTimeUtc == decoded.Time && item.Id < decoded.Id);
+        }
+
+        var rows = await query.Take(take + 1).ToArrayAsync(token);
+        var items = rows.Take(take).ToArray();
+        var next = rows.Length > take && items.Length > 0
+            ? new TimeCursor(items[^1].SubmitTimeUtc, items[^1].Id).Encode()
+            : null;
+        return new SubmissionPageModel(items, next);
+    }
+
+    public Task<Submission[]> GetAllSubmissions(Game game, AnswerResult? type = null,
         CancellationToken token = default) =>
-        GetSubmissionsByType(type).Where(s => s.Game == game).TakeAllIfZero(count, skip).ToArrayAsync(token);
-
-    public Task<Submission[]> GetSubmissions(GameChallenge challenge, AnswerResult? type = null, int count = 100,
-        int skip = 0, CancellationToken token = default) =>
-        GetSubmissionsByType(type).Where(s => s.GameChallenge == challenge).TakeAllIfZero(count, skip)
-            .ToArrayAsync(token);
-
-    public Task<Submission[]> GetSubmissions(Participation team, AnswerResult? type = null, int count = 100,
-        int skip = 0, CancellationToken token = default) =>
-        GetSubmissionsByType(type).Where(s => s.TeamId == team.TeamId).TakeAllIfZero(count, skip)
-            .ToArrayAsync(token);
+        GetSubmissionsByType(type).Where(item => item.GameId == game.Id).ToArrayAsync(token);
 
     public Task SendSubmission(Submission submission)
         => hub.Clients.Group($"Game_{submission.GameId}").ReceivedSubmissions(submission);
@@ -57,6 +73,6 @@ public class SubmissionRepository(
             ? Context.Submissions.Where(s => s.Status == type.Value)
             : Context.Submissions;
 
-        return subs.OrderByDescending(s => s.SubmitTimeUtc);
+        return subs.AsNoTracking().OrderByDescending(s => s.SubmitTimeUtc).ThenByDescending(s => s.Id);
     }
 }

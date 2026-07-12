@@ -174,23 +174,23 @@ public class SubmissionRepositoryTests(GZCTFApplicationFactory factory, ITestOut
         }
 
         // Get all submissions
-        var allSubmissions = await submissionRepo.GetSubmissions(game, null, 100, 0, CancellationToken.None);
-        Assert.Equal(4, allSubmissions.Length);
+        var allSubmissions = await submissionRepo.GetSubmissions(game, null, 100, null, CancellationToken.None);
+        Assert.Equal(4, allSubmissions.Items.Count);
 
         // Get only accepted submissions
-        var acceptedSubmissions = await submissionRepo.GetSubmissions(game, AnswerResult.Accepted, 100, 0,
+        var acceptedSubmissions = await submissionRepo.GetSubmissions(game, AnswerResult.Accepted, 100, null,
             CancellationToken.None);
-        Assert.Equal(2, acceptedSubmissions.Length);
-        Assert.All(acceptedSubmissions, s => Assert.Equal(AnswerResult.Accepted, s.Status));
+        Assert.Equal(2, acceptedSubmissions.Items.Count);
+        Assert.All(acceptedSubmissions.Items, s => Assert.Equal(AnswerResult.Accepted, s.Status));
 
         // Get only wrong submissions
-        var wrongSubmissions = await submissionRepo.GetSubmissions(game, AnswerResult.WrongAnswer, 100, 0,
+        var wrongSubmissions = await submissionRepo.GetSubmissions(game, AnswerResult.WrongAnswer, 100, null,
             CancellationToken.None);
-        Assert.Equal(2, wrongSubmissions.Length);
-        Assert.All(wrongSubmissions, s => Assert.Equal(AnswerResult.WrongAnswer, s.Status));
+        Assert.Equal(2, wrongSubmissions.Items.Count);
+        Assert.All(wrongSubmissions.Items, s => Assert.Equal(AnswerResult.WrongAnswer, s.Status));
 
         output.WriteLine(
-            $"Filter test passed - All: {allSubmissions.Length}, Accepted: {acceptedSubmissions.Length}, Wrong: {wrongSubmissions.Length}");
+            $"Filter test passed - All: {allSubmissions.Items.Count}, Accepted: {acceptedSubmissions.Items.Count}, Wrong: {wrongSubmissions.Items.Count}");
     }
 
     [Fact]
@@ -264,19 +264,19 @@ public class SubmissionRepositoryTests(GZCTFApplicationFactory factory, ITestOut
         }
 
         // Get first 5
-        var firstPage = await submissionRepo.GetSubmissions(game, null, 5, 0, CancellationToken.None);
-        Assert.Equal(5, firstPage.Length);
+        var firstPage = await submissionRepo.GetSubmissions(game, null, 5, null, CancellationToken.None);
+        Assert.Equal(5, firstPage.Items.Count);
 
         // Get next 5
-        var secondPage = await submissionRepo.GetSubmissions(game, null, 5, 5, CancellationToken.None);
-        Assert.Equal(5, secondPage.Length);
+        var secondPage = await submissionRepo.GetSubmissions(game, null, 5, firstPage.NextCursor, CancellationToken.None);
+        Assert.Equal(5, secondPage.Items.Count);
 
         // Verify no overlap
-        var firstIds = firstPage.Select(s => s.Id).ToHashSet();
-        var secondIds = secondPage.Select(s => s.Id).ToHashSet();
+        var firstIds = firstPage.Items.Select(s => s.Id).ToHashSet();
+        var secondIds = secondPage.Items.Select(s => s.Id).ToHashSet();
         Assert.Empty(firstIds.Intersect(secondIds));
 
-        output.WriteLine($"Pagination test passed - First page: {firstPage.Length}, Second page: {secondPage.Length}");
+        output.WriteLine($"Pagination test passed - First page: {firstPage.Items.Count}, Second page: {secondPage.Items.Count}");
     }
 
     [Fact]

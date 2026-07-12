@@ -1,6 +1,6 @@
-import { ActionIcon, Badge, Box, Button, Group, Pagination, Select, Stack, Table, Text, Title, Tooltip } from '@mantine/core'
+import { ActionIcon, Badge, Box, Button, Group, Select, Stack, Table, Text, Title, Tooltip } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { mdiClose, mdiRefresh } from '@mdi/js'
+import { mdiArrowLeftBold, mdiArrowRightBold, mdiClose, mdiRefresh } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { useMemo, useState } from 'react'
 import useSWR from 'swr'
@@ -33,10 +33,8 @@ interface DeploymentQueueItem {
 }
 
 interface DeploymentQueueResponse {
-  total: number
-  page: number
-  pageSize: number
   items: DeploymentQueueItem[]
+  nextCursor?: string | null
 }
 
 const PAGE_SIZE = 20
@@ -80,15 +78,17 @@ function slotsLabel(item: DeploymentQueueItem) {
 
 export default function QueuePage() {
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
-  const [page, setPage] = useState(1)
+  const [cursorStack, setCursorStack] = useState<string[]>([])
+  const cursor = cursorStack.at(-1)
+  const page = cursorStack.length + 1
   const query = useMemo(() => {
     const params = new URLSearchParams({
-      page: page.toString(),
       pageSize: PAGE_SIZE.toString(),
     })
     if (statusFilter) params.set('status', statusFilter)
+    if (cursor) params.set('cursor', cursor)
     return `/api/v1/deployment-targets?${params.toString()}`
-  }, [page, statusFilter])
+  }, [cursor, statusFilter])
   const { data, isLoading, mutate } = useSWR(query, fetcher, {
     refreshInterval: 10000,
     keepPreviousData: true,
@@ -110,9 +110,7 @@ export default function QueuePage() {
   }
 
   const items = data?.items ?? []
-  const total = data?.total ?? 0
-  const pageSize = data?.pageSize ?? PAGE_SIZE
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const nextCursor = data?.nextCursor
 
   return (
     <AdminPage>
@@ -132,7 +130,7 @@ export default function QueuePage() {
               value={statusFilter}
               onChange={(value) => {
                 setStatusFilter(value)
-                setPage(1)
+                setCursorStack([])
               }}
               w={140}
             />
@@ -241,12 +239,27 @@ export default function QueuePage() {
             </Table>
           </Box>
         </YinyuTableShell>
-        {total > 0 && (
+        {(items.length > 0 || page > 1) && (
           <Group justify="space-between" mt="sm" wrap="wrap">
             <Text size="sm" className="yy-readable-text">
-              共 {total} 条记录
+              第 {page} 页
             </Text>
-            <Pagination value={data?.page ?? page} total={totalPages} onChange={setPage} />
+            <Group gap="xs">
+              <ActionIcon
+                aria-label="上一页"
+                disabled={cursorStack.length === 0}
+                onClick={() => setCursorStack((current) => current.slice(0, -1))}
+              >
+                <Icon path={mdiArrowLeftBold} size={1} />
+              </ActionIcon>
+              <ActionIcon
+                aria-label="下一页"
+                disabled={!nextCursor}
+                onClick={() => nextCursor && setCursorStack((current) => [...current, nextCursor])}
+              >
+                <Icon path={mdiArrowRightBold} size={1} />
+              </ActionIcon>
+            </Group>
           </Group>
         )}
       </Stack>

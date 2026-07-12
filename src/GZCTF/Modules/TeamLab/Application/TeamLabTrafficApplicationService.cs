@@ -1,13 +1,13 @@
-using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Net;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Services.Concurrency;
-using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
+using GZCTF.Infrastructure.Persistence.Queries;
 
 namespace GZCTF.Modules.TeamLab.Application;
 
@@ -43,24 +43,31 @@ public sealed class TeamLabTrafficApplicationService(
         await RefreshAsync(runtime, cancellationToken);
         var cursor = DecodeCursor(after);
         var take = Math.Clamp(limit, 1, 200);
-        var rows = await context.TeamLabTrafficFlows.AsNoTracking()
-            .Where(item => item.RuntimeId == runtime.Id && item.Generation == runtime.Generation && item.Id > cursor)
-            .OrderBy(item => item.Id)
+        var query = context.TeamLabTrafficFlows.AsNoTracking()
+            .Where(item => item.RuntimeId == runtime.Id && item.Generation == runtime.Generation);
+        if (cursor is { } decoded)
+            query = query.Where(item => item.CapturedAt > decoded.Time ||
+                                        item.CapturedAt == decoded.Time && item.Id > decoded.Id);
+        var rows = await query.OrderBy(item => item.CapturedAt).ThenBy(item => item.Id)
             .Take(take + 1)
             .Select(item => new
             {
                 item.Id, item.ShardId, item.NetworkId, item.SourceIp, item.SourcePort, item.DestinationIp,
-                item.DestinationPort, item.Protocol, item.Bytes, item.Packets, item.FirstSeenAt, item.LastSeenAt
+                item.DestinationPort, item.Protocol, item.Bytes, item.Packets, item.FirstSeenAt, item.LastSeenAt,
+                item.CapturedAt
             }).ToArrayAsync(cancellationToken);
         var shardPublicIds = runtime.Shards.ToDictionary(item => item.Id, item => item.PublicId);
         var networkKeys = runtime.Networks.ToDictionary(item => item.Id, item => item.TopologyKey);
         var page = rows.Take(take).Select(item => new TeamLabTrafficFlowProjectionModel(
-            EncodeCursor(item.Id),
+            new TimeCursor(item.CapturedAt, item.Id).Encode(),
             item.ShardId is { } shardId ? shardPublicIds.GetValueOrDefault(shardId) : Guid.Empty,
             item.NetworkId is { } networkId ? networkKeys.GetValueOrDefault(networkId) ?? string.Empty : string.Empty,
             item.SourceIp, item.SourcePort, item.DestinationIp, item.DestinationPort, item.Protocol,
             item.Bytes, item.Packets, item.FirstSeenAt, item.LastSeenAt)).ToArray();
-        return new TeamLabTrafficFlowPageModel(page, rows.Length > take ? EncodeCursor(page.Length == 0 ? cursor : rows[take - 1].Id) : null);
+        return new TeamLabTrafficFlowPageModel(page,
+            rows.Length > take && page.Length > 0
+                ? new TimeCursor(rows[take - 1].CapturedAt, rows[take - 1].Id).Encode()
+                : null);
     }
 
     public async Task<TeamLabCaptureModel> StartCaptureAsync(
@@ -231,25 +238,7 @@ public sealed class TeamLabTrafficApplicationService(
                     item.Cursor > cursor &&
                     !string.IsNullOrWhiteSpace(item.SourceIp) &&
                     !string.IsNullOrWhiteSpace(item.DestinationIp))
-                .Select(item => new TeamLabTrafficFlow
-                {
-                    RuntimeId = runtime.Id,
-                    Generation = runtime.Generation,
-                    SourceCursor = item.Cursor,
-                    ShardId = network.ShardId,
-                    NetworkId = network.Id,
-                    WorkerNodeId = network.WorkerNodeId,
-                    SourceIp = item.SourceIp,
-                    SourcePort = item.SourcePort,
-                    DestinationIp = item.DestinationIp,
-                    DestinationPort = item.DestinationPort,
-                    Protocol = item.Protocol,
-                    Bytes = item.Bytes,
-                    Packets = 1,
-                    FirstSeenAt = item.CapturedAt,
-                    LastSeenAt = item.CapturedAt,
-                    CapturedAt = item.CapturedAt
-                }));
+                .Select(item => CreateFlow(runtime, network, item)));
             network.FlowCursor = Math.Max(cursor, result.NextCursor);
             await context.SaveChangesAsync(cancellationToken);
         }
@@ -279,23 +268,14 @@ public sealed class TeamLabTrafficApplicationService(
         new(job.PublicId, job.Status, job.Scope, networkKey, job.MaxBytes, job.MaxSeconds, job.CapturedBytes,
             job.CreatedAt, job.StartedAt, job.CompletedAt, job.ExpiresAt, job.LastError);
 
-    private static string EncodeCursor(long id)
+    private static TimeCursor? DecodeCursor(string? cursor)
     {
-        Span<byte> bytes = stackalloc byte[8];
-        BinaryPrimitives.WriteInt64BigEndian(bytes, id);
-        return WebEncoders.Base64UrlEncode(bytes);
-    }
-
-    private static long DecodeCursor(string? cursor)
-    {
-        if (string.IsNullOrWhiteSpace(cursor)) return 0;
+        if (string.IsNullOrWhiteSpace(cursor)) return null;
         try
         {
-            var bytes = WebEncoders.Base64UrlDecode(cursor.Trim());
-            if (bytes.Length != 8) throw new FormatException();
-            return BinaryPrimitives.ReadInt64BigEndian(bytes);
+            return TimeCursor.Decode(cursor);
         }
-        catch (FormatException)
+        catch (InvalidTimeCursorException)
         {
             throw new TeamLabApiContractException("traffic_cursor_invalid", "The traffic cursor is invalid.", 400);
         }
@@ -316,4 +296,57 @@ public sealed class TeamLabTrafficApplicationService(
 
     private static string Hash(string value) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+
+    private static TeamLabTrafficFlow CreateFlow(
+        TeamLabRuntime runtime,
+        TeamLabRuntimeNetwork network,
+        TeamLabNodeFlowSample sample)
+    {
+        var sourceIp = NormalizeIp(sample.SourceIp);
+        var destinationIp = NormalizeIp(sample.DestinationIp);
+        var protocol = sample.Protocol.Trim().ToUpperInvariant();
+        var capturedAt = sample.CapturedAt.ToUniversalTime();
+        var fingerprintInput = string.Join('|', runtime.Id, runtime.Generation, network.Id,
+            sourceIp, sample.SourcePort, destinationIp, sample.DestinationPort, protocol,
+            capturedAt.UtcTicks, sample.Bytes, 1);
+
+        return new TeamLabTrafficFlow
+        {
+            RuntimeId = runtime.Id,
+            Generation = runtime.Generation,
+            SourceCursor = sample.Cursor,
+            ShardId = network.ShardId,
+            NetworkId = network.Id,
+            WorkerNodeId = network.WorkerNodeId,
+            SourceIp = sourceIp,
+            SourcePrefix = ToPrivatePrefix(sourceIp),
+            SourcePort = sample.SourcePort,
+            DestinationIp = destinationIp,
+            DestinationPrefix = ToPrivatePrefix(destinationIp),
+            DestinationPort = sample.DestinationPort,
+            Protocol = protocol,
+            Bytes = sample.Bytes,
+            Packets = 1,
+            FirstSeenAt = capturedAt,
+            LastSeenAt = capturedAt,
+            CapturedAt = capturedAt,
+            Fingerprint = SHA256.HashData(Encoding.UTF8.GetBytes(fingerprintInput))
+        };
+    }
+
+    private static string NormalizeIp(string value) =>
+        IPAddress.TryParse(value.Trim(), out var address) ? address.ToString() : value.Trim();
+
+    private static string ToPrivatePrefix(string value)
+    {
+        if (!IPAddress.TryParse(value, out var address))
+            return "unknown";
+
+        var bytes = address.GetAddressBytes();
+        if (bytes.Length == 4)
+            return $"{bytes[0]}.{bytes[1]}.{bytes[2]}.0/24";
+
+        Array.Clear(bytes, 8, bytes.Length - 8);
+        return $"{new IPAddress(bytes)}/64";
+    }
 }

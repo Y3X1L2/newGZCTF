@@ -21,6 +21,7 @@ namespace GZCTF.Migrations
                 .HasAnnotation("ProductVersion", "10.0.5")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("GZCTF.Models.Data.Attachment", b =>
@@ -78,14 +79,16 @@ namespace GZCTF.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("RoundId");
-
                     b.HasIndex("ServiceId");
 
                     b.HasIndex("TeamId");
 
                     b.HasIndex("RoundId", "ServiceId", "TeamId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("UX_AwdpCheckerTasks_Round_Service_Team");
+
+                    b.HasIndex("Status", "ExecutedAt", "Id")
+                        .HasDatabaseName("IX_AwdpCheckerTasks_Status_Executed_Id");
 
                     b.ToTable("AwdpCheckerTasks");
                 });
@@ -296,10 +299,13 @@ namespace GZCTF.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("GameId");
-
                     b.HasIndex("GameId", "RoundNumber")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("UX_AwdpRounds_Game_Round");
+
+                    b.HasIndex("GameId", "Status", "RoundNumber")
+                        .IsDescending(false, false, true)
+                        .HasDatabaseName("IX_AwdpRounds_Game_Status_Round");
 
                     b.ToTable("AwdpRounds");
                 });
@@ -613,13 +619,21 @@ namespace GZCTF.Migrations
 
                     b.HasIndex("ActiveIdentity")
                         .IsUnique()
+                        .HasDatabaseName("UX_DeploymentQueueTickets_ActiveIdentity")
                         .HasFilter("\"Status\" IN (0, 1, 2)");
 
                     b.HasIndex("DeploymentTargetId");
 
-                    b.HasIndex("Status", "CreatedAt");
+                    b.HasIndex("Status", "CompletedAt", "Id")
+                        .IsDescending(false, true, true)
+                        .HasDatabaseName("IX_DeploymentQueueTickets_Terminal_Completed_Id")
+                        .HasFilter("\"Status\" IN (3, 4, 5)");
 
-                    b.HasIndex("TargetNodeId", "Status");
+                    b.HasIndex("Status", "CreatedAt", "Id")
+                        .HasDatabaseName("IX_DeploymentQueueTickets_Status_Created_Id");
+
+                    b.HasIndex("TargetNodeId", "Status", "CreatedAt", "Id")
+                        .HasDatabaseName("IX_DeploymentQueueTickets_Node_Status_Created_Id");
 
                     b.ToTable("DeploymentQueueTickets");
                 });
@@ -1477,13 +1491,6 @@ namespace GZCTF.Migrations
                     b.Property<DateTimeOffset?>("LastCheckedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("ReferenceCount")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("References")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<byte>("Status")
                         .HasColumnType("smallint");
 
@@ -1492,12 +1499,12 @@ namespace GZCTF.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Status");
-
-                    b.HasIndex("WorkerNodeId");
-
                     b.HasIndex("ImageTemplateId", "WorkerNodeId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("UX_ImageDistributionRecords_Template_Node");
+
+                    b.HasIndex("WorkerNodeId", "Status", "LastCheckedAt")
+                        .HasDatabaseName("IX_ImageDistributionRecords_Node_Status_Checked");
 
                     b.ToTable("ImageDistributionRecords");
                 });
@@ -1610,11 +1617,14 @@ namespace GZCTF.Migrations
 
             modelBuilder.Entity("GZCTF.Models.Data.LogModel", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+                    b.Property<DateTimeOffset>("TimeUtc")
+                        .HasColumnType("timestamp with time zone");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
                     b.Property<string>("Exception")
                         .HasColumnType("text");
@@ -1640,14 +1650,19 @@ namespace GZCTF.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
-                    b.Property<DateTimeOffset>("TimeUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<string>("UserName")
                         .HasMaxLength(15)
                         .HasColumnType("character varying(15)");
 
-                    b.HasKey("Id");
+                    b.HasKey("TimeUtc", "Id");
+
+                    b.HasIndex("TimeUtc", "Id")
+                        .IsDescending()
+                        .HasDatabaseName("IX_Logs_Time_Id");
+
+                    b.HasIndex("Level", "TimeUtc", "Id")
+                        .IsDescending(false, true, true)
+                        .HasDatabaseName("IX_Logs_Level_Time_Id");
 
                     b.ToTable("Logs");
                 });
@@ -1683,13 +1698,16 @@ namespace GZCTF.Migrations
 
                     b.HasIndex("DivisionId");
 
-                    b.HasIndex("GameId");
-
                     b.HasIndex("TeamId");
 
                     b.HasIndex("WriteupId");
 
-                    b.HasIndex("TeamId", "GameId");
+                    b.HasIndex("GameId", "TeamId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Participations_Game_Team");
+
+                    b.HasIndex("GameId", "Status", "DivisionId", "TeamId")
+                        .HasDatabaseName("IX_Participations_Game_Status_Division_Team");
 
                     b.ToTable("Participations");
                 });
@@ -1979,21 +1997,31 @@ namespace GZCTF.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ChallengeId");
-
                     b.HasIndex("FlagId");
-
-                    b.HasIndex("GameId");
-
-                    b.HasIndex("ParticipationId");
 
                     b.HasIndex("ReviewedById");
 
-                    b.HasIndex("Status");
-
                     b.HasIndex("UserId");
 
-                    b.HasIndex("TeamId", "ChallengeId", "GameId");
+                    b.HasIndex("ParticipationId", "ChallengeId")
+                        .HasDatabaseName("IX_Submissions_Participation_Challenge");
+
+                    b.HasIndex("ChallengeId", "SubmitTimeUtc", "Id")
+                        .IsDescending(false, true, true)
+                        .HasDatabaseName("IX_Submissions_Challenge_Time_Id");
+
+                    b.HasIndex("GameId", "SubmitTimeUtc", "Id")
+                        .IsDescending(false, true, true)
+                        .HasDatabaseName("IX_Submissions_Game_Time_Id");
+
+                    b.HasIndex("Status", "SubmitTimeUtc", "Id")
+                        .IsDescending(false, true, true)
+                        .HasDatabaseName("IX_Submissions_Unchecked_Time_Id")
+                        .HasFilter("\"Status\" = 'FlagSubmitted'");
+
+                    b.HasIndex("TeamId", "SubmitTimeUtc", "Id")
+                        .IsDescending(false, true, true)
+                        .HasDatabaseName("IX_Submissions_Team_Time_Id");
 
                     b.ToTable("Submissions");
                 });
@@ -2651,6 +2679,9 @@ namespace GZCTF.Migrations
 
             modelBuilder.Entity("GZCTF.Models.Data.TeamLabTrafficFlow", b =>
                 {
+                    b.Property<DateTimeOffset>("CapturedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bigint");
@@ -2660,9 +2691,6 @@ namespace GZCTF.Migrations
                     b.Property<long>("Bytes")
                         .HasColumnType("bigint");
 
-                    b.Property<DateTimeOffset>("CapturedAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<string>("DestinationIp")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -2670,6 +2698,15 @@ namespace GZCTF.Migrations
 
                     b.Property<int?>("DestinationPort")
                         .HasColumnType("integer");
+
+                    b.Property<string>("DestinationPrefix")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<byte[]>("Fingerprint")
+                        .IsRequired()
+                        .HasColumnType("bytea");
 
                     b.Property<DateTimeOffset>("FirstSeenAt")
                         .HasColumnType("timestamp with time zone");
@@ -2708,21 +2745,31 @@ namespace GZCTF.Migrations
                     b.Property<int?>("SourcePort")
                         .HasColumnType("integer");
 
+                    b.Property<string>("SourcePrefix")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<Guid?>("WorkerNodeId")
                         .HasColumnType("uuid");
 
-                    b.HasKey("Id");
+                    b.HasKey("CapturedAt", "Id");
 
                     b.HasIndex("NetworkId");
 
                     b.HasIndex("WorkerNodeId");
 
-                    b.HasIndex("RuntimeId", "CapturedAt");
+                    b.HasIndex("ShardId", "CapturedAt", "Id")
+                        .IsDescending(false, true, true)
+                        .HasDatabaseName("IX_TeamLabFlows_Shard_Time_Id");
 
-                    b.HasIndex("ShardId", "CapturedAt");
+                    b.HasIndex("CapturedAt", "RuntimeId", "Generation", "Fingerprint")
+                        .IsUnique()
+                        .HasDatabaseName("UX_TeamLabFlows_Time_Runtime_Generation_Fingerprint");
 
-                    b.HasIndex(new[] { "RuntimeId", "Generation", "NetworkId", "SourceCursor" }, "UX_TeamLabFlow_SourceCursor")
-                        .IsUnique();
+                    b.HasIndex("RuntimeId", "Generation", "CapturedAt", "Id")
+                        .IsDescending(false, false, true, true)
+                        .HasDatabaseName("IX_TeamLabFlows_Runtime_Generation_Time_Id");
 
                     b.ToTable("TeamLabTrafficFlows");
                 });
@@ -2836,14 +2883,16 @@ namespace GZCTF.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("GameId");
-
                     b.HasIndex("PaperId");
 
                     b.HasIndex("ParticipationId");
 
                     b.HasIndex("UserId", "GameId")
                         .IsUnique();
+
+                    b.HasIndex("GameId", "Status", "SubmittedAt", "Id")
+                        .IsDescending(false, false, true, true)
+                        .HasDatabaseName("IX_TheoryAnswerSheets_Game_Status_Submitted_Id");
 
                     b.ToTable("TheoryAnswerSheets");
                 });
@@ -2979,7 +3028,21 @@ namespace GZCTF.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Type", "BankName");
+                    b.HasIndex("BankName")
+                        .HasDatabaseName("IX_TheoryQuestions_Bank_Trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("BankName"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("BankName"), new[] { "gin_trgm_ops" });
+
+                    b.HasIndex("Title")
+                        .HasDatabaseName("IX_TheoryQuestions_Title_Trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Title"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Title"), new[] { "gin_trgm_ops" });
+
+                    b.HasIndex("Type", "UpdatedAt", "Id")
+                        .IsDescending(false, true, true)
+                        .HasDatabaseName("IX_TheoryQuestions_Type_Updated_Id");
 
                     b.ToTable("TheoryQuestionBankItems");
                 });
@@ -3047,7 +3110,9 @@ namespace GZCTF.Migrations
 
                     b.HasKey("ChapterId", "UserId");
 
-                    b.HasIndex("UserId", "CompletedAt");
+                    b.HasIndex("UserId", "UpdatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("IX_TrainingChapterProgress_User_Updated");
 
                     b.ToTable("TrainingChapterProgresses");
                 });
@@ -3592,9 +3657,13 @@ namespace GZCTF.Migrations
 
                     b.HasKey("CourseId", "UserId");
 
-                    b.HasIndex("UpdatedAt");
+                    b.HasIndex("UserId", "UpdatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("IX_TrainingCourseProgress_User_Updated");
 
-                    b.HasIndex("UserId", "Status");
+                    b.HasIndex("CourseId", "Status", "UpdatedAt", "UserId")
+                        .IsDescending(false, false, true, false)
+                        .HasDatabaseName("IX_TrainingCourseProgress_Course_Status_Updated_User");
 
                     b.ToTable("TrainingCourseProgresses");
                 });
@@ -4248,6 +4317,116 @@ namespace GZCTF.Migrations
                     b.ToTable("ApiOperations", (string)null);
                 });
 
+            modelBuilder.Entity("GZCTF.Modules.Audit.Domain.DataGovernanceRun", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("Cutoff")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DataSet")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ErrorDetail")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("LeaseOwner")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("PartitionName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<long>("RowsAggregated")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("RowsDeleted")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("RowsRead")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte>("Status")
+                        .HasColumnType("smallint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DataSet", "StartedAt", "Id")
+                        .IsDescending(false, true, true);
+
+                    b.HasIndex("Status", "CompletedAt", "Id");
+
+                    b.ToTable("DataGovernanceRuns", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Audit.Domain.DeploymentLifecycleAggregate", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("BucketStart")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Count")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("DurationCount")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("DurationMaxMilliseconds")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("DurationTotalMilliseconds")
+                        .HasColumnType("bigint");
+
+                    b.Property<byte>("Kind")
+                        .HasColumnType("smallint");
+
+                    b.Property<byte>("Status")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("WorkerNodeId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BucketStart", "Kind", "Status", "WorkerNodeId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_DeploymentLifecycleAggregates_Dimensions");
+
+                    b.ToTable("DeploymentLifecycleAggregates", (string)null);
+                });
+
             modelBuilder.Entity("GZCTF.Modules.Audit.Domain.ExternalApiRequestAudit", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4330,6 +4509,42 @@ namespace GZCTF.Migrations
                     b.HasIndex("TraceId");
 
                     b.ToTable("ExternalApiRequestAudits", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Audit.Domain.OperationalLogAggregate", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("BucketStart")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Count")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasMaxLength(15)
+                        .HasColumnType("character varying(15)");
+
+                    b.Property<string>("Logger")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BucketStart", "Level", "Logger")
+                        .IsUnique()
+                        .HasDatabaseName("UX_OperationalLogAggregates_Bucket_Level_Logger");
+
+                    b.ToTable("OperationalLogAggregates", (string)null);
                 });
 
             modelBuilder.Entity("GZCTF.Modules.Content.Domain.ImageImportJob", b =>
@@ -4621,6 +4836,36 @@ namespace GZCTF.Migrations
                     b.HasIndex("TeamId");
 
                     b.ToTable("PenetrationTeamRuntimeBindings", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Runtime.Domain.ImageDistributionReference", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DistributionRecordId")
+                        .HasColumnType("uuid");
+
+                    b.Property<byte>("Kind")
+                        .HasColumnType("smallint");
+
+                    b.Property<int>("ResourceId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Kind", "ResourceId")
+                        .HasDatabaseName("IX_ImageDistributionReferences_Kind_Resource");
+
+                    b.HasIndex("DistributionRecordId", "Kind", "ResourceId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ImageDistributionReferences_Record_Kind_Resource");
+
+                    b.ToTable("ImageDistributionReferences", (string)null);
                 });
 
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabNetworkLease", b =>
@@ -4979,6 +5224,114 @@ namespace GZCTF.Migrations
                         .IsUnique();
 
                     b.ToTable("TeamLabTopologyReleases", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabTrafficFlowAggregate", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("BucketStart")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Bytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("DestinationPrefix")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<long>("FlowCount")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Generation")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("NetworkId")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("PacketCount")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Protocol")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<int>("RuntimeId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ShardId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SourcePrefix")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RuntimeId", "Generation", "BucketStart")
+                        .HasDatabaseName("IX_TeamLabFlowAggregates_Runtime_Generation_Bucket");
+
+                    b.HasIndex("BucketStart", "RuntimeId", "Generation", "ShardId", "NetworkId", "Protocol", "SourcePrefix", "DestinationPrefix")
+                        .IsUnique()
+                        .HasDatabaseName("UX_TeamLabFlowAggregates_Dimensions");
+
+                    b.ToTable("TeamLabTrafficFlowAggregates", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Theory.Domain.TheoryQuestionTag", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("UX_TheoryQuestionTags_NormalizedName");
+
+                    b.ToTable("TheoryQuestionTags", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Theory.Domain.TheoryQuestionTagBinding", b =>
+                {
+                    b.Property<int>("QuestionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TagId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("QuestionId", "TagId");
+
+                    b.HasIndex("TagId", "QuestionId")
+                        .HasDatabaseName("IX_TheoryQuestionTagBindings_Tag_Question");
+
+                    b.ToTable("TheoryQuestionTagBindings", (string)null);
                 });
 
             modelBuilder.Entity("GZCTF.Modules.Training.Domain.TrainingCourseImageTemplateBinding", b =>
@@ -6928,6 +7281,17 @@ namespace GZCTF.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("GZCTF.Modules.Runtime.Domain.ImageDistributionReference", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.ImageDistributionRecord", "DistributionRecord")
+                        .WithMany("References")
+                        .HasForeignKey("DistributionRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DistributionRecord");
+                });
+
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabNetworkLease", b =>
                 {
                     b.HasOne("GZCTF.Models.Data.TeamLabRuntime", null)
@@ -7038,6 +7402,23 @@ namespace GZCTF.Migrations
                         .IsRequired();
 
                     b.Navigation("Topology");
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Theory.Domain.TheoryQuestionTagBinding", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.TheoryQuestionBankItem", null)
+                        .WithMany("TagBindings")
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Modules.Theory.Domain.TheoryQuestionTag", "Tag")
+                        .WithMany("Questions")
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Tag");
                 });
 
             modelBuilder.Entity("GZCTF.Modules.Training.Domain.TrainingCourseImageTemplateBinding", b =>
@@ -7192,6 +7573,11 @@ namespace GZCTF.Migrations
                     b.Navigation("Submissions");
                 });
 
+            modelBuilder.Entity("GZCTF.Models.Data.ImageDistributionRecord", b =>
+                {
+                    b.Navigation("References");
+                });
+
             modelBuilder.Entity("GZCTF.Models.Data.Participation", b =>
                 {
                     b.Navigation("FirstSolves");
@@ -7253,6 +7639,11 @@ namespace GZCTF.Migrations
             modelBuilder.Entity("GZCTF.Models.Data.TheoryPaper", b =>
                 {
                     b.Navigation("Questions");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.TheoryQuestionBankItem", b =>
+                {
+                    b.Navigation("TagBindings");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.TrainingCourse", b =>
@@ -7322,6 +7713,11 @@ namespace GZCTF.Migrations
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabTopologyNetwork", b =>
                 {
                     b.Navigation("Interfaces");
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Theory.Domain.TheoryQuestionTag", b =>
+                {
+                    b.Navigation("Questions");
                 });
 #pragma warning restore 612, 618
         }

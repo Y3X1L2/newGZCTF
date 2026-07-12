@@ -1,15 +1,11 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
-using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Models.Data;
 
 /// <summary>
 /// Participation information
 /// </summary>
-[Index(nameof(GameId))]
-[Index(nameof(TeamId))]
-[Index(nameof(TeamId), nameof(GameId))]
 public class Participation
 {
     [Key]

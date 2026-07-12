@@ -18,6 +18,7 @@ export interface TheoryQuestionEditModel {
   content: string
   options: string[]
   answerIndexes: number[]
+  tags?: string[]
 }
 
 export interface TheoryQuestionBankItemModel extends TheoryQuestionEditModel {
@@ -114,11 +115,11 @@ export interface TheoryResultsModel {
 const request = api.request
 
 export const theoryAdminApi = {
-  getQuestions: (keyword?: string, count = 1000) =>
+  getQuestions: (keyword?: string, count = 1000, tag?: string[]) =>
     request<TheoryQuestionBankItemModel[], unknown>({
       path: '/api/admin/theory/questions',
       method: 'GET',
-      query: { keyword, count },
+      query: { keyword, count, tag },
     }),
 
   createQuestion: (data: TheoryQuestionEditModel) =>

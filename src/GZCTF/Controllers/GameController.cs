@@ -16,6 +16,7 @@ using GZCTF.Services.Concurrency;
 using GZCTF.Services.Cache;
 using GZCTF.Services.Config;
 using GZCTF.Services.Fleet;
+using GZCTF.Infrastructure.Persistence.Queries;
 using GZCTF.Storage.Interface;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -467,16 +468,17 @@ public class GameController(
     /// <param name="id">Game ID</param>
     /// <param name="type">Submission type</param>
     /// <param name="count"></param>
-    /// <param name="skip"></param>
+    /// <param name="cursor"></param>
     /// <param name="token"></param>
     /// <response code="200">Successfully retrieved game submissions</response>
     /// <response code="400">Game not found</response>
     [RequireMonitor]
     [HttpGet("{id:int}/Submissions")]
-    [ProducesResponseType(typeof(Submission[]), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(SubmissionPageModel), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Submissions([FromRoute] int id, [FromQuery] AnswerResult? type = null,
-        [FromQuery][Range(0, 100)] int count = 100, [FromQuery] int skip = 0, CancellationToken token = default)
+        [FromQuery][Range(1, 100)] int count = 100, [FromQuery] string? cursor = null,
+        CancellationToken token = default)
     {
         var game = await gameRepository.GetGameById(id, token);
 
@@ -489,22 +491,50 @@ public class GameController(
 
         if (game.GameType is not (GameType.Penetration or GameType.Mixed))
         {
-            var gameSubmissions = await submissionRepository.GetSubmissions(game, type, count, skip, token);
-            return Ok(gameSubmissions);
+            try
+            {
+                return Ok(await submissionRepository.GetSubmissions(game, type, count, cursor, token));
+            }
+            catch (InvalidTimeCursorException)
+            {
+                return BadRequest(new RequestResponse("invalid_cursor", StatusCodes.Status400BadRequest));
+            }
         }
 
-        var pageSize = count <= 0 ? 0 : Math.Min(count, 100);
-        var fetchCount = pageSize <= 0 ? 0 : Math.Max(0, skip) + pageSize;
-        var submissions = await submissionRepository.GetSubmissions(game, type, fetchCount, 0, token);
+        TimeCursor? decodedCursor;
+        try
+        {
+            decodedCursor = string.IsNullOrWhiteSpace(cursor) ? null : TimeCursor.Decode(cursor);
+        }
+        catch (InvalidTimeCursorException)
+        {
+            return BadRequest(new RequestResponse("invalid_cursor", StatusCodes.Status400BadRequest));
+        }
+
+        var pageSize = Math.Clamp(count, 1, 100);
+        var standardQuery = dbContext.Submissions.AsNoTracking().Where(item => item.GameId == id);
+        if (type is not null)
+            standardQuery = standardQuery.Where(item => item.Status == type.Value);
+        if (decodedCursor is { } standardCursor)
+            standardQuery = standardQuery.Where(item => item.SubmitTimeUtc < standardCursor.Time ||
+                item.SubmitTimeUtc == standardCursor.Time && 2L * item.Id < standardCursor.Id);
+        var submissions = await standardQuery
+            .OrderByDescending(item => item.SubmitTimeUtc).ThenByDescending(item => item.Id)
+            .Take(pageSize + 1)
+            .ToArrayAsync(token);
 
         var penetrationQuery = dbContext.PenetrationSubmissions.AsNoTracking()
             .Where(s => s.GameId == id);
         if (type is not null)
             penetrationQuery = penetrationQuery.Where(s => s.Status == type.Value);
+        if (decodedCursor is { } penetrationCursor)
+            penetrationQuery = penetrationQuery.Where(item => item.SubmittedAt < penetrationCursor.Time ||
+                item.SubmittedAt == penetrationCursor.Time && 2L * item.Id + 1 < penetrationCursor.Id);
 
         var penetrationRows = await penetrationQuery
             .OrderByDescending(s => s.SubmittedAt)
-            .Take(fetchCount <= 0 ? int.MaxValue : fetchCount)
+            .ThenByDescending(s => s.Id)
+            .Take(pageSize + 1)
             .Select(s => new
             {
                 Submission = s,
@@ -540,12 +570,18 @@ public class GameController(
                 DisplayChallengeName = "[渗透] " + row.NodeName + " / " + row.ItemTitle
             }).ToArray();
 
-        var merged = submissions.Concat(penetrationSubmissions)
-            .OrderByDescending(s => s.SubmitTimeUtc)
-            .Skip(Math.Max(0, skip))
+        var rows = submissions.Select(item => new SubmissionPageRow(item.SubmitTimeUtc, 2L * item.Id, item))
+            .Concat(penetrationRows.Zip(penetrationSubmissions,
+                (row, item) => new SubmissionPageRow(row.Submission.SubmittedAt, 2L * row.Submission.Id + 1, item)))
+            .OrderByDescending(item => item.Time)
+            .ThenByDescending(item => item.SortId)
+            .Take(pageSize + 1)
             .ToArray();
-
-        return Ok(pageSize <= 0 ? merged : merged.Take(pageSize).ToArray());
+        var items = rows.Take(pageSize).ToArray();
+        var nextCursor = rows.Length > pageSize && items.Length > 0
+            ? new TimeCursor(items[^1].Time, items[^1].SortId).Encode()
+            : null;
+        return Ok(new SubmissionPageModel(items.Select(item => item.Submission).ToArray(), nextCursor));
     }
 
     /// <summary>
@@ -969,7 +1005,7 @@ public class GameController(
         if (DateTimeOffset.UtcNow < game.StartTimeUtc)
             return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Game_NotStarted)]));
 
-        var submissions = await submissionRepository.GetSubmissions(game, count: 0, token: token);
+        var submissions = await submissionRepository.GetAllSubmissions(game, token: token);
 
         var stream = excelHelper.GetSubmissionExcel(submissions);
         stream.Seek(0, SeekOrigin.Begin);
@@ -1922,4 +1958,6 @@ public class GameController(
         int GameId,
         Guid UserId,
         int ChallengeId);
+
+    private sealed record SubmissionPageRow(DateTimeOffset Time, long SortId, Submission Submission);
 }

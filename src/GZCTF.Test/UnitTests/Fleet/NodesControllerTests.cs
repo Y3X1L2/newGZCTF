@@ -494,7 +494,7 @@ public class NodesControllerTests
     }
 
     [Fact]
-    public async Task DeploymentTargetsController_List_ReturnsRequestedPage()
+    public async Task DeploymentTargetsController_List_ReturnsStableCursorPage()
     {
         await using var context = CreateContext();
         var baseTime = DateTimeOffset.Parse("2026-07-09T00:00:00Z");
@@ -520,13 +520,14 @@ public class NodesControllerTests
             HttpContext = new DefaultHttpContext()
         };
 
-        var result = await controller.List(page: 2, pageSize: 2);
+        var firstResult = await controller.List(pageSize: 2);
+        var firstOk = Assert.IsType<OkObjectResult>(firstResult);
+        var firstPage = Assert.IsType<DeploymentQueueListResult>(firstOk.Value);
+        Assert.NotNull(firstPage.NextCursor);
+
+        var result = await controller.List(cursor: firstPage.NextCursor, pageSize: 2);
         var ok = Assert.IsType<OkObjectResult>(result);
         var list = Assert.IsType<DeploymentQueueListResult>(ok.Value);
-
-        Assert.Equal(5, list.Total);
-        Assert.Equal(2, list.Page);
-        Assert.Equal(2, list.PageSize);
         Assert.Equal(
             [
                 Guid.Parse("00000000-0000-0000-0000-000000000003"),

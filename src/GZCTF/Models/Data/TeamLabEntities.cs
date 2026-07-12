@@ -363,10 +363,6 @@ public class TeamLabEvent
     public TeamLabRuntime Runtime { get; set; } = null!;
 }
 
-[Index(nameof(RuntimeId), nameof(CapturedAt))]
-[Index(nameof(ShardId), nameof(CapturedAt))]
-[Index(nameof(RuntimeId), nameof(Generation), nameof(NetworkId), nameof(SourceCursor),
-    Name = "UX_TeamLabFlow_SourceCursor", IsUnique = true)]
 public class TeamLabTrafficFlow
 {
     [Key] public long Id { get; set; }
@@ -385,9 +381,13 @@ public class TeamLabTrafficFlow
 
     [MaxLength(64)] public string SourceIp { get; set; } = string.Empty;
 
+    [MaxLength(64)] public string SourcePrefix { get; set; } = string.Empty;
+
     public int? SourcePort { get; set; }
 
     [MaxLength(64)] public string DestinationIp { get; set; } = string.Empty;
+
+    [MaxLength(64)] public string DestinationPrefix { get; set; } = string.Empty;
 
     public int? DestinationPort { get; set; }
 
@@ -402,6 +402,8 @@ public class TeamLabTrafficFlow
     public DateTimeOffset LastSeenAt { get; set; } = DateTimeOffset.UtcNow;
 
     public DateTimeOffset CapturedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public byte[] Fingerprint { get; set; } = [];
 
     public TeamLabRuntime Runtime { get; set; } = null!;
 

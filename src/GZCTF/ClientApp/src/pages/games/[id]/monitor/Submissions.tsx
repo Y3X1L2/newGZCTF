@@ -65,7 +65,10 @@ const Submissions: FC = () => {
   const { id } = useParams()
   const numId = parseInt(id ?? '-1')
 
-  const [activePage, setPage] = useState(1)
+  const [cursorStack, setCursorStack] = useState<string[]>([])
+  const [nextCursor, setNextCursor] = useState<string | null>()
+  const cursor = cursorStack.at(-1)
+  const activePage = cursorStack.length + 1
 
   const [, update] = useState(new Date())
   const newSubmissions = useRef<Submission[]>([])
@@ -93,9 +96,10 @@ const Submissions: FC = () => {
         const res = await api.game.gameSubmissions(numId, {
           type: type === 'All' ? undefined : type,
           count: ITEM_COUNT_PER_PAGE,
-          skip: (activePage - 1) * ITEM_COUNT_PER_PAGE,
+          cursor,
         })
-        setSubmissions(res.data)
+        setSubmissions(res.data.items)
+        setNextCursor(res.data.nextCursor)
       } catch (err) {
         showNotification({
           color: 'red',
@@ -111,7 +115,7 @@ const Submissions: FC = () => {
     if (activePage === 1) {
       newSubmissions.current = []
     }
-  }, [activePage, type, numId, t])
+  }, [activePage, cursor, type, numId, t])
 
   useEffect(() => {
     if (game?.end && new Date() < new Date(game.end)) {
@@ -202,7 +206,7 @@ const Submissions: FC = () => {
           bg="transparent"
           onChange={(value) => {
             setType(value as AnswerResult | 'All')
-            setPage(1)
+            setCursorStack([])
           }}
           data={[
             {
@@ -223,16 +227,20 @@ const Submissions: FC = () => {
               <Icon path={mdiDownload} size={1} />
             </ActionIcon>
           </Tooltip>
-          <ActionIcon size="lg" disabled={activePage <= 1} onClick={() => setPage(1)}>
+          <ActionIcon size="lg" disabled={activePage <= 1} onClick={() => setCursorStack([])}>
             <Icon path={mdiReplay} size={1} />
           </ActionIcon>
-          <ActionIcon size="lg" disabled={activePage <= 1} onClick={() => setPage(activePage - 1)}>
+          <ActionIcon
+            size="lg"
+            disabled={activePage <= 1}
+            onClick={() => setCursorStack((current) => current.slice(0, -1))}
+          >
             <Icon path={mdiArrowLeftBold} size={1} />
           </ActionIcon>
           <ActionIcon
             size="lg"
-            disabled={submissions && submissions.length < ITEM_COUNT_PER_PAGE}
-            onClick={() => setPage(activePage + 1)}
+            disabled={!nextCursor}
+            onClick={() => nextCursor && setCursorStack((current) => [...current, nextCursor])}
           >
             <Icon path={mdiArrowRightBold} size={1} />
           </ActionIcon>

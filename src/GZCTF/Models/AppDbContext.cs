@@ -25,6 +25,13 @@ using PenetrationObjectiveEntity = GZCTF.Modules.Penetration.Domain.PenetrationO
 using PenetrationGameLabBindingEntity = GZCTF.Modules.Penetration.Domain.PenetrationGameLabBinding;
 using PenetrationTeamRuntimeBindingEntity = GZCTF.Modules.Penetration.Domain.PenetrationTeamRuntimeBinding;
 using TeamLabRuntimeOperationJobEntity = GZCTF.Modules.TeamLab.Domain.TeamLabRuntimeOperationJob;
+using TheoryQuestionTagEntity = GZCTF.Modules.Theory.Domain.TheoryQuestionTag;
+using TheoryQuestionTagBindingEntity = GZCTF.Modules.Theory.Domain.TheoryQuestionTagBinding;
+using ImageDistributionReferenceEntity = GZCTF.Modules.Runtime.Domain.ImageDistributionReference;
+using DataGovernanceRunEntity = GZCTF.Modules.Audit.Domain.DataGovernanceRun;
+using OperationalLogAggregateEntity = GZCTF.Modules.Audit.Domain.OperationalLogAggregate;
+using DeploymentLifecycleAggregateEntity = GZCTF.Modules.Audit.Domain.DeploymentLifecycleAggregate;
+using TeamLabTrafficFlowAggregateEntity = GZCTF.Modules.TeamLab.Domain.TeamLabTrafficFlowAggregate;
 
 namespace GZCTF.Models;
 
@@ -74,6 +81,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<ChallengeMutationJobEntity> ChallengeMutationJobs { get; set; } = null!;
     public DbSet<ImageTemplate> ImageTemplates { get; set; } = null!;
     public DbSet<ImageDistributionRecord> ImageDistributionRecords { get; set; } = null!;
+    public DbSet<ImageDistributionReferenceEntity> ImageDistributionReferences => Set<ImageDistributionReferenceEntity>();
     public DbSet<DockerRegistryMigrationTask> DockerRegistryMigrationTasks { get; set; } = null!;
     public DbSet<DockerRegistryMigrationItem> DockerRegistryMigrationItems { get; set; } = null!;
     public DbSet<VmInstance> VmInstances => Set<VmInstance>();
@@ -82,6 +90,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<DeploymentQueueTicket> DeploymentQueueTickets { get; set; } = null!;
     public DbSet<GamePhase> GamePhases => Set<GamePhase>();
     public DbSet<TheoryQuestionBankItem> TheoryQuestionBankItems { get; set; } = null!;
+    public DbSet<TheoryQuestionTagEntity> TheoryQuestionTags => Set<TheoryQuestionTagEntity>();
+    public DbSet<TheoryQuestionTagBindingEntity> TheoryQuestionTagBindings => Set<TheoryQuestionTagBindingEntity>();
     public DbSet<TheoryPaper> TheoryPapers { get; set; } = null!;
     public DbSet<TheoryPaperQuestion> TheoryPaperQuestions { get; set; } = null!;
     public DbSet<TheoryAnswerSheet> TheoryAnswerSheets { get; set; } = null!;
@@ -134,6 +144,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TeamLabTopologyReleaseEntity> TeamLabTopologyReleases => Set<TeamLabTopologyReleaseEntity>();
     public DbSet<TeamLabNetworkLeaseEntity> TeamLabNetworkLeases => Set<TeamLabNetworkLeaseEntity>();
     public DbSet<TeamLabRuntimeOperationJobEntity> TeamLabRuntimeOperationJobs => Set<TeamLabRuntimeOperationJobEntity>();
+    public DbSet<DataGovernanceRunEntity> DataGovernanceRuns => Set<DataGovernanceRunEntity>();
+    public DbSet<OperationalLogAggregateEntity> OperationalLogAggregates => Set<OperationalLogAggregateEntity>();
+    public DbSet<DeploymentLifecycleAggregateEntity> DeploymentLifecycleAggregates => Set<DeploymentLifecycleAggregateEntity>();
+    public DbSet<TeamLabTrafficFlowAggregateEntity> TeamLabTrafficFlowAggregates => Set<TeamLabTrafficFlowAggregateEntity>();
 
     private static ValueConverter<T?, string> GetJsonConverter<T>() where T : class, new() =>
         new(
@@ -157,6 +171,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.HasPostgresExtension("pg_trgm");
         builder.ApplyConfigurationsFromAssembly(typeof(ModuleAssemblyMarker).Assembly,
             type => type.Namespace?.StartsWith("GZCTF.Modules", StringComparison.Ordinal) == true);
 
@@ -329,53 +344,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
             entity.Navigation(e => e.Manager).AutoInclude();
         });
 
-        builder.Entity<Participation>(entity =>
-        {
-            entity.Property(e => e.Status)
-                .HasConversion<int>();
-
-            entity.HasMany(e => e.Instances).WithOne();
-
-            entity.HasMany(e => e.Submissions)
-                .WithOne(e => e.Participation)
-                .HasForeignKey(e => e.ParticipationId);
-
-            entity.HasMany(e => e.FirstSolves)
-                .WithOne(e => e.Participation)
-                .HasForeignKey(e => e.ParticipationId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasMany(e => e.Members)
-                .WithOne(e => e.Participation)
-                .HasForeignKey(e => e.ParticipationId);
-
-            entity.HasOne(e => e.Writeup)
-                .WithMany();
-
-            entity.HasOne(e => e.Division)
-                .WithMany()
-                .HasForeignKey(e => e.DivisionId)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            entity.Navigation(e => e.Game).AutoInclude();
-            entity.Navigation(e => e.Team).AutoInclude();
-            entity.Navigation(e => e.Members).AutoInclude();
-            entity.Navigation(e => e.Writeup).AutoInclude();
-
-            entity.HasMany(e => e.Challenges)
-                .WithMany(e => e.Teams)
-                .UsingEntity<GameInstance>(
-                    e => e.HasOne(i => i.Challenge)
-                        .WithMany(c => c.Instances)
-                        .HasForeignKey(i => i.ChallengeId),
-                    e => e.HasOne(i => i.Participation)
-                        .WithMany(p => p.Instances)
-                        .HasForeignKey(i => i.ParticipationId)
-                        .OnDelete(DeleteBehavior.Cascade),
-                    e => e.HasKey(i => new { i.ChallengeId, i.ParticipationId })
-                );
-        });
-
         builder.Entity<GameInstance>(entity =>
         {
             entity.HasOne(e => e.FlagContext)
@@ -498,30 +466,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
             entity.Navigation(e => e.TestContainer).AutoInclude();
         });
 
-        builder.Entity<Submission>(entity =>
-        {
-            entity.Property(e => e.Status).HasConversion<string>();
-            entity.Property(e => e.SubmissionType)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.HasOne(e => e.ReviewedBy)
-                .WithMany()
-                .HasForeignKey(e => e.ReviewedById)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            entity.HasOne(e => e.FlagContext)
-                .WithMany()
-                .HasForeignKey(e => e.FlagId)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            entity.HasIndex(e => e.Status);
-
-            entity.Navigation(e => e.Team).AutoInclude();
-            entity.Navigation(e => e.User).AutoInclude();
-            entity.Navigation(e => e.GameChallenge).AutoInclude();
-        });
-
         builder.Entity<FlagContext>(entity =>
         {
             entity.HasOne(e => e.Attachment)
@@ -625,140 +569,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .HasForeignKey(e => e.GameId);
 
             entity.HasKey(e => new { e.GameId, e.TeamId, e.UserId });
-        });
-
-        builder.Entity<TheoryQuestionBankItem>(entity =>
-        {
-            entity.Property(e => e.Type)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.Property(e => e.BankName)
-                .HasMaxLength(128);
-
-            entity.Property(e => e.Options)
-                .HasConversion(requiredListConverter)
-                .Metadata
-                .SetValueComparer(listComparer);
-
-            entity.Property(e => e.AnswerIndexes)
-                .HasConversion(intListConverter)
-                .Metadata
-                .SetValueComparer(intListComparer);
-        });
-
-        builder.Entity<TheoryPaper>(entity =>
-        {
-            entity.HasOne(e => e.Game)
-                .WithMany()
-                .HasForeignKey(e => e.GameId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasMany(e => e.Questions)
-                .WithOne(e => e.Paper)
-                .HasForeignKey(e => e.PaperId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        builder.Entity<TheoryPaperQuestion>(entity =>
-        {
-            entity.Property(e => e.Type)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.Property(e => e.Options)
-                .HasConversion(requiredListConverter)
-                .Metadata
-                .SetValueComparer(listComparer);
-
-            entity.Property(e => e.AnswerIndexes)
-                .HasConversion(intListConverter)
-                .Metadata
-                .SetValueComparer(intListComparer);
-
-            entity.HasOne(e => e.SourceQuestion)
-                .WithMany()
-                .HasForeignKey(e => e.SourceQuestionId)
-                .OnDelete(DeleteBehavior.SetNull);
-        });
-
-        builder.Entity<TheoryAnswerSheet>(entity =>
-        {
-            entity.Property(e => e.Status)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.HasOne(e => e.Game)
-                .WithMany()
-                .HasForeignKey(e => e.GameId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.Paper)
-                .WithMany()
-                .HasForeignKey(e => e.PaperId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.Participation)
-                .WithMany()
-                .HasForeignKey(e => e.ParticipationId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.User)
-                .WithMany()
-                .HasForeignKey(e => e.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasMany(e => e.Answers)
-                .WithOne(e => e.AnswerSheet)
-                .HasForeignKey(e => e.AnswerSheetId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.Navigation(e => e.Participation).AutoInclude();
-            entity.Navigation(e => e.User).AutoInclude();
-        });
-
-        builder.Entity<TheorySubmissionAnswer>(entity =>
-        {
-            entity.Property(e => e.SelectedIndexes)
-                .HasConversion(intListConverter)
-                .Metadata
-                .SetValueComparer(intListComparer);
-
-            entity.HasOne(e => e.PaperQuestion)
-                .WithMany()
-                .HasForeignKey(e => e.PaperQuestionId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        builder.Entity<LogModel>(entity =>
-        {
-            entity.Property(e => e.Status)
-                .HasConversion<string>()
-                .HasMaxLength(Limits.MaxLogStatusLength);
-        });
-
-        builder.Entity<ImageDistributionRecord>(entity =>
-        {
-            entity.Property(e => e.ImageType)
-                .HasConversion<byte>();
-
-            entity.Property(e => e.Status)
-                .HasConversion<byte>();
-
-            entity.Property(e => e.References)
-                .HasConversion(GetRequiredJsonConverter<List<ImageDistributionReference>>())
-                .Metadata
-                .SetValueComparer(GetEnumerableComparer<List<ImageDistributionReference>, ImageDistributionReference>());
-
-            entity.HasOne(e => e.ImageTemplate)
-                .WithMany()
-                .HasForeignKey(e => e.ImageTemplateId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.WorkerNode)
-                .WithMany()
-                .HasForeignKey(e => e.WorkerNodeId)
-                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<DockerRegistryMigrationTask>(entity =>
@@ -1050,42 +860,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .OnDelete(DeleteBehavior.SetNull);
         });
 
-        builder.Entity<TrainingCourseProgress>(entity =>
-        {
-            entity.Property(e => e.Status)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.HasOne(e => e.Course)
-                .WithMany()
-                .HasForeignKey(e => e.CourseId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.User)
-                .WithMany()
-                .HasForeignKey(e => e.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
         builder.Entity<TrainingCheckIn>(entity =>
         {
-            entity.HasOne(e => e.User)
-                .WithMany()
-                .HasForeignKey(e => e.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        builder.Entity<TrainingChapterProgress>(entity =>
-        {
-            entity.Property(e => e.Status)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.HasOne(e => e.Chapter)
-                .WithMany()
-                .HasForeignKey(e => e.ChapterId)
-                .OnDelete(DeleteBehavior.Cascade);
-
             entity.HasOne(e => e.User)
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
@@ -1251,21 +1027,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        builder.Entity<AwdpRound>(entity =>
-        {
-            entity.Property(e => e.Status)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.HasIndex(e => e.GameId);
-            entity.HasIndex(e => new { e.GameId, e.RoundNumber }).IsUnique();
-
-            entity.HasOne(e => e.Game)
-                .WithMany(e => e.AwdpRounds)
-                .HasForeignKey(e => e.GameId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
         builder.Entity<AwdpFlag>(entity =>
         {
             entity.HasIndex(e => e.RoundId);
@@ -1299,33 +1060,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .WithMany()
                 .HasForeignKey(e => e.SubmittedByUserId)
                 .OnDelete(DeleteBehavior.SetNull);
-        });
-
-        builder.Entity<AwdpCheckerTask>(entity =>
-        {
-            entity.Property(e => e.Status)
-                .HasConversion<string>()
-                .HasMaxLength(32);
-
-            entity.HasIndex(e => e.RoundId);
-            entity.HasIndex(e => e.ServiceId);
-            entity.HasIndex(e => e.TeamId);
-            entity.HasIndex(e => new { e.RoundId, e.ServiceId, e.TeamId }).IsUnique();
-
-            entity.HasOne(e => e.Round)
-                .WithMany(e => e.CheckerTasks)
-                .HasForeignKey(e => e.RoundId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.Service)
-                .WithMany()
-                .HasForeignKey(e => e.ServiceId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.Team)
-                .WithMany()
-                .HasForeignKey(e => e.TeamId)
-                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<AwdpPatchSubmission>(entity =>
@@ -1423,29 +1157,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
-        builder.Entity<DeploymentQueueTicket>(entity =>
-        {
-            entity.HasIndex(e => e.ActiveIdentity)
-                .IsUnique()
-                .HasFilter("\"Status\" IN (0, 1, 2)");
-
-            entity.Property(e => e.Kind)
-                .HasConversion<byte>();
-
-            entity.Property(e => e.Status)
-                .HasConversion<byte>();
-
-            entity.HasOne(e => e.DeploymentTarget)
-                .WithMany()
-                .HasForeignKey(e => e.DeploymentTargetId)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            entity.HasOne(e => e.TargetNode)
-                .WithMany()
-                .HasForeignKey(e => e.TargetNodeId)
-                .OnDelete(DeleteBehavior.SetNull);
-        });
-
         builder.Entity<TeamLabRuntimeNetwork>(entity =>
         {
             entity.HasOne(e => e.Runtime)
@@ -1513,29 +1224,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .WithMany(e => e.Events)
                 .HasForeignKey(e => e.RuntimeId)
                 .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        builder.Entity<TeamLabTrafficFlow>(entity =>
-        {
-            entity.HasOne(e => e.Runtime)
-                .WithMany(e => e.TrafficFlows)
-                .HasForeignKey(e => e.RuntimeId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.Shard)
-                .WithMany()
-                .HasForeignKey(e => e.ShardId)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            entity.HasOne(e => e.Network)
-                .WithMany()
-                .HasForeignKey(e => e.NetworkId)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            entity.HasOne(e => e.WorkerNode)
-                .WithMany()
-                .HasForeignKey(e => e.WorkerNodeId)
-                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<TeamLabTrafficCaptureJob>(entity =>

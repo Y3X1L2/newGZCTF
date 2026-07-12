@@ -1,4 +1,5 @@
 using GZCTF.Models.Data;
+using GZCTF.Modules.Runtime.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Services.Fleet;
@@ -16,7 +17,7 @@ public class ImageDistributionService(
     public async Task<IReadOnlyList<ImageDistributionRecord>> DistributeToCapableNodesAsync(
         ImageTemplate template,
         CancellationToken token,
-        ImageDistributionReference? reference = null)
+        ImageDistributionReferenceKey? reference = null)
     {
         var persisted = context.Entry(template).State == EntityState.Detached
             ? await context.ImageTemplates.SingleOrDefaultAsync(item => item.Id == template.Id, token)
@@ -61,7 +62,7 @@ public class ImageDistributionService(
 
     public async Task<IReadOnlyList<ImageDistributionRecord>> DistributeTemplateAsync(
         int templateId,
-        ImageDistributionReference? reference,
+        ImageDistributionReferenceKey? reference,
         CancellationToken token)
     {
         var template = await context.ImageTemplates.AsNoTracking()
@@ -97,23 +98,23 @@ public class ImageDistributionService(
             .ToArrayAsync(token);
 
         foreach (var templateId in templateIds.OfType<int>().Distinct())
-            await DistributeTemplateAsync(templateId, ImageDistributionReference.Game(gameId), token);
+            await DistributeTemplateAsync(templateId, ImageDistributionReferenceKey.Game(gameId), token);
 
         foreach (var image in dockerImages)
-            await DistributeDockerImageAsync(image, ImageDistributionReference.Game(gameId), token);
+            await DistributeDockerImageAsync(image, ImageDistributionReferenceKey.Game(gameId), token);
     }
 
     public async Task ReleaseGameReferencesAsync(int gameId, CancellationToken token) =>
-        await ReleaseReferenceAsync(ImageDistributionReference.Game(gameId), token);
+        await ReleaseReferenceAsync(ImageDistributionReferenceKey.Game(gameId), token);
 
     public Task ReleaseTrainingCourseReferencesAsync(int courseId, CancellationToken token) =>
-        ReleaseReferenceAsync(ImageDistributionReference.TrainingCourse(courseId), token);
+        ReleaseReferenceAsync(ImageDistributionReferenceKey.TrainingCourse(courseId), token);
 
     public Task ReleaseTrainingCourseTemplateReferenceAsync(
         int courseId,
         int templateId,
         CancellationToken token) =>
-        ReleaseReferenceAsync(ImageDistributionReference.TrainingCourse(courseId), token, templateId);
+        ReleaseReferenceAsync(ImageDistributionReferenceKey.TrainingCourse(courseId), token, templateId);
 
     public async Task CleanupUnreferencedAsync(CancellationToken token)
     {
@@ -122,14 +123,14 @@ public class ImageDistributionService(
         var records = await context.ImageDistributionRecords
             .Include(r => r.WorkerNode)
             .Include(r => r.ImageTemplate)
-            .Where(r => r.ReferenceCount <= 0 ||
+            .Include(r => r.References)
+            .Where(r => !r.References.Any() ||
                         r.Status == ImageDistributionStatus.CleanupPending)
             .ToArrayAsync(token);
 
         foreach (var record in records)
         {
-            record.ReferenceCount = Math.Max(0, record.References.Count);
-            if (record.ReferenceCount > 0)
+            if (record.References.Count > 0)
                 continue;
 
             record.Status = ImageDistributionStatus.CleanupPending;
@@ -141,23 +142,22 @@ public class ImageDistributionService(
 
     public async Task ReconcileReferencesAsync(CancellationToken token)
     {
-        var records = (await context.ImageDistributionRecords
-                .Where(record => record.ReferenceCount > 0 ||
-                                 record.Status == ImageDistributionStatus.CleanupPending)
-                .ToArrayAsync(token))
-            .Where(record => record.References.Count > 0)
-            .ToArray();
+        var records = await context.ImageDistributionRecords
+            .Include(record => record.References)
+            .Where(record => record.References.Any() ||
+                             record.Status == ImageDistributionStatus.CleanupPending)
+            .ToArrayAsync(token);
         if (records.Length == 0)
             return;
 
         var gameIds = records.SelectMany(record => record.References)
             .Where(reference => reference.Kind == ImageDistributionReferenceKind.Game)
-            .Select(reference => reference.Id)
+            .Select(reference => reference.ResourceId)
             .Distinct()
             .ToArray();
         var courseIds = records.SelectMany(record => record.References)
             .Where(reference => reference.Kind == ImageDistributionReferenceKind.TrainingCourse)
-            .Select(reference => reference.Id)
+            .Select(reference => reference.ResourceId)
             .Distinct()
             .ToArray();
 
@@ -177,23 +177,17 @@ public class ImageDistributionService(
 
         foreach (var record in records)
         {
-            var validReferences = record.References.Where(reference => reference.Kind switch
+            var invalidReferences = record.References.Where(reference => reference.Kind switch
             {
                 ImageDistributionReferenceKind.Game =>
-                    gameReferences.Contains((reference.Id, record.ImageTemplateId)),
+                    !gameReferences.Contains((reference.ResourceId, record.ImageTemplateId)),
                 ImageDistributionReferenceKind.TrainingCourse =>
-                    courseReferences.Contains((reference.Id, record.ImageTemplateId)),
-                _ => false
+                    !courseReferences.Contains((reference.ResourceId, record.ImageTemplateId)),
+                _ => true
             }).ToList();
-            if (validReferences.Count == record.References.Count)
-            {
-                record.ReferenceCount = Math.Max(record.ReferenceCount, validReferences.Count);
-                continue;
-            }
-
-            record.References = validReferences;
-            record.ReferenceCount = validReferences.Count;
-            if (record.ReferenceCount == 0)
+            if (invalidReferences.Count > 0)
+                context.ImageDistributionReferences.RemoveRange(invalidReferences);
+            if (record.References.Count == invalidReferences.Count)
                 record.Status = ImageDistributionStatus.CleanupPending;
         }
 
@@ -210,8 +204,10 @@ public class ImageDistributionService(
 
         foreach (var record in records)
         {
-            record.ReferenceCount = 0;
-            record.References = [];
+            var references = await context.ImageDistributionReferences
+                .Where(reference => reference.DistributionRecordId == record.Id)
+                .ToArrayAsync(token);
+            context.ImageDistributionReferences.RemoveRange(references);
             record.Status = ImageDistributionStatus.CleanupPending;
             await CleanupRecordAsync(record, token, removeOnSuccess: false);
         }
@@ -262,7 +258,7 @@ public class ImageDistributionService(
         await agentClient.PullDockerImageAsync(nodeId, resolved, null, token);
     }
 
-    async Task DistributeDockerImageAsync(string image, ImageDistributionReference reference, CancellationToken token)
+    async Task DistributeDockerImageAsync(string image, ImageDistributionReferenceKey reference, CancellationToken token)
     {
         var resolved = await dockerRegistry.ResolveImageReferenceAsync(image, token);
         var template = await context.ImageTemplates.AsNoTracking()
@@ -283,13 +279,33 @@ public class ImageDistributionService(
     }
 
     async Task<ImageDistributionRecord> EnsureTemplateOnNodeAsync(ImageTemplate template, WorkerNode node,
-        ImageDistributionReference? reference, CancellationToken token)
+        ImageDistributionReferenceKey? reference, CancellationToken token)
     {
         var hash = ResolveImageHash(template);
-        var record = await context.ImageDistributionRecords
-            .FirstOrDefaultAsync(r => r.ImageTemplateId == template.Id && r.WorkerNodeId == node.Id, token);
+        await using var ownedTransaction = context.Database.CurrentTransaction is null && context.Database.IsRelational()
+            ? await context.Database.BeginTransactionAsync(token)
+            : null;
+        await AcquireDistributionLockAsync(template.Id, node.Id, token);
 
-        if (record is null)
+        var record = await context.ImageDistributionRecords
+            .Include(item => item.References)
+            .FirstOrDefaultAsync(r => r.ImageTemplateId == template.Id && r.WorkerNodeId == node.Id, token);
+        if (record is null && IsPostgres())
+        {
+            var recordId = Guid.CreateVersion7();
+            await context.Database.ExecuteSqlInterpolatedAsync($$"""
+                INSERT INTO "ImageDistributionRecords"
+                    ("Id", "ImageTemplateId", "WorkerNodeId", "ImageHash", "ImageType", "Status", "CreatedAt")
+                VALUES
+                    ({{recordId}}, {{template.Id}}, {{node.Id}}, {{hash}}, {{(byte)template.ImageType}},
+                     {{(byte)ImageDistributionStatus.Pending}}, CURRENT_TIMESTAMP)
+                ON CONFLICT ("ImageTemplateId", "WorkerNodeId") DO NOTHING
+                """, token);
+            record = await context.ImageDistributionRecords
+                .Include(item => item.References)
+                .SingleAsync(r => r.ImageTemplateId == template.Id && r.WorkerNodeId == node.Id, token);
+        }
+        else if (record is null)
         {
             record = new ImageDistributionRecord
             {
@@ -301,9 +317,14 @@ public class ImageDistributionService(
                 CreatedAt = DateTimeOffset.UtcNow
             };
             context.ImageDistributionRecords.Add(record);
+            await context.SaveChangesAsync(token);
         }
 
-        AddReference(record, reference);
+        await AddReferenceAsync(record, reference, token);
+        await context.SaveChangesAsync(token);
+        if (ownedTransaction is not null)
+            await ownedTransaction.CommitAsync(token);
+
         if (record.Status == ImageDistributionStatus.Ready &&
             string.Equals(record.ImageHash, hash, StringComparison.OrdinalIgnoreCase))
         {
@@ -354,37 +375,73 @@ public class ImageDistributionService(
     }
 
     async Task ReleaseReferenceAsync(
-        ImageDistributionReference reference,
+        ImageDistributionReferenceKey reference,
         CancellationToken token,
         int? templateId = null)
     {
-        var query = context.ImageDistributionRecords
-            .Include(r => r.WorkerNode)
-            .Include(r => r.ImageTemplate)
-            .AsQueryable();
+        var referenceQuery = context.ImageDistributionReferences
+            .Where(item => item.Kind == reference.Kind && item.ResourceId == reference.ResourceId);
         if (templateId.HasValue)
-            query = query.Where(record => record.ImageTemplateId == templateId.Value);
+            referenceQuery = referenceQuery.Where(item => item.DistributionRecord.ImageTemplateId == templateId.Value);
 
-        var records = (await query.ToArrayAsync(token))
-            .Where(r => r.References.Contains(reference))
-            .ToArray();
+        var candidates = await referenceQuery
+            .Select(item => new
+            {
+                item.DistributionRecordId,
+                item.DistributionRecord.ImageTemplateId,
+                item.DistributionRecord.WorkerNodeId
+            })
+            .Distinct()
+            .OrderBy(item => item.ImageTemplateId)
+            .ThenBy(item => item.WorkerNodeId)
+            .ToArrayAsync(token);
+        if (candidates.Length == 0)
+            return;
 
-        foreach (var record in records)
+        foreach (var candidate in candidates)
         {
-            var before = record.References.Count;
-            record.References = record.References.Where(r => r != reference).ToList();
-            if (record.References.Count != before)
-                record.ReferenceCount = Math.Max(record.References.Count, record.ReferenceCount - 1);
-            else
-                record.ReferenceCount = Math.Max(record.ReferenceCount, record.References.Count);
-            if (record.ReferenceCount > 0)
+            await using var transaction = context.Database.CurrentTransaction is null && context.Database.IsRelational()
+                ? await context.Database.BeginTransactionAsync(token)
+                : null;
+            await AcquireDistributionLockAsync(candidate.ImageTemplateId, candidate.WorkerNodeId, token);
+
+            var currentReference = await context.ImageDistributionReferences.SingleOrDefaultAsync(item =>
+                item.DistributionRecordId == candidate.DistributionRecordId &&
+                item.Kind == reference.Kind && item.ResourceId == reference.ResourceId, token);
+            if (currentReference is null)
+            {
+                if (transaction is not null)
+                    await transaction.CommitAsync(token);
                 continue;
+            }
+
+            context.ImageDistributionReferences.Remove(currentReference);
+            await context.SaveChangesAsync(token);
+            if (await context.ImageDistributionReferences.AnyAsync(
+                    item => item.DistributionRecordId == candidate.DistributionRecordId, token))
+            {
+                if (transaction is not null)
+                    await transaction.CommitAsync(token);
+                continue;
+            }
+
+            var record = await context.ImageDistributionRecords
+                .Include(item => item.WorkerNode)
+                .Include(item => item.ImageTemplate)
+                .SingleOrDefaultAsync(item => item.Id == candidate.DistributionRecordId, token);
+            if (record is null)
+            {
+                if (transaction is not null)
+                    await transaction.CommitAsync(token);
+                continue;
+            }
 
             record.Status = ImageDistributionStatus.CleanupPending;
             await CleanupRecordAsync(record, token);
+            await context.SaveChangesAsync(token);
+            if (transaction is not null)
+                await transaction.CommitAsync(token);
         }
-
-        await context.SaveChangesAsync(token);
     }
 
     async Task CleanupRecordAsync(
@@ -476,19 +533,54 @@ public class ImageDistributionService(
         throw new InvalidOperationException($"Image template {template.Name} ({template.Id}) has no image hash.");
     }
 
-    static void AddReference(ImageDistributionRecord record, ImageDistributionReference? reference)
+    async Task AddReferenceAsync(
+        ImageDistributionRecord record,
+        ImageDistributionReferenceKey? reference,
+        CancellationToken token)
     {
-        if (reference is not null && !record.References.Contains(reference))
+        if (reference is not { } key)
+            return;
+
+        if (context.Database.IsRelational())
         {
-            record.References.Add(reference);
-            record.ReferenceCount = Math.Max(record.References.Count, record.ReferenceCount + 1);
+            await context.Database.ExecuteSqlInterpolatedAsync($$"""
+                INSERT INTO "ImageDistributionReferences"
+                    ("Id", "DistributionRecordId", "Kind", "ResourceId", "CreatedAt")
+                VALUES
+                    ({{Guid.CreateVersion7()}}, {{record.Id}}, {{(byte)key.Kind}}, {{key.ResourceId}}, CURRENT_TIMESTAMP)
+                ON CONFLICT ("DistributionRecordId", "Kind", "ResourceId") DO NOTHING
+                """, token);
             return;
         }
 
-        record.ReferenceCount = Math.Max(record.ReferenceCount, record.References.Count);
-        if (reference is null && record.ReferenceCount == 0)
-            record.ReferenceCount = 1;
+        if (await context.ImageDistributionReferences.AnyAsync(item =>
+                item.DistributionRecordId == record.Id &&
+                item.Kind == key.Kind &&
+                item.ResourceId == key.ResourceId, token))
+            return;
+
+        var entity = new ImageDistributionReference
+        {
+            DistributionRecordId = record.Id,
+            Kind = key.Kind,
+            ResourceId = key.ResourceId
+        };
+        record.References.Add(entity);
+        context.ImageDistributionReferences.Add(entity);
     }
+
+    async Task AcquireDistributionLockAsync(int templateId, Guid nodeId, CancellationToken token)
+    {
+        if (!IsPostgres())
+            return;
+
+        var lockKey = $"image-distribution:{templateId}:{nodeId:N}";
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))", token);
+    }
+
+    bool IsPostgres() =>
+        context.Database.ProviderName?.Contains("Npgsql", StringComparison.Ordinal) == true;
 
     static string TrimError(string message) =>
         message.Length <= 1024 ? message : message[..1024];

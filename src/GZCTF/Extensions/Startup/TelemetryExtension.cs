@@ -2,6 +2,7 @@
 using GZCTF.Models.Internal;
 using GZCTF.Services.HealthCheck;
 using Npgsql;
+using GZCTF.Infrastructure.Persistence.Governance;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -44,6 +45,7 @@ public static class TelemetryExtension
                 metrics.AddNpgsqlInstrumentation();
                 metrics.AddAWSInstrumentation();
                 metrics.AddMeter("Microsoft.Extensions.Diagnostics.HealthChecks");
+                metrics.AddMeter(DataGovernanceMetrics.MeterName);
 
                 if (TelemetryConfig is { Prometheus.Enable: true })
                     metrics.AddPrometheusExporter(options =>

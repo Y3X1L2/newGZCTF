@@ -8,6 +8,9 @@ namespace GZCTF.Models.Request.Admin;
 /// </summary>
 public class LogMessageModel
 {
+    [JsonPropertyName("id")]
+    public long Id { get; set; }
+
     /// <summary>
     /// Log time
     /// </summary>
@@ -44,6 +47,7 @@ public class LogMessageModel
     public static LogMessageModel FromLogModel(LogModel logInfo) =>
         new()
         {
+            Id = logInfo.Id,
             Time = logInfo.TimeUtc,
             Level = logInfo.Level,
             UserName = logInfo.UserName,
@@ -52,3 +56,5 @@ public class LogMessageModel
             Status = logInfo.Status
         };
 }
+
+public sealed record LogMessagePageModel(IReadOnlyList<LogMessageModel> Items, string? NextCursor);

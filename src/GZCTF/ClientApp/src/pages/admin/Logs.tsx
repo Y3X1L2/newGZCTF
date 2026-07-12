@@ -49,7 +49,10 @@ function taskStatusSemantic(status?: TaskStatus | null) {
 
 const Logs: FC = () => {
   const [level, setLevel] = useState(LogLevel.Info)
-  const [activePage, setPage] = useState(1)
+  const [cursorStack, setCursorStack] = useState<string[]>([])
+  const [nextCursor, setNextCursor] = useState<string | null>()
+  const cursor = cursorStack.at(-1)
+  const activePage = cursorStack.length + 1
   const theme = useMantineTheme()
 
   const [, update] = useState(new Date())
@@ -70,9 +73,10 @@ const Logs: FC = () => {
         const res = await api.admin.adminLogs({
           level,
           count: ITEM_COUNT_PER_PAGE,
-          skip: (activePage - 1) * ITEM_COUNT_PER_PAGE,
+          cursor,
         })
-        setLogs(res.data)
+        setLogs(res.data.items)
+        setNextCursor(res.data.nextCursor)
       } catch (err) {
         showNotification({
           color: 'red',
@@ -88,10 +92,10 @@ const Logs: FC = () => {
     if (activePage === 1) {
       newLogs.current = []
     }
-  }, [activePage, level])
+  }, [activePage, cursor, level])
 
   useEffect(() => {
-    setPage(1)
+    setCursorStack([])
   }, [level])
 
   useEffect(() => {
@@ -131,7 +135,7 @@ const Logs: FC = () => {
     .filter((item) => level === 'All' || item.level === level)
     .map((item, i) => (
       <Table.Tr
-        key={`${item.time}@${i}`}
+        key={item.id ?? `${item.time}@${i}`}
         className={cx({
           [tableClasses.fade]:
             i === 0 && activePage === 1 && newLogs.current.length > 0 && newLogs.current[0].level === level,
@@ -189,7 +193,11 @@ const Logs: FC = () => {
             }))}
           />
           <Group justify="right" className="yy-admin-logs-pagination">
-            <ActionIcon size="lg" disabled={activePage <= 1} onClick={() => setPage(activePage - 1)}>
+            <ActionIcon
+              size="lg"
+              disabled={activePage <= 1}
+              onClick={() => setCursorStack((current) => current.slice(0, -1))}
+            >
               <Icon path={mdiArrowLeftBold} size={1} />
             </ActionIcon>
             <Text fw="bold" size="sm">
@@ -197,8 +205,8 @@ const Logs: FC = () => {
             </Text>
             <ActionIcon
               size="lg"
-              disabled={logs && logs.length < ITEM_COUNT_PER_PAGE}
-              onClick={() => setPage(activePage + 1)}
+              disabled={!nextCursor}
+              onClick={() => nextCursor && setCursorStack((current) => [...current, nextCursor])}
             >
               <Icon path={mdiArrowRightBold} size={1} />
             </ActionIcon>

@@ -1,12 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
-using Microsoft.EntityFrameworkCore;
+using GZCTF.Modules.Runtime.Domain;
 
 namespace GZCTF.Models.Data;
 
-[Index(nameof(ImageTemplateId), nameof(WorkerNodeId), IsUnique = true)]
-[Index(nameof(Status))]
 public class ImageDistributionRecord
 {
     [Key]
@@ -23,9 +21,7 @@ public class ImageDistributionRecord
 
     public ImageDistributionStatus Status { get; set; } = ImageDistributionStatus.Pending;
 
-    public int ReferenceCount { get; set; }
-
-    public List<ImageDistributionReference> References { get; set; } = [];
+    public ICollection<ImageDistributionReference> References { get; set; } = [];
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
@@ -50,21 +46,4 @@ public enum ImageDistributionStatus : byte
     Ready = 2,
     Failed = 3,
     CleanupPending = 4
-}
-
-public sealed record ImageDistributionReference(
-    ImageDistributionReferenceKind Kind,
-    int Id)
-{
-    public static ImageDistributionReference Game(int gameId) =>
-        new(ImageDistributionReferenceKind.Game, gameId);
-
-    public static ImageDistributionReference TrainingCourse(int courseId) =>
-        new(ImageDistributionReferenceKind.TrainingCourse, courseId);
-}
-
-public enum ImageDistributionReferenceKind : byte
-{
-    Game = 0,
-    TrainingCourse = 1
 }

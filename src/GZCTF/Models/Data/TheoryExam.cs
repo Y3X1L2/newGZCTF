@@ -1,10 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using GZCTF.Modules.Theory.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Models.Data;
 
-[Index(nameof(Type), nameof(BankName))]
 public class TheoryQuestionBankItem
 {
     [Key]
@@ -27,9 +27,11 @@ public class TheoryQuestionBankItem
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    [JsonIgnore]
+    public ICollection<TheoryQuestionTagBinding> TagBindings { get; set; } = [];
 }
 
-[Index(nameof(GameId), IsUnique = true)]
 public class TheoryPaper
 {
     [Key]
@@ -58,8 +60,6 @@ public class TheoryPaper
     public List<TheoryPaperQuestion> Questions { get; set; } = [];
 }
 
-[Index(nameof(PaperId))]
-[Index(nameof(SourceQuestionId))]
 public class TheoryPaperQuestion
 {
     [Key]
@@ -91,9 +91,6 @@ public class TheoryPaperQuestion
     public int Order { get; set; }
 }
 
-[Index(nameof(GameId))]
-[Index(nameof(ParticipationId))]
-[Index(nameof(UserId), nameof(GameId), IsUnique = true)]
 public class TheoryAnswerSheet
 {
     [Key]
@@ -134,8 +131,6 @@ public class TheoryAnswerSheet
     public List<TheorySubmissionAnswer> Answers { get; set; } = [];
 }
 
-[Index(nameof(AnswerSheetId))]
-[Index(nameof(PaperQuestionId))]
 public class TheorySubmissionAnswer
 {
     [Key]

@@ -593,7 +593,7 @@ export const useCTFScreenData = (numId: number) => {
   }, [initialEvents])
 
   useEffect(() => {
-    if (initialSubmissions) setLiveSubmissions(initialSubmissions.slice(0, MAX_SUBMISSIONS))
+    if (initialSubmissions?.items) setLiveSubmissions(initialSubmissions.items.slice(0, MAX_SUBMISSIONS))
   }, [initialSubmissions])
 
   useEffect(() => {
