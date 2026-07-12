@@ -3,8 +3,8 @@ import { mdiDeleteOutline, mdiRefresh, mdiRestart } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { memo } from 'react'
 import { YinyuTableShell } from '@Components/yinyu/YinyuUI'
-import { PenetrationRuntimeBindingModel } from '../../../../Api/PenetrationApi'
-import { TeamLabRuntimeStatus } from '../../../../Api/TeamLabApi'
+import { PenetrationRuntimeBindingModel } from '@Api/PenetrationApi'
+import { TeamLabRuntimeStatus } from '@Api/TeamLabApi'
 
 interface Props {
   runtimes: PenetrationRuntimeBindingModel[]

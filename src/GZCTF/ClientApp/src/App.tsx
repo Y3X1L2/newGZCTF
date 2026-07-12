@@ -3,7 +3,7 @@ import { DatesProvider } from '@mantine/dates'
 import { emotionTransform, MantineEmotionProvider } from '@mantine/emotion'
 import { ModalsProvider } from '@mantine/modals'
 import { Notifications } from '@mantine/notifications'
-import { FC, Suspense, useEffect } from 'react'
+import { FC, lazy, Suspense, useEffect, useMemo } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useRoutes } from 'react-router'
@@ -11,27 +11,30 @@ import { SWRConfig } from 'swr'
 import routes from '~react-pages'
 import { ErrorFallback } from '@Components/ErrorFallback'
 import { WsrxProvider } from '@Components/WsrxProvider'
-import { SignalField } from '@Components/yinyu/SignalField'
-import { YinyuGameBendsBackground } from '@Components/yinyu/YinyuReactBits'
 import { YinyuRouteLoader } from '@Components/yinyu/YinyuUI'
 import yinyuIcon from './assets/yinyu-icon-transparent.png'
 import { localCacheProvider } from '@Utils/Cache'
 import { useLanguage } from '@Utils/I18n'
 import { useCustomTheme } from '@Utils/ThemeOverride'
 import { useBanner, useConfig } from '@Hooks/useConfig'
-import { fetcher } from '@Api'
+import { createSWRConfig } from './api-client/swr'
 import '@mantine/core/styles.css'
 import '@mantine/dates/styles.css'
 import '@mantine/dropzone/styles.css'
 import '@mantine/notifications/styles.css'
+import './styles/foundation/tokens.css'
 import './styles/App.css'
 import './styles/YinyuDesignLab.css'
 import './styles/YinyuTheme.css'
 import './styles/YinyuRefinement.css'
+import './styles/foundation/base.css'
+
+const RouteBackdrop = lazy(() => import('@Components/yinyu/RouteBackdrop').then((module) => ({ default: module.RouteBackdrop })))
+const SignalField = lazy(() => import('@Components/yinyu/SignalField').then((module) => ({ default: module.SignalField })))
 
 const RouteLoading = () => (
   <Center h='100vh' w='100vw' className='route-loader-screen'>
-    <YinyuRouteLoader title='YINYU' description={'正在载入演练信号与页面状态'} />
+    <YinyuRouteLoader title='YINYU' description='正在加载页面内容' />
   </Center>
 )
 
@@ -118,6 +121,7 @@ export const App: FC = () => {
   const { theme } = useCustomTheme()
   const location = useLocation()
   const routeElement = useRoutes(routes)
+  const swrConfig = useMemo(() => createSWRConfig(localCacheProvider), [])
   useBanner()
   usePlatformFavicon()
 
@@ -134,19 +138,12 @@ export const App: FC = () => {
     <MantineProvider defaultColorScheme='dark' forceColorScheme='dark' theme={theme} stylesTransform={emotionTransform}>
       <MantineEmotionProvider>
         <ErrorBoundary FallbackComponent={ErrorFallback}>
-          {useReactBitsBackdrop ? <YinyuGameBendsBackground className='yy-root-reactbits-bg' /> : null}
-          {!suppressSignalField ? <SignalField /> : null}
+          <Suspense fallback={null}>{useReactBitsBackdrop ? <RouteBackdrop /> : null}</Suspense>
+          <Suspense fallback={null}>{!suppressSignalField ? <SignalField /> : null}</Suspense>
           <Notifications zIndex={5000} />
           <DatesProvider settings={{ locale }}>
             <ModalsProvider labels={{ confirm: t('common.modal.confirm'), cancel: t('common.modal.cancel') }}>
-              <SWRConfig
-                value={{
-                  refreshInterval: 10000,
-                  keepPreviousData: true,
-                  provider: localCacheProvider,
-                  fetcher,
-                }}
-              >
+              <SWRConfig value={swrConfig}>
                 <WsrxProvider>
                   <Suspense fallback={<RouteLoading />}>{routeElement}</Suspense>
                 </WsrxProvider>

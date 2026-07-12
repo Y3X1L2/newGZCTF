@@ -677,9 +677,9 @@
 }
 
 .yy-admin-tab-grid.admin-tab-grid {
-  width: max-content;
-  min-width: 100%;
-  grid-template-columns: repeat(auto-fit, minmax(8.8rem, 1fr));
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
   gap: 0.55rem;
   padding-bottom: 0.15rem;
 }
@@ -1781,7 +1781,7 @@
   }
 
   .yy-admin-tab-grid.admin-tab-grid {
-    grid-template-columns: repeat(auto-fit, minmax(7.8rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
   }
 
   .game-index-card dl {

@@ -242,3 +242,12 @@
 - 流量元数据使用 Agent 字节游标增量读取，network cursor 独立持久化；PCAP 使用真实 PID 状态完成，外部创建抓包持久化 Idempotency-Key，dumpcap 文件上限单位已修正。
 - 最终门禁：解决方案 0 warning / 0 error；单元测试 476/476；PostgreSQL 16 contract migration 2/2；EF 无 pending model changes；OpenAPI 26 breaking/11 additive comparator、自身快照和兼容比较通过；前端 locale、strict TypeScript、production build 通过。
 - 全量集成测试的 TeamLab、迁移和 OpenAPI 均通过；仅发现 2 个 Phase 1 resource-grant 测试夹具在签发前缺少管理员授权事实，修正夹具后对应 2/2 通过。Phase 3 未部署、未连接或修改生产服务器。
+
+## 2026-07-12 Phase 0-3 主线整合
+
+- 将远端 `main` 的 Phase 2 提交 `ba11a8ce` 合入 Phase 3 提交 `efda66e2`，共同基线为 Phase 1 提交 `c83d3135`；Phase 0、1、2、3 由此进入同一提交历史。
+- 冲突按最终模块边界解决：保留 Phase 2 的生成 API 隔离、全局 token/theme、公共组件、页面组件化、前端架构与 bundle 门禁；保留 Phase 3 的独立 TeamLab topology/release/runtime 契约和 Penetration adapter。
+- Penetration 管理入口继续作为薄路由，Phase 3 实现迁入 `components/topology/penetration`；节点管理保留 Phase 2 的 `NodesPage`、`NodeResourcePanel`、`AddNodeModal` 拆分，并切换到 Phase 3 的 `NodeTeamLabApi`。
+- 删除 Phase 2 基于旧 Penetration topology DTO 的无引用 `penetrationTopologyModel.tsx`，未恢复 Phase 3 已清理的旧 UX 契约测试或 compatibility API；对应架构预算同步收紧到当前组件边界。
+- 整合验证通过：solution build 0 warning / 0 error，单元测试 476/476，PostgreSQL 全量集成测试 222/222，前端 locale/strict TypeScript/架构扫描/production build/bundle budget 全部通过，EF 无 pending model changes，OpenAPI 26 breaking/11 additive 自测及基线兼容性通过。
+- 本次仅完成代码合并与主线同步，未部署、未连接或修改生产服务器。

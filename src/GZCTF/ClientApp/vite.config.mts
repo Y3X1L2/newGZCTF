@@ -69,7 +69,7 @@ export default defineConfig(({ mode }) => {
           async: false,
         }
       ),
-      Pages({ dirs: [{ dir: './src/pages', baseRoute: '', filePattern: '**/*.tsx' }] }),
+      Pages({ dirs: [{ dir: './src/pages', baseRoute: '', filePattern: '**/*.tsx' }], importMode: 'async' }),
       i18nVirtualManifest(),
       sanitizeGeneratedOutput(),
       optimizeCssModules(),

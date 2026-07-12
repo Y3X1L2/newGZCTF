@@ -10,6 +10,8 @@
     <TypeScriptToolsVersion>Latest</TypeScriptToolsVersion>
     <IsPackable>false</IsPackable>
     <SpaRoot>ClientApp\</SpaRoot>
+    <FrontendBuildMode Condition="'$(FrontendBuildMode)' == ''">Source</FrontendBuildMode>
+    <FrontendArtifactDir Condition="'$(FrontendArtifactDir)' == ''">$(SpaRoot)build\</FrontendArtifactDir>
     <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**</DefaultItemExcludes>
     <UserSecretsId>291cc810-6142-49a5-8134-1175254665a9</UserSecretsId>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
@@ -152,7 +154,13 @@
     <Exec WorkingDirectory="$(SpaRoot)" Command="$(NodePackageManager) install $(NodePackageInstallArgs)" />
   </Target>
 
-  <Target Name="PublishFrontend" AfterTargets="ComputeFilesToPublish" DependsOnTargets="DetectNodeEnv">
+  <ItemGroup Condition="'$(FrontendBuildMode)' == 'Artifact' Or '$(FrontendBuildMode)' == 'Skip'">
+    <Content Remove="wwwroot\index.html" />
+    <Content Remove="wwwroot\static\**" />
+    <Content Remove="wwwroot\frontend-manifest.json" />
+  </ItemGroup>
+
+  <Target Name="PublishFrontend" AfterTargets="ComputeFilesToPublish" DependsOnTargets="DetectNodeEnv" Condition="'$(FrontendBuildMode)' == 'Source'">
     <!-- As part of publishing, ensure the JS resources are freshly built in production mode -->
     <Exec WorkingDirectory="$(SpaRoot)" Command="$(NodePackageManager) install $(NodePackageInstallArgs)" />
     <Exec WorkingDirectory="$(SpaRoot)" Command="$(NodePackageManager) run build" />
@@ -161,6 +169,18 @@
     <ItemGroup>
       <DistFiles Include="$(SpaRoot)build\**" />
       <ResolvedFileToPublish Include="@(DistFiles->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>wwwroot\%(RecursiveDir)%(FileName)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="PublishFrontendArtifact" AfterTargets="ComputeFilesToPublish" Condition="'$(FrontendBuildMode)' == 'Artifact'">
+    <Error Condition="!Exists('$(FrontendArtifactDir)index.html')" Text="Frontend artifact was not found at $(FrontendArtifactDir). Run pnpm build:artifact or set FrontendArtifactDir." />
+    <ItemGroup>
+      <FrontendArtifactFiles Include="$(FrontendArtifactDir)**" />
+      <ResolvedFileToPublish Include="@(FrontendArtifactFiles->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
         <RelativePath>wwwroot\%(RecursiveDir)%(FileName)%(Extension)</RelativePath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
         <ExcludeFromSingleFile>true</ExcludeFromSingleFile>

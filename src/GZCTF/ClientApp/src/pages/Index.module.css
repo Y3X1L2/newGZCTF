@@ -1,0 +1,21 @@
+@media (min-width: 48em) and (max-width: 52em) {
+  :global(.yy-home-page.yy-home-recomposed > .yy-home-title-row) > .brandHeading {
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: nowrap !important;
+    font-size: 3.25rem !important;
+    line-height: 0.94 !important;
+    white-space: nowrap;
+  }
+
+  :global(.yy-home-page.yy-home-recomposed > .yy-home-title-row) > .brandHeading span {
+    width: auto !important;
+    margin-left: 0 !important;
+  }
+
+  :global(.yy-home-page.yy-home-recomposed > .yy-home-title-row) > .brandHeading > span,
+  :global(.yy-home-page.yy-home-recomposed > .yy-home-title-row) > .brandHeading > em {
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+  }
+}

@@ -1,19 +1,4 @@
 /* Final YINYU visual refinement layer. Keep this after YinyuTheme.css. */
-:root {
-  --font-display:
-    'Soft Aurora', 'Lexend', 'Arial Rounded MT Bold', 'Nunito Sans', 'Aptos Display', 'Segoe UI Variable Display',
-    'Microsoft YaHei UI', 'Noto Sans SC', ui-rounded, ui-sans-serif, system-ui, sans-serif;
-  --yy-title-glow: 0 0 2rem rgba(107, 238, 177, 0.2), 0 0 2.3rem rgba(185, 173, 209, 0.12), 0 1rem 2.6rem rgba(0, 0, 0, 0.44);
-  --yy-hex-border: rgba(107, 238, 177, 0.22);
-  --yy-hex-border-hot: rgba(107, 238, 177, 0.72);
-  --yy-gradient-brand: #ffffff 0%, #e4fff2 16%, #78f8be 34%, #f5fffa 50%, #b9add1 66%, #f5fffa 82%, #9affd2 100%;
-  --yy-gradient-signal: #f5fff9 0%, #9dffd5 22%, #42f49d 48%, #d8fff0 70%, #ffffff 100%;
-  --yy-gradient-silver: #ffffff 0%, #dde5df 24%, #73837d 43%, #f4f7f5 60%, #b9add1 78%, #ffffff 100%;
-  --yy-gradient-coming: #fff9de 0%, #d8c48a 28%, #dcffe9 52%, #78f8be 74%, #ffffff 100%;
-  --yy-gradient-ended: #f4f7f5 0%, #dde5df 24%, #73837d 48%, #cfd8d2 70%, #ffffff 100%;
-  --yy-gradient-danger: #fff1ed 0%, #e7a190 24%, #c8645d 48%, #f6ded8 72%, #ffffff 100%;
-}
-
 .yy-react-gradient-text {
   display: inline-flex;
   max-width: 100%;

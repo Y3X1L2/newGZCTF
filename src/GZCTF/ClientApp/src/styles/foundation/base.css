@@ -1,0 +1,46 @@
+html,
+body,
+#root {
+  min-width: 0;
+  max-width: 100%;
+}
+
+img,
+video {
+  max-width: 100%;
+}
+
+:where(.yy-page-frame, .yy-training-page, .yy-course-detail, .admin-shell, .admin-panel, .mantine-Tabs-panel) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.yy-table-shell {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+}
+
+.yy-table-shell > .mantine-Table-table {
+  min-width: var(--yy-table-min-width, 680px);
+}
+
+.yy-table-shell:focus-within {
+  border-color: var(--yy-color-border-strong);
+}
+
+:where(.mantine-Group-root, .mantine-Stack-root, .mantine-SimpleGrid-root) > * {
+  min-width: 0;
+}
+
+@media (max-width: 47.99em) {
+  .mantine-Modal-content,
+  .mantine-Drawer-content {
+    max-width: calc(100vw - 0.75rem);
+  }
+
+  .yy-table-shell > .mantine-Table-table {
+    min-width: var(--yy-table-min-width-mobile, 640px);
+  }
+}

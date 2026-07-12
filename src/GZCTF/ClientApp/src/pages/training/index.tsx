@@ -29,6 +29,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import useSWR from 'swr'
 import { WithNavBar } from '@Components/WithNavbar'
+import { DeferredGrid } from '@Components/foundation'
 import { RequireRole } from '@Components/WithRole'
 import {
   TrainingCheckInCard,
@@ -253,7 +254,7 @@ const Training: FC = () => {
   const showcase = canCreate ? teachingCourses : learningCourses
 
   return (
-    <WithNavBar width="min(100%, calc(100vw - 7.25rem))" minWidth={0}>
+    <WithNavBar width="var(--container)" minWidth={0}>
       <Box className="yy-training-page yy-course-home">
         <YinyuGameBendsBackground className="yy-training-bg" />
         <section className="yy-training-shell">
@@ -311,7 +312,7 @@ const Training: FC = () => {
                 <TrainingStatusText tone="ongoing">{recent.length}/{Math.min(3, showcase.length || 3)}</TrainingStatusText>
               </Group>
               {recent.length ? (
-                <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="md" className="yy-training-course-grid">
+                <DeferredGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="md" className="yy-training-course-grid">
                   {recent.map((course) => (
                     <TrainingCourseCard
                       key={course.id}
@@ -321,7 +322,7 @@ const Training: FC = () => {
                       extraAction={courseCardAction(course)}
                     />
                   ))}
-                </SimpleGrid>
+                </DeferredGrid>
               ) : (
                 <TrainingEmptyState
                   title={canCreate ? '还没有授课课程' : '还没有开始学习'}
@@ -335,7 +336,7 @@ const Training: FC = () => {
                   <Title order={3}>{canCreate ? '我教授的课程' : '今日待完成'}</Title>
                 </Stack>
               </Group>
-              <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="md" className="yy-training-course-grid">
+              <DeferredGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="md" className="yy-training-course-grid">
                 {(canCreate ? teachingCourses : todoCourses).slice(0, 6).map((course) => (
                   <TrainingCourseCard
                     key={course.id}
@@ -345,7 +346,7 @@ const Training: FC = () => {
                     extraAction={courseCardAction(course)}
                   />
                 ))}
-              </SimpleGrid>
+              </DeferredGrid>
               {(canCreate ? teachingCourses : todoCourses).length === 0 ? (
                 <TrainingEmptyState
                   title={canCreate ? '暂无授课课程' : '暂无待完成课程'}
@@ -359,11 +360,11 @@ const Training: FC = () => {
                   <Title order={3}>全部课程</Title>
                 </Stack>
               </Group>
-              <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="md" className="yy-training-course-grid">
+              <DeferredGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="md" className="yy-training-course-grid">
                 {courses.map((course) => (
                   <TrainingCourseCard key={course.id} course={course} extraAction={courseCardAction(course)} />
                 ))}
-              </SimpleGrid>
+              </DeferredGrid>
               {courses.length === 0 ? (
                 <TrainingEmptyState title="暂无课程" />
               ) : null}
