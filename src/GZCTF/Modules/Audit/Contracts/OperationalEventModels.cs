@@ -1,0 +1,66 @@
+using GZCTF.Modules.Audit.Domain;
+
+namespace GZCTF.Modules.Audit.Contracts;
+
+public sealed record OperationalEventDraft(
+    string EventCode,
+    OperationalEventOutcome Outcome,
+    string Message,
+    OperationalEventSeverity Severity = OperationalEventSeverity.Information,
+    Guid? CorrelationId = null,
+    OperationalErrorCategory? ErrorCategory = null,
+    string? ErrorCode = null,
+    bool Retryable = false,
+    IReadOnlyDictionary<string, object?>? Detail = null,
+    Guid? ActorUserId = null,
+    Guid? OwnerUserId = null,
+    int? OwnerTeamId = null,
+    int? GameId = null,
+    int? CourseId = null,
+    int? ChallengeId = null,
+    int? ImageTemplateId = null,
+    Guid? WorkerNodeId = null,
+    Guid? DeploymentTicketId = null,
+    int? TeamLabRuntimeId = null,
+    Guid? VmInstanceId = null,
+    string? SubjectType = null,
+    string? SubjectId = null,
+    string? SubjectDisplayName = null,
+    string? ResourceType = null,
+    string? ResourceId = null,
+    string? ResourceDisplayName = null);
+
+public sealed record OperationalEventModel(
+    long Id,
+    DateTimeOffset OccurredAt,
+    Guid CorrelationId,
+    string? TraceId,
+    string EventCode,
+    OperationalEventSeverity Severity,
+    OperationalEventOutcome Outcome,
+    OperationalErrorCategory? ErrorCategory,
+    string? ErrorCode,
+    bool Retryable,
+    string Message,
+    IReadOnlyDictionary<string, object?>? Detail,
+    Guid? ActorUserId,
+    Guid? OwnerUserId,
+    int? OwnerTeamId,
+    int? GameId,
+    int? CourseId,
+    int? ChallengeId,
+    int? ImageTemplateId,
+    Guid? WorkerNodeId,
+    Guid? DeploymentTicketId,
+    int? TeamLabRuntimeId,
+    Guid? VmInstanceId,
+    string? SubjectType,
+    string? SubjectId,
+    string? SubjectDisplayName,
+    string? ResourceType,
+    string? ResourceId,
+    string? ResourceDisplayName);
+
+public sealed record OperationalEventPageModel(
+    IReadOnlyList<OperationalEventModel> Items,
+    string? NextCursor);

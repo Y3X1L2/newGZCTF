@@ -23,6 +23,15 @@
 - `/admin/logs`、`/admin/queue`、节点和镜像状态彼此独立，无法按同一 correlation 联动排障。
 - 本阶段不部署生产服务器。按大单元开发和集中测试，全部实现后执行一次独立质量审查。
 
+### 2026-07-13 大单元 1 完成
+
+- 已新增稳定 event code、severity、outcome、error category 和 detail allowlist，业务代码只能使用集中常量。
+- 已新增追加式 `OperationalEvent`、同事务 `IOperationalEventWriter`、结构化 system log scope、查询模型和数据库索引。
+- 已为 `LogModel`、`DeploymentQueueTicket`、`ImageDistributionRecord` 预留 correlation、trace 和 typed error 字段。
+- 已将 operational event 纳入 Phase 4 retention catalog，默认保留 180 天。
+- 已生成 `ExpandPhaseSevenObservabilityAuditRecovery`、`BackfillPhaseSevenObservabilityAuditRecovery`、`ContractPhaseSevenObservabilityAuditRecovery` 三段迁移；Backfill 只导入活动 ticket、image distribution 和 TeamLab runtime snapshot，Contract fail closed。
+- 集中门禁：事件/保留策略专项测试 `10/10`，EF `No changes have been made to the model since the last migration.`。
+
 ## 0. Phase Boundary
 
 ### 0.1 Must Complete
@@ -259,10 +268,10 @@ Agent 新增 `GET /api/runtime/inventory`：
 - Modify: `AppDbContext.cs`、`AuditModuleRegistration.cs`、retention catalog。
 - Test: event contract、sanitization、migration、retention。
 
-- [ ] Implement stable enums, codes, limits and sensitive-key policy.
-- [ ] Implement append-only entity and same-unit-of-work writer.
-- [ ] Add indexes, retention and Expand/Backfill/Contract migrations.
-- [ ] Run one concentrated event/database gate.
+- [x] Implement stable enums, codes, limits and sensitive-key policy.
+- [x] Implement append-only entity and same-unit-of-work writer.
+- [x] Add indexes, retention and Expand/Backfill/Contract migrations.
+- [x] Run one concentrated event/database gate.
 
 ### Task 2: Reliable Logs and Correlation
 

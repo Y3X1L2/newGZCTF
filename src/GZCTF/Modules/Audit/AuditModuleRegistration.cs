@@ -14,6 +14,7 @@ public static class AuditModuleRegistration
         services.AddScoped<IdempotencyService>();
         services.AddScoped<ExternalApiAuditContext>();
         services.AddScoped<ApiOperationService>();
+        services.AddScoped<IOperationalEventWriter, EfOperationalEventWriter>();
         services.AddHostedService<ApiOperationWorker>();
         services.AddSingleton<IAuthorizationMiddlewareResultHandler, ExternalApiAuthorizationResultHandler>();
         return services;

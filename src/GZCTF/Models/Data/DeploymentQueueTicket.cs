@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using GZCTF.Services.Fleet;
+using GZCTF.Modules.Audit.Domain;
 
 namespace GZCTF.Models.Data;
 
@@ -35,6 +36,11 @@ public class DeploymentQueueTicket
     [MaxLength(64)] public string? BlockedReasonCode { get; set; }
     [MaxLength(512)] public string? StageMessage { get; set; }
     [MaxLength(1024)] public string? ErrorMessage { get; set; }
+    public OperationalErrorCategory? ErrorCategory { get; set; }
+    [MaxLength(128)] public string? ErrorCode { get; set; }
+    public bool Retryable { get; set; }
+    [MaxLength(128)] public string? TraceParent { get; set; }
+    [MaxLength(512)] public string? TraceState { get; set; }
     public int AttemptCount { get; set; }
     public DateTimeOffset? NotBeforeAt { get; set; }
     [MaxLength(128)] public string? ClaimOwner { get; set; }

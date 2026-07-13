@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 using GZCTF.Modules.Runtime.Domain;
+using GZCTF.Modules.Audit.Domain;
 
 namespace GZCTF.Models.Data;
 
@@ -38,6 +39,12 @@ public class ImageDistributionRecord
 
     [MaxLength(128)]
     public string? LastErrorCode { get; set; }
+
+    public OperationalErrorCategory? ErrorCategory { get; set; }
+
+    public bool Retryable { get; set; }
+
+    public Guid? LastCorrelationId { get; set; }
 
     public ICollection<ImageDistributionReference> References { get; set; } = [];
 

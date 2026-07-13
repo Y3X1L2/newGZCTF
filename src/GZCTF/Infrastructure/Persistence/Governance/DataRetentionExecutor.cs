@@ -30,6 +30,8 @@ public sealed class DataRetentionExecutor(
 
         await CleanAsync("deployment-ticket", leaseOwner, now,
             cleaner.CleanDeploymentTicketsAsync, cancellationToken);
+        await CleanAsync("operational-event", leaseOwner, now,
+            cleaner.CleanOperationalEventsAsync, cancellationToken);
         await CleanAsync("api-operation", leaseOwner, now,
             cleaner.CleanApiOperationsAsync, cancellationToken);
         await CleanAsync("teamlab-event", leaseOwner, now,

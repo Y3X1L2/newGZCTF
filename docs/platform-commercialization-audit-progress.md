@@ -4,6 +4,9 @@
 
 ## 2026-07-13 Phase 7 计划编写与代码事实基线
 
+- Phase 7 大单元 1 已完成：统一 event/error taxonomy、追加式 `OperationalEvent`、同事务 writer、敏感 detail allowlist、查询模型、事件索引和 180 天 retention 已落地。
+- 已生成 Phase 7 Expand/Backfill/Contract 三段迁移；Backfill 仅为活动 ticket、image distribution、TeamLab runtime 建立 snapshot 基线，Contract 对缺失基线 fail closed。
+- 大单元 1 集中门禁通过：事件/保留策略专项测试 `10/10`，EF 模型与迁移一致。
 - Phase 7 以提交 `4d4c6fe8d082ee74ea5f63ade2e9ecbbd576875d` 为基线，当前分支为 `codex/phase-07-observability-audit-recovery`，本阶段尚未部署生产服务器。
 - 已确认原始 `LogModel` 缺 trace/correlation/event/error/resource/node 维度；`DatabaseSink` 的低流量 flush 和退出 drain 不可靠，不能作为审计唯一事实。
 - 已确认 `DeploymentQueueTicket`、`ImageDistributionRecord` 和 TeamLab event 分别承载当前状态或局部历史，缺少统一追加式事件、错误分类和 correlation timeline。

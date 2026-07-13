@@ -7,6 +7,7 @@ public sealed class DataRetentionOptions
     public const string SectionName = "DataRetention";
 
     [Range(1, 3650)] public int SystemLogDays { get; set; } = 30;
+    [Range(1, 3650)] public int OperationalEventDays { get; set; } = 180;
     [Range(1, 3650)] public int TeamLabFlowDays { get; set; } = 7;
     [Range(1, 3650)] public int TeamLabFlowAggregateDays { get; set; } = 180;
     [Range(1, 3650)] public int DeploymentTicketDays { get; set; } = 180;
