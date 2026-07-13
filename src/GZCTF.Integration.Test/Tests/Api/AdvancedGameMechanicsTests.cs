@@ -759,6 +759,7 @@ public class AdvancedGameMechanicsTests(GZCTFApplicationFactory factory, ITestOu
         // 7. Destroy the container
         var destroyResponse = await client.DeleteAsync($"/api/Game/{game.Id}/Container/{challengeId}");
         destroyResponse.EnsureSuccessStatusCode();
+        await ContainerHelper.WaitContainerDestroyedAsync(factory.Services, runtimeContainer.Id, output);
 
         output.WriteLine("✅ Container destroyed successfully");
     }

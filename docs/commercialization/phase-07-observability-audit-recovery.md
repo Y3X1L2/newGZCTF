@@ -411,12 +411,23 @@ Agent 新增 `GET /api/runtime/inventory`：
 - Create: `docs/commercialization/benchmarks/phase-07-observability-baseline.md`。
 - Modify: progress and master plan status.
 
-- [ ] Document correlation search, errors, recovery, metrics, alerts, retention and incident workflow.
-- [ ] Run one consolidated backend gate.
-- [ ] Run one consolidated frontend gate.
-- [ ] Dispatch one independent quality-review agent for the complete Phase 7 diff.
-- [ ] Verify findings, fix confirmed issues in one batch, then rerun affected gate and final full gate once.
-- [ ] Record exact evidence and unresolved external deployment evidence.
+- [x] Document correlation search, errors, recovery, metrics, alerts, retention and incident workflow.
+- [x] Run one consolidated backend gate.
+- [x] Run one consolidated frontend gate.
+- [x] Dispatch one independent quality-review agent for the complete Phase 7 diff.
+- [x] Verify findings, fix confirmed issues in one batch, then rerun affected gate and final full gate once.
+- [x] Record exact evidence and unresolved external deployment evidence.
+
+Task 7 closed the independent review findings as one hardening batch:
+
+- ordinary Docker and VM facts now persist a monotonic runtime generation; VM facts also persist the libvirt domain UUID;
+- Agent destroy calls compare generation and, for VM, native UUID before changing the resource;
+- stale Stop/Destroy completes only when the exact resource is absent, replays only against the exact current generation, and fails closed on node/generation/native-identity drift;
+- TeamLab control recovery verifies every current-generation Docker/VM asset across shards before replay or completion;
+- stopped VM facts are excluded from expected-running reconciliation, while historical VM UUIDs are backfilled from matching inventory;
+- unavailable/unsupported inventory emits `Blocked`, missing resources emit typed `Failed`, and orphan identity includes generation;
+- operational event message/detail values are defensively redacted, database log shutdown is synchronized with emit, correlation timelines are chronological, and challenge labels honor the owning domain;
+- migration `20260713152015_HardenPhaseSevenRuntimeIdentity` backfills existing Docker/VM generations to `1` without introducing a compatibility runtime path.
 
 ## 7. Concentrated Acceptance
 
@@ -439,7 +450,9 @@ Agent 新增 `GET /api/runtime/inventory`：
 ### Recovery
 
 - matching Agent resource completes stale create.
-- absent resource with stable identity replays safely.
+- absent Create resource with stable identity replays safely.
+- absent Stop/Destroy resource completes without issuing another destructive call.
+- matching Stop/Destroy replays with Agent-side generation/native-identity preconditions.
 - identity mismatch fails closed.
 - online Agent missing resource corrects DB state.
 - offline Agent causes no false deletion.
@@ -467,3 +480,14 @@ Phase 7 is code-complete only when:
 - Release build、unit、integration、frontend production gates、EF consistency and sensitive-data scans pass.
 
 External collector deployment、production alert rules and target-environment incident drills remain deployment/Phase 14 evidence and cannot be inferred from local development.
+
+Final development evidence on 2026-07-13:
+
+- Release solution build: `0` warnings / `0` errors;
+- unit tests: `483/483`;
+- PostgreSQL/Redis integration tests: `227/227` with Testcontainers Ryuk disabled as required by the local baseline;
+- affected observability/recovery/runtime-control tests: `41/41`;
+- frontend production gate completed before the final backend-only hardening batch: locale, strict TypeScript, architecture, Vite, artifact manifest and bundle budget all passed;
+- EF Core reports no pending model changes; Git whitespace and migration checks pass;
+- the single independent quality review was completed and all ten confirmed findings were closed;
+- no production deployment or production-server access was performed in Phase 7.

@@ -81,6 +81,29 @@ public sealed class LoggingObservabilityTests
     }
 
     [Fact]
+    public async Task DatabaseSink_DisposeDrainsAcceptedLogsAndCountsRejectedEmits()
+    {
+        var databaseName = Guid.NewGuid().ToString();
+        using var provider = new ServiceCollection()
+            .AddLogging()
+            .AddDbContext<AppDbContext>(options => options.UseInMemoryDatabase(databaseName))
+            .BuildServiceProvider();
+        var sink = new DatabaseSink(provider);
+        using var logger = new LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
+        var droppedBefore = DatabaseLogSinkMetrics.Dropped;
+
+        for (var index = 0; index < 10; index++)
+            logger.Information("accepted log {Index}", index);
+        sink.Dispose();
+        logger.Information("rejected after dispose");
+
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(10, await context.Logs.CountAsync(item => item.Message.Contains("accepted log")));
+        Assert.True(DatabaseLogSinkMetrics.Dropped >= droppedBefore + 1);
+    }
+
+    [Fact]
     public async Task LogRepository_FiltersByCorrelationTicketAndResource()
     {
         await using var context = CreateContext();

@@ -915,7 +915,8 @@ public class EditController(
                 user!.Id,
                 RuntimeOperationKind.Destroy,
                 challenge.TestContainer?.NodeId ?? activeCreate?.TargetNodeId,
-                challenge.Title), token);
+                challenge.Title,
+                challenge.TestContainer?.RuntimeGeneration ?? activeCreate?.Generation ?? 1), token);
         return Accepted(await deploymentQueue.GetStatusAsync(queued.TicketId, token));
     }
 

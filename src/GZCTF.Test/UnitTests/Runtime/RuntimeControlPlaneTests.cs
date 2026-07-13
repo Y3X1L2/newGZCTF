@@ -50,6 +50,25 @@ public sealed class RuntimeControlPlaneTests
     }
 
     [Fact]
+    public async Task Queue_AssignsMonotonicGenerationAcrossCompletedCreates()
+    {
+        await using var context = CreateContext();
+        var service = CreateQueue(context);
+        var request = DeploymentQueueRequest.GameContainer(1, 2, 3);
+        var first = await service.EnqueueAsync(request, CancellationToken.None);
+        var firstTicket = await context.DeploymentQueueTickets.SingleAsync(item => item.Id == first.TicketId);
+        firstTicket.Status = DeploymentQueueTicketStatus.Succeeded;
+        firstTicket.CompletedAt = DateTimeOffset.UtcNow;
+        await context.SaveChangesAsync();
+
+        var second = await service.EnqueueAsync(request, CancellationToken.None);
+        var secondTicket = await context.DeploymentQueueTickets.SingleAsync(item => item.Id == second.TicketId);
+
+        Assert.Equal(1, firstTicket.Generation);
+        Assert.Equal(2, secondTicket.Generation);
+    }
+
+    [Fact]
     public async Task Queue_ControlSupersedesUnstartedCreateForSameSubject()
     {
         await using var context = CreateContext();
@@ -71,7 +90,7 @@ public sealed class RuntimeControlPlaneTests
     }
 
     [Fact]
-    public async Task Recovery_ReplaysIdempotentDestroyButFailsClosedForExtend()
+    public async Task Recovery_CompletesAbsentDestroyButFailsClosedForExtend()
     {
         await using var context = CreateContext();
         var node = SeedNode(context, 2);
@@ -95,9 +114,9 @@ public sealed class RuntimeControlPlaneTests
         var recovered = await CreateReconciliation(context)
             .ReconcileAsync(Guid.CreateVersion7(), TimeSpan.FromMinutes(10), CancellationToken.None);
 
-        Assert.Equal(1, recovered.ReplayedCount);
+        Assert.Equal(1, recovered.RecoveredTicketCount);
         Assert.Equal(1, recovered.ConflictCount);
-        Assert.Equal(DeploymentQueueTicketStatus.Scheduled, destroy.Status);
+        Assert.Equal(DeploymentQueueTicketStatus.Succeeded, destroy.Status);
         Assert.Equal(DeploymentQueueTicketStatus.Failed, extend.Status);
     }
 

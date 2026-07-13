@@ -216,8 +216,39 @@ public class DockerService
         return BuildContainerResponse(inspect, primaryNetwork, portSpec, request.ExposedPort);
     }
 
-    public async Task DestroyContainerAsync(string containerId, CancellationToken token)
+    public async Task DestroyContainerAsync(
+        string containerId,
+        CancellationToken token,
+        int? expectedGeneration = null)
     {
+        if (expectedGeneration is { } requiredGeneration)
+        {
+            ContainerInspectResponse existing;
+            try
+            {
+                existing = await _client.Containers.InspectContainerAsync(containerId, token);
+            }
+            catch (DockerContainerNotFoundException)
+            {
+                return;
+            }
+            catch (DockerApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            {
+                return;
+            }
+
+            var generation = existing.Config.Labels is not null &&
+                             existing.Config.Labels.TryGetValue("GZCTF.Generation", out var value) &&
+                             int.TryParse(value, out var parsed)
+                ? parsed
+                : (int?)null;
+            if (generation != requiredGeneration)
+                throw new AgentOperationException(
+                    "Conflict", "runtime.identity_conflict",
+                    "Container generation does not match the requested runtime identity.", false,
+                    StatusCodes.Status409Conflict);
+        }
+
         try
         {
             await _client.Containers.StopContainerAsync(containerId,

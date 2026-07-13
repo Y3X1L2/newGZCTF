@@ -485,7 +485,8 @@ public class NodesController : ControllerBase
             try
             {
                 var queued = await deploymentQueue.EnqueueAsync(
-                    DeploymentQueueRequest.MaintenanceContainer(container.Id, container.NodeId, container.Image),
+                    DeploymentQueueRequest.MaintenanceContainer(
+                        container.Id, container.NodeId, container.Image, container.RuntimeGeneration),
                     token);
                 var result = await WaitForControlTicketAsync(deploymentQueue, queued.TicketId, token);
                 if (result?.Status == DeploymentQueueTicketStatus.Succeeded)
@@ -536,6 +537,7 @@ public class NodesController : ControllerBase
                     vm.Challenge.GameId, vm.UserId, vm.ChallengeId, vm.Id) with
                 {
                     Operation = RuntimeOperationKind.Destroy,
+                    Generation = vm.RuntimeGeneration,
                     TargetNodeId = vm.NodeId,
                     SubjectDisplayName = "Node force cleanup",
                     ResourceDisplayName = vm.VmName
@@ -886,6 +888,7 @@ public class NodesController : ControllerBase
             vm.Challenge.GameId, vm.UserId, vm.ChallengeId, vm.Id) with
         {
             Operation = RuntimeOperationKind.Destroy,
+            Generation = vm.RuntimeGeneration,
             TargetNodeId = vm.NodeId,
             SubjectDisplayName = vm.UserId.ToString("N")[..8],
             ResourceDisplayName = vm.VmName
@@ -908,6 +911,7 @@ public class NodesController : ControllerBase
             vm.Challenge.GameId, vm.UserId, vm.ChallengeId, vm.Id) with
         {
             Operation = RuntimeOperationKind.Destroy,
+            Generation = vm.RuntimeGeneration,
             TargetNodeId = vm.NodeId,
             SubjectDisplayName = vm.UserId.ToString("N")[..8],
             ResourceDisplayName = vm.VmName

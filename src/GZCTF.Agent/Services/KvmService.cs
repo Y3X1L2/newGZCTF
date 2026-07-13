@@ -55,6 +55,8 @@ public class KvmService
             return new CreateVmResponse
             {
                 VmName = request.VmName,
+                NativeId = domainId,
+                Generation = Math.Max(1, request.Generation),
                 Status = "Running",
                 VncAddress = await GetVncAddressAsync(request.VmName, token),
                 Interfaces = request.Interfaces
@@ -94,20 +96,46 @@ public class KvmService
         if (!state.Equals("running", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"VM {request.VmName} was created but is not running (state: {state})");
         await File.WriteAllTextAsync(generationPath, Math.Max(1, request.Generation).ToString(), token);
+        domainId = (await RunCommandAsync(
+            $"virsh domuuid {ShellEscape(request.VmName)} 2>/dev/null", token, throwOnError: false)).Trim();
+        if (string.IsNullOrWhiteSpace(domainId))
+            throw new InvalidOperationException($"VM {request.VmName} has no stable libvirt domain identity.");
 
         return new CreateVmResponse
         {
             VmName = request.VmName,
+            NativeId = domainId,
+            Generation = Math.Max(1, request.Generation),
             Status = "Running",
             VncAddress = await GetVncAddressAsync(request.VmName, token),
             Interfaces = request.Interfaces
         };
     }
 
-    public async Task DestroyVmAsync(string vmName, CancellationToken token)
+    public async Task DestroyVmAsync(
+        string vmName,
+        int? expectedGeneration,
+        string? expectedNativeId,
+        CancellationToken token)
     {
         if (!SafeNamePattern.IsMatch(vmName)) return;
         await using var identityLock = await _resourceLock.AcquireAsync($"vm:{vmName}", token);
+        var nativeId = (await RunCommandAsync(
+            $"virsh domuuid {ShellEscape(vmName)} 2>/dev/null", token, throwOnError: false)).Trim();
+        if (string.IsNullOrWhiteSpace(nativeId))
+            return;
+        var generation = await ReadDomainGenerationAsync(vmName, token);
+        if (expectedGeneration is { } requiredGeneration && generation != requiredGeneration)
+            throw new AgentOperationException(
+                "Conflict", "runtime.identity_conflict",
+                $"VM {vmName} generation does not match the requested runtime identity.", false,
+                StatusCodes.Status409Conflict);
+        if (!string.IsNullOrWhiteSpace(expectedNativeId) &&
+            !nativeId.Equals(expectedNativeId, StringComparison.OrdinalIgnoreCase))
+            throw new AgentOperationException(
+                "Conflict", "runtime.identity_conflict",
+                $"VM {vmName} native identity does not match the requested runtime identity.", false,
+                StatusCodes.Status409Conflict);
         await StopRdpProxyAsync(vmName);
         await RunCommandAsync($"virsh destroy {ShellEscape(vmName)} 2>/dev/null || true", token);
         await RunCommandAsync($"virsh undefine {ShellEscape(vmName)} --remove-all-storage 2>/dev/null || true", token);

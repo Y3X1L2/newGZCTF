@@ -105,7 +105,6 @@ public class DeploymentQueueService
         using var activity = PlatformTelemetry.RuntimeActivitySource.StartActivity("runtime.enqueue", ActivityKind.Producer);
         activity?.SetTag("runtime.workload", request.Kind.ToString());
         activity?.SetTag("runtime.operation", request.Operation.ToString());
-        var identity = DeploymentQueueTicket.BuildActiveIdentity(request);
         var subjectKey = DeploymentQueueTicket.BuildSubjectConcurrencyKey(request);
         await using var transaction = _context.Database.IsRelational()
             ? await _context.Database.BeginTransactionAsync(token)
@@ -121,6 +120,9 @@ public class DeploymentQueueService
                     $"SELECT pg_advisory_xact_lock(hashtextextended({ownerAdmissionKey}, 0))", token);
             }
         }
+
+        request = await ResolveGenerationAsync(request, subjectKey, token);
+        var identity = DeploymentQueueTicket.BuildActiveIdentity(request);
         var existing = await _context.DeploymentQueueTickets
             .Include(t => t.TargetNode)
             .FirstOrDefaultAsync(t => t.ActiveIdentity == identity && ActiveStatuses.Contains(t.Status), token);
@@ -245,6 +247,22 @@ public class DeploymentQueueService
             await transaction.CommitAsync(token);
         await _wakeup.NotifyAsync(ticket.Id, token);
         return DeploymentQueueResult.FromStatus(status, reusedExistingTicket: false);
+    }
+
+    async Task<DeploymentQueueRequest> ResolveGenerationAsync(
+        DeploymentQueueRequest request,
+        string subjectKey,
+        CancellationToken token)
+    {
+        if (request.Operation != RuntimeOperationKind.Create ||
+            request.Kind == DeploymentQueueKind.TeamLabRuntime)
+            return request with { Generation = Math.Max(1, request.Generation) };
+
+        var latest = await _context.DeploymentQueueTickets
+            .Where(ticket => ticket.SubjectConcurrencyKey == subjectKey)
+            .Select(ticket => (int?)ticket.Generation)
+            .MaxAsync(token) ?? 0;
+        return request with { Generation = Math.Max(request.Generation, latest + 1) };
     }
 
     public async Task<DeploymentQueueStatusModel?> GetStatusAsync(Guid ticketId, CancellationToken token)

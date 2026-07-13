@@ -43,6 +43,12 @@ public sealed class OperationalEventQueryService(AppDbContext context)
         var latest = timeline.Items.First();
         var failure = timeline.Items.FirstOrDefault(item => item.Event.Outcome == OperationalEventOutcome.Failed);
         var outcome = facts.HasFailure ? OperationalEventOutcome.Failed : latest.Event.Outcome;
+        var chronologicalTimeline = new OperationalEventViewPageModel(
+            timeline.Items
+                .OrderBy(item => item.Event.OccurredAt)
+                .ThenBy(item => item.Event.Id)
+                .ToArray(),
+            null);
         return new OperationalCorrelationSummaryModel(
             correlationId,
             facts.StartedAt,
@@ -56,7 +62,7 @@ public sealed class OperationalEventQueryService(AppDbContext context)
                 .Distinct(StringComparer.Ordinal).ToArray(),
             timeline.Items.Select(item => item.Labels.Subject).FirstOrDefault(item => item is not null),
             timeline.Items.Select(item => item.Labels.Resource).FirstOrDefault(item => item is not null),
-            timeline);
+            chronologicalTimeline);
     }
 
     private async Task<OperationalEventViewPageModel> QueryCoreAsync(
@@ -266,9 +272,7 @@ public sealed class OperationalEventQueryService(AppDbContext context)
     {
         public OperationalEventLabels For(OperationalEvent item)
         {
-            var challenge = item.ChallengeId is { } challengeId
-                ? GameChallenges.GetValueOrDefault(challengeId) ?? ExerciseChallenges.GetValueOrDefault(challengeId)
-                : null;
+            var challenge = ResolveChallenge(item);
             return new OperationalEventLabels(
                 item.ActorUserId is { } actorId ? Users.GetValueOrDefault(actorId) : null,
                 item.OwnerUserId is { } ownerId ? Users.GetValueOrDefault(ownerId) : null,
@@ -283,6 +287,20 @@ public sealed class OperationalEventQueryService(AppDbContext context)
                 item.VmInstanceId is { } vmId ? Vms.GetValueOrDefault(vmId) : null,
                 item.SubjectDisplayName ?? item.SubjectId,
                 item.ResourceDisplayName ?? item.ResourceId);
+        }
+
+        private string? ResolveChallenge(OperationalEvent item)
+        {
+            if (item.ChallengeId is not { } challengeId)
+                return null;
+            if (item.GameId is not null ||
+                item.SubjectType is "game-container" or "challenge-test-container")
+                return GameChallenges.GetValueOrDefault(challengeId);
+            if (item.CourseId is not null ||
+                item.SubjectType is "exercise-container" or "training-container" or "exercise-challenge")
+                return ExerciseChallenges.GetValueOrDefault(challengeId);
+            return GameChallenges.GetValueOrDefault(challengeId) ??
+                   ExerciseChallenges.GetValueOrDefault(challengeId);
         }
     }
 }

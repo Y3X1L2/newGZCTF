@@ -795,7 +795,7 @@ public class AdminController(
 
         var queue = HttpContext.RequestServices.GetRequiredService<DeploymentQueueService>();
         var queued = await queue.EnqueueAsync(DeploymentQueueRequest.MaintenanceContainer(
-            container.Id, container.NodeId, container.Image), token);
+            container.Id, container.NodeId, container.Image, container.RuntimeGeneration), token);
         return Accepted(await queue.GetStatusAsync(queued.TicketId, token));
     }
 

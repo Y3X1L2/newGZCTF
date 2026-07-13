@@ -193,6 +193,7 @@ public class KubernetesManager : IContainerManager, IContainerPatchApplicator, I
         {
             ContainerId = name,
             Image = config.Image,
+            RuntimeGeneration = Math.Max(1, config.Generation),
             Port = config.ExposedPort,
             IP = service.Spec.ClusterIP,
             IsProxy = !_meta.ExposePort,

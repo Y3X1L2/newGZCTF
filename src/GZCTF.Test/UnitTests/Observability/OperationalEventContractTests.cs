@@ -113,6 +113,29 @@ public sealed class OperationalEventContractTests
             Detail: new Dictionary<string, object?> { [key] = "value" })));
     }
 
+    [Fact]
+    public void Append_RedactsSensitiveAssignmentsFromMessageAndDetailValues()
+    {
+        using var context = CreateContext();
+        var writer = new EfOperationalEventWriter(
+            context, NullLogger<EfOperationalEventWriter>.Instance);
+
+        var entity = writer.Append(new OperationalEventDraft(
+            OperationalEventCodes.Runtime.TicketEnqueued,
+            OperationalEventOutcome.Pending,
+            "Request failed with token=top-secret and Authorization: Bearer abc.def.",
+            Detail: new Dictionary<string, object?>
+            {
+                ["reasonCode"] = "password: qwer1234!"
+            }));
+
+        Assert.DoesNotContain("top-secret", entity.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("abc.def", entity.Message, StringComparison.Ordinal);
+        Assert.Contains("[REDACTED]", entity.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("qwer1234", entity.DetailJson, StringComparison.Ordinal);
+        Assert.Contains("[REDACTED]", entity.DetailJson, StringComparison.Ordinal);
+    }
+
     private static AppDbContext CreateContext() => new(
         new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())

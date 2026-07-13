@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
@@ -29,6 +30,13 @@ public sealed class EfOperationalEventWriter(
         "wireguardprivatekey", "userdata", "cloudinit", "registryauth", "command",
         "environment", "requestbody", "responsebody", "rdppassword", "sshprivatekey"
     ];
+    private static readonly Regex SensitiveAssignmentPattern = new(
+        @"\b(" + string.Join("|", SensitiveFragments.Select(Regex.Escape)) +
+        @")\b\s*([:=])\s*(?:""[^""]*""|'[^']*'|[^\s,;}]+)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex BearerPattern = new(
+        @"\bBearer\s+[^\s,;]+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     public OperationalEvent Append(OperationalEventDraft draft)
     {
@@ -45,7 +53,7 @@ public sealed class EfOperationalEventWriter(
             ErrorCategory = draft.ErrorCategory,
             ErrorCode = Trim(draft.ErrorCode, 128),
             Retryable = draft.Retryable,
-            Message = Trim(draft.Message, MaxMessageLength) ?? string.Empty,
+            Message = SanitizeText(draft.Message, MaxMessageLength),
             DetailJson = SerializeDetail(draft.Detail),
             ActorUserId = draft.ActorUserId,
             OwnerUserId = draft.OwnerUserId,
@@ -108,10 +116,29 @@ public sealed class EfOperationalEventWriter(
                 throw new ArgumentException($"Operational event detail key '{key}' is not allowed.", nameof(detail));
         }
 
-        var json = JsonSerializer.Serialize(detail);
+        var sanitized = detail.ToDictionary(
+            item => item.Key,
+            item => SanitizeDetailValue(item.Value),
+            StringComparer.Ordinal);
+        var json = JsonSerializer.Serialize(sanitized);
         if (json.Length > MaxDetailLength)
             throw new ArgumentException($"Operational event detail exceeds {MaxDetailLength} characters.", nameof(detail));
         return json;
+    }
+
+    private static object? SanitizeDetailValue(object? value) => value switch
+    {
+        string text => SanitizeText(text, MaxDetailLength),
+        IEnumerable<string> values => values.Select(item => SanitizeText(item, MaxDetailLength)).ToArray(),
+        _ => value
+    };
+
+    private static string SanitizeText(string value, int maxLength)
+    {
+        var sanitized = BearerPattern.Replace(value, "Bearer [REDACTED]");
+        sanitized = SensitiveAssignmentPattern.Replace(sanitized,
+            match => $"{match.Groups[1].Value}{match.Groups[2].Value}[REDACTED]");
+        return Trim(sanitized, maxLength) ?? string.Empty;
     }
 
     private void WriteStructuredLog(OperationalEvent entity)

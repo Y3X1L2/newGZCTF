@@ -133,6 +133,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             IsProxy = false,
             Status = ContainerStatus.Running,
             NodeId = selectedNode.Id,
+            RuntimeGeneration = Math.Max(1, config.Generation),
         };
         if (!await ApplyPublicProxyAsync(remoteContainer, config, selectedNode, ticketId, context, token))
             return null;
@@ -161,7 +162,8 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         }
         else
         {
-            await _agentClient.DestroyContainerAsync(container.NodeId.Value, container.ContainerId, token);
+            await _agentClient.DestroyContainerAsync(
+                container.NodeId.Value, container.ContainerId, container.RuntimeGeneration, token);
             container.Status = ContainerStatus.Destroyed;
 
         }
@@ -477,7 +479,8 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             if (node.IsLocal)
                 await _localManager.DestroyContainerAsync(container, token);
             else
-                await _agentClient.DestroyContainerAsync(node.Id, container.ContainerId, token);
+                await _agentClient.DestroyContainerAsync(
+                    node.Id, container.ContainerId, config.Generation, token);
         }
         catch (Exception ex)
         {

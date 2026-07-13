@@ -241,6 +241,8 @@ public class DeploymentExecutionService
             return ticket.Operation is RuntimeOperationKind.Stop or RuntimeOperationKind.Destroy
                 ? DeploymentExecutionResult.Completed()
                 : DeploymentExecutionResult.Failed("The runtime container no longer exists.");
+        if (container.RuntimeGeneration != ticket.Generation)
+            return DeploymentExecutionResult.Failed("Container control ticket has a stale runtime generation.");
         if (ticket.Operation == RuntimeOperationKind.Extend)
         {
             if (ticket.ExtensionSeconds is not > 0)
@@ -265,6 +267,8 @@ public class DeploymentExecutionService
             return ticket.Operation is RuntimeOperationKind.Stop or RuntimeOperationKind.Destroy
                 ? DeploymentExecutionResult.Completed()
                 : DeploymentExecutionResult.Failed("The VM no longer exists.");
+        if (vm.RuntimeGeneration != ticket.Generation)
+            return DeploymentExecutionResult.Failed("VM control ticket has a stale runtime generation.");
         if (ticket.Operation is not (RuntimeOperationKind.Stop or RuntimeOperationKind.Destroy))
             return DeploymentExecutionResult.Failed($"VM operation {ticket.Operation} is not supported.");
         await _fleetVmService.DestroyVmAsync(vm, token);
@@ -278,6 +282,12 @@ public class DeploymentExecutionService
     {
         if (_teamLabRuntime is null || ticket.TeamLabRuntimeId is not { } runtimeId)
             return DeploymentExecutionResult.Failed("TeamLab control ticket has invalid identity.");
+        var runtimeGeneration = await _context.TeamLabRuntimes.AsNoTracking()
+            .Where(item => item.Id == runtimeId)
+            .Select(item => (int?)item.Generation)
+            .SingleOrDefaultAsync(token);
+        if (runtimeGeneration is not null && runtimeGeneration != ticket.Generation)
+            return DeploymentExecutionResult.Failed("TeamLab control ticket has a stale runtime generation.");
         return ticket.Operation switch
         {
             RuntimeOperationKind.Reset => await _teamLabRuntime.ExecuteQueuedResetAsync(

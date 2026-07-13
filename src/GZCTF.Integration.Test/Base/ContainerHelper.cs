@@ -3,6 +3,7 @@ using Docker.DotNet;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Services.Container.Provider;
+using GZCTF.Utils;
 using k8s;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -124,6 +125,30 @@ public static class ContainerHelper
         // Wait for container readiness
         await WaitContainerReadyAsync(serviceProvider, container, output);
         return container;
+    }
+
+    public static async Task WaitContainerDestroyedAsync(
+        IServiceProvider serviceProvider,
+        Guid containerId,
+        ITestOutputHelper output)
+    {
+        for (var attempt = 0; attempt < MaxAttempts; attempt++)
+        {
+            using var scope = serviceProvider.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var status = await context.Containers.AsNoTracking()
+                .Where(container => container.Id == containerId)
+                .Select(container => (ContainerStatus?)container.Status)
+                .SingleOrDefaultAsync();
+            if (status is null or ContainerStatus.Destroyed)
+            {
+                output.WriteLine($"✅ Container {containerId} cleanup completed");
+                return;
+            }
+            await Task.Delay(DelayMs);
+        }
+
+        throw new InvalidOperationException($"Container {containerId} was not destroyed within the timeout.");
     }
 
     /// <summary>

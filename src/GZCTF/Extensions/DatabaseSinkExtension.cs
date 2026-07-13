@@ -27,6 +27,7 @@ public sealed class DatabaseSink : ILogEventSink, IDisposable
 
     private readonly ConcurrentQueue<LogModel> _buffer = [];
     private readonly SemaphoreSlim _flushSignal = new(0, 1);
+    private readonly object _lifecycleLock = new();
     private readonly IServiceProvider _serviceProvider;
     private readonly CancellationTokenSource _forceStop = new();
     private readonly Task _writerTask;
@@ -41,27 +42,39 @@ public sealed class DatabaseSink : ILogEventSink, IDisposable
 
     public void Emit(LogEvent logEvent)
     {
-        if (Volatile.Read(ref _stopping) != 0)
-            return;
-
-        while (Volatile.Read(ref _bufferedCount) >= MaxBufferedLogs &&
-               _buffer.TryDequeue(out _))
+        var shouldSignal = false;
+        lock (_lifecycleLock)
         {
-            Interlocked.Decrement(ref _bufferedCount);
-            DatabaseLogSinkMetrics.RecordDropped();
+            if (_stopping != 0)
+            {
+                DatabaseLogSinkMetrics.RecordDropped();
+                return;
+            }
+
+            while (_bufferedCount >= MaxBufferedLogs && _buffer.TryDequeue(out _))
+            {
+                Interlocked.Decrement(ref _bufferedCount);
+                DatabaseLogSinkMetrics.RecordDropped();
+            }
+
+            _buffer.Enqueue(LogModelFactory.FromLogEvent(logEvent));
+            var buffered = Interlocked.Increment(ref _bufferedCount);
+            DatabaseLogSinkMetrics.SetBuffered(buffered);
+            shouldSignal = buffered >= FlushBatchSize;
         }
 
-        _buffer.Enqueue(LogModelFactory.FromLogEvent(logEvent));
-        var buffered = Interlocked.Increment(ref _bufferedCount);
-        DatabaseLogSinkMetrics.SetBuffered(buffered);
-        if (buffered >= FlushBatchSize)
+        if (shouldSignal)
             SignalFlush();
     }
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _stopping, 1) != 0)
-            return;
+        lock (_lifecycleLock)
+        {
+            if (_stopping != 0)
+                return;
+            Volatile.Write(ref _stopping, 1);
+        }
 
         SignalFlush();
         if (!_writerTask.Wait(ShutdownTimeout))

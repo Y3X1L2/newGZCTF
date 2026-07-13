@@ -134,6 +134,13 @@ public class AgentClient
     }
 
     public virtual async Task DestroyContainerAsync(Guid nodeId, string containerId, CancellationToken token)
+        => await DestroyContainerAsync(nodeId, containerId, null, token);
+
+    public virtual async Task DestroyContainerAsync(
+        Guid nodeId,
+        string containerId,
+        int? expectedGeneration,
+        CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null)
@@ -141,7 +148,9 @@ public class AgentClient
 
         var client = BuildClient(node);
         using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(60));
-        var response = await client.DeleteAsync($"/api/containers/{Uri.EscapeDataString(containerId)}",
+        var generationQuery = expectedGeneration is { } generation ? $"?generation={generation}" : string.Empty;
+        var response = await client.DeleteAsync(
+            $"/api/containers/{Uri.EscapeDataString(containerId)}{generationQuery}",
             deadline.Token);
         if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
         {
@@ -629,6 +638,14 @@ public class AgentClient
     }
 
     public virtual async Task DestroyVmAsync(Guid nodeId, string vmName, CancellationToken token)
+        => await DestroyVmAsync(nodeId, vmName, null, null, token);
+
+    public virtual async Task DestroyVmAsync(
+        Guid nodeId,
+        string vmName,
+        int? expectedGeneration,
+        string? expectedNativeId,
+        CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null)
@@ -636,7 +653,14 @@ public class AgentClient
 
         var client = BuildClient(node);
         using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(60));
-        var response = await client.DeleteAsync($"/api/vms/{Uri.EscapeDataString(vmName)}", deadline.Token);
+        var query = new List<string>(2);
+        if (expectedGeneration is { } generation)
+            query.Add($"generation={generation}");
+        if (!string.IsNullOrWhiteSpace(expectedNativeId))
+            query.Add($"nativeId={Uri.EscapeDataString(expectedNativeId)}");
+        var suffix = query.Count == 0 ? string.Empty : $"?{string.Join('&', query)}";
+        var response = await client.DeleteAsync(
+            $"/api/vms/{Uri.EscapeDataString(vmName)}{suffix}", deadline.Token);
         if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
         {
             throw await CreateAgentExceptionAsync(
@@ -1063,6 +1087,8 @@ public class AgentVmInitConfig
 public class AgentCreateVmResponse
 {
     public string VmName { get; set; } = string.Empty;
+    public string NativeId { get; set; } = string.Empty;
+    public int Generation { get; set; } = 1;
     public string Status { get; set; } = string.Empty;
     public string? VncAddress { get; set; }
     public List<AgentVmNetworkInterfaceRequest> Interfaces { get; set; } = [];

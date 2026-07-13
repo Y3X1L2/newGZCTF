@@ -9,6 +9,7 @@ using GZCTF.Models.Data;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
+using GZCTF.Utils;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -143,7 +144,33 @@ public sealed class OperationalEventQueryTests
         Assert.Equal(["runtime"], summary.Domains);
         Assert.Equal("admin team", summary.Subject);
         Assert.Equal("nginx:latest", summary.Resource);
-        Assert.Equal([2L, 1L], summary.Timeline.Items.Select(item => item.Event.Id).ToArray());
+        Assert.Equal([1L, 2L], summary.Timeline.Items.Select(item => item.Event.Id).ToArray());
+    }
+
+    [Fact]
+    public async Task QueryAsync_ResolvesChallengeLabelFromOwningDomainWhenIdsCollide()
+    {
+        await using var context = CreateContext();
+        context.GameChallenges.Add(new GameChallenge
+        {
+            Id = 7, GameId = 10, Title = "Game challenge", Category = ChallengeCategory.Misc
+        });
+        context.ExerciseChallenges.Add(new ExerciseChallenge
+        {
+            Id = 7, TrainingCourseId = 20, Title = "Exercise challenge", Category = ChallengeCategory.Web
+        });
+        context.OperationalEvents.AddRange(
+            Event(1, DateTimeOffset.UtcNow, OperationalEventCodes.Runtime.TicketEnqueued,
+                gameId: 10, challengeId: 7, subjectType: "game-container"),
+            Event(2, DateTimeOffset.UtcNow.AddSeconds(-1), OperationalEventCodes.Runtime.TicketEnqueued,
+                courseId: 20, challengeId: 7, subjectType: "training-container"));
+        await context.SaveChangesAsync();
+
+        var page = await new OperationalEventQueryService(context)
+            .QueryAsync(new OperationalEventQueryModel(), CancellationToken.None);
+
+        Assert.Equal("Game challenge", page.Items.Single(item => item.Event.Id == 1).Labels.Challenge);
+        Assert.Equal("Exercise challenge", page.Items.Single(item => item.Event.Id == 2).Labels.Challenge);
     }
 
     [Fact]
@@ -174,7 +201,11 @@ public sealed class OperationalEventQueryTests
         string? resourceType = null,
         string? resourceId = null,
         string? subjectDisplayName = null,
-        string? resourceDisplayName = null) => new()
+        string? resourceDisplayName = null,
+        int? gameId = null,
+        int? courseId = null,
+        int? challengeId = null,
+        string? subjectType = null) => new()
     {
         Id = id,
         OccurredAt = occurredAt,
@@ -186,6 +217,10 @@ public sealed class OperationalEventQueryTests
         Message = eventCode,
         WorkerNodeId = workerNodeId,
         ImageTemplateId = imageTemplateId,
+        GameId = gameId,
+        CourseId = courseId,
+        ChallengeId = challengeId,
+        SubjectType = subjectType,
         ResourceType = resourceType,
         ResourceId = resourceId,
         SubjectDisplayName = subjectDisplayName,

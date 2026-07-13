@@ -625,6 +625,7 @@ public class EditControllerTests(GZCTFApplicationFactory factory, ITestOutputHel
 
             // Should not return 404 for game
             Assert.NotEqual(HttpStatusCode.NotFound, destroyContainerResponse.StatusCode);
+            await ContainerHelper.WaitContainerDestroyedAsync(factory.Services, testContainer.Id, output);
         }
         finally
         {
@@ -633,6 +634,7 @@ public class EditControllerTests(GZCTFApplicationFactory factory, ITestOutputHel
             {
                 await adminClient.DeleteAsync(
                     $"/api/Edit/Games/{game.Id}/Challenges/{challenge.Id}/Container");
+                await ContainerHelper.WaitContainerDestroyedAsync(factory.Services, testContainer.Id, output);
                 // Ignore cleanup errors
             }
             catch

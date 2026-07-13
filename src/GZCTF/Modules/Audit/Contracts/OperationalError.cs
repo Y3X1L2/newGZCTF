@@ -25,6 +25,7 @@ public static class OperationalErrorCodes
     public const string RequestInvalid = "request.invalid";
     public const string OperationConflict = "operation.conflict";
     public const string RuntimeIdentityConflict = "runtime.identity_conflict";
+    public const string RuntimeResourceMissing = "runtime.resource_missing";
     public const string RuntimeNoEligibleNode = "runtime.no_eligible_node";
     public const string RuntimeCapacityExhausted = "runtime.capacity_exhausted";
     public const string ImageRegistryUnreachable = "image.registry_unreachable";

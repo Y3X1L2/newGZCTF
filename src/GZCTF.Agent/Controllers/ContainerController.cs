@@ -29,10 +29,13 @@ public class ContainerController : ControllerBase
     }
 
     [HttpDelete("{containerId}")]
-    public async Task<IActionResult> Destroy(string containerId, CancellationToken token)
+    public async Task<IActionResult> Destroy(
+        string containerId,
+        [FromQuery] int? generation,
+        CancellationToken token)
     {
         await using var permit = await _gate.EnterAsync(AgentOperationCategory.Control, token);
-        await _docker.DestroyContainerAsync(containerId, token);
+        await _docker.DestroyContainerAsync(containerId, token, generation);
         return NoContent();
     }
 

@@ -11,21 +11,25 @@ Environment:
 - PostgreSQL integration uses isolated `postgres:16-alpine`; Testcontainers Ryuk is disabled and the suite disposes resources.
 - This workstation result is a correctness/build baseline, not a production capacity claim.
 
-Results recorded before the final Phase 7 gate:
+Final Phase 7 development results:
 
 | Gate | Result |
 | --- | --- |
 | Release solution build | 0 warnings, 0 errors |
-| Focused observability query/log tests | 26/26 passed |
-| Recovery/inventory focused tests | 29/29 passed |
+| Unit tests | 483/483 passed |
+| PostgreSQL/Redis integration tests | 227/227 passed |
+| Final affected observability/recovery/runtime-control tests | 41/41 passed |
 | PostgreSQL migration/advisory lease | 1/1 passed |
 | Frontend production build | locale, strict TypeScript, architecture, Vite, artifact manifest and bundle budget passed |
 | Event query | stable `(OccurredAt, Id)` cursor, count capped at 200 |
 | Correlation summary | event count, time range, failure, domains, nodes and bounded timeline |
 | Log sink | 2-second or 50-item flush, 500-item max batch, 10000-item bounded buffer, 5-second shutdown drain |
 | Recovery | one-minute cycle, 15-minute stale threshold, PostgreSQL advisory single owner |
+| Runtime control identity | persistent generation for Docker/VM, libvirt UUID for VM, Agent-side destroy preconditions |
+| EF model | no pending model changes after `20260713152015_HardenPhaseSevenRuntimeIdentity` |
+| Independent review | one review completed; all ten confirmed findings closed |
 
-The final full-suite counts, EF consistency, sensitive-data scan and independent review evidence are appended only after the final gate completes.
+The full integration gate initially exposed two pre-existing real-container fixture races: cleanup returned after queue admission without waiting for the container fact to become `Destroyed`. Both test flows now wait for the durable terminal fact; the focused real-container tests pass `2/2` and the subsequent full suite passes `227/227`.
 
 ## Commercial Pre-production Sign-off
 
@@ -67,4 +71,3 @@ Run against the target PostgreSQL/Redis topology, OTLP collector, Registry and r
 - Confirm common image, node, Agent, Docker/KVM and recovery failures can be diagnosed without SSH.
 
 Record dataset size, concurrent users, p50/p95/p99, PostgreSQL CPU/IO/locks, collector queue/drop, event write rate, query plan, Agent latency, recovery decisions and UI timings. Missing target-environment measurements remain release evidence gaps and must not be replaced with estimates.
-

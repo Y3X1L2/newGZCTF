@@ -4,6 +4,12 @@
 
 ## 2026-07-13 Phase 7 计划编写与代码事实基线
 
+- Phase 7 大单元 7 已完成，Phase 7 代码开发闭环：runbook、开发基准、最终门禁和单次独立质量审查均已归档；本阶段未部署、未连接或修改生产服务器。
+- 独立审查确认的 10 项问题全部关闭：stale Stop/Destroy 精确身份恢复、Stopped VM 事实排除、普通 Docker/VM generation 与 VM libvirt UUID 持久化、无资源记录时的能力校验、恢复 outcome/error taxonomy、消息和值脱敏、`DatabaseSink` emit/dispose 竞态、correlation 时间线顺序、orphan generation 去重、跨域 challenge 标签冲突。
+- Docker/VM 销毁已形成双端 fail-closed：主站 ticket/resource generation 校验，Agent 再校验 generation；VM 额外比较 libvirt domain UUID。资源已不存在时控制票据直接完成，只有当前代际和原生身份精确匹配时才允许重放。
+- 新增迁移 `20260713152015_HardenPhaseSevenRuntimeIdentity`，历史 Docker/VM generation 明确回填为 `1`；EF 无 pending model changes，不保留旧恢复双轨或猜测性兼容分支。
+- 最终门禁：Release solution build `0` warning / `0` error，单元测试 `483/483`，PostgreSQL/Redis 集成测试 `227/227`，受影响观测/恢复/运行控制专项 `41/41`；前端在最终后端 hardening 前已通过 locale、strict TypeScript、architecture、production build、artifact manifest 和 bundle budget。
+- 全量集成门禁暴露的两个真实容器测试夹具清理竞态已修复：DELETE 后等待持久化 `Destroyed` 事实，专项 `2/2` 与随后全量 `227/227` 均通过；未修改生产调度容量算法。
 - Phase 7 大单元 6 已完成：新增结构化事件查询、恢复漂移和 correlation summary API，支持稳定 cursor 与全业务范围过滤；名称按页面批量解析，不产生逐事件 N+1。
 - `/admin/logs` 已统一承载事件时间线、部署队列、系统日志和恢复漂移；队列、节点、镜像均可无整页刷新跳转到关联时间线，系统日志补齐 deployment ticket 与实时镜像范围过滤。
 - `DeploymentQueueController` 已从 `NodesController` 拆分且保持 `/api/v1/deployment-queue` 契约；大单元 6 集中门禁为 Release build `0` warning / `0` error、观测专项 `26/26`、前端 production build 与 bundle budget 通过。当前进入大单元 7：runbook、基准、最终全量门禁与一次独立质量审查。

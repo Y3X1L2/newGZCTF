@@ -84,6 +84,20 @@ public sealed class RuntimeFactReconciliationService(
             var actual = inventory.Find(fact);
             if (actual is null)
             {
+                var conflicting = inventory.FindIdentityConflict(fact);
+                if (conflicting is not null)
+                {
+                    conflicts++;
+                    if (CorrectExpectedFact(fact, "runtime_identity_conflict"))
+                    {
+                        corrected++;
+                        AppendFactCorrection(runId, fact, OperationalEventCodes.Recovery.IdentityConflict,
+                            "Managed runtime resource native identity conflicts with the database fact.", conflicting,
+                            "runtime_identity_conflict");
+                    }
+                    continue;
+                }
+
                 missing++;
                 if (CorrectExpectedFact(fact, "resource_missing"))
                 {
@@ -106,6 +120,8 @@ public sealed class RuntimeFactReconciliationService(
                 }
                 continue;
             }
+
+            fact.BackfillNativeIdentity(actual);
 
             if (!IsActive(fact.Kind, actual.State))
             {
@@ -178,7 +194,8 @@ public sealed class RuntimeFactReconciliationService(
                            item.ContainerId != string.Empty)
             .ToArrayAsync(token);
         var vms = await context.VmInstances
-            .Where(item => item.NodeId != null && item.Status != VmInstanceStatus.Destroyed &&
+            .Where(item => item.NodeId != null &&
+                           (item.Status == VmInstanceStatus.Creating || item.Status == VmInstanceStatus.Running) &&
                            item.VmName != string.Empty)
             .ToArrayAsync(token);
         var teamLabAssets = await context.TeamLabRuntimeAssets
@@ -204,7 +221,14 @@ public sealed class RuntimeFactReconciliationService(
         var tasks = nodes.Select(async node =>
         {
             if (node.IsLocal)
-                return new NodeInventory(node.Id, InventoryAvailability.Local, false, false, [], [], null);
+                return new NodeInventory(
+                    node.Id,
+                    InventoryAvailability.Local,
+                    node.Capabilities.HasFlag(NodeCapability.Docker),
+                    node.Capabilities.HasFlag(NodeCapability.Kvm),
+                    [],
+                    [],
+                    null);
             if (node.GetEffectiveStatus(now) != NodeStatus.Online)
                 return new NodeInventory(node.Id, InventoryAvailability.Offline, false, false, [], [],
                     "Node is offline.");
@@ -281,10 +305,17 @@ public sealed class RuntimeFactReconciliationService(
                 continue;
             events.Append(new OperationalEventDraft(
                 code,
-                OperationalEventOutcome.Observed,
+                OperationalEventOutcome.Blocked,
                 inventory.Error ?? "Runtime inventory is unavailable.",
                 OperationalEventSeverity.Warning,
                 runId,
+                inventory.Availability == InventoryAvailability.Unsupported
+                    ? OperationalErrorCategory.AgentProtocol
+                    : OperationalErrorCategory.NodeUnavailable,
+                inventory.Availability == InventoryAvailability.Unsupported
+                    ? OperationalErrorCodes.AgentFeatureMissing
+                    : OperationalErrorCodes.NodeOffline,
+                true,
                 Detail: new Dictionary<string, object?>
                 {
                     ["reasonCode"] = inventory.Availability.ToString()
@@ -392,14 +423,19 @@ public sealed class RuntimeFactReconciliationService(
         string reasonCode)
     {
         var conflict = findingCode == OperationalEventCodes.Recovery.IdentityConflict;
+        var missing = findingCode == OperationalEventCodes.Recovery.ResourceMissing;
         events.Append(new OperationalEventDraft(
             findingCode,
-            conflict ? OperationalEventOutcome.Failed : OperationalEventOutcome.Observed,
+            conflict || missing ? OperationalEventOutcome.Failed : OperationalEventOutcome.Observed,
             message,
             OperationalEventSeverity.Warning,
             runId,
-            conflict ? OperationalErrorCategory.Conflict : null,
-            conflict ? OperationalErrorCodes.RuntimeIdentityConflict : null,
+            conflict || missing ? OperationalErrorCategory.Conflict : null,
+            conflict
+                ? OperationalErrorCodes.RuntimeIdentityConflict
+                : missing
+                    ? OperationalErrorCodes.RuntimeResourceMissing
+                    : null,
             false,
             new Dictionary<string, object?>
             {
@@ -446,7 +482,9 @@ public sealed class RuntimeFactReconciliationService(
     {
         if (ticket.Operation != RuntimeOperationKind.Create)
             return ticket.Operation is RuntimeOperationKind.Stop or RuntimeOperationKind.Destroy
-                ? InspectControlTicket(ticket, inventories)
+                ? ticket.Kind == DeploymentQueueKind.TeamLabRuntime
+                    ? await InspectTeamLabControlTicketAsync(ticket, inventories, token)
+                    : await InspectControlTicketAsync(ticket, inventories, token)
                 : TicketInspection.FailClosed("Operation cannot be proven safe to replay.",
                     OperationalErrorCodes.RuntimeIdentityConflict);
 
@@ -460,39 +498,50 @@ public sealed class RuntimeFactReconciliationService(
                 OperationalErrorCodes.NodeOffline);
 
         var resource = await ResolveTicketResourceAsync(ticket, token);
-        if (inventory.Availability == InventoryAvailability.Local)
-            return resource?.IsDatabaseRunning == true
-                ? TicketInspection.Completed("Local database runtime fact confirms completion.", resource)
-                : TicketInspection.SafeReplay("Local create operation is safe to replay by stable identity.");
-        if (inventory.Availability != InventoryAvailability.Available)
+        if (inventory.Availability is not (InventoryAvailability.Available or InventoryAvailability.Local))
             return TicketInspection.Deferred(inventory.Error ?? "Assigned node inventory is unavailable.",
                 inventory.Availability == InventoryAvailability.Unsupported
                     ? OperationalErrorCodes.AgentFeatureMissing
                     : OperationalErrorCodes.NodeOffline);
-        if (resource is not null && !inventory.Supports(resource.Kind))
+        var requiredKind = ResourceKind(ticket);
+        if (!inventory.Supports(requiredKind))
             return TicketInspection.Deferred("Assigned node cannot report the required runtime kind.",
                 OperationalErrorCodes.AgentFeatureMissing);
+        if (inventory.Availability == InventoryAvailability.Local)
+            return resource?.IsDatabaseRunning == true
+                ? TicketInspection.Completed("Local database runtime fact confirms completion.", resource)
+                : TicketInspection.SafeReplay("Local create operation is safe to replay by stable identity.");
         if (resource is null)
             return TicketInspection.SafeReplay("No persisted runtime resource exists; create is safe to replay.");
         if (resource.WorkerNodeId is { } resourceNode && resourceNode != nodeId)
             return TicketInspection.FailClosed("Persisted runtime resource belongs to a different node.",
                 OperationalErrorCodes.RuntimeIdentityConflict);
+        if (resource.Generation != ticket.Generation)
+            return TicketInspection.FailClosed("Persisted runtime generation does not match the deployment ticket.",
+                OperationalErrorCodes.RuntimeIdentityConflict, resource);
 
         var actual = inventory.Find(resource);
         if (actual is null)
+        {
+            if (inventory.FindIdentityConflict(resource) is not null)
+                return TicketInspection.FailClosed("Runtime native identity does not match the deployment ticket.",
+                    OperationalErrorCodes.RuntimeIdentityConflict, resource);
             return TicketInspection.SafeReplay("Runtime resource is absent; create is safe to replay by stable identity.",
                 resource);
+        }
         if (actual.Generation != ticket.Generation)
             return TicketInspection.FailClosed("Runtime generation does not match the deployment ticket.",
                 OperationalErrorCodes.RuntimeIdentityConflict, resource);
+        resource.BackfillNativeIdentity(actual);
         return IsActive(resource.Kind, actual.State)
             ? TicketInspection.Completed("Agent inventory confirms the runtime resource.", resource)
             : TicketInspection.SafeReplay("Runtime resource is not running; create is safe to replay.", resource);
     }
 
-    private TicketInspection InspectControlTicket(
+    private async Task<TicketInspection> InspectControlTicketAsync(
         DeploymentQueueTicket ticket,
-        IReadOnlyDictionary<Guid, NodeInventory> inventories)
+        IReadOnlyDictionary<Guid, NodeInventory> inventories,
+        CancellationToken token)
     {
         if (ticket.TargetNodeId is not { } nodeId)
             return TicketInspection.FailClosed("Control ticket has no target node.", OperationalErrorCodes.NodeNotFound);
@@ -502,7 +551,41 @@ public sealed class RuntimeFactReconciliationService(
                 inventory?.Availability == InventoryAvailability.Unsupported
                     ? OperationalErrorCodes.AgentFeatureMissing
                     : OperationalErrorCodes.NodeOffline);
-        return TicketInspection.SafeReplay("Control operation is idempotent and safe to replay.");
+        var requiredKind = ResourceKind(ticket);
+        if (!inventory.Supports(requiredKind))
+            return TicketInspection.Deferred("Assigned node cannot report the required runtime kind.",
+                OperationalErrorCodes.AgentFeatureMissing);
+
+        var resource = await ResolveTicketResourceAsync(ticket, token);
+        if (resource is null)
+            return TicketInspection.Completed("Runtime resource no longer exists; control operation is complete.");
+        if (resource.WorkerNodeId is { } resourceNode && resourceNode != nodeId)
+            return TicketInspection.FailClosed("Persisted runtime resource belongs to a different node.",
+                OperationalErrorCodes.RuntimeIdentityConflict);
+        if (resource.Generation != ticket.Generation)
+            return TicketInspection.FailClosed("Control ticket generation does not match the persisted runtime.",
+                OperationalErrorCodes.RuntimeIdentityConflict);
+        if (inventory.Availability == InventoryAvailability.Local)
+            return resource.IsDatabaseDestroyed
+                ? TicketInspection.Completed("Local database runtime fact confirms the control operation.", resource)
+                : TicketInspection.SafeReplay("Local control operation is safe to replay.", resource);
+
+        var actual = inventory.Find(resource);
+        if (actual is null)
+        {
+            if (inventory.FindIdentityConflict(resource) is not null)
+                return TicketInspection.FailClosed("Control target native identity has changed.",
+                    OperationalErrorCodes.RuntimeIdentityConflict);
+            resource.MarkDestroyed();
+            return TicketInspection.Completed("Agent inventory confirms the runtime resource is absent.", resource);
+        }
+        if (actual.Generation != ticket.Generation)
+            return TicketInspection.FailClosed("Control target generation has changed.",
+                OperationalErrorCodes.RuntimeIdentityConflict);
+
+        resource.BackfillNativeIdentity(actual);
+        resource.MarkRunning(nodeId);
+        return TicketInspection.SafeReplay("Agent inventory confirms the exact control target; replay is safe.", resource);
     }
 
     private async Task<TicketInspection> InspectTeamLabTicketAsync(
@@ -544,12 +627,12 @@ public sealed class RuntimeFactReconciliationService(
                     inventory?.Availability == InventoryAvailability.Unsupported
                         ? OperationalErrorCodes.AgentFeatureMissing
                         : OperationalErrorCodes.NodeOffline);
-            if (inventory.Availability == InventoryAvailability.Local)
-                continue;
             var fact = ExpectedRuntimeFact.FromTeamLabAsset(asset);
             if (!inventory.Supports(fact.Kind))
                 return TicketInspection.Deferred("TeamLab shard cannot report the required runtime kind.",
                     OperationalErrorCodes.AgentFeatureMissing);
+            if (inventory.Availability == InventoryAvailability.Local)
+                continue;
             var actual = inventory.Find(fact);
             if (actual is null || !IsActive(fact.Kind, actual.State))
                 return runtime.Status == TeamLabRuntimeStatus.Running
@@ -569,10 +652,108 @@ public sealed class RuntimeFactReconciliationService(
         return TicketInspection.Completed("Agent inventory confirms every TeamLab runtime asset.");
     }
 
+    private async Task<TicketInspection> InspectTeamLabControlTicketAsync(
+        DeploymentQueueTicket ticket,
+        IReadOnlyDictionary<Guid, NodeInventory> inventories,
+        CancellationToken token)
+    {
+        if (ticket.TeamLabRuntimeId is not { } runtimeId)
+            return TicketInspection.FailClosed("TeamLab control ticket has no runtime identity.",
+                OperationalErrorCodes.RuntimeIdentityConflict);
+        var runtime = await context.TeamLabRuntimes
+            .Include(item => item.Assets)
+            .Include(item => item.Shards)
+            .SingleOrDefaultAsync(item => item.Id == runtimeId, token);
+        if (runtime is null)
+            return TicketInspection.Completed("TeamLab runtime no longer exists; control operation is complete.");
+        if (runtime.Generation != ticket.Generation)
+            return TicketInspection.FailClosed("TeamLab control ticket generation is stale.",
+                OperationalErrorCodes.RuntimeIdentityConflict);
+
+        var assets = runtime.Assets.Where(item => item.Generation == runtime.Generation &&
+                                                  (item.Kind == TeamLabResourceKind.Docker ||
+                                                   item.Kind == TeamLabResourceKind.Vm)).ToArray();
+        var hasPhysicalResource = false;
+        foreach (var asset in assets)
+        {
+            if (asset.WorkerNodeId is not { } nodeId || string.IsNullOrWhiteSpace(asset.RuntimeResourceId))
+            {
+                if (asset.Status == TeamLabRuntimeStatus.Running)
+                    return TicketInspection.FailClosed("Running TeamLab asset has incomplete control identity.",
+                        OperationalErrorCodes.RuntimeIdentityConflict);
+                continue;
+            }
+
+            if (!inventories.TryGetValue(nodeId, out var inventory) ||
+                inventory.Availability is InventoryAvailability.Offline or InventoryAvailability.Unavailable or
+                    InventoryAvailability.Unsupported)
+                return TicketInspection.Deferred(inventory?.Error ?? "TeamLab shard inventory is unavailable.",
+                    inventory?.Availability == InventoryAvailability.Unsupported
+                        ? OperationalErrorCodes.AgentFeatureMissing
+                        : OperationalErrorCodes.NodeOffline);
+            var fact = ExpectedRuntimeFact.FromTeamLabAsset(asset);
+            if (!inventory.Supports(fact.Kind))
+                return TicketInspection.Deferred("TeamLab shard cannot report the required runtime kind.",
+                    OperationalErrorCodes.AgentFeatureMissing);
+            if (inventory.Availability == InventoryAvailability.Local)
+            {
+                hasPhysicalResource |= asset.Status != TeamLabRuntimeStatus.Destroyed;
+                continue;
+            }
+            var actual = inventory.Find(fact);
+            if (actual is null)
+            {
+                if (inventory.FindIdentityConflict(fact) is not null)
+                    return TicketInspection.FailClosed("TeamLab control target native identity has changed.",
+                        OperationalErrorCodes.RuntimeIdentityConflict);
+                continue;
+            }
+            if (actual.Generation != runtime.Generation)
+                return TicketInspection.FailClosed("TeamLab control target generation has changed.",
+                    OperationalErrorCodes.RuntimeIdentityConflict);
+            hasPhysicalResource = true;
+        }
+
+        if (hasPhysicalResource)
+            return TicketInspection.SafeReplay(
+                "Agent inventory confirms the current TeamLab generation; cleanup replay is safe.");
+
+        MarkTeamLabDestroyed(runtime);
+        return TicketInspection.Completed("Agent inventory confirms all TeamLab runtime assets are absent.");
+    }
+
+    private static void MarkTeamLabDestroyed(TeamLabRuntime runtime)
+    {
+        var now = DateTimeOffset.UtcNow;
+        runtime.Status = TeamLabRuntimeStatus.Destroyed;
+        runtime.IsOpenToPlayers = false;
+        runtime.LastError = null;
+        runtime.UpdatedAt = now;
+        foreach (var shard in runtime.Shards.Where(item => item.Generation == runtime.Generation))
+        {
+            shard.Status = TeamLabRuntimeStatus.Destroyed;
+            shard.LastError = null;
+            shard.UpdatedAt = now;
+        }
+        foreach (var asset in runtime.Assets.Where(item => item.Generation == runtime.Generation))
+        {
+            asset.Status = TeamLabRuntimeStatus.Destroyed;
+            asset.LastError = null;
+        }
+    }
+
     private async Task<TicketResource?> ResolveTicketResourceAsync(
         DeploymentQueueTicket ticket,
         CancellationToken token)
     {
+        if (ticket.Kind == DeploymentQueueKind.ChallengeTestContainer &&
+            ticket.SubjectType == "runtime-container" &&
+            Guid.TryParse(ticket.SubjectPublicId, out var containerId))
+        {
+            var maintained = await context.Containers.SingleOrDefaultAsync(item => item.Id == containerId, token);
+            return maintained is null ? null : TicketResource.FromContainer(maintained);
+        }
+
         GZCTF.Models.Data.Container? container = ticket.Kind switch
         {
             DeploymentQueueKind.GameContainer when ticket.GameId is { } gameId &&
@@ -617,7 +798,10 @@ public sealed class RuntimeFactReconciliationService(
 
     private void CompleteTicket(DeploymentQueueTicket ticket, TicketInspection inspection)
     {
-        inspection.Resource?.MarkRunning(ticket.TargetNodeId);
+        if (ticket.Operation == RuntimeOperationKind.Create)
+            inspection.Resource?.MarkRunning(ticket.TargetNodeId);
+        else if (ticket.Operation is RuntimeOperationKind.Stop or RuntimeOperationKind.Destroy)
+            inspection.Resource?.MarkDestroyed();
         ticket.Status = DeploymentQueueTicketStatus.Succeeded;
         ticket.Stage = DeploymentStage.Ready;
         ticket.StageMessage = inspection.Message;
@@ -682,7 +866,7 @@ public sealed class RuntimeFactReconciliationService(
             events.Append(RuntimeOperationalEvents.Ticket(
                 ticket,
                 code,
-                OperationalEventOutcome.Pending,
+                OperationalEventOutcome.Blocked,
                 inspection.Message,
                 OperationalEventSeverity.Warning,
                 new OperationalError(
@@ -775,6 +959,9 @@ public sealed class RuntimeFactReconciliationService(
         _ => false
     };
 
+    private static RuntimeFactKind ResourceKind(DeploymentQueueTicket ticket) =>
+        ticket.Kind == DeploymentQueueKind.VirtualMachine ? RuntimeFactKind.Vm : RuntimeFactKind.Docker;
+
     private enum RuntimeFactKind : byte { Docker, Vm }
     private enum InventoryAvailability : byte { Available, Local, Offline, Unsupported, Unavailable }
     private enum TicketRecoveryDecision : byte { Completed, SafeReplay, Deferred, FailClosed }
@@ -799,19 +986,35 @@ public sealed class RuntimeFactReconciliationService(
         {
             RuntimeFactKind.Docker => Containers.FirstOrDefault(item =>
                 item.NativeId.Equals(fact.NativeId, StringComparison.Ordinal)),
+            RuntimeFactKind.Vm when !string.IsNullOrWhiteSpace(fact.NativeId) => Vms.FirstOrDefault(item =>
+                item.NativeId.Equals(fact.NativeId, StringComparison.OrdinalIgnoreCase)),
             RuntimeFactKind.Vm => Vms.FirstOrDefault(item =>
                 item.StableName.Equals(fact.StableName, StringComparison.Ordinal)),
             _ => null
         };
 
+        public AgentRuntimeInventoryResource? FindIdentityConflict(ExpectedRuntimeFact fact) =>
+            fact.Kind == RuntimeFactKind.Vm && !string.IsNullOrWhiteSpace(fact.NativeId)
+                ? Vms.FirstOrDefault(item => item.StableName.Equals(fact.StableName, StringComparison.Ordinal) &&
+                                             !item.NativeId.Equals(fact.NativeId, StringComparison.OrdinalIgnoreCase))
+                : null;
+
         public AgentRuntimeInventoryResource? Find(TicketResource fact) => fact.Kind switch
         {
             RuntimeFactKind.Docker => Containers.FirstOrDefault(item =>
                 item.NativeId.Equals(fact.NativeId, StringComparison.Ordinal)),
+            RuntimeFactKind.Vm when !string.IsNullOrWhiteSpace(fact.NativeId) => Vms.FirstOrDefault(item =>
+                item.NativeId.Equals(fact.NativeId, StringComparison.OrdinalIgnoreCase)),
             RuntimeFactKind.Vm => Vms.FirstOrDefault(item =>
                 item.StableName.Equals(fact.StableName, StringComparison.Ordinal)),
             _ => null
         };
+
+        public AgentRuntimeInventoryResource? FindIdentityConflict(TicketResource fact) =>
+            fact.Kind == RuntimeFactKind.Vm && !string.IsNullOrWhiteSpace(fact.NativeId)
+                ? Vms.FirstOrDefault(item => item.StableName.Equals(fact.StableName, StringComparison.Ordinal) &&
+                                             !item.NativeId.Equals(fact.NativeId, StringComparison.OrdinalIgnoreCase))
+                : null;
 
         public IEnumerable<ActualRuntimeFact> AllResources()
         {
@@ -828,10 +1031,11 @@ public sealed class RuntimeFactReconciliationService(
         AgentRuntimeInventoryResource Resource)
     {
         public string IdentityKey => Kind == RuntimeFactKind.Docker
-            ? $"{WorkerNodeId:D}|docker|{Resource.NativeId}"
-            : $"{WorkerNodeId:D}|vm|{Resource.StableName}";
+            ? $"{WorkerNodeId:D}|docker|{Resource.NativeId}|g{Resource.Generation}"
+            : $"{WorkerNodeId:D}|vm|{Resource.StableName}|g{Resource.Generation}";
         public string EventResourceType => Kind == RuntimeFactKind.Docker ? "container" : "vm";
-        public string EventResourceId => Kind == RuntimeFactKind.Docker ? Resource.NativeId : Resource.StableName;
+        public string EventResourceId =>
+            $"{(Kind == RuntimeFactKind.Docker ? Resource.NativeId : Resource.StableName)}@g{Resource.Generation}";
     }
 
     private sealed record ExpectedRuntimeFact(
@@ -850,8 +1054,8 @@ public sealed class RuntimeFactReconciliationService(
         TeamLabRuntimeAsset? TeamLabAsset)
     {
         public string IdentityKey => Kind == RuntimeFactKind.Docker
-            ? $"{WorkerNodeId:D}|docker|{NativeId}"
-            : $"{WorkerNodeId:D}|vm|{StableName}";
+            ? $"{WorkerNodeId:D}|docker|{NativeId}|g{Generation}"
+            : $"{WorkerNodeId:D}|vm|{StableName}|g{Generation}";
         public string EventResourceType => Kind == RuntimeFactKind.Docker ? "container" : "vm";
         public string EventResourceId => Kind == RuntimeFactKind.Docker ? NativeId : StableName;
 
@@ -860,7 +1064,7 @@ public sealed class RuntimeFactReconciliationService(
             RuntimeFactKind.Docker,
             item.ContainerId,
             string.Empty,
-            null,
+            item.RuntimeGeneration,
             "container",
             item.Id.ToString(),
             item.Image,
@@ -873,9 +1077,9 @@ public sealed class RuntimeFactReconciliationService(
         public static ExpectedRuntimeFact FromVm(VmInstance item) => new(
             item.NodeId!.Value,
             RuntimeFactKind.Vm,
-            string.Empty,
+            item.RuntimeNativeId ?? string.Empty,
             item.VmName,
-            null,
+            item.RuntimeGeneration,
             "vm-instance",
             item.Id.ToString(),
             item.VmName,
@@ -899,14 +1103,22 @@ public sealed class RuntimeFactReconciliationService(
             null,
             null,
             item);
+
+        public void BackfillNativeIdentity(AgentRuntimeInventoryResource actual)
+        {
+            if (Vm is not null && string.IsNullOrWhiteSpace(Vm.RuntimeNativeId))
+                Vm.RuntimeNativeId = actual.NativeId;
+        }
     }
 
     private sealed record TicketResource(
         RuntimeFactKind Kind,
         string NativeId,
         string StableName,
+        int Generation,
         Guid? WorkerNodeId,
         bool IsDatabaseRunning,
+        bool IsDatabaseDestroyed,
         GZCTF.Models.Data.Container? Container,
         VmInstance? Vm)
     {
@@ -914,19 +1126,29 @@ public sealed class RuntimeFactReconciliationService(
             RuntimeFactKind.Docker,
             item.ContainerId,
             string.Empty,
+            item.RuntimeGeneration,
             item.NodeId,
             item.Status == ContainerStatus.Running,
+            item.Status == ContainerStatus.Destroyed,
             item,
             null);
 
         public static TicketResource FromVm(VmInstance item) => new(
             RuntimeFactKind.Vm,
-            string.Empty,
+            item.RuntimeNativeId ?? string.Empty,
             item.VmName,
+            item.RuntimeGeneration,
             item.NodeId,
             item.Status == VmInstanceStatus.Running,
+            item.Status == VmInstanceStatus.Destroyed,
             null,
             item);
+
+        public void BackfillNativeIdentity(AgentRuntimeInventoryResource actual)
+        {
+            if (Vm is not null && string.IsNullOrWhiteSpace(Vm.RuntimeNativeId))
+                Vm.RuntimeNativeId = actual.NativeId;
+        }
 
         public void MarkRunning(Guid? nodeId)
         {
@@ -948,6 +1170,17 @@ public sealed class RuntimeFactReconciliationService(
                 Container.Status = ContainerStatus.Destroyed;
             if (Vm is not null && Vm.Status != VmInstanceStatus.Destroyed)
                 Vm.Status = VmInstanceStatus.Error;
+        }
+
+        public void MarkDestroyed()
+        {
+            if (Container is not null)
+                Container.Status = ContainerStatus.Destroyed;
+            if (Vm is not null)
+            {
+                Vm.Status = VmInstanceStatus.Destroyed;
+                Vm.DestroyedAt ??= DateTimeOffset.UtcNow;
+            }
         }
     }
 

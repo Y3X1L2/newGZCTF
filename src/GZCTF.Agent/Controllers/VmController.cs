@@ -21,10 +21,14 @@ public class VmController(KvmService kvm, AgentOperationGate gate) : ControllerB
     }
 
     [HttpDelete("{vmName}")]
-    public async Task<IActionResult> Destroy(string vmName, CancellationToken token)
+    public async Task<IActionResult> Destroy(
+        string vmName,
+        [FromQuery] int? generation,
+        [FromQuery] string? nativeId,
+        CancellationToken token)
     {
         await using var permit = await gate.EnterAsync(AgentOperationCategory.Control, token);
-        await _kvm.DestroyVmAsync(vmName, token);
+        await _kvm.DestroyVmAsync(vmName, generation, nativeId, token);
         return NoContent();
     }
 
