@@ -6,6 +6,7 @@ using GZCTF.Modules.Audit.Infrastructure;
 using GZCTF.Infrastructure.Api;
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Infrastructure.Concurrency;
+using GZCTF.Infrastructure.Telemetry;
 using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.Runtime.Infrastructure;
 using GZCTF.Models.Internal;
@@ -159,12 +160,15 @@ internal static class ServicesExtension
             builder.Services.AddHostedService<FleetHealthCheckService>();
             builder.Services.AddHostedService<RuntimeSchedulingWorker>();
             builder.Services.AddHostedService<RuntimeExecutionWorker>();
+            builder.Services.AddHostedService<RuntimeTelemetrySnapshotWorker>();
 
 #pragma warning disable EXTEXP0001
+            builder.Services.AddTransient<AgentTelemetryHandler>();
             builder.Services.AddHttpClient("Agent", client =>
                 {
                     client.Timeout = TimeSpan.FromMinutes(10);
                 })
+                .AddHttpMessageHandler<AgentTelemetryHandler>()
                 .RemoveAllResilienceHandlers();
 #pragma warning restore EXTEXP0001
             builder.Services.AddSingleton<AgentClient>();

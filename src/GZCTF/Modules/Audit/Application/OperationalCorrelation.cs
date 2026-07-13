@@ -2,33 +2,38 @@ namespace GZCTF.Modules.Audit.Application;
 
 public sealed class OperationalCorrelation
 {
-    private Guid? _correlationId;
+    public const string HeaderName = "X-GZCTF-Correlation-Id";
 
-    public Guid? Current => _correlationId;
+    private static readonly AsyncLocal<State?> Ambient = new();
+
+    public Guid? Current => Ambient.Value?.CorrelationId;
 
     public Guid Ensure()
     {
-        _correlationId ??= Guid.CreateVersion7();
-        return _correlationId.Value;
+        var correlationId = Current ?? Guid.CreateVersion7();
+        Ambient.Value = new State(correlationId);
+        return correlationId;
     }
 
     public void Promote(Guid correlationId)
     {
         if (correlationId == Guid.Empty)
             throw new ArgumentException("Correlation id cannot be empty.", nameof(correlationId));
-        _correlationId = correlationId;
+        Ambient.Value = new State(correlationId);
     }
 
     public IDisposable Begin(Guid? correlationId = null)
     {
-        var previous = _correlationId;
-        _correlationId = correlationId is { } value && value != Guid.Empty
+        var previous = Ambient.Value;
+        Ambient.Value = new State(correlationId is { } value && value != Guid.Empty
             ? value
-            : Guid.CreateVersion7();
-        return new Scope(this, previous);
+            : Guid.CreateVersion7());
+        return new Scope(previous);
     }
 
-    private sealed class Scope(OperationalCorrelation owner, Guid? previous) : IDisposable
+    private sealed record State(Guid CorrelationId);
+
+    private sealed class Scope(State? previous) : IDisposable
     {
         private bool _disposed;
 
@@ -36,7 +41,7 @@ public sealed class OperationalCorrelation
         {
             if (_disposed)
                 return;
-            owner._correlationId = previous;
+            Ambient.Value = previous;
             _disposed = true;
         }
     }

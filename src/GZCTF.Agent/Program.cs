@@ -1,6 +1,8 @@
 using GZCTF.Agent.Models;
+using GZCTF.Agent.Middlewares;
 using GZCTF.Agent.Services;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,10 +22,25 @@ builder.Services.AddSingleton<AgentResourceLock>();
 builder.Services.AddSingleton<ImageTransferSingleFlight>();
 builder.Services.AddHostedService<HeartbeatWorker>();
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var error = AgentCorrelationErrorMiddleware.CreateValidationError(
+                context.HttpContext.Request,
+                "The Agent request payload is invalid.");
+            context.HttpContext.Response.Headers[AgentProtocolHeaders.ErrorCategory] = error.Category;
+            context.HttpContext.Response.Headers[AgentProtocolHeaders.ErrorCode] = error.Code;
+            context.HttpContext.Response.Headers[AgentProtocolHeaders.Retryable] = "false";
+            return new BadRequestObjectResult(error);
+        };
+    });
 builder.Services.AddHttpClient();
 
 var app = builder.Build();
+
+app.UseMiddleware<AgentCorrelationErrorMiddleware>();
 
 app.Use(async (context, next) =>
 {
@@ -31,17 +48,21 @@ app.Use(async (context, next) =>
     var expectedToken = config.GetSection("Agent:AuthToken").Get<string>() ?? "";
     if (string.IsNullOrEmpty(expectedToken) || expectedToken == "__local__")
     {
-        context.Response.StatusCode = 401;
-        context.Response.ContentType = "application/json";
-        await context.Response.WriteAsync("{\"message\":\"Agent auth not configured. Set Agent:AuthToken in appsettings.json\"}");
+        await AgentCorrelationErrorMiddleware.WriteAsync(context,
+            new AgentErrorResponse(
+                "Authorization", "auth.not_configured", "Agent authentication is not configured.", false,
+                $"{context.Request.Method.ToLowerInvariant()}.auth", context.Response.Headers[AgentProtocolHeaders.CorrelationId]!),
+            StatusCodes.Status401Unauthorized, context.RequestAborted);
         return;
     }
     var authHeader = context.Request.Headers.Authorization.ToString().Replace("Bearer ", "").Trim();
     if (authHeader != expectedToken)
     {
-        context.Response.StatusCode = 401;
-        context.Response.ContentType = "application/json";
-        await context.Response.WriteAsync("{\"message\":\"Invalid auth token\"}");
+        await AgentCorrelationErrorMiddleware.WriteAsync(context,
+            new AgentErrorResponse(
+                "Authorization", "auth.forbidden", "Invalid Agent authentication token.", false,
+                $"{context.Request.Method.ToLowerInvariant()}.auth", context.Response.Headers[AgentProtocolHeaders.CorrelationId]!),
+            StatusCodes.Status401Unauthorized, context.RequestAborted);
         return;
     }
     await next();

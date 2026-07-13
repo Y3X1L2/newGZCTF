@@ -40,6 +40,15 @@
 - 已新增 scoped `OperationalCorrelation` 和教师/管理员 mutation audit filter；普通 GET、heartbeat、外部 API 和非管理用户流量不进入该通用审计。
 - 集中门禁：Phase 7 observability 与 retention 专项测试 `13/13`。
 
+### 2026-07-13 大单元 3 完成
+
+- 已注册 `GZCTF.Runtime`、`GZCTF.AgentClient`、`GZCTF.Operations` meters，以及 runtime、Agent、image distribution、TeamLab、cache ActivitySource；指标标签只使用 operation、result、stage、workload、error category 等有限集合。
+- 已新增运行队列和节点状态快照 worker，按数据库 checkpoint 与 `INodeLiveStateStore` 汇总 queue depth、online、schedulable 和 overloaded，不把 ticket、队伍或节点 ID 写入 metric label。
+- `OperationalCorrelation` 已改为基于 `AsyncLocal` 的 ambient context；所有 Agent HTTP 调用统一传播 `X-GZCTF-Correlation-Id`，建立业务 span，并记录稳定 operation、耗时、结果与 typed error category。
+- Agent 已新增统一 correlation/error middleware 和稳定错误响应；认证、模型校验、Docker、KVM、镜像、TeamLab 与维护接口不再返回匿名异常正文，且 Agent 不引入 OTLP exporter。
+- 主站 `AgentClientException` 已携带 `OperationalError`，非成功响应优先读取 Agent typed error；节点缺失、超时、传输失败、协议空响应、镜像校验失败均有稳定 category/code/retryable。
+- 集中门禁：Release solution build `0` warning / `0` error；Phase 7 observability/Agent contract 专项测试 `21/21`。
+
 ## 0. Phase Boundary
 
 ### 0.1 Must Complete
@@ -307,10 +316,10 @@ Agent 新增 `GET /api/runtime/inventory`：
 - Modify: Agent Program and controllers.
 - Test: error mapping、headers、metrics and span contracts。
 
-- [ ] Register bounded metrics and all custom ActivitySources.
-- [ ] Centralize Agent send/deadline/retry/span/correlation/error mapping.
-- [ ] Add Agent correlation middleware and uniform error body without Agent exporter dependency.
-- [ ] Run one concentrated telemetry/Agent contract gate.
+- [x] Register bounded metrics and all custom ActivitySources.
+- [x] Centralize Agent send/deadline/retry/span/correlation/error mapping.
+- [x] Add Agent correlation middleware and uniform error body without Agent exporter dependency.
+- [x] Run one concentrated telemetry/Agent contract gate.
 
 ### Task 4: Lifecycle Event Integration
 

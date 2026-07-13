@@ -3,6 +3,7 @@ using System.Text.Json;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
+using GZCTF.Infrastructure.Telemetry;
 
 namespace GZCTF.Modules.Audit.Infrastructure;
 
@@ -65,6 +66,7 @@ public sealed class EfOperationalEventWriter(
         };
 
         context.Set<OperationalEvent>().Add(entity);
+        PlatformTelemetry.RecordEvent(entity.EventCode, entity.Outcome);
         WriteStructuredLog(entity);
         return entity;
     }

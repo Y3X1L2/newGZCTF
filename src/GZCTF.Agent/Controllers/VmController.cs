@@ -15,8 +15,9 @@ public class VmController(KvmService kvm, AgentOperationGate gate) : ControllerB
     {
         await using var permit = await gate.EnterAsync(AgentOperationCategory.VmCreate, token);
         var result = await _kvm.CreateVmAsync(request, token);
-        if (result is null) return StatusCode(500, new { message = "VM creation failed" });
-        return Ok(result);
+        return result is null
+            ? throw new AgentOperationException("Kvm", "kvm.operation_failed", "VM creation failed.", true)
+            : Ok(result);
     }
 
     [HttpDelete("{vmName}")]

@@ -4,6 +4,10 @@
 
 ## 2026-07-13 Phase 7 计划编写与代码事实基线
 
+- Phase 7 大单元 3 已完成：主站注册 runtime/Agent/operations meters 与全部业务 ActivitySource，运行队列和节点健康状态使用低基数快照指标。
+- `OperationalCorrelation` 已改为 `AsyncLocal` ambient context；Agent HTTP 调用统一传播 correlation、建立业务 span、记录稳定 operation/耗时/结果/error category。
+- Agent 已使用统一 correlation/error middleware，认证、模型校验、Docker、KVM、镜像和 TeamLab 错误返回稳定 typed contract；主站 `AgentClientException` 携带 `OperationalError`，不再依赖错误文本分类。
+- 大单元 3 集中门禁通过：Release solution build `0` warning / `0` error，observability/Agent contract 专项 `21/21`。
 - Phase 7 大单元 2 已完成：原始日志采用 timer-or-batch flush、失败保留、缓冲保护和退出 drain；数据库与 SignalR 统一结构化映射，日志查询支持 correlation/event/node/resource。
 - 已新增 `OperationalCorrelation` 和教师/管理员 mutation audit filter，排除 heartbeat、外部 API 和普通用户流量；专项累计 `13/13` 通过。
 - Phase 7 大单元 1 已完成：统一 event/error taxonomy、追加式 `OperationalEvent`、同事务 writer、敏感 detail allowlist、查询模型、事件索引和 180 天 retention 已落地。

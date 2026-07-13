@@ -12,6 +12,10 @@ public class MaintenanceController(AgentMaintenanceService service) : Controller
     public async Task<IActionResult> SyncAgent([FromBody] AgentSyncRequest request, CancellationToken token)
     {
         var result = await service.SyncAgentAsync(request, token);
-        return result.Success ? Ok(result) : BadRequest(result);
+        return result.Success
+            ? Ok(result)
+            : throw new AgentOperationException(
+                "AgentProtocol", "agent.sync_failed", "Agent synchronization failed.", true,
+                StatusCodes.Status400BadRequest);
     }
 }
