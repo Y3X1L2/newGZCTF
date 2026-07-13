@@ -13,8 +13,10 @@ public static class AuditModuleRegistration
         services.AddScoped<IApiOperationStore, EfApiOperationStore>();
         services.AddScoped<IdempotencyService>();
         services.AddScoped<ExternalApiAuditContext>();
+        services.AddScoped<OperationalCorrelation>();
         services.AddScoped<ApiOperationService>();
         services.AddScoped<IOperationalEventWriter, EfOperationalEventWriter>();
+        services.AddScoped<AdminMutationAuditFilter>();
         services.AddHostedService<ApiOperationWorker>();
         services.AddSingleton<IAuthorizationMiddlewareResultHandler, ExternalApiAuthorizationResultHandler>();
         return services;

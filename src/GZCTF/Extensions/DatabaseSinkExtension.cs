@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using System.Net;
+using System.Diagnostics;
 using Serilog;
 using Serilog.Configuration;
 using Serilog.Core;
@@ -16,101 +16,166 @@ public static class DatabaseSinkExtension
     }
 }
 
-public class DatabaseSink : ILogEventSink, IDisposable
+public sealed class DatabaseSink : ILogEventSink, IDisposable
 {
-    private readonly ConcurrentQueue<LogModel> _logBuffer = [];
-    private readonly AsyncManualResetEvent _resetEvent = new();
-    private readonly IServiceProvider _serviceProvider;
-    private readonly CancellationTokenSource _tokenSource = new();
+    private const int FlushBatchSize = 50;
+    private const int MaxFlushBatchSize = 500;
+    private const int MaxBufferedLogs = 10_000;
+    private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan RetryInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan ShutdownTimeout = TimeSpan.FromSeconds(5);
 
-    private DateTimeOffset _lastFlushTime = DateTimeOffset.FromUnixTimeSeconds(0);
+    private readonly ConcurrentQueue<LogModel> _buffer = [];
+    private readonly SemaphoreSlim _flushSignal = new(0, 1);
+    private readonly IServiceProvider _serviceProvider;
+    private readonly CancellationTokenSource _forceStop = new();
+    private readonly Task _writerTask;
+    private int _bufferedCount;
+    private int _stopping;
 
     public DatabaseSink(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider;
-        Task.Factory.StartNew(
-            () => WriteToDatabase(_tokenSource.Token),
-            _tokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-    }
-
-    public void Dispose()
-    {
-        _tokenSource.Cancel();
-        GC.SuppressFinalize(this);
+        _writerTask = Task.Run(() => WriteToDatabaseAsync(_forceStop.Token));
     }
 
     public void Emit(LogEvent logEvent)
     {
-        _logBuffer.Enqueue(ToLogModel(logEvent));
-        _resetEvent.Set();
+        if (Volatile.Read(ref _stopping) != 0)
+            return;
+
+        while (Volatile.Read(ref _bufferedCount) >= MaxBufferedLogs &&
+               _buffer.TryDequeue(out _))
+        {
+            Interlocked.Decrement(ref _bufferedCount);
+            DatabaseLogSinkMetrics.RecordDropped();
+        }
+
+        _buffer.Enqueue(LogModelFactory.FromLogEvent(logEvent));
+        var buffered = Interlocked.Increment(ref _bufferedCount);
+        DatabaseLogSinkMetrics.SetBuffered(buffered);
+        if (buffered >= FlushBatchSize)
+            SignalFlush();
     }
 
-    private static LogModel ToLogModel(LogEvent logEvent)
+    public void Dispose()
     {
-        logEvent.Properties.TryGetValue("UserName", out var userName);
-        logEvent.Properties.TryGetValue("SourceContext", out var sourceContext);
-        logEvent.Properties.TryGetValue("IP", out var ip);
-        logEvent.Properties.TryGetValue("Status", out var status);
+        if (Interlocked.Exchange(ref _stopping, 1) != 0)
+            return;
 
-        return new LogModel
+        SignalFlush();
+        if (!_writerTask.Wait(ShutdownTimeout))
         {
-            TimeUtc = logEvent.Timestamp.ToUniversalTime(),
-            Level = logEvent.Level.ToString(),
-            Message = logEvent.RenderMessageWithExceptions(),
-            UserName = LogHelper.GetLogPropertyValue(userName, "Anonymous"),
-            Logger = LogHelper.GetLogPropertyValue<string>(sourceContext, "Unknown") ?? string.Empty,
-            RemoteIP = LogHelper.GetLogPropertyValue<IPAddress>(ip, null),
-            Status = logEvent.Exception is null
-                ? LogHelper.GetLogPropertyValue(status, TaskStatus.Failed)
-                : TaskStatus.Failed,
-            Exception = logEvent.Exception?.ToString()
-        };
-    }
-
-    private async Task WriteToDatabase(CancellationToken token = default)
-    {
-        List<LogModel> lockedLogBuffer = [];
-
-        try
-        {
-            while (!token.IsCancellationRequested)
+            _forceStop.Cancel();
+            try
             {
-                await _resetEvent.WaitAsync(token);
-                _resetEvent.Reset();
+                _writerTask.Wait(ShutdownTimeout);
+            }
+            catch (AggregateException)
+            {
+            }
+        }
 
-                while (_logBuffer.TryDequeue(out var logModel))
-                    lockedLogBuffer.Add(logModel);
+        _forceStop.Dispose();
+        _flushSignal.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
-                if (lockedLogBuffer.Count <= 50 && DateTimeOffset.Now - _lastFlushTime <= TimeSpan.FromSeconds(10))
-                    continue;
+    private async Task WriteToDatabaseAsync(CancellationToken token)
+    {
+        List<LogModel> pending = [];
+        while (!token.IsCancellationRequested)
+        {
+            if (pending.Count == 0 && Volatile.Read(ref _stopping) != 0 && _buffer.IsEmpty)
+                return;
 
-                await using var scope = _serviceProvider.CreateAsyncScope();
+            try
+            {
+                await _flushSignal.WaitAsync(FlushInterval, token);
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                return;
+            }
 
-                var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                await dbContext.Logs.AddRangeAsync(lockedLogBuffer, token);
-                var affectedRows = 0;
+            while (pending.Count < MaxFlushBatchSize && _buffer.TryDequeue(out var log))
+            {
+                pending.Add(log);
+                Interlocked.Decrement(ref _bufferedCount);
+            }
 
+            DatabaseLogSinkMetrics.SetBuffered(Volatile.Read(ref _bufferedCount) + pending.Count);
+            if (pending.Count == 0)
+                continue;
+
+            try
+            {
+                await FlushAsync(pending, token);
+                pending.Clear();
+                DatabaseLogSinkMetrics.SetBuffered(Volatile.Read(ref _bufferedCount));
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception)
+            {
+                DatabaseLogSinkMetrics.RecordFlushFailure();
                 try
                 {
-                    affectedRows = await dbContext.SaveChangesAsync(token);
+                    await Task.Delay(RetryInterval, token);
                 }
-                catch (Exception ex)
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
-                    var logger = scope.ServiceProvider.GetRequiredService<ILogger<DatabaseSink>>();
-                    logger.LogErrorMessage(ex);
-                }
-                finally
-                {
-                    if (affectedRows > 0)
-                    {
-                        // If some logs were saved, we need to remove them from the buffer
-                        lockedLogBuffer.RemoveAll(logModel => logModel.Id != 0);
-                    }
-
-                    _lastFlushTime = DateTimeOffset.Now;
+                    return;
                 }
             }
         }
-        catch (TaskCanceledException) { }
+    }
+
+    private async Task FlushAsync(List<LogModel> pending, CancellationToken token)
+    {
+        var started = Stopwatch.GetTimestamp();
+        await using var scope = _serviceProvider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await context.Logs.AddRangeAsync(pending, token);
+        await context.SaveChangesAsync(token);
+        DatabaseLogSinkMetrics.RecordFlush(pending.Count, Stopwatch.GetElapsedTime(started));
+    }
+
+    private void SignalFlush()
+    {
+        try
+        {
+            _flushSignal.Release();
+        }
+        catch (SemaphoreFullException)
+        {
+        }
+    }
+}
+
+public static class DatabaseLogSinkMetrics
+{
+    private static long _buffered;
+    private static long _dropped;
+    private static long _flushFailures;
+    private static long _flushed;
+    private static long _lastFlushMilliseconds;
+
+    public static long Buffered => Interlocked.Read(ref _buffered);
+    public static long Dropped => Interlocked.Read(ref _dropped);
+    public static long FlushFailures => Interlocked.Read(ref _flushFailures);
+    public static long Flushed => Interlocked.Read(ref _flushed);
+    public static long LastFlushMilliseconds => Interlocked.Read(ref _lastFlushMilliseconds);
+
+    internal static void SetBuffered(long value) => Interlocked.Exchange(ref _buffered, Math.Max(0, value));
+    internal static void RecordDropped() => Interlocked.Increment(ref _dropped);
+    internal static void RecordFlushFailure() => Interlocked.Increment(ref _flushFailures);
+
+    internal static void RecordFlush(int count, TimeSpan elapsed)
+    {
+        Interlocked.Add(ref _flushed, count);
+        Interlocked.Exchange(ref _lastFlushMilliseconds, Math.Max(0, (long)elapsed.TotalMilliseconds));
     }
 }

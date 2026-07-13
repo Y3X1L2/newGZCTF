@@ -2,6 +2,7 @@ using System.Net.Mime;
 using GZCTF.Composition;
 using GZCTF.Middlewares;
 using GZCTF.Modules.Identity.Infrastructure;
+using GZCTF.Modules.Audit.Infrastructure;
 using GZCTF.Infrastructure.Api;
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Infrastructure.Concurrency;
@@ -212,7 +213,9 @@ internal static class ServicesExtension
                 options.EnableForHttps = true;
             });
 
-            builder.Services.AddControllersWithViews().ConfigureApiBehaviorOptions(options =>
+            builder.Services.AddControllersWithViews()
+                .AddMvcOptions(options => options.Filters.AddService<AdminMutationAuditFilter>())
+                .ConfigureApiBehaviorOptions(options =>
             {
                 options.InvalidModelStateResponseFactory = InvalidModelStateHandler;
             }).AddDataAnnotationsLocalization(options =>

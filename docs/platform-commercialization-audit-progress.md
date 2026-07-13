@@ -4,6 +4,8 @@
 
 ## 2026-07-13 Phase 7 计划编写与代码事实基线
 
+- Phase 7 大单元 2 已完成：原始日志采用 timer-or-batch flush、失败保留、缓冲保护和退出 drain；数据库与 SignalR 统一结构化映射，日志查询支持 correlation/event/node/resource。
+- 已新增 `OperationalCorrelation` 和教师/管理员 mutation audit filter，排除 heartbeat、外部 API 和普通用户流量；专项累计 `13/13` 通过。
 - Phase 7 大单元 1 已完成：统一 event/error taxonomy、追加式 `OperationalEvent`、同事务 writer、敏感 detail allowlist、查询模型、事件索引和 180 天 retention 已落地。
 - 已生成 Phase 7 Expand/Backfill/Contract 三段迁移；Backfill 仅为活动 ticket、image distribution、TeamLab runtime 建立 snapshot 基线，Contract 对缺失基线 fail closed。
 - 大单元 1 集中门禁通过：事件/保留策略专项测试 `10/10`，EF 模型与迁移一致。

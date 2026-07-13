@@ -7,10 +7,8 @@ public interface ILogRepository : IRepository
     /// <summary>
     /// Get logs with pagination and optional level filtering
     /// </summary>
-    /// <param name="cursor"></param>
-    /// <param name="count"></param>
-    /// <param name="level"></param>
+    /// <param name="query"></param>
     /// <param name="token"></param>
     /// <returns></returns>
-    public Task<LogMessagePageModel> GetLogs(string? cursor, int count, string? level, CancellationToken token);
+    public Task<LogMessagePageModel> GetLogs(LogQueryModel query, CancellationToken token);
 }

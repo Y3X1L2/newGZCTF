@@ -654,13 +654,12 @@ public class AdminController(
     [RequireAdmin]
     [ProducesResponseType(typeof(LogMessagePageModel), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Logs([FromQuery] string? level = "All",
-        [FromQuery][Range(0, 1000)] int count = 50,
-        [FromQuery] string? cursor = null, CancellationToken token = default)
+    public async Task<IActionResult> Logs([FromQuery] LogQueryModel query,
+        CancellationToken token = default)
     {
         try
         {
-            return Ok(await logRepository.GetLogs(cursor, count, level, token));
+            return Ok(await logRepository.GetLogs(query, token));
         }
         catch (Infrastructure.Persistence.Queries.InvalidTimeCursorException)
         {

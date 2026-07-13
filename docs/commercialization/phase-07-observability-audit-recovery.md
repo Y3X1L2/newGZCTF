@@ -32,6 +32,14 @@
 - 已生成 `ExpandPhaseSevenObservabilityAuditRecovery`、`BackfillPhaseSevenObservabilityAuditRecovery`、`ContractPhaseSevenObservabilityAuditRecovery` 三段迁移；Backfill 只导入活动 ticket、image distribution 和 TeamLab runtime snapshot，Contract fail closed。
 - 集中门禁：事件/保留策略专项测试 `10/10`，EF `No changes have been made to the model since the last migration.`。
 
+### 2026-07-13 大单元 2 完成
+
+- `DatabaseSink` 已改为定时或批量 flush、失败批次保留、有限重试、最大缓冲保护和退出 drain；低流量日志不再依赖下一条日志触发。
+- 数据库 sink 与 SignalR sink 统一复用 `LogModelFactory`，trace/correlation/event/error/node/ticket/resource 字段不再重复解析。
+- 系统日志 API 已支持 correlation、logger、event code、node 和 resource 精确过滤，并继续使用 cursor 分页。
+- 已新增 scoped `OperationalCorrelation` 和教师/管理员 mutation audit filter；普通 GET、heartbeat、外部 API 和非管理用户流量不进入该通用审计。
+- 集中门禁：Phase 7 observability 与 retention 专项测试 `13/13`。
+
 ## 0. Phase Boundary
 
 ### 0.1 Must Complete
@@ -282,10 +290,10 @@ Agent 新增 `GET /api/runtime/inventory`：
 - Modify: startup registration.
 - Test: low-volume flush、shutdown drain、redaction、filter coverage。
 
-- [ ] Add trace/correlation/event/error/resource/node fields.
-- [ ] Implement timer-or-batch flush, bounded retry and graceful drain.
-- [ ] Add correlation scope and authenticated mutation audit; exclude heartbeat and existing external API audit.
-- [ ] Run one concentrated logging/audit gate.
+- [x] Add trace/correlation/event/error/resource/node fields.
+- [x] Implement timer-or-batch flush, bounded retry and graceful drain.
+- [x] Add correlation scope and authenticated mutation audit; exclude heartbeat and existing external API audit.
+- [x] Run one concentrated logging/audit gate.
 
 ### Task 3: Telemetry and Typed Agent Errors
 
