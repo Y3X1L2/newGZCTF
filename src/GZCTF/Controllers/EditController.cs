@@ -8,7 +8,6 @@ using GZCTF.Models.Request.Info;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Infrastructure.Cache;
-using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Fleet;
 using GZCTF.Services.Transfer;
 using Microsoft.AspNetCore.Identity;
@@ -33,20 +32,17 @@ public class EditController(
     UserManager<UserInfo> userManager,
     ILogger<EditController> logger,
     IPostRepository postRepository,
-    IContainerRepository containerRepository,
     IGameChallengeRepository challengeRepository,
     IGameInstanceRepository instanceRepository,
     IGameNoticeRepository gameNoticeRepository,
     IGameRepository gameRepository,
     AppDbContext dbContext,
-    IContainerManager containerService,
-    INginxProxySyncService nginxProxySync,
     IBlobRepository blobService,
     GameExportService exportService,
     GameImportService importService,
     IDivisionRepository divisionRepository,
     IStringLocalizer<Program> localizer,
-    DockerImageRegistryService dockerRegistry,
+    DeploymentQueueService deploymentQueue,
     IServiceScopeFactory scopeFactory) : Controller
 {
     bool HasContainerRuntimeConfig(GameChallenge challenge) =>
@@ -850,7 +846,7 @@ public class EditController(
     /// <param name="token"></param>
     /// <response code="200">Successfully started game challenge container</response>
     [HttpPost("Games/{id:int}/Challenges/{cId:int}/Container")]
-    [ProducesResponseType(typeof(ContainerInfoModel), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(DeploymentQueueStatusModel), StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> CreateTestContainer([FromRoute] int id, [FromRoute] int cId,
         CancellationToken token)
@@ -868,38 +864,11 @@ public class EditController(
         if (!HasContainerRuntimeConfig(challenge))
             return ContainerRuntimeConfigError();
 
-        var image = await dockerRegistry.ResolveImageReferenceAsync(challenge.ContainerImage!, token);
-        var exposedPort = challenge.ExposePort!.Value;
         var user = await userManager.GetUserAsync(User);
-
-        var container = await containerService.CreateContainerAsync(
-            new()
-            {
-                TeamId = "admin",
-                UserId = user!.Id,
-                ChallengeId = challenge.Id,
-                Flag = challenge.Type.IsDynamic() ? challenge.GenerateTestFlag() : null,
-                Image = image,
-                CPUCount = challenge.CPUCount ?? 1,
-                MemoryLimit = challenge.MemoryLimit ?? 64,
-                StorageLimit = challenge.StorageLimit ?? 256,
-                NetworkMode = challenge.NetworkMode ?? NetworkMode.Open,
-                ExposedPort = exposedPort,
-            }, token);
-
-        if (container is null)
-            return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Container_CreationFailed)]));
-
-        challenge.TestContainer = container;
-        await challengeRepository.SaveAsync(token);
-        await nginxProxySync.TrySyncNowAsync("test container created", token);
-
-        logger.Log(
-            StaticLocalizer[nameof(Resources.Program.Container_TestContainerCreated), container.LogId],
-            user,
-            TaskStatus.Success);
-
-        return Ok(ContainerInfoModel.FromContainer(container));
+        var queued = await deploymentQueue.EnqueueAsync(
+            DeploymentQueueRequest.ChallengeTestContainer(
+                id, challenge.Id, user!.Id, resourceDisplayName: challenge.Title), token);
+        return Accepted(await deploymentQueue.GetStatusAsync(queued.TicketId, token));
     }
 
     /// <summary>
@@ -924,12 +893,30 @@ public class EditController(
             return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Challenge_NotFound)],
                 StatusCodes.Status404NotFound));
 
-        if (challenge.TestContainer is null)
+        var activeCreate = challenge.TestContainer is null
+            ? await dbContext.DeploymentQueueTickets.AsNoTracking()
+                .Where(ticket => ticket.Kind == DeploymentQueueKind.ChallengeTestContainer &&
+                                 ticket.Operation == RuntimeOperationKind.Create &&
+                                 ticket.GameId == id && ticket.ChallengeId == cId &&
+                                 ticket.Status != DeploymentQueueTicketStatus.Succeeded &&
+                                 ticket.Status != DeploymentQueueTicketStatus.Failed &&
+                                 ticket.Status != DeploymentQueueTicketStatus.Cancelled)
+                .OrderByDescending(ticket => ticket.CreatedAt)
+                .FirstOrDefaultAsync(token)
+            : null;
+        if (challenge.TestContainer is null && activeCreate is null)
             return Ok();
 
-        await containerRepository.DestroyContainer(challenge.TestContainer, token);
-
-        return Ok();
+        var user = await userManager.GetUserAsync(User);
+        var queued = await deploymentQueue.EnqueueAsync(
+            DeploymentQueueRequest.ChallengeTestContainer(
+                id,
+                challenge.Id,
+                user!.Id,
+                RuntimeOperationKind.Destroy,
+                challenge.TestContainer?.NodeId ?? activeCreate?.TargetNodeId,
+                challenge.Title), token);
+        return Accepted(await deploymentQueue.GetStatusAsync(queued.TicketId, token));
     }
 
     /// <summary>

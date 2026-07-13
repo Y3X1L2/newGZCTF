@@ -1,4 +1,3 @@
-using System.Text.Json;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
@@ -52,229 +51,74 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
 
     public async Task<DataContainer?> CreateContainerAsync(ContainerConfig config, CancellationToken token = default)
     {
+        if (config.PreferredNodeId is not { } nodeId)
+        {
+            _logger.LogError(
+                "Fleet container execution requires a scheduler-assigned node for image {Image}.",
+                config.Image);
+            return null;
+        }
+
         using var scope = _scopeFactory.CreateScope();
-        var fleetManager = scope.ServiceProvider.GetRequiredService<FleetManager>();
         var nodeRepo = scope.ServiceProvider.GetRequiredService<INodeRepository>();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var queueState = scope.ServiceProvider.GetService<DeploymentQueueStateAccessor>();
-
-        if (config.PreferredNodeId is { } preferredNodeId)
-            return await CreateOnPreferredNodeAsync(config, preferredNodeId, nodeRepo, context, token);
-
-        var onlineNodes = await nodeRepo.GetOnlineNodesAsync(token);
-        if (onlineNodes.Count == 0)
-        {
-            _logger.LogWarning("No online fleet node available for Docker container creation");
-            _logger.SystemLog("Docker deployment failed: no online fleet node is available.",
-                TaskStatus.Failed, LogLevel.Warning);
-            return null;
-        }
-
-        var target = new DeploymentTarget
-        {
-            Type = TargetType.Docker,
-            Action = TargetAction.Create,
-            Payload = JsonSerializer.Serialize(config)
-        };
-        var schedule = await fleetManager.TryScheduleWithTargetAsync(target, token);
-        var nodeId = schedule.NodeId;
-
-        if (nodeId is null)
-        {
-            if (schedule.Target is not null)
-            {
-                schedule.Target.Status = TargetStatus.Pending;
-                schedule.Target.ErrorMessage = schedule.Reason ?? "Waiting for a schedulable fleet node";
-                await SaveFleetStateAsync(context, "queue Docker deployment target", token);
-                _logger.SystemLogDeploymentTarget("queued", schedule.Target);
-            }
-
-            queueState?.SetQueued(schedule.QueueStatus);
-            _logger.LogInformation("Docker container creation queued: {Reason}", schedule.Reason);
-            return null;
-        }
-
-        var node = schedule.Node ?? await nodeRepo.GetNodeByIdAsync(nodeId.Value, token);
-        if (schedule.Target is not null)
-        {
-            schedule.Target.Status = TargetStatus.Creating;
-            _logger.SystemLogDeploymentTarget("image-distribution", schedule.Target, node,
-                "ensuring Docker image on worker from storage registry");
-        }
-
-        if (node?.IsLocal == true)
-        {
-            var container = await _localManager.CreateContainerAsync(config, token);
-            if (container is not null)
-            {
-                container.NodeId = nodeId.Value;
-                if (!await ApplyPublicProxyAsync(container, config, node, schedule.Target, context, token))
-                    return null;
-
-                await ConfirmReservedCapacityAsync(context, nodeId.Value, NodeCapability.Docker, config, token);
-            }
-            else
-                ReleaseReservedCapacity(node, NodeCapability.Docker);
-
-            CompleteDeploymentTarget(schedule.Target, container, node.HostAddress);
-            await SaveFleetStateAsync(context, "complete scheduled local Docker deployment target", token);
-            _logger.SystemLogDeploymentTarget("completed", schedule.Target, node);
-            await SyncNginxIfProxiedAsync(container, "scheduled local Docker container created", token);
-            return container;
-        }
-
-        var remoteConfig = new ContainerConfig
-        {
-            Image = config.Image,
-            TeamId = config.TeamId,
-            ChallengeId = config.ChallengeId,
-            UserId = config.UserId,
-            ExposedPort = config.ExposedPort,
-            Flag = config.Flag,
-            EnableTrafficCapture = config.EnableTrafficCapture,
-            MemoryLimit = config.MemoryLimit,
-            CPUCount = config.CPUCount,
-            StorageLimit = config.StorageLimit,
-            NetworkMode = config.NetworkMode,
-            NetworkName = config.NetworkName,
-            IPAddress = config.IPAddress,
-            AdditionalNetworkNames = config.AdditionalNetworkNames,
-            NetworkSubnets = config.NetworkSubnets,
-            NetworkAttachments = config.NetworkAttachments,
-            PublishPort = config.PublishPort,
-            PreferredHostPort = config.PreferredHostPort,
-            BypassPublicProxy = config.BypassPublicProxy,
-            EnvironmentVariables = config.EnvironmentVariables,
-            StartCommand = config.StartCommand,
-            DnsServers = config.DnsServers,
-            HealthCheck = config.HealthCheck,
-            UsePenetrationFabric = config.UsePenetrationFabric,
-            EnableNetworkAdmin = config.EnableNetworkAdmin,
-            RemoveDefaultRoute = config.RemoveDefaultRoute,
-            EnableIpForwarding = config.EnableIpForwarding,
-            PreferredNodeId = config.PreferredNodeId,
-            FleetCapacityReserved = config.FleetCapacityReserved
-        };
-        if (!await EnsureDockerImageReadyAsync(nodeId.Value, remoteConfig.Image, schedule.Target, node, context, token))
-        {
-            if (node is not null)
-                ReleaseReservedCapacity(node, NodeCapability.Docker);
-            return null;
-        }
-
-        _logger.SystemLogDeploymentTarget("container-creating", schedule.Target, node,
-            "Docker image is ready on worker");
-        var result = await _agentClient.CreateContainerAsync(nodeId.Value, remoteConfig, token);
-
-        if (result is null)
-        {
-            _logger.LogWarning("Agent container creation failed on node {NodeId}", nodeId.Value);
-            FailDeploymentTarget(schedule.Target, "Agent container creation failed");
-            if (node is not null)
-                ReleaseReservedCapacity(node, NodeCapability.Docker);
-
-            await SaveFleetStateAsync(context, "fail remote Docker deployment target", token);
-            _logger.SystemLogDeploymentTarget("failed", schedule.Target, node);
-            return null;
-        }
-
-        var remoteContainer = new DataContainer
-        {
-            ContainerId = result.ContainerId,
-            Image = config.Image,
-            IP = config.PublishPort ? node!.HostAddress : result.IP,
-            Port = config.PublishPort && result.PublicPort > 0 ? result.PublicPort : result.Port,
-            PublicIP = config.PublishPort ? node!.HostAddress : null,
-            PublicPort = result.PublicPort,
-            IsProxy = false,
-            Status = ContainerStatus.Running,
-            NodeId = nodeId.Value,
-        };
-        if (!await ApplyPublicProxyAsync(remoteContainer, config, node!, schedule.Target, context, token))
-            return null;
-        await ConfirmReservedCapacityAsync(context, nodeId.Value, NodeCapability.Docker, config, token);
-        CompleteDeploymentTarget(schedule.Target, remoteContainer, node!.HostAddress);
-        await SaveFleetStateAsync(context, "complete remote Docker deployment target", token);
-        _logger.SystemLogDeploymentTarget("completed", schedule.Target, node);
-        await SyncNginxIfProxiedAsync(remoteContainer, "remote Docker container created", token);
-        return remoteContainer;
+        var execution = scope.ServiceProvider.GetService<DeploymentExecutionContextAccessor>();
+        return await CreateOnPreferredNodeAsync(config, nodeId, nodeRepo, context,
+            execution?.Current?.TicketId, token);
     }
 
     async Task<DataContainer?> CreateOnPreferredNodeAsync(ContainerConfig config, Guid nodeId,
-        INodeRepository nodeRepo, AppDbContext context, CancellationToken token)
+        INodeRepository nodeRepo, AppDbContext context, Guid? ticketId, CancellationToken token)
     {
         var node = await nodeRepo.GetNodeByIdAsync(nodeId, token);
-        var target = new DeploymentTarget
-        {
-            Type = TargetType.Docker,
-            Action = TargetAction.Create,
-            TargetNodeId = nodeId,
-            Payload = JsonSerializer.Serialize(config),
-            Status = TargetStatus.Creating
-        };
-        context.DeploymentTargets.Add(target);
 
-        var canUseNode = config.FleetCapacityReserved
-            ? CanUseReservedDockerCapacity(node)
-            : node is not null && WeightedScheduler.CanHost(node, NodeCapability.Docker);
+        var canUseNode = config.FleetCapacityReserved && CanUseReservedDockerCapacity(node);
 
         if (!canUseNode)
         {
-            target.Status = TargetStatus.Failed;
-            target.CompletedAt = DateTimeOffset.UtcNow;
-            target.ErrorMessage = node is null ? "Preferred fleet node not found" : "Preferred fleet node cannot host Docker containers";
-            await SaveFleetStateAsync(context, "fail preferred Docker deployment target", token);
-            _logger.SystemLogDeploymentTarget("failed", target, node);
+            var message = node is null
+                ? "Preferred fleet node not found"
+                : "Preferred fleet node cannot host Docker containers";
+            await UpdateTicketStageAsync(context, ticketId, DeploymentStage.Failed, message, token);
             return null;
         }
 
         var selectedNode = node!;
 
-        if (!config.FleetCapacityReserved)
-            FleetManager.ReserveCapacity(selectedNode, NodeCapability.Docker);
-
         if (selectedNode.IsLocal)
         {
-            _logger.SystemLogDeploymentTarget("creating", target, selectedNode);
+            await UpdateTicketStageAsync(context, ticketId, DeploymentStage.ContainerCreating,
+                "Creating container on local Docker node.", token);
             var localContainer = await _localManager.CreateContainerAsync(config, token);
             if (localContainer is not null)
             {
                 localContainer.NodeId = selectedNode.Id;
-                if (!await ApplyPublicProxyAsync(localContainer, config, selectedNode, target, context, token))
+                if (!await ApplyPublicProxyAsync(localContainer, config, selectedNode, ticketId, context, token))
                     return null;
 
-                if (!config.FleetCapacityReserved)
-                    FleetManager.ConfirmCapacity(selectedNode, NodeCapability.Docker);
             }
-            else if (!config.FleetCapacityReserved)
-                ReleaseReservedCapacity(selectedNode, NodeCapability.Docker);
 
-            CompleteDeploymentTarget(target, localContainer, selectedNode.HostAddress);
-            await SaveFleetStateAsync(context, "complete preferred local Docker deployment target", token);
-            _logger.SystemLogDeploymentTarget("completed", target, selectedNode);
+            await UpdateTicketStageAsync(context, ticketId,
+                localContainer is null ? DeploymentStage.Failed : DeploymentStage.BootProbing,
+                localContainer is null ? "Local container creation failed." : "Container started; probing service.", token);
             await SyncNginxIfProxiedAsync(localContainer, "preferred local Docker container created", token);
             return localContainer;
         }
 
-        _logger.SystemLogDeploymentTarget("image-distribution", target, selectedNode,
-            "ensuring Docker image on worker from storage registry");
-        if (!await EnsureDockerImageReadyAsync(selectedNode.Id, config.Image, target, selectedNode, context, token))
+        await UpdateTicketStageAsync(context, ticketId, DeploymentStage.ImagePreparing,
+            "Ensuring Docker image on worker from storage registry.", token);
+        if (!await EnsureDockerImageReadyAsync(selectedNode.Id, config.Image, ticketId, selectedNode, context, token))
         {
-            if (!config.FleetCapacityReserved)
-                ReleaseReservedCapacity(selectedNode, NodeCapability.Docker);
             return null;
         }
 
-        _logger.SystemLogDeploymentTarget("container-creating", target, selectedNode,
-            "Docker image is ready on worker");
+        await UpdateTicketStageAsync(context, ticketId, DeploymentStage.ContainerCreating,
+            "Docker image is ready; creating container.", token);
         var result = await _agentClient.CreateContainerOrThrowAsync(selectedNode.Id, config, token);
         if (result is null)
         {
-            if (!config.FleetCapacityReserved)
-                ReleaseReservedCapacity(selectedNode, NodeCapability.Docker);
-            FailDeploymentTarget(target, "Agent container creation failed on preferred node");
-            await SaveFleetStateAsync(context, "fail preferred remote Docker deployment target", token);
-            _logger.SystemLogDeploymentTarget("failed", target, selectedNode);
+            await UpdateTicketStageAsync(context, ticketId, DeploymentStage.Failed,
+                "Agent container creation failed on preferred node.", token);
             return null;
         }
 
@@ -290,13 +134,10 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             Status = ContainerStatus.Running,
             NodeId = selectedNode.Id,
         };
-        if (!await ApplyPublicProxyAsync(remoteContainer, config, selectedNode, target, context, token))
+        if (!await ApplyPublicProxyAsync(remoteContainer, config, selectedNode, ticketId, context, token))
             return null;
-        if (!config.FleetCapacityReserved)
-            FleetManager.ConfirmCapacity(selectedNode, NodeCapability.Docker);
-        CompleteDeploymentTarget(target, remoteContainer, selectedNode.HostAddress);
-        await SaveFleetStateAsync(context, "complete preferred remote Docker deployment target", token);
-        _logger.SystemLogDeploymentTarget("completed", target, selectedNode);
+        await UpdateTicketStageAsync(context, ticketId, DeploymentStage.BootProbing,
+            "Container started; probing service.", token);
         await SyncNginxIfProxiedAsync(remoteContainer, "preferred remote Docker container created", token);
         return remoteContainer;
     }
@@ -332,7 +173,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
 
         if (node is not null && container.Status == ContainerStatus.Destroyed)
         {
-            FleetManager.ReleaseCurrentCapacity(node, NodeCapability.Docker);
+            node.CurrentContainers = Math.Max(0, node.CurrentContainers - 1);
             await SaveFleetStateAsync(context, "release Docker node capacity after destroy", token);
         }
     }
@@ -492,7 +333,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         await context.SaveChangesAsync(token);
     }
 
-    async Task<bool> EnsureDockerImageReadyAsync(Guid nodeId, string image, DeploymentTarget? target,
+    async Task<bool> EnsureDockerImageReadyAsync(Guid nodeId, string image, Guid? ticketId,
         WorkerNode? node, AppDbContext context, CancellationToken token)
     {
         try
@@ -507,9 +348,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             var nodeName = node?.Name ?? nodeId.ToString();
             var message = $"Node {nodeName} failed to ensure Docker image {image} from storage registry: {ex.Message}";
             _logger.LogWarning(ex, "Failed to ensure Docker image {Image} on node {NodeId}", image, nodeId);
-            FailDeploymentTarget(target, message);
-            await SaveFleetStateAsync(context, "fail Docker deployment image distribution", token);
-            _logger.SystemLogDeploymentTarget("failed", target, node, message);
+            await UpdateTicketStageAsync(context, ticketId, DeploymentStage.Failed, message, token);
             return false;
         }
     }
@@ -523,22 +362,6 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         }
 
         throw new InvalidOperationException("Unexpected non-worker concurrency conflict while saving fleet state.");
-    }
-
-    static void ReleaseReservedCapacity(WorkerNode node, NodeCapability capability) =>
-        FleetManager.ReleaseCapacity(node, capability);
-
-    static async Task ConfirmReservedCapacityAsync(AppDbContext context, Guid nodeId, NodeCapability capability,
-        ContainerConfig config, CancellationToken token)
-    {
-        if (config.FleetCapacityReserved)
-            return;
-
-        var node = await context.WorkerNodes.FirstOrDefaultAsync(n => n.Id == nodeId, token);
-        if (node is null)
-            return;
-
-        FleetManager.ConfirmCapacity(node, capability);
     }
 
     /// <summary>
@@ -572,14 +395,14 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
     }
 
     async Task<bool> ApplyPublicProxyAsync(DataContainer container, ContainerConfig config, WorkerNode node,
-        DeploymentTarget? target, AppDbContext context, CancellationToken token)
+        Guid? ticketId, AppDbContext context, CancellationToken token)
     {
         if (!ShouldUsePublicProxy(config, node))
             return true;
 
         if (container.PublicPort is not > 0)
         {
-            await CleanupContainerAfterProxyAllocationFailure(container, node, config, target, context, token,
+            await CleanupContainerAfterProxyAllocationFailure(container, node, config, ticketId, context, token,
                 "Container did not expose a worker host port for Nginx proxy");
             return false;
         }
@@ -588,7 +411,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         var proxyPort = await AllocatePublicPortAsync(ParseContainerGuid(container.ContainerId), token);
         if (proxyPort is null)
         {
-            await CleanupContainerAfterProxyAllocationFailure(container, node, config, target, context, token,
+            await CleanupContainerAfterProxyAllocationFailure(container, node, config, ticketId, context, token,
                 "No available Nginx proxy public port");
             return false;
         }
@@ -645,7 +468,7 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
     }
 
     async Task CleanupContainerAfterProxyAllocationFailure(DataContainer container, WorkerNode node,
-        ContainerConfig config, DeploymentTarget? target, AppDbContext context, CancellationToken token, string reason)
+        ContainerConfig config, Guid? ticketId, AppDbContext context, CancellationToken token, string reason)
     {
         _logger.LogError("Nginx proxy setup failed for container {ContainerId} on node {NodeId}: {Reason}",
             container.ContainerId, node.Id, reason);
@@ -663,41 +486,22 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
                 container.ContainerId);
         }
 
-        if (!config.FleetCapacityReserved && target is not null)
-            ReleaseReservedCapacity(node, NodeCapability.Docker);
-
-        FailDeploymentTarget(target, reason);
-        await SaveFleetStateAsync(context, "fail Docker deployment after Nginx proxy setup", token);
-        _logger.SystemLogDeploymentTarget("failed", target, node);
+        await UpdateTicketStageAsync(context, ticketId, DeploymentStage.Failed, reason, token);
     }
 
-    static void CompleteDeploymentTarget(DeploymentTarget? target, DataContainer? container, string? host)
+    static async Task UpdateTicketStageAsync(AppDbContext context, Guid? ticketId, DeploymentStage stage,
+        string message, CancellationToken token)
     {
-        if (target is null)
+        if (ticketId is null)
             return;
-
-        target.CompletedAt = DateTimeOffset.UtcNow;
-        if (container is null)
-        {
-            target.Status = TargetStatus.Failed;
-            target.ErrorMessage = "Container creation failed";
+        var ticket = await context.DeploymentQueueTickets.FirstOrDefaultAsync(item => item.Id == ticketId, token);
+        if (ticket is null)
             return;
-        }
-
-        target.Status = TargetStatus.Completed;
-        target.ResultHost = container.PublicIP ?? host ?? container.IP;
-        target.ResultPort = container.PublicPort ?? container.Port;
-        target.ErrorMessage = null;
-    }
-
-    static void FailDeploymentTarget(DeploymentTarget? target, string message)
-    {
-        if (target is null)
-            return;
-
-        target.Status = TargetStatus.Failed;
-        target.CompletedAt = DateTimeOffset.UtcNow;
-        target.ErrorMessage = message;
+        ticket.Stage = stage;
+        ticket.StageMessage = message;
+        if (stage == DeploymentStage.Failed)
+            ticket.ErrorMessage = message;
+        await context.SaveChangesAsync(token);
     }
 
     internal static bool CanUseReservedDockerCapacity(WorkerNode? node)
@@ -707,7 +511,6 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
 
         return node.GetEffectiveStatus(DateTimeOffset.UtcNow) == NodeStatus.Online
             && node.IsSchedulable
-            && (node.Capabilities & NodeCapability.Docker) == NodeCapability.Docker
-            && node.AllocatedContainers < node.MaxContainers;
+            && (node.Capabilities & NodeCapability.Docker) == NodeCapability.Docker;
     }
 }

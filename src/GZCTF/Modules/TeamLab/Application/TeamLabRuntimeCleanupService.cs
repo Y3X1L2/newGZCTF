@@ -11,12 +11,10 @@ public sealed class TeamLabRuntimeCleanupService(
     AppDbContext context,
     ITeamLabNodeExecutor executor,
     TeamLabTrafficApplicationService traffic,
-    FleetCapacityReservationService capacity,
     IPublicUdpGatewayProvider publicGateway)
 {
     public async Task<TeamLabNodeResult> CleanupAsync(
         TeamLabRuntime runtime,
-        bool releaseActiveCapacity,
         CancellationToken cancellationToken)
     {
         var generation = runtime.Generation;
@@ -41,16 +39,6 @@ public sealed class TeamLabRuntimeCleanupService(
             runtime.Events.Add(Event(runtime, "cleanup", TeamLabEventLevel.Error, runtime.LastError));
             await context.SaveChangesAsync(cancellationToken);
             return TeamLabNodeResult.Failed(runtime.LastError);
-        }
-
-        if (releaseActiveCapacity)
-        {
-            foreach (var shard in shards)
-            {
-                var docker = runtime.Assets.Count(item => item.Generation == generation && item.ShardId == shard.Id && item.Kind == TeamLabResourceKind.Docker);
-                var vm = runtime.Assets.Count(item => item.Generation == generation && item.ShardId == shard.Id && item.Kind == TeamLabResourceKind.Vm);
-                await capacity.ReleaseActiveAsync(shard.WorkerNodeId, docker, vm, cancellationToken);
-            }
         }
 
         foreach (var shard in shards)

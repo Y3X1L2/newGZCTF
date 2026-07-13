@@ -577,17 +577,31 @@ namespace GZCTF.Migrations
                     b.Property<DateTimeOffset?>("AssignedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("AwdpServiceInstanceId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("BlockedReasonCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<int?>("ChallengeId")
                         .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("ClaimExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ClaimOwner")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("DeploymentTargetId")
-                        .HasColumnType("uuid");
 
                     b.Property<int>("DockerSlots")
                         .HasColumnType("integer");
@@ -596,10 +610,22 @@ namespace GZCTF.Migrations
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
 
+                    b.Property<int?>("ExtensionSeconds")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("GameId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("Generation")
+                        .HasColumnType("integer");
+
                     b.Property<byte>("Kind")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTimeOffset?>("NotBeforeAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte>("Operation")
                         .HasColumnType("smallint");
 
                     b.Property<int?>("OwnerTeamId")
@@ -608,15 +634,34 @@ namespace GZCTF.Migrations
                     b.Property<Guid?>("OwnerUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("PayloadHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ProtectedPayload")
+                        .HasColumnType("text");
+
                     b.Property<string>("ResourceDisplayName")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
+
+                    b.Property<byte>("Stage")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("StageMessage")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
 
                     b.Property<DateTimeOffset?>("StartedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<byte>("Status")
                         .HasColumnType("smallint");
+
+                    b.Property<string>("SubjectConcurrencyKey")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<string>("SubjectDisplayName")
                         .HasMaxLength(256)
@@ -647,71 +692,25 @@ namespace GZCTF.Migrations
                     b.HasIndex("ActiveIdentity")
                         .IsUnique()
                         .HasDatabaseName("UX_DeploymentQueueTickets_ActiveIdentity")
-                        .HasFilter("\"Status\" IN (0, 1, 2)");
+                        .HasFilter("\"Status\" IN (0, 1, 2, 3)");
 
-                    b.HasIndex("DeploymentTargetId");
+                    b.HasIndex("SubjectConcurrencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_DeploymentQueueTickets_SubjectConcurrencyKey")
+                        .HasFilter("\"Status\" IN (0, 1, 2, 3)");
 
                     b.HasIndex("Status", "CompletedAt", "Id")
                         .IsDescending(false, true, true)
                         .HasDatabaseName("IX_DeploymentQueueTickets_Terminal_Completed_Id")
-                        .HasFilter("\"Status\" IN (3, 4, 5)");
+                        .HasFilter("\"Status\" IN (4, 5, 6)");
 
-                    b.HasIndex("Status", "CreatedAt", "Id")
-                        .HasDatabaseName("IX_DeploymentQueueTickets_Status_Created_Id");
+                    b.HasIndex("Status", "NotBeforeAt", "CreatedAt", "Id")
+                        .HasDatabaseName("IX_DeploymentQueueTickets_Status_NotBefore_Created_Id");
 
                     b.HasIndex("TargetNodeId", "Status", "CreatedAt", "Id")
                         .HasDatabaseName("IX_DeploymentQueueTickets_Node_Status_Created_Id");
 
                     b.ToTable("DeploymentQueueTickets");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.DeploymentTarget", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<byte>("Action")
-                        .HasColumnType("smallint");
-
-                    b.Property<DateTimeOffset?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ErrorMessage")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
-
-                    b.Property<string>("Payload")
-                        .IsRequired()
-                        .HasMaxLength(4096)
-                        .HasColumnType("character varying(4096)");
-
-                    b.Property<string>("ResultHost")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<int?>("ResultPort")
-                        .HasColumnType("integer");
-
-                    b.Property<byte>("Status")
-                        .HasColumnType("smallint");
-
-                    b.Property<Guid?>("TargetNodeId")
-                        .HasColumnType("uuid");
-
-                    b.Property<byte>("Type")
-                        .HasColumnType("smallint");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Status");
-
-                    b.HasIndex("TargetNodeId");
-
-                    b.ToTable("DeploymentTargets");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.Division", b =>
@@ -1145,6 +1144,51 @@ namespace GZCTF.Migrations
                     b.ToTable("FlagContexts");
                 });
 
+            modelBuilder.Entity("GZCTF.Models.Data.FleetCapacityReservation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DeploymentQueueTicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("DockerSlots")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ReleasedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte>("Status")
+                        .HasColumnType("smallint");
+
+                    b.Property<int>("VmSlots")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("WorkerNodeId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeploymentQueueTicketId", "Status")
+                        .HasDatabaseName("IX_FleetCapacityReservations_Ticket_Status");
+
+                    b.HasIndex("DeploymentQueueTicketId", "WorkerNodeId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_FleetCapacityReservations_Ticket_Node");
+
+                    b.HasIndex("WorkerNodeId", "Status", "ExpiresAt")
+                        .HasDatabaseName("IX_FleetCapacityReservations_Node_Status_Expires");
+
+                    b.ToTable("FleetCapacityReservations");
+                });
+
             modelBuilder.Entity("GZCTF.Models.Data.Game", b =>
                 {
                     b.Property<int>("Id")
@@ -1497,6 +1541,16 @@ namespace GZCTF.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("ClaimExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ClaimOwner")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1518,6 +1572,22 @@ namespace GZCTF.Migrations
                     b.Property<DateTimeOffset?>("LastCheckedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("LastErrorCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte>("Operation")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTimeOffset?>("ProgressUpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte>("Stage")
+                        .HasColumnType("smallint");
+
                     b.Property<byte>("Status")
                         .HasColumnType("smallint");
 
@@ -1532,6 +1602,9 @@ namespace GZCTF.Migrations
 
                     b.HasIndex("WorkerNodeId", "Status", "LastCheckedAt")
                         .HasDatabaseName("IX_ImageDistributionRecords_Node_Status_Checked");
+
+                    b.HasIndex("Status", "NextAttemptAt", "ClaimExpiresAt", "CreatedAt")
+                        .HasDatabaseName("IX_ImageDistributionRecords_Work_Claim");
 
                     b.ToTable("ImageDistributionRecords");
                 });
@@ -2431,6 +2504,11 @@ namespace GZCTF.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("PlacementGroupKey")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
                     b.Property<int>("RuntimeId")
                         .HasColumnType("integer");
 
@@ -2495,6 +2573,9 @@ namespace GZCTF.Migrations
                     b.Property<int>("Generation")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("IsEntry")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -2502,6 +2583,11 @@ namespace GZCTF.Migrations
 
                     b.Property<long?>("NetworkLeaseId")
                         .HasColumnType("bigint");
+
+                    b.Property<string>("PlacementGroupKey")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<int>("RuntimeId")
                         .HasColumnType("integer");
@@ -4104,8 +4190,16 @@ namespace GZCTF.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AgentBinarySha256")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<int>("AgentPort")
                         .HasColumnType("integer");
+
+                    b.Property<string>("AgentVersion")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("AuthToken")
                         .IsRequired()
@@ -4114,6 +4208,21 @@ namespace GZCTF.Migrations
 
                     b.Property<byte>("Capabilities")
                         .HasColumnType("smallint");
+
+                    b.Property<string>("CapabilityHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("CapabilityManifestJson")
+                        .IsRequired()
+                        .HasMaxLength(8192)
+                        .HasColumnType("character varying(8192)");
+
+                    b.Property<int>("CapabilityManifestSchemaVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("CapabilityObservedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<uint>("ConcurrencyToken")
                         .IsConcurrencyToken()
@@ -4180,23 +4289,8 @@ namespace GZCTF.Migrations
                     b.Property<int>("RegistryPort")
                         .HasColumnType("integer");
 
-                    b.Property<int>("ReservedContainers")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("ReservedVms")
-                        .HasColumnType("integer");
-
                     b.Property<byte>("Status")
                         .HasColumnType("smallint");
-
-                    b.Property<string>("TeamLabAgentVersion")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("TeamLabCapabilitiesJson")
-                        .IsRequired()
-                        .HasMaxLength(4096)
-                        .HasColumnType("character varying(4096)");
 
                     b.Property<string>("TeamLabFabricIp")
                         .HasMaxLength(64)
@@ -4207,9 +4301,6 @@ namespace GZCTF.Migrations
 
                     b.Property<bool>("TeamLabNetworkEnabled")
                         .HasColumnType("boolean");
-
-                    b.Property<int>("TeamLabProtocolVersion")
-                        .HasColumnType("integer");
 
                     b.Property<int>("TeamLabTunnelConfigVersion")
                         .HasColumnType("integer");
@@ -5861,26 +5952,10 @@ namespace GZCTF.Migrations
 
             modelBuilder.Entity("GZCTF.Models.Data.DeploymentQueueTicket", b =>
                 {
-                    b.HasOne("GZCTF.Models.Data.DeploymentTarget", "DeploymentTarget")
-                        .WithMany()
-                        .HasForeignKey("DeploymentTargetId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("GZCTF.Models.Data.WorkerNode", "TargetNode")
                         .WithMany()
                         .HasForeignKey("TargetNodeId")
                         .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("DeploymentTarget");
-
-                    b.Navigation("TargetNode");
-                });
-
-            modelBuilder.Entity("GZCTF.Models.Data.DeploymentTarget", b =>
-                {
-                    b.HasOne("GZCTF.Models.Data.WorkerNode", "TargetNode")
-                        .WithMany()
-                        .HasForeignKey("TargetNodeId");
 
                     b.Navigation("TargetNode");
                 });
@@ -6086,6 +6161,25 @@ namespace GZCTF.Migrations
                     b.Navigation("Challenge");
 
                     b.Navigation("Exercise");
+                });
+
+            modelBuilder.Entity("GZCTF.Models.Data.FleetCapacityReservation", b =>
+                {
+                    b.HasOne("GZCTF.Models.Data.DeploymentQueueTicket", "DeploymentQueueTicket")
+                        .WithMany()
+                        .HasForeignKey("DeploymentQueueTicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.WorkerNode", "WorkerNode")
+                        .WithMany()
+                        .HasForeignKey("WorkerNodeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DeploymentQueueTicket");
+
+                    b.Navigation("WorkerNode");
                 });
 
             modelBuilder.Entity("GZCTF.Models.Data.Game", b =>

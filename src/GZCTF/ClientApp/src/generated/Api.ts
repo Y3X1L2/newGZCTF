@@ -10149,7 +10149,7 @@ export class Api<
       cId: number,
       params: RequestParams = {},
     ) =>
-      this.request<ContainerInfoModel, RequestResponse>({
+      this.request<DeploymentQueueStatusModel, RequestResponse>({
         path: `/api/edit/games/${id}/challenges/${cId}/container`,
         method: "POST",
         format: "json",
@@ -13463,17 +13463,17 @@ export class Api<
         ...params,
       }),
   };
-  deploymentTargets = {
+  deploymentQueue = {
     /**
      * No description
      *
-     * @tags DeploymentTargets
-     * @name DeploymentTargetsCancel
-     * @request DELETE:/api/v1/deployment-targets/{id}
+     * @tags DeploymentQueue
+     * @name DeploymentQueueCancel
+     * @request DELETE:/api/v1/deployment-queue/{id}
      */
-    deploymentTargetsCancel: (id: string, params: RequestParams = {}) =>
+    deploymentQueueCancel: (id: string, params: RequestParams = {}) =>
       this.request<Blob, any>({
-        path: `/api/v1/deployment-targets/${id}`,
+        path: `/api/v1/deployment-queue/${id}`,
         method: "DELETE",
         ...params,
       }),
@@ -13481,61 +13481,57 @@ export class Api<
     /**
      * No description
      *
-     * @tags DeploymentTargets
-     * @name DeploymentTargetsGetById
-     * @request GET:/api/v1/deployment-targets/{id}
+     * @tags DeploymentQueue
+     * @name DeploymentQueueGetById
+     * @request GET:/api/v1/deployment-queue/{id}
      */
-    deploymentTargetsGetById: (id: string, params: RequestParams = {}) =>
+    deploymentQueueGetById: (id: string, params: RequestParams = {}) =>
       this.request<Blob, any>({
-        path: `/api/v1/deployment-targets/${id}`,
+        path: `/api/v1/deployment-queue/${id}`,
         method: "GET",
         ...params,
       }),
     /**
      * No description
      *
-     * @tags DeploymentTargets
-     * @name DeploymentTargetsGetById
-     * @request GET:/api/v1/deployment-targets/{id}
+     * @tags DeploymentQueue
+     * @name DeploymentQueueGetById
+     * @request GET:/api/v1/deployment-queue/{id}
      */
-    useDeploymentTargetsGetById: (
+    useDeploymentQueueGetById: (
       id: string,
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
       useSWR<Blob, any>(
-        doFetch ? `/api/v1/deployment-targets/${id}` : null,
+        doFetch ? `/api/v1/deployment-queue/${id}` : null,
         options,
       ),
 
     /**
      * No description
      *
-     * @tags DeploymentTargets
-     * @name DeploymentTargetsGetById
-     * @request GET:/api/v1/deployment-targets/{id}
+     * @tags DeploymentQueue
+     * @name DeploymentQueueGetById
+     * @request GET:/api/v1/deployment-queue/{id}
      */
-    mutateDeploymentTargetsGetById: (
+    mutateDeploymentQueueGetById: (
       id: string,
       data?: Blob | Promise<Blob>,
       options?: MutatorOptions,
-    ) => mutate<Blob>(`/api/v1/deployment-targets/${id}`, data, options),
+    ) => mutate<Blob>(`/api/v1/deployment-queue/${id}`, data, options),
 
     /**
      * No description
      *
-     * @tags DeploymentTargets
-     * @name DeploymentTargetsList
-     * @request GET:/api/v1/deployment-targets
+     * @tags DeploymentQueue
+     * @name DeploymentQueueList
+     * @request GET:/api/v1/deployment-queue
      */
-    deploymentTargetsList: (
+    deploymentQueueList: (
       query?: {
         status?: string | null;
-        /**
-         * @format int32
-         * @default 1
-         */
-        page?: number;
+        cursor?: string | null;
         /**
          * @format int32
          * @default 20
@@ -13545,7 +13541,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<Blob, any>({
-        path: `/api/v1/deployment-targets`,
+        path: `/api/v1/deployment-queue`,
         method: "GET",
         query: query,
         ...params,
@@ -13553,18 +13549,14 @@ export class Api<
     /**
      * No description
      *
-     * @tags DeploymentTargets
-     * @name DeploymentTargetsList
-     * @request GET:/api/v1/deployment-targets
+     * @tags DeploymentQueue
+     * @name DeploymentQueueList
+     * @request GET:/api/v1/deployment-queue
      */
-    useDeploymentTargetsList: (
+    useDeploymentQueueList: (
       query?: {
         status?: string | null;
-        /**
-         * @format int32
-         * @default 1
-         */
-        page?: number;
+        cursor?: string | null;
         /**
          * @format int32
          * @default 20
@@ -13575,25 +13567,21 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<Blob, any>(
-        doFetch ? [`/api/v1/deployment-targets`, query] : null,
+        doFetch ? [`/api/v1/deployment-queue`, query] : null,
         options,
       ),
 
     /**
      * No description
      *
-     * @tags DeploymentTargets
-     * @name DeploymentTargetsList
-     * @request GET:/api/v1/deployment-targets
+     * @tags DeploymentQueue
+     * @name DeploymentQueueList
+     * @request GET:/api/v1/deployment-queue
      */
-    mutateDeploymentTargetsList: (
+    mutateDeploymentQueueList: (
       query?: {
         status?: string | null;
-        /**
-         * @format int32
-         * @default 1
-         */
-        page?: number;
+        cursor?: string | null;
         /**
          * @format int32
          * @default 20
@@ -13602,7 +13590,7 @@ export class Api<
       },
       data?: Blob | Promise<Blob>,
       options?: MutatorOptions,
-    ) => mutate<Blob>([`/api/v1/deployment-targets`, query], data, options),
+    ) => mutate<Blob>([`/api/v1/deployment-queue`, query], data, options),
   };
   penetrationAdmin = {
     /**

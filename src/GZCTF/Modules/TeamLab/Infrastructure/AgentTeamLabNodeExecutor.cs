@@ -313,7 +313,8 @@ public sealed class AgentTeamLabNodeExecutor(
             return TeamLabNodeAssetCreateResult.Failed($"Image template {template.Id} is not a Docker template.");
         var image = DockerImageReference.ResolvePullTarget(template.Name, template.RegistryUrl).FullImage;
         image = await dockerRegistry.ResolveImageReferenceAsync(image, cancellationToken);
-        await imageDistribution.EnsureDockerImageOnNodeAsync(image, workerNodeId, cancellationToken);
+        if (!request.ImageReady)
+            await imageDistribution.EnsureDockerImageOnNodeAsync(image, workerNodeId, cancellationToken);
         var environment = request.Environment.Concat(request.Secrets)
             .GroupBy(item => item.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Last().Value, StringComparer.Ordinal);
@@ -375,8 +376,12 @@ public sealed class AgentTeamLabNodeExecutor(
     {
         if (template.ImageType == ImageType.Docker)
             return TeamLabNodeAssetCreateResult.Failed($"Image template {template.Id} is not a VM template.");
-        var imageReady = await imageDistribution.EnsureVmTemplateOnNodeAsync(template.Id, workerNodeId, cancellationToken);
-        if (!imageReady.Success) return TeamLabNodeAssetCreateResult.Failed(imageReady.Message);
+        if (!request.ImageReady)
+        {
+            var imageReady = await imageDistribution.EnsureVmTemplateOnNodeAsync(
+                template.Id, workerNodeId, cancellationToken);
+            if (!imageReady.Success) return TeamLabNodeAssetCreateResult.Failed(imageReady.Message);
+        }
         var vmName = LinuxName($"tl{request.RuntimeId}-{request.AssetKey}");
         var interfaces = request.Interfaces.Select(iface => new AgentVmNetworkInterfaceRequest
         {

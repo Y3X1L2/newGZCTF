@@ -266,7 +266,7 @@ AWDP 已有服务、服务实例、轮次、Flag、Checker、Patch、重置、�
 | TeamLab 与 Penetration 耦合 | TeamLab 计划、资产、路由、发布仍使用 Penetration 实体 | 组网底座难以 API 化和商业化复用 | Phase 3 |
 | 数据库生命周期不足 | 高频表缺少保留、归档、分区和聚合策略 | 长期运营后查询和写入压力不可控 | Phase 4 |
 | 缓存策略分散 | Redis 覆盖缓存、锁、SignalR、端口分配，高频事件策略未统一 | 高并发下状态漂移和数据库压力风险高 | Phase 5 |
-| 调度与能力协商不足 | 仍有协议硬编码和能力耦合缺陷 | Docker、KVM、TeamLab 多节点调度不够稳 | Phase 6 |
+| 调度容量尚未完成目标硬件签收 | Phase 6 已删除整数协议和双轨队列，自动化门禁通过；500-owner/300-create 与双主站故障接管仍缺目标环境证据 | 代码底座可继续支撑 Phase 7-9，商业容量结论必须由预发布/Phase 14 实测冻结 | Phase 14 |
 | 日志可读性不足 | 队列和日志仍出现内部 ID、泛化错误 | 运维排障成本高 | Phase 7 |
 | VM 抽象不足 | `WindowsVM` 承载 VM 语义 | Linux SSH 和 Windows RDP 无法统一 | Phase 8 |
 | API token 权限过粗 | token 管理要求管理员，token 没有 scope/permission | 出题人 API 无法按最小权限开放 | Phase 1、Phase 10 |
@@ -762,7 +762,7 @@ Phase 编号表示依赖顺序，不表示所有团队串行开发。满足前�
 | 决策点 | 当前采用路线 | 切换条件 |
 | --- | --- | --- |
 | 主站架构 | 模块化单体 + 独立 Agent 执行面 | 某模块需要独立扩缩容、独立发布且模块边界已通过 Phase 1 验收时，才评估拆服务。 |
-| 部署队列 | PostgreSQL 事实队列 + Redis 分布式锁 + 现有 QueueManager | Phase 6 基准证明目标吞吐、故障恢复或跨实例协调无法达标时，才引入专用消息中间件。 |
+| 部署队列 | PostgreSQL 事实队列 + Redis wake-up/短期调度 lease + 独立 scheduling/execution worker | Phase 6 基准证明目标吞吐、故障恢复或跨实例协调无法达标时，才引入专用消息中间件。 |
 | TeamLab 网络 | WireGuard 玩家入口 + L3 Fabric | 产品明确要求同一二层广播域、二层协议训练或跨节点二层设备仿真时，才评估 VXLAN/OVS。 |
 | 高频流量存储 | Redis 缓冲 + PostgreSQL 聚合事实 | Phase 4 基准证明目标保留周期和查询 SLA 无法由 PostgreSQL 分区方案满足时，才引入列式或时序存储。 |
 | 前端样式 | design token + Mantine theme + 公共组件 + CSS module | 不切回单一超大 CSS，不允许页面私有视觉体系。 |

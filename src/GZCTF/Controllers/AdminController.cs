@@ -10,6 +10,7 @@ using GZCTF.Models.Request.Info;
 using GZCTF.Repositories.Interface;
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Config;
+using GZCTF.Services.Fleet;
 using GZCTF.Storage.Interface;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -793,11 +794,10 @@ public class AdminController(
             return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Admin_ContainerInstanceNotFound)],
                 StatusCodes.Status404NotFound));
 
-        if (await containerRepository.DestroyContainer(container, token))
-            return Ok();
-
-        return BadRequest(
-            new RequestResponse(localizer[nameof(Resources.Program.Admin_ContainerInstanceDestroyFailed)]));
+        var queue = HttpContext.RequestServices.GetRequiredService<DeploymentQueueService>();
+        var queued = await queue.EnqueueAsync(DeploymentQueueRequest.MaintenanceContainer(
+            container.Id, container.NodeId, container.Image), token);
+        return Accepted(await queue.GetStatusAsync(queued.TicketId, token));
     }
 
     /// <summary>

@@ -12,34 +12,61 @@ public class KvmService
 {
     private readonly KvmConfig _config;
     private readonly ILogger<KvmService> _logger;
+    private readonly AgentResourceLock _resourceLock;
 
     private static readonly Regex SafeNamePattern = new(@"^[a-zA-Z0-9_\-]+$", RegexOptions.Compiled);
     private static readonly Regex SafeMacPattern = new(@"^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$", RegexOptions.Compiled);
     private static readonly Regex SafeInterfacePattern = new(@"^[a-zA-Z0-9_\-\.]+$", RegexOptions.Compiled);
     private static readonly ConcurrentDictionary<string, RdpProxy> RdpProxies = new();
-    private static readonly SemaphoreSlim VirtInstallGate = new(1, 1);
     private const int RdpProxyPortStart = 46000;
     private const int RdpProxyPortCount = 10000;
 
-    public KvmService(IOptions<KvmConfig> config, ILogger<KvmService> logger)
-    { _config = config.Value; _logger = logger; }
+    public KvmService(IOptions<KvmConfig> config, AgentResourceLock resourceLock, ILogger<KvmService> logger)
+    { _config = config.Value; _resourceLock = resourceLock; _logger = logger; }
 
     public async Task<CreateVmResponse?> CreateVmAsync(CreateVmRequest request, CancellationToken token)
     {
         if (!SafeNamePattern.IsMatch(request.VmName))
             throw new ArgumentException("Invalid VM name", nameof(request.VmName));
 
+        await using var identityLock = await _resourceLock.AcquireAsync($"vm:{request.VmName}", token);
+
         var templatePath = ResolveTemplatePath(request);
         var vmPath = Path.Combine(_config.ImageStoragePath, $"{request.VmName}.qcow2");
+        var generationPath = Path.Combine(_config.ImageStoragePath, $"{request.VmName}.generation");
 
         Directory.CreateDirectory(_config.ImageStoragePath);
 
-        await RunCommandAsync($"virsh destroy {ShellEscape(request.VmName)} 2>/dev/null || true", token,
-            throwOnError: false);
-        await RunCommandAsync($"virsh undefine {ShellEscape(request.VmName)} --remove-all-storage 2>/dev/null || true",
-            token, throwOnError: false);
+        var domainId = (await RunCommandAsync($"virsh domuuid {ShellEscape(request.VmName)} 2>/dev/null", token,
+            throwOnError: false)).Trim();
+        var recordedGeneration = await ReadGenerationAsync(generationPath, token);
+        if (!string.IsNullOrWhiteSpace(domainId))
+        {
+            recordedGeneration ??= await ReadDomainGenerationAsync(request.VmName, token);
+            if (recordedGeneration != request.Generation)
+                throw new InvalidOperationException(
+                    $"runtime_identity_conflict: VM {request.VmName} exists with generation {recordedGeneration?.ToString() ?? "unknown"}.");
+            if (!File.Exists(generationPath))
+                await File.WriteAllTextAsync(generationPath, Math.Max(1, request.Generation).ToString(), token);
+            var existingState = (await RunCommandAsync($"virsh domstate {ShellEscape(request.VmName)}", token,
+                throwOnError: false)).Trim();
+            if (!existingState.Equals("running", StringComparison.OrdinalIgnoreCase))
+                await RunCommandAsync($"virsh start {ShellEscape(request.VmName)}", token);
+            return new CreateVmResponse
+            {
+                VmName = request.VmName,
+                Status = "Running",
+                VncAddress = await GetVncAddressAsync(request.VmName, token),
+                Interfaces = request.Interfaces
+            };
+        }
         if (File.Exists(vmPath))
+        {
+            if (recordedGeneration is not null && recordedGeneration != request.Generation)
+                throw new InvalidOperationException(
+                    $"runtime_identity_conflict: VM overlay {request.VmName} belongs to generation {recordedGeneration}.");
             File.Delete(vmPath);
+        }
 
         if (!string.IsNullOrEmpty(templatePath))
             await RunCommandAsync($"qemu-img create -f qcow2 -b {ShellEscape(templatePath)} -F qcow2 {ShellEscape(vmPath)}", token);
@@ -57,22 +84,16 @@ public class KvmService
             cloudInitArgs = BuildVirtInstallCloudInitArguments(cloudInitFiles, directCloudInit) + " ";
         }
 
-        await VirtInstallGate.WaitAsync(token);
-        try
-        {
-            await RunCommandAsync(
-                $"virt-install --name {ShellEscape(request.VmName)} --memory {request.Memory} --vcpus {request.Cpu} " +
-                $"--disk path={ShellEscape(vmPath)} --osinfo detect=on,require=off --import --noautoconsole " +
-                $"{cloudInitArgs}{BuildVirtInstallNetworkArguments(request)} --graphics vnc,listen=0.0.0.0", token);
-        }
-        finally
-        {
-            VirtInstallGate.Release();
-        }
+        await RunCommandAsync(
+            $"virt-install --name {ShellEscape(request.VmName)} --memory {request.Memory} --vcpus {request.Cpu} " +
+            $"--metadata description={ShellEscape($"gzctf-generation={Math.Max(1, request.Generation)}")} " +
+            $"--disk path={ShellEscape(vmPath)} --osinfo detect=on,require=off --import --noautoconsole " +
+            $"{cloudInitArgs}{BuildVirtInstallNetworkArguments(request)} --graphics vnc,listen=0.0.0.0", token);
 
         var state = (await RunCommandAsync($"virsh domstate {ShellEscape(request.VmName)}", token)).Trim();
         if (!state.Equals("running", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"VM {request.VmName} was created but is not running (state: {state})");
+        await File.WriteAllTextAsync(generationPath, Math.Max(1, request.Generation).ToString(), token);
 
         return new CreateVmResponse
         {
@@ -86,10 +107,34 @@ public class KvmService
     public async Task DestroyVmAsync(string vmName, CancellationToken token)
     {
         if (!SafeNamePattern.IsMatch(vmName)) return;
+        await using var identityLock = await _resourceLock.AcquireAsync($"vm:{vmName}", token);
         await StopRdpProxyAsync(vmName);
         await RunCommandAsync($"virsh destroy {ShellEscape(vmName)} 2>/dev/null || true", token);
         await RunCommandAsync($"virsh undefine {ShellEscape(vmName)} --remove-all-storage 2>/dev/null || true", token);
         CleanupCloudInitSeed(vmName);
+        var generationPath = Path.Combine(_config.ImageStoragePath, $"{vmName}.generation");
+        if (File.Exists(generationPath)) File.Delete(generationPath);
+    }
+
+    static async Task<int?> ReadGenerationAsync(string path, CancellationToken token)
+    {
+        if (!File.Exists(path)) return null;
+        var value = await File.ReadAllTextAsync(path, token);
+        return int.TryParse(value.Trim(), out var generation) ? generation : null;
+    }
+
+    async Task<int?> ReadDomainGenerationAsync(string vmName, CancellationToken token)
+    {
+        var description = await RunCommandAsync(
+            $"virsh desc {ShellEscape(vmName)} 2>/dev/null", token, throwOnError: false);
+        const string marker = "gzctf-generation=";
+        var index = description.IndexOf(marker, StringComparison.Ordinal);
+        if (index < 0)
+            return null;
+        var value = description[(index + marker.Length)..]
+            .Split(['\r', '\n', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault();
+        return int.TryParse(value, out var generation) ? generation : null;
     }
 
     public async Task<int> GetVmCountAsync(CancellationToken token)

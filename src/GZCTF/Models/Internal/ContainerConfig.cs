@@ -2,6 +2,7 @@ namespace GZCTF.Models.Internal;
 
 public class ContainerConfig
 {
+    public int Generation { get; set; } = 1;
     /// <summary>
     /// Container image
     /// </summary>

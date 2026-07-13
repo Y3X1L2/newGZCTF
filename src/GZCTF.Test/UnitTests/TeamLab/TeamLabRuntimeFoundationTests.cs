@@ -12,13 +12,13 @@ namespace GZCTF.Test.UnitTests.TeamLab;
 public sealed class TeamLabRuntimeFoundationTests
 {
     [Fact]
-    public void QueueIdentity_DependsOnlyOnRuntime()
+    public void QueueIdentity_SeparatesRuntimeOperationAndGeneration()
     {
         var request = DeploymentQueueRequest.TeamLab(
             42, 2, 1, runtimePublicId: Guid.Parse("01900000-0000-7000-8000-000000000042"));
         var ticket = DeploymentQueueTicket.Create(request);
 
-        Assert.Equal("teamlab-runtime:42", ticket.ActiveIdentity);
+        Assert.Equal("Create:teamlab-runtime:42:1", ticket.ActiveIdentity);
         Assert.Null(ticket.GameId);
         Assert.Null(ticket.OwnerTeamId);
         Assert.Equal("teamlab-runtime", ticket.SubjectType);

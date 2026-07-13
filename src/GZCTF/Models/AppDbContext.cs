@@ -88,8 +88,8 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<DockerRegistryMigrationItem> DockerRegistryMigrationItems { get; set; } = null!;
     public DbSet<VmInstance> VmInstances => Set<VmInstance>();
     public DbSet<WorkerNode> WorkerNodes { get; set; } = null!;
-    public DbSet<DeploymentTarget> DeploymentTargets { get; set; } = null!;
     public DbSet<DeploymentQueueTicket> DeploymentQueueTickets { get; set; } = null!;
+    public DbSet<FleetCapacityReservation> FleetCapacityReservations => Set<FleetCapacityReservation>();
     public DbSet<GamePhase> GamePhases => Set<GamePhase>();
     public DbSet<TheoryQuestionBankItem> TheoryQuestionBankItems { get; set; } = null!;
     public DbSet<TheoryQuestionTagEntity> TheoryQuestionTags => Set<TheoryQuestionTagEntity>();

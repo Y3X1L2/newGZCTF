@@ -1,5 +1,6 @@
 using GZCTF.Repositories.Interface;
 using GZCTF.Infrastructure.Cache;
+using GZCTF.Services.Fleet;
 
 namespace GZCTF.Services.CronJob;
 
@@ -12,14 +13,15 @@ public static class RuntimeCronJobs
         CancellationToken cancellationToken)
     {
         var containerRepo = scope.ServiceProvider.GetRequiredService<IContainerRepository>();
+        var queue = scope.ServiceProvider.GetRequiredService<DeploymentQueueService>();
 
         foreach (var container in await containerRepo.GetDyingContainers(cancellationToken))
         {
-            await containerRepo.DestroyContainer(container, cancellationToken);
+            await queue.EnqueueAsync(DeploymentQueueRequest.MaintenanceContainer(
+                container.Id, container.NodeId, container.Image), cancellationToken);
             logger.SystemLog(
-                StaticLocalizer[nameof(Resources.Program.CronJob_RemoveExpiredContainer),
-                    container.LogId],
-                TaskStatus.Success, LogLevel.Debug);
+                $"Expired container cleanup queued: container={container.Id}, node={container.NodeId}, image={container.Image}.",
+                TaskStatus.Pending, LogLevel.Debug);
         }
     }
 

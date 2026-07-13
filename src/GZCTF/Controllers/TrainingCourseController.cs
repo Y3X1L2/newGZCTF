@@ -7,6 +7,7 @@ using GZCTF.Models.Request.Training;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Services.Config;
+using GZCTF.Services.Fleet;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -1111,11 +1112,17 @@ public class TrainingCourseController(
             TimeSpan.FromMinutes(containerPolicy.Value.RenewalWindow))
             return BadRequest(new RequestResponse("当前还未进入实例续期窗口。"));
 
-        await containerRepository.ExtendLifetime(instance.Container,
-            TimeSpan.FromMinutes(containerPolicy.Value.ExtensionDuration), token);
-
-        logger.Log($"Extended course container: {course.Title} / {instance.Exercise.Title}.", user, TaskStatus.Success);
-        return Ok(ContainerInfoModel.FromContainer(instance.Container));
+        var queue = HttpContext.RequestServices.GetRequiredService<DeploymentQueueService>();
+        var queued = await queue.EnqueueAsync(DeploymentQueueRequest.TrainingContainer(
+            user.Id, instance.ExerciseId) with
+        {
+            Operation = RuntimeOperationKind.Extend,
+            TargetNodeId = instance.Container.NodeId,
+            ExtensionSeconds = (int)TimeSpan.FromMinutes(containerPolicy.Value.ExtensionDuration).TotalSeconds,
+            SubjectDisplayName = user.UserName,
+            ResourceDisplayName = $"{course.Title} / {instance.Exercise.Title}"
+        }, token);
+        return Accepted(await queue.GetStatusAsync(queued.TicketId, token));
     }
 
     [HttpDelete("{courseId:int}/challenges/{challengeId:int}/container")]
@@ -1142,13 +1149,18 @@ public class TrainingCourseController(
         if (instance.IsContainerOperationTooFrequent)
             return RequestResponse.Result("操作过于频繁，请稍后再试。", StatusCodes.Status429TooManyRequests);
 
-        if (!await containerRepository.DestroyContainer(instance.Container, token))
-            return BadRequest(new RequestResponse("课程容器销毁失败。"));
-
+        var queue = HttpContext.RequestServices.GetRequiredService<DeploymentQueueService>();
+        var queued = await queue.EnqueueAsync(DeploymentQueueRequest.TrainingContainer(
+            user.Id, instance.ExerciseId) with
+        {
+            Operation = RuntimeOperationKind.Stop,
+            TargetNodeId = instance.Container.NodeId,
+            SubjectDisplayName = user.UserName,
+            ResourceDisplayName = $"{course.Title} / {instance.Exercise.Title}"
+        }, token);
         instance.LastContainerOperation = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(token);
-        logger.Log($"Destroyed course container: {course.Title} / {instance.Exercise.Title}.", user, TaskStatus.Success);
-        return Ok();
+        return Accepted(await queue.GetStatusAsync(queued.TicketId, token));
     }
 
     [HttpPost("{courseId:int}/challenges/{challengeId:int}/submit")]

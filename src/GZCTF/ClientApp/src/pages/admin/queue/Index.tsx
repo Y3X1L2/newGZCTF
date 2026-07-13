@@ -9,27 +9,22 @@ import { YinyuTableShell } from '@Components/yinyu/YinyuUI'
 
 interface DeploymentQueueItem {
   id: string
-  ticketId?: string | null
-  targetId?: string | null
+  operation: number
+  stage: number
   typeLabel: string
   actionLabel: string
   requestLabel: string
-  ownerLabel?: string | null
-  gameLabel?: string | null
-  challengeLabel?: string | null
   image?: string | null
   targetNodeLabel: string
   statusLabel: string
   statusKey: string
   dockerSlots: number
   vmSlots: number
-  queuePosition: number
   peopleAhead: number
-  result?: string | null
+  stageMessage?: string | null
+  blockedReasonCode?: string | null
   errorMessage?: string | null
   createdAt: string
-  startedAt?: string | null
-  completedAt?: string | null
 }
 
 interface DeploymentQueueResponse {
@@ -38,16 +33,18 @@ interface DeploymentQueueResponse {
 }
 
 const PAGE_SIZE = 20
+const activeStatuses = new Set(['pending', 'scheduling', 'scheduled', 'running'])
 
 const fetcher = async (url: string) => {
-  const res = await fetch(url)
-  if (!res.ok) throw new Error('Failed to load deployment queue')
-  return (await res.json()) as DeploymentQueueResponse
+  const response = await fetch(url)
+  if (!response.ok) throw new Error('Failed to load deployment queue')
+  return (await response.json()) as DeploymentQueueResponse
 }
 
 const statusConfig: Record<string, { color: string; semantic: string }> = {
   pending: { color: 'violet', semantic: 'pending' },
-  assigned: { color: 'blue', semantic: 'assigned' },
+  scheduling: { color: 'cyan', semantic: 'running' },
+  scheduled: { color: 'blue', semantic: 'assigned' },
   running: { color: 'blue', semantic: 'running' },
   completed: { color: 'green', semantic: 'success' },
   failed: { color: 'red', semantic: 'failed' },
@@ -56,7 +53,8 @@ const statusConfig: Record<string, { color: string; semantic: string }> = {
 
 const statusOptions = [
   { value: 'pending', label: '等待中' },
-  { value: 'assigned', label: '已分配' },
+  { value: 'scheduling', label: '调度中' },
+  { value: 'scheduled', label: '已分配' },
   { value: 'running', label: '执行中' },
   { value: 'completed', label: '已完成' },
   { value: 'failed', label: '失败' },
@@ -82,28 +80,26 @@ export default function QueuePage() {
   const cursor = cursorStack.at(-1)
   const page = cursorStack.length + 1
   const query = useMemo(() => {
-    const params = new URLSearchParams({
-      pageSize: PAGE_SIZE.toString(),
-    })
+    const params = new URLSearchParams({ pageSize: PAGE_SIZE.toString() })
     if (statusFilter) params.set('status', statusFilter)
     if (cursor) params.set('cursor', cursor)
-    return `/api/v1/deployment-targets?${params.toString()}`
+    return `/api/v1/deployment-queue?${params.toString()}`
   }, [cursor, statusFilter])
   const { data, isLoading, mutate } = useSWR(query, fetcher, {
-    refreshInterval: 10000,
+    refreshInterval: (latest) => latest?.items.some((item) => activeStatuses.has(item.statusKey)) ? 1500 : 10000,
     keepPreviousData: true,
   })
 
   const handleCancel = async (id: string) => {
     try {
-      const res = await fetch(`/api/v1/deployment-targets/${id}`, { method: 'DELETE' })
-      if (res.ok) {
-        notifications.show({ title: '已取消', message: '部署任务已取消', color: 'green' })
-        await mutate()
-      } else {
-        const body = await res.json().catch(() => ({}))
+      const response = await fetch(`/api/v1/deployment-queue/${id}`, { method: 'DELETE' })
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}))
         notifications.show({ title: '取消失败', message: body.message || '请检查任务状态', color: 'red' })
+        return
       }
+      notifications.show({ title: '已取消', message: '部署任务已取消', color: 'green' })
+      await mutate()
     } catch {
       notifications.show({ title: '取消失败', message: '网络错误', color: 'red' })
     }
@@ -118,9 +114,7 @@ export default function QueuePage() {
         <Group justify="space-between" mb="lg" wrap="nowrap" className="yy-admin-page-head">
           <div>
             <Title order={2}>部署队列</Title>
-            <Text size="sm" className="yy-readable-text">
-              查看环境创建、销毁、延期和恢复任务的队列与历史。
-            </Text>
+            <Text size="sm" className="yy-readable-text">查看环境生命周期任务的排队、调度和执行进度。</Text>
           </div>
           <Group wrap="nowrap" style={{ overflowX: 'auto' }}>
             <Select
@@ -141,15 +135,16 @@ export default function QueuePage() {
         </Group>
         <YinyuTableShell p={0} w="100%" style={{ overflow: 'hidden' }}>
           <Box style={{ overflowX: 'auto' }}>
-            <Table miw={1180}>
+            <Table miw={1240}>
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>请求对象</Table.Th>
                   <Table.Th>镜像/模板</Table.Th>
                   <Table.Th>目标节点</Table.Th>
                   <Table.Th>类型</Table.Th>
-                  <Table.Th>动作</Table.Th>
+                  <Table.Th>操作</Table.Th>
                   <Table.Th>状态</Table.Th>
+                  <Table.Th>当前阶段</Table.Th>
                   <Table.Th>资源</Table.Th>
                   <Table.Th>创建时间</Table.Th>
                   <Table.Th>管理</Table.Th>
@@ -158,79 +153,46 @@ export default function QueuePage() {
               <Table.Tbody>
                 {items.length === 0 && (
                   <Table.Tr>
-                    <Table.Td colSpan={9} style={{ textAlign: 'center' }}>
+                    <Table.Td colSpan={10} style={{ textAlign: 'center' }}>
                       <Text className="yy-readable-text">{isLoading ? '加载中...' : '暂无部署任务'}</Text>
                     </Table.Td>
                   </Table.Tr>
                 )}
                 {items.map((item) => {
-                  const st = statusConfig[item.statusKey] ?? { color: 'gray', semantic: 'unknown' }
-                  const canCancel = item.statusKey === 'pending' || item.statusKey === 'assigned' || item.statusKey === 'running'
+                  const status = statusConfig[item.statusKey] ?? { color: 'gray', semantic: 'unknown' }
+                  const canCancel = activeStatuses.has(item.statusKey)
+                  const detail = item.errorMessage || item.stageMessage || item.blockedReasonCode || ''
                   return (
                     <Table.Tr key={item.id}>
                       <Table.Td>
                         <Stack gap={2}>
-                          <Text size="sm" fw={700} lineClamp={2}>
-                            {item.requestLabel}
-                          </Text>
-                          <Text size="xs" c="dimmed">
-                            {item.ticketId ? `队列 ${item.ticketId.slice(0, 8)}` : `任务 ${item.id.slice(0, 8)}`}
-                          </Text>
+                          <Text size="sm" fw={700} lineClamp={2}>{item.requestLabel}</Text>
+                          <Text size="xs" c="dimmed">任务 {item.id.slice(0, 8)}</Text>
                         </Stack>
                       </Table.Td>
-                      <Table.Td>
-                        <Text size="xs" lineClamp={2}>
-                          {item.image || '-'}
-                        </Text>
-                      </Table.Td>
-                      <Table.Td>
-                        <Text size="xs" lineClamp={2}>
-                          {item.targetNodeLabel}
-                        </Text>
-                      </Table.Td>
+                      <Table.Td><Text size="xs" lineClamp={2}>{item.image || '-'}</Text></Table.Td>
+                      <Table.Td><Text size="xs" lineClamp={2}>{item.targetNodeLabel}</Text></Table.Td>
                       <Table.Td>{item.typeLabel}</Table.Td>
                       <Table.Td>{item.actionLabel}</Table.Td>
                       <Table.Td>
-                        <Tooltip label={item.errorMessage || item.result || ''} disabled={!item.errorMessage && !item.result}>
-                          <Badge color={st.color} size="sm" className="yy-semantic-badge" data-semantic={st.semantic}>
+                        <Tooltip label={detail} disabled={!detail}>
+                          <Badge color={status.color} size="sm" className="yy-semantic-badge" data-semantic={status.semantic}>
                             {item.statusLabel}
                           </Badge>
                         </Tooltip>
-                        {item.peopleAhead > 0 && (
-                          <Text size="xs" c="dimmed" mt={4}>
-                            前方 {item.peopleAhead} 个
-                          </Text>
-                        )}
+                        {item.peopleAhead > 0 && <Text size="xs" c="dimmed" mt={4}>前方 {item.peopleAhead} 个任务</Text>}
                       </Table.Td>
+                      <Table.Td><Text size="xs" lineClamp={3}>{item.stageMessage || '-'}</Text></Table.Td>
+                      <Table.Td><Text size="xs">{slotsLabel(item)}</Text></Table.Td>
+                      <Table.Td><Text size="xs">{formatTime(item.createdAt)}</Text></Table.Td>
                       <Table.Td>
-                        <Text size="xs">{slotsLabel(item)}</Text>
-                      </Table.Td>
-                      <Table.Td>
-                        <Text size="xs">{formatTime(item.createdAt)}</Text>
-                      </Table.Td>
-                      <Table.Td>
-                        {canCancel || item.errorMessage ? (
-                          <Group gap={6} wrap="nowrap">
-                            {canCancel && (
-                              <Tooltip label="取消任务">
-                                <ActionIcon color="red" variant="subtle" size="sm" onClick={() => handleCancel(item.id)}>
-                                  <Icon path={mdiClose} size={1} />
-                                </ActionIcon>
-                              </Tooltip>
-                            )}
-                            {item.errorMessage && (
-                              <Tooltip label={item.errorMessage}>
-                                <Text size="xs" c="red" span>
-                                  错误
-                                </Text>
-                              </Tooltip>
-                            )}
-                          </Group>
-                        ) : (
-                          <Text size="xs" c="dimmed">
-                            -
-                          </Text>
-                        )}
+                        {canCancel ? (
+                          <Tooltip label="取消任务">
+                            <ActionIcon color="red" variant="subtle" size="sm" onClick={() => handleCancel(item.id)}>
+                              <Icon path={mdiClose} size={1} />
+                            </ActionIcon>
+                          </Tooltip>
+                        ) : <Text size="xs" c="dimmed">-</Text>}
                       </Table.Td>
                     </Table.Tr>
                   )
@@ -241,22 +203,12 @@ export default function QueuePage() {
         </YinyuTableShell>
         {(items.length > 0 || page > 1) && (
           <Group justify="space-between" mt="sm" wrap="wrap">
-            <Text size="sm" className="yy-readable-text">
-              第 {page} 页
-            </Text>
+            <Text size="sm" className="yy-readable-text">第 {page} 页</Text>
             <Group gap="xs">
-              <ActionIcon
-                aria-label="上一页"
-                disabled={cursorStack.length === 0}
-                onClick={() => setCursorStack((current) => current.slice(0, -1))}
-              >
+              <ActionIcon aria-label="上一页" disabled={cursorStack.length === 0} onClick={() => setCursorStack((current) => current.slice(0, -1))}>
                 <Icon path={mdiArrowLeftBold} size={1} />
               </ActionIcon>
-              <ActionIcon
-                aria-label="下一页"
-                disabled={!nextCursor}
-                onClick={() => nextCursor && setCursorStack((current) => [...current, nextCursor])}
-              >
+              <ActionIcon aria-label="下一页" disabled={!nextCursor} onClick={() => nextCursor && setCursorStack((current) => [...current, nextCursor])}>
                 <Icon path={mdiArrowRightBold} size={1} />
               </ActionIcon>
             </Group>

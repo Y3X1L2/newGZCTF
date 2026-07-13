@@ -15,17 +15,22 @@ public class DockerService
     private readonly DockerClient _client;
     private readonly DockerConfig _config;
     private readonly ILogger<DockerService> _logger;
+    private readonly AgentResourceLock _resourceLock;
     private static readonly TimeSpan FabricCommandTimeout = TimeSpan.FromSeconds(15);
 
-    public DockerService(IOptions<DockerConfig> config, ILogger<DockerService> logger)
+    public DockerService(IOptions<DockerConfig> config, AgentResourceLock resourceLock,
+        ILogger<DockerService> logger)
     {
         _config = config.Value;
+        _resourceLock = resourceLock;
         _logger = logger;
         _client = new DockerClientConfiguration(new Uri(_config.Uri)).CreateClient();
     }
 
     public async Task<AgentContainerResponse?> CreateContainerAsync(CreateContainerRequest request, CancellationToken token)
     {
+        var containerName = BuildContainerName(request);
+        await using var identityLock = await _resourceLock.AcquireAsync($"container:{containerName}", token);
         var fabricManagementNetwork = request.UsePenetrationFabric && request.PublishPort;
         var isolatedHostNetwork = request.UseHostNetworkNone || request.UsePenetrationFabric;
         var attachments = isolatedHostNetwork
@@ -47,7 +52,6 @@ public class DockerService
         foreach (var attachment in attachments)
             await EnsureNetworkAsync(attachment, token);
 
-        var containerName = BuildContainerName(request);
         var portSpec = $"{request.ExposedPort}/tcp";
         var env = request.EnvironmentVariables
             .Where(kv => !string.IsNullOrWhiteSpace(kv.Key))
@@ -74,7 +78,8 @@ public class DockerService
                 ["ChallengeId"] = request.ChallengeId.ToString(),
                 ["TeamId"] = request.TeamId,
                 ["UserId"] = request.UserId.ToString(),
-                ["ManagedBy"] = "GZCTF"
+                ["ManagedBy"] = "GZCTF",
+                ["GZCTF.Generation"] = Math.Max(1, request.Generation).ToString()
             },
             HostConfig = new HostConfig
             {
@@ -124,18 +129,36 @@ public class DockerService
         if (!string.IsNullOrWhiteSpace(request.StartCommand))
             createParams.Cmd = ["sh", "-c", request.StartCommand];
 
-        Docker.DotNet.Models.CreateContainerResponse? createResult;
+        try
+        {
+            var existing = await _client.Containers.InspectContainerAsync(containerName, token);
+            var generation = existing.Config.Labels is not null &&
+                             existing.Config.Labels.TryGetValue("GZCTF.Generation", out var label)
+                ? label
+                : null;
+            if (!string.Equals(existing.Config.Image, request.Image, StringComparison.Ordinal) ||
+                !string.Equals(generation, Math.Max(1, request.Generation).ToString(), StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    $"runtime_identity_conflict: container {containerName} exists with a different image or generation.");
+            if (existing.State?.Running != true)
+                await _client.Containers.StartContainerAsync(existing.ID, new ContainerStartParameters(), token);
+            return BuildContainerResponse(existing, primaryNetwork, portSpec, request.ExposedPort);
+        }
+        catch (DockerContainerNotFoundException)
+        {
+        }
+        catch (DockerApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+        }
+
+        Docker.DotNet.Models.CreateContainerResponse createResult;
         try
         {
             createResult = await _client.Containers.CreateContainerAsync(createParams, token);
         }
         catch (DockerApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
-            _logger.LogInformation("Image {Image} not found, pulling...", request.Image);
-            await _client.Images.CreateImageAsync(
-                new ImagesCreateParameters { FromImage = request.Image }, null,
-                new Progress<JSONMessage>(), token);
-            createResult = await _client.Containers.CreateContainerAsync(createParams, token);
+            throw new InvalidOperationException($"image_not_ready: Docker image {request.Image} is not present.", ex);
         }
 
         await _client.Containers.StartContainerAsync(createResult.ID, new ContainerStartParameters(), token);
@@ -190,23 +213,7 @@ public class DockerService
         }
 
         var inspect = await _client.Containers.InspectContainerAsync(createResult.ID, token);
-        var network = !primaryNetwork.Equals("none", StringComparison.OrdinalIgnoreCase) &&
-                      !string.IsNullOrWhiteSpace(primaryNetwork) &&
-                      inspect.NetworkSettings.Networks.TryGetValue(primaryNetwork, out var netVal)
-            ? netVal
-            : inspect.NetworkSettings.Networks.FirstOrDefault().Value;
-        var portBinding = inspect.NetworkSettings.Ports is not null &&
-                          inspect.NetworkSettings.Ports.TryGetValue(portSpec, out var pbVal)
-            ? pbVal?.FirstOrDefault()
-            : null;
-
-        return new AgentContainerResponse
-        {
-            ContainerId = createResult.ID,
-            IP = network?.IPAMConfig?.IPv4Address ?? network?.IPAddress ?? "",
-            Port = request.ExposedPort,
-            PublicPort = int.TryParse(portBinding?.HostPort, out var pp) ? pp : 0,
-        };
+        return BuildContainerResponse(inspect, primaryNetwork, portSpec, request.ExposedPort);
     }
 
     public async Task DestroyContainerAsync(string containerId, CancellationToken token)
@@ -810,6 +817,8 @@ public class DockerService
 
     private async Task EnsureNetworkAsync(ContainerNetworkAttachment attachment, CancellationToken token)
     {
+        await using var networkLock = await _resourceLock.AcquireAsync(
+            $"docker-network:{attachment.NetworkName}", token);
         try
         {
             await _client.Networks.InspectNetworkAsync(attachment.NetworkName, token);
@@ -834,6 +843,27 @@ public class DockerService
 
             await _client.Networks.CreateNetworkAsync(parameters, token);
         }
+    }
+
+    static AgentContainerResponse BuildContainerResponse(ContainerInspectResponse inspect, string primaryNetwork,
+        string portSpec, int exposedPort)
+    {
+        var network = !primaryNetwork.Equals("none", StringComparison.OrdinalIgnoreCase) &&
+                      !string.IsNullOrWhiteSpace(primaryNetwork) &&
+                      inspect.NetworkSettings.Networks.TryGetValue(primaryNetwork, out var selected)
+            ? selected
+            : inspect.NetworkSettings.Networks.FirstOrDefault().Value;
+        var portBinding = inspect.NetworkSettings.Ports is not null &&
+                          inspect.NetworkSettings.Ports.TryGetValue(portSpec, out var bindings)
+            ? bindings?.FirstOrDefault()
+            : null;
+        return new AgentContainerResponse
+        {
+            ContainerId = inspect.ID,
+            IP = network?.IPAMConfig?.IPv4Address ?? network?.IPAddress ?? string.Empty,
+            Port = exposedPort,
+            PublicPort = int.TryParse(portBinding?.HostPort, out var port) ? port : 0
+        };
     }
 
     private List<ContainerNetworkAttachment> GetNetworkAttachments(CreateContainerRequest request)

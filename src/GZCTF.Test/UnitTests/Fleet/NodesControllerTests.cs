@@ -390,192 +390,6 @@ public class NodesControllerTests
     }
 
     [Fact]
-    public async Task DeploymentTargetsController_List_DoesNotExposeRawPayloadOrSecrets()
-    {
-        await using var context = CreateContext();
-        context.DeploymentTargets.Add(new DeploymentTarget
-        {
-            Type = TargetType.Docker,
-            Action = TargetAction.Create,
-            Status = TargetStatus.Pending,
-            Payload = "{\"Flag\":\"flag{secret}\",\"RegistryAuth\":\"token\",\"PrivateKey\":\"wg-private\"}",
-            ErrorMessage = "safe error"
-        });
-        await context.SaveChangesAsync();
-        var controller = new DeploymentTargetsController(context,
-            new DeploymentQueueService(context, NullLogger<DeploymentQueueService>.Instance),
-            new DeploymentQueueViewService(context),
-            NullLogger<DeploymentTargetsController>.Instance);
-        controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new DefaultHttpContext()
-        };
-
-        var result = await controller.List();
-        var ok = Assert.IsType<OkObjectResult>(result);
-        var json = JsonSerializer.Serialize(ok.Value);
-
-        Assert.DoesNotContain("Payload", json, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("flag{secret}", json, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("RegistryAuth", json, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("wg-private", json, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("safe error", json, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public async Task DeploymentTargetsController_List_ParsesDockerCreatePayloadWithStringEnum()
-    {
-        await using var context = CreateContext();
-        context.Games.Add(new Game { Id = 23, Title = "CTF题库" });
-        context.Teams.Add(new Team { Id = 18, Name = "whoami" });
-        context.GameChallenges.Add(new GameChallenge
-        {
-            Id = 80,
-            GameId = 23,
-            Title = "aes90",
-            Category = ChallengeCategory.Crypto
-        });
-        context.DeploymentTargets.Add(new DeploymentTarget
-        {
-            Type = TargetType.Docker,
-            Action = TargetAction.Create,
-            Status = TargetStatus.Completed,
-            Payload = """
-                      {"Image":"10.24.0.28:5000/ctf/pwn/aes1:v1","TeamId":"18","ChallengeId":80,"GameId":23,"UserId":"019ea9c1-8aca-7680-ba85-24b7a9b135d8","ExposedPort":1337,"Flag":"flag{secret}","NetworkMode":"Open","AdditionalNetworkNames":[],"NetworkSubnets":{},"EnvironmentVariables":{},"DnsServers":[],"NetworkAttachments":[]}
-                      """
-        });
-        await context.SaveChangesAsync();
-        var controller = new DeploymentTargetsController(context,
-            new DeploymentQueueService(context, NullLogger<DeploymentQueueService>.Instance),
-            new DeploymentQueueViewService(context),
-            NullLogger<DeploymentTargetsController>.Instance);
-        controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new DefaultHttpContext()
-        };
-
-        var result = await controller.List();
-        var ok = Assert.IsType<OkObjectResult>(result);
-        var list = Assert.IsType<DeploymentQueueListResult>(ok.Value);
-        var item = Assert.Single(list.Items);
-        var json = JsonSerializer.Serialize(ok.Value);
-
-        Assert.Equal("whoami #18", item.OwnerLabel);
-        Assert.Equal("CTF题库 #23", item.GameLabel);
-        Assert.Equal("aes90 #80", item.ChallengeLabel);
-        Assert.Equal("whoami #18 / CTF题库 #23 / aes90 #80", item.RequestLabel);
-        Assert.Equal("10.24.0.28:5000/ctf/pwn/aes1:v1", item.Image);
-        Assert.DoesNotContain("flag{secret}", json, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public async Task DeploymentTargetsController_List_ReturnsStableCursorPage()
-    {
-        await using var context = CreateContext();
-        var baseTime = DateTimeOffset.Parse("2026-07-09T00:00:00Z");
-        for (var i = 0; i < 5; i++)
-        {
-            context.DeploymentTargets.Add(new DeploymentTarget
-            {
-                Id = Guid.Parse($"00000000-0000-0000-0000-00000000000{i + 1}"),
-                Type = TargetType.Docker,
-                Action = TargetAction.Create,
-                Status = TargetStatus.Completed,
-                CreatedAt = baseTime.AddMinutes(i)
-            });
-        }
-
-        await context.SaveChangesAsync();
-        var controller = new DeploymentTargetsController(context,
-            new DeploymentQueueService(context, NullLogger<DeploymentQueueService>.Instance),
-            new DeploymentQueueViewService(context),
-            NullLogger<DeploymentTargetsController>.Instance);
-        controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new DefaultHttpContext()
-        };
-
-        var firstResult = await controller.List(pageSize: 2);
-        var firstOk = Assert.IsType<OkObjectResult>(firstResult);
-        var firstPage = Assert.IsType<DeploymentQueueListResult>(firstOk.Value);
-        Assert.NotNull(firstPage.NextCursor);
-
-        var result = await controller.List(cursor: firstPage.NextCursor, pageSize: 2);
-        var ok = Assert.IsType<OkObjectResult>(result);
-        var list = Assert.IsType<DeploymentQueueListResult>(ok.Value);
-        Assert.Equal(
-            [
-                Guid.Parse("00000000-0000-0000-0000-000000000003"),
-                Guid.Parse("00000000-0000-0000-0000-000000000002")
-            ],
-            list.Items.Select(i => i.Id).ToArray());
-    }
-
-    [Fact]
-    public async Task DeploymentTargetsController_Cancel_CancelsLinkedQueueTicketAndReleasesReservedCapacity()
-    {
-        await using var context = CreateContext();
-        var node = new WorkerNode
-        {
-            Id = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
-            Name = "node-1",
-            HostAddress = "10.24.0.30",
-            AuthToken = "token",
-            Status = NodeStatus.Online,
-            Capabilities = NodeCapability.Docker,
-            CurrentContainers = 0,
-            ReservedContainers = 1,
-            MaxContainers = 2
-        };
-        var target = new DeploymentTarget
-        {
-            Id = Guid.Parse("11111111-2222-3333-4444-555555555555"),
-            Type = TargetType.Docker,
-            Action = TargetAction.Create,
-            Status = TargetStatus.Creating,
-            TargetNodeId = node.Id
-        };
-        var ticket = new DeploymentQueueTicket
-        {
-            Id = Guid.Parse("66666666-7777-8888-9999-aaaaaaaaaaaa"),
-            Kind = DeploymentQueueKind.GameContainer,
-            Status = DeploymentQueueTicketStatus.Creating,
-            TargetNodeId = node.Id,
-            DeploymentTargetId = target.Id,
-            DockerSlots = 1,
-            ActiveIdentity = "game-container:1:2:3"
-        };
-        context.WorkerNodes.Add(node);
-        context.DeploymentTargets.Add(target);
-        context.DeploymentQueueTickets.Add(ticket);
-        await context.SaveChangesAsync();
-        var capacity = new FleetCapacityReservationService(context,
-            new GZCTF.Infrastructure.Concurrency.LocalDevelopmentLeaseProvider(),
-            NullLogger<FleetCapacityReservationService>.Instance);
-        var queue = new DeploymentQueueService(context, capacity,
-            NullLogger<DeploymentQueueService>.Instance);
-        var controller = new DeploymentTargetsController(context,
-            queue,
-            new DeploymentQueueViewService(context),
-            NullLogger<DeploymentTargetsController>.Instance);
-        controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new DefaultHttpContext()
-        };
-
-        var result = await controller.Cancel(target.Id);
-
-        Assert.IsType<NoContentResult>(result);
-        var reloadedTicket = await context.DeploymentQueueTickets.SingleAsync(t => t.Id == ticket.Id);
-        var reloadedTarget = await context.DeploymentTargets.SingleAsync(t => t.Id == target.Id);
-        var reloadedNode = await context.WorkerNodes.SingleAsync(n => n.Id == node.Id);
-        Assert.Equal(DeploymentQueueTicketStatus.Cancelled, reloadedTicket.Status);
-        Assert.Equal(TargetStatus.Cancelled, reloadedTarget.Status);
-        Assert.Equal(0, reloadedNode.CurrentContainers);
-        Assert.Equal(0, reloadedNode.ReservedContainers);
-    }
-
-    [Fact]
     public async Task NodesController_Deregister_CancelsActiveQueueTicketsForRemovedNode()
     {
         await using var context = CreateContext();
@@ -594,7 +408,7 @@ public class NodesControllerTests
         {
             Id = Guid.Parse("aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb"),
             Kind = DeploymentQueueKind.GameContainer,
-            Status = DeploymentQueueTicketStatus.Creating,
+            Status = DeploymentQueueTicketStatus.Running,
             TargetNodeId = node.Id,
             DockerSlots = 1,
             ActiveIdentity = "game-container:2:3:4"
@@ -641,9 +455,7 @@ public class NodesControllerTests
             Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
             IsLocal = false,
             CurrentContainers = 0,
-            ReservedContainers = 2,
-            CurrentVms = 0,
-            ReservedVms = 1
+            CurrentVms = 0
         };
         var game = new Game { Id = 91, Title = "teamlab" };
         var team = new Team { Id = 92, Name = "teamlab-team" };
@@ -708,8 +520,8 @@ public class NodesControllerTests
         var liveState = services.GetRequiredService<INodeLiveStateStore>();
         var stored = await liveState.GetAsync(node.Id);
         Assert.NotNull(stored);
-        Assert.Equal(2, stored.CurrentContainers);
-        Assert.Equal(1, stored.CurrentVms);
+        Assert.Equal(1, stored.CurrentContainers);
+        Assert.Equal(0, stored.CurrentVms);
     }
 
     [Fact]
@@ -763,32 +575,19 @@ public class NodesControllerTests
             CurrentContainers = 1,
             CurrentVms = 0,
             UsedPorts = 3,
-            AgentVersion = "1.8.3-test",
-            TeamLabProtocolVersion = 3,
+            CapabilityManifest = CreateManifest(includeKvm: true),
             TeamLabFabricIp = "10.251.0.3",
-            TeamLabFabricStatus = TeamLabFabricStatus.Healthy,
-            TeamLabCapabilities = new TeamLabNodeCapabilityReport
-            {
-                Docker = true,
-                Kvm = true,
-                KvmDevice = true,
-                CpuVirtualization = true,
-                WireGuard = true,
-                Iptables = true,
-                Nftables = true,
-                Tcpdump = true,
-                Dumpcap = false
-            }
+            TeamLabFabricStatus = TeamLabFabricStatus.Healthy
         });
 
         Assert.IsType<OkObjectResult>(result);
         var reloaded = await context.WorkerNodes.SingleAsync(n => n.Id == node.Id);
-        Assert.Equal("1.8.3-test", reloaded.TeamLabAgentVersion);
-        Assert.Equal(3, reloaded.TeamLabProtocolVersion);
+        Assert.Equal("1.8.3-test", reloaded.AgentVersion);
+        Assert.Equal(1, reloaded.CapabilityManifestSchemaVersion);
         Assert.Equal("10.251.0.3", reloaded.TeamLabFabricIp);
         Assert.Equal(TeamLabFabricStatus.Healthy, reloaded.TeamLabFabricStatus);
         Assert.Equal(NodeCapability.Docker | NodeCapability.Kvm, reloaded.Capabilities);
-        Assert.Contains("\"tcpdump\":true", reloaded.TeamLabCapabilitiesJson, StringComparison.OrdinalIgnoreCase);
+        Assert.True(AgentCapabilityEvaluator.Supports(reloaded, AgentFeatureIds.Pcap));
     }
 
     [Fact]
@@ -836,18 +635,7 @@ public class NodesControllerTests
             CurrentContainers = 1,
             CurrentVms = 0,
             UsedPorts = 3,
-            TeamLabCapabilities = new TeamLabNodeCapabilityReport
-            {
-                Docker = true,
-                Kvm = true,
-                KvmDevice = false,
-                CpuVirtualization = true,
-                WireGuard = true,
-                Iptables = true,
-                Nftables = false,
-                Tcpdump = true,
-                Dumpcap = false
-            }
+            CapabilityManifest = CreateManifest(includeKvm: false)
         });
 
         Assert.IsType<OkObjectResult>(result);
@@ -871,9 +659,9 @@ public class NodesControllerTests
             IsSchedulable = true,
             TeamLabNetworkEnabled = true,
             TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
+            TeamLabFabricStatus = TeamLabFabricStatus.Healthy,
             TeamLabTunnelIp = "10.250.0.31",
-            TeamLabAgentVersion = "1.8.3-test",
-            TeamLabProtocolVersion = 3,
+            CapabilityManifestJson = AgentCapabilityEvaluator.Normalize(CreateManifest(includeKvm: false)).Json,
             MaxContainers = 5,
             MaxVms = 0
         });
@@ -881,6 +669,10 @@ public class NodesControllerTests
         var services = new ServiceCollection()
             .AddSingleton(context)
             .AddLogging()
+            .AddSingleton<INodeLiveStateStore, TestNodeLiveStateStore>()
+            .AddSingleton(Options.Create(new RuntimeSchedulingOptions()))
+            .AddScoped<NodeCapacitySnapshotService>()
+            .AddScoped<NodeEligibilityEvaluator>()
             .BuildServiceProvider();
         var controller = CreateNodesController(context, services);
         controller.ControllerContext = new ControllerContext
@@ -948,6 +740,27 @@ public class NodesControllerTests
         Assert.Equal("http://10.24.0.27/api/agent/download", agent.Request?.DownloadUrl);
         Assert.True(agent.Request?.Restart);
         Assert.False(string.IsNullOrWhiteSpace(agent.Request?.ExpectedSha256));
+    }
+
+    static AgentCapabilityManifest CreateManifest(bool includeKvm)
+    {
+        var features = new List<string>
+        {
+            AgentFeatureIds.Docker,
+            AgentFeatureIds.DockerPull,
+            AgentFeatureIds.TeamLabFabric,
+            AgentFeatureIds.WireGuard,
+            AgentFeatureIds.Pcap
+        };
+        if (includeKvm)
+        {
+            features.Add(AgentFeatureIds.Kvm);
+            features.Add(AgentFeatureIds.VmDownload);
+        }
+        return new AgentCapabilityManifest("1.8.3-test", "abc", 1, features.ToArray(),
+            new AgentExecutionLimits(2, includeKvm ? 1 : 0, 2, includeKvm ? 1 : 0, 4, 2),
+            new AgentHostFacts(8, 16L * 1024 * 1024 * 1024, includeKvm, includeKvm),
+            DateTimeOffset.UtcNow);
     }
 
     static PortAllocationService CreatePortAllocator(ContainerProvider providerOptions)

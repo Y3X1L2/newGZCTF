@@ -9,11 +9,13 @@ namespace GZCTF.Agent.Controllers;
 public class ContainerController : ControllerBase
 {
     private readonly DockerService _docker;
+    private readonly AgentOperationGate _gate;
     private readonly ILogger<ContainerController> _logger;
 
-    public ContainerController(DockerService docker, ILogger<ContainerController> logger)
+    public ContainerController(DockerService docker, AgentOperationGate gate, ILogger<ContainerController> logger)
     {
         _docker = docker;
+        _gate = gate;
         _logger = logger;
     }
 
@@ -22,6 +24,7 @@ public class ContainerController : ControllerBase
     {
         try
         {
+            await using var permit = await _gate.EnterAsync(AgentOperationCategory.DockerCreate, token);
             var result = await _docker.CreateContainerAsync(request, token);
             if (result is null) return StatusCode(500, new { message = "Container creation failed" });
             return Ok(result);
@@ -36,6 +39,7 @@ public class ContainerController : ControllerBase
     [HttpDelete("{containerId}")]
     public async Task<IActionResult> Destroy(string containerId, CancellationToken token)
     {
+        await using var permit = await _gate.EnterAsync(AgentOperationCategory.Control, token);
         await _docker.DestroyContainerAsync(containerId, token);
         return NoContent();
     }
@@ -55,6 +59,7 @@ public class ContainerController : ControllerBase
     [HttpDelete("networks/{networkName}")]
     public async Task<IActionResult> RemoveNetwork(string networkName, CancellationToken token)
     {
+        await using var permit = await _gate.EnterAsync(AgentOperationCategory.TeamLabNetwork, token);
         await _docker.RemoveNetworkAsync(networkName, token);
         return NoContent();
     }
@@ -66,6 +71,7 @@ public class ContainerController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.NetworkName) || string.IsNullOrWhiteSpace(request.Cidr))
             return BadRequest(new { message = "Network name and CIDR are required" });
 
+        await using var permit = await _gate.EnterAsync(AgentOperationCategory.TeamLabNetwork, token);
         var result = await _docker.CreateFabricNetworkAsync(request.NetworkName, request.Cidr, token);
         return Ok(result);
     }
@@ -74,6 +80,7 @@ public class ContainerController : ControllerBase
     public async Task<IActionResult> AttachFabricInterface(string containerId, [FromBody] FabricAttachRequest request,
         CancellationToken token)
     {
+        await using var permit = await _gate.EnterAsync(AgentOperationCategory.TeamLabNetwork, token);
         var result = await _docker.AttachFabricInterfaceAsync(containerId, request, token);
         return Ok(result);
     }
@@ -81,6 +88,7 @@ public class ContainerController : ControllerBase
     [HttpPost("{containerId}/fabric/forwarding")]
     public async Task<IActionResult> EnableFabricForwarding(string containerId, CancellationToken token)
     {
+        await using var permit = await _gate.EnterAsync(AgentOperationCategory.TeamLabNetwork, token);
         var result = await _docker.EnableFabricForwardingAsync(containerId, token);
         return Ok(result);
     }
@@ -89,6 +97,7 @@ public class ContainerController : ControllerBase
     public async Task<IActionResult> ApplyFabricRoute(string containerId, [FromBody] FabricRouteRequest request,
         CancellationToken token)
     {
+        await using var permit = await _gate.EnterAsync(AgentOperationCategory.TeamLabNetwork, token);
         var result = await _docker.ApplyFabricRouteAsync(containerId, request.TargetCidr, request.GatewayIp, token);
         return Ok(result);
     }
@@ -104,6 +113,7 @@ public class ContainerController : ControllerBase
     [HttpDelete("fabric/networks/{networkName}")]
     public async Task<IActionResult> RemoveFabricNetwork(string networkName, CancellationToken token)
     {
+        await using var permit = await _gate.EnterAsync(AgentOperationCategory.TeamLabNetwork, token);
         var result = await _docker.RemoveFabricNetworkAsync(networkName, token);
         return Ok(result);
     }

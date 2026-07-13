@@ -34,6 +34,9 @@ public class HeartbeatWorker : BackgroundService
                 var vms = await kvm.GetVmCountAsync(token);
                 var teamLab = scope.ServiceProvider.GetRequiredService<TeamLabNetworkService>();
                 var teamLabStatus = await teamLab.GetStatusAsync(token);
+                var capabilityService = scope.ServiceProvider.GetRequiredService<AgentCapabilityService>();
+                var manifest = await capabilityService.GetManifestAsync(
+                    await capabilityService.GetBinarySha256Async(), token);
                 await kvm.RestoreRdpProxiesAsync(token);
 
                 var payload = new
@@ -45,11 +48,10 @@ public class HeartbeatWorker : BackgroundService
                     CurrentContainers = containers,
                     CurrentVms = vms,
                     UsedPorts = 0,
-                    AgentVersion = teamLabStatus.AgentVersion,
-                    TeamLabProtocolVersion = teamLabStatus.ProtocolVersion,
+                    CapabilityManifest = manifest,
                     TeamLabFabricIp = (string?)null,
-                    TeamLabFabricStatus = 0,
-                    TeamLabCapabilities = teamLabStatus.Capabilities
+                    TeamLabFabricStatus = teamLabStatus.Available && teamLabStatus.Enable ? 3 :
+                        teamLabStatus.Available ? 1 : 4
                 };
 
                 var url = $"{_config.ServerUrl}/api/v1/nodes/{_config.NodeId}/heartbeat";

@@ -5,22 +5,17 @@ using System.Text;
 using System.Text.Json;
 using GZCTF.Models;
 using GZCTF.Models.Data;
-using GZCTF.Models.Internal;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using Npgsql;
 
 namespace GZCTF.Modules.TeamLab.Application;
 
 public sealed class TeamLabRuntimePlanner(
     AppDbContext context,
-    TeamLabRuntimeOverlayService overlayService,
-    IOptions<TeamLabNetworkConfig> options)
+    TeamLabRuntimeOverlayService overlayService)
 {
-    private readonly TeamLabNetworkConfig _config = options.Value;
-
     public async Task<TeamLabRuntimeCreateResult> CreateAsync(
         CreateTeamLabRuntimeModel command,
         Guid runtimeOwnerUserId,
@@ -69,11 +64,6 @@ public sealed class TeamLabRuntimePlanner(
         if (topologyNetworks.Count != definition.Networks.Count)
             throw new TeamLabApiContractException("release_invalid", "The release network catalog is incomplete.", 500);
 
-        var nodes = await LoadPlanningNodesAsync(cancellationToken);
-        var placements = TeamLabAssetPlanner.BuildPlacement(definition, nodes)
-            ?? throw new TeamLabApiContractException(
-                "capability_unavailable", "The current TeamLab node set cannot place this runtime.", 409);
-
         try
         {
             await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
@@ -91,7 +81,7 @@ public sealed class TeamLabRuntimePlanner(
             context.TeamLabRuntimes.Add(runtime);
             await context.SaveChangesAsync(cancellationToken);
 
-            await PlanGenerationAsync(runtime, definition, topologyNetworks, placements, command.Overlays, cancellationToken);
+            await PlanGenerationAsync(runtime, definition, topologyNetworks, command.Overlays, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return new TeamLabRuntimeCreateResult(runtime.Id, runtime.PublicId, false);
         }
@@ -138,8 +128,6 @@ public sealed class TeamLabRuntimePlanner(
         var topologyNetworks = await context.TeamLabTopologyNetworks.AsNoTracking()
             .Where(item => item.TopologyId == release.TopologyId)
             .ToDictionaryAsync(item => item.Key, StringComparer.Ordinal, cancellationToken);
-        var placements = TeamLabAssetPlanner.BuildPlacement(definition, await LoadPlanningNodesAsync(cancellationToken))
-            ?? throw new TeamLabApiContractException("capability_unavailable", "The current TeamLab node set cannot place this runtime.", 409);
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         runtime.Generation++;
         runtime.TopologyReleaseId = release.Id;
@@ -148,7 +136,7 @@ public sealed class TeamLabRuntimePlanner(
         runtime.Status = TeamLabRuntimeStatus.Planning;
         runtime.LastError = null;
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
-        await PlanGenerationAsync(runtime, definition, topologyNetworks, placements, runtimeOverlays, cancellationToken);
+        await PlanGenerationAsync(runtime, definition, topologyNetworks, runtimeOverlays, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new TeamLabRuntimeCreateResult(runtime.Id, runtime.PublicId, false);
     }
@@ -157,10 +145,14 @@ public sealed class TeamLabRuntimePlanner(
         TeamLabRuntime runtime,
         TeamLabTopologyDefinitionModel definition,
         IReadOnlyDictionary<string, TeamLabTopologyNetwork> topologyNetworks,
-        IReadOnlyList<TeamLabAssetPlanner.TeamLabInternalPlacement> placements,
         IReadOnlyList<TeamLabRuntimeOverlayModel>? runtimeOverlays,
         CancellationToken cancellationToken)
     {
+        var groups = TeamLabAssetPlanner.BuildGroups(definition);
+        var groupByNetwork = groups.SelectMany(group => group.NetworkKeys.Select(key => (key, group.Key)))
+            .ToDictionary(item => item.key, item => item.Key, StringComparer.Ordinal);
+        var groupByAsset = groups.SelectMany(group => group.AssetKeys.Select(key => (key, group.Key)))
+            .ToDictionary(item => item.key, item => item.Key, StringComparer.Ordinal);
         var usedCidrs = await context.TeamLabNetworkLeases.AsNoTracking()
             .Where(item => item.ReleasedAt == null)
             .Select(item => item.AllocatedCidr)
@@ -173,14 +165,12 @@ public sealed class TeamLabRuntimePlanner(
             if (cidr is null)
                 throw new TeamLabApiContractException("address_pool_exhausted", $"Address pool for network '{network.Key}' is exhausted.", 409);
             allocated.Add(cidr.Value);
-            var placement = placements.Single(item => item.Groups.Any(group => group.NetworkKeys.Contains(network.Key, StringComparer.Ordinal)));
-            var shard = EnsureShard(runtime, placement.Node.Id);
             var runtimeNetwork = new TeamLabRuntimeNetwork
             {
                 RuntimeId = runtime.Id,
                 Generation = runtime.Generation,
-                Shard = shard,
-                WorkerNodeId = placement.Node.Id,
+                PlacementGroupKey = groupByNetwork[network.Key],
+                IsEntry = network.IsEntry,
                 TopologyKey = network.Key,
                 Name = network.Name,
                 Cidr = cidr.Value.ToString(),
@@ -199,8 +189,6 @@ public sealed class TeamLabRuntimePlanner(
         }
         foreach (var asset in definition.Assets.OrderBy(item => item.Key, StringComparer.Ordinal))
         {
-            var placement = placements.Single(item => item.Groups.Any(group => group.AssetKeys.Contains(asset.Key, StringComparer.Ordinal)));
-            var shard = EnsureShard(runtime, placement.Node.Id);
             var interfaces = asset.Interfaces.OrderBy(item => item.OrderIndex).Select(iface =>
             {
                 var network = runtimeNetworkByKey[iface.NetworkKey];
@@ -213,8 +201,7 @@ public sealed class TeamLabRuntimePlanner(
             {
                 RuntimeId = runtime.Id,
                 Generation = runtime.Generation,
-                Shard = shard,
-                WorkerNodeId = placement.Node.Id,
+                PlacementGroupKey = groupByAsset[asset.Key],
                 Kind = asset.Kind == TeamLabAssetKind.Docker ? TeamLabResourceKind.Docker : TeamLabResourceKind.Vm,
                 TopologyKey = asset.Key,
                 Name = asset.Name,
@@ -226,104 +213,13 @@ public sealed class TeamLabRuntimePlanner(
                 Status = TeamLabRuntimeStatus.Pending
             });
         }
-        var entryKey = definition.Networks.Single(item => item.IsEntry).Key;
-        var entryShard = runtime.Shards.Single(item => item.Generation == runtime.Generation &&
-                                                       item.Networks.Any(network => network.TopologyKey == entryKey));
-        await context.SaveChangesAsync(cancellationToken);
-        runtime.EntryShardId = entryShard.Id;
-        if (runtime.PublicUdpMapping is null)
-            runtime.PublicUdpMapping = await AllocateUdpMappingAsync(runtime, entryShard.WorkerNodeId, cancellationToken);
-        else
-            await RefreshUdpMappingAsync(runtime, entryShard.WorkerNodeId, cancellationToken);
         var envelope = overlayService.Protect(runtime.Id, runtime.Generation, runtimeOverlays,
             definition.Assets.Select(item => item.Key).ToHashSet(StringComparer.Ordinal));
         if (envelope is not null) runtime.SecretEnvelopes.Add(envelope);
         runtime.Status = TeamLabRuntimeStatus.Scheduled;
         runtime.Events.Add(Event(runtime, "planning", TeamLabEventLevel.Success,
-            $"Runtime generation {runtime.Generation} planned with {runtime.Shards.Count(item => item.Generation == runtime.Generation)} shard(s)."));
+            $"Runtime generation {runtime.Generation} logical network groups compiled; physical nodes will be assigned by the scheduler."));
         await context.SaveChangesAsync(cancellationToken);
-    }
-
-    private async Task<TeamLabPlanningNodeSnapshot[]> LoadPlanningNodesAsync(CancellationToken cancellationToken)
-    {
-        var now = DateTimeOffset.UtcNow;
-        return await context.WorkerNodes.AsNoTracking()
-            .Where(item => item.IsSchedulable && item.TeamLabNetworkEnabled &&
-                           item.TeamLabTunnelStatus == TeamLabTunnelStatus.Healthy &&
-                           item.Status == NodeStatus.Online &&
-                           (item.IsLocal || item.LastHeartbeat >= now - WorkerNode.DefaultHeartbeatTimeout))
-            .Select(item => new TeamLabPlanningNodeSnapshot(
-                item.Id, item.Name,
-                (item.Capabilities & NodeCapability.Docker) != 0,
-                (item.Capabilities & NodeCapability.Kvm) != 0,
-                item.MaxContainers - item.CurrentContainers - item.ReservedContainers,
-                item.MaxVms - item.CurrentVms - item.ReservedVms,
-                item.CpuLoad, item.MemoryLoad))
-            .ToArrayAsync(cancellationToken);
-    }
-
-    private async Task<TeamLabPublicUdpMapping> AllocateUdpMappingAsync(
-        TeamLabRuntime runtime,
-        Guid workerNodeId,
-        CancellationToken cancellationToken)
-    {
-        var node = await context.WorkerNodes.AsNoTracking().SingleAsync(item => item.Id == workerNodeId, cancellationToken);
-        if (string.IsNullOrWhiteSpace(node.TeamLabTunnelIp))
-            throw new TeamLabApiContractException("capability_unavailable", $"Node '{node.Name}' has no TeamLab tunnel IP.", 409);
-        var usedPublic = await context.TeamLabPublicUdpMappings.AsNoTracking().Select(item => item.PublicUdpPort).ToArrayAsync(cancellationToken);
-        var usedWorker = await context.TeamLabPublicUdpMappings.AsNoTracking()
-            .Where(item => item.WorkerTunnelIp == node.TeamLabTunnelIp)
-            .Select(item => item.WorkerWireGuardPort).ToArrayAsync(cancellationToken);
-        var publicPort = FirstFree(_config.PublicUdpPortStart, _config.PublicUdpPortEnd, usedPublic);
-        var workerPort = FirstFree(_config.WorkerWireGuardPortStart, _config.WorkerWireGuardPortEnd, usedWorker);
-        if (publicPort is null || workerPort is null)
-            throw new TeamLabApiContractException("capability_unavailable", "No TeamLab WireGuard UDP port is available.", 409);
-        return new TeamLabPublicUdpMapping
-        {
-            RuntimeId = runtime.Id,
-            Generation = runtime.Generation,
-            PublicUdpPort = publicPort.Value,
-            WorkerTunnelIp = node.TeamLabTunnelIp,
-            WorkerWireGuardPort = workerPort.Value,
-            RuleVersion = runtime.Generation
-        };
-    }
-
-    private async Task RefreshUdpMappingAsync(
-        TeamLabRuntime runtime,
-        Guid workerNodeId,
-        CancellationToken cancellationToken)
-    {
-        var mapping = runtime.PublicUdpMapping!;
-        var node = await context.WorkerNodes.AsNoTracking().SingleAsync(item => item.Id == workerNodeId, cancellationToken);
-        if (string.IsNullOrWhiteSpace(node.TeamLabTunnelIp))
-            throw new TeamLabApiContractException("capability_unavailable", $"Node '{node.Name}' has no TeamLab tunnel IP.", 409);
-        var usedWorker = await context.TeamLabPublicUdpMappings.AsNoTracking()
-            .Where(item => item.Id != mapping.Id && item.WorkerTunnelIp == node.TeamLabTunnelIp)
-            .Select(item => item.WorkerWireGuardPort).ToArrayAsync(cancellationToken);
-        var workerPort = FirstFree(_config.WorkerWireGuardPortStart, _config.WorkerWireGuardPortEnd, usedWorker)
-            ?? throw new TeamLabApiContractException("capability_unavailable", "No Worker WireGuard UDP port is available.", 409);
-        mapping.Generation = runtime.Generation;
-        mapping.WorkerTunnelIp = node.TeamLabTunnelIp;
-        mapping.WorkerWireGuardPort = workerPort;
-        mapping.RuleVersion++;
-        mapping.IsSynced = false;
-        mapping.LastSyncError = null;
-    }
-
-    private static TeamLabRuntimeShard EnsureShard(TeamLabRuntime runtime, Guid workerNodeId)
-    {
-        var shard = runtime.Shards.FirstOrDefault(item => item.WorkerNodeId == workerNodeId && item.Generation == runtime.Generation);
-        if (shard is not null) return shard;
-        shard = new TeamLabRuntimeShard
-        {
-            RuntimeId = runtime.Id,
-            Generation = runtime.Generation,
-            WorkerNodeId = workerNodeId,
-            Status = TeamLabRuntimeStatus.Pending
-        };
-        runtime.Shards.Add(shard);
-        return shard;
     }
 
     private static TeamLabEvent Event(TeamLabRuntime runtime, string stage, TeamLabEventLevel level, string message) => new()
@@ -393,13 +289,6 @@ public sealed class TeamLabRuntimePlanner(
     }
 
     private static string LinuxName(string value) => value.Length <= 15 ? value : value[..15];
-
-    private static int? FirstFree(int start, int end, IEnumerable<int> used)
-    {
-        var occupied = used.ToHashSet();
-        for (var value = start; value <= end; value++) if (!occupied.Contains(value)) return value;
-        return null;
-    }
 
     private static string? NormalizeExternalReference(string? value)
     {

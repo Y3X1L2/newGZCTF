@@ -244,14 +244,14 @@ public sealed class DatabaseGovernanceMigrationTests : IAsyncLifetime
         var terminal = new DeploymentQueueTicket
         {
             Kind = DeploymentQueueKind.GameContainer,
-            Status = DeploymentQueueTicketStatus.Completed,
+            Status = DeploymentQueueTicketStatus.Succeeded,
             ActiveIdentity = "phase4-terminal",
             CompletedAt = DateTimeOffset.UtcNow.AddDays(-400)
         };
         var active = new DeploymentQueueTicket
         {
             Kind = DeploymentQueueKind.GameContainer,
-            Status = DeploymentQueueTicketStatus.Creating,
+            Status = DeploymentQueueTicketStatus.Running,
             ActiveIdentity = "phase4-active",
             CreatedAt = DateTimeOffset.UtcNow.AddDays(-400)
         };

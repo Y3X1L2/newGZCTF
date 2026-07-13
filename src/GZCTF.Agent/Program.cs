@@ -14,6 +14,10 @@ builder.Services.AddSingleton<KvmService>();
 builder.Services.AddSingleton<TeamLabCommandRunner>();
 builder.Services.AddSingleton<TeamLabNetworkService>();
 builder.Services.AddSingleton<AgentMaintenanceService>();
+builder.Services.AddSingleton<AgentCapabilityService>();
+builder.Services.AddSingleton<AgentOperationGate>();
+builder.Services.AddSingleton<AgentResourceLock>();
+builder.Services.AddSingleton<ImageTransferSingleFlight>();
 builder.Services.AddHostedService<HeartbeatWorker>();
 
 builder.Services.AddControllers();

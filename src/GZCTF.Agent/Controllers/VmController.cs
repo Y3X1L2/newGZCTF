@@ -6,15 +6,14 @@ namespace GZCTF.Agent.Controllers;
 
 [ApiController]
 [Route("api/vms")]
-public class VmController : ControllerBase
+public class VmController(KvmService kvm, AgentOperationGate gate) : ControllerBase
 {
-    private readonly KvmService _kvm;
-
-    public VmController(KvmService kvm) { _kvm = kvm; }
+    private readonly KvmService _kvm = kvm;
 
     [HttpPost("create")]
     public async Task<IActionResult> Create([FromBody] CreateVmRequest request, CancellationToken token)
     {
+        await using var permit = await gate.EnterAsync(AgentOperationCategory.VmCreate, token);
         var result = await _kvm.CreateVmAsync(request, token);
         if (result is null) return StatusCode(500, new { message = "VM creation failed" });
         return Ok(result);
@@ -23,6 +22,7 @@ public class VmController : ControllerBase
     [HttpDelete("{vmName}")]
     public async Task<IActionResult> Destroy(string vmName, CancellationToken token)
     {
+        await using var permit = await gate.EnterAsync(AgentOperationCategory.Control, token);
         await _kvm.DestroyVmAsync(vmName, token);
         return NoContent();
     }

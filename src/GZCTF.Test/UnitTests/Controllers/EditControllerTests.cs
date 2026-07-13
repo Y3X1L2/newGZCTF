@@ -31,7 +31,7 @@ namespace GZCTF.Test.UnitTests.Controllers;
 public class EditControllerTests
 {
     [Fact]
-    public async Task CreateTestContainer_ResolvesManagedDockerImageBeforeCreatingContainer()
+    public async Task CreateTestContainer_QueuesDockerRuntimeOperation()
     {
         var challenge = new GameChallenge
         {
@@ -47,31 +47,28 @@ public class EditControllerTests
         challengeRepository
             .Setup(r => r.GetChallenge(3, 11, It.IsAny<CancellationToken>()))
             .ReturnsAsync(challenge);
-        var containerManager = new RecordingContainerManager();
-        var controller = CreateController(challengeRepository.Object, containerManager,
-            registryAddress: "10.24.0.99:5000");
+        var (controller, context) = CreateController(challengeRepository.Object);
 
         var result = await controller.CreateTestContainer(3, 11, CancellationToken.None);
 
-        Assert.IsType<OkObjectResult>(result);
-        Assert.NotNull(containerManager.LastConfig);
-        Assert.Equal("10.24.0.99:5000/ctf/web/demo:latest", containerManager.LastConfig!.Image);
+        var accepted = Assert.IsType<AcceptedResult>(result);
+        var status = Assert.IsType<DeploymentQueueStatusModel>(accepted.Value);
+        Assert.Equal(DeploymentQueueKind.ChallengeTestContainer, status.Kind);
+        var ticket = await context.DeploymentQueueTickets.SingleAsync();
+        Assert.Equal(RuntimeOperationKind.Create, ticket.Operation);
+        Assert.Equal("challenge-test-container:3:11", ticket.SubjectConcurrencyKey);
+        Assert.Equal(1, ticket.DockerSlots);
     }
 
-    private static EditController CreateController(IGameChallengeRepository challengeRepository,
-        RecordingContainerManager containerManager, string registryAddress)
+    private static (EditController Controller, AppDbContext Context) CreateController(
+        IGameChallengeRepository challengeRepository)
     {
         var context = CreateContext();
         var services = new ServiceCollection();
         services.AddSingleton(context);
         services.AddLogging();
         var provider = services.BuildServiceProvider();
-        var dockerRegistry = new DockerImageRegistryService(
-            Options.Create(new DockerRegistrySettings { Address = registryAddress }),
-            provider.GetRequiredService<IServiceScopeFactory>(),
-            new AgentClient(new StaticHttpClientFactory(), provider.GetRequiredService<IServiceScopeFactory>(),
-                new ConfigurationBuilder().Build(), NullLogger<AgentClient>.Instance),
-            NullLogger<DockerImageRegistryService>.Instance);
+        var queue = new DeploymentQueueService(context, NullLogger<DeploymentQueueService>.Instance);
         var userManager = CreateUserManager();
         userManager
             .Setup(m => m.GetUserAsync(It.IsAny<ClaimsPrincipal>()))
@@ -82,21 +79,17 @@ public class EditControllerTests
             userManager.Object,
             NullLogger<EditController>.Instance,
             Mock.Of<IPostRepository>(),
-            Mock.Of<IContainerRepository>(),
             challengeRepository,
             Mock.Of<IGameInstanceRepository>(),
             Mock.Of<IGameNoticeRepository>(),
             Mock.Of<IGameRepository>(),
             context,
-            containerManager,
-            Mock.Of<INginxProxySyncService>(s =>
-                s.TrySyncNowAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()) == Task.CompletedTask),
             Mock.Of<IBlobRepository>(),
             null!,
             null!,
             Mock.Of<IDivisionRepository>(),
             Mock.Of<IStringLocalizer<Program>>(),
-            dockerRegistry,
+            queue,
             provider.GetRequiredService<IServiceScopeFactory>())
         {
             ControllerContext = new ControllerContext
@@ -111,7 +104,7 @@ public class EditControllerTests
             }
         };
 
-        return controller;
+        return (controller, context);
     }
 
     private static Mock<UserManager<UserInfo>> CreateUserManager()
@@ -137,31 +130,4 @@ public class EditControllerTests
         return new AppDbContext(options);
     }
 
-    private sealed class RecordingContainerManager : IContainerManager
-    {
-        public ContainerConfig? LastConfig { get; private set; }
-
-        public Task<Container?> CreateContainerAsync(ContainerConfig config, CancellationToken token = default)
-        {
-            LastConfig = config;
-            return Task.FromResult<Container?>(new Container
-            {
-                Id = Guid.CreateVersion7(),
-                Image = config.Image,
-                ContainerId = "test-container",
-                Status = ContainerStatus.Running,
-                IP = "127.0.0.1",
-                Port = config.ExposedPort,
-                StartedAt = DateTimeOffset.UtcNow
-            });
-        }
-
-        public Task DestroyContainerAsync(Container container, CancellationToken token = default) =>
-            Task.CompletedTask;
-    }
-
-    private sealed class StaticHttpClientFactory : IHttpClientFactory
-    {
-        public HttpClient CreateClient(string name) => new();
-    }
 }

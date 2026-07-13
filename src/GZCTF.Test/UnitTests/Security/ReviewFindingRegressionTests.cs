@@ -86,7 +86,7 @@ public class ReviewFindingRegressionTests
     }
 
     [Fact]
-    public async Task RecoverStaleCreatingTicketsAsync_FailsStaleCreatingTicketAndReleasesCapacity()
+    public async Task RecoverStaleCreatingTicketsAsync_ReplaysStableCreateAndKeepsCapacityReserved()
     {
         await using var context = CreateContext();
         var node = new WorkerNode
@@ -99,24 +99,33 @@ public class ReviewFindingRegressionTests
             IsLocal = true,
             Capabilities = NodeCapability.Docker,
             MaxContainers = 10,
-            CurrentContainers = 2,
-            ReservedContainers = 2
+            CurrentContainers = 2
         };
-        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(3, dockerSlots: 2, vmSlots: 0));
-        ticket.Status = DeploymentQueueTicketStatus.Creating;
+        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.GameContainer(1, 2, 3));
+        ticket.Status = DeploymentQueueTicketStatus.Running;
         ticket.TargetNodeId = node.Id;
         ticket.StartedAt = DateTimeOffset.UtcNow - TimeSpan.FromMinutes(30);
         context.WorkerNodes.Add(node);
         context.DeploymentQueueTickets.Add(ticket);
+        context.FleetCapacityReservations.Add(new FleetCapacityReservation
+        {
+            DeploymentQueueTicketId = ticket.Id,
+            WorkerNodeId = node.Id,
+            DockerSlots = 1,
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
+        });
         await context.SaveChangesAsync();
         var service = CreateQueueService(context);
 
         var recovered = await service.RecoverStaleCreatingTicketsAsync(TimeSpan.FromMinutes(10), CancellationToken.None);
 
         Assert.Equal(1, recovered);
-        Assert.Equal(DeploymentQueueTicketStatus.Failed, ticket.Status);
+        Assert.Equal(DeploymentQueueTicketStatus.Scheduled, ticket.Status);
+        Assert.Equal(DeploymentStage.NodeExecutionWaiting, ticket.Stage);
+        Assert.Equal(1, ticket.AttemptCount);
         Assert.Equal(2, node.CurrentContainers);
-        Assert.Equal(0, node.ReservedContainers);
+        Assert.Equal(CapacityReservationStatus.Active,
+            (await context.FleetCapacityReservations.SingleAsync()).Status);
     }
 
     static DeploymentQueueService CreateQueueService(AppDbContext context)

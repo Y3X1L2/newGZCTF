@@ -75,20 +75,24 @@ public class NodesController : ControllerBase
     [RequireAdmin]
     public async Task<IActionResult> List()
     {
-        var nodes = await _nodeRepo.GetAllNodesAsync(HttpContext.RequestAborted);
-        await OverlayLiveStateAsync(nodes, HttpContext.RequestAborted);
+        var snapshots = await HttpContext.RequestServices.GetRequiredService<NodeCapacitySnapshotService>()
+            .LoadAsync(HttpContext.RequestAborted);
+        var eligibility = HttpContext.RequestServices.GetRequiredService<NodeEligibilityEvaluator>();
         var now = DateTimeOffset.UtcNow;
         var portPool = GetPublicPortPool();
         var publicPortUsage = await GetPublicPortUsageAsync(portPool, HttpContext.RequestAborted);
-        return Ok(nodes.Select(n => new
+        return Ok(snapshots.Select(snapshot =>
         {
+            var n = snapshot.Node;
+            return new
+            {
             n.Id, n.Name, n.HostAddress, Status = n.GetEffectiveStatus(now), n.Capabilities,
             n.CpuLoad, n.MemoryLoad, n.CurrentContainers, n.MaxContainers,
-            n.ReservedContainers,
-            AllocatedContainers = n.AllocatedContainers,
+            ReservedContainers = snapshot.ReservedDocker,
+            AllocatedContainers = snapshot.AllocatedDocker,
             n.CurrentVms, n.MaxVms,
-            n.ReservedVms,
-            AllocatedVms = n.AllocatedVms,
+            ReservedVms = snapshot.ReservedVm,
+            AllocatedVms = snapshot.AllocatedVm,
             UsedPorts = publicPortUsage,
             TotalPorts = portPool.Total,
             PortPoolStart = portPool.Start,
@@ -102,18 +106,23 @@ public class NodesController : ControllerBase
             n.TeamLabTunnelLastHandshake,
             n.TeamLabTunnelLastError,
             n.TeamLabTunnelConfigVersion,
-            n.TeamLabAgentVersion,
-            n.TeamLabProtocolVersion,
+            n.AgentVersion,
+            n.AgentBinarySha256,
+            n.CapabilityManifestSchemaVersion,
+            n.CapabilityHash,
+            n.CapabilityObservedAt,
+            AgentFeatures = AgentCapabilityEvaluator.Parse(n.CapabilityManifestJson)?.Features ?? [],
+            AgentExecutionLimits = AgentCapabilityEvaluator.Parse(n.CapabilityManifestJson)?.ExecutionLimits,
             n.TeamLabFabricIp,
             n.TeamLabFabricStatus,
-            n.TeamLabCapabilitiesJson,
-            CanHostTeamLab = WeightedScheduler.CanHostTeamLab(n),
-            CanHostTeamLabFabric = WeightedScheduler.CanHostTeamLabFabric(n),
-            CanHostTeamLabDocker = WeightedScheduler.CanHostTeamLabDocker(n),
-            CanHostTeamLabVm = WeightedScheduler.CanHostTeamLabVm(n),
-            UnschedulableReasons = GetUnschedulableReasons(n),
-            UnschedulableByCapability = GetUnschedulableByCapability(n),
-            SchedulableCapabilities = GetSchedulableCapabilities(n)
+            CanHostTeamLab = TeamLabReason(snapshot, eligibility, NodeCapability.Docker | NodeCapability.Kvm, 1, 1) is null,
+            CanHostTeamLabFabric = TeamLabReason(snapshot, eligibility, NodeCapability.None, 0, 0) is null,
+            CanHostTeamLabDocker = TeamLabReason(snapshot, eligibility, NodeCapability.Docker, 1, 0) is null,
+            CanHostTeamLabVm = TeamLabReason(snapshot, eligibility, NodeCapability.Kvm, 0, 1) is null,
+            UnschedulableReasons = GetUnschedulableReasons(snapshot, eligibility),
+            UnschedulableByCapability = GetUnschedulableByCapability(snapshot, eligibility),
+            SchedulableCapabilities = GetSchedulableCapabilities(snapshot, eligibility)
+            };
         }));
     }
 
@@ -121,9 +130,11 @@ public class NodesController : ControllerBase
     [RequireAdmin]
     public async Task<IActionResult> Detail(Guid id)
     {
-        var node = await _nodeRepo.GetNodeByIdAsync(id, HttpContext.RequestAborted);
-        if (node is null) return NotFound();
-        await OverlayLiveStateAsync([node], HttpContext.RequestAborted);
+        var snapshot = (await HttpContext.RequestServices.GetRequiredService<NodeCapacitySnapshotService>()
+            .LoadAsync(HttpContext.RequestAborted)).SingleOrDefault(item => item.Node.Id == id);
+        if (snapshot is null) return NotFound();
+        var node = snapshot.Node;
+        var eligibility = HttpContext.RequestServices.GetRequiredService<NodeEligibilityEvaluator>();
         var now = DateTimeOffset.UtcNow;
         var portPool = GetPublicPortPool();
         var publicPortUsage = await GetPublicPortUsageAsync(portPool, HttpContext.RequestAborted);
@@ -131,11 +142,11 @@ public class NodesController : ControllerBase
         {
             node.Id, node.Name, node.HostAddress, Status = node.GetEffectiveStatus(now), node.Capabilities,
             node.CpuLoad, node.MemoryLoad, node.CurrentContainers, node.MaxContainers,
-            node.ReservedContainers,
-            AllocatedContainers = node.AllocatedContainers,
+            ReservedContainers = snapshot.ReservedDocker,
+            AllocatedContainers = snapshot.AllocatedDocker,
             node.CurrentVms, node.MaxVms,
-            node.ReservedVms,
-            AllocatedVms = node.AllocatedVms,
+            ReservedVms = snapshot.ReservedVm,
+            AllocatedVms = snapshot.AllocatedVm,
             UsedPorts = publicPortUsage,
             TotalPorts = portPool.Total,
             PortPoolStart = portPool.Start,
@@ -149,18 +160,22 @@ public class NodesController : ControllerBase
             node.TeamLabTunnelLastHandshake,
             node.TeamLabTunnelLastError,
             node.TeamLabTunnelConfigVersion,
-            node.TeamLabAgentVersion,
-            node.TeamLabProtocolVersion,
+            node.AgentVersion,
+            node.AgentBinarySha256,
+            node.CapabilityManifestSchemaVersion,
+            node.CapabilityHash,
+            node.CapabilityObservedAt,
+            AgentFeatures = AgentCapabilityEvaluator.Parse(node.CapabilityManifestJson)?.Features ?? [],
+            AgentExecutionLimits = AgentCapabilityEvaluator.Parse(node.CapabilityManifestJson)?.ExecutionLimits,
             node.TeamLabFabricIp,
             node.TeamLabFabricStatus,
-            node.TeamLabCapabilitiesJson,
-            CanHostTeamLab = WeightedScheduler.CanHostTeamLab(node),
-            CanHostTeamLabFabric = WeightedScheduler.CanHostTeamLabFabric(node),
-            CanHostTeamLabDocker = WeightedScheduler.CanHostTeamLabDocker(node),
-            CanHostTeamLabVm = WeightedScheduler.CanHostTeamLabVm(node),
-            UnschedulableReasons = GetUnschedulableReasons(node),
-            UnschedulableByCapability = GetUnschedulableByCapability(node),
-            SchedulableCapabilities = GetSchedulableCapabilities(node)
+            CanHostTeamLab = TeamLabReason(snapshot, eligibility, NodeCapability.Docker | NodeCapability.Kvm, 1, 1) is null,
+            CanHostTeamLabFabric = TeamLabReason(snapshot, eligibility, NodeCapability.None, 0, 0) is null,
+            CanHostTeamLabDocker = TeamLabReason(snapshot, eligibility, NodeCapability.Docker, 1, 0) is null,
+            CanHostTeamLabVm = TeamLabReason(snapshot, eligibility, NodeCapability.Kvm, 0, 1) is null,
+            UnschedulableReasons = GetUnschedulableReasons(snapshot, eligibility),
+            UnschedulableByCapability = GetUnschedulableByCapability(snapshot, eligibility),
+            SchedulableCapabilities = GetSchedulableCapabilities(snapshot, eligibility)
         });
     }
 
@@ -334,30 +349,16 @@ public class NodesController : ControllerBase
         await using var transaction = await _context.Database.BeginTransactionAsync(token);
 
         var now = DateTimeOffset.UtcNow;
-        var targets = await _context.DeploymentTargets
-            .Where(t => t.TargetNodeId == id)
-            .ToListAsync(token);
-        foreach (var target in targets)
-        {
-            if (target.Status is TargetStatus.Pending or TargetStatus.Assigned or TargetStatus.Creating
-                or TargetStatus.Running)
-            {
-                target.Status = TargetStatus.Cancelled;
-                target.CompletedAt = now;
-                target.ErrorMessage = "Target node was deregistered.";
-            }
-            target.TargetNodeId = null;
-        }
-
         var tickets = await _context.DeploymentQueueTickets
             .Where(t => t.TargetNodeId == id)
             .ToListAsync(token);
         foreach (var ticket in tickets)
         {
-            if (ticket.Status is DeploymentQueueTicketStatus.Pending or DeploymentQueueTicketStatus.Assigned
-                or DeploymentQueueTicketStatus.Creating)
+            if (ticket.Status is DeploymentQueueTicketStatus.Pending or DeploymentQueueTicketStatus.Scheduling
+                or DeploymentQueueTicketStatus.Scheduled or DeploymentQueueTicketStatus.Running)
             {
                 ticket.Status = DeploymentQueueTicketStatus.Cancelled;
+                ticket.Stage = DeploymentStage.Cancelled;
                 ticket.CompletedAt = now;
                 ticket.ErrorMessage = "Target node was deregistered.";
             }
@@ -383,8 +384,7 @@ public class NodesController : ControllerBase
     {
         var errors = new List<string>();
         var runtimes = HttpContext.RequestServices.GetRequiredService<GZCTF.Modules.TeamLab.Application.ITeamLabRuntimeApplicationService>();
-        var containerManager = HttpContext.RequestServices.GetRequiredService<IContainerManager>();
-        var fleetVm = HttpContext.RequestServices.GetRequiredService<FleetVmService>();
+        var deploymentQueue = HttpContext.RequestServices.GetRequiredService<DeploymentQueueService>();
         var nginxProxySync = HttpContext.RequestServices.GetRequiredService<INginxProxySyncService>();
 
         var runtimeIds = await _context.TeamLabRuntimeShards
@@ -398,9 +398,10 @@ public class NodesController : ControllerBase
         {
             try
             {
-                var result = await runtimes.DestroyAsync(runtimeId, token);
-                if (result.Status != TeamLabRuntimeStatus.Destroyed)
-                    errors.Add($"TeamLab runtime {runtimeId:D} 清理失败：{result.Error}");
+                var queued = await runtimes.DestroyAndEnqueueAsync(runtimeId, null, null, token);
+                var result = await WaitForControlTicketAsync(deploymentQueue, queued.TicketId, token);
+                if (result?.Status != DeploymentQueueTicketStatus.Succeeded)
+                    errors.Add($"TeamLab runtime {runtimeId:D} 清理失败：{result?.ErrorMessage}");
             }
             catch (Exception ex)
             {
@@ -419,7 +420,12 @@ public class NodesController : ControllerBase
         {
             try
             {
-                await containerManager.DestroyContainerAsync(container, token);
+                var queued = await deploymentQueue.EnqueueAsync(
+                    DeploymentQueueRequest.MaintenanceContainer(container.Id, container.NodeId, container.Image),
+                    token);
+                var result = await WaitForControlTicketAsync(deploymentQueue, queued.TicketId, token);
+                if (result?.Status == DeploymentQueueTicketStatus.Succeeded)
+                    container.Status = ContainerStatus.Destroyed;
                 if (container.Status == ContainerStatus.Destroyed)
                 {
                     await _context.GameInstances
@@ -451,7 +457,7 @@ public class NodesController : ControllerBase
             }
         }
 
-        var vms = await _context.VmInstances
+        var vms = await _context.VmInstances.Include(vm => vm.Challenge)
             .Where(v => v.NodeId == nodeId &&
                         (v.Status == VmInstanceStatus.Creating || v.Status == VmInstanceStatus.Running))
             .ToArrayAsync(token);
@@ -460,8 +466,19 @@ public class NodesController : ControllerBase
         {
             try
             {
-                await fleetVm.DestroyVmAsync(vm, token);
-                await _context.SaveChangesAsync(token);
+                if (vm.Challenge is null)
+                    throw new InvalidOperationException("VM challenge metadata is missing.");
+                var queued = await deploymentQueue.EnqueueAsync(DeploymentQueueRequest.Vm(
+                    vm.Challenge.GameId, vm.UserId, vm.ChallengeId, vm.Id) with
+                {
+                    Operation = RuntimeOperationKind.Destroy,
+                    TargetNodeId = vm.NodeId,
+                    SubjectDisplayName = "Node force cleanup",
+                    ResourceDisplayName = vm.VmName
+                }, token);
+                var result = await WaitForControlTicketAsync(deploymentQueue, queued.TicketId, token);
+                if (result?.Status != DeploymentQueueTicketStatus.Succeeded)
+                    throw new InvalidOperationException(result?.ErrorMessage ?? "VM cleanup timed out.");
             }
             catch (Exception ex)
             {
@@ -489,6 +506,23 @@ public class NodesController : ControllerBase
             activeContainers, activeVms, activeTeamLabRuntimes);
     }
 
+    static async Task<DeploymentQueueStatusModel?> WaitForControlTicketAsync(
+        DeploymentQueueService queue,
+        Guid ticketId,
+        CancellationToken token)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddMinutes(5);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            var status = await queue.GetStatusAsync(ticketId, token);
+            if (status?.Status is DeploymentQueueTicketStatus.Succeeded or
+                DeploymentQueueTicketStatus.Failed or DeploymentQueueTicketStatus.Cancelled)
+                return status;
+            await Task.Delay(TimeSpan.FromMilliseconds(500), token);
+        }
+        return await queue.GetStatusAsync(ticketId, token);
+    }
+
     Task<int> CountActiveTeamLabRuntimesAsync(Guid nodeId, CancellationToken token) =>
         _context.TeamLabRuntimeShards.AsNoTracking()
             .Where(shard => shard.WorkerNodeId == nodeId &&
@@ -506,21 +540,23 @@ public class NodesController : ControllerBase
         var token = HttpContext.RequestAborted;
         var node = await _context.WorkerNodes.FirstOrDefaultAsync(n => n.Id == id, token);
         if (node is null) return NotFound();
+        var snapshot = (await HttpContext.RequestServices.GetRequiredService<NodeCapacitySnapshotService>()
+            .LoadAsync(token)).Single(item => item.Node.Id == id);
 
         if (request.IsSchedulable.HasValue)
             node.IsSchedulable = request.IsSchedulable.Value;
 
         if (request.MaxContainers.HasValue)
         {
-            if (request.MaxContainers.Value < node.AllocatedContainers || request.MaxContainers.Value > 10000)
-                return BadRequest(new { message = $"容器开启上限不能小于当前占用数 {node.AllocatedContainers}，且不能超过 10000。" });
+            if (request.MaxContainers.Value < snapshot.AllocatedDocker || request.MaxContainers.Value > 10000)
+                return BadRequest(new { message = $"容器开启上限不能小于当前占用数 {snapshot.AllocatedDocker}，且不能超过 10000。" });
             node.MaxContainers = request.MaxContainers.Value;
         }
 
         if (request.MaxVms.HasValue)
         {
-            if (request.MaxVms.Value < node.AllocatedVms || request.MaxVms.Value > 1000)
-                return BadRequest(new { message = $"虚拟机开启上限不能小于当前占用数 {node.AllocatedVms}，且不能超过 1000。" });
+            if (request.MaxVms.Value < snapshot.AllocatedVm || request.MaxVms.Value > 1000)
+                return BadRequest(new { message = $"虚拟机开启上限不能小于当前占用数 {snapshot.AllocatedVm}，且不能超过 1000。" });
             node.MaxVms = request.MaxVms.Value;
         }
 
@@ -627,21 +663,6 @@ public class NodesController : ControllerBase
             ? request.Sequence
             : Math.Max(node.LiveMetricSequence + 1, receivedAt.ToUnixTimeMilliseconds());
 
-        var runningTeamLabDockerAssets = await _context.TeamLabRuntimeAssets.CountAsync(
-            a => (a.WorkerNodeId == node.Id ||
-                  (a.WorkerNodeId == null && a.Shard != null && a.Shard.WorkerNodeId == node.Id))
-                 && a.Runtime.Status == TeamLabRuntimeStatus.Running
-                 && a.Kind == TeamLabResourceKind.Docker
-                 && a.Status == TeamLabRuntimeStatus.Running,
-            HttpContext.RequestAborted);
-        var runningTeamLabVmAssets = await _context.TeamLabRuntimeAssets.CountAsync(
-            a => (a.WorkerNodeId == node.Id ||
-                  (a.WorkerNodeId == null && a.Shard != null && a.Shard.WorkerNodeId == node.Id))
-                 && a.Runtime.Status == TeamLabRuntimeStatus.Running
-                 && a.Kind == TeamLabResourceKind.Vm
-                 && a.Status == TeamLabRuntimeStatus.Running,
-            HttpContext.RequestAborted);
-
         var capabilityChanged = ApplyReportedCapabilities(node, request);
         if (capabilityChanged)
             await _context.SaveChangesAsync(HttpContext.RequestAborted);
@@ -654,8 +675,8 @@ public class NodesController : ControllerBase
                 receivedAt,
                 request.CpuLoad,
                 request.MemoryLoad,
-                request.CurrentContainers + runningTeamLabDockerAssets,
-                request.CurrentVms + runningTeamLabVmAssets,
+                request.CurrentContainers,
+                request.CurrentVms,
                 request.UsedPorts),
             HttpContext.RequestAborted);
         if (!writeResult.Accepted)
@@ -664,49 +685,40 @@ public class NodesController : ControllerBase
         return Ok(new { accepted = true, buffered = writeResult.UsedFallback });
     }
 
-    async Task OverlayLiveStateAsync(IReadOnlyCollection<WorkerNode> nodes, CancellationToken token)
-    {
-        var liveStateStore = HttpContext.RequestServices.GetService<INodeLiveStateStore>();
-        if (liveStateStore is null || nodes.Count == 0)
-            return;
-
-        var states = await liveStateStore.GetManyAsync(nodes.Select(node => node.Id).ToArray(), token);
-        var now = DateTimeOffset.UtcNow;
-        foreach (var node in nodes)
-        {
-            if (states.TryGetValue(node.Id, out var state))
-                WeightedScheduler.ApplyLiveState(node, state, now, liveStateStore.FreshnessTtl);
-        }
-    }
-
     static bool ApplyReportedCapabilities(WorkerNode node, HeartbeatRequest request)
     {
         var changed = false;
-        if (!string.IsNullOrWhiteSpace(request.AgentVersion))
-            changed |= SetIfChanged(node.TeamLabAgentVersion, request.AgentVersion.Trim(),
-                value => node.TeamLabAgentVersion = value);
-        if (request.TeamLabProtocolVersion.HasValue)
-            changed |= SetIfChanged(node.TeamLabProtocolVersion, Math.Max(0, request.TeamLabProtocolVersion.Value),
-                value => node.TeamLabProtocolVersion = value);
         if (!string.IsNullOrWhiteSpace(request.TeamLabFabricIp))
             changed |= SetIfChanged(node.TeamLabFabricIp, request.TeamLabFabricIp.Trim(),
                 value => node.TeamLabFabricIp = value);
         if (request.TeamLabFabricStatus.HasValue)
             changed |= SetIfChanged(node.TeamLabFabricStatus, request.TeamLabFabricStatus.Value,
                 value => node.TeamLabFabricStatus = value);
-        if (request.TeamLabCapabilities is null)
+        if (request.CapabilityManifest is null)
             return changed;
 
-        var capabilitiesJson = JsonSerializer.Serialize(request.TeamLabCapabilities,
-            new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        changed |= SetIfChanged(node.TeamLabCapabilitiesJson, capabilitiesJson,
-            value => node.TeamLabCapabilitiesJson = value);
-        var capabilities = WorkerNodeCapabilityHelper.FromTeamLabReport(
-            request.TeamLabCapabilities.Docker,
-            request.TeamLabCapabilities.Kvm,
-            request.TeamLabCapabilities.KvmDevice,
-            request.TeamLabCapabilities.CpuVirtualization);
-        changed |= SetIfChanged(node.Capabilities, capabilities, value => node.Capabilities = value);
+        var effectiveManifest = string.IsNullOrWhiteSpace(request.CapabilityManifest.BinarySha256) &&
+                                !string.IsNullOrWhiteSpace(node.AgentBinarySha256)
+            ? request.CapabilityManifest with { BinarySha256 = node.AgentBinarySha256 }
+            : request.CapabilityManifest;
+        var normalized = AgentCapabilityEvaluator.Normalize(effectiveManifest);
+        var capabilityChanged = !string.Equals(node.CapabilityHash, normalized.Hash, StringComparison.Ordinal);
+        changed |= SetIfChanged(node.AgentVersion, effectiveManifest.AgentVersion,
+            value => node.AgentVersion = value);
+        if (!string.IsNullOrWhiteSpace(effectiveManifest.BinarySha256))
+            changed |= SetIfChanged(node.AgentBinarySha256, effectiveManifest.BinarySha256,
+                value => node.AgentBinarySha256 = value);
+        if (capabilityChanged)
+        {
+            changed |= SetIfChanged(node.CapabilityManifestSchemaVersion,
+                effectiveManifest.ManifestSchemaVersion, value => node.CapabilityManifestSchemaVersion = value);
+            changed |= SetIfChanged(node.CapabilityManifestJson, normalized.Json,
+                value => node.CapabilityManifestJson = value);
+            changed |= SetIfChanged(node.CapabilityHash, normalized.Hash, value => node.CapabilityHash = value);
+            changed |= SetIfChanged(node.CapabilityObservedAt, request.CapabilityManifest.ObservedAt,
+                value => node.CapabilityObservedAt = value);
+            changed |= SetIfChanged(node.Capabilities, normalized.Capabilities, value => node.Capabilities = value);
+        }
         return changed;
     }
 
@@ -722,31 +734,48 @@ public class NodesController : ControllerBase
     [RequireUser]
     public async Task<IActionResult> DestroyVm(Guid instanceId)
     {
-        var vm = await _context.VmInstances.FindAsync(new object[] { instanceId }, HttpContext.RequestAborted);
+        var vm = await _context.VmInstances.Include(item => item.Challenge)
+            .FirstOrDefaultAsync(item => item.Id == instanceId, HttpContext.RequestAborted);
         if (vm is null) return NotFound();
 
         var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
         if (vm.UserId.ToString() != userId)
             return Forbid();
 
-        var fleetVm = HttpContext.RequestServices.GetRequiredService<FleetVmService>();
-        await fleetVm.DestroyVmAsync(vm, HttpContext.RequestAborted);
-        await _context.SaveChangesAsync();
-        return NoContent();
+        if (vm.Challenge is null)
+            return BadRequest(new { message = "VM challenge metadata is missing." });
+        var queue = HttpContext.RequestServices.GetRequiredService<DeploymentQueueService>();
+        var queued = await queue.EnqueueAsync(DeploymentQueueRequest.Vm(
+            vm.Challenge.GameId, vm.UserId, vm.ChallengeId, vm.Id) with
+        {
+            Operation = RuntimeOperationKind.Destroy,
+            TargetNodeId = vm.NodeId,
+            SubjectDisplayName = vm.UserId.ToString("N")[..8],
+            ResourceDisplayName = vm.VmName
+        }, HttpContext.RequestAborted);
+        return Accepted(await queue.GetStatusAsync(queued.TicketId, HttpContext.RequestAborted));
     }
 
     [HttpDelete("vms/{instanceId:guid}/admin")]
     [RequireAdmin]
     public async Task<IActionResult> DestroyVmAsAdmin(Guid instanceId)
     {
-        var vm = await _context.VmInstances
+        var vm = await _context.VmInstances.Include(item => item.Challenge)
             .FirstOrDefaultAsync(v => v.Id == instanceId, HttpContext.RequestAborted);
         if (vm is null) return NotFound();
 
-        var fleetVm = HttpContext.RequestServices.GetRequiredService<FleetVmService>();
-        await fleetVm.DestroyVmAsync(vm, HttpContext.RequestAborted);
-        await _context.SaveChangesAsync();
-        return NoContent();
+        if (vm.Challenge is null)
+            return BadRequest(new { message = "VM challenge metadata is missing." });
+        var queue = HttpContext.RequestServices.GetRequiredService<DeploymentQueueService>();
+        var queued = await queue.EnqueueAsync(DeploymentQueueRequest.Vm(
+            vm.Challenge.GameId, vm.UserId, vm.ChallengeId, vm.Id) with
+        {
+            Operation = RuntimeOperationKind.Destroy,
+            TargetNodeId = vm.NodeId,
+            SubjectDisplayName = vm.UserId.ToString("N")[..8],
+            ResourceDisplayName = vm.VmName
+        }, HttpContext.RequestAborted);
+        return Accepted(await queue.GetStatusAsync(queued.TicketId, HttpContext.RequestAborted));
     }
 
     [HttpGet("/api/agent/download")]
@@ -759,10 +788,12 @@ public class NodesController : ControllerBase
         return File(System.IO.File.OpenRead(path), "application/octet-stream", "gzctf-agent");
     }
 
-    static string[] GetUnschedulableReasons(WorkerNode node)
+    static string[] GetUnschedulableReasons(NodeCapacitySnapshot snapshot, NodeEligibilityEvaluator eligibility)
     {
-        var dockerReason = WeightedScheduler.GetUnschedulableReason(node, NodeCapability.Docker);
-        var kvmReason = WeightedScheduler.GetUnschedulableReason(node, NodeCapability.Kvm);
+        var dockerReason = eligibility.GetReason(snapshot, NodeCapability.Docker, 1, 0, false,
+            [AgentFeatureIds.Docker]);
+        var kvmReason = eligibility.GetReason(snapshot, NodeCapability.Kvm, 0, 1, false,
+            [AgentFeatureIds.Kvm]);
 
         if (dockerReason is null || kvmReason is null)
             return [];
@@ -788,26 +819,36 @@ public class NodesController : ControllerBase
                CryptographicOperations.FixedTimeEquals(leftBytes, rightBytes);
     }
 
-    static object GetUnschedulableByCapability(WorkerNode node) => new
+    static object GetUnschedulableByCapability(NodeCapacitySnapshot snapshot,
+        NodeEligibilityEvaluator eligibility) => new
     {
-        Docker = WeightedScheduler.GetUnschedulableReason(node, NodeCapability.Docker),
-        Kvm = WeightedScheduler.GetUnschedulableReason(node, NodeCapability.Kvm),
-        TeamLabNetwork = WeightedScheduler.GetTeamLabFabricUnschedulableReason(node),
-        TeamLabDocker = WeightedScheduler.GetTeamLabAssetHostUnschedulableReason(node, requiresDocker: true, requiresVm: false),
-        TeamLabVm = WeightedScheduler.GetTeamLabAssetHostUnschedulableReason(node, requiresDocker: false, requiresVm: true)
+        Docker = eligibility.GetReason(snapshot, NodeCapability.Docker, 1, 0, false,
+            [AgentFeatureIds.Docker]),
+        Kvm = eligibility.GetReason(snapshot, NodeCapability.Kvm, 0, 1, false, [AgentFeatureIds.Kvm]),
+        TeamLabNetwork = TeamLabReason(snapshot, eligibility, NodeCapability.None, 0, 0),
+        TeamLabDocker = TeamLabReason(snapshot, eligibility, NodeCapability.Docker, 1, 0),
+        TeamLabVm = TeamLabReason(snapshot, eligibility, NodeCapability.Kvm, 0, 1)
     };
 
-    static string[] GetSchedulableCapabilities(WorkerNode node) =>
+    static string[] GetSchedulableCapabilities(NodeCapacitySnapshot snapshot,
+        NodeEligibilityEvaluator eligibility) =>
     [
         .. new[]
         {
-            WeightedScheduler.CanHost(node, NodeCapability.Docker) ? nameof(NodeCapability.Docker) : null,
-            WeightedScheduler.CanHost(node, NodeCapability.Kvm) ? nameof(NodeCapability.Kvm) : null,
-            WeightedScheduler.CanHostTeamLabFabric(node) ? "TeamLabNetwork" : null,
-            WeightedScheduler.CanHostTeamLabDocker(node) ? "TeamLabDocker" : null,
-            WeightedScheduler.CanHostTeamLabVm(node) ? "TeamLabVm" : null
+            eligibility.GetReason(snapshot, NodeCapability.Docker, 1, 0, false,
+                [AgentFeatureIds.Docker]) is null ? nameof(NodeCapability.Docker) : null,
+            eligibility.GetReason(snapshot, NodeCapability.Kvm, 0, 1, false,
+                [AgentFeatureIds.Kvm]) is null ? nameof(NodeCapability.Kvm) : null,
+            TeamLabReason(snapshot, eligibility, NodeCapability.None, 0, 0) is null ? "TeamLabNetwork" : null,
+            TeamLabReason(snapshot, eligibility, NodeCapability.Docker, 1, 0) is null ? "TeamLabDocker" : null,
+            TeamLabReason(snapshot, eligibility, NodeCapability.Kvm, 0, 1) is null ? "TeamLabVm" : null
         }.OfType<string>()
     ];
+
+    static string? TeamLabReason(NodeCapacitySnapshot snapshot, NodeEligibilityEvaluator eligibility,
+        NodeCapability capability, int dockerSlots, int vmSlots) =>
+        eligibility.GetReason(snapshot, capability, dockerSlots, vmSlots, true,
+            [AgentFeatureIds.TeamLabFabric]);
 
     PublicPortPool GetPublicPortPool()
         => CreatePortPool(
@@ -1018,18 +1059,18 @@ public class NodesController : ControllerBase
 }
 
 [ApiController]
-[Route("api/v1/deployment-targets")]
+[Route("api/v1/deployment-queue")]
 [Produces(MediaTypeNames.Application.Json)]
-public class DeploymentTargetsController : ControllerBase
+public class DeploymentQueueController : ControllerBase
 {
     private readonly AppDbContext _context;
     private readonly DeploymentQueueService _queue;
     private readonly DeploymentQueueViewService _queueView;
-    private readonly ILogger<DeploymentTargetsController> _logger;
+    private readonly ILogger<DeploymentQueueController> _logger;
 
-    public DeploymentTargetsController(AppDbContext context, DeploymentQueueService queue,
+    public DeploymentQueueController(AppDbContext context, DeploymentQueueService queue,
         DeploymentQueueViewService queueView,
-        ILogger<DeploymentTargetsController> logger)
+        ILogger<DeploymentQueueController> logger)
     {
         _context = context;
         _queue = queue;
@@ -1058,17 +1099,17 @@ public class DeploymentTargetsController : ControllerBase
     [RequireAdmin]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var target = await _context.DeploymentTargets
-            .Include(t => t.TargetNode)
-            .FirstOrDefaultAsync(t => t.Id == id);
-        if (target is null) return NotFound();
+        var ticket = await _context.DeploymentQueueTickets
+            .Include(item => item.TargetNode)
+            .FirstOrDefaultAsync(item => item.Id == id);
+        if (ticket is null) return NotFound();
         return Ok(new
         {
-            target.Id, target.TargetNodeId, target.Type, target.Action, target.Status,
-            TargetNodeName = target.TargetNode == null ? null : target.TargetNode.Name,
-            TargetNodeHost = target.TargetNode == null ? null : target.TargetNode.HostAddress,
-            target.ResultPort, target.ResultHost,
-            target.CreatedAt, target.CompletedAt, target.ErrorMessage
+            ticket.Id, ticket.TargetNodeId, ticket.Kind, ticket.Operation, ticket.Status, ticket.Stage,
+            TargetNodeName = ticket.TargetNode == null ? null : ticket.TargetNode.Name,
+            TargetNodeHost = ticket.TargetNode == null ? null : ticket.TargetNode.HostAddress,
+            ticket.SubjectDisplayName, ticket.ResourceDisplayName,
+            ticket.CreatedAt, ticket.StartedAt, ticket.CompletedAt, ticket.ErrorMessage
         });
     }
 
@@ -1079,50 +1120,18 @@ public class DeploymentTargetsController : ControllerBase
         var token = HttpContext?.RequestAborted ?? CancellationToken.None;
         var ticket = await _context.DeploymentQueueTickets
             .Include(t => t.TargetNode)
-            .Include(t => t.DeploymentTarget).ThenInclude(t => t!.TargetNode)
             .SingleOrDefaultAsync(t => t.Id == id, token);
         if (ticket is not null)
         {
             await _queue.CancelAsync(ticket.Id, "Deployment queue ticket was cancelled by administrator.", token);
-            var node = ticket.TargetNode ?? ticket.DeploymentTarget?.TargetNode;
+            var node = ticket.TargetNode;
             _logger.SystemLog(
                 $"Deployment queue ticket {ticket.Id} cancelled by administrator: kind={ticket.Kind}, game={ticket.GameId}, team={ticket.OwnerTeamId}, user={ticket.OwnerUserId}, challenge={ticket.ChallengeId}, node={node?.Name ?? node?.HostAddress ?? "unassigned"}.",
                 TaskStatus.Exit, LogLevel.Information);
             return NoContent();
         }
 
-        var target = await _context.DeploymentTargets
-            .Include(t => t.TargetNode)
-            .SingleOrDefaultAsync(t => t.Id == id, token);
-        if (target is null) return NotFound();
-        if (target.Status == TargetStatus.Pending ||
-            target.Status == TargetStatus.Assigned ||
-            target.Status == TargetStatus.Creating ||
-            target.Status == TargetStatus.Running)
-        {
-            var activeTicket = await _context.DeploymentQueueTickets
-                .AsNoTracking()
-                .Where(t => t.DeploymentTargetId == target.Id &&
-                            (t.Status == DeploymentQueueTicketStatus.Pending ||
-                             t.Status == DeploymentQueueTicketStatus.Assigned ||
-                             t.Status == DeploymentQueueTicketStatus.Creating))
-                .OrderByDescending(t => t.CreatedAt)
-                .FirstOrDefaultAsync();
-            if (activeTicket is not null)
-            {
-                await _queue.CancelAsync(activeTicket.Id, "Deployment target was cancelled by administrator.",
-                    token);
-                _logger.SystemLogDeploymentTarget("cancelled", target, target.TargetNode);
-                return NoContent();
-            }
-
-            target.Status = TargetStatus.Cancelled;
-            target.CompletedAt = DateTimeOffset.UtcNow;
-            target.ErrorMessage = "Deployment target was cancelled by administrator.";
-            await _context.SaveChangesAsync();
-            _logger.SystemLogDeploymentTarget("cancelled", target, target.TargetNode);
-        }
-        return NoContent();
+        return NotFound();
     }
 }
 
@@ -1158,24 +1167,9 @@ public class HeartbeatRequest
     public int CurrentContainers { get; set; }
     public int CurrentVms { get; set; }
     public int UsedPorts { get; set; }
-    public string? AgentVersion { get; set; }
-    public int? TeamLabProtocolVersion { get; set; }
+    public AgentCapabilityManifest? CapabilityManifest { get; set; }
     public string? TeamLabFabricIp { get; set; }
     public TeamLabFabricStatus? TeamLabFabricStatus { get; set; }
-    public TeamLabNodeCapabilityReport? TeamLabCapabilities { get; set; }
-}
-
-public class TeamLabNodeCapabilityReport
-{
-    public bool Docker { get; set; }
-    public bool Kvm { get; set; }
-    public bool KvmDevice { get; set; }
-    public bool CpuVirtualization { get; set; }
-    public bool WireGuard { get; set; }
-    public bool Iptables { get; set; }
-    public bool Nftables { get; set; }
-    public bool Tcpdump { get; set; }
-    public bool Dumpcap { get; set; }
 }
 
 record NodeForceCleanupResult(bool Success, string Message, int ActiveContainers, int ActiveVms,

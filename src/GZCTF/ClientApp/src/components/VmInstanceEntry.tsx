@@ -15,7 +15,7 @@ interface VmInstanceEntryProps {
 }
 
 type VmState = 'none' | 'creating' | 'running' | 'ready' | 'error' | 'destroying'
-type VmStage = 'image-pending' | 'image-pulling' | 'vm-creating' | 'vm-booting' | 'ready' | 'error'
+type VmStage = 'image-pending' | 'image-pulling' | 'image-verifying' | 'vm-creating' | 'vm-booting' | 'ready' | 'error'
 type VmStatusWithStage = VmStatusResponse & {
   stage?: VmStage | null
   stageMessage?: string | null
@@ -215,7 +215,7 @@ export const VmInstanceEntry: FC<VmInstanceEntryProps> = ({
   }
 
   if (vmState === 'creating' || vmState === 'running') {
-    const imageStage = vmStage === 'image-pending' || vmStage === 'image-pulling'
+    const imageStage = vmStage === 'image-pending' || vmStage === 'image-pulling' || vmStage === 'image-verifying'
     const statusText = imageStage ? '镜像准备中' : vmStage === 'vm-creating' ? '靶机创建中' : '等待靶机就绪'
     const title = imageStage
       ? (vmStage === 'image-pulling' ? '正在拉取靶机镜像' : '等待拉取靶机镜像')

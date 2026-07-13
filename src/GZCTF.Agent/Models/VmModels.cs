@@ -8,6 +8,7 @@ public enum VmInitOsType
 
 public class CreateVmRequest
 {
+    public int Generation { get; set; } = 1;
     public int? TemplateId { get; set; }
     public string? TemplatePath { get; set; }
     public string VmName { get; set; } = string.Empty;

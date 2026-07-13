@@ -66,6 +66,7 @@ public sealed record TeamLabNodeAssetCreateRequest(
     int StorageMiB,
     int? ExposePort,
     bool RoutingEnabled,
+    bool ImageReady,
     IReadOnlyDictionary<string, string> Environment,
     IReadOnlyDictionary<string, string> Secrets,
     IReadOnlyList<TeamLabNodeInterfaceIntent> Interfaces);

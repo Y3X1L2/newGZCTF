@@ -5,6 +5,8 @@ using GZCTF.Modules.Identity.Infrastructure;
 using GZCTF.Infrastructure.Api;
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Infrastructure.Concurrency;
+using GZCTF.Modules.Runtime.Application;
+using GZCTF.Modules.Runtime.Infrastructure;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories;
 using GZCTF.Repositories.Interface;
@@ -51,6 +53,7 @@ internal static class ServicesExtension
             builder.AddConfig<KvmSettings>();
             builder.AddConfig<GuacamoleSettings>();
             builder.AddConfig<DockerRegistrySettings>();
+            builder.AddConfig<RuntimeSchedulingOptions>();
 
             builder.Services.Configure<RegistrySet<RegistryConfig>>(builder.Configuration.GetSection("Registries"));
 
@@ -135,21 +138,26 @@ internal static class ServicesExtension
             // Fleet control-plane services
             builder.Services.AddScoped<INodeRepository, NodeRepository>();
             builder.Services.AddScoped<NodeDeployService>();
-            builder.Services.AddScoped<FleetManager>();
-            builder.Services.AddScoped<WeightedScheduler>();
+            builder.Services.AddScoped<NodeCapacitySnapshotService>();
+            builder.Services.AddScoped<NodeEligibilityEvaluator>();
+            builder.Services.AddScoped<RuntimeQueueSelector>();
+            builder.Services.AddScoped<RuntimeAdmissionPolicy>();
+            builder.Services.AddScoped<TeamLabPhysicalPlacementService>();
             builder.Services.AddScoped<FleetCapacityReservationService>();
             builder.Services.AddScoped<DeploymentQueueService>();
             builder.Services.AddScoped<DeploymentQueueViewService>();
-            builder.Services.AddScoped<DeploymentQueueStateAccessor>();
             builder.Services.AddScoped<DeploymentExecutionContextAccessor>();
             builder.Services.AddScoped<DeploymentExecutionService>();
-            builder.Services.AddSingleton(new NodeExecutionGateOptions());
-            builder.Services.AddSingleton<NodeExecutionGate>();
-            builder.Services.AddSingleton<QueueManager>();
+            builder.Services.AddScoped<RuntimeSchedulingService>();
+            builder.Services.AddSingleton<RuntimeExecutionService>();
+            builder.Services.AddSingleton<NodeDispatchLimiter>();
+            builder.Services.AddSingleton<ImageDistributionCoordinator>();
             builder.Services.AddScoped<ImageDistributionService>();
+            builder.Services.AddHostedService<ImageDistributionWorker>();
             builder.Services.AddHostedService<ImageDistributionReconcileService>();
             builder.Services.AddHostedService<FleetHealthCheckService>();
-            builder.Services.AddHostedService<QueueProcessingService>();
+            builder.Services.AddHostedService<RuntimeSchedulingWorker>();
+            builder.Services.AddHostedService<RuntimeExecutionWorker>();
 
 #pragma warning disable EXTEXP0001
             builder.Services.AddHttpClient("Agent", client =>

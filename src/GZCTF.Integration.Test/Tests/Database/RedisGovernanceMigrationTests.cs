@@ -1,5 +1,6 @@
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Runtime.Application;
 using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -89,13 +90,14 @@ public sealed class RedisGovernanceMigrationTests : IAsyncLifetime
         await using var secondContext = CreateContext();
         var claimedAt = DateTimeOffset.UtcNow;
         var claims = await Task.WhenAll(
-            QueueManager.TryClaimTicketAsync(firstContext, ticket.Id, claimedAt, CancellationToken.None),
-            QueueManager.TryClaimTicketAsync(secondContext, ticket.Id, claimedAt, CancellationToken.None));
+            RuntimeSchedulingService.TryClaimAsync(firstContext, ticket.Id, claimedAt, CancellationToken.None),
+            RuntimeSchedulingService.TryClaimAsync(secondContext, ticket.Id, claimedAt, CancellationToken.None));
 
         Assert.Single(claims, claimed => claimed);
         await setup.Entry(ticket).ReloadAsync();
-        Assert.Equal(DeploymentQueueTicketStatus.Assigned, ticket.Status);
-        Assert.NotNull(ticket.AssignedAt);
+        Assert.Equal(DeploymentQueueTicketStatus.Scheduling, ticket.Status);
+        Assert.NotNull(ticket.ClaimOwner);
+        Assert.NotNull(ticket.ClaimExpiresAt);
     }
 
     private AppDbContext CreateContext()

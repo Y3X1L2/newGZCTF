@@ -7,6 +7,17 @@ public class AgentConfig
     public string AuthToken { get; set; } = string.Empty;
     public int ListenPort { get; set; } = 5001;
     public int HeartbeatIntervalSeconds { get; set; } = 30;
+    public AgentExecutionLimitOverrides ExecutionLimits { get; set; } = new();
+}
+
+public sealed class AgentExecutionLimitOverrides
+{
+    public int? DockerCreates { get; set; }
+    public int? VmCreates { get; set; }
+    public int? DockerImageTransfers { get; set; }
+    public int? VmImageTransfers { get; set; }
+    public int? TeamLabNetworkOperations { get; set; }
+    public int? ControlOperations { get; set; }
 }
 
 public class DockerConfig

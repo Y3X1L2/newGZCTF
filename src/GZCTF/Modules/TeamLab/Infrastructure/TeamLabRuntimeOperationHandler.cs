@@ -32,8 +32,16 @@ public sealed class TeamLabRuntimeOperationHandler(
                 ?? throw new ApiOperationTerminalException("teamlab_payload_invalid", "Destroy runtime ID is missing.");
             await operations.UpdateProgressAsync(operationId, leaseOwner, "runtime-destroying", 0, 1,
                 "teamlab-runtime", runtimeId.ToString("D"), null, cancellationToken);
-            var projection = await runtimes.DestroyAsync(runtimeId, cancellationToken);
-            await CompleteJobAsync(job, projection, cancellationToken);
+            var queued = await runtimes.DestroyAndEnqueueAsync(
+                runtimeId, operationId, operation.ActorUserId, cancellationToken);
+            job.RuntimeId = await context.TeamLabRuntimes.AsNoTracking()
+                .Where(runtime => runtime.PublicId == runtimeId)
+                .Select(runtime => (int?)runtime.Id)
+                .SingleAsync(cancellationToken);
+            job.RuntimePublicId = runtimeId;
+            job.ProtectedPayload = null;
+            await context.SaveChangesAsync(cancellationToken);
+            await WaitForTicketAsync(job, queued.TicketId, operationId, leaseOwner, cancellationToken);
             return;
         }
 
@@ -117,16 +125,17 @@ public sealed class TeamLabRuntimeOperationHandler(
             var (stage, progress) = ticket.Status switch
             {
                 DeploymentQueueTicketStatus.Pending => ("runtime-queued", 1L),
-                DeploymentQueueTicketStatus.Assigned => ("runtime-assigned", 2L),
-                DeploymentQueueTicketStatus.Creating => ("runtime-deploying", 3L),
-                DeploymentQueueTicketStatus.Completed => ("runtime-ready", 4L),
+                DeploymentQueueTicketStatus.Scheduling or DeploymentQueueTicketStatus.Scheduled =>
+                    ("runtime-assigned", 2L),
+                DeploymentQueueTicketStatus.Running => ("runtime-deploying", 3L),
+                DeploymentQueueTicketStatus.Succeeded => ("runtime-ready", 4L),
                 DeploymentQueueTicketStatus.Failed => ("runtime-failed", 4L),
                 DeploymentQueueTicketStatus.Cancelled => ("runtime-cancelled", 4L),
                 _ => ("runtime-queued", 1L)
             };
             await operations.UpdateProgressAsync(operationId, leaseOwner, stage, progress, 4,
                 "teamlab-runtime", job.RuntimePublicId?.ToString("D"), ticket.Id, cancellationToken);
-            if (ticket.Status == DeploymentQueueTicketStatus.Completed)
+            if (ticket.Status == DeploymentQueueTicketStatus.Succeeded)
             {
                 var projection = await runtimes.GetAsync(job.RuntimePublicId!.Value, cancellationToken);
                 var trackedJob = await context.TeamLabRuntimeOperationJobs.SingleAsync(item => item.OperationId == operationId, cancellationToken);

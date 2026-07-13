@@ -1,7 +1,8 @@
-using GZCTF.Models;
-using GZCTF.Models.Data;
 using GZCTF.Infrastructure.Concurrency;
+using GZCTF.Models.Data;
+using GZCTF.Modules.Runtime.Application;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace GZCTF.Services.Fleet;
 
@@ -22,7 +23,6 @@ public sealed record FleetCapacityReservationResult(
 {
     public static FleetCapacityReservationResult Reserved(WorkerNode node, int dockerSlots, int vmSlots) =>
         new(true, node.Id, node, dockerSlots, vmSlots, "Capacity reserved.");
-
     public static FleetCapacityReservationResult Failed(string message) =>
         new(false, null, null, 0, 0, message);
 }
@@ -37,466 +37,199 @@ public sealed record FleetCapacityBatchReservationResult(
     public static FleetCapacityBatchReservationResult Reserved(
         IReadOnlyList<FleetCapacityReservationResult> reservations) =>
         new(true, reservations, "Capacity reserved.");
-
     public static FleetCapacityBatchReservationResult Failed(string message) => new(false, [], message);
 }
 
-public class FleetCapacityReservationService
+public sealed class FleetCapacityReservationService
 {
-    static readonly DeploymentQueueTicketStatus[] ActiveQueueStatuses =
-    [
-        DeploymentQueueTicketStatus.Pending,
-        DeploymentQueueTicketStatus.Assigned,
-        DeploymentQueueTicketStatus.Creating
-    ];
+    static readonly TimeSpan ReservationLifetime = TimeSpan.FromMinutes(30);
+    readonly AppDbContext context;
+    readonly IDistributedLeaseProvider leaseProvider;
+    readonly NodeCapacitySnapshotService snapshots;
+    readonly NodeEligibilityEvaluator eligibility;
+    readonly ILogger<FleetCapacityReservationService> logger;
 
-    static readonly TargetStatus[] ReservedTargetStatuses =
-    [
-        TargetStatus.Assigned,
-        TargetStatus.Creating
-    ];
-
-    static readonly TimeSpan DeploymentTargetReservationTimeout = TimeSpan.FromMinutes(30);
-
-    readonly AppDbContext _context;
-    readonly IDistributedLeaseProvider _lockService;
-    readonly ILogger<FleetCapacityReservationService> _logger;
-
-    public FleetCapacityReservationService(AppDbContext context, IDistributedLeaseProvider lockService,
+    public FleetCapacityReservationService(AppDbContext context, IDistributedLeaseProvider leaseProvider,
         ILogger<FleetCapacityReservationService> logger)
+        : this(context, leaseProvider, new NodeCapacitySnapshotService(context),
+            new NodeEligibilityEvaluator(Options.Create(new RuntimeSchedulingOptions())), logger)
     {
-        _context = context;
-        _lockService = lockService;
-        _logger = logger;
     }
 
-    public async Task<FleetCapacityReservationResult> TryReserveAsync(FleetCapacityRequest request,
+    public FleetCapacityReservationService(AppDbContext context, IDistributedLeaseProvider leaseProvider,
+        NodeCapacitySnapshotService snapshots, NodeEligibilityEvaluator eligibility,
+        ILogger<FleetCapacityReservationService> logger)
+    {
+        this.context = context;
+        this.leaseProvider = leaseProvider;
+        this.snapshots = snapshots;
+        this.eligibility = eligibility;
+        this.logger = logger;
+    }
+
+    public async Task<FleetCapacityReservationResult> TryReserveAsync(Guid ticketId, FleetCapacityRequest request,
         CancellationToken token)
     {
         var dockerSlots = Math.Max(0, request.DockerSlots);
         var vmSlots = Math.Max(0, request.VmSlots);
-
         if (dockerSlots == 0 && vmSlots == 0)
             return FleetCapacityReservationResult.Failed("No capacity slots were requested.");
 
-        await using var schedulerLease = await AcquireSchedulerLockAsync(token);
-        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-            token, schedulerLease.LeaseLost);
-        token = leaseCancellation.Token;
+        await using var lease = await AcquireSchedulerLeaseAsync(token);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, lease.LeaseLost);
+        token = linked.Token;
 
-        for (var attempt = 1; attempt <= 3; attempt++)
+        var existing = await context.FleetCapacityReservations.AsNoTracking()
+            .FirstOrDefaultAsync(item => item.DeploymentQueueTicketId == ticketId &&
+                                         item.Status == CapacityReservationStatus.Active, token);
+        if (existing is not null)
         {
-            var nodes = await BuildCandidateQuery(request)
-                .ToListAsync(token);
-            var node = SelectNode(nodes, request, dockerSlots, vmSlots);
-
-            if (node is null)
-                return FleetCapacityReservationResult.Failed(
-                    $"No schedulable node has enough capacity for Docker={dockerSlots}, VM={vmSlots}.");
-
-            node.ReservedContainers += dockerSlots;
-            node.ReservedVms += vmSlots;
-
-            try
-            {
-                await _context.SaveChangesAsync(token);
-
-                _logger.LogInformation(
-                    "Reserved fleet capacity on node {NodeId}: Docker={DockerSlots}, VM={VmSlots}",
-                    node.Id, dockerSlots, vmSlots);
-
-                return FleetCapacityReservationResult.Reserved(node, dockerSlots, vmSlots);
-            }
-            catch (DbUpdateConcurrencyException ex) when (attempt < 3)
-            {
-                _logger.LogWarning(ex,
-                    "Capacity reservation conflicted; retrying reservation attempt {Attempt}.",
-                    attempt + 1);
-                DetachConflictedWorkerNodeEntries(ex);
-            }
+            var existingNode = await context.WorkerNodes.FirstOrDefaultAsync(item => item.Id == existing.WorkerNodeId,
+                token);
+            return existingNode is null
+                ? FleetCapacityReservationResult.Failed("Existing reservation references a missing node.")
+                : FleetCapacityReservationResult.Reserved(existingNode, existing.DockerSlots, existing.VmSlots);
         }
 
-        return FleetCapacityReservationResult.Failed("Capacity reservation conflicted repeatedly.");
+        var candidates = (await snapshots.LoadAsync(token))
+            .Where(item => request.PreferredNodeId is null || item.Node.Id == request.PreferredNodeId)
+            .Where(item => eligibility.GetReason(item, request.RequiredCapability, dockerSlots, vmSlots,
+                request.RequireTeamLab) is null)
+            .OrderByDescending(item => eligibility.Score(item, dockerSlots, vmSlots))
+            .ThenBy(item => item.Node.Name, StringComparer.Ordinal)
+            .ThenBy(item => item.Node.Id)
+            .ToArray();
+        var selected = candidates.FirstOrDefault();
+        if (selected is null)
+            return FleetCapacityReservationResult.Failed(
+                $"No schedulable node has enough capacity for Docker={dockerSlots}, VM={vmSlots}.");
+
+        context.FleetCapacityReservations.Add(NewReservation(ticketId, selected.Node.Id, dockerSlots, vmSlots));
+        await context.SaveChangesAsync(token);
+        logger.LogInformation("Reserved capacity for ticket {TicketId} on node {NodeId}: Docker={Docker}, VM={Vm}",
+            ticketId, selected.Node.Id, dockerSlots, vmSlots);
+        return FleetCapacityReservationResult.Reserved(selected.Node, dockerSlots, vmSlots);
     }
 
-    public async Task<FleetCapacityBatchReservationResult> TryReserveBatchAsync(
-        IReadOnlyList<FleetCapacityBatchItem> items,
-        bool requireTeamLab,
-        CancellationToken token)
+    public async Task<FleetCapacityBatchReservationResult> TryReserveBatchAsync(Guid ticketId,
+        IReadOnlyList<FleetCapacityBatchItem> items, bool requireTeamLab, CancellationToken token)
     {
-        var normalizedItems = items
-            .GroupBy(item => item.NodeId)
-            .Select(group => new FleetCapacityBatchItem(
-                group.Key,
+        var normalized = items.GroupBy(item => item.NodeId)
+            .Select(group => new FleetCapacityBatchItem(group.Key,
                 group.Sum(item => Math.Max(0, item.DockerSlots)),
                 group.Sum(item => Math.Max(0, item.VmSlots))))
             .Where(item => item.DockerSlots > 0 || item.VmSlots > 0)
-            .OrderBy(item => item.NodeId)
-            .ToArray();
-
-        if (normalizedItems.Length == 0)
+            .OrderBy(item => item.NodeId).ToArray();
+        if (normalized.Length == 0)
             return FleetCapacityBatchReservationResult.Failed("No capacity slots were requested.");
 
-        await using var schedulerLease = await AcquireSchedulerLockAsync(token);
-        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-            token, schedulerLease.LeaseLost);
-        token = leaseCancellation.Token;
+        await using var lease = await AcquireSchedulerLeaseAsync(token);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, lease.LeaseLost);
+        token = linked.Token;
 
-        for (var attempt = 1; attempt <= 3; attempt++)
+        var existing = await context.FleetCapacityReservations.AsNoTracking()
+            .Where(item => item.DeploymentQueueTicketId == ticketId &&
+                           item.Status == CapacityReservationStatus.Active)
+            .ToArrayAsync(token);
+        if (existing.Length > 0)
         {
-            var nodeIds = normalizedItems.Select(item => item.NodeId).ToArray();
-            var nodes = await _context.WorkerNodes
-                .Where(node => nodeIds.Contains(node.Id))
-                .ToListAsync(token);
-            var nodesById = nodes.ToDictionary(node => node.Id);
-
-            foreach (var item in normalizedItems)
-            {
-                if (!nodesById.TryGetValue(item.NodeId, out var node))
-                    return FleetCapacityBatchReservationResult.Failed($"Node {item.NodeId} was not found.");
-
-                var requiredCapability = NodeCapability.None;
-                if (item.DockerSlots > 0)
-                    requiredCapability |= NodeCapability.Docker;
-                if (item.VmSlots > 0)
-                    requiredCapability |= NodeCapability.Kvm;
-
-                var request = new FleetCapacityRequest(
-                    requiredCapability,
-                    item.DockerSlots,
-                    item.VmSlots,
-                    PreferredNodeId: item.NodeId,
-                    RequireTeamLab: requireTeamLab);
-                if (!CanReserve(node, request, item.DockerSlots, item.VmSlots))
-                    return FleetCapacityBatchReservationResult.Failed(
-                        $"Node {node.Name} has insufficient capacity for Docker={item.DockerSlots}, VM={item.VmSlots}.");
-            }
-
-            foreach (var item in normalizedItems)
-            {
-                var node = nodesById[item.NodeId];
-                node.ReservedContainers += item.DockerSlots;
-                node.ReservedVms += item.VmSlots;
-            }
-
-            try
-            {
-                await _context.SaveChangesAsync(token);
-
-                var reservations = normalizedItems
-                    .Select(item =>
-                    {
-                        var node = nodesById[item.NodeId];
-                        return FleetCapacityReservationResult.Reserved(node, item.DockerSlots, item.VmSlots);
-                    })
-                    .ToArray();
-                return FleetCapacityBatchReservationResult.Reserved(reservations);
-            }
-            catch (DbUpdateConcurrencyException ex) when (attempt < 3)
-            {
-                _logger.LogWarning(ex,
-                    "Batch capacity reservation conflicted; retrying reservation attempt {Attempt}.",
-                    attempt + 1);
-                DetachConflictedWorkerNodeEntries(ex);
-            }
+            var existingNodeIds = existing.Select(item => item.WorkerNodeId).ToArray();
+            var existingNodes = await context.WorkerNodes.Where(item => existingNodeIds.Contains(item.Id))
+                .ToDictionaryAsync(item => item.Id, token);
+            return FleetCapacityBatchReservationResult.Reserved(existing
+                .Where(item => existingNodes.ContainsKey(item.WorkerNodeId))
+                .Select(item => FleetCapacityReservationResult.Reserved(existingNodes[item.WorkerNodeId],
+                    item.DockerSlots, item.VmSlots)).ToArray());
         }
 
-        return FleetCapacityBatchReservationResult.Failed("Capacity reservation conflicted repeatedly.");
+        var nodeIds = normalized.Select(item => item.NodeId).ToArray();
+        var nodeSnapshots = (await snapshots.LoadAsync(token)).Where(item => nodeIds.Contains(item.Node.Id))
+            .ToDictionary(item => item.Node.Id);
+        foreach (var item in normalized)
+        {
+            if (!nodeSnapshots.TryGetValue(item.NodeId, out var snapshot))
+                return FleetCapacityBatchReservationResult.Failed($"Node {item.NodeId} was not found.");
+            var capability = (item.DockerSlots > 0 ? NodeCapability.Docker : NodeCapability.None) |
+                             (item.VmSlots > 0 ? NodeCapability.Kvm : NodeCapability.None);
+            if (eligibility.GetReason(snapshot, capability, item.DockerSlots, item.VmSlots, requireTeamLab) is not null)
+                return FleetCapacityBatchReservationResult.Failed(
+                    $"Node {snapshot.Node.Name} has insufficient capacity for Docker={item.DockerSlots}, VM={item.VmSlots}.");
+        }
+
+        foreach (var item in normalized)
+            context.FleetCapacityReservations.Add(NewReservation(ticketId, item.NodeId, item.DockerSlots,
+                item.VmSlots));
+        await context.SaveChangesAsync(token);
+        return FleetCapacityBatchReservationResult.Reserved(normalized.Select(item =>
+            FleetCapacityReservationResult.Reserved(nodeSnapshots[item.NodeId].Node, item.DockerSlots, item.VmSlots)).ToArray());
     }
 
-    public async Task ReleaseAsync(Guid nodeId, int dockerSlots, int vmSlots, CancellationToken token)
+    public Task ConfirmAsync(Guid ticketId, Guid nodeId, CancellationToken token) =>
+        FinishReservationAsync(ticketId, nodeId, CapacityReservationStatus.Confirmed, token);
+
+    public Task ReleaseAsync(Guid ticketId, Guid nodeId, CancellationToken token) =>
+        FinishReservationAsync(ticketId, nodeId, CapacityReservationStatus.Released, token);
+
+    public Task<int> RenewAsync(Guid ticketId, CancellationToken token) =>
+        context.FleetCapacityReservations
+            .Where(item => item.DeploymentQueueTicketId == ticketId &&
+                           item.Status == CapacityReservationStatus.Active)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(item => item.ExpiresAt, DateTimeOffset.UtcNow.Add(ReservationLifetime)), token);
+
+    public async Task<int> RenewActiveTicketReservationsAsync(CancellationToken token)
     {
-        var normalizedDockerSlots = Math.Max(0, dockerSlots);
-        var normalizedVmSlots = Math.Max(0, vmSlots);
-        if (normalizedDockerSlots == 0 && normalizedVmSlots == 0)
-            return;
-
-        await using var schedulerLease = await AcquireSchedulerLockAsync(token);
-        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-            token, schedulerLease.LeaseLost);
-        token = leaseCancellation.Token;
-
-        for (var attempt = 1; attempt <= 3; attempt++)
-        {
-            var node = await _context.WorkerNodes.FirstOrDefaultAsync(n => n.Id == nodeId, token);
-            if (node is null)
-                return;
-
-            node.ReservedContainers = Math.Max(0, node.ReservedContainers - normalizedDockerSlots);
-            node.ReservedVms = Math.Max(0, node.ReservedVms - normalizedVmSlots);
-
-            try
-            {
-                await _context.SaveChangesAsync(token);
-                return;
-            }
-            catch (DbUpdateConcurrencyException ex) when (attempt < 3)
-            {
-                _logger.LogWarning(ex,
-                    "Capacity release conflicted on node {NodeId}; retrying release attempt {Attempt}.",
-                    nodeId, attempt + 1);
-                DetachConflictedWorkerNodeEntries(ex);
-            }
-        }
-    }
-
-    public async Task ReleaseActiveAsync(Guid nodeId, int dockerSlots, int vmSlots, CancellationToken token)
-    {
-        var normalizedDockerSlots = Math.Max(0, dockerSlots);
-        var normalizedVmSlots = Math.Max(0, vmSlots);
-        if (normalizedDockerSlots == 0 && normalizedVmSlots == 0)
-            return;
-
-        await using var schedulerLease = await AcquireSchedulerLockAsync(token);
-        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-            token, schedulerLease.LeaseLost);
-        token = leaseCancellation.Token;
-
-        for (var attempt = 1; attempt <= 3; attempt++)
-        {
-            var node = await _context.WorkerNodes.FirstOrDefaultAsync(n => n.Id == nodeId, token);
-            if (node is null)
-                return;
-
-            node.CurrentContainers = Math.Max(0, node.CurrentContainers - normalizedDockerSlots);
-            node.CurrentVms = Math.Max(0, node.CurrentVms - normalizedVmSlots);
-
-            try
-            {
-                await _context.SaveChangesAsync(token);
-                return;
-            }
-            catch (DbUpdateConcurrencyException ex) when (attempt < 3)
-            {
-                _logger.LogWarning(ex,
-                    "Active capacity release conflicted on node {NodeId}; retrying release attempt {Attempt}.",
-                    nodeId, attempt + 1);
-                DetachConflictedWorkerNodeEntries(ex);
-            }
-        }
-    }
-
-    public async Task ConfirmAsync(Guid nodeId, int dockerSlots, int vmSlots, CancellationToken token)
-    {
-        var normalizedDockerSlots = Math.Max(0, dockerSlots);
-        var normalizedVmSlots = Math.Max(0, vmSlots);
-        if (normalizedDockerSlots == 0 && normalizedVmSlots == 0)
-            return;
-
-        await using var schedulerLease = await AcquireSchedulerLockAsync(token);
-        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-            token, schedulerLease.LeaseLost);
-        token = leaseCancellation.Token;
-
-        for (var attempt = 1; attempt <= 3; attempt++)
-        {
-            var node = await _context.WorkerNodes.FirstOrDefaultAsync(n => n.Id == nodeId, token);
-            if (node is null)
-                return;
-
-            var dockerToConfirm = Math.Min(node.ReservedContainers, normalizedDockerSlots);
-            var vmToConfirm = Math.Min(node.ReservedVms, normalizedVmSlots);
-
-            node.ReservedContainers = Math.Max(0, node.ReservedContainers - dockerToConfirm);
-            node.ReservedVms = Math.Max(0, node.ReservedVms - vmToConfirm);
-            node.CurrentContainers += dockerToConfirm;
-            node.CurrentVms += vmToConfirm;
-
-            try
-            {
-                await _context.SaveChangesAsync(token);
-                return;
-            }
-            catch (DbUpdateConcurrencyException ex) when (attempt < 3)
-            {
-                _logger.LogWarning(ex,
-                    "Capacity confirmation conflicted on node {NodeId}; retrying confirmation attempt {Attempt}.",
-                    nodeId, attempt + 1);
-                DetachConflictedWorkerNodeEntries(ex);
-            }
-        }
+        var ticketIds = await context.DeploymentQueueTickets.AsNoTracking()
+            .Where(ticket => ticket.Status == DeploymentQueueTicketStatus.Scheduled ||
+                             ticket.Status == DeploymentQueueTicketStatus.Running)
+            .Select(ticket => ticket.Id)
+            .ToArrayAsync(token);
+        if (ticketIds.Length == 0)
+            return 0;
+        return await context.FleetCapacityReservations
+            .Where(item => ticketIds.Contains(item.DeploymentQueueTicketId) &&
+                           item.Status == CapacityReservationStatus.Active)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(item => item.ExpiresAt, DateTimeOffset.UtcNow.Add(ReservationLifetime)), token);
     }
 
     public async Task ReconcileReservedAsync(Guid nodeId, CancellationToken token)
     {
-        await using var schedulerLease = await AcquireSchedulerLockAsync(token);
-        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-            token, schedulerLease.LeaseLost);
-        token = leaseCancellation.Token;
-
-        for (var attempt = 1; attempt <= 3; attempt++)
-        {
-            var node = await _context.WorkerNodes.FirstOrDefaultAsync(n => n.Id == nodeId, token);
-            if (node is null)
-                return;
-
-            var staleTargetCutoff = DateTimeOffset.UtcNow - DeploymentTargetReservationTimeout;
-            var staleTargets = await _context.DeploymentTargets
-                .Where(t => t.TargetNodeId == nodeId &&
-                            t.Action == TargetAction.Create &&
-                            ReservedTargetStatuses.Contains(t.Status) &&
-                            t.CreatedAt < staleTargetCutoff)
-                .ToListAsync(token);
-
-            foreach (var target in staleTargets)
-            {
-                target.Status = TargetStatus.Failed;
-                target.CompletedAt = DateTimeOffset.UtcNow;
-                target.ErrorMessage ??= "Deployment target timed out before completion.";
-            }
-
-            var activeQueueSlots = await _context.DeploymentQueueTickets
-                .Where(t => t.Kind != DeploymentQueueKind.TeamLabRuntime &&
-                            t.TargetNodeId == nodeId &&
-                            ActiveQueueStatuses.Contains(t.Status))
-                .GroupBy(_ => 1)
-                .Select(g => new
-                {
-                    Docker = g.Sum(t => t.DockerSlots),
-                    Vm = g.Sum(t => t.VmSlots)
-                })
-                .FirstOrDefaultAsync(token);
-
-            var activeTeamLabTickets = await _context.DeploymentQueueTickets.AsNoTracking()
-                .Where(ticket => ticket.Kind == DeploymentQueueKind.TeamLabRuntime &&
-                                 ActiveQueueStatuses.Contains(ticket.Status))
-                .Select(ticket => new
-                {
-                    ticket.TeamLabRuntimeId,
-                    ticket.TargetNodeId,
-                    ticket.DockerSlots,
-                    ticket.VmSlots
-                })
-                .ToArrayAsync(token);
-            var teamLabDocker = 0;
-            var teamLabVm = 0;
-            var teamLabFacts = await TeamLabCapacityFacts.LoadManyAsync(
-                _context,
-                activeTeamLabTickets
-                    .Where(ticket => ticket.TeamLabRuntimeId != null)
-                    .Select(ticket => ticket.TeamLabRuntimeId!.Value)
-                    .ToArray(),
-                token);
-            foreach (var ticket in activeTeamLabTickets)
-            {
-                var shardSlots = ticket.TeamLabRuntimeId is { } runtimeId
-                    ? teamLabFacts.GetValueOrDefault(runtimeId) ?? []
-                    : [];
-                if (shardSlots.Length == 0)
-                {
-                    if (ticket.TargetNodeId == nodeId)
-                    {
-                        teamLabDocker += ticket.DockerSlots;
-                        teamLabVm += ticket.VmSlots;
-                    }
-                    continue;
-                }
-
-                var local = shardSlots.FirstOrDefault(slot => slot.WorkerNodeId == nodeId);
-                if (local is not null)
-                {
-                    teamLabDocker += local.DockerSlots;
-                    teamLabVm += local.VmSlots;
-                }
-            }
-
-            var activeTargetSlots = await _context.DeploymentTargets
-                .Where(t => t.TargetNodeId == nodeId &&
-                            t.Action == TargetAction.Create &&
-                            ReservedTargetStatuses.Contains(t.Status) &&
-                            t.CreatedAt >= staleTargetCutoff)
-                .GroupBy(_ => 1)
-                .Select(g => new
-                {
-                    Docker = g.Count(t => t.Type == TargetType.Docker),
-                    Vm = g.Count(t => t.Type == TargetType.Vm)
-                })
-                .FirstOrDefaultAsync(token);
-
-            node.ReservedContainers = Math.Max(0,
-                (activeQueueSlots?.Docker ?? 0) +
-                teamLabDocker +
-                (activeTargetSlots?.Docker ?? 0));
-            node.ReservedVms = Math.Max(0,
-                (activeQueueSlots?.Vm ?? 0) +
-                teamLabVm +
-                (activeTargetSlots?.Vm ?? 0));
-
-            try
-            {
-                await _context.SaveChangesAsync(token);
-                return;
-            }
-            catch (DbUpdateConcurrencyException ex) when (attempt < 3)
-            {
-                _logger.LogWarning(ex,
-                    "Capacity reserved-slot reconciliation conflicted on node {NodeId}; retrying attempt {Attempt}.",
-                    nodeId, attempt + 1);
-                DetachConflictedWorkerNodeEntries(ex);
-            }
-        }
+        var now = DateTimeOffset.UtcNow;
+        await context.FleetCapacityReservations
+            .Where(item => item.WorkerNodeId == nodeId && item.Status == CapacityReservationStatus.Active &&
+                           item.ExpiresAt <= now)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(item => item.Status, CapacityReservationStatus.Expired)
+                .SetProperty(item => item.ReleasedAt, now), token);
     }
 
-    void DetachConflictedWorkerNodeEntries(DbUpdateConcurrencyException ex)
+    async Task FinishReservationAsync(Guid ticketId, Guid nodeId, CapacityReservationStatus status,
+        CancellationToken token)
     {
-        if (ex.Entries.Count > 0)
-        {
-            foreach (var entry in ex.Entries)
-            {
-                if (entry.Entity is not WorkerNode)
-                    throw new InvalidOperationException(
-                        "Unexpected non-worker concurrency conflict while updating fleet capacity.");
-
-                entry.State = EntityState.Detached;
-            }
-
+        await using var lease = await AcquireSchedulerLeaseAsync(token);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, lease.LeaseLost);
+        token = linked.Token;
+        var reservation = await context.FleetCapacityReservations.FirstOrDefaultAsync(item =>
+            item.DeploymentQueueTicketId == ticketId && item.WorkerNodeId == nodeId &&
+            item.Status == CapacityReservationStatus.Active, token);
+        if (reservation is null)
             return;
-        }
-
-        foreach (var entry in _context.ChangeTracker.Entries<WorkerNode>())
-            entry.State = EntityState.Detached;
+        reservation.Status = status;
+        reservation.ReleasedAt = DateTimeOffset.UtcNow;
+        await context.SaveChangesAsync(token);
     }
 
-    IQueryable<WorkerNode> BuildCandidateQuery(FleetCapacityRequest request)
-    {
-        var cutoff = DateTimeOffset.UtcNow - WorkerNode.DefaultHeartbeatTimeout;
-        var query = _context.WorkerNodes
-            .Where(n => n.Status == NodeStatus.Online &&
-                        (n.IsLocal || (n.LastHeartbeat.HasValue && n.LastHeartbeat >= cutoff)));
+    static FleetCapacityReservation NewReservation(Guid ticketId, Guid nodeId, int dockerSlots, int vmSlots) =>
+        new()
+        {
+            DeploymentQueueTicketId = ticketId,
+            WorkerNodeId = nodeId,
+            DockerSlots = dockerSlots,
+            VmSlots = vmSlots,
+            ExpiresAt = DateTimeOffset.UtcNow.Add(ReservationLifetime)
+        };
 
-        if (request.PreferredNodeId is { } preferredNodeId)
-            query = query.Where(n => n.Id == preferredNodeId);
-
-        return query;
-    }
-
-    static WorkerNode? SelectNode(IEnumerable<WorkerNode> nodes, FleetCapacityRequest request,
-        int dockerSlots, int vmSlots) =>
-        nodes.Where(node => CanReserve(node, request, dockerSlots, vmSlots))
-            .OrderByDescending(NodeScore)
-            .FirstOrDefault();
-
-    static bool CanReserve(WorkerNode node, FleetCapacityRequest request, int dockerSlots, int vmSlots)
-    {
-        var baseReason = request.RequireTeamLab
-            ? WeightedScheduler.GetTeamLabFabricUnschedulableReason(node) ??
-              WeightedScheduler.GetUnschedulableReason(node, request.RequiredCapability)
-            : WeightedScheduler.GetUnschedulableReason(node, request.RequiredCapability);
-
-        if (baseReason is not null)
-            return false;
-
-        return node.AllocatedContainers + dockerSlots <= node.MaxContainers &&
-               node.AllocatedVms + vmSlots <= node.MaxVms;
-    }
-
-    static float NodeScore(WorkerNode node) =>
-        1000f * (1 - Math.Clamp(node.CpuLoad, 0f, 1f)) +
-        500f * (1 - Math.Clamp(node.MemoryLoad, 0f, 1f)) +
-        200f * (1 - (float)node.AllocatedContainers / Math.Max(node.MaxContainers, 1)) +
-        200f * (1 - (float)node.AllocatedVms / Math.Max(node.MaxVms, 1));
-
-    async ValueTask<IDistributedLease> AcquireSchedulerLockAsync(CancellationToken token)
-        => await _lockService.AcquireAsync("fleet:scheduler", TimeSpan.FromSeconds(10),
-            cancellationToken: token);
+    async ValueTask<IDistributedLease> AcquireSchedulerLeaseAsync(CancellationToken token) =>
+        await leaseProvider.AcquireAsync("fleet:scheduler", TimeSpan.FromSeconds(10), cancellationToken: token);
 }

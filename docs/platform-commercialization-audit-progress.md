@@ -1,6 +1,41 @@
 # 商业化总纲审计进度记录
 
-更新时间：2026-07-12
+更新时间：2026-07-13
+
+## 2026-07-13 Phase 6 代码开发完成
+
+- `DeploymentQueueTicket` 已成为 Docker、培训/练习、AWDP、管理员测试容器、VM 和 TeamLab 的唯一运行任务事实；旧 `DeploymentTarget/FleetManager/WeightedScheduler` 活动实现和旧 API route 已删除。
+- 调度与执行已拆分，owner 公平选择、队伍/个人并发配额、PostgreSQL owner admission lock、节点容量快照、原子 reservation、claim owner 校验、stale recovery 和 Scheduled/Running reservation 续租已闭环。
+- Stop/Destroy/Reset 不再吞掉运行中的 Create，也不直接取消 Running 并释放容量；同 subject 控制任务等待前序运行任务终态后进入独立 control lane。
+- TeamLab Reset 使用加密 ticket payload 排队完成清理、重规划、多节点 late binding、原子预留和重建；TeamLab runtime 镜像引用、Pull/Cleanup 互斥和 active TeamLab VM 防误删已完成。
+- Agent capability hash 已排除动态时间，heartbeat 使用缓存的真实 binary SHA-256；KVM domain 通过 libvirt description 恢复 generation sidecar，避免部分成功后永久 identity conflict。
+- 独立 agent 审查报告的 12 项问题已逐项核实并全部关闭。最终门禁：Release build 0 warning/0 error，单元 437/437，PostgreSQL 集成 227/227，前端 locale/strict/architecture/production build/artifact/bundle 全通过，EF 无 pending model changes，Git whitespace 和活动旧架构扫描通过。
+- Phase 6 代码开发完成，未部署生产。500-owner/300-create、双主站故障接管和目标节点真实吞吐保留为预发布专用环境容量签收，不以本地开发机数字替代。
+
+## 2026-07-13 Phase 6 大单元 1/2 实施
+
+- 统一 ticket 控制面、scheduling/execution worker 拆分、owner-safe reservation、容量事实快照、公平 selector 和 TeamLab late binding 主体已实现。
+- 解决方案编译为 0 warning / 0 error，Runtime 控制面集中测试 7/7 通过，包含 Docker 容量 `3+1` 双节点 TeamLab physical assignment。
+- Agent capability 与分类并发、镜像异步分发、前端阶段反馈、旧 scheduler/counter 清理、三段迁移、真实并发验收和独立质量审查尚未完成；Phase 6 保持进行中。
+
+## 2026-07-13 Phase 6 并发方案压实
+
+- 已继续核对 `QueueManager`、`QueueProcessingService`、`NodeExecutionGate`、Agent `DockerService/KvmService/ImageController`、`AgentClient` 和 TeamLab 部署链路；本次仍只修改计划文档，未修改业务代码、未生成迁移、未部署或连接服务器。
+- 已确认当前 scheduler 会等待整批真实 deployment 完成后才进入下一轮；主站每节点统一 gate 默认 2，TeamLab 绕过该 gate；Agent KVM 全局 `VirtInstallGate = 1`；Docker create 隐式 pull；VM `.part` 和 Docker pull 均缺 single-flight；AgentClient 统一 10 分钟 timeout。
+- Phase 6 已冻结为统一控制面：PostgreSQL ticket 唯一事实、独立 scheduling/execution worker、owner-safe 原子 reservation、operation-aware dispatch、Agent 分类型最终 gate、资源级幂等和镜像 single-flight。不引入第二套持久消息队列或通用求解器。
+- Agent 自动并发边界已写入协议：Docker create `clamp(cpu/2, 2, 8)`、VM create 1/2、Docker/VM image transfer 2/1、TeamLab network 4、control 2；配置可覆盖，feature 缺失时对应 limit 为 0。
+- TeamLab 执行冻结为镜像准备与 network apply 并行、route 按相关 network、asset 按自身 image 和 order group、probe 有界并行、rollback 走独立 control lane；不同节点聚合吞吐，不设置跨节点全局 gate。
+- 已同步补充并发故障验收：慢 execution 不阻塞调度、control 不被 create backlog 阻塞、同镜像 20 并发只传输一次、相同 generation create 收敛、VM 达到且不超过 gate、双节点 TeamLab 流水线 trace 和销毁无残留。
+
+## 2026-07-12 Phase 6 计划编写
+
+- 已基于 `20cf2a3f1fecb81f986a381de0d825e41d4746aa` 审计当前运行控制面；本次只编写计划，未修改业务代码、未生成迁移、未部署或连接生产服务器。
+- 已确认 `DeploymentQueueTicket + DeploymentTarget + FleetManager` 形成双轨任务事实；`DeploymentQueueViewService` 仍合并两套数据并解析 payload，属于 Phase 6 必须原子删除的旧架构。
+- 已确认当前 QueueManager 只扫描最早 20 个 Pending ticket，缺 owner 公平、backoff、结构化 blocked reason 和队伍/个人并发创建上限。
+- 已确认 WorkerNode mutable reserved counters 无 owner，TeamLab 在入队前按容量快照绑定 WorkerNode，执行时又绕过节点 gate；高并发下存在过期计划、重复争抢和恢复反推复杂度。
+- 已确认 Agent 与主站仍以硬编码 `protocolVersion = 3` 和 `TeamLabCapabilitiesJson` 判断能力；Phase 6 将改为具体 feature set，并保持 Docker、KVM、Fabric、抓包、cloud-init、镜像和自更新独立。
+- 已确认镜像分发事实和引用基础可复用，但当前全节点串行传输、模板主状态与节点缓存状态耦合、引用种类和新节点 reconcile 不完整。
+- 详细计划已写入 `docs/commercialization/phase-06-runtime-scheduling-concurrency.md`，能力协商前置契约已写入 `docs/commercialization/agent-capability-protocol.md`。冻结方向为 PostgreSQL 唯一事实队列、Redis wake-up/lease、owner-safe reservation rows、owner-aware 公平选择、TeamLab late binding、feature-set 能力协商、异步镜像预分发和无刷新阶段反馈；等待用户确认后再实施。
 
 ## 2026-07-12 Phase 5 实施启动
 
@@ -119,6 +154,7 @@
 ## 当前写作状态
 
 - 进度记录文件已建立。
+
 - 控制器、服务、实体、Agent、前端路由、测试和遗留模块已完成总纲级审计。
 - `docs/platform-commercialization-master-plan.md` 已整体重写。
 - 已完成禁用泛化词扫描，当前无命中。

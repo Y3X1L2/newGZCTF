@@ -31,7 +31,6 @@ public partial class TeamLabNetworkService(
         if (!hasWg) missing.Add("wireguard-tools/wg");
         if (!hasIptables && !hasNft) missing.Add("iptables or nftables");
         var message = available ? null : $"Missing TeamLab network dependency: {string.Join(", ", missing)}.";
-        var agentVersion = typeof(TeamLabNetworkService).Assembly.GetName().Version?.ToString() ?? "unknown";
         var capabilities = new TeamLabToolCapabilityReport(
             hasDocker,
             hasKvm,
@@ -47,8 +46,6 @@ public partial class TeamLabNetworkService(
             available,
             _config.Enable,
             _config.DryRun,
-            agentVersion,
-            ProtocolVersion: 3,
             hasIp,
             hasDocker,
             hasKvm,

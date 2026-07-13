@@ -199,9 +199,7 @@ public class WorkerNodeTests
                 IsLocal = true,
                 Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
                 CurrentContainers = 0,
-                ReservedContainers = 3,
-                CurrentVms = 0,
-                ReservedVms = 1
+                CurrentVms = 0
             });
             context.Games.Add(game);
             context.Teams.Add(team);
@@ -294,126 +292,5 @@ public class WorkerNodeTests
                 State is null
                     ? new Dictionary<Guid, NodeLiveState>()
                     : new Dictionary<Guid, NodeLiveState> { [State.WorkerNodeId] = State });
-    }
-}
-
-public class DeploymentTargetTests
-{
-    [Fact]
-    public void DeploymentTarget_Defaults()
-    {
-        var target = new DeploymentTarget();
-        Assert.Equal(TargetStatus.Pending, target.Status);
-        Assert.Equal(TargetType.Docker, target.Type);
-    }
-
-    [Fact]
-    public void VmCreatePayload_IncludesFlagForRemoteScheduling()
-    {
-        var payloadType = typeof(FleetVmService).GetNestedType("VmCreatePayload", BindingFlags.NonPublic);
-        Assert.NotNull(payloadType);
-
-        var payload = Activator.CreateInstance(payloadType,
-            42,
-            "/images/windows.qcow2",
-            4096,
-            2,
-            "team-1-windows",
-            "flag{vm_contract}",
-            Guid.NewGuid(),
-            1,
-            Guid.NewGuid(),
-            2);
-
-        var json = JsonSerializer.Serialize(payload);
-
-        Assert.Contains("\"Flag\":\"flag{vm_contract}\"", json);
-    }
-
-    [Fact]
-    public void DeploymentTargetLogHelper_FormatsCompletedTargetWithoutPayload()
-    {
-        var target = new DeploymentTarget
-        {
-            Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-            Type = TargetType.Docker,
-            Action = TargetAction.Create,
-            TargetNodeId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
-            Payload = "{\"Flag\":\"flag{secret}\",\"RegistryAuth\":\"secret-token\"}",
-            Status = TargetStatus.Completed,
-            ResultHost = "203.195.157.191",
-            ResultPort = 30001
-        };
-        var node = new WorkerNode
-        {
-            Id = target.TargetNodeId.Value,
-            Name = "node-1",
-            HostAddress = "10.24.0.30"
-        };
-
-        var (message, status, level) = DeploymentTargetLogHelper.Build("completed", target, node);
-
-        Assert.Equal(TaskStatus.Success, status);
-        Assert.Equal(LogLevel.Information, level);
-        Assert.Contains("Deployment target 11111111-1111-1111-1111-111111111111 completed", message);
-        Assert.Contains("Docker/Create", message);
-        Assert.Contains("node-1", message);
-        Assert.Contains("203.195.157.191:30001", message);
-        Assert.DoesNotContain("flag{secret}", message);
-        Assert.DoesNotContain("secret-token", message);
-    }
-
-    [Fact]
-    public void DeploymentTargetLogHelper_DoesNotExposeCloudInitUserData()
-    {
-        var target = new DeploymentTarget
-        {
-            Id = Guid.Parse("33333333-3333-3333-3333-333333333333"),
-            Type = TargetType.Vm,
-            Action = TargetAction.Create,
-            Payload = """
-                      {
-                        "CloudInit": {
-                          "UserData": "#cloud-config\nwrite_files:\n- content: flag{cloud_init_secret}",
-                          "SensitiveKeys": ["flag", "GZCTF_FLAG", "user-data"]
-                        }
-                      }
-                      """,
-            Status = TargetStatus.Completed
-        };
-
-        var (message, _, _) = DeploymentTargetLogHelper.Build("completed", target);
-
-        Assert.DoesNotContain("CloudInit", message, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("UserData", message, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("flag{cloud_init_secret}", message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void DeploymentTargetLogHelper_MapsFailedAndCancelledStatuses()
-    {
-        var failed = new DeploymentTarget
-        {
-            Status = TargetStatus.Failed,
-            Type = TargetType.Vm,
-            Action = TargetAction.Create,
-            ErrorMessage = "Agent VM creation failed"
-        };
-        var cancelled = new DeploymentTarget
-        {
-            Status = TargetStatus.Cancelled,
-            Type = TargetType.Docker,
-            Action = TargetAction.Create,
-            ErrorMessage = "Target node was deregistered."
-        };
-
-        var (_, failedStatus, failedLevel) = DeploymentTargetLogHelper.Build("failed", failed);
-        var (cancelledMessage, cancelledStatus, cancelledLevel) = DeploymentTargetLogHelper.Build("cancelled", cancelled);
-
-        Assert.Equal(TaskStatus.Failed, failedStatus);
-        Assert.Equal(LogLevel.Warning, failedLevel);
-        Assert.Equal(TaskStatus.Exit, cancelledStatus);
-        Assert.Equal(LogLevel.Information, cancelledLevel);
-        Assert.Contains("Target node was deregistered.", cancelledMessage);
     }
 }

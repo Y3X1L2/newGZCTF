@@ -12,17 +12,27 @@ namespace GZCTF.Agent.Controllers;
 public class ImageController : ControllerBase
 {
     private readonly DockerService _docker;
+    private readonly AgentOperationGate _gate;
+    private readonly ImageTransferSingleFlight _singleFlight;
     private readonly ILogger<ImageController> _logger;
 
-    public ImageController(DockerService docker, ILogger<ImageController> logger)
-    { _docker = docker; _logger = logger; }
+    public ImageController(DockerService docker, AgentOperationGate gate,
+        ImageTransferSingleFlight singleFlight, ILogger<ImageController> logger)
+    { _docker = docker; _gate = gate; _singleFlight = singleFlight; _logger = logger; }
 
     [HttpPost("pull-docker")]
     public async Task<IActionResult> PullDockerImage([FromBody] PullDockerImageRequest request, CancellationToken token)
     {
         try
         {
-            await _docker.PullImageAsync(request.Image, request.RegistryAuth, token);
+            await _singleFlight.RunAsync<object?>("docker:" + request.Image.Trim().ToLowerInvariant(),
+                async sharedToken =>
+                {
+                    await using var permit = await _gate.EnterAsync(AgentOperationCategory.DockerImageTransfer,
+                        sharedToken);
+                    await _docker.PullImageAsync(request.Image, request.RegistryAuth, sharedToken);
+                    return null;
+                }, token);
             return Ok(new { message = "Image pulled successfully" });
         }
         catch (Exception ex)
@@ -91,58 +101,62 @@ public class ImageController : ControllerBase
     {
         try
         {
-            var storagePath = "/var/lib/gzctf/images";
-            var fileStem = request.TemplateId.HasValue ? request.TemplateId.Value.ToString() : request.Hash;
-            var fileName = fileStem + ".qcow2";
-            var destPath = Path.Combine(storagePath, fileName);
-            var expectedHash = NormalizeSha256(request.Digest) ?? NormalizeSha256(request.Hash);
-            var expectedDigest = string.IsNullOrWhiteSpace(expectedHash) ? null : $"sha256:{expectedHash}";
-
-            if (System.IO.File.Exists(destPath))
+            var key = $"vm:{request.TemplateId?.ToString() ?? request.Hash}:{NormalizeSha256(request.Digest) ?? NormalizeSha256(request.Hash)}";
+            var result = await _singleFlight.RunAsync(key, async sharedToken =>
             {
-                var currentHash = await ComputeSha256Async(destPath, token);
-                if (string.IsNullOrWhiteSpace(expectedHash) ||
-                    string.Equals(currentHash, expectedHash, StringComparison.OrdinalIgnoreCase))
-                    return Ok(new DownloadVmImageResponse(true, "Image already exists", true, true,
-                        new FileInfo(destPath).Length, $"sha256:{currentHash}"));
-
-                System.IO.File.Delete(destPath);
-            }
-
-            Directory.CreateDirectory(storagePath);
-            var tempPath = destPath + ".part";
-
-            await DownloadVmImagePayloadAsync(request, tempPath, token);
-
-            var actualHash = await ComputeSha256Async(tempPath, token);
-            if (!string.IsNullOrWhiteSpace(expectedHash) &&
-                !string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase))
-            {
-                TryDelete(tempPath);
-                throw new InvalidOperationException(
-                    $"VM image sha256 mismatch: expected {expectedHash}, got {actualHash}.");
-            }
-
-            if (request.ExpectedSize is > 0 && new FileInfo(tempPath).Length != request.ExpectedSize.Value)
-            {
-                var actualSize = new FileInfo(tempPath).Length;
-                TryDelete(tempPath);
-                throw new InvalidOperationException(
-                    $"VM image size mismatch: expected {request.ExpectedSize.Value}, got {actualSize}.");
-            }
-
-            System.IO.File.Move(tempPath, destPath, overwrite: true);
-            var size = new FileInfo(destPath).Length;
-
-            _logger.LogInformation("VM image downloaded: {Hash} ({MB}MB)", request.Hash, size / 1024 / 1024);
-            return Ok(new DownloadVmImageResponse(true, "Image downloaded successfully", false, true,
-                size, expectedDigest ?? $"sha256:{actualHash}"));
+                await using var permit = await _gate.EnterAsync(AgentOperationCategory.VmImageTransfer, sharedToken);
+                return await DownloadVmImageCoreAsync(request, sharedToken);
+            }, token);
+            return Ok(result);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to download VM image: {Hash}", request.Hash);
             return StatusCode(500, new DownloadVmImageResponse(false, ex.Message, false, false, null, null));
         }
+    }
+
+    async Task<DownloadVmImageResponse> DownloadVmImageCoreAsync(DownloadVmImageRequest request,
+        CancellationToken token)
+    {
+        const string storagePath = "/var/lib/gzctf/images";
+        var fileStem = request.TemplateId.HasValue ? request.TemplateId.Value.ToString() : request.Hash;
+        var destPath = Path.Combine(storagePath, fileStem + ".qcow2");
+        var expectedHash = NormalizeSha256(request.Digest) ?? NormalizeSha256(request.Hash);
+        var expectedDigest = string.IsNullOrWhiteSpace(expectedHash) ? null : $"sha256:{expectedHash}";
+        if (System.IO.File.Exists(destPath))
+        {
+            var currentHash = await ComputeSha256Async(destPath, token);
+            if (string.IsNullOrWhiteSpace(expectedHash) ||
+                string.Equals(currentHash, expectedHash, StringComparison.OrdinalIgnoreCase))
+                return new DownloadVmImageResponse(true, "Image already exists", true, true,
+                    new FileInfo(destPath).Length, $"sha256:{currentHash}");
+            System.IO.File.Delete(destPath);
+        }
+
+        Directory.CreateDirectory(storagePath);
+        var tempPath = destPath + ".part";
+        await DownloadVmImagePayloadAsync(request, tempPath, token);
+        var actualHash = await ComputeSha256Async(tempPath, token);
+        if (!string.IsNullOrWhiteSpace(expectedHash) &&
+            !string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase))
+        {
+            TryDelete(tempPath);
+            throw new InvalidOperationException(
+                $"VM image sha256 mismatch: expected {expectedHash}, got {actualHash}.");
+        }
+        if (request.ExpectedSize is > 0 && new FileInfo(tempPath).Length != request.ExpectedSize.Value)
+        {
+            var actualSize = new FileInfo(tempPath).Length;
+            TryDelete(tempPath);
+            throw new InvalidOperationException(
+                $"VM image size mismatch: expected {request.ExpectedSize.Value}, got {actualSize}.");
+        }
+        System.IO.File.Move(tempPath, destPath, overwrite: true);
+        var size = new FileInfo(destPath).Length;
+        _logger.LogInformation("VM image downloaded: {Hash} ({MB}MB)", request.Hash, size / 1024 / 1024);
+        return new DownloadVmImageResponse(true, "Image downloaded successfully", false, true,
+            size, expectedDigest ?? $"sha256:{actualHash}");
     }
 
     [HttpDelete("vm/{templateId:int}")]

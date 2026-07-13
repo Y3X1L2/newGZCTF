@@ -21,6 +21,24 @@ public class ImageDistributionRecord
 
     public ImageDistributionStatus Status { get; set; } = ImageDistributionStatus.Pending;
 
+    public ImageDistributionOperation Operation { get; set; } = ImageDistributionOperation.Distribute;
+
+    public ImageDistributionStage Stage { get; set; } = ImageDistributionStage.Queued;
+
+    public int AttemptCount { get; set; }
+
+    [MaxLength(256)]
+    public string? ClaimOwner { get; set; }
+
+    public DateTimeOffset? ClaimExpiresAt { get; set; }
+
+    public DateTimeOffset? NextAttemptAt { get; set; }
+
+    public DateTimeOffset? ProgressUpdatedAt { get; set; }
+
+    [MaxLength(128)]
+    public string? LastErrorCode { get; set; }
+
     public ICollection<ImageDistributionReference> References { get; set; } = [];
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -46,4 +64,20 @@ public enum ImageDistributionStatus : byte
     Ready = 2,
     Failed = 3,
     CleanupPending = 4
+}
+
+public enum ImageDistributionOperation : byte
+{
+    Distribute = 0,
+    Cleanup = 1
+}
+
+public enum ImageDistributionStage : byte
+{
+    None = 0,
+    Queued = 1,
+    Preparing = 2,
+    Pulling = 3,
+    Verifying = 4,
+    Cleaning = 5
 }

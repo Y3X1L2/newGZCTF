@@ -9,6 +9,8 @@ public class ImageDistributionService(
     AgentClient agentClient,
     DockerImageRegistryService dockerRegistry,
     VmArtifactStore vmArtifacts,
+    ImageDistributionCoordinator coordinator,
+    DeploymentExecutionContextAccessor executionContext,
     ILogger<ImageDistributionService> logger)
 {
     static readonly NodeCapability DockerCapability = NodeCapability.Docker;
@@ -27,37 +29,7 @@ public class ImageDistributionService(
         if (persisted.Status == ImageStatus.Deleting)
             throw new InvalidOperationException($"Image template {template.Id} is being deleted.");
 
-        persisted.Status = ImageStatus.Importing;
-        persisted.ErrorMessage = null;
-        await context.SaveChangesAsync(token);
-
-        var records = await DistributeTemplateAsync(template.Id, reference, token);
-        if (records.Count == 0)
-        {
-            var imageKind = template.ImageType == ImageType.Docker ? "Docker" : "KVM";
-            var message = $"No online schedulable {imageKind} node is available for image template " +
-                          $"{template.Name} ({template.Id}).";
-            persisted.Status = ImageStatus.Error;
-            persisted.ErrorMessage = TrimError(message);
-            await context.SaveChangesAsync(token);
-            throw new InvalidOperationException(message);
-        }
-
-        var failures = records
-            .Where(record => record.Status == ImageDistributionStatus.Failed)
-            .Select(record => record.ErrorMessage)
-            .Where(message => !string.IsNullOrWhiteSpace(message))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-        persisted.Status = failures.Length == 0 ? ImageStatus.Ready : ImageStatus.Error;
-        persisted.ErrorMessage = failures.Length == 0
-            ? null
-            : TrimError(string.Join("; ", failures));
-        await context.SaveChangesAsync(token);
-        if (failures.Length > 0)
-            throw new InvalidOperationException(persisted.ErrorMessage);
-
-        return records;
+        return await DistributeTemplateAsync(template.Id, reference, token);
     }
 
     public async Task<IReadOnlyList<ImageDistributionRecord>> DistributeTemplateAsync(
@@ -73,7 +45,9 @@ public class ImageDistributionService(
         var nodes = await GetCapableNodesAsync(template, token);
         List<ImageDistributionRecord> records = [];
         foreach (var node in nodes)
-            records.Add(await EnsureTemplateOnNodeAsync(template, node, reference, token));
+            records.Add(await QueueTemplateOnNodeAsync(template, node, reference, token));
+        if (records.Count > 0)
+            coordinator.Wake();
         return records;
     }
 
@@ -116,13 +90,14 @@ public class ImageDistributionService(
         CancellationToken token) =>
         ReleaseReferenceAsync(ImageDistributionReferenceKey.TrainingCourse(courseId), token, templateId);
 
+    public Task ReleaseTeamLabRuntimeReferencesAsync(int runtimeId, CancellationToken token) =>
+        ReleaseReferenceAsync(ImageDistributionReferenceKey.TeamLabRuntime(runtimeId), token);
+
     public async Task CleanupUnreferencedAsync(CancellationToken token)
     {
         await ReconcileReferencesAsync(token);
 
         var records = await context.ImageDistributionRecords
-            .Include(r => r.WorkerNode)
-            .Include(r => r.ImageTemplate)
             .Include(r => r.References)
             .Where(r => !r.References.Any() ||
                         r.Status == ImageDistributionStatus.CleanupPending)
@@ -133,11 +108,12 @@ public class ImageDistributionService(
             if (record.References.Count > 0)
                 continue;
 
-            record.Status = ImageDistributionStatus.CleanupPending;
-            await CleanupRecordAsync(record, token);
+            QueueCleanup(record);
         }
 
         await context.SaveChangesAsync(token);
+        if (records.Length > 0)
+            coordinator.Wake();
     }
 
     public async Task ReconcileReferencesAsync(CancellationToken token)
@@ -160,6 +136,11 @@ public class ImageDistributionService(
             .Select(reference => reference.ResourceId)
             .Distinct()
             .ToArray();
+        var runtimeIds = records.SelectMany(record => record.References)
+            .Where(reference => reference.Kind == ImageDistributionReferenceKind.TeamLabRuntime)
+            .Select(reference => reference.ResourceId)
+            .Distinct()
+            .ToArray();
 
         var gameReferences = (await context.GameChallenges.AsNoTracking()
                 .Where(challenge => gameIds.Contains(challenge.GameId) && challenge.ImageTemplateId.HasValue)
@@ -174,6 +155,14 @@ public class ImageDistributionService(
                 .ToArrayAsync(token))
             .Select(reference => (reference.CourseId, reference.ImageTemplateId))
             .ToHashSet();
+        var runtimeReferences = (await context.TeamLabRuntimeAssets.AsNoTracking()
+                .Where(asset => runtimeIds.Contains(asset.RuntimeId) && asset.SourceTemplateId.HasValue &&
+                                asset.Runtime.Status != TeamLabRuntimeStatus.Destroyed)
+                .Select(asset => new { asset.RuntimeId, TemplateId = asset.SourceTemplateId!.Value })
+                .Distinct()
+                .ToArrayAsync(token))
+            .Select(reference => (reference.RuntimeId, reference.TemplateId))
+            .ToHashSet();
 
         foreach (var record in records)
         {
@@ -183,12 +172,14 @@ public class ImageDistributionService(
                     !gameReferences.Contains((reference.ResourceId, record.ImageTemplateId)),
                 ImageDistributionReferenceKind.TrainingCourse =>
                     !courseReferences.Contains((reference.ResourceId, record.ImageTemplateId)),
+                ImageDistributionReferenceKind.TeamLabRuntime =>
+                    !runtimeReferences.Contains((reference.ResourceId, record.ImageTemplateId)),
                 _ => true
             }).ToList();
             if (invalidReferences.Count > 0)
                 context.ImageDistributionReferences.RemoveRange(invalidReferences);
             if (record.References.Count == invalidReferences.Count)
-                record.Status = ImageDistributionStatus.CleanupPending;
+                QueueCleanup(record);
         }
 
         await context.SaveChangesAsync(token);
@@ -208,7 +199,7 @@ public class ImageDistributionService(
                 .Where(reference => reference.DistributionRecordId == record.Id)
                 .ToArrayAsync(token);
             context.ImageDistributionReferences.RemoveRange(references);
-            record.Status = ImageDistributionStatus.CleanupPending;
+            QueueCleanup(record);
             await CleanupRecordAsync(record, token, removeOnSuccess: false);
         }
 
@@ -222,7 +213,16 @@ public class ImageDistributionService(
                 $"Image template {templateId} cache cleanup is incomplete on node {failure.WorkerNodeId}.");
     }
 
-    public async Task<AgentVmImageDownloadResult> EnsureVmTemplateOnNodeAsync(int templateId, Guid nodeId,
+    public Task<AgentVmImageDownloadResult> EnsureVmTemplateOnNodeAsync(
+        int templateId,
+        Guid nodeId,
+        CancellationToken token) =>
+        EnsureVmTemplateOnNodeAsync(templateId, nodeId, null, token);
+
+    public async Task<AgentVmImageDownloadResult> EnsureVmTemplateOnNodeAsync(
+        int templateId,
+        Guid nodeId,
+        ImageDistributionReferenceKey? reference,
         CancellationToken token)
     {
         var template = await context.ImageTemplates.AsNoTracking()
@@ -239,7 +239,9 @@ public class ImageDistributionService(
             return AgentVmImageDownloadResult.Failed(
                 $"Node {node.Name} cannot host VM template {template.Name} ({template.Id}).");
 
-        var record = await EnsureTemplateOnNodeAsync(template, node, null, token);
+        var record = await QueueTemplateOnNodeAsync(template, node, reference, token);
+        coordinator.Wake();
+        record = await WaitForReadyAsync(record.Id, template.Name, node.Name, token);
         return record.Status == ImageDistributionStatus.Ready
             ? AgentVmImageDownloadResult.Ok(record.LastCheckedAt.HasValue, true, template.FileSize,
                 $"sha256:{template.ImageHash}")
@@ -247,15 +249,34 @@ public class ImageDistributionService(
                                                 $"VM template {template.Name} ({template.Id}) is not ready on node {node.Name}.");
     }
 
-    public async Task EnsureDockerImageOnNodeAsync(string image, Guid nodeId, CancellationToken token)
+    public Task EnsureDockerImageOnNodeAsync(string image, Guid nodeId, CancellationToken token) =>
+        EnsureDockerImageOnNodeAsync(image, nodeId, null, token);
+
+    public async Task EnsureDockerImageOnNodeAsync(
+        string image,
+        Guid nodeId,
+        ImageDistributionReferenceKey? reference,
+        CancellationToken token)
     {
+        var resolved = await dockerRegistry.ResolveImageReferenceAsync(image, token);
+        var template = await context.ImageTemplates.AsNoTracking()
+            .Where(item => item.ImageType == ImageType.Docker && item.Status == ImageStatus.Ready &&
+                           (item.RegistryUrl == resolved || item.RegistryUrl == image || item.Name == image))
+            .OrderBy(item => item.Id)
+            .FirstOrDefaultAsync(token)
+            ?? throw new InvalidOperationException(
+                $"Docker image {resolved} is not registered as a ready platform image template.");
         var node = await context.WorkerNodes.AsNoTracking()
             .FirstOrDefaultAsync(n => n.Id == nodeId, token);
-        if (node is null || (node.Capabilities & NodeCapability.Docker) != NodeCapability.Docker)
+        if (node is null || !CanNodeUseImage(node, template))
             throw new InvalidOperationException($"Node {nodeId} cannot host Docker images.");
 
-        var resolved = await dockerRegistry.ResolveImageReferenceAsync(image, token);
-        await agentClient.PullDockerImageAsync(nodeId, resolved, null, token);
+        var record = await QueueTemplateOnNodeAsync(template, node, reference, token);
+        coordinator.Wake();
+        record = await WaitForReadyAsync(record.Id, template.Name, node.Name, token);
+        if (record.Status != ImageDistributionStatus.Ready)
+            throw new InvalidOperationException(record.ErrorMessage ??
+                                                $"Docker image {resolved} is not ready on node {node.Name}.");
     }
 
     async Task DistributeDockerImageAsync(string image, ImageDistributionReferenceKey reference, CancellationToken token)
@@ -271,14 +292,10 @@ public class ImageDistributionService(
             throw new InvalidOperationException(
                 $"Docker image {resolved} is not registered as a ready platform image template.");
 
-        var records = await DistributeTemplateAsync(template.Id, reference, token);
-        var failed = records.FirstOrDefault(record => record.Status == ImageDistributionStatus.Failed);
-        if (failed is not null)
-            throw new InvalidOperationException(failed.ErrorMessage ??
-                                                $"Docker image {resolved} could not be distributed.");
+        await DistributeTemplateAsync(template.Id, reference, token);
     }
 
-    async Task<ImageDistributionRecord> EnsureTemplateOnNodeAsync(ImageTemplate template, WorkerNode node,
+    async Task<ImageDistributionRecord> QueueTemplateOnNodeAsync(ImageTemplate template, WorkerNode node,
         ImageDistributionReferenceKey? reference, CancellationToken token)
     {
         var hash = ResolveImageHash(template);
@@ -321,57 +338,208 @@ public class ImageDistributionService(
         }
 
         await AddReferenceAsync(record, reference, token);
-        await context.SaveChangesAsync(token);
-        if (ownedTransaction is not null)
-            await ownedTransaction.CommitAsync(token);
-
         if (record.Status == ImageDistributionStatus.Ready &&
             string.Equals(record.ImageHash, hash, StringComparison.OrdinalIgnoreCase))
         {
             record.LastCheckedAt = DateTimeOffset.UtcNow;
             await context.SaveChangesAsync(token);
+            if (ownedTransaction is not null)
+                await ownedTransaction.CommitAsync(token);
             return record;
         }
 
         record.ImageHash = hash;
         record.ImageType = template.ImageType;
-        record.Status = ImageDistributionStatus.Pulling;
+        record.Operation = ImageDistributionOperation.Distribute;
+        if (record.Status != ImageDistributionStatus.Pulling || record.ClaimExpiresAt <= DateTimeOffset.UtcNow)
+        {
+            record.Status = ImageDistributionStatus.Pending;
+            record.Stage = ImageDistributionStage.Queued;
+            record.ClaimOwner = null;
+            record.ClaimExpiresAt = null;
+        }
         record.ErrorMessage = null;
+        record.LastErrorCode = null;
+        record.NextAttemptAt = DateTimeOffset.UtcNow;
         record.LastCheckedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(token);
+        if (ownedTransaction is not null)
+            await ownedTransaction.CommitAsync(token);
+        return record;
+    }
+
+    public async Task ProcessClaimedAsync(Guid recordId, string claimOwner, CancellationToken token)
+    {
+        var record = await context.ImageDistributionRecords
+            .Include(item => item.ImageTemplate)
+            .Include(item => item.WorkerNode)
+            .Include(item => item.References)
+            .SingleOrDefaultAsync(item => item.Id == recordId, token);
+        if (record is null || !string.Equals(record.ClaimOwner, claimOwner, StringComparison.Ordinal))
+            return;
 
         try
         {
+            if (record.Operation == ImageDistributionOperation.Cleanup)
+            {
+                record.Stage = ImageDistributionStage.Cleaning;
+                record.ProgressUpdatedAt = DateTimeOffset.UtcNow;
+                await context.SaveChangesAsync(token);
+                await CleanupRecordAsync(record, token);
+                await context.SaveChangesAsync(token);
+                return;
+            }
+
+            var template = record.ImageTemplate ??
+                           throw new InvalidOperationException(
+                               $"Image template {record.ImageTemplateId} no longer exists.");
+            var node = record.WorkerNode ??
+                       throw new InvalidOperationException(
+                           $"Worker node {record.WorkerNodeId} no longer exists.");
+            if (template.Status != ImageStatus.Ready)
+                throw new InvalidOperationException(
+                    $"Image template {template.Name} ({template.Id}) is not ready in storage.");
+            if (!CanNodeUseImage(node, template))
+                throw new InvalidOperationException(
+                    $"Node {node.Name} cannot host image template {template.Name} ({template.Id}).");
+
+            await SetTransferStageAsync(record, ImageDistributionStage.Preparing, token);
             if (template.ImageType == ImageType.Docker)
             {
-                var image = await dockerRegistry.ResolveImageReferenceAsync(template.RegistryUrl ?? template.Name, token);
+                var image = await dockerRegistry.ResolveImageReferenceAsync(
+                    template.RegistryUrl ?? template.Name, token);
+                await SetTransferStageAsync(record, ImageDistributionStage.Pulling, token);
                 await agentClient.PullDockerImageAsync(node.Id, image, template.RegistryAuth, token);
             }
             else
             {
                 var artifact = await vmArtifacts.EnsureAndBuildDownloadAsync(template, node.Id, token);
+                await SetTransferStageAsync(record, ImageDistributionStage.Pulling, token);
                 var result = await agentClient.DownloadVmImageAsync(node.Id, template.Id, artifact.Sha256,
                     artifact.DownloadUrl, artifact.Size, token);
                 if (!result.Success)
                     throw new InvalidOperationException(result.Message);
+                if (!result.Verified)
+                    throw new InvalidOperationException(
+                        $"VM image {template.Name} ({template.Id}) was downloaded without digest verification.");
             }
 
+            await SetTransferStageAsync(record, ImageDistributionStage.Verifying, token);
             record.Status = ImageDistributionStatus.Ready;
+            record.Stage = ImageDistributionStage.None;
             record.ErrorMessage = null;
+            record.LastErrorCode = null;
+            record.NextAttemptAt = null;
             record.LastCheckedAt = DateTimeOffset.UtcNow;
+            record.ProgressUpdatedAt = record.LastCheckedAt;
         }
         catch (Exception ex) when (IsDistributionFailure(ex, token))
         {
             record.Status = ImageDistributionStatus.Failed;
+            record.Stage = ImageDistributionStage.None;
+            record.LastErrorCode = record.Operation == ImageDistributionOperation.Cleanup
+                ? "image_cleanup_failed"
+                : "image_distribution_failed";
             record.ErrorMessage = TrimError(
-                $"Failed to distribute image template {template.Name} ({template.Id}) to node {node.Name}: {ex.Message}");
+                $"Image template {record.ImageTemplate?.Name ?? record.ImageTemplateId.ToString()} " +
+                $"on node {record.WorkerNode?.Name ?? record.WorkerNodeId.ToString()} failed: {ex.Message}");
+            record.NextAttemptAt = DateTimeOffset.UtcNow.Add(RetryDelay(record.AttemptCount));
+            record.ProgressUpdatedAt = DateTimeOffset.UtcNow;
             logger.LogWarning(ex,
-                "Failed to distribute image template {TemplateId} to node {NodeName} ({NodeId}).",
-                template.Id, node.Name, node.Id);
+                "Image distribution work {RecordId} failed for template {TemplateId} on node {NodeId}.",
+                record.Id, record.ImageTemplateId, record.WorkerNodeId);
+        }
+        finally
+        {
+            if (context.Entry(record).State != EntityState.Deleted)
+            {
+                record.ClaimOwner = null;
+                record.ClaimExpiresAt = null;
+                await context.SaveChangesAsync(token.IsCancellationRequested ? CancellationToken.None : token);
+            }
+        }
+    }
+
+    async Task<ImageDistributionRecord> WaitForReadyAsync(
+        Guid recordId,
+        string templateName,
+        string nodeName,
+        CancellationToken token)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddHours(2);
+        ImageDistributionStage? displayedStage = null;
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            var record = await context.ImageDistributionRecords.AsNoTracking()
+                .SingleOrDefaultAsync(item => item.Id == recordId, token)
+                ?? throw new InvalidOperationException(
+                    $"Image distribution record {recordId} disappeared while preparing {templateName}.");
+            if (record.Status is ImageDistributionStatus.Ready or ImageDistributionStatus.Failed)
+                return record;
+
+            if (record.Stage != displayedStage)
+            {
+                displayedStage = record.Stage;
+                await UpdateCurrentTicketStageAsync(record.Stage, templateName, nodeName, token);
+            }
+
+            coordinator.Wake();
+            await Task.Delay(TimeSpan.FromMilliseconds(500), token);
         }
 
+        throw new TimeoutException(
+            $"Timed out waiting for image template {templateName} on node {nodeName}.");
+    }
+
+    async Task SetTransferStageAsync(ImageDistributionRecord record, ImageDistributionStage stage,
+        CancellationToken token)
+    {
+        record.Stage = stage;
+        record.ProgressUpdatedAt = DateTimeOffset.UtcNow;
+        record.LastCheckedAt = record.ProgressUpdatedAt;
         await context.SaveChangesAsync(token);
-        return record;
+    }
+
+    async Task UpdateCurrentTicketStageAsync(ImageDistributionStage stage, string templateName,
+        string nodeName, CancellationToken token)
+    {
+        if (executionContext.Current?.TicketId is not { } ticketId || ticketId == Guid.Empty)
+            return;
+        var ticket = await context.DeploymentQueueTickets
+            .SingleOrDefaultAsync(item => item.Id == ticketId, token);
+        if (ticket is null || ticket.Status != DeploymentQueueTicketStatus.Running)
+            return;
+
+        (ticket.Stage, ticket.StageMessage) = stage switch
+        {
+            ImageDistributionStage.Preparing => (DeploymentStage.ImagePreparing,
+                $"Preparing image {templateName} for node {nodeName}."),
+            ImageDistributionStage.Pulling => (DeploymentStage.ImagePulling,
+                $"Pulling image {templateName} to node {nodeName}."),
+            ImageDistributionStage.Verifying => (DeploymentStage.ImageVerifying,
+                $"Verifying image {templateName} on node {nodeName}."),
+            _ => (DeploymentStage.ImagePreparing,
+                $"Image {templateName} is queued for node {nodeName}.")
+        };
+        await context.SaveChangesAsync(token);
+    }
+
+    static TimeSpan RetryDelay(int attemptCount) =>
+        TimeSpan.FromSeconds(Math.Min(300, 5 * Math.Pow(2, Math.Clamp(attemptCount - 1, 0, 6))));
+
+    static void QueueCleanup(ImageDistributionRecord record)
+    {
+        if (record.Status == ImageDistributionStatus.Pulling &&
+            record.ClaimOwner is not null && record.ClaimExpiresAt > DateTimeOffset.UtcNow)
+            return;
+        record.Operation = ImageDistributionOperation.Cleanup;
+        record.Status = ImageDistributionStatus.CleanupPending;
+        record.Stage = ImageDistributionStage.Queued;
+        record.ClaimOwner = null;
+        record.ClaimExpiresAt = null;
+        record.NextAttemptAt = DateTimeOffset.UtcNow;
+        record.ErrorMessage = null;
+        record.LastErrorCode = null;
     }
 
     async Task ReleaseReferenceAsync(
@@ -436,11 +604,11 @@ public class ImageDistributionService(
                 continue;
             }
 
-            record.Status = ImageDistributionStatus.CleanupPending;
-            await CleanupRecordAsync(record, token);
+            QueueCleanup(record);
             await context.SaveChangesAsync(token);
             if (transaction is not null)
                 await transaction.CommitAsync(token);
+            coordinator.Wake();
         }
     }
 
@@ -484,7 +652,11 @@ public class ImageDistributionService(
         catch (Exception ex) when (IsDistributionFailure(ex, token))
         {
             record.Status = ImageDistributionStatus.Failed;
+            record.Stage = ImageDistributionStage.None;
+            record.LastErrorCode = "image_cleanup_failed";
             record.ErrorMessage = TrimError($"Image cache cleanup failed: {ex.Message}");
+            record.NextAttemptAt = DateTimeOffset.UtcNow.Add(RetryDelay(record.AttemptCount));
+            record.ProgressUpdatedAt = DateTimeOffset.UtcNow;
             logger.LogWarning(ex,
                 "Failed to cleanup image template {TemplateId} on node {NodeId}.",
                 record.ImageTemplateId, record.WorkerNodeId);
@@ -500,7 +672,13 @@ public class ImageDistributionService(
                 vm => vm.ChallengeId,
                 challenge => challenge.Id,
                 (_, challenge) => challenge.ImageTemplateId)
-            .AnyAsync(templateId => templateId == record.ImageTemplateId, token);
+            .AnyAsync(templateId => templateId == record.ImageTemplateId, token) ||
+        await context.TeamLabRuntimeAssets.AsNoTracking().AnyAsync(asset =>
+            asset.WorkerNodeId == record.WorkerNodeId &&
+            asset.SourceTemplateId == record.ImageTemplateId &&
+            asset.Kind == TeamLabResourceKind.Vm &&
+            asset.Runtime.Status != TeamLabRuntimeStatus.Destroyed &&
+            asset.Status != TeamLabRuntimeStatus.Destroyed, token);
 
     async Task<WorkerNode[]> GetCapableNodesAsync(ImageTemplate template, CancellationToken token)
     {

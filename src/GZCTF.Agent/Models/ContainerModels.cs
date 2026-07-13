@@ -2,6 +2,7 @@ namespace GZCTF.Agent.Models;
 
 public class CreateContainerRequest
 {
+    public int Generation { get; set; } = 1;
     public string Image { get; set; } = string.Empty;
     public string TeamId { get; set; } = string.Empty;
     public int ChallengeId { get; set; }

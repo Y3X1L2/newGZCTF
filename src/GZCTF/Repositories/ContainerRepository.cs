@@ -4,7 +4,6 @@ using GZCTF.Repositories.Interface;
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Fleet;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
@@ -64,26 +63,6 @@ public class ContainerRepository(
     public Task ExtendLifetime(Container container, TimeSpan time, CancellationToken token = default)
     {
         container.ExpectStopAt += time;
-        Context.DeploymentTargets.Add(new DeploymentTarget
-        {
-            Type = TargetType.Docker,
-            Action = TargetAction.Start,
-            TargetNodeId = container.NodeId,
-            Payload = JsonSerializer.Serialize(new ContainerLifecyclePayload(
-                container.Id,
-                container.ContainerId,
-                container.Image,
-                container.GameInstance?.ChallengeId,
-                container.GameInstance?.Challenge?.GameId,
-                container.GameInstance?.Participation?.TeamId,
-                null,
-                $"extend:{(int)time.TotalMinutes} min")),
-            Status = TargetStatus.Completed,
-            ResultHost = container.PublicIP ?? container.IP,
-            ResultPort = container.PublicPort ?? container.Port,
-            CreatedAt = DateTimeOffset.UtcNow,
-            CompletedAt = DateTimeOffset.UtcNow
-        });
         logger.SystemLog(
             $"Extended Docker container lifetime: container={container.Id}, image={container.Image}, node={container.NodeId}, minutes={(int)time.TotalMinutes}.",
             TaskStatus.Success, LogLevel.Information);
@@ -95,26 +74,6 @@ public class ContainerRepository(
 
     public async Task<bool> DestroyContainer(Container container, CancellationToken token = default)
     {
-        var target = new DeploymentTarget
-        {
-            Type = TargetType.Docker,
-            Action = TargetAction.Destroy,
-            TargetNodeId = container.NodeId,
-            Payload = JsonSerializer.Serialize(new ContainerLifecyclePayload(
-                container.Id,
-                container.ContainerId,
-                container.Image,
-                container.GameInstance?.ChallengeId,
-                container.GameInstance?.Challenge?.GameId,
-                container.GameInstance?.Participation?.TeamId,
-                null,
-                "destroy")),
-            Status = TargetStatus.Creating,
-            ResultHost = container.PublicIP ?? container.IP,
-            ResultPort = container.PublicPort ?? container.Port,
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-        Context.DeploymentTargets.Add(target);
         logger.SystemLog(
             $"Destroying Docker container: container={container.Id}, image={container.Image}, node={container.NodeId}.",
             TaskStatus.Pending, LogLevel.Information);
@@ -125,12 +84,8 @@ public class ContainerRepository(
 
             if (container.Status != ContainerStatus.Destroyed)
             {
-                target.Status = TargetStatus.Failed;
-                target.CompletedAt = DateTimeOffset.UtcNow;
-                target.ErrorMessage = "Container manager did not report Destroyed status.";
-                await SaveAsync(token);
                 logger.SystemLog(
-                    $"Docker container destroy failed: container={container.Id}, image={container.Image}, node={container.NodeId}, error={target.ErrorMessage}.",
+                    $"Docker container destroy failed: container={container.Id}, image={container.Image}, node={container.NodeId}, error=container manager did not report Destroyed status.",
                     TaskStatus.Failed, LogLevel.Warning);
                 return false;
             }
@@ -151,8 +106,6 @@ public class ContainerRepository(
                 .ExecuteUpdateAsync(s => s.SetProperty(c => c.TestContainerId, (Guid?)null), token);
 
             Context.Containers.Remove(container);
-            target.Status = TargetStatus.Completed;
-            target.CompletedAt = DateTimeOffset.UtcNow;
             await SaveAsync(token);
             await nginxProxySync.TrySyncNowAsync("container destroyed", token);
             logger.SystemLog(
@@ -163,10 +116,6 @@ public class ContainerRepository(
         }
         catch (Exception ex)
         {
-            target.Status = TargetStatus.Failed;
-            target.CompletedAt = DateTimeOffset.UtcNow;
-            target.ErrorMessage = ex.Message.Length <= 1024 ? ex.Message : ex.Message[..1024];
-            await SaveAsync(token);
             logger.SystemLog(
                 StaticLocalizer[nameof(Resources.Program.ContainerRepository_ContainerDestroyFailed),
                     container.LogId,
@@ -176,13 +125,4 @@ public class ContainerRepository(
         }
     }
 
-    sealed record ContainerLifecyclePayload(
-        Guid ContainerGuid,
-        string ContainerId,
-        string Image,
-        int? ChallengeId,
-        int? GameId,
-        int? TeamId,
-        Guid? UserId,
-        string Operation);
 }

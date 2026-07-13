@@ -170,7 +170,7 @@ public static class TeamLabAssetPlanner
         250 * (1 - (float)dockerSlots / Math.Max(node.AvailableDockerSlots, 1)) +
         250 * (1 - (float)vmSlots / Math.Max(node.AvailableVmSlots, 1));
 
-    private static IReadOnlyList<TeamLabInternalNetworkGroup> BuildGroups(TeamLabTopologyDefinitionModel definition)
+    internal static IReadOnlyList<TeamLabInternalNetworkGroup> BuildGroups(TeamLabTopologyDefinitionModel definition)
     {
         var parent = definition.Networks.ToDictionary(item => item.Key, item => item.Key, StringComparer.Ordinal);
         foreach (var asset in definition.Assets)

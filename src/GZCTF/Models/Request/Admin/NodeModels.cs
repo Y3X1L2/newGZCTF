@@ -21,15 +21,6 @@ public class NodeListResponse
     public int MaxVms { get; set; }
     public DateTimeOffset? LastHeartbeat { get; set; }
 
-    public static NodeListResponse FromNode(WorkerNode n) => new()
-    {
-        Id = n.Id, Name = n.Name, HostAddress = n.HostAddress,
-        Status = n.Status, CpuLoad = n.CpuLoad, MemoryLoad = n.MemoryLoad,
-        CurrentContainers = n.CurrentContainers, ReservedContainers = n.ReservedContainers,
-        AllocatedContainers = n.AllocatedContainers, MaxContainers = n.MaxContainers,
-        CurrentVms = n.CurrentVms, ReservedVms = n.ReservedVms,
-        AllocatedVms = n.AllocatedVms, MaxVms = n.MaxVms, LastHeartbeat = n.LastHeartbeat
-    };
 }
 
 public class NodeResourceListResponse

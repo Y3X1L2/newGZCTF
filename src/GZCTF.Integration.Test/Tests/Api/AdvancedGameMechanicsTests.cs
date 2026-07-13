@@ -699,33 +699,13 @@ public class AdvancedGameMechanicsTests(GZCTFApplicationFactory factory, ITestOu
         var containerInfo = await createContainerResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.NotEqual(JsonValueKind.Null, containerInfo.ValueKind);
 
-        // 3. Re-get the detailed challenge to find the container entry
-        var entry = string.Empty;
-        for (var i = 0; i < 5; i++)
-        {
-            await Task.Delay(500);
-            var detailResponse = await client.GetAsync($"/api/Game/{game.Id}/Challenges/{challengeId}");
-            detailResponse.EnsureSuccessStatusCode();
-            var detail = await detailResponse.Content.ReadFromJsonAsync<JsonElement>();
-            if (detail.ValueKind != JsonValueKind.Object)
-                continue;
-
-            if (detail.TryGetProperty("context", out var context) &&
-                context.TryGetProperty("instanceEntry", out var insEntry) &&
-                insEntry.ValueKind == JsonValueKind.String)
-            {
-                entry = insEntry.GetString() ?? string.Empty;
-            }
-
-            break;
-        }
-
+        // 3. Wait for the queued runtime fact, then use its stable entry.
+        var runtimeContainer = await ContainerHelper.WaitUserContainerAsync(
+            factory.Services, challengeId, participationId, output);
+        var entry = runtimeContainer.Entry;
         Assert.False(string.IsNullOrEmpty(entry), "Container entry should be available");
 
-        // 4. Wait for container to be ready
-        await ContainerHelper.WaitUserContainerAsync(factory.Services, challengeId, participationId, output);
-
-        // 5. Fetch the flag
+        // 4. Fetch the flag
         var flag = await ContainerHelper.FetchFlag(entry);
         Assert.NotNull(flag);
         Assert.StartsWith("flag{", flag);

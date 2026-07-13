@@ -1,6 +1,7 @@
 using System.Text.Json;
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +11,8 @@ namespace GZCTF.Modules.TeamLab.Application;
 public sealed class TeamLabTopologyApplicationService(
     AppDbContext context,
     TeamLabTopologyValidator validator,
-    TeamLabReleaseService releases) : ITeamLabTopologyApplicationService
+    TeamLabReleaseService releases,
+    NodeCapacitySnapshotService capacitySnapshots) : ITeamLabTopologyApplicationService
 {
     public TeamLabCapabilitiesModel GetCapabilities() => new(
         "v1",
@@ -199,22 +201,20 @@ public sealed class TeamLabTopologyApplicationService(
         var release = await context.TeamLabTopologyReleases.AsNoTracking()
             .SingleOrDefaultAsync(item => item.TopologyId == topology.Id && item.Id == releaseId, cancellationToken)
             ?? throw new TeamLabApiContractException("release_not_found", "The topology release was not found.", 404);
-        var now = DateTimeOffset.UtcNow;
-        var nodes = await context.WorkerNodes.AsNoTracking()
-            .Where(item => item.IsSchedulable && item.TeamLabNetworkEnabled &&
-                           item.TeamLabTunnelStatus == TeamLabTunnelStatus.Healthy &&
-                           item.Status == NodeStatus.Online &&
-                           (item.IsLocal || item.LastHeartbeat >= now - WorkerNode.DefaultHeartbeatTimeout))
+        var nodes = (await capacitySnapshots.LoadAsync(cancellationToken))
+            .Where(item => item.Node.IsSchedulable && item.Node.TeamLabNetworkEnabled &&
+                           item.Node.TeamLabTunnelStatus == TeamLabTunnelStatus.Healthy &&
+                           item.Node.GetEffectiveStatus(DateTimeOffset.UtcNow) == NodeStatus.Online)
             .Select(item => new TeamLabPlanningNodeSnapshot(
-                item.Id,
-                item.Name,
-                (item.Capabilities & NodeCapability.Docker) != 0,
-                (item.Capabilities & NodeCapability.Kvm) != 0,
-                item.MaxContainers - item.CurrentContainers - item.ReservedContainers,
-                item.MaxVms - item.CurrentVms - item.ReservedVms,
-                item.CpuLoad,
-                item.MemoryLoad))
-            .ToArrayAsync(cancellationToken);
+                item.Node.Id,
+                item.Node.Name,
+                (item.Node.Capabilities & NodeCapability.Docker) != 0,
+                (item.Node.Capabilities & NodeCapability.Kvm) != 0,
+                item.AvailableDocker,
+                item.AvailableVm,
+                item.Node.CpuLoad,
+                item.Node.MemoryLoad))
+            .ToArray();
         return TeamLabAssetPlanner.Build(topology.PublicId, release.Id, TeamLabReleaseCodec.Decode(release.CanonicalJson), nodes);
     }
 

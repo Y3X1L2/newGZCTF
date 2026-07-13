@@ -599,15 +599,11 @@ public class EditControllerTests(GZCTFApplicationFactory factory, ITestOutputHel
             await createContainerResponse.Content.ReadAsStringAsync());
 
         // Try to wait for admin test container if available
-        await ContainerHelper.WaitAdminContainerAsync(factory.Services, challenge.Id, output);
+        var testContainer = await ContainerHelper.WaitAdminContainerAsync(factory.Services, challenge.Id, output);
 
         try
         {
-            var responseText = await createContainerResponse.Content.ReadAsStringAsync();
-            using var responseJson = System.Text.Json.JsonDocument.Parse(responseText);
-            var root = responseJson.RootElement;
-            Assert.True(root.TryGetProperty("entry", out var entryElement));
-            var entry = entryElement.GetString();
+            var entry = testContainer.Entry;
             Assert.NotNull(entry);
             Assert.NotEmpty(entry);
 

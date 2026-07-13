@@ -19,10 +19,8 @@ public class WorkerNode
     public float CpuLoad { get; set; }
     public float MemoryLoad { get; set; }
     public int CurrentContainers { get; set; }
-    public int ReservedContainers { get; set; }
     public int MaxContainers { get; set; } = 20;
     public int CurrentVms { get; set; }
-    public int ReservedVms { get; set; }
     public int MaxVms { get; set; } = 5;
     public int UsedPorts { get; set; }
     public int TotalPorts { get; set; } = 28231;
@@ -43,11 +41,14 @@ public class WorkerNode
     public DateTimeOffset? TeamLabTunnelLastHandshake { get; set; }
     [MaxLength(1024)] public string? TeamLabTunnelLastError { get; set; }
     public int TeamLabTunnelConfigVersion { get; set; }
-    [MaxLength(64)] public string? TeamLabAgentVersion { get; set; }
-    public int TeamLabProtocolVersion { get; set; }
     [MaxLength(64)] public string? TeamLabFabricIp { get; set; }
     public TeamLabFabricStatus TeamLabFabricStatus { get; set; } = TeamLabFabricStatus.Unknown;
-    [MaxLength(4096)] public string TeamLabCapabilitiesJson { get; set; } = "{}";
+    [MaxLength(64)] public string? AgentVersion { get; set; }
+    [MaxLength(128)] public string? AgentBinarySha256 { get; set; }
+    public int CapabilityManifestSchemaVersion { get; set; }
+    [MaxLength(8192)] public string CapabilityManifestJson { get; set; } = "{}";
+    [MaxLength(64)] public string? CapabilityHash { get; set; }
+    public DateTimeOffset? CapabilityObservedAt { get; set; }
 
     [Timestamp] public uint ConcurrencyToken { get; set; }
 
@@ -63,12 +64,6 @@ public class WorkerNode
             ? NodeStatus.Offline
             : Status;
     }
-
-    [NotMapped]
-    public int AllocatedContainers => Math.Max(0, CurrentContainers) + Math.Max(0, ReservedContainers);
-
-    [NotMapped]
-    public int AllocatedVms => Math.Max(0, CurrentVms) + Math.Max(0, ReservedVms);
 }
 
 [Flags]

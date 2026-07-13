@@ -1399,9 +1399,6 @@ public class GameController(
             if (existingVm is not null)
                 return Ok(new { status = existingVm.Status.ToString(), vmInstanceId = existingVm.Id });
 
-            var vmMemory = ResolveWindowsVmMemory(instance.Challenge.MemoryLimit);
-            var vmCpu = ResolveWindowsVmCpu(instance.Challenge.CPUCount);
-
             var vmInstance = new VmInstance
             {
                 ChallengeId = challengeId,
@@ -1415,35 +1412,12 @@ public class GameController(
             dbContext.VmInstances.Add(vmInstance);
             await dbContext.SaveChangesAsync(token);
 
-            var imageTemplate = instance.Challenge.ImageTemplateId.HasValue
-                ? await dbContext.ImageTemplates.FindAsync(new object[] { instance.Challenge.ImageTemplateId.Value }, token)
-                : null;
-            var templatePath = imageTemplate?.LocalFilePath;
-            var target = new DeploymentTarget
-            {
-                Type = TargetType.Vm,
-                Action = TargetAction.Create,
-                Status = TargetStatus.Pending,
-                Payload = System.Text.Json.JsonSerializer.Serialize(new VmCreatePayload(
-                    instance.Challenge.ImageTemplateId, templatePath, vmMemory, vmCpu, vmInstance.VmName,
-                    instance.FlagContext?.Flag, vmInstance.Id, id, context.User.Id, challengeId)),
-                ErrorMessage = "Waiting for VM image preparation"
-            };
-            dbContext.DeploymentTargets.Add(target);
-
             var queue = HttpContext.RequestServices.GetRequiredService<DeploymentQueueService>();
             var queued = await queue.EnqueueAsync(
                 DeploymentQueueRequest.Vm(id, context.User.Id, challengeId, vmInstance.Id),
                 token);
-            var ticket = await dbContext.DeploymentQueueTickets
+            var ticket = await dbContext.DeploymentQueueTickets.AsNoTracking()
                 .FirstOrDefaultAsync(t => t.Id == queued.TicketId, token);
-            if (ticket is not null)
-            {
-                ticket.DeploymentTargetId = target.Id;
-                target.ErrorMessage = $"Waiting in deployment queue. People ahead: {queued.PeopleAhead}.";
-            }
-
-            await dbContext.SaveChangesAsync(token);
             var status = await queue.GetStatusAsync(queued.TicketId, token)
                          ?? DeploymentQueueStatusModel.FromTicket(ticket!, queuePosition: queued.QueuePosition);
             return BuildVmCreateAccepted(vmInstance.Id, status);
@@ -1508,22 +1482,6 @@ public class GameController(
 
     static int? ResolveWindowsVmCpu(int? cpuCount) => cpuCount is >= 1 ? cpuCount : null;
 
-    internal static IActionResult BuildVmCreateFallback(DeploymentQueueStateAccessor queueState, string? errorMessage = null)
-    {
-        var queued = queueState.ConsumeQueued();
-        if (queued is not null)
-            return new AcceptedResult((string?)null, new
-            {
-                status = "queued",
-                queue = queued
-            });
-
-        return new BadRequestObjectResult(new
-        {
-            message = string.IsNullOrWhiteSpace(errorMessage) ? "No KVM node available" : errorMessage
-        });
-    }
-
     internal static IActionResult BuildVmCreateAccepted(Guid vmInstanceId, DeploymentQueueStatusModel queue) =>
         new AcceptedResult((string?)null, new
         {
@@ -1578,10 +1536,17 @@ public class GameController(
             return BadRequest(
                 new RequestResponse(localizer[nameof(Resources.Program.Game_ContainerExtensionNotAvailable)]));
 
-        await containerRepository.ExtendLifetime(instance.Container,
-            TimeSpan.FromMinutes(containerPolicy.Value.ExtensionDuration), token);
-
-        return Ok(ContainerInfoModel.FromContainer(instance.Container));
+        var queue = HttpContext.RequestServices.GetRequiredService<DeploymentQueueService>();
+        var queued = await queue.EnqueueAsync(DeploymentQueueRequest.GameContainer(
+            id, context.Participation!.TeamId, challengeId) with
+        {
+            Operation = RuntimeOperationKind.Extend,
+            TargetNodeId = instance.Container.NodeId,
+            ExtensionSeconds = (int)TimeSpan.FromMinutes(containerPolicy.Value.ExtensionDuration).TotalSeconds,
+            SubjectDisplayName = context.Participation.Team.Name,
+            ResourceDisplayName = instance.Challenge.Title
+        }, token);
+        return Accepted(await queue.GetStatusAsync(queued.TicketId, token));
     }
 
     /// <summary>
@@ -1628,30 +1593,18 @@ public class GameController(
             return RequestResponse.Result(localizer[nameof(Resources.Program.Game_OperationTooFrequent)],
                 StatusCodes.Status429TooManyRequests);
 
-        var destroyId = instance.Container.LogId;
-
-        if (!await containerRepository.DestroyContainer(instance.Container, token))
-            return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Game_ContainerDeletionFailed)]));
-
+        var queue = HttpContext.RequestServices.GetRequiredService<DeploymentQueueService>();
+        var queued = await queue.EnqueueAsync(DeploymentQueueRequest.GameContainer(
+            id, context.Participation!.TeamId, challengeId) with
+        {
+            Operation = RuntimeOperationKind.Stop,
+            TargetNodeId = instance.Container.NodeId,
+            SubjectDisplayName = context.Participation.Team.Name,
+            ResourceDisplayName = instance.Challenge.Title
+        }, token);
         instance.LastContainerOperation = DateTimeOffset.UtcNow;
-
-        await gameEventRepository.AddEvent(
-            new()
-            {
-                Type = EventType.ContainerDestroy,
-                GameId = context.Game!.Id,
-                TeamId = context.Participation!.TeamId,
-                UserId = context.User!.Id,
-                Values = [instance.Challenge.Id.ToString(), instance.Challenge.Title]
-            }, token);
-
-        logger.Log(
-            StaticLocalizer[nameof(Resources.Program.Game_ContainerDeleted), context.Participation!.Team.Name,
-                instance.Challenge.Title,
-                destroyId],
-            context.User, TaskStatus.Success);
-
-        return Ok();
+        await dbContext.SaveChangesAsync(token);
+        return Accepted(await queue.GetStatusAsync(queued.TicketId, token));
     }
 
     /// <summary>
@@ -1698,9 +1651,8 @@ public class GameController(
                 rdpUrl = authUrl;
         }
 
-        var deploymentTarget = await LoadVmDeploymentTargetAsync(vmInstance.Id, token);
-        var queueStatus = await LoadVmQueueStatusAsync(vmInstance.Id, deploymentTarget, token);
-        var stage = ResolveVmStage(vmInstance, deploymentTarget, queueStatus);
+        var queueStatus = await LoadVmQueueStatusAsync(vmInstance.Id, token);
+        var stage = ResolveVmStage(vmInstance, queueStatus);
         return Ok(new VmStatusResponse
         {
             VmInstanceId = vmInstance.Id,
@@ -1749,56 +1701,24 @@ public class GameController(
         if (vmInstance is null)
             return NotFound(new RequestResponse("No VM instance found", StatusCodes.Status404NotFound));
 
-        var fleetVm = HttpContext.RequestServices.GetRequiredService<FleetVmService>();
-        try
+        var queue = HttpContext.RequestServices.GetRequiredService<DeploymentQueueService>();
+        var queued = await queue.EnqueueAsync(DeploymentQueueRequest.Vm(
+            id, context.User!.Id, challengeId, vmInstance.Id) with
         {
-            await fleetVm.DestroyVmAsync(vmInstance, token);
-
-            if (!string.IsNullOrEmpty(vmInstance.GuacamoleConnectionId))
-            {
-                var guacService = HttpContext.RequestServices.GetRequiredService<GuacamoleService>();
-                await guacService.DeleteConnectionAsync(vmInstance.GuacamoleConnectionId, token);
-                vmInstance.GuacamoleConnectionId = null;
-                vmInstance.RdpUrl = null;
-            }
-
-            await dbContext.SaveChangesAsync(token);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed to destroy VM {VmName} for user {UserId}.",
-                vmInstance.VmName, context.User!.Id);
-            vmInstance.Status = VmInstanceStatus.Error;
-            vmInstance.DestroyedAt ??= DateTimeOffset.UtcNow;
-            await dbContext.SaveChangesAsync(token);
-            return BadRequest(new RequestResponse("VM destruction failed; instance was marked as error."));
-        }
-
-        logger.Log(
-            StaticLocalizer[nameof(Resources.Program.Game_ContainerDeleted), context.Participation!.Team.Name,
-                $"VM:{vmInstance.VmName}", vmInstance.Id.ToString()],
-            context.User, TaskStatus.Success);
-
-        return Ok();
+            Operation = RuntimeOperationKind.Stop,
+            TargetNodeId = vmInstance.NodeId,
+            SubjectDisplayName = context.User.UserName,
+            ResourceDisplayName = vmInstance.VmName
+        }, token);
+        return Accepted(await queue.GetStatusAsync(queued.TicketId, token));
     }
 
-    async Task<DeploymentTarget?> LoadVmDeploymentTargetAsync(Guid vmInstanceId, CancellationToken token) =>
-        await dbContext.DeploymentTargets
-            .Include(t => t.TargetNode)
-            .AsNoTracking()
-            .Where(t => t.Type == TargetType.Vm &&
-                        t.Action == TargetAction.Create &&
-                        t.Payload.Contains(vmInstanceId.ToString()))
-            .OrderByDescending(t => t.CreatedAt)
-            .FirstOrDefaultAsync(token);
-
-    async Task<DeploymentQueueStatusModel?> LoadVmQueueStatusAsync(Guid vmInstanceId, DeploymentTarget? target,
-        CancellationToken token)
+    async Task<DeploymentQueueStatusModel?> LoadVmQueueStatusAsync(Guid vmInstanceId, CancellationToken token)
     {
         var ticket = await dbContext.DeploymentQueueTickets
             .Include(t => t.TargetNode)
             .AsNoTracking()
-            .Where(t => t.Kind == DeploymentQueueKind.Vm && t.VmInstanceId == vmInstanceId)
+            .Where(t => t.Kind == DeploymentQueueKind.VirtualMachine && t.VmInstanceId == vmInstanceId)
             .OrderByDescending(t => t.CreatedAt)
             .FirstOrDefaultAsync(token);
 
@@ -1809,33 +1729,10 @@ public class GameController(
                    ?? DeploymentQueueStatusModel.FromTicket(ticket, queuePosition: 0);
         }
 
-        if (target is null)
-            return null;
-
-        return new DeploymentQueueStatusModel(
-            target.Id,
-            DeploymentQueueKind.Vm,
-            target.Status switch
-            {
-                TargetStatus.Pending or TargetStatus.Assigned => DeploymentQueueTicketStatus.Pending,
-                TargetStatus.Running or TargetStatus.Creating => DeploymentQueueTicketStatus.Creating,
-                TargetStatus.Completed => DeploymentQueueTicketStatus.Completed,
-                TargetStatus.Failed => DeploymentQueueTicketStatus.Failed,
-                TargetStatus.Cancelled => DeploymentQueueTicketStatus.Cancelled,
-                _ => DeploymentQueueTicketStatus.Pending
-            },
-            target.TargetNodeId,
-            target.TargetNode?.Name,
-            QueuePosition: 0,
-            PeopleAhead: 0,
-            target.ErrorMessage,
-            target.CreatedAt,
-            StartedAt: null,
-            target.CompletedAt);
+        return null;
     }
 
-    static (string Stage, string Message) ResolveVmStage(VmInstance vm, DeploymentTarget? target,
-        DeploymentQueueStatusModel? queue)
+    static (string Stage, string Message) ResolveVmStage(VmInstance vm, DeploymentQueueStatusModel? queue)
     {
         if (!string.IsNullOrWhiteSpace(vm.RdpUrl))
             return ("ready", "靶机已就绪");
@@ -1846,26 +1743,22 @@ public class GameController(
         if (vm.Status == VmInstanceStatus.Running)
             return ("vm-booting", "虚拟机已启动，正在配置远程桌面");
 
-        if (target?.Status == TargetStatus.Running)
-            return ("image-pulling", "正在从存储服务器拉取靶机镜像");
-
-        if (target?.Status == TargetStatus.Creating)
-            return ("vm-creating", "镜像已就绪，正在创建虚拟机");
-
-        if (target?.Status == TargetStatus.Failed)
-            return ("error", target.ErrorMessage ?? "靶机创建失败");
-
         if (queue is null)
             return ("image-pending", "等待拉取靶机镜像");
 
-        return queue.Status switch
+        return queue.Stage switch
         {
-            DeploymentQueueTicketStatus.Pending or DeploymentQueueTicketStatus.Assigned =>
-                ("image-pending", "等待拉取靶机镜像"),
-            DeploymentQueueTicketStatus.Creating => ("image-pulling", "正在从存储服务器拉取靶机镜像"),
-            DeploymentQueueTicketStatus.Failed => ("error", queue.ErrorMessage ?? "靶机创建失败"),
-            DeploymentQueueTicketStatus.Cancelled => ("error", "靶机创建已取消"),
-            DeploymentQueueTicketStatus.Completed => ("vm-booting", "虚拟机已启动，正在配置远程桌面"),
+            DeploymentStage.Queued or DeploymentStage.AdmissionChecking or DeploymentStage.CapacityWaiting =>
+                ("queued", queue.StageMessage ?? "等待可用虚拟化节点"),
+            DeploymentStage.ImagePreparing => ("image-preparing", queue.StageMessage ?? "正在准备靶机镜像"),
+            DeploymentStage.ImagePulling => ("image-pulling", queue.StageMessage ?? "正在拉取靶机镜像"),
+            DeploymentStage.ImageVerifying => ("image-verifying", queue.StageMessage ?? "正在校验靶机镜像"),
+            DeploymentStage.VmCreating => ("vm-creating", queue.StageMessage ?? "正在创建虚拟机"),
+            DeploymentStage.BootProbing or DeploymentStage.AccessOpening =>
+                ("vm-booting", queue.StageMessage ?? "虚拟机已启动，正在配置远程桌面"),
+            DeploymentStage.Failed => ("error", queue.ErrorMessage ?? "靶机创建失败"),
+            DeploymentStage.Cancelled => ("error", "靶机创建已取消"),
+            DeploymentStage.Ready => ("vm-booting", "虚拟机已启动，正在配置远程桌面"),
             _ => ("image-pending", "等待拉取靶机镜像")
         };
     }

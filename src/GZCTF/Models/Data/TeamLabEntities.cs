@@ -147,6 +147,10 @@ public class TeamLabRuntimeNetwork
 
     public Guid? WorkerNodeId { get; set; }
 
+    [MaxLength(256)] public string PlacementGroupKey { get; set; } = string.Empty;
+
+    public bool IsEntry { get; set; }
+
     [MaxLength(64)] public string TopologyKey { get; set; } = string.Empty;
 
     [MaxLength(128)] public string Name { get; set; } = string.Empty;
@@ -180,6 +184,8 @@ public class TeamLabRuntimeAsset
     public int? ShardId { get; set; }
 
     public Guid? WorkerNodeId { get; set; }
+
+    [MaxLength(256)] public string PlacementGroupKey { get; set; } = string.Empty;
 
     public TeamLabResourceKind Kind { get; set; }
 

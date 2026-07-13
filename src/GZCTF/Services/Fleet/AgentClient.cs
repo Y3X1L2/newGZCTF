@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Net.Mime;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
+using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Container.Manager;
 using Microsoft.EntityFrameworkCore;
@@ -24,7 +25,7 @@ public class AgentClient
     {
         var client = _httpClientFactory.CreateClient("Agent");
         client.BaseAddress = new Uri($"http://{node.HostAddress}:{node.AgentPort}");
-        client.Timeout = TimeSpan.FromMinutes(10);
+        client.Timeout = Timeout.InfiniteTimeSpan;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", node.AuthToken);
         return client;
     }
@@ -61,7 +62,7 @@ public class AgentClient
         var client = BuildClient(node);
         var body = JsonSerializer.Serialize(new
         {
-            config.Image, config.TeamId, config.ChallengeId, config.UserId,
+            config.Generation, config.Image, config.TeamId, config.ChallengeId, config.UserId,
             config.ExposedPort, config.Flag, config.EnableTrafficCapture,
             config.MemoryLimit, config.CPUCount, config.StorageLimit,
             NetworkMode = config.NetworkMode.ToString(),
@@ -86,8 +87,12 @@ public class AgentClient
         HttpResponseMessage response;
         try
         {
-            response = await client.PostAsync("/api/containers/create",
-                new StringContent(body, Encoding.UTF8, "application/json"), token);
+            using var deadline = CreateDeadline(token, TimeSpan.FromMinutes(3));
+            response = await SendIdempotentAsync(client, () => new HttpRequestMessage(HttpMethod.Post,
+                "/api/containers/create")
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json")
+            }, deadline.Token);
         }
         catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
         {
@@ -121,7 +126,9 @@ public class AgentClient
             throw new InvalidOperationException($"Fleet node {nodeId} was not found.");
 
         var client = BuildClient(node);
-        var response = await client.DeleteAsync($"/api/containers/{Uri.EscapeDataString(containerId)}", token);
+        using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(60));
+        var response = await client.DeleteAsync($"/api/containers/{Uri.EscapeDataString(containerId)}",
+            deadline.Token);
         if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
         {
             var responseBody = await response.Content.ReadAsStringAsync(token);
@@ -179,8 +186,9 @@ public class AgentClient
         if (node is null) return null;
 
         var client = BuildClient(node);
-        var response = await client.GetAsync("/api/teamlab/status", token);
-        return await ReadTeamLabResponseAsync<TeamLabStatusResponse>(response, token);
+        using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(5));
+        var response = await client.GetAsync("/api/teamlab/status", deadline.Token);
+        return await ReadTeamLabResponseAsync<TeamLabStatusResponse>(response, deadline.Token);
     }
 
     public virtual async Task<TeamLabDryRunResponse?> CreateTeamLabBridgeAsync(Guid nodeId, TeamLabBridgeRequest request,
@@ -287,8 +295,15 @@ public class AgentClient
                 $"Agent sync failed on node {node.Name} ({node.HostAddress}): {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
         }
 
-        return await response.Content.ReadFromJsonAsync<AgentSyncResponse>(token)
-               ?? new AgentSyncResponse(false, "Agent returned an empty sync response.", null);
+        var result = await response.Content.ReadFromJsonAsync<AgentSyncResponse>(token)
+                     ?? new AgentSyncResponse(false, "Agent returned an empty sync response.", null);
+        if (!result.Success || string.IsNullOrWhiteSpace(request.ExpectedSha256))
+            return result;
+        var manifest = await WaitForCapabilityManifestAsync(client, request.ExpectedSha256, token);
+        return manifest is null
+            ? new AgentSyncResponse(false,
+                "Agent binary synchronized, but the updated capability manifest was not observed.", result.AgentVersion)
+            : result with { Message = "Agent synchronized and capability manifest confirmed." };
     }
 
     public virtual async Task<TeamLabCaptureDownloadResult?> DownloadTeamLabCaptureAsync(Guid nodeId,
@@ -324,8 +339,10 @@ public class AgentClient
 
         var client = BuildClient(node);
         var body = JsonSerializer.Serialize(request);
-        var response = await client.PostAsync(path, new StringContent(body, Encoding.UTF8, "application/json"), token);
-        return await ReadTeamLabResponseAsync<TResponse>(response, token);
+        using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(60));
+        var response = await client.PostAsync(path, new StringContent(body, Encoding.UTF8, "application/json"),
+            deadline.Token);
+        return await ReadTeamLabResponseAsync<TResponse>(response, deadline.Token);
     }
 
     private async Task<T?> ReadTeamLabResponseAsync<T>(HttpResponseMessage response, CancellationToken token)
@@ -473,7 +490,12 @@ public class AgentClient
 
         var client = BuildClient(node);
         var body = JsonSerializer.Serialize(request);
-        var response = await client.PostAsync("/api/vms/create", new StringContent(body, Encoding.UTF8, "application/json"), token);
+        using var deadline = CreateDeadline(token, TimeSpan.FromMinutes(5));
+        var response = await SendIdempotentAsync(client, () => new HttpRequestMessage(HttpMethod.Post,
+            "/api/vms/create")
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json")
+        }, deadline.Token);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -491,7 +513,8 @@ public class AgentClient
             throw new InvalidOperationException($"Fleet node {nodeId} was not found.");
 
         var client = BuildClient(node);
-        var response = await client.DeleteAsync($"/api/vms/{Uri.EscapeDataString(vmName)}", token);
+        using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(60));
+        var response = await client.DeleteAsync($"/api/vms/{Uri.EscapeDataString(vmName)}", deadline.Token);
         if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
         {
             var responseBody = await response.Content.ReadAsStringAsync(token);
@@ -542,8 +565,9 @@ public class AgentClient
 
         var client = BuildClient(node);
         var body = JsonSerializer.Serialize(new { image, registryAuth });
+        using var deadline = CreateDeadline(token, TimeSpan.FromHours(2));
         var response = await client.PostAsync("/api/images/pull-docker",
-            new StringContent(body, Encoding.UTF8, "application/json"), token);
+            new StringContent(body, Encoding.UTF8, "application/json"), deadline.Token);
         if (!response.IsSuccessStatusCode)
         {
             var responseBody = await response.Content.ReadAsStringAsync(token);
@@ -649,7 +673,6 @@ public class AgentClient
         }
 
         var client = BuildClient(node);
-        client.Timeout = TimeSpan.FromHours(2);
         var registryReference = BuildVmRegistryReference(templateId, hash);
 
         var body = JsonSerializer.Serialize(new
@@ -664,8 +687,9 @@ public class AgentClient
             tag = registryReference.Tag,
             digest = registryReference.Digest
         });
+        using var deadline = CreateDeadline(token, TimeSpan.FromHours(2));
         var response = await client.PostAsync("/api/images/download-vm",
-            new StringContent(body, Encoding.UTF8, "application/json"), token);
+            new StringContent(body, Encoding.UTF8, "application/json"), deadline.Token);
         if (!response.IsSuccessStatusCode)
         {
             var responseBody = await response.Content.ReadAsStringAsync(token);
@@ -709,6 +733,60 @@ public class AgentClient
         body = body.Trim();
         return body.Length <= 2048 ? body : body[..2048] + "...";
     }
+
+    async Task<AgentCapabilityManifest?> WaitForCapabilityManifestAsync(HttpClient client, string expectedSha256,
+        CancellationToken token)
+    {
+        var expected = expectedSha256.Trim().Replace("sha256:", string.Empty,
+            StringComparison.OrdinalIgnoreCase);
+        var expiresAt = DateTimeOffset.UtcNow.AddSeconds(45);
+        while (DateTimeOffset.UtcNow < expiresAt)
+        {
+            try
+            {
+                using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(5));
+                using var response = await client.GetAsync("/api/status", deadline.Token);
+                if (response.IsSuccessStatusCode)
+                {
+                    var manifest = await response.Content.ReadFromJsonAsync<AgentCapabilityManifest>(deadline.Token);
+                    if (manifest?.ManifestSchemaVersion == AgentCapabilityEvaluator.SupportedManifestSchema &&
+                        string.Equals(manifest.BinarySha256, expected, StringComparison.OrdinalIgnoreCase))
+                        return manifest;
+                }
+            }
+            catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException &&
+                                       !token.IsCancellationRequested)
+            {
+                _logger.LogDebug(ex, "Waiting for Agent capability manifest after sync.");
+            }
+            await Task.Delay(TimeSpan.FromSeconds(2), token);
+        }
+        return null;
+    }
+
+    static CancellationTokenSource CreateDeadline(CancellationToken token, TimeSpan timeout)
+    {
+        var source = CancellationTokenSource.CreateLinkedTokenSource(token);
+        source.CancelAfter(timeout);
+        return source;
+    }
+
+    static async Task<HttpResponseMessage> SendIdempotentAsync(HttpClient client,
+        Func<HttpRequestMessage> requestFactory, CancellationToken token)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                using var request = requestFactory();
+                return await client.SendAsync(request, token);
+            }
+            catch (HttpRequestException) when (attempt == 0)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(150), token);
+            }
+        }
+    }
 }
 
 public class AgentCreateContainerResponse
@@ -732,6 +810,7 @@ public class AgentClientException : Exception
 
 public class AgentCreateVmRequest
 {
+    public int Generation { get; set; } = 1;
     public int? TemplateId { get; set; }
     public string? TemplatePath { get; set; }
     public bool ImageEnsured { get; set; }
@@ -839,8 +918,6 @@ public record TeamLabStatusResponse(
     bool Available,
     bool Enable,
     bool DryRun,
-    string AgentVersion,
-    int ProtocolVersion,
     bool HasIpCommand,
     bool HasDockerCommand,
     bool HasKvmCommand,

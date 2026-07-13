@@ -52,31 +52,42 @@ public static class ContainerHelper
     /// <param name="challengeId">Challenge ID</param>
     /// <param name="output">Test output helper for logging</param>
     /// <exception cref="InvalidOperationException">Thrown when container fails, times out, or not found</exception>
-    public static async Task WaitAdminContainerAsync(IServiceProvider serviceProvider, int challengeId,
+    public static async Task<Container> WaitAdminContainerAsync(IServiceProvider serviceProvider, int challengeId,
         ITestOutputHelper output)
     {
-        using var scope = serviceProvider.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
         output.WriteLine($"🔍 Waiting for admin test container for challenge {challengeId}...");
-
-        // Find and validate challenge
-        var challenge = await context.GameChallenges
-            .AsNoTracking()
-            .Include(c => c.TestContainer)
-            .FirstOrDefaultAsync(c => c.Id == challengeId);
-
-        if (challenge?.TestContainer is null)
-            throw new InvalidOperationException($"Challenge {challengeId} not found");
-
-        output.WriteLine($"✅ Found challenge: {challenge.Title}");
-
-        var container = challenge.TestContainer;
+        Container? container = null;
+        for (var attempt = 0; attempt < MaxAttempts && container is null; attempt++)
+        {
+            using var scope = serviceProvider.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            container = await context.GameChallenges.AsNoTracking()
+                .Where(challenge => challenge.Id == challengeId)
+                .Select(challenge => challenge.TestContainer)
+                .SingleOrDefaultAsync();
+            if (container is null)
+                await Task.Delay(DelayMs);
+        }
+        if (container is null)
+        {
+            using var scope = serviceProvider.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var ticket = await context.DeploymentQueueTickets.AsNoTracking()
+                .Where(item => item.Kind == DeploymentQueueKind.ChallengeTestContainer &&
+                               item.ChallengeId == challengeId)
+                .OrderByDescending(item => item.CreatedAt)
+                .Select(item => new { item.Status, item.Stage, item.StageMessage, item.ErrorMessage })
+                .FirstOrDefaultAsync();
+            throw new InvalidOperationException(
+                $"Challenge {challengeId} test container was not created. " +
+                $"Ticket={ticket?.Status}/{ticket?.Stage}, stage={ticket?.StageMessage}, error={ticket?.ErrorMessage}");
+        }
 
         output.WriteLine($"📦 Found test container: {container.ContainerId}");
 
         // Wait for container readiness
         await WaitContainerReadyAsync(serviceProvider, container, output);
+        return container;
     }
 
     /// <summary>
@@ -87,30 +98,32 @@ public static class ContainerHelper
     /// <param name="participationId">Participation ID (team in game)</param>
     /// <param name="output">Test output helper for logging</param>
     /// <exception cref="InvalidOperationException">Thrown when container fails, times out, or not found</exception>
-    public static async Task WaitUserContainerAsync(IServiceProvider serviceProvider, int challengeId,
+    public static async Task<Container> WaitUserContainerAsync(IServiceProvider serviceProvider, int challengeId,
         int participationId, ITestOutputHelper output)
     {
-        using var scope = serviceProvider.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
         output.WriteLine(
             $"🔍 Waiting for user container for challenge {challengeId}, participation {participationId}...");
-
-        var instance = await context.GameInstances
-            .Include(i => i.Container)
-            .FirstOrDefaultAsync(i =>
-                i.ChallengeId == challengeId && i.ParticipationId == participationId);
-
-        if (instance?.Container == null)
+        Container? container = null;
+        for (var attempt = 0; attempt < MaxAttempts && container is null; attempt++)
+        {
+            using var scope = serviceProvider.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            container = await context.GameInstances.AsNoTracking()
+                .Where(instance => instance.ChallengeId == challengeId && instance.ParticipationId == participationId)
+                .Select(instance => instance.Container)
+                .SingleOrDefaultAsync();
+            if (container is null)
+                await Task.Delay(DelayMs);
+        }
+        if (container is null)
             throw new InvalidOperationException(
                 $"No game instance found for challenge {challengeId}, participation {participationId}");
-
-        var container = instance.Container;
 
         output.WriteLine($"📦 Found user container: {container.ContainerId}");
 
         // Wait for container readiness
         await WaitContainerReadyAsync(serviceProvider, container, output);
+        return container;
     }
 
     /// <summary>

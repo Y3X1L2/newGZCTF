@@ -4,6 +4,7 @@ using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Ctf.Application;
 using GZCTF.Modules.Ctf.Contracts;
 using GZCTF.Modules.Ctf.Domain;
+using GZCTF.Modules.Runtime.Application;
 using GZCTF.Repositories.Interface;
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Fleet;
@@ -15,10 +16,8 @@ public sealed class ChallengeMutationOperationHandler(
     AppDbContext context,
     ApiOperationService operations,
     IGameChallengeRepository challengeRepository,
-    IContainerRepository containerRepository,
     DeploymentQueueService deploymentQueue,
-    NodeExecutionGate executionGate,
-    FleetVmService fleetVm,
+    NodeDispatchLimiter dispatchLimiter,
     IPlatformCache cache,
     ImageDistributionService distribution,
     ILogger<ChallengeMutationOperationHandler> logger) : IApiOperationHandler
@@ -204,8 +203,9 @@ public sealed class ChallengeMutationOperationHandler(
         var activeStatuses = new[]
         {
             DeploymentQueueTicketStatus.Pending,
-            DeploymentQueueTicketStatus.Assigned,
-            DeploymentQueueTicketStatus.Creating
+            DeploymentQueueTicketStatus.Scheduling,
+            DeploymentQueueTicketStatus.Scheduled,
+            DeploymentQueueTicketStatus.Running
         };
         var tickets = await context.DeploymentQueueTickets.AsNoTracking()
             .Where(ticket => ticket.GameId == job.GameId &&
@@ -217,7 +217,7 @@ public sealed class ChallengeMutationOperationHandler(
         foreach (var ticket in tickets)
             await deploymentQueue.CancelAsync(ticket.Id, "Challenge deletion requested by external API.", cancellationToken);
         foreach (var nodeId in tickets.Select(ticket => ticket.TargetNodeId).OfType<Guid>().Distinct())
-            await executionGate.RunExclusiveAsync(nodeId, _ => Task.CompletedTask, cancellationToken);
+            await dispatchLimiter.WaitForIdleAsync(nodeId, NodeDispatchCategory.DockerCreate, cancellationToken);
 
         context.ChangeTracker.Clear();
         var containers = await context.Containers
@@ -230,8 +230,10 @@ public sealed class ChallengeMutationOperationHandler(
             .ToArrayAsync(cancellationToken);
         foreach (var container in containers)
         {
-            if (!await containerRepository.DestroyContainer(container, cancellationToken))
-                throw new InvalidOperationException($"Container {container.Id} could not be destroyed.");
+            var queued = await deploymentQueue.EnqueueAsync(
+                DeploymentQueueRequest.MaintenanceContainer(container.Id, container.NodeId, container.Image),
+                cancellationToken);
+            await RequireQueueSuccessAsync(queued.TicketId, cancellationToken);
         }
 
         var testContainers = await context.GameChallenges
@@ -243,8 +245,10 @@ public sealed class ChallengeMutationOperationHandler(
             .ToArrayAsync(cancellationToken);
         foreach (var container in testContainers)
         {
-            if (!await containerRepository.DestroyContainer(container, cancellationToken))
-                throw new InvalidOperationException($"Test container {container.Id} could not be destroyed.");
+            var queued = await deploymentQueue.EnqueueAsync(
+                DeploymentQueueRequest.MaintenanceContainer(container.Id, container.NodeId, container.Image),
+                cancellationToken);
+            await RequireQueueSuccessAsync(queued.TicketId, cancellationToken);
         }
 
         var virtualMachines = await context.VmInstances
@@ -253,7 +257,19 @@ public sealed class ChallengeMutationOperationHandler(
                          vm.Status != VmInstanceStatus.Destroyed)
             .ToArrayAsync(cancellationToken);
         foreach (var vm in virtualMachines)
-            await fleetVm.DestroyVmAsync(vm, cancellationToken);
+        {
+            if (vm.Challenge is null)
+                throw new InvalidOperationException($"VM {vm.Id} has no challenge metadata.");
+            var queued = await deploymentQueue.EnqueueAsync(DeploymentQueueRequest.Vm(
+                vm.Challenge.GameId, vm.UserId, vm.ChallengeId, vm.Id) with
+            {
+                Operation = RuntimeOperationKind.Destroy,
+                TargetNodeId = vm.NodeId,
+                SubjectDisplayName = "Challenge deletion",
+                ResourceDisplayName = vm.VmName
+            }, cancellationToken);
+            await RequireQueueSuccessAsync(queued.TicketId, cancellationToken);
+        }
 
         await RequireLeaseAsync(
             operationId, leaseOwner, "challenge-deleting", 1, 3, job.GameId, cancellationToken);
@@ -403,6 +419,21 @@ public sealed class ChallengeMutationOperationHandler(
                 null,
                 cancellationToken))
             throw new OperationCanceledException("The operation execution lease was lost.", cancellationToken);
+    }
+
+    private async Task RequireQueueSuccessAsync(Guid ticketId, CancellationToken cancellationToken)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddMinutes(5);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            var status = await deploymentQueue.GetStatusAsync(ticketId, cancellationToken);
+            if (status?.Status == DeploymentQueueTicketStatus.Succeeded)
+                return;
+            if (status?.Status is DeploymentQueueTicketStatus.Failed or DeploymentQueueTicketStatus.Cancelled)
+                throw new InvalidOperationException(status.ErrorMessage ?? $"Runtime control ticket {ticketId} failed.");
+            await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
+        }
+        throw new TimeoutException($"Runtime control ticket {ticketId} did not complete in time.");
     }
 
     private static GameChallenge CreateChallenge(int gameId, OpenChallengeImportModel item)

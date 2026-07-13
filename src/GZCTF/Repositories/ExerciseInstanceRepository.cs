@@ -22,7 +22,7 @@ public class ExerciseInstanceRepository(
     IOptionsSnapshot<ContainerPolicy> containerPolicy,
     DockerImageRegistryService dockerRegistry,
     INginxProxySyncService nginxProxySync,
-    DeploymentQueueStateAccessor deploymentQueueState,
+    DeploymentQueueService deploymentQueue,
     DeploymentExecutionContextAccessor deploymentExecutionContext,
     IDistributedLeaseProvider lockService,
     ILogger<ExerciseInstanceRepository> logger,
@@ -33,8 +33,9 @@ public class ExerciseInstanceRepository(
     static readonly DeploymentQueueTicketStatus[] ActiveQueueStatuses =
     [
         DeploymentQueueTicketStatus.Pending,
-        DeploymentQueueTicketStatus.Assigned,
-        DeploymentQueueTicketStatus.Creating
+        DeploymentQueueTicketStatus.Scheduling,
+        DeploymentQueueTicketStatus.Scheduled,
+        DeploymentQueueTicketStatus.Running
     ];
 
     public async Task<ExerciseInstance[]> GetExerciseInstances(UserInfo user, CancellationToken token = default)
@@ -218,9 +219,29 @@ public class ExerciseInstanceRepository(
 
         await Context.Entry(instance).Reference(e => e.FlagContext).LoadAsync(token);
 
+        if (deploymentExecutionContext.Current is null)
+        {
+            var request = instance.Exercise.TrainingCourseId.HasValue
+                ? DeploymentQueueRequest.TrainingContainer(user.Id, instance.ExerciseId)
+                : DeploymentQueueRequest.ExerciseContainer(user.Id, instance.ExerciseId);
+            var queued = await deploymentQueue.EnqueueAsync(request with
+            {
+                SubjectType = instance.Exercise.TrainingCourseId.HasValue
+                    ? "training-container"
+                    : "exercise-container",
+                SubjectPublicId = $"{user.Id:D}:{instance.ExerciseId}",
+                SubjectDisplayName = user.UserName,
+                ResourceDisplayName = instance.Exercise.Title
+            }, token);
+            var queueStatus = await deploymentQueue.GetStatusAsync(queued.TicketId, token)
+                              ?? throw new InvalidOperationException("Queued exercise ticket could not be loaded.");
+            return new QueuedTaskResult<Container>(queueStatus);
+        }
+
         var image = await dockerRegistry.ResolveImageReferenceAsync(instance.Exercise.ContainerImage, token);
         var container = await service.CreateContainerAsync(new ContainerConfig
         {
+            Generation = deploymentExecutionContext.Current?.Generation ?? 1,
             TeamId = "exercise",
             UserId = user.Id,
             ChallengeId = instance.ExerciseId,
@@ -238,9 +259,6 @@ public class ExerciseInstanceRepository(
 
         if (container is null)
         {
-            if (deploymentQueueState.ConsumeQueued() is { } queueStatus)
-                return new QueuedTaskResult<Container>(queueStatus);
-
             logger.SystemLog(
                 StaticLocalizer[nameof(Resources.Program.InstanceRepository_ContainerCreationFailed),
                     instance.Exercise.Title],

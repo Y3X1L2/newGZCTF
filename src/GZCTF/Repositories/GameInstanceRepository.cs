@@ -19,7 +19,7 @@ public class GameInstanceRepository(
     IOptionsSnapshot<ContainerPolicy> containerPolicy,
     DockerImageRegistryService dockerRegistry,
     INginxProxySyncService nginxProxySync,
-    DeploymentQueueStateAccessor deploymentQueueState,
+    DeploymentQueueService deploymentQueue,
     DeploymentExecutionContextAccessor deploymentExecutionContext,
     IDistributedLeaseProvider lockService,
     ILogger<GameInstanceRepository> logger) : RepositoryBase(context), IGameInstanceRepository
@@ -27,8 +27,9 @@ public class GameInstanceRepository(
     static readonly DeploymentQueueTicketStatus[] ActiveQueueStatuses =
     [
         DeploymentQueueTicketStatus.Pending,
-        DeploymentQueueTicketStatus.Assigned,
-        DeploymentQueueTicketStatus.Creating
+        DeploymentQueueTicketStatus.Scheduling,
+        DeploymentQueueTicketStatus.Scheduled,
+        DeploymentQueueTicketStatus.Running
     ];
 
     public async Task<GameInstance?> GetInstance(Participation part, int challengeId, CancellationToken token = default)
@@ -207,10 +208,26 @@ public class GameInstanceRepository(
 
         await Context.Entry(gameInstance).Reference(e => e.FlagContext).LoadAsync(token);
 
+        if (deploymentExecutionContext.Current is null)
+        {
+            var queued = await deploymentQueue.EnqueueAsync(
+                DeploymentQueueRequest.GameContainer(game.Id, team.Id, gameInstance.ChallengeId) with
+                {
+                    SubjectType = "game-container",
+                    SubjectPublicId = $"{game.Id}:{team.Id}:{gameInstance.ChallengeId}",
+                    SubjectDisplayName = $"{game.Title} / {team.Name}",
+                    ResourceDisplayName = gameInstance.Challenge.Title
+                }, token);
+            var queueStatus = await deploymentQueue.GetStatusAsync(queued.TicketId, token)
+                              ?? throw new InvalidOperationException("Queued container ticket could not be loaded.");
+            return new QueuedTaskResult<Container>(queueStatus);
+        }
+
         var challenge = gameInstance.Challenge;
         var image = await dockerRegistry.ResolveImageReferenceAsync(challenge.ContainerImage!, token);
         var container = await service.CreateContainerAsync(new ContainerConfig
         {
+            Generation = deploymentExecutionContext.Current?.Generation ?? 1,
             TeamId = team.Id.ToString(),
             UserId = user.Id,
             GameId = game.Id,
@@ -229,9 +246,6 @@ public class GameInstanceRepository(
 
         if (container is null)
         {
-            if (deploymentQueueState.ConsumeQueued() is { } queueStatus)
-                return new QueuedTaskResult<Container>(queueStatus);
-
             logger.SystemLog(
                 StaticLocalizer[nameof(Resources.Program.InstanceRepository_ContainerCreationFailed),
                     gameInstance.Challenge.Title],

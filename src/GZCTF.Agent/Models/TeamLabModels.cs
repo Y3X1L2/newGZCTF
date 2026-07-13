@@ -21,8 +21,6 @@ public record TeamLabStatusResponse(
     bool Available,
     bool Enable,
     bool DryRun,
-    string AgentVersion,
-    int ProtocolVersion,
     bool HasIpCommand,
     bool HasDockerCommand,
     bool HasKvmCommand,

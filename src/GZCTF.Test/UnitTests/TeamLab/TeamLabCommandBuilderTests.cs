@@ -91,14 +91,12 @@ public class TeamLabCommandBuilderTests
     }
 
     [Fact]
-    public async Task GetStatusAsync_ReturnsVersionsAndToolCapabilities()
+    public async Task GetStatusAsync_ReturnsToolCapabilities()
     {
         var service = CreateService(enable: false);
 
         var status = await service.GetStatusAsync(CancellationToken.None);
 
-        Assert.False(string.IsNullOrWhiteSpace(status.AgentVersion));
-        Assert.True(status.ProtocolVersion >= 2);
         Assert.Equal(status.HasDockerCommand, status.Capabilities.Docker);
         Assert.Equal(status.HasKvmCommand, status.Capabilities.Kvm);
         Assert.Equal(status.HasWireGuardCommand, status.Capabilities.WireGuard);
@@ -757,6 +755,7 @@ public class TeamLabCommandBuilderTests
 
     private static KvmService CreateKvmService(string imageStoragePath) => new(
         Options.Create(new KvmConfig { ImageStoragePath = imageStoragePath }),
+        new AgentResourceLock(),
         NullLogger<KvmService>.Instance);
 
     private sealed class TempDirectory : IDisposable

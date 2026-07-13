@@ -13,6 +13,8 @@ public class AwdpInstanceService(
     IAwdpRepository awdpRepository,
     IContainerManager containerManager,
     DockerImageRegistryService dockerRegistry,
+    DeploymentQueueService deploymentQueue,
+    DeploymentExecutionContextAccessor deploymentExecutionContext,
     INginxProxySyncService nginxProxySync,
     IServiceProvider serviceProvider,
     ILogger<AwdpInstanceService> logger)
@@ -42,29 +44,26 @@ public class AwdpInstanceService(
                 var networkName = GetNetworkName(game.Id, part.TeamId);
                 var customNetwork = await TryCreateNetwork(networkName, token);
 
-                var container = await CreateContainer(service, part.TeamId, customNetwork ? networkName : null,
-                    null, token);
-                if (container is null)
-                {
-                    logger.LogWarning("Failed to create AWDP container for game {GameId}, service {ServiceId}, team {TeamId}",
-                        game.Id, service.Id, part.TeamId);
-                    continue;
-                }
-
-                await context.Containers.AddAsync(container, token);
-                await context.SaveChangesAsync(token);
-
-                await context.AwdpServiceInstances.AddAsync(new AwdpServiceInstance
+                var instance = new AwdpServiceInstance
                 {
                     ServiceId = service.Id,
                     TeamId = part.TeamId,
-                    ContainerId = container.Id,
                     NetworkName = customNetwork ? networkName : string.Empty,
-                    IsRunning = container.Status == ContainerStatus.Running,
+                    IsRunning = false,
                     CreatedAt = DateTimeOffset.UtcNow
-                }, token);
-
+                };
+                await context.AwdpServiceInstances.AddAsync(instance, token);
                 await context.SaveChangesAsync(token);
+                await deploymentQueue.EnqueueAsync(
+                    DeploymentQueueRequest.AwdpContainer(part.TeamId, instance.Id) with
+                    {
+                        GameId = game.Id,
+                        ChallengeId = service.Id,
+                        SubjectType = "awdp-container",
+                        SubjectPublicId = instance.Id.ToString(),
+                        SubjectDisplayName = $"{game.Title} / team {part.TeamId}",
+                        ResourceDisplayName = service.Name
+                    }, token);
                 createdAny = true;
             }
         }
@@ -122,18 +121,67 @@ public class AwdpInstanceService(
 
     public Task<(bool Success, string Message)> ResetInstance(int instanceId, string? newFlag = null,
         CancellationToken token = default) =>
-        RunWithInstanceLock(instanceId, token,
-            () => ResetInstance(instanceId, AwdpResetType.Admin, false, newFlag, token));
+        QueueResetAsync(instanceId, null, AwdpResetType.Admin, false, recordReset: true, token);
 
     public Task<(bool Success, string Message)> ResetInstanceForRound(int instanceId, string newFlag,
         CancellationToken token = default) =>
-        RunWithInstanceLock(instanceId, token,
-            () => ResetInstance(instanceId, AwdpResetType.Admin, false, newFlag, token, false));
+        QueueResetAsync(instanceId, null, AwdpResetType.Admin, false, recordReset: false, token);
 
     public Task<(bool Success, string Message)> ResetInstanceByPlayer(int instanceId, int teamId,
         CancellationToken token = default) =>
-        RunWithInstanceLock(instanceId, token,
-            () => ResetInstanceForTeam(instanceId, teamId, AwdpResetType.Player, true, null, token));
+        QueueResetAsync(instanceId, teamId, AwdpResetType.Player, true, recordReset: true, token);
+
+    async Task<(bool Success, string Message)> QueueResetAsync(
+        int instanceId,
+        int? expectedTeamId,
+        AwdpResetType resetType,
+        bool enforceLimit,
+        bool recordReset,
+        CancellationToken token)
+    {
+        var instance = await awdpRepository.GetInstanceForUpdate(instanceId, token);
+        if (instance is null)
+            return (false, "AWDP instance was not found.");
+        if (expectedTeamId.HasValue && instance.TeamId != expectedTeamId.Value)
+            return (false, "The AWDP instance belongs to another team.");
+        if (instance.Container?.NodeId is not { } nodeId)
+            return (false, "The AWDP instance has no running node and cannot be reset.");
+        if (enforceLimit && await awdpRepository.GetResetCount(instance.ServiceId, instance.TeamId, token) >=
+            instance.Service.MaxResetCount)
+            return (false, "The AWDP reset limit has been reached.");
+
+        if (recordReset)
+        {
+            await context.AwdpResetRecords.AddAsync(new AwdpResetRecord
+            {
+                ServiceId = instance.ServiceId,
+                TeamId = instance.TeamId,
+                ResetAt = DateTimeOffset.UtcNow,
+                ResetType = resetType
+            }, token);
+            await context.SaveChangesAsync(token);
+        }
+
+        var generation = await context.DeploymentQueueTickets.AsNoTracking()
+            .Where(ticket => ticket.Kind == DeploymentQueueKind.AwdpContainer &&
+                             ticket.AwdpServiceInstanceId == instanceId)
+            .Select(ticket => (int?)ticket.Generation)
+            .MaxAsync(token) ?? 0;
+        var queued = await deploymentQueue.EnqueueAsync(
+            DeploymentQueueRequest.AwdpContainer(instance.TeamId, instance.Id) with
+            {
+                GameId = instance.Service.GameId,
+                ChallengeId = instance.ServiceId,
+                Operation = RuntimeOperationKind.Reset,
+                Generation = generation + 1,
+                TargetNodeId = nodeId,
+                SubjectType = "awdp-container",
+                SubjectPublicId = instance.Id.ToString(),
+                SubjectDisplayName = $"team {instance.TeamId}",
+                ResourceDisplayName = instance.Service.Name
+            }, token);
+        return (true, $"AWDP reset queued as {queued.TicketId}.");
+    }
 
     public Task<(bool Success, string Message)> RecoverInstanceByPlayer(int instanceId, int teamId,
         CancellationToken token = default) =>
@@ -196,9 +244,14 @@ public class AwdpInstanceService(
                 return (false, "重置次数已用尽");
         }
 
+        var previousNodeId = instance.Container?.NodeId;
         await DestroyInstanceContainer(instance, token);
         await context.SaveChangesAsync(token);
 
+        if (previousNodeId is null)
+            return (false, "原实例缺少运行节点，无法重置");
+        using var execution = deploymentExecutionContext.Push(
+            new DeploymentExecutionContext(previousNodeId.Value, true, Guid.Empty));
         var container = await CreateContainer(instance.Service, instance.TeamId,
             string.IsNullOrWhiteSpace(instance.NetworkName) ? null : instance.NetworkName, newFlag, token);
 
@@ -284,6 +337,7 @@ public class AwdpInstanceService(
         var image = await dockerRegistry.ResolveImageReferenceAsync(service.ImageName, token);
         var container = await containerManager.CreateContainerAsync(new ContainerConfig
         {
+            Generation = deploymentExecutionContext.Current?.Generation ?? 1,
             Image = image,
             ExposedPort = service.ExposePort,
             CPUCount = 10,
@@ -294,7 +348,9 @@ public class AwdpInstanceService(
             NetworkMode = string.IsNullOrWhiteSpace(networkName) ? NetworkMode.Isolated : NetworkMode.Custom,
             TeamId = teamId.ToString(),
             ChallengeId = service.Id,
-            UserId = Guid.Empty
+            UserId = Guid.Empty,
+            PreferredNodeId = deploymentExecutionContext.Current?.TargetNodeId,
+            FleetCapacityReserved = deploymentExecutionContext.Current?.CapacityReserved == true
         }, token);
 
         if (container is not null && container.Id == Guid.Empty)
@@ -302,6 +358,38 @@ public class AwdpInstanceService(
 
         return container;
     }
+
+    public async Task<bool> ExecuteQueuedCreateAsync(int instanceId, CancellationToken token)
+    {
+        var instance = await context.AwdpServiceInstances
+            .Include(item => item.Service)
+            .FirstOrDefaultAsync(item => item.Id == instanceId, token);
+        if (instance is null)
+            return false;
+        if (instance.ContainerId is not null)
+            return true;
+
+        var flag = await GetCurrentFlagValue(instance, token);
+        var container = await CreateContainer(instance.Service, instance.TeamId,
+            string.IsNullOrWhiteSpace(instance.NetworkName) ? null : instance.NetworkName, flag, token);
+        if (container is null)
+            return false;
+        if (container.Id == Guid.Empty)
+            container.Id = Guid.CreateVersion7();
+        await context.Containers.AddAsync(container, token);
+        instance.Container = container;
+        instance.ContainerId = container.Id;
+        instance.IsRunning = container.Status == ContainerStatus.Running;
+        instance.CreatedAt = DateTimeOffset.UtcNow;
+        await context.SaveChangesAsync(token);
+        await nginxProxySync.TrySyncNowAsync("AWDP queued container created", token);
+        return instance.IsRunning;
+    }
+
+    public Task<(bool Success, string Message)> ExecuteQueuedResetAsync(int instanceId,
+        CancellationToken token) =>
+        RunWithInstanceLock(instanceId, token,
+            () => ResetInstance(instanceId, AwdpResetType.Admin, false, null, token, recordReset: false));
 
     async Task DestroyInstanceContainer(AwdpServiceInstance instance, CancellationToken token)
     {
