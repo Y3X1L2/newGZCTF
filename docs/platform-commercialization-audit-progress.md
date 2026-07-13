@@ -4,6 +4,10 @@
 
 ## 2026-07-13 Phase 7 计划编写与代码事实基线
 
+- Phase 7 大单元 4 已完成：runtime queue/scheduling/execution/capacity、image distribution、node/Agent、TeamLab 和 VM ready 生命周期均写统一 `OperationalEvent`，状态与事件按同一工作单元提交。
+- ticket enqueue 已持久化 W3C trace context，worker 使用 ticket correlation 建立 consumer span；Agent 失败、节点关键 transition、镜像 worker claim 和 TeamLab 多 shard 生命周期均可跨模块关联。
+- TeamLab 已统一使用 `TeamLabEventRecorder` 双写局部事件和平台 operational event，旧的散落 `new TeamLabEvent` 构造已从 application services 清理。
+- 大单元 4 集中门禁通过：Release solution build `0` warning / `0` error，runtime/capacity/image/node/TeamLab 专项 `118/118`。
 - Phase 7 大单元 3 已完成：主站注册 runtime/Agent/operations meters 与全部业务 ActivitySource，运行队列和节点健康状态使用低基数快照指标。
 - `OperationalCorrelation` 已改为 `AsyncLocal` ambient context；Agent HTTP 调用统一传播 correlation、建立业务 span、记录稳定 operation/耗时/结果/error category。
 - Agent 已使用统一 correlation/error middleware，认证、模型校验、Docker、KVM、镜像和 TeamLab 错误返回稳定 typed contract；主站 `AgentClientException` 携带 `OperationalError`，不再依赖错误文本分类。

@@ -1,5 +1,7 @@
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Services.Fleet;
 using GZCTF.Services.TeamLab;
@@ -11,13 +13,22 @@ public sealed class TeamLabRuntimeCleanupService(
     AppDbContext context,
     ITeamLabNodeExecutor executor,
     TeamLabTrafficApplicationService traffic,
-    IPublicUdpGatewayProvider publicGateway)
+    IPublicUdpGatewayProvider publicGateway,
+    TeamLabEventRecorder eventRecorder)
 {
     public async Task<TeamLabNodeResult> CleanupAsync(
         TeamLabRuntime runtime,
         CancellationToken cancellationToken)
     {
         var generation = runtime.Generation;
+        eventRecorder.Record(
+            runtime,
+            "cleanup",
+            TeamLabEventLevel.Info,
+            OperationalEventCodes.TeamLab.CleanupStarted,
+            OperationalEventOutcome.Started,
+            "Runtime resource cleanup started.");
+        await context.SaveChangesAsync(cancellationToken);
         var shards = runtime.Shards.Where(item => item.Generation == generation).ToArray();
         await traffic.StopCollectorsAsync(runtime, cancellationToken);
         var results = await Task.WhenAll(shards.Select(shard => executor.CleanupShardAsync(
@@ -36,7 +47,19 @@ public sealed class TeamLabRuntimeCleanupService(
             runtime.IsOpenToPlayers = false;
             runtime.LastError = Trim(string.Join("; ", errors));
             runtime.UpdatedAt = DateTimeOffset.UtcNow;
-            runtime.Events.Add(Event(runtime, "cleanup", TeamLabEventLevel.Error, runtime.LastError));
+            eventRecorder.Record(
+                runtime,
+                "cleanup",
+                TeamLabEventLevel.Error,
+                OperationalEventCodes.TeamLab.CleanupFailed,
+                OperationalEventOutcome.Failed,
+                "Runtime resource cleanup failed.",
+                new OperationalError(
+                    OperationalErrorCategory.Network,
+                    OperationalErrorCodes.NetworkOperationFailed,
+                    "TeamLab cleanup failed.",
+                    true,
+                    Operation: "teamlab.cleanup"));
             await context.SaveChangesAsync(cancellationToken);
             return TeamLabNodeResult.Failed(runtime.LastError);
         }
@@ -72,6 +95,13 @@ public sealed class TeamLabRuntimeCleanupService(
         runtime.IsOpenToPlayers = false;
         runtime.LastError = null;
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
+        eventRecorder.Record(
+            runtime,
+            "cleanup",
+            TeamLabEventLevel.Success,
+            OperationalEventCodes.TeamLab.CleanupSucceeded,
+            OperationalEventOutcome.Succeeded,
+            "Runtime resources were cleaned successfully.");
         await context.SaveChangesAsync(cancellationToken);
         return TeamLabNodeResult.Ok("Runtime resources cleaned.");
     }
@@ -96,16 +126,6 @@ public sealed class TeamLabRuntimeCleanupService(
             assets.Where(item => item.Kind == TeamLabResourceKind.Vm && !string.IsNullOrWhiteSpace(item.RuntimeResourceId))
                 .Select(item => item.RuntimeResourceId!).ToArray());
     }
-
-    private static TeamLabEvent Event(TeamLabRuntime runtime, string stage, TeamLabEventLevel level, string message) => new()
-    {
-        RuntimeId = runtime.Id,
-        Generation = runtime.Generation,
-        Stage = stage,
-        Level = level,
-        Message = Trim(message),
-        CreatedAt = DateTimeOffset.UtcNow
-    };
 
     private static string Trim(string value) => value.Length <= 1024 ? value : value[..1024];
 }

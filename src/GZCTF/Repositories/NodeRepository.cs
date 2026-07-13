@@ -1,4 +1,6 @@
 using GZCTF.Models.Data;
+using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,8 +9,13 @@ namespace GZCTF.Repositories;
 public class NodeRepository : INodeRepository
 {
     private readonly AppDbContext _context;
+    private readonly IOperationalEventWriter _events;
 
-    public NodeRepository(AppDbContext context) => _context = context;
+    public NodeRepository(AppDbContext context, IOperationalEventWriter events)
+    {
+        _context = context;
+        _events = events;
+    }
 
     public Task<List<WorkerNode>> GetOnlineNodesAsync(CancellationToken token)
     {
@@ -34,7 +41,22 @@ public class NodeRepository : INodeRepository
                 && !n.IsLocal
                 && (!n.LastHeartbeat.HasValue || n.LastHeartbeat < cutoff))
             .ToListAsync(token);
-        foreach (var node in stale) node.Status = NodeStatus.Offline;
+        foreach (var node in stale)
+        {
+            node.Status = NodeStatus.Offline;
+            _events.Append(NodeOperationalEvents.Create(
+                node,
+                OperationalEventCodes.Node.Offline,
+                OperationalEventOutcome.Observed,
+                "Worker node heartbeat expired and the node became offline.",
+                OperationalEventSeverity.Warning,
+                detail: new Dictionary<string, object?>
+                {
+                    ["previousStatus"] = NodeStatus.Online.ToString(),
+                    ["currentStatus"] = NodeStatus.Offline.ToString(),
+                    ["reasonCode"] = "heartbeat_timeout"
+                }));
+        }
         if (stale.Count > 0) await _context.SaveChangesAsync(token);
         return stale.Count;
     }

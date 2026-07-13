@@ -49,6 +49,17 @@
 - 主站 `AgentClientException` 已携带 `OperationalError`，非成功响应优先读取 Agent typed error；节点缺失、超时、传输失败、协议空响应、镜像校验失败均有稳定 category/code/retryable。
 - 集中门禁：Release solution build `0` warning / `0` error；Phase 7 observability/Agent contract 专项测试 `21/21`。
 
+### 2026-07-13 大单元 4 完成
+
+- `DeploymentQueueTicket` enqueue 时已持久化 W3C `traceparent`/`tracestate`；ticket id 作为稳定 correlation，调度与执行 worker 从持久化上下文建立 consumer activity。
+- 队列 enqueue/duplicate/cancel/admission/recovery、调度 started/blocked/assigned、执行 started/succeeded/failed 和 Extend/Stop/Reset/Destroy 控制操作均写结构化事件；状态、typed error 与事件在同一工作单元保存。
+- 容量 reserve/block/confirm/release/expire/conflict 已接入事件；单节点与 TeamLab 多 shard reservation 使用相同 ticket correlation，不把节点或 ticket ID 写入 metric label。
+- 镜像 queued/claimed/transfer/verify/ready/retry/failure/reference/cleanup/reconcile 已接入事件，镜像 record 同步保存 error category/code/retryable/last correlation；worker claim 与事件在同一事务提交。
+- 节点注册、注销、上下线、能力、可调度、Agent sync 和 TeamLab tunnel health transition 已接入；正常 heartbeat、status poll 和成功 Agent call 不写 durable event，Agent call failure 统一写 `agent.call.failed`。
+- TeamLab 已新增统一 `TeamLabEventRecorder`，planner、placement、network、route、asset、probe、deploy、reset、destroy、cleanup、access grant 和 capture 不再散落构造 `TeamLabEvent`，并与 `OperationalEvent` 双写同一工作单元。
+- VM boot probe、ready、remote access opened/failed 已接入事件，轮询通过存在性集合避免重复事件和 N+1 查询。
+- 集中门禁：Release solution build `0` warning / `0` error；runtime/capacity/image/node/TeamLab 专项测试 `118/118`。
+
 ## 0. Phase Boundary
 
 ### 0.1 Must Complete
@@ -330,11 +341,11 @@ Agent 新增 `GET /api/runtime/inventory`：
 - Modify: TeamLab planner/orchestrator/placement/cleanup/access-grant.
 - Test: runtime、image、node、TeamLab lifecycle events.
 
-- [ ] Persist producer trace context and queue/capacity events atomically.
-- [ ] Emit image and node transition events without heartbeat noise.
-- [ ] Replace scattered TeamLab event construction with recorder.
-- [ ] Add lifecycle spans and metrics.
-- [ ] Run one concentrated Create/Extend/Stop/Reset/Destroy/failure/recovery gate.
+- [x] Persist producer trace context and queue/capacity events atomically.
+- [x] Emit image and node transition events without heartbeat noise.
+- [x] Replace scattered TeamLab event construction with recorder.
+- [x] Add lifecycle spans and metrics.
+- [x] Run one concentrated Create/Extend/Stop/Reset/Destroy/failure/recovery gate.
 
 ### Task 5: Agent Inventory and Fact-based Recovery
 

@@ -1,8 +1,15 @@
+using System.Diagnostics;
+using GZCTF.Infrastructure.Telemetry;
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Audit.Domain;
+using GZCTF.Modules.Audit.Infrastructure;
 using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.Runtime.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace GZCTF.Services.Fleet;
 
@@ -32,12 +39,16 @@ public class DeploymentQueueService
     readonly ILogger<DeploymentQueueService> _logger;
     readonly IDeploymentQueueWakeup _wakeup;
     readonly RuntimeAdmissionPolicy? _admission;
+    readonly IOperationalEventWriter _events;
+    readonly OperationalCorrelation _correlation;
 
     public DeploymentQueueService(AppDbContext context, ILogger<DeploymentQueueService> logger)
     {
         _context = context;
         _logger = logger;
         _wakeup = new PollingDeploymentQueueWakeup();
+        _events = DefaultEvents(context);
+        _correlation = new OperationalCorrelation();
     }
 
     public DeploymentQueueService(AppDbContext context, FleetCapacityReservationService capacity,
@@ -47,6 +58,8 @@ public class DeploymentQueueService
         _capacity = capacity;
         _logger = logger;
         _wakeup = new PollingDeploymentQueueWakeup();
+        _events = DefaultEvents(context);
+        _correlation = new OperationalCorrelation();
     }
 
     public DeploymentQueueService(AppDbContext context, FleetCapacityReservationService capacity,
@@ -56,6 +69,8 @@ public class DeploymentQueueService
         _capacity = capacity;
         _wakeup = wakeup;
         _logger = logger;
+        _events = DefaultEvents(context);
+        _correlation = new OperationalCorrelation();
     }
 
     public DeploymentQueueService(AppDbContext context, FleetCapacityReservationService capacity,
@@ -66,11 +81,30 @@ public class DeploymentQueueService
         _capacity = capacity;
         _admission = admission;
         _wakeup = wakeup;
+        _events = DefaultEvents(context);
+        _correlation = new OperationalCorrelation();
+        _logger = logger;
+    }
+
+    public DeploymentQueueService(AppDbContext context, FleetCapacityReservationService capacity,
+        RuntimeAdmissionPolicy admission, IDeploymentQueueWakeup wakeup,
+        IOperationalEventWriter events, OperationalCorrelation correlation,
+        ILogger<DeploymentQueueService> logger)
+    {
+        _context = context;
+        _capacity = capacity;
+        _admission = admission;
+        _wakeup = wakeup;
+        _events = events;
+        _correlation = correlation;
         _logger = logger;
     }
 
     public async Task<DeploymentQueueResult> EnqueueAsync(DeploymentQueueRequest request, CancellationToken token)
     {
+        using var activity = PlatformTelemetry.RuntimeActivitySource.StartActivity("runtime.enqueue", ActivityKind.Producer);
+        activity?.SetTag("runtime.workload", request.Kind.ToString());
+        activity?.SetTag("runtime.operation", request.Operation.ToString());
         var identity = DeploymentQueueTicket.BuildActiveIdentity(request);
         var subjectKey = DeploymentQueueTicket.BuildSubjectConcurrencyKey(request);
         await using var transaction = _context.Database.IsRelational()
@@ -93,6 +127,13 @@ public class DeploymentQueueService
 
         if (existing is not null)
         {
+            using var correlationScope = _correlation.Begin(existing.Id);
+            _events.Append(RuntimeOperationalEvents.Ticket(
+                existing,
+                OperationalEventCodes.Runtime.TicketDuplicate,
+                OperationalEventOutcome.Observed,
+                "An active deployment ticket was reused."));
+            await _context.SaveChangesAsync(token);
             var existingStatus = await GetStatusAsync(existing.Id, token)
                 ?? DeploymentQueueStatusModel.FromTicket(existing, queuePosition: 0);
             _logger.SystemLog(
@@ -114,6 +155,13 @@ public class DeploymentQueueService
             if (request.Operation == RuntimeOperationKind.Create)
             {
                 var subjectTicket = subjectTickets[0];
+                using var correlationScope = _correlation.Begin(subjectTicket.Id);
+                _events.Append(RuntimeOperationalEvents.Ticket(
+                    subjectTicket,
+                    OperationalEventCodes.Runtime.TicketDuplicate,
+                    OperationalEventOutcome.Observed,
+                    "A subject-level active deployment ticket was reused."));
+                await _context.SaveChangesAsync(token);
                 var subjectStatus = await GetStatusAsync(subjectTicket.Id, token)
                     ?? DeploymentQueueStatusModel.FromTicket(subjectTicket, queuePosition: 0);
                 if (transaction is not null)
@@ -128,11 +176,63 @@ public class DeploymentQueueService
         }
 
         if (_admission is not null)
-            await _admission.EnsureQueueCapacityAsync(request, token);
+        {
+            try
+            {
+                await _admission.EnsureQueueCapacityAsync(request, token);
+            }
+            catch (Exception exception)
+            {
+                var correlationId = _correlation.Current ?? Guid.CreateVersion7();
+                await _events.AppendAndSaveAsync(new OperationalEventDraft(
+                    OperationalEventCodes.Runtime.AdmissionBlocked,
+                    OperationalEventOutcome.Failed,
+                    "Runtime admission rejected the deployment request.",
+                    OperationalEventSeverity.Warning,
+                    correlationId,
+                    OperationalErrorCategory.Capacity,
+                    OperationalErrorCodes.RuntimeCapacityExhausted,
+                    true,
+                    new Dictionary<string, object?>
+                    {
+                        ["workload"] = request.Kind.ToString(),
+                        ["operation"] = request.Operation.ToString(),
+                        ["dockerSlots"] = request.DockerSlots,
+                        ["vmSlots"] = request.VmSlots
+                    },
+                    OwnerUserId: request.OwnerUserId,
+                    OwnerTeamId: request.OwnerTeamId,
+                    GameId: request.GameId,
+                    ChallengeId: request.ChallengeId,
+                    TeamLabRuntimeId: request.TeamLabRuntimeId,
+                    VmInstanceId: request.VmInstanceId,
+                    SubjectType: request.SubjectType ?? request.Kind.ToString(),
+                    SubjectId: request.SubjectPublicId,
+                    SubjectDisplayName: request.SubjectDisplayName,
+                    ResourceType: "deployment-request",
+                    ResourceId: identity,
+                    ResourceDisplayName: request.ResourceDisplayName), token);
+                activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
+                throw;
+            }
+        }
 
         var ticket = DeploymentQueueTicket.Create(request);
+        using var ticketCorrelationScope = _correlation.Begin(ticket.Id);
         _context.DeploymentQueueTickets.Add(ticket);
+        _events.Append(RuntimeOperationalEvents.Ticket(
+            ticket,
+            OperationalEventCodes.Runtime.AdmissionAccepted,
+            OperationalEventOutcome.Succeeded,
+            "Runtime admission accepted the deployment request."));
+        _events.Append(RuntimeOperationalEvents.Ticket(
+            ticket,
+            OperationalEventCodes.Runtime.TicketEnqueued,
+            OperationalEventOutcome.Pending,
+            "Deployment ticket entered the runtime queue."));
         await _context.SaveChangesAsync(token);
+        PlatformTelemetry.RecordRuntimeTransition(ticket.Kind.ToString(), ticket.Stage.ToString(), "enqueued");
+        activity?.SetTag("gzctf.deployment_ticket_id", ticket.Id.ToString());
 
         _logger.LogInformation("Deployment queue ticket {TicketId} created for {Kind}", ticket.Id, ticket.Kind);
         _logger.SystemLog(
@@ -191,9 +291,24 @@ public class DeploymentQueueService
         ticket.ClaimExpiresAt = null;
         ticket.ProtectedPayload = null;
 
+        using var correlationScope = _correlation.Begin(ticket.Id);
+        _events.Append(RuntimeOperationalEvents.Ticket(
+            ticket,
+            OperationalEventCodes.Runtime.TicketCancelled,
+            OperationalEventOutcome.Cancelled,
+            "Deployment ticket was cancelled.",
+            OperationalEventSeverity.Information,
+            detail: new Dictionary<string, object?>
+            {
+                ["workload"] = ticket.Kind.ToString(),
+                ["operation"] = ticket.Operation.ToString(),
+                ["stage"] = ticket.Stage.ToString(),
+                ["reasonCode"] = "ticket_cancelled"
+            }));
         if (shouldReleaseCapacity)
             await ReleaseTicketCapacityAsync(ticket, nodeId, dockerSlots, vmSlots, token);
         await _context.SaveChangesAsync(token);
+        PlatformTelemetry.RecordRuntimeTransition(ticket.Kind.ToString(), ticket.Stage.ToString(), "cancelled");
 
         _logger.SystemLog(
             $"Deployment queue ticket cancelled: ticket={ticket.Id}, kind={ticket.Kind}, node={nodeId}, reason={ticket.ErrorMessage}.",
@@ -235,8 +350,14 @@ public class DeploymentQueueService
                 ticket.ErrorMessage = null;
                 ticket.CompletedAt = DateTimeOffset.UtcNow;
                 ticket.ProtectedPayload = null;
+                _events.Append(RuntimeOperationalEvents.Ticket(
+                    ticket,
+                    OperationalEventCodes.Runtime.ExecutionClaimRecovered,
+                    OperationalEventOutcome.Recovered,
+                    "Expired execution claim was completed from runtime facts."));
                 if (_capacity is not null && ticket.Operation == RuntimeOperationKind.Create)
                     await ConfirmTicketCapacityAsync(ticket, token);
+                PlatformTelemetry.RecordRecoveryDecision("completed", ticket.Kind.ToString());
                 _logger.SystemLog(
                     $"Stale deployment ticket confirmed from runtime facts: ticket={ticket.Id}, kind={ticket.Kind}, node={ticket.TargetNodeId}.",
                     TaskStatus.Success, LogLevel.Information);
@@ -253,6 +374,13 @@ public class DeploymentQueueService
                 ticket.CompletedAt = null;
                 ticket.AttemptCount++;
                 replayIds.Add(ticket.Id);
+                _events.Append(RuntimeOperationalEvents.Ticket(
+                    ticket,
+                    OperationalEventCodes.Runtime.ExecutionReplayQueued,
+                    OperationalEventOutcome.Recovered,
+                    "Expired execution claim was queued for idempotent replay.",
+                    OperationalEventSeverity.Warning));
+                PlatformTelemetry.RecordRecoveryDecision("safe_replay", ticket.Kind.ToString());
                 _logger.SystemLog(
                     $"Stale deployment ticket scheduled for idempotent replay: ticket={ticket.Id}, kind={ticket.Kind}, node={ticket.TargetNodeId}.",
                     TaskStatus.Pending, LogLevel.Warning);
@@ -265,7 +393,23 @@ public class DeploymentQueueService
             ticket.StageMessage = ticket.ErrorMessage;
             ticket.CompletedAt = DateTimeOffset.UtcNow;
             ticket.ProtectedPayload = null;
+            var error = RuntimeOperationalEvents.Failure(
+                ticket,
+                "runtime.recover",
+                code: OperationalErrorCodes.RuntimeIdentityConflict,
+                category: OperationalErrorCategory.Conflict);
+            ticket.ErrorCategory = error.Category;
+            ticket.ErrorCode = error.Code;
+            ticket.Retryable = error.Retryable;
+            _events.Append(RuntimeOperationalEvents.Ticket(
+                ticket,
+                OperationalEventCodes.Runtime.ExecutionFailedClosed,
+                OperationalEventOutcome.Failed,
+                "Expired execution claim failed closed.",
+                OperationalEventSeverity.Warning,
+                error));
             await ReleaseTicketCapacityAsync(ticket, ticket.TargetNodeId, ticket.DockerSlots, ticket.VmSlots, token);
+            PlatformTelemetry.RecordRecoveryDecision("failed_closed", ticket.Kind.ToString());
             _logger.SystemLog(
                 $"Stale deployment ticket failed closed: ticket={ticket.Id}, kind={ticket.Kind}, node={ticket.TargetNodeId}.",
                 TaskStatus.Failed, LogLevel.Warning);
@@ -468,4 +612,7 @@ public class DeploymentQueueService
         string.IsNullOrWhiteSpace(reason)
             ? "Deployment queue ticket was cancelled."
             : reason.Length <= 1024 ? reason : reason[..1024];
+
+    static IOperationalEventWriter DefaultEvents(AppDbContext context) =>
+        new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance);
 }

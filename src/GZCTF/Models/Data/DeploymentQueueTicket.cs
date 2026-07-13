@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Diagnostics;
 using GZCTF.Services.Fleet;
 using GZCTF.Modules.Audit.Domain;
 
@@ -53,8 +54,11 @@ public class DeploymentQueueTicket
     [ForeignKey(nameof(TargetNodeId))]
     public WorkerNode? TargetNode { get; set; }
 
-    public static DeploymentQueueTicket Create(DeploymentQueueRequest request) => new()
+    public static DeploymentQueueTicket Create(DeploymentQueueRequest request)
     {
+        var activity = Activity.Current;
+        return new DeploymentQueueTicket
+        {
         Kind = request.Kind,
         Operation = request.Operation,
         OwnerTeamId = request.OwnerTeamId,
@@ -77,8 +81,11 @@ public class DeploymentQueueTicket
         SubjectDisplayName = request.SubjectDisplayName,
         ResourceDisplayName = request.ResourceDisplayName,
         ProtectedPayload = request.ProtectedPayload,
-        PayloadHash = request.PayloadHash
-    };
+            PayloadHash = request.PayloadHash,
+            TraceParent = activity?.Id,
+            TraceState = activity?.TraceStateString
+        };
+    }
 
     public static string BuildActiveIdentity(DeploymentQueueRequest request) =>
         $"{request.Operation}:{BuildSubjectConcurrencyKey(request)}:{Math.Max(1, request.Generation)}";

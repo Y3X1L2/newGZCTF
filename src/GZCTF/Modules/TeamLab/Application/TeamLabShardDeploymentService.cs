@@ -1,6 +1,8 @@
 using System.Text.Json;
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Services;
@@ -14,7 +16,8 @@ public sealed class TeamLabShardDeploymentService(
     AppDbContext context,
     ITeamLabNodeExecutor executor,
     TeamLabRouteApplicationService routes,
-    IServiceScopeFactory scopeFactory)
+    IServiceScopeFactory scopeFactory,
+    TeamLabEventRecorder eventRecorder)
 {
     public async Task DeployAsync(
         TeamLabRuntime runtime,
@@ -59,8 +62,38 @@ public sealed class TeamLabShardDeploymentService(
             }
             throw new TeamLabRuntimeExecutionException(networkError.Message);
         }
+        eventRecorder.Record(
+            runtime,
+            "network",
+            TeamLabEventLevel.Success,
+            OperationalEventCodes.TeamLab.NetworkApplied,
+            OperationalEventOutcome.Succeeded,
+            "Runtime shard networks were applied.",
+            detail: new Dictionary<string, object?>
+            {
+                ["generation"] = runtime.Generation,
+                ["stage"] = "network",
+                ["shardCount"] = currentShards.Length,
+                ["assetCount"] = runtimeAssets.Length
+            });
+        await context.SaveChangesAsync(cancellationToken);
 
         await routes.ApplyAsync(runtime, definition, cancellationToken);
+        eventRecorder.Record(
+            runtime,
+            "route",
+            TeamLabEventLevel.Success,
+            OperationalEventCodes.TeamLab.RouteApplied,
+            OperationalEventOutcome.Succeeded,
+            "Runtime routes were applied.",
+            detail: new Dictionary<string, object?>
+            {
+                ["generation"] = runtime.Generation,
+                ["stage"] = "route",
+                ["routeCount"] = definition.Connections.Count,
+                ["shardCount"] = currentShards.Length
+            });
+        await context.SaveChangesAsync(cancellationToken);
         var topologyAssets = definition.Assets.ToDictionary(item => item.Key, StringComparer.Ordinal);
         var allowedRoutes = BuildAllowedRoutes(runtime, definition);
         foreach (var orderGroup in definition.Assets.GroupBy(item => item.OrderIndex).OrderBy(item => item.Key))
@@ -81,6 +114,41 @@ public sealed class TeamLabShardDeploymentService(
                 result.Asset.Status = result.Result.Success ? TeamLabRuntimeStatus.Running : TeamLabRuntimeStatus.Failed;
                 result.Asset.RuntimeResourceId = result.Result.RuntimeResourceId;
                 result.Asset.LastError = result.Result.Success ? null : Trim(result.Result.Message);
+                var shard = runtime.Shards.Single(item => item.Id == result.Asset.ShardId);
+                eventRecorder.Record(
+                    runtime,
+                    "asset",
+                    result.Result.Success ? TeamLabEventLevel.Success : TeamLabEventLevel.Error,
+                    result.Result.Success
+                        ? OperationalEventCodes.TeamLab.AssetCreated
+                        : OperationalEventCodes.TeamLab.AssetCreateFailed,
+                    result.Result.Success
+                        ? OperationalEventOutcome.Succeeded
+                        : OperationalEventOutcome.Failed,
+                    result.Result.Success
+                        ? "Runtime asset was created."
+                        : "Runtime asset creation failed.",
+                    result.Result.Success
+                        ? null
+                        : new OperationalError(
+                            result.Asset.Kind == TeamLabResourceKind.Vm
+                                ? OperationalErrorCategory.Kvm
+                                : OperationalErrorCategory.Docker,
+                            result.Asset.Kind == TeamLabResourceKind.Vm
+                                ? OperationalErrorCodes.KvmOperationFailed
+                                : OperationalErrorCodes.DockerOperationFailed,
+                            "TeamLab asset creation failed.",
+                            true,
+                            WorkerNodeId: shard.WorkerNodeId,
+                            Operation: "teamlab.asset.create"),
+                    shard.WorkerNodeId,
+                    new Dictionary<string, object?>
+                    {
+                        ["generation"] = runtime.Generation,
+                        ["stage"] = "asset",
+                        ["assetCount"] = 1,
+                        ["imageType"] = result.Asset.Kind.ToString()
+                    });
             }
             await context.SaveChangesAsync(cancellationToken);
             var assetFailure = results.FirstOrDefault(item => !item.Result.Success);
@@ -109,6 +177,14 @@ public sealed class TeamLabShardDeploymentService(
             });
         if (probeFailure.TryPeek(out var failure))
             throw new TeamLabRuntimeExecutionException(failure);
+        eventRecorder.Record(
+            runtime,
+            "probe",
+            TeamLabEventLevel.Success,
+            OperationalEventCodes.TeamLab.ProbeSucceeded,
+            OperationalEventOutcome.Succeeded,
+            "Runtime asset probes completed successfully.");
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     async Task PrepareImageAsync(

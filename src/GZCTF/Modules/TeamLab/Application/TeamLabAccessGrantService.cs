@@ -4,6 +4,7 @@ using System.Text;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.TeamLab.Contracts;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
@@ -22,7 +23,8 @@ public sealed class TeamLabAccessGrantService(
     ITeamLabNodeExecutor executor,
     IDataProtectionProvider protectionProvider,
     IOptions<PublicUdpGatewayConfig> gatewayOptions,
-    IOptions<ContainerProvider> containerOptions)
+    IOptions<ContainerProvider> containerOptions,
+    TeamLabEventRecorder eventRecorder)
 {
     private readonly IDataProtector _protector = protectionProvider.CreateProtector("GZCTF.TeamLab.WireGuardGrant.v1");
     private readonly PublicUdpGatewayConfig _gateway = gatewayOptions.Value;
@@ -92,14 +94,14 @@ public sealed class TeamLabAccessGrantService(
         }
         runtime.AccessGrants.Add(grant);
         runtime.IsOpenToPlayers = true;
-        runtime.Events.Add(new TeamLabEvent
-        {
-            RuntimeId = runtime.Id,
-            Generation = runtime.Generation,
-            Stage = "access",
-            Level = TeamLabEventLevel.Success,
-            Message = "WireGuard access grant created."
-        });
+        eventRecorder.Record(
+            runtime,
+            "access",
+            TeamLabEventLevel.Success,
+            OperationalEventCodes.TeamLab.AccessOpened,
+            OperationalEventOutcome.Succeeded,
+            "WireGuard access grant created.",
+            workerNodeId: entryShard.WorkerNodeId);
         await context.SaveChangesAsync(cancellationToken);
         return ToModel(runtime, grant,
             $"/api/open/v1/teamlab/runtimes/{runtime.PublicId:D}/access-grants/{grant.PublicId:D}/download?token={token}");
@@ -144,6 +146,14 @@ public sealed class TeamLabAccessGrantService(
         grant.RevokedAt = DateTimeOffset.UtcNow;
         runtime.IsOpenToPlayers = runtime.AccessGrants.Any(item => item.Id != grant.Id &&
                                                                    item.Generation == runtime.Generation && !item.Revoked);
+        eventRecorder.Record(
+            runtime,
+            "access",
+            TeamLabEventLevel.Info,
+            OperationalEventCodes.TeamLab.AccessRevoked,
+            OperationalEventOutcome.Succeeded,
+            "WireGuard access grant revoked.",
+            workerNodeId: entryShard.WorkerNodeId);
         await context.SaveChangesAsync(cancellationToken);
     }
 

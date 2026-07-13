@@ -3,6 +3,8 @@ using System.Text;
 using System.Text.Json;
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Infrastructure.Concurrency;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +16,8 @@ public sealed class TeamLabTrafficApplicationService(
     AppDbContext context,
     ITeamLabNodeExecutor executor,
     IDistributedLeaseProvider locks,
-    ITeamLabTrafficIngestor ingestor)
+    ITeamLabTrafficIngestor ingestor,
+    TeamLabEventRecorder eventRecorder)
 {
     public async Task StartCollectorsAsync(TeamLabRuntime runtime, CancellationToken cancellationToken)
     {
@@ -156,6 +159,17 @@ public sealed class TeamLabTrafficApplicationService(
         job.FilePath = result.FilePath;
         job.CapturedBytes = result.CapturedBytes;
         job.LastError = result.Success ? null : result.Message;
+        eventRecorder.Record(
+            runtime,
+            "capture",
+            result.Success ? TeamLabEventLevel.Success : TeamLabEventLevel.Error,
+            result.Success
+                ? OperationalEventCodes.TeamLab.CaptureStarted
+                : OperationalEventCodes.TeamLab.CaptureFailed,
+            result.Success ? OperationalEventOutcome.Started : OperationalEventOutcome.Failed,
+            result.Success ? "Traffic capture started." : "Traffic capture failed to start.",
+            result.Success ? null : CaptureError(workerNodeId),
+            workerNodeId);
         await context.SaveChangesAsync(cancellationToken);
         if (!result.Success) throw new TeamLabApiContractException("operation_failed", result.Message, 500);
         return ToModel(job, network.TopologyKey);
@@ -177,6 +191,15 @@ public sealed class TeamLabTrafficApplicationService(
                 job.Status = TeamLabTrafficCaptureStatus.Failed;
                 job.LastError = result.Message;
                 job.CompletedAt = DateTimeOffset.UtcNow;
+                eventRecorder.Record(
+                    runtime,
+                    "capture",
+                    TeamLabEventLevel.Error,
+                    OperationalEventCodes.TeamLab.CaptureFailed,
+                    OperationalEventOutcome.Failed,
+                    "Traffic capture status check failed.",
+                    CaptureError(nodeId),
+                    nodeId);
             }
             else if (!result.Running)
             {
@@ -206,6 +229,17 @@ public sealed class TeamLabTrafficApplicationService(
         job.FilePath = result.FilePath ?? job.FilePath;
         job.LastError = result.Success ? null : result.Message;
         job.CompletedAt = DateTimeOffset.UtcNow;
+        eventRecorder.Record(
+            runtime,
+            "capture",
+            result.Success ? TeamLabEventLevel.Success : TeamLabEventLevel.Error,
+            result.Success
+                ? OperationalEventCodes.TeamLab.CaptureStopped
+                : OperationalEventCodes.TeamLab.CaptureFailed,
+            result.Success ? OperationalEventOutcome.Succeeded : OperationalEventOutcome.Failed,
+            result.Success ? "Traffic capture stopped." : "Traffic capture failed to stop.",
+            result.Success ? null : CaptureError(job.WorkerNodeId.Value),
+            job.WorkerNodeId.Value);
         await context.SaveChangesAsync(cancellationToken);
         return ToModel(job, job.Network?.TopologyKey);
     }
@@ -328,6 +362,15 @@ public sealed class TeamLabTrafficApplicationService(
     private static TeamLabCaptureModel ToModel(TeamLabTrafficCaptureJob job, string? networkKey) =>
         new(job.PublicId, job.Status, job.Scope, networkKey, job.MaxBytes, job.MaxSeconds, job.CapturedBytes,
             job.CreatedAt, job.StartedAt, job.CompletedAt, job.ExpiresAt, job.LastError);
+
+    private static OperationalError CaptureError(Guid workerNodeId) =>
+        new(
+            OperationalErrorCategory.Network,
+            OperationalErrorCodes.NetworkOperationFailed,
+            "TeamLab traffic capture operation failed.",
+            true,
+            WorkerNodeId: workerNodeId,
+            Operation: "teamlab.capture");
 
     private static TimeCursor? DecodeCursor(string? cursor)
     {

@@ -33,6 +33,7 @@ public static class OperationalErrorCodes
     public const string ImageTransferFailed = "image.transfer_failed";
     public const string ImageTransferTimeout = "image.transfer_timeout";
     public const string ImageDigestMismatch = "image.digest_mismatch";
+    public const string ImageCleanupFailed = "image.cleanup_failed";
     public const string NodeNotFound = "node.not_found";
     public const string NodeOffline = "node.offline";
     public const string AgentFeatureMissing = "agent.feature_missing";

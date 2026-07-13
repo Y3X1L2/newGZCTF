@@ -5,7 +5,10 @@ using GZCTF.Modules.Audit.Domain;
 
 namespace GZCTF.Infrastructure.Telemetry;
 
-public sealed class AgentTelemetryHandler(OperationalCorrelation correlation) : DelegatingHandler
+public sealed class AgentTelemetryHandler(
+    OperationalCorrelation correlation,
+    IServiceScopeFactory? scopeFactory = null,
+    ILogger<AgentTelemetryHandler>? logger = null) : DelegatingHandler
 {
     public const string WorkerNodeHeaderName = "X-GZCTF-Worker-Node-Id";
     public const string ErrorCategoryHeaderName = "X-GZCTF-Error-Category";
@@ -46,6 +49,8 @@ public sealed class AgentTelemetryHandler(OperationalCorrelation correlation) : 
                 activity?.SetTag("error.type", ReadHeader(response, ErrorCodeHeaderName) ??
                                                 OperationalErrorCodes.UnclassifiedFailure);
                 activity?.SetTag("error.category", errorCategory?.ToString());
+                var error = BuildResponseError(response, operation, errorCategory);
+                await RecordFailureAsync(request, operation, correlationId, error, cancellationToken);
             }
 
             PlatformTelemetry.RecordAgentCall(operation, success,
@@ -61,6 +66,7 @@ public sealed class AgentTelemetryHandler(OperationalCorrelation correlation) : 
             activity?.SetTag("error.category", error.Category.ToString());
             PlatformTelemetry.RecordAgentCall(operation, false,
                 Stopwatch.GetElapsedTime(startedAt), error.Category);
+            await RecordFailureAsync(request, operation, correlationId, error, cancellationToken);
             throw;
         }
     }
@@ -80,6 +86,66 @@ public sealed class AgentTelemetryHandler(OperationalCorrelation correlation) : 
 
     private static string? ReadHeader(HttpResponseMessage response, string name) =>
         response.Headers.TryGetValues(name, out var values) ? values.FirstOrDefault() : null;
+
+    private static OperationalError BuildResponseError(
+        HttpResponseMessage response,
+        string operation,
+        OperationalErrorCategory? category)
+    {
+        var code = ReadHeader(response, ErrorCodeHeaderName) ?? OperationalErrorCodes.UnclassifiedFailure;
+        var retryable = bool.TryParse(ReadHeader(response, RetryableHeaderName), out var parsed) && parsed;
+        return new OperationalError(
+            category ?? OperationalErrorCategory.Unknown,
+            code,
+            "Agent call failed.",
+            retryable,
+            (int)response.StatusCode,
+            Operation: operation);
+    }
+
+    private async Task RecordFailureAsync(
+        HttpRequestMessage request,
+        string operation,
+        Guid correlationId,
+        OperationalError error,
+        CancellationToken token)
+    {
+        if (scopeFactory is null)
+            return;
+        try
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var writer = scope.ServiceProvider.GetRequiredService<IOperationalEventWriter>();
+            var nodeId = request.Headers.TryGetValues(WorkerNodeHeaderName, out var nodeIds) &&
+                         Guid.TryParse(nodeIds.FirstOrDefault(), out var parsedNodeId)
+                ? parsedNodeId
+                : (Guid?)null;
+            await writer.AppendAndSaveAsync(new OperationalEventDraft(
+                OperationalEventCodes.Agent.CallFailed,
+                OperationalEventOutcome.Failed,
+                "Agent call failed.",
+                OperationalEventSeverity.Warning,
+                correlationId,
+                error.Category,
+                error.Code,
+                error.Retryable,
+                new Dictionary<string, object?>
+                {
+                    ["operation"] = operation,
+                    ["httpStatus"] = error.HttpStatus
+                },
+                WorkerNodeId: nodeId,
+                SubjectType: "agent-call",
+                SubjectId: operation,
+                ResourceType: "worker-node",
+                ResourceId: nodeId?.ToString()), token);
+        }
+        catch (Exception exception)
+        {
+            logger?.LogWarning(exception,
+                "Failed to persist Agent call failure event for operation {Operation}.", operation);
+        }
+    }
 }
 
 public static class AgentOperationName

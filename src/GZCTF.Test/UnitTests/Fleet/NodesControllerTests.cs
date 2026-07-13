@@ -10,6 +10,8 @@ using GZCTF.Controllers;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
+using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Infrastructure;
 using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Repositories.Interface;
@@ -430,6 +432,8 @@ public class NodesControllerTests
             services.GetRequiredService<IServiceScopeFactory>(),
             Options.Create(new ContainerProvider()),
             CreatePortAllocator(new ContainerProvider()),
+            new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance),
+            new OperationalCorrelation(),
             NullLogger<NodesController>.Instance);
 
         var result = await controller.Deregister(node.Id);
@@ -499,6 +503,8 @@ public class NodesControllerTests
             services.GetRequiredService<IServiceScopeFactory>(),
             Options.Create(new ContainerProvider()),
             CreatePortAllocator(new ContainerProvider()),
+            new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance),
+            new OperationalCorrelation(),
             NullLogger<NodesController>.Instance);
         controller.ControllerContext = new ControllerContext
         {
@@ -559,6 +565,8 @@ public class NodesControllerTests
             services.GetRequiredService<IServiceScopeFactory>(),
             Options.Create(new ContainerProvider()),
             CreatePortAllocator(new ContainerProvider()),
+            new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance),
+            new OperationalCorrelation(),
             NullLogger<NodesController>.Instance);
         controller.ControllerContext = new ControllerContext
         {
@@ -620,6 +628,8 @@ public class NodesControllerTests
             services.GetRequiredService<IServiceScopeFactory>(),
             Options.Create(new ContainerProvider()),
             CreatePortAllocator(new ContainerProvider()),
+            new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance),
+            new OperationalCorrelation(),
             NullLogger<NodesController>.Instance);
         controller.ControllerContext = new ControllerContext
         {
@@ -791,6 +801,8 @@ public class NodesControllerTests
             services.GetRequiredService<IServiceScopeFactory>(),
             Options.Create(new ContainerProvider()),
             CreatePortAllocator(new ContainerProvider()),
+            new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance),
+            new OperationalCorrelation(),
             NullLogger<NodesController>.Instance);
 
     private sealed class InMemoryNodeRepository(AppDbContext context) : INodeRepository

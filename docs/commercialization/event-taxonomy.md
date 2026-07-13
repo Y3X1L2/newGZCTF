@@ -202,6 +202,7 @@ normal heartbeat、status poll 和成功的普通 Agent call 只进入 span/metr
 | `teamlab.deploy.started` | Started |
 | `teamlab.network.applied` | Succeeded |
 | `teamlab.asset.created` | Succeeded |
+| `teamlab.asset.create_failed` | Failed |
 | `teamlab.route.applied` | Succeeded |
 | `teamlab.probe.succeeded` | Succeeded |
 | `teamlab.ready` | Succeeded |
@@ -209,12 +210,18 @@ normal heartbeat、status poll 和成功的普通 Agent call 只进入 span/metr
 | `teamlab.reset.queued` | Pending |
 | `teamlab.reset.started` | Started |
 | `teamlab.reset.succeeded` | Succeeded |
+| `teamlab.reset.failed` | Failed |
 | `teamlab.destroy.started` | Started |
 | `teamlab.destroy.succeeded` | Succeeded |
 | `teamlab.destroy.failed` | Failed |
+| `teamlab.cleanup.started` | Started |
+| `teamlab.cleanup.succeeded` | Succeeded |
+| `teamlab.cleanup.failed` | Failed |
 | `teamlab.capture.started` | Started |
 | `teamlab.capture.stopped` | Succeeded |
 | `teamlab.capture.failed` | Failed |
+| `teamlab.access.opened` | Succeeded |
+| `teamlab.access.revoked` | Succeeded |
 
 ## 13. Recovery Events
 

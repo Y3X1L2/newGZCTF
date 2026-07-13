@@ -1,4 +1,9 @@
+using System.Diagnostics;
+using GZCTF.Infrastructure.Telemetry;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
@@ -51,7 +56,7 @@ public sealed class RuntimeExecutionService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Runtime ticket {TicketId} failed during execution.", ticketId);
-            await FailClaimedTicketAsync(ticketId, claimOwner, ex.Message, token);
+            await FailClaimedTicketAsync(ticketId, claimOwner, ex, token);
         }
 
         return true;
@@ -62,14 +67,29 @@ public sealed class RuntimeExecutionService(
     {
         using var scope = scopeFactory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var events = scope.ServiceProvider.GetRequiredService<IOperationalEventWriter>();
         if (context.Database.IsRelational())
-            return await context.DeploymentQueueTickets
+        {
+            await using var transaction = await context.Database.BeginTransactionAsync(token);
+            var claimed = await context.DeploymentQueueTickets
                 .Where(ticket => ticket.Id == ticketId && ticket.Status == DeploymentQueueTicketStatus.Scheduled)
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(ticket => ticket.Status, DeploymentQueueTicketStatus.Running)
                     .SetProperty(ticket => ticket.ClaimOwner, claimOwner)
                     .SetProperty(ticket => ticket.ClaimExpiresAt, now.Add(ClaimTimeout))
                     .SetProperty(ticket => ticket.StartedAt, now), token) == 1;
+            if (!claimed)
+            {
+                await transaction.RollbackAsync(token);
+                return false;
+            }
+            var claimedTicket = await context.DeploymentQueueTickets.SingleAsync(
+                ticket => ticket.Id == ticketId, token);
+            AppendExecutionStarted(events, claimedTicket);
+            await context.SaveChangesAsync(token);
+            await transaction.CommitAsync(token);
+            return true;
+        }
 
         var ticket = await context.DeploymentQueueTickets.SingleOrDefaultAsync(item => item.Id == ticketId, token);
         if (ticket?.Status != DeploymentQueueTicketStatus.Scheduled)
@@ -78,6 +98,7 @@ public sealed class RuntimeExecutionService(
         ticket.ClaimOwner = claimOwner;
         ticket.ClaimExpiresAt = now.Add(ClaimTimeout);
         ticket.StartedAt = now;
+        AppendExecutionStarted(events, ticket);
         await context.SaveChangesAsync(token);
         return true;
     }
@@ -88,14 +109,27 @@ public sealed class RuntimeExecutionService(
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var capacity = scope.ServiceProvider.GetRequiredService<FleetCapacityReservationService>();
         var executor = scope.ServiceProvider.GetRequiredService<DeploymentExecutionService>();
+        var events = scope.ServiceProvider.GetRequiredService<IOperationalEventWriter>();
+        var correlation = scope.ServiceProvider.GetRequiredService<OperationalCorrelation>();
         var ticket = await context.DeploymentQueueTickets.SingleOrDefaultAsync(item => item.Id == ticketId, token);
         if (ticket is null || ticket.Status != DeploymentQueueTicketStatus.Running ||
             !string.Equals(ticket.ClaimOwner, claimOwner, StringComparison.Ordinal))
             return;
+        using var correlationScope = correlation.Begin(ticket.Id);
+        using var activity = RuntimeOperationalEvents.StartActivity(ticket, "runtime.execute");
+        var executionStartedAt = Stopwatch.GetTimestamp();
 
         if (ticket.TargetNodeId is not { } nodeId)
         {
-            await MarkFailedAsync(context, capacity, ticket, "Scheduled ticket has no target node.", token);
+            var error = new OperationalError(
+                OperationalErrorCategory.NodeUnavailable,
+                OperationalErrorCodes.NodeNotFound,
+                "Scheduled ticket has no target node.",
+                false,
+                Operation: "runtime.execute");
+            await MarkFailedAsync(context, capacity, events, ticket, error, token);
+            await context.SaveChangesAsync(token);
+            activity?.SetStatus(ActivityStatusCode.Error, error.Code);
             return;
         }
 
@@ -120,6 +154,11 @@ public sealed class RuntimeExecutionService(
                 _ => DeploymentStage.NodeExecutionWaiting
             };
             ticket.StageMessage = $"Executing {ticket.Operation} control operation.";
+            events.Append(RuntimeOperationalEvents.Ticket(
+                ticket,
+                RuntimeOperationalEvents.ControlStartedCode(ticket.Operation),
+                OperationalEventOutcome.Started,
+                "Runtime control operation started."));
             await context.SaveChangesAsync(token);
         }
         DeploymentExecutionResult? result = null;
@@ -151,8 +190,6 @@ public sealed class RuntimeExecutionService(
 
         if (result.Success)
         {
-            if (RequiresCapacityReservation(ticket))
-                await ConfirmCapacityAsync(context, capacity, ticket, token);
             ticket.Status = DeploymentQueueTicketStatus.Succeeded;
             ticket.Stage = DeploymentStage.Ready;
             ticket.StageMessage = "Runtime operation completed.";
@@ -161,31 +198,57 @@ public sealed class RuntimeExecutionService(
             ticket.ClaimOwner = null;
             ticket.ClaimExpiresAt = null;
             ticket.ProtectedPayload = null;
+            ticket.ErrorCategory = null;
+            ticket.ErrorCode = null;
+            ticket.Retryable = false;
+            events.Append(RuntimeOperationalEvents.Ticket(
+                ticket,
+                OperationalEventCodes.Runtime.ExecutionSucceeded,
+                OperationalEventOutcome.Succeeded,
+                "Runtime operation completed successfully."));
+            if (RuntimeOperationalEvents.ResourceSucceededCode(ticket) is { } resourceCode)
+                events.Append(RuntimeOperationalEvents.Ticket(
+                    ticket,
+                    resourceCode,
+                    OperationalEventOutcome.Succeeded,
+                    "Runtime resource operation completed successfully."));
+            if (RequiresCapacityReservation(ticket))
+                await ConfirmCapacityAsync(context, capacity, ticket, token);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+            PlatformTelemetry.RecordRuntimeTransition(ticket.Kind.ToString(), ticket.Stage.ToString(), "succeeded");
             logger.SystemLog($"Deployment execution completed: ticket={ticket.Id}, node={nodeId}.",
                 TaskStatus.Success, LogLevel.Information);
         }
         else
         {
-            await MarkFailedAsync(context, capacity, ticket, result.ErrorMessage, token);
+            var error = RuntimeOperationalEvents.Failure(ticket, "runtime.execute");
+            await MarkFailedAsync(context, capacity, events, ticket, error, token, result.ErrorMessage);
+            activity?.SetStatus(ActivityStatusCode.Error, error.Code);
+            PlatformTelemetry.RecordRuntimeTransition(ticket.Kind.ToString(), ticket.Stage.ToString(), "failed");
             logger.SystemLog(
                 $"Deployment execution failed: ticket={ticket.Id}, node={nodeId}, error={ticket.ErrorMessage}.",
                 TaskStatus.Failed, LogLevel.Warning);
         }
 
         await context.SaveChangesAsync(token);
+        PlatformTelemetry.RecordRuntimeDuration(
+            ticket.Kind.ToString(), ticket.Operation.ToString(), Stopwatch.GetElapsedTime(executionStartedAt));
     }
 
-    async Task FailClaimedTicketAsync(Guid ticketId, string claimOwner, string message, CancellationToken token)
+    async Task FailClaimedTicketAsync(Guid ticketId, string claimOwner, Exception exception, CancellationToken token)
     {
         using var scope = scopeFactory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var capacity = scope.ServiceProvider.GetRequiredService<FleetCapacityReservationService>();
+        var events = scope.ServiceProvider.GetRequiredService<IOperationalEventWriter>();
         var ticket = await context.DeploymentQueueTickets.SingleOrDefaultAsync(item => item.Id == ticketId, token);
         if (ticket is null || ticket.Status != DeploymentQueueTicketStatus.Running ||
             !string.Equals(ticket.ClaimOwner, claimOwner, StringComparison.Ordinal))
             return;
-        await MarkFailedAsync(context, capacity, ticket, message, token);
+        var error = RuntimeOperationalEvents.Failure(ticket, "runtime.execute", exception);
+        await MarkFailedAsync(context, capacity, events, ticket, error, token, exception.Message);
         await context.SaveChangesAsync(token);
+        PlatformTelemetry.RecordRuntimeTransition(ticket.Kind.ToString(), ticket.Stage.ToString(), "failed");
     }
 
     async Task RenewClaimLoopAsync(
@@ -234,19 +297,59 @@ public sealed class RuntimeExecutionService(
         }
     }
 
-    static async Task MarkFailedAsync(AppDbContext context, FleetCapacityReservationService capacity,
-        DeploymentQueueTicket ticket, string? message, CancellationToken token)
+    static async Task MarkFailedAsync(
+        AppDbContext context,
+        FleetCapacityReservationService capacity,
+        IOperationalEventWriter events,
+        DeploymentQueueTicket ticket,
+        OperationalError error,
+        CancellationToken token,
+        string? message = null)
     {
-        if (RequiresCapacityReservation(ticket))
-            await ReleaseCapacityAsync(context, capacity, ticket, token);
         ticket.Status = DeploymentQueueTicketStatus.Failed;
         ticket.Stage = DeploymentStage.Failed;
-        ticket.ErrorMessage = TrimError(message);
+        ticket.ErrorMessage = TrimError(message ?? error.Message);
         ticket.StageMessage = ticket.ErrorMessage;
+        ticket.ErrorCategory = error.Category;
+        ticket.ErrorCode = error.Code;
+        ticket.Retryable = error.Retryable;
         ticket.CompletedAt = DateTimeOffset.UtcNow;
         ticket.ClaimOwner = null;
         ticket.ClaimExpiresAt = null;
         ticket.ProtectedPayload = null;
+        events.Append(RuntimeOperationalEvents.Ticket(
+            ticket,
+            OperationalEventCodes.Runtime.ExecutionFailed,
+            OperationalEventOutcome.Failed,
+            "Runtime execution failed.",
+            OperationalEventSeverity.Error,
+            error));
+        if (RuntimeOperationalEvents.ResourceFailedCode(ticket) is { } resourceCode)
+            events.Append(RuntimeOperationalEvents.Ticket(
+                ticket,
+                resourceCode,
+                OperationalEventOutcome.Failed,
+                "Runtime resource operation failed.",
+                OperationalEventSeverity.Error,
+                error));
+        if (RequiresCapacityReservation(ticket))
+            await ReleaseCapacityAsync(context, capacity, ticket, token);
+    }
+
+    static void AppendExecutionStarted(IOperationalEventWriter events, DeploymentQueueTicket ticket)
+    {
+        events.Append(RuntimeOperationalEvents.Ticket(
+            ticket,
+            OperationalEventCodes.Runtime.ExecutionStarted,
+            OperationalEventOutcome.Started,
+            "Runtime execution claim started."));
+        if (RuntimeOperationalEvents.ResourceStartedCode(ticket) is { } resourceCode)
+            events.Append(RuntimeOperationalEvents.Ticket(
+                ticket,
+                resourceCode,
+                OperationalEventOutcome.Started,
+                "Runtime resource creation started."));
+        PlatformTelemetry.RecordRuntimeTransition(ticket.Kind.ToString(), ticket.Stage.ToString(), "started");
     }
 
     static async Task ConfirmCapacityAsync(AppDbContext context, FleetCapacityReservationService capacity,

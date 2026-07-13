@@ -119,6 +119,7 @@ public static class OperationalEventCodes
         public const string DeployStarted = "teamlab.deploy.started";
         public const string NetworkApplied = "teamlab.network.applied";
         public const string AssetCreated = "teamlab.asset.created";
+        public const string AssetCreateFailed = "teamlab.asset.create_failed";
         public const string RouteApplied = "teamlab.route.applied";
         public const string ProbeSucceeded = "teamlab.probe.succeeded";
         public const string Ready = "teamlab.ready";
@@ -126,12 +127,18 @@ public static class OperationalEventCodes
         public const string ResetQueued = "teamlab.reset.queued";
         public const string ResetStarted = "teamlab.reset.started";
         public const string ResetSucceeded = "teamlab.reset.succeeded";
+        public const string ResetFailed = "teamlab.reset.failed";
         public const string DestroyStarted = "teamlab.destroy.started";
         public const string DestroySucceeded = "teamlab.destroy.succeeded";
         public const string DestroyFailed = "teamlab.destroy.failed";
+        public const string CleanupStarted = "teamlab.cleanup.started";
+        public const string CleanupSucceeded = "teamlab.cleanup.succeeded";
+        public const string CleanupFailed = "teamlab.cleanup.failed";
         public const string CaptureStarted = "teamlab.capture.started";
         public const string CaptureStopped = "teamlab.capture.stopped";
         public const string CaptureFailed = "teamlab.capture.failed";
+        public const string AccessOpened = "teamlab.access.opened";
+        public const string AccessRevoked = "teamlab.access.revoked";
         public const string SnapshotImported = "teamlab.snapshot.imported";
     }
 
