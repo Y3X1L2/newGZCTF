@@ -72,6 +72,15 @@
 - 修复 `BackfillPhaseSevenObservabilityAuditRecovery` 误重复创建 Expand schema 的迁移缺陷；Backfill 现在只导入活动 ticket、image distribution 和 TeamLab runtime snapshot，Down 只删除相应 snapshot 事件。
 - 集中门禁：Release solution build `0` warning / `0` error；恢复、Agent inventory、runtime control 与历史回归专项 `29/29`；PostgreSQL 16 migration/advisory lease 集成验收 `1/1`。
 
+### 2026-07-13 大单元 6 完成
+
+- 新增 `OperationalEventQueryService` 与 `/api/admin/operations`，支持稳定时间游标、correlation、时间、事件域、结果、错误分类、节点、部署任务、镜像、TeamLab、VM 和业务对象过滤，并提供 recovery drift 与 correlation summary。
+- 事件标签按页面批量解析用户、队伍、比赛、课程、题目、镜像、节点、部署任务、TeamLab runtime 和 VM 名称；查询链路不逐事件回表，不暴露受保护 payload、Agent 原始响应或敏感运行配置。
+- `DeploymentQueueController` 已从 `NodesController` 拆出，原 `/api/v1/deployment-queue` 路由保持不变；队列投影携带稳定 correlation，并显示业务对象、镜像、节点名称、操作、阶段、资源和排队位置。
+- `/admin/logs` 已收敛为事件时间线、部署队列、系统日志和恢复漂移四个按需挂载视图；事件支持时间、领域、结果、错误与 correlation 筛选，详情抽屉展示结构化明细和关联摘要。
+- 队列、节点和镜像页面已增加 React Router 深链入口，跳转后直接按 correlation、节点或模板过滤；系统日志同步支持 deployment ticket 过滤，SignalR 实时日志继续遵守当前节点、任务和镜像范围。
+- 集中门禁：Release solution build `0` warning / `0` error；观测查询、日志可靠性与路由回归专项 `26/26`；前端 strict TypeScript、locale、architecture、Vite production build、artifact manifest 与 bundle budget 全部通过。
+
 ## 0. Phase Boundary
 
 ### 0.1 Must Complete
@@ -388,11 +397,11 @@ Agent 新增 `GET /api/runtime/inventory`：
 - Modify: queue/node/image pages, generated API and locales.
 - Test: query projections、pagination、filters、frontend components.
 
-- [ ] Implement cursor queries, batch name resolution and correlation summary without N+1.
-- [ ] Expose redacted Admin APIs.
-- [ ] Build timeline, filters, detail drawer, raw logs and recovery view.
-- [ ] Add deep links from queue/node/image.
-- [ ] Run one concentrated API/frontend production gate.
+- [x] Implement cursor queries, batch name resolution and correlation summary without N+1.
+- [x] Expose redacted Admin APIs.
+- [x] Build timeline, filters, detail drawer, raw logs and recovery view.
+- [x] Add deep links from queue/node/image.
+- [x] Run one concentrated API/frontend production gate.
 
 ### Task 7: Runbook, Final Gate, and Review
 

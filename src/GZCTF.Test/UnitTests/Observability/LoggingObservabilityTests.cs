@@ -81,35 +81,39 @@ public sealed class LoggingObservabilityTests
     }
 
     [Fact]
-    public async Task LogRepository_FiltersByCorrelationAndResource()
+    public async Task LogRepository_FiltersByCorrelationTicketAndResource()
     {
         await using var context = CreateContext();
         var expectedCorrelation = Guid.CreateVersion7();
+        var expectedTicket = Guid.CreateVersion7();
         context.Logs.AddRange(
-            Log(expectedCorrelation, "vm", "vm-1"),
-            Log(Guid.CreateVersion7(), "container", "container-1"));
+            Log(expectedCorrelation, expectedTicket, "vm", "vm-1"),
+            Log(Guid.CreateVersion7(), Guid.CreateVersion7(), "container", "container-1"));
         await context.SaveChangesAsync();
         var repository = new LogRepository(context);
 
         var result = await repository.GetLogs(new LogQueryModel
         {
             CorrelationId = expectedCorrelation,
+            DeploymentTicketId = expectedTicket,
             ResourceType = "vm",
             ResourceId = "vm-1"
         }, CancellationToken.None);
 
         var item = Assert.Single(result.Items);
         Assert.Equal(expectedCorrelation, item.CorrelationId);
+        Assert.Equal(expectedTicket, item.DeploymentTicketId);
         Assert.Equal("vm-1", item.ResourceId);
     }
 
-    private static LogModel Log(Guid correlationId, string resourceType, string resourceId) => new()
+    private static LogModel Log(Guid correlationId, Guid deploymentTicketId, string resourceType, string resourceId) => new()
     {
         TimeUtc = DateTimeOffset.UtcNow,
         Level = "Information",
         Logger = "test",
         Message = "test",
         CorrelationId = correlationId,
+        DeploymentTicketId = deploymentTicketId,
         ResourceType = resourceType,
         ResourceId = resourceId
     };

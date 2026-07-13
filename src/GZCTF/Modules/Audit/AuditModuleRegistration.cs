@@ -16,6 +16,7 @@ public static class AuditModuleRegistration
         services.AddScoped<OperationalCorrelation>();
         services.AddScoped<ApiOperationService>();
         services.AddScoped<IOperationalEventWriter, EfOperationalEventWriter>();
+        services.AddScoped<OperationalEventQueryService>();
         services.AddScoped<AdminMutationAuditFilter>();
         services.AddHostedService<ApiOperationWorker>();
         services.AddSingleton<IAuthorizationMiddlewareResultHandler, ExternalApiAuthorizationResultHandler>();

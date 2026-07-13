@@ -98,6 +98,7 @@ public sealed class LogQueryModel
     public string? Logger { get; set; }
     public string? EventCode { get; set; }
     public Guid? WorkerNodeId { get; set; }
+    public Guid? DeploymentTicketId { get; set; }
     public string? ResourceType { get; set; }
     public string? ResourceId { get; set; }
 }

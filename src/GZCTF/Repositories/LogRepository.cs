@@ -22,6 +22,8 @@ public class LogRepository(AppDbContext context) : RepositoryBase(context), ILog
             data = data.Where(x => x.EventCode == query.EventCode);
         if (query.WorkerNodeId is { } workerNodeId)
             data = data.Where(x => x.WorkerNodeId == workerNodeId);
+        if (query.DeploymentTicketId is { } deploymentTicketId)
+            data = data.Where(x => x.DeploymentTicketId == deploymentTicketId);
         if (!string.IsNullOrWhiteSpace(query.ResourceType))
             data = data.Where(x => x.ResourceType == query.ResourceType);
         if (!string.IsNullOrWhiteSpace(query.ResourceId))

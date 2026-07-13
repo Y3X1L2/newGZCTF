@@ -26,10 +26,12 @@ import {
   mdiFileImportOutline,
   mdiMagnify,
   mdiRefresh,
+  mdiTimelineClockOutline,
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import dayjs from 'dayjs'
 import { useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router'
 import useSWR from 'swr'
 import { AdminPage } from '@Components/admin/AdminPage'
 import {
@@ -801,6 +803,16 @@ export default function ImagesPage() {
                       <Table.Td>{img.uploadedAt ? dayjs(img.uploadedAt).format('YYYY-MM-DD HH:mm') : '-'}</Table.Td>
                       <Table.Td>
                         <Group justify="flex-end">
+                          <Tooltip label="关联时间线">
+                            <ActionIcon
+                              component={Link}
+                              to={`/admin/logs?tab=events&imageTemplateId=${encodeURIComponent(String(img.id))}`}
+                              color="teal"
+                              variant="subtle"
+                            >
+                              <Icon path={mdiTimelineClockOutline} size={0.82} />
+                            </ActionIcon>
+                          </Tooltip>
                           <Tooltip label="删除">
                             <ActionIcon color="red" variant="subtle" onClick={() => handleDelete(img.id, img.name)}>
                               <Icon path={mdiDeleteOutline} size={0.82} />
