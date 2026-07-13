@@ -127,6 +127,11 @@ public class KvmService
     {
         var description = await RunCommandAsync(
             $"virsh desc {ShellEscape(vmName)} 2>/dev/null", token, throwOnError: false);
+        return ParseDomainGeneration(description);
+    }
+
+    internal static int? ParseDomainGeneration(string description)
+    {
         const string marker = "gzctf-generation=";
         var index = description.IndexOf(marker, StringComparison.Ordinal);
         if (index < 0)
@@ -141,6 +146,36 @@ public class KvmService
     {
         var result = await RunCommandAsync("virsh list --name 2>/dev/null", token, throwOnError: false);
         return result.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length;
+    }
+
+    public async Task<IReadOnlyList<RuntimeInventoryResource>> GetManagedRuntimeInventoryAsync(
+        CancellationToken token)
+    {
+        var result = await RunCommandAsync("virsh list --all --name 2>/dev/null", token, throwOnError: false);
+        List<RuntimeInventoryResource> inventory = [];
+        foreach (var vmName in result.Split('\n',
+                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            token.ThrowIfCancellationRequested();
+            if (!SafeNamePattern.IsMatch(vmName))
+                continue;
+            var generation = await ReadDomainGenerationAsync(vmName, token);
+            if (generation is null or < 1)
+                continue;
+            var domainId = (await RunCommandAsync(
+                $"virsh domuuid {ShellEscape(vmName)} 2>/dev/null", token, throwOnError: false)).Trim();
+            if (string.IsNullOrWhiteSpace(domainId))
+                continue;
+            var state = (await RunCommandAsync(
+                $"virsh domstate {ShellEscape(vmName)} 2>/dev/null", token, throwOnError: false)).Trim();
+            inventory.Add(new RuntimeInventoryResource(
+                domainId,
+                vmName,
+                generation.Value,
+                string.IsNullOrWhiteSpace(state) ? "unknown" : state));
+        }
+
+        return inventory.OrderBy(item => item.StableName, StringComparer.Ordinal).ToArray();
     }
 
     public async Task RestoreRdpProxiesAsync(CancellationToken token)

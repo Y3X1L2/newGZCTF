@@ -60,6 +60,18 @@
 - VM boot probe、ready、remote access opened/failed 已接入事件，轮询通过存在性集合避免重复事件和 N+1 查询。
 - 集中门禁：Release solution build `0` warning / `0` error；runtime/capacity/image/node/TeamLab 专项测试 `118/118`。
 
+### 2026-07-13 大单元 5 完成
+
+- Agent 新增只读 `/api/runtime/inventory`，Docker 只返回同时具有 `ManagedBy=GZCTF` 与有效 `GZCTF.Generation` 的运行资源，KVM 只返回 domain description 含 `gzctf-generation=` 标记的虚拟机；inventory 不返回 env、flag、command、凭据或 userdata。
+- Agent capability manifest 与主站协议新增 `runtime.inventory.v1`，旧 Agent、离线节点、能力缺失和传输失败被明确区分；Docker 与 KVM 支持状态独立，不因缺少 KVM 阻断 Docker 事实核对。
+- TeamLab Docker/VM 创建现完整传播 runtime generation，避免 inventory 将同名旧代资源误判为当前资源。
+- 新增 `RuntimeFactReconciliationService` 与独立 `RuntimeRecoveryWorker`；恢复从调度 worker 中移除，使用独立 PostgreSQL session advisory lease 保证多主部署只有一个 recovery owner。
+- 恢复按数据库当前事实与 Agent inventory 分类 matching、missing、identity conflict、offline、unsupported 和 orphan；offline/unsupported 只延迟处理，orphan 只写一次观察事件且绝不自动销毁。
+- 活动容器缺失会修正为 Destroyed、VM 修正为 Error、TeamLab asset/shard/runtime 修正为 Failed；已成功环境不自动重建，只有尚未完成且稳定身份可证明幂等的 ticket 才重新排队。
+- stale ticket 现按 Agent 事实完成、稳定身份重放、延迟或 fail-closed；容量 reservation 同步续租、确认、释放和过期 reconcile，重复运行不产生重复状态修正或孤儿事件。
+- 修复 `BackfillPhaseSevenObservabilityAuditRecovery` 误重复创建 Expand schema 的迁移缺陷；Backfill 现在只导入活动 ticket、image distribution 和 TeamLab runtime snapshot，Down 只删除相应 snapshot 事件。
+- 集中门禁：Release solution build `0` warning / `0` error；恢复、Agent inventory、runtime control 与历史回归专项 `29/29`；PostgreSQL 16 migration/advisory lease 集成验收 `1/1`。
+
 ## 0. Phase Boundary
 
 ### 0.1 Must Complete
@@ -358,11 +370,11 @@ Agent 新增 `GET /api/runtime/inventory`：
 - Modify: queue recovery and startup registration.
 - Test: inventory filtering、matching、missing、conflict、offline、unsupported、dual-main lease。
 
-- [ ] Implement GZCTF-managed Docker/KVM inventory.
-- [ ] Add single-owner startup/periodic recovery.
-- [ ] Reconcile stale tickets, active facts, reservations and orphan reports.
-- [ ] Emit idempotent recovery events and metrics.
-- [ ] Run one concentrated recovery gate.
+- [x] Implement GZCTF-managed Docker/KVM inventory.
+- [x] Add single-owner startup/periodic recovery.
+- [x] Reconcile stale tickets, active facts, reservations and orphan reports.
+- [x] Emit idempotent recovery events and metrics.
+- [x] Run one concentrated recovery gate.
 
 ### Task 6: Query API and Troubleshooting UI
 

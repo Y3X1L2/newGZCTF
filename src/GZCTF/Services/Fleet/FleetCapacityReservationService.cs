@@ -238,6 +238,18 @@ public sealed class FleetCapacityReservationService
             .ToArrayAsync(token);
         if (ticketIds.Length == 0)
             return 0;
+        if (!context.Database.IsRelational())
+        {
+            var reservations = await context.FleetCapacityReservations
+                .Where(item => ticketIds.Contains(item.DeploymentQueueTicketId) &&
+                               item.Status == CapacityReservationStatus.Active)
+                .ToArrayAsync(token);
+            var expiresAt = DateTimeOffset.UtcNow.Add(ReservationLifetime);
+            foreach (var reservation in reservations)
+                reservation.ExpiresAt = expiresAt;
+            await context.SaveChangesAsync(token);
+            return reservations.Length;
+        }
         return await context.FleetCapacityReservations
             .Where(item => ticketIds.Contains(item.DeploymentQueueTicketId) &&
                            item.Status == CapacityReservationStatus.Active)

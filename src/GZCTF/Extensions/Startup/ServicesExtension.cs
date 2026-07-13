@@ -151,6 +151,7 @@ internal static class ServicesExtension
             builder.Services.AddScoped<DeploymentExecutionContextAccessor>();
             builder.Services.AddScoped<DeploymentExecutionService>();
             builder.Services.AddScoped<RuntimeSchedulingService>();
+            builder.Services.AddScoped<RuntimeFactReconciliationService>();
             builder.Services.AddSingleton<RuntimeExecutionService>();
             builder.Services.AddSingleton<NodeDispatchLimiter>();
             builder.Services.AddSingleton<ImageDistributionCoordinator>();
@@ -159,6 +160,7 @@ internal static class ServicesExtension
             builder.Services.AddHostedService<ImageDistributionReconcileService>();
             builder.Services.AddHostedService<FleetHealthCheckService>();
             builder.Services.AddHostedService<RuntimeSchedulingWorker>();
+            builder.Services.AddHostedService<RuntimeRecoveryWorker>();
             builder.Services.AddHostedService<RuntimeExecutionWorker>();
             builder.Services.AddHostedService<RuntimeTelemetrySnapshotWorker>();
 

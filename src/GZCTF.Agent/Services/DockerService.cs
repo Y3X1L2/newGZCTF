@@ -462,6 +462,49 @@ public class DockerService
         return containers.Count;
     }
 
+    public async Task<IReadOnlyList<RuntimeInventoryResource>> GetManagedRuntimeInventoryAsync(
+        CancellationToken token)
+    {
+        var containers = await _client.Containers.ListContainersAsync(new ContainersListParameters
+        {
+            Filters = new Dictionary<string, IDictionary<string, bool>>
+            {
+                ["label"] = new Dictionary<string, bool> { ["ManagedBy=GZCTF"] = true }
+            },
+            All = true
+        }, token);
+
+        return BuildManagedRuntimeInventory(containers);
+    }
+
+    internal static IReadOnlyList<RuntimeInventoryResource> BuildManagedRuntimeInventory(
+        IEnumerable<ContainerListResponse> containers) => containers
+            .Select(container =>
+            {
+                if (container.Labels is null ||
+                    !container.Labels.TryGetValue("ManagedBy", out var managedBy) ||
+                    !managedBy.Equals("GZCTF", StringComparison.Ordinal) ||
+                    !container.Labels.TryGetValue("GZCTF.Generation", out var value) ||
+                    !int.TryParse(value, out var generation) || generation < 1)
+                    return null;
+
+                var stableName = container.Names
+                    .Select(name => name.Trim('/'))
+                    .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name));
+                if (string.IsNullOrWhiteSpace(container.ID) || string.IsNullOrWhiteSpace(stableName))
+                    return null;
+
+                return new RuntimeInventoryResource(
+                    container.ID,
+                    stableName,
+                    generation,
+                    container.State ?? "unknown",
+                    container.Image);
+            })
+            .OfType<RuntimeInventoryResource>()
+            .OrderBy(item => item.StableName, StringComparer.Ordinal)
+            .ToArray();
+
     public async Task PullImageAsync(string image, string? registryAuth, CancellationToken token)
     {
         AuthConfig? authConfig = null;

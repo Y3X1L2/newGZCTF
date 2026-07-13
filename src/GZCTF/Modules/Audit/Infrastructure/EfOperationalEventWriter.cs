@@ -20,7 +20,8 @@ public sealed class EfOperationalEventWriter(
         "httpStatus", "durationMs", "queuePosition", "dockerSlots", "vmSlots",
         "previousStatus", "currentStatus", "capability", "feature",
         "imageType", "digestPrefix", "sizeBytes", "routeCount", "assetCount",
-        "shardCount", "decision", "reasonCode"
+        "shardCount", "decision", "reasonCode", "matchedCount", "missingCount",
+        "conflictCount", "orphanCount", "deferredCount", "correctedCount", "replayedCount"
     };
     private static readonly string[] SensitiveFragments =
     [

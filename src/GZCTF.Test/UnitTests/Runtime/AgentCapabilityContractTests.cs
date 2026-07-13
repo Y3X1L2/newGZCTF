@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Agent.Models;
 using GZCTF.Agent.Services;
+using Docker.DotNet.Models;
 using Microsoft.Extensions.Options;
 using Xunit;
 using AgentHostFacts = GZCTF.Agent.Models.AgentHostFacts;
@@ -86,6 +88,47 @@ public sealed class AgentCapabilityContractTests
         Assert.Equal(2, maximum);
         release.SetResult();
         await Task.WhenAll(tasks);
+    }
+
+    [Fact]
+    public void DockerInventory_OnlyReturnsManagedRuntimeContainersWithGeneration()
+    {
+        var inventory = DockerService.BuildManagedRuntimeInventory(
+        [
+            new ContainerListResponse
+            {
+                ID = "runtime-id", Names = ["/gzctf_runtime"], Image = "challenge:latest", State = "running",
+                Labels = new Dictionary<string, string>
+                {
+                    ["ManagedBy"] = "GZCTF",
+                    ["GZCTF.Generation"] = "3"
+                }
+            },
+            new ContainerListResponse
+            {
+                ID = "registry-id", Names = ["/gzctf-internal-registry"], State = "running",
+                Labels = new Dictionary<string, string> { ["ManagedBy"] = "GZCTF" }
+            },
+            new ContainerListResponse
+            {
+                ID = "foreign-id", Names = ["/foreign"], State = "running",
+                Labels = new Dictionary<string, string> { ["GZCTF.Generation"] = "3" }
+            }
+        ]);
+
+        var item = Assert.Single(inventory);
+        Assert.Equal("runtime-id", item.NativeId);
+        Assert.Equal("gzctf_runtime", item.StableName);
+        Assert.Equal(3, item.Generation);
+    }
+
+    [Theory]
+    [InlineData("gzctf-generation=7", 7)]
+    [InlineData("description without marker", null)]
+    [InlineData("gzctf-generation=invalid", null)]
+    public void KvmInventory_RequiresGenerationMarker(string description, int? expected)
+    {
+        Assert.Equal(expected, KvmService.ParseDomainGeneration(description));
     }
 
     static class InterlockedExtensions

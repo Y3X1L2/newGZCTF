@@ -200,6 +200,55 @@ public class AgentClient
         }
     }
 
+    public virtual async Task<AgentRuntimeInventoryResponse> GetRuntimeInventoryAsync(
+        Guid nodeId,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null)
+            throw NodeNotFound(nodeId, "runtime.inventory");
+
+        var client = BuildClient(node);
+        HttpResponseMessage response;
+        try
+        {
+            using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(30));
+            response = await client.GetAsync("/api/runtime/inventory", deadline.Token);
+        }
+        catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
+        {
+            throw TransportFailure(
+                node.Id,
+                "runtime.inventory",
+                OperationalErrorCodes.AgentTimeout,
+                $"Agent runtime inventory timed out on node {node.Name} ({node.HostAddress}).",
+                ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw TransportFailure(
+                node.Id,
+                "runtime.inventory",
+                OperationalErrorCodes.AgentConnectionFailed,
+                $"Agent runtime inventory failed on node {node.Name} ({node.HostAddress}).",
+                ex);
+        }
+
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(
+                response,
+                "runtime.inventory",
+                node.Id,
+                $"Agent runtime inventory failed on node {node.Name} ({node.HostAddress}).",
+                token);
+
+        var result = await response.Content.ReadFromJsonAsync<AgentRuntimeInventoryResponse>(token);
+        return result ?? throw InvalidAgentResponse(
+            node.Id,
+            "runtime.inventory",
+            $"Agent returned an empty runtime inventory on node {node.Name} ({node.HostAddress}).");
+    }
+
     public async Task<TeamLabStatusResponse?> GetTeamLabStatusAsync(Guid nodeId, CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);

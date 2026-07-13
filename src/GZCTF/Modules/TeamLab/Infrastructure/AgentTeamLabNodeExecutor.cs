@@ -320,6 +320,7 @@ public sealed class AgentTeamLabNodeExecutor(
             .ToDictionary(group => group.Key, group => group.Last().Value, StringComparer.Ordinal);
         var config = new ContainerConfig
         {
+            Generation = request.Generation,
             Image = image,
             TeamId = $"teamlab-{request.RuntimeId}",
             ChallengeId = StableId(request.AssetKey),
@@ -398,6 +399,7 @@ public sealed class AgentTeamLabNodeExecutor(
         }).ToList();
         var vmRequest = new AgentCreateVmRequest
         {
+            Generation = request.Generation,
             TemplateId = template.Id,
             TemplatePath = template.LocalFilePath ?? template.Name,
             ImageEnsured = true,

@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Infrastructure.Concurrency;
@@ -17,8 +18,10 @@ using GZCTF.Services.Fleet;
 using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Moq;
 using Xunit;
 
 namespace GZCTF.Test.UnitTests.Runtime;
@@ -89,10 +92,11 @@ public sealed class RuntimeControlPlaneTests
         context.DeploymentQueueTickets.AddRange(destroy, extend);
         await context.SaveChangesAsync();
 
-        var recovered = await CreateQueue(context)
-            .RecoverStaleCreatingTicketsAsync(TimeSpan.FromMinutes(10), CancellationToken.None);
+        var recovered = await CreateReconciliation(context)
+            .ReconcileAsync(Guid.CreateVersion7(), TimeSpan.FromMinutes(10), CancellationToken.None);
 
-        Assert.Equal(2, recovered);
+        Assert.Equal(1, recovered.ReplayedCount);
+        Assert.Equal(1, recovered.ConflictCount);
         Assert.Equal(DeploymentQueueTicketStatus.Scheduled, destroy.Status);
         Assert.Equal(DeploymentQueueTicketStatus.Failed, extend.Status);
     }
@@ -317,6 +321,29 @@ public sealed class RuntimeControlPlaneTests
             new FleetCapacityReservationService(context, lease,
                 NullLogger<FleetCapacityReservationService>.Instance),
             new PollingDeploymentQueueWakeup(), NullLogger<DeploymentQueueService>.Instance);
+    }
+
+    static RuntimeFactReconciliationService CreateReconciliation(AppDbContext context)
+    {
+        var lease = new LocalDevelopmentLeaseProvider();
+        var writer = new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance);
+        var capacity = new FleetCapacityReservationService(context, lease,
+            new NodeCapacitySnapshotService(context),
+            new NodeEligibilityEvaluator(Options.Create(new RuntimeSchedulingOptions())),
+            writer,
+            NullLogger<FleetCapacityReservationService>.Instance);
+        var agent = new AgentClient(
+            new Mock<IHttpClientFactory>().Object,
+            new Mock<IServiceScopeFactory>().Object,
+            new ConfigurationBuilder().Build(),
+            NullLogger<AgentClient>.Instance);
+        return new RuntimeFactReconciliationService(
+            context,
+            agent,
+            capacity,
+            new PollingDeploymentQueueWakeup(),
+            writer,
+            NullLogger<RuntimeFactReconciliationService>.Instance);
     }
 
     static ServiceProvider BuildExecutionProvider(string databaseName, DeploymentExecutionService executor)

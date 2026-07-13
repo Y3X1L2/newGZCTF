@@ -11,20 +11,11 @@ public sealed class RuntimeSchedulingWorker(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var poll = TimeSpan.FromSeconds(1);
-        var nextRecoveryAt = DateTimeOffset.MinValue;
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 using var scope = scopeFactory.CreateScope();
-                if (DateTimeOffset.UtcNow >= nextRecoveryAt)
-                {
-                    var queue = scope.ServiceProvider.GetRequiredService<DeploymentQueueService>();
-                    var capacity = scope.ServiceProvider.GetRequiredService<FleetCapacityReservationService>();
-                    await capacity.RenewActiveTicketReservationsAsync(stoppingToken);
-                    await queue.RecoverStaleCreatingTicketsAsync(TimeSpan.FromMinutes(15), stoppingToken);
-                    nextRecoveryAt = DateTimeOffset.UtcNow.AddMinutes(1);
-                }
                 var service = scope.ServiceProvider.GetRequiredService<RuntimeSchedulingService>();
                 var count = await service.SchedulePendingAsync(stoppingToken);
                 poll = count > 0 ? TimeSpan.FromMilliseconds(100) : TimeSpan.FromSeconds(2);

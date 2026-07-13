@@ -4,6 +4,11 @@
 
 ## 2026-07-13 Phase 7 计划编写与代码事实基线
 
+- Phase 7 大单元 5 已完成：Agent 提供受管 Docker/KVM inventory，主站通过 `runtime.inventory.v1` 做协议检测，TeamLab 资产完整传播 generation；恢复使用数据库当前事实与 Agent inventory，不再只看数据库状态。
+- `RuntimeFactReconciliationService` 与独立 `RuntimeRecoveryWorker` 已接入，使用独立 PostgreSQL advisory lease 保证多主单 owner；matching、missing、identity conflict、offline、unsupported、orphan、stale ticket 和 capacity reservation 均形成闭环。
+- 离线或旧 Agent 不误判资源丢失，孤儿资源只记录不自动删除，已成功后丢失的容器/VM/TeamLab 状态修正后等待标准重置；只有尚未完成且稳定身份幂等的 ticket 自动重放。
+- Phase 7 Backfill migration 中误重复创建 Expand schema 的缺陷已删除，真实 PostgreSQL 16 从 Phase 3 到 latest 的迁移与双实例 recovery advisory lease 验收通过。
+- 大单元 5 集中门禁：Release solution build `0` warning / `0` error，恢复/Agent inventory/runtime control 专项 `29/29`，PostgreSQL migration/advisory lease `1/1`。当前进入大单元 6：事件查询 API、部署队列控制器拆分与管理端统一排障界面。
 - Phase 7 大单元 4 已完成：runtime queue/scheduling/execution/capacity、image distribution、node/Agent、TeamLab 和 VM ready 生命周期均写统一 `OperationalEvent`，状态与事件按同一工作单元提交。
 - ticket enqueue 已持久化 W3C trace context，worker 使用 ticket correlation 建立 consumer span；Agent 失败、节点关键 transition、镜像 worker claim 和 TeamLab 多 shard 生命周期均可跨模块关联。
 - TeamLab 已统一使用 `TeamLabEventRecorder` 双写局部事件和平台 operational event，旧的散落 `new TeamLabEvent` 构造已从 application services 清理。
