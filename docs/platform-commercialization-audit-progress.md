@@ -2,6 +2,16 @@
 
 更新时间：2026-07-13
 
+## 2026-07-13 Phase 7 计划编写与代码事实基线
+
+- Phase 7 以提交 `4d4c6fe8d082ee74ea5f63ade2e9ecbbd576875d` 为基线，当前分支为 `codex/phase-07-observability-audit-recovery`，本阶段尚未部署生产服务器。
+- 已确认原始 `LogModel` 缺 trace/correlation/event/error/resource/node 维度；`DatabaseSink` 的低流量 flush 和退出 drain 不可靠，不能作为审计唯一事实。
+- 已确认 `DeploymentQueueTicket`、`ImageDistributionRecord` 和 TeamLab event 分别承载当前状态或局部历史，缺少统一追加式事件、错误分类和 correlation timeline。
+- 已确认 OpenTelemetry 框架 instrumentation 已存在，但运行队列、Agent、镜像、节点、TeamLab 和恢复缺业务 meter/span；`GZCTF.Cache` ActivitySource 尚未注册。
+- 已确认 Phase 6 stale ticket recovery 只核对数据库状态，Agent 已具备 Docker label 和 KVM generation metadata，却没有 GZCTF-managed runtime inventory API。
+- Phase 7 冻结为四类职责：当前状态事实、追加式 `OperationalEvent`、原始 `LogModel`、OpenTelemetry。恢复只读取数据库当前事实和 Agent inventory，不从日志或事件反推状态。
+- 详细实施计划已写入 `docs/commercialization/phase-07-observability-audit-recovery.md`，稳定事件和错误分类已写入 `docs/commercialization/event-taxonomy.md`。开发按七个大单元推进，只在大单元边界集中验证，最终执行一次独立质量审查。
+
 ## 2026-07-13 Phase 6 代码开发完成
 
 - `DeploymentQueueTicket` 已成为 Docker、培训/练习、AWDP、管理员测试容器、VM 和 TeamLab 的唯一运行任务事实；旧 `DeploymentTarget/FleetManager/WeightedScheduler` 活动实现和旧 API route 已删除。
