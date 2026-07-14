@@ -1,8 +1,18 @@
 using System.Diagnostics;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using GZCTF.Modules.Audit.Application;
 
 namespace GZCTF.Infrastructure.Api;
+
+public sealed class ExternalApiProblemDetailsModel : ProblemDetails
+{
+    [JsonPropertyName("code")]
+    public string Code { get; init; } = string.Empty;
+
+    [JsonPropertyName("traceId")]
+    public string TraceId { get; init; } = string.Empty;
+}
 
 public static class ExternalApiProblemDetails
 {

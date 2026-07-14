@@ -86,12 +86,7 @@ public sealed class IdempotencyService(
 
     private static void Validate(string kind, string routeKey, string idempotencyKey, string requestHash)
     {
-        if (string.IsNullOrWhiteSpace(idempotencyKey))
-            throw new IdempotencyValidationException(
-                "idempotency_key_required", "An Idempotency-Key header is required.");
-        if (idempotencyKey.Trim().Length > 128)
-            throw new IdempotencyValidationException(
-                "idempotency_key_invalid", "Idempotency-Key cannot exceed 128 characters.");
+        _ = ExternalIdempotencyKey.Normalize(idempotencyKey);
         if (string.IsNullOrWhiteSpace(kind) || kind.Trim().Length > 128 ||
             string.IsNullOrWhiteSpace(routeKey) || routeKey.Trim().Length > 256)
             throw new IdempotencyValidationException(

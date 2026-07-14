@@ -119,6 +119,24 @@ public sealed class ExternalApiRequestAuditMiddleware(
         if (context.Request.Path.StartsWithSegments(
                 "/api/open/v1/operations", StringComparison.OrdinalIgnoreCase))
             return ("operation", context.Request.RouteValues["id"]?.ToString());
+        if (context.Request.Path.StartsWithSegments(
+                "/api/open/v1/teamlab", StringComparison.OrdinalIgnoreCase))
+        {
+            var routeValues = context.Request.RouteValues;
+            if (routeValues["captureId"] is { } captureId)
+                return ("teamlab-capture", captureId.ToString());
+            if (routeValues["grantId"] is { } grantId)
+                return ("teamlab-access-grant", grantId.ToString());
+            if (routeValues["releaseId"] is { } releaseId)
+                return ("teamlab-release", releaseId.ToString());
+            if (routeValues["runtimeId"] is { } runtimeId)
+                return ("teamlab-runtime", runtimeId.ToString());
+            if (routeValues["topologyId"] is { } topologyId)
+                return ("teamlab-topology", topologyId.ToString());
+            if (context.Request.Path.Value?.Contains("/topologies", StringComparison.OrdinalIgnoreCase) == true)
+                return ("teamlab-topology", null);
+            return ("teamlab", null);
+        }
         return (null, null);
     }
 

@@ -1,4 +1,5 @@
 using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.Modules.Audit.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -14,9 +15,19 @@ public sealed class TeamLabTopologyEntityConfiguration : IEntityTypeConfiguratio
         builder.Property(item => item.EditorMetadataJson).HasColumnType("jsonb");
         builder.HasIndex(item => item.PublicId).IsUnique();
         builder.HasIndex(item => item.OwnerUserId);
+        builder.HasIndex(item => item.CreatedByOperationId).IsUnique();
+        builder.HasIndex(item => item.LastMutationOperationId).IsUnique();
         builder.HasOne<UserInfo>()
             .WithMany()
             .HasForeignKey(item => item.OwnerUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<ApiOperation>()
+            .WithMany()
+            .HasForeignKey(item => item.CreatedByOperationId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<ApiOperation>()
+            .WithMany()
+            .HasForeignKey(item => item.LastMutationOperationId)
             .OnDelete(DeleteBehavior.SetNull);
     }
 }
@@ -111,6 +122,7 @@ public sealed class TeamLabTopologyReleaseEntityConfiguration : IEntityTypeConfi
         builder.Property(item => item.ContentHash).HasMaxLength(128);
         builder.HasIndex(item => new { item.TopologyId, item.Version }).IsUnique();
         builder.HasIndex(item => new { item.TopologyId, item.SourceRevision, item.ContentHash }).IsUnique();
+        builder.HasIndex(item => item.ApiOperationId).IsUnique();
         builder.HasOne(item => item.Topology)
             .WithMany(item => item.Releases)
             .HasForeignKey(item => item.TopologyId)
@@ -118,6 +130,10 @@ public sealed class TeamLabTopologyReleaseEntityConfiguration : IEntityTypeConfi
         builder.HasOne<UserInfo>()
             .WithMany()
             .HasForeignKey(item => item.PublishedById)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<ApiOperation>()
+            .WithMany()
+            .HasForeignKey(item => item.ApiOperationId)
             .OnDelete(DeleteBehavior.SetNull);
     }
 }

@@ -1,5 +1,6 @@
 using GZCTF.Models.Data;
 using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.Modules.Audit.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -48,11 +49,16 @@ public sealed class TeamLabAccessGrantEntityConfiguration : IEntityTypeConfigura
     {
         builder.ToTable("TeamLabAccessGrants");
         builder.HasIndex(item => item.PublicId).IsUnique();
+        builder.HasIndex(item => item.ApiOperationId).IsUnique();
         builder.Property(item => item.Type).HasConversion<byte>();
         builder.HasOne(item => item.Runtime)
             .WithMany(item => item.AccessGrants)
             .HasForeignKey(item => item.RuntimeId)
             .OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<ApiOperation>()
+            .WithMany()
+            .HasForeignKey(item => item.ApiOperationId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }
 
@@ -66,5 +72,16 @@ public sealed class TeamLabRuntimeSecretEnvelopeEntityConfiguration : IEntityTyp
             .WithMany(item => item.SecretEnvelopes)
             .HasForeignKey(item => item.RuntimeId)
             .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class TeamLabTrafficCaptureJobEntityConfiguration : IEntityTypeConfiguration<TeamLabTrafficCaptureJob>
+{
+    public void Configure(EntityTypeBuilder<TeamLabTrafficCaptureJob> builder)
+    {
+        builder.HasOne<ApiOperation>()
+            .WithMany()
+            .HasForeignKey(item => item.ApiOperationId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

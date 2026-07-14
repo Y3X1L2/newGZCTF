@@ -261,6 +261,8 @@ public class TeamLabAccessGrant
 
     public int Generation { get; set; } = 1;
 
+    public Guid? ApiOperationId { get; set; }
+
     public TeamLabAccessGrantType Type { get; set; } = TeamLabAccessGrantType.WireGuard;
 
     [MaxLength(64)] public string ClientAddress { get; set; } = string.Empty;
@@ -280,6 +282,10 @@ public class TeamLabAccessGrant
     [MaxLength(1024)] public string ProtectedServerPrivateKey { get; set; } = string.Empty;
 
     [MaxLength(128)] public string DownloadTokenHash { get; set; } = string.Empty;
+
+    [MaxLength(1024)] public string? ProtectedDownloadToken { get; set; }
+
+    public DateTimeOffset? AppliedAt { get; set; }
 
     public bool Revoked { get; set; }
 
@@ -422,8 +428,7 @@ public class TeamLabTrafficFlow
 
 [Index(nameof(RuntimeId), nameof(Status))]
 [Index(nameof(ShardId), nameof(Status))]
-[Index(nameof(RuntimeId), nameof(Generation), nameof(IdempotencyKeyHash),
-    Name = "UX_TeamLabCapture_Idempotency", IsUnique = true)]
+[Index(nameof(ApiOperationId), Name = "UX_TeamLabCapture_ApiOperation", IsUnique = true)]
 public class TeamLabTrafficCaptureJob
 {
     [Key] public int Id { get; set; }
@@ -434,6 +439,8 @@ public class TeamLabTrafficCaptureJob
 
     public int Generation { get; set; } = 1;
 
+    public Guid? ApiOperationId { get; set; }
+
     public int? ShardId { get; set; }
 
     public int? NetworkId { get; set; }
@@ -443,10 +450,6 @@ public class TeamLabTrafficCaptureJob
     public TeamLabTrafficCaptureStatus Status { get; set; } = TeamLabTrafficCaptureStatus.Pending;
 
     [MaxLength(64)] public string Scope { get; set; } = string.Empty;
-
-    [MaxLength(64)] public string? IdempotencyKeyHash { get; set; }
-
-    [MaxLength(64)] public string? RequestHash { get; set; }
 
     [MaxLength(512)] public string? FilePath { get; set; }
 

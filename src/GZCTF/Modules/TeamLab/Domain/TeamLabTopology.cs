@@ -8,6 +8,8 @@ public sealed class TeamLabTopology
     public string Name { get; set; } = string.Empty;
     public int Revision { get; set; }
     public int SchemaVersion { get; set; } = 1;
+    public Guid? CreatedByOperationId { get; set; }
+    public Guid? LastMutationOperationId { get; set; }
     public string EditorMetadataJson { get; set; } = "{\"networks\":{},\"assets\":{}}";
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;

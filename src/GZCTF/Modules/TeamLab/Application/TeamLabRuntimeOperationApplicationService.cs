@@ -11,7 +11,17 @@ namespace GZCTF.Modules.TeamLab.Application;
 public sealed record TeamLabRuntimeOperationPayload(
     CreateTeamLabRuntimeModel? Create,
     Guid? RuntimeId,
-    ResetTeamLabRuntimeModel? Reset);
+    ResetTeamLabRuntimeModel? Reset)
+{
+    public CreateTeamLabTopologyModel? CreateTopology { get; init; }
+    public Guid? TopologyId { get; init; }
+    public UpdateTeamLabTopologyModel? UpdateTopology { get; init; }
+    public PublishTeamLabTopologyModel? PublishTopology { get; init; }
+    public TeamLabAccessGrantCreateModel? CreateAccessGrant { get; init; }
+    public Guid? AccessGrantId { get; init; }
+    public CreateTeamLabCaptureModel? CreateCapture { get; init; }
+    public Guid? CaptureId { get; init; }
+}
 
 public sealed record TeamLabRuntimeOperationSubmission(
     Guid ApiTokenId,
@@ -19,6 +29,8 @@ public sealed record TeamLabRuntimeOperationSubmission(
     string RouteKey,
     string IdempotencyKey,
     string RequestHash,
+    string ResourceType,
+    string? ResourceId,
     TeamLabRuntimeOperationJob Job);
 
 public interface ITeamLabRuntimeOperationSubmissionStore
@@ -84,6 +96,109 @@ public sealed class TeamLabRuntimeOperationApplicationService(
         SubmitAsync(apiTokenId, actorUserId, idempotencyKey, routeKey, TeamLabRuntimeOperationKind.Destroy,
             new TeamLabRuntimeOperationPayload(null, runtimeId, null), cancellationToken);
 
+    public Task<IdempotencyBeginResult> SubmitTopologyCreateAsync(
+        Guid apiTokenId,
+        Guid actorUserId,
+        string idempotencyKey,
+        CreateTeamLabTopologyModel command,
+        CancellationToken cancellationToken) =>
+        SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
+            "POST:/api/open/v1/teamlab/topologies", TeamLabRuntimeOperationKind.TopologyCreate,
+            new TeamLabRuntimeOperationPayload(null, null, null) { CreateTopology = command }, cancellationToken);
+
+    public Task<IdempotencyBeginResult> SubmitTopologyUpdateAsync(
+        Guid apiTokenId,
+        Guid actorUserId,
+        string idempotencyKey,
+        Guid topologyId,
+        UpdateTeamLabTopologyModel command,
+        CancellationToken cancellationToken) =>
+        SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
+            $"PUT:/api/open/v1/teamlab/topologies/{topologyId:D}", TeamLabRuntimeOperationKind.TopologyUpdate,
+            new TeamLabRuntimeOperationPayload(null, null, null)
+            {
+                TopologyId = topologyId,
+                UpdateTopology = command
+            }, cancellationToken);
+
+    public Task<IdempotencyBeginResult> SubmitTopologyDeleteAsync(
+        Guid apiTokenId,
+        Guid actorUserId,
+        string idempotencyKey,
+        Guid topologyId,
+        CancellationToken cancellationToken) =>
+        SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
+            $"DELETE:/api/open/v1/teamlab/topologies/{topologyId:D}", TeamLabRuntimeOperationKind.TopologyDelete,
+            new TeamLabRuntimeOperationPayload(null, null, null) { TopologyId = topologyId }, cancellationToken);
+
+    public Task<IdempotencyBeginResult> SubmitTopologyPublishAsync(
+        Guid apiTokenId,
+        Guid actorUserId,
+        string idempotencyKey,
+        Guid topologyId,
+        PublishTeamLabTopologyModel command,
+        CancellationToken cancellationToken) =>
+        SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
+            $"POST:/api/open/v1/teamlab/topologies/{topologyId:D}/releases",
+            TeamLabRuntimeOperationKind.TopologyPublish,
+            new TeamLabRuntimeOperationPayload(null, null, null)
+            {
+                TopologyId = topologyId,
+                PublishTopology = command
+            }, cancellationToken);
+
+    public Task<IdempotencyBeginResult> SubmitAccessGrantCreateAsync(
+        Guid apiTokenId,
+        Guid actorUserId,
+        string idempotencyKey,
+        Guid runtimeId,
+        TeamLabAccessGrantCreateModel command,
+        CancellationToken cancellationToken) =>
+        SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
+            $"POST:/api/open/v1/teamlab/runtimes/{runtimeId:D}/access-grants",
+            TeamLabRuntimeOperationKind.AccessGrantCreate,
+            new TeamLabRuntimeOperationPayload(null, runtimeId, null) { CreateAccessGrant = command },
+            cancellationToken);
+
+    public Task<IdempotencyBeginResult> SubmitAccessGrantRevokeAsync(
+        Guid apiTokenId,
+        Guid actorUserId,
+        string idempotencyKey,
+        Guid runtimeId,
+        Guid grantId,
+        CancellationToken cancellationToken) =>
+        SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
+            $"DELETE:/api/open/v1/teamlab/runtimes/{runtimeId:D}/access-grants/{grantId:D}",
+            TeamLabRuntimeOperationKind.AccessGrantRevoke,
+            new TeamLabRuntimeOperationPayload(null, runtimeId, null) { AccessGrantId = grantId },
+            cancellationToken);
+
+    public Task<IdempotencyBeginResult> SubmitCaptureStartAsync(
+        Guid apiTokenId,
+        Guid actorUserId,
+        string idempotencyKey,
+        Guid runtimeId,
+        CreateTeamLabCaptureModel command,
+        CancellationToken cancellationToken) =>
+        SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
+            $"POST:/api/open/v1/teamlab/runtimes/{runtimeId:D}/captures",
+            TeamLabRuntimeOperationKind.CaptureStart,
+            new TeamLabRuntimeOperationPayload(null, runtimeId, null) { CreateCapture = command },
+            cancellationToken);
+
+    public Task<IdempotencyBeginResult> SubmitCaptureStopAsync(
+        Guid apiTokenId,
+        Guid actorUserId,
+        string idempotencyKey,
+        Guid runtimeId,
+        Guid captureId,
+        CancellationToken cancellationToken) =>
+        SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
+            $"POST:/api/open/v1/teamlab/runtimes/{runtimeId:D}/captures/{captureId:D}/stop",
+            TeamLabRuntimeOperationKind.CaptureStop,
+            new TeamLabRuntimeOperationPayload(null, runtimeId, null) { CaptureId = captureId },
+            cancellationToken);
+
     private Task<IdempotencyBeginResult> SubmitAsync(
         Guid apiTokenId,
         Guid actorUserId,
@@ -93,7 +208,7 @@ public sealed class TeamLabRuntimeOperationApplicationService(
         TeamLabRuntimeOperationPayload payload,
         CancellationToken cancellationToken)
     {
-        var normalizedKey = NormalizeIdempotencyKey(idempotencyKey);
+        var normalizedKey = ExternalIdempotencyKey.Normalize(idempotencyKey);
         var payloadBytes = JsonSerializer.SerializeToUtf8Bytes(new { kind, payload });
         var requestHash = Convert.ToHexStringLower(SHA256.HashData(payloadBytes));
         var job = new TeamLabRuntimeOperationJob
@@ -103,18 +218,25 @@ public sealed class TeamLabRuntimeOperationApplicationService(
             ProtectedPayload = protector.Protect(payload),
             PayloadHash = $"sha256:{requestHash}"
         };
+        var (resourceType, resourceId) = ResolveResource(kind, payload);
         return submissions.SubmitAsync(new TeamLabRuntimeOperationSubmission(
-            apiTokenId, actorUserId, routeKey.Trim(), normalizedKey, requestHash, job), cancellationToken);
+            apiTokenId, actorUserId, routeKey.Trim(), normalizedKey, requestHash,
+            resourceType, resourceId, job), cancellationToken);
     }
 
-    private static string NormalizeIdempotencyKey(string value)
-    {
-        var normalized = value.Trim();
-        if (normalized.Length is < 1 or > 128 || normalized.Any(character =>
-                !char.IsAsciiLetterOrDigit(character) && character is not '-' and not '_' and not '.'))
-            throw new IdempotencyValidationException(
-                string.IsNullOrEmpty(normalized) ? "idempotency_key_required" : "idempotency_key_invalid",
-                "Idempotency-Key must contain 1-128 ASCII letters, digits, '-', '_' or '.'.");
-        return normalized;
-    }
+    private static (string Type, string? Id) ResolveResource(
+        TeamLabRuntimeOperationKind kind,
+        TeamLabRuntimeOperationPayload payload) => kind switch
+        {
+            TeamLabRuntimeOperationKind.TopologyCreate => ("teamlab-topology", null),
+            TeamLabRuntimeOperationKind.TopologyUpdate or TeamLabRuntimeOperationKind.TopologyDelete or
+                TeamLabRuntimeOperationKind.TopologyPublish =>
+                ("teamlab-topology", payload.TopologyId?.ToString("D")),
+            TeamLabRuntimeOperationKind.AccessGrantRevoke =>
+                ("teamlab-access-grant", payload.AccessGrantId?.ToString("D")),
+            TeamLabRuntimeOperationKind.CaptureStop =>
+                ("teamlab-capture", payload.CaptureId?.ToString("D")),
+            _ => ("teamlab-runtime", payload.RuntimeId?.ToString("D"))
+        };
+
 }

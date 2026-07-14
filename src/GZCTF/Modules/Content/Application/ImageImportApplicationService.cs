@@ -90,7 +90,7 @@ public sealed class ImageImportApplicationService(
         if (!actor.UserId.HasValue)
             throw new ImageImportContractException(
                 "authentication_required", "Authentication is required.", 401);
-        var normalizedKey = NormalizeIdempotencyKey(idempotencyKey);
+        var normalizedKey = ExternalIdempotencyKey.Normalize(idempotencyKey);
 
         var normalized = Normalize(command);
         await referencePolicy.ValidateAsync(normalized.RegistryUrl, cancellationToken);
@@ -132,7 +132,7 @@ public sealed class ImageImportApplicationService(
             throw new ImageImportContractException(
                 "authentication_required", "Authentication is required.", 401);
 
-        var normalizedKey = NormalizeIdempotencyKey(idempotencyKey);
+        var normalizedKey = ExternalIdempotencyKey.Normalize(idempotencyKey);
         var normalized = Normalize(command);
         var staged = await staging.StageAsync(
             source,
@@ -309,20 +309,6 @@ public sealed class ImageImportApplicationService(
     {
         var payload = JsonSerializer.SerializeToUtf8Bytes(new { command, contentDigest });
         return Convert.ToHexStringLower(SHA256.HashData(payload));
-    }
-
-    private static string NormalizeIdempotencyKey(string value)
-    {
-        var normalized = value.Trim();
-        if (normalized.Length is < 1 or > 128)
-            throw new IdempotencyValidationException(
-                string.IsNullOrEmpty(normalized)
-                    ? "idempotency_key_required"
-                    : "idempotency_key_invalid",
-                string.IsNullOrEmpty(normalized)
-                    ? "An Idempotency-Key header is required."
-                    : "Idempotency-Key cannot exceed 128 characters.");
-        return normalized;
     }
 
     private static string? NormalizeDigest(string? value)

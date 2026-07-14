@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
-using System.Net.Mime;
 using System.Security.Claims;
+using GZCTF.Infrastructure.Api;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Identity.Application;
 using GZCTF.Modules.TeamLab.Application;
@@ -13,7 +13,12 @@ namespace GZCTF.Modules.TeamLab.Api;
 [ApiController]
 [ApiExplorerSettings(GroupName = "open-v1")]
 [Route("api/open/v1/teamlab/runtimes")]
-[Produces(MediaTypeNames.Application.Json, "application/problem+json")]
+[ProducesResponseType(typeof(ExternalApiProblemDetailsModel), StatusCodes.Status400BadRequest, "application/problem+json")]
+[ProducesResponseType(typeof(ExternalApiProblemDetailsModel), StatusCodes.Status401Unauthorized, "application/problem+json")]
+[ProducesResponseType(typeof(ExternalApiProblemDetailsModel), StatusCodes.Status403Forbidden, "application/problem+json")]
+[ProducesResponseType(typeof(ExternalApiProblemDetailsModel), StatusCodes.Status404NotFound, "application/problem+json")]
+[ProducesResponseType(typeof(ExternalApiProblemDetailsModel), StatusCodes.Status409Conflict, "application/problem+json")]
+[ProducesResponseType(typeof(ExternalApiProblemDetailsModel), StatusCodes.Status422UnprocessableEntity, "application/problem+json")]
 public sealed class OpenTeamLabRuntimesController(
     ITeamLabRuntimeApplicationService runtimes,
     TeamLabRuntimeProjectionService projections,
@@ -23,6 +28,7 @@ public sealed class OpenTeamLabRuntimesController(
 {
     [HttpPost]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
+    [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Create(
         CreateTeamLabRuntimeModel model,
         [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
@@ -37,14 +43,16 @@ public sealed class OpenTeamLabRuntimesController(
 
     [HttpGet("{runtimeId:guid}")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesRead)]
-    public async Task<TeamLabRuntimeProjectionModel> Get(Guid runtimeId, CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(OpenTeamLabRuntimeModel), StatusCodes.Status200OK)]
+    public async Task<OpenTeamLabRuntimeModel> Get(Guid runtimeId, CancellationToken cancellationToken)
     {
         await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
-        return await runtimes.GetAsync(runtimeId, cancellationToken);
+        return (await runtimes.GetAsync(runtimeId, cancellationToken)).ToOpen();
     }
 
     [HttpPost("{runtimeId:guid}/reset")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
+    [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Reset(
         Guid runtimeId,
         ResetTeamLabRuntimeModel model,
@@ -61,6 +69,7 @@ public sealed class OpenTeamLabRuntimesController(
 
     [HttpDelete("{runtimeId:guid}")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
+    [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Destroy(
         Guid runtimeId,
         [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
@@ -76,10 +85,11 @@ public sealed class OpenTeamLabRuntimesController(
 
     [HttpGet("{runtimeId:guid}/events")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesRead)]
-    public async Task<IReadOnlyList<TeamLabRuntimeEventModel>> Events(
+    [ProducesResponseType(typeof(OpenTeamLabRuntimeEventPageModel), StatusCodes.Status200OK)]
+    public async Task<OpenTeamLabRuntimeEventPageModel> Events(
         Guid runtimeId,
-        [FromQuery] long after = 0,
-        [FromQuery, Range(1, 200)] int limit = 100,
+        [FromQuery] string? after = null,
+        [FromQuery, Range(1, 100)] int limit = 50,
         CancellationToken cancellationToken = default)
     {
         await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
@@ -88,22 +98,27 @@ public sealed class OpenTeamLabRuntimesController(
 
     [HttpPost("{runtimeId:guid}/access-grants")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
-    public async Task<ActionResult<TeamLabAccessGrantModel>> CreateAccessGrant(
+    [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
+    public async Task<IActionResult> CreateAccessGrant(
         Guid runtimeId,
         TeamLabAccessGrantCreateModel model,
         [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
         CancellationToken cancellationToken)
     {
-        _ = idempotencyKey;
         if (!string.Equals(model.Type, "WireGuard", StringComparison.OrdinalIgnoreCase))
             throw new TeamLabApiContractException("topology_invalid", "Only WireGuard access grants are supported.", 422);
         await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
-        var grant = await access.CreateAsync(runtimeId, cancellationToken);
-        return Created($"/api/open/v1/teamlab/runtimes/{runtimeId:D}/access-grants/{grant.Id:D}", grant);
+        var actor = Actor();
+        var result = await operations.SubmitAccessGrantCreateAsync(
+            actor.TokenId, actor.UserId, idempotencyKey, runtimeId, model, cancellationToken);
+        var operation = ApiOperationModel.FromEntity(result.Operation);
+        return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
     }
 
     [HttpGet("{runtimeId:guid}/access-grants/{grantId:guid}/download")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesRead)]
+    [Produces("application/x-wireguard-profile")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> DownloadAccessConfiguration(
         Guid runtimeId,
         Guid grantId,
@@ -117,11 +132,19 @@ public sealed class OpenTeamLabRuntimesController(
 
     [HttpDelete("{runtimeId:guid}/access-grants/{grantId:guid}")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
-    public async Task<IActionResult> RevokeAccessGrant(Guid runtimeId, Guid grantId, CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
+    public async Task<IActionResult> RevokeAccessGrant(
+        Guid runtimeId,
+        Guid grantId,
+        [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
+        CancellationToken cancellationToken)
     {
         await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
-        await access.RevokeAsync(runtimeId, grantId, cancellationToken);
-        return NoContent();
+        var actor = Actor();
+        var result = await operations.SubmitAccessGrantRevokeAsync(
+            actor.TokenId, actor.UserId, idempotencyKey, runtimeId, grantId, cancellationToken);
+        var operation = ApiOperationModel.FromEntity(result.Operation);
+        return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
     }
 
     private async Task AuthorizeRuntimeAsync(Guid runtimeId, CancellationToken cancellationToken)

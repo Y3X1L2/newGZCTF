@@ -4,7 +4,15 @@ public enum TeamLabRuntimeOperationKind : byte
 {
     Create = 0,
     Reset = 1,
-    Destroy = 2
+    Destroy = 2,
+    TopologyCreate = 3,
+    TopologyUpdate = 4,
+    TopologyDelete = 5,
+    TopologyPublish = 6,
+    AccessGrantCreate = 7,
+    AccessGrantRevoke = 8,
+    CaptureStart = 9,
+    CaptureStop = 10
 }
 
 public sealed class TeamLabRuntimeOperationJob

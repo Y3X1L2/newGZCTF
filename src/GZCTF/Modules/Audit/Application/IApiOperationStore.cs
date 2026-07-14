@@ -14,8 +14,6 @@ public interface IApiOperationStore
 
     Task<ApiOperation?> GetAsync(Guid id, CancellationToken cancellationToken);
 
-    Task<ApiOperation?> GetForTokenAsync(Guid id, Guid apiTokenId, CancellationToken cancellationToken);
-
     Task<IReadOnlyList<ApiOperation>> ClaimAsync(
         string leaseOwner,
         TimeSpan leaseDuration,

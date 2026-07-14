@@ -10,6 +10,7 @@ public sealed class TeamLabTopologyRelease
     public string CanonicalJson { get; set; } = string.Empty;
     public string ContentHash { get; set; } = string.Empty;
     public Guid? PublishedById { get; set; }
+    public Guid? ApiOperationId { get; set; }
     public DateTimeOffset PublishedAt { get; set; } = DateTimeOffset.UtcNow;
     public TeamLabTopology Topology { get; set; } = null!;
 }

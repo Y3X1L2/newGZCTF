@@ -15,6 +15,16 @@ public sealed class OpenApiContractOperationProcessor : IOperationProcessor
                      string.Equals(parameter.Name, IdempotencyKeyHeader, StringComparison.OrdinalIgnoreCase)))
             parameter.IsRequired = true;
 
+        foreach (var response in operation.Responses.Where(item =>
+                     int.TryParse(item.Key, out var statusCode) && statusCode >= 400))
+        {
+            var media = response.Value.Content.Values.FirstOrDefault();
+            if (media is null)
+                continue;
+            response.Value.Content.Clear();
+            response.Value.Content["application/problem+json"] = media;
+        }
+
         if (!string.Equals(
                 context.OperationDescription.Path,
                 DockerArchivePath,

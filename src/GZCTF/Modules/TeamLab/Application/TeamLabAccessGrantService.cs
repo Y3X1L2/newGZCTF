@@ -31,6 +31,18 @@ public sealed class TeamLabAccessGrantService(
     private readonly ContainerProvider _container = containerOptions.Value;
 
     public async Task<TeamLabAccessGrantModel> CreateAsync(Guid runtimePublicId, CancellationToken cancellationToken)
+        => await CreateCoreAsync(runtimePublicId, null, cancellationToken);
+
+    public async Task<TeamLabAccessGrantModel> CreateForOperationAsync(
+        Guid runtimePublicId,
+        Guid operationId,
+        CancellationToken cancellationToken) =>
+        await CreateCoreAsync(runtimePublicId, operationId, cancellationToken);
+
+    private async Task<TeamLabAccessGrantModel> CreateCoreAsync(
+        Guid runtimePublicId,
+        Guid? operationId,
+        CancellationToken cancellationToken)
     {
         var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
         if (runtime.Status != TeamLabRuntimeStatus.Running || runtime.PublicUdpMapping is null)
@@ -45,29 +57,48 @@ public sealed class TeamLabAccessGrantService(
         if (string.IsNullOrWhiteSpace(publicEndpoint))
             throw new TeamLabApiContractException("capability_unavailable", "The public WireGuard endpoint is not configured.", 409);
 
-        var client = GenerateKeyPair();
-        var server = GenerateKeyPair();
-        var token = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
-        var network = IPNetwork.Parse(entryNetwork.Cidr);
-        var clientAddress = $"{HostAt(network, 2)}/32";
-        var serverAddress = $"{LastHost(network)}/32";
-        var endpoint = $"{publicEndpoint}:{runtime.PublicUdpMapping.PublicUdpPort}";
-        var grant = new TeamLabAccessGrant
+        var grant = operationId is { } operation
+            ? runtime.AccessGrants.SingleOrDefault(item => item.ApiOperationId == operation)
+            : null;
+        string token;
+        if (grant is null)
         {
-            RuntimeId = runtime.Id,
-            Generation = runtime.Generation,
-            Type = TeamLabAccessGrantType.WireGuard,
-            ClientAddress = clientAddress,
-            Endpoint = endpoint,
-            AllowedIps = entryNetwork.Cidr,
-            Dns = entryNetwork.GatewayIp,
-            PublicKey = client.PublicKey,
-            ProtectedPrivateKey = _protector.Protect(client.PrivateKey),
-            ServerPublicKey = server.PublicKey,
-            ProtectedServerPrivateKey = _protector.Protect(server.PrivateKey),
-            DownloadTokenHash = HashToken(token),
-            ExpiresAt = DateTimeOffset.UtcNow.AddHours(12)
-        };
+            var client = GenerateKeyPair();
+            var server = GenerateKeyPair();
+            token = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
+            var network = IPNetwork.Parse(entryNetwork.Cidr);
+            grant = new TeamLabAccessGrant
+            {
+                RuntimeId = runtime.Id,
+                Generation = runtime.Generation,
+                ApiOperationId = operationId,
+                Type = TeamLabAccessGrantType.WireGuard,
+                ClientAddress = $"{HostAt(network, 2)}/32",
+                Endpoint = $"{publicEndpoint}:{runtime.PublicUdpMapping.PublicUdpPort}",
+                AllowedIps = entryNetwork.Cidr,
+                Dns = entryNetwork.GatewayIp,
+                PublicKey = client.PublicKey,
+                ProtectedPrivateKey = _protector.Protect(client.PrivateKey),
+                ServerPublicKey = server.PublicKey,
+                ProtectedServerPrivateKey = _protector.Protect(server.PrivateKey),
+                DownloadTokenHash = HashToken(token),
+                ProtectedDownloadToken = _protector.Protect(token),
+                ExpiresAt = DateTimeOffset.UtcNow.AddHours(12)
+            };
+            runtime.AccessGrants.Add(grant);
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(grant.ProtectedDownloadToken))
+                throw new TeamLabApiContractException(
+                    "access_grant_expired", "The access configuration link is no longer available.", 410);
+            token = _protector.Unprotect(grant.ProtectedDownloadToken);
+            if (grant.AppliedAt is not null)
+                return ToModel(runtime, grant, DownloadUrl(runtime, grant, token));
+        }
+
+        var serverAddress = $"{LastHost(IPNetwork.Parse(entryNetwork.Cidr))}/32";
         var blocked = runtime.Networks.Where(item => item.Generation == runtime.Generation && item.Id != entryNetwork.Id)
             .Select(item => item.Cidr).ToArray();
         var applied = await executor.ConfigureAccessAsync(entryShard.WorkerNodeId,
@@ -77,22 +108,23 @@ public sealed class TeamLabAccessGrantService(
                 TeamLabRouteApplicationService.WireGuardName(runtime.Id),
                 runtime.PublicUdpMapping.WorkerWireGuardPort,
                 serverAddress,
-                server.PrivateKey,
-                client.PublicKey,
-                clientAddress,
+                _protector.Unprotect(grant.ProtectedServerPrivateKey),
+                grant.PublicKey,
+                grant.ClientAddress,
                 entryNetwork.Cidr,
                 [entryNetwork.Cidr],
                 blocked), cancellationToken);
         if (!applied.Success)
-            throw new TeamLabApiContractException("operation_failed", applied.Message, 500);
+            throw new TeamLabApiContractException(
+                "operation_failed", "The access grant could not be applied to the runtime.", 500);
         var revokedAt = DateTimeOffset.UtcNow;
         foreach (var previous in runtime.AccessGrants.Where(item =>
-                     item.Generation == runtime.Generation && !item.Revoked))
+                     item.Id != grant.Id && item.Generation == runtime.Generation && !item.Revoked))
         {
             previous.Revoked = true;
             previous.RevokedAt = revokedAt;
         }
-        runtime.AccessGrants.Add(grant);
+        grant.AppliedAt = DateTimeOffset.UtcNow;
         runtime.IsOpenToPlayers = true;
         eventRecorder.Record(
             runtime,
@@ -103,8 +135,24 @@ public sealed class TeamLabAccessGrantService(
             "WireGuard access grant created.",
             workerNodeId: entryShard.WorkerNodeId);
         await context.SaveChangesAsync(cancellationToken);
-        return ToModel(runtime, grant,
-            $"/api/open/v1/teamlab/runtimes/{runtime.PublicId:D}/access-grants/{grant.PublicId:D}/download?token={token}");
+        return ToModel(runtime, grant, DownloadUrl(runtime, grant, token));
+    }
+
+    public async Task<TeamLabAccessGrantModel?> GetOperationResultAsync(
+        Guid operationId,
+        CancellationToken cancellationToken)
+    {
+        var grant = await context.TeamLabAccessGrants.AsNoTracking()
+            .Include(item => item.Runtime)
+            .SingleOrDefaultAsync(item => item.ApiOperationId == operationId, cancellationToken);
+        if (grant is null)
+            return null;
+        var token = grant.ConfigurationConsumedAt is null && grant.ExpiresAt > DateTimeOffset.UtcNow &&
+                    !string.IsNullOrWhiteSpace(grant.ProtectedDownloadToken)
+            ? _protector.Unprotect(grant.ProtectedDownloadToken)
+            : null;
+        return ToModel(grant.Runtime, grant,
+            token is null ? null : DownloadUrl(grant.Runtime, grant, token));
     }
 
     public async Task<TeamLabAccessConfigurationResult> ConsumeConfigurationAsync(
@@ -127,6 +175,7 @@ public sealed class TeamLabAccessGrantService(
         var config = BuildClientConfig(clientPrivate, grant.ServerPublicKey, grant.ClientAddress, grant.Endpoint,
             grant.AllowedIps, grant.Dns);
         grant.ConfigurationConsumedAt = DateTimeOffset.UtcNow;
+        grant.ProtectedDownloadToken = null;
         await context.SaveChangesAsync(cancellationToken);
         return new TeamLabAccessConfigurationResult($"tl-{runtime.PublicId:N}"[..11] + ".conf", config);
     }
@@ -134,14 +183,17 @@ public sealed class TeamLabAccessGrantService(
     public async Task RevokeAsync(Guid runtimePublicId, Guid grantPublicId, CancellationToken cancellationToken)
     {
         var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
-        var grant = runtime.AccessGrants.SingleOrDefault(item => item.PublicId == grantPublicId && !item.Revoked)
+        var grant = runtime.AccessGrants.SingleOrDefault(item => item.PublicId == grantPublicId)
             ?? throw new TeamLabApiContractException("access_grant_not_found", "The access grant was not found.", 404);
+        if (grant.Revoked)
+            return;
         var entryShard = runtime.Shards.Single(item => item.Id == runtime.EntryShardId && item.Generation == runtime.Generation);
         var cleanup = await executor.CleanupShardAsync(entryShard.WorkerNodeId,
             new TeamLabNodeCleanupRequest(runtime.Id, runtime.Generation,
                 [TeamLabRouteApplicationService.WireGuardName(runtime.Id)], [], []), cancellationToken);
         if (!cleanup.Success)
-            throw new TeamLabApiContractException("operation_failed", cleanup.Message, 500);
+            throw new TeamLabApiContractException(
+                "operation_failed", "The access grant could not be revoked from the runtime.", 500);
         grant.Revoked = true;
         grant.RevokedAt = DateTimeOffset.UtcNow;
         runtime.IsOpenToPlayers = runtime.AccessGrants.Any(item => item.Id != grant.Id &&
@@ -170,6 +222,9 @@ public sealed class TeamLabAccessGrantService(
     private static TeamLabAccessGrantModel ToModel(TeamLabRuntime runtime, TeamLabAccessGrant grant, string? downloadUrl) =>
         new(grant.PublicId, "WireGuard", grant.ClientAddress, grant.Endpoint, grant.AllowedIps, grant.Dns,
             grant.CreatedAt, grant.ExpiresAt, downloadUrl);
+
+    private static string DownloadUrl(TeamLabRuntime runtime, TeamLabAccessGrant grant, string token) =>
+        $"/api/open/v1/teamlab/runtimes/{runtime.PublicId:D}/access-grants/{grant.PublicId:D}/download?token={token}";
 
     private static (string PrivateKey, string PublicKey) GenerateKeyPair()
     {

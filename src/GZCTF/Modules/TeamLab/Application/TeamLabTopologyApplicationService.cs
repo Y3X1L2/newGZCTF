@@ -1,4 +1,5 @@
 using System.Text.Json;
+using GZCTF.Infrastructure.Persistence.Queries;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Modules.Runtime.Application;
@@ -33,12 +34,37 @@ public sealed class TeamLabTopologyApplicationService(
     public async Task<TeamLabTopologyDetailModel> CreateAsync(
         CreateTeamLabTopologyModel model,
         Guid actorUserId,
+        CancellationToken cancellationToken) =>
+        await CreateCoreAsync(model, actorUserId, null, cancellationToken);
+
+    public async Task<TeamLabTopologyDetailModel> CreateForOperationAsync(
+        CreateTeamLabTopologyModel model,
+        Guid actorUserId,
+        Guid operationId,
+        CancellationToken cancellationToken)
+    {
+        var existing = await context.TeamLabTopologies.AsNoTracking()
+            .Include(item => item.Networks)
+            .Include(item => item.Assets).ThenInclude(item => item.Interfaces).ThenInclude(item => item.Network)
+            .Include(item => item.Connections)
+            .SingleOrDefaultAsync(item => item.CreatedByOperationId == operationId, cancellationToken);
+        return existing is not null
+            ? ToDetail(existing)
+            : await CreateCoreAsync(model, actorUserId, operationId, cancellationToken);
+    }
+
+    private async Task<TeamLabTopologyDetailModel> CreateCoreAsync(
+        CreateTeamLabTopologyModel model,
+        Guid actorUserId,
+        Guid? operationId,
         CancellationToken cancellationToken)
     {
         var definition = TeamLabReleaseCodec.Normalize(new TeamLabTopologyDefinitionModel(
             model.Name, model.Networks, model.Assets, model.Connections));
         await RequireValidAsync(definition, cancellationToken);
         var topology = BuildTopology(definition, actorUserId);
+        topology.CreatedByOperationId = operationId;
+        topology.LastMutationOperationId = operationId;
         topology.EditorMetadataJson = SerializeEditor(NormalizeEditor(model.Editor, definition));
         context.TeamLabTopologies.Add(topology);
         await context.SaveChangesAsync(cancellationToken);
@@ -59,6 +85,34 @@ public sealed class TeamLabTopologyApplicationService(
             .ToArrayAsync(cancellationToken);
     }
 
+    public async Task<OpenTeamLabTopologyPageModel> ListPageAsync(
+        Guid actorUserId,
+        bool includeAll,
+        int limit,
+        string? after,
+        CancellationToken cancellationToken)
+    {
+        var normalizedLimit = Math.Clamp(limit, 1, 100);
+        var cursor = DecodeCursor(after, "topology_cursor_invalid");
+        var query = context.TeamLabTopologies.AsNoTracking();
+        if (!includeAll) query = query.Where(item => item.OwnerUserId == actorUserId);
+        if (cursor is { } value)
+            query = query.Where(item => item.UpdatedAt < value.Time ||
+                                        item.UpdatedAt == value.Time && item.PublicId.CompareTo(value.Id) > 0);
+        var rows = await query
+            .OrderByDescending(item => item.UpdatedAt)
+            .ThenBy(item => item.PublicId)
+            .Take(normalizedLimit + 1)
+            .Select(item => new TeamLabTopologySummaryModel(
+                item.PublicId, item.Name, item.Revision, item.SchemaVersion, item.CreatedAt, item.UpdatedAt))
+            .ToArrayAsync(cancellationToken);
+        var page = rows.Take(normalizedLimit).ToArray();
+        var nextCursor = rows.Length > normalizedLimit
+            ? new GuidTimeCursor(page[^1].UpdatedAt, page[^1].Id).Encode()
+            : null;
+        return new OpenTeamLabTopologyPageModel(page, nextCursor);
+    }
+
     public async Task<TeamLabTopologyDetailModel> GetAsync(
         Guid topologyId,
         Guid actorUserId,
@@ -71,6 +125,31 @@ public sealed class TeamLabTopologyApplicationService(
         UpdateTeamLabTopologyModel model,
         Guid actorUserId,
         bool includeAll,
+        CancellationToken cancellationToken) =>
+        await UpdateCoreAsync(topologyId, model, actorUserId, includeAll, null, cancellationToken);
+
+    public async Task<TeamLabTopologyDetailModel> UpdateForOperationAsync(
+        Guid topologyId,
+        UpdateTeamLabTopologyModel model,
+        Guid actorUserId,
+        bool includeAll,
+        Guid operationId,
+        CancellationToken cancellationToken)
+    {
+        var alreadyApplied = await context.TeamLabTopologies.AsNoTracking()
+            .AnyAsync(item => item.PublicId == topologyId && item.LastMutationOperationId == operationId &&
+                              (includeAll || item.OwnerUserId == actorUserId), cancellationToken);
+        return alreadyApplied
+            ? await GetAsync(topologyId, actorUserId, includeAll, cancellationToken)
+            : await UpdateCoreAsync(topologyId, model, actorUserId, includeAll, operationId, cancellationToken);
+    }
+
+    private async Task<TeamLabTopologyDetailModel> UpdateCoreAsync(
+        Guid topologyId,
+        UpdateTeamLabTopologyModel model,
+        Guid actorUserId,
+        bool includeAll,
+        Guid? operationId,
         CancellationToken cancellationToken)
     {
         var definition = TeamLabReleaseCodec.Normalize(new TeamLabTopologyDefinitionModel(
@@ -90,6 +169,7 @@ public sealed class TeamLabTopologyApplicationService(
                 .SetProperty(item => item.Name, definition.Name)
                 .SetProperty(item => item.EditorMetadataJson, SerializeEditor(NormalizeEditor(model.Editor, definition)))
                 .SetProperty(item => item.Revision, item => item.Revision + 1)
+                .SetProperty(item => item.LastMutationOperationId, operationId)
                 .SetProperty(item => item.UpdatedAt, now), cancellationToken);
         if (updated == 0)
             throw new TeamLabApiContractException(
@@ -129,6 +209,28 @@ public sealed class TeamLabTopologyApplicationService(
         await context.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task DeleteForOperationAsync(
+        Guid topologyId,
+        Guid actorUserId,
+        bool includeAll,
+        Guid operationId,
+        CancellationToken cancellationToken)
+    {
+        _ = operationId;
+        var topology = await context.TeamLabTopologies
+            .SingleOrDefaultAsync(item => item.PublicId == topologyId &&
+                                          (includeAll || item.OwnerUserId == actorUserId), cancellationToken);
+        if (topology is null)
+            return;
+        if (await context.TeamLabTopologyReleases.AnyAsync(item => item.TopologyId == topology.Id, cancellationToken))
+            throw new TeamLabApiContractException(
+                "release_immutable",
+                "A topology with published releases cannot be deleted.",
+                409);
+        context.TeamLabTopologies.Remove(topology);
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<TeamLabValidationResultModel> ValidateAsync(
         Guid topologyId,
         Guid actorUserId,
@@ -159,7 +261,19 @@ public sealed class TeamLabTopologyApplicationService(
         CancellationToken cancellationToken)
     {
         var topology = await RequireTopologyAsync(topologyId, actorUserId, includeAll, cancellationToken);
-        return await releases.PublishAsync(topology, revision, actorUserId, cancellationToken);
+        return await releases.PublishAsync(topology, revision, actorUserId, null, cancellationToken);
+    }
+
+    public async Task<TeamLabReleaseModel> PublishForOperationAsync(
+        Guid topologyId,
+        int revision,
+        Guid actorUserId,
+        bool includeAll,
+        Guid operationId,
+        CancellationToken cancellationToken)
+    {
+        var topology = await RequireTopologyAsync(topologyId, actorUserId, includeAll, cancellationToken);
+        return await releases.PublishAsync(topology, revision, actorUserId, operationId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<TeamLabReleaseModel>> ListReleasesAsync(
@@ -174,6 +288,36 @@ public sealed class TeamLabTopologyApplicationService(
             .OrderByDescending(item => item.Version)
             .ToArrayAsync(cancellationToken);
         return rows.Select(item => TeamLabReleaseService.ToModel(item, topology.PublicId)).ToArray();
+    }
+
+    public async Task<OpenTeamLabReleasePageModel> ListReleasesPageAsync(
+        Guid topologyId,
+        Guid actorUserId,
+        bool includeAll,
+        int limit,
+        string? after,
+        CancellationToken cancellationToken)
+    {
+        var topology = await RequireTopologyIdentityAsync(topologyId, actorUserId, includeAll, cancellationToken);
+        var normalizedLimit = Math.Clamp(limit, 1, 100);
+        var cursor = DecodeCursor(after, "release_cursor_invalid");
+        var query = context.TeamLabTopologyReleases.AsNoTracking()
+            .Where(item => item.TopologyId == topology.Id);
+        if (cursor is { } value)
+            query = query.Where(item => item.PublishedAt < value.Time ||
+                                        item.PublishedAt == value.Time && item.Id.CompareTo(value.Id) > 0);
+        var rows = await query
+            .OrderByDescending(item => item.PublishedAt)
+            .ThenBy(item => item.Id)
+            .Take(normalizedLimit + 1)
+            .ToArrayAsync(cancellationToken);
+        var page = rows.Take(normalizedLimit)
+            .Select(item => TeamLabReleaseService.ToModel(item, topology.PublicId).ToOpen())
+            .ToArray();
+        var nextCursor = rows.Length > normalizedLimit
+            ? new GuidTimeCursor(page[^1].PublishedAt, page[^1].Id).Encode()
+            : null;
+        return new OpenTeamLabReleasePageModel(page, nextCursor);
     }
 
     public async Task<TeamLabReleaseModel> GetReleaseAsync(
@@ -461,6 +605,19 @@ public sealed class TeamLabTopologyApplicationService(
 
     private static TeamLabApiContractException NotFound() =>
         new("topology_not_found", "The TeamLab topology was not found.", 404);
+
+    private static GuidTimeCursor? DecodeCursor(string? value, string errorCode)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        try
+        {
+            return GuidTimeCursor.Decode(value);
+        }
+        catch (InvalidTimeCursorException)
+        {
+            throw new TeamLabApiContractException(errorCode, "The pagination cursor is invalid.", 400);
+        }
+    }
 
     private sealed record TeamLabTopologyIdentity(int Id, Guid PublicId);
 }

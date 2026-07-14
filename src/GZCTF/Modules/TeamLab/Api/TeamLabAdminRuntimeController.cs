@@ -52,7 +52,7 @@ public sealed class TeamLabAdminRuntimeController(
         CancellationToken cancellationToken)
     {
         await AuthorizeAsync(runtimeId, cancellationToken);
-        var capture = await traffic.StartCaptureAsync(runtimeId, model, null, cancellationToken);
+        var capture = await traffic.StartCaptureAsync(runtimeId, model, cancellationToken);
         return Created($"/api/admin/teamlab/runtimes/{runtimeId:D}/captures/{capture.Id:D}", capture);
     }
 
