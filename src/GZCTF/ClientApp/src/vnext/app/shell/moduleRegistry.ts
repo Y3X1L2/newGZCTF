@@ -90,6 +90,7 @@ export const platformModules: PlatformModule[] = [
     group: '管理与运维',
     description: '镜像、虚拟机模板与分发状态',
     adminOnly: true,
+    implemented: true,
   },
   {
     id: 'teamlab',
@@ -110,6 +111,7 @@ export const platformModules: PlatformModule[] = [
     group: '管理与运维',
     description: '赛事、用户、节点和系统配置',
     adminOnly: true,
+    implemented: true,
   },
 ]
 

@@ -1,6 +1,6 @@
 import { ChevronRight, Grid3X3, LogIn, LogOut, Moon, Settings, Sun, UserRound } from 'lucide-react'
 import { motion } from 'motion/react'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { getPlatformName, PLATFORM_TYPE } from '@Utils/Brand'
 import { useConfig } from '@Hooks/useConfig'
@@ -223,6 +223,10 @@ export function PlatformShell() {
   const routeFrameKey = location.pathname.match(/^\/games\/\d+(?=\/)/)?.[0] ?? location.pathname
   const platformName = getPlatformName(config.title)
   const displayName = user?.realName || user?.userName || '登录'
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 })
+  }, [location.pathname])
 
   return (
     <div className={styles.shell}>

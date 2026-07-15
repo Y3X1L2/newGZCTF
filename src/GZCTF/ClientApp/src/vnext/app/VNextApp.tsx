@@ -66,6 +66,21 @@ const TrainingTheoryPaperEditorPage = lazy(() =>
 const PendingPage = lazy(() =>
   import('../features/pending/PendingPage').then((module) => ({ default: module.PendingPage }))
 )
+const AdminShell = lazy(() =>
+  import('../features/admin/shell/AdminShell').then((module) => ({ default: module.AdminShell }))
+)
+const AdminPendingPage = lazy(() =>
+  import('../features/admin/AdminPendingPage').then((module) => ({ default: module.AdminPendingPage }))
+)
+const AdminImagesPage = lazy(() =>
+  import('../features/admin/images/AdminImagesPage').then((module) => ({ default: module.AdminImagesPage }))
+)
+const AdminNodesPage = lazy(() =>
+  import('../features/admin/nodes/AdminNodesPage').then((module) => ({ default: module.AdminNodesPage }))
+)
+const AdminNodeDetailPage = lazy(() =>
+  import('../features/admin/nodes/AdminNodeDetailPage').then((module) => ({ default: module.AdminNodeDetailPage }))
+)
 
 export function VNextApp() {
   return (
@@ -106,6 +121,18 @@ export function VNextApp() {
           <Route path="training/courses/:courseId/chapters/:chapterId/theory" element={<TrainingTheoryPage />} />
           <Route path="account/profile" element={<Navigate replace to="/settings/profile" />} />
           <Route path="account/settings" element={<Navigate replace to="/settings/security" />} />
+          <Route path="admin" element={<AdminShell />}>
+            <Route index element={<Navigate replace to="images" />} />
+            <Route path="dashboard" element={<AdminPendingPage />} />
+            <Route path="images" element={<AdminImagesPage />} />
+            <Route path="nodes" element={<AdminNodesPage />} />
+            <Route path="nodes/:nodeId" element={<AdminNodeDetailPage />} />
+            <Route path="instances" element={<AdminPendingPage />} />
+            <Route path="queue" element={<AdminPendingPage />} />
+            <Route path="logs" element={<AdminPendingPage />} />
+            <Route path="system" element={<AdminPendingPage />} />
+            <Route path="*" element={<AdminPendingPage />} />
+          </Route>
           <Route path="*" element={<PendingPage />} />
         </Route>
       </Routes>
