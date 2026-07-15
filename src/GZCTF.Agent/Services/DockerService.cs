@@ -216,8 +216,39 @@ public class DockerService
         return BuildContainerResponse(inspect, primaryNetwork, portSpec, request.ExposedPort);
     }
 
-    public async Task DestroyContainerAsync(string containerId, CancellationToken token)
+    public async Task DestroyContainerAsync(
+        string containerId,
+        CancellationToken token,
+        int? expectedGeneration = null)
     {
+        if (expectedGeneration is { } requiredGeneration)
+        {
+            ContainerInspectResponse existing;
+            try
+            {
+                existing = await _client.Containers.InspectContainerAsync(containerId, token);
+            }
+            catch (DockerContainerNotFoundException)
+            {
+                return;
+            }
+            catch (DockerApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            {
+                return;
+            }
+
+            var generation = existing.Config.Labels is not null &&
+                             existing.Config.Labels.TryGetValue("GZCTF.Generation", out var value) &&
+                             int.TryParse(value, out var parsed)
+                ? parsed
+                : (int?)null;
+            if (generation != requiredGeneration)
+                throw new AgentOperationException(
+                    "Conflict", "runtime.identity_conflict",
+                    "Container generation does not match the requested runtime identity.", false,
+                    StatusCodes.Status409Conflict);
+        }
+
         try
         {
             await _client.Containers.StopContainerAsync(containerId,
@@ -461,6 +492,49 @@ public class DockerService
         }, token);
         return containers.Count;
     }
+
+    public async Task<IReadOnlyList<RuntimeInventoryResource>> GetManagedRuntimeInventoryAsync(
+        CancellationToken token)
+    {
+        var containers = await _client.Containers.ListContainersAsync(new ContainersListParameters
+        {
+            Filters = new Dictionary<string, IDictionary<string, bool>>
+            {
+                ["label"] = new Dictionary<string, bool> { ["ManagedBy=GZCTF"] = true }
+            },
+            All = true
+        }, token);
+
+        return BuildManagedRuntimeInventory(containers);
+    }
+
+    internal static IReadOnlyList<RuntimeInventoryResource> BuildManagedRuntimeInventory(
+        IEnumerable<ContainerListResponse> containers) => containers
+            .Select(container =>
+            {
+                if (container.Labels is null ||
+                    !container.Labels.TryGetValue("ManagedBy", out var managedBy) ||
+                    !managedBy.Equals("GZCTF", StringComparison.Ordinal) ||
+                    !container.Labels.TryGetValue("GZCTF.Generation", out var value) ||
+                    !int.TryParse(value, out var generation) || generation < 1)
+                    return null;
+
+                var stableName = container.Names
+                    .Select(name => name.Trim('/'))
+                    .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name));
+                if (string.IsNullOrWhiteSpace(container.ID) || string.IsNullOrWhiteSpace(stableName))
+                    return null;
+
+                return new RuntimeInventoryResource(
+                    container.ID,
+                    stableName,
+                    generation,
+                    container.State ?? "unknown",
+                    container.Image);
+            })
+            .OfType<RuntimeInventoryResource>()
+            .OrderBy(item => item.StableName, StringComparer.Ordinal)
+            .ToArray();
 
     public async Task PullImageAsync(string image, string? registryAuth, CancellationToken token)
     {

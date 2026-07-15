@@ -18,7 +18,7 @@ public static class RuntimeCronJobs
         foreach (var container in await containerRepo.GetDyingContainers(cancellationToken))
         {
             await queue.EnqueueAsync(DeploymentQueueRequest.MaintenanceContainer(
-                container.Id, container.NodeId, container.Image), cancellationToken);
+                container.Id, container.NodeId, container.Image, container.RuntimeGeneration), cancellationToken);
             logger.SystemLog(
                 $"Expired container cleanup queued: container={container.Id}, node={container.NodeId}, image={container.Image}.",
                 TaskStatus.Pending, LogLevel.Debug);

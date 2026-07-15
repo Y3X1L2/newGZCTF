@@ -2,8 +2,11 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Net.Mime;
+using GZCTF.Infrastructure.Telemetry;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
+using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Container.Manager;
@@ -27,6 +30,8 @@ public class AgentClient
         client.BaseAddress = new Uri($"http://{node.HostAddress}:{node.AgentPort}");
         client.Timeout = Timeout.InfiniteTimeSpan;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", node.AuthToken);
+        client.DefaultRequestHeaders.TryAddWithoutValidation(
+            AgentTelemetryHandler.WorkerNodeHeaderName, node.Id.ToString());
         return client;
     }
 
@@ -57,7 +62,7 @@ public class AgentClient
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null)
-            throw new AgentClientException($"Fleet node {nodeId} was not found.");
+            throw NodeNotFound(nodeId, "container.create");
 
         var client = BuildClient(node);
         var body = JsonSerializer.Serialize(new
@@ -96,44 +101,65 @@ public class AgentClient
         }
         catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
         {
-            throw new AgentClientException(
+            throw TransportFailure(
+                node.Id,
+                "container.create",
+                OperationalErrorCodes.AgentTimeout,
                 $"Agent request timed out on node {node.Name} ({node.HostAddress}) while creating image {config.Image}.",
                 ex);
         }
         catch (HttpRequestException ex)
         {
-            throw new AgentClientException(
-                $"Agent request failed on node {node.Name} ({node.HostAddress}) while creating image {config.Image}: {ex.Message}",
+            throw TransportFailure(
+                node.Id,
+                "container.create",
+                OperationalErrorCodes.AgentConnectionFailed,
+                $"Agent request failed on node {node.Name} ({node.HostAddress}) while creating image {config.Image}.",
                 ex);
         }
 
         if (!response.IsSuccessStatusCode)
-        {
-            var responseBody = await response.Content.ReadAsStringAsync(token);
-            throw new AgentClientException(
-                $"Agent create container failed on node {node.Name} ({node.HostAddress}) for image {config.Image}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
-        }
+            throw await CreateAgentExceptionAsync(
+                response,
+                "container.create",
+                node.Id,
+                $"Agent create container failed on node {node.Name} ({node.HostAddress}) for image {config.Image}.",
+                token);
 
         var result = await response.Content.ReadFromJsonAsync<AgentCreateContainerResponse>(token);
-        return result ?? throw new AgentClientException(
+        return result ?? throw InvalidAgentResponse(
+            node.Id,
+            "container.create",
             $"Agent returned an empty container response on node {node.Name} ({node.HostAddress}) for image {config.Image}.");
     }
 
     public virtual async Task DestroyContainerAsync(Guid nodeId, string containerId, CancellationToken token)
+        => await DestroyContainerAsync(nodeId, containerId, null, token);
+
+    public virtual async Task DestroyContainerAsync(
+        Guid nodeId,
+        string containerId,
+        int? expectedGeneration,
+        CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null)
-            throw new InvalidOperationException($"Fleet node {nodeId} was not found.");
+            throw NodeNotFound(nodeId, "container.destroy");
 
         var client = BuildClient(node);
         using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(60));
-        var response = await client.DeleteAsync($"/api/containers/{Uri.EscapeDataString(containerId)}",
+        var generationQuery = expectedGeneration is { } generation ? $"?generation={generation}" : string.Empty;
+        var response = await client.DeleteAsync(
+            $"/api/containers/{Uri.EscapeDataString(containerId)}{generationQuery}",
             deadline.Token);
         if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
         {
-            var responseBody = await response.Content.ReadAsStringAsync(token);
-            throw new InvalidOperationException(
-                $"Agent container deletion failed on node {nodeId}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+            throw await CreateAgentExceptionAsync(
+                response,
+                "container.destroy",
+                node.Id,
+                $"Agent container deletion failed on node {node.Name} ({node.HostAddress}).",
+                token);
         }
     }
 
@@ -155,9 +181,9 @@ public class AgentClient
 
         if (!response.IsSuccessStatusCode)
         {
-            var responseBody = await response.Content.ReadAsStringAsync(token);
-            return AgentCommandResult.Failed(null,
-                $"Agent command failed: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+            var error = await ReadAgentErrorAsync(
+                response, "container.exec", node.Id, "Agent container command failed.", token);
+            return AgentCommandResult.Failed(null, error.Message);
         }
 
         var result = await response.Content.ReadFromJsonAsync<AgentCommandResult>(token);
@@ -168,16 +194,68 @@ public class AgentClient
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null)
-            throw new InvalidOperationException($"Fleet node {nodeId} was not found.");
+            throw NodeNotFound(nodeId, "container.network.delete");
 
         var client = BuildClient(node);
         var response = await client.DeleteAsync($"/api/containers/networks/{Uri.EscapeDataString(networkName)}", token);
         if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
         {
-            var responseBody = await response.Content.ReadAsStringAsync(token);
-            throw new InvalidOperationException(
-                $"Agent network deletion failed on node {nodeId}, network {networkName}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+            throw await CreateAgentExceptionAsync(
+                response,
+                "container.network.delete",
+                node.Id,
+                $"Agent network deletion failed on node {node.Name} ({node.HostAddress}), network {networkName}.",
+                token);
         }
+    }
+
+    public virtual async Task<AgentRuntimeInventoryResponse> GetRuntimeInventoryAsync(
+        Guid nodeId,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null)
+            throw NodeNotFound(nodeId, "runtime.inventory");
+
+        var client = BuildClient(node);
+        HttpResponseMessage response;
+        try
+        {
+            using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(30));
+            response = await client.GetAsync("/api/runtime/inventory", deadline.Token);
+        }
+        catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
+        {
+            throw TransportFailure(
+                node.Id,
+                "runtime.inventory",
+                OperationalErrorCodes.AgentTimeout,
+                $"Agent runtime inventory timed out on node {node.Name} ({node.HostAddress}).",
+                ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw TransportFailure(
+                node.Id,
+                "runtime.inventory",
+                OperationalErrorCodes.AgentConnectionFailed,
+                $"Agent runtime inventory failed on node {node.Name} ({node.HostAddress}).",
+                ex);
+        }
+
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(
+                response,
+                "runtime.inventory",
+                node.Id,
+                $"Agent runtime inventory failed on node {node.Name} ({node.HostAddress}).",
+                token);
+
+        var result = await response.Content.ReadFromJsonAsync<AgentRuntimeInventoryResponse>(token);
+        return result ?? throw InvalidAgentResponse(
+            node.Id,
+            "runtime.inventory",
+            $"Agent returned an empty runtime inventory on node {node.Name} ({node.HostAddress}).");
     }
 
     public async Task<TeamLabStatusResponse?> GetTeamLabStatusAsync(Guid nodeId, CancellationToken token)
@@ -188,7 +266,8 @@ public class AgentClient
         var client = BuildClient(node);
         using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(5));
         var response = await client.GetAsync("/api/teamlab/status", deadline.Token);
-        return await ReadTeamLabResponseAsync<TeamLabStatusResponse>(response, deadline.Token);
+        return await ReadTeamLabResponseAsync<TeamLabStatusResponse>(
+            response, "teamlab.status", node.Id, deadline.Token);
     }
 
     public virtual async Task<TeamLabDryRunResponse?> CreateTeamLabBridgeAsync(Guid nodeId, TeamLabBridgeRequest request,
@@ -279,21 +358,30 @@ public class AgentClient
         }
         catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
         {
-            throw new AgentClientException(
-                $"Agent sync request timed out on node {node.Name} ({node.HostAddress}).", ex);
+            throw TransportFailure(
+                node.Id,
+                "maintenance.sync",
+                OperationalErrorCodes.AgentTimeout,
+                $"Agent sync request timed out on node {node.Name} ({node.HostAddress}).",
+                ex);
         }
         catch (HttpRequestException ex)
         {
-            throw new AgentClientException(
-                $"Agent sync request failed on node {node.Name} ({node.HostAddress}): {ex.Message}", ex);
+            throw TransportFailure(
+                node.Id,
+                "maintenance.sync",
+                OperationalErrorCodes.AgentConnectionFailed,
+                $"Agent sync request failed on node {node.Name} ({node.HostAddress}).",
+                ex);
         }
 
         if (!response.IsSuccessStatusCode)
-        {
-            var responseBody = await response.Content.ReadAsStringAsync(token);
-            throw new AgentClientException(
-                $"Agent sync failed on node {node.Name} ({node.HostAddress}): {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
-        }
+            throw await CreateAgentExceptionAsync(
+                response,
+                "maintenance.sync",
+                node.Id,
+                $"Agent sync failed on node {node.Name} ({node.HostAddress}).",
+                token);
 
         var result = await response.Content.ReadFromJsonAsync<AgentSyncResponse>(token)
                      ?? new AgentSyncResponse(false, "Agent returned an empty sync response.", null);
@@ -317,9 +405,13 @@ public class AgentClient
         var response = await client.GetAsync(path, HttpCompletionOption.ResponseHeadersRead, token);
         if (!response.IsSuccessStatusCode)
         {
-            var responseBody = await response.Content.ReadAsStringAsync(token);
-            return TeamLabCaptureDownloadResult.Failed(
-                $"Agent TeamLab capture download failed: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+            var error = await ReadAgentErrorAsync(
+                response,
+                "teamlab.capture.download",
+                node.Id,
+                "Agent TeamLab capture download failed.",
+                token);
+            return TeamLabCaptureDownloadResult.Failed(error.Message);
         }
 
         var stream = await response.Content.ReadAsStreamAsync(token);
@@ -342,16 +434,26 @@ public class AgentClient
         using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(60));
         var response = await client.PostAsync(path, new StringContent(body, Encoding.UTF8, "application/json"),
             deadline.Token);
-        return await ReadTeamLabResponseAsync<TResponse>(response, deadline.Token);
+        return await ReadTeamLabResponseAsync<TResponse>(
+            response,
+            AgentOperationName.Resolve(HttpMethod.Post, path),
+            node.Id,
+            deadline.Token);
     }
 
-    private async Task<T?> ReadTeamLabResponseAsync<T>(HttpResponseMessage response, CancellationToken token)
+    private async Task<T?> ReadTeamLabResponseAsync<T>(
+        HttpResponseMessage response,
+        string operation,
+        Guid nodeId,
+        CancellationToken token)
     {
         if (!response.IsSuccessStatusCode)
         {
-            var responseBody = await response.Content.ReadAsStringAsync(token);
-            _logger.LogWarning("Agent TeamLab request failed: {Status}. Body: {Body}",
-                response.StatusCode, TrimResponseBody(responseBody));
+            var error = await ReadAgentErrorAsync(
+                response, operation, nodeId, "Agent TeamLab request failed.", token);
+            _logger.LogWarning(
+                "Agent TeamLab request failed with {ErrorCategory}/{ErrorCode} on node {NodeId}.",
+                error.Category, error.Code, nodeId);
             return default;
         }
 
@@ -366,7 +468,7 @@ public class AgentClient
             return PenetrationFabricResult.Unsupported($"Fleet node {nodeId} was not found.");
 
         var client = BuildClient(node);
-        return await PostFabricAsync(client, "/api/containers/fabric/networks",
+        return await PostFabricAsync(client, node.Id, "/api/containers/fabric/networks",
             new { networkName, cidr }, token);
     }
 
@@ -378,7 +480,7 @@ public class AgentClient
             return PenetrationFabricResult.Unsupported($"Fleet node {nodeId} was not found.");
 
         var client = BuildClient(node);
-        return await PostFabricAsync(client,
+        return await PostFabricAsync(client, node.Id,
             $"/api/containers/{Uri.EscapeDataString(containerId)}/fabric/interfaces",
             new
             {
@@ -401,7 +503,7 @@ public class AgentClient
             return PenetrationFabricResult.Unsupported($"Fleet node {nodeId} was not found.");
 
         var client = BuildClient(node);
-        return await PostFabricAsync(client,
+        return await PostFabricAsync(client, node.Id,
             $"/api/containers/{Uri.EscapeDataString(containerId)}/fabric/forwarding",
             new { }, token);
     }
@@ -414,7 +516,7 @@ public class AgentClient
             return PenetrationFabricResult.Unsupported($"Fleet node {nodeId} was not found.");
 
         var client = BuildClient(node);
-        return await PostFabricAsync(client,
+        return await PostFabricAsync(client, node.Id,
             $"/api/containers/{Uri.EscapeDataString(containerId)}/fabric/routes",
             new { targetCidr, gatewayIp }, token);
     }
@@ -427,7 +529,7 @@ public class AgentClient
             return PenetrationFabricResult.Unsupported($"Fleet node {nodeId} was not found.");
 
         var client = BuildClient(node);
-        return await PostFabricAsync(client,
+        return await PostFabricAsync(client, node.Id,
             $"/api/containers/{Uri.EscapeDataString(containerId)}/fabric/probe",
             new { targetIp }, token);
     }
@@ -443,25 +545,37 @@ public class AgentClient
         var response = await client.DeleteAsync($"/api/containers/fabric/networks/{Uri.EscapeDataString(networkName)}", token);
         if (!response.IsSuccessStatusCode)
         {
-            var responseBody = await response.Content.ReadAsStringAsync(token);
-            return PenetrationFabricResult.Failed(null,
-                $"Agent fabric network deletion failed: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+            var error = await ReadAgentErrorAsync(
+                response,
+                "fabric.network.delete",
+                node.Id,
+                "Agent fabric network deletion failed.",
+                token);
+            return PenetrationFabricResult.Failed(null, error.Message);
         }
 
         var result = await response.Content.ReadFromJsonAsync<PenetrationFabricResult>(token);
         return result ?? PenetrationFabricResult.Failed(null, "Agent returned an empty fabric result.");
     }
 
-    static async Task<PenetrationFabricResult> PostFabricAsync(HttpClient client, string path, object body,
+    static async Task<PenetrationFabricResult> PostFabricAsync(
+        HttpClient client,
+        Guid nodeId,
+        string path,
+        object body,
         CancellationToken token)
     {
         var response = await client.PostAsync(path,
             new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json"), token);
         if (!response.IsSuccessStatusCode)
         {
-            var responseBody = await response.Content.ReadAsStringAsync(token);
-            return PenetrationFabricResult.Failed(null,
-                $"Agent fabric command failed: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+            var error = await ReadAgentErrorAsync(
+                response,
+                AgentOperationName.Resolve(HttpMethod.Post, path),
+                nodeId,
+                "Agent fabric command failed.",
+                token);
+            return PenetrationFabricResult.Failed(null, error.Message);
         }
 
         var result = await response.Content.ReadFromJsonAsync<PenetrationFabricResult>(token);
@@ -480,12 +594,23 @@ public class AgentClient
             var template = await context.ImageTemplates.AsNoTracking()
                 .FirstOrDefaultAsync(t => t.Id == request.TemplateId.Value, token);
             if (template is null || string.IsNullOrWhiteSpace(template.ImageHash))
-                throw new AgentClientException($"VM template {request.TemplateId.Value} is missing or has no image hash.");
+                throw new AgentClientException(new OperationalError(
+                    OperationalErrorCategory.ImageRegistry,
+                    OperationalErrorCodes.ImageArtifactMissing,
+                    $"VM template {request.TemplateId.Value} is missing or has no image hash.",
+                    false,
+                    WorkerNodeId: node.Id,
+                    Operation: "image.vm.ensure"));
 
             var download = await DownloadVmImageAsync(nodeId, template.Id, template.ImageHash, token: token);
             if (!download.Success)
-                throw new AgentClientException(
-                    $"Agent VM image ensure failed on node {node.Name} ({node.HostAddress}) for template {template.Name} ({template.Id}): {download.Message}");
+                throw new AgentClientException(new OperationalError(
+                    OperationalErrorCategory.ImageTransfer,
+                    OperationalErrorCodes.ImageTransferFailed,
+                    $"Agent VM image ensure failed on node {node.Name} ({node.HostAddress}) for template {template.Name} ({template.Id}): {download.Message}",
+                    true,
+                    WorkerNodeId: node.Id,
+                    Operation: "image.vm.ensure"));
         }
 
         var client = BuildClient(node);
@@ -498,28 +623,52 @@ public class AgentClient
         }, deadline.Token);
 
         if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogWarning("Agent create VM failed on node {NodeId}: {Status}", nodeId, response.StatusCode);
-            return null;
-        }
+            throw await CreateAgentExceptionAsync(
+                response,
+                "vm.create",
+                node.Id,
+                $"Agent VM creation failed on node {node.Name} ({node.HostAddress}).",
+                token);
 
-        return await response.Content.ReadFromJsonAsync<AgentCreateVmResponse>(token);
+        return await response.Content.ReadFromJsonAsync<AgentCreateVmResponse>(token)
+               ?? throw InvalidAgentResponse(
+                   node.Id,
+                   "vm.create",
+                   $"Agent returned an empty VM response on node {node.Name} ({node.HostAddress}).");
     }
 
     public virtual async Task DestroyVmAsync(Guid nodeId, string vmName, CancellationToken token)
+        => await DestroyVmAsync(nodeId, vmName, null, null, token);
+
+    public virtual async Task DestroyVmAsync(
+        Guid nodeId,
+        string vmName,
+        int? expectedGeneration,
+        string? expectedNativeId,
+        CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null)
-            throw new InvalidOperationException($"Fleet node {nodeId} was not found.");
+            throw NodeNotFound(nodeId, "vm.destroy");
 
         var client = BuildClient(node);
         using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(60));
-        var response = await client.DeleteAsync($"/api/vms/{Uri.EscapeDataString(vmName)}", deadline.Token);
+        var query = new List<string>(2);
+        if (expectedGeneration is { } generation)
+            query.Add($"generation={generation}");
+        if (!string.IsNullOrWhiteSpace(expectedNativeId))
+            query.Add($"nativeId={Uri.EscapeDataString(expectedNativeId)}");
+        var suffix = query.Count == 0 ? string.Empty : $"?{string.Join('&', query)}";
+        var response = await client.DeleteAsync(
+            $"/api/vms/{Uri.EscapeDataString(vmName)}{suffix}", deadline.Token);
         if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
         {
-            var responseBody = await response.Content.ReadAsStringAsync(token);
-            throw new InvalidOperationException(
-                $"Agent VM deletion failed on node {nodeId}, VM {vmName}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+            throw await CreateAgentExceptionAsync(
+                response,
+                "vm.destroy",
+                node.Id,
+                $"Agent VM deletion failed on node {node.Name} ({node.HostAddress}), VM {vmName}.",
+                token);
         }
     }
 
@@ -561,7 +710,7 @@ public class AgentClient
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null)
-            throw new AgentClientException($"Fleet node {nodeId} was not found.");
+            throw NodeNotFound(nodeId, "image.docker.pull");
 
         var client = BuildClient(node);
         var body = JsonSerializer.Serialize(new { image, registryAuth });
@@ -570,9 +719,12 @@ public class AgentClient
             new StringContent(body, Encoding.UTF8, "application/json"), deadline.Token);
         if (!response.IsSuccessStatusCode)
         {
-            var responseBody = await response.Content.ReadAsStringAsync(token);
-            throw new AgentClientException(
-                $"Agent Docker image pull failed on node {node.Name} ({node.HostAddress}) for image {image}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+            throw await CreateAgentExceptionAsync(
+                response,
+                "image.docker.pull",
+                node.Id,
+                $"Agent Docker image pull failed on node {node.Name} ({node.HostAddress}) for image {image}.",
+                token);
         }
     }
 
@@ -580,15 +732,18 @@ public class AgentClient
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null)
-            throw new AgentClientException($"Fleet node {nodeId} was not found.");
+            throw NodeNotFound(nodeId, "image.docker.delete");
 
         var client = BuildClient(node);
         var response = await client.DeleteAsync($"/api/images/docker?image={Uri.EscapeDataString(image)}", token);
         if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
         {
-            var responseBody = await response.Content.ReadAsStringAsync(token);
-            throw new AgentClientException(
-                $"Agent Docker image cleanup failed on node {node.Name} ({node.HostAddress}) for image {image}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+            throw await CreateAgentExceptionAsync(
+                response,
+                "image.docker.delete",
+                node.Id,
+                $"Agent Docker image cleanup failed on node {node.Name} ({node.HostAddress}) for image {image}.",
+                token);
         }
     }
 
@@ -596,16 +751,19 @@ public class AgentClient
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null)
-            throw new AgentClientException($"Fleet node {nodeId} was not found.");
+            throw NodeNotFound(nodeId, "image.vm.delete");
 
         var path = $"/api/images/vm/{templateId}?hash={Uri.EscapeDataString(hash)}";
         var client = BuildClient(node);
         var response = await client.DeleteAsync(path, token);
         if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
         {
-            var responseBody = await response.Content.ReadAsStringAsync(token);
-            throw new AgentClientException(
-                $"Agent VM image cleanup failed on node {node.Name} ({node.HostAddress}) for template {templateId}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+            throw await CreateAgentExceptionAsync(
+                response,
+                "image.vm.delete",
+                node.Id,
+                $"Agent VM image cleanup failed on node {node.Name} ({node.HostAddress}) for template {templateId}.",
+                token);
         }
     }
 
@@ -613,7 +771,7 @@ public class AgentClient
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null)
-            throw new InvalidOperationException($"Fleet node {nodeId} was not found.");
+            throw NodeNotFound(nodeId, "image.registry.ensure");
 
         var client = BuildClient(node);
         var body = JsonSerializer.Serialize(new { port = Math.Clamp(port, 1, 65535) });
@@ -621,9 +779,12 @@ public class AgentClient
             new StringContent(body, Encoding.UTF8, "application/json"), token);
         if (!response.IsSuccessStatusCode)
         {
-            var responseBody = await response.Content.ReadAsStringAsync(token);
-            throw new InvalidOperationException(
-                $"Agent Docker registry bootstrap failed on node {nodeId}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+            throw await CreateAgentExceptionAsync(
+                response,
+                "image.registry.ensure",
+                node.Id,
+                $"Agent Docker registry bootstrap failed on node {node.Name} ({node.HostAddress}).",
+                token);
         }
     }
 
@@ -637,7 +798,7 @@ public class AgentClient
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null)
-            throw new InvalidOperationException($"Fleet node {nodeId} was not found.");
+            throw NodeNotFound(nodeId, "image.registry.configure");
 
         var client = BuildClient(node);
         var body = JsonSerializer.Serialize(new { registries });
@@ -645,9 +806,12 @@ public class AgentClient
             new StringContent(body, Encoding.UTF8, "application/json"), token);
         if (!response.IsSuccessStatusCode)
         {
-            var responseBody = await response.Content.ReadAsStringAsync(token);
-            throw new InvalidOperationException(
-                $"Agent Docker registry trust configuration failed on node {nodeId}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+            throw await CreateAgentExceptionAsync(
+                response,
+                "image.registry.configure",
+                node.Id,
+                $"Agent Docker registry trust configuration failed on node {node.Name} ({node.HostAddress}).",
+                token);
         }
     }
 
@@ -692,9 +856,13 @@ public class AgentClient
             new StringContent(body, Encoding.UTF8, "application/json"), deadline.Token);
         if (!response.IsSuccessStatusCode)
         {
-            var responseBody = await response.Content.ReadAsStringAsync(token);
-            return AgentVmImageDownloadResult.Failed(
-                $"Agent VM image download failed on node {node.Name} ({node.HostAddress}) for template {templateId}: {(int)response.StatusCode} {response.StatusCode}. {TrimResponseBody(responseBody)}");
+            var error = await ReadAgentErrorAsync(
+                response,
+                "image.vm.download",
+                node.Id,
+                $"Agent VM image download failed on node {node.Name} ({node.HostAddress}) for template {templateId}.",
+                token);
+            return AgentVmImageDownloadResult.Failed(error.Message);
         }
 
         var result = await response.Content.ReadFromJsonAsync<AgentVmImageDownloadResult>(token);
@@ -721,17 +889,81 @@ public class AgentClient
         if (value.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
             value = value["sha256:".Length..];
         if (value.Length != 64)
-            throw new AgentClientException("VM image sha256 digest is invalid.");
+            throw new AgentClientException(new OperationalError(
+                OperationalErrorCategory.Validation,
+                OperationalErrorCodes.RequestInvalid,
+                "VM image sha256 digest is invalid.",
+                false,
+                Operation: "image.vm.reference"));
         return value.ToLowerInvariant();
     }
 
-    static string TrimResponseBody(string? body)
-    {
-        if (string.IsNullOrWhiteSpace(body))
-            return string.Empty;
+    private static AgentClientException NodeNotFound(Guid nodeId, string operation) =>
+        new(new OperationalError(
+            OperationalErrorCategory.NodeUnavailable,
+            OperationalErrorCodes.NodeNotFound,
+            $"Fleet node {nodeId} was not found.",
+            false,
+            WorkerNodeId: nodeId,
+            Operation: operation));
 
-        body = body.Trim();
-        return body.Length <= 2048 ? body : body[..2048] + "...";
+    private static AgentClientException InvalidAgentResponse(
+        Guid nodeId,
+        string operation,
+        string message) =>
+        new(new OperationalError(
+            OperationalErrorCategory.AgentProtocol,
+            OperationalErrorCodes.AgentResponseInvalid,
+            message,
+            false,
+            WorkerNodeId: nodeId,
+            Operation: operation));
+
+    private static AgentClientException TransportFailure(
+        Guid nodeId,
+        string operation,
+        string code,
+        string message,
+        Exception innerException) =>
+        new(new OperationalError(
+            OperationalErrorCategory.AgentTransport,
+            code,
+            message,
+            true,
+            WorkerNodeId: nodeId,
+            Operation: operation), innerException);
+
+    private static async Task<AgentClientException> CreateAgentExceptionAsync(
+        HttpResponseMessage response,
+        string operation,
+        Guid nodeId,
+        string fallbackMessage,
+        CancellationToken token) =>
+        new(await ReadAgentErrorAsync(response, operation, nodeId, fallbackMessage, token));
+
+    private static async Task<OperationalError> ReadAgentErrorAsync(
+        HttpResponseMessage response,
+        string operation,
+        Guid nodeId,
+        string fallbackMessage,
+        CancellationToken token)
+    {
+        AgentErrorResponse? payload = null;
+        try
+        {
+            payload = await response.Content.ReadFromJsonAsync<AgentErrorResponse>(token);
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            // Older or malformed Agent responses fail closed to HTTP status classification.
+        }
+
+        return OperationalErrorClassifier.FromAgentResponse(
+            payload,
+            (int)response.StatusCode,
+            operation,
+            fallbackMessage,
+            nodeId);
     }
 
     async Task<AgentCapabilityManifest?> WaitForCapabilityManifestAsync(HttpClient client, string expectedSha256,
@@ -799,12 +1031,16 @@ public class AgentCreateContainerResponse
 
 public class AgentClientException : Exception
 {
-    public AgentClientException(string message) : base(message)
+    public OperationalError Error { get; }
+
+    public AgentClientException(OperationalError error) : base(error.Message)
     {
+        Error = error;
     }
 
-    public AgentClientException(string message, Exception innerException) : base(message, innerException)
+    public AgentClientException(OperationalError error, Exception innerException) : base(error.Message, innerException)
     {
+        Error = error;
     }
 }
 
@@ -851,6 +1087,8 @@ public class AgentVmInitConfig
 public class AgentCreateVmResponse
 {
     public string VmName { get; set; } = string.Empty;
+    public string NativeId { get; set; } = string.Empty;
+    public int Generation { get; set; } = 1;
     public string Status { get; set; } = string.Empty;
     public string? VncAddress { get; set; }
     public List<AgentVmNetworkInterfaceRequest> Interfaces { get; set; } = [];

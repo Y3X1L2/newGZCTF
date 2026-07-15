@@ -1,4 +1,3 @@
-﻿using System.Net;
 using GZCTF.Hubs;
 using GZCTF.Hubs.Clients;
 using GZCTF.Models.Request.Admin;
@@ -27,28 +26,14 @@ public class SignalRSink(IServiceProvider serviceProvider) : ILogEventSink
     {
         _hubContext ??= serviceProvider.GetRequiredService<IHubContext<AdminHub, IAdminClient>>();
 
-        logEvent.Properties.TryGetValue("UserName", out var userName);
-        logEvent.Properties.TryGetValue("IP", out var ip);
-        logEvent.Properties.TryGetValue("Status", out var status);
-
         try
         {
             _hubContext.Clients.All.ReceivedLog(
-                new LogMessageModel
-                {
-                    Time = logEvent.Timestamp,
-                    Level = logEvent.Level.ToString(),
-                    Msg = logEvent.RenderMessageWithExceptions(),
-                    UserName = LogHelper.GetLogPropertyValue(userName, "Anonymous"),
-                    IP = LogHelper.GetLogPropertyValue<IPAddress>(ip, null),
-                    Status = logEvent.Exception is null
-                        ? LogHelper.GetLogPropertyValue(status, TaskStatus.Failed)
-                        : TaskStatus.Failed,
-                }).Wait();
+                LogMessageModel.FromLogModel(LogModelFactory.FromLogEvent(logEvent))).Wait();
         }
         catch
         {
-            // ignored
+            // Real-time delivery is best effort; the database sink remains the durable raw-log path.
         }
     }
 }

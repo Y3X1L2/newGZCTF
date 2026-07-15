@@ -23,7 +23,8 @@ public sealed class OperationsController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken)
     {
-        if (!Guid.TryParse(User.FindFirstValue(ApiTokenClaimTypes.TokenId), out var tokenId))
+        if (!Guid.TryParse(User.FindFirstValue(ApiTokenClaimTypes.TokenId), out var tokenId) ||
+            !Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var actorUserId))
         {
             var result = new ObjectResult(ExternalApiProblemDetails.Create(
                 HttpContext,
@@ -37,7 +38,17 @@ public sealed class OperationsController(
             return result;
         }
 
-        var operation = await operations.GetForTokenAsync(id, tokenId, cancellationToken);
+        var hasExplicitGrant = User.FindAll(ApiTokenClaimTypes.Resource).Any(claim =>
+            ApiTokenResourceClaim.TryParse(claim.Value, out var type, out var resourceId) &&
+            (string.Equals(type, "operation", StringComparison.Ordinal) || type == "*") &&
+            (string.Equals(resourceId, id.ToString("D"), StringComparison.OrdinalIgnoreCase) || resourceId == "*"));
+        var operation = await operations.GetAccessibleAsync(
+            id,
+            tokenId,
+            actorUserId,
+            User.IsInRole(nameof(Role.Admin)),
+            hasExplicitGrant,
+            cancellationToken);
         if (operation is null)
             throw new ApiOperationNotFoundException();
 

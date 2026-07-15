@@ -13,6 +13,7 @@ public sealed class DeploymentQueueTicketEntityConfiguration : IEntityTypeConfig
         builder.Property(item => item.Operation).HasConversion<byte>();
         builder.Property(item => item.Status).HasConversion<byte>();
         builder.Property(item => item.Stage).HasConversion<byte>();
+        builder.Property(item => item.ErrorCategory).HasConversion<byte>();
         builder.HasIndex(item => item.ActiveIdentity).IsUnique()
             .HasFilter("\"Status\" IN (0, 1, 2, 3)")
             .HasDatabaseName("UX_DeploymentQueueTickets_ActiveIdentity");
@@ -58,6 +59,7 @@ public sealed class ImageDistributionRecordEntityConfiguration : IEntityTypeConf
         builder.Property(item => item.Status).HasConversion<byte>();
         builder.Property(item => item.Operation).HasConversion<byte>();
         builder.Property(item => item.Stage).HasConversion<byte>();
+        builder.Property(item => item.ErrorCategory).HasConversion<byte>();
         builder.HasIndex(item => new { item.ImageTemplateId, item.WorkerNodeId }).IsUnique()
             .HasDatabaseName("UX_ImageDistributionRecords_Template_Node");
         builder.HasIndex(item => new { item.WorkerNodeId, item.Status, item.LastCheckedAt })

@@ -2,6 +2,43 @@
 
 更新时间：2026-07-13
 
+## 2026-07-13 Phase 7 计划编写与代码事实基线
+
+- Phase 7 大单元 7 已完成，Phase 7 代码开发闭环：runbook、开发基准、最终门禁和单次独立质量审查均已归档；本阶段未部署、未连接或修改生产服务器。
+- 独立审查确认的 10 项问题全部关闭：stale Stop/Destroy 精确身份恢复、Stopped VM 事实排除、普通 Docker/VM generation 与 VM libvirt UUID 持久化、无资源记录时的能力校验、恢复 outcome/error taxonomy、消息和值脱敏、`DatabaseSink` emit/dispose 竞态、correlation 时间线顺序、orphan generation 去重、跨域 challenge 标签冲突。
+- Docker/VM 销毁已形成双端 fail-closed：主站 ticket/resource generation 校验，Agent 再校验 generation；VM 额外比较 libvirt domain UUID。资源已不存在时控制票据直接完成，只有当前代际和原生身份精确匹配时才允许重放。
+- 新增迁移 `20260713152015_HardenPhaseSevenRuntimeIdentity`，历史 Docker/VM generation 明确回填为 `1`；EF 无 pending model changes，不保留旧恢复双轨或猜测性兼容分支。
+- 最终门禁：Release solution build `0` warning / `0` error，单元测试 `483/483`，PostgreSQL/Redis 集成测试 `227/227`，受影响观测/恢复/运行控制专项 `41/41`；前端在最终后端 hardening 前已通过 locale、strict TypeScript、architecture、production build、artifact manifest 和 bundle budget。
+- 全量集成门禁暴露的两个真实容器测试夹具清理竞态已修复：DELETE 后等待持久化 `Destroyed` 事实，专项 `2/2` 与随后全量 `227/227` 均通过；未修改生产调度容量算法。
+- Phase 7 大单元 6 已完成：新增结构化事件查询、恢复漂移和 correlation summary API，支持稳定 cursor 与全业务范围过滤；名称按页面批量解析，不产生逐事件 N+1。
+- `/admin/logs` 已统一承载事件时间线、部署队列、系统日志和恢复漂移；队列、节点、镜像均可无整页刷新跳转到关联时间线，系统日志补齐 deployment ticket 与实时镜像范围过滤。
+- `DeploymentQueueController` 已从 `NodesController` 拆分且保持 `/api/v1/deployment-queue` 契约；大单元 6 集中门禁为 Release build `0` warning / `0` error、观测专项 `26/26`、前端 production build 与 bundle budget 通过。当前进入大单元 7：runbook、基准、最终全量门禁与一次独立质量审查。
+- Phase 7 大单元 5 已完成：Agent 提供受管 Docker/KVM inventory，主站通过 `runtime.inventory.v1` 做协议检测，TeamLab 资产完整传播 generation；恢复使用数据库当前事实与 Agent inventory，不再只看数据库状态。
+- `RuntimeFactReconciliationService` 与独立 `RuntimeRecoveryWorker` 已接入，使用独立 PostgreSQL advisory lease 保证多主单 owner；matching、missing、identity conflict、offline、unsupported、orphan、stale ticket 和 capacity reservation 均形成闭环。
+- 离线或旧 Agent 不误判资源丢失，孤儿资源只记录不自动删除，已成功后丢失的容器/VM/TeamLab 状态修正后等待标准重置；只有尚未完成且稳定身份幂等的 ticket 自动重放。
+- Phase 7 Backfill migration 中误重复创建 Expand schema 的缺陷已删除，真实 PostgreSQL 16 从 Phase 3 到 latest 的迁移与双实例 recovery advisory lease 验收通过。
+- 大单元 5 集中门禁：Release solution build `0` warning / `0` error，恢复/Agent inventory/runtime control 专项 `29/29`，PostgreSQL migration/advisory lease `1/1`。
+- Phase 7 大单元 4 已完成：runtime queue/scheduling/execution/capacity、image distribution、node/Agent、TeamLab 和 VM ready 生命周期均写统一 `OperationalEvent`，状态与事件按同一工作单元提交。
+- ticket enqueue 已持久化 W3C trace context，worker 使用 ticket correlation 建立 consumer span；Agent 失败、节点关键 transition、镜像 worker claim 和 TeamLab 多 shard 生命周期均可跨模块关联。
+- TeamLab 已统一使用 `TeamLabEventRecorder` 双写局部事件和平台 operational event，旧的散落 `new TeamLabEvent` 构造已从 application services 清理。
+- 大单元 4 集中门禁通过：Release solution build `0` warning / `0` error，runtime/capacity/image/node/TeamLab 专项 `118/118`。
+- Phase 7 大单元 3 已完成：主站注册 runtime/Agent/operations meters 与全部业务 ActivitySource，运行队列和节点健康状态使用低基数快照指标。
+- `OperationalCorrelation` 已改为 `AsyncLocal` ambient context；Agent HTTP 调用统一传播 correlation、建立业务 span、记录稳定 operation/耗时/结果/error category。
+- Agent 已使用统一 correlation/error middleware，认证、模型校验、Docker、KVM、镜像和 TeamLab 错误返回稳定 typed contract；主站 `AgentClientException` 携带 `OperationalError`，不再依赖错误文本分类。
+- 大单元 3 集中门禁通过：Release solution build `0` warning / `0` error，observability/Agent contract 专项 `21/21`。
+- Phase 7 大单元 2 已完成：原始日志采用 timer-or-batch flush、失败保留、缓冲保护和退出 drain；数据库与 SignalR 统一结构化映射，日志查询支持 correlation/event/node/resource。
+- 已新增 `OperationalCorrelation` 和教师/管理员 mutation audit filter，排除 heartbeat、外部 API 和普通用户流量；专项累计 `13/13` 通过。
+- Phase 7 大单元 1 已完成：统一 event/error taxonomy、追加式 `OperationalEvent`、同事务 writer、敏感 detail allowlist、查询模型、事件索引和 180 天 retention 已落地。
+- 已生成 Phase 7 Expand/Backfill/Contract 三段迁移；Backfill 仅为活动 ticket、image distribution、TeamLab runtime 建立 snapshot 基线，Contract 对缺失基线 fail closed。
+- 大单元 1 集中门禁通过：事件/保留策略专项测试 `10/10`，EF 模型与迁移一致。
+- Phase 7 以提交 `4d4c6fe8d082ee74ea5f63ade2e9ecbbd576875d` 为基线，当前分支为 `codex/phase-07-observability-audit-recovery`，本阶段尚未部署生产服务器。
+- 已确认原始 `LogModel` 缺 trace/correlation/event/error/resource/node 维度；`DatabaseSink` 的低流量 flush 和退出 drain 不可靠，不能作为审计唯一事实。
+- 已确认 `DeploymentQueueTicket`、`ImageDistributionRecord` 和 TeamLab event 分别承载当前状态或局部历史，缺少统一追加式事件、错误分类和 correlation timeline。
+- 已确认 OpenTelemetry 框架 instrumentation 已存在，但运行队列、Agent、镜像、节点、TeamLab 和恢复缺业务 meter/span；`GZCTF.Cache` ActivitySource 尚未注册。
+- 已确认 Phase 6 stale ticket recovery 只核对数据库状态，Agent 已具备 Docker label 和 KVM generation metadata，却没有 GZCTF-managed runtime inventory API。
+- Phase 7 冻结为四类职责：当前状态事实、追加式 `OperationalEvent`、原始 `LogModel`、OpenTelemetry。恢复只读取数据库当前事实和 Agent inventory，不从日志或事件反推状态。
+- 详细实施计划已写入 `docs/commercialization/phase-07-observability-audit-recovery.md`，稳定事件和错误分类已写入 `docs/commercialization/event-taxonomy.md`。开发按七个大单元推进，只在大单元边界集中验证，最终执行一次独立质量审查。
+
 ## 2026-07-13 Phase 6 代码开发完成
 
 - `DeploymentQueueTicket` 已成为 Docker、培训/练习、AWDP、管理员测试容器、VM 和 TeamLab 的唯一运行任务事实；旧 `DeploymentTarget/FleetManager/WeightedScheduler` 活动实现和旧 API route 已删除。

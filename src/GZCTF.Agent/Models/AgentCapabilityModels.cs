@@ -11,6 +11,7 @@ public static class AgentFeatureIds
     public const string WireGuard = "teamlab.wireguard.v1";
     public const string Flow = "teamlab.flow.v1";
     public const string Pcap = "teamlab.pcap.v1";
+    public const string RuntimeInventory = "runtime.inventory.v1";
     public const string SelfUpdate = "maintenance.self-update.v1";
 }
 

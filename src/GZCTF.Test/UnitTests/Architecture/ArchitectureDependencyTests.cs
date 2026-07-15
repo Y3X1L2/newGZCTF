@@ -14,8 +14,12 @@ public class ArchitectureDependencyTests
     public void ModuleApiControllers_DoNotDependOnPersistenceOrAgent()
     {
         var controllers = typeof(Program).Assembly.GetTypes()
-            .Where(type => type.Namespace?.StartsWith("GZCTF.Modules", StringComparison.Ordinal) == true)
             .Where(type => !type.IsAbstract && typeof(ControllerBase).IsAssignableFrom(type))
+            .Where(type => type.Namespace?.StartsWith("GZCTF.Modules", StringComparison.Ordinal) == true ||
+                           type.GetCustomAttributes(typeof(RouteAttribute), true)
+                               .Cast<RouteAttribute>()
+                               .Any(attribute => attribute.Template?.StartsWith(
+                                   "api/open/v1", StringComparison.OrdinalIgnoreCase) == true))
             .ToArray();
 
         Assert.NotEmpty(controllers);

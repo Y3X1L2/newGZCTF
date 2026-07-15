@@ -1,20 +1,27 @@
 using System;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
+using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Infrastructure;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Modules.Runtime.Infrastructure;
+using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Services.Fleet;
 using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Moq;
 using Xunit;
 
 namespace GZCTF.Test.UnitTests.Runtime;
@@ -34,6 +41,31 @@ public sealed class RuntimeControlPlaneTests
         Assert.Equal(first.TicketId, second.TicketId);
         Assert.True(second.ReusedExistingTicket);
         Assert.Single(context.DeploymentQueueTickets);
+        var eventCodes = await context.OperationalEvents
+            .Where(item => item.DeploymentTicketId == first.TicketId)
+            .Select(item => item.EventCode)
+            .ToArrayAsync();
+        Assert.Contains(OperationalEventCodes.Runtime.TicketEnqueued, eventCodes);
+        Assert.Contains(OperationalEventCodes.Runtime.TicketDuplicate, eventCodes);
+    }
+
+    [Fact]
+    public async Task Queue_AssignsMonotonicGenerationAcrossCompletedCreates()
+    {
+        await using var context = CreateContext();
+        var service = CreateQueue(context);
+        var request = DeploymentQueueRequest.GameContainer(1, 2, 3);
+        var first = await service.EnqueueAsync(request, CancellationToken.None);
+        var firstTicket = await context.DeploymentQueueTickets.SingleAsync(item => item.Id == first.TicketId);
+        firstTicket.Status = DeploymentQueueTicketStatus.Succeeded;
+        firstTicket.CompletedAt = DateTimeOffset.UtcNow;
+        await context.SaveChangesAsync();
+
+        var second = await service.EnqueueAsync(request, CancellationToken.None);
+        var secondTicket = await context.DeploymentQueueTickets.SingleAsync(item => item.Id == second.TicketId);
+
+        Assert.Equal(1, firstTicket.Generation);
+        Assert.Equal(2, secondTicket.Generation);
     }
 
     [Fact]
@@ -58,7 +90,7 @@ public sealed class RuntimeControlPlaneTests
     }
 
     [Fact]
-    public async Task Recovery_ReplaysIdempotentDestroyButFailsClosedForExtend()
+    public async Task Recovery_CompletesAbsentDestroyButFailsClosedForExtend()
     {
         await using var context = CreateContext();
         var node = SeedNode(context, 2);
@@ -79,11 +111,12 @@ public sealed class RuntimeControlPlaneTests
         context.DeploymentQueueTickets.AddRange(destroy, extend);
         await context.SaveChangesAsync();
 
-        var recovered = await CreateQueue(context)
-            .RecoverStaleCreatingTicketsAsync(TimeSpan.FromMinutes(10), CancellationToken.None);
+        var recovered = await CreateReconciliation(context)
+            .ReconcileAsync(Guid.CreateVersion7(), TimeSpan.FromMinutes(10), CancellationToken.None);
 
-        Assert.Equal(2, recovered);
-        Assert.Equal(DeploymentQueueTicketStatus.Scheduled, destroy.Status);
+        Assert.Equal(1, recovered.RecoveredTicketCount);
+        Assert.Equal(1, recovered.ConflictCount);
+        Assert.Equal(DeploymentQueueTicketStatus.Succeeded, destroy.Status);
         Assert.Equal(DeploymentQueueTicketStatus.Failed, extend.Status);
     }
 
@@ -109,6 +142,13 @@ public sealed class RuntimeControlPlaneTests
         Assert.Equal(node.Id, reservation.WorkerNodeId);
         Assert.Equal(CapacityReservationStatus.Active, reservation.Status);
         Assert.Equal(0, node.CurrentContainers);
+        var eventCodes = await context.OperationalEvents
+            .Where(item => item.DeploymentTicketId == ticket.Id)
+            .Select(item => item.EventCode)
+            .ToArrayAsync();
+        Assert.Contains(OperationalEventCodes.Runtime.SchedulingStarted, eventCodes);
+        Assert.Contains(OperationalEventCodes.Capacity.Reserved, eventCodes);
+        Assert.Contains(OperationalEventCodes.Runtime.SchedulingAssigned, eventCodes);
     }
 
     [Fact]
@@ -280,13 +320,17 @@ public sealed class RuntimeControlPlaneTests
         var schedulingOptions = Options.Create(new RuntimeSchedulingOptions());
         var snapshots = new NodeCapacitySnapshotService(context);
         var eligibility = new NodeEligibilityEvaluator(schedulingOptions);
+        var writer = new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance);
+        var correlation = new OperationalCorrelation();
+        var teamLabEvents = new TeamLabEventRecorder(context, writer, correlation);
         return new RuntimeSchedulingService(context,
-            new FleetCapacityReservationService(context, lease, snapshots, eligibility,
+            new FleetCapacityReservationService(context, lease, snapshots, eligibility, writer,
                 NullLogger<FleetCapacityReservationService>.Instance),
             new RuntimeQueueSelector(context, schedulingOptions),
-            new TeamLabPhysicalPlacementService(context, lease, snapshots, eligibility,
+            new TeamLabPhysicalPlacementService(context, lease, snapshots, eligibility, writer, teamLabEvents,
                 Options.Create(new TeamLabNetworkConfig())),
-            new PollingDeploymentQueueWakeup(), NullLogger<RuntimeSchedulingService>.Instance);
+            new PollingDeploymentQueueWakeup(), writer, correlation,
+            NullLogger<RuntimeSchedulingService>.Instance);
     }
 
     static DeploymentQueueService CreateQueue(AppDbContext context)
@@ -298,11 +342,36 @@ public sealed class RuntimeControlPlaneTests
             new PollingDeploymentQueueWakeup(), NullLogger<DeploymentQueueService>.Instance);
     }
 
+    static RuntimeFactReconciliationService CreateReconciliation(AppDbContext context)
+    {
+        var lease = new LocalDevelopmentLeaseProvider();
+        var writer = new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance);
+        var capacity = new FleetCapacityReservationService(context, lease,
+            new NodeCapacitySnapshotService(context),
+            new NodeEligibilityEvaluator(Options.Create(new RuntimeSchedulingOptions())),
+            writer,
+            NullLogger<FleetCapacityReservationService>.Instance);
+        var agent = new AgentClient(
+            new Mock<IHttpClientFactory>().Object,
+            new Mock<IServiceScopeFactory>().Object,
+            new ConfigurationBuilder().Build(),
+            NullLogger<AgentClient>.Instance);
+        return new RuntimeFactReconciliationService(
+            context,
+            agent,
+            capacity,
+            new PollingDeploymentQueueWakeup(),
+            writer,
+            NullLogger<RuntimeFactReconciliationService>.Instance);
+    }
+
     static ServiceProvider BuildExecutionProvider(string databaseName, DeploymentExecutionService executor)
     {
         var services = new ServiceCollection();
         services.AddDbContext<AppDbContext>(options => options.UseInMemoryDatabase(databaseName));
         services.AddSingleton<IDistributedLeaseProvider, LocalDevelopmentLeaseProvider>();
+        services.AddScoped<OperationalCorrelation>();
+        services.AddScoped<IOperationalEventWriter, EfOperationalEventWriter>();
         services.AddScoped<FleetCapacityReservationService>();
         services.AddSingleton(executor);
         services.AddSingleton<NodeDispatchLimiter>();

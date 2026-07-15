@@ -12,6 +12,15 @@ public sealed class SystemLogEntityConfiguration : IEntityTypeConfiguration<LogM
         builder.HasKey(item => new { item.TimeUtc, item.Id });
         builder.Property(item => item.Id).ValueGeneratedOnAdd();
         builder.Property(item => item.Status).HasConversion<string>().HasMaxLength(Limits.MaxLogStatusLength);
+        builder.HasIndex(item => new { item.CorrelationId, item.TimeUtc, item.Id })
+            .IsDescending(false, true, true)
+            .HasDatabaseName("IX_Logs_Correlation_Time_Id");
+        builder.HasIndex(item => new { item.EventCode, item.TimeUtc, item.Id })
+            .IsDescending(false, true, true)
+            .HasDatabaseName("IX_Logs_Event_Time_Id");
+        builder.HasIndex(item => new { item.WorkerNodeId, item.TimeUtc, item.Id })
+            .IsDescending(false, true, true)
+            .HasDatabaseName("IX_Logs_Node_Time_Id");
         builder.HasIndex(item => new { item.TimeUtc, item.Id }).IsDescending(true, true)
             .HasDatabaseName("IX_Logs_Time_Id");
         builder.HasIndex(item => new { item.Level, item.TimeUtc, item.Id }).IsDescending(false, true, true)

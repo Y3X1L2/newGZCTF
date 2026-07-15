@@ -6,6 +6,9 @@ using System.Text;
 using System.Text.Json;
 using GZCTF.Middlewares;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Models.Internal;
 using GZCTF.Models.Request.Admin;
 using GZCTF.Modules.Runtime.Application;
@@ -34,10 +37,14 @@ public class NodesController : ControllerBase
     private readonly ContainerProvider _containerProvider;
     private readonly IPortAllocationService _portAllocator;
     private readonly ILogger<NodesController> _logger;
+    private readonly IOperationalEventWriter _events;
+    private readonly OperationalCorrelation _correlation;
 
     public NodesController(INodeRepository nodeRepo, AppDbContext context, IServiceScopeFactory scopeFactory,
         IOptions<ContainerProvider> containerProvider,
         IPortAllocationService portAllocator,
+        IOperationalEventWriter events,
+        OperationalCorrelation correlation,
         ILogger<NodesController> logger)
     {
         _nodeRepo = nodeRepo;
@@ -45,6 +52,8 @@ public class NodesController : ControllerBase
         _scopeFactory = scopeFactory;
         _containerProvider = containerProvider.Value;
         _portAllocator = portAllocator;
+        _events = events;
+        _correlation = correlation;
         _logger = logger;
     }
 
@@ -52,6 +61,18 @@ public class NodesController : ControllerBase
     [RequireAdmin]
     public async Task<IActionResult> Register([FromBody] NodeDeployRequest request)
     {
+        await _events.AppendAndSaveAsync(new OperationalEventDraft(
+            OperationalEventCodes.Node.RegistrationStarted,
+            OperationalEventOutcome.Started,
+            "Worker node registration started.",
+            CorrelationId: _correlation.Ensure(),
+            Detail: new Dictionary<string, object?> { ["operation"] = "node.register" },
+            SubjectType: "worker-node",
+            SubjectId: request.HostAddress,
+            SubjectDisplayName: request.NodeName ?? request.HostAddress,
+            ResourceType: "worker-node",
+            ResourceId: request.HostAddress,
+            ResourceDisplayName: request.NodeName ?? request.HostAddress), HttpContext.RequestAborted);
         var deployer = HttpContext.RequestServices.GetRequiredService<NodeDeployService>();
         var requestBaseUrl = $"{Request.Scheme}://{Request.Host}{Request.PathBase}";
         var result = await deployer.DeployToServerAsync(
@@ -60,11 +81,43 @@ public class NodesController : ControllerBase
 
         if (!result.Success)
         {
+            await _events.AppendAndSaveAsync(new OperationalEventDraft(
+                OperationalEventCodes.Node.RegistrationFailed,
+                OperationalEventOutcome.Failed,
+                "Worker node registration failed.",
+                OperationalEventSeverity.Error,
+                _correlation.Ensure(),
+                OperationalErrorCategory.NodeUnavailable,
+                OperationalErrorCodes.NodeOffline,
+                true,
+                new Dictionary<string, object?> { ["operation"] = "node.register" },
+                SubjectType: "worker-node",
+                SubjectId: request.HostAddress,
+                SubjectDisplayName: request.NodeName ?? request.HostAddress,
+                ResourceType: "worker-node",
+                ResourceId: request.HostAddress,
+                ResourceDisplayName: request.NodeName ?? request.HostAddress), HttpContext.RequestAborted);
             _logger.SystemLog($"Worker node registration failed: host={request.HostAddress}, message={result.Message}.",
                 TaskStatus.Failed, LogLevel.Warning);
             return BadRequest(new { message = result.Message });
         }
 
+        var registeredNode = result.NodeId is { } registeredNodeId
+            ? await _context.WorkerNodes.SingleOrDefaultAsync(node => node.Id == registeredNodeId,
+                HttpContext.RequestAborted)
+            : null;
+        if (registeredNode is not null)
+            await _events.AppendAndSaveAsync(NodeOperationalEvents.Create(
+                registeredNode,
+                OperationalEventCodes.Node.RegistrationSucceeded,
+                OperationalEventOutcome.Succeeded,
+                "Worker node registration completed successfully.",
+                correlationId: _correlation.Ensure(),
+                detail: new Dictionary<string, object?>
+                {
+                    ["operation"] = "node.register",
+                    ["capability"] = registeredNode.Capabilities.ToString()
+                }), HttpContext.RequestAborted);
         _logger.SystemLog(
             $"Worker node registered or updated: node={result.NodeName ?? request.NodeName ?? request.HostAddress}, id={result.NodeId}, host={request.HostAddress}, capabilities={result.Capabilities}.",
             TaskStatus.Success, LogLevel.Information);
@@ -371,6 +424,17 @@ public class NodesController : ControllerBase
         foreach (var vm in await _context.VmInstances.Where(v => v.NodeId == id).ToListAsync(token))
             vm.NodeId = null;
 
+        _events.Append(NodeOperationalEvents.Create(
+            node!,
+            OperationalEventCodes.Node.Deregistered,
+            OperationalEventOutcome.Succeeded,
+            "Worker node was deregistered.",
+            correlationId: _correlation.Ensure(),
+            detail: new Dictionary<string, object?>
+            {
+                ["operation"] = "node.deregister",
+                ["reasonCode"] = force ? "forced" : "requested"
+            }));
         _context.WorkerNodes.Remove(node);
         await _context.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
@@ -421,7 +485,8 @@ public class NodesController : ControllerBase
             try
             {
                 var queued = await deploymentQueue.EnqueueAsync(
-                    DeploymentQueueRequest.MaintenanceContainer(container.Id, container.NodeId, container.Image),
+                    DeploymentQueueRequest.MaintenanceContainer(
+                        container.Id, container.NodeId, container.Image, container.RuntimeGeneration),
                     token);
                 var result = await WaitForControlTicketAsync(deploymentQueue, queued.TicketId, token);
                 if (result?.Status == DeploymentQueueTicketStatus.Succeeded)
@@ -472,6 +537,7 @@ public class NodesController : ControllerBase
                     vm.Challenge.GameId, vm.UserId, vm.ChallengeId, vm.Id) with
                 {
                     Operation = RuntimeOperationKind.Destroy,
+                    Generation = vm.RuntimeGeneration,
                     TargetNodeId = vm.NodeId,
                     SubjectDisplayName = "Node force cleanup",
                     ResourceDisplayName = vm.VmName
@@ -542,6 +608,7 @@ public class NodesController : ControllerBase
         if (node is null) return NotFound();
         var snapshot = (await HttpContext.RequestServices.GetRequiredService<NodeCapacitySnapshotService>()
             .LoadAsync(token)).Single(item => item.Node.Id == id);
+        var previousSchedulable = node.IsSchedulable;
 
         if (request.IsSchedulable.HasValue)
             node.IsSchedulable = request.IsSchedulable.Value;
@@ -563,6 +630,25 @@ public class NodesController : ControllerBase
         if (request.IsStorageNode.HasValue || request.RegistryPort.HasValue)
             return BadRequest(new { message = "镜像仓库已固定为 10.24.0.28:5000，节点管理不再支持切换存储服务器。" });
 
+        if (previousSchedulable != node.IsSchedulable)
+        {
+            _events.Append(NodeOperationalEvents.Create(
+                node,
+                node.IsSchedulable
+                    ? OperationalEventCodes.Node.SchedulableEnabled
+                    : OperationalEventCodes.Node.SchedulableDisabled,
+                OperationalEventOutcome.Observed,
+                node.IsSchedulable
+                    ? "Worker node scheduling was enabled."
+                    : "Worker node scheduling was disabled.",
+                correlationId: _correlation.Ensure(),
+                detail: new Dictionary<string, object?>
+                {
+                    ["previousStatus"] = previousSchedulable ? "schedulable" : "disabled",
+                    ["currentStatus"] = node.IsSchedulable ? "schedulable" : "disabled",
+                    ["operation"] = "node.update"
+                }));
+        }
         await _context.SaveChangesAsync(token);
         _logger.SystemLog(
             $"Worker node updated: node={node.Name}, id={node.Id}, schedulable={node.IsSchedulable}, maxContainers={node.MaxContainers}, maxVms={node.MaxVms}.",
@@ -614,6 +700,13 @@ public class NodesController : ControllerBase
             HttpContext.RequestServices.GetRequiredService<IConfiguration>(),
             requestBaseUrl);
         var agentClient = HttpContext.RequestServices.GetRequiredService<AgentClient>();
+        await _events.AppendAndSaveAsync(NodeOperationalEvents.Create(
+            node,
+            OperationalEventCodes.Agent.SyncStarted,
+            OperationalEventOutcome.Started,
+            "Worker node Agent synchronization started.",
+            correlationId: _correlation.Ensure(),
+            detail: new Dictionary<string, object?> { ["operation"] = "agent.sync" }), token);
 
         try
         {
@@ -622,6 +715,25 @@ public class NodesController : ControllerBase
                     $"{serverUrl.TrimEnd('/')}/api/agent/download",
                     NodeDeployService.ComputeAgentBinarySha256()),
                 token);
+            await _events.AppendAndSaveAsync(NodeOperationalEvents.Create(
+                node,
+                result.Success ? OperationalEventCodes.Agent.SyncSucceeded : OperationalEventCodes.Agent.SyncFailed,
+                result.Success ? OperationalEventOutcome.Succeeded : OperationalEventOutcome.Failed,
+                result.Success
+                    ? "Worker node Agent synchronization completed."
+                    : "Worker node Agent synchronization failed.",
+                result.Success ? OperationalEventSeverity.Information : OperationalEventSeverity.Error,
+                result.Success
+                    ? null
+                    : new OperationalError(
+                        OperationalErrorCategory.AgentProtocol,
+                        OperationalErrorCodes.AgentSyncFailed,
+                        "Agent synchronization failed.",
+                        true,
+                        WorkerNodeId: node.Id,
+                        Operation: "agent.sync"),
+                _correlation.Ensure(),
+                new Dictionary<string, object?> { ["operation"] = "agent.sync" }), token);
             _logger.SystemLog(
                 $"Worker node Agent sync requested: node={node.Name}, id={node.Id}, success={result.Success}, message={result.Message}.",
                 result.Success ? TaskStatus.Pending : TaskStatus.Failed,
@@ -630,6 +742,18 @@ public class NodesController : ControllerBase
         }
         catch (Exception ex) when (ex is AgentClientException or HttpRequestException or TaskCanceledException)
         {
+            var error = ex is AgentClientException agentException
+                ? agentException.Error
+                : OperationalErrorClassifier.FromException(ex, "agent.sync", node.Id);
+            await _events.AppendAndSaveAsync(NodeOperationalEvents.Create(
+                node,
+                OperationalEventCodes.Agent.SyncFailed,
+                OperationalEventOutcome.Failed,
+                "Worker node Agent synchronization failed.",
+                OperationalEventSeverity.Error,
+                error,
+                _correlation.Ensure(),
+                new Dictionary<string, object?> { ["operation"] = "agent.sync" }), token);
             _logger.LogWarning(ex, "Agent sync failed on node {NodeId}", id);
             _logger.SystemLog(
                 $"Worker node Agent sync failed: node={node.Name}, id={node.Id}, error={ex.Message}.",
@@ -663,9 +787,24 @@ public class NodesController : ControllerBase
             ? request.Sequence
             : Math.Max(node.LiveMetricSequence + 1, receivedAt.ToUnixTimeMilliseconds());
 
+        var previousCapabilities = node.Capabilities;
+        var previousCapabilityHash = node.CapabilityHash;
         var capabilityChanged = ApplyReportedCapabilities(node, request);
         if (capabilityChanged)
+        {
+            _events.Append(NodeOperationalEvents.Create(
+                node,
+                OperationalEventCodes.Node.CapabilityChanged,
+                OperationalEventOutcome.Observed,
+                "Worker node capability manifest changed.",
+                detail: new Dictionary<string, object?>
+                {
+                    ["previousStatus"] = previousCapabilities.ToString(),
+                    ["currentStatus"] = node.Capabilities.ToString(),
+                    ["capability"] = node.CapabilityHash ?? previousCapabilityHash
+                }));
             await _context.SaveChangesAsync(HttpContext.RequestAborted);
+        }
 
         var liveStateStore = HttpContext.RequestServices.GetRequiredService<INodeLiveStateStore>();
         var writeResult = await liveStateStore.WriteAsync(new NodeLiveState(
@@ -749,6 +888,7 @@ public class NodesController : ControllerBase
             vm.Challenge.GameId, vm.UserId, vm.ChallengeId, vm.Id) with
         {
             Operation = RuntimeOperationKind.Destroy,
+            Generation = vm.RuntimeGeneration,
             TargetNodeId = vm.NodeId,
             SubjectDisplayName = vm.UserId.ToString("N")[..8],
             ResourceDisplayName = vm.VmName
@@ -771,6 +911,7 @@ public class NodesController : ControllerBase
             vm.Challenge.GameId, vm.UserId, vm.ChallengeId, vm.Id) with
         {
             Operation = RuntimeOperationKind.Destroy,
+            Generation = vm.RuntimeGeneration,
             TargetNodeId = vm.NodeId,
             SubjectDisplayName = vm.UserId.ToString("N")[..8],
             ResourceDisplayName = vm.VmName
@@ -1055,83 +1196,6 @@ public class NodesController : ControllerBase
         if (span.TotalMinutes >= 1)
             return $"{(int)span.TotalMinutes}分钟";
         return $"{Math.Max(0, (int)span.TotalSeconds)}秒";
-    }
-}
-
-[ApiController]
-[Route("api/v1/deployment-queue")]
-[Produces(MediaTypeNames.Application.Json)]
-public class DeploymentQueueController : ControllerBase
-{
-    private readonly AppDbContext _context;
-    private readonly DeploymentQueueService _queue;
-    private readonly DeploymentQueueViewService _queueView;
-    private readonly ILogger<DeploymentQueueController> _logger;
-
-    public DeploymentQueueController(AppDbContext context, DeploymentQueueService queue,
-        DeploymentQueueViewService queueView,
-        ILogger<DeploymentQueueController> logger)
-    {
-        _context = context;
-        _queue = queue;
-        _queueView = queueView;
-        _logger = logger;
-    }
-
-    [HttpGet]
-    [RequireAdmin]
-    public async Task<IActionResult> List(
-        [FromQuery] string? status = null,
-        [FromQuery] string? cursor = null,
-        [FromQuery] int pageSize = 20)
-    {
-        try
-        {
-            return Ok(await _queueView.ListAsync(status, cursor, pageSize, HttpContext.RequestAborted));
-        }
-        catch (Infrastructure.Persistence.Queries.InvalidTimeCursorException)
-        {
-            return BadRequest(new { code = "invalid_cursor", message = "The pagination cursor is invalid." });
-        }
-    }
-
-    [HttpGet("{id:guid}")]
-    [RequireAdmin]
-    public async Task<IActionResult> GetById(Guid id)
-    {
-        var ticket = await _context.DeploymentQueueTickets
-            .Include(item => item.TargetNode)
-            .FirstOrDefaultAsync(item => item.Id == id);
-        if (ticket is null) return NotFound();
-        return Ok(new
-        {
-            ticket.Id, ticket.TargetNodeId, ticket.Kind, ticket.Operation, ticket.Status, ticket.Stage,
-            TargetNodeName = ticket.TargetNode == null ? null : ticket.TargetNode.Name,
-            TargetNodeHost = ticket.TargetNode == null ? null : ticket.TargetNode.HostAddress,
-            ticket.SubjectDisplayName, ticket.ResourceDisplayName,
-            ticket.CreatedAt, ticket.StartedAt, ticket.CompletedAt, ticket.ErrorMessage
-        });
-    }
-
-    [HttpDelete("{id:guid}")]
-    [RequireAdmin]
-    public async Task<IActionResult> Cancel(Guid id)
-    {
-        var token = HttpContext?.RequestAborted ?? CancellationToken.None;
-        var ticket = await _context.DeploymentQueueTickets
-            .Include(t => t.TargetNode)
-            .SingleOrDefaultAsync(t => t.Id == id, token);
-        if (ticket is not null)
-        {
-            await _queue.CancelAsync(ticket.Id, "Deployment queue ticket was cancelled by administrator.", token);
-            var node = ticket.TargetNode;
-            _logger.SystemLog(
-                $"Deployment queue ticket {ticket.Id} cancelled by administrator: kind={ticket.Kind}, game={ticket.GameId}, team={ticket.OwnerTeamId}, user={ticket.OwnerUserId}, challenge={ticket.ChallengeId}, node={node?.Name ?? node?.HostAddress ?? "unassigned"}.",
-                TaskStatus.Exit, LogLevel.Information);
-            return NoContent();
-        }
-
-        return NotFound();
     }
 }
 

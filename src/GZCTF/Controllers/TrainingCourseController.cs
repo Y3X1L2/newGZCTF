@@ -1154,6 +1154,7 @@ public class TrainingCourseController(
             user.Id, instance.ExerciseId) with
         {
             Operation = RuntimeOperationKind.Stop,
+            Generation = instance.Container.RuntimeGeneration,
             TargetNodeId = instance.Container.NodeId,
             SubjectDisplayName = user.UserName,
             ResourceDisplayName = $"{course.Title} / {instance.Exercise.Title}"

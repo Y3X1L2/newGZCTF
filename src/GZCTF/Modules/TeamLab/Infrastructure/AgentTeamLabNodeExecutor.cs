@@ -127,14 +127,22 @@ public sealed class AgentTeamLabNodeExecutor(
         Guid workerNodeId,
         TeamLabAssetKind kind,
         string resourceId,
+        CancellationToken cancellationToken) =>
+        await DestroyAssetAsync(workerNodeId, kind, resourceId, null, cancellationToken);
+
+    private async Task<TeamLabNodeResult> DestroyAssetAsync(
+        Guid workerNodeId,
+        TeamLabAssetKind kind,
+        string resourceId,
+        int? generation,
         CancellationToken cancellationToken)
     {
         try
         {
             if (kind == TeamLabAssetKind.Docker)
-                await agent.DestroyContainerAsync(workerNodeId, resourceId, cancellationToken);
+                await agent.DestroyContainerAsync(workerNodeId, resourceId, generation, cancellationToken);
             else
-                await agent.DestroyVmAsync(workerNodeId, resourceId, cancellationToken);
+                await agent.DestroyVmAsync(workerNodeId, resourceId, generation, null, cancellationToken);
             return TeamLabNodeResult.Ok("Asset destroyed.");
         }
         catch (Exception exception) when (exception is AgentClientException or HttpRequestException or TaskCanceledException)
@@ -151,12 +159,14 @@ public sealed class AgentTeamLabNodeExecutor(
         var errors = new List<string>();
         foreach (var containerId in request.ContainerIds.Distinct(StringComparer.Ordinal))
         {
-            var result = await DestroyAssetAsync(workerNodeId, TeamLabAssetKind.Docker, containerId, cancellationToken);
+            var result = await DestroyAssetAsync(
+                workerNodeId, TeamLabAssetKind.Docker, containerId, request.Generation, cancellationToken);
             if (!result.Success) errors.Add(result.Message);
         }
         foreach (var vmName in request.VmNames.Distinct(StringComparer.Ordinal))
         {
-            var result = await DestroyAssetAsync(workerNodeId, TeamLabAssetKind.Vm, vmName, cancellationToken);
+            var result = await DestroyAssetAsync(
+                workerNodeId, TeamLabAssetKind.Vm, vmName, request.Generation, cancellationToken);
             if (!result.Success) errors.Add(result.Message);
         }
         var cleanup = await agent.CleanupTeamLabAsync(workerNodeId,
@@ -320,6 +330,7 @@ public sealed class AgentTeamLabNodeExecutor(
             .ToDictionary(group => group.Key, group => group.Last().Value, StringComparer.Ordinal);
         var config = new ContainerConfig
         {
+            Generation = request.Generation,
             Image = image,
             TeamId = $"teamlab-{request.RuntimeId}",
             ChallengeId = StableId(request.AssetKey),
@@ -361,7 +372,8 @@ public sealed class AgentTeamLabNodeExecutor(
             var attachResult = RequireMutation(attach, $"Failed to attach container interface {iface.Key}.");
             if (!attachResult.Success)
             {
-                await agent.DestroyContainerAsync(workerNodeId, container.ContainerId, cancellationToken);
+                await agent.DestroyContainerAsync(
+                    workerNodeId, container.ContainerId, request.Generation, cancellationToken);
                 return TeamLabNodeAssetCreateResult.Failed(attachResult.Message);
             }
         }
@@ -398,6 +410,7 @@ public sealed class AgentTeamLabNodeExecutor(
         }).ToList();
         var vmRequest = new AgentCreateVmRequest
         {
+            Generation = request.Generation,
             TemplateId = template.Id,
             TemplatePath = template.LocalFilePath ?? template.Name,
             ImageEnsured = true,
@@ -421,7 +434,7 @@ public sealed class AgentTeamLabNodeExecutor(
                 return TeamLabNodeAssetCreateResult.Created(vm.VmName);
             if (attempt < 23) await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
         }
-        await agent.DestroyVmAsync(workerNodeId, vm.VmName, cancellationToken);
+        await agent.DestroyVmAsync(workerNodeId, vm.VmName, request.Generation, vm.NativeId, cancellationToken);
         return TeamLabNodeAssetCreateResult.Failed($"VM {request.Name} did not reach IP {primaryIp}.");
     }
 

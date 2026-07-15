@@ -1399,11 +1399,17 @@ public class GameController(
             if (existingVm is not null)
                 return Ok(new { status = existingVm.Status.ToString(), vmInstanceId = existingVm.Id });
 
+            var vmName = $"vm_c{challengeId}_u{context.User.Id}";
+            var runtimeGeneration = (await dbContext.VmInstances
+                .Where(v => v.VmName == vmName)
+                .Select(v => (int?)v.RuntimeGeneration)
+                .MaxAsync(token) ?? 0) + 1;
             var vmInstance = new VmInstance
             {
                 ChallengeId = challengeId,
                 UserId = context.User.Id,
-                VmName = $"vm_c{challengeId}_u{context.User.Id}",
+                VmName = vmName,
+                RuntimeGeneration = runtimeGeneration,
                 ProviderName = "KVM",
                 OSType = OSType.Windows,
                 Status = VmInstanceStatus.Creating,
@@ -1414,7 +1420,10 @@ public class GameController(
 
             var queue = HttpContext.RequestServices.GetRequiredService<DeploymentQueueService>();
             var queued = await queue.EnqueueAsync(
-                DeploymentQueueRequest.Vm(id, context.User.Id, challengeId, vmInstance.Id),
+                DeploymentQueueRequest.Vm(id, context.User.Id, challengeId, vmInstance.Id) with
+                {
+                    Generation = vmInstance.RuntimeGeneration
+                },
                 token);
             var ticket = await dbContext.DeploymentQueueTickets.AsNoTracking()
                 .FirstOrDefaultAsync(t => t.Id == queued.TicketId, token);
@@ -1598,6 +1607,7 @@ public class GameController(
             id, context.Participation!.TeamId, challengeId) with
         {
             Operation = RuntimeOperationKind.Stop,
+            Generation = instance.Container.RuntimeGeneration,
             TargetNodeId = instance.Container.NodeId,
             SubjectDisplayName = context.Participation.Team.Name,
             ResourceDisplayName = instance.Challenge.Title
@@ -1706,6 +1716,7 @@ public class GameController(
             id, context.User!.Id, challengeId, vmInstance.Id) with
         {
             Operation = RuntimeOperationKind.Stop,
+            Generation = vmInstance.RuntimeGeneration,
             TargetNodeId = vmInstance.NodeId,
             SubjectDisplayName = context.User.UserName,
             ResourceDisplayName = vmInstance.VmName

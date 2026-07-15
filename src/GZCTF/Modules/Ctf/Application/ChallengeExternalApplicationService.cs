@@ -199,7 +199,7 @@ public sealed class ChallengeExternalApplicationService(
         TPayload payload,
         CancellationToken cancellationToken)
     {
-        var normalizedKey = NormalizeIdempotencyKey(idempotencyKey);
+        var normalizedKey = ExternalIdempotencyKey.Normalize(idempotencyKey);
         var payloadJson = JsonSerializer.Serialize(payload, JsonOptions);
         var requestHash = Convert.ToHexStringLower(SHA256.HashData(
             JsonSerializer.SerializeToUtf8Bytes(new { gameId, kind, payload }, JsonOptions)));
@@ -363,17 +363,6 @@ public sealed class ChallengeExternalApplicationService(
                 "challenge_attachment_url_invalid",
                 "Remote attachment URLs must be absolute HTTP or HTTPS URLs no longer than 2,048 characters.");
         return new OpenChallengeAttachmentModel { RemoteUrl = value };
-    }
-
-    private static string NormalizeIdempotencyKey(string value)
-    {
-        var normalized = value.Trim();
-        if (normalized.Length is < 1 or > 128 || normalized.Any(character =>
-                !char.IsAsciiLetterOrDigit(character) && character is not '-' and not '_' and not '.'))
-            throw new IdempotencyValidationException(
-                string.IsNullOrEmpty(normalized) ? "idempotency_key_required" : "idempotency_key_invalid",
-                "Idempotency-Key must contain 1-128 ASCII letters, digits, '-', '_' or '.'.");
-        return normalized;
     }
 
     private static string EncodeCursor(int challengeId)

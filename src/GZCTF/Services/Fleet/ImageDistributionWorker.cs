@@ -1,4 +1,8 @@
+using System.Diagnostics;
+using GZCTF.Infrastructure.Telemetry;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Runtime.Application;
 using Microsoft.EntityFrameworkCore;
 
@@ -34,6 +38,7 @@ public sealed class ImageDistributionWorker(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var events = scope.ServiceProvider.GetRequiredService<IOperationalEventWriter>();
         var now = DateTimeOffset.UtcNow;
         var candidates = await context.ImageDistributionRecords.AsNoTracking()
             .Where(record =>
@@ -49,7 +54,7 @@ public sealed class ImageDistributionWorker(
             .ThenBy(record => record.Id)
             .Take(BatchSize)
             .Select(record => new ClaimedImageWork(record.Id, record.WorkerNodeId, record.ImageType,
-                record.Operation))
+                record.Operation, record.Status))
             .ToArrayAsync(token);
 
         List<ClaimedImageWork> claimed = [];
@@ -60,6 +65,7 @@ public sealed class ImageDistributionWorker(
                 : ImageDistributionStatus.Pulling;
             if (context.Database.IsRelational())
             {
+                await using var transaction = await context.Database.BeginTransactionAsync(token);
                 var affected = await context.ImageDistributionRecords
                     .Where(record => record.Id == candidate.Id &&
                                      (record.ClaimOwner == null || record.ClaimExpiresAt <= now) &&
@@ -72,7 +78,19 @@ public sealed class ImageDistributionWorker(
                         .SetProperty(record => record.AttemptCount, record => record.AttemptCount + 1)
                         .SetProperty(record => record.ProgressUpdatedAt, now), token);
                 if (affected == 1)
+                {
+                    var claimedRecord = await context.ImageDistributionRecords
+                        .Include(item => item.ImageTemplate)
+                        .SingleAsync(item => item.Id == candidate.Id, token);
+                    AppendClaimEvents(events, claimedRecord, candidate.Status);
+                    await context.SaveChangesAsync(token);
+                    await transaction.CommitAsync(token);
                     claimed.Add(candidate);
+                }
+                else
+                {
+                    await transaction.RollbackAsync(token);
+                }
                 continue;
             }
 
@@ -86,6 +104,7 @@ public sealed class ImageDistributionWorker(
             record.ClaimExpiresAt = now.Add(ClaimDuration);
             record.AttemptCount++;
             record.ProgressUpdatedAt = now;
+            AppendClaimEvents(events, record, candidate.Status);
             await context.SaveChangesAsync(token);
             claimed.Add(candidate);
         }
@@ -99,6 +118,7 @@ public sealed class ImageDistributionWorker(
         {
             await using var scope = scopeFactory.CreateAsyncScope();
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var correlation = scope.ServiceProvider.GetRequiredService<OperationalCorrelation>();
             var manifestJson = await context.WorkerNodes.AsNoTracking()
                 .Where(node => node.Id == work.WorkerNodeId)
                 .Select(node => node.CapabilityManifestJson)
@@ -116,8 +136,27 @@ public sealed class ImageDistributionWorker(
                 _ => limits?.ControlOperations ?? 2
             };
             var service = scope.ServiceProvider.GetRequiredService<ImageDistributionService>();
-            await dispatchLimiter.RunAsync(work.WorkerNodeId, category, Math.Max(1, limit),
-                operationToken => service.ProcessClaimedAsync(work.Id, _claimOwner, operationToken), token);
+            using var correlationScope = correlation.Begin(work.Id);
+            using var activity = PlatformTelemetry.ImageActivitySource.StartActivity(
+                work.Operation == ImageDistributionOperation.Cleanup
+                    ? "image.cleanup"
+                    : "image.distribute",
+                ActivityKind.Consumer);
+            activity?.SetTag("image.type", work.ImageType.ToString());
+            activity?.SetTag("image.operation", work.Operation.ToString());
+            activity?.SetTag("gzctf.image_distribution_id", work.Id.ToString());
+            activity?.SetTag("gzctf.worker_node_id", work.WorkerNodeId.ToString());
+            try
+            {
+                await dispatchLimiter.RunAsync(work.WorkerNodeId, category, Math.Max(1, limit),
+                    operationToken => service.ProcessClaimedAsync(work.Id, _claimOwner, operationToken), token);
+                activity?.SetStatus(ActivityStatusCode.Ok);
+            }
+            catch (Exception exception)
+            {
+                activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
+                throw;
+            }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -133,5 +172,26 @@ public sealed class ImageDistributionWorker(
         Guid Id,
         Guid WorkerNodeId,
         ImageType ImageType,
-        ImageDistributionOperation Operation);
+        ImageDistributionOperation Operation,
+        ImageDistributionStatus Status);
+
+    static void AppendClaimEvents(
+        IOperationalEventWriter events,
+        ImageDistributionRecord record,
+        ImageDistributionStatus previousStatus)
+    {
+        record.LastCorrelationId = record.Id;
+        if (previousStatus == ImageDistributionStatus.Failed)
+            events.Append(ImageDistributionService.BuildOperationalEvent(
+                record,
+                OperationalEventCodes.Image.DistributionRetryQueued,
+                OperationalEventOutcome.Pending,
+                "Image distribution retry was queued.",
+                OperationalEventSeverity.Warning));
+        events.Append(ImageDistributionService.BuildOperationalEvent(
+            record,
+            OperationalEventCodes.Image.DistributionClaimed,
+            OperationalEventOutcome.Started,
+            "Image distribution work was claimed by a worker."));
+    }
 }

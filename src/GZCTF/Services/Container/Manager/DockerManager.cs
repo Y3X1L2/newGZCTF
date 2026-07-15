@@ -183,7 +183,12 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
             return null;
         }
 
-        var container = new Models.Data.Container { ContainerId = containerRes.ID, Image = config.Image };
+        var container = new Models.Data.Container
+        {
+            ContainerId = containerRes.ID,
+            Image = config.Image,
+            RuntimeGeneration = Math.Max(1, config.Generation)
+        };
 
         retry = 0;
 

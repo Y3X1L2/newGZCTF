@@ -15,15 +15,20 @@ public class VmController(KvmService kvm, AgentOperationGate gate) : ControllerB
     {
         await using var permit = await gate.EnterAsync(AgentOperationCategory.VmCreate, token);
         var result = await _kvm.CreateVmAsync(request, token);
-        if (result is null) return StatusCode(500, new { message = "VM creation failed" });
-        return Ok(result);
+        return result is null
+            ? throw new AgentOperationException("Kvm", "kvm.operation_failed", "VM creation failed.", true)
+            : Ok(result);
     }
 
     [HttpDelete("{vmName}")]
-    public async Task<IActionResult> Destroy(string vmName, CancellationToken token)
+    public async Task<IActionResult> Destroy(
+        string vmName,
+        [FromQuery] int? generation,
+        [FromQuery] string? nativeId,
+        CancellationToken token)
     {
         await using var permit = await gate.EnterAsync(AgentOperationCategory.Control, token);
-        await _kvm.DestroyVmAsync(vmName, token);
+        await _kvm.DestroyVmAsync(vmName, generation, nativeId, token);
         return NoContent();
     }
 

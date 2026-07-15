@@ -231,7 +231,8 @@ public sealed class ChallengeMutationOperationHandler(
         foreach (var container in containers)
         {
             var queued = await deploymentQueue.EnqueueAsync(
-                DeploymentQueueRequest.MaintenanceContainer(container.Id, container.NodeId, container.Image),
+                DeploymentQueueRequest.MaintenanceContainer(
+                    container.Id, container.NodeId, container.Image, container.RuntimeGeneration),
                 cancellationToken);
             await RequireQueueSuccessAsync(queued.TicketId, cancellationToken);
         }
@@ -246,7 +247,8 @@ public sealed class ChallengeMutationOperationHandler(
         foreach (var container in testContainers)
         {
             var queued = await deploymentQueue.EnqueueAsync(
-                DeploymentQueueRequest.MaintenanceContainer(container.Id, container.NodeId, container.Image),
+                DeploymentQueueRequest.MaintenanceContainer(
+                    container.Id, container.NodeId, container.Image, container.RuntimeGeneration),
                 cancellationToken);
             await RequireQueueSuccessAsync(queued.TicketId, cancellationToken);
         }
@@ -264,6 +266,7 @@ public sealed class ChallengeMutationOperationHandler(
                 vm.Challenge.GameId, vm.UserId, vm.ChallengeId, vm.Id) with
             {
                 Operation = RuntimeOperationKind.Destroy,
+                Generation = vm.RuntimeGeneration,
                 TargetNodeId = vm.NodeId,
                 SubjectDisplayName = "Challenge deletion",
                 ResourceDisplayName = vm.VmName

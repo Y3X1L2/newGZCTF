@@ -13,6 +13,7 @@ public static class TeamLabModuleRegistration
         services.AddScoped<ITeamLabTopologyApplicationService, TeamLabTopologyApplicationService>();
         services.AddScoped<TeamLabRuntimeOverlayService>();
         services.AddScoped<TeamLabRuntimePlanner>();
+        services.AddScoped<TeamLabEventRecorder>();
         services.AddScoped<TeamLabRuntimeProjectionService>();
         services.AddScoped<TeamLabAuthorizationService>();
         services.AddScoped<TeamLabTrafficApplicationService>();

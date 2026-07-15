@@ -40,6 +40,7 @@ public sealed class AgentCapabilityService(
             features.Add(AgentFeatureIds.Flow);
             features.Add(AgentFeatureIds.Pcap);
         }
+        features.Add(AgentFeatureIds.RuntimeInventory);
         features.Add(AgentFeatureIds.SelfUpdate);
 
         var logicalCpu = Math.Max(1, Environment.ProcessorCount);

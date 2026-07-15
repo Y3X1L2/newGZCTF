@@ -36,6 +36,11 @@ public class Container
     public string ContainerId { get; set; } = string.Empty;
 
     /// <summary>
+    /// Monotonic runtime generation used to reject stale create/control operations.
+    /// </summary>
+    public int RuntimeGeneration { get; set; } = 1;
+
+    /// <summary>
     /// Container status
     /// </summary>
     [Required]
@@ -177,4 +182,3 @@ internal record GameMetadata(
     int TeamId,
     string ContainerId,
     string? Flag);
-

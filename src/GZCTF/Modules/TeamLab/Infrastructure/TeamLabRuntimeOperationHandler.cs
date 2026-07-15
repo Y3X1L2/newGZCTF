@@ -2,6 +2,7 @@ using System.Text.Json;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
@@ -12,6 +13,10 @@ namespace GZCTF.Modules.TeamLab.Infrastructure;
 public sealed class TeamLabRuntimeOperationHandler(
     AppDbContext context,
     ITeamLabRuntimeApplicationService runtimes,
+    ITeamLabTopologyApplicationService topologies,
+    TeamLabAuthorizationService authorization,
+    TeamLabAccessGrantService access,
+    TeamLabTrafficApplicationService traffic,
     TeamLabRuntimeOperationPayloadProtector protector,
     ApiOperationService operations) : IApiOperationHandler
 {
@@ -24,6 +29,12 @@ public sealed class TeamLabRuntimeOperationHandler(
             ?? throw new ApiOperationTerminalException("teamlab_job_not_found", "The TeamLab operation job was not found.");
         if (job.ResultJson is not null) return;
         var operation = await context.ApiOperations.AsNoTracking().SingleAsync(item => item.Id == operationId, cancellationToken);
+
+        if (job.Kind is >= TeamLabRuntimeOperationKind.TopologyCreate and <= TeamLabRuntimeOperationKind.CaptureStop)
+        {
+            await ExecuteExternalCommandAsync(job, operation, leaseOwner, cancellationToken);
+            return;
+        }
 
         if (job.Kind == TeamLabRuntimeOperationKind.Destroy)
         {
@@ -101,11 +112,146 @@ public sealed class TeamLabRuntimeOperationHandler(
         await WaitForTicketAsync(job, ticket.Id, operationId, leaseOwner, cancellationToken);
     }
 
+    private async Task ExecuteExternalCommandAsync(
+        TeamLabRuntimeOperationJob job,
+        ApiOperation operation,
+        string leaseOwner,
+        CancellationToken cancellationToken)
+    {
+        var actorUserId = operation.ActorUserId
+            ?? throw new ApiOperationTerminalException("authentication_required", "The operation actor is missing.");
+        var isAdministrator = await context.Users.AsNoTracking()
+            .Where(item => item.Id == actorUserId)
+            .Select(item => item.Role >= Role.Admin)
+            .SingleOrDefaultAsync(cancellationToken);
+        var payload = ReadPayload(job);
+
+        switch (job.Kind)
+        {
+            case TeamLabRuntimeOperationKind.TopologyCreate:
+            {
+                await operations.UpdateProgressAsync(operation.Id, leaseOwner, "topology-creating", 0, 1,
+                    "teamlab-topology", null, null, cancellationToken);
+                var result = await topologies.CreateForOperationAsync(
+                    payload.CreateTopology ?? throw MissingPayload("topology create"),
+                    actorUserId, operation.Id, cancellationToken);
+                await operations.UpdateProgressAsync(operation.Id, leaseOwner, "topology-created", 1, 1,
+                    "teamlab-topology", result.Id.ToString("D"), null, cancellationToken);
+                await CompleteJobAsync(job, result.ToOpen(), cancellationToken);
+                return;
+            }
+            case TeamLabRuntimeOperationKind.TopologyUpdate:
+            {
+                var topologyId = payload.TopologyId ?? throw MissingPayload("topology update ID");
+                var result = await topologies.UpdateForOperationAsync(
+                    topologyId,
+                    payload.UpdateTopology ?? throw MissingPayload("topology update"),
+                    actorUserId, isAdministrator, operation.Id, cancellationToken);
+                await operations.UpdateProgressAsync(operation.Id, leaseOwner, "topology-updated", 1, 1,
+                    "teamlab-topology", topologyId.ToString("D"), null, cancellationToken);
+                await CompleteJobAsync(job, result.ToOpen(), cancellationToken);
+                return;
+            }
+            case TeamLabRuntimeOperationKind.TopologyDelete:
+            {
+                var topologyId = payload.TopologyId ?? throw MissingPayload("topology delete ID");
+                await topologies.DeleteForOperationAsync(
+                    topologyId, actorUserId, isAdministrator, operation.Id, cancellationToken);
+                await operations.UpdateProgressAsync(operation.Id, leaseOwner, "topology-deleted", 1, 1,
+                    "teamlab-topology", topologyId.ToString("D"), null, cancellationToken);
+                await CompleteJobAsync(job, new { topologyId, deleted = true }, cancellationToken);
+                return;
+            }
+            case TeamLabRuntimeOperationKind.TopologyPublish:
+            {
+                var topologyId = payload.TopologyId ?? throw MissingPayload("topology publish ID");
+                var result = await topologies.PublishForOperationAsync(
+                    topologyId,
+                    payload.PublishTopology?.Revision ?? throw MissingPayload("topology publish revision"),
+                    actorUserId, isAdministrator, operation.Id, cancellationToken);
+                await operations.UpdateProgressAsync(operation.Id, leaseOwner, "release-published", 1, 1,
+                    "teamlab-release", result.Id.ToString("D"), null, cancellationToken);
+                await CompleteJobAsync(job, result.ToOpen(), cancellationToken);
+                return;
+            }
+            case TeamLabRuntimeOperationKind.AccessGrantCreate:
+            {
+                var runtimeId = payload.RuntimeId ?? throw MissingPayload("runtime ID");
+                if (!string.Equals(payload.CreateAccessGrant?.Type, "WireGuard", StringComparison.OrdinalIgnoreCase))
+                    throw new ApiOperationTerminalException(
+                        "topology_invalid", "Only WireGuard access grants are supported.");
+                await authorization.RequireRuntimeOwnerAsync(runtimeId, actorUserId, isAdministrator, cancellationToken);
+                var result = await access.CreateForOperationAsync(runtimeId, operation.Id, cancellationToken);
+                job.RuntimePublicId = runtimeId;
+                await operations.UpdateProgressAsync(operation.Id, leaseOwner, "access-grant-created", 1, 1,
+                    "teamlab-access-grant", result.Id.ToString("D"), null, cancellationToken);
+                await CompleteJobAsync(job, new { grantId = result.Id }, cancellationToken);
+                return;
+            }
+            case TeamLabRuntimeOperationKind.AccessGrantRevoke:
+            {
+                var runtimeId = payload.RuntimeId ?? throw MissingPayload("runtime ID");
+                var grantId = payload.AccessGrantId ?? throw MissingPayload("access grant ID");
+                await authorization.RequireRuntimeOwnerAsync(runtimeId, actorUserId, isAdministrator, cancellationToken);
+                await access.RevokeAsync(runtimeId, grantId, cancellationToken);
+                job.RuntimePublicId = runtimeId;
+                await operations.UpdateProgressAsync(operation.Id, leaseOwner, "access-grant-revoked", 1, 1,
+                    "teamlab-access-grant", grantId.ToString("D"), null, cancellationToken);
+                await CompleteJobAsync(job, new { grantId, revoked = true }, cancellationToken);
+                return;
+            }
+            case TeamLabRuntimeOperationKind.CaptureStart:
+            {
+                var runtimeId = payload.RuntimeId ?? throw MissingPayload("runtime ID");
+                await authorization.RequireRuntimeOwnerAsync(runtimeId, actorUserId, isAdministrator, cancellationToken);
+                var result = await traffic.StartCaptureForOperationAsync(
+                    runtimeId,
+                    payload.CreateCapture ?? throw MissingPayload("capture request"),
+                    operation.Id,
+                    cancellationToken);
+                job.RuntimePublicId = runtimeId;
+                await operations.UpdateProgressAsync(operation.Id, leaseOwner, "capture-started", 1, 1,
+                    "teamlab-capture", result.Id.ToString("D"), null, cancellationToken);
+                await CompleteJobAsync(job, result.ToOpen(), cancellationToken);
+                return;
+            }
+            case TeamLabRuntimeOperationKind.CaptureStop:
+            {
+                var runtimeId = payload.RuntimeId ?? throw MissingPayload("runtime ID");
+                var captureId = payload.CaptureId ?? throw MissingPayload("capture ID");
+                await authorization.RequireRuntimeOwnerAsync(runtimeId, actorUserId, isAdministrator, cancellationToken);
+                var result = await traffic.StopCaptureAsync(runtimeId, captureId, cancellationToken);
+                job.RuntimePublicId = runtimeId;
+                await operations.UpdateProgressAsync(operation.Id, leaseOwner, "capture-stopped", 1, 1,
+                    "teamlab-capture", captureId.ToString("D"), null, cancellationToken);
+                await CompleteJobAsync(job, result.ToOpen(), cancellationToken);
+                return;
+            }
+            default:
+                throw new ApiOperationTerminalException(
+                    "teamlab_operation_invalid", "The TeamLab operation kind is invalid.");
+        }
+    }
+
+    private static ApiOperationTerminalException MissingPayload(string field) =>
+        new("teamlab_payload_invalid", $"The TeamLab operation {field} is missing.");
+
     public async Task OnTerminalFailureAsync(Guid operationId, CancellationToken cancellationToken)
     {
         var job = await context.TeamLabRuntimeOperationJobs.SingleOrDefaultAsync(item => item.OperationId == operationId, cancellationToken);
         if (job is null) return;
         job.ProtectedPayload = null;
+        if (job.Kind == TeamLabRuntimeOperationKind.AccessGrantCreate)
+        {
+            var grant = await context.TeamLabAccessGrants.SingleOrDefaultAsync(
+                item => item.ApiOperationId == operationId, cancellationToken);
+            if (grant is not null)
+            {
+                grant.ProtectedDownloadToken = null;
+                grant.Revoked = true;
+                grant.RevokedAt ??= DateTimeOffset.UtcNow;
+            }
+        }
         await context.SaveChangesAsync(cancellationToken);
     }
 
@@ -137,7 +283,7 @@ public sealed class TeamLabRuntimeOperationHandler(
                 "teamlab-runtime", job.RuntimePublicId?.ToString("D"), ticket.Id, cancellationToken);
             if (ticket.Status == DeploymentQueueTicketStatus.Succeeded)
             {
-                var projection = await runtimes.GetAsync(job.RuntimePublicId!.Value, cancellationToken);
+                var projection = (await runtimes.GetAsync(job.RuntimePublicId!.Value, cancellationToken)).ToOpen();
                 var trackedJob = await context.TeamLabRuntimeOperationJobs.SingleAsync(item => item.OperationId == operationId, cancellationToken);
                 await CompleteJobAsync(trackedJob, projection, cancellationToken);
                 return;
@@ -145,7 +291,9 @@ public sealed class TeamLabRuntimeOperationHandler(
             if (ticket.Status is DeploymentQueueTicketStatus.Failed or DeploymentQueueTicketStatus.Cancelled)
                 throw new ApiOperationTerminalException(
                     ticket.Status == DeploymentQueueTicketStatus.Cancelled ? "operation_cancelled" : "operation_failed",
-                    ticket.ErrorMessage ?? "The TeamLab deployment failed.");
+                    ticket.Status == DeploymentQueueTicketStatus.Cancelled
+                        ? "The TeamLab deployment was cancelled."
+                        : "The TeamLab deployment failed. Use the operation ID to inspect administrator diagnostics.");
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
         }
     }

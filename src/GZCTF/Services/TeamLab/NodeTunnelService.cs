@@ -1,5 +1,7 @@
 using System.Globalization;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Services.Fleet;
 
 namespace GZCTF.Services.TeamLab;
@@ -7,7 +9,11 @@ namespace GZCTF.Services.TeamLab;
 public sealed record TeamLabNodeProbeResult(bool Success, string Message, TeamLabStatusResponse? Status);
 public sealed record TeamLabNodeEnableResult(bool Success, string Message, string[] Commands);
 
-public class NodeTunnelService(AgentClient agentClient, AppDbContext context, ILogger<NodeTunnelService> logger)
+public class NodeTunnelService(
+    AgentClient agentClient,
+    AppDbContext context,
+    IOperationalEventWriter events,
+    ILogger<NodeTunnelService> logger)
 {
     public async Task<TeamLabNodeProbeResult> ProbeNodeAsync(WorkerNode node, CancellationToken token)
     {
@@ -15,9 +21,23 @@ public class NodeTunnelService(AgentClient agentClient, AppDbContext context, IL
         if (status is null)
             return new TeamLabNodeProbeResult(false, "WorkerNode TeamLab status endpoint did not respond.", null);
 
+        var previousStatus = node.TeamLabTunnelStatus;
         node.TeamLabTunnelLastHandshake = DateTimeOffset.UtcNow;
         node.TeamLabTunnelLastError = status.Available ? null : status.Message;
         node.TeamLabTunnelStatus = status.Available ? TeamLabTunnelStatus.Probing : TeamLabTunnelStatus.Error;
+        if (node.TeamLabTunnelStatus == TeamLabTunnelStatus.Error && previousStatus != TeamLabTunnelStatus.Error)
+            events.Append(NodeOperationalEvents.Create(
+                node,
+                OperationalEventCodes.Node.HealthDegraded,
+                OperationalEventOutcome.Observed,
+                "Worker node TeamLab network health degraded.",
+                OperationalEventSeverity.Warning,
+                detail: new Dictionary<string, object?>
+                {
+                    ["previousStatus"] = previousStatus.ToString(),
+                    ["currentStatus"] = node.TeamLabTunnelStatus.ToString(),
+                    ["reasonCode"] = "teamlab_probe_failed"
+                }));
         await context.SaveChangesAsync(token);
 
         return new TeamLabNodeProbeResult(status.Available, status.Message ?? "TeamLab network probe completed.", status);
@@ -52,11 +72,24 @@ public class NodeTunnelService(AgentClient agentClient, AppDbContext context, IL
         if (!probe.Success)
             return new TeamLabNodeEnableResult(false, probe.Message, []);
 
+        var previousStatus = node.TeamLabTunnelStatus;
         node.TeamLabNetworkEnabled = true;
         node.TeamLabTunnelIp = normalizedTunnelIp;
         node.TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy;
         node.TeamLabTunnelLastError = null;
         node.TeamLabTunnelConfigVersion++;
+        if (previousStatus != TeamLabTunnelStatus.Healthy)
+            events.Append(NodeOperationalEvents.Create(
+                node,
+                OperationalEventCodes.Node.HealthRecovered,
+                OperationalEventOutcome.Recovered,
+                "Worker node TeamLab network health recovered.",
+                detail: new Dictionary<string, object?>
+                {
+                    ["previousStatus"] = previousStatus.ToString(),
+                    ["currentStatus"] = TeamLabTunnelStatus.Healthy.ToString(),
+                    ["reasonCode"] = "teamlab_probe_succeeded"
+                }));
         await context.SaveChangesAsync(token);
 
         logger.LogInformation("WorkerNode {NodeId} marked healthy for TeamLab scheduling with tunnel IP {TunnelIp}.",

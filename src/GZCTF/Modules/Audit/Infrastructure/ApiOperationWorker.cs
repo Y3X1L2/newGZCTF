@@ -129,6 +129,20 @@ public sealed class ApiOperationWorker : BackgroundService
                 stoppingToken))
                 await handler.OnTerminalFailureAsync(operation.Id, stoppingToken);
         }
+        catch (ApiContractException exception) when (exception.StatusCode < 500)
+        {
+            _logger.LogWarning(
+                "External API operation {OperationId} was rejected: {ErrorCode}",
+                operation.Id,
+                exception.Code);
+            if (await MarkFailedAsync(
+                    operation.Id,
+                    exception.Code,
+                    exception.Message,
+                    0,
+                    stoppingToken))
+                await handler.OnTerminalFailureAsync(operation.Id, stoppingToken);
+        }
         catch (Exception exception)
         {
             _logger.LogError(exception, "External API operation {OperationId} failed", operation.Id);

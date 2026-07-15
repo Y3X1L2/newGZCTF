@@ -60,7 +60,10 @@ public class FleetVmService
         if (nodeId is null)
         {
             await _queue.EnqueueAsync(
-                DeploymentQueueRequest.Vm(gameId, vmInstance.UserId, vmInstance.ChallengeId, vmInstance.Id), token);
+                DeploymentQueueRequest.Vm(gameId, vmInstance.UserId, vmInstance.ChallengeId, vmInstance.Id) with
+                {
+                    Generation = vmInstance.RuntimeGeneration
+                }, token);
             _logger.LogInformation("VM creation queued for instance {VmInstanceId}.", vmInstance.Id);
             return null;
         }
@@ -79,6 +82,7 @@ public class FleetVmService
             await UpdateTicketStage(execution?.TicketId, DeploymentStage.VmCreating,
                 "Creating VM on local KVM node.", token);
             vmInstance.NodeId = nodeId.Value;
+            vmInstance.RuntimeGeneration = Math.Max(1, execution?.Generation ?? vmInstance.RuntimeGeneration);
             var vm = await CreateLocalVmAsync(vmInstance, templatePath, memory, cpu, token);
             await UpdateTicketStage(execution?.TicketId,
                 vm?.Status == VmInstanceStatus.Running ? DeploymentStage.BootProbing : DeploymentStage.Failed,
@@ -124,6 +128,8 @@ public class FleetVmService
 
         vmInstance.Status = VmInstanceStatus.Running;
         vmInstance.NodeId = nodeId.Value;
+        vmInstance.RuntimeGeneration = Math.Max(1, result.Generation);
+        vmInstance.RuntimeNativeId = string.IsNullOrWhiteSpace(result.NativeId) ? null : result.NativeId;
         await UpdateTicketStage(execution?.TicketId, DeploymentStage.BootProbing,
             "VM started; waiting for readiness probe.", token);
         return vmInstance;
@@ -240,7 +246,12 @@ public class FleetVmService
             try
             {
                 _logger.SystemLog($"Destroying VM {vmInstance.VmName}.", TaskStatus.Pending, LogLevel.Information);
-                await _agentClient.DestroyVmAsync(vmInstance.NodeId!.Value, vmInstance.VmName, token);
+                await _agentClient.DestroyVmAsync(
+                    vmInstance.NodeId!.Value,
+                    vmInstance.VmName,
+                    vmInstance.RuntimeGeneration,
+                    vmInstance.RuntimeNativeId,
+                    token);
             }
             catch (Exception ex)
             {

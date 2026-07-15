@@ -191,18 +191,71 @@ public class OpenApiTests(GZCTFApplicationFactory factory, ITestOutputHelper out
         using var document = JsonDocument.Parse(content);
         var paths = document.RootElement.GetProperty("paths");
 
-        foreach (var route in new[]
-                 {
-                     "/api/open/v1/images/docker-references",
-                     "/api/open/v1/images/docker-archives"
-                 })
+        var writes = paths.EnumerateObject()
+            .SelectMany(path => path.Value.EnumerateObject()
+                .Where(operation => operation.Name is "post" or "put" or "delete")
+                .Select(operation => (Route: path.Name, Method: operation.Name, Operation: operation.Value)))
+            .Where(item =>
+                item.Route is "/api/open/v1/images/docker-references" or "/api/open/v1/images/docker-archives" ||
+                item.Route.StartsWith("/api/open/v1/teamlab", StringComparison.Ordinal) &&
+                !item.Route.EndsWith("/validate", StringComparison.Ordinal) &&
+                !item.Route.EndsWith("/plan", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.NotEmpty(writes);
+        foreach (var write in writes)
         {
-            var parameters = paths.GetProperty(route).GetProperty("post")
-                .GetProperty("parameters");
-            Assert.Contains(parameters.EnumerateArray(), parameter =>
+            var parameters = write.Operation.GetProperty("parameters");
+            Assert.True(parameters.EnumerateArray().Any(parameter =>
                 parameter.GetProperty("name").GetString() == "Idempotency-Key" &&
                 parameter.GetProperty("in").GetString() == "header" &&
-                parameter.GetProperty("required").GetBoolean());
+                parameter.GetProperty("required").GetBoolean()),
+                $"{write.Method.ToUpperInvariant()} {write.Route} must require Idempotency-Key.");
+            if (write.Route.StartsWith("/api/open/v1/teamlab", StringComparison.Ordinal))
+                Assert.True(write.Operation.GetProperty("responses").TryGetProperty("202", out _),
+                    $"{write.Method.ToUpperInvariant()} {write.Route} must return 202 Accepted.");
+        }
+    }
+
+    [Fact]
+    public async Task OpenV1_TeamLabSchemasDoNotExposeInternalRuntimeOrEditorState()
+    {
+        var content = await _client.GetStringAsync(OpenV1DocumentPath);
+        using var document = JsonDocument.Parse(content);
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+        var teamLabSchemas = schemas.EnumerateObject()
+            .Where(schema => schema.Name.Contains("TeamLab", StringComparison.Ordinal))
+            .Select(schema => schema.Value.GetRawText())
+            .ToArray();
+
+        Assert.NotEmpty(teamLabSchemas);
+        var serialized = string.Join('\n', teamLabSchemas);
+        Assert.DoesNotContain("runtimeResourceId", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("protectedDownloadToken", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("lastError", serialized, StringComparison.OrdinalIgnoreCase);
+
+        var openRequestSchemas = schemas.EnumerateObject()
+            .Where(schema => schema.Name.StartsWith("Open", StringComparison.Ordinal) &&
+                             schema.Name.Contains("TeamLabTopologyModel", StringComparison.Ordinal))
+            .Select(schema => schema.Value.GetRawText())
+            .ToArray();
+        Assert.NotEmpty(openRequestSchemas);
+        Assert.All(openRequestSchemas, schema =>
+            Assert.DoesNotContain("editor", schema, StringComparison.OrdinalIgnoreCase));
+
+        var problemSchema = schemas.GetProperty("ExternalApiProblemDetailsModel");
+        Assert.Contains("\"code\"", problemSchema.GetRawText(), StringComparison.Ordinal);
+        Assert.Contains("\"traceId\"", problemSchema.GetRawText(), StringComparison.Ordinal);
+
+        foreach (var path in document.RootElement.GetProperty("paths").EnumerateObject()
+                     .Where(path => path.Name.StartsWith("/api/open/v1/teamlab", StringComparison.Ordinal)))
+        foreach (var operation in path.Value.EnumerateObject().Where(item => IsHttpMethod(item.Name)))
+        foreach (var response in operation.Value.GetProperty("responses").EnumerateObject()
+                     .Where(item => int.TryParse(item.Name, out var status) && status >= 400))
+        {
+            var contentTypes = response.Value.GetProperty("content");
+            Assert.True(contentTypes.TryGetProperty("application/problem+json", out _),
+                $"{operation.Name.ToUpperInvariant()} {path.Name} response {response.Name} must use application/problem+json.");
         }
     }
 

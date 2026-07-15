@@ -26,8 +26,8 @@ public sealed class EfTeamLabRuntimeOperationSubmissionStore(
             RouteKey = submission.RouteKey,
             IdempotencyKey = submission.IdempotencyKey,
             RequestHash = submission.RequestHash,
-            ResourceType = "teamlab-runtime",
-            ResourceId = submission.Job.RuntimePublicId?.ToString("D"),
+            ResourceType = submission.ResourceType,
+            ResourceId = submission.ResourceId,
             CreatedAt = now,
             UpdatedAt = now
         };

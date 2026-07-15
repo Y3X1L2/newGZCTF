@@ -1,4 +1,6 @@
 using GZCTF.Models.Data;
+using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Modules.Runtime.Domain;
@@ -73,6 +75,7 @@ public sealed class NodeMetricPersistenceWorker(
 
         using var scope = scopeFactory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var events = scope.ServiceProvider.GetRequiredService<IOperationalEventWriter>();
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
         var nodes = await context.WorkerNodes
@@ -141,7 +144,20 @@ public sealed class NodeMetricPersistenceWorker(
             node.CurrentVms = latest.CurrentVms;
             node.UsedPorts = latest.UsedPorts;
             node.LastHeartbeat = latest.ReceivedAt;
+            var previousStatus = node.Status;
             node.Status = NodeStatus.Online;
+            if (previousStatus != NodeStatus.Online)
+                events.Append(NodeOperationalEvents.Create(
+                    node,
+                    OperationalEventCodes.Node.Online,
+                    OperationalEventOutcome.Observed,
+                    "Worker node heartbeat resumed and the node became online.",
+                    detail: new Dictionary<string, object?>
+                    {
+                        ["previousStatus"] = previousStatus.ToString(),
+                        ["currentStatus"] = NodeStatus.Online.ToString(),
+                        ["reasonCode"] = "heartbeat_resumed"
+                    }));
         }
 
         await context.SaveChangesAsync(cancellationToken);

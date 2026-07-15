@@ -4,6 +4,7 @@ using GZCTF.Services.HealthCheck;
 using Npgsql;
 using GZCTF.Infrastructure.Persistence.Governance;
 using GZCTF.Infrastructure.Cache;
+using GZCTF.Infrastructure.Telemetry;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -48,6 +49,9 @@ public static class TelemetryExtension
                 metrics.AddMeter("Microsoft.Extensions.Diagnostics.HealthChecks");
                 metrics.AddMeter(DataGovernanceMetrics.MeterName);
                 metrics.AddMeter(RedisTelemetry.MeterName);
+                metrics.AddMeter(PlatformTelemetry.RuntimeMeterName);
+                metrics.AddMeter(PlatformTelemetry.AgentClientMeterName);
+                metrics.AddMeter(PlatformTelemetry.OperationsMeterName);
 
                 if (TelemetryConfig is { Prometheus.Enable: true })
                     metrics.AddPrometheusExporter(options =>
@@ -69,6 +73,11 @@ public static class TelemetryExtension
                 tracing.AddNpgsql();
                 tracing.AddAWSInstrumentation();
                 tracing.AddGrpcClientInstrumentation();
+                tracing.AddSource(PlatformTelemetry.RuntimeActivitySourceName);
+                tracing.AddSource(PlatformTelemetry.AgentClientActivitySourceName);
+                tracing.AddSource(PlatformTelemetry.ImageActivitySourceName);
+                tracing.AddSource(PlatformTelemetry.TeamLabActivitySourceName);
+                tracing.AddSource(PlatformTelemetry.CacheActivitySourceName);
 
                 if (TelemetryConfig is { Console.Enable: true })
                     tracing.AddConsoleExporter();

@@ -96,18 +96,12 @@ public class TeamLabController(TeamLabNetworkService service, AgentOperationGate
     [HttpGet("capture/{runtimeId:int}/{jobId:int}/download")]
     public IActionResult DownloadCapture(int runtimeId, int jobId)
     {
-        string path;
-        try
-        {
-            path = TeamLabNetworkService.ResolveCaptureFilePath(runtimeId, jobId);
-        }
-        catch (ArgumentOutOfRangeException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        var path = TeamLabNetworkService.ResolveCaptureFilePath(runtimeId, jobId);
 
         if (!System.IO.File.Exists(path))
-            return NotFound(new { message = "TeamLab capture file was not found." });
+            throw new AgentOperationException(
+                "Storage", "storage.file_not_found", "TeamLab capture file was not found.", false,
+                StatusCodes.Status404NotFound);
 
         return PhysicalFile(path, "application/vnd.tcpdump.pcap", $"teamlab-capture-{runtimeId}-{jobId}.pcap",
             enableRangeProcessing: true);

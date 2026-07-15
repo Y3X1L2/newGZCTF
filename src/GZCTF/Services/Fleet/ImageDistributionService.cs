@@ -1,4 +1,7 @@
 using GZCTF.Models.Data;
+using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Runtime.Domain;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,6 +14,7 @@ public class ImageDistributionService(
     VmArtifactStore vmArtifacts,
     ImageDistributionCoordinator coordinator,
     DeploymentExecutionContextAccessor executionContext,
+    IOperationalEventWriter events,
     ILogger<ImageDistributionService> logger)
 {
     static readonly NodeCapability DockerCapability = NodeCapability.Docker;
@@ -177,7 +181,15 @@ public class ImageDistributionService(
                 _ => true
             }).ToList();
             if (invalidReferences.Count > 0)
+            {
                 context.ImageDistributionReferences.RemoveRange(invalidReferences);
+                AppendImageEvent(
+                    record,
+                    OperationalEventCodes.Image.ReconcileCorrected,
+                    OperationalEventOutcome.Recovered,
+                    "Image distribution references were reconciled.",
+                    detail: ImageDetail(record, "stale_reference_removed"));
+            }
             if (record.References.Count == invalidReferences.Count)
                 QueueCleanup(record);
         }
@@ -337,7 +349,13 @@ public class ImageDistributionService(
             await context.SaveChangesAsync(token);
         }
 
-        await AddReferenceAsync(record, reference, token);
+        var referenceAdded = await AddReferenceAsync(record, reference, token);
+        if (referenceAdded)
+            AppendImageEvent(
+                record,
+                OperationalEventCodes.Image.ReferenceAttached,
+                OperationalEventOutcome.Succeeded,
+                "An image distribution reference was attached.");
         if (record.Status == ImageDistributionStatus.Ready &&
             string.Equals(record.ImageHash, hash, StringComparison.OrdinalIgnoreCase))
         {
@@ -351,7 +369,9 @@ public class ImageDistributionService(
         record.ImageHash = hash;
         record.ImageType = template.ImageType;
         record.Operation = ImageDistributionOperation.Distribute;
-        if (record.Status != ImageDistributionStatus.Pulling || record.ClaimExpiresAt <= DateTimeOffset.UtcNow)
+        var queued = record.Status != ImageDistributionStatus.Pulling ||
+                     record.ClaimExpiresAt <= DateTimeOffset.UtcNow;
+        if (queued)
         {
             record.Status = ImageDistributionStatus.Pending;
             record.Stage = ImageDistributionStage.Queued;
@@ -362,6 +382,15 @@ public class ImageDistributionService(
         record.LastErrorCode = null;
         record.NextAttemptAt = DateTimeOffset.UtcNow;
         record.LastCheckedAt = DateTimeOffset.UtcNow;
+        record.ErrorCategory = null;
+        record.Retryable = false;
+        record.LastCorrelationId = record.Id;
+        if (queued)
+            AppendImageEvent(
+                record,
+                OperationalEventCodes.Image.DistributionQueued,
+                OperationalEventOutcome.Pending,
+                "Image distribution was queued for a worker node.");
         await context.SaveChangesAsync(token);
         if (ownedTransaction is not null)
             await ownedTransaction.CommitAsync(token);
@@ -384,6 +413,11 @@ public class ImageDistributionService(
             {
                 record.Stage = ImageDistributionStage.Cleaning;
                 record.ProgressUpdatedAt = DateTimeOffset.UtcNow;
+                AppendImageEvent(
+                    record,
+                    OperationalEventCodes.Image.CleanupStarted,
+                    OperationalEventOutcome.Started,
+                    "Image cache cleanup started.");
                 await context.SaveChangesAsync(token);
                 await CleanupRecordAsync(record, token);
                 await context.SaveChangesAsync(token);
@@ -432,19 +466,49 @@ public class ImageDistributionService(
             record.NextAttemptAt = null;
             record.LastCheckedAt = DateTimeOffset.UtcNow;
             record.ProgressUpdatedAt = record.LastCheckedAt;
+            record.ErrorCategory = null;
+            record.Retryable = false;
+            AppendImageEvent(
+                record,
+                OperationalEventCodes.Image.TransferSucceeded,
+                OperationalEventOutcome.Succeeded,
+                "Image transfer completed successfully.");
+            AppendImageEvent(
+                record,
+                OperationalEventCodes.Image.VerifySucceeded,
+                OperationalEventOutcome.Succeeded,
+                "Image verification completed successfully.");
+            AppendImageEvent(
+                record,
+                OperationalEventCodes.Image.DistributionReady,
+                OperationalEventOutcome.Succeeded,
+                "Image is ready on the worker node.");
         }
         catch (Exception ex) when (IsDistributionFailure(ex, token))
         {
+            var error = ImageFailure(record, ex);
             record.Status = ImageDistributionStatus.Failed;
             record.Stage = ImageDistributionStage.None;
-            record.LastErrorCode = record.Operation == ImageDistributionOperation.Cleanup
-                ? "image_cleanup_failed"
-                : "image_distribution_failed";
+            record.LastErrorCode = error.Code;
+            record.ErrorCategory = error.Category;
+            record.Retryable = error.Retryable;
+            record.LastCorrelationId = record.Id;
             record.ErrorMessage = TrimError(
                 $"Image template {record.ImageTemplate?.Name ?? record.ImageTemplateId.ToString()} " +
                 $"on node {record.WorkerNode?.Name ?? record.WorkerNodeId.ToString()} failed: {ex.Message}");
             record.NextAttemptAt = DateTimeOffset.UtcNow.Add(RetryDelay(record.AttemptCount));
             record.ProgressUpdatedAt = DateTimeOffset.UtcNow;
+            AppendImageEvent(
+                record,
+                record.Operation == ImageDistributionOperation.Cleanup
+                    ? OperationalEventCodes.Image.CleanupFailed
+                    : OperationalEventCodes.Image.DistributionFailed,
+                OperationalEventOutcome.Failed,
+                record.Operation == ImageDistributionOperation.Cleanup
+                    ? "Image cache cleanup failed."
+                    : "Image distribution failed.",
+                OperationalEventSeverity.Error,
+                error);
             logger.LogWarning(ex,
                 "Image distribution work {RecordId} failed for template {TemplateId} on node {NodeId}.",
                 record.Id, record.ImageTemplateId, record.WorkerNodeId);
@@ -497,6 +561,18 @@ public class ImageDistributionService(
         record.Stage = stage;
         record.ProgressUpdatedAt = DateTimeOffset.UtcNow;
         record.LastCheckedAt = record.ProgressUpdatedAt;
+        if (stage == ImageDistributionStage.Preparing)
+            AppendImageEvent(
+                record,
+                OperationalEventCodes.Image.TransferStarted,
+                OperationalEventOutcome.Started,
+                "Image transfer preparation started.");
+        else if (stage == ImageDistributionStage.Verifying)
+            AppendImageEvent(
+                record,
+                OperationalEventCodes.Image.VerifyStarted,
+                OperationalEventOutcome.Started,
+                "Image verification started.");
         await context.SaveChangesAsync(token);
     }
 
@@ -527,11 +603,13 @@ public class ImageDistributionService(
     static TimeSpan RetryDelay(int attemptCount) =>
         TimeSpan.FromSeconds(Math.Min(300, 5 * Math.Pow(2, Math.Clamp(attemptCount - 1, 0, 6))));
 
-    static void QueueCleanup(ImageDistributionRecord record)
+    void QueueCleanup(ImageDistributionRecord record)
     {
         if (record.Status == ImageDistributionStatus.Pulling &&
             record.ClaimOwner is not null && record.ClaimExpiresAt > DateTimeOffset.UtcNow)
             return;
+        var transitioned = record.Operation != ImageDistributionOperation.Cleanup ||
+                           record.Status != ImageDistributionStatus.CleanupPending;
         record.Operation = ImageDistributionOperation.Cleanup;
         record.Status = ImageDistributionStatus.CleanupPending;
         record.Stage = ImageDistributionStage.Queued;
@@ -540,6 +618,15 @@ public class ImageDistributionService(
         record.NextAttemptAt = DateTimeOffset.UtcNow;
         record.ErrorMessage = null;
         record.LastErrorCode = null;
+        record.ErrorCategory = null;
+        record.Retryable = false;
+        record.LastCorrelationId = record.Id;
+        if (transitioned)
+            AppendImageEvent(
+                record,
+                OperationalEventCodes.Image.CleanupQueued,
+                OperationalEventOutcome.Pending,
+                "Image cache cleanup was queued.");
     }
 
     async Task ReleaseReferenceAsync(
@@ -583,21 +670,26 @@ public class ImageDistributionService(
                 continue;
             }
 
-            context.ImageDistributionReferences.Remove(currentReference);
-            await context.SaveChangesAsync(token);
-            if (await context.ImageDistributionReferences.AnyAsync(
-                    item => item.DistributionRecordId == candidate.DistributionRecordId, token))
+            var record = await context.ImageDistributionRecords
+                .Include(item => item.WorkerNode)
+                .Include(item => item.ImageTemplate)
+                .SingleOrDefaultAsync(item => item.Id == candidate.DistributionRecordId, token);
+            if (record is null)
             {
                 if (transaction is not null)
                     await transaction.CommitAsync(token);
                 continue;
             }
 
-            var record = await context.ImageDistributionRecords
-                .Include(item => item.WorkerNode)
-                .Include(item => item.ImageTemplate)
-                .SingleOrDefaultAsync(item => item.Id == candidate.DistributionRecordId, token);
-            if (record is null)
+            context.ImageDistributionReferences.Remove(currentReference);
+            AppendImageEvent(
+                record,
+                OperationalEventCodes.Image.ReferenceReleased,
+                OperationalEventOutcome.Succeeded,
+                "An image distribution reference was released.");
+            await context.SaveChangesAsync(token);
+            if (await context.ImageDistributionReferences.AnyAsync(
+                    item => item.DistributionRecordId == candidate.DistributionRecordId, token))
             {
                 if (transaction is not null)
                     await transaction.CommitAsync(token);
@@ -633,6 +725,13 @@ public class ImageDistributionService(
                     record.Status = ImageDistributionStatus.CleanupPending;
                     record.ErrorMessage = "VM image cache is still referenced by an active VM on this node.";
                     record.LastCheckedAt = DateTimeOffset.UtcNow;
+                    AppendImageEvent(
+                        record,
+                        OperationalEventCodes.Image.CleanupQueued,
+                        OperationalEventOutcome.Blocked,
+                        "Image cache cleanup is waiting for active VM references.",
+                        OperationalEventSeverity.Warning,
+                        detail: ImageDetail(record, "active_vm_reference"));
                     return;
                 }
 
@@ -641,22 +740,45 @@ public class ImageDistributionService(
             }
 
             if (removeOnSuccess)
+            {
+                AppendImageEvent(
+                    record,
+                    OperationalEventCodes.Image.CleanupSucceeded,
+                    OperationalEventOutcome.Succeeded,
+                    "Image cache cleanup completed successfully.");
                 context.ImageDistributionRecords.Remove(record);
+            }
             else
             {
                 record.Status = ImageDistributionStatus.CleanupPending;
                 record.ErrorMessage = null;
                 record.LastCheckedAt = DateTimeOffset.UtcNow;
+                AppendImageEvent(
+                    record,
+                    OperationalEventCodes.Image.CleanupSucceeded,
+                    OperationalEventOutcome.Succeeded,
+                    "Image cache cleanup completed successfully.");
             }
         }
         catch (Exception ex) when (IsDistributionFailure(ex, token))
         {
+            var error = ImageFailure(record, ex);
             record.Status = ImageDistributionStatus.Failed;
             record.Stage = ImageDistributionStage.None;
-            record.LastErrorCode = "image_cleanup_failed";
+            record.LastErrorCode = error.Code;
+            record.ErrorCategory = error.Category;
+            record.Retryable = error.Retryable;
+            record.LastCorrelationId = record.Id;
             record.ErrorMessage = TrimError($"Image cache cleanup failed: {ex.Message}");
             record.NextAttemptAt = DateTimeOffset.UtcNow.Add(RetryDelay(record.AttemptCount));
             record.ProgressUpdatedAt = DateTimeOffset.UtcNow;
+            AppendImageEvent(
+                record,
+                OperationalEventCodes.Image.CleanupFailed,
+                OperationalEventOutcome.Failed,
+                "Image cache cleanup failed.",
+                OperationalEventSeverity.Error,
+                error);
             logger.LogWarning(ex,
                 "Failed to cleanup image template {TemplateId} on node {NodeId}.",
                 record.ImageTemplateId, record.WorkerNodeId);
@@ -711,31 +833,31 @@ public class ImageDistributionService(
         throw new InvalidOperationException($"Image template {template.Name} ({template.Id}) has no image hash.");
     }
 
-    async Task AddReferenceAsync(
+    async Task<bool> AddReferenceAsync(
         ImageDistributionRecord record,
         ImageDistributionReferenceKey? reference,
         CancellationToken token)
     {
         if (reference is not { } key)
-            return;
+            return false;
 
         if (context.Database.IsRelational())
         {
-            await context.Database.ExecuteSqlInterpolatedAsync($$"""
+            var affected = await context.Database.ExecuteSqlInterpolatedAsync($$"""
                 INSERT INTO "ImageDistributionReferences"
                     ("Id", "DistributionRecordId", "Kind", "ResourceId", "CreatedAt")
                 VALUES
                     ({{Guid.CreateVersion7()}}, {{record.Id}}, {{(byte)key.Kind}}, {{key.ResourceId}}, CURRENT_TIMESTAMP)
                 ON CONFLICT ("DistributionRecordId", "Kind", "ResourceId") DO NOTHING
                 """, token);
-            return;
+            return affected > 0;
         }
 
         if (await context.ImageDistributionReferences.AnyAsync(item =>
                 item.DistributionRecordId == record.Id &&
                 item.Kind == key.Kind &&
                 item.ResourceId == key.ResourceId, token))
-            return;
+            return false;
 
         var entity = new ImageDistributionReference
         {
@@ -745,6 +867,7 @@ public class ImageDistributionService(
         };
         record.References.Add(entity);
         context.ImageDistributionReferences.Add(entity);
+        return true;
     }
 
     async Task AcquireDistributionLockAsync(int templateId, Guid nodeId, CancellationToken token)
@@ -759,6 +882,75 @@ public class ImageDistributionService(
 
     bool IsPostgres() =>
         context.Database.ProviderName?.Contains("Npgsql", StringComparison.Ordinal) == true;
+
+    void AppendImageEvent(
+        ImageDistributionRecord record,
+        string eventCode,
+        OperationalEventOutcome outcome,
+        string message,
+        OperationalEventSeverity severity = OperationalEventSeverity.Information,
+        OperationalError? error = null,
+        IReadOnlyDictionary<string, object?>? detail = null) =>
+        events.Append(BuildOperationalEvent(record, eventCode, outcome, message, severity, error, detail));
+
+    internal static OperationalEventDraft BuildOperationalEvent(
+        ImageDistributionRecord record,
+        string eventCode,
+        OperationalEventOutcome outcome,
+        string message,
+        OperationalEventSeverity severity = OperationalEventSeverity.Information,
+        OperationalError? error = null,
+        IReadOnlyDictionary<string, object?>? detail = null) =>
+        new(
+            eventCode,
+            outcome,
+            message,
+            severity,
+            record.Id,
+            error?.Category,
+            error?.Code,
+            error?.Retryable ?? false,
+            detail ?? ImageDetail(record),
+            ImageTemplateId: record.ImageTemplateId,
+            WorkerNodeId: record.WorkerNodeId,
+            SubjectType: "image-distribution",
+            SubjectId: record.Id.ToString(),
+            SubjectDisplayName: record.ImageTemplate?.Name,
+            ResourceType: "image-template",
+            ResourceId: record.ImageTemplateId.ToString(),
+            ResourceDisplayName: record.ImageTemplate?.Name);
+
+    static OperationalError ImageFailure(ImageDistributionRecord record, Exception exception)
+    {
+        var operation = record.Operation == ImageDistributionOperation.Cleanup
+            ? "image.cleanup"
+            : "image.distribute";
+        if (exception is AgentClientException agent)
+            return agent.Error with { WorkerNodeId = record.WorkerNodeId, Operation = operation };
+        return new OperationalError(
+            record.Operation == ImageDistributionOperation.Cleanup
+                ? OperationalErrorCategory.Storage
+                : OperationalErrorCategory.ImageTransfer,
+            record.Operation == ImageDistributionOperation.Cleanup
+                ? OperationalErrorCodes.ImageCleanupFailed
+                : OperationalErrorCodes.ImageTransferFailed,
+            "Image distribution operation failed.",
+            exception is HttpRequestException or IOException or TimeoutException,
+            WorkerNodeId: record.WorkerNodeId,
+            Operation: operation);
+    }
+
+    static IReadOnlyDictionary<string, object?> ImageDetail(
+        ImageDistributionRecord record,
+        string? reasonCode = null) =>
+        new Dictionary<string, object?>
+        {
+            ["imageType"] = record.ImageType.ToString(),
+            ["operation"] = record.Operation.ToString(),
+            ["stage"] = record.Stage.ToString(),
+            ["attempt"] = record.AttemptCount,
+            ["reasonCode"] = reasonCode
+        };
 
     static string TrimError(string message) =>
         message.Length <= 1024 ? message : message[..1024];

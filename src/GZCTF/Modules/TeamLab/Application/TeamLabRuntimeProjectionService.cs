@@ -1,5 +1,6 @@
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Infrastructure.Persistence.Queries;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -76,6 +77,53 @@ public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
                 item.Id, item.Generation, item.Stage, item.Level, item.Message,
                 item.ObjectType, item.ObjectId, item.CreatedAt))
             .ToArrayAsync(cancellationToken);
+    }
+
+    public async Task<OpenTeamLabRuntimeEventPageModel> GetEventsAsync(
+        Guid runtimePublicId,
+        string? after,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var runtime = await context.TeamLabRuntimes.AsNoTracking()
+            .Where(item => item.PublicId == runtimePublicId)
+            .Select(item => new { item.Id, item.Generation })
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw new TeamLabApiContractException("runtime_not_found", "The TeamLab runtime was not found.", 404);
+        var normalizedLimit = Math.Clamp(limit, 1, 100);
+        var cursor = DecodeEventCursor(after);
+        var query = context.TeamLabEvents.AsNoTracking()
+            .Where(item => item.RuntimeId == runtime.Id && item.Generation == runtime.Generation);
+        if (cursor is { } value)
+            query = query.Where(item => item.CreatedAt > value.Time ||
+                                        item.CreatedAt == value.Time && item.Id > value.Id);
+        var rows = await query
+            .OrderBy(item => item.CreatedAt)
+            .ThenBy(item => item.Id)
+            .Take(normalizedLimit + 1)
+            .Select(item => new TeamLabRuntimeEventModel(
+                item.Id, item.Generation, item.Stage, item.Level, item.Message,
+                item.ObjectType, item.ObjectId, item.CreatedAt))
+            .ToArrayAsync(cancellationToken);
+        var page = rows.Take(normalizedLimit).ToArray();
+        var nextCursor = rows.Length > normalizedLimit
+            ? new TimeCursor(page[^1].CreatedAt, page[^1].Cursor).Encode()
+            : null;
+        return new OpenTeamLabRuntimeEventPageModel(page, nextCursor);
+    }
+
+    private static TimeCursor? DecodeEventCursor(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        try
+        {
+            return TimeCursor.Decode(value);
+        }
+        catch (InvalidTimeCursorException)
+        {
+            throw new TeamLabApiContractException(
+                "runtime_event_cursor_invalid", "The pagination cursor is invalid.", 400);
+        }
     }
 
     private static string Stage(TeamLabRuntimeStatus status) => status switch

@@ -17,9 +17,11 @@ import {
   mdiPlus,
   mdiProgressWrench,
   mdiRefresh,
+  mdiTimelineClockOutline,
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router'
 import { AdminPage } from '@Components/admin/AdminPage'
 import { CleanupButton } from '@Components/admin/CleanupButton'
 import { NodeCard, NodeInfo } from '@Components/admin/NodeCard'
@@ -267,6 +269,18 @@ export default function NodesPage() {
                     }}
                     rightSection={
                       <Group gap={4} wrap="nowrap">
+                        <Tooltip label="关联时间线">
+                          <ActionIcon
+                            component={Link}
+                            to={`/admin/logs?tab=events&workerNodeId=${encodeURIComponent(node.id)}`}
+                            color="teal"
+                            variant="subtle"
+                            size="sm"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <Icon path={mdiTimelineClockOutline} size={0.82} />
+                          </ActionIcon>
+                        </Tooltip>
                         {!node.isLocal && (
                           <>
                             <Tooltip label="同步最新版本">

@@ -543,6 +543,9 @@ namespace GZCTF.Migrations
                     b.Property<Guid?>("PublicPortLeaseId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("RuntimeGeneration")
+                        .HasColumnType("integer");
+
                     b.Property<DateTimeOffset>("StartedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -606,6 +609,13 @@ namespace GZCTF.Migrations
                     b.Property<int>("DockerSlots")
                         .HasColumnType("integer");
 
+                    b.Property<byte?>("ErrorCategory")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<string>("ErrorMessage")
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
@@ -645,6 +655,9 @@ namespace GZCTF.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<bool>("Retryable")
+                        .HasColumnType("boolean");
+
                     b.Property<byte>("Stage")
                         .HasColumnType("smallint");
 
@@ -680,6 +693,14 @@ namespace GZCTF.Migrations
 
                     b.Property<int?>("TeamLabRuntimeId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("TraceParent")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("TraceState")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
 
                     b.Property<Guid?>("VmInstanceId")
                         .HasColumnType("uuid");
@@ -1554,6 +1575,9 @@ namespace GZCTF.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<byte?>("ErrorCategory")
+                        .HasColumnType("smallint");
+
                     b.Property<string>("ErrorMessage")
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
@@ -1572,6 +1596,9 @@ namespace GZCTF.Migrations
                     b.Property<DateTimeOffset?>("LastCheckedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("LastCorrelationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("LastErrorCode")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
@@ -1584,6 +1611,9 @@ namespace GZCTF.Migrations
 
                     b.Property<DateTimeOffset?>("ProgressUpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Retryable")
+                        .HasColumnType("boolean");
 
                     b.Property<byte>("Stage")
                         .HasColumnType("smallint");
@@ -1726,6 +1756,24 @@ namespace GZCTF.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<Guid?>("CorrelationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("DeploymentTicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ErrorCategory")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("EventCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<string>("Exception")
                         .HasColumnType("text");
 
@@ -1746,13 +1794,36 @@ namespace GZCTF.Migrations
                     b.Property<IPAddress>("RemoteIP")
                         .HasColumnType("inet");
 
+                    b.Property<string>("ResourceDisplayName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("ResourceId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ResourceType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("Status")
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
+                    b.Property<string>("TraceId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("UserName")
                         .HasMaxLength(15)
                         .HasColumnType("character varying(15)");
+
+                    b.Property<Guid?>("WorkerNodeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("WorkerNodeName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.HasKey("TimeUtc", "Id");
 
@@ -1760,9 +1831,21 @@ namespace GZCTF.Migrations
                         .IsDescending()
                         .HasDatabaseName("IX_Logs_Time_Id");
 
+                    b.HasIndex("CorrelationId", "TimeUtc", "Id")
+                        .IsDescending(false, true, true)
+                        .HasDatabaseName("IX_Logs_Correlation_Time_Id");
+
+                    b.HasIndex("EventCode", "TimeUtc", "Id")
+                        .IsDescending(false, true, true)
+                        .HasDatabaseName("IX_Logs_Event_Time_Id");
+
                     b.HasIndex("Level", "TimeUtc", "Id")
                         .IsDescending(false, true, true)
                         .HasDatabaseName("IX_Logs_Level_Time_Id");
+
+                    b.HasIndex("WorkerNodeId", "TimeUtc", "Id")
+                        .IsDescending(false, true, true)
+                        .HasDatabaseName("IX_Logs_Node_Time_Id");
 
                     b.ToTable("Logs");
                 });
@@ -2221,6 +2304,12 @@ namespace GZCTF.Migrations
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
 
+                    b.Property<Guid?>("ApiOperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AppliedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("ClientAddress")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -2252,6 +2341,10 @@ namespace GZCTF.Migrations
 
                     b.Property<int>("Generation")
                         .HasColumnType("integer");
+
+                    b.Property<string>("ProtectedDownloadToken")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
 
                     b.Property<string>("ProtectedPrivateKey")
                         .IsRequired()
@@ -2289,6 +2382,9 @@ namespace GZCTF.Migrations
                         .HasColumnType("smallint");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ApiOperationId")
+                        .IsUnique();
 
                     b.HasIndex("PublicId")
                         .IsUnique();
@@ -2711,6 +2807,9 @@ namespace GZCTF.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<Guid?>("ApiOperationId")
+                        .HasColumnType("uuid");
+
                     b.Property<long>("CapturedBytes")
                         .HasColumnType("bigint");
 
@@ -2730,10 +2829,6 @@ namespace GZCTF.Migrations
                     b.Property<int>("Generation")
                         .HasColumnType("integer");
 
-                    b.Property<string>("IdempotencyKeyHash")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
                     b.Property<string>("LastError")
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
@@ -2749,10 +2844,6 @@ namespace GZCTF.Migrations
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
-
-                    b.Property<string>("RequestHash")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
 
                     b.Property<int>("RuntimeId")
                         .HasColumnType("integer");
@@ -2784,7 +2875,7 @@ namespace GZCTF.Migrations
 
                     b.HasIndex("ShardId", "Status");
 
-                    b.HasIndex(new[] { "RuntimeId", "Generation", "IdempotencyKeyHash" }, "UX_TeamLabCapture_Idempotency")
+                    b.HasIndex(new[] { "ApiOperationId" }, "UX_TeamLabCapture_ApiOperation")
                         .IsUnique();
 
                     b.ToTable("TeamLabTrafficCaptureJobs");
@@ -4160,6 +4251,13 @@ namespace GZCTF.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("RuntimeGeneration")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RuntimeNativeId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<string>("SnapshotName")
                         .HasColumnType("text");
 
@@ -4636,6 +4734,144 @@ namespace GZCTF.Migrations
                     b.HasIndex("TraceId");
 
                     b.ToTable("ExternalApiRequestAudits", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.Audit.Domain.OperationalEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("ChallengeId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("CourseId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("DeploymentTicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DetailJson")
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)");
+
+                    b.Property<byte?>("ErrorCategory")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("EventCode")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int?>("GameId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ImageTemplateId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte>("Outcome")
+                        .HasColumnType("smallint");
+
+                    b.Property<int?>("OwnerTeamId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("OwnerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResourceDisplayName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("ResourceId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ResourceType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("Retryable")
+                        .HasColumnType("boolean");
+
+                    b.Property<byte>("Severity")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("SubjectDisplayName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("SubjectId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("SubjectType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int?>("TeamLabRuntimeId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TraceId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("VmInstanceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("WorkerNodeId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredAt", "Id")
+                        .IsDescending()
+                        .HasDatabaseName("IX_OperationalEvents_Time_Id");
+
+                    b.HasIndex("CorrelationId", "OccurredAt", "Id")
+                        .HasDatabaseName("IX_OperationalEvents_Correlation_Time_Id");
+
+                    b.HasIndex("CourseId", "OccurredAt", "Id")
+                        .HasDatabaseName("IX_OperationalEvents_Course_Time_Id");
+
+                    b.HasIndex("DeploymentTicketId", "OccurredAt", "Id")
+                        .HasDatabaseName("IX_OperationalEvents_Ticket_Time_Id");
+
+                    b.HasIndex("GameId", "OccurredAt", "Id")
+                        .HasDatabaseName("IX_OperationalEvents_Game_Time_Id");
+
+                    b.HasIndex("ImageTemplateId", "OccurredAt", "Id")
+                        .HasDatabaseName("IX_OperationalEvents_Template_Time_Id");
+
+                    b.HasIndex("OwnerTeamId", "OccurredAt", "Id")
+                        .HasDatabaseName("IX_OperationalEvents_Team_Time_Id");
+
+                    b.HasIndex("WorkerNodeId", "OccurredAt", "Id")
+                        .HasDatabaseName("IX_OperationalEvents_Node_Time_Id");
+
+                    b.HasIndex("EventCode", "Outcome", "OccurredAt", "Id")
+                        .HasDatabaseName("IX_OperationalEvents_Code_Outcome_Time_Id");
+
+                    b.ToTable("OperationalEvents", (string)null);
                 });
 
             modelBuilder.Entity("GZCTF.Modules.Audit.Domain.OperationalLogAggregate", b =>
@@ -5151,9 +5387,15 @@ namespace GZCTF.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("CreatedByOperationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("EditorMetadataJson")
                         .IsRequired()
                         .HasColumnType("jsonb");
+
+                    b.Property<Guid?>("LastMutationOperationId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -5176,6 +5418,12 @@ namespace GZCTF.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedByOperationId")
+                        .IsUnique();
+
+                    b.HasIndex("LastMutationOperationId")
+                        .IsUnique();
 
                     b.HasIndex("OwnerUserId");
 
@@ -5380,6 +5628,9 @@ namespace GZCTF.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ApiOperationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("CanonicalJson")
                         .IsRequired()
                         .HasColumnType("jsonb");
@@ -5408,6 +5659,9 @@ namespace GZCTF.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ApiOperationId")
+                        .IsUnique();
 
                     b.HasIndex("PublishedById");
 
@@ -6591,6 +6845,11 @@ namespace GZCTF.Migrations
 
             modelBuilder.Entity("GZCTF.Models.Data.TeamLabAccessGrant", b =>
                 {
+                    b.HasOne("GZCTF.Modules.Audit.Domain.ApiOperation", null)
+                        .WithMany()
+                        .HasForeignKey("ApiOperationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("GZCTF.Models.Data.TeamLabRuntime", "Runtime")
                         .WithMany("AccessGrants")
                         .HasForeignKey("RuntimeId")
@@ -6730,6 +6989,11 @@ namespace GZCTF.Migrations
 
             modelBuilder.Entity("GZCTF.Models.Data.TeamLabTrafficCaptureJob", b =>
                 {
+                    b.HasOne("GZCTF.Modules.Audit.Domain.ApiOperation", null)
+                        .WithMany()
+                        .HasForeignKey("ApiOperationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("GZCTF.Models.Data.TeamLabRuntimeNetwork", "Network")
                         .WithMany()
                         .HasForeignKey("NetworkId")
@@ -7531,6 +7795,16 @@ namespace GZCTF.Migrations
 
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabTopology", b =>
                 {
+                    b.HasOne("GZCTF.Modules.Audit.Domain.ApiOperation", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByOperationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GZCTF.Modules.Audit.Domain.ApiOperation", null)
+                        .WithMany()
+                        .HasForeignKey("LastMutationOperationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("GZCTF.Models.Data.UserInfo", null)
                         .WithMany()
                         .HasForeignKey("OwnerUserId")
@@ -7596,6 +7870,11 @@ namespace GZCTF.Migrations
 
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabTopologyRelease", b =>
                 {
+                    b.HasOne("GZCTF.Modules.Audit.Domain.ApiOperation", null)
+                        .WithMany()
+                        .HasForeignKey("ApiOperationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("GZCTF.Models.Data.UserInfo", null)
                         .WithMany()
                         .HasForeignKey("PublishedById")

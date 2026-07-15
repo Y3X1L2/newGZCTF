@@ -7,6 +7,9 @@ using System.Threading.Tasks;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
+using GZCTF.Modules.Audit.Infrastructure;
+using GZCTF.Modules.Audit.Domain;
+using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Runtime.Domain;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
@@ -52,6 +55,10 @@ public class ImageDistributionServiceTests
             .Select(record => record.WorkerNodeId).Order().ToArray());
         Assert.All(records, record => Assert.Equal(ImageDistributionStatus.Pending, record.Status));
         Assert.Equal(4, await context.ImageDistributionReferences.CountAsync());
+        Assert.Equal(4, await context.OperationalEvents.CountAsync(item =>
+            item.EventCode == OperationalEventCodes.Image.DistributionQueued));
+        Assert.Equal(4, await context.OperationalEvents.CountAsync(item =>
+            item.EventCode == OperationalEventCodes.Image.ReferenceAttached));
     }
 
     [Fact]
@@ -84,6 +91,13 @@ public class ImageDistributionServiceTests
         Assert.Null(record.ClaimOwner);
         Assert.Null(record.ErrorMessage);
         Assert.Equal(ImageStatus.Ready, template.Status);
+        var eventCodes = await context.OperationalEvents
+            .Where(item => item.CorrelationId == record.Id)
+            .Select(item => item.EventCode)
+            .ToArrayAsync();
+        Assert.Contains(OperationalEventCodes.Image.TransferStarted, eventCodes);
+        Assert.Contains(OperationalEventCodes.Image.VerifyStarted, eventCodes);
+        Assert.Contains(OperationalEventCodes.Image.DistributionReady, eventCodes);
     }
 
     [Fact]
@@ -114,9 +128,11 @@ public class ImageDistributionServiceTests
 
         await context.Entry(record).ReloadAsync();
         Assert.Equal(ImageDistributionStatus.Failed, record.Status);
-        Assert.Equal("image_distribution_failed", record.LastErrorCode);
+        Assert.Equal(OperationalErrorCodes.ImageTransferFailed, record.LastErrorCode);
         Assert.Contains("registry unavailable", record.ErrorMessage);
         Assert.Equal(ImageStatus.Ready, template.Status);
+        Assert.Contains(OperationalEventCodes.Image.DistributionFailed,
+            await context.OperationalEvents.Select(item => item.EventCode).ToArrayAsync());
     }
 
     [Fact]
@@ -223,9 +239,10 @@ public class ImageDistributionServiceTests
         var artifacts = new VmArtifactStore(
             Options.Create(new DockerRegistrySettings { Address = "10.24.0.28:5000", Namespace = "ctf" }),
             vmRegistry.Object, NullLogger<VmArtifactStore>.Instance);
+        var writer = new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance);
         return new ImageDistributionService(context, agent, registry, artifacts,
             new ImageDistributionCoordinator(), new DeploymentExecutionContextAccessor(),
-            NullLogger<ImageDistributionService>.Instance);
+            writer, NullLogger<ImageDistributionService>.Instance);
     }
 
     static ImageDistributionReference Reference(ImageDistributionReferenceKind kind, int resourceId) => new()

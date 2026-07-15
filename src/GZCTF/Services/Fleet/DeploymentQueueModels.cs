@@ -50,7 +50,8 @@ public sealed record DeploymentQueueRequest(
         Guid userId,
         RuntimeOperationKind operation = RuntimeOperationKind.Create,
         Guid? targetNodeId = null,
-        string? resourceDisplayName = null) =>
+        string? resourceDisplayName = null,
+        int generation = 1) =>
         new(DeploymentQueueKind.ChallengeTestContainer, null, userId, gameId, challengeId,
             null, null, operation == RuntimeOperationKind.Create ? 1 : 0, 0,
             SubjectType: "challenge-test-container",
@@ -58,12 +59,14 @@ public sealed record DeploymentQueueRequest(
             SubjectDisplayName: "Challenge test runtime",
             ResourceDisplayName: resourceDisplayName,
             Operation: operation,
+            Generation: generation,
             TargetNodeId: targetNodeId);
 
     public static DeploymentQueueRequest MaintenanceContainer(
         Guid containerId,
         Guid? nodeId,
-        string? displayName = null) =>
+        string? displayName = null,
+        int generation = 1) =>
         new(DeploymentQueueKind.ChallengeTestContainer, null, null, null, null,
             null, null, 0, 0,
             SubjectType: "runtime-container",
@@ -71,6 +74,7 @@ public sealed record DeploymentQueueRequest(
             SubjectDisplayName: "System maintenance",
             ResourceDisplayName: displayName,
             Operation: RuntimeOperationKind.Destroy,
+            Generation: generation,
             TargetNodeId: nodeId);
 
     public static DeploymentQueueRequest Vm(int gameId, Guid userId, int challengeId, Guid vmInstanceId) =>

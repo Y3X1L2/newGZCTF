@@ -241,6 +241,17 @@ public sealed class DatabaseGovernanceMigrationTests : IAsyncLifetime
             .TryAcquireAsync(CancellationToken.None);
         Assert.NotNull(reacquired);
 
+        const long recoveryLeaseKey = 0x475A435446524543;
+        var recoveryLease = await new PostgresGovernanceLease(context)
+            .TryAcquireAsync(recoveryLeaseKey, CancellationToken.None);
+        Assert.NotNull(recoveryLease);
+        Assert.Null(await new PostgresGovernanceLease(secondContext)
+            .TryAcquireAsync(recoveryLeaseKey, CancellationToken.None));
+        await recoveryLease!.DisposeAsync();
+        await using var recoveryReacquired = await new PostgresGovernanceLease(secondContext)
+            .TryAcquireAsync(recoveryLeaseKey, CancellationToken.None);
+        Assert.NotNull(recoveryReacquired);
+
         var terminal = new DeploymentQueueTicket
         {
             Kind = DeploymentQueueKind.GameContainer,

@@ -54,6 +54,8 @@ public sealed record CloudInitSeedFiles(
 public class CreateVmResponse
 {
     public string VmName { get; set; } = string.Empty;
+    public string NativeId { get; set; } = string.Empty;
+    public int Generation { get; set; } = 1;
     public string Status { get; set; } = "Running";
     public string? VncAddress { get; set; }
     public List<VmNetworkInterfaceRequest> Interfaces { get; set; } = [];

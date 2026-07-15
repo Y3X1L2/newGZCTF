@@ -4,11 +4,22 @@ namespace GZCTF.Modules.Audit.Application;
 
 public sealed class ApiOperationService(IApiOperationStore store)
 {
-    public Task<ApiOperation?> GetForTokenAsync(
+    public async Task<ApiOperation?> GetAccessibleAsync(
         Guid id,
         Guid apiTokenId,
-        CancellationToken cancellationToken) =>
-        store.GetForTokenAsync(id, apiTokenId, cancellationToken);
+        Guid actorUserId,
+        bool isAdministrator,
+        bool hasExplicitGrant,
+        CancellationToken cancellationToken)
+    {
+        var operation = await store.GetAsync(id, cancellationToken);
+        if (operation is null)
+            return null;
+        return operation.ApiTokenId == apiTokenId || operation.ActorUserId == actorUserId ||
+               isAdministrator || hasExplicitGrant
+            ? operation
+            : null;
+    }
 
     public Task<IReadOnlyList<ApiOperation>> ClaimAsync(
         string leaseOwner,

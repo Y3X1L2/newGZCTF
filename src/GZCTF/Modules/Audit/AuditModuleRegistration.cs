@@ -1,6 +1,7 @@
 using GZCTF.Infrastructure.Api;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Infrastructure;
+using GZCTF.Modules.Identity.Application;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
 
@@ -13,7 +14,12 @@ public static class AuditModuleRegistration
         services.AddScoped<IApiOperationStore, EfApiOperationStore>();
         services.AddScoped<IdempotencyService>();
         services.AddScoped<ExternalApiAuditContext>();
+        services.AddScoped<OperationalCorrelation>();
         services.AddScoped<ApiOperationService>();
+        services.AddScoped<IOperationalEventWriter, EfOperationalEventWriter>();
+        services.AddScoped<OperationalEventQueryService>();
+        services.AddScoped<IApiTokenResourceGrantPolicy, OperationApiTokenResourceGrantPolicy>();
+        services.AddScoped<AdminMutationAuditFilter>();
         services.AddHostedService<ApiOperationWorker>();
         services.AddSingleton<IAuthorizationMiddlewareResultHandler, ExternalApiAuthorizationResultHandler>();
         return services;

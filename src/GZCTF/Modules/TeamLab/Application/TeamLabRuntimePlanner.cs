@@ -3,8 +3,11 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Diagnostics;
+using GZCTF.Infrastructure.Telemetry;
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +17,8 @@ namespace GZCTF.Modules.TeamLab.Application;
 
 public sealed class TeamLabRuntimePlanner(
     AppDbContext context,
-    TeamLabRuntimeOverlayService overlayService)
+    TeamLabRuntimeOverlayService overlayService,
+    TeamLabEventRecorder eventRecorder)
 {
     public async Task<TeamLabRuntimeCreateResult> CreateAsync(
         CreateTeamLabRuntimeModel command,
@@ -148,6 +152,17 @@ public sealed class TeamLabRuntimePlanner(
         IReadOnlyList<TeamLabRuntimeOverlayModel>? runtimeOverlays,
         CancellationToken cancellationToken)
     {
+        using var activity = PlatformTelemetry.TeamLabActivitySource.StartActivity(
+            "teamlab.plan", ActivityKind.Internal);
+        activity?.SetTag("gzctf.teamlab_runtime_id", runtime.Id);
+        activity?.SetTag("teamlab.generation", runtime.Generation);
+        eventRecorder.Record(
+            runtime,
+            "planning",
+            TeamLabEventLevel.Info,
+            OperationalEventCodes.TeamLab.PlanStarted,
+            OperationalEventOutcome.Started,
+            "TeamLab runtime planning started.");
         var groups = TeamLabAssetPlanner.BuildGroups(definition);
         var groupByNetwork = groups.SelectMany(group => group.NetworkKeys.Select(key => (key, group.Key)))
             .ToDictionary(item => item.key, item => item.Key, StringComparer.Ordinal);
@@ -217,20 +232,16 @@ public sealed class TeamLabRuntimePlanner(
             definition.Assets.Select(item => item.Key).ToHashSet(StringComparer.Ordinal));
         if (envelope is not null) runtime.SecretEnvelopes.Add(envelope);
         runtime.Status = TeamLabRuntimeStatus.Scheduled;
-        runtime.Events.Add(Event(runtime, "planning", TeamLabEventLevel.Success,
-            $"Runtime generation {runtime.Generation} logical network groups compiled; physical nodes will be assigned by the scheduler."));
+        eventRecorder.Record(
+            runtime,
+            "planning",
+            TeamLabEventLevel.Success,
+            OperationalEventCodes.TeamLab.PlanSucceeded,
+            OperationalEventOutcome.Succeeded,
+            $"Runtime generation {runtime.Generation} logical network groups compiled; physical nodes will be assigned by the scheduler.");
         await context.SaveChangesAsync(cancellationToken);
+        activity?.SetStatus(ActivityStatusCode.Ok);
     }
-
-    private static TeamLabEvent Event(TeamLabRuntime runtime, string stage, TeamLabEventLevel level, string message) => new()
-    {
-        RuntimeId = runtime.Id,
-        Generation = runtime.Generation,
-        Stage = stage,
-        Level = level,
-        Message = message,
-        CreatedAt = DateTimeOffset.UtcNow
-    };
 
     private static IPNetwork? Allocate(string poolCidr, int runtimePrefix, IEnumerable<IPNetwork> unavailable)
     {

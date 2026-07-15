@@ -1,9 +1,13 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using GZCTF.Infrastructure.Telemetry;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Services.Fleet;
 using GZCTF.Services.TeamLab;
 using GZCTF.Modules.Runtime.Application;
@@ -24,6 +28,7 @@ public sealed class TeamLabRuntimeOrchestrator(
     TeamLabRuntimeOperationPayloadProtector operationPayloads,
     DeploymentQueueService queue,
     IPublicUdpGatewayProvider publicGateway,
+    TeamLabEventRecorder eventRecorder,
     ILogger<TeamLabRuntimeOrchestrator> logger) : ITeamLabRuntimeApplicationService
 {
     public async Task<TeamLabRuntimeCreateResult> PlanAndEnqueueAsync(
@@ -87,7 +92,13 @@ public sealed class TeamLabRuntimeOrchestrator(
             ProtectedPayload = protectedPayload,
             PayloadHash = payloadHash
         }, cancellationToken);
-        runtime.Events.Add(Event(runtime, "reset", TeamLabEventLevel.Info, "Runtime reset queued."));
+        eventRecorder.Record(
+            runtime,
+            "reset",
+            TeamLabEventLevel.Info,
+            OperationalEventCodes.TeamLab.ResetQueued,
+            OperationalEventOutcome.Pending,
+            "Runtime reset queued.");
         await context.SaveChangesAsync(cancellationToken);
         await LinkOperationAsync(operationId, runtime, queued.TicketId, cancellationToken);
         return new TeamLabRuntimeCreateResult(runtime.Id, runtime.PublicId, false);
@@ -115,18 +126,30 @@ public sealed class TeamLabRuntimeOrchestrator(
         var runtime = await LoadRuntimeAsync(runtimeId, cancellationToken);
         runtime.Status = TeamLabRuntimeStatus.Destroying;
         runtime.IsOpenToPlayers = false;
-        runtime.Events.Add(Event(runtime, "reset", TeamLabEventLevel.Info, "Runtime generation reset started."));
+        using var activity = PlatformTelemetry.TeamLabActivitySource.StartActivity(
+            "teamlab.reset", ActivityKind.Internal);
+        activity?.SetTag("gzctf.teamlab_runtime_id", runtime.Id);
+        activity?.SetTag("teamlab.generation", runtime.Generation);
+        eventRecorder.Record(
+            runtime,
+            "reset",
+            TeamLabEventLevel.Info,
+            OperationalEventCodes.TeamLab.ResetStarted,
+            OperationalEventOutcome.Started,
+            "Runtime generation reset started.");
         await context.SaveChangesAsync(cancellationToken);
         var cleaned = await cleanup.CleanupAsync(runtime, cancellationToken);
         if (!cleaned.Success)
-            return await FailAsync(runtime, cleaned.Message, cancellationToken, cleanupPending: true);
+            return await FailAsync(runtime, cleaned.Message, cancellationToken, cleanupPending: true,
+                OperationalEventCodes.TeamLab.ResetFailed, "reset");
         runtime.Status = TeamLabRuntimeStatus.Destroyed;
         await context.SaveChangesAsync(cancellationToken);
 
         await planner.ResetAsync(runtime.PublicId, command.Overlays, command.ReleaseId, null, cancellationToken);
         var reserved = await placement.BindAndReserveAsync(ticketId, runtime.Id, cancellationToken);
         if (!reserved.Success || reserved.NodeId is not { } entryNodeId)
-            return await FailAsync(runtime, reserved.Message, cancellationToken);
+            return await FailAsync(runtime, reserved.Message, cancellationToken, false,
+                OperationalEventCodes.TeamLab.ResetFailed, "reset");
 
         var ticket = await context.DeploymentQueueTickets.SingleAsync(item => item.Id == ticketId, cancellationToken);
         var replanned = await context.TeamLabRuntimes.Include(item => item.Assets)
@@ -137,12 +160,33 @@ public sealed class TeamLabRuntimeOrchestrator(
         ticket.VmSlots = replanned.Assets.Count(item =>
             item.Generation == replanned.Generation && item.Kind == TeamLabResourceKind.Vm);
         await context.SaveChangesAsync(cancellationToken);
-        return await ExecuteQueuedAsync(runtime.Id, cancellationToken);
+        var resetResult = await ExecuteQueuedAsync(runtime.Id, cancellationToken);
+        if (resetResult.Success)
+        {
+            eventRecorder.Record(
+                runtime,
+                "reset",
+                TeamLabEventLevel.Success,
+                OperationalEventCodes.TeamLab.ResetSucceeded,
+                OperationalEventOutcome.Succeeded,
+                "Runtime reset completed successfully.");
+            await context.SaveChangesAsync(cancellationToken);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+        }
+        else
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, "reset_failed");
+        }
+        return resetResult;
     }
 
     public async Task<TeamLabNodeResult> ExecuteQueuedAsync(int runtimeId, CancellationToken cancellationToken)
     {
         var runtime = await LoadRuntimeAsync(runtimeId, cancellationToken);
+        using var activity = PlatformTelemetry.TeamLabActivitySource.StartActivity(
+            "teamlab.deploy", ActivityKind.Internal);
+        activity?.SetTag("gzctf.teamlab_runtime_id", runtime.Id);
+        activity?.SetTag("teamlab.generation", runtime.Generation);
         if (runtime.Status == TeamLabRuntimeStatus.Running) return TeamLabNodeResult.Ok("Runtime is already running.");
         if (runtime.Status is not TeamLabRuntimeStatus.Scheduled and not TeamLabRuntimeStatus.Deploying)
             return TeamLabNodeResult.Failed($"Runtime cannot deploy from status {runtime.Status}.");
@@ -165,7 +209,13 @@ public sealed class TeamLabRuntimeOrchestrator(
         runtime.Status = TeamLabRuntimeStatus.Deploying;
         runtime.LastError = null;
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
-        runtime.Events.Add(Event(runtime, "deploy", TeamLabEventLevel.Info, "Runtime deployment started."));
+        eventRecorder.Record(
+            runtime,
+            "deploy",
+            TeamLabEventLevel.Info,
+            OperationalEventCodes.TeamLab.DeployStarted,
+            OperationalEventOutcome.Started,
+            "Runtime deployment started.");
         foreach (var shard in runtime.Shards.Where(item => item.Generation == runtime.Generation))
             shard.Status = TeamLabRuntimeStatus.Deploying;
         await context.SaveChangesAsync(cancellationToken);
@@ -190,18 +240,30 @@ public sealed class TeamLabRuntimeOrchestrator(
                 shard.LastError = null;
                 shard.UpdatedAt = DateTimeOffset.UtcNow;
             }
-            runtime.Events.Add(Event(runtime, "ready", TeamLabEventLevel.Success, "Runtime deployment completed."));
+            eventRecorder.Record(
+                runtime,
+                "ready",
+                TeamLabEventLevel.Success,
+                OperationalEventCodes.TeamLab.Ready,
+                OperationalEventOutcome.Succeeded,
+                "Runtime deployment completed.");
             await context.SaveChangesAsync(cancellationToken);
+            activity?.SetStatus(ActivityStatusCode.Ok);
             return TeamLabNodeResult.Ok("Runtime deployment completed.");
         }
         catch (Exception exception) when (exception is TeamLabRuntimeExecutionException or AgentClientException or HttpRequestException or TaskCanceledException)
         {
             logger.LogWarning(exception, "TeamLab runtime {RuntimeId} deployment failed.", runtime.PublicId);
             var cleaned = await cleanup.CleanupAsync(runtime, cancellationToken);
+            activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
+            var error = exception is AgentClientException agentException
+                ? agentException.Error
+                : TeamLabFailure(runtime, "teamlab.deploy");
             return await FailAsync(runtime,
                 cleaned.Success ? exception.Message : $"{exception.Message}; cleanup: {cleaned.Message}",
                 cancellationToken,
-                cleanupPending: !cleaned.Success);
+                cleanupPending: !cleaned.Success,
+                error: error);
         }
     }
 
@@ -241,15 +303,45 @@ public sealed class TeamLabRuntimeOrchestrator(
             return TeamLabNodeResult.Ok("Runtime is already destroyed.");
         runtime.Status = TeamLabRuntimeStatus.Destroying;
         runtime.IsOpenToPlayers = false;
-        runtime.Events.Add(Event(runtime, "destroy", TeamLabEventLevel.Info, "Runtime destruction started."));
+        using var activity = PlatformTelemetry.TeamLabActivitySource.StartActivity(
+            "teamlab.destroy", ActivityKind.Internal);
+        activity?.SetTag("gzctf.teamlab_runtime_id", runtime.Id);
+        eventRecorder.Record(
+            runtime,
+            "destroy",
+            TeamLabEventLevel.Info,
+            OperationalEventCodes.TeamLab.DestroyStarted,
+            OperationalEventOutcome.Started,
+            "Runtime destruction started.");
         await context.SaveChangesAsync(cancellationToken);
         var result = await cleanup.CleanupAsync(runtime, cancellationToken);
         if (result.Success)
         {
             await imageDistribution.ReleaseTeamLabRuntimeReferencesAsync(runtime.Id, cancellationToken);
             runtime.Status = TeamLabRuntimeStatus.Destroyed;
-            runtime.Events.Add(Event(runtime, "destroy", TeamLabEventLevel.Success, "Runtime destroyed."));
+            eventRecorder.Record(
+                runtime,
+                "destroy",
+                TeamLabEventLevel.Success,
+                OperationalEventCodes.TeamLab.DestroySucceeded,
+                OperationalEventOutcome.Succeeded,
+                "Runtime destroyed.");
             await context.SaveChangesAsync(cancellationToken);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+        }
+        else
+        {
+            var error = TeamLabFailure(runtime, "teamlab.destroy");
+            eventRecorder.Record(
+                runtime,
+                "destroy",
+                TeamLabEventLevel.Error,
+                OperationalEventCodes.TeamLab.DestroyFailed,
+                OperationalEventOutcome.Failed,
+                "Runtime destruction failed.",
+                error);
+            await context.SaveChangesAsync(cancellationToken);
+            activity?.SetStatus(ActivityStatusCode.Error, error.Code);
         }
         return result;
     }
@@ -258,13 +350,24 @@ public sealed class TeamLabRuntimeOrchestrator(
         TeamLabRuntime runtime,
         string message,
         CancellationToken cancellationToken,
-        bool cleanupPending = false)
+        bool cleanupPending = false,
+        string eventCode = OperationalEventCodes.TeamLab.DeployFailed,
+        string stage = "deploy",
+        OperationalError? error = null)
     {
         runtime.Status = cleanupPending ? TeamLabRuntimeStatus.CleanupPending : TeamLabRuntimeStatus.Failed;
         runtime.IsOpenToPlayers = false;
         runtime.LastError = Trim(message);
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
-        runtime.Events.Add(Event(runtime, "deploy", TeamLabEventLevel.Error, runtime.LastError));
+        error ??= TeamLabFailure(runtime, $"teamlab.{stage}");
+        eventRecorder.Record(
+            runtime,
+            stage,
+            TeamLabEventLevel.Error,
+            eventCode,
+            OperationalEventOutcome.Failed,
+            stage == "reset" ? "Runtime reset failed." : "Runtime deployment failed.",
+            error);
         await context.SaveChangesAsync(cancellationToken);
         return TeamLabNodeResult.Failed(runtime.LastError);
     }
@@ -304,15 +407,13 @@ public sealed class TeamLabRuntimeOrchestrator(
         await context.SaveChangesAsync(cancellationToken);
     }
 
-    private static TeamLabEvent Event(TeamLabRuntime runtime, string stage, TeamLabEventLevel level, string message) => new()
-    {
-        RuntimeId = runtime.Id,
-        Generation = runtime.Generation,
-        Stage = stage,
-        Level = level,
-        Message = Trim(message),
-        CreatedAt = DateTimeOffset.UtcNow
-    };
+    private static OperationalError TeamLabFailure(TeamLabRuntime runtime, string operation) =>
+        new(
+            OperationalErrorCategory.Network,
+            OperationalErrorCodes.NetworkOperationFailed,
+            "TeamLab runtime operation failed.",
+            true,
+            Operation: operation);
 
     private static string Trim(string value) => value.Length <= 1024 ? value : value[..1024];
 }

@@ -48,6 +48,10 @@
   cursor: pointer;
 }
 
+.virtual {
+  content-visibility: auto;
+}
+
 .overflow {
   scrollbar-width: none;
   overflow-x: scroll;

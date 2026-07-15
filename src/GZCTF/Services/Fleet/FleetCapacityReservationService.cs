@@ -1,7 +1,12 @@
 using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Audit.Domain;
+using GZCTF.Modules.Audit.Infrastructure;
 using GZCTF.Modules.Runtime.Application;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace GZCTF.Services.Fleet;
@@ -48,22 +53,34 @@ public sealed class FleetCapacityReservationService
     readonly NodeCapacitySnapshotService snapshots;
     readonly NodeEligibilityEvaluator eligibility;
     readonly ILogger<FleetCapacityReservationService> logger;
+    readonly IOperationalEventWriter events;
 
     public FleetCapacityReservationService(AppDbContext context, IDistributedLeaseProvider leaseProvider,
         ILogger<FleetCapacityReservationService> logger)
         : this(context, leaseProvider, new NodeCapacitySnapshotService(context),
-            new NodeEligibilityEvaluator(Options.Create(new RuntimeSchedulingOptions())), logger)
+            new NodeEligibilityEvaluator(Options.Create(new RuntimeSchedulingOptions())),
+            new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance), logger)
     {
     }
 
     public FleetCapacityReservationService(AppDbContext context, IDistributedLeaseProvider leaseProvider,
         NodeCapacitySnapshotService snapshots, NodeEligibilityEvaluator eligibility,
         ILogger<FleetCapacityReservationService> logger)
+        : this(context, leaseProvider, snapshots, eligibility,
+            new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance), logger)
+    {
+    }
+
+    public FleetCapacityReservationService(AppDbContext context, IDistributedLeaseProvider leaseProvider,
+        NodeCapacitySnapshotService snapshots, NodeEligibilityEvaluator eligibility,
+        IOperationalEventWriter events,
+        ILogger<FleetCapacityReservationService> logger)
     {
         this.context = context;
         this.leaseProvider = leaseProvider;
         this.snapshots = snapshots;
         this.eligibility = eligibility;
+        this.events = events;
         this.logger = logger;
     }
 
@@ -73,7 +90,8 @@ public sealed class FleetCapacityReservationService
         var dockerSlots = Math.Max(0, request.DockerSlots);
         var vmSlots = Math.Max(0, request.VmSlots);
         if (dockerSlots == 0 && vmSlots == 0)
-            return FleetCapacityReservationResult.Failed("No capacity slots were requested.");
+            return await CapacityBlockedAsync(ticketId, request.PreferredNodeId,
+                "No capacity slots were requested.", token);
 
         await using var lease = await AcquireSchedulerLeaseAsync(token);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, lease.LeaseLost);
@@ -86,9 +104,13 @@ public sealed class FleetCapacityReservationService
         {
             var existingNode = await context.WorkerNodes.FirstOrDefaultAsync(item => item.Id == existing.WorkerNodeId,
                 token);
-            return existingNode is null
-                ? FleetCapacityReservationResult.Failed("Existing reservation references a missing node.")
-                : FleetCapacityReservationResult.Reserved(existingNode, existing.DockerSlots, existing.VmSlots);
+            if (existingNode is null)
+                return await CapacityBlockedAsync(ticketId, existing.WorkerNodeId,
+                    "Existing reservation references a missing node.", token,
+                    OperationalEventCodes.Capacity.Conflict, OperationalErrorCodes.RuntimeIdentityConflict,
+                    OperationalErrorCategory.Conflict, false);
+            return FleetCapacityReservationResult.Reserved(
+                existingNode, existing.DockerSlots, existing.VmSlots);
         }
 
         var candidates = (await snapshots.LoadAsync(token))
@@ -101,10 +123,18 @@ public sealed class FleetCapacityReservationService
             .ToArray();
         var selected = candidates.FirstOrDefault();
         if (selected is null)
-            return FleetCapacityReservationResult.Failed(
-                $"No schedulable node has enough capacity for Docker={dockerSlots}, VM={vmSlots}.");
+            return await CapacityBlockedAsync(ticketId, request.PreferredNodeId,
+                $"No schedulable node has enough capacity for Docker={dockerSlots}, VM={vmSlots}.", token);
 
         context.FleetCapacityReservations.Add(NewReservation(ticketId, selected.Node.Id, dockerSlots, vmSlots));
+        if (await LoadTicketAsync(ticketId, token) is { } ticket)
+            events.Append(RuntimeOperationalEvents.Ticket(
+                ticket,
+                OperationalEventCodes.Capacity.Reserved,
+                OperationalEventOutcome.Succeeded,
+                "Node capacity was reserved for the runtime ticket.",
+                workerNodeId: selected.Node.Id,
+                detail: CapacityDetail(ticket, dockerSlots, vmSlots)));
         await context.SaveChangesAsync(token);
         logger.LogInformation("Reserved capacity for ticket {TicketId} on node {NodeId}: Docker={Docker}, VM={Vm}",
             ticketId, selected.Node.Id, dockerSlots, vmSlots);
@@ -121,7 +151,10 @@ public sealed class FleetCapacityReservationService
             .Where(item => item.DockerSlots > 0 || item.VmSlots > 0)
             .OrderBy(item => item.NodeId).ToArray();
         if (normalized.Length == 0)
+        {
+            await CapacityBlockedAsync(ticketId, null, "No capacity slots were requested.", token);
             return FleetCapacityBatchReservationResult.Failed("No capacity slots were requested.");
+        }
 
         await using var lease = await AcquireSchedulerLeaseAsync(token);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, lease.LeaseLost);
@@ -148,17 +181,36 @@ public sealed class FleetCapacityReservationService
         foreach (var item in normalized)
         {
             if (!nodeSnapshots.TryGetValue(item.NodeId, out var snapshot))
+            {
+                await CapacityBlockedAsync(ticketId, item.NodeId, $"Node {item.NodeId} was not found.", token,
+                    OperationalEventCodes.Capacity.Conflict, OperationalErrorCodes.NodeNotFound,
+                    OperationalErrorCategory.NodeUnavailable, false);
                 return FleetCapacityBatchReservationResult.Failed($"Node {item.NodeId} was not found.");
+            }
             var capability = (item.DockerSlots > 0 ? NodeCapability.Docker : NodeCapability.None) |
                              (item.VmSlots > 0 ? NodeCapability.Kvm : NodeCapability.None);
             if (eligibility.GetReason(snapshot, capability, item.DockerSlots, item.VmSlots, requireTeamLab) is not null)
+            {
+                await CapacityBlockedAsync(ticketId, item.NodeId,
+                    $"Node {snapshot.Node.Name} has insufficient capacity for Docker={item.DockerSlots}, VM={item.VmSlots}.",
+                    token);
                 return FleetCapacityBatchReservationResult.Failed(
                     $"Node {snapshot.Node.Name} has insufficient capacity for Docker={item.DockerSlots}, VM={item.VmSlots}.");
+            }
         }
 
         foreach (var item in normalized)
             context.FleetCapacityReservations.Add(NewReservation(ticketId, item.NodeId, item.DockerSlots,
                 item.VmSlots));
+        if (await LoadTicketAsync(ticketId, token) is { } batchTicket)
+            foreach (var item in normalized)
+                events.Append(RuntimeOperationalEvents.Ticket(
+                    batchTicket,
+                    OperationalEventCodes.Capacity.Reserved,
+                    OperationalEventOutcome.Succeeded,
+                    "Node capacity was reserved for a runtime shard.",
+                    workerNodeId: item.NodeId,
+                    detail: CapacityDetail(batchTicket, item.DockerSlots, item.VmSlots)));
         await context.SaveChangesAsync(token);
         return FleetCapacityBatchReservationResult.Reserved(normalized.Select(item =>
             FleetCapacityReservationResult.Reserved(nodeSnapshots[item.NodeId].Node, item.DockerSlots, item.VmSlots)).ToArray());
@@ -186,6 +238,18 @@ public sealed class FleetCapacityReservationService
             .ToArrayAsync(token);
         if (ticketIds.Length == 0)
             return 0;
+        if (!context.Database.IsRelational())
+        {
+            var reservations = await context.FleetCapacityReservations
+                .Where(item => ticketIds.Contains(item.DeploymentQueueTicketId) &&
+                               item.Status == CapacityReservationStatus.Active)
+                .ToArrayAsync(token);
+            var expiresAt = DateTimeOffset.UtcNow.Add(ReservationLifetime);
+            foreach (var reservation in reservations)
+                reservation.ExpiresAt = expiresAt;
+            await context.SaveChangesAsync(token);
+            return reservations.Length;
+        }
         return await context.FleetCapacityReservations
             .Where(item => ticketIds.Contains(item.DeploymentQueueTicketId) &&
                            item.Status == CapacityReservationStatus.Active)
@@ -196,12 +260,38 @@ public sealed class FleetCapacityReservationService
     public async Task ReconcileReservedAsync(Guid nodeId, CancellationToken token)
     {
         var now = DateTimeOffset.UtcNow;
-        await context.FleetCapacityReservations
+        var expired = await context.FleetCapacityReservations
             .Where(item => item.WorkerNodeId == nodeId && item.Status == CapacityReservationStatus.Active &&
                            item.ExpiresAt <= now)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(item => item.Status, CapacityReservationStatus.Expired)
-                .SetProperty(item => item.ReleasedAt, now), token);
+            .ToArrayAsync(token);
+        if (expired.Length == 0)
+            return;
+        var ticketIds = expired.Select(item => item.DeploymentQueueTicketId).Distinct().ToArray();
+        var tickets = await context.DeploymentQueueTickets
+            .Where(ticket => ticketIds.Contains(ticket.Id))
+            .ToDictionaryAsync(ticket => ticket.Id, token);
+        foreach (var reservation in expired)
+        {
+            reservation.Status = CapacityReservationStatus.Expired;
+            reservation.ReleasedAt = now;
+            if (tickets.TryGetValue(reservation.DeploymentQueueTicketId, out var ticket))
+                events.Append(RuntimeOperationalEvents.Ticket(
+                    ticket,
+                    OperationalEventCodes.Capacity.Expired,
+                    OperationalEventOutcome.Recovered,
+                    "A runtime capacity reservation expired.",
+                    OperationalEventSeverity.Warning,
+                    new OperationalError(
+                        OperationalErrorCategory.Capacity,
+                        OperationalErrorCodes.RuntimeCapacityExhausted,
+                        "Capacity reservation expired.",
+                        true,
+                        WorkerNodeId: nodeId,
+                        Operation: "runtime.capacity.expire"),
+                    nodeId,
+                    CapacityDetail(ticket, reservation.DockerSlots, reservation.VmSlots)));
+        }
+        await context.SaveChangesAsync(token);
     }
 
     async Task FinishReservationAsync(Guid ticketId, Guid nodeId, CapacityReservationStatus status,
@@ -217,6 +307,18 @@ public sealed class FleetCapacityReservationService
             return;
         reservation.Status = status;
         reservation.ReleasedAt = DateTimeOffset.UtcNow;
+        if (await LoadTicketAsync(ticketId, token) is { } ticket)
+            events.Append(RuntimeOperationalEvents.Ticket(
+                ticket,
+                status == CapacityReservationStatus.Confirmed
+                    ? OperationalEventCodes.Capacity.Confirmed
+                    : OperationalEventCodes.Capacity.Released,
+                OperationalEventOutcome.Succeeded,
+                status == CapacityReservationStatus.Confirmed
+                    ? "Runtime capacity reservation was confirmed."
+                    : "Runtime capacity reservation was released.",
+                workerNodeId: nodeId,
+                detail: CapacityDetail(ticket, reservation.DockerSlots, reservation.VmSlots)));
         await context.SaveChangesAsync(token);
     }
 
@@ -232,4 +334,50 @@ public sealed class FleetCapacityReservationService
 
     async ValueTask<IDistributedLease> AcquireSchedulerLeaseAsync(CancellationToken token) =>
         await leaseProvider.AcquireAsync("fleet:scheduler", TimeSpan.FromSeconds(10), cancellationToken: token);
+
+    async Task<DeploymentQueueTicket?> LoadTicketAsync(Guid ticketId, CancellationToken token) =>
+        await context.DeploymentQueueTickets.SingleOrDefaultAsync(ticket => ticket.Id == ticketId, token);
+
+    async Task<FleetCapacityReservationResult> CapacityBlockedAsync(
+        Guid ticketId,
+        Guid? nodeId,
+        string message,
+        CancellationToken token,
+        string eventCode = OperationalEventCodes.Capacity.Blocked,
+        string errorCode = OperationalErrorCodes.RuntimeCapacityExhausted,
+        OperationalErrorCategory category = OperationalErrorCategory.Capacity,
+        bool retryable = true)
+    {
+        if (await LoadTicketAsync(ticketId, token) is { } ticket)
+        {
+            events.Append(RuntimeOperationalEvents.Ticket(
+                ticket,
+                eventCode,
+                eventCode == OperationalEventCodes.Capacity.Conflict
+                    ? OperationalEventOutcome.Failed
+                    : OperationalEventOutcome.Blocked,
+                "Runtime capacity reservation was blocked.",
+                OperationalEventSeverity.Warning,
+                new OperationalError(category, errorCode, message, retryable,
+                    WorkerNodeId: nodeId, Operation: "runtime.capacity.reserve"),
+                nodeId,
+                CapacityDetail(ticket, ticket.DockerSlots, ticket.VmSlots)));
+            await context.SaveChangesAsync(token);
+        }
+        return FleetCapacityReservationResult.Failed(message);
+    }
+
+    static IReadOnlyDictionary<string, object?> CapacityDetail(
+        DeploymentQueueTicket ticket,
+        int dockerSlots,
+        int vmSlots) =>
+        new Dictionary<string, object?>
+        {
+            ["workload"] = ticket.Kind.ToString(),
+            ["operation"] = ticket.Operation.ToString(),
+            ["stage"] = ticket.Stage.ToString(),
+            ["dockerSlots"] = dockerSlots,
+            ["vmSlots"] = vmSlots,
+            ["attempt"] = ticket.AttemptCount
+        };
 }

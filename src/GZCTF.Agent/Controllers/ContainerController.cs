@@ -10,37 +10,32 @@ public class ContainerController : ControllerBase
 {
     private readonly DockerService _docker;
     private readonly AgentOperationGate _gate;
-    private readonly ILogger<ContainerController> _logger;
 
-    public ContainerController(DockerService docker, AgentOperationGate gate, ILogger<ContainerController> logger)
+    public ContainerController(DockerService docker, AgentOperationGate gate)
     {
         _docker = docker;
         _gate = gate;
-        _logger = logger;
     }
 
     [HttpPost("create")]
     public async Task<IActionResult> Create([FromBody] CreateContainerRequest request, CancellationToken token)
     {
-        try
-        {
-            await using var permit = await _gate.EnterAsync(AgentOperationCategory.DockerCreate, token);
-            var result = await _docker.CreateContainerAsync(request, token);
-            if (result is null) return StatusCode(500, new { message = "Container creation failed" });
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Agent container creation failed for image {Image}", request.Image);
-            return StatusCode(500, new { message = ex.Message, type = ex.GetType().Name });
-        }
+        await using var permit = await _gate.EnterAsync(AgentOperationCategory.DockerCreate, token);
+        var result = await _docker.CreateContainerAsync(request, token);
+        return result is null
+            ? throw new AgentOperationException(
+                "Docker", "docker.operation_failed", "Container creation failed.", true)
+            : Ok(result);
     }
 
     [HttpDelete("{containerId}")]
-    public async Task<IActionResult> Destroy(string containerId, CancellationToken token)
+    public async Task<IActionResult> Destroy(
+        string containerId,
+        [FromQuery] int? generation,
+        CancellationToken token)
     {
         await using var permit = await _gate.EnterAsync(AgentOperationCategory.Control, token);
-        await _docker.DestroyContainerAsync(containerId, token);
+        await _docker.DestroyContainerAsync(containerId, token, generation);
         return NoContent();
     }
 
@@ -49,7 +44,7 @@ public class ContainerController : ControllerBase
         CancellationToken token)
     {
         if (request.Command.Count == 0)
-            return BadRequest(new { message = "Command is empty" });
+            throw new ArgumentException("Command is empty.", nameof(request));
 
         var timeout = TimeSpan.FromSeconds(Math.Clamp(request.TimeoutSeconds, 1, 60));
         var result = await _docker.ExecuteContainerCommandAsync(containerId, request.Command, timeout, token);
@@ -69,7 +64,7 @@ public class ContainerController : ControllerBase
         CancellationToken token)
     {
         if (string.IsNullOrWhiteSpace(request.NetworkName) || string.IsNullOrWhiteSpace(request.Cidr))
-            return BadRequest(new { message = "Network name and CIDR are required" });
+            throw new ArgumentException("Network name and CIDR are required.", nameof(request));
 
         await using var permit = await _gate.EnterAsync(AgentOperationCategory.TeamLabNetwork, token);
         var result = await _docker.CreateFabricNetworkAsync(request.NetworkName, request.Cidr, token);

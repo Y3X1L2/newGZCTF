@@ -1,8 +1,7 @@
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Infrastructure.Concurrency;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +13,8 @@ public sealed class TeamLabTrafficApplicationService(
     AppDbContext context,
     ITeamLabNodeExecutor executor,
     IDistributedLeaseProvider locks,
-    ITeamLabTrafficIngestor ingestor)
+    ITeamLabTrafficIngestor ingestor,
+    TeamLabEventRecorder eventRecorder)
 {
     public async Task StartCollectorsAsync(TeamLabRuntime runtime, CancellationToken cancellationToken)
     {
@@ -72,7 +72,20 @@ public sealed class TeamLabTrafficApplicationService(
     public async Task<TeamLabCaptureModel> StartCaptureAsync(
         Guid runtimePublicId,
         CreateTeamLabCaptureModel model,
-        string? idempotencyKey,
+        CancellationToken cancellationToken) =>
+        await StartCaptureCoreAsync(runtimePublicId, model, null, cancellationToken);
+
+    public async Task<TeamLabCaptureModel> StartCaptureForOperationAsync(
+        Guid runtimePublicId,
+        CreateTeamLabCaptureModel model,
+        Guid operationId,
+        CancellationToken cancellationToken) =>
+        await StartCaptureCoreAsync(runtimePublicId, model, operationId, cancellationToken);
+
+    private async Task<TeamLabCaptureModel> StartCaptureCoreAsync(
+        Guid runtimePublicId,
+        CreateTeamLabCaptureModel model,
+        Guid? operationId,
         CancellationToken cancellationToken)
     {
         if (model.MaxSeconds is < 1 or > 86400 || model.MaxBytes is < 1024 or > 10L * 1024 * 1024 * 1024 ||
@@ -81,32 +94,12 @@ public sealed class TeamLabTrafficApplicationService(
         var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
         if (runtime.Status != TeamLabRuntimeStatus.Running)
             throw new TeamLabApiContractException("runtime_not_ready", "The runtime is not ready for capture.", 409);
-        var normalizedKey = NormalizeIdempotencyKey(idempotencyKey);
-        var keyHash = normalizedKey is null ? null : Hash(normalizedKey);
-        var requestHash = keyHash is null ? null : Hash(JsonSerializer.Serialize(model));
-        await using var idempotencyLock = keyHash is null
-            ? null
-            : await locks.AcquireAsync($"teamlab:capture:{runtime.Id}:{runtime.Generation}:{keyHash}",
-                TimeSpan.FromSeconds(10), cancellationToken: cancellationToken);
-        using var leaseCancellation = idempotencyLock is null
-            ? null
-            : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, idempotencyLock.LeaseLost);
-        cancellationToken = leaseCancellation?.Token ?? cancellationToken;
-        if (keyHash is not null)
+        if (operationId is { } operation)
         {
             var existing = await context.TeamLabTrafficCaptureJobs.Include(item => item.Network)
-                .SingleOrDefaultAsync(item =>
-                    item.RuntimeId == runtime.Id &&
-                    item.Generation == runtime.Generation &&
-                    item.IdempotencyKeyHash == keyHash,
-                    cancellationToken);
+                .SingleOrDefaultAsync(item => item.ApiOperationId == operation, cancellationToken);
             if (existing is not null)
             {
-                if (!string.Equals(existing.RequestHash, requestHash, StringComparison.Ordinal))
-                    throw new TeamLabApiContractException(
-                        "idempotency_key_reused",
-                        "The Idempotency-Key was already used with a different capture request.",
-                        409);
                 if (existing.Status != TeamLabTrafficCaptureStatus.Pending)
                     return ToModel(existing, existing.Network?.TopologyKey);
                 return await StartCaptureJobAsync(runtime, existing, existing.Network!, cancellationToken);
@@ -124,10 +117,9 @@ public sealed class TeamLabTrafficApplicationService(
             ShardId = network.ShardId,
             NetworkId = network.Id,
             WorkerNodeId = network.WorkerNodeId,
+            ApiOperationId = operationId,
             Status = TeamLabTrafficCaptureStatus.Pending,
             Scope = model.Scope.Trim(),
-            IdempotencyKeyHash = keyHash,
-            RequestHash = requestHash,
             MaxSeconds = model.MaxSeconds,
             MaxBytes = model.MaxBytes,
             ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(model.ExpiresInSeconds)
@@ -156,8 +148,21 @@ public sealed class TeamLabTrafficApplicationService(
         job.FilePath = result.FilePath;
         job.CapturedBytes = result.CapturedBytes;
         job.LastError = result.Success ? null : result.Message;
+        eventRecorder.Record(
+            runtime,
+            "capture",
+            result.Success ? TeamLabEventLevel.Success : TeamLabEventLevel.Error,
+            result.Success
+                ? OperationalEventCodes.TeamLab.CaptureStarted
+                : OperationalEventCodes.TeamLab.CaptureFailed,
+            result.Success ? OperationalEventOutcome.Started : OperationalEventOutcome.Failed,
+            result.Success ? "Traffic capture started." : "Traffic capture failed to start.",
+            result.Success ? null : CaptureError(workerNodeId),
+            workerNodeId);
         await context.SaveChangesAsync(cancellationToken);
-        if (!result.Success) throw new TeamLabApiContractException("operation_failed", result.Message, 500);
+        if (!result.Success)
+            throw new TeamLabApiContractException(
+                "operation_failed", "The traffic capture could not be started.", 500);
         return ToModel(job, network.TopologyKey);
     }
 
@@ -177,6 +182,15 @@ public sealed class TeamLabTrafficApplicationService(
                 job.Status = TeamLabTrafficCaptureStatus.Failed;
                 job.LastError = result.Message;
                 job.CompletedAt = DateTimeOffset.UtcNow;
+                eventRecorder.Record(
+                    runtime,
+                    "capture",
+                    TeamLabEventLevel.Error,
+                    OperationalEventCodes.TeamLab.CaptureFailed,
+                    OperationalEventOutcome.Failed,
+                    "Traffic capture status check failed.",
+                    CaptureError(nodeId),
+                    nodeId);
             }
             else if (!result.Running)
             {
@@ -206,6 +220,17 @@ public sealed class TeamLabTrafficApplicationService(
         job.FilePath = result.FilePath ?? job.FilePath;
         job.LastError = result.Success ? null : result.Message;
         job.CompletedAt = DateTimeOffset.UtcNow;
+        eventRecorder.Record(
+            runtime,
+            "capture",
+            result.Success ? TeamLabEventLevel.Success : TeamLabEventLevel.Error,
+            result.Success
+                ? OperationalEventCodes.TeamLab.CaptureStopped
+                : OperationalEventCodes.TeamLab.CaptureFailed,
+            result.Success ? OperationalEventOutcome.Succeeded : OperationalEventOutcome.Failed,
+            result.Success ? "Traffic capture stopped." : "Traffic capture failed to stop.",
+            result.Success ? null : CaptureError(job.WorkerNodeId.Value),
+            job.WorkerNodeId.Value);
         await context.SaveChangesAsync(cancellationToken);
         return ToModel(job, job.Network?.TopologyKey);
     }
@@ -329,6 +354,15 @@ public sealed class TeamLabTrafficApplicationService(
         new(job.PublicId, job.Status, job.Scope, networkKey, job.MaxBytes, job.MaxSeconds, job.CapturedBytes,
             job.CreatedAt, job.StartedAt, job.CompletedAt, job.ExpiresAt, job.LastError);
 
+    private static OperationalError CaptureError(Guid workerNodeId) =>
+        new(
+            OperationalErrorCategory.Network,
+            OperationalErrorCodes.NetworkOperationFailed,
+            "TeamLab traffic capture operation failed.",
+            true,
+            WorkerNodeId: workerNodeId,
+            Operation: "teamlab.capture");
+
     private static TimeCursor? DecodeCursor(string? cursor)
     {
         if (string.IsNullOrWhiteSpace(cursor)) return null;
@@ -341,21 +375,5 @@ public sealed class TeamLabTrafficApplicationService(
             throw new TeamLabApiContractException("traffic_cursor_invalid", "The traffic cursor is invalid.", 400);
         }
     }
-
-    private static string? NormalizeIdempotencyKey(string? value)
-    {
-        if (value is null) return null;
-        var normalized = value.Trim();
-        if (normalized.Length is < 1 or > 128 || normalized.Any(character =>
-                !char.IsAsciiLetterOrDigit(character) && character is not '-' and not '_' and not '.'))
-            throw new TeamLabApiContractException(
-                "idempotency_key_invalid",
-                "Idempotency-Key must contain 1-128 ASCII letters, digits, '-', '_' or '.'.",
-                400);
-        return normalized;
-    }
-
-    private static string Hash(string value) =>
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
 }

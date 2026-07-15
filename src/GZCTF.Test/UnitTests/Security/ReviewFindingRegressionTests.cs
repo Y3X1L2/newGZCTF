@@ -1,13 +1,22 @@
 using System;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Infrastructure.Concurrency;
+using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Infrastructure;
+using GZCTF.Modules.Runtime.Application;
+using GZCTF.Modules.Runtime.Infrastructure;
 using GZCTF.Services.Fleet;
 using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Moq;
 using Xunit;
 
 namespace GZCTF.Test.UnitTests.Security;
@@ -115,11 +124,12 @@ public class ReviewFindingRegressionTests
             ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
         });
         await context.SaveChangesAsync();
-        var service = CreateQueueService(context);
+        var service = CreateReconciliationService(context);
 
-        var recovered = await service.RecoverStaleCreatingTicketsAsync(TimeSpan.FromMinutes(10), CancellationToken.None);
+        var recovered = await service.ReconcileAsync(
+            Guid.CreateVersion7(), TimeSpan.FromMinutes(10), CancellationToken.None);
 
-        Assert.Equal(1, recovered);
+        Assert.Equal(1, recovered.ReplayedCount);
         Assert.Equal(DeploymentQueueTicketStatus.Scheduled, ticket.Status);
         Assert.Equal(DeploymentStage.NodeExecutionWaiting, ticket.Stage);
         Assert.Equal(1, ticket.AttemptCount);
@@ -134,6 +144,25 @@ public class ReviewFindingRegressionTests
         var capacity = new FleetCapacityReservationService(context, lockService,
             NullLogger<FleetCapacityReservationService>.Instance);
         return new DeploymentQueueService(context, capacity, NullLogger<DeploymentQueueService>.Instance);
+    }
+
+    static RuntimeFactReconciliationService CreateReconciliationService(AppDbContext context)
+    {
+        var lockService = new LocalDevelopmentLeaseProvider();
+        var writer = new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance);
+        var capacity = new FleetCapacityReservationService(context, lockService,
+            new NodeCapacitySnapshotService(context),
+            new NodeEligibilityEvaluator(Options.Create(new RuntimeSchedulingOptions())),
+            writer,
+            NullLogger<FleetCapacityReservationService>.Instance);
+        var agent = new AgentClient(
+            new Mock<IHttpClientFactory>().Object,
+            new Mock<IServiceScopeFactory>().Object,
+            new ConfigurationBuilder().Build(),
+            NullLogger<AgentClient>.Instance);
+        return new RuntimeFactReconciliationService(context, agent, capacity,
+            new PollingDeploymentQueueWakeup(), writer,
+            NullLogger<RuntimeFactReconciliationService>.Instance);
     }
 
     static AppDbContext CreateContext()

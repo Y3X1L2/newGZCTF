@@ -14,6 +14,7 @@ using TrainingCourseImageTemplateBindingEntity = GZCTF.Modules.Training.Domain.T
 using ImageImportJobEntity = GZCTF.Modules.Content.Domain.ImageImportJob;
 using ChallengeMutationJobEntity = GZCTF.Modules.Ctf.Domain.ChallengeMutationJob;
 using ExternalApiRequestAuditEntity = GZCTF.Modules.Audit.Domain.ExternalApiRequestAudit;
+using OperationalEventEntity = GZCTF.Modules.Audit.Domain.OperationalEvent;
 using TeamLabTopologyEntity = GZCTF.Modules.TeamLab.Domain.TeamLabTopology;
 using TeamLabTopologyNetworkEntity = GZCTF.Modules.TeamLab.Domain.TeamLabTopologyNetwork;
 using TeamLabTopologyAssetEntity = GZCTF.Modules.TeamLab.Domain.TeamLabTopologyAsset;
@@ -78,6 +79,7 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<ApiTokenResourceGrantEntity> ApiTokenResourceGrants { get; set; } = null!;
     public DbSet<ApiOperationEntity> ApiOperations { get; set; } = null!;
     public DbSet<ExternalApiRequestAuditEntity> ExternalApiRequestAudits { get; set; } = null!;
+    public DbSet<OperationalEventEntity> OperationalEvents => Set<OperationalEventEntity>();
     public DbSet<TrainingCourseImageTemplateBindingEntity> TrainingCourseImageTemplateBindings { get; set; } = null!;
     public DbSet<ImageImportJobEntity> ImageImportJobs { get; set; } = null!;
     public DbSet<ChallengeMutationJobEntity> ChallengeMutationJobs { get; set; } = null!;

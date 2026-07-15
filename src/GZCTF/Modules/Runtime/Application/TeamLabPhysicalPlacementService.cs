@@ -1,6 +1,11 @@
+using System.Diagnostics;
 using GZCTF.Infrastructure.Concurrency;
+using GZCTF.Infrastructure.Telemetry;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
+using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Domain;
+using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Services.Fleet;
 using GZCTF.Modules.Runtime.Contracts;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +18,8 @@ public sealed class TeamLabPhysicalPlacementService(
     IDistributedLeaseProvider leaseProvider,
     NodeCapacitySnapshotService snapshots,
     NodeEligibilityEvaluator eligibility,
+    IOperationalEventWriter events,
+    TeamLabEventRecorder teamLabEvents,
     IOptions<TeamLabNetworkConfig> options)
 {
     static readonly TimeSpan ReservationLifetime = TimeSpan.FromMinutes(30);
@@ -21,6 +28,10 @@ public sealed class TeamLabPhysicalPlacementService(
     public async Task<FleetCapacityReservationResult> BindAndReserveAsync(Guid ticketId, int runtimeId,
         CancellationToken token)
     {
+        using var activity = PlatformTelemetry.TeamLabActivitySource.StartActivity(
+            "teamlab.placement", ActivityKind.Internal);
+        activity?.SetTag("gzctf.deployment_ticket_id", ticketId.ToString());
+        activity?.SetTag("gzctf.teamlab_runtime_id", runtimeId);
         await using var lease = await leaseProvider.AcquireAsync("fleet:scheduler", TimeSpan.FromSeconds(10),
             cancellationToken: token);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, lease.LeaseLost);
@@ -137,14 +148,37 @@ public sealed class TeamLabPhysicalPlacementService(
                 ExpiresAt = DateTimeOffset.UtcNow.Add(ReservationLifetime)
             }).ToArray();
         context.FleetCapacityReservations.AddRange(reservations);
-        runtime.Events.Add(new TeamLabEvent
-        {
-            RuntimeId = runtime.Id,
-            Generation = runtime.Generation,
-            Stage = "scheduling",
-            Level = TeamLabEventLevel.Success,
-            Message = $"Physical placement assigned {groups.Length} network group(s) to {shards.Count} node shard(s)."
-        });
+        teamLabEvents.Record(
+            runtime,
+            "scheduling",
+            TeamLabEventLevel.Success,
+            OperationalEventCodes.TeamLab.PlacementSucceeded,
+            OperationalEventOutcome.Succeeded,
+            $"Physical placement assigned {groups.Length} network group(s) to {shards.Count} node shard(s).",
+            detail: new Dictionary<string, object?>
+            {
+                ["generation"] = runtime.Generation,
+                ["stage"] = "scheduling",
+                ["shardCount"] = shards.Count,
+                ["assetCount"] = generationAssets.Length
+            });
+        var ticket = await context.DeploymentQueueTickets.SingleAsync(item => item.Id == ticketId, token);
+        foreach (var reservation in reservations)
+            events.Append(RuntimeOperationalEvents.Ticket(
+                ticket,
+                OperationalEventCodes.Capacity.Reserved,
+                OperationalEventOutcome.Succeeded,
+                "Node capacity was reserved for a TeamLab shard.",
+                workerNodeId: reservation.WorkerNodeId,
+                detail: new Dictionary<string, object?>
+                {
+                    ["workload"] = ticket.Kind.ToString(),
+                    ["operation"] = ticket.Operation.ToString(),
+                    ["stage"] = ticket.Stage.ToString(),
+                    ["dockerSlots"] = reservation.DockerSlots,
+                    ["vmSlots"] = reservation.VmSlots,
+                    ["generation"] = runtime.Generation
+                }));
         await context.SaveChangesAsync(token);
         if (transaction is not null)
             await transaction.CommitAsync(token);
@@ -152,6 +186,7 @@ public sealed class TeamLabPhysicalPlacementService(
         var entryNodeId = entryNetwork.WorkerNodeId.Value;
         var entryNode = candidates.Single(item => item.Node.Id == entryNodeId).Node;
         var entryReservation = reservations.SingleOrDefault(item => item.WorkerNodeId == entryNodeId);
+        activity?.SetStatus(ActivityStatusCode.Ok);
         return FleetCapacityReservationResult.Reserved(entryNode,
             entryReservation?.DockerSlots ?? 0, entryReservation?.VmSlots ?? 0);
     }
@@ -184,6 +219,23 @@ public sealed class TeamLabPhysicalPlacementService(
             VmSlots = item.VmSlots,
             ExpiresAt = DateTimeOffset.UtcNow.Add(ReservationLifetime)
         }));
+        var ticket = await context.DeploymentQueueTickets.SingleAsync(item => item.Id == ticketId, token);
+        foreach (var item in items)
+            events.Append(RuntimeOperationalEvents.Ticket(
+                ticket,
+                OperationalEventCodes.Capacity.Reserved,
+                OperationalEventOutcome.Succeeded,
+                "Node capacity was reserved for an existing TeamLab shard assignment.",
+                workerNodeId: item.NodeId,
+                detail: new Dictionary<string, object?>
+                {
+                    ["workload"] = ticket.Kind.ToString(),
+                    ["operation"] = ticket.Operation.ToString(),
+                    ["stage"] = ticket.Stage.ToString(),
+                    ["dockerSlots"] = item.DockerSlots,
+                    ["vmSlots"] = item.VmSlots,
+                    ["generation"] = runtime.Generation
+                }));
         await context.SaveChangesAsync(token);
         var entryNodeId = runtime.Shards.Single(item => item.Id == runtime.EntryShardId).WorkerNodeId;
         var entry = items.First(item => item.NodeId == entryNodeId);

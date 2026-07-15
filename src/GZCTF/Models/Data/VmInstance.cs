@@ -16,6 +16,8 @@ public class VmInstance
     public int ChallengeId { get; set; }
     public Guid UserId { get; set; }
     public string VmName { get; set; } = string.Empty;
+    public int RuntimeGeneration { get; set; } = 1;
+    [MaxLength(128)] public string? RuntimeNativeId { get; set; }
     public string ProviderName { get; set; } = string.Empty;
     public OSType OSType { get; set; } = OSType.Windows;
     public VmInstanceStatus Status { get; set; } = VmInstanceStatus.Creating;

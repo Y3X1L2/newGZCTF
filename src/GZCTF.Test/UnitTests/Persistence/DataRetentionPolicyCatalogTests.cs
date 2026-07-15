@@ -15,7 +15,7 @@ public sealed class DataRetentionPolicyCatalogTests
         string[] expected =
         [
             "participation", "submission", "training-progress", "theory-answer",
-            "awdp-competition", "system-log", "teamlab-flow", "teamlab-flow-aggregate",
+            "awdp-competition", "system-log", "operational-event", "teamlab-flow", "teamlab-flow-aggregate",
             "deployment-ticket", "api-operation", "teamlab-event", "governance-run",
             "worker-node-metric"
         ];

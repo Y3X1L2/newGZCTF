@@ -13,6 +13,7 @@ public sealed class DeploymentQueueListResult
 public sealed class DeploymentQueueItemModel
 {
     public Guid Id { get; set; }
+    public Guid CorrelationId { get; set; }
     public DeploymentQueueKind Kind { get; set; }
     public RuntimeOperationKind Operation { get; set; }
     public DeploymentStage Stage { get; set; }
@@ -148,6 +149,7 @@ public sealed class DeploymentQueueViewService(AppDbContext context)
         return new DeploymentQueueItemModel
         {
             Id = ticket.Id,
+            CorrelationId = ticket.Id,
             Kind = ticket.Kind,
             Operation = ticket.Operation,
             Stage = ticket.Stage,

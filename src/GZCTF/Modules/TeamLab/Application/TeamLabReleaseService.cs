@@ -11,8 +11,16 @@ public sealed class TeamLabReleaseService(AppDbContext context, TeamLabTopologyV
         TeamLabTopology topology,
         int expectedRevision,
         Guid actorUserId,
+        Guid? operationId,
         CancellationToken cancellationToken)
     {
+        if (operationId is { } operation)
+        {
+            var applied = await context.TeamLabTopologyReleases.AsNoTracking()
+                .SingleOrDefaultAsync(item => item.ApiOperationId == operation, cancellationToken);
+            if (applied is not null)
+                return ToModel(applied, topology.PublicId);
+        }
         if (topology.Revision != expectedRevision)
             throw new TeamLabApiContractException(
                 "topology_revision_conflict",
@@ -48,7 +56,8 @@ public sealed class TeamLabReleaseService(AppDbContext context, TeamLabTopologyV
             SchemaVersion = topology.SchemaVersion,
             CanonicalJson = canonicalJson,
             ContentHash = contentHash,
-            PublishedById = actorUserId
+            PublishedById = actorUserId,
+            ApiOperationId = operationId
         };
         context.TeamLabTopologyReleases.Add(release);
         await context.SaveChangesAsync(cancellationToken);

@@ -1,4 +1,8 @@
+using GZCTF.Infrastructure.Telemetry;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,6 +14,8 @@ public sealed class RuntimeSchedulingService(
     RuntimeQueueSelector selector,
     TeamLabPhysicalPlacementService teamLabPlacement,
     IDeploymentQueueWakeup wakeup,
+    IOperationalEventWriter events,
+    OperationalCorrelation correlation,
     ILogger<RuntimeSchedulingService> logger)
 {
     static readonly TimeSpan ClaimTimeout = TimeSpan.FromMinutes(2);
@@ -31,7 +37,16 @@ public sealed class RuntimeSchedulingService(
             var claimOwner = ticket.ClaimOwner;
             if (string.IsNullOrWhiteSpace(claimOwner))
                 continue;
+            using var correlationScope = correlation.Begin(ticket.Id);
+            using var activity = RuntimeOperationalEvents.StartActivity(ticket, "runtime.schedule");
             ticket.Stage = DeploymentStage.AdmissionChecking;
+            events.Append(RuntimeOperationalEvents.Ticket(
+                ticket,
+                OperationalEventCodes.Runtime.SchedulingStarted,
+                OperationalEventOutcome.Started,
+                "Runtime scheduling started."));
+            await context.SaveChangesAsync(token);
+            PlatformTelemetry.RecordRuntimeTransition(ticket.Kind.ToString(), ticket.Stage.ToString(), "started");
 
             if (!await IsTicketStillDeployableAsync(ticket, token))
             {
@@ -44,7 +59,13 @@ public sealed class RuntimeSchedulingService(
                 ticket.Stage = DeploymentStage.Cancelled;
                 ticket.CompletedAt = DateTimeOffset.UtcNow;
                 ticket.ErrorMessage = "Deployment queue ticket is not deployable anymore.";
+                events.Append(RuntimeOperationalEvents.Ticket(
+                    ticket,
+                    OperationalEventCodes.Runtime.TicketCancelled,
+                    OperationalEventOutcome.Cancelled,
+                    "Runtime scheduling cancelled a non-deployable ticket."));
                 await context.SaveChangesAsync(token);
+                activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error, "not_deployable");
                 continue;
             }
 
@@ -64,7 +85,35 @@ public sealed class RuntimeSchedulingService(
                 ticket.NotBeforeAt = DateTimeOffset.UtcNow.AddSeconds(Math.Min(30, 1 << Math.Min(5, ticket.AttemptCount)));
                 ticket.ClaimOwner = null;
                 ticket.ClaimExpiresAt = null;
+                var error = new OperationalError(
+                    OperationalErrorCategory.Capacity,
+                    OperationalErrorCodes.RuntimeCapacityExhausted,
+                    "No eligible node currently has sufficient capacity.",
+                    true,
+                    WorkerNodeId: ticket.TargetNodeId,
+                    Operation: "runtime.schedule");
+                ticket.ErrorCategory = error.Category;
+                ticket.ErrorCode = error.Code;
+                ticket.Retryable = error.Retryable;
+                events.Append(RuntimeOperationalEvents.Ticket(
+                    ticket,
+                    OperationalEventCodes.Runtime.SchedulingBlocked,
+                    OperationalEventOutcome.Blocked,
+                    "Runtime scheduling is waiting for node capacity.",
+                    OperationalEventSeverity.Warning,
+                    error,
+                    detail: new Dictionary<string, object?>
+                    {
+                        ["workload"] = ticket.Kind.ToString(),
+                        ["operation"] = ticket.Operation.ToString(),
+                        ["stage"] = ticket.Stage.ToString(),
+                        ["attempt"] = ticket.AttemptCount,
+                        ["dockerSlots"] = ticket.DockerSlots,
+                        ["vmSlots"] = ticket.VmSlots,
+                        ["reasonCode"] = ticket.BlockedReasonCode
+                    }));
                 await context.SaveChangesAsync(token);
+                PlatformTelemetry.RecordRuntimeTransition(ticket.Kind.ToString(), ticket.Stage.ToString(), "blocked");
                 continue;
             }
 
@@ -78,7 +127,17 @@ public sealed class RuntimeSchedulingService(
             ticket.ClaimExpiresAt = null;
             ticket.AssignedAt ??= DateTimeOffset.UtcNow;
             ticket.ErrorMessage = null;
+            ticket.ErrorCategory = null;
+            ticket.ErrorCode = null;
+            ticket.Retryable = false;
+            events.Append(RuntimeOperationalEvents.Ticket(
+                ticket,
+                OperationalEventCodes.Runtime.SchedulingAssigned,
+                OperationalEventOutcome.Succeeded,
+                "Runtime scheduling assigned a worker node.",
+                workerNodeId: nodeId));
             await context.SaveChangesAsync(token);
+            PlatformTelemetry.RecordRuntimeTransition(ticket.Kind.ToString(), ticket.Stage.ToString(), "assigned");
             await wakeup.NotifyAsync(ticket.Id, token);
             scheduled++;
 

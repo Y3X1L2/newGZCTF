@@ -2,9 +2,11 @@ using System.Net.Mime;
 using GZCTF.Composition;
 using GZCTF.Middlewares;
 using GZCTF.Modules.Identity.Infrastructure;
+using GZCTF.Modules.Audit.Infrastructure;
 using GZCTF.Infrastructure.Api;
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Infrastructure.Concurrency;
+using GZCTF.Infrastructure.Telemetry;
 using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.Runtime.Infrastructure;
 using GZCTF.Models.Internal;
@@ -149,6 +151,7 @@ internal static class ServicesExtension
             builder.Services.AddScoped<DeploymentExecutionContextAccessor>();
             builder.Services.AddScoped<DeploymentExecutionService>();
             builder.Services.AddScoped<RuntimeSchedulingService>();
+            builder.Services.AddScoped<RuntimeFactReconciliationService>();
             builder.Services.AddSingleton<RuntimeExecutionService>();
             builder.Services.AddSingleton<NodeDispatchLimiter>();
             builder.Services.AddSingleton<ImageDistributionCoordinator>();
@@ -157,13 +160,17 @@ internal static class ServicesExtension
             builder.Services.AddHostedService<ImageDistributionReconcileService>();
             builder.Services.AddHostedService<FleetHealthCheckService>();
             builder.Services.AddHostedService<RuntimeSchedulingWorker>();
+            builder.Services.AddHostedService<RuntimeRecoveryWorker>();
             builder.Services.AddHostedService<RuntimeExecutionWorker>();
+            builder.Services.AddHostedService<RuntimeTelemetrySnapshotWorker>();
 
 #pragma warning disable EXTEXP0001
+            builder.Services.AddTransient<AgentTelemetryHandler>();
             builder.Services.AddHttpClient("Agent", client =>
                 {
                     client.Timeout = TimeSpan.FromMinutes(10);
                 })
+                .AddHttpMessageHandler<AgentTelemetryHandler>()
                 .RemoveAllResilienceHandlers();
 #pragma warning restore EXTEXP0001
             builder.Services.AddSingleton<AgentClient>();
@@ -212,7 +219,9 @@ internal static class ServicesExtension
                 options.EnableForHttps = true;
             });
 
-            builder.Services.AddControllersWithViews().ConfigureApiBehaviorOptions(options =>
+            builder.Services.AddControllersWithViews()
+                .AddMvcOptions(options => options.Filters.AddService<AdminMutationAuditFilter>())
+                .ConfigureApiBehaviorOptions(options =>
             {
                 options.InvalidModelStateResponseFactory = InvalidModelStateHandler;
             }).AddDataAnnotationsLocalization(options =>
