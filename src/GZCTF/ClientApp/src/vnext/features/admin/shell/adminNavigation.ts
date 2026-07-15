@@ -16,21 +16,21 @@ export interface AdminNavigationGroup {
 export const adminNavigation: AdminNavigationGroup[] = [
   {
     label: '概览',
-    items: [{ id: 'dashboard', label: '运行概览', route: '/admin/dashboard', icon: CircleGauge, implemented: false }],
+    items: [{ id: 'dashboard', label: '运行概览', route: '/admin/dashboard', icon: CircleGauge, implemented: true }],
   },
   {
     label: '资源',
     items: [
       { id: 'images', label: '环境模板', route: '/admin/images', icon: Boxes, implemented: true },
-      { id: 'instances', label: '运行实例', route: '/admin/instances', icon: Activity, implemented: false },
+      { id: 'instances', label: '运行实例', route: '/admin/instances', icon: Activity, implemented: true },
     ],
   },
   {
     label: '运维',
     items: [
       { id: 'nodes', label: '节点管理', route: '/admin/nodes', icon: Server, implemented: true },
-      { id: 'queue', label: '部署队列', route: '/admin/queue', icon: ListTodo, implemented: false },
-      { id: 'logs', label: '系统日志', route: '/admin/logs', icon: FileClock, implemented: false },
+      { id: 'queue', label: '部署队列', route: '/admin/queue', icon: ListTodo, implemented: true },
+      { id: 'logs', label: '系统日志', route: '/admin/logs', icon: FileClock, implemented: true },
     ],
   },
   {

@@ -81,6 +81,18 @@ const AdminNodesPage = lazy(() =>
 const AdminNodeDetailPage = lazy(() =>
   import('../features/admin/nodes/AdminNodeDetailPage').then((module) => ({ default: module.AdminNodeDetailPage }))
 )
+const AdminQueuePage = lazy(() =>
+  import('../features/admin/queue/AdminQueuePage').then((module) => ({ default: module.AdminQueuePage }))
+)
+const AdminInstancesPage = lazy(() =>
+  import('../features/admin/instances/AdminInstancesPage').then((module) => ({ default: module.AdminInstancesPage }))
+)
+const AdminLogsPage = lazy(() =>
+  import('../features/admin/logs/AdminLogsPage').then((module) => ({ default: module.AdminLogsPage }))
+)
+const AdminDashboardPage = lazy(() =>
+  import('../features/admin/dashboard/AdminDashboardPage').then((module) => ({ default: module.AdminDashboardPage }))
+)
 
 export function VNextApp() {
   return (
@@ -122,14 +134,14 @@ export function VNextApp() {
           <Route path="account/profile" element={<Navigate replace to="/settings/profile" />} />
           <Route path="account/settings" element={<Navigate replace to="/settings/security" />} />
           <Route path="admin" element={<AdminShell />}>
-            <Route index element={<Navigate replace to="images" />} />
-            <Route path="dashboard" element={<AdminPendingPage />} />
+            <Route index element={<Navigate replace to="dashboard" />} />
+            <Route path="dashboard" element={<AdminDashboardPage />} />
             <Route path="images" element={<AdminImagesPage />} />
             <Route path="nodes" element={<AdminNodesPage />} />
             <Route path="nodes/:nodeId" element={<AdminNodeDetailPage />} />
-            <Route path="instances" element={<AdminPendingPage />} />
-            <Route path="queue" element={<AdminPendingPage />} />
-            <Route path="logs" element={<AdminPendingPage />} />
+            <Route path="instances" element={<AdminInstancesPage />} />
+            <Route path="queue" element={<AdminQueuePage />} />
+            <Route path="logs" element={<AdminLogsPage />} />
             <Route path="system" element={<AdminPendingPage />} />
             <Route path="*" element={<AdminPendingPage />} />
           </Route>
