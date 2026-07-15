@@ -6,9 +6,12 @@
   "scripts": {
     "dev": "vite",
     "lint": "oxlint --fix",
+    "lint:check": "oxlint --deny-warnings src/vnext",
     "check": "tsc --noEmit --strict --project tsconfig.app.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "validate:locales": "node scripts/validate-locales.mjs",
-    "build": "pnpm validate:locales && pnpm check && pnpm check:architecture && vite build && node scripts/create-artifact-manifest.mjs && node scripts/check-bundle-budget.mjs",
+    "build": "pnpm validate:locales && pnpm lint:check && pnpm check && pnpm check:architecture && pnpm test && vite build && node scripts/create-artifact-manifest.mjs && node scripts/check-bundle-budget.mjs",
     "build:artifact": "pnpm build",
     "check:architecture": "node scripts/check-frontend-architecture.mjs",
     "check:bundle": "node scripts/check-bundle-budget.mjs",
@@ -46,6 +49,7 @@
     "chroma-js": "^3.2.0",
     "clsx": "^2.1.1",
     "dayjs": "^1.11.20",
+    "dompurify": "^3.3.3",
     "echarts": "^6.0.0",
     "embla-carousel": "^8.6.0",
     "embla-carousel-autoplay": "^8.6.0",
@@ -77,6 +81,9 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@trivago/prettier-plugin-sort-imports": "^6.0.2",
     "@types/chroma-js": "^3.1.2",
     "@types/katex": "^0.16.8",
@@ -89,6 +96,7 @@
     "@vitejs/plugin-react": "^6.0.1",
     "babel-plugin-prismjs": "^2.1.0",
     "esbuild": "^0.28.0",
+    "jsdom": "^29.1.1",
     "oxlint": "^1.58.0",
     "postcss": "^8.5.8",
     "postcss-preset-mantine": "^1.18.0",
@@ -103,6 +111,7 @@
     "vite-plugin-banner": "^0.8.1",
     "vite-plugin-optimize-css-modules": "^1.4.0",
     "vite-plugin-pages": "^0.33.3",
-    "vite-plugin-webfont-dl": "^3.12.0"
+    "vite-plugin-webfont-dl": "^3.12.0",
+    "vitest": "^4.1.10"
   }
 }

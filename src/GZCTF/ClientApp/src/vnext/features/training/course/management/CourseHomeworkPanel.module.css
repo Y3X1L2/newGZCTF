@@ -1,0 +1,91 @@
+.panel {
+  display: grid;
+  min-width: 0;
+  gap: var(--yn-space-5);
+}
+
+.panel > header > span {
+  color: var(--yn-color-brand-strong);
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+}
+
+.panel h2 {
+  margin: 5px 0 0;
+  font-size: var(--yn-font-xl);
+}
+
+.panel p {
+  margin: 6px 0 0;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-sm);
+}
+
+.homeworkList {
+  display: grid;
+  border-top: 1px solid var(--yn-color-border);
+}
+
+.homeworkList article {
+  display: grid;
+  min-width: 0;
+  min-height: 78px;
+  grid-template-columns: 44px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--yn-space-4);
+  border-bottom: 1px solid var(--yn-color-border);
+}
+
+.chapterNumber {
+  color: var(--yn-color-muted);
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-sm);
+}
+
+.homeworkList article > div {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.homeworkList small {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.homeworkList a {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-sm);
+  font-weight: 650;
+}
+
+.homeworkList a:hover {
+  border-color: var(--yn-color-brand);
+  background: var(--yn-color-brand-soft);
+  color: var(--yn-color-brand-strong);
+}
+
+@media (max-width: 680px) {
+  .homeworkList article {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    padding: var(--yn-space-3) 0;
+  }
+
+  .homeworkList article > span:nth-of-type(2) {
+    display: none;
+  }
+
+  .homeworkList a {
+    width: 38px;
+    padding: 0;
+    justify-content: center;
+    font-size: 0;
+  }
+}

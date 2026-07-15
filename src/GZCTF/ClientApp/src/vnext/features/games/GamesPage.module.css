@@ -1,0 +1,312 @@
+.page {
+  width: min(100%, var(--yn-page-max-width));
+  min-height: calc(100vh - var(--yn-context-height));
+  margin: 0 auto;
+  padding: var(--yn-space-8) var(--yn-page-gutter) 80px;
+}
+
+.resultCount {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-sm);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yn-space-5);
+  padding: var(--yn-space-5) 0;
+}
+
+.searchBox {
+  display: flex;
+  width: min(100%, 420px);
+  min-height: 42px;
+  align-items: center;
+  gap: var(--yn-space-3);
+  padding: 0 var(--yn-space-4);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-muted);
+  transition: border-color var(--yn-motion-fast) var(--yn-ease-standard);
+}
+
+.searchBox:focus-within {
+  border-color: var(--yn-color-border-strong);
+}
+
+.searchBox input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--yn-color-text);
+  font-size: var(--yn-font-sm);
+}
+
+.searchBox input:focus-visible {
+  box-shadow: none;
+}
+
+.searchBox input::placeholder {
+  color: var(--yn-color-muted);
+}
+
+.statusFilters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.filter,
+.filterActive {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: transparent;
+  color: var(--yn-color-muted);
+  cursor: pointer;
+  font-size: var(--yn-font-xs);
+  transition:
+    border-color var(--yn-motion-fast) var(--yn-ease-standard),
+    background-color var(--yn-motion-fast) var(--yn-ease-standard),
+    color var(--yn-motion-fast) var(--yn-ease-standard);
+}
+
+.filter span,
+.filterActive span {
+  font-family: var(--yn-font-mono);
+}
+
+.filter:hover,
+.filterActive {
+  border-color: var(--yn-color-control-strong);
+  background: var(--yn-color-control-strong);
+  color: var(--yn-color-control-strong-text);
+}
+
+.gameList {
+  border-top: 1px solid var(--yn-color-border);
+}
+
+.gameList article {
+  border-bottom: 1px solid var(--yn-color-border);
+}
+
+.gameRow {
+  display: grid;
+  min-height: 116px;
+  grid-template-columns: 38px 104px minmax(280px, 1fr) minmax(280px, auto) 22px;
+  align-items: center;
+  gap: var(--yn-space-5);
+  padding: var(--yn-space-3) 0;
+  transition:
+    background-color var(--yn-motion-fast) var(--yn-ease-standard),
+    padding var(--yn-motion-fast) var(--yn-ease-standard);
+}
+
+.gameRow:hover {
+  padding-right: var(--yn-space-3);
+  padding-left: var(--yn-space-3);
+  background: var(--yn-color-surface);
+}
+
+.rowIndex {
+  color: var(--yn-color-border-strong);
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-sm);
+}
+
+.poster {
+  width: 104px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-game-ongoing);
+}
+
+.gameMain {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--yn-space-2);
+}
+
+.gameTitleLine {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--yn-space-3);
+}
+
+.gameTitleLine h2 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gameMain p {
+  margin: 0;
+  overflow: hidden;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gameMeta {
+  display: grid;
+  gap: var(--yn-space-2);
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.gameMeta > span {
+  display: flex;
+  align-items: center;
+  gap: var(--yn-space-2);
+  white-space: nowrap;
+}
+
+.rowArrow {
+  color: var(--yn-color-muted);
+  transition: transform var(--yn-motion-fast) var(--yn-ease-standard);
+}
+
+.gameRow:hover .rowArrow {
+  color: var(--yn-color-brand);
+  transform: translateX(2px);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--yn-space-3);
+  margin-top: var(--yn-space-6);
+}
+
+.pagination button {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+  cursor: pointer;
+}
+
+.pagination button:hover:not(:disabled) {
+  border-color: var(--yn-color-border-strong);
+  color: var(--yn-color-brand);
+}
+
+.pagination span {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+@media (max-width: 1120px) {
+  .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .searchBox {
+    width: 100%;
+    max-width: none;
+  }
+
+  .statusFilters {
+    justify-content: flex-start;
+  }
+
+  .gameRow {
+    grid-template-columns: 32px 92px minmax(260px, 1fr) 22px;
+  }
+
+  .poster {
+    width: 92px;
+  }
+
+  .gameMeta {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .page {
+    padding-top: var(--yn-space-6);
+  }
+
+  .statusFilters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filter,
+  .filterActive {
+    justify-content: space-between;
+  }
+
+  .gameRow {
+    min-height: 104px;
+    grid-template-columns: 82px minmax(0, 1fr) 20px;
+    gap: var(--yn-space-3);
+  }
+
+  .rowIndex {
+    display: none;
+  }
+
+  .poster {
+    width: 82px;
+  }
+
+  .gameTitleLine {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .gameTitleLine h2 {
+    width: 100%;
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 460px) {
+  .gameRow {
+    grid-template-columns: 66px minmax(0, 1fr) 18px;
+  }
+
+  .poster {
+    width: 66px;
+  }
+
+  .gameMain p {
+    display: none;
+  }
+
+  .pagination {
+    justify-content: center;
+  }
+}

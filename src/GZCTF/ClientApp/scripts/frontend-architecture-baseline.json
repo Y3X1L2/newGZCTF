@@ -2,6 +2,10 @@
   "maxInlineStyles": 208,
   "maxYinyuClassReferences": 862,
   "maxGlobalCssLines": 13727,
+  "vnext": {
+    "maxInlineStyles": 0,
+    "maxTsxLines": 650
+  },
   "pageLineBudgets": {
     "src/pages/training/courses/[courseId]/Index.tsx": 10,
     "src/pages/admin/games/[id]/Penetration.tsx": 10,

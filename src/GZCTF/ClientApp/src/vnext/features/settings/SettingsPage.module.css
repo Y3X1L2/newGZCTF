@@ -1,0 +1,412 @@
+.page {
+  width: min(var(--yn-page-max-width), 100%);
+  margin: 0 auto;
+  padding: var(--yn-space-8) var(--yn-page-gutter) 80px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: clamp(28px, 5vw, 72px);
+  margin-top: var(--yn-space-7);
+  align-items: start;
+}
+
+.sideNav {
+  position: sticky;
+  top: calc(var(--yn-context-height) + 24px);
+  display: grid;
+  gap: 4px;
+}
+
+.sideLink,
+.sideLinkActive,
+.backHome {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border-left: 2px solid transparent;
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-sm);
+}
+
+.sideLink:hover,
+.sideLinkActive {
+  background: var(--yn-color-surface-muted);
+  color: var(--yn-color-text);
+}
+
+.sideLinkActive {
+  border-left-color: var(--yn-color-brand);
+}
+
+.backHome {
+  margin-top: var(--yn-space-4);
+  border-top: 1px solid var(--yn-color-border);
+  color: var(--yn-color-muted);
+}
+
+.panel {
+  min-width: 0;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-lg);
+  background: var(--yn-color-surface);
+}
+
+.settingsContent {
+  display: grid;
+  gap: var(--yn-space-6);
+  padding: clamp(22px, 4vw, 42px);
+}
+
+.sectionIntro,
+.sectionIntroRow {
+  padding-bottom: var(--yn-space-5);
+  border-bottom: 1px solid var(--yn-color-border);
+}
+
+.sectionIntroRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--yn-space-5);
+}
+
+.sectionIntro span,
+.sectionIntroRow span {
+  color: var(--yn-color-muted);
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+}
+
+.sectionIntro h2,
+.sectionIntroRow h2 {
+  margin: 5px 0 0;
+  font-size: var(--yn-font-xl);
+}
+
+.sectionIntro p,
+.sectionIntroRow p,
+.avatarSection p,
+.emailSection p {
+  margin: 7px 0 0;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-sm);
+  line-height: 1.6;
+}
+
+.avatarSection,
+.emailSection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yn-space-5);
+  padding: var(--yn-space-5) 0;
+  border-bottom: 1px solid var(--yn-color-border);
+}
+
+.avatarSection {
+  justify-content: flex-start;
+}
+
+.avatarPreview {
+  display: grid;
+  width: 76px;
+  height: 76px;
+  flex: 0 0 auto;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--yn-color-border);
+  border-radius: 50%;
+  background: var(--yn-color-canvas-raised);
+  color: var(--yn-color-muted);
+}
+
+.avatarPreview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.inlineActions,
+.formActions {
+  display: flex;
+  align-items: center;
+  gap: var(--yn-space-2);
+  margin-top: var(--yn-space-3);
+}
+
+.fileButton {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  cursor: pointer;
+  font-size: var(--yn-font-sm);
+  font-weight: 650;
+}
+
+.fileButton input {
+  display: none;
+}
+
+.form,
+.dialogForm {
+  display: grid;
+  gap: var(--yn-space-4);
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yn-space-4);
+}
+
+.form label,
+.dialogForm label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.form label > span,
+.dialogForm label > span,
+.dialogForm legend {
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-sm);
+  font-weight: 650;
+}
+
+.form label small {
+  margin-left: 5px;
+  color: var(--yn-color-muted);
+  font-weight: 500;
+}
+
+.form input,
+.form textarea,
+.dialogForm input,
+.emailControl input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  outline: 0;
+  background: var(--yn-color-surface-muted);
+  color: var(--yn-color-text);
+  box-shadow: none;
+}
+
+.form textarea {
+  resize: vertical;
+}
+
+.form input:focus,
+.form textarea:focus,
+.dialogForm input:focus,
+.emailControl input:focus {
+  border-color: var(--yn-color-border-strong);
+}
+
+.formActions {
+  justify-content: flex-end;
+  margin-top: var(--yn-space-2);
+}
+
+.emailControl {
+  display: grid;
+  width: min(460px, 60%);
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--yn-space-2);
+}
+
+.tableWrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+}
+
+.table {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+  font-size: var(--yn-font-sm);
+}
+
+.table th,
+.table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--yn-color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table th {
+  background: var(--yn-color-surface-muted);
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+  font-weight: 650;
+}
+
+.table td strong,
+.table td small {
+  display: block;
+}
+
+.table td small {
+  max-width: 180px;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--yn-color-muted);
+  font-family: var(--yn-font-mono);
+  font-size: 10px;
+  text-overflow: ellipsis;
+}
+
+.scopeList {
+  display: flex;
+  max-width: 260px;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.scopeList span {
+  padding: 3px 6px;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-sm);
+  color: var(--yn-color-text-secondary);
+  font-family: var(--yn-font-mono);
+  font-size: 10px;
+}
+
+.revokeButton {
+  border: 0;
+  background: transparent;
+  color: var(--yn-color-danger);
+  cursor: pointer;
+}
+
+.emptyCell {
+  padding: 36px !important;
+  color: var(--yn-color-muted);
+  text-align: center !important;
+}
+
+.dialogForm fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.dialogForm legend {
+  margin-bottom: 10px;
+}
+
+.checkGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.checkGrid label {
+  display: flex;
+  min-height: 52px;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+}
+
+.checkGrid input {
+  width: 16px;
+  min-height: 16px;
+  flex: 0 0 auto;
+}
+
+.checkGrid span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.checkGrid small {
+  color: var(--yn-color-muted);
+  font-family: var(--yn-font-mono);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.secretBox {
+  display: grid;
+  gap: var(--yn-space-4);
+}
+
+.secretBox code {
+  padding: var(--yn-space-4);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-canvas-raised);
+  color: var(--yn-color-brand-strong);
+  font-family: var(--yn-font-mono);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sideNav {
+    position: static;
+    display: flex;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--yn-color-border);
+  }
+
+  .sideLink,
+  .sideLinkActive {
+    flex: 0 0 auto;
+    border-bottom: 2px solid transparent;
+    border-left: 0;
+  }
+
+  .sideLinkActive {
+    border-bottom-color: var(--yn-color-brand);
+  }
+
+  .backHome {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding-top: var(--yn-space-6);
+  }
+
+  .formGrid,
+  .checkGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .sectionIntroRow,
+  .avatarSection,
+  .emailSection {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .emailControl {
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+}

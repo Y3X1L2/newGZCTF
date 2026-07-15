@@ -1,0 +1,111 @@
+:root {
+  color-scheme: light;
+  --yn-color-canvas: #f3f6f5;
+  --yn-color-canvas-raised: #edf2ef;
+  --yn-color-surface: #ffffff;
+  --yn-color-surface-muted: #f7f9f8;
+  --yn-color-surface-strong: #17201c;
+  --yn-color-border: #d8e0dc;
+  --yn-color-border-strong: #b7c5be;
+  --yn-color-text: #17201c;
+  --yn-color-text-secondary: #3e4e46;
+  --yn-color-muted: #6b7b73;
+  --yn-color-brand: #15996a;
+  --yn-color-brand-strong: #0d7650;
+  --yn-color-brand-soft: #dff4eb;
+  --yn-color-info: #2e67d1;
+  --yn-color-info-soft: #e4ecfb;
+  --yn-color-warning: #c9683d;
+  --yn-color-warning-soft: #fce9df;
+  --yn-color-danger: #c74444;
+  --yn-color-danger-soft: #f9e5e5;
+  --yn-color-control-strong: #17201c;
+  --yn-color-control-strong-hover: #26332d;
+  --yn-color-control-strong-text: #ffffff;
+  --yn-color-nav-active: #17201c;
+  --yn-color-nav-active-text: #ffffff;
+  --yn-color-header: rgba(250, 252, 251, 0.94);
+  --yn-color-grid: rgba(53, 85, 68, 0.045);
+  --yn-color-game-ongoing: #173a2c;
+  --yn-color-game-upcoming: #294d91;
+  --yn-color-game-ended: #3e4b45;
+  --yn-color-game-visual-text: #edf7f2;
+  --yn-shadow-surface: 0 14px 36px rgba(24, 43, 34, 0.08);
+  --yn-shadow-overlay: 0 24px 64px rgba(14, 24, 19, 0.16);
+  --yn-shadow-focus: 0 0 0 3px rgba(21, 153, 106, 0.2);
+  --yn-font-sans: Lexend, 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
+  --yn-font-mono: 'JetBrains Mono', 'IBM Plex Mono', Consolas, monospace;
+  --yn-font-xs: 11px;
+  --yn-font-sm: 12px;
+  --yn-font-md: 13px;
+  --yn-font-lg: 16px;
+  --yn-font-xl: 21px;
+  --yn-font-2xl: 30px;
+  --yn-space-1: 4px;
+  --yn-space-2: 8px;
+  --yn-space-3: 12px;
+  --yn-space-4: 16px;
+  --yn-space-5: 20px;
+  --yn-space-6: 24px;
+  --yn-space-7: 32px;
+  --yn-space-8: 40px;
+  --yn-radius-sm: 4px;
+  --yn-radius-md: 6px;
+  --yn-radius-lg: 8px;
+  --yn-motion-fast: 160ms;
+  --yn-motion-normal: 240ms;
+  --yn-motion-drawer: 360ms;
+  --yn-motion-expressive: 420ms;
+  --yn-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --yn-ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --yn-rail-width: 72px;
+  --yn-context-height: 64px;
+  --yn-page-max-width: 1520px;
+  --yn-page-gutter: clamp(24px, 3vw, 48px);
+  letter-spacing: 0;
+}
+
+:root[data-yinyu-theme='dark'] {
+  color-scheme: dark;
+  --yn-color-canvas: #080a09;
+  --yn-color-canvas-raised: #0f1210;
+  --yn-color-surface: #151816;
+  --yn-color-surface-muted: #1b1f1c;
+  --yn-color-surface-strong: #f0f3f1;
+  --yn-color-border: #2a2f2c;
+  --yn-color-border-strong: #454c48;
+  --yn-color-text: #f0f3f1;
+  --yn-color-text-secondary: #c7ceca;
+  --yn-color-muted: #929a96;
+  --yn-color-brand: #59e6b0;
+  --yn-color-brand-strong: #82f0c7;
+  --yn-color-brand-soft: #123528;
+  --yn-color-info: #7ba3f5;
+  --yn-color-info-soft: #1d3155;
+  --yn-color-warning: #f19569;
+  --yn-color-warning-soft: #4a2b20;
+  --yn-color-danger: #ff8585;
+  --yn-color-danger-soft: #4d2525;
+  --yn-color-control-strong: #23875f;
+  --yn-color-control-strong-hover: #2da675;
+  --yn-color-control-strong-text: #f4fff9;
+  --yn-color-nav-active: #17241f;
+  --yn-color-nav-active-text: #68e8b7;
+  --yn-color-header: rgba(8, 10, 9, 0.94);
+  --yn-color-grid: rgba(255, 255, 255, 0.035);
+  --yn-color-game-ongoing: #245a43;
+  --yn-color-game-upcoming: #294d91;
+  --yn-color-game-ended: #2b302d;
+  --yn-color-game-visual-text: #edf7f2;
+  --yn-shadow-surface: 0 18px 48px rgba(0, 0, 0, 0.24);
+  --yn-shadow-overlay: 0 28px 72px rgba(0, 0, 0, 0.42);
+  --yn-shadow-focus: 0 0 0 3px rgba(89, 230, 176, 0.24);
+}
+
+@media (max-width: 820px) {
+  :root {
+    --yn-rail-width: 0px;
+    --yn-context-height: 56px;
+    --yn-page-gutter: 18px;
+  }
+}

@@ -1,0 +1,13 @@
+.page {
+  width: min(1440px, 100%);
+  min-width: 0;
+  margin: 0 auto;
+  padding: clamp(24px, 3vw, 44px) var(--yn-page-gutter) 80px;
+}
+
+@media (max-width: 520px) {
+  .page {
+    padding-right: var(--yn-space-4);
+    padding-left: var(--yn-space-4);
+  }
+}

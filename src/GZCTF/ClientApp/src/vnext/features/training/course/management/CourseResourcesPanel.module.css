@@ -1,0 +1,112 @@
+.panel {
+  display: grid;
+  min-width: 0;
+  gap: var(--yn-space-5);
+}
+
+.resourceList {
+  display: grid;
+  border-top: 1px solid var(--yn-color-border);
+}
+
+.resourceList article {
+  display: grid;
+  min-width: 0;
+  min-height: 78px;
+  grid-template-columns: 40px minmax(0, 1fr) auto minmax(110px, auto) auto;
+  align-items: center;
+  gap: var(--yn-space-4);
+  border-bottom: 1px solid var(--yn-color-border);
+}
+
+.resourceIcon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  color: var(--yn-color-brand-strong);
+}
+
+.resourceIdentity,
+.resourceMeta {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.resourceIdentity small,
+.resourceMeta,
+.resourceMeta small {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.resourceIdentity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resourceActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.resourceActions a,
+.resourceActions button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-muted);
+  cursor: pointer;
+}
+
+.resourceActions a:hover,
+.resourceActions button:hover {
+  border-color: var(--yn-color-control-strong);
+  background: var(--yn-color-control-strong);
+  color: var(--yn-color-control-strong-text);
+}
+
+.formGrid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yn-space-4);
+}
+
+.formGrid > label:nth-child(3),
+.formGrid > label:last-child {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 800px) {
+  .resourceList article {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    padding: var(--yn-space-3) 0;
+  }
+
+  .resourceList article > :nth-child(3),
+  .resourceMeta {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .formGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .formGrid > label:nth-child(3),
+  .formGrid > label:last-child {
+    grid-column: auto;
+  }
+}

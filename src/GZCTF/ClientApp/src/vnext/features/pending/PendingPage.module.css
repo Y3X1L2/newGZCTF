@@ -1,0 +1,133 @@
+.page {
+  display: grid;
+  width: min(100%, var(--yn-page-max-width));
+  min-height: calc(100vh - var(--yn-context-height));
+  margin: 0 auto;
+  place-items: center;
+  padding: var(--yn-space-8) var(--yn-page-gutter);
+}
+
+.state {
+  position: relative;
+  width: min(100%, 660px);
+  overflow: hidden;
+  padding: clamp(32px, 6vw, 64px);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-lg);
+  background: var(--yn-color-surface);
+}
+
+.geometry {
+  position: absolute;
+  inset: 0 0 auto auto;
+  width: 240px;
+  height: 180px;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.geometry span,
+.geometry i {
+  position: absolute;
+  display: block;
+}
+
+.geometry span:first-child {
+  inset: 22px 30px auto auto;
+  width: 130px;
+  height: 86px;
+  border: 1px solid var(--yn-color-border-strong);
+  transform: skewY(-14deg);
+}
+
+.geometry span:nth-child(2) {
+  inset: 58px 78px auto auto;
+  width: 96px;
+  height: 66px;
+  border: 1px solid var(--yn-color-brand);
+  transform: skewY(12deg);
+}
+
+.geometry i {
+  top: 86px;
+  right: 18px;
+  width: 190px;
+  height: 1px;
+  background: var(--yn-color-border-strong);
+  transform: rotate(-18deg);
+}
+
+.icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-brand-soft);
+  color: var(--yn-color-brand);
+}
+
+.eyebrow {
+  margin: var(--yn-space-6) 0 0;
+  color: var(--yn-color-muted);
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+}
+
+.state h1 {
+  max-width: 520px;
+  margin: var(--yn-space-2) 0 0;
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1.25;
+}
+
+.state > p:last-of-type {
+  max-width: 560px;
+  margin: var(--yn-space-4) 0 0;
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-md);
+  line-height: 1.8;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yn-space-3);
+  margin-top: var(--yn-space-7);
+}
+
+.primaryAction,
+.secondaryAction {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--yn-space-2);
+  padding: 0 var(--yn-space-4);
+  border-radius: var(--yn-radius-md);
+  font-size: var(--yn-font-sm);
+}
+
+.primaryAction {
+  background: var(--yn-color-control-strong);
+  color: var(--yn-color-control-strong-text);
+}
+
+.secondaryAction {
+  border: 1px solid var(--yn-color-border);
+  background: var(--yn-color-surface-muted);
+}
+
+@media (max-width: 520px) {
+  .state {
+    padding: var(--yn-space-7) var(--yn-space-5);
+  }
+
+  .geometry {
+    opacity: 0.24;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+}
