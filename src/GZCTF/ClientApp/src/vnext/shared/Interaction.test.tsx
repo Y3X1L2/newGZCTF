@@ -52,8 +52,10 @@ describe('VNextDrawer', () => {
 
     const dialog = screen.getByRole('dialog', { name: '测试抽屉' })
     expect(dialog).toHaveAttribute('open')
+    await waitFor(() => expect(dialog.className).toMatch(/drawerOpening/))
     fireEvent.animationEnd(dialog.firstElementChild as Element)
     await user.click(within(dialog).getByRole('button', { name: '关闭' }))
+    await waitFor(() => expect(dialog.className).toMatch(/drawerClosing/))
     fireEvent.animationEnd(dialog.firstElementChild as Element)
 
     await waitFor(() => expect(dialog).not.toHaveAttribute('open'))
