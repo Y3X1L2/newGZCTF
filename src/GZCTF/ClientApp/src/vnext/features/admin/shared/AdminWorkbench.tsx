@@ -223,6 +223,36 @@ export function PaginationBar({
   )
 }
 
+export function CursorPaginationBar({
+  page,
+  hasNext,
+  onPrevious,
+  onNext,
+  label = '游标分页',
+}: {
+  page: number
+  hasNext: boolean
+  onPrevious: () => void
+  onNext: () => void
+  label?: string
+}) {
+  if (page <= 1 && !hasNext) return null
+  return (
+    <nav aria-label={label} className={styles.pagination}>
+      <span>{label}</span>
+      <div>
+        <button aria-label="上一页" disabled={page <= 1} onClick={onPrevious} type="button">
+          <ChevronLeft size={17} />
+        </button>
+        <strong>第 {page} 页</strong>
+        <button aria-label="下一页" disabled={!hasNext} onClick={onNext} type="button">
+          <ChevronRight size={17} />
+        </button>
+      </div>
+    </nav>
+  )
+}
+
 export function DetailDrawer({
   open,
   title,

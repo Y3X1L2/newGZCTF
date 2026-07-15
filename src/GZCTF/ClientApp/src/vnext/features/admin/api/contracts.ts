@@ -204,6 +204,29 @@ export interface DeploymentTaskPage {
   nextCursor: string | null
 }
 
+export interface DeploymentTaskDetail {
+  id: string
+  correlationId: string
+  targetNodeId: string | null
+  kind: number | null
+  operation: number | null
+  status: number | null
+  stage: number | null
+  targetNodeName: string | null
+  targetNodeHost: string | null
+  resultHost: string | null
+  resultPort: number | null
+  subjectDisplayName: string | null
+  resourceDisplayName: string | null
+  createdAt: number
+  startedAt: number | null
+  completedAt: number | null
+  errorMessage: string | null
+  errorCategory: string | number | null
+  errorCode: string | null
+  retryable: boolean | null
+}
+
 export interface AdminLogEntry {
   id?: number
   time: number
@@ -212,6 +235,17 @@ export interface AdminLogEntry {
   ip: string | null
   msg: string | null
   status: string | null
+  correlationId?: string | null
+  traceId?: string | null
+  eventCode?: string | null
+  errorCategory?: string | null
+  errorCode?: string | null
+  workerNodeId?: string | null
+  workerNodeName?: string | null
+  deploymentTicketId?: string | null
+  resourceType?: string | null
+  resourceId?: string | null
+  resourceDisplayName?: string | null
 }
 
 export interface AdminLogPage {
@@ -237,4 +271,24 @@ export interface LegacyContainerInstancePage {
   data: LegacyContainerInstance[]
   length: number
   total: number
+}
+
+export interface GlobalInstanceItem extends NodeResourceItem {
+  nodeId: string
+  nodeName: string
+}
+
+export interface GlobalInstanceNodeFailure {
+  nodeId: string
+  nodeName: string
+  message: string
+}
+
+export interface GlobalInstanceInventory {
+  source: 'node-resources' | 'legacy-containers'
+  items: GlobalInstanceItem[]
+  totalNodes: number
+  loadedNodes: number
+  failures: GlobalInstanceNodeFailure[]
+  collectedAt: number
 }

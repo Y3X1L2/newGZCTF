@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createImageTemplateAdminApi } from './imageTemplateAdminApi'
+import { createInstanceAdminApi } from './instanceAdminApi'
 import { createNodeAdminApi } from './nodeAdminApi'
+import type { NodeResourcePage, NodeSummary } from './contracts'
 import type { RuntimeJsonClient } from './runtimeJsonClient'
 
 function createClient(get: RuntimeJsonClient['get']): RuntimeJsonClient {
@@ -139,5 +141,121 @@ describe('nodeAdminApi', () => {
     const adapter = createNodeAdminApi(createClient(vi.fn().mockResolvedValue(page)))
 
     await expect(adapter.resources(node.id)).resolves.toEqual(page)
+  })
+})
+
+describe('instanceAdminApi', () => {
+  const nodes = [
+    { id: 'node-1', name: 'worker-1' },
+    { id: 'node-2', name: 'worker-2' },
+  ] as NodeSummary[]
+  const resource = {
+    kind: 'container',
+    id: 'container-1',
+    name: 'SSTI',
+    status: 'Running',
+    isActive: true,
+    startedAt: 1_784_082_368_817,
+    expectedStopAt: null,
+    stoppedAt: null,
+    duration: '1分钟',
+    image: 'registry/ssti:latest',
+    runtimeId: 'abc123',
+    entry: 'http://example.test:32768',
+    ip: '10.24.0.30',
+    port: 32768,
+    gameId: 23,
+    gameTitle: 'CTF题库',
+    challengeId: 19,
+    challengeTitle: 'SSTI',
+    challengeCategory: 'Web',
+    teamId: 1,
+    teamName: 'admin',
+    userId: null,
+    userName: null,
+    providerName: 'Docker',
+    osType: 'Linux',
+  }
+
+  function page(nodeId: string): NodeResourcePage {
+    return {
+      nodeId,
+      nodeName: nodeId,
+      page: 1,
+      pageSize: 50,
+      total: 1,
+      runningCount: 1,
+      containerCount: 1,
+      vmCount: 0,
+      pentestCount: 0,
+      teamLabCount: 0,
+      items: [{ ...resource, id: `container-${nodeId}` }],
+    }
+  }
+
+  it('aggregates node resources without mixing in legacy containers', async () => {
+    const resources = vi.fn(async (nodeId: string) => page(nodeId))
+    const adapter = createInstanceAdminApi(createClient(vi.fn()), { resources })
+
+    const inventory = await adapter.inventory(nodes, 'active')
+
+    expect(inventory.source).toBe('node-resources')
+    expect(inventory.items).toHaveLength(2)
+    expect(inventory.loadedNodes).toBe(2)
+    expect(inventory.items[0]).toHaveProperty('nodeName')
+  })
+
+  it('keeps healthy node results when one node fails', async () => {
+    const resources = vi.fn(async (nodeId: string) => {
+      if (nodeId === 'node-2') throw new Error('node offline')
+      return page(nodeId)
+    })
+    const adapter = createInstanceAdminApi(createClient(vi.fn()), { resources })
+
+    const inventory = await adapter.inventory(nodes, 'active')
+
+    expect(inventory.source).toBe('node-resources')
+    expect(inventory.items).toHaveLength(1)
+    expect(inventory.loadedNodes).toBe(1)
+    expect(inventory.failures).toEqual([{ nodeId: 'node-2', nodeName: 'worker-2', message: 'node offline' }])
+  })
+
+  it('uses the explicitly labelled legacy view only when every node resource request fails', async () => {
+    const get = vi.fn().mockResolvedValue({
+      data: [
+        {
+          containerGuid: 'legacy-1',
+          challenge: { id: 19, title: 'SSTI', category: 'Web' },
+          team: { id: 1, name: 'admin' },
+          startedAt: 1_784_082_368_817,
+          ip: '10.24.0.30',
+          port: 32768,
+        },
+      ],
+      length: 1,
+      total: 1,
+    })
+    const resources = vi.fn().mockRejectedValue(new Error('resource endpoint unavailable'))
+    const adapter = createInstanceAdminApi(createClient(get), { resources })
+
+    const inventory = await adapter.inventory(nodes, 'active')
+
+    expect(inventory.source).toBe('legacy-containers')
+    expect(inventory.items).toHaveLength(1)
+    expect(inventory.items[0].nodeName).toBe('传统容器接口')
+    expect(get).toHaveBeenCalledWith('/api/admin/instances')
+  })
+
+  it('never substitutes active legacy containers for a failed history query', async () => {
+    const get = vi.fn()
+    const resources = vi.fn().mockRejectedValue(new Error('history endpoint unavailable'))
+    const adapter = createInstanceAdminApi(createClient(get), { resources })
+
+    const inventory = await adapter.inventory(nodes, 'history', 'node-1')
+
+    expect(inventory.source).toBe('node-resources')
+    expect(inventory.items).toEqual([])
+    expect(inventory.failures).toHaveLength(1)
+    expect(get).not.toHaveBeenCalled()
   })
 })

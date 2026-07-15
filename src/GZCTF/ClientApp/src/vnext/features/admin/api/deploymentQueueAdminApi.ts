@@ -1,5 +1,6 @@
 import {
   contractFailure,
+  isOptionalBoolean,
   isNullableNumber,
   isNullableString,
   isNumber,
@@ -8,7 +9,7 @@ import {
   isRecord,
   isString,
 } from './contractParsers'
-import type { DeploymentQueueContract, DeploymentTask, DeploymentTaskPage } from './contracts'
+import type { DeploymentQueueContract, DeploymentTask, DeploymentTaskDetail, DeploymentTaskPage } from './contracts'
 import {
   isUnavailableEndpoint,
   runtimeJsonClient,
@@ -107,6 +108,67 @@ function route(contract: DeploymentQueueContract) {
   return contract === 'deployment-targets' ? '/api/v1/deployment-targets' : '/api/v1/deployment-queue'
 }
 
+function parseDetail(value: unknown): DeploymentTaskDetail {
+  const errorCategoryValid =
+    value &&
+    isRecord(value) &&
+    (value.errorCategory === undefined ||
+      value.errorCategory === null ||
+      isString(value.errorCategory) ||
+      isNumber(value.errorCategory))
+
+  if (
+    !isRecord(value) ||
+    !isString(value.id) ||
+    !isOptionalString(value.correlationId) ||
+    !isOptionalString(value.targetNodeId) ||
+    !isOptionalNumber(value.kind) ||
+    !isOptionalNumber(value.type) ||
+    !isOptionalNumber(value.operation) ||
+    !isOptionalNumber(value.action) ||
+    !isOptionalNumber(value.status) ||
+    !isOptionalNumber(value.stage) ||
+    !isOptionalString(value.targetNodeName) ||
+    !isOptionalString(value.targetNodeHost) ||
+    !isOptionalString(value.resultHost) ||
+    !isOptionalNumber(value.resultPort) ||
+    !isOptionalString(value.subjectDisplayName) ||
+    !isOptionalString(value.resourceDisplayName) ||
+    !isNumber(value.createdAt) ||
+    !isOptionalNumber(value.startedAt) ||
+    !isOptionalNumber(value.completedAt) ||
+    !isOptionalString(value.errorMessage) ||
+    !errorCategoryValid ||
+    !isOptionalString(value.errorCode) ||
+    !isOptionalBoolean(value.retryable)
+  ) {
+    return contractFailure('Deployment task detail', value)
+  }
+
+  return {
+    id: value.id,
+    correlationId: value.correlationId ?? value.id,
+    targetNodeId: value.targetNodeId ?? null,
+    kind: value.kind ?? value.type ?? null,
+    operation: value.operation ?? value.action ?? null,
+    status: value.status ?? null,
+    stage: value.stage ?? null,
+    targetNodeName: value.targetNodeName ?? null,
+    targetNodeHost: value.targetNodeHost ?? null,
+    resultHost: value.resultHost ?? null,
+    resultPort: value.resultPort ?? null,
+    subjectDisplayName: value.subjectDisplayName ?? null,
+    resourceDisplayName: value.resourceDisplayName ?? null,
+    createdAt: value.createdAt,
+    startedAt: value.startedAt ?? null,
+    completedAt: value.completedAt ?? null,
+    errorMessage: value.errorMessage ?? null,
+    errorCategory: (value.errorCategory as string | number | null | undefined) ?? null,
+    errorCode: value.errorCode ?? null,
+    retryable: value.retryable ?? null,
+  }
+}
+
 export function createDeploymentQueueAdminApi(client: RuntimeJsonClient = runtimeJsonClient) {
   let resolvedContract: DeploymentQueueContract | null = null
 
@@ -164,13 +226,13 @@ export function createDeploymentQueueAdminApi(client: RuntimeJsonClient = runtim
       return resolvedContract
     },
     async detail(id: string) {
-      let result: Record<string, unknown> | null = null
+      let result: DeploymentTaskDetail | null = null
       await withResolvedRoute(async (contract) => {
         const value = await client.get(`${route(contract)}/${id}`)
-        if (!isRecord(value) || !isString(value.id)) return contractFailure('Deployment task detail', value)
-        result = value
+        result = parseDetail(value)
       })
-      return result
+      if (!result) return contractFailure('Deployment task detail', null)
+      return result as DeploymentTaskDetail
     },
     async cancel(id: string) {
       await withResolvedRoute((contract) => client.delete(`${route(contract)}/${id}`))

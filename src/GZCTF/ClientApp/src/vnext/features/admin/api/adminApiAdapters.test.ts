@@ -108,6 +108,62 @@ describe('deploymentQueueAdminApi', () => {
       pageSize: 10,
     })
   })
+
+  it('parses the correlated Phase 7 task detail contract', async () => {
+    const detail = {
+      id: deploymentTask().id,
+      correlationId: deploymentTask().id,
+      targetNodeId: deploymentTask().targetNodeId,
+      kind: 1,
+      operation: 1,
+      status: 5,
+      stage: 18,
+      targetNodeName: 'worker-1',
+      targetNodeHost: '10.24.0.30',
+      resultHost: null,
+      resultPort: null,
+      subjectDisplayName: 'admin',
+      resourceDisplayName: 'SSTI',
+      createdAt: 1_784_081_794_959,
+      startedAt: 1_784_081_794_969,
+      completedAt: 1_784_081_795_470,
+      errorMessage: 'Image pull failed.',
+      errorCategory: 2,
+      errorCode: 'image_pull_failed',
+      retryable: true,
+    }
+    const get = vi.fn().mockResolvedValue(detail)
+    const adapter = createDeploymentQueueAdminApi(createClient({ get }))
+
+    await expect(adapter.detail(detail.id)).resolves.toEqual(detail)
+  })
+
+  it('normalizes the deployed legacy task detail fields', async () => {
+    const get = vi.fn().mockResolvedValue({
+      id: deploymentTask().id,
+      targetNodeId: deploymentTask().targetNodeId,
+      type: 0,
+      action: 2,
+      status: 2,
+      targetNodeName: 'worker-1',
+      targetNodeHost: '10.24.0.30',
+      resultHost: '203.0.113.10',
+      resultPort: 30000,
+      createdAt: 1_784_081_794_959,
+      completedAt: 1_784_081_795_470,
+      errorMessage: null,
+    })
+    const adapter = createDeploymentQueueAdminApi(createClient({ get }))
+
+    await expect(adapter.detail(deploymentTask().id)).resolves.toMatchObject({
+      kind: 0,
+      operation: 2,
+      stage: null,
+      startedAt: null,
+      resultHost: '203.0.113.10',
+      resultPort: 30000,
+    })
+  })
 })
 
 describe('adminLogApi', () => {

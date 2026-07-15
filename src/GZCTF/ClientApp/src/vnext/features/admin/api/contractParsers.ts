@@ -16,6 +16,10 @@ export function isBoolean(value: unknown): value is boolean {
   return typeof value === 'boolean'
 }
 
+export function isOptionalBoolean(value: unknown): value is boolean | null | undefined {
+  return value === undefined || value === null || isBoolean(value)
+}
+
 export function isNullableString(value: unknown): value is string | null {
   return value === null || isString(value)
 }
