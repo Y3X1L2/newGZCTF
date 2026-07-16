@@ -55,7 +55,7 @@ export const gameModuleDefinitions = [
     description: '攻击、修补与服务状态',
     icon: Swords,
     types: [GameType.AWDP, GameType.Mixed],
-    implemented: false,
+    implemented: true,
   },
   {
     id: 'pentest',

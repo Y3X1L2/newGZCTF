@@ -23,6 +23,9 @@ const GameTheoryPage = lazy(() =>
 const TheoryScoreboardPage = lazy(() =>
   import('../features/games/theory/TheoryScoreboardPage').then((module) => ({ default: module.TheoryScoreboardPage }))
 )
+const AwdpWorkspacePage = lazy(() =>
+  import('../features/games/awdp/AwdpWorkspacePage').then((module) => ({ default: module.AwdpWorkspacePage }))
+)
 const PostsPage = lazy(() => import('../features/posts/PostsPage').then((module) => ({ default: module.PostsPage })))
 const PostDetailPage = lazy(() =>
   import('../features/posts/PostDetailPage').then((module) => ({ default: module.PostDetailPage }))
@@ -119,19 +122,32 @@ const AdminTheoryPaperPage = lazy(() =>
   import('../features/admin/theory/AdminTheoryPaperPage').then((module) => ({ default: module.AdminTheoryPaperPage }))
 )
 const AdminTheoryResultsPage = lazy(() =>
-  import('../features/admin/theory/AdminTheoryResultsPage').then((module) => ({ default: module.AdminTheoryResultsPage }))
+  import('../features/admin/theory/AdminTheoryResultsPage').then((module) => ({
+    default: module.AdminTheoryResultsPage,
+  }))
+)
+const AdminAwdpPage = lazy(() =>
+  import('../features/admin/awdp/AdminAwdpPage').then((module) => ({ default: module.AdminAwdpPage }))
 )
 const AdminGamePhasesPage = lazy(() =>
-  import('../features/admin/games/phases/AdminGamePhasesPage').then((module) => ({ default: module.AdminGamePhasesPage }))
+  import('../features/admin/games/phases/AdminGamePhasesPage').then((module) => ({
+    default: module.AdminGamePhasesPage,
+  }))
 )
 const AdminGameDivisionsPage = lazy(() =>
-  import('../features/admin/games/divisions/AdminGameDivisionsPage').then((module) => ({ default: module.AdminGameDivisionsPage }))
+  import('../features/admin/games/divisions/AdminGameDivisionsPage').then((module) => ({
+    default: module.AdminGameDivisionsPage,
+  }))
 )
 const AdminGameReviewPage = lazy(() =>
-  import('../features/admin/games/review/AdminGameReviewPage').then((module) => ({ default: module.AdminGameReviewPage }))
+  import('../features/admin/games/review/AdminGameReviewPage').then((module) => ({
+    default: module.AdminGameReviewPage,
+  }))
 )
 const AdminGameNoticesPage = lazy(() =>
-  import('../features/admin/games/notices/AdminGameNoticesPage').then((module) => ({ default: module.AdminGameNoticesPage }))
+  import('../features/admin/games/notices/AdminGameNoticesPage').then((module) => ({
+    default: module.AdminGameNoticesPage,
+  }))
 )
 
 export function VNextApp() {
@@ -148,6 +164,7 @@ export function VNextApp() {
               <Route path="scoreboard" element={<ScoreboardPage />} />
               <Route path="theory" element={<GameTheoryPage />} />
               <Route path="theory-scoreboard" element={<TheoryScoreboardPage />} />
+              <Route path="awdp" element={<AwdpWorkspacePage />} />
             </Route>
           </Route>
           <Route path="posts" element={<PostsPage />} />
@@ -189,6 +206,7 @@ export function VNextApp() {
               <Route path="challenges/:challengeId" element={<AdminChallengeEditorPage />} />
               <Route path="theory-paper" element={<AdminTheoryPaperPage />} />
               <Route path="theory-results" element={<AdminTheoryResultsPage />} />
+              <Route path="awdp-services" element={<AdminAwdpPage />} />
             </Route>
             <Route path="images" element={<AdminImagesPage />} />
             <Route path="nodes" element={<AdminNodesPage />} />

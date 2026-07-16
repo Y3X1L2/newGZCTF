@@ -1,11 +1,22 @@
-import { ArrowLeft, BookOpenCheck, ChartNoAxesColumn, Clock3, Flag, Layers3, Megaphone, Settings2, UserCheck } from 'lucide-react'
+import {
+  ArrowLeft,
+  BookOpenCheck,
+  ChartNoAxesColumn,
+  Clock3,
+  Flag,
+  Layers3,
+  Megaphone,
+  Settings2,
+  Swords,
+  UserCheck,
+} from 'lucide-react'
 import { NavLink, Outlet, useParams } from 'react-router'
 import { GameInfoModel, GameType } from '@Api'
 import { DataState } from '../../../shared/Primitives'
 import { StatusBadge } from '../shared/AdminWorkbench'
+import styles from './GameAdminShell.module.css'
 import { gameLifecycle, gameLifecycleMeta, gameTypeLabel } from './gamePresentation'
 import { useAdminGame } from './useAdminGames'
-import styles from './GameAdminShell.module.css'
 
 const baseTabs = [
   { label: '比赛信息', route: 'info', icon: Settings2 },
@@ -46,6 +57,9 @@ export function GameAdminShell() {
           { label: '理论成绩', route: 'theory-results', icon: ChartNoAxesColumn },
         ]
       : []),
+    ...(request.game.gameType === GameType.AWDP || request.game.gameType === GameType.Mixed
+      ? [{ label: 'AWDP 管理', route: 'awdp-services', icon: Swords }]
+      : []),
   ]
   return (
     <div className={styles.shell}>
@@ -62,12 +76,18 @@ export function GameAdminShell() {
           <div className={styles.badges}>
             <StatusBadge tone={lifecycle.tone}>{lifecycle.label}</StatusBadge>
             <StatusBadge tone="info">{gameTypeLabel(request.game.gameType)}</StatusBadge>
-            <StatusBadge tone={request.game.hidden ? 'warning' : 'success'}>{request.game.hidden ? '隐藏' : '公开'}</StatusBadge>
+            <StatusBadge tone={request.game.hidden ? 'warning' : 'success'}>
+              {request.game.hidden ? '隐藏' : '公开'}
+            </StatusBadge>
           </div>
         </div>
         <nav aria-label="比赛管理页面" className={styles.tabs}>
           {tabs.map((tab) => (
-            <NavLink className={({ isActive }) => (isActive ? styles.activeTab : styles.tab)} key={tab.route} to={tab.route}>
+            <NavLink
+              className={({ isActive }) => (isActive ? styles.activeTab : styles.tab)}
+              key={tab.route}
+              to={tab.route}
+            >
               <tab.icon size={16} />
               {tab.label}
             </NavLink>
