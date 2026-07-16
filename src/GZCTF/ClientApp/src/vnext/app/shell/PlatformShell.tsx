@@ -1,5 +1,4 @@
 import { ChevronRight, Grid3X3, LogIn, LogOut, Moon, Settings, Sun, UserRound } from 'lucide-react'
-import { motion } from 'motion/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { getPlatformName, PLATFORM_TYPE } from '@Utils/Brand'
@@ -299,15 +298,9 @@ export function PlatformShell() {
       </header>
 
       <main className={styles.main}>
-        <motion.div
-          animate={{ opacity: 1, x: 0 }}
-          className={styles.routeFrame}
-          initial={{ opacity: 0, x: 7 }}
-          key={routeFrameKey}
-          transition={{ duration: 0.17, ease: [0.2, 0, 0, 1] }}
-        >
+        <div className={styles.routeFrame} key={routeFrameKey}>
           <Outlet />
-        </motion.div>
+        </div>
       </main>
 
       <ModuleDrawer onClose={() => setModuleOpen(false)} open={moduleOpen} />

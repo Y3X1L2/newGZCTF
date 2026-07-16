@@ -1,5 +1,6 @@
 import { X } from 'lucide-react'
 import { ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import styles from './Interaction.module.css'
 
 export type ActionTone = 'primary' | 'secondary' | 'danger' | 'ghost'
@@ -87,7 +88,7 @@ export function VNextDialog({
     return acquireBodyScrollLock()
   }, [open])
 
-  return (
+  return createPortal(
     <dialog
       aria-describedby={description ? descriptionId : undefined}
       aria-labelledby={titleId}
@@ -115,7 +116,8 @@ export function VNextDialog({
         <div className={styles.dialogBody}>{children}</div>
         {footer ? <footer className={styles.dialogFooter}>{footer}</footer> : null}
       </div>
-    </dialog>
+    </dialog>,
+    document.body
   )
 }
 

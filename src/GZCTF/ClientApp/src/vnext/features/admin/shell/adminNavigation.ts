@@ -1,4 +1,4 @@
-import { Activity, Boxes, CircleGauge, FileClock, ListTodo, Server, Settings2 } from 'lucide-react'
+import { Activity, BookOpenCheck, Boxes, CircleGauge, FileClock, ListTodo, Server, Settings2, Trophy } from 'lucide-react'
 
 export interface AdminNavigationItem {
   id: string
@@ -17,6 +17,13 @@ export const adminNavigation: AdminNavigationGroup[] = [
   {
     label: '概览',
     items: [{ id: 'dashboard', label: '运行概览', route: '/admin/dashboard', icon: CircleGauge, implemented: true }],
+  },
+  {
+    label: '业务',
+    items: [
+      { id: 'games', label: '赛事管理', route: '/admin/games', icon: Trophy, implemented: true },
+      { id: 'theory-bank', label: '理论题库', route: '/admin/theory-bank', icon: BookOpenCheck, implemented: true },
+    ],
   },
   {
     label: '资源',

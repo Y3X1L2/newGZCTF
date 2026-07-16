@@ -2,6 +2,7 @@ import { Check, Clock3, Copy, ExternalLink, Monitor, RefreshCw, Server, Trash2 }
 import { useEffect, useId, useMemo, useState } from 'react'
 import { ActionButton, InlineFeedback } from '../../shared/Interaction'
 import { StatusPill } from '../../shared/Primitives'
+import { externalEntryHref } from '../../shared/urls'
 import styles from './InstanceControl.module.css'
 import { RuntimeInstanceController, RuntimeInstancePhase } from './types'
 
@@ -13,11 +14,6 @@ const phaseLabels: Record<RuntimeInstancePhase, string> = {
   extending: '正在延期',
   stopping: '正在销毁',
   failed: '状态异常',
-}
-
-function entryHref(entry: string) {
-  if (/^[a-z][a-z\d+.-]*:\/\//i.test(entry)) return entry
-  return `http://${entry}`
 }
 
 function formatRemaining(target: number | null, now: number) {
@@ -133,7 +129,7 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
               </button>
               <a
                 aria-label="打开实例入口"
-                href={entryHref(controller.entry)}
+                href={externalEntryHref(controller.entry)}
                 rel="noreferrer noopener"
                 target="_blank"
                 title="在新窗口打开"

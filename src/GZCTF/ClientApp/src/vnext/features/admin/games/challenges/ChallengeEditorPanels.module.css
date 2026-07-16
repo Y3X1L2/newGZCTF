@@ -1,0 +1,209 @@
+.panelStack {
+  display: grid;
+  min-width: 0;
+  gap: var(--yn-space-4);
+}
+
+.panelToolbar,
+.attachmentSummary,
+.flagRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yn-space-4);
+}
+
+.panelToolbar > div,
+.attachmentSummary > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.panelToolbar span,
+.attachmentSummary span,
+.attachmentSummary small {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.attachmentSummary {
+  padding: var(--yn-space-4);
+  border: 1px solid var(--yn-color-border);
+  background: var(--yn-color-surface-muted);
+}
+
+.attachmentSummary strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panelActions,
+.rowActions,
+.flagMeta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--yn-space-2);
+}
+
+.attachmentControls {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yn-space-4);
+}
+
+.bindingBlock {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--yn-space-3);
+}
+
+.noticePanel,
+.emptyPanel {
+  padding: var(--yn-space-4);
+  border: 1px solid var(--yn-color-border);
+  background: var(--yn-color-surface-muted);
+  color: var(--yn-color-text-secondary);
+}
+
+.noticePanel p {
+  margin: 6px 0 0;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-sm);
+  line-height: 1.65;
+}
+
+.emptyPanel {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-sm);
+  line-height: 1.6;
+}
+
+.flagList {
+  border-top: 1px solid var(--yn-color-border);
+}
+
+.flagRow {
+  min-height: 82px;
+  padding: var(--yn-space-3) 0;
+  border-bottom: 1px solid var(--yn-color-border);
+}
+
+.flagIdentity {
+  display: grid;
+  min-width: 220px;
+  flex: 1;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--yn-space-3);
+}
+
+.flagIdentity > div {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.flagIdentity code {
+  overflow: hidden;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flagIcon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--yn-color-border);
+  color: var(--yn-color-brand-strong);
+}
+
+.flagMeta {
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.flagMeta a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--yn-color-brand-strong);
+}
+
+.rowActions {
+  flex: 0 0 auto;
+}
+
+.rowActions button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-text-secondary);
+  cursor: pointer;
+}
+
+.rowActions button:hover:not(:disabled) {
+  border-color: var(--yn-color-border-strong);
+  color: var(--yn-color-text);
+}
+
+.rowActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (max-width: 1040px) {
+  .attachmentControls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .flagRow {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .flagMeta {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+    padding-left: 46px;
+  }
+}
+
+@media (max-width: 680px) {
+  .panelToolbar,
+  .attachmentSummary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .panelActions,
+  .panelActions > button,
+  .bindingBlock,
+  .bindingBlock > button {
+    width: 100%;
+  }
+
+  .bindingBlock {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .flagIdentity {
+    min-width: 0;
+  }
+}

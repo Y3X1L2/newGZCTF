@@ -6,8 +6,7 @@
 
 .filters,
 .questionMeta,
-.rowActions,
-.optionEditor header {
+.rowActions {
   display: flex;
   align-items: center;
 }
@@ -80,8 +79,7 @@
   white-space: nowrap;
 }
 
-.rowActions button,
-.optionEditor button:not([class]) {
+.rowActions button {
   display: grid;
   width: 34px;
   height: 34px;
@@ -93,16 +91,13 @@
   cursor: pointer;
 }
 
-.rowActions button:hover,
-.optionEditor button:not([class]):hover {
+.rowActions button:hover {
   border-color: var(--yn-color-control-strong);
   background: var(--yn-color-control-strong);
   color: var(--yn-color-control-strong-text);
 }
 
-.importForm,
-.questionForm,
-.optionEditor {
+.importForm {
   display: grid;
   min-width: 0;
   gap: var(--yn-space-4);
@@ -116,34 +111,6 @@
   border-radius: var(--yn-radius-md);
   background: var(--yn-color-surface-muted);
   font-size: var(--yn-font-sm);
-}
-
-.formColumns {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--yn-space-4);
-}
-
-.optionEditor header {
-  justify-content: space-between;
-  gap: var(--yn-space-4);
-}
-
-.optionEditor > div {
-  display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) 34px;
-  align-items: center;
-  gap: var(--yn-space-2);
-}
-
-.optionEditor > div > input:last-of-type {
-  min-height: 40px;
-  padding: 0 11px;
-  border: 1px solid var(--yn-color-border);
-  border-radius: var(--yn-radius-md);
-  background: var(--yn-color-surface);
-  color: var(--yn-color-text);
-  font: inherit;
 }
 
 @media (max-width: 960px) {
@@ -161,8 +128,7 @@
 }
 
 @media (max-width: 680px) {
-  .filters,
-  .formColumns {
+  .filters {
     grid-template-columns: minmax(0, 1fr);
   }
 

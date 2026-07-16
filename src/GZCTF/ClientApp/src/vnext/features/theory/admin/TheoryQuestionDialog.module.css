@@ -1,0 +1,60 @@
+.questionForm,
+.optionEditor {
+  display: grid;
+  min-width: 0;
+  gap: var(--yn-space-4);
+}
+
+.formColumns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yn-space-4);
+}
+
+.optionEditor header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yn-space-4);
+}
+
+.optionEditor > div {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: var(--yn-space-2);
+}
+
+.optionEditor > div > input:last-of-type {
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-text);
+  font: inherit;
+}
+
+.optionEditor > div > button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: transparent;
+  color: var(--yn-color-muted);
+  cursor: pointer;
+}
+
+.optionEditor > div > button:hover {
+  border-color: var(--yn-color-control-strong);
+  background: var(--yn-color-control-strong);
+  color: var(--yn-color-control-strong-text);
+}
+
+@media (max-width: 680px) {
+  .formColumns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

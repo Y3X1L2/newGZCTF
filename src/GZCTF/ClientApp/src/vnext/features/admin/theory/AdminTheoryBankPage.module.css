@@ -1,0 +1,233 @@
+.page {
+  display: grid;
+  width: min(var(--yn-page-max-width), 100%);
+  min-width: 0;
+  margin: 0 auto;
+  padding: var(--yn-space-7) var(--yn-page-gutter) 72px;
+  gap: var(--yn-space-5);
+}
+
+.catalog,
+.filterPanel,
+.filterPanel section,
+.filterOptions,
+.tableColumn {
+  display: grid;
+  min-width: 0;
+}
+
+.catalog {
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(32px, 4vw, 64px);
+}
+
+.filterPanel {
+  position: sticky;
+  top: calc(var(--yn-context-height) + var(--yn-space-5));
+  gap: var(--yn-space-5);
+  padding-right: var(--yn-space-5);
+  border-right: 1px solid var(--yn-color-border);
+}
+
+.filterPanel header span {
+  color: var(--yn-color-brand-strong);
+  font-family: var(--yn-font-mono);
+  font-size: 11px;
+}
+
+.filterPanel header h2 {
+  margin: 6px 0 0;
+  font-size: var(--yn-font-xl);
+}
+
+.filterPanel header p {
+  margin: var(--yn-space-2) 0 0;
+  color: var(--yn-color-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.filterPanel section {
+  gap: var(--yn-space-2);
+}
+
+.filterPanel section > strong {
+  color: var(--yn-color-text-secondary);
+  font-size: 13px;
+}
+
+.filterOptions {
+  max-height: 210px;
+  gap: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.filterOptions button,
+.clearFilters {
+  display: flex;
+  min-width: 0;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yn-space-2);
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--yn-radius-sm);
+  background: transparent;
+  color: var(--yn-color-text-secondary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.filterOptions button:hover,
+.filterOptions button[data-active] {
+  background: var(--yn-color-surface-muted);
+  color: var(--yn-color-text);
+}
+
+.filterOptions button[data-active] {
+  box-shadow: inset 2px 0 var(--yn-color-brand);
+}
+
+.filterOptions button small {
+  color: var(--yn-color-muted);
+  font-family: var(--yn-font-mono);
+  font-size: 11px;
+}
+
+.clearFilters {
+  width: fit-content;
+  justify-content: flex-start;
+  padding: 0;
+  color: var(--yn-color-muted);
+}
+
+.clearFilters:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.tableColumn {
+  gap: var(--yn-space-4);
+}
+
+.searchBox {
+  display: flex;
+  min-width: min(360px, 100%);
+  min-height: 44px;
+  flex: 1 1 360px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-muted);
+}
+
+.searchBox input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--yn-color-text);
+  font: inherit;
+}
+
+.identity,
+.metaCell {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.identity strong,
+.identity small,
+.metaCell strong,
+.metaCell small,
+.answer {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identity small,
+.metaCell small,
+.answer {
+  color: var(--yn-color-muted);
+  font-size: 12px;
+}
+
+.identity strong,
+.metaCell strong {
+  font-size: 13px;
+}
+
+.rowActions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.iconButton {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--yn-radius-md);
+  background: transparent;
+  color: var(--yn-color-muted);
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  border-color: var(--yn-color-border);
+  background: var(--yn-color-surface-muted);
+  color: var(--yn-color-text);
+}
+
+.iconButton[data-danger]:hover {
+  border-color: color-mix(in srgb, var(--yn-color-danger) 38%, var(--yn-color-border));
+  background: var(--yn-color-danger-soft);
+  color: var(--yn-color-danger);
+}
+
+@media (max-width: 1080px) {
+  .catalog {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .filterPanel {
+    position: static;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 0 0 var(--yn-space-5);
+    border-right: 0;
+    border-bottom: 1px solid var(--yn-color-border);
+  }
+
+  .filterPanel header,
+  .clearFilters {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 680px) {
+  .searchBox {
+    min-width: 0;
+  }
+
+  .filterPanel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .filterPanel header,
+  .clearFilters {
+    grid-column: auto;
+  }
+}

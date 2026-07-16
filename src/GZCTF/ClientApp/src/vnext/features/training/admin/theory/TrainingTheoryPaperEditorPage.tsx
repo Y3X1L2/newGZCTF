@@ -12,7 +12,7 @@ import { ActionButton, InlineFeedback } from '../../../../shared/Interaction'
 import { DataState, StatusPill } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
 import { useVNextPageTitle } from '../../../../shared/useVNextPageTitle'
-import { DEFAULT_COURSE_BANK, theoryQuestionTypeLabel } from '../../theory/theoryQuestionModel'
+import { DEFAULT_THEORY_BANK, theoryQuestionTypeLabel } from '../../../theory/questionModel'
 import { EditorActionBar, EditorSection, TrainingEditorShell } from '../TrainingEditorShell'
 import styles from './TrainingTheoryPaperEditorPage.module.css'
 
@@ -97,14 +97,14 @@ export function TrainingTheoryPaperEditorPage() {
 
   const allQuestions = questionsRequest.data ?? []
   const banks = useMemo(
-    () => [...new Set(allQuestions.map((question) => question.bankName || DEFAULT_COURSE_BANK))].sort(),
+    () => [...new Set(allQuestions.map((question) => question.bankName || DEFAULT_THEORY_BANK))].sort(),
     [allQuestions]
   )
   const filteredQuestions = useMemo(() => {
     const search = keyword.trim().toLocaleLowerCase('zh-CN')
     return allQuestions.filter((question) => {
       if (typeFilter !== 'All' && question.type !== typeFilter) return false
-      if (bankFilter !== 'All' && (question.bankName || DEFAULT_COURSE_BANK) !== bankFilter) return false
+      if (bankFilter !== 'All' && (question.bankName || DEFAULT_THEORY_BANK) !== bankFilter) return false
       if (!search) return true
       return [question.title, question.content, question.bankName]
         .filter(Boolean)
@@ -296,7 +296,7 @@ export function TrainingTheoryPaperEditorPage() {
                     <div>
                       <strong>{question.title}</strong>
                       <small>
-                        {theoryQuestionTypeLabel(question.type)} · {question.bankName || DEFAULT_COURSE_BANK}
+                        {theoryQuestionTypeLabel(question.type)} · {question.bankName || DEFAULT_THEORY_BANK}
                       </small>
                     </div>
                     <TextField
@@ -406,7 +406,7 @@ export function TrainingTheoryPaperEditorPage() {
                   <span>
                     <strong>{question.title}</strong>
                     <small>
-                      {theoryQuestionTypeLabel(question.type)} · {question.bankName || DEFAULT_COURSE_BANK}
+                      {theoryQuestionTypeLabel(question.type)} · {question.bankName || DEFAULT_THEORY_BANK}
                     </small>
                   </span>
                   <StatusPill tone={added ? 'success' : 'neutral'}>{added ? '已加入' : '可选择'}</StatusPill>

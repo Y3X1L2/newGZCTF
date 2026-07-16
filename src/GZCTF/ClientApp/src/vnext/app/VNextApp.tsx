@@ -93,6 +93,46 @@ const AdminLogsPage = lazy(() =>
 const AdminDashboardPage = lazy(() =>
   import('../features/admin/dashboard/AdminDashboardPage').then((module) => ({ default: module.AdminDashboardPage }))
 )
+const AdminGamesPage = lazy(() =>
+  import('../features/admin/games/AdminGamesPage').then((module) => ({ default: module.AdminGamesPage }))
+)
+const AdminTheoryBankPage = lazy(() =>
+  import('../features/admin/theory/AdminTheoryBankPage').then((module) => ({ default: module.AdminTheoryBankPage }))
+)
+const GameAdminShell = lazy(() =>
+  import('../features/admin/games/GameAdminShell').then((module) => ({ default: module.GameAdminShell }))
+)
+const AdminGameInfoPage = lazy(() =>
+  import('../features/admin/games/AdminGameInfoPage').then((module) => ({ default: module.AdminGameInfoPage }))
+)
+const AdminGameChallengesPage = lazy(() =>
+  import('../features/admin/games/challenges/AdminGameChallengesPage').then((module) => ({
+    default: module.AdminGameChallengesPage,
+  }))
+)
+const AdminChallengeEditorPage = lazy(() =>
+  import('../features/admin/games/challenges/AdminChallengeEditorPage').then((module) => ({
+    default: module.AdminChallengeEditorPage,
+  }))
+)
+const AdminTheoryPaperPage = lazy(() =>
+  import('../features/admin/theory/AdminTheoryPaperPage').then((module) => ({ default: module.AdminTheoryPaperPage }))
+)
+const AdminTheoryResultsPage = lazy(() =>
+  import('../features/admin/theory/AdminTheoryResultsPage').then((module) => ({ default: module.AdminTheoryResultsPage }))
+)
+const AdminGamePhasesPage = lazy(() =>
+  import('../features/admin/games/phases/AdminGamePhasesPage').then((module) => ({ default: module.AdminGamePhasesPage }))
+)
+const AdminGameDivisionsPage = lazy(() =>
+  import('../features/admin/games/divisions/AdminGameDivisionsPage').then((module) => ({ default: module.AdminGameDivisionsPage }))
+)
+const AdminGameReviewPage = lazy(() =>
+  import('../features/admin/games/review/AdminGameReviewPage').then((module) => ({ default: module.AdminGameReviewPage }))
+)
+const AdminGameNoticesPage = lazy(() =>
+  import('../features/admin/games/notices/AdminGameNoticesPage').then((module) => ({ default: module.AdminGameNoticesPage }))
+)
 
 export function VNextApp() {
   return (
@@ -136,6 +176,20 @@ export function VNextApp() {
           <Route path="admin" element={<AdminShell />}>
             <Route index element={<Navigate replace to="dashboard" />} />
             <Route path="dashboard" element={<AdminDashboardPage />} />
+            <Route path="games" element={<AdminGamesPage />} />
+            <Route path="theory-bank" element={<AdminTheoryBankPage />} />
+            <Route path="games/:gameId" element={<GameAdminShell />}>
+              <Route index element={<Navigate replace to="info" />} />
+              <Route path="info" element={<AdminGameInfoPage />} />
+              <Route path="phases" element={<AdminGamePhasesPage />} />
+              <Route path="divisions" element={<AdminGameDivisionsPage />} />
+              <Route path="review" element={<AdminGameReviewPage />} />
+              <Route path="notices" element={<AdminGameNoticesPage />} />
+              <Route path="challenges" element={<AdminGameChallengesPage />} />
+              <Route path="challenges/:challengeId" element={<AdminChallengeEditorPage />} />
+              <Route path="theory-paper" element={<AdminTheoryPaperPage />} />
+              <Route path="theory-results" element={<AdminTheoryResultsPage />} />
+            </Route>
             <Route path="images" element={<AdminImagesPage />} />
             <Route path="nodes" element={<AdminNodesPage />} />
             <Route path="nodes/:nodeId" element={<AdminNodeDetailPage />} />

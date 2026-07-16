@@ -80,6 +80,7 @@ export const platformModules: PlatformModule[] = [
     group: '学习与训练',
     description: '理论题目、试卷与考试管理',
     adminOnly: true,
+    implemented: true,
   },
   {
     id: 'images',

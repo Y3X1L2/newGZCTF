@@ -11,15 +11,15 @@ import { ActionButton, InlineFeedback, VNextDialog } from '../../../../shared/In
 import { DataState, StatusPill } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
 import {
-  DEFAULT_COURSE_BANK,
+  DEFAULT_THEORY_BANK,
   normalizeTheoryQuestion,
   parseTheoryQuestionJson,
   theoryAnswerLabel,
   theoryQuestionTypeLabel,
-} from '../../theory/theoryQuestionModel'
+} from '../../../theory/questionModel'
 import { CourseManagementPanelHeader } from './CourseManagementPanelHeader'
 import styles from './CourseTheoryBankPanel.module.css'
-import { TheoryQuestionDialog } from './TheoryQuestionDialog'
+import { TheoryQuestionDialog } from '../../../theory/admin/TheoryQuestionDialog'
 
 export function CourseTheoryBankPanel({ course }: { course: TrainingCourseModel }) {
   const courseId = course.id ?? 0
@@ -38,20 +38,20 @@ export function CourseTheoryBankPanel({ course }: { course: TrainingCourseModel 
   const [deleteQuestion, setDeleteQuestion] = useState<TrainingCourseTheoryQuestionModel | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [jsonText, setJsonText] = useState('')
-  const [jsonBank, setJsonBank] = useState(DEFAULT_COURSE_BANK)
+  const [jsonBank, setJsonBank] = useState(DEFAULT_THEORY_BANK)
   const [previewQuestions, setPreviewQuestions] = useState<TheoryQuestionEditModel[]>([])
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'danger'; message: string } | null>(null)
 
   const banks = useMemo(
-    () => [...new Set(questions.map((question) => question.bankName || DEFAULT_COURSE_BANK))].sort(),
+    () => [...new Set(questions.map((question) => question.bankName || DEFAULT_THEORY_BANK))].sort(),
     [questions]
   )
   const visibleQuestions = useMemo(() => {
     const search = keyword.trim().toLocaleLowerCase('zh-CN')
     return questions.filter((question) => {
       if (typeFilter !== 'All' && question.type !== typeFilter) return false
-      if (bankFilter !== 'All' && (question.bankName || DEFAULT_COURSE_BANK) !== bankFilter) return false
+      if (bankFilter !== 'All' && (question.bankName || DEFAULT_THEORY_BANK) !== bankFilter) return false
       if (!search) return true
       return [question.title, question.content, question.bankName, ...(question.tags ?? [])]
         .filter(Boolean)
@@ -98,7 +98,7 @@ export function CourseTheoryBankPanel({ course }: { course: TrainingCourseModel 
 
   const parseImport = () => {
     try {
-      setPreviewQuestions(parseTheoryQuestionJson(jsonText, jsonBank.trim() || DEFAULT_COURSE_BANK))
+      setPreviewQuestions(parseTheoryQuestionJson(jsonText, jsonBank.trim() || DEFAULT_THEORY_BANK))
       setFeedback(null)
     } catch (parseError) {
       setPreviewQuestions([])
@@ -193,7 +193,7 @@ export function CourseTheoryBankPanel({ course }: { course: TrainingCourseModel 
             <article key={question.id}>
               <div className={styles.questionMeta}>
                 <StatusPill tone="info">{theoryQuestionTypeLabel(question.type)}</StatusPill>
-                <StatusPill>{question.bankName || DEFAULT_COURSE_BANK}</StatusPill>
+                <StatusPill>{question.bankName || DEFAULT_THEORY_BANK}</StatusPill>
               </div>
               <div className={styles.questionBody}>
                 <strong>{question.title}</strong>

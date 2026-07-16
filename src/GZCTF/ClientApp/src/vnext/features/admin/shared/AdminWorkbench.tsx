@@ -40,8 +40,8 @@ export function AdminPageHeader({
   )
 }
 
-export function MetricStrip({ children }: { children: ReactNode }) {
-  return <section className={styles.metricStrip}>{children}</section>
+export function MetricStrip({ children, density = 'compact' }: { children: ReactNode; density?: 'compact' | 'comfortable' }) {
+  return <section className={styles.metricStrip} data-density={density}>{children}</section>
 }
 
 export function MetricItem({
@@ -125,6 +125,7 @@ export function DataTable<T>({
   onRowClick,
   emptyTitle = '暂无数据',
   emptyDescription = '当前条件下没有可展示的记录。',
+  density = 'compact',
 }: {
   caption: string
   columns: AdminDataColumn<T>[]
@@ -133,6 +134,7 @@ export function DataTable<T>({
   onRowClick?: (row: T) => void
   emptyTitle?: string
   emptyDescription?: string
+  density?: 'compact' | 'comfortable'
 }) {
   if (!rows.length) return <DataState description={emptyDescription} title={emptyTitle} />
 
@@ -149,7 +151,7 @@ export function DataTable<T>({
 
   return (
     <div className={styles.tableFrame}>
-      <table className={styles.dataTable}>
+      <table className={styles.dataTable} data-density={density}>
         <caption>{caption}</caption>
         <thead>
           <tr>
@@ -289,6 +291,35 @@ export function RefreshIndicator({ active, label }: { active: boolean; label: st
       <RefreshCw aria-hidden="true" size={14} />
       {label}
     </span>
+  )
+}
+
+export function AdminEditorSection({
+  title,
+  description,
+  children,
+}: {
+  title: string
+  description?: string
+  children: ReactNode
+}) {
+  return (
+    <section className={styles.editorSection}>
+      <header>
+        <h2>{title}</h2>
+        {description ? <p>{description}</p> : null}
+      </header>
+      <div>{children}</div>
+    </section>
+  )
+}
+
+export function AdminEditorActionBar({ children, status }: { children: ReactNode; status?: ReactNode }) {
+  return (
+    <footer className={styles.editorActionBar}>
+      <div>{status}</div>
+      <div>{children}</div>
+    </footer>
   )
 }
 

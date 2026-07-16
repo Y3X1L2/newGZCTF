@@ -290,6 +290,7 @@
 
 .main {
   min-height: 100vh;
+  overflow-x: clip;
   margin-left: var(--yn-rail-width);
   padding-top: var(--yn-context-height);
 }
@@ -297,6 +298,17 @@
 .routeFrame {
   width: 100%;
   min-height: calc(100vh - var(--yn-context-height));
+  animation: route-frame-enter var(--yn-motion-normal) var(--yn-ease-standard) both;
+}
+
+@keyframes route-frame-enter {
+  from {
+    transform: translateX(7px);
+  }
+
+  to {
+    transform: translateX(0);
+  }
 }
 
 .moduleDrawerBody {
@@ -565,5 +577,11 @@
   .readyState,
   .pendingState {
     display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .routeFrame {
+    animation: none;
   }
 }
