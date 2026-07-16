@@ -1,8 +1,9 @@
 import { Search, Trophy, Users } from 'lucide-react'
 import { ChangeEvent, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import api, { ScoreboardItem } from '@Api'
+import { ScoreboardItem } from '@Api'
 import { DataState, PageHeading, StatusPill } from '../../../shared/Primitives'
+import { useGameChallengeCatalog, useGameScoreboard } from '../gamePlayerApi'
 import { useGameWorkspace } from '../workspace/GameWorkspaceShell'
 import styles from './ScoreboardPage.module.css'
 
@@ -38,19 +39,8 @@ function TeamAvatar({ item }: { item: ScoreboardItem }) {
 export function ScoreboardPage() {
   const { gameId, game, revision } = useGameWorkspace()
   const ongoing = Date.now() >= (game.start ?? 0) && Date.now() < (game.end ?? 0)
-  const {
-    data: scoreboard,
-    error,
-    mutate,
-  } = api.game.useGameScoreboard(gameId, {
-    revalidateOnFocus: false,
-    refreshInterval: ongoing ? 30_000 : 0,
-  })
-  const { data: teamInfo } = api.game.useGameChallengesWithTeamInfo(
-    gameId,
-    { revalidateOnFocus: false, refreshInterval: ongoing ? 30_000 : 0 },
-    true
-  )
+  const { data: scoreboard, error, mutate } = useGameScoreboard(gameId, ongoing ? 30_000 : 0)
+  const { data: teamInfo } = useGameChallengeCatalog(gameId, ongoing ? 30_000 : 0)
   const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState(searchParams.get('q') ?? '')
   const divisionId = Number(searchParams.get('division')) || null

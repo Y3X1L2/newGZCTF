@@ -33,11 +33,19 @@ for (const path of sourceFiles) {
     inlineStyles += (content.match(/\bstyle=\{/g) || []).length
     yinyuClassReferences += (content.match(/\byy-[a-z0-9-]+/gi) || []).length
 
-    if (!file.startsWith('src/api-client/') && !file.startsWith('src/generated/') && /from\s+['"][^'"]*generated\/Api['"]/.test(content)) {
+    if (
+      !file.startsWith('src/api-client/') &&
+      !file.startsWith('src/generated/') &&
+      /from\s+['"][^'"]*generated\/Api['"]/.test(content)
+    ) {
       failures.push(`${file}: generated API must be consumed through @Api`)
     }
 
-    if (file.startsWith('src/pages/') && /import\s+['"]\.[^'"]+\.css['"]/.test(content) && !/\.module\.css['"]/.test(content)) {
+    if (
+      file.startsWith('src/pages/') &&
+      /import\s+['"]\.[^'"]+\.css['"]/.test(content) &&
+      !/\.module\.css['"]/.test(content)
+    ) {
       failures.push(`${file}: route pages may only import CSS modules`)
     }
 
@@ -54,19 +62,32 @@ for (const path of sourceFiles) {
       }
       if (/\byy-[a-z0-9-]+/i.test(content)) failures.push(`${file}: vNext may not use legacy yy-* classes`)
       if (
-        imports.some((specifier) =>
-          /(?:^|\/)(?:components|pages|styles)(?:\/|$)/.test(specifier.replaceAll('\\', '/'))
-        )
+        imports.some((specifier) => /(?:^|\/)(?:components|pages|styles)(?:\/|$)/.test(specifier.replaceAll('\\', '/')))
       ) {
         failures.push(`${file}: vNext may not import legacy visual components, pages, or global styles`)
       }
-      if (file.endsWith('.tsx') && imports.some((specifier) => specifier.endsWith('.css') && !specifier.endsWith('.module.css'))) {
+      if (
+        file.endsWith('.tsx') &&
+        imports.some((specifier) => specifier.endsWith('.css') && !specifier.endsWith('.module.css'))
+      ) {
         failures.push(`${file}: vNext TSX files may only import CSS modules`)
       }
-      if (file.includes('/features/training/') && imports.some((specifier) => /(?:^|\/)games(?:\/|$)/.test(specifier))) {
+      if (
+        file.endsWith('.tsx') &&
+        /import\s+(?!type\s|\{|\*)[A-Za-z_$][\w$]*(?:\s*,\s*\{[^}]*\})?\s+from\s+['"]@Api['"]/s.test(content)
+      ) {
+        failures.push(`${file}: page and view components must consume generated API through a feature adapter`)
+      }
+      if (
+        file.includes('/features/training/') &&
+        imports.some((specifier) => /(?:^|\/)games(?:\/|$)/.test(specifier))
+      ) {
         failures.push(`${file}: training must not depend on the games feature`)
       }
-      if (file.includes('/features/games/') && imports.some((specifier) => /(?:^|\/)training(?:\/|$)/.test(specifier))) {
+      if (
+        file.includes('/features/games/') &&
+        imports.some((specifier) => /(?:^|\/)training(?:\/|$)/.test(specifier))
+      ) {
         failures.push(`${file}: games must not depend on the training feature`)
       }
       if (file.endsWith('.tsx') && /\bfetch\s*\(/.test(content)) {
@@ -78,7 +99,11 @@ for (const path of sourceFiles) {
       if (/document\.querySelector/.test(content)) {
         failures.push(`${file}: do not query the document to coordinate React forms or views`)
       }
-      if (file.endsWith('.tsx') && file !== 'src/vnext/shared/MarkdownContent.tsx' && /dangerouslySetInnerHTML/.test(content)) {
+      if (
+        file.endsWith('.tsx') &&
+        file !== 'src/vnext/shared/MarkdownContent.tsx' &&
+        /dangerouslySetInnerHTML/.test(content)
+      ) {
         failures.push(`${file}: sanitized HTML rendering is centralized in MarkdownContent`)
       }
       if (file.endsWith('.tsx')) {
@@ -90,16 +115,22 @@ for (const path of sourceFiles) {
     }
   }
 
-  if (file === 'src/styles/YinyuDesignLab.css' || file === 'src/styles/YinyuTheme.css' || file === 'src/styles/YinyuRefinement.css') {
+  if (
+    file === 'src/styles/YinyuDesignLab.css' ||
+    file === 'src/styles/YinyuTheme.css' ||
+    file === 'src/styles/YinyuRefinement.css'
+  ) {
     globalCssLines += content.split(/\r?\n/).length
   }
 }
 
-if (inlineStyles > baseline.maxInlineStyles) failures.push(`inline style count ${inlineStyles} exceeds ${baseline.maxInlineStyles}`)
+if (inlineStyles > baseline.maxInlineStyles)
+  failures.push(`inline style count ${inlineStyles} exceeds ${baseline.maxInlineStyles}`)
 if (yinyuClassReferences > baseline.maxYinyuClassReferences) {
   failures.push(`yy-* reference count ${yinyuClassReferences} exceeds ${baseline.maxYinyuClassReferences}`)
 }
-if (globalCssLines > baseline.maxGlobalCssLines) failures.push(`global CSS lines ${globalCssLines} exceeds ${baseline.maxGlobalCssLines}`)
+if (globalCssLines > baseline.maxGlobalCssLines)
+  failures.push(`global CSS lines ${globalCssLines} exceeds ${baseline.maxGlobalCssLines}`)
 if (vnextInlineStyles > baseline.vnext.maxInlineStyles) {
   failures.push(`vNext inline style count ${vnextInlineStyles} exceeds ${baseline.vnext.maxInlineStyles}`)
 }

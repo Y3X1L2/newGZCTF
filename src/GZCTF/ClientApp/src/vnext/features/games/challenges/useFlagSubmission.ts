@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { encryptApiData } from '@Utils/Crypto'
-import api, { AnswerResult } from '@Api'
+import { AnswerResult } from '@Api'
 import { errorMessage } from '../../../shared/errors'
 import { ChallengeFeedback } from '../../challenge-runtime/types'
+import { gamePlayerApi } from '../gamePlayerApi'
 
 export interface SessionSubmission {
   key: string
@@ -37,8 +38,8 @@ async function resolveSubmission(gameId: number, challengeId: number, submitId: 
   if (initial !== AnswerResult.FlagSubmitted) return initial
   for (let attempt = 0; attempt < 24; attempt += 1) {
     await new Promise((resolve) => window.setTimeout(resolve, 1250))
-    const response = await api.game.gameStatus(gameId, challengeId, submitId)
-    if (response.data !== AnswerResult.FlagSubmitted) return response.data
+    const result = await gamePlayerApi.submissionStatus(gameId, challengeId, submitId)
+    if (result !== AnswerResult.FlagSubmitted) return result
   }
   return AnswerResult.FlagSubmitted
 }
@@ -71,11 +72,8 @@ export function useFlagSubmission(gameId: number, publicKey?: string | null) {
 
       try {
         const encrypted = await encryptApiData((translationKey) => translationKey, captured, publicKey)
-        const response = await api.game.gameSubmit(gameId, challengeId, {
-          flag: encrypted,
-          ...(flagId ? { flagId } : {}),
-        })
-        const result = await resolveSubmission(gameId, challengeId, response.data.id, response.data.status)
+        const response = await gamePlayerApi.submitFlag(gameId, challengeId, encrypted, flagId)
+        const result = await resolveSubmission(gameId, challengeId, response.id, response.status)
         const nextFeedback = resultFeedback(result)
         setFeedback((current) => new Map(current).set(challengeId, nextFeedback))
         setSubmissions((current) =>
@@ -93,11 +91,7 @@ export function useFlagSubmission(gameId: number, publicKey?: string | null) {
         )
 
         if (result === AnswerResult.Accepted) {
-          await Promise.all([
-            api.game.mutateGameChallengesWithTeamInfo(gameId),
-            api.game.mutateGameGetChallenge(gameId, challengeId),
-            api.game.mutateGameScoreboard(gameId),
-          ])
+          await gamePlayerApi.refreshAcceptedSubmission(gameId, challengeId)
         }
         return result
       } catch (requestError) {

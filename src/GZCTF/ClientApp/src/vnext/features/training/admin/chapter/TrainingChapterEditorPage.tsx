@@ -1,7 +1,7 @@
 import { Save, Trash2 } from 'lucide-react'
 import { FormEvent, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import api, { TrainingArticleContentType, TrainingCourseChapterEditModel, TrainingCourseVideoProvider } from '@Api'
+import { TrainingArticleContentType, TrainingCourseChapterEditModel, TrainingCourseVideoProvider } from '@Api'
 import { FileField, SelectField, TextAreaField, TextField, ToggleField } from '../../../../shared/FormControls'
 import { ActionButton, InlineFeedback, VNextDialog } from '../../../../shared/Interaction'
 import { MarkdownContent } from '../../../../shared/MarkdownContent'
@@ -9,7 +9,12 @@ import { DataState, StatusPill } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
 import { useVNextPageTitle } from '../../../../shared/useVNextPageTitle'
 import { EditorActionBar, EditorSection, TrainingEditorShell } from '../TrainingEditorShell'
-import { trainingAdminApi, uploadTrainingAsset } from '../trainingAdminApi'
+import {
+  trainingAdminApi,
+  uploadTrainingAsset,
+  useTrainingAdminChapter,
+  useTrainingAdminCourse,
+} from '../trainingAdminApi'
 import styles from './TrainingChapterEditorPage.module.css'
 
 const emptyDraft = (): TrainingCourseChapterEditModel => ({
@@ -38,17 +43,8 @@ export function TrainingChapterEditorPage() {
   const chapterNumber = Number(chapterId)
   const validCourse = Number.isInteger(courseNumber) && courseNumber > 0
   const editing = Number.isInteger(chapterNumber) && chapterNumber > 0
-  const courseRequest = api.trainingCourseAdmin.useTrainingCourseAdminCourse(
-    courseNumber,
-    { revalidateOnFocus: false },
-    validCourse
-  )
-  const chapterRequest = api.trainingCourse.useTrainingCourseChapter(
-    courseNumber,
-    chapterNumber,
-    { revalidateOnFocus: false },
-    validCourse && editing
-  )
+  const courseRequest = useTrainingAdminCourse(courseNumber, validCourse)
+  const chapterRequest = useTrainingAdminChapter(courseNumber, chapterNumber, validCourse && editing)
   const course = courseRequest.data
   const chapter = chapterRequest.data
   const [draft, setDraft] = useState<TrainingCourseChapterEditModel>(emptyDraft)

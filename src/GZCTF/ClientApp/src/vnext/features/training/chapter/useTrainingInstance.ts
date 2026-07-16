@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import api, { ChallengeType, EnvironmentType, TrainingCourseChallengeDetailModel } from '@Api'
+import { ChallengeType, EnvironmentType, TrainingCourseChallengeDetailModel } from '@Api'
 import { errorMessage } from '../../../shared/errors'
 import { RuntimeInstanceController, RuntimeInstancePhase } from '../../challenge-runtime/types'
+import { trainingChapterApi } from './trainingChapterApi'
 
 type PendingOperation = 'create' | 'extend' | 'destroy'
 
@@ -120,15 +121,15 @@ export function useTrainingInstance({
     operationRef.current = { kind: 'create', startedAt: Date.now(), previousCloseTime: null }
     setPhase('provisioning')
     try {
-      const response = await api.trainingCourse.trainingCourseCreateContainer(courseId, challengeId, { chapterId })
+      const response = await trainingChapterApi.createInstance(courseId, chapterId, challengeId)
       if (activeChallengeRef.current !== challengeId) return
-      if (response.data.entry) {
+      if (response.entry) {
         updateChallenge({
           ...challenge,
           context: {
             ...challenge?.context,
-            closeTime: response.data.expectStopAt,
-            instanceEntry: response.data.entry,
+            closeTime: response.expectStopAt,
+            instanceEntry: response.entry,
           },
         })
         operationRef.current = null
@@ -154,15 +155,15 @@ export function useTrainingInstance({
     }
     setPhase('extending')
     try {
-      const response = await api.trainingCourse.trainingCourseExtendContainer(courseId, challengeId, { chapterId })
+      const response = await trainingChapterApi.extendInstance(courseId, chapterId, challengeId)
       if (activeChallengeRef.current !== challengeId) return
-      if (response.data.entry && response.data.expectStopAt) {
+      if (response.entry && response.expectStopAt) {
         updateChallenge({
           ...challenge,
           context: {
             ...challenge?.context,
-            closeTime: response.data.expectStopAt,
-            instanceEntry: response.data.entry,
+            closeTime: response.expectStopAt,
+            instanceEntry: response.entry,
           },
         })
         operationRef.current = null
@@ -188,7 +189,7 @@ export function useTrainingInstance({
     }
     setPhase('stopping')
     try {
-      await api.trainingCourse.trainingCourseDestroyContainer(courseId, challengeId, { chapterId })
+      await trainingChapterApi.destroyInstance(courseId, chapterId, challengeId)
       if (activeChallengeRef.current !== challengeId) return
       window.setTimeout(() => void refresh(), 900)
     } catch (requestError) {

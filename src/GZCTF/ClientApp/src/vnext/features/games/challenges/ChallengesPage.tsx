@@ -1,24 +1,14 @@
-import {
-  Bell,
-  Check,
-  Download,
-  FileArchive,
-  Flag,
-  Lightbulb,
-  ListTree,
-  ShieldCheck,
-  Trophy,
-  Users,
-} from 'lucide-react'
+import { Bell, Check, Download, FileArchive, Flag, Lightbulb, ListTree, ShieldCheck, Trophy, Users } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useConfig } from '@Hooks/useConfig'
-import api, { AnswerResult, ChallengeDetailModel, ChallengeInfo, SubmissionType } from '@Api'
+import { AnswerResult, ChallengeDetailModel, ChallengeInfo, SubmissionType } from '@Api'
 import { ActionButton } from '../../../shared/Interaction'
 import { MarkdownContent } from '../../../shared/MarkdownContent'
 import { DataState, StatusPill } from '../../../shared/Primitives'
 import { FlagSubmission } from '../../challenge-runtime/FlagSubmission'
 import { InstanceControl } from '../../challenge-runtime/InstanceControl'
+import { useGameChallenge, useGameChallengeCatalog } from '../gamePlayerApi'
 import { formatWorkspaceNotice, useGameWorkspace } from '../workspace/GameWorkspaceShell'
 import { ChallengeCatalog, ChallengeGroup } from './ChallengeCatalog'
 import styles from './ChallengesPage.module.css'
@@ -203,11 +193,7 @@ export function ChallengesPage() {
     data: teamInfo,
     error: teamError,
     mutate: mutateTeamInfo,
-  } = api.game.useGameChallengesWithTeamInfo(gameId, {
-    revalidateOnFocus: false,
-    shouldRetryOnError: false,
-    refreshInterval: ongoing ? 10_000 : 0,
-  })
+  } = useGameChallengeCatalog(gameId, ongoing ? 10_000 : 0)
 
   useEffect(() => {
     if (revision > 0) void mutateTeamInfo()
@@ -252,16 +238,7 @@ export function ChallengesPage() {
     data: challenge,
     error: challengeError,
     mutate: mutateChallenge,
-  } = api.game.useGameGetChallenge(
-    gameId,
-    selectedId ?? 0,
-    {
-      keepPreviousData: false,
-      revalidateOnFocus: false,
-      refreshInterval: ongoing ? 60_000 : 0,
-    },
-    Boolean(selectedId)
-  )
+  } = useGameChallenge(gameId, selectedId ?? 0, ongoing ? 60_000 : 0, Boolean(selectedId))
 
   useEffect(() => {
     if (!challenge || challenge.id !== selectedId) return

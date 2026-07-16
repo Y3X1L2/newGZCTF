@@ -1,6 +1,6 @@
 import { Download, ExternalLink, FileText, Link2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import api, {
+import {
   TrainingCourseModel,
   TrainingCourseResourceEditModel,
   TrainingCourseResourceModel,
@@ -10,7 +10,8 @@ import { FileField, SelectField, TextAreaField, TextField, ToggleField } from '.
 import { ActionButton, InlineFeedback, VNextDialog } from '../../../../shared/Interaction'
 import { DataState, StatusPill } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
-import { uploadTrainingAsset } from '../../admin/trainingAdminApi'
+import { safeResourceHref } from '../../../../shared/urls'
+import { trainingAdminApi, uploadTrainingAsset } from '../../admin/trainingAdminApi'
 import { formatFileSize, formatTrainingDate } from '../../training'
 import { CourseManagementPanelHeader } from './CourseManagementPanelHeader'
 import styles from './CourseResourcesPanel.module.css'
@@ -102,9 +103,9 @@ export function CourseResourcesPanel({
         order: Math.max(1, Number(draft.order) || 1),
       }
       if (editingResource?.id) {
-        await api.trainingCourseAdmin.trainingCourseAdminUpdateResource(courseId, editingResource.id, payload)
+        await trainingAdminApi.updateResource(courseId, editingResource.id, payload)
       } else {
-        await api.trainingCourseAdmin.trainingCourseAdminCreateResource(courseId, payload)
+        await trainingAdminApi.createResource(courseId, payload)
       }
       await onCourseChanged()
       setEditOpen(false)
@@ -120,7 +121,7 @@ export function CourseResourcesPanel({
     if (!deleteTarget?.id || saving) return
     setSaving(true)
     try {
-      await api.trainingCourseAdmin.trainingCourseAdminDeleteResource(courseId, deleteTarget.id)
+      await trainingAdminApi.deleteResource(courseId, deleteTarget.id)
       await onCourseChanged()
       setDeleteTarget(null)
       setFeedback({ tone: 'success', message: '课程资源已删除。' })
@@ -149,7 +150,7 @@ export function CourseResourcesPanel({
       {resources.length ? (
         <div className={styles.resourceList}>
           {resources.map((resource) => {
-            const href = resource.downloadUrl || resource.externalUrl
+            const href = safeResourceHref(resource.downloadUrl || resource.externalUrl)
             const external = resource.type !== TrainingCourseResourceType.File
             return (
               <article key={resource.id}>

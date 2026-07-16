@@ -1,10 +1,11 @@
 import { Search, Trash2, UserPlus } from 'lucide-react'
 import { FormEvent, useState } from 'react'
-import api, { TrainingCourseModel, TrainingCourseTeacherCandidateModel, TrainingCourseTeacherRole } from '@Api'
+import { TrainingCourseModel, TrainingCourseTeacherCandidateModel, TrainingCourseTeacherRole } from '@Api'
 import { SelectField, TextField } from '../../../../shared/FormControls'
 import { ActionButton, InlineFeedback, VNextDialog } from '../../../../shared/Interaction'
 import { StatusPill } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
+import { trainingAdminApi } from '../../admin/trainingAdminApi'
 import { formatTrainingDate } from '../../training'
 import { CourseManagementPanelHeader } from './CourseManagementPanelHeader'
 import styles from './CoursePeoplePanels.module.css'
@@ -30,10 +31,8 @@ export function CourseTeachersPanel({
     setSearching(true)
     setFeedback(null)
     try {
-      const response = await api.trainingCourseAdmin.trainingCourseAdminTeacherCandidates(courseId, {
-        keyword: keyword.trim() || null,
-      })
-      const available = (response.data ?? []).filter((candidate) => !candidate.alreadyTeacher)
+      const response = await trainingAdminApi.findTeacherCandidates(courseId, keyword.trim() || null)
+      const available = response.filter((candidate) => !candidate.alreadyTeacher)
       setCandidates(available)
       setSelectedTeacherId(available[0]?.userId ?? '')
     } catch (requestError) {
@@ -47,10 +46,7 @@ export function CourseTeachersPanel({
     if (!selectedTeacherId || saving) return
     setSaving(true)
     try {
-      await api.trainingCourseAdmin.trainingCourseAdminAddTeacher(courseId, {
-        teacherId: selectedTeacherId,
-        role: TrainingCourseTeacherRole.Teacher,
-      })
+      await trainingAdminApi.addTeacher(courseId, selectedTeacherId)
       await onCourseChanged()
       setAddOpen(false)
       setFeedback({ tone: 'success', message: '共同教师已添加。' })
@@ -65,7 +61,7 @@ export function CourseTeachersPanel({
     if (!teacherId || saving) return
     setSaving(true)
     try {
-      await api.trainingCourseAdmin.trainingCourseAdminRemoveTeacher(courseId, teacherId)
+      await trainingAdminApi.removeTeacher(courseId, teacherId)
       await onCourseChanged()
       setFeedback({ tone: 'success', message: '共同教师已移除。' })
     } catch (requestError) {

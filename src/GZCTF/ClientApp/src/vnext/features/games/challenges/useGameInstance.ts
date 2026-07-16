@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import api, { ChallengeDetailModel, ChallengeType, ContainerStatus, EnvironmentType, VmStatusResponse } from '@Api'
+import { ChallengeDetailModel, ChallengeType, ContainerStatus, EnvironmentType, VmStatusResponse } from '@Api'
 import { errorMessage } from '../../../shared/errors'
 import { RuntimeInstanceController, RuntimeInstancePhase } from '../../challenge-runtime/types'
+import { gamePlayerApi } from '../gamePlayerApi'
 
 function challengeInstanceKind(challenge?: ChallengeDetailModel): RuntimeInstanceController['kind'] {
   const container =
@@ -16,16 +17,6 @@ function vmPhase(status: VmStatusResponse): RuntimeInstancePhase {
   if (status.rdpUrl || status.stage === 'ready') return 'running'
   if (status.queue?.queuePosition || status.queue?.peopleAhead) return 'queued'
   return 'provisioning'
-}
-
-async function readVmStatus(gameId: number, challengeId: number) {
-  const response = await fetch(`/api/Game/${gameId}/Vm/${challengeId}`, { credentials: 'include' })
-  if (response.status === 404) return null
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { title?: string } | null
-    throw new Error(body?.title || `Windows 靶机状态读取失败 (${response.status})`)
-  }
-  return (await response.json()) as VmStatusResponse
 }
 
 export function useGameInstance({
@@ -87,7 +78,7 @@ export function useGameInstance({
     }
 
     try {
-      const next = await readVmStatus(gameId, challengeId)
+      const next = await gamePlayerApi.vmStatus(gameId, challengeId)
       if (activeChallengeRef.current !== challengeId) return
       setVmStatus(next)
       setError(null)
@@ -119,20 +110,20 @@ export function useGameInstance({
     provisioningStartedRef.current = Date.now()
     setPhase('provisioning')
     try {
-      const response = await api.game.gameCreateContainer(gameId, challengeId)
+      const response = await gamePlayerApi.createInstance(gameId, challengeId)
       if (activeChallengeRef.current !== challengeId) return
       if (kind === 'docker') {
         updateChallenge({
           ...challenge,
           context: {
             ...challenge?.context,
-            closeTime: response.data.expectStopAt,
-            instanceEntry: response.data.entry,
+            closeTime: response.expectStopAt,
+            instanceEntry: response.entry,
           },
         })
-        setPhase(response.data.entry ? 'running' : 'provisioning')
-        if (response.data.entry) provisioningStartedRef.current = null
-        if (!response.data.entry || response.data.status === ContainerStatus.Pending) {
+        setPhase(response.entry ? 'running' : 'provisioning')
+        if (response.entry) provisioningStartedRef.current = null
+        if (!response.entry || response.status === ContainerStatus.Pending) {
           window.setTimeout(() => void refresh(), 1200)
         }
       } else {
@@ -151,14 +142,14 @@ export function useGameInstance({
     setError(null)
     setPhase('extending')
     try {
-      const response = await api.game.gameExtendContainerLifetime(gameId, challengeId)
+      const response = await gamePlayerApi.extendInstance(gameId, challengeId)
       if (activeChallengeRef.current !== challengeId) return
       updateChallenge({
         ...challenge,
         context: {
           ...challenge?.context,
-          closeTime: response.data.expectStopAt,
-          instanceEntry: response.data.entry ?? challenge?.context?.instanceEntry,
+          closeTime: response.expectStopAt,
+          instanceEntry: response.entry ?? challenge?.context?.instanceEntry,
         },
       })
       setPhase('running')
@@ -174,8 +165,8 @@ export function useGameInstance({
     setError(null)
     setPhase('stopping')
     try {
-      if (kind === 'windows') await api.game.gameDestroyVm(gameId, challengeId)
-      else await api.game.gameDeleteContainer(gameId, challengeId)
+      if (kind === 'windows') await gamePlayerApi.destroyVm(gameId, challengeId)
+      else await gamePlayerApi.destroyContainer(gameId, challengeId)
       if (activeChallengeRef.current !== challengeId) return
       setVmStatus(null)
       provisioningStartedRef.current = null

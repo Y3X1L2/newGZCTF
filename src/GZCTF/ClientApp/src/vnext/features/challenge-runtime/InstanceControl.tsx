@@ -40,6 +40,7 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
   const remaining = useMemo(() => formatRemaining(controller.closeTime, now), [controller.closeTime, now])
   const queue = controller.vmStatus?.queue
   const stageMessage = controller.vmStatus?.stageMessage
+  const entryHref = externalEntryHref(controller.entry)
 
   if (controller.kind === 'none') return null
 
@@ -127,15 +128,17 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
               <button aria-label="复制实例入口" onClick={() => void copyEntry()} title="复制入口" type="button">
                 {copied ? <Check size={17} /> : <Copy size={17} />}
               </button>
-              <a
-                aria-label="打开实例入口"
-                href={externalEntryHref(controller.entry)}
-                rel="noreferrer noopener"
-                target="_blank"
-                title="在新窗口打开"
-              >
-                <ExternalLink size={17} />
-              </a>
+              {entryHref ? (
+                <a
+                  aria-label="打开实例入口"
+                  href={entryHref}
+                  rel="noreferrer noopener"
+                  target="_blank"
+                  title="在新窗口打开"
+                >
+                  <ExternalLink size={17} />
+                </a>
+              ) : null}
             </div>
           ) : (
             <InlineFeedback>实例已运行，正在等待服务端分配访问入口。</InlineFeedback>

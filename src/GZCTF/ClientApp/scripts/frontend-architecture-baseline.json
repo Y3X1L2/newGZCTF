@@ -1,21 +1,32 @@
 {
+  "componentLineBudgets": {
+    "src/components/admin/nodes/NodeResourcePanel.tsx": 700,
+    "src/components/admin/nodes/NodesPage.tsx": 350,
+    "src/components/topology/penetration/PenetrationAdminPage.tsx": 550,
+    "src/components/topology/penetration/TeamLabRuntimeObservability.tsx": 750,
+    "src/components/training/course-detail/CourseDetailPage.tsx": 1900,
+    "src/vnext/features/admin/games/challenges/AdminChallengeRuntimePanel.tsx": 170,
+    "src/vnext/features/settings/ProfileSettings.tsx": 220,
+    "src/vnext/features/settings/SecuritySettings.tsx": 130,
+    "src/vnext/features/settings/TokenSettings.tsx": 280,
+    "src/vnext/features/teams/useTeamWorkspaceController.ts": 240,
+    "src/vnext/features/training/chapter/TrainingLabCard.tsx": 180,
+    "src/vnext/features/training/chapter/useTrainingChapterController.ts": 130
+  },
+  "maxGlobalCssLines": 13727,
   "maxInlineStyles": 208,
   "maxYinyuClassReferences": 862,
-  "maxGlobalCssLines": 13727,
+  "pageLineBudgets": {
+    "src/pages/admin/games/[id]/Penetration.tsx": 10,
+    "src/pages/admin/nodes/Index.tsx": 10,
+    "src/pages/training/courses/[courseId]/Index.tsx": 10,
+    "src/vnext/features/admin/games/challenges/AdminChallengeEditorPage.tsx": 610,
+    "src/vnext/features/settings/SettingsPage.tsx": 80,
+    "src/vnext/features/teams/TeamsPage.tsx": 260,
+    "src/vnext/features/training/chapter/TrainingChapterPage.tsx": 180
+  },
   "vnext": {
     "maxInlineStyles": 0,
     "maxTsxLines": 650
-  },
-  "pageLineBudgets": {
-    "src/pages/training/courses/[courseId]/Index.tsx": 10,
-    "src/pages/admin/games/[id]/Penetration.tsx": 10,
-    "src/pages/admin/nodes/Index.tsx": 10
-  },
-  "componentLineBudgets": {
-    "src/components/admin/nodes/NodesPage.tsx": 350,
-    "src/components/admin/nodes/NodeResourcePanel.tsx": 700,
-    "src/components/training/course-detail/CourseDetailPage.tsx": 1900,
-    "src/components/topology/penetration/PenetrationAdminPage.tsx": 550,
-    "src/components/topology/penetration/TeamLabRuntimeObservability.tsx": 750
   }
 }

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { NodeResourcePage, NodeSummary } from './contracts'
 import { createImageTemplateAdminApi } from './imageTemplateAdminApi'
 import { createInstanceAdminApi } from './instanceAdminApi'
 import { createNodeAdminApi } from './nodeAdminApi'
-import type { NodeResourcePage, NodeSummary } from './contracts'
 import type { RuntimeJsonClient } from './runtimeJsonClient'
 
 function createClient(get: RuntimeJsonClient['get']): RuntimeJsonClient {
@@ -243,6 +243,7 @@ describe('instanceAdminApi', () => {
     expect(inventory.source).toBe('legacy-containers')
     expect(inventory.items).toHaveLength(1)
     expect(inventory.items[0].nodeName).toBe('传统容器接口')
+    expect(inventory.items[0].entry).toBe('http://10.24.0.30:32768')
     expect(get).toHaveBeenCalledWith('/api/admin/instances')
   })
 

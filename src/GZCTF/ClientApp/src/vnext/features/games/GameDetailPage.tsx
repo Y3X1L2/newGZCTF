@@ -1,7 +1,7 @@
 import { ArrowLeft, ArrowRight, Clock3, ShieldCheck, Users } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import api, { GameType, NoticeType, ParticipationStatus } from '@Api'
+import { GameType, NoticeType, ParticipationStatus } from '@Api'
 import { ActionButton, InlineFeedback, VNextConfirmDialog, VNextDialog } from '../../shared/Interaction'
 import { MarkdownContent } from '../../shared/MarkdownContent'
 import { DataState, GeometricPoster, StatusPill } from '../../shared/Primitives'
@@ -11,6 +11,7 @@ import { useCurrentAccount } from '../account/useCurrentAccount'
 import styles from './GameDetailPage.module.css'
 import { gameStatusLabel, gameStatusTone, participationLabel } from './gameCatalog'
 import { gameModulesFor } from './gameModules'
+import { gamePlayerApi, useGameJoinCheck, useGameNotices, usePlayerGame, usePlayerTeams } from './gamePlayerApi'
 
 function gameStatus(start?: number, end?: number) {
   const now = Date.now()
@@ -81,16 +82,12 @@ export function GameDetailPage() {
   const id = Number(gameId)
   const validId = Number.isInteger(id) && id > 0
   const account = useCurrentAccount()
-  const { data: game, error, mutate } = api.game.useGameGame(id, { revalidateOnFocus: false }, validId)
-  const { data: teams } = api.team.useTeamGetTeamsInfo({ revalidateOnFocus: false }, account.isAuthenticated)
-  const { data: notices } = api.game.useGameNotices(id, { count: 5, skip: 0 }, { revalidateOnFocus: false }, validId)
+  const { data: game, error, mutate } = usePlayerGame(id, validId)
+  const { data: teams } = usePlayerTeams(account.isAuthenticated)
+  const { data: notices } = useGameNotices(id, 5, validId)
   const [joinOpen, setJoinOpen] = useState(false)
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false)
-  const { data: checkInfo, mutate: mutateCheck } = api.game.useGameGetGameJoinCheckInfo(
-    id,
-    { revalidateOnFocus: false },
-    validId && joinOpen && account.isAuthenticated
-  )
+  const { data: checkInfo, mutate: mutateCheck } = useGameJoinCheck(id, validId && joinOpen && account.isAuthenticated)
   const [teamId, setTeamId] = useState<number | null>(null)
   const [divisionId, setDivisionId] = useState<number | null>(null)
   const [inviteCode, setInviteCode] = useState('')
@@ -143,7 +140,7 @@ export function GameDetailPage() {
     setSubmitting(true)
     setFeedback(null)
     try {
-      await api.game.gameJoinGame(id, { teamId, divisionId, inviteCode: inviteCode.trim() || null })
+      await gamePlayerApi.join(id, { teamId, divisionId, inviteCode: inviteCode.trim() || null })
       await Promise.all([mutate(), mutateCheck()])
       setJoinOpen(false)
       setInviteCode('')
@@ -159,7 +156,7 @@ export function GameDetailPage() {
     setSubmitting(true)
     setFeedback(null)
     try {
-      await api.game.gameLeaveGame(id)
+      await gamePlayerApi.leave(id)
       await mutate()
       setFeedback({ tone: 'success', message: '已撤回当前报名。' })
       return true

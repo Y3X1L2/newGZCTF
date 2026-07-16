@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
-import api, {
+import {
   TrainingCourseChapterModel,
   TrainingCourseEnrollmentStatus,
   TrainingCourseProgressStatus,
@@ -24,6 +24,7 @@ import { MarkdownContent } from '../../../shared/MarkdownContent'
 import { DataState, GeometricPoster, StatusPill } from '../../../shared/Primitives'
 import { errorMessage } from '../../../shared/errors'
 import { useVNextPageTitle } from '../../../shared/useVNextPageTitle'
+import { trainingLearnerApi, useTrainingCourseDetail } from '../api/trainingLearnerApi'
 import {
   courseProgress,
   courseStatusLabel,
@@ -78,7 +79,7 @@ export function TrainingCoursePage() {
   const id = Number(courseId)
   const validId = Number.isInteger(id) && id > 0
   const [searchParams, setSearchParams] = useSearchParams()
-  const courseRequest = api.trainingCourse.useTrainingCourseCourse(id, { revalidateOnFocus: false }, validId)
+  const courseRequest = useTrainingCourseDetail(id, validId)
   const course = courseRequest.data
   useVNextPageTitle(course?.title || '课程详情')
   const [enrollOpen, setEnrollOpen] = useState(false)
@@ -132,7 +133,7 @@ export function TrainingCoursePage() {
     setSubmitting(true)
     setFeedback(null)
     try {
-      await api.trainingCourse.trainingCourseEnroll(id, { applyReason: applyReason.trim() })
+      await trainingLearnerApi.enroll(id, applyReason.trim())
       await courseRequest.mutate()
       setEnrollOpen(false)
       setApplyReason('')
@@ -149,7 +150,7 @@ export function TrainingCoursePage() {
     setSubmitting(true)
     setFeedback(null)
     try {
-      await api.trainingCourse.trainingCourseCancelEnroll(id)
+      await trainingLearnerApi.cancelEnrollment(id)
       await courseRequest.mutate()
       setFeedback({ tone: 'success', message: '报名申请已撤回。' })
     } catch (requestError) {

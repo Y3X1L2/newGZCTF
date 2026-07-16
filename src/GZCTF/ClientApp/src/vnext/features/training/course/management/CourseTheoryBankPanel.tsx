@@ -1,6 +1,6 @@
 import { FileUp, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import api, {
+import {
   TheoryQuestionEditModel,
   TheoryQuestionType,
   TrainingCourseModel,
@@ -10,6 +10,7 @@ import { FileField, SelectField, TextAreaField, TextField } from '../../../../sh
 import { ActionButton, InlineFeedback, VNextDialog } from '../../../../shared/Interaction'
 import { DataState, StatusPill } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
+import { TheoryQuestionDialog } from '../../../theory/admin/TheoryQuestionDialog'
 import {
   DEFAULT_THEORY_BANK,
   normalizeTheoryQuestion,
@@ -17,18 +18,13 @@ import {
   theoryAnswerLabel,
   theoryQuestionTypeLabel,
 } from '../../../theory/questionModel'
+import { trainingAdminApi, useTrainingAdminTheoryQuestions } from '../../admin/trainingAdminApi'
 import { CourseManagementPanelHeader } from './CourseManagementPanelHeader'
 import styles from './CourseTheoryBankPanel.module.css'
-import { TheoryQuestionDialog } from '../../../theory/admin/TheoryQuestionDialog'
 
 export function CourseTheoryBankPanel({ course }: { course: TrainingCourseModel }) {
   const courseId = course.id ?? 0
-  const questionsRequest = api.trainingCourseAdmin.useTrainingCourseAdminTheoryQuestions(
-    courseId,
-    { count: 5000 },
-    { revalidateOnFocus: false },
-    Boolean(course.canEdit && courseId)
-  )
+  const questionsRequest = useTrainingAdminTheoryQuestions(courseId, 5000, Boolean(course.canEdit && courseId))
   const questions = questionsRequest.data ?? []
   const [keyword, setKeyword] = useState('')
   const [typeFilter, setTypeFilter] = useState('All')
@@ -66,9 +62,9 @@ export function CourseTheoryBankPanel({ course }: { course: TrainingCourseModel 
       const payload = normalizeTheoryQuestion(draft)
       if (!payload.title) throw new Error('请输入题干。')
       if (activeQuestion?.id) {
-        await api.trainingCourseAdmin.trainingCourseAdminUpdateTheoryQuestion(courseId, activeQuestion.id, payload)
+        await trainingAdminApi.updateTheoryQuestion(courseId, activeQuestion.id, payload)
       } else {
-        await api.trainingCourseAdmin.trainingCourseAdminCreateTheoryQuestion(courseId, payload)
+        await trainingAdminApi.createTheoryQuestion(courseId, payload)
       }
       await questionsRequest.mutate()
       setEditorOpen(false)
@@ -85,7 +81,7 @@ export function CourseTheoryBankPanel({ course }: { course: TrainingCourseModel 
     if (!deleteQuestion?.id || saving) return
     setSaving(true)
     try {
-      await api.trainingCourseAdmin.trainingCourseAdminDeleteTheoryQuestion(courseId, deleteQuestion.id)
+      await trainingAdminApi.deleteTheoryQuestion(courseId, deleteQuestion.id)
       await questionsRequest.mutate()
       setDeleteQuestion(null)
       setFeedback({ tone: 'success', message: '理论题目已删除。' })
@@ -112,7 +108,7 @@ export function CourseTheoryBankPanel({ course }: { course: TrainingCourseModel 
     setFeedback(null)
     try {
       for (const question of previewQuestions) {
-        await api.trainingCourseAdmin.trainingCourseAdminCreateTheoryQuestion(courseId, question)
+        await trainingAdminApi.createTheoryQuestion(courseId, question)
       }
       await questionsRequest.mutate()
       setImportOpen(false)

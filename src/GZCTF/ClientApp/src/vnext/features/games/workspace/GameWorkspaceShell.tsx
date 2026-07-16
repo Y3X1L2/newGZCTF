@@ -2,10 +2,11 @@ import * as signalR from '@microsoft/signalr'
 import { Clock3, Radio, Wifi, WifiOff } from 'lucide-react'
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useParams } from 'react-router'
-import api, { DetailedGameInfoModel, GameNotice, NoticeType } from '@Api'
+import { DetailedGameInfoModel, GameNotice, NoticeType } from '@Api'
 import { DataState, StatusPill } from '../../../shared/Primitives'
 import { useVNextPageTitle } from '../../../shared/useVNextPageTitle'
 import { gameModulesFor } from '../gameModules'
+import { useGameNotices, usePlayerGame } from '../gamePlayerApi'
 import styles from './GameWorkspaceShell.module.css'
 
 type ConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'offline'
@@ -78,13 +79,8 @@ export function GameWorkspaceShell() {
   const id = Number(gameId)
   const validId = Number.isInteger(id) && id > 0
   const location = useLocation()
-  const { data: game, error } = api.game.useGameGame(id, { revalidateOnFocus: false }, validId)
-  const { data: initialNotices, mutate: mutateNotices } = api.game.useGameNotices(
-    id,
-    { count: 100, skip: 0 },
-    { revalidateOnFocus: false },
-    validId
-  )
+  const { data: game, error } = usePlayerGame(id, validId)
+  const { data: initialNotices, mutate: mutateNotices } = useGameNotices(id, 100, validId)
   const [notices, setNotices] = useState<GameNotice[]>([])
   const [connectionState, setConnectionState] = useState<ConnectionState>('connecting')
   const [revision, setRevision] = useState(0)

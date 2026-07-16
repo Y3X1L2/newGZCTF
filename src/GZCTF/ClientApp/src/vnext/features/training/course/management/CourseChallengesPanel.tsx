@@ -1,10 +1,11 @@
 import { Box, FileArchive, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
-import api, { EnvironmentType, TrainingCourseModel } from '@Api'
+import { EnvironmentType, TrainingCourseModel } from '@Api'
 import { ActionButton, InlineFeedback, VNextDialog } from '../../../../shared/Interaction'
 import { DataState, StatusPill } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
+import { trainingAdminApi } from '../../admin/trainingAdminApi'
 import styles from './CourseChallengesPanel.module.css'
 import { CourseManagementActionLink, CourseManagementPanelHeader } from './CourseManagementPanelHeader'
 
@@ -26,7 +27,7 @@ export function CourseChallengesPanel({
     setSaving(true)
     setFeedback(null)
     try {
-      await api.trainingCourseAdmin.trainingCourseAdminRemoveChallenge(courseId, deleteId)
+      await trainingAdminApi.removeChallenge(courseId, deleteId)
       await onCourseChanged()
       setDeleteId(null)
       setFeedback({ tone: 'success', message: '课程题目已删除。' })

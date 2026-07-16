@@ -1,10 +1,11 @@
 import { Box, Database, HardDriveUpload, PackagePlus, RefreshCw, Server, Trash2, Upload } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import api, { ImageStatus, ImageType, OSType, TrainingCourseImageTemplateModel, TrainingCourseModel } from '@Api'
+import { ImageStatus, ImageType, OSType, TrainingCourseImageTemplateModel, TrainingCourseModel } from '@Api'
 import { TextField } from '../../../../shared/FormControls'
 import { ActionButton, InlineFeedback } from '../../../../shared/Interaction'
 import { DataState, StatusPill } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
+import { useTrainingAdminImageTemplates } from '../../admin/trainingAdminApi'
 import { CourseRegistrySummary, courseEnvironmentApi } from '../../api/courseEnvironmentApi'
 import { formatFileSize, formatTrainingDate } from '../../training'
 import {
@@ -32,15 +33,7 @@ function statusInfo(status?: ImageStatus) {
 
 export function CourseEnvironmentPanel({ course }: { course: TrainingCourseModel }) {
   const courseId = course.id ?? 0
-  const templatesRequest = api.trainingCourseAdmin.useTrainingCourseAdminImageTemplates(
-    courseId,
-    {
-      revalidateOnFocus: false,
-      refreshInterval: (data?: TrainingCourseImageTemplateModel[]) =>
-        data?.some((item) => item.status === ImageStatus.Importing) ? 5000 : 0,
-    },
-    Boolean(course.canEdit && courseId)
-  )
+  const templatesRequest = useTrainingAdminImageTemplates(courseId, Boolean(course.canEdit && courseId))
   const [registry, setRegistry] = useState<CourseRegistrySummary | null>(null)
   const [query, setQuery] = useState('')
   const [dialog, setDialog] = useState<CourseEnvironmentDialog>(null)

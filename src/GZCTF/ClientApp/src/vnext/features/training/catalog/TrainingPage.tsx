@@ -1,11 +1,12 @@
 import { ArrowRight, BookOpenCheck, CalendarCheck, ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import api, { TrainingCourseModel, TrainingCourseStatus } from '@Api'
+import { TrainingCourseModel, TrainingCourseStatus } from '@Api'
 import { ActionButton, InlineFeedback } from '../../../shared/Interaction'
 import { DataState, GeometricPoster, PageHeading, SectionHeading, StatusPill } from '../../../shared/Primitives'
 import { useVNextPageTitle } from '../../../shared/useVNextPageTitle'
 import { useCurrentAccount } from '../../account/useCurrentAccount'
+import { trainingLearnerApi, useTrainingCourses, useTrainingOverview } from '../api/trainingLearnerApi'
 import { courseProgress, courseStatusLabel, matchesScope, TrainingScope, trainingScopes } from '../training'
 import { TrainingActivityCalendar } from './TrainingActivityCalendar'
 import { TrainingCourseCard } from './TrainingCourseCard'
@@ -19,8 +20,8 @@ export function TrainingPage() {
   useVNextPageTitle('培训')
   const account = useCurrentAccount()
   const [searchParams, setSearchParams] = useSearchParams()
-  const coursesRequest = api.trainingCourse.useTrainingCourseCourses({ revalidateOnFocus: false })
-  const overviewRequest = api.trainingCourse.useTrainingCourseOverview({ revalidateOnFocus: false })
+  const coursesRequest = useTrainingCourses()
+  const overviewRequest = useTrainingOverview()
   const [featuredIndex, setFeaturedIndex] = useState(0)
   const [featuredPaused, setFeaturedPaused] = useState(false)
   const [checkingIn, setCheckingIn] = useState(false)
@@ -96,8 +97,8 @@ export function TrainingPage() {
     setCheckingIn(true)
     setFeedback(null)
     try {
-      const response = await api.trainingCourse.trainingCourseCheckIn()
-      await overviewRequest.mutate(response.data, { revalidate: false })
+      const overview = await trainingLearnerApi.checkIn()
+      await overviewRequest.mutate(overview, { revalidate: false })
       setFeedback('今日签到已记录。')
     } catch {
       setFeedback('签到失败，请稍后重试。')

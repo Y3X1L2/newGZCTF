@@ -13,8 +13,9 @@ import { ReactNode, useMemo } from 'react'
 import { Link } from 'react-router'
 import { getPrimarySlogan } from '@Utils/Brand'
 import { useConfig } from '@Hooks/useConfig'
-import api, { TrainingActivityPointModel, TrainingCourseModel, TrainingCourseProgressStatus } from '@Api'
+import { TrainingActivityPointModel, TrainingCourseModel, TrainingCourseProgressStatus } from '@Api'
 import { DataState, GeometricPoster, SectionHeading, StatusPill } from '../../shared/Primitives'
+import { localDateKey } from '../../shared/dates'
 import { useVNextPageTitle } from '../../shared/useVNextPageTitle'
 import { useCurrentAccount } from '../account/useCurrentAccount'
 import {
@@ -25,6 +26,7 @@ import {
   useGameCatalog,
 } from '../games/gameCatalog'
 import styles from './HomePage.module.css'
+import { useHomeCourses, useHomePosts, useHomeTrainingOverview } from './homeApi'
 
 interface ContinueItem {
   id: string
@@ -69,7 +71,7 @@ function ActivityHeatmap({ points }: { points: TrainingActivityPointModel[] }) {
     return Array.from({ length: 112 }, (_, index) => {
       const date = new Date(start)
       date.setDate(start.getDate() + index)
-      const key = date.toISOString().slice(0, 10)
+      const key = localDateKey(date)
       return { key, level: activityLevel(byDate.get(key)) }
     })
   }, [points])
@@ -125,23 +127,9 @@ export function HomePage() {
   const { config } = useConfig()
   const account = useCurrentAccount()
   const gameCatalog = useGameCatalog()
-  const posts = api.info.useInfoGetLatestPosts({
-    refreshInterval: 5 * 60 * 1000,
-    revalidateOnFocus: false,
-  })
-  const courses = api.trainingCourse.useTrainingCourseCourses({
-    refreshInterval: 5 * 60 * 1000,
-    revalidateOnFocus: false,
-    shouldRetryOnError: false,
-  })
-  const overview = api.trainingCourse.useTrainingCourseOverview(
-    {
-      refreshInterval: 5 * 60 * 1000,
-      revalidateOnFocus: false,
-      shouldRetryOnError: false,
-    },
-    account.isAuthenticated
-  )
+  const posts = useHomePosts()
+  const courses = useHomeCourses()
+  const overview = useHomeTrainingOverview(account.isAuthenticated)
 
   useVNextPageTitle()
 

@@ -1,6 +1,6 @@
 import { Check, ChevronLeft, ChevronRight, Eye, Search, UserPlus, X } from 'lucide-react'
 import { FormEvent, useMemo, useRef, useState } from 'react'
-import api, {
+import {
   TrainingCourseEnrollmentStatus,
   TrainingCourseModel,
   TrainingCourseStudentCandidateModel,
@@ -10,12 +10,16 @@ import { SelectField, TextField } from '../../../../shared/FormControls'
 import { ActionButton, InlineFeedback, VNextDialog, VNextDrawer } from '../../../../shared/Interaction'
 import { DataState, StatusPill } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
+import {
+  trainingAdminApi,
+  useTrainingAdminEnrollments,
+  useTrainingAdminLearningSummaries,
+} from '../../admin/trainingAdminApi'
 import { formatTrainingDate } from '../../training'
 import { CourseManagementPanelHeader } from './CourseManagementPanelHeader'
 import styles from './CoursePeoplePanels.module.css'
 import { StudentLearningDetail } from './StudentLearningDetail'
 
-const requestOptions = { revalidateOnFocus: false, shouldRetryOnError: false }
 const pageSize = 8
 
 function enrollmentLabel(status?: TrainingCourseEnrollmentStatus) {
@@ -33,16 +37,8 @@ function enrollmentTone(status?: TrainingCourseEnrollmentStatus): 'success' | 'w
 
 export function CourseStudentsPanel({ course }: { course: TrainingCourseModel }) {
   const courseId = course.id ?? 0
-  const enrollmentsRequest = api.trainingCourseAdmin.useTrainingCourseAdminEnrollments(
-    courseId,
-    requestOptions,
-    Boolean(course.canManageEnrollments && courseId)
-  )
-  const summariesRequest = api.trainingCourseAdmin.useTrainingCourseAdminLearningSummaries(
-    courseId,
-    requestOptions,
-    Boolean(course.canManageEnrollments && courseId)
-  )
+  const enrollmentsRequest = useTrainingAdminEnrollments(courseId, Boolean(course.canManageEnrollments && courseId))
+  const summariesRequest = useTrainingAdminLearningSummaries(courseId, Boolean(course.canManageEnrollments && courseId))
   const [page, setPage] = useState(1)
   const [addOpen, setAddOpen] = useState(false)
   const [keyword, setKeyword] = useState('')
@@ -80,7 +76,7 @@ export function CourseStudentsPanel({ course }: { course: TrainingCourseModel })
     setSaving(true)
     setFeedback(null)
     try {
-      await api.trainingCourseAdmin.trainingCourseAdminReviewEnrollment(courseId, userId, { status })
+      await trainingAdminApi.reviewEnrollment(courseId, userId, status)
       await refresh()
       setFeedback({
         tone: 'success',
@@ -98,10 +94,8 @@ export function CourseStudentsPanel({ course }: { course: TrainingCourseModel })
     setSearching(true)
     setFeedback(null)
     try {
-      const response = await api.trainingCourseAdmin.trainingCourseAdminStudentCandidates(courseId, {
-        keyword: keyword.trim() || null,
-      })
-      const available = (response.data ?? []).filter((candidate) => !candidate.alreadyEnrolled)
+      const response = await trainingAdminApi.findStudentCandidates(courseId, keyword.trim() || null)
+      const available = response.filter((candidate) => !candidate.alreadyEnrolled)
       setCandidates(available)
       setSelectedUserId(available[0]?.userId ?? '')
     } catch (requestError) {
@@ -116,7 +110,7 @@ export function CourseStudentsPanel({ course }: { course: TrainingCourseModel })
     setSaving(true)
     setFeedback(null)
     try {
-      await api.trainingCourseAdmin.trainingCourseAdminAddEnrollment(courseId, { userId: selectedUserId })
+      await trainingAdminApi.addEnrollment(courseId, selectedUserId)
       await refresh()
       setAddOpen(false)
       setCandidates([])
@@ -138,9 +132,9 @@ export function CourseStudentsPanel({ course }: { course: TrainingCourseModel })
     setDetail(cachedDetail)
     setDetailLoading(!cachedDetail)
     try {
-      const response = await api.trainingCourseAdmin.trainingCourseAdminStudentLearningDetail(courseId, userId)
+      const response = await trainingAdminApi.studentLearningDetail(courseId, userId)
       if (detailRequestIdRef.current !== requestId) return
-      const nextDetail = response.data ?? null
+      const nextDetail = response ?? null
       if (nextDetail) detailCacheRef.current.set(userId, nextDetail)
       setDetail(nextDetail)
     } catch (requestError) {

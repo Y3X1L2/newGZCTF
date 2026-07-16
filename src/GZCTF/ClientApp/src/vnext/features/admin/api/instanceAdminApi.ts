@@ -1,3 +1,5 @@
+import { externalEntryHref } from '../../../shared/urls'
+import { boundedMap } from '../shared/boundedMap'
 import { contractFailure, isNumber, isRecord } from './contractParsers'
 import type {
   GlobalInstanceInventory,
@@ -10,7 +12,6 @@ import type {
 } from './contracts'
 import { nodeAdminApi } from './nodeAdminApi'
 import { runtimeJsonClient, type RuntimeJsonClient } from './runtimeJsonClient'
-import { boundedMap } from '../shared/boundedMap'
 
 function isLegacyContainer(value: unknown): value is LegacyContainerInstance {
   return isRecord(value)
@@ -47,7 +48,12 @@ export function createInstanceAdminApi(
       additional.push(await resourceApi.resources(node.id, { status, page, pageSize: 50 }))
     }
     return [first, ...additional].flatMap((result) =>
-      result.items.map<GlobalInstanceItem>((item) => ({ ...item, nodeId: node.id, nodeName: node.name }))
+      result.items.map<GlobalInstanceItem>((item) => ({
+        ...item,
+        entry: externalEntryHref(item.entry),
+        nodeId: node.id,
+        nodeName: node.name,
+      }))
     )
   }
 
@@ -72,7 +78,7 @@ export function createInstanceAdminApi(
           duration: '',
           image: container.image ?? null,
           runtimeId: container.containerId ?? null,
-          entry: container.ip && container.port ? `${container.ip}:${container.port}` : null,
+          entry: container.ip && container.port ? externalEntryHref(`${container.ip}:${container.port}`) : null,
           ip: container.ip ?? null,
           port: container.port ?? null,
           gameId: null,
@@ -141,9 +147,7 @@ export function createInstanceAdminApi(
 
       return {
         source: 'node-resources' as const,
-        items: results
-          .flatMap((result) => result.items)
-          .sort((left, right) => right.startedAt - left.startedAt),
+        items: results.flatMap((result) => result.items).sort((left, right) => right.startedAt - left.startedAt),
         totalNodes: selectedNodes.length,
         loadedNodes,
         failures,

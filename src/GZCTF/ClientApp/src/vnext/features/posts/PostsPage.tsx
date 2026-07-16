@@ -1,10 +1,10 @@
 import { ChevronLeft, ChevronRight, Pin, Search } from 'lucide-react'
 import { ChangeEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import api from '@Api'
 import { DataState, PageHeading, StatusPill } from '../../shared/Primitives'
 import { useVNextPageTitle } from '../../shared/useVNextPageTitle'
 import styles from './PostsPage.module.css'
+import { usePosts } from './postsApi'
 
 const PAGE_SIZE = 12
 
@@ -25,7 +25,7 @@ function formatDate(value: number) {
 }
 
 export function PostsPage() {
-  const { data: posts, error } = api.info.useInfoGetPosts({ revalidateOnFocus: false })
+  const { data: posts, error } = usePosts()
   const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState(searchParams.get('q') ?? '')
   const pinnedOnly = searchParams.get('pinned') === '1'

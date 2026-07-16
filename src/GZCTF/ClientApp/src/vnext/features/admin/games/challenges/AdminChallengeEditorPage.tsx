@@ -1,44 +1,26 @@
-import {
-  ArrowLeft,
-  ExternalLink,
-  Play,
-  RefreshCw,
-  Save,
-  Square,
-  Trash2,
-} from 'lucide-react'
+import { ArrowLeft, Save, Trash2 } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useOutletContext, useParams } from 'react-router'
-import {
-  ChallengeCategory,
-  ContainerStatus,
-  EnvironmentType,
-  NetworkMode,
-} from '@Api'
+import { ChallengeCategory, ContainerStatus, EnvironmentType, NetworkMode } from '@Api'
 import { SelectField, TextAreaField, TextField, ToggleField } from '../../../../shared/FormControls'
 import { ActionButton, InlineFeedback, VNextConfirmDialog } from '../../../../shared/Interaction'
 import { MarkdownContent } from '../../../../shared/MarkdownContent'
 import { DataState } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
 import { useVNextPageTitle } from '../../../../shared/useVNextPageTitle'
-import { externalEntryHref } from '../../../../shared/urls'
 import { gameAdminApi } from '../../api'
 import { useAdminImages } from '../../images/useAdminImages'
-import {
-  AdminEditorActionBar,
-  AdminEditorSection,
-  AdminPageHeader,
-  StatusBadge,
-} from '../../shared/AdminWorkbench'
+import { AdminEditorActionBar, AdminEditorSection, AdminPageHeader, StatusBadge } from '../../shared/AdminWorkbench'
 import type { GameAdminOutletContext } from '../GameAdminShell'
 import {
   challengeConfigurationIssues,
-  challengeEnvironmentLabel,
   challengeTypeLabel,
   isContainerChallenge,
   templateAvailableForEnvironment,
 } from '../gamePresentation'
 import { useAdminGameChallenge } from '../useAdminGames'
+import styles from './AdminChallengeEditorPage.module.css'
+import { AdminChallengeRuntimePanel, RuntimeOperation } from './AdminChallengeRuntimePanel'
 import { ChallengeAttachmentPanel } from './ChallengeAttachmentPanel'
 import { ChallengeFlagPanel, type ChallengeEditorFeedback } from './ChallengeFlagPanel'
 import {
@@ -47,31 +29,6 @@ import {
   type ChallengeEditorDraft,
   validateChallengeEditorDraft,
 } from './challengeEditorModel'
-import styles from './AdminChallengeEditorPage.module.css'
-
-type RuntimeOperation = {
-  kind: 'create' | 'destroy'
-  startedAt: number
-  ticketId?: string
-}
-
-function runtimeStatus(status?: ContainerStatus) {
-  if (status === ContainerStatus.Running) return { label: '运行中', tone: 'success' as const }
-  if (status === ContainerStatus.Pending) return { label: '部署中', tone: 'info' as const }
-  return { label: '已销毁', tone: 'neutral' as const }
-}
-
-function runtimeTime(value?: number) {
-  if (!value) return '—'
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }).format(value)
-}
 
 export function AdminChallengeEditorPage() {
   const navigate = useNavigate()
@@ -142,16 +99,23 @@ export function AdminChallengeEditorPage() {
   }
 
   const setEnvironment = (environment: EnvironmentType) => {
-    setDraft((current) => current ? {
-      ...current,
-      environment,
-      imageTemplateId: null,
-      containerImage: environment === EnvironmentType.Docker ? current.containerImage : '',
-    } : current)
+    setDraft((current) =>
+      current
+        ? {
+            ...current,
+            environment,
+            imageTemplateId: null,
+            containerImage: environment === EnvironmentType.Docker ? current.containerImage : '',
+          }
+        : current
+    )
   }
 
   const availableTemplates = useMemo(
-    () => (imagesRequest.images ?? []).filter((template) => draft && templateAvailableForEnvironment(template, draft.environment)),
+    () =>
+      (imagesRequest.images ?? []).filter(
+        (template) => draft && templateAvailableForEnvironment(template, draft.environment)
+      ),
     [draft, imagesRequest.images]
   )
 
@@ -188,7 +152,10 @@ export function AdminChallengeEditorPage() {
       const ticket = await gameAdminApi.createTestInstance(gameId, challenge.id)
       setRuntimeOperation({ kind: 'create', startedAt: Date.now(), ticketId: ticket.ticketId })
       await challengeRequest.mutate()
-      setFeedback({ tone: 'neutral', message: `测试实例已进入部署队列${ticket.ticketId ? `，任务 ${ticket.ticketId}` : ''}。` })
+      setFeedback({
+        tone: 'neutral',
+        message: `测试实例已进入部署队列${ticket.ticketId ? `，任务 ${ticket.ticketId}` : ''}。`,
+      })
     } catch (requestError) {
       setFeedback({ tone: 'danger', message: errorMessage(requestError, '测试实例创建失败。') })
     }
@@ -234,13 +201,16 @@ export function AdminChallengeEditorPage() {
   const containerChallenge = isContainerChallenge(challenge.type)
   const configurationIssues = challengeConfigurationIssues(challenge)
   const testContainer = challenge.testContainer
-  const testStatus = runtimeStatus(testContainer?.status)
 
   return (
     <div className={styles.page}>
       <AdminPageHeader
         actions={
-          <ActionButton icon={<ArrowLeft size={16} />} onClick={() => navigate(`/admin/games/${gameId}/challenges`)} type="button">
+          <ActionButton
+            icon={<ArrowLeft size={16} />}
+            onClick={() => navigate(`/admin/games/${gameId}/challenges`)}
+            type="button"
+          >
             返回题目列表
           </ActionButton>
         }
@@ -249,55 +219,147 @@ export function AdminChallengeEditorPage() {
         title={challenge.title}
       />
       <div className={styles.statusLine}>
-        <StatusBadge tone={challenge.isEnabled ? 'success' : 'neutral'}>{challenge.isEnabled ? '已启用' : '未启用'}</StatusBadge>
+        <StatusBadge tone={challenge.isEnabled ? 'success' : 'neutral'}>
+          {challenge.isEnabled ? '已启用' : '未启用'}
+        </StatusBadge>
         <StatusBadge tone="info">{challengeTypeLabel(challenge.type)}</StatusBadge>
         <StatusBadge tone={configurationIssues.length ? 'warning' : 'success'}>
           {configurationIssues.length ? `${configurationIssues.length} 项待配置` : '配置完整'}
         </StatusBadge>
         <span>已解出 {challenge.acceptedCount} 队</span>
       </div>
-      {feedback ? <InlineFeedback tone={feedback.tone === 'neutral' ? undefined : feedback.tone}>{feedback.message}</InlineFeedback> : null}
-      {challengeRequest.error ? <InlineFeedback tone="danger">{errorMessage(challengeRequest.error, '题目详情刷新失败。')}</InlineFeedback> : null}
+      {feedback ? (
+        <InlineFeedback tone={feedback.tone === 'neutral' ? undefined : feedback.tone}>
+          {feedback.message}
+        </InlineFeedback>
+      ) : null}
+      {challengeRequest.error ? (
+        <InlineFeedback tone="danger">{errorMessage(challengeRequest.error, '题目详情刷新失败。')}</InlineFeedback>
+      ) : null}
 
       <form className={styles.form} onSubmit={(event) => void save(event)}>
-        <AdminEditorSection description="题目类型创建后不可变更；名称、分类和启用状态会直接影响选手端展示。" title="题目身份">
+        <AdminEditorSection
+          description="题目类型创建后不可变更；名称、分类和启用状态会直接影响选手端展示。"
+          title="题目身份"
+        >
           <div className={styles.stack}>
             <div className={styles.fieldGrid}>
-              <TextField label="题目名称" maxLength={128} onValueChange={(value) => update('title', value)} required value={draft.title} />
-              <SelectField label="题目分类" onValueChange={(value) => update('category', value as ChallengeCategory)} value={draft.category}>
-                {Object.values(ChallengeCategory).map((category) => <option key={category} value={category}>{category}</option>)}
+              <TextField
+                label="题目名称"
+                maxLength={128}
+                onValueChange={(value) => update('title', value)}
+                required
+                value={draft.title}
+              />
+              <SelectField
+                label="题目分类"
+                onValueChange={(value) => update('category', value as ChallengeCategory)}
+                value={draft.category}
+              >
+                {Object.values(ChallengeCategory).map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
               </SelectField>
               <TextField disabled label="题目类型" value={challengeTypeLabel(challenge.type)} />
               {challenge.type === 'DynamicAttachment' ? (
-                <TextField hint="所有队伍下载时使用的统一文件名。" label="动态附件文件名" onValueChange={(value) => update('fileName', value)} value={draft.fileName} />
+                <TextField
+                  hint="所有队伍下载时使用的统一文件名。"
+                  label="动态附件文件名"
+                  onValueChange={(value) => update('fileName', value)}
+                  value={draft.fileName}
+                />
               ) : null}
             </div>
-            <ToggleField checked={draft.isEnabled} description="发布前应先完成 Flag、附件和环境验证。" label="启用题目" onChange={(checked) => update('isEnabled', checked)} />
-            {configurationIssues.length ? <InlineFeedback tone="danger">{configurationIssues.join('；')}。</InlineFeedback> : null}
+            <ToggleField
+              checked={draft.isEnabled}
+              description="发布前应先完成 Flag、附件和环境验证。"
+              label="启用题目"
+              onChange={(checked) => update('isEnabled', checked)}
+            />
+            {configurationIssues.length ? (
+              <InlineFeedback tone="danger">{configurationIssues.join('；')}。</InlineFeedback>
+            ) : null}
           </div>
         </AdminEditorSection>
 
         <AdminEditorSection description="题面与选手端使用同一 Markdown 渲染器；提示每行一条。" title="题面与提示">
           <div className={styles.stack}>
             <div className={styles.markdownGrid}>
-              <TextAreaField label="题目说明 Markdown" onValueChange={(value) => update('content', value)} rows={22} value={draft.content} />
-              <article className={styles.preview}><header>实时预览</header><MarkdownContent source={draft.content || '暂无题目说明。'} /></article>
+              <TextAreaField
+                label="题目说明 Markdown"
+                onValueChange={(value) => update('content', value)}
+                rows={22}
+                value={draft.content}
+              />
+              <article className={styles.preview}>
+                <header>实时预览</header>
+                <MarkdownContent source={draft.content || '暂无题目说明。'} />
+              </article>
             </div>
-            <TextAreaField hint="空行会在保存时移除。" label="题目提示" onValueChange={(value) => update('hintsText', value)} rows={6} value={draft.hintsText} />
+            <TextAreaField
+              hint="空行会在保存时移除。"
+              label="题目提示"
+              onValueChange={(value) => update('hintsText', value)}
+              rows={6}
+              value={draft.hintsText}
+            />
           </div>
         </AdminEditorSection>
 
-        <AdminEditorSection description="题目分值按解出人数衰减至最低得分率；截止时间为空表示跟随比赛。" title="计分与限制">
+        <AdminEditorSection
+          description="题目分值按解出人数衰减至最低得分率；截止时间为空表示跟随比赛。"
+          title="计分与限制"
+        >
           <div className={styles.stack}>
             <div className={styles.resourceGrid}>
-              <TextField label="初始分值" min={1} onValueChange={(value) => update('originalScore', Number(value))} type="number" value={draft.originalScore} />
-              <TextField label="最低得分率" max={1} min={0} onValueChange={(value) => update('minScoreRate', Number(value))} step={0.05} type="number" value={draft.minScoreRate} />
-              <TextField label="难度系数" min={0.1} onValueChange={(value) => update('difficulty', Number(value))} step={0.5} type="number" value={draft.difficulty} />
-              <TextField hint="0 表示不限制。" label="提交次数限制" min={0} onValueChange={(value) => update('submissionLimit', Number(value))} type="number" value={draft.submissionLimit} />
+              <TextField
+                label="初始分值"
+                min={1}
+                onValueChange={(value) => update('originalScore', Number(value))}
+                type="number"
+                value={draft.originalScore}
+              />
+              <TextField
+                label="最低得分率"
+                max={1}
+                min={0}
+                onValueChange={(value) => update('minScoreRate', Number(value))}
+                step={0.05}
+                type="number"
+                value={draft.minScoreRate}
+              />
+              <TextField
+                label="难度系数"
+                min={0.1}
+                onValueChange={(value) => update('difficulty', Number(value))}
+                step={0.5}
+                type="number"
+                value={draft.difficulty}
+              />
+              <TextField
+                hint="0 表示不限制。"
+                label="提交次数限制"
+                min={0}
+                onValueChange={(value) => update('submissionLimit', Number(value))}
+                type="number"
+                value={draft.submissionLimit}
+              />
             </div>
             <div className={styles.fieldGrid}>
-              <TextField label="题目截止时间" onValueChange={(value) => update('deadline', value)} type="datetime-local" value={draft.deadline} />
-              <ToggleField checked={draft.disableBloodBonus} description="仅影响当前题目的前三血奖励。" label="禁用血分奖励" onChange={(checked) => update('disableBloodBonus', checked)} />
+              <TextField
+                label="题目截止时间"
+                onValueChange={(value) => update('deadline', value)}
+                type="datetime-local"
+                value={draft.deadline}
+              />
+              <ToggleField
+                checked={draft.disableBloodBonus}
+                description="仅影响当前题目的前三血奖励。"
+                label="禁用血分奖励"
+                onChange={(checked) => update('disableBloodBonus', checked)}
+              />
             </div>
             <div className={styles.scorePreview}>
               <span>初始 {draft.originalScore} 分</span>
@@ -307,11 +369,18 @@ export function AdminChallengeEditorPage() {
           </div>
         </AdminEditorSection>
 
-        <AdminEditorSection description="容器题必须选择运行环境。模板列表只展示已就绪且类型匹配的全局环境模板。" title="运行环境">
+        <AdminEditorSection
+          description="容器题必须选择运行环境。模板列表只展示已就绪且类型匹配的全局环境模板。"
+          title="运行环境"
+        >
           {containerChallenge ? (
             <div className={styles.stack}>
               <div className={styles.fieldGrid}>
-                <SelectField label="环境类型" onValueChange={(value) => setEnvironment(value as EnvironmentType)} value={draft.environment}>
+                <SelectField
+                  label="环境类型"
+                  onValueChange={(value) => setEnvironment(value as EnvironmentType)}
+                  value={draft.environment}
+                >
                   <option value={EnvironmentType.None}>未配置</option>
                   <option value={EnvironmentType.Docker}>Docker</option>
                   <option value={EnvironmentType.WindowsVM}>Windows VM</option>
@@ -320,41 +389,99 @@ export function AdminChallengeEditorPage() {
                   label="环境模板"
                   onValueChange={(value) => {
                     const template = availableTemplates.find((item) => item.id === Number(value))
-                    setDraft((current) => current ? {
-                      ...current,
-                      imageTemplateId: template?.id ?? null,
-                      containerImage: current.environment === EnvironmentType.Docker ? template?.registryUrl ?? current.containerImage : '',
-                    } : current)
+                    setDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            imageTemplateId: template?.id ?? null,
+                            containerImage:
+                              current.environment === EnvironmentType.Docker
+                                ? (template?.registryUrl ?? current.containerImage)
+                                : '',
+                          }
+                        : current
+                    )
                   }}
                   value={draft.imageTemplateId ?? ''}
                 >
                   <option value="">请选择已就绪模板</option>
-                  {availableTemplates.map((template) => <option key={template.id} value={template.id}>#{template.id} {template.name}</option>)}
+                  {availableTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      #{template.id} {template.name}
+                    </option>
+                  ))}
                 </SelectField>
               </div>
               {draft.environment === EnvironmentType.Docker ? (
                 <>
-                  <TextField hint="选择 Docker 模板时自动填充，也可使用节点可拉取的完整镜像引用。" label="Docker 镜像引用" onValueChange={(value) => update('containerImage', value)} value={draft.containerImage} />
+                  <TextField
+                    hint="选择 Docker 模板时自动填充，也可使用节点可拉取的完整镜像引用。"
+                    label="Docker 镜像引用"
+                    onValueChange={(value) => update('containerImage', value)}
+                    value={draft.containerImage}
+                  />
                   <div className={styles.resourceGrid}>
-                    <TextField label="内存 MB" min={32} onValueChange={(value) => update('memoryLimit', Number(value))} type="number" value={draft.memoryLimit} />
-                    <TextField hint="单位为 0.1 CPU。" label="CPU 配额" min={1} onValueChange={(value) => update('cpuCount', Number(value))} type="number" value={draft.cpuCount} />
-                    <TextField label="存储 MB" min={0} onValueChange={(value) => update('storageLimit', Number(value))} type="number" value={draft.storageLimit} />
-                    <TextField label="暴露端口" max={65535} min={1} onValueChange={(value) => update('exposePort', Number(value))} type="number" value={draft.exposePort} />
+                    <TextField
+                      label="内存 MB"
+                      min={32}
+                      onValueChange={(value) => update('memoryLimit', Number(value))}
+                      type="number"
+                      value={draft.memoryLimit}
+                    />
+                    <TextField
+                      hint="单位为 0.1 CPU。"
+                      label="CPU 配额"
+                      min={1}
+                      onValueChange={(value) => update('cpuCount', Number(value))}
+                      type="number"
+                      value={draft.cpuCount}
+                    />
+                    <TextField
+                      label="存储 MB"
+                      min={0}
+                      onValueChange={(value) => update('storageLimit', Number(value))}
+                      type="number"
+                      value={draft.storageLimit}
+                    />
+                    <TextField
+                      label="暴露端口"
+                      max={65535}
+                      min={1}
+                      onValueChange={(value) => update('exposePort', Number(value))}
+                      type="number"
+                      value={draft.exposePort}
+                    />
                   </div>
                 </>
               ) : null}
               {draft.environment !== EnvironmentType.None ? (
                 <div className={styles.fieldGrid}>
-                  <SelectField label="网络模式" onValueChange={(value) => update('networkMode', value as NetworkMode)} value={draft.networkMode}>
+                  <SelectField
+                    label="网络模式"
+                    onValueChange={(value) => update('networkMode', value as NetworkMode)}
+                    value={draft.networkMode}
+                  >
                     <option value={NetworkMode.Open}>开放网络</option>
                     <option value={NetworkMode.Isolated}>隔离网络</option>
                     <option value={NetworkMode.Custom}>自定义网络</option>
                   </SelectField>
-                  <ToggleField checked={draft.enableTrafficCapture} description="开启后平台记录实例流量供后续分析。" label="记录实例流量" onChange={(checked) => update('enableTrafficCapture', checked)} />
+                  <ToggleField
+                    checked={draft.enableTrafficCapture}
+                    description="开启后平台记录实例流量供后续分析。"
+                    label="记录实例流量"
+                    onChange={(checked) => update('enableTrafficCapture', checked)}
+                  />
                 </div>
               ) : null}
               {challenge.type === 'DynamicContainer' ? (
-                <TextField hint="平台根据队伍和题目信息替换占位符。" label="动态 Flag 模板" maxLength={120} onValueChange={(value) => update('flagTemplate', value)} placeholder="flag{[TEAM_HASH]}" value={draft.flagTemplate} />
+                <TextField
+                  hint="平台根据队伍和题目信息替换占位符。"
+                  label="动态 Flag 模板"
+                  maxLength={120}
+                  onValueChange={(value) => update('flagTemplate', value)}
+                  placeholder="flag{[TEAM_HASH]}"
+                  value={draft.flagTemplate}
+                />
               ) : null}
             </div>
           ) : (
@@ -362,56 +489,77 @@ export function AdminChallengeEditorPage() {
           )}
         </AdminEditorSection>
 
-        <AdminEditorSection description="普通附件绑定在题目上；动态附件按 Flag 独立绑定，避免两种模型混用。" title="题目附件">
-          <ChallengeAttachmentPanel challenge={challenge} gameId={gameId} onChanged={challengeRequest.mutate} onFeedback={reportFeedback} />
+        <AdminEditorSection
+          description="普通附件绑定在题目上；动态附件按 Flag 独立绑定，避免两种模型混用。"
+          title="题目附件"
+        >
+          <ChallengeAttachmentPanel
+            challenge={challenge}
+            gameId={gameId}
+            onChanged={challengeRequest.mutate}
+            onFeedback={reportFeedback}
+          />
         </AdminEditorSection>
 
-        <AdminEditorSection description="支持多阶段判题、继承动态分值或固定分值，以及文本、文件和自定义答案。" title="Flag 管理">
-          <ChallengeFlagPanel challenge={challenge} gameId={gameId} onChanged={challengeRequest.mutate} onFeedback={reportFeedback} />
+        <AdminEditorSection
+          description="支持多阶段判题、继承动态分值或固定分值，以及文本、文件和自定义答案。"
+          title="Flag 管理"
+        >
+          <ChallengeFlagPanel
+            challenge={challenge}
+            gameId={gameId}
+            onChanged={challengeRequest.mutate}
+            onFeedback={reportFeedback}
+          />
         </AdminEditorSection>
 
-        <AdminEditorSection description="管理员测试实例只支持 Docker；创建和销毁都进入部署队列，并每 3 秒回读题目状态。" title="测试实例">
-          {draft.environment === EnvironmentType.Docker && containerChallenge ? (
-            <div className={styles.runtimePanel}>
-              <div className={styles.runtimeHeader}>
-                <div>
-                  <StatusBadge pulse={Boolean(runtimeOperation)} tone={runtimeOperation ? 'info' : testStatus.tone}>
-                    {runtimeOperation ? (runtimeOperation.kind === 'create' ? '创建排队中' : '销毁排队中') : testContainer ? testStatus.label : '未创建'}
-                  </StatusBadge>
-                  <span>{challengeEnvironmentLabel(challenge.environment)} · {challenge.containerImage}</span>
-                </div>
-                <div className={styles.panelButtons}>
-                  <ActionButton disabled={Boolean(runtimeOperation) || Boolean(testContainer) || dirty} icon={<Play size={16} />} onClick={() => void createTestInstance()} tone="primary" type="button">创建测试实例</ActionButton>
-                  <ActionButton disabled={Boolean(runtimeOperation) || !testContainer} icon={<Square size={16} />} onClick={() => void destroyTestInstance()} tone="danger" type="button">销毁实例</ActionButton>
-                  <ActionButton disabled={challengeRequest.isRefreshing} icon={<RefreshCw size={16} />} onClick={() => void challengeRequest.mutate()} type="button">刷新状态</ActionButton>
-                </div>
-              </div>
-              {dirty ? <InlineFeedback tone="danger">请先保存运行环境更改，再创建测试实例。</InlineFeedback> : null}
-              {testContainer ? (
-                <div className={styles.runtimeFacts}>
-                  <span><small>启动时间</small><strong>{runtimeTime(testContainer.startedAt)}</strong></span>
-                  <span><small>预计停止</small><strong>{runtimeTime(testContainer.expectStopAt)}</strong></span>
-                  <span><small>访问入口</small>{testContainer.entry ? <a href={externalEntryHref(testContainer.entry)} rel="noreferrer" target="_blank">打开实例 <ExternalLink size={14} /></a> : <strong>等待分配</strong>}</span>
-                </div>
-              ) : null}
-              {runtimeOperation?.ticketId ? <code className={styles.ticket}>QUEUE {runtimeOperation.ticketId}</code> : null}
-            </div>
-          ) : draft.environment === EnvironmentType.WindowsVM && containerChallenge ? (
-            <div className={styles.passiveEnvironment}>后端尚未提供 Windows VM 管理员测试实例接口。请保存配置后，通过专用测试比赛验证选手实例流程。</div>
-          ) : (
-            <div className={styles.passiveEnvironment}>当前题目没有可测试的 Docker 环境。</div>
-          )}
-        </AdminEditorSection>
+        <AdminChallengeRuntimePanel
+          challenge={challenge}
+          containerChallenge={containerChallenge}
+          dirty={dirty}
+          draftEnvironment={draft.environment}
+          onCreate={createTestInstance}
+          onDestroy={destroyTestInstance}
+          onRefresh={challengeRequest.mutate}
+          operation={runtimeOperation}
+          refreshing={challengeRequest.isRefreshing}
+        />
 
-        <AdminEditorSection description="删除会移除题目、附件和 Flag；已有实例或业务事实时服务端可能拒绝。" title="危险区">
+        <AdminEditorSection
+          description="删除会移除题目、附件和 Flag；已有实例或业务事实时服务端可能拒绝。"
+          title="危险区"
+        >
           <div className={styles.dangerRow}>
-            <div><strong>删除题目</strong><p>此操作不可撤销，必须输入完整题目名称确认。</p></div>
-            <ActionButton disabled={deleting || Boolean(testContainer) || Boolean(runtimeOperation)} icon={<Trash2 size={16} />} onClick={() => setDeleteOpen(true)} tone="danger" type="button">删除题目</ActionButton>
+            <div>
+              <strong>删除题目</strong>
+              <p>此操作不可撤销，必须输入完整题目名称确认。</p>
+            </div>
+            <ActionButton
+              disabled={deleting || Boolean(testContainer) || Boolean(runtimeOperation)}
+              icon={<Trash2 size={16} />}
+              onClick={() => setDeleteOpen(true)}
+              tone="danger"
+              type="button"
+            >
+              删除题目
+            </ActionButton>
           </div>
         </AdminEditorSection>
 
-        <AdminEditorActionBar status={dirty ? '有未保存的题目配置。附件与 Flag 已即时保存。' : feedback?.message || '题目配置已与服务器同步。'}>
-          <ActionButton disabled={saving || !dirty} icon={<Save size={17} />} onClick={() => void save()} tone="primary" type="button">{saving ? '正在保存' : '保存题目'}</ActionButton>
+        <AdminEditorActionBar
+          status={
+            dirty ? '有未保存的题目配置。附件与 Flag 已即时保存。' : feedback?.message || '题目配置已与服务器同步。'
+          }
+        >
+          <ActionButton
+            disabled={saving || !dirty}
+            icon={<Save size={17} />}
+            onClick={() => void save()}
+            tone="primary"
+            type="button"
+          >
+            {saving ? '正在保存' : '保存题目'}
+          </ActionButton>
         </AdminEditorActionBar>
       </form>
 

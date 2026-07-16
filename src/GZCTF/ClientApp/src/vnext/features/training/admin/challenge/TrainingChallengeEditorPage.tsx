@@ -1,7 +1,7 @@
 import { Save } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import api, {
+import {
   ChallengeCategory,
   ChallengeType,
   EnvironmentType,
@@ -20,7 +20,13 @@ import { DataState, StatusPill } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
 import { useVNextPageTitle } from '../../../../shared/useVNextPageTitle'
 import { EditorActionBar, EditorSection, TrainingEditorShell } from '../TrainingEditorShell'
-import { uploadTrainingAsset } from '../trainingAdminApi'
+import {
+  trainingAdminApi,
+  uploadTrainingAsset,
+  useTrainingAdminChallenge,
+  useTrainingAdminCourse,
+  useTrainingAdminImageTemplates,
+} from '../trainingAdminApi'
 import styles from './TrainingChallengeEditorPage.module.css'
 
 const emptyDraft = (): TrainingCourseChallengeCreateModel => ({
@@ -62,22 +68,9 @@ export function TrainingChallengeEditorPage() {
   const challengeNumber = Number(challengeId)
   const validCourse = Number.isInteger(courseNumber) && courseNumber > 0
   const editing = Number.isInteger(challengeNumber) && challengeNumber > 0
-  const courseRequest = api.trainingCourseAdmin.useTrainingCourseAdminCourse(
-    courseNumber,
-    { revalidateOnFocus: false },
-    validCourse
-  )
-  const detailRequest = api.trainingCourseAdmin.useTrainingCourseAdminCourseChallengeEditDetail(
-    courseNumber,
-    challengeNumber,
-    { revalidateOnFocus: false },
-    validCourse && editing
-  )
-  const templatesRequest = api.trainingCourseAdmin.useTrainingCourseAdminImageTemplates(
-    courseNumber,
-    { revalidateOnFocus: false },
-    validCourse
-  )
+  const courseRequest = useTrainingAdminCourse(courseNumber, validCourse)
+  const detailRequest = useTrainingAdminChallenge(courseNumber, challengeNumber, validCourse && editing)
+  const templatesRequest = useTrainingAdminImageTemplates(courseNumber, validCourse)
   const course = courseRequest.data
   const detail = detailRequest.data
   const [draft, setDraft] = useState<TrainingCourseChallengeCreateModel>(emptyDraft)
@@ -151,9 +144,9 @@ export function TrainingChallengeEditorPage() {
         submissionLimit: Math.max(0, Number(draft.submissionLimit) || 0),
       }
       if (editing) {
-        await api.trainingCourseAdmin.trainingCourseAdminUpdateCourseChallenge(courseNumber, challengeNumber, payload)
+        await trainingAdminApi.updateChallenge(courseNumber, challengeNumber, payload)
       } else {
-        await api.trainingCourseAdmin.trainingCourseAdminCreateCourseChallenge(courseNumber, payload)
+        await trainingAdminApi.createChallenge(courseNumber, payload)
       }
       navigate(`/training/courses/${courseNumber}?tab=challenges`, { replace: true })
     } catch (requestError) {

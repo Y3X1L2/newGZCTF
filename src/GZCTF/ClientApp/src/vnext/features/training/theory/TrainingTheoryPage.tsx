@@ -1,7 +1,7 @@
 import { ArrowLeft, BookOpenCheck, CheckCircle2, RotateCcw } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import api, {
+import {
   TheoryAnswerSheetEditModel,
   TheoryAnswerSheetStatus,
   TheoryPlayerPaperModel,
@@ -12,6 +12,7 @@ import { DataState, StatusPill } from '../../../shared/Primitives'
 import { errorMessage } from '../../../shared/errors'
 import { useVNextPageTitle } from '../../../shared/useVNextPageTitle'
 import { TheoryExamWorkbench } from '../../theory/workbench/TheoryExamWorkbench'
+import { trainingLearnerApi, useTrainingTheoryContext } from '../api/trainingLearnerApi'
 import styles from './TrainingTheoryPage.module.css'
 
 export function TrainingTheoryPage() {
@@ -20,19 +21,10 @@ export function TrainingTheoryPage() {
   const chapterNumber = Number(chapterId)
   const validIds =
     Number.isInteger(courseNumber) && courseNumber > 0 && Number.isInteger(chapterNumber) && chapterNumber > 0
-  const courseRequest = api.trainingCourse.useTrainingCourseCourse(courseNumber, { revalidateOnFocus: false }, validIds)
-  const chapterRequest = api.trainingCourse.useTrainingCourseChapter(
-    courseNumber,
-    chapterNumber,
-    { revalidateOnFocus: false },
-    validIds
-  )
-  const paperRequest = api.trainingCourse.useTrainingCourseChapterTheory(
-    courseNumber,
-    chapterNumber,
-    { revalidateOnFocus: false, shouldRetryOnError: false },
-    validIds
-  )
+  const requests = useTrainingTheoryContext(courseNumber, chapterNumber, validIds)
+  const courseRequest = requests.course
+  const chapterRequest = requests.chapter
+  const paperRequest = requests.paper
   const course = courseRequest.data
   const chapter = chapterRequest.data
   const paper = paperRequest.data
@@ -42,16 +34,14 @@ export function TrainingTheoryPage() {
 
   const saveDraft = useCallback(
     async (data: TheoryAnswerSheetEditModel) => {
-      const response = await api.trainingCourse.trainingCourseSaveChapterTheoryDraft(courseNumber, chapterNumber, data)
-      return response.data
+      return trainingLearnerApi.saveTheoryDraft(courseNumber, chapterNumber, data)
     },
     [chapterNumber, courseNumber]
   )
 
   const submit = useCallback(
     async (data: TheoryAnswerSheetEditModel) => {
-      const response = await api.trainingCourse.trainingCourseSubmitChapterTheory(courseNumber, chapterNumber, data)
-      return response.data
+      return trainingLearnerApi.submitTheory(courseNumber, chapterNumber, data)
     },
     [chapterNumber, courseNumber]
   )
@@ -69,8 +59,8 @@ export function TrainingTheoryPage() {
     setRetrying(true)
     setRetryError(null)
     try {
-      const response = await api.trainingCourse.trainingCourseRetryChapterTheory(courseNumber, chapterNumber)
-      await paperRequest.mutate(response.data, { revalidate: false })
+      const nextPaper = await trainingLearnerApi.retryTheory(courseNumber, chapterNumber)
+      await paperRequest.mutate(nextPaper, { revalidate: false })
       await chapterRequest.mutate()
     } catch (requestError) {
       setRetryError(errorMessage(requestError, '无法开始新的作答，请稍后重试。'))

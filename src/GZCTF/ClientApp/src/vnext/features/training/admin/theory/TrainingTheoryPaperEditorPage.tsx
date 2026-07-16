@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, Dice5, Plus, Save, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router'
-import api, {
+import {
   TheoryQuestionType,
   TrainingCourseChapterTheoryPaperEditModel,
   TrainingCourseTheoryPaperQuestionEditModel,
@@ -14,6 +14,13 @@ import { errorMessage } from '../../../../shared/errors'
 import { useVNextPageTitle } from '../../../../shared/useVNextPageTitle'
 import { DEFAULT_THEORY_BANK, theoryQuestionTypeLabel } from '../../../theory/questionModel'
 import { EditorActionBar, EditorSection, TrainingEditorShell } from '../TrainingEditorShell'
+import {
+  trainingAdminApi,
+  useTrainingAdminChapter,
+  useTrainingAdminCourse,
+  useTrainingAdminTheoryPaper,
+  useTrainingAdminTheoryQuestions,
+} from '../trainingAdminApi'
 import styles from './TrainingTheoryPaperEditorPage.module.css'
 
 function toPaperQuestion(
@@ -45,29 +52,10 @@ export function TrainingTheoryPaperEditorPage() {
   const chapterNumber = Number(chapterId)
   const validIds =
     Number.isInteger(courseNumber) && courseNumber > 0 && Number.isInteger(chapterNumber) && chapterNumber > 0
-  const courseRequest = api.trainingCourseAdmin.useTrainingCourseAdminCourse(
-    courseNumber,
-    { revalidateOnFocus: false },
-    validIds
-  )
-  const chapterRequest = api.trainingCourse.useTrainingCourseChapter(
-    courseNumber,
-    chapterNumber,
-    { revalidateOnFocus: false },
-    validIds
-  )
-  const paperRequest = api.trainingCourseAdmin.useTrainingCourseAdminChapterTheoryPaper(
-    courseNumber,
-    chapterNumber,
-    { revalidateOnFocus: false },
-    validIds
-  )
-  const questionsRequest = api.trainingCourseAdmin.useTrainingCourseAdminTheoryQuestions(
-    courseNumber,
-    { count: 5000 },
-    { revalidateOnFocus: false },
-    validIds
-  )
+  const courseRequest = useTrainingAdminCourse(courseNumber, validIds)
+  const chapterRequest = useTrainingAdminChapter(courseNumber, chapterNumber, validIds)
+  const paperRequest = useTrainingAdminTheoryPaper(courseNumber, chapterNumber, validIds)
+  const questionsRequest = useTrainingAdminTheoryQuestions(courseNumber, 5000, validIds)
   const course = courseRequest.data
   const chapter = chapterRequest.data
   const [paper, setPaper] = useState<TrainingCourseChapterTheoryPaperEditModel | null>(null)
@@ -168,19 +156,15 @@ export function TrainingTheoryPaperEditorPage() {
     setSaving(true)
     setFeedback(null)
     try {
-      const response = await api.trainingCourseAdmin.trainingCourseAdminSaveChapterTheoryPaper(
-        courseNumber,
-        chapterNumber,
-        {
-          ...paper,
-          title: paper.title.trim(),
-          description: paper.description?.trim() || '',
-          passRate: Math.min(100, Math.max(1, Number(paper.passRate) || 60)),
-          isPublished: published,
-          questions: normalizeOrder(selectedQuestions),
-        }
-      )
-      await Promise.all([paperRequest.mutate(response.data, { revalidate: false }), courseRequest.mutate()])
+      const savedPaper = await trainingAdminApi.saveTheoryPaper(courseNumber, chapterNumber, {
+        ...paper,
+        title: paper.title.trim(),
+        description: paper.description?.trim() || '',
+        passRate: Math.min(100, Math.max(1, Number(paper.passRate) || 60)),
+        isPublished: published,
+        questions: normalizeOrder(selectedQuestions),
+      })
+      await Promise.all([paperRequest.mutate(savedPaper, { revalidate: false }), courseRequest.mutate()])
       setFeedback({ tone: 'success', message: published ? '课后练习已保存并发放。' : '课后练习草稿已保存。' })
     } catch (requestError) {
       setFeedback({ tone: 'danger', message: errorMessage(requestError, '课后练习保存失败。') })

@@ -32,6 +32,19 @@ describe('challenge runtime contract', () => {
     expect(runtime.create).toHaveBeenCalledOnce()
   })
 
+  it('normalizes a bare host entry and exposes a safe open action', () => {
+    render(<InstanceControl controller={controller({ phase: 'running', entry: '10.24.0.30:32768' })} />)
+
+    expect(screen.getByRole('link', { name: '打开实例入口' })).toHaveAttribute('href', 'http://10.24.0.30:32768')
+  })
+
+  it('shows an unsafe entry as text without rendering an executable link', () => {
+    render(<InstanceControl controller={controller({ phase: 'running', entry: 'javascript:alert(1)' })} />)
+
+    expect(screen.getByText('javascript:alert(1)')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '打开实例入口' })).not.toBeInTheDocument()
+  })
+
   it('submits a trimmed non-empty Flag through the shared form contract', async () => {
     const onSubmit = vi.fn()
     const onValueChange = vi.fn()

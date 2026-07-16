@@ -1,12 +1,11 @@
 import { Check, Search } from 'lucide-react'
 import { FormEvent, useState } from 'react'
-import api from '@Api'
 import { ActionButton, InlineFeedback, VNextDialog } from '../../shared/Interaction'
 import { errorMessage } from '../../shared/errors'
 import { TeamAvatar } from './TeamAvatar'
 import styles from './TeamsPage.module.css'
-
-export type TeamFeedback = { tone: 'success' | 'danger'; message: string }
+import { teamApi, useTeamSearch } from './teamApi'
+import { TeamFeedback } from './teamTypes'
 
 interface TeamDialogsProps {
   createOpen: boolean
@@ -39,9 +38,8 @@ export function TeamDialogs({
   const [targetTeamId, setTargetTeamId] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const { data: searchResults, error: searchError } = api.team.useTeamSearch(
-    { hint: searchHint.trim() },
-    { revalidateOnFocus: false, keepPreviousData: true },
+  const { data: searchResults, error: searchError } = useTeamSearch(
+    searchHint.trim(),
     searchOpen && searchHint.trim().length >= 2
   )
 
@@ -49,9 +47,9 @@ export function TeamDialogs({
     event.preventDefault()
     setSubmitting(true)
     try {
-      const response = await api.team.teamCreateTeam({ name: createName.trim(), bio: createBio.trim() })
+      const response = await teamApi.create({ name: createName.trim(), bio: createBio.trim() })
       await onTeamsChanged()
-      onTeamCreated(response.data.id)
+      onTeamCreated(response.id)
       setCreateName('')
       setCreateBio('')
       onCreateClose()
@@ -67,7 +65,7 @@ export function TeamDialogs({
     event.preventDefault()
     setSubmitting(true)
     try {
-      await api.team.teamAccept(inviteToken.trim())
+      await teamApi.joinByInviteCode(inviteToken.trim())
       await onTeamsChanged()
       setInviteToken('')
       onJoinClose()
@@ -83,7 +81,7 @@ export function TeamDialogs({
     if (!targetTeamId) return
     setSubmitting(true)
     try {
-      await api.team.teamCreateJoinRequest(targetTeamId, { message: requestMessage.trim() })
+      await teamApi.requestToJoin(targetTeamId, requestMessage.trim())
       setTargetTeamId(null)
       setRequestMessage('')
       onSearchClose()

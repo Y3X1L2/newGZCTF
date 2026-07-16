@@ -1,10 +1,10 @@
 import { Award, Clock3, Trophy, Users } from 'lucide-react'
 import { ChangeEvent, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import api from '@Api'
 import { DataState, PageHeading, StatusPill } from '../../../shared/Primitives'
 import { useGameWorkspace } from '../workspace/GameWorkspaceShell'
 import styles from './TheoryScoreboardPage.module.css'
+import { useTheoryScoreboard } from './theoryPlayerApi'
 
 function formatTime(value?: number | null) {
   if (!value) return '尚未提交'
@@ -22,15 +22,7 @@ function formatTime(value?: number | null) {
 export function TheoryScoreboardPage() {
   const { gameId, game, revision } = useGameWorkspace()
   const ongoing = Date.now() >= (game.start ?? 0) && Date.now() < (game.end ?? 0)
-  const {
-    data: items,
-    error,
-    mutate,
-  } = api.theoryPlayer.useTheoryPlayerScoreboard(
-    gameId,
-    { revalidateOnFocus: false, refreshInterval: ongoing ? 30_000 : 0, shouldRetryOnError: false },
-    true
-  )
+  const { data: items, error, mutate } = useTheoryScoreboard(gameId, ongoing ? 30_000 : 0)
   const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState(searchParams.get('q') ?? '')
 

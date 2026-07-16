@@ -1,17 +1,14 @@
 import { useCallback, useEffect } from 'react'
-import api, { TheoryAnswerSheetEditModel, TheoryPlayerPaperModel } from '@Api'
+import { TheoryAnswerSheetEditModel, TheoryPlayerPaperModel } from '@Api'
 import { DataState } from '../../../shared/Primitives'
 import { TheoryExamWorkbench } from '../../theory/workbench/TheoryExamWorkbench'
 import { useGameWorkspace } from '../workspace/GameWorkspaceShell'
 import styles from './GameTheoryPage.module.css'
+import { theoryPlayerApi, useGameTheoryPaper } from './theoryPlayerApi'
 
 export function GameTheoryPage() {
   const { gameId, game, revision } = useGameWorkspace()
-  const {
-    data: paper,
-    error,
-    mutate,
-  } = api.theoryPlayer.useTheoryPlayerGetPaper(gameId, { revalidateOnFocus: false, shouldRetryOnError: false }, true)
+  const { data: paper, error, mutate } = useGameTheoryPaper(gameId)
 
   useEffect(() => {
     if (revision > 0) void mutate()
@@ -19,16 +16,14 @@ export function GameTheoryPage() {
 
   const saveDraft = useCallback(
     async (data: TheoryAnswerSheetEditModel) => {
-      const response = await api.theoryPlayer.theoryPlayerSaveDraft(gameId, data)
-      return response.data
+      return theoryPlayerApi.saveDraft(gameId, data)
     },
     [gameId]
   )
 
   const submit = useCallback(
     async (data: TheoryAnswerSheetEditModel) => {
-      const response = await api.theoryPlayer.theoryPlayerSubmit(gameId, data)
-      return response.data
+      return theoryPlayerApi.submit(gameId, data)
     },
     [gameId]
   )
@@ -36,7 +31,7 @@ export function GameTheoryPage() {
   const onSubmitted = useCallback(
     (submittedPaper: TheoryPlayerPaperModel) => {
       void mutate(submittedPaper, { revalidate: false })
-      void api.theoryPlayer.mutateTheoryPlayerScoreboard(gameId)
+      void theoryPlayerApi.refreshScoreboard(gameId)
     },
     [gameId, mutate]
   )

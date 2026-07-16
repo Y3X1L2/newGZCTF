@@ -1,10 +1,10 @@
 import { ArrowLeft, Pin } from 'lucide-react'
 import { Link, useParams } from 'react-router'
-import api from '@Api'
 import { MarkdownContent, markdownOutline } from '../../shared/MarkdownContent'
 import { DataState, StatusPill } from '../../shared/Primitives'
 import { useVNextPageTitle } from '../../shared/useVNextPageTitle'
 import styles from './PostDetailPage.module.css'
+import { usePost } from './postsApi'
 
 function formatDate(value: number) {
   return new Intl.DateTimeFormat('zh-CN', {
@@ -19,7 +19,7 @@ function formatDate(value: number) {
 
 export function PostDetailPage() {
   const { postId = '' } = useParams()
-  const { data: post, error } = api.info.useInfoGetPost(postId, { revalidateOnFocus: false }, Boolean(postId))
+  const { data: post, error } = usePost(postId, Boolean(postId))
   const outline = markdownOutline(post?.content ?? '')
 
   useVNextPageTitle(post?.title || '公告详情')

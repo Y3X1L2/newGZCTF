@@ -1,7 +1,7 @@
 import { Archive, Save, Send, Trash2, Undo2 } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import api, { TrainingCourseEditModel, TrainingCourseEnrollmentPolicy, TrainingCourseStatus } from '@Api'
+import { TrainingCourseEditModel, TrainingCourseEnrollmentPolicy, TrainingCourseStatus } from '@Api'
 import { FileField, SelectField, TextAreaField, TextField } from '../../../../shared/FormControls'
 import { ActionButton, InlineFeedback, VNextDialog } from '../../../../shared/Interaction'
 import { MarkdownContent } from '../../../../shared/MarkdownContent'
@@ -11,7 +11,7 @@ import { useVNextPageTitle } from '../../../../shared/useVNextPageTitle'
 import { useCurrentAccount } from '../../../account/useCurrentAccount'
 import { courseStatusLabel, courseStatusTone } from '../../training'
 import { EditorActionBar, EditorSection, TrainingEditorShell } from '../TrainingEditorShell'
-import { trainingAdminApi, uploadTrainingAsset } from '../trainingAdminApi'
+import { trainingAdminApi, uploadTrainingAsset, useTrainingAdminCourse } from '../trainingAdminApi'
 import styles from './TrainingCourseEditorPage.module.css'
 
 const emptyDraft = (): TrainingCourseEditModel => ({
@@ -30,7 +30,7 @@ export function TrainingCourseEditorPage() {
   const account = useCurrentAccount()
   const id = Number(courseId)
   const editing = Number.isInteger(id) && id > 0
-  const courseRequest = api.trainingCourseAdmin.useTrainingCourseAdminCourse(id, { revalidateOnFocus: false }, editing)
+  const courseRequest = useTrainingAdminCourse(id, editing)
   const course = courseRequest.data
   const [draft, setDraft] = useState<TrainingCourseEditModel>(emptyDraft)
   const [tagsText, setTagsText] = useState('')

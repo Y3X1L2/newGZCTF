@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import api, { AnswerResult, TrainingCourseChallengeDetailModel } from '@Api'
+import { AnswerResult, TrainingCourseChallengeDetailModel } from '@Api'
 import { errorMessage } from '../../../shared/errors'
 import { ChallengeFeedback } from '../../challenge-runtime/types'
+import { trainingChapterApi } from './trainingChapterApi'
 
 function feedbackForResult(result: AnswerResult): ChallengeFeedback {
   if (result === AnswerResult.Accepted)
@@ -43,13 +44,9 @@ export function useTrainingFlagSubmission({
       setFeedback(feedbackForResult(AnswerResult.FlagSubmitted))
 
       try {
-        const response = await api.trainingCourse.trainingCourseSubmitFlag(
-          courseId,
-          challengeId,
-          { flag: captured, ...(flagId ? { flagId } : {}) },
-          { chapterId }
-        )
-        const result = response.data.status ?? AnswerResult.NotFound
+        const result =
+          (await trainingChapterApi.submitFlag(courseId, chapterId, challengeId, captured, flagId)) ??
+          AnswerResult.NotFound
         setFeedback(feedbackForResult(result))
         if (result === AnswerResult.Accepted) {
           updateChallenge({
