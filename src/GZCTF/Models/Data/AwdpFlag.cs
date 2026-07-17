@@ -1,10 +1,12 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Models.Data;
 
 /// <summary>
 /// AWDP 每轮每队每服务的 Flag
 /// </summary>
+[Index(nameof(SubmittedByUserId), nameof(FirstSubmittedAt))]
 public class AwdpFlag
 {
     [Key]

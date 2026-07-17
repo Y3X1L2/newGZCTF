@@ -67,6 +67,9 @@ public sealed class SubmissionEntityConfiguration : IEntityTypeConfiguration<Sub
             .HasDatabaseName("IX_Submissions_Team_Time_Id");
         builder.HasIndex(item => new { item.ParticipationId, item.ChallengeId })
             .HasDatabaseName("IX_Submissions_Participation_Challenge");
+        builder.HasIndex(item => new { item.UserId, item.SubmitTimeUtc, item.ChallengeId, item.Status })
+            .IsDescending(false, true, false, false)
+            .HasDatabaseName("IX_Submissions_User_Time_Challenge_Status");
         builder.HasIndex(item => new { item.Status, item.SubmitTimeUtc, item.Id })
             .IsDescending(false, true, true)
             .HasFilter("\"Status\" = 'FlagSubmitted'")

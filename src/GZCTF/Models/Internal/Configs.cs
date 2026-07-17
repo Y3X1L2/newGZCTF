@@ -72,6 +72,12 @@ public class PortalSsoConfig
     public bool Enabled { get; set; }
 
     /// <summary>
+    /// User-facing portal entry used to start an IAM login flow.
+    /// The portal remains responsible for issuing the token passed to the callback.
+    /// </summary>
+    public string EntryUrl { get; set; } = string.Empty;
+
+    /// <summary>
     /// IAM profile endpoint, for example http://192.168.20.150:8001/iam/v1/auth/profile.
     /// </summary>
     public string ProfileEndpoint { get; set; } = string.Empty;
