@@ -755,6 +755,60 @@ namespace GZCTF.Migrations
                 INSERT INTO "PenetrationTeamRuntimeBindings" ("GameId", "TeamId", "RuntimeId", "CreatedAt")
                 SELECT "GameId", "TeamId", "Id", "CreatedAt" FROM "TeamLabRuntimes";
 
+                WITH runtime_workers AS (
+                    SELECT runtime."Id" AS runtime_id,
+                           runtime."Generation" AS generation,
+                           runtime."WorkerNodeId" AS worker_node_id
+                    FROM "TeamLabRuntimes" runtime
+                    UNION
+                    SELECT network."RuntimeId", network."Generation",
+                           COALESCE(network."WorkerNodeId", runtime."WorkerNodeId")
+                    FROM "TeamLabRuntimeNetworks" network
+                    JOIN "TeamLabRuntimes" runtime ON runtime."Id" = network."RuntimeId"
+                    UNION
+                    SELECT asset."RuntimeId", asset."Generation",
+                           COALESCE(asset."WorkerNodeId", runtime."WorkerNodeId")
+                    FROM "TeamLabRuntimeAssets" asset
+                    JOIN "TeamLabRuntimes" runtime ON runtime."Id" = asset."RuntimeId"
+                )
+                INSERT INTO "TeamLabRuntimeShards"
+                    ("PublicId", "RuntimeId", "Generation", "WorkerNodeId", "Status", "RouteVersion",
+                     "LastError", "CreatedAt", "UpdatedAt")
+                SELECT gen_random_uuid(), worker.runtime_id, worker.generation, worker.worker_node_id,
+                       runtime."Status", 0, runtime."LastError", runtime."CreatedAt", runtime."UpdatedAt"
+                FROM runtime_workers worker
+                JOIN "TeamLabRuntimes" runtime ON runtime."Id" = worker.runtime_id
+                WHERE worker.worker_node_id IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM "TeamLabRuntimeShards" shard
+                      WHERE shard."RuntimeId" = worker.runtime_id
+                        AND shard."Generation" = worker.generation
+                        AND shard."WorkerNodeId" = worker.worker_node_id
+                  );
+
+                UPDATE "TeamLabRuntimeNetworks" network
+                SET "ShardId" = shard."Id",
+                    "WorkerNodeId" = COALESCE(network."WorkerNodeId", runtime."WorkerNodeId")
+                FROM "TeamLabRuntimes" runtime, "TeamLabRuntimeShards" shard
+                WHERE network."RuntimeId" = runtime."Id"
+                  AND network."Generation" = runtime."Generation"
+                  AND network."ShardId" IS NULL
+                  AND shard."RuntimeId" = network."RuntimeId"
+                  AND shard."Generation" = network."Generation"
+                  AND shard."WorkerNodeId" = COALESCE(network."WorkerNodeId", runtime."WorkerNodeId");
+
+                UPDATE "TeamLabRuntimeAssets" asset
+                SET "ShardId" = shard."Id",
+                    "WorkerNodeId" = COALESCE(asset."WorkerNodeId", runtime."WorkerNodeId")
+                FROM "TeamLabRuntimes" runtime, "TeamLabRuntimeShards" shard
+                WHERE asset."RuntimeId" = runtime."Id"
+                  AND asset."Generation" = runtime."Generation"
+                  AND asset."ShardId" IS NULL
+                  AND shard."RuntimeId" = asset."RuntimeId"
+                  AND shard."Generation" = asset."Generation"
+                  AND shard."WorkerNodeId" = COALESCE(asset."WorkerNodeId", runtime."WorkerNodeId");
+
                 UPDATE "TeamLabRuntimes" runtime
                 SET "EntryShardId" = (
                     SELECT network."ShardId"
@@ -775,6 +829,26 @@ namespace GZCTF.Migrations
                       ON topology_network."TopologyId" = binding."TopologyId"
                      AND topology_network."Key" = network."TopologyKey"
                     WHERE network."RuntimeId" = runtime."Id" AND topology_network."IsEntry" AND network."ShardId" IS NOT NULL
+                  );
+
+                UPDATE "TeamLabRuntimes" runtime
+                SET "EntryShardId" = (
+                    SELECT network."ShardId"
+                    FROM "TeamLabRuntimeNetworks" network
+                    WHERE network."RuntimeId" = runtime."Id"
+                      AND network."Generation" = runtime."Generation"
+                      AND network."ShardId" IS NOT NULL
+                    ORDER BY network."Id"
+                    LIMIT 1
+                )
+                WHERE runtime."EntryShardId" IS NULL
+                  AND runtime."Status" IN (6, 8, 10)
+                  AND EXISTS (
+                      SELECT 1
+                      FROM "TeamLabRuntimeNetworks" network
+                      WHERE network."RuntimeId" = runtime."Id"
+                        AND network."Generation" = runtime."Generation"
+                        AND network."ShardId" IS NOT NULL
                   );
 
                 INSERT INTO "TeamLabAccessGrants"

@@ -60,7 +60,9 @@ namespace GZCTF.Migrations
                         FROM "DeploymentTargets" AS target
                         LEFT JOIN "DeploymentQueueTickets" AS ticket
                           ON ticket."DeploymentTargetId" = target."Id"
-                        WHERE ticket."Id" IS NULL AND target."Status" IN (0, 1, 5, 6)
+                        WHERE ticket."Id" IS NULL
+                          AND target."Status" IN (0, 1, 5, 6)
+                          AND target."CreatedAt" >= CURRENT_TIMESTAMP - INTERVAL '1 day'
                     ) THEN
                         RAISE EXCEPTION 'Phase 6 backfill aborted: active orphan DeploymentTargets require manual resolution';
                     END IF;
@@ -115,8 +117,8 @@ namespace GZCTF.Migrations
                 SELECT target."Id",
                        CASE WHEN target."Type" = 1 THEN 6 ELSE 5 END,
                        CASE target."Action" WHEN 2 THEN 5 WHEN 3 THEN 4 ELSE 1 END,
-                       CASE target."Status" WHEN 2 THEN 4 WHEN 3 THEN 5 WHEN 4 THEN 6 END,
-                       CASE target."Status" WHEN 2 THEN 17 WHEN 3 THEN 18 WHEN 4 THEN 19 END,
+                       CASE target."Status" WHEN 2 THEN 4 WHEN 4 THEN 6 ELSE 5 END,
+                       CASE target."Status" WHEN 2 THEN 17 WHEN 4 THEN 19 ELSE 18 END,
                        target."TargetNodeId",
                        CASE WHEN target."Type" = 0 THEN 1 ELSE 0 END,
                        CASE WHEN target."Type" = 1 THEN 1 ELSE 0 END,
@@ -127,14 +129,30 @@ namespace GZCTF.Migrations
                        target."Id"::text,
                        'Legacy deployment target',
                        CASE WHEN target."Type" = 1 THEN 'VM' ELSE 'Docker' END,
-                       target."ErrorMessage",
+                       CASE
+                           WHEN target."Status" IN (0, 1, 5, 6) THEN COALESCE(
+                               target."ErrorMessage",
+                               'Legacy active deployment target was stale and had no queue ticket during Phase 6 migration.')
+                           ELSE target."ErrorMessage"
+                       END,
                        0,
                        target."CreatedAt",
-                       target."CompletedAt"
+                       CASE
+                           WHEN target."Status" IN (0, 1, 5, 6)
+                               THEN COALESCE(target."CompletedAt", CURRENT_TIMESTAMP)
+                           ELSE target."CompletedAt"
+                       END
                 FROM "DeploymentTargets" AS target
                 LEFT JOIN "DeploymentQueueTickets" AS ticket
                   ON ticket."DeploymentTargetId" = target."Id"
-                WHERE ticket."Id" IS NULL AND target."Status" IN (2, 3, 4);
+                WHERE ticket."Id" IS NULL
+                  AND (
+                      target."Status" IN (2, 3, 4)
+                      OR (
+                          target."Status" IN (0, 1, 5, 6)
+                          AND target."CreatedAt" < CURRENT_TIMESTAMP - INTERVAL '1 day'
+                      )
+                  );
                 """);
         }
 
