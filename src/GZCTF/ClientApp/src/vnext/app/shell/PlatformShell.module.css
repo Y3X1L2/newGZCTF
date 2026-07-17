@@ -429,13 +429,23 @@
   font-size: var(--yn-font-lg);
 }
 
-.identity span,
-.identity small {
+.identity span {
   overflow: hidden;
   color: var(--yn-color-muted);
   font-size: var(--yn-font-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.identity p {
+  display: -webkit-box;
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-xs);
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .signedOut p {
@@ -449,6 +459,101 @@
   display: grid;
   gap: 4px;
   margin-top: var(--yn-space-6);
+}
+
+.accountSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: var(--yn-space-5);
+  overflow: hidden;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-border);
+}
+
+.accountSummary > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 10px;
+  background: var(--yn-color-surface-muted);
+}
+
+.accountSummary > div:nth-child(4) {
+  grid-column: 1 / -1;
+}
+
+.accountSummary strong {
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-lg);
+}
+
+.accountSummary span {
+  overflow: hidden;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.continueSection {
+  margin-top: var(--yn-space-6);
+}
+
+.continueSection > header {
+  display: flex;
+  align-items: center;
+  gap: var(--yn-space-2);
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+  font-weight: 650;
+}
+
+.continueSection > div {
+  display: grid;
+  gap: 4px;
+  margin-top: var(--yn-space-3);
+}
+
+.continueSection a {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--yn-space-2);
+  padding: 10px;
+  border-radius: var(--yn-radius-md);
+  color: var(--yn-color-text-secondary);
+}
+
+.continueSection a:hover {
+  background: var(--yn-color-canvas-raised);
+  color: var(--yn-color-text);
+}
+
+.continueSection a > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.continueSection strong,
+.continueSection small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.continueSection strong {
+  font-size: var(--yn-font-sm);
+}
+
+.continueSection small {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
 }
 
 .accountLinks a {

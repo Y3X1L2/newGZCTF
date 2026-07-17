@@ -74,6 +74,37 @@
   color: var(--yn-color-danger);
 }
 
+.passwordControl {
+  position: relative;
+  display: block;
+}
+
+.passwordControl input {
+  padding-right: 44px;
+}
+
+.passwordControl button {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--yn-radius-sm);
+  background: transparent;
+  color: var(--yn-color-muted);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.passwordControl button:hover {
+  background: var(--yn-color-surface-muted);
+  color: var(--yn-color-text);
+}
+
 .fileInput {
   padding: 7px !important;
 }

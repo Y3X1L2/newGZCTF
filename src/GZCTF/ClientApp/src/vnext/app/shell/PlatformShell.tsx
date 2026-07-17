@@ -1,9 +1,10 @@
-import { ChevronRight, Grid3X3, LogIn, LogOut, Moon, Settings, Sun, UserRound } from 'lucide-react'
+import { Activity, ChevronRight, Grid3X3, LogIn, LogOut, Moon, PlayCircle, Settings, Sun, UserRound } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { getPlatformName, PLATFORM_TYPE } from '@Utils/Brand'
 import { useConfig } from '@Hooks/useConfig'
 import { roleLabel, useAccountLogout, useCurrentAccount } from '../../features/account/useCurrentAccount'
+import { useAccountSummary } from '../../features/profile/useUserProfileController'
 import { DrawerRequestClose, VNextConfirmDialog, VNextDrawer } from '../../shared/Interaction'
 import { useVNextTheme } from '../VNextThemeProvider'
 import styles from './PlatformShell.module.css'
@@ -84,7 +85,9 @@ function AccountDrawer({ open, onClose }: DrawerProps) {
   const navigate = useNavigate()
   const { user, isAuthenticated, isAdmin } = useCurrentAccount()
   const logout = useAccountLogout()
-  const displayName = user?.realName || user?.userName || '当前用户'
+  const summaryRequest = useAccountSummary(open && isAuthenticated)
+  const summary = summaryRequest.data
+  const displayName = summary?.userName || user?.userName || '当前用户'
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
   const logoutDrawerCloseRef = useRef<DrawerRequestClose | null>(null)
 
@@ -122,10 +125,8 @@ function AccountDrawer({ open, onClose }: DrawerProps) {
                 </span>
                 <div>
                   <strong>{displayName}</strong>
-                  <span>
-                    {user?.userName && user.userName !== displayName ? `@${user.userName}` : roleLabel(user?.role)}
-                  </span>
-                  {user?.email ? <small>{user.email}</small> : null}
+                  <span>{roleLabel(summary?.role ?? user?.role)}</span>
+                  <p>{summary?.bio || user?.bio || '还没有填写公开简介。'}</p>
                 </div>
               </section>
             ) : (
@@ -138,18 +139,69 @@ function AccountDrawer({ open, onClose }: DrawerProps) {
               </section>
             )}
 
+            {isAuthenticated && summary ? (
+              <section className={styles.accountSummary}>
+                <div>
+                  <strong>{summary.solved}</strong>
+                  <span>个人解题</span>
+                </div>
+                <div>
+                  <strong>{summary.activeDays}</strong>
+                  <span>活跃天数</span>
+                </div>
+                <div>
+                  <strong>{summary.runningInstances}</strong>
+                  <span>运行实例</span>
+                </div>
+                {summary.pendingReviews ? (
+                  <div>
+                    <strong>{summary.pendingReviews}</strong>
+                    <span>待审核</span>
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+
+            {isAuthenticated && summary?.continueItems.length ? (
+              <section className={styles.continueSection}>
+                <header>
+                  <Activity size={15} />
+                  <span>继续进行</span>
+                </header>
+                <div>
+                  {summary.continueItems.map((item) => (
+                    <Link
+                      key={item.id}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        requestClose(() => navigate(item.route))
+                      }}
+                      to={item.route}
+                    >
+                      <PlayCircle size={17} />
+                      <span>
+                        <strong>{item.title}</strong>
+                        <small>{item.subtitle}</small>
+                      </span>
+                      <ChevronRight size={15} />
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
             <nav className={styles.accountLinks}>
               {isAuthenticated ? (
                 <>
                   <Link
                     onClick={(event) => {
                       event.preventDefault()
-                      requestClose(() => navigate('/settings/profile'))
+                      requestClose(() => navigate('/users/me'))
                     }}
-                    to="/settings/profile"
+                    to="/users/me"
                   >
                     <UserRound size={17} />
-                    个人资料
+                    个人主页
                     <ChevronRight size={16} />
                   </Link>
                   <Link
@@ -221,7 +273,7 @@ export function PlatformShell() {
   const activeModule = currentModule(location.pathname)
   const routeFrameKey = location.pathname.match(/^\/games\/\d+(?=\/)/)?.[0] ?? location.pathname
   const platformName = getPlatformName(config.title)
-  const displayName = user?.realName || user?.userName || '登录'
+  const displayName = user?.userName || '登录'
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 })

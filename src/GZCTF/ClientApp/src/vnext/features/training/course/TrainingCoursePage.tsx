@@ -29,7 +29,6 @@ import {
   courseProgress,
   courseStatusLabel,
   courseStatusTone,
-  courseTeacherNames,
   formatTrainingDate,
 } from '../training'
 import styles from './TrainingCoursePage.module.css'
@@ -221,7 +220,19 @@ export function TrainingCoursePage() {
           <div className={styles.heroMeta}>
             <span>
               <UserRound size={16} />
-              任课教师：{courseTeacherNames(course)}
+              任课教师：
+              {(course.teachers ?? []).length
+                ? course.teachers?.map((teacher, index) => (
+                    <span key={teacher.teacherId || teacher.userName}>
+                      {index > 0 ? '、' : ''}
+                      {teacher.teacherId ? (
+                        <Link to={`/users/${teacher.teacherId}`}>{teacher.realName || teacher.userName}</Link>
+                      ) : (
+                        teacher.realName || teacher.userName
+                      )}
+                    </span>
+                  ))
+                : '暂未指定教师'}
             </span>
             <span>
               <UsersRound size={16} />

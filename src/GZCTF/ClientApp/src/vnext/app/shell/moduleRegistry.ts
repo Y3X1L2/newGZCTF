@@ -130,6 +130,9 @@ export function currentModule(pathname: string) {
   if (pathname === '/settings' || pathname.startsWith('/settings/')) {
     return { ...platformModules[0], label: '账户设置', implemented: true }
   }
+  if (pathname.startsWith('/users/')) {
+    return { ...platformModules[0], label: '个人主页', implemented: true }
+  }
   if (pathname.startsWith('/account/')) {
     return { ...platformModules[0], label: '账户访问', implemented: false }
   }

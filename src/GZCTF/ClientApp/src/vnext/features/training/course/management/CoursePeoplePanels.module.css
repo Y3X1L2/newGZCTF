@@ -223,6 +223,18 @@
   font-size: var(--yn-font-xs);
 }
 
+.peopleList article > div > a {
+  overflow: hidden;
+  color: var(--yn-color-text);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.peopleList article > div > a:hover {
+  color: var(--yn-color-brand);
+}
+
 @media (max-width: 760px) {
   .searchForm {
     align-items: stretch;

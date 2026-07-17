@@ -427,10 +427,20 @@
 }
 
 .memberIdentity strong,
+.memberIdentity a,
 .memberIdentity small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.memberIdentity a {
+  color: var(--yn-color-text);
+  font-weight: 700;
+}
+
+.memberIdentity a:hover {
+  color: var(--yn-color-brand);
 }
 
 .memberIdentity small {

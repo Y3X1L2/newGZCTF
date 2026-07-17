@@ -3,6 +3,20 @@ import { Navigate, Route, Routes } from 'react-router'
 import { VNextRouteLoading } from './VNextRouteLoading'
 import { PlatformShell } from './shell/PlatformShell'
 
+const AuthShell = lazy(() => import('../features/auth/AuthShell').then((module) => ({ default: module.AuthShell })))
+const LoginPage = lazy(() => import('../features/auth/LoginPage').then((module) => ({ default: module.LoginPage })))
+const RegisterPage = lazy(() =>
+  import('../features/auth/RegisterPage').then((module) => ({ default: module.RegisterPage }))
+)
+const RecoveryPage = lazy(() =>
+  import('../features/auth/RecoveryPage').then((module) => ({ default: module.RecoveryPage }))
+)
+const ResetPage = lazy(() => import('../features/auth/ResetPage').then((module) => ({ default: module.ResetPage })))
+const VerifyPage = lazy(() => import('../features/auth/VerifyPage').then((module) => ({ default: module.VerifyPage })))
+const AuthPendingPage = lazy(() =>
+  import('../features/auth/PendingPage').then((module) => ({ default: module.PendingPage }))
+)
+
 const HomePage = lazy(() => import('../features/home/HomePage').then((module) => ({ default: module.HomePage })))
 const GamesPage = lazy(() => import('../features/games/GamesPage').then((module) => ({ default: module.GamesPage })))
 const GameDetailPage = lazy(() =>
@@ -34,6 +48,9 @@ const SettingsPage = lazy(() =>
   import('../features/settings/SettingsPage').then((module) => ({ default: module.SettingsPage }))
 )
 const TeamsPage = lazy(() => import('../features/teams/TeamsPage').then((module) => ({ default: module.TeamsPage })))
+const UserProfilePage = lazy(() =>
+  import('../features/profile/UserProfilePage').then((module) => ({ default: module.UserProfilePage }))
+)
 const TrainingPage = lazy(() =>
   import('../features/training/catalog/TrainingPage').then((module) => ({ default: module.TrainingPage }))
 )
@@ -154,6 +171,15 @@ export function VNextApp() {
   return (
     <Suspense fallback={<VNextRouteLoading />}>
       <Routes>
+        <Route element={<AuthShell />}>
+          <Route path="account/login" element={<LoginPage />} />
+          <Route path="account/register" element={<RegisterPage />} />
+          <Route path="account/recovery" element={<RecoveryPage />} />
+          <Route path="account/reset" element={<ResetPage />} />
+          <Route path="account/verify" element={<VerifyPage />} />
+          <Route path="account/confirm" element={<VerifyPage mode="email-change" />} />
+          <Route path="account/pending" element={<AuthPendingPage />} />
+        </Route>
         <Route element={<PlatformShell />}>
           <Route index element={<HomePage />} />
           <Route path="games" element={<GamesPage />} />
@@ -171,6 +197,7 @@ export function VNextApp() {
           <Route path="posts/:postId" element={<PostDetailPage />} />
           <Route path="settings/:section?" element={<SettingsPage />} />
           <Route path="teams" element={<TeamsPage />} />
+          <Route path="users/:userId" element={<UserProfilePage />} />
           <Route path="training" element={<TrainingPage />} />
           <Route path="training/courses/new" element={<TrainingCourseEditorPage />} />
           <Route path="training/courses/:courseId" element={<TrainingCoursePage />} />

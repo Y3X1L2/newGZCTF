@@ -1,4 +1,12 @@
-import { ChangeEventHandler, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
+import {
+  ChangeEventHandler,
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+  useState,
+} from 'react'
 import styles from './FormControls.module.css'
 
 type FieldChromeProps = {
@@ -44,6 +52,49 @@ export function TextField({
   return (
     <FieldChrome error={error} hint={hint} label={label} required={required}>
       <input aria-invalid={Boolean(error)} onChange={handleChange} required={required} {...props} />
+    </FieldChrome>
+  )
+}
+
+export function PasswordField({
+  label,
+  hint,
+  error,
+  required,
+  onChange,
+  onValueChange,
+  ...props
+}: FieldChromeProps &
+  Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & {
+    onValueChange?: (value: string) => void
+  }) {
+  const [visible, setVisible] = useState(false)
+  const handleChange: ChangeEventHandler<HTMLInputElement> | undefined =
+    onChange || onValueChange
+      ? (event) => {
+          onChange?.(event)
+          onValueChange?.(event.currentTarget.value)
+        }
+      : undefined
+
+  return (
+    <FieldChrome error={error} hint={hint} label={label} required={required}>
+      <span className={styles.passwordControl}>
+        <input
+          aria-invalid={Boolean(error)}
+          onChange={handleChange}
+          required={required}
+          type={visible ? 'text' : 'password'}
+          {...props}
+        />
+        <button
+          aria-label={visible ? '隐藏密码' : '显示密码'}
+          onClick={() => setVisible((current) => !current)}
+          type="button"
+        >
+          {visible ? <EyeOff aria-hidden="true" size={17} /> : <Eye aria-hidden="true" size={17} />}
+        </button>
+      </span>
     </FieldChrome>
   )
 }

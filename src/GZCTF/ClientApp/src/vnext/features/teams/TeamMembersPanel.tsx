@@ -1,4 +1,5 @@
 import { TeamInfoModel } from '@Api'
+import { Link } from 'react-router'
 import { StatusPill } from '../../shared/Primitives'
 import { MemberAvatar } from './TeamAvatar'
 import { TeamConfirmation } from './TeamConfirmationDialog'
@@ -24,7 +25,11 @@ export function TeamMembersPanel({ team, isCaptain, onConfirm }: TeamMembersPane
               <MemberAvatar name={member.userName} src={member.avatar} />
             </span>
             <span className={styles.memberIdentity}>
-              <strong>{member.userName || '未命名用户'}</strong>
+              {member.id ? (
+                <Link to={`/users/${member.id}`}>{member.userName || '未命名用户'}</Link>
+              ) : (
+                <strong>{member.userName || '未命名用户'}</strong>
+              )}
               <small>{member.bio || '暂无简介'}</small>
             </span>
             <StatusPill tone={member.captain ? 'success' : 'neutral'}>{member.captain ? '队长' : '成员'}</StatusPill>

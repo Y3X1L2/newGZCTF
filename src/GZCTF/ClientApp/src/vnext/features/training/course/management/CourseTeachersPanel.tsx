@@ -1,5 +1,6 @@
 import { Search, Trash2, UserPlus } from 'lucide-react'
 import { FormEvent, useState } from 'react'
+import { Link } from 'react-router'
 import { TrainingCourseModel, TrainingCourseTeacherCandidateModel, TrainingCourseTeacherRole } from '@Api'
 import { SelectField, TextField } from '../../../../shared/FormControls'
 import { ActionButton, InlineFeedback, VNextDialog } from '../../../../shared/Interaction'
@@ -90,7 +91,11 @@ export function CourseTeachersPanel({
         {(course.teachers ?? []).map((teacher) => (
           <article key={teacher.teacherId}>
             <div>
-              <strong>{teacher.realName || teacher.userName || '未命名教师'}</strong>
+              {teacher.teacherId ? (
+                <Link to={`/users/${teacher.teacherId}`}>{teacher.realName || teacher.userName || '未命名教师'}</Link>
+              ) : (
+                <strong>{teacher.realName || teacher.userName || '未命名教师'}</strong>
+              )}
               <small>{teacher.userName || teacher.teacherId}</small>
             </div>
             <StatusPill tone={teacher.role === TrainingCourseTeacherRole.Owner ? 'info' : 'neutral'}>

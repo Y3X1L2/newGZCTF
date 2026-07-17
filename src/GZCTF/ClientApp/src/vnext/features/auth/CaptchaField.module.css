@@ -1,0 +1,91 @@
+.empty {
+  min-height: 1px;
+}
+
+.turnstile {
+  min-height: 65px;
+  overflow: hidden;
+}
+
+.turnstile[data-disabled] {
+  opacity: 0.58;
+  pointer-events: none;
+}
+
+.pow {
+  display: grid;
+  min-height: 64px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--yn-space-3);
+  padding: 10px 12px;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface-muted);
+}
+
+.powIcon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--yn-color-border-strong);
+  color: var(--yn-color-muted);
+}
+
+.powIcon[data-loading] svg {
+  animation: pow-pulse 900ms var(--yn-ease-standard) infinite alternate;
+}
+
+.powIcon[data-complete] {
+  border-color: var(--yn-color-brand);
+  color: var(--yn-color-brand-strong);
+}
+
+.pow > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.pow strong {
+  font-size: var(--yn-font-sm);
+}
+
+.pow small {
+  overflow: hidden;
+  color: var(--yn-color-muted);
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pow button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--yn-radius-sm);
+  background: transparent;
+  color: var(--yn-color-text-secondary);
+  cursor: pointer;
+}
+
+.pow button:hover {
+  background: var(--yn-color-canvas-raised);
+}
+
+@keyframes pow-pulse {
+  from {
+    opacity: 0.45;
+    transform: scale(0.92);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
