@@ -1,0 +1,232 @@
+.page {
+  width: min(var(--yn-page-max-width), 100%);
+  margin: 0 auto;
+  padding: var(--yn-space-7) var(--yn-page-gutter) 72px;
+}
+
+.page > section:nth-of-type(1) {
+  margin-top: var(--yn-space-5);
+}
+
+.searchBox,
+.inlineSearch label {
+  display: flex;
+  min-width: min(360px, 100%);
+  min-height: 42px;
+  flex: 1;
+  align-items: center;
+  gap: var(--yn-space-2);
+  padding: 0 var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-muted);
+}
+
+.searchBox:focus-within,
+.inlineSearch label:focus-within {
+  border-color: var(--yn-color-border-strong);
+}
+
+.searchBox input,
+.inlineSearch input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--yn-color-text);
+  box-shadow: none;
+}
+
+.archiveToggle {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: var(--yn-space-2);
+  padding: 0 var(--yn-space-3);
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-sm);
+}
+
+.groupIdentity {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.groupIdentity strong,
+.groupIdentity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.groupIdentity small {
+  max-width: 520px;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.mono {
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+  white-space: nowrap;
+}
+
+.formStack,
+.drawerContent {
+  display: grid;
+  gap: var(--yn-space-5);
+}
+
+.detailSection {
+  display: grid;
+  gap: var(--yn-space-4);
+  padding-top: var(--yn-space-4);
+  border-top: 1px solid var(--yn-color-border);
+}
+
+.detailSection:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.detailSection > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--yn-space-3);
+}
+
+.detailSection h3,
+.detailSection p {
+  margin: 0;
+}
+
+.detailSection h3 {
+  font-size: var(--yn-font-md);
+}
+
+.detailSection p,
+.detailSection header > span {
+  margin-top: 3px;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-sm);
+}
+
+.personList,
+.candidateList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--yn-color-border);
+  list-style: none;
+}
+
+.personList li,
+.candidateList li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yn-space-3);
+  padding: var(--yn-space-3) 0;
+  border-bottom: 1px solid var(--yn-color-border);
+}
+
+.personList li > div:first-child,
+.candidateList li > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.personList strong,
+.personList small,
+.candidateList strong,
+.candidateList small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.personList small,
+.candidateList small,
+.searchHint {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.personList button {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--yn-radius-md);
+  background: transparent;
+  color: var(--yn-color-muted);
+  cursor: pointer;
+}
+
+.personList button:hover {
+  border-color: var(--yn-color-danger);
+  color: var(--yn-color-danger);
+}
+
+.personAction {
+  display: flex;
+  align-items: center;
+  gap: var(--yn-space-2);
+}
+
+.personSearch {
+  display: grid;
+  gap: var(--yn-space-3);
+  padding: var(--yn-space-4);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface-muted);
+}
+
+.inlineSearch {
+  display: flex;
+  align-items: center;
+  gap: var(--yn-space-2);
+}
+
+.inlineSearch label {
+  min-width: 0;
+  background: var(--yn-color-surface);
+}
+
+.drawerActions {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yn-space-3);
+}
+
+@media (max-width: 760px) {
+  .page {
+    padding-top: var(--yn-space-5);
+  }
+
+  .searchBox {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .inlineSearch,
+  .drawerActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .candidateList li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

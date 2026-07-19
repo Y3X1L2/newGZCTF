@@ -1,5 +1,6 @@
 export * from './adminLogApi'
 export * from './contracts'
+export * from './commonAdminApi'
 export * from './deploymentQueueAdminApi'
 export * from './gameAdminApi'
 export * from './gameOperationsAdminApi'

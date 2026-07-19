@@ -1,4 +1,17 @@
-import { Activity, BookOpenCheck, Boxes, CircleGauge, FileClock, ListTodo, Server, Settings2, Trophy } from 'lucide-react'
+import {
+  Activity,
+  BookOpenCheck,
+  Boxes,
+  CircleGauge,
+  FileClock,
+  GraduationCap,
+  ListTodo,
+  Server,
+  Settings2,
+  ShieldCheck,
+  Trophy,
+  Users,
+} from 'lucide-react'
 
 export interface AdminNavigationItem {
   id: string
@@ -41,7 +54,12 @@ export const adminNavigation: AdminNavigationGroup[] = [
     ],
   },
   {
-    label: '后续',
-    items: [{ id: 'system', label: '系统配置', route: '/admin/system', icon: Settings2, implemented: false }],
+    label: '治理',
+    items: [
+      { id: 'users', label: '用户管理', route: '/admin/users', icon: Users, implemented: true },
+      { id: 'teams', label: '战队管理', route: '/admin/teams', icon: ShieldCheck, implemented: true },
+      { id: 'student-groups', label: '学员组', route: '/admin/student-groups', icon: GraduationCap, implemented: true },
+      { id: 'system', label: '系统设置', route: '/admin/system', icon: Settings2, implemented: true },
+    ],
   },
 ]

@@ -110,6 +110,20 @@ const AdminInstancesPage = lazy(() =>
 const AdminLogsPage = lazy(() =>
   import('../features/admin/logs/AdminLogsPage').then((module) => ({ default: module.AdminLogsPage }))
 )
+const AdminUsersPage = lazy(() =>
+  import('../features/admin/users/AdminUsersPage').then((module) => ({ default: module.AdminUsersPage }))
+)
+const AdminTeamsPage = lazy(() =>
+  import('../features/admin/teams/AdminTeamsPage').then((module) => ({ default: module.AdminTeamsPage }))
+)
+const AdminStudentGroupsPage = lazy(() =>
+  import('../features/admin/student-groups/AdminStudentGroupsPage').then((module) => ({
+    default: module.AdminStudentGroupsPage,
+  }))
+)
+const AdminSystemPage = lazy(() =>
+  import('../features/admin/system/AdminSystemPage').then((module) => ({ default: module.AdminSystemPage }))
+)
 const AdminDashboardPage = lazy(() =>
   import('../features/admin/dashboard/AdminDashboardPage').then((module) => ({ default: module.AdminDashboardPage }))
 )
@@ -241,7 +255,10 @@ export function VNextApp() {
             <Route path="instances" element={<AdminInstancesPage />} />
             <Route path="queue" element={<AdminQueuePage />} />
             <Route path="logs" element={<AdminLogsPage />} />
-            <Route path="system" element={<AdminPendingPage />} />
+            <Route path="users" element={<AdminUsersPage />} />
+            <Route path="teams" element={<AdminTeamsPage />} />
+            <Route path="student-groups" element={<AdminStudentGroupsPage />} />
+            <Route path="system" element={<AdminSystemPage />} />
             <Route path="*" element={<AdminPendingPage />} />
           </Route>
           <Route path="*" element={<PendingPage />} />
