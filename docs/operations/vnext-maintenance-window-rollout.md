@@ -71,7 +71,7 @@
 
 ```bash
 export RELEASE_SHA='<最终提交的完整 SHA>'
-export RELEASE_TAG='vnext-rc.3'
+export RELEASE_TAG='vnext-rc.4'
 export RELEASE_TS="$(date -u +%Y%m%dT%H%M%SZ)"
 export RELEASE_ROOT='/opt/gzctf/releases'
 export VALIDATION_ROOT='/opt/gzctf-vnext'
@@ -122,11 +122,11 @@ git diff --check
 - 工作区没有来源不明或未处理文件。
 - `HEAD..origin/main` 为空；如果不为空，先做兼容审查，不能直接部署。
 - 所有上线提交都已推送到远端工作分支。
-- 旧标签 `vnext-rc.2` 不移动；为最终 SHA 创建新的标签。
+- 历史标签 `vnext-rc.2` 和 `vnext-rc.3` 不移动；`vnext-rc.3` 因 Linux RID 构建说明缺失已在部署前淘汰，不得用于生产发布。
 
 ```powershell
 $releaseSha = git rev-parse HEAD
-$releaseTag = 'vnext-rc.3'
+$releaseTag = 'vnext-rc.4'
 git tag -a $releaseTag $releaseSha -m "YINYU vNext maintenance-window release candidate"
 git push origin codex/vnext-clean-rebuild
 git push origin $releaseTag
@@ -156,7 +156,9 @@ Set-Location ../../..
 ```powershell
 $sha = git rev-parse HEAD
 $artifactRoot = Join-Path $PWD "artifacts/$sha"
+dotnet restore src/GZCTF/GZCTF.csproj --runtime linux-x64
 dotnet publish src/GZCTF/GZCTF.csproj -c Release --no-restore `
+  --runtime linux-x64 --self-contained false `
   -o "$artifactRoot/publish"
 dotnet ef migrations bundle --project src/GZCTF/GZCTF.csproj `
   --startup-project src/GZCTF/GZCTF.csproj --configuration Release `

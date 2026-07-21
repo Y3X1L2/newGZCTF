@@ -190,6 +190,8 @@
 - [ ] 停止外部写入和旧应用，执行最终 PostgreSQL 备份并验证摘要、`pg_restore --list` 和 `DataProtectionKeys`。
 - [ ] 备份旧发布目录、文件存储、应用配置、systemd、基础容器清单以及 Nginx、WireGuard、FRP、Agent 和公网网关配置。
 
+执行记录：`vnext-rc.3` 在发布物构建前发现缺少主站 `linux-x64` RID 约束，未部署且已淘汰。历史标签保持不变，修复后的候选从 `vnext-rc.4` 继续。
+
 完成门禁：候选版本可从远端固定 SHA 重建，最终备份可读，旧版本及其数据库、文件和运行配置能够完整恢复。
 
 ## 9. 阶段 6：部署与开放前验收
