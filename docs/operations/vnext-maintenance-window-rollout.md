@@ -348,17 +348,24 @@ sudo install -m 0600 "$OLD_RELEASE/appsettings.json" "$NEW_RELEASE/publish/appse
 
 ### 7.3 显式执行迁移
 
-应用启动时仍会自动检查迁移，但正式发布先使用 migration bundle 执行。bundle 从工作目录下权限为 `0600` 的 `appsettings.json` 读取生产连接串，避免把连接串暴露在命令参数、Shell 历史或共享日志中：
+应用启动时仍会自动检查迁移，但正式发布先使用 migration bundle 执行。EF migration bundle 不会自动读取发布目录中的 `appsettings.json`，必须从受限配置中读取连接串并显式传给 `--connection`。不要把连接串写进脚本、Shell 历史或共享日志：
 
 ```bash
 sudo chmod +x "$NEW_RELEASE/gzctf-migrate"
+set +o history
+DB_CONNECTION="$(sudo jq -er '.ConnectionStrings.Database' "$NEW_RELEASE/publish/appsettings.json")"
 set -o pipefail
 (
   cd "$NEW_RELEASE/publish"
-  sudo ../gzctf-migrate
+  sudo ../gzctf-migrate --connection "$DB_CONNECTION"
 ) 2>&1 | sudo tee "$REPORT_ROOT/migration.log"
-test "${PIPESTATUS[0]}" -eq 0
+MIGRATION_EXIT="${PIPESTATUS[0]}"
+unset DB_CONNECTION
+set -o history
+test "$MIGRATION_EXIT" -eq 0
 ```
+
+迁移进程运行期间连接串会短暂存在于该进程参数中，因此该步骤只能由受信任管理员在维护窗口执行，并应限制同机非特权用户。执行后检查迁移日志未输出连接串。
 
 迁移后记录迁移头和核心表计数。若 bundle 失败、迁移头错误或核心数据异常，不启动新应用，直接进入回滚。
 
