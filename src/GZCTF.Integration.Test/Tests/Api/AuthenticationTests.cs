@@ -64,6 +64,20 @@ public class AuthenticationTests(GZCTFApplicationFactory factory, ITestOutputHel
         Assert.Null(capabilities.PortalSso.EntryUrl);
     }
 
+    [Theory]
+    [InlineData("https://evil.example")]
+    [InlineData("//evil.example")]
+    [InlineData("/\\evil")]
+    [InlineData("/training\\evil")]
+    public async Task PortalSso_InvalidReturnUrl_ReturnsBadRequest(string returnUrl)
+    {
+        var encodedReturnUrl = Uri.EscapeDataString(returnUrl);
+        var response = await _client.GetAsync(
+            $"/api/account/portal-sso?portal_token=invalid&returnUrl={encodedReturnUrl}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     [Fact]
     public async Task Recovery_DoesNotRevealWhetherAccountExists()
     {

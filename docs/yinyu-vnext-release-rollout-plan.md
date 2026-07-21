@@ -46,7 +46,7 @@
 | 1 | 形成可复现 RC | 已完成 | 工作区干净、提交可审查、现网基线已记录、RC 标签可复现 |
 | 2 | 实例就绪契约完善 | 已完成 | 不依赖固定等待时间，入口状态可观测；实机验收并入阶段 7 |
 | 3 | Docker 全量集成测试 | 已完成 | 247 项完成且无测试资源残留 |
-| 4 | IAM 实时验收 | 待开始 | 新建、绑定、同步、异常和重定向边界全部通过 |
+| 4 | IAM 实时验收 | 已完成 | 新建、绑定、同步、异常和重定向边界全部通过 |
 | 5 | 基础设施与实时能力验收 | 待开始 | Redis/SignalR/OTel/healthz 全部通过 |
 | 6 | 完整业务验收 | 待开始 | 自动验收和 AWDP 人工验收均有证据 |
 | 7 | 构建发布物及离线演练 | 待开始 | 固定 SHA、校验清单、迁移和回滚演练通过 |
@@ -162,14 +162,25 @@
 
 ## 7. 阶段 4：IAM 实时验收
 
-- 使用浏览器取得短期有效门户 Token，不写入命令历史和文档。
-- 验证新 IAM 用户自动创建、相同 IAM ID 重复登录不重复创建。
-- 验证既有绑定、`data.user` 嵌套结构、姓名和角色同步。
-- 验证过期或伪造 Token 返回 `401`，无权限返回 `403`。
-- 验证 `returnUrl` 只允许站内路径。
-- 验证 IAM 故障时本地登录仍可使用。
+- [x] 使用浏览器取得短期有效门户 Token，不写入命令历史和文档。
+- [x] 验证新 IAM 用户自动创建、相同 IAM ID 重复登录不重复创建。
+- [x] 验证既有绑定、`data.user` 嵌套结构、姓名和角色同步。
+- [x] 验证过期或伪造 Token 返回 `401`，无权限返回 `403`。
+- [x] 验证 `returnUrl` 只允许站内路径，并拒绝反斜杠混淆路径。
+- [x] 验证 IAM 故障时本地登录仍可使用。
 
 完成门禁：身份唯一性、权限映射、异常路径和本地登录全部通过。
+
+### 7.1 执行结果
+
+- 候选版本基于 `vnext-rc.2`（`95d6c67`），在独立 PostgreSQL、Redis 和应用进程中验证，未连接或修改 `10.24.0.27`。
+- IAM `data.user` 嵌套响应解析成功，首次登录创建 `iam_12`，`super_admin` 正确映射为 `SuperAdmin`，并跳转到 `/training`。
+- 同一 IAM ID 重复登录后，测试库保持 2 个用户（本地 `Admin` 和 `iam_12`）、1 个 `PortalIAM` 绑定和 1 个 `iam_12` 用户。
+- 伪造和过期形式 Token 均返回 `401`；缺少 CTF 平台授权返回 `403`，且未创建未授权用户。
+- IAM Profile 服务不可达时 SSO 返回 `504`，本地密码登录仍返回 `200`。
+- 验收发现 `/training\\evil` 可绕过原站内路径预校验，现已拒绝所有包含反斜杠的 `returnUrl`；认证集成测试 `22/22` 通过。
+
+详细证据见 `docs/yinyu-vnext-iam-acceptance-20260722.md`。
 
 ## 8. 阶段 5：基础设施与实时能力验收
 
@@ -234,6 +245,7 @@ AWDP 按 `docs/yinyu-awdp-manual-acceptance.md` 由测试人员手工验收，�
 
 - `docs/yinyu-vnext-production-acceptance-20260720.md`
 - `docs/yinyu-awdp-manual-acceptance.md`
+- `docs/yinyu-vnext-iam-acceptance-20260722.md`
 - `docs/yinyu-vnext-deferred-contract-gaps.md`
 - `scripts/validation/`
 

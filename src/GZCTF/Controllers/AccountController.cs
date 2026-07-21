@@ -759,7 +759,7 @@ public class AccountController(
 
         if (!returnUrl.StartsWith("/", StringComparison.Ordinal) ||
             returnUrl.StartsWith("//", StringComparison.Ordinal) ||
-            returnUrl.StartsWith("/\\", StringComparison.Ordinal))
+            returnUrl.Contains('\\'))
             return null;
 
         return returnUrl;
