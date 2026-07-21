@@ -42,7 +42,7 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
   const queue = controller.vmStatus?.queue
   const stageMessage = controller.vmStatus?.stageMessage
   const entryHref = externalEntryHref(controller.entry)
-  const entryPublicationFailed = controller.entryStatus === ContainerEntryStatus.Error
+  const entryPublicationFailed = controller.entryStatus === ContainerEntryStatus.Error && controller.closeTime !== null
 
   if (controller.kind === 'none') return null
 
@@ -85,7 +85,12 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
               <ActionButton icon={<RefreshCw size={16} />} onClick={() => void controller.refresh()} type="button">
                 刷新状态
               </ActionButton>
-              <ActionButton icon={<Trash2 size={16} />} onClick={() => void controller.destroy()} tone="danger" type="button">
+              <ActionButton
+                icon={<Trash2 size={16} />}
+                onClick={() => void controller.destroy()}
+                tone="danger"
+                type="button"
+              >
                 销毁实例
               </ActionButton>
             </div>

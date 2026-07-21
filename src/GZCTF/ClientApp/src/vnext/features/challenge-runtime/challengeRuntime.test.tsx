@@ -66,6 +66,7 @@ describe('challenge runtime contract', () => {
           entryStatus: ContainerEntryStatus.Error,
           entryError: 'Public gateway reload failed.',
           error: '公网入口发布失败。',
+          closeTime: Date.now() + 60_000,
         })}
       />
     )
@@ -73,6 +74,22 @@ describe('challenge runtime contract', () => {
     expect(screen.getByRole('button', { name: '刷新状态' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '销毁实例' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重新创建' })).not.toBeInTheDocument()
+  })
+
+  it('offers recreation when deployment failed before a runtime existed', () => {
+    render(
+      <InstanceControl
+        controller={controller({
+          phase: 'failed',
+          entryStatus: ContainerEntryStatus.Error,
+          entryError: '题目镜像暂不可用，请联系管理员。',
+          error: '题目镜像暂不可用，请联系管理员。',
+        })}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: '重新创建' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '销毁实例' })).not.toBeInTheDocument()
   })
 
   it('shows an unsafe entry as text without rendering an executable link', () => {

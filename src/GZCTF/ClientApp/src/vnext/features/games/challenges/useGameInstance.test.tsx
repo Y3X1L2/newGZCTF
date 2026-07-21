@@ -88,4 +88,42 @@ describe('useGameInstance', () => {
     expect(refreshChallenge).not.toHaveBeenCalled()
     unmount()
   })
+
+  it('transitions a queued deployment to the server-projected failure state', async () => {
+    vi.useFakeTimers()
+    const initialChallenge = dockerChallenge(null)
+    const failedChallenge = dockerChallenge(null, ContainerEntryStatus.Error)
+    failedChallenge.context!.instanceEntryError = '题目镜像暂不可用，请联系管理员。'
+    const refreshChallenge = vi.fn().mockResolvedValue(failedChallenge)
+
+    vi.spyOn(gamePlayerApi, 'createInstance').mockResolvedValue({
+      entry: undefined,
+      expectStopAt: undefined,
+      entryStatus: ContainerEntryStatus.Pending,
+    })
+
+    const { result, unmount } = renderHook(() =>
+      useGameInstance({
+        challenge: initialChallenge,
+        gameId: 23,
+        refreshChallenge,
+        updateChallenge: vi.fn(),
+      })
+    )
+
+    await act(async () => {
+      await result.current.create()
+      await vi.advanceTimersByTimeAsync(1_200)
+    })
+
+    expect(result.current.phase).toBe('failed')
+    expect(result.current.error).toBe('题目镜像暂不可用，请联系管理员。')
+    expect(refreshChallenge).toHaveBeenCalledOnce()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000)
+    })
+    expect(refreshChallenge).toHaveBeenCalledOnce()
+    unmount()
+  })
 })

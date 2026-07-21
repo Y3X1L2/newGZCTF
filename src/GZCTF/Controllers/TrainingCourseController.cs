@@ -1034,7 +1034,13 @@ public class TrainingCourseController(
             s.ExerciseChallengeId == challengeId &&
             s.Status == AnswerResult.Accepted, token);
 
-        return Ok(TrainingCourseChallengeDetailModel.FromInstance(courseId, chapterId, instance, attempts, solved));
+        var model = TrainingCourseChallengeDetailModel.FromInstance(courseId, chapterId, instance, attempts, solved);
+        var queue = HttpContext.RequestServices.GetRequiredService<DeploymentQueueService>();
+        var queueStatus = await queue.GetLatestSubjectStatusAsync(
+            DeploymentQueueRequest.TrainingContainer(user.Id, challengeId), token);
+        PlayerRuntimeStatusProjection.Apply(model.Context, queueStatus);
+
+        return Ok(model);
     }
 
     [HttpPost("{courseId:int}/challenges/{challengeId:int}/container")]

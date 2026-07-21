@@ -1,18 +1,10 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  ChallengeType,
-  ContainerEntryStatus,
-  EnvironmentType,
-  TrainingCourseChallengeDetailModel,
-} from '@Api'
+import { ChallengeType, ContainerEntryStatus, EnvironmentType, TrainingCourseChallengeDetailModel } from '@Api'
 import { trainingChapterApi } from './trainingChapterApi'
 import { useTrainingInstance } from './useTrainingInstance'
 
-function dockerChallenge(
-  entry: string | null,
-  status?: ContainerEntryStatus
-): TrainingCourseChallengeDetailModel {
+function dockerChallenge(entry: string | null, status?: ContainerEntryStatus): TrainingCourseChallengeDetailModel {
   return {
     id: 7,
     type: ChallengeType.DynamicContainer,
@@ -96,6 +88,45 @@ describe('useTrainingInstance', () => {
       await vi.advanceTimersByTimeAsync(10_000)
     })
     expect(refreshChallenge).not.toHaveBeenCalled()
+    unmount()
+  })
+
+  it('transitions a queued course deployment to the server-projected failure state', async () => {
+    vi.useFakeTimers()
+    const initialChallenge = dockerChallenge(null)
+    const failedChallenge = dockerChallenge(null, ContainerEntryStatus.Error)
+    failedChallenge.context!.instanceEntryError = '题目镜像暂不可用，请联系管理员。'
+    const refreshChallenge = vi.fn().mockResolvedValue(failedChallenge)
+
+    vi.spyOn(trainingChapterApi, 'createInstance').mockResolvedValue({
+      entry: undefined,
+      expectStopAt: undefined,
+      entryStatus: ContainerEntryStatus.Pending,
+    })
+
+    const { result, unmount } = renderHook(() =>
+      useTrainingInstance({
+        challenge: initialChallenge,
+        chapterId: 8,
+        courseId: 3,
+        refreshChallenge,
+        updateChallenge: vi.fn(),
+      })
+    )
+
+    await act(async () => {
+      await result.current.create()
+      await vi.advanceTimersByTimeAsync(900)
+    })
+
+    expect(result.current.phase).toBe('failed')
+    expect(result.current.error).toBe('题目镜像暂不可用，请联系管理员。')
+    expect(refreshChallenge).toHaveBeenCalledOnce()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000)
+    })
+    expect(refreshChallenge).toHaveBeenCalledOnce()
     unmount()
   })
 })
