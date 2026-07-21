@@ -156,16 +156,19 @@ Set-Location ../../..
 ```powershell
 $sha = git rev-parse HEAD
 $artifactRoot = Join-Path $PWD "artifacts/$sha"
+dotnet tool restore
 dotnet restore src/GZCTF/GZCTF.csproj --runtime linux-x64
 dotnet publish src/GZCTF/GZCTF.csproj -c Release --no-restore `
   --runtime linux-x64 --self-contained false `
   -o "$artifactRoot/publish"
-dotnet ef migrations bundle --project src/GZCTF/GZCTF.csproj `
+dotnet tool run dotnet-ef migrations bundle --project src/GZCTF/GZCTF.csproj `
   --startup-project src/GZCTF/GZCTF.csproj --configuration Release `
-  --runtime linux-x64 --self-contained `
+  --target-runtime linux-x64 --self-contained `
   --output "$artifactRoot/gzctf-migrate"
 git show -s --format='%H%n%cI%n%s' HEAD | Set-Content "$artifactRoot/version.txt"
 ```
+
+发布前必须检查 `publish/GZCTF`、`publish/agent/gzctf-agent` 和 `gzctf-migrate` 的前四字节均为 `7F-45-4C-46`（ELF）。出现 `4D-5A`（Windows PE）立即停止，不得上传服务器。
 
 在 Linux 或 Git Bash 中为发布物生成校验清单和压缩包：
 
