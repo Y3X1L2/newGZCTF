@@ -1,4 +1,4 @@
-import { Box, Eye, FileArchive, FolderInput, Search, Trash2, Upload } from 'lucide-react'
+import { BadgeCheck, Box, Eye, FileArchive, FolderInput, Search, Trash2, Upload } from 'lucide-react'
 import { ChangeEvent, useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import { ImageStatus, ImageType, OSType } from '@Api'
@@ -209,6 +209,19 @@ export function AdminImagesPage() {
     }
   }
 
+  const setCredentialCapability = async (template: ImageTemplateSummary) => {
+    setActionFailure(null)
+    try {
+      await imageTemplateAdminApi.setInstanceCredentialCapability(
+        template.id,
+        !template.supportsInstanceCredentials
+      )
+      await Promise.all([detail.mutate(), mutate()])
+    } catch (capabilityError) {
+      setActionFailure(errorMessage(capabilityError, 'Windows 实例凭据能力更新失败。'))
+    }
+  }
+
   const selected = detail.data ?? images?.find((item) => item.id === selectedId) ?? null
 
   return (
@@ -341,14 +354,31 @@ export function AdminImagesPage() {
         description={selected ? `${imageTypeLabel(selected.imageType)} · ${imageOsLabel(selected.osType)}` : undefined}
         footer={
           selected ? (
-            <ActionButton
-              icon={<Trash2 size={16} />}
-              onClick={() => setDeleteTarget(selected)}
-              tone="danger"
-              type="button"
-            >
-              删除模板
-            </ActionButton>
+            <>
+              {selected.canManage !== false &&
+              selected.osType === OSType.Windows &&
+              selected.imageType !== ImageType.Docker &&
+              (selected.status === ImageStatus.Ready || selected.supportsInstanceCredentials) ? (
+                <ActionButton
+                  icon={<BadgeCheck size={16} />}
+                  onClick={() => void setCredentialCapability(selected)}
+                  tone={selected.supportsInstanceCredentials ? 'primary' : undefined}
+                  type="button"
+                >
+                  {selected.supportsInstanceCredentials ? '撤销凭据认证' : '认证 Cloudbase-Init'}
+                </ActionButton>
+              ) : null}
+              {selected.canManage !== false ? (
+                <ActionButton
+                  icon={<Trash2 size={16} />}
+                  onClick={() => setDeleteTarget(selected)}
+                  tone="danger"
+                  type="button"
+                >
+                  删除模板
+                </ActionButton>
+              ) : null}
+            </>
           ) : undefined
         }
         onClose={() => setSelectedId(null)}
@@ -388,6 +418,12 @@ export function AdminImagesPage() {
                 <dt>操作系统</dt>
                 <dd>{imageOsLabel(selected.osType)}</dd>
               </div>
+              {selected.osType === OSType.Windows && selected.imageType !== ImageType.Docker ? (
+                <div>
+                  <dt>实例凭据</dt>
+                  <dd>{selected.supportsInstanceCredentials ? '已认证' : '未认证'}</dd>
+                </div>
+              ) : null}
               <div>
                 <dt>文件大小</dt>
                 <dd>{formatBytes(selected.fileSize)}</dd>

@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import { ContainerEntryStatus } from '@Api'
 import { FlagSubmission } from './FlagSubmission'
 import { InstanceControl } from './InstanceControl'
 import { RuntimeInstanceController } from './types'
@@ -10,7 +11,9 @@ function controller(overrides: Partial<RuntimeInstanceController> = {}): Runtime
     kind: 'docker',
     phase: 'idle',
     entry: null,
-    entryAvailableAt: null,
+    entryStatus: null,
+    entryReadyAt: null,
+    entryError: null,
     closeTime: null,
     vmStatus: null,
     error: null,
@@ -39,20 +42,37 @@ describe('challenge runtime contract', () => {
     expect(screen.getByRole('link', { name: '打开实例入口' })).toHaveAttribute('href', 'http://10.24.0.30:32768')
   })
 
-  it('holds the public entry action during the gateway synchronization window', () => {
+  it('holds the public entry action until the gateway confirms the route', () => {
     render(
       <InstanceControl
         controller={controller({
-          phase: 'running',
-          entry: '203.195.157.191:30000',
-          entryAvailableAt: Date.now() + 8_000,
+          phase: 'provisioning',
+          entry: null,
+          entryStatus: ContainerEntryStatus.Pending,
           closeTime: Date.now() + 60_000,
         })}
       />
     )
 
-    expect(screen.getByText(/公网入口正在同步/)).toBeInTheDocument()
+    expect(screen.getByText('正在准备运行环境')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '打开实例入口' })).not.toBeInTheDocument()
+  })
+
+  it('offers refresh and destroy when the gateway rejects the current route', () => {
+    render(
+      <InstanceControl
+        controller={controller({
+          phase: 'failed',
+          entryStatus: ContainerEntryStatus.Error,
+          entryError: 'Public gateway reload failed.',
+          error: '公网入口发布失败。',
+        })}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: '刷新状态' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '销毁实例' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重新创建' })).not.toBeInTheDocument()
   })
 
   it('shows an unsafe entry as text without rendering an executable link', () => {

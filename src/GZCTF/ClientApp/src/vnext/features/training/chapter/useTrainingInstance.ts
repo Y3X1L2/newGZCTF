@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChallengeType, EnvironmentType, TrainingCourseChallengeDetailModel } from '@Api'
+import {
+  ChallengeType,
+  ClientFlagContext,
+  ContainerEntryStatus,
+  EnvironmentType,
+  TrainingCourseChallengeDetailModel,
+} from '@Api'
 import { errorMessage } from '../../../shared/errors'
-import { publicEntryAvailableAt } from '../../challenge-runtime/entryReadiness'
 import { RuntimeInstanceController, RuntimeInstancePhase } from '../../challenge-runtime/types'
 import { trainingChapterApi } from './trainingChapterApi'
 
@@ -24,6 +29,17 @@ function operationTimedOut(operation: OperationState) {
   return Date.now() - operation.startedAt > 120_000
 }
 
+function resolvedEntryStatus(context?: ClientFlagContext): ContainerEntryStatus | null {
+  return context?.instanceEntryStatus ?? (context?.instanceEntry ? ContainerEntryStatus.Ready : null)
+}
+
+function resolvedPhase(context?: ClientFlagContext): RuntimeInstancePhase {
+  const status = resolvedEntryStatus(context)
+  if (status === ContainerEntryStatus.Error) return 'failed'
+  if (status === ContainerEntryStatus.Pending) return 'provisioning'
+  return context?.instanceEntry ? 'running' : 'idle'
+}
+
 export function useTrainingInstance({
   courseId,
   chapterId,
@@ -39,9 +55,13 @@ export function useTrainingInstance({
 }): RuntimeInstanceController {
   const challengeId = challenge?.id ?? 0
   const kind = instanceKind(challenge)
-  const [phase, setPhase] = useState<RuntimeInstancePhase>(challenge?.context?.instanceEntry ? 'running' : 'idle')
+  const instanceEntry = challenge?.context?.instanceEntry ?? null
+  const instanceEntryStatus = resolvedEntryStatus(challenge?.context)
+  const instanceEntryReadyAt = challenge?.context?.instanceEntryReadyAt ?? null
+  const instanceEntryError = challenge?.context?.instanceEntryError ?? null
+  const closeTime = challenge?.context?.closeTime ?? null
+  const [phase, setPhase] = useState<RuntimeInstancePhase>(resolvedPhase(challenge?.context))
   const [error, setError] = useState<string | null>(null)
-  const [entryAvailableAt, setEntryAvailableAt] = useState<number | null>(null)
   const activeChallengeRef = useRef(challengeId)
   const operationRef = useRef<OperationState | null>(null)
 
@@ -49,43 +69,51 @@ export function useTrainingInstance({
     activeChallengeRef.current = challengeId
     operationRef.current = null
     setError(null)
-    setEntryAvailableAt(null)
-    setPhase(challenge?.context?.instanceEntry ? 'running' : 'idle')
+    setPhase(resolvedPhase(challenge?.context))
   }, [challengeId, kind])
 
   useEffect(() => {
     if (operationRef.current || kind === 'none') return
-    setPhase(challenge?.context?.instanceEntry ? 'running' : 'idle')
-  }, [challenge?.context?.instanceEntry, kind])
+    const nextPhase = resolvedPhase(challenge?.context)
+    setPhase(nextPhase)
+    setError(nextPhase === 'failed' ? (instanceEntryError ?? '公网入口发布失败。') : null)
+  }, [instanceEntry, instanceEntryError, instanceEntryStatus, kind])
 
   const refresh = useCallback(async () => {
     if (!challengeId || kind === 'none') return
     try {
       const next = await refreshChallenge()
       if (activeChallengeRef.current !== challengeId || !next) return
+      updateChallenge(next)
       const operation = operationRef.current
       const entry = next.context?.instanceEntry ?? null
+      const entryStatus = resolvedEntryStatus(next.context)
       const closeTime = next.context?.closeTime ?? null
 
       if (!operation) {
-        setError(null)
-        setPhase(entry ? 'running' : 'idle')
+        setError(entryStatus === ContainerEntryStatus.Error ? (next.context?.instanceEntryError ?? '公网入口发布失败。') : null)
+        setPhase(resolvedPhase(next.context))
         return
       }
 
       if (operation.kind === 'destroy' && !entry) {
         operationRef.current = null
-        setEntryAvailableAt(null)
         setError(null)
         setPhase('idle')
         return
       }
 
-      if (operation.kind === 'create' && entry) {
+      if (operation.kind === 'create' && entryStatus === ContainerEntryStatus.Ready && entry) {
         operationRef.current = null
-        setEntryAvailableAt((current) => current ?? publicEntryAvailableAt())
         setError(null)
         setPhase('running')
+        return
+      }
+
+      if (operation.kind === 'create' && entryStatus === ContainerEntryStatus.Error) {
+        operationRef.current = null
+        setError(next.context?.instanceEntryError ?? '公网入口发布失败，请联系管理员或稍后刷新。')
+        setPhase('failed')
         return
       }
 
@@ -104,15 +132,16 @@ export function useTrainingInstance({
       if (operationTimedOut(operation)) {
         operationRef.current = null
         setError('实例操作等待超时，请刷新状态后重试。')
-        setPhase(entry ? 'running' : 'failed')
+        setPhase(resolvedPhase(next.context) === 'idle' ? 'failed' : resolvedPhase(next.context))
       }
     } catch (requestError) {
       if (activeChallengeRef.current !== challengeId) return
       operationRef.current = null
       setError(errorMessage(requestError, '实例状态读取失败。'))
-      setPhase(challenge?.context?.instanceEntry ? 'running' : 'failed')
+      const currentPhase = resolvedPhase(challenge?.context)
+      setPhase(currentPhase === 'idle' ? 'failed' : currentPhase)
     }
-  }, [challenge?.context?.instanceEntry, challengeId, kind, refreshChallenge])
+  }, [challengeId, instanceEntry, instanceEntryStatus, kind, refreshChallenge, updateChallenge])
 
   useEffect(() => {
     if (!['provisioning', 'extending', 'stopping'].includes(phase)) return undefined
@@ -128,19 +157,34 @@ export function useTrainingInstance({
     try {
       const response = await trainingChapterApi.createInstance(courseId, chapterId, challengeId)
       if (activeChallengeRef.current !== challengeId) return
-      if (response.entry) {
-        setEntryAvailableAt(publicEntryAvailableAt())
+      const entryStatus = response.entryStatus ??
+        (response.entry ? ContainerEntryStatus.Ready : ContainerEntryStatus.Pending)
+      if (entryStatus === ContainerEntryStatus.Ready && response.entry) {
         updateChallenge({
           ...challenge,
           context: {
             ...challenge?.context,
             closeTime: response.expectStopAt,
             instanceEntry: response.entry,
+            instanceEntryStatus: entryStatus,
+            instanceEntryReadyAt: response.entryReadyAt,
+            instanceEntryError: response.entryError,
           },
         })
         operationRef.current = null
         setPhase('running')
       } else {
+        updateChallenge({
+          ...challenge,
+          context: {
+            ...challenge?.context,
+            closeTime: response.expectStopAt,
+            instanceEntry: null,
+            instanceEntryStatus: entryStatus,
+            instanceEntryReadyAt: response.entryReadyAt,
+            instanceEntryError: response.entryError,
+          },
+        })
         window.setTimeout(() => void refresh(), 900)
       }
     } catch (requestError) {
@@ -170,6 +214,9 @@ export function useTrainingInstance({
             ...challenge?.context,
             closeTime: response.expectStopAt,
             instanceEntry: response.entry,
+            instanceEntryStatus: response.entryStatus ?? challenge?.context?.instanceEntryStatus,
+            instanceEntryReadyAt: response.entryReadyAt ?? challenge?.context?.instanceEntryReadyAt,
+            instanceEntryError: response.entryError ?? challenge?.context?.instanceEntryError,
           },
         })
         operationRef.current = null
@@ -218,9 +265,11 @@ export function useTrainingInstance({
   return {
     kind,
     phase,
-    entry: challenge?.context?.instanceEntry ?? null,
-    entryAvailableAt: kind === 'docker' ? entryAvailableAt : null,
-    closeTime: challenge?.context?.closeTime ?? null,
+    entry: instanceEntry,
+    entryStatus: kind === 'docker' ? instanceEntryStatus : null,
+    entryReadyAt: kind === 'docker' ? instanceEntryReadyAt : null,
+    entryError: kind === 'docker' ? instanceEntryError : null,
+    closeTime,
     vmStatus: null,
     error,
     busy: ['provisioning', 'extending', 'stopping'].includes(phase),

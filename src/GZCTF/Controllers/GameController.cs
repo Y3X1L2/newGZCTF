@@ -16,6 +16,7 @@ using GZCTF.Infrastructure.Cache;
 using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Services.Config;
 using GZCTF.Services.Fleet;
+using GZCTF.Services.Vm;
 using GZCTF.Infrastructure.Persistence.Queries;
 using GZCTF.Storage.Interface;
 using Microsoft.AspNetCore.Identity;
@@ -1415,6 +1416,7 @@ public class GameController(
                 Status = VmInstanceStatus.Creating,
                 CreatedAt = DateTimeOffset.UtcNow,
             };
+            HttpContext.RequestServices.GetRequiredService<VmCredentialService>().Initialize(vmInstance);
             dbContext.VmInstances.Add(vmInstance);
             await dbContext.SaveChangesAsync(token);
 

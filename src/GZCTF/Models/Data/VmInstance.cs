@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Models.Data;
@@ -41,9 +42,11 @@ public class VmInstance
     public string RdpUsername { get; set; } = "player";
 
     /// <summary>
-    /// RDP password for this VM instance.
+    /// Data Protection ciphertext for the instance-specific RDP password.
     /// </summary>
-    public string RdpPassword { get; set; } = "qwer1234!";
+    [JsonIgnore]
+    [MaxLength(2048)]
+    public string? RdpPasswordProtected { get; set; }
 
     /// <summary>
     /// Full Guacamole URL for the user to access this VM via browser.

@@ -1,4 +1,4 @@
-import { AnswerResult } from '@Api'
+import { AnswerResult, ContainerEntryStatus } from '@Api'
 
 export type RuntimeInstancePhase = 'idle' | 'queued' | 'provisioning' | 'running' | 'extending' | 'stopping' | 'failed'
 
@@ -17,7 +17,9 @@ export interface RuntimeInstanceController {
   kind: 'none' | 'docker' | 'windows'
   phase: RuntimeInstancePhase
   entry: string | null
-  entryAvailableAt: number | null
+  entryStatus: ContainerEntryStatus | null
+  entryReadyAt: number | null
+  entryError: string | null
   closeTime: number | null
   vmStatus: RuntimeVmStatus | null
   error: string | null

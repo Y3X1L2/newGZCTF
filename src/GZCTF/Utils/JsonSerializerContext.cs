@@ -11,6 +11,7 @@ using GZCTF.Models.Request.Edit;
 using GZCTF.Models.Request.Game;
 using GZCTF.Models.Request.Info;
 using GZCTF.Models.Request.Training;
+using GZCTF.Repositories.Interface;
 using GZCTF.Services.Container.Provider;
 using GZCTF.Services.TeamLab;
 using Namotion.Reflection;
@@ -154,6 +155,9 @@ namespace GZCTF.Utils;
 [JsonSerializable(typeof(ArrayResponse<PenetrationSubmissionLogModel>))]
 [JsonSerializable(typeof(TeamLabUdpMappingEntry))]
 [JsonSerializable(typeof(TeamLabUdpMappingEntry[]))]
+[JsonSerializable(typeof(PortMappingEntry[]))]
+[JsonSerializable(typeof(PortMapAckRequest))]
+[JsonSerializable(typeof(PortMapAckResponse))]
 [JsonSerializable(typeof(GameEvent[]))]
 [JsonSerializable(typeof(Submission[]))]
 [JsonSerializable(typeof(CheatInfoModel[]))]

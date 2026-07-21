@@ -20,7 +20,22 @@ public class ContainerInfoModel
     /// <summary>
     /// Challenge entry point
     /// </summary>
-    public string Entry { get; set; } = string.Empty;
+    public string? Entry { get; set; }
+
+    /// <summary>
+    /// Publication status of the challenge entry point.
+    /// </summary>
+    public ContainerEntryStatus EntryStatus { get; set; } = ContainerEntryStatus.Pending;
+
+    /// <summary>
+    /// Time when the challenge entry point became available.
+    /// </summary>
+    public DateTimeOffset? EntryReadyAt { get; set; }
+
+    /// <summary>
+    /// Player-safe route publication failure.
+    /// </summary>
+    public string? EntryError { get; set; }
 
     internal static ContainerInfoModel FromContainer(Container container) =>
         new()
@@ -28,6 +43,9 @@ public class ContainerInfoModel
             Status = container.Status,
             StartedAt = container.StartedAt,
             ExpectStopAt = container.ExpectStopAt,
-            Entry = container.Entry
+            Entry = container.ReadyEntry,
+            EntryStatus = container.EntryStatus,
+            EntryReadyAt = container.EntryReadyAt,
+            EntryError = container.EntryError
         };
 }

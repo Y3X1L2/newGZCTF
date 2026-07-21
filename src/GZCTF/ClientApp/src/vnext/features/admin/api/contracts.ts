@@ -28,6 +28,8 @@ export interface ImageTemplateSummary {
   uploadedAt: number
   registryUrl: string | null
   containsMalware?: boolean
+  supportsInstanceCredentials?: boolean
+  canManage?: boolean
 }
 
 export interface ImageTemplateIdentity {
@@ -40,6 +42,8 @@ export interface ImageTemplateIdentity {
   registryUrl?: string | null
   errorMessage?: string | null
   imageHash?: string | null
+  supportsInstanceCredentials?: boolean
+  canManage?: boolean
 }
 
 export interface DockerRegistrySummary {

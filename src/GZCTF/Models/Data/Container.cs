@@ -96,10 +96,33 @@ public class Container
     public Guid? PublicPortLeaseId { get; set; }
 
     /// <summary>
+    /// Publication state of the player-facing entry.
+    /// Direct entries are ready immediately; gateway-backed entries require an acknowledgement.
+    /// </summary>
+    public ContainerEntryStatus EntryStatus { get; set; } = ContainerEntryStatus.Ready;
+
+    /// <summary>
+    /// Time when the current player-facing route was confirmed by the gateway.
+    /// </summary>
+    public DateTimeOffset? EntryReadyAt { get; set; }
+
+    /// <summary>
+    /// Sanitized route publication failure exposed to the player.
+    /// </summary>
+    [MaxLength(512)]
+    public string? EntryError { get; set; }
+
+    /// <summary>
     /// Container instance access method
     /// </summary>
     [NotMapped]
     public string Entry => IsProxy ? Id.ToString() : $"{PublicIP ?? IP}:{PublicPort ?? Port}";
+
+    /// <summary>
+    /// Player-facing entry. Pending and failed routes are intentionally withheld.
+    /// </summary>
+    [NotMapped]
+    public string? ReadyEntry => EntryStatus == ContainerEntryStatus.Ready ? Entry : null;
 
     /// <summary>
     /// Whether traffic capture is enabled

@@ -1,5 +1,6 @@
 import { Check, Clock3, Copy, ExternalLink, Monitor, RefreshCw, Server, Trash2 } from 'lucide-react'
 import { useEffect, useId, useMemo, useState } from 'react'
+import { ContainerEntryStatus } from '@Api'
 import { ActionButton, InlineFeedback } from '../../shared/Interaction'
 import { StatusPill } from '../../shared/Primitives'
 import { externalEntryHref } from '../../shared/urls'
@@ -32,19 +33,16 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
   const running = controller.phase === 'running' || controller.phase === 'extending'
 
   useEffect(() => {
-    if (!running || (!controller.closeTime && !controller.entryAvailableAt)) return undefined
+    if (!running || !controller.closeTime) return undefined
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
-  }, [controller.closeTime, controller.entryAvailableAt, running])
+  }, [controller.closeTime, running])
 
   const remaining = useMemo(() => formatRemaining(controller.closeTime, now), [controller.closeTime, now])
   const queue = controller.vmStatus?.queue
   const stageMessage = controller.vmStatus?.stageMessage
   const entryHref = externalEntryHref(controller.entry)
-  const entrySyncing = Boolean(controller.entry && controller.entryAvailableAt && now < controller.entryAvailableAt)
-  const entrySyncSeconds = controller.entryAvailableAt
-    ? Math.max(1, Math.ceil((controller.entryAvailableAt - now) / 1000))
-    : 0
+  const entryPublicationFailed = controller.entryStatus === ContainerEntryStatus.Error
 
   if (controller.kind === 'none') return null
 
@@ -82,14 +80,25 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
                 : '创建后将显示由服务端返回的访问入口和剩余时间。'}
             </p>
           </div>
-          <ActionButton
-            icon={<RefreshCw size={16} />}
-            onClick={() => void controller.create()}
-            tone="primary"
-            type="button"
-          >
-            {controller.phase === 'failed' ? '重新创建' : '创建实例'}
-          </ActionButton>
+          {entryPublicationFailed ? (
+            <div className={styles.runtimeActions}>
+              <ActionButton icon={<RefreshCw size={16} />} onClick={() => void controller.refresh()} type="button">
+                刷新状态
+              </ActionButton>
+              <ActionButton icon={<Trash2 size={16} />} onClick={() => void controller.destroy()} tone="danger" type="button">
+                销毁实例
+              </ActionButton>
+            </div>
+          ) : (
+            <ActionButton
+              icon={<RefreshCw size={16} />}
+              onClick={() => void controller.create()}
+              tone="primary"
+              type="button"
+            >
+              {controller.phase === 'failed' ? '重新创建' : '创建实例'}
+            </ActionButton>
+          )}
         </div>
       ) : controller.phase === 'queued' || controller.phase === 'provisioning' ? (
         <div className={styles.progressPanel} role="status">
@@ -126,7 +135,7 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
             ) : null}
           </div>
 
-          {controller.entry && !entrySyncing ? (
+          {controller.entry ? (
             <div className={styles.entryRow}>
               <code>{controller.entry}</code>
               <button aria-label="复制实例入口" onClick={() => void copyEntry()} title="复制入口" type="button">
@@ -144,10 +153,8 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
                 </a>
               ) : null}
             </div>
-          ) : controller.entry ? (
-            <InlineFeedback>公网入口正在同步，预计 {entrySyncSeconds} 秒后可用。</InlineFeedback>
           ) : (
-            <InlineFeedback>实例已运行，正在等待服务端分配访问入口。</InlineFeedback>
+            <InlineFeedback>实例已运行，正在等待服务端确认访问入口。</InlineFeedback>
           )}
 
           <div className={styles.runtimeActions}>

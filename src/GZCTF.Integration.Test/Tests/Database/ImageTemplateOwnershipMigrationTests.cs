@@ -114,14 +114,14 @@ public sealed class ImageTemplateOwnershipMigrationTests : IAsyncLifetime
             context.TrainingCourses.AddRange(
                 new TrainingCourse { Id = firstCourseId, Title = "first", Slug = "first-down" },
                 new TrainingCourse { Id = secondCourseId, Title = "second", Slug = "second-down" });
-            context.ImageTemplates.Add(new ImageTemplate
-            {
-                Id = templateId,
-                Name = "down",
-                ImageType = ImageType.Docker,
-                OSType = OSType.Linux,
-                Status = ImageStatus.Ready
-            });
+            await context.SaveChangesAsync();
+            await context.Database.ExecuteSqlInterpolatedAsync($$"""
+                INSERT INTO "ImageTemplates"
+                    ("Id", "Name", "OSType", "ImageType", "FileSize", "UploadedAt", "Status",
+                     "ContainsMalware")
+                VALUES
+                    ({{templateId}}, 'down', 0, 0, 0, now(), 0, false);
+                """);
             context.TrainingCourseImageTemplateBindings.AddRange(
                 new()
                 {

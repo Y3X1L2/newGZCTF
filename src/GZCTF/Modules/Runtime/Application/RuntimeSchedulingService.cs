@@ -3,6 +3,7 @@ using GZCTF.Models.Data;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
+using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
 
@@ -223,9 +224,16 @@ public sealed class RuntimeSchedulingService(
                 : FleetCapacityReservationResult.Failed("Control operation target node is unavailable.");
         }
 
+        var requiresInstanceCredentials = ticket.Kind == DeploymentQueueKind.VirtualMachine;
         return await capacity.TryReserveAsync(ticket.Id, new FleetCapacityRequest(
-            RequiredCapability(ticket), ticket.DockerSlots, ticket.VmSlots,
-            await ResolvePreferredNodeIdAsync(ticket, token), false), token);
+            RequiredCapability(ticket),
+            ticket.DockerSlots,
+            ticket.VmSlots,
+            await ResolvePreferredNodeIdAsync(ticket, token),
+            RequiredFeatures: requiresInstanceCredentials
+                ? [AgentFeatureIds.Kvm, AgentFeatureIds.CloudInit]
+                : null,
+            RequireRemote: requiresInstanceCredentials), token);
     }
 
     async Task<Guid?> ResolvePreferredNodeIdAsync(DeploymentQueueTicket ticket, CancellationToken token)

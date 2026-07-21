@@ -198,11 +198,15 @@ public class NginxSyncService : IHostedService, INginxProxySyncService, IDisposa
             configBuilder.AppendLine("}");
 
         var newConfig = configBuilder.ToString();
+        var revision = PortMappingRevision.Compute(filteredMappings);
+        var leaseIds = filteredMappings.Select(mapping => mapping.LeaseId).ToArray();
 
         // 计算配置哈希，无变化则跳过
         var newHash = ComputeHash(newConfig);
         if (newHash == _lastConfigHash)
         {
+            await containerRepo.SetEntryPublicationResultAsync(
+                leaseIds, ContainerEntryStatus.Ready, null, token);
             _logger.LogDebug("Nginx stream config unchanged, skipping reload");
             return;
         }
@@ -230,6 +234,8 @@ public class NginxSyncService : IHostedService, INginxProxySyncService, IDisposa
                 File.Move(backupPath, _config.ConfigPath, overwrite: true);
             else
                 TryDeleteFile(_config.ConfigPath);
+            await containerRepo.SetEntryPublicationResultAsync(
+                leaseIds, ContainerEntryStatus.Error, "Public gateway configuration validation failed.", token);
             return;
         }
 
@@ -237,14 +243,23 @@ public class NginxSyncService : IHostedService, INginxProxySyncService, IDisposa
         if (await ReloadNginxAsync(token))
         {
             _lastConfigHash = newHash;
+            await containerRepo.SetEntryPublicationResultAsync(
+                leaseIds, ContainerEntryStatus.Ready, null, token);
             _logger.LogInformation("Nginx stream config reloaded, {Count} port mappings", filteredMappings.Length);
             TryDeleteFile(backupPath);
         }
-        else if (hadPreviousConfig)
+        else
         {
-            File.Move(backupPath, _config.ConfigPath, overwrite: true);
-            _ = await ReloadNginxAsync(CancellationToken.None);
+            await containerRepo.SetEntryPublicationResultAsync(
+                leaseIds, ContainerEntryStatus.Error, "Public gateway reload failed.", token);
+            if (hadPreviousConfig)
+            {
+                File.Move(backupPath, _config.ConfigPath, overwrite: true);
+                _ = await ReloadNginxAsync(CancellationToken.None);
+            }
         }
+
+        _logger.LogDebug("Processed Nginx port map revision {Revision}", revision);
     }
 
     async Task<bool> TestNginxConfigAsync(CancellationToken token)

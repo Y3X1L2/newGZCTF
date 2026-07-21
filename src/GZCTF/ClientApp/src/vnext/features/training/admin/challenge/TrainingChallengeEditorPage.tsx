@@ -6,10 +6,7 @@ import {
   ChallengeType,
   EnvironmentType,
   FileType,
-  ImageStatus,
-  ImageType,
   NetworkMode,
-  OSType,
   TrainingCourseChallengeCreateModel,
   TrainingCourseImageTemplateModel,
 } from '@Api'
@@ -19,6 +16,7 @@ import { MarkdownContent } from '../../../../shared/MarkdownContent'
 import { DataState, StatusPill } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
 import { useVNextPageTitle } from '../../../../shared/useVNextPageTitle'
+import { runtimeTemplateAvailable } from '../../../challenge-runtime/imageTemplateCapabilities'
 import { EditorActionBar, EditorSection, TrainingEditorShell } from '../TrainingEditorShell'
 import {
   trainingAdminApi,
@@ -55,10 +53,7 @@ const emptyDraft = (): TrainingCourseChallengeCreateModel => ({
 })
 
 function templateMatchesEnvironment(template: TrainingCourseImageTemplateModel, environment?: EnvironmentType) {
-  if (template.status !== ImageStatus.Ready) return false
-  if (environment === EnvironmentType.Docker) return template.imageType === ImageType.Docker
-  if (environment === EnvironmentType.WindowsVM) return template.osType === OSType.Windows
-  return false
+  return runtimeTemplateAvailable(template, environment)
 }
 
 export function TrainingChallengeEditorPage() {

@@ -20,7 +20,12 @@ export interface DockerTemplateRegistration {
 
 function isImageTemplateIdentity(value: unknown): value is ImageTemplateIdentity {
   return (
-    isRecord(value) && isNumber(value.id) && isString(value.name) && isNumber(value.osType) && isNumber(value.imageType)
+    isRecord(value) &&
+    isNumber(value.id) &&
+    isString(value.name) &&
+    isNumber(value.osType) &&
+    isNumber(value.imageType) &&
+    (value.canManage === undefined || isBoolean(value.canManage))
   )
 }
 
@@ -38,7 +43,9 @@ function isImageTemplateSummary(value: unknown): value is ImageTemplateSummary {
     isNullableString(value.imageHash) &&
     isNumber(value.uploadedAt) &&
     isNullableString(value.registryUrl) &&
-    (value.containsMalware === undefined || isBoolean(value.containsMalware))
+    (value.containsMalware === undefined || isBoolean(value.containsMalware)) &&
+    (value.supportsInstanceCredentials === undefined || isBoolean(value.supportsInstanceCredentials)) &&
+    (value.canManage === undefined || isBoolean(value.canManage))
   )
 }
 
@@ -134,6 +141,13 @@ export function createImageTemplateAdminApi(client: RuntimeJsonClient = runtimeJ
 
     async importLocal(data: { localPath: string; displayName?: string | null }) {
       return parseIdentity(await client.postJson('/api/v1/image-templates/import-local', data), 'Local image import')
+    },
+
+    async setInstanceCredentialCapability(id: number, supported: boolean) {
+      return parseIdentity(
+        await client.patchJson(`/api/v1/image-templates/${id}/instance-credentials`, { supported }),
+        'Windows credential capability update'
+      )
     },
 
     async delete(id: number) {

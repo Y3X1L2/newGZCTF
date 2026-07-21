@@ -3,6 +3,7 @@ using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Services.Vm;
+using GZCTF.Modules.Runtime.Contracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -13,6 +14,7 @@ public class FleetVmService
     private readonly AgentClient _agentClient;
     private readonly INodeRepository _nodeRepo;
     private readonly IVirtualMachineProvider _vmProvider;
+    private readonly VmCredentialService _credentialService;
     private readonly GuacamoleService _guacamoleService;
     private readonly ImageDistributionService _imageDistribution;
     private readonly KvmSettings _kvmSettings;
@@ -25,6 +27,7 @@ public class FleetVmService
         AgentClient agentClient,
         INodeRepository nodeRepo,
         IVirtualMachineProvider vmProvider,
+        VmCredentialService credentialService,
         GuacamoleService guacamoleService,
         ImageDistributionService imageDistribution,
         IOptions<KvmSettings> kvmSettings,
@@ -36,6 +39,7 @@ public class FleetVmService
         _agentClient = agentClient;
         _nodeRepo = nodeRepo;
         _vmProvider = vmProvider;
+        _credentialService = credentialService;
         _guacamoleService = guacamoleService;
         _imageDistribution = imageDistribution;
         _kvmSettings = kvmSettings.Value;
@@ -45,7 +49,7 @@ public class FleetVmService
         _logger = logger;
     }
 
-    public async Task<VmInstance?> CreateVmAsync(VmInstance vmInstance, int? templateId, string? templatePath,
+    public async Task<VmInstance?> CreateVmAsync(VmInstance vmInstance, int? templateId,
         int? memory, int? cpu, string? flag, CancellationToken token)
     {
         var gameId = vmInstance.Challenge?.GameId ??
@@ -77,19 +81,33 @@ public class FleetVmService
             return null;
         }
 
-        if (node?.IsLocal == true)
+        var nodeContractError = ValidateCredentialNode(node);
+        if (nodeContractError is not null)
         {
-            await UpdateTicketStage(execution?.TicketId, DeploymentStage.VmCreating,
-                "Creating VM on local KVM node.", token);
+            vmInstance.Status = VmInstanceStatus.Error;
             vmInstance.NodeId = nodeId.Value;
-            vmInstance.RuntimeGeneration = Math.Max(1, execution?.Generation ?? vmInstance.RuntimeGeneration);
-            var vm = await CreateLocalVmAsync(vmInstance, templatePath, memory, cpu, token);
-            await UpdateTicketStage(execution?.TicketId,
-                vm?.Status == VmInstanceStatus.Running ? DeploymentStage.BootProbing : DeploymentStage.Failed,
-                vm?.Status == VmInstanceStatus.Running ? "VM started; waiting for readiness probe." : "VM creation failed.",
-                token);
-            return vm;
+            await UpdateTicketStage(execution?.TicketId, DeploymentStage.Failed,
+                nodeContractError, token);
+            return null;
         }
+
+        var template = templateId.HasValue
+            ? await _context.ImageTemplates.AsNoTracking()
+                .SingleOrDefaultAsync(item => item.Id == templateId.Value, token)
+            : null;
+        var imageContractError = ValidateCredentialImage(template);
+        if (imageContractError is not null)
+        {
+            vmInstance.Status = VmInstanceStatus.Error;
+            vmInstance.NodeId = nodeId.Value;
+            await UpdateTicketStage(execution?.TicketId, DeploymentStage.Failed,
+                imageContractError, token);
+            return null;
+        }
+
+        _credentialService.Initialize(vmInstance);
+        vmInstance.RuntimeGeneration = Math.Max(1, execution?.Generation ?? vmInstance.RuntimeGeneration);
+        var rdpPassword = _credentialService.RevealPassword(vmInstance);
 
         await UpdateTicketStage(execution?.TicketId, DeploymentStage.ImagePreparing,
             "Ensuring VM template on worker from storage registry.", token);
@@ -114,7 +132,8 @@ public class FleetVmService
             VmName = vmInstance.VmName,
             Memory = memory ?? _kvmSettings.DefaultVmMemoryMb,
             Cpu = cpu ?? _kvmSettings.DefaultVmCpu,
-            Flag = flag
+            Flag = flag,
+            CloudInit = BuildWindowsCloudInit(vmInstance, rdpPassword)
         }, token);
 
         if (result is null)
@@ -133,6 +152,42 @@ public class FleetVmService
         await UpdateTicketStage(execution?.TicketId, DeploymentStage.BootProbing,
             "VM started; waiting for readiness probe.", token);
         return vmInstance;
+    }
+
+    internal static AgentVmInitConfig BuildWindowsCloudInit(VmInstance vmInstance, string password) =>
+        new()
+        {
+            Enabled = true,
+            OsType = OSType.Windows,
+            Hostname = vmInstance.VmName,
+            InstanceId = $"gzctf-vm-{vmInstance.Id:N}-g{vmInstance.RuntimeGeneration}",
+            MetaData =
+                $"instance-id: gzctf-vm-{vmInstance.Id:N}-g{vmInstance.RuntimeGeneration}\nlocal-hostname: {vmInstance.VmName}\n",
+            UserData = VmCredentialService.BuildWindowsUserData(vmInstance.RdpUsername, password),
+            SensitiveKeys = ["user-data", "rdp-password"]
+        };
+
+    internal static string? ValidateCredentialNode(WorkerNode node)
+    {
+        if (node.IsLocal)
+            return "Local KVM does not support the required Windows instance credential injection contract.";
+
+        return AgentCapabilityEvaluator.Supports(node, AgentFeatureIds.Kvm, AgentFeatureIds.CloudInit)
+            ? null
+            : "Assigned KVM node does not advertise Cloud-Init credential injection support.";
+    }
+
+    internal static string? ValidateCredentialImage(ImageTemplate? template)
+    {
+        if (template is null)
+            return "Windows VM image template is missing.";
+        if (template.OSType != OSType.Windows || template.ImageType == ImageType.Docker)
+            return "Assigned image is not a Windows VM image.";
+        if (template.Status != ImageStatus.Ready)
+            return "Windows VM image is not ready.";
+        return template.SupportsInstanceCredentials
+            ? null
+            : "Windows image is not verified for instance-specific Cloudbase-Init credentials.";
     }
 
     private async Task<AgentVmImageDownloadResult> EnsureRemoteVmImageAsync(Guid nodeId, WorkerNode? node,
@@ -166,47 +221,6 @@ public class FleetVmService
         if (stage == DeploymentStage.Failed)
             ticket.ErrorMessage = message;
         await _context.SaveChangesAsync(token);
-    }
-
-    private async Task<VmInstance?> CreateLocalVmAsync(VmInstance vmInstance, string? templatePath,
-        int? memory, int? cpu, CancellationToken token)
-    {
-        if (string.IsNullOrEmpty(templatePath))
-        {
-            _logger.LogError("No template path provided for local VM creation");
-            vmInstance.Status = VmInstanceStatus.Error;
-            return vmInstance;
-        }
-
-        try
-        {
-            var createResult = await _vmProvider.CreateFromTemplateAsync(templatePath, vmInstance.VmName, memory, cpu, token);
-            if (!createResult.Success)
-            {
-                _logger.LogError("Local VM creation failed for {VmName}: {Error}", vmInstance.VmName,
-                    createResult.ErrorMessage);
-                vmInstance.Status = VmInstanceStatus.Error;
-                return vmInstance;
-            }
-
-            var startResult = await _vmProvider.StartAsync(vmInstance.VmName, token);
-            if (!startResult.Success)
-            {
-                _logger.LogError("Local VM start failed for {VmName}: {Error}", vmInstance.VmName,
-                    startResult.ErrorMessage);
-                vmInstance.Status = VmInstanceStatus.Error;
-                return vmInstance;
-            }
-
-            vmInstance.Status = VmInstanceStatus.Running;
-            return vmInstance;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Local VM creation exception for {VmName}", vmInstance.VmName);
-            vmInstance.Status = VmInstanceStatus.Error;
-            return vmInstance;
-        }
     }
 
     public async Task DestroyVmAsync(VmInstance vmInstance, CancellationToken token)

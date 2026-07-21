@@ -57,6 +57,7 @@ public class VmReadyService : BackgroundService
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var vmProvider = scope.ServiceProvider.GetRequiredService<IVirtualMachineProvider>();
         var guacService = scope.ServiceProvider.GetRequiredService<GuacamoleService>();
+        var credentialService = scope.ServiceProvider.GetRequiredService<VmCredentialService>();
         var nodeRepo = scope.ServiceProvider.GetRequiredService<INodeRepository>();
         var agentClient = scope.ServiceProvider.GetRequiredService<AgentClient>();
         var events = scope.ServiceProvider.GetRequiredService<IOperationalEventWriter>();
@@ -191,7 +192,7 @@ public class VmReadyService : BackgroundService
                         vmIp: accessEndpoint.RdpHost,
                         rdpPort: accessEndpoint.RdpPort,
                         username: vm.RdpUsername,
-                        password: vm.RdpPassword,
+                        password: credentialService.RevealPassword(vm),
                         token: token);
 
                     if (string.IsNullOrEmpty(connectionId))
