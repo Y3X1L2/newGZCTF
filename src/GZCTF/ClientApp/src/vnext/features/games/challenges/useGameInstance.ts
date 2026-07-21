@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChallengeDetailModel, ChallengeType, ContainerStatus, EnvironmentType, VmStatusResponse } from '@Api'
 import { errorMessage } from '../../../shared/errors'
+import { publicEntryAvailableAt } from '../../challenge-runtime/entryReadiness'
 import { RuntimeInstanceController, RuntimeInstancePhase } from '../../challenge-runtime/types'
 import { gamePlayerApi } from '../gamePlayerApi'
 
@@ -35,6 +36,7 @@ export function useGameInstance({
   const [phase, setPhase] = useState<RuntimeInstancePhase>('idle')
   const [vmStatus, setVmStatus] = useState<VmStatusResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [entryAvailableAt, setEntryAvailableAt] = useState<number | null>(null)
   const activeChallengeRef = useRef(challengeId)
   const provisioningStartedRef = useRef<number | null>(null)
 
@@ -43,6 +45,7 @@ export function useGameInstance({
     provisioningStartedRef.current = null
     setError(null)
     setVmStatus(null)
+    setEntryAvailableAt(null)
     if (kind === 'docker' && challenge?.context?.instanceEntry) setPhase('running')
     else if (kind === 'windows') setPhase('provisioning')
     else setPhase('idle')
@@ -51,8 +54,7 @@ export function useGameInstance({
   useEffect(() => {
     if (kind !== 'docker' || phase === 'extending' || phase === 'stopping') return
     if (challenge?.context?.instanceEntry) {
-      provisioningStartedRef.current = null
-      setPhase('running')
+      if (!provisioningStartedRef.current) setPhase('running')
     } else if (phase === 'running') {
       setPhase('idle')
     }
@@ -64,6 +66,9 @@ export function useGameInstance({
       const next = await refreshChallenge()
       if (activeChallengeRef.current !== challengeId) return
       if (next?.context?.instanceEntry) {
+        if (provisioningStartedRef.current) {
+          setEntryAvailableAt((current) => current ?? publicEntryAvailableAt())
+        }
         provisioningStartedRef.current = null
         setPhase('running')
       } else if (provisioningStartedRef.current && Date.now() - provisioningStartedRef.current < 120_000) {
@@ -113,6 +118,7 @@ export function useGameInstance({
       const response = await gamePlayerApi.createInstance(gameId, challengeId)
       if (activeChallengeRef.current !== challengeId) return
       if (kind === 'docker') {
+        setEntryAvailableAt(response.entry ? publicEntryAvailableAt() : null)
         updateChallenge({
           ...challenge,
           context: {
@@ -169,6 +175,7 @@ export function useGameInstance({
       else await gamePlayerApi.destroyContainer(gameId, challengeId)
       if (activeChallengeRef.current !== challengeId) return
       setVmStatus(null)
+      setEntryAvailableAt(null)
       provisioningStartedRef.current = null
       updateChallenge({
         ...challenge,
@@ -189,6 +196,7 @@ export function useGameInstance({
       kind === 'windows'
         ? (vmStatus?.rdpUrl ?? vmStatus?.ipAddress ?? null)
         : (challenge?.context?.instanceEntry ?? null),
+    entryAvailableAt: kind === 'docker' ? entryAvailableAt : null,
     closeTime: challenge?.context?.closeTime ?? null,
     vmStatus,
     error,

@@ -10,6 +10,7 @@ function controller(overrides: Partial<RuntimeInstanceController> = {}): Runtime
     kind: 'docker',
     phase: 'idle',
     entry: null,
+    entryAvailableAt: null,
     closeTime: null,
     vmStatus: null,
     error: null,
@@ -36,6 +37,22 @@ describe('challenge runtime contract', () => {
     render(<InstanceControl controller={controller({ phase: 'running', entry: '10.24.0.30:32768' })} />)
 
     expect(screen.getByRole('link', { name: '打开实例入口' })).toHaveAttribute('href', 'http://10.24.0.30:32768')
+  })
+
+  it('holds the public entry action during the gateway synchronization window', () => {
+    render(
+      <InstanceControl
+        controller={controller({
+          phase: 'running',
+          entry: '203.195.157.191:30000',
+          entryAvailableAt: Date.now() + 8_000,
+          closeTime: Date.now() + 60_000,
+        })}
+      />
+    )
+
+    expect(screen.getByText(/公网入口正在同步/)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '打开实例入口' })).not.toBeInTheDocument()
   })
 
   it('shows an unsafe entry as text without rendering an executable link', () => {

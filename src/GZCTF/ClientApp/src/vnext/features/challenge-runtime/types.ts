@@ -17,6 +17,7 @@ export interface RuntimeInstanceController {
   kind: 'none' | 'docker' | 'windows'
   phase: RuntimeInstancePhase
   entry: string | null
+  entryAvailableAt: number | null
   closeTime: number | null
   vmStatus: RuntimeVmStatus | null
   error: string | null

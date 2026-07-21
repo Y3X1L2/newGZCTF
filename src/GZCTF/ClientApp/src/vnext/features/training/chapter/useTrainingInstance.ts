@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChallengeType, EnvironmentType, TrainingCourseChallengeDetailModel } from '@Api'
 import { errorMessage } from '../../../shared/errors'
+import { publicEntryAvailableAt } from '../../challenge-runtime/entryReadiness'
 import { RuntimeInstanceController, RuntimeInstancePhase } from '../../challenge-runtime/types'
 import { trainingChapterApi } from './trainingChapterApi'
 
@@ -40,6 +41,7 @@ export function useTrainingInstance({
   const kind = instanceKind(challenge)
   const [phase, setPhase] = useState<RuntimeInstancePhase>(challenge?.context?.instanceEntry ? 'running' : 'idle')
   const [error, setError] = useState<string | null>(null)
+  const [entryAvailableAt, setEntryAvailableAt] = useState<number | null>(null)
   const activeChallengeRef = useRef(challengeId)
   const operationRef = useRef<OperationState | null>(null)
 
@@ -47,6 +49,7 @@ export function useTrainingInstance({
     activeChallengeRef.current = challengeId
     operationRef.current = null
     setError(null)
+    setEntryAvailableAt(null)
     setPhase(challenge?.context?.instanceEntry ? 'running' : 'idle')
   }, [challengeId, kind])
 
@@ -72,6 +75,7 @@ export function useTrainingInstance({
 
       if (operation.kind === 'destroy' && !entry) {
         operationRef.current = null
+        setEntryAvailableAt(null)
         setError(null)
         setPhase('idle')
         return
@@ -79,6 +83,7 @@ export function useTrainingInstance({
 
       if (operation.kind === 'create' && entry) {
         operationRef.current = null
+        setEntryAvailableAt((current) => current ?? publicEntryAvailableAt())
         setError(null)
         setPhase('running')
         return
@@ -124,6 +129,7 @@ export function useTrainingInstance({
       const response = await trainingChapterApi.createInstance(courseId, chapterId, challengeId)
       if (activeChallengeRef.current !== challengeId) return
       if (response.entry) {
+        setEntryAvailableAt(publicEntryAvailableAt())
         updateChallenge({
           ...challenge,
           context: {
@@ -213,6 +219,7 @@ export function useTrainingInstance({
     kind,
     phase,
     entry: challenge?.context?.instanceEntry ?? null,
+    entryAvailableAt: kind === 'docker' ? entryAvailableAt : null,
     closeTime: challenge?.context?.closeTime ?? null,
     vmStatus: null,
     error,

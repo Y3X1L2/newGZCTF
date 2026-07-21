@@ -32,15 +32,19 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
   const running = controller.phase === 'running' || controller.phase === 'extending'
 
   useEffect(() => {
-    if (!running || !controller.closeTime) return undefined
+    if (!running || (!controller.closeTime && !controller.entryAvailableAt)) return undefined
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
-  }, [controller.closeTime, running])
+  }, [controller.closeTime, controller.entryAvailableAt, running])
 
   const remaining = useMemo(() => formatRemaining(controller.closeTime, now), [controller.closeTime, now])
   const queue = controller.vmStatus?.queue
   const stageMessage = controller.vmStatus?.stageMessage
   const entryHref = externalEntryHref(controller.entry)
+  const entrySyncing = Boolean(controller.entry && controller.entryAvailableAt && now < controller.entryAvailableAt)
+  const entrySyncSeconds = controller.entryAvailableAt
+    ? Math.max(1, Math.ceil((controller.entryAvailableAt - now) / 1000))
+    : 0
 
   if (controller.kind === 'none') return null
 
@@ -122,7 +126,7 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
             ) : null}
           </div>
 
-          {controller.entry ? (
+          {controller.entry && !entrySyncing ? (
             <div className={styles.entryRow}>
               <code>{controller.entry}</code>
               <button aria-label="复制实例入口" onClick={() => void copyEntry()} title="复制入口" type="button">
@@ -140,6 +144,8 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
                 </a>
               ) : null}
             </div>
+          ) : controller.entry ? (
+            <InlineFeedback>公网入口正在同步，预计 {entrySyncSeconds} 秒后可用。</InlineFeedback>
           ) : (
             <InlineFeedback>实例已运行，正在等待服务端分配访问入口。</InlineFeedback>
           )}
