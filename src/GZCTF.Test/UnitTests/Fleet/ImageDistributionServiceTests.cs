@@ -7,13 +7,14 @@ using System.Threading.Tasks;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
-using GZCTF.Modules.Audit.Infrastructure;
-using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Audit.Domain;
+using GZCTF.Modules.Audit.Infrastructure;
 using GZCTF.Modules.Runtime.Domain;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Services.Fleet;
+using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -163,6 +164,60 @@ public class ImageDistributionServiceTests
     }
 
     [Fact]
+    public async Task EnsureDockerImageOnNodeAsync_LegacyManagedAddressMatchesInternalTemplate()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, "docker-node", NodeCapability.Docker);
+        var template = SeedDockerTemplate(context);
+        context.ImageDistributionRecords.Add(new ImageDistributionRecord
+        {
+            ImageTemplateId = template.Id,
+            WorkerNodeId = node.Id,
+            ImageHash = template.ImageHash!,
+            ImageType = template.ImageType,
+            Status = ImageDistributionStatus.Ready
+        });
+        await context.SaveChangesAsync();
+
+        await CreateService(context, new RecordingAgentClient()).EnsureDockerImageOnNodeAsync(
+            "10.24.0.28:5000/training/web:latest", node.Id, CancellationToken.None);
+
+        Assert.Equal(ImageDistributionStatus.Ready,
+            (await context.ImageDistributionRecords.SingleAsync()).Status);
+    }
+
+    [Fact]
+    public async Task DistributeGameAsync_LegacyManagedAddressQueuesInternalTemplate()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, "docker-node", NodeCapability.Docker);
+        var template = SeedDockerTemplate(context);
+        context.GameChallenges.Add(new GameChallenge
+        {
+            Id = 21,
+            GameId = 7,
+            Title = "legacy-image",
+            Content = "test",
+            Type = ChallengeType.StaticContainer,
+            Environment = EnvironmentType.Docker,
+            ContainerImage = "10.24.0.28:5000/training/web:latest",
+            ExposePort = 80,
+            IsEnabled = true
+        });
+        await context.SaveChangesAsync();
+
+        await CreateService(context, new RecordingAgentClient())
+            .DistributeGameAsync(7, CancellationToken.None);
+
+        var record = await context.ImageDistributionRecords.SingleAsync();
+        Assert.Equal(template.Id, record.ImageTemplateId);
+        Assert.Equal(node.Id, record.WorkerNodeId);
+        Assert.Equal(ImageDistributionStatus.Pending, record.Status);
+        Assert.Contains(record.References, reference =>
+            reference.Kind == ImageDistributionReferenceKind.Game && reference.ResourceId == 7);
+    }
+
+    [Fact]
     public async Task ReleaseReference_QueuesCleanupWithoutDeletingSharedCacheInline()
     {
         await using var context = CreateContext();
@@ -264,9 +319,15 @@ public class ImageDistributionServiceTests
     {
         var node = new WorkerNode
         {
-            Id = Guid.NewGuid(), Name = name, HostAddress = "10.24.0.30",
-            AuthToken = Guid.NewGuid().ToString("N"), Capabilities = capability,
-            Status = NodeStatus.Online, IsSchedulable = true, MaxContainers = 10, MaxVms = 10,
+            Id = Guid.NewGuid(),
+            Name = name,
+            HostAddress = "10.24.0.30",
+            AuthToken = Guid.NewGuid().ToString("N"),
+            Capabilities = capability,
+            Status = NodeStatus.Online,
+            IsSchedulable = true,
+            MaxContainers = 10,
+            MaxVms = 10,
             LastHeartbeat = DateTimeOffset.UtcNow
         };
         context.WorkerNodes.Add(node);
@@ -277,9 +338,14 @@ public class ImageDistributionServiceTests
     {
         var template = new ImageTemplate
         {
-            Id = 11, Name = "web", ImageType = ImageType.Docker, OSType = OSType.Linux,
-            RegistryUrl = "gzctf-internal://training/web:latest", ImageHash = "training-web-latest",
-            FileSize = 1, Status = ImageStatus.Ready
+            Id = 11,
+            Name = "web",
+            ImageType = ImageType.Docker,
+            OSType = OSType.Linux,
+            RegistryUrl = "gzctf-internal://training/web:latest",
+            ImageHash = "training-web-latest",
+            FileSize = 1,
+            Status = ImageStatus.Ready
         };
         context.ImageTemplates.Add(template);
         return template;
@@ -289,8 +355,13 @@ public class ImageDistributionServiceTests
     {
         var template = new ImageTemplate
         {
-            Id = 12, Name = "win", ImageType = ImageType.Qcow2, OSType = OSType.Windows,
-            ImageHash = new string('a', 64), FileSize = 1024, Status = ImageStatus.Ready
+            Id = 12,
+            Name = "win",
+            ImageType = ImageType.Qcow2,
+            OSType = OSType.Windows,
+            ImageHash = new string('a', 64),
+            FileSize = 1024,
+            Status = ImageStatus.Ready
         };
         context.ImageTemplates.Add(template);
         return template;
@@ -315,7 +386,8 @@ public class ImageDistributionServiceTests
         public override Task PullDockerImageAsync(Guid nodeId, string image, string? registryAuth,
             CancellationToken token)
         {
-            if (DockerPullException is not null) throw DockerPullException;
+            if (DockerPullException is not null)
+                throw DockerPullException;
             PulledDockerNodes.Add(nodeId);
             return Task.CompletedTask;
         }
