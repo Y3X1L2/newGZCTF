@@ -1,5 +1,5 @@
 import { ArrowLeft, Network, RefreshCw, Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useSWRConfig } from 'swr'
 import { ActionButton, InlineFeedback, VNextConfirmDialog } from '../../../shared/Interaction'
@@ -29,16 +29,6 @@ const tabs = [
 ] as const
 
 type NodeTab = (typeof tabs)[number]['id']
-
-function parseCapabilities(value: string | null) {
-  if (!value) return []
-  try {
-    const parsed = JSON.parse(value) as Record<string, unknown>
-    return Object.entries(parsed).filter((entry): entry is [string, boolean] => typeof entry[1] === 'boolean')
-  } catch {
-    return []
-  }
-}
 
 function actionMessage(value: Record<string, unknown>) {
   if (typeof value.message === 'string') return value.message
@@ -109,10 +99,6 @@ export function AdminNodeDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const requestedTab = searchParams.get('tab') as NodeTab | null
   const activeTab = tabs.some((tab) => tab.id === requestedTab) ? (requestedTab as NodeTab) : 'resources'
-  const capabilities = useMemo(
-    () => parseCapabilities(node?.teamLabCapabilitiesJson ?? null),
-    [node?.teamLabCapabilitiesJson]
-  )
 
   useVNextPageTitle(node ? `${node.name} · 节点管理` : '节点详情')
 
@@ -310,9 +296,10 @@ export function AdminNodeDetailPage() {
               <h2>Agent 与心跳</h2>
             </header>
             <Facts>
-              <Fact label="Agent 版本" value={node.teamLabAgentVersion || '未上报'} />
-              <Fact label="协议版本" value={node.teamLabProtocolVersion || '—'} />
+              <Fact label="Agent 版本" value={node.agentVersion || '未上报'} />
+              <Fact label="能力清单版本" value={node.capabilityManifestSchemaVersion || '—'} />
               <Fact label="最后心跳" value={formatHeartbeat(node.lastHeartbeat)} />
+              <Fact label="能力上报" value={formatHeartbeat(node.capabilityObservedAt)} />
               <Fact label="配置版本" value={node.teamLabTunnelConfigVersion || '—'} />
             </Facts>
             <div className={styles.panelActions}>
@@ -343,9 +330,7 @@ export function AdminNodeDetailPage() {
               <Fact
                 label="能力探测"
                 value={
-                  capabilities.length
-                    ? capabilities.map(([key, enabled]) => `${key}:${enabled ? 'yes' : 'no'}`).join(' · ')
-                    : '未上报'
+                  node.agentFeatures.length ? node.agentFeatures.join(' · ') : '未上报'
                 }
                 wide
               />

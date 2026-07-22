@@ -30,6 +30,19 @@ function isCapabilityAvailability(value: unknown) {
   )
 }
 
+function isAgentExecutionLimits(value: unknown) {
+  return (
+    value === null ||
+    (isRecord(value) &&
+      isNumber(value.dockerCreates) &&
+      isNumber(value.vmCreates) &&
+      isNumber(value.dockerImageTransfers) &&
+      isNumber(value.vmImageTransfers) &&
+      isNumber(value.teamLabNetworkOperations) &&
+      isNumber(value.controlOperations))
+  )
+}
+
 function isNodeSummary(value: unknown): value is NodeSummary {
   return (
     isRecord(value) &&
@@ -63,11 +76,15 @@ function isNodeSummary(value: unknown): value is NodeSummary {
     isNullableNumber(value.teamLabTunnelLastHandshake) &&
     isNullableString(value.teamLabTunnelLastError) &&
     isNumber(value.teamLabTunnelConfigVersion) &&
-    isNullableString(value.teamLabAgentVersion) &&
-    isNumber(value.teamLabProtocolVersion) &&
+    isNullableString(value.agentVersion) &&
+    isNullableString(value.agentBinarySha256) &&
+    isNumber(value.capabilityManifestSchemaVersion) &&
+    isNullableString(value.capabilityHash) &&
+    isNullableNumber(value.capabilityObservedAt) &&
+    isStringArray(value.agentFeatures) &&
+    isAgentExecutionLimits(value.agentExecutionLimits) &&
     isNullableString(value.teamLabFabricIp) &&
     isNumber(value.teamLabFabricStatus) &&
-    isNullableString(value.teamLabCapabilitiesJson) &&
     isBoolean(value.canHostTeamLab) &&
     isBoolean(value.canHostTeamLabFabric) &&
     isBoolean(value.canHostTeamLabDocker) &&

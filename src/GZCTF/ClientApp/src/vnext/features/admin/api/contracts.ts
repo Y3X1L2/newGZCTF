@@ -61,6 +61,15 @@ export interface NodeCapabilityAvailability {
   teamLabVm: string | null
 }
 
+export interface AgentExecutionLimits {
+  dockerCreates: number
+  vmCreates: number
+  dockerImageTransfers: number
+  vmImageTransfers: number
+  teamLabNetworkOperations: number
+  controlOperations: number
+}
+
 export interface NodeSummary {
   id: string
   name: string
@@ -92,11 +101,15 @@ export interface NodeSummary {
   teamLabTunnelLastHandshake: number | null
   teamLabTunnelLastError: string | null
   teamLabTunnelConfigVersion: number
-  teamLabAgentVersion: string | null
-  teamLabProtocolVersion: number
+  agentVersion: string | null
+  agentBinarySha256: string | null
+  capabilityManifestSchemaVersion: number
+  capabilityHash: string | null
+  capabilityObservedAt: number | null
+  agentFeatures: string[]
+  agentExecutionLimits: AgentExecutionLimits | null
   teamLabFabricIp: string | null
   teamLabFabricStatus: TeamLabFabricStatus
-  teamLabCapabilitiesJson: string | null
   canHostTeamLab: boolean
   canHostTeamLabFabric: boolean
   canHostTeamLabDocker: boolean

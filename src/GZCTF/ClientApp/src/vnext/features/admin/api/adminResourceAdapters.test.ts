@@ -72,11 +72,22 @@ describe('nodeAdminApi', () => {
     teamLabTunnelLastHandshake: 1_783_500_724_849,
     teamLabTunnelLastError: null,
     teamLabTunnelConfigVersion: 27,
-    teamLabAgentVersion: '1.0.0.0',
-    teamLabProtocolVersion: 3,
+    agentVersion: '1.0.0.0',
+    agentBinarySha256: '191cd4fe85efe9c9357597ca15e07d7f2128f962d2f3d83e4d1422a1e7b68866',
+    capabilityManifestSchemaVersion: 1,
+    capabilityHash: '545b0397cda0c390b61b3fb6d4cc09f01bb4dd52b14516f7fbddcd96b7a44c77',
+    capabilityObservedAt: 1_784_664_963_517,
+    agentFeatures: ['runtime.docker.v1', 'runtime.kvm.v1', 'runtime.inventory.v1'],
+    agentExecutionLimits: {
+      dockerCreates: 4,
+      vmCreates: 1,
+      dockerImageTransfers: 2,
+      vmImageTransfers: 1,
+      teamLabNetworkOperations: 4,
+      controlOperations: 2,
+    },
     teamLabFabricIp: null,
     teamLabFabricStatus: 0,
-    teamLabCapabilitiesJson: '{"docker":true,"kvm":true}',
     canHostTeamLab: true,
     canHostTeamLabFabric: true,
     canHostTeamLabDocker: true,
@@ -95,6 +106,13 @@ describe('nodeAdminApi', () => {
   it('accepts the deployed node list shape', async () => {
     const adapter = createNodeAdminApi(createClient(vi.fn().mockResolvedValue([node])))
     await expect(adapter.list()).resolves.toEqual([node])
+  })
+
+  it('rejects the removed pre-manifest Agent contract', async () => {
+    const { agentVersion: _agentVersion, ...legacyNode } = node
+    const adapter = createNodeAdminApi(createClient(vi.fn().mockResolvedValue([legacyNode])))
+
+    await expect(adapter.list()).rejects.toThrow('Node list')
   })
 
   it('accepts the deployed mixed resource page shape', async () => {
