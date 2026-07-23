@@ -25,6 +25,7 @@ import {
   participationLabel,
   useGameCatalog,
 } from '../games/gameCatalog'
+import { HomeOrchestrationVisual } from './HomeOrchestrationVisual'
 import styles from './HomePage.module.css'
 import { useHomeCourses, useHomePosts, useHomeTrainingOverview } from './homeApi'
 
@@ -81,25 +82,6 @@ function ActivityHeatmap({ points }: { points: TrainingActivityPointModel[] }) {
       {cells.map((cell) => (
         <span data-level={cell.level} key={cell.key} title={cell.key} />
       ))}
-    </div>
-  )
-}
-
-function OrchestrationScene() {
-  return (
-    <div className={styles.scene} aria-hidden="true">
-      <span className={styles.scenePlaneA} />
-      <span className={styles.scenePlaneB} />
-      <span className={styles.scenePlaneC} />
-      <span className={styles.sceneRouteA}>
-        <i />
-      </span>
-      <span className={styles.sceneRouteB}>
-        <i />
-      </span>
-      <span className={styles.sceneNodeA} />
-      <span className={styles.sceneNodeB} />
-      <span className={styles.sceneNodeC} />
     </div>
   )
 }
@@ -217,7 +199,7 @@ export function HomePage() {
             </Link>
           </div>
         </div>
-        <OrchestrationScene />
+        <HomeOrchestrationVisual />
       </section>
 
       {(continueItems.length > 0 || account.isAuthenticated) && (

@@ -1,0 +1,736 @@
+.root {
+  --flow-art-opacity: 1;
+  --flow-glow-opacity: 0.78;
+  --flow-glow-peak-opacity: 0.94;
+  --flow-mobile-glow-opacity: 0.64;
+  --flow-ribbon-opacity: 0.8;
+  --flow-ribbon-peak-opacity: 0.96;
+  --flow-blue: var(--yn-color-info);
+  --flow-blue-mid: color-mix(in srgb, var(--yn-color-info) 70%, white);
+  --flow-blue-soft: color-mix(in srgb, var(--yn-color-info) 36%, white);
+  --flow-blue-pale: color-mix(in srgb, var(--yn-color-info) 12%, white);
+  --flow-green: var(--yn-color-brand);
+  --flow-green-mid: color-mix(in srgb, var(--yn-color-brand) 68%, white);
+  --flow-green-soft: color-mix(in srgb, var(--yn-color-brand) 34%, white);
+  --flow-green-pale: color-mix(in srgb, var(--yn-color-brand) 10%, white);
+  position: relative;
+  width: min(112%, 620px);
+  aspect-ratio: 760 / 420;
+  justify-self: end;
+  contain: layout style;
+  isolation: isolate;
+  pointer-events: none;
+}
+
+.root::before {
+  position: absolute;
+  top: 51%;
+  left: 61%;
+  z-index: 1;
+  width: 132px;
+  height: 132px;
+  border: 1px solid color-mix(in srgb, var(--flow-blue) 52%, transparent);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 18px color-mix(in srgb, var(--flow-blue) 8%, transparent),
+    0 0 46px color-mix(in srgb, var(--flow-green) 18%, transparent);
+  content: '';
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.08);
+  animation: core-boot 1.55s 80ms cubic-bezier(0.16, 0.84, 0.2, 1) both;
+}
+
+.root::after {
+  position: absolute;
+  top: 8%;
+  bottom: 8%;
+  left: 13%;
+  z-index: 2;
+  width: 25%;
+  background: linear-gradient(
+    102deg,
+    transparent 4%,
+    rgb(255 255 255 / 0.06) 32%,
+    rgb(255 255 255 / 0.64) 50%,
+    color-mix(in srgb, var(--flow-blue) 20%, transparent) 66%,
+    transparent 94%
+  );
+  content: '';
+  filter: blur(6px);
+  opacity: 0;
+  transform: translateX(0) skewX(-15deg);
+  animation: energy-sweep 1.55s 620ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.art {
+  position: absolute;
+  inset: -5% -8% -5% -7%;
+  display: block;
+  width: 115%;
+  height: 110%;
+  overflow: visible;
+  clip-path: ellipse(0 0 at 61% 52%);
+  filter: blur(12px);
+  opacity: 0;
+  animation: page-load 1.85s cubic-bezier(0.18, 0.78, 0.18, 1) forwards;
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    #000 7%,
+    #000 74%,
+    rgb(0 0 0 / 0.6) 83%,
+    rgb(0 0 0 / 0.12) 91%,
+    transparent 98%
+  );
+}
+
+.blue {
+  stop-color: var(--flow-blue);
+}
+
+.blueMid {
+  stop-color: var(--flow-blue-mid);
+}
+
+.blueSoft {
+  stop-color: var(--flow-blue-soft);
+}
+
+.bluePale,
+.meshPale,
+.meshBright {
+  stop-color: var(--flow-blue-pale);
+}
+
+.green {
+  stop-color: var(--flow-green);
+}
+
+.greenMid {
+  stop-color: var(--flow-green-mid);
+}
+
+.greenSoft {
+  stop-color: var(--flow-green-soft);
+}
+
+.greenPale {
+  stop-color: var(--flow-green-pale);
+}
+
+.meshBright {
+  stop-color: white;
+}
+
+.meshBlue,
+.glowBlue {
+  stop-color: var(--flow-blue-mid);
+}
+
+.glowGreen {
+  stop-color: var(--flow-green-mid);
+}
+
+.dot {
+  fill: color-mix(in srgb, var(--flow-blue) 65%, var(--flow-green));
+}
+
+.glows {
+  opacity: var(--flow-glow-opacity);
+  transform-origin: 62% 56%;
+  animation:
+    glow-load 1.5s 120ms cubic-bezier(0.18, 0.82, 0.18, 1) both,
+    glow-breathe 6.8s 2.1s ease-in-out infinite;
+}
+
+.dotFields {
+  opacity: 0;
+  transform-box: view-box;
+  transform-origin: 53% 52%;
+  animation: details-load 1s 820ms cubic-bezier(0.2, 0.75, 0.2, 1) both;
+  mask-image: radial-gradient(ellipse at center, #000 14%, transparent 73%);
+}
+
+.ribbon {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.ribbons {
+  opacity: 0;
+  transform-box: view-box;
+  transform-origin: 61% 52%;
+  animation:
+    ribbons-load 1.48s 240ms cubic-bezier(0.16, 0.84, 0.2, 1) both,
+    ribbons-breathe 7.4s 2.1s ease-in-out infinite;
+}
+
+.ribbonA {
+  animation: ribbon-a 9.4s ease-in-out infinite;
+}
+
+.ribbonB {
+  animation: ribbon-b 10.8s ease-in-out infinite;
+}
+
+.ribbonC {
+  animation: ribbon-c 11.6s ease-in-out infinite;
+}
+
+.ribbonEdge {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.62);
+  stroke-width: 1.2;
+  animation: line-draw 1.05s 580ms cubic-bezier(0.2, 0.72, 0.2, 1) both;
+}
+
+.ribbonEdgeGreen {
+  stroke: color-mix(in srgb, var(--flow-green-soft) 72%, transparent);
+  animation-delay: 720ms;
+}
+
+.mesh path {
+  fill: none;
+  stroke-width: 0.8;
+  opacity: 0;
+  animation: mesh-draw 900ms 720ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.mesh path:nth-child(2) {
+  animation-delay: 800ms;
+}
+
+.mesh path:nth-child(3) {
+  animation-delay: 880ms;
+}
+
+.mesh path:nth-child(4) {
+  animation-delay: 960ms;
+}
+
+.mesh path:nth-child(5) {
+  animation-delay: 1.04s;
+}
+
+.mesh path:nth-child(6) {
+  animation-delay: 1.12s;
+}
+
+.mesh path:nth-child(7) {
+  animation-delay: 1.2s;
+}
+
+.orbits {
+  opacity: 0;
+  transform-box: view-box;
+  transform-origin: 57% 51%;
+  animation: orbits-load 1.45s 580ms cubic-bezier(0.2, 0.78, 0.2, 1) both;
+}
+
+.orbit {
+  --flow-orbit-duration: 18s;
+  --flow-orbit-delay: 860ms;
+  --flow-orbit-direction: normal;
+  fill: none;
+  stroke: var(--flow-blue);
+  stroke-dasharray: 0.74 0.04 0.12 0.1;
+  stroke-linecap: round;
+  stroke-width: 1.15;
+  opacity: 0.55;
+  animation-name: orbit-draw, orbit-flow;
+  animation-duration: 1.25s, var(--flow-orbit-duration);
+  animation-delay: var(--flow-orbit-delay), 2.3s;
+  animation-direction: normal, var(--flow-orbit-direction);
+  animation-fill-mode: both, none;
+  animation-iteration-count: 1, infinite;
+  animation-timing-function: cubic-bezier(0.2, 0.72, 0.2, 1), linear;
+}
+
+.orbitTwo {
+  --flow-orbit-duration: 22s;
+  --flow-orbit-delay: 1.02s;
+  --flow-orbit-direction: reverse;
+  stroke: var(--flow-blue-mid);
+}
+
+.orbitThree {
+  --flow-orbit-duration: 26s;
+  --flow-orbit-delay: 1.18s;
+  stroke: var(--flow-green-mid);
+  opacity: 0.42;
+}
+
+.node {
+  --flow-node-delay: 1.18s;
+  stroke: rgb(255 255 255 / 0.8);
+  stroke-width: 1;
+  opacity: 0;
+  transform: scale(0);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation:
+    node-load 640ms var(--flow-node-delay) cubic-bezier(0.16, 0.9, 0.22, 1.3) both,
+    node-pulse 4.6s calc(var(--flow-node-delay) + 640ms) ease-in-out infinite;
+}
+
+.nodeBlueA,
+.nodeBlueB {
+  fill: var(--flow-blue);
+}
+
+.nodeGreenA,
+.nodeGreenB {
+  fill: var(--flow-green);
+}
+
+.nodeGreenA {
+  --flow-node-delay: 1.3s;
+}
+
+.nodeBlueB {
+  --flow-node-delay: 1.42s;
+}
+
+.nodeGreenB {
+  --flow-node-delay: 1.54s;
+}
+
+.nodePale {
+  --flow-node-delay: 1.66s;
+  fill: var(--flow-blue-soft);
+}
+
+.sparkles {
+  fill: white;
+  opacity: 0;
+  animation:
+    details-load 800ms 1.34s ease-out both,
+    sparkle 5.4s 2.14s ease-in-out infinite;
+}
+
+:global(:root[data-yinyu-theme='dark']) .root {
+  --flow-art-opacity: 0.88;
+  --flow-glow-opacity: 0.58;
+  --flow-glow-peak-opacity: 0.76;
+  --flow-mobile-glow-opacity: 0.48;
+  --flow-ribbon-opacity: 0.72;
+  --flow-ribbon-peak-opacity: 0.82;
+}
+
+@keyframes page-load {
+  0% {
+    clip-path: ellipse(0 0 at 61% 52%);
+    filter: blur(12px);
+    opacity: 0;
+    transform: scale(0.92);
+  }
+
+  24% {
+    clip-path: ellipse(14% 11% at 61% 52%);
+    opacity: 0.34;
+  }
+
+  60% {
+    clip-path: ellipse(49% 41% at 61% 52%);
+    filter: blur(3px);
+    opacity: 0.88;
+  }
+
+  100% {
+    clip-path: ellipse(88% 76% at 61% 52%);
+    filter: blur(0);
+    opacity: var(--flow-art-opacity);
+    transform: scale(1);
+  }
+}
+
+@keyframes core-boot {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.08);
+  }
+
+  28% {
+    opacity: 0.9;
+  }
+
+  68% {
+    opacity: 0.42;
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.72);
+  }
+}
+
+@keyframes energy-sweep {
+  0% {
+    opacity: 0;
+    transform: translateX(0) skewX(-15deg);
+  }
+
+  22% {
+    opacity: 0.72;
+  }
+
+  72% {
+    opacity: 0.34;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(245%) skewX(-15deg);
+  }
+}
+
+@keyframes glow-load {
+  0% {
+    opacity: 0;
+    transform: scale(0.62);
+  }
+
+  72% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+
+  100% {
+    opacity: var(--flow-glow-opacity);
+    transform: scale(1);
+  }
+}
+
+@keyframes ribbons-load {
+  0% {
+    opacity: 0;
+    transform: translateX(118px) scaleX(0.18) scaleY(0.72) skewY(-5deg);
+  }
+
+  42% {
+    opacity: 0.78;
+    transform: translateX(28px) scaleX(0.82) scaleY(1.06) skewY(1.2deg);
+  }
+
+  72% {
+    opacity: 1;
+    transform: translateX(-7px) scaleX(1.035) scaleY(0.98) skewY(-0.4deg);
+  }
+
+  100% {
+    opacity: var(--flow-ribbon-opacity);
+    transform: translateX(0) scale(1) skewY(0);
+  }
+}
+
+@keyframes orbits-load {
+  0% {
+    opacity: 0;
+    transform: scale(0.72) rotate(-7deg);
+  }
+
+  56%,
+  100% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes details-load {
+  0% {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+
+  68%,
+  100% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes line-draw {
+  0% {
+    opacity: 0;
+    stroke-dasharray: 0 1;
+    stroke-dashoffset: 1;
+  }
+
+  34% {
+    opacity: 0.9;
+  }
+
+  100% {
+    opacity: 1;
+    stroke-dasharray: 1 0;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes mesh-draw {
+  0% {
+    opacity: 0;
+    stroke-dasharray: 0 1;
+    stroke-dashoffset: 1;
+  }
+
+  24% {
+    opacity: 0.2;
+  }
+
+  100% {
+    opacity: 0.56;
+    stroke-dasharray: 1 0;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes orbit-draw {
+  0% {
+    opacity: 0;
+    stroke-dasharray: 0 1;
+    stroke-dashoffset: 0.25;
+  }
+
+  24% {
+    opacity: 0.76;
+  }
+
+  100% {
+    stroke-dasharray: 0.74 0.04 0.12 0.1;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes node-load {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+
+  72% {
+    opacity: 1;
+    transform: scale(1.42);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes glow-breathe {
+  0%,
+  100% {
+    opacity: var(--flow-glow-opacity);
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: var(--flow-glow-peak-opacity);
+    transform: scale(1.05);
+  }
+}
+
+@keyframes ribbons-breathe {
+  0%,
+  100% {
+    opacity: var(--flow-ribbon-opacity);
+    transform: translateY(0) scale(1);
+  }
+
+  50% {
+    opacity: var(--flow-ribbon-peak-opacity);
+    transform: translateY(-5px) scale(1.02);
+  }
+}
+
+@keyframes ribbon-a {
+  0%,
+  100% {
+    transform: translateY(0) skewY(0deg);
+  }
+
+  50% {
+    transform: translateY(-4px) skewY(0.42deg);
+  }
+}
+
+@keyframes ribbon-b {
+  0%,
+  100% {
+    transform: translateY(0) scaleY(1);
+  }
+
+  50% {
+    transform: translateY(5px) scaleY(1.022);
+  }
+}
+
+@keyframes ribbon-c {
+  0%,
+  100% {
+    transform: translateY(0) skewY(0deg);
+  }
+
+  50% {
+    transform: translateY(-3px) skewY(-0.32deg);
+  }
+}
+
+@keyframes orbit-flow {
+  to {
+    stroke-dashoffset: -1;
+  }
+}
+
+@keyframes node-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.72;
+    transform: scale(0.86);
+  }
+}
+
+@keyframes sparkle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.38;
+  }
+}
+
+@media (max-width: 1240px) {
+  .root {
+    width: min(112%, 500px);
+  }
+}
+
+@media (max-width: 980px) {
+  .root {
+    width: min(114%, 420px);
+  }
+}
+
+@media (max-width: 760px) {
+  .root {
+    width: min(100%, 560px);
+    justify-self: center;
+    margin-top: -20px;
+  }
+}
+
+@media (max-width: 540px) {
+  .root {
+    width: min(110%, 420px);
+    margin-top: -8px;
+  }
+
+  .root::before,
+  .root::after,
+  .dotFields,
+  .mesh,
+  .sparkles {
+    display: none;
+  }
+
+  .art,
+  .glows,
+  .ribbons,
+  .orbits,
+  .orbit,
+  .ribbon,
+  .node {
+    animation: none;
+  }
+
+  .art {
+    clip-path: none;
+    filter: none;
+    opacity: var(--flow-art-opacity);
+    transform: none;
+  }
+
+  .glows {
+    opacity: var(--flow-mobile-glow-opacity);
+    transform: none;
+  }
+
+  .ribbons {
+    opacity: var(--flow-ribbon-opacity);
+    transform: none;
+  }
+
+  .orbits,
+  .node {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root::before,
+  .root::after {
+    display: none;
+  }
+
+  .art,
+  .glows,
+  .dotFields,
+  .ribbons,
+  .ribbon,
+  .ribbonEdge,
+  .mesh path,
+  .orbits,
+  .orbit,
+  .node,
+  .sparkles {
+    animation: none;
+  }
+
+  .art {
+    clip-path: none;
+    filter: none;
+    opacity: var(--flow-art-opacity);
+    transform: none;
+  }
+
+  .glows,
+  .ribbons,
+  .dotFields,
+  .orbits,
+  .node,
+  .sparkles {
+    opacity: 1;
+    transform: none;
+  }
+
+  .glows {
+    opacity: var(--flow-glow-opacity);
+  }
+
+  .ribbons {
+    opacity: var(--flow-ribbon-opacity);
+  }
+
+  .mesh path {
+    opacity: 0.56;
+    stroke-dasharray: 1 0;
+    stroke-dashoffset: 0;
+  }
+}
