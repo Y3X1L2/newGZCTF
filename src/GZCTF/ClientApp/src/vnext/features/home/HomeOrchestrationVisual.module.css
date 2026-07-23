@@ -5,6 +5,11 @@
   --flow-mobile-glow-opacity: 0.64;
   --flow-ribbon-opacity: 0.8;
   --flow-ribbon-peak-opacity: 0.96;
+  --flow-brush-entry-delay: 1.3s;
+  --flow-orbit-entry-delay: 1.45s;
+  --flow-node-entry-delay: 1.75s;
+  --flow-sparkle-entry-delay: 1.9s;
+  --flow-ribbon-live-delay: 2.35s;
   --flow-blue: var(--yn-color-info);
   --flow-blue-mid: color-mix(in srgb, var(--yn-color-info) 70%, white);
   --flow-blue-soft: color-mix(in srgb, var(--yn-color-info) 36%, white);
@@ -27,17 +32,20 @@
   top: 51%;
   left: 61%;
   z-index: 1;
-  width: 132px;
-  height: 132px;
-  border: 1px solid color-mix(in srgb, var(--flow-blue) 52%, transparent);
+  width: 176px;
+  height: 112px;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--flow-blue) 34%, transparent) 0%,
+    color-mix(in srgb, var(--flow-green) 18%, transparent) 34%,
+    transparent 72%
+  );
   border-radius: 50%;
-  box-shadow:
-    0 0 0 18px color-mix(in srgb, var(--flow-blue) 8%, transparent),
-    0 0 46px color-mix(in srgb, var(--flow-green) 18%, transparent);
   content: '';
+  filter: blur(5px);
   opacity: 0;
   transform: translate(-50%, -50%) scale(0.08);
-  animation: core-boot 1.55s 80ms cubic-bezier(0.16, 0.84, 0.2, 1) both;
+  animation: core-bloom 1.55s 80ms cubic-bezier(0.16, 0.84, 0.2, 1) both;
 }
 
 .root::after {
@@ -59,7 +67,7 @@
   filter: blur(6px);
   opacity: 0;
   transform: translateX(0) skewX(-15deg);
-  animation: energy-sweep 1.55s 620ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: energy-sweep 1.55s var(--flow-brush-entry-delay) cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 .art {
@@ -69,10 +77,8 @@
   width: 115%;
   height: 110%;
   overflow: visible;
-  clip-path: ellipse(0 0 at 61% 52%);
-  filter: blur(12px);
   opacity: 0;
-  animation: page-load 1.85s cubic-bezier(0.18, 0.78, 0.18, 1) forwards;
+  animation: art-fade-in 520ms ease-out forwards;
   mask-image: linear-gradient(
     90deg,
     transparent 0%,
@@ -156,25 +162,55 @@
   transform-origin: center;
 }
 
+.ribbonRevealMask {
+  mask-type: luminance;
+}
+
+.ribbonMaskBase {
+  fill: black;
+}
+
+.ribbonReveal {
+  fill: none;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  stroke-linecap: round;
+  animation: ribbon-reveal 1.55s 420ms var(--yn-ease-emphasized) both;
+}
+
+.ribbonRevealA {
+  stroke-width: 190;
+}
+
+.ribbonRevealB {
+  stroke-width: 220;
+  animation-delay: 550ms;
+  animation-duration: 1.65s;
+}
+
+.ribbonRevealC {
+  stroke-width: 200;
+  animation-delay: 680ms;
+  animation-duration: 1.7s;
+}
+
 .ribbons {
-  opacity: 0;
+  opacity: var(--flow-ribbon-opacity);
   transform-box: view-box;
   transform-origin: 61% 52%;
-  animation:
-    ribbons-load 1.48s 240ms cubic-bezier(0.16, 0.84, 0.2, 1) both,
-    ribbons-breathe 7.4s 2.1s ease-in-out infinite;
+  animation: ribbons-breathe 7.4s var(--flow-ribbon-live-delay) ease-in-out infinite both;
 }
 
 .ribbonA {
-  animation: ribbon-a 9.4s ease-in-out infinite;
+  animation: ribbon-a 9.4s var(--flow-ribbon-live-delay) ease-in-out infinite both;
 }
 
 .ribbonB {
-  animation: ribbon-b 10.8s ease-in-out infinite;
+  animation: ribbon-b 10.8s var(--flow-ribbon-live-delay) ease-in-out infinite both;
 }
 
 .ribbonC {
-  animation: ribbon-c 11.6s ease-in-out infinite;
+  animation: ribbon-c 11.6s var(--flow-ribbon-live-delay) ease-in-out infinite both;
 }
 
 .ribbonEdge {
@@ -224,12 +260,12 @@
   opacity: 0;
   transform-box: view-box;
   transform-origin: 57% 51%;
-  animation: orbits-load 1.45s 580ms cubic-bezier(0.2, 0.78, 0.2, 1) both;
+  animation: orbits-load 1.45s var(--flow-orbit-entry-delay) cubic-bezier(0.2, 0.78, 0.2, 1) both;
 }
 
 .orbit {
   --flow-orbit-duration: 18s;
-  --flow-orbit-delay: 860ms;
+  --flow-orbit-delay: var(--flow-orbit-entry-delay);
   --flow-orbit-direction: normal;
   fill: none;
   stroke: var(--flow-blue);
@@ -239,7 +275,7 @@
   opacity: 0.55;
   animation-name: orbit-draw, orbit-flow;
   animation-duration: 1.25s, var(--flow-orbit-duration);
-  animation-delay: var(--flow-orbit-delay), 2.3s;
+  animation-delay: var(--flow-orbit-delay), calc(var(--flow-orbit-delay) + 1.25s);
   animation-direction: normal, var(--flow-orbit-direction);
   animation-fill-mode: both, none;
   animation-iteration-count: 1, infinite;
@@ -248,20 +284,20 @@
 
 .orbitTwo {
   --flow-orbit-duration: 22s;
-  --flow-orbit-delay: 1.02s;
+  --flow-orbit-delay: calc(var(--flow-orbit-entry-delay) + 160ms);
   --flow-orbit-direction: reverse;
   stroke: var(--flow-blue-mid);
 }
 
 .orbitThree {
   --flow-orbit-duration: 26s;
-  --flow-orbit-delay: 1.18s;
+  --flow-orbit-delay: calc(var(--flow-orbit-entry-delay) + 320ms);
   stroke: var(--flow-green-mid);
   opacity: 0.42;
 }
 
 .node {
-  --flow-node-delay: 1.18s;
+  --flow-node-delay: var(--flow-node-entry-delay);
   stroke: rgb(255 255 255 / 0.8);
   stroke-width: 1;
   opacity: 0;
@@ -284,19 +320,19 @@
 }
 
 .nodeGreenA {
-  --flow-node-delay: 1.3s;
+  --flow-node-delay: calc(var(--flow-node-entry-delay) + 120ms);
 }
 
 .nodeBlueB {
-  --flow-node-delay: 1.42s;
+  --flow-node-delay: calc(var(--flow-node-entry-delay) + 240ms);
 }
 
 .nodeGreenB {
-  --flow-node-delay: 1.54s;
+  --flow-node-delay: calc(var(--flow-node-entry-delay) + 360ms);
 }
 
 .nodePale {
-  --flow-node-delay: 1.66s;
+  --flow-node-delay: calc(var(--flow-node-entry-delay) + 480ms);
   fill: var(--flow-blue-soft);
 }
 
@@ -304,8 +340,8 @@
   fill: white;
   opacity: 0;
   animation:
-    details-load 800ms 1.34s ease-out both,
-    sparkle 5.4s 2.14s ease-in-out infinite;
+    details-load 800ms var(--flow-sparkle-entry-delay) ease-out both,
+    sparkle 5.4s calc(var(--flow-sparkle-entry-delay) + 800ms) ease-in-out infinite;
 }
 
 :global(:root[data-yinyu-theme='dark']) .root {
@@ -317,51 +353,34 @@
   --flow-ribbon-peak-opacity: 0.82;
 }
 
-@keyframes page-load {
+@keyframes art-fade-in {
   0% {
-    clip-path: ellipse(0 0 at 61% 52%);
-    filter: blur(12px);
     opacity: 0;
-    transform: scale(0.92);
-  }
-
-  24% {
-    clip-path: ellipse(14% 11% at 61% 52%);
-    opacity: 0.34;
-  }
-
-  60% {
-    clip-path: ellipse(49% 41% at 61% 52%);
-    filter: blur(3px);
-    opacity: 0.88;
   }
 
   100% {
-    clip-path: ellipse(88% 76% at 61% 52%);
-    filter: blur(0);
     opacity: var(--flow-art-opacity);
-    transform: scale(1);
   }
 }
 
-@keyframes core-boot {
+@keyframes core-bloom {
   0% {
     opacity: 0;
     transform: translate(-50%, -50%) scale(0.08);
   }
 
   28% {
-    opacity: 0.9;
+    opacity: 0.82;
   }
 
   68% {
-    opacity: 0.42;
-    transform: translate(-50%, -50%) scale(1.05);
+    opacity: 0.38;
+    transform: translate(-50%, -50%) scale(1.18);
   }
 
   100% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(1.72);
+    transform: translate(-50%, -50%) scale(2.16);
   }
 }
 
@@ -399,28 +418,6 @@
   100% {
     opacity: var(--flow-glow-opacity);
     transform: scale(1);
-  }
-}
-
-@keyframes ribbons-load {
-  0% {
-    opacity: 0;
-    transform: translateX(118px) scaleX(0.18) scaleY(0.72) skewY(-5deg);
-  }
-
-  42% {
-    opacity: 0.78;
-    transform: translateX(28px) scaleX(0.82) scaleY(1.06) skewY(1.2deg);
-  }
-
-  72% {
-    opacity: 1;
-    transform: translateX(-7px) scaleX(1.035) scaleY(0.98) skewY(-0.4deg);
-  }
-
-  100% {
-    opacity: var(--flow-ribbon-opacity);
-    transform: translateX(0) scale(1) skewY(0);
   }
 }
 
@@ -470,6 +467,16 @@
   100% {
     opacity: 1;
     stroke-dasharray: 1 0;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes ribbon-reveal {
+  0% {
+    stroke-dashoffset: 1;
+  }
+
+  100% {
     stroke-dashoffset: 0;
   }
 }
@@ -652,6 +659,7 @@
   .art,
   .glows,
   .ribbons,
+  .ribbonReveal,
   .orbits,
   .orbit,
   .ribbon,
@@ -660,10 +668,7 @@
   }
 
   .art {
-    clip-path: none;
-    filter: none;
     opacity: var(--flow-art-opacity);
-    transform: none;
   }
 
   .glows {
@@ -674,6 +679,10 @@
   .ribbons {
     opacity: var(--flow-ribbon-opacity);
     transform: none;
+  }
+
+  .ribbonReveal {
+    stroke-dashoffset: 0;
   }
 
   .orbits,
@@ -693,6 +702,7 @@
   .glows,
   .dotFields,
   .ribbons,
+  .ribbonReveal,
   .ribbon,
   .ribbonEdge,
   .mesh path,
@@ -704,10 +714,7 @@
   }
 
   .art {
-    clip-path: none;
-    filter: none;
     opacity: var(--flow-art-opacity);
-    transform: none;
   }
 
   .glows,
@@ -726,6 +733,10 @@
 
   .ribbons {
     opacity: var(--flow-ribbon-opacity);
+  }
+
+  .ribbonReveal {
+    stroke-dashoffset: 0;
   }
 
   .mesh path {

@@ -9,6 +9,7 @@ describe('HomeOrchestrationVisual', () => {
     const visual = screen.getByTestId('home-orchestration-visual')
     expect(visual).toHaveAttribute('aria-hidden', 'true')
     expect(visual.querySelector('svg')).toHaveAttribute('viewBox', '0 0 760 420')
+    expect(visual.querySelectorAll('mask path[pathLength="1"]')).toHaveLength(3)
     expect(visual.querySelectorAll('a, button, input')).toHaveLength(0)
   })
 

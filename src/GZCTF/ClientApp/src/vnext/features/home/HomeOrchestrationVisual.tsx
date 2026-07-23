@@ -89,8 +89,34 @@ export function HomeOrchestrationVisual() {
             <stop offset="0.34" stopColor="black" />
             <stop offset="1" stopColor="white" />
           </linearGradient>
-          <mask height="420" id={ids.ribbonFade} maskUnits="userSpaceOnUse" width="840" x="0" y="0">
-            <rect fill={`url(#${ids.ribbonFadeGradient})`} height="420" width="840" />
+          <mask
+            className={styles.ribbonRevealMask}
+            height="420"
+            id={ids.ribbonFade}
+            maskUnits="userSpaceOnUse"
+            width="840"
+            x="0"
+            y="0"
+          >
+            <rect className={styles.ribbonMaskBase} height="420" width="840" />
+            <path
+              className={`${styles.ribbonReveal} ${styles.ribbonRevealA}`}
+              d="M90 85 C210 84 280 124 364 176 C462 238 540 270 646 236 C706 217 754 174 810 142"
+              pathLength="1"
+              stroke={`url(#${ids.ribbonFadeGradient})`}
+            />
+            <path
+              className={`${styles.ribbonReveal} ${styles.ribbonRevealB}`}
+              d="M126 139 C225 115 282 165 370 215 C458 267 540 305 646 258 C702 232 752 194 812 176"
+              pathLength="1"
+              stroke={`url(#${ids.ribbonFadeGradient})`}
+            />
+            <path
+              className={`${styles.ribbonReveal} ${styles.ribbonRevealC}`}
+              d="M176 361 C290 320 350 272 448 252 C540 232 618 270 700 270 C742 270 778 252 820 224"
+              pathLength="1"
+              stroke={`url(#${ids.ribbonFadeGradient})`}
+            />
           </mask>
         </defs>
 
