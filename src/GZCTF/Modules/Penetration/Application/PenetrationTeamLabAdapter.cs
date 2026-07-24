@@ -90,9 +90,15 @@ public sealed class PenetrationTeamLabAdapter(
             .Select(item => item.TeamId)
             .Distinct()
             .ToArrayAsync(cancellationToken);
-        var results = await Task.WhenAll(teamIds.Select(teamId => DeployTeamAsync(
-            gameId, teamId, actorUserId, cancellationToken)));
-        return (results.Count(item => !item.Reused), results.Count(item => item.Reused));
+        var created = 0;
+        var reused = 0;
+        foreach (var teamId in teamIds.Order())
+        {
+            var result = await DeployTeamAsync(gameId, teamId, actorUserId, cancellationToken);
+            if (result.Reused) reused++;
+            else created++;
+        }
+        return (created, reused);
     }
 
     public async Task<TeamLabRuntimeCreateResult> DeployTeamAsync(
