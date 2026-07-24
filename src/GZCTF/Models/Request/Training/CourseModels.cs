@@ -1321,8 +1321,11 @@ public class TrainingCourseChallengeDetailModel
             Solved = solved,
             Attempts = attempts,
             Limit = instance.Exercise.SubmissionLimit,
-            Flags = instance.Exercise.Flags is { Count: > 1 }
-                ? instance.Exercise.Flags
+            // Dynamic flags belong to individual instances and must not be exposed as
+            // configured multi-flag steps when other users have loaded the same exercise.
+            Flags = !instance.Exercise.Type.IsDynamic() &&
+                    instance.Exercise.Flags is { Count: > 1 } flags
+                ? flags
                     .OrderBy(flag => flag.OrderIndex)
                     .Select(flag => new FlagStepInfo
                     {
