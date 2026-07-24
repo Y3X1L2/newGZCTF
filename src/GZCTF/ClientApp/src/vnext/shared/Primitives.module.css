@@ -1,0 +1,240 @@
+.pageHeading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--yn-space-6);
+  padding-bottom: var(--yn-space-7);
+  border-bottom: 1px solid var(--yn-color-border);
+}
+
+.pageHeading > div:first-child,
+.sectionHeading > div {
+  min-width: 0;
+}
+
+.pageHeading span,
+.sectionHeading span {
+  color: var(--yn-color-muted);
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+}
+
+.pageHeading h1 {
+  margin: var(--yn-space-2) 0 0;
+  font-size: clamp(30px, 3.2vw, 44px);
+  line-height: 1.12;
+}
+
+.pageHeading p {
+  max-width: 720px;
+  margin: var(--yn-space-3) 0 0;
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-md);
+  line-height: 1.75;
+}
+
+.pageActions {
+  display: flex;
+  align-items: center;
+  gap: var(--yn-space-2);
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--yn-space-5);
+  margin-bottom: var(--yn-space-5);
+}
+
+.sectionHeading h2 {
+  margin: var(--yn-space-1) 0 0;
+  font-size: var(--yn-font-xl);
+}
+
+.sectionHeading a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yn-space-2);
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-sm);
+}
+
+.sectionHeading a:hover {
+  color: var(--yn-color-brand);
+}
+
+.statusPill {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: var(--yn-radius-sm);
+  font-size: var(--yn-font-xs);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.statusPill_success {
+  background: var(--yn-color-brand-soft);
+  color: var(--yn-color-brand-strong);
+}
+
+.statusPill_info {
+  background: var(--yn-color-info-soft);
+  color: var(--yn-color-info);
+}
+
+.statusPill_warning {
+  background: var(--yn-color-warning-soft);
+  color: var(--yn-color-warning);
+}
+
+.statusPill_neutral {
+  background: var(--yn-color-canvas-raised);
+  color: var(--yn-color-muted);
+}
+
+.dataState {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  align-content: center;
+  padding: var(--yn-space-7);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-lg);
+  background: var(--yn-color-surface);
+  text-align: center;
+}
+
+.dataState strong {
+  margin-top: var(--yn-space-4);
+  font-size: var(--yn-font-lg);
+}
+
+.dataState p {
+  max-width: 460px;
+  margin: var(--yn-space-2) 0 0;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-sm);
+  line-height: 1.65;
+}
+
+.emptyMark {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--yn-color-border-strong);
+  transform: rotate(45deg);
+}
+
+.loadingMark {
+  display: flex;
+  gap: 5px;
+}
+
+.loadingMark i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--yn-color-brand);
+  animation: primitive-loading 800ms var(--yn-ease-standard) infinite alternate;
+}
+
+.loadingMark i:nth-child(2) {
+  animation-delay: 100ms;
+}
+
+.loadingMark i:nth-child(3) {
+  animation-delay: 200ms;
+}
+
+.posterImage,
+.posterFallback {
+  width: 100%;
+  height: 100%;
+}
+
+.posterImage {
+  object-fit: cover;
+}
+
+.posterFallback {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--yn-color-game-ongoing);
+  color: var(--yn-color-game-visual-text);
+}
+
+.posterFallback_green {
+  background: var(--yn-color-game-ongoing);
+}
+
+.posterFallback_blue {
+  background: var(--yn-color-game-upcoming);
+}
+
+.posterFallback_orange {
+  background: #75452f;
+}
+
+.posterFallback_neutral {
+  background: var(--yn-color-game-ended);
+}
+
+.posterFallback > svg {
+  position: relative;
+  z-index: 2;
+  opacity: 0.65;
+}
+
+.posterPlaneA,
+.posterPlaneB,
+.posterRoute {
+  position: absolute;
+  display: block;
+}
+
+.posterPlaneA {
+  width: 58%;
+  height: 46%;
+  border: 1px solid currentColor;
+  opacity: 0.2;
+  transform: translate(-28%, -15%) skewY(-12deg);
+}
+
+.posterPlaneB {
+  width: 45%;
+  height: 38%;
+  border: 1px solid currentColor;
+  opacity: 0.12;
+  transform: translate(35%, 28%) skewY(10deg);
+}
+
+.posterRoute {
+  width: 68%;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.28;
+  transform: rotate(-22deg);
+}
+
+@keyframes primitive-loading {
+  from {
+    opacity: 0.35;
+    transform: translateY(1px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@media (max-width: 720px) {
+  .pageHeading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

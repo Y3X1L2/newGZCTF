@@ -1,0 +1,312 @@
+.page,
+.paperColumn,
+.formGrid,
+.selectedSection,
+.selectedList,
+.bankColumn,
+.bankList {
+  display: grid;
+  min-width: 0;
+}
+
+.page {
+  width: min(var(--yn-page-max-width), 100%);
+  margin: 0 auto;
+  padding: var(--yn-space-7) var(--yn-page-gutter) 72px;
+  gap: var(--yn-space-5);
+}
+
+.workspace {
+  display: grid;
+  min-width: 0;
+  grid-template-areas: 'bank paper';
+  grid-template-columns: minmax(340px, 400px) minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(32px, 4vw, 64px);
+}
+
+.paperColumn {
+  grid-area: paper;
+}
+
+.bankColumn {
+  grid-area: bank;
+}
+
+.paperColumn,
+.formGrid,
+.selectedSection,
+.bankColumn {
+  gap: var(--yn-space-4);
+}
+
+.formGrid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.selectedSection {
+  padding: var(--yn-space-5) 0;
+}
+
+.selectedSection > header,
+.bankColumn > header,
+.bulkScore,
+.filterRow,
+.itemActions {
+  display: flex;
+  align-items: center;
+  gap: var(--yn-space-2);
+}
+
+.selectedSection > header,
+.bankColumn > header {
+  justify-content: space-between;
+  gap: var(--yn-space-4);
+}
+
+.selectedSection > header span,
+.bankColumn > header span {
+  color: var(--yn-color-brand-strong);
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+}
+
+.selectedSection h2,
+.bankColumn h2 {
+  margin: 5px 0 0;
+  font-size: var(--yn-font-xl);
+}
+
+.bulkScore {
+  align-items: flex-end;
+}
+
+.bulkScore label {
+  width: 112px;
+}
+
+.selectedList {
+  gap: 0;
+  border-top: 1px solid var(--yn-color-border);
+}
+
+.selectedList article {
+  display: grid;
+  min-width: 0;
+  min-height: 92px;
+  grid-template-columns: 34px minmax(0, 1fr) 96px auto;
+  align-items: center;
+  gap: var(--yn-space-3);
+  border-bottom: 1px solid var(--yn-color-border);
+}
+
+.selectedList article > span,
+.selectedList small,
+.bankList small {
+  color: var(--yn-color-muted);
+  font-family: var(--yn-font-mono);
+  font-size: 12px;
+}
+
+.selectedList strong,
+.bankList strong {
+  font-size: 13px;
+}
+
+.selectedList article > div:nth-child(2),
+.bankList label > span {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.selectedList strong,
+.selectedList small,
+.bankList strong,
+.bankList small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemActions {
+  gap: 4px;
+}
+
+.itemActions button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-sm);
+  background: transparent;
+  color: var(--yn-color-muted);
+  cursor: pointer;
+}
+
+.itemActions button:hover:not(:disabled) {
+  border-color: var(--yn-color-brand);
+  color: var(--yn-color-brand-strong);
+}
+
+.itemActions button[data-danger]:hover:not(:disabled) {
+  border-color: var(--yn-color-danger);
+  color: var(--yn-color-danger);
+}
+
+.itemActions button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.bankColumn {
+  position: sticky;
+  top: calc(var(--yn-context-height) + var(--yn-space-5));
+  max-height: calc(100vh - var(--yn-context-height) - 112px);
+  padding: var(--yn-space-5);
+  overflow: hidden;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+}
+
+.filterRow {
+  align-items: flex-end;
+}
+
+.filterRow > label {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 0;
+  gap: 7px;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.filterRow select {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-text);
+}
+
+.filterRow > button {
+  flex: 0 0 auto;
+}
+
+.bankSelector {
+  display: grid;
+  min-width: 0;
+  gap: var(--yn-space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.bankSelector legend {
+  margin-bottom: 7px;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.bankSelector > div {
+  display: flex;
+  max-height: 84px;
+  flex-wrap: wrap;
+  gap: 7px;
+  overflow-y: auto;
+}
+
+.bankSelector label {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.bankSelector label:has(input:checked) {
+  border-color: color-mix(in srgb, var(--yn-color-brand) 55%, var(--yn-color-border));
+  background: var(--yn-color-brand-soft);
+  color: var(--yn-color-brand-strong);
+}
+
+.bankSelector > button {
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+  cursor: pointer;
+}
+
+.bankList {
+  min-height: 180px;
+  flex: 1;
+  gap: 0;
+  overflow-y: auto;
+  border-top: 1px solid var(--yn-color-border);
+  overscroll-behavior: contain;
+}
+
+.bankList > label {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--yn-space-2);
+  padding: 14px 0;
+  border-bottom: 1px solid var(--yn-color-border);
+  cursor: pointer;
+}
+
+.bankList > label[data-added] {
+  opacity: 0.62;
+}
+
+@media (max-width: 1180px) {
+  .workspace {
+    grid-template-areas:
+      'bank'
+      'paper';
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bankColumn {
+    position: static;
+    max-height: none;
+  }
+
+  .bankList {
+    max-height: 520px;
+  }
+}
+
+@media (max-width: 720px) {
+  .selectedSection > header,
+  .filterRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .bulkScore {
+    width: 100%;
+  }
+
+  .selectedList article {
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    padding: var(--yn-space-2) 0;
+  }
+
+  .selectedList article > label {
+    display: none;
+  }
+}

@@ -828,6 +828,8 @@ public class KvmService
         if (Directory.Exists(root))
             Directory.Delete(root, recursive: true);
         Directory.CreateDirectory(root);
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
 
         var files = new CloudInitSeedFiles(
             Path.Combine(root, "user-data"),
@@ -843,6 +845,13 @@ public class KvmService
                 ? BuildCloudInitNetworkConfig(request)
                 : cloudInit.NetworkConfig,
             token);
+        if (!OperatingSystem.IsWindows())
+        {
+            var sensitiveMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+            File.SetUnixFileMode(files.UserDataPath, sensitiveMode);
+            File.SetUnixFileMode(files.MetaDataPath, sensitiveMode);
+            File.SetUnixFileMode(files.NetworkConfigPath, sensitiveMode);
+        }
         return files;
     }
 

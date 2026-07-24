@@ -1,0 +1,81 @@
+.form {
+  display: grid;
+  gap: var(--yn-space-4);
+}
+
+.primaryButton,
+.secondaryButton {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--yn-space-2);
+  padding: 0 15px;
+  border-radius: var(--yn-radius-md);
+  cursor: pointer;
+  font-size: var(--yn-font-md);
+  font-weight: 720;
+  transition:
+    border-color var(--yn-motion-fast) var(--yn-ease-standard),
+    background-color var(--yn-motion-fast) var(--yn-ease-standard),
+    color var(--yn-motion-fast) var(--yn-ease-standard);
+}
+
+.primaryButton {
+  border: 1px solid var(--yn-color-control-strong);
+  background: var(--yn-color-control-strong);
+  color: var(--yn-color-control-strong-text);
+}
+
+.primaryButton:hover:not(:disabled) {
+  border-color: var(--yn-color-control-strong-hover);
+  background: var(--yn-color-control-strong-hover);
+}
+
+.secondaryButton {
+  border: 1px solid var(--yn-color-border-strong);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-text);
+}
+
+.secondaryButton:hover:not(:disabled) {
+  border-color: var(--yn-color-text-secondary);
+  background: var(--yn-color-surface-muted);
+}
+
+.textLink {
+  justify-self: end;
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-sm);
+  font-weight: 650;
+}
+
+.textLink:hover {
+  color: var(--yn-color-brand-strong);
+}
+
+.divider {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--yn-space-3);
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.divider::before,
+.divider::after {
+  height: 1px;
+  background: var(--yn-color-border);
+  content: '';
+}
+
+.spinner {
+  animation: auth-spin 700ms linear infinite;
+}
+
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

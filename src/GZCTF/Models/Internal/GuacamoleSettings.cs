@@ -27,6 +27,16 @@ public class GuacamoleSettings
     public string GuacamoleAuthToken { get; set; } = string.Empty;
 
     /// <summary>
+    /// Managed Guacamole API account used to obtain renewable session tokens.
+    /// </summary>
+    public string ApiUsername { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Password for the managed Guacamole API account.
+    /// </summary>
+    public string ApiPassword { get; set; } = string.Empty;
+
+    /// <summary>
     /// Connection timeout in seconds for Guacamole API calls
     /// </summary>
     public int ConnectionTimeoutSeconds { get; set; } = 10;

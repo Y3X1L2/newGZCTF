@@ -1,0 +1,56 @@
+.calendarViewport {
+  display: grid;
+  min-width: 0;
+  justify-items: center;
+  overflow-x: hidden;
+  padding-bottom: 4px;
+}
+
+.calendar {
+  display: grid;
+  width: max-content;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 12px);
+  grid-auto-columns: 12px;
+  gap: 4px;
+}
+
+.calendar span {
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--yn-color-border);
+  background: var(--yn-color-surface-muted);
+}
+
+.level1 {
+  border-color: color-mix(in srgb, var(--yn-color-brand) 24%, var(--yn-color-border)) !important;
+  background: color-mix(in srgb, var(--yn-color-brand-soft) 60%, var(--yn-color-surface-muted)) !important;
+}
+
+.level2 {
+  border-color: color-mix(in srgb, var(--yn-color-brand) 42%, var(--yn-color-border)) !important;
+  background: color-mix(in srgb, var(--yn-color-brand) 38%, var(--yn-color-surface)) !important;
+}
+
+.level3 {
+  border-color: var(--yn-color-brand) !important;
+  background: color-mix(in srgb, var(--yn-color-brand) 68%, var(--yn-color-surface)) !important;
+}
+
+.level4 {
+  border-color: var(--yn-color-brand-strong) !important;
+  background: var(--yn-color-brand-strong) !important;
+}
+
+@media (max-width: 680px) {
+  .calendar {
+    grid-template-rows: repeat(7, 12px);
+    grid-auto-columns: 12px;
+    gap: 4px;
+  }
+
+  .calendar span {
+    width: 12px;
+    height: 12px;
+  }
+}

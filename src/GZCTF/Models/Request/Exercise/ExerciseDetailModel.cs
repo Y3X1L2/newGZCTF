@@ -66,12 +66,9 @@ public class ExerciseDetailModel
             Tags = instance.Exercise.Tags,
             Title = instance.Exercise.Title,
             Type = instance.Exercise.Type,
-            Context = new()
-            {
-                InstanceEntry = instance.Container?.Entry,
-                CloseTime = instance.Container?.ExpectStopAt,
-                Url = instance.AttachmentUrl,
-                FileSize = instance.Attachment?.FileSize
-            }
+            Context = ClientFlagContext.FromInstance(
+                instance.Container,
+                instance.AttachmentUrl,
+                instance.Attachment?.FileSize)
         };
 }

@@ -16,7 +16,9 @@ public sealed record FleetCapacityRequest(
     NodeCapability RequiredCapability,
     WorkloadResourceVector Resources,
     Guid? PreferredNodeId = null,
-    bool RequireTeamLab = false);
+    bool RequireTeamLab = false,
+    IReadOnlyCollection<string>? RequiredFeatures = null,
+    bool RequireRemote = false);
 
 public sealed record FleetCapacityReservationResult(
     bool Success,
@@ -128,8 +130,9 @@ public sealed class FleetCapacityReservationService
 
         var candidates = (await snapshots.LoadAsync(token))
             .Where(item => request.PreferredNodeId is null || item.Node.Id == request.PreferredNodeId)
+            .Where(item => !request.RequireRemote || !item.Node.IsLocal)
             .Where(item => eligibility.GetReason(item, request.RequiredCapability, requested,
-                request.RequireTeamLab) is null)
+                request.RequireTeamLab, request.RequiredFeatures) is null)
             .OrderByDescending(item => eligibility.Score(item, requested))
             .ThenBy(item => item.Node.Name, StringComparer.Ordinal)
             .ThenBy(item => item.Node.Id)

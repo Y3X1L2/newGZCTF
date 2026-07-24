@@ -12,6 +12,7 @@
     <PackageReference Include="Aspire.Hosting.AppHost" />
     <PackageReference Include="Aspire.Hosting.PostgreSQL" />
     <PackageReference Include="Aspire.Hosting.Redis" />
+    <PackageReference Include="MessagePack" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\GZCTF\GZCTF.csproj" />

@@ -60,6 +60,36 @@ public class ContainerRepository(
             .ToArrayAsync(token);
     }
 
+    public Task<int> SetEntryPublicationResultAsync(
+        IReadOnlyCollection<Guid> leaseIds,
+        ContainerEntryStatus status,
+        string? error,
+        CancellationToken token = default)
+    {
+        if (leaseIds.Count == 0)
+            return Task.FromResult(0);
+
+        var readyAt = status == ContainerEntryStatus.Ready ? DateTimeOffset.UtcNow : (DateTimeOffset?)null;
+        var safeError = status == ContainerEntryStatus.Error ? PortMappingRevision.NormalizeError(error) : null;
+
+        var query = Context.Containers
+            .Where(container =>
+                container.Status == ContainerStatus.Running &&
+                container.PublicPortLeaseId != null &&
+                leaseIds.Contains(container.PublicPortLeaseId.Value));
+
+        // A failed candidate config is rolled back, so routes already confirmed by the
+        // previous config remain usable. Only unpublished routes inherit the failure.
+        if (status == ContainerEntryStatus.Error)
+            query = query.Where(container => container.EntryStatus != ContainerEntryStatus.Ready);
+
+        return query
+            .ExecuteUpdateAsync(update => update
+                .SetProperty(container => container.EntryStatus, status)
+                .SetProperty(container => container.EntryReadyAt, readyAt)
+                .SetProperty(container => container.EntryError, safeError), token);
+    }
+
     public Task ExtendLifetime(Container container, TimeSpan time, CancellationToken token = default)
     {
         container.ExpectStopAt += time;

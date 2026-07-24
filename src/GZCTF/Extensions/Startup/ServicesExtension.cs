@@ -176,6 +176,7 @@ internal static class ServicesExtension
 #pragma warning restore EXTEXP0001
             builder.Services.AddSingleton<AgentClient>();
             builder.Services.AddScoped<FleetVmService>();
+            builder.Services.AddSingleton<VmCredentialService>();
             builder.Services.AddSingleton<GuacamoleService>();
             builder.Services.AddHostedService<VmReadyService>();
             builder.Services.AddScoped<NodeTunnelService>();

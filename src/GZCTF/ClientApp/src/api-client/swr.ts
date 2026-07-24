@@ -1,4 +1,4 @@
-import type { SWRConfiguration } from 'swr'
+import type { Cache, SWRConfiguration } from 'swr'
 import { fetcher } from '../generated/Api'
 
 const responseStatus = (error: unknown) => {
@@ -14,14 +14,14 @@ const responseStatus = (error: unknown) => {
   return typeof status === 'number' ? status : undefined
 }
 
-export const createSWRConfig = (provider: NonNullable<SWRConfiguration['provider']>): SWRConfiguration => ({
-  provider,
+export const createSWRConfig = (): SWRConfiguration => ({
+  provider: (): Cache => new Map(),
   fetcher,
-  refreshInterval: 10_000,
+  refreshInterval: 0,
   dedupingInterval: 2_000,
   focusThrottleInterval: 10_000,
   errorRetryCount: 3,
-  keepPreviousData: true,
+  keepPreviousData: false,
   revalidateOnReconnect: true,
   shouldRetryOnError: true,
   onErrorRetry: (error, _key, _config, revalidate, context) => {

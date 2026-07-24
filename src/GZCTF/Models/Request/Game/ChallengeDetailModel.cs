@@ -61,13 +61,10 @@ public class ChallengeDetailModel
             Deadline = gameInstance.Challenge.DeadlineUtc,
             Attempts = attemptCount,
             Flags = flagSteps,
-            Context = new()
-            {
-                InstanceEntry = gameInstance.Container?.Entry,
-                CloseTime = gameInstance.Container?.ExpectStopAt,
-                Url = gameInstance.AttachmentUrl,
-                FileSize = gameInstance.Attachment?.FileSize
-            }
+            Context = ClientFlagContext.FromInstance(
+                gameInstance.Container,
+                gameInstance.AttachmentUrl,
+                gameInstance.Attachment?.FileSize)
         };
     }
 }

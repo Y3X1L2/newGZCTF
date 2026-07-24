@@ -459,14 +459,13 @@ public class DeploymentExecutionService
 
         var challenge = vm.Challenge;
         var templateId = challenge?.ImageTemplateId;
-        var templatePath = challenge?.ImageTemplate?.LocalFilePath;
         var memory = ResolveVmMemory(challenge?.MemoryLimit);
         var cpu = ResolveVmCpu(challenge?.CPUCount);
 
         var previousNode = vm.NodeId;
         using var _ = _executionContext.Push(new DeploymentExecutionContext(nodeId, CapacityReserved: true,
             ticket.Id, ticket.Generation));
-        var result = await _fleetVmService.CreateVmAsync(vm, templateId, templatePath, memory, cpu, flag: null, token);
+        var result = await _fleetVmService.CreateVmAsync(vm, templateId, memory, cpu, flag: null, token);
 
         if (result is null || vm.Status == VmInstanceStatus.Error)
         {

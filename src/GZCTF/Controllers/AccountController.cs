@@ -4,6 +4,7 @@ using GZCTF.Middlewares;
 using GZCTF.Models;
 using GZCTF.Models.Internal;
 using GZCTF.Models.Request.Account;
+using GZCTF.Models.Request.Info;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Services.Config;
@@ -32,11 +33,41 @@ public class AccountController(
     IOptionsSnapshot<AccountPolicy> accountPolicy,
     IOptionsSnapshot<GlobalConfig> globalConfig,
     IOptionsSnapshot<PortalSsoConfig> portalSsoConfig,
+    UserProfileQueryService userProfiles,
     UserManager<UserInfo> userManager,
     SignInManager<UserInfo> signInManager,
     ILogger<AccountController> logger,
     IStringLocalizer<Program> localizer) : ControllerBase
 {
+    /// <summary>
+    /// Get public account capabilities used by authentication pages.
+    /// </summary>
+    [HttpGet]
+    [ProducesResponseType(typeof(AccountCapabilitiesModel), StatusCodes.Status200OK)]
+    public IActionResult Capabilities() =>
+        Ok(AccountCapabilitiesModel.FromConfig(accountPolicy.Value, portalSsoConfig.Value));
+
+    /// <summary>
+    /// Get the lightweight identity and activity summary used by the account drawer.
+    /// </summary>
+    [HttpGet]
+    [RequireUser]
+    [ProducesResponseType(typeof(AccountSummaryModel), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Summary(CancellationToken token)
+    {
+        var user = await userManager.GetUserAsync(User);
+        if (user is null)
+            return Unauthorized(new RequestResponse(localizer[nameof(Resources.Program.Auth_LoginRequired)],
+                StatusCodes.Status401Unauthorized));
+
+        var summary = await userProfiles.GetAccountSummaryAsync(user.Id, token);
+        return summary is null
+            ? NotFound(new RequestResponse(localizer[nameof(Resources.Program.Account_UserNotExist)],
+                StatusCodes.Status404NotFound))
+            : Ok(summary);
+    }
+
     /// <summary>
     /// Login through the unified portal IAM service.
     /// </summary>
@@ -229,17 +260,12 @@ public class AccountController(
         if (accountPolicy.Value.UseCaptcha && !await captcha.VerifyAsync(model, HttpContext, token))
             return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Account_TokenValidationFailed)]));
 
-        var user = await userManager.FindByEmailAsync(model.Email!);
-        if (user is null)
-            return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Account_UserNotExist)],
-                StatusCodes.Status404NotFound));
-
-        if (!user.EmailConfirmed)
-            return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Account_EmailNotConfirmed)],
-                StatusCodes.Status404NotFound));
-
         if (!accountPolicy.Value.EmailConfirmationRequired)
             return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Account_ResetPasswordFromAdmin)]));
+
+        var user = await userManager.FindByEmailAsync(model.Email!);
+        if (user is null || !user.EmailConfirmed)
+            return RecoveryAccepted();
 
         logger.Log(StaticLocalizer[nameof(Resources.Program.Account_SendEmailVerification)], HttpContext,
             TaskStatus.Pending);
@@ -254,11 +280,17 @@ public class AccountController(
         else
         {
             if (!mailSender.SendResetPasswordUrl(user.UserName, user.Email, link, localizer, globalConfig))
-                return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Account_EmailSendFailed)]));
+            {
+                logger.LogWarning("Password recovery email delivery failed for user {UserId}.", user.Id);
+                return RecoveryAccepted();
+            }
         }
 
-        return Ok(new RequestResponse(localizer[nameof(Resources.Program.Account_EmailSent)], StatusCodes.Status200OK));
+        return RecoveryAccepted();
     }
+
+    private OkObjectResult RecoveryAccepted() =>
+        Ok(new RequestResponse(localizer[nameof(Resources.Program.Account_EmailSent)], StatusCodes.Status200OK));
 
     /// <summary>
     /// User password reset
@@ -727,7 +759,7 @@ public class AccountController(
 
         if (!returnUrl.StartsWith("/", StringComparison.Ordinal) ||
             returnUrl.StartsWith("//", StringComparison.Ordinal) ||
-            returnUrl.StartsWith("/\\", StringComparison.Ordinal))
+            returnUrl.Contains('\\'))
             return null;
 
         return returnUrl;
@@ -751,7 +783,7 @@ public class AccountController(
 
     private string GetEmailLink(string action, string token, string? email)
         => $"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}/account/{action}?" +
-           $"token={token}&email={Codec.Base64.Encode(email)}";
+           $"token={Uri.EscapeDataString(token)}&email={Uri.EscapeDataString(Codec.Base64.Encode(email))}";
 
     private BadRequestObjectResult HandleIdentityError(IEnumerable<IdentityError> errors) =>
         BadRequest(new RequestResponse(errors.FirstOrDefault()?.Description ??

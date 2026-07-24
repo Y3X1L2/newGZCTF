@@ -11,6 +11,7 @@ using GZCTF.Models.Request.Edit;
 using GZCTF.Models.Request.Game;
 using GZCTF.Models.Request.Info;
 using GZCTF.Models.Request.Training;
+using GZCTF.Repositories.Interface;
 using GZCTF.Services.Container.Provider;
 using GZCTF.Services.TeamLab;
 using Namotion.Reflection;
@@ -34,6 +35,12 @@ namespace GZCTF.Utils;
 [JsonSerializable(typeof(RequestResponse<RegisterStatus>))]
 [JsonSerializable(typeof(RequestResponse<bool>))]
 [JsonSerializable(typeof(ProfileUserInfoModel))]
+[JsonSerializable(typeof(PublicUserProfileModel))]
+[JsonSerializable(typeof(UserProfileOverviewModel))]
+[JsonSerializable(typeof(UserActivityPointModel[]))]
+[JsonSerializable(typeof(UserProfileHistoryPageModel))]
+[JsonSerializable(typeof(UserPrivateOverviewModel))]
+[JsonSerializable(typeof(AccountSummaryModel))]
 [JsonSerializable(typeof(ConfigEditModel))]
 [JsonSerializable(typeof(ArrayResponse<UserInfoModel>))]
 [JsonSerializable(typeof(ArrayResponse<TeamInfoModel>))]
@@ -148,6 +155,9 @@ namespace GZCTF.Utils;
 [JsonSerializable(typeof(ArrayResponse<PenetrationSubmissionLogModel>))]
 [JsonSerializable(typeof(TeamLabUdpMappingEntry))]
 [JsonSerializable(typeof(TeamLabUdpMappingEntry[]))]
+[JsonSerializable(typeof(PortMappingEntry[]))]
+[JsonSerializable(typeof(PortMapAckRequest))]
+[JsonSerializable(typeof(PortMapAckResponse))]
 [JsonSerializable(typeof(GameEvent[]))]
 [JsonSerializable(typeof(Submission[]))]
 [JsonSerializable(typeof(CheatInfoModel[]))]

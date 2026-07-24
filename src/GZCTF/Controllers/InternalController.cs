@@ -52,7 +52,50 @@ public class InternalController : ControllerBase
         }
 
         var mappings = await _containerRepository.GetProxyPortMappingsAsync(token);
+        Response.Headers["X-GZCTF-Port-Map-Revision"] = PortMappingRevision.Compute(mappings);
         return Ok(mappings);
+    }
+
+    /// <summary>
+    /// Acknowledge that the public gateway applied the current TCP port map.
+    /// </summary>
+    [HttpPost("port-map/ack")]
+    [AllowAnonymous]
+    public async Task<IActionResult> AcknowledgePortMap([FromBody] PortMapAckRequest request, CancellationToken token)
+    {
+        if (!await IsAuthorizedSyncRequest())
+        {
+            _logger.LogWarning("Rejected unauthorized internal port-map acknowledgement from {RemoteIp}",
+                HttpContext.Connection.RemoteIpAddress);
+            return Unauthorized(new RequestResponse("Invalid internal sync token", StatusCodes.Status401Unauthorized));
+        }
+
+        var mappings = await _containerRepository.GetProxyPortMappingsAsync(token);
+        var currentRevision = PortMappingRevision.Compute(mappings);
+        var acknowledgedLeaseIds = (request.LeaseIds ?? []).Distinct().Order().ToArray();
+
+        if (!PortMappingRevision.Matches(request.Revision, acknowledgedLeaseIds, mappings))
+        {
+            _logger.LogInformation(
+                "Ignored stale public gateway acknowledgement {ReceivedRevision}; current revision is {CurrentRevision}",
+                request.Revision, currentRevision);
+            return Conflict(new RequestResponse(
+                "Port map changed before the acknowledgement was applied", StatusCodes.Status409Conflict));
+        }
+
+        var status = request.Succeeded ? ContainerEntryStatus.Ready : ContainerEntryStatus.Error;
+        var publicationError = request.Succeeded ? null : PortMappingRevision.NormalizeError(request.Error);
+        var updated = await _containerRepository.SetEntryPublicationResultAsync(
+            acknowledgedLeaseIds, status, publicationError, token);
+
+        if (request.Succeeded)
+            _logger.LogInformation("Public gateway acknowledged port map {Revision} with {Count} routes",
+                currentRevision, updated);
+        else
+            _logger.LogWarning("Public gateway rejected port map {Revision}: {Error}",
+                currentRevision, publicationError);
+
+        return Ok(new PortMapAckResponse(currentRevision, updated));
     }
 
     /// <summary>

@@ -1,0 +1,20 @@
+[Unit]
+Description=Synchronize GZCTF public TCP routes into Nginx
+After=network-online.target nginx.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/gzctf/gateway-sync.env
+ExecStart=/usr/local/libexec/gzctf/sync-nginx-port-map.sh
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/etc/nginx/stream-conf.d /var/lib/gzctf-gateway /run/lock
+
+[Install]
+WantedBy=multi-user.target

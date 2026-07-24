@@ -18,7 +18,7 @@ namespace GZCTF.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.5")
+                .HasAnnotation("ProductVersion", "10.0.10")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
@@ -162,9 +162,9 @@ namespace GZCTF.Migrations
 
                     b.HasIndex("SubmittedByTeamId");
 
-                    b.HasIndex("SubmittedByUserId");
-
                     b.HasIndex("TeamId");
+
+                    b.HasIndex("SubmittedByUserId", "FirstSubmittedAt");
 
                     b.HasIndex("RoundId", "ServiceId", "TeamId")
                         .IsUnique();
@@ -510,6 +510,16 @@ namespace GZCTF.Migrations
                     b.Property<string>("ContainerId")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("EntryError")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTimeOffset?>("EntryReadyAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte>("EntryStatus")
+                        .HasColumnType("smallint");
 
                     b.Property<DateTimeOffset>("ExpectStopAt")
                         .HasColumnType("timestamp with time zone");
@@ -1723,6 +1733,9 @@ namespace GZCTF.Migrations
                     b.Property<byte>("Status")
                         .HasColumnType("smallint");
 
+                    b.Property<bool>("SupportsInstanceCredentials")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTimeOffset>("UploadedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2030,7 +2043,7 @@ namespace GZCTF.Migrations
 
                     b.HasIndex("TeamId");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId", "SubmittedAt");
 
                     b.HasIndex("GameId", "TeamId", "ObjectiveId");
 
@@ -2243,8 +2256,6 @@ namespace GZCTF.Migrations
 
                     b.HasIndex("ReviewedById");
 
-                    b.HasIndex("UserId");
-
                     b.HasIndex("ParticipationId", "ChallengeId")
                         .HasDatabaseName("IX_Submissions_Participation_Challenge");
 
@@ -2264,6 +2275,10 @@ namespace GZCTF.Migrations
                     b.HasIndex("TeamId", "SubmitTimeUtc", "Id")
                         .IsDescending(false, true, true)
                         .HasDatabaseName("IX_Submissions_Team_Time_Id");
+
+                    b.HasIndex("UserId", "SubmitTimeUtc", "ChallengeId", "Status")
+                        .IsDescending(false, true, false, false)
+                        .HasDatabaseName("IX_Submissions_User_Time_Challenge_Status");
 
                     b.ToTable("Submissions");
                 });
@@ -3545,9 +3560,9 @@ namespace GZCTF.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("RdpPassword")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<string>("RdpPasswordProtected")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
 
                     b.Property<string>("RdpUrl")
                         .HasColumnType("text");

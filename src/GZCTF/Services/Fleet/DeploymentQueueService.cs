@@ -301,6 +301,26 @@ public class DeploymentQueueService
         return DeploymentQueueStatusModel.FromTicket(ticket, position);
     }
 
+    public async Task<DeploymentQueueStatusModel?> GetLatestSubjectStatusAsync(
+        DeploymentQueueRequest request,
+        CancellationToken token)
+    {
+        var subjectKey = DeploymentQueueTicket.BuildSubjectConcurrencyKey(request);
+        var ticket = await _context.DeploymentQueueTickets
+            .Include(t => t.TargetNode)
+            .AsNoTracking()
+            .Where(t => t.SubjectConcurrencyKey == subjectKey)
+            .OrderByDescending(t => t.CreatedAt)
+            .ThenByDescending(t => t.Id)
+            .FirstOrDefaultAsync(token);
+
+        if (ticket is null)
+            return null;
+
+        var position = await GetQueuePositionAsync(ticket, token);
+        return DeploymentQueueStatusModel.FromTicket(ticket, position);
+    }
+
     public async Task CancelAsync(Guid ticketId, string reason, CancellationToken token)
     {
         var ticket = await _context.DeploymentQueueTickets

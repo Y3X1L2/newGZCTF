@@ -59,12 +59,20 @@ public class GuacamoleService
                 return _cachedToken;
             }
 
+            if (string.IsNullOrWhiteSpace(_settings.ApiUsername) ||
+                string.IsNullOrWhiteSpace(_settings.ApiPassword))
+            {
+                _logger.LogError(
+                    "Guacamole authentication is not configured. Set GuacamoleAuthToken or the managed API account.");
+                return null;
+            }
+
             try
             {
                 var content = new FormUrlEncodedContent(new Dictionary<string, string>
                 {
-                    ["username"] = "guacadmin",
-                    ["password"] = "guacadmin"
+                    ["username"] = _settings.ApiUsername,
+                    ["password"] = _settings.ApiPassword
                 });
 
                 var response = await _httpClient.PostAsync(
@@ -100,11 +108,14 @@ public class GuacamoleService
     public async Task<string?> CreateRdpConnectionAsync(
         string connectionName,
         string vmIp,
-        int rdpPort = 3389,
-        string username = "player",
-        string password = "qwer1234!",
+        int rdpPort,
+        string username,
+        string password,
         CancellationToken token = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(username);
+        ArgumentException.ThrowIfNullOrWhiteSpace(password);
+
         var authToken = await GetAuthTokenAsync(token);
         if (authToken is null) return null;
 
@@ -145,8 +156,7 @@ public class GuacamoleService
                     }
                 }
 
-                _logger.LogError("Failed to create Guacamole connection: {Status} {Body}",
-                    response.StatusCode, errBody);
+                _logger.LogError("Failed to create Guacamole connection: {Status}", response.StatusCode);
                 return null;
             }
 

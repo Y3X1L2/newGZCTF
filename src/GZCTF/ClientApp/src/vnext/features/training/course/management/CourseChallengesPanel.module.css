@@ -1,0 +1,79 @@
+.panel {
+  display: grid;
+  min-width: 0;
+  gap: var(--yn-space-5);
+}
+
+.challengeList {
+  display: grid;
+  border-top: 1px solid var(--yn-color-border);
+}
+
+.challengeList article {
+  display: grid;
+  min-width: 0;
+  min-height: 78px;
+  grid-template-columns: 40px minmax(0, 1fr) auto minmax(110px, auto) auto;
+  align-items: center;
+  gap: var(--yn-space-4);
+  border-bottom: 1px solid var(--yn-color-border);
+}
+
+.challengeIcon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  color: var(--yn-color-brand-strong);
+}
+
+.challengeList article > div:nth-child(2) {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.challengeList small,
+.chapterLabel {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.rowActions {
+  display: flex;
+  gap: 5px;
+}
+
+.rowActions a,
+.rowActions button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: transparent;
+  color: var(--yn-color-muted);
+  cursor: pointer;
+}
+
+.rowActions a:hover,
+.rowActions button:hover {
+  border-color: var(--yn-color-brand);
+  background: var(--yn-color-brand-soft);
+  color: var(--yn-color-brand-strong);
+}
+
+@media (max-width: 760px) {
+  .challengeList article {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    padding: var(--yn-space-3) 0;
+  }
+
+  .challengeList article > :nth-child(3),
+  .chapterLabel {
+    display: none;
+  }
+}

@@ -1039,6 +1039,8 @@ public class TrainingCourseImageTemplateModel
 
     public DateTimeOffset UploadedAt { get; set; }
 
+    public bool SupportsInstanceCredentials { get; set; }
+
     public static TrainingCourseImageTemplateModel FromTemplate(ImageTemplate template) =>
         new()
         {
@@ -1052,7 +1054,8 @@ public class TrainingCourseImageTemplateModel
             ErrorMessage = template.ErrorMessage,
             ImageHash = template.ImageHash,
             RegistryUrl = template.RegistryUrl,
-            UploadedAt = template.UploadedAt
+            UploadedAt = template.UploadedAt,
+            SupportsInstanceCredentials = template.SupportsInstanceCredentials
         };
 }
 
@@ -1329,13 +1332,10 @@ public class TrainingCourseChallengeDetailModel
                     })
                     .ToList()
                 : null,
-            Context = new ClientFlagContext
-            {
-                InstanceEntry = instance.Container?.Entry,
-                CloseTime = instance.Container?.ExpectStopAt,
-                Url = instance.AttachmentUrl,
-                FileSize = instance.Attachment?.FileSize
-            }
+            Context = ClientFlagContext.FromInstance(
+                instance.Container,
+                instance.AttachmentUrl,
+                instance.Attachment?.FileSize)
         };
     }
 }

@@ -308,11 +308,7 @@ public class ImageDistributionService(
         CancellationToken token)
     {
         var resolved = await dockerRegistry.ResolveImageReferenceAsync(image, token);
-        var template = await context.ImageTemplates.AsNoTracking()
-            .Where(item => item.ImageType == ImageType.Docker && item.Status == ImageStatus.Ready &&
-                           (item.RegistryUrl == resolved || item.RegistryUrl == image || item.Name == image))
-            .OrderBy(item => item.Id)
-            .FirstOrDefaultAsync(token)
+        var template = await FindReadyDockerTemplateAsync(image, resolved, token)
             ?? throw new InvalidOperationException(
                 $"Docker image {resolved} is not registered as a ready platform image template.");
         var node = await context.WorkerNodes.AsNoTracking()
@@ -331,17 +327,38 @@ public class ImageDistributionService(
     async Task DistributeDockerImageAsync(string image, ImageDistributionReferenceKey reference, CancellationToken token)
     {
         var resolved = await dockerRegistry.ResolveImageReferenceAsync(image, token);
-        var template = await context.ImageTemplates.AsNoTracking()
-            .Where(item => item.ImageType == ImageType.Docker &&
-                           item.Status == ImageStatus.Ready &&
-                           item.RegistryUrl == resolved)
-            .OrderBy(item => item.Id)
-            .FirstOrDefaultAsync(token);
+        var template = await FindReadyDockerTemplateAsync(image, resolved, token);
         if (template is null)
             throw new InvalidOperationException(
                 $"Docker image {resolved} is not registered as a ready platform image template.");
 
         await DistributeTemplateAsync(template.Id, reference, token);
+    }
+
+    async Task<ImageTemplate?> FindReadyDockerTemplateAsync(
+        string image,
+        string resolved,
+        CancellationToken token)
+    {
+        HashSet<string> references =
+        [
+            DockerImageRegistryService.NormalizeRegistryAddress(image),
+            DockerImageRegistryService.NormalizeRegistryAddress(resolved)
+        ];
+
+        foreach (var reference in references.ToArray())
+        {
+            if (await dockerRegistry.IsManagedImageReferenceAsync(reference, token))
+                references.Add(dockerRegistry.ToInternalImageReference(reference));
+        }
+
+        var normalizedReferences = references.ToArray();
+        return await context.ImageTemplates.AsNoTracking()
+            .Where(item => item.ImageType == ImageType.Docker &&
+                           item.Status == ImageStatus.Ready &&
+                           (normalizedReferences.Contains(item.RegistryUrl!) || item.Name == image))
+            .OrderBy(item => item.Id)
+            .FirstOrDefaultAsync(token);
     }
 
     async Task<ImageDistributionRecord> QueueTemplateOnNodeAsync(ImageTemplate template, WorkerNode node,

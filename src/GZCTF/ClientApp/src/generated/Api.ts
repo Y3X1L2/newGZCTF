@@ -200,6 +200,13 @@ export enum SubmissionType {
   Normal = "Normal",
 }
 
+/** Player-facing container entry publication status. */
+export enum ContainerEntryStatus {
+  Pending = "Pending",
+  Ready = "Ready",
+  Error = "Error",
+}
+
 /** Container status */
 export enum ContainerStatus {
   Pending = "Pending",
@@ -2581,7 +2588,16 @@ export interface ContainerInfoModel {
    */
   expectStopAt?: number;
   /** Challenge entry point */
-  entry?: string;
+  entry?: string | null;
+  /** Publication status of the challenge entry point. */
+  entryStatus?: ContainerEntryStatus;
+  /**
+   * Time when the challenge entry point became available.
+   * @format uint64
+   */
+  entryReadyAt?: number | null;
+  /** Player-safe route publication failure. */
+  entryError?: string | null;
 }
 
 export interface FlagInfoModel {
@@ -4081,6 +4097,11 @@ export interface ImageTemplate {
   /** Whether this image is classified as containing known malware */
   containsMalware?: boolean;
   /**
+   * The image has been verified to consume instance-specific credentials through Cloudbase-Init.
+   * Required for Windows player VM deployment.
+   */
+  supportsInstanceCredentials?: boolean;
+  /**
    * SHA256 hash of the image file
    * @maxLength 64
    */
@@ -4305,6 +4326,15 @@ export interface ClientFlagContext {
   closeTime?: number | null;
   /** Connection method of the challenge instance */
   instanceEntry?: string | null;
+  /** Publication status of the challenge instance entry. */
+  instanceEntryStatus?: ContainerEntryStatus | null;
+  /**
+   * Time when the current instance entry became available.
+   * @format uint64
+   */
+  instanceEntryReadyAt?: number | null;
+  /** Player-safe route publication failure. */
+  instanceEntryError?: string | null;
   /** Attachment URL */
   url?: string | null;
   /**
@@ -5407,6 +5437,7 @@ export interface TrainingCourseImageTemplateModel {
   registryUrl?: string | null;
   /** @format uint64 */
   uploadedAt?: number;
+  supportsInstanceCredentials?: boolean;
 }
 
 export interface TrainingCourseDockerRegisterModel {

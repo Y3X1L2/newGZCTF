@@ -21,6 +21,7 @@ const assets = walk(buildDir)
     name: relative(buildDir, path).replaceAll('\\', '/'),
     raw: statSync(path).size,
     gzip: gzipSync(readFileSync(path)).byteLength,
+    content: readFileSync(path, 'utf8'),
   }))
   .sort((left, right) => right.gzip - left.gzip)
 
@@ -28,6 +29,9 @@ const failures = []
 for (const asset of assets) {
   if (asset.name.endsWith('.js') && asset.gzip > hardJsGzipBudget) failures.push(`${asset.name}: JS gzip ${asset.gzip}`)
   if (asset.name.endsWith('.css') && asset.gzip > hardCssGzipBudget) failures.push(`${asset.name}: CSS gzip ${asset.gzip}`)
+  if (/@mantine\/|MantineProvider|--mantine-scale/.test(asset.content)) {
+    failures.push(`${asset.name}: vNext production artifact contains Mantine runtime or transformed units`)
+  }
 }
 
 console.log('[bundle] largest assets:')

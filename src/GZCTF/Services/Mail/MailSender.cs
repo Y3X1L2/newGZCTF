@@ -18,6 +18,7 @@ public sealed class MailSender : IMailSender, IDisposable
     private readonly ConcurrentQueue<MailContent> _mailQueue = new();
     private readonly EmailConfig? _options;
     private readonly AsyncManualResetEvent _resetEvent = new();
+    private readonly SmtpConnectionOptions? _smtpConnection;
     private readonly SmtpClient? _smtpClient;
     private bool _disposed;
 
@@ -30,9 +31,17 @@ public sealed class MailSender : IMailSender, IDisposable
         _options = options.Value;
         _cancellationToken = _cancellationTokenSource.Token;
 
-        if (string.IsNullOrWhiteSpace(_options.SenderAddress) ||
-            string.IsNullOrWhiteSpace(_options.Smtp?.Host) || _options.Smtp.Port is not > 0)
+        var smtp = _options.Smtp;
+        if (string.IsNullOrWhiteSpace(_options.SenderAddress) || smtp is null ||
+            string.IsNullOrWhiteSpace(smtp.Host) || smtp.Port is not > 0)
             return;
+
+        _smtpConnection = new(
+            smtp.Host,
+            smtp.Port.Value,
+            _options.UserName ?? string.Empty,
+            _options.Password ?? string.Empty,
+            smtp.BypassCertVerify);
 
         _smtpClient = new();
         _smtpClient.AuthenticationMechanisms.Remove("XOAUTH2");
@@ -50,7 +59,7 @@ public sealed class MailSender : IMailSender, IDisposable
                 }));
 
         _smtpClient.ServerCertificateValidationCallback = (_, _, _, errors)
-            => errors is SslPolicyErrors.None || options.Value.Smtp?.BypassCertVerify is true;
+            => errors is SslPolicyErrors.None || _smtpConnection.BypassCertVerify;
 
         if (!TestSmtpClient())
         {
@@ -63,7 +72,7 @@ public sealed class MailSender : IMailSender, IDisposable
         }
 
         _logger.SystemLog(StaticLocalizer[nameof(Resources.Program.MailSender_ConnectedToSmtp),
-            $"{_options.Smtp.Host}:{_options.Smtp.Port}"], TaskStatus.Success, LogLevel.Debug);
+            $"{_smtpConnection.Host}:{_smtpConnection.Port}"], TaskStatus.Success, LogLevel.Debug);
 
         Task.Factory.StartNew(MailSenderWorker, _cancellationToken, TaskCreationOptions.LongRunning,
             TaskScheduler.Default);
@@ -150,7 +159,8 @@ public sealed class MailSender : IMailSender, IDisposable
 
     private async Task MailSenderWorker()
     {
-        if (_smtpClient is null)
+        var smtpConnection = _smtpConnection;
+        if (_smtpClient is null || smtpConnection is null)
             return;
 
         while (!_cancellationToken.IsCancellationRequested)
@@ -161,11 +171,11 @@ public sealed class MailSender : IMailSender, IDisposable
             try
             {
                 if (!_smtpClient.IsConnected)
-                    await _smtpClient.ConnectAsync(_options!.Smtp!.Host, _options.Smtp.Port!.Value,
+                    await _smtpClient.ConnectAsync(smtpConnection.Host, smtpConnection.Port,
                         cancellationToken: _cancellationToken);
 
                 if (!_smtpClient.IsAuthenticated)
-                    await _smtpClient.AuthenticateAsync(_options!.UserName, _options.Password,
+                    await _smtpClient.AuthenticateAsync(smtpConnection.UserName, smtpConnection.Password,
                         _cancellationToken);
 
                 while (_mailQueue.TryDequeue(out var content))
@@ -208,13 +218,14 @@ public sealed class MailSender : IMailSender, IDisposable
 
     private bool TestSmtpClient(CancellationToken token = default)
     {
-        if (_smtpClient is null)
+        var smtpConnection = _smtpConnection;
+        if (_smtpClient is null || smtpConnection is null)
             return false;
 
         try
         {
-            _smtpClient.Connect(_options!.Smtp!.Host, _options.Smtp.Port!.Value, cancellationToken: token);
-            _smtpClient.Authenticate(_options.UserName, _options.Password, token);
+            _smtpClient.Connect(smtpConnection.Host, smtpConnection.Port, cancellationToken: token);
+            _smtpClient.Authenticate(smtpConnection.UserName, smtpConnection.Password, token);
             _smtpClient.Disconnect(true, token);
             return true;
         }
@@ -230,6 +241,13 @@ public sealed class MailSender : IMailSender, IDisposable
     {
         Dispose();
     }
+
+    private sealed record SmtpConnectionOptions(
+        string Host,
+        int Port,
+        string UserName,
+        string Password,
+        bool BypassCertVerify);
 }
 
 /// <summary>

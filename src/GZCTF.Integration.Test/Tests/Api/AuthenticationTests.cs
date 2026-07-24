@@ -2,6 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 using GZCTF.Integration.Test.Base;
 using GZCTF.Models.Request.Account;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -41,6 +44,65 @@ public class AuthenticationTests(GZCTFApplicationFactory factory, ITestOutputHel
         Assert.Equal(seeded.UserName, profile.UserName);
         Assert.Equal(seeded.Email, profile.Email);
     }
+
+    [Fact]
+    public async Task Account_Capabilities_ReturnPublicAuthenticationOptions()
+    {
+        using var host = RecoveryEnabledHost();
+        using var client = host.CreateClient();
+        var response = await client.GetAsync("/api/Account/Capabilities");
+
+        response.EnsureSuccessStatusCode();
+        var capabilities = await response.Content.ReadFromJsonAsync<AccountCapabilitiesModel>();
+
+        Assert.NotNull(capabilities);
+        Assert.True(capabilities.AllowPasswordLogin);
+        Assert.True(capabilities.AllowRegister);
+        Assert.True(capabilities.PasswordRecoveryAvailable);
+        Assert.True(capabilities.EmailConfirmationRequired);
+        Assert.False(capabilities.PortalSso.Enabled);
+        Assert.Null(capabilities.PortalSso.EntryUrl);
+    }
+
+    [Theory]
+    [InlineData("https://evil.example")]
+    [InlineData("//evil.example")]
+    [InlineData("/\\evil")]
+    [InlineData("/training\\evil")]
+    public async Task PortalSso_InvalidReturnUrl_ReturnsBadRequest(string returnUrl)
+    {
+        var encodedReturnUrl = Uri.EscapeDataString(returnUrl);
+        var response = await _client.GetAsync(
+            $"/api/account/portal-sso?portal_token=invalid&returnUrl={encodedReturnUrl}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Recovery_DoesNotRevealWhetherAccountExists()
+    {
+        using var host = RecoveryEnabledHost();
+        using var client = host.CreateClient();
+        var first = await client.PostAsJsonAsync("/api/Account/Recovery", new RecoveryModel
+        {
+            Email = $"missing_{Guid.NewGuid():N}@example.com"
+        });
+        var second = await client.PostAsJsonAsync("/api/Account/Recovery", new RecoveryModel
+        {
+            Email = $"also_missing_{Guid.NewGuid():N}@example.com"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(first.StatusCode, second.StatusCode);
+        Assert.Equal(await first.Content.ReadAsStringAsync(), await second.Content.ReadAsStringAsync());
+    }
+
+    private WebApplicationFactory<Program> RecoveryEnabledHost() =>
+        factory.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, configuration) =>
+            configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AccountPolicy:EmailConfirmationRequired"] = "true"
+            })));
 
     [Fact]
     public async Task Register_WithValidData_ReturnsSuccess()

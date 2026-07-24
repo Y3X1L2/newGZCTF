@@ -10,6 +10,7 @@ using GZCTF.Modules.Theory.Application;
 using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.Runtime.Infrastructure;
 using GZCTF.Infrastructure.Cache;
+using GZCTF.Services;
 using Microsoft.Extensions.Options;
 
 namespace GZCTF.Composition;
@@ -42,6 +43,7 @@ public static class ModuleRegistration
         services.AddPenetrationModule();
         services.AddTheoryModule();
         services.AddScoped<TheoryStatisticsProjectionService>();
+        services.AddScoped<UserProfileQueryService>();
         services.AddSingleton<RedisDeploymentQueueWakeup>();
         services.AddSingleton<RedisRuntimeSignalWakeup>();
         services.AddSingleton<PollingDeploymentQueueWakeup>();

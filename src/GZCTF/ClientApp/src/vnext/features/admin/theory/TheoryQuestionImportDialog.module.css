@@ -1,0 +1,77 @@
+.form {
+  display: grid;
+  min-width: 0;
+  gap: var(--yn-space-4);
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yn-space-4);
+}
+
+.preview {
+  display: grid;
+  max-height: 360px;
+  gap: 0;
+  overflow-y: auto;
+  border-top: 1px solid var(--yn-color-border);
+}
+
+.preview header,
+.preview > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.28fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--yn-space-3);
+  min-height: 46px;
+  border-bottom: 1px solid var(--yn-color-border);
+}
+
+.preview header {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.preview p,
+.preview small {
+  margin: var(--yn-space-3) 0;
+  color: var(--yn-color-muted);
+}
+
+.preview > div strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview > div span,
+.preview > div em {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+  font-style: normal;
+}
+
+.preview > div[data-tone='danger'] strong,
+.preview > div em[data-action='update'] {
+  color: var(--yn-color-warning);
+}
+
+.preview > div em[data-action='create'] {
+  color: var(--yn-color-brand);
+}
+
+@media (max-width: 680px) {
+  .fieldGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .preview header,
+  .preview > div {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .preview > div strong {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}

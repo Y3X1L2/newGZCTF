@@ -423,6 +423,9 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
         container.PublicIP = PublicEntry;
         container.PublicPort = proxyPort.Port;
         container.PublicPortLeaseId = proxyPort.LeaseId;
+        container.EntryStatus = ContainerEntryStatus.Pending;
+        container.EntryReadyAt = null;
+        container.EntryError = null;
         return true;
     }
 

@@ -177,6 +177,28 @@ public sealed class RuntimeControlPlaneTests
     }
 
     [Fact]
+    public async Task Scheduler_AssignsWindowsVmOnlyToRemoteCloudInitNode()
+    {
+        await using var context = CreateContext();
+        SeedVmNode(context, "local", isLocal: true,
+            [AgentFeatureIds.Kvm, AgentFeatureIds.CloudInit]);
+        SeedVmNode(context, "remote-kvm-only", isLocal: false,
+            [AgentFeatureIds.Kvm]);
+        var eligible = SeedVmNode(context, "remote-cloud-init", isLocal: false,
+            [AgentFeatureIds.Kvm, AgentFeatureIds.CloudInit]);
+        context.DeploymentQueueTickets.Add(DeploymentQueueTicket.Create(
+            DeploymentQueueRequest.Vm(1, Guid.NewGuid(), 2, Guid.NewGuid())));
+        await context.SaveChangesAsync();
+
+        var scheduled = await CreateScheduler(context).SchedulePendingAsync(CancellationToken.None);
+
+        Assert.Equal(1, scheduled);
+        var ticket = await context.DeploymentQueueTickets.SingleAsync();
+        Assert.Equal(eligible.Id, ticket.TargetNodeId);
+        Assert.Equal(eligible.Id, (await context.FleetCapacityReservations.SingleAsync()).WorkerNodeId);
+    }
+
+    [Fact]
     public async Task ConcurrentSchedulers_DoNotOversellNode()
     {
         var databaseName = Guid.NewGuid().ToString();
@@ -871,6 +893,41 @@ public sealed class RuntimeControlPlaneTests
         resources ?? new TeamLabAssetResourceModel(10, 256, 512),
         [new TeamLabTopologyInterfaceModel("eth0", networkKey, 10, true)],
         false);
+
+    static WorkerNode SeedVmNode(
+        AppDbContext context,
+        string name,
+        bool isLocal,
+        string[] features)
+    {
+        var manifest = AgentCapabilityEvaluator.Normalize(new AgentCapabilityManifest(
+            "1.8.3-test",
+            null,
+            AgentCapabilityEvaluator.SupportedManifestSchema,
+            features,
+            new AgentExecutionLimits(0, 2, 0, 2, 2, 2),
+            new AgentHostFacts(8, 16L * 1024 * 1024 * 1024, 0, true, true),
+            DateTimeOffset.UtcNow));
+        var node = new WorkerNode
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            HostAddress = "10.24.0.30",
+            AuthToken = "token",
+            IsLocal = isLocal,
+            IsSchedulable = true,
+            Status = NodeStatus.Online,
+            LastHeartbeat = DateTimeOffset.UtcNow,
+            Capabilities = NodeCapability.Kvm,
+            MaxVms = 2,
+            CapabilityManifestJson = manifest.Json,
+            CapabilityManifestSchemaVersion = AgentCapabilityEvaluator.SupportedManifestSchema,
+            CapabilityHash = manifest.Hash
+        };
+        context.WorkerNodes.Add(node);
+        context.SaveChanges();
+        return node;
+    }
 
     static AppDbContext CreateContext(string? databaseName = null) => new(
         new DbContextOptionsBuilder<AppDbContext>()

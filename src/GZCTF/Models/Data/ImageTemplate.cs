@@ -116,6 +116,12 @@ public class ImageTemplate
     public bool ContainsMalware { get; set; }
 
     /// <summary>
+    /// The image has been verified to consume instance-specific credentials through Cloudbase-Init.
+    /// Required for Windows player VM deployment.
+    /// </summary>
+    public bool SupportsInstanceCredentials { get; set; }
+
+    /// <summary>
     /// SHA256 hash of the image file
     /// </summary>
     [MaxLength(64)]

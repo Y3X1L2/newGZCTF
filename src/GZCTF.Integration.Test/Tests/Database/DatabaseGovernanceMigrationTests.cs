@@ -5,8 +5,6 @@ using GZCTF.Models.Data;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Runtime.Domain;
 using GZCTF.Modules.TeamLab.Domain;
-using GZCTF.Modules.TeamLab.Infrastructure;
-using GZCTF.Storage;
 using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -47,18 +45,17 @@ public sealed class DatabaseGovernanceMigrationTests : IAsyncLifetime
             Assert.Contains("duplicate Participation", rejected.MessageText);
             await context.Database.ExecuteSqlRawAsync(
                 "DELETE FROM \"Participations\" WHERE \"Id\" = 930002");
-            var lateQuestion = new TheoryQuestionBankItem
-            {
-                Type = TheoryQuestionType.SingleChoice,
-                BankName = " Contract Window ",
-                Title = "Late migration question",
-                Options = ["A", "B"],
-                AnswerIndexes = [1]
-            };
-            context.TheoryQuestionBankItems.Add(lateQuestion);
-            await context.SaveChangesAsync();
+            const int lateQuestionId = 940005;
+            await context.Database.ExecuteSqlInterpolatedAsync($$"""
+                INSERT INTO "TheoryQuestionBankItems"
+                    ("Id", "Type", "BankName", "Title", "Content", "Options", "AnswerIndexes",
+                     "CreatedAt", "UpdatedAt")
+                VALUES
+                    ({{lateQuestionId}}, 'SingleChoice', ' Contract Window ', 'Late migration question', '',
+                     '["A","B"]', '[1]', now(), now());
+                """);
             await migrator.MigrateAsync();
-            seed = seed with { LateQuestionId = lateQuestion.Id };
+            seed = seed with { LateQuestionId = lateQuestionId };
         }
 
         await AssertMigrationContractAsync(seed);
@@ -79,14 +76,16 @@ public sealed class DatabaseGovernanceMigrationTests : IAsyncLifetime
             AuthToken = "phase4-test-token",
             Capabilities = NodeCapability.Docker | NodeCapability.Kvm
         };
-        const int templateId = 940002;
+        const int templateId = 940001;
+        const int topologyId = 940002;
         const int questionId = 940003;
-        var templateHash = new string('a', 64);
-        const int topologyId = 940001;
-        const int runtimeId = 940001;
-        var topologyPublicId = Guid.Parse("44444444-4444-4444-8444-444444444401");
-        var releaseId = Guid.Parse("44444444-4444-4444-8444-444444444402");
-        var runtimePublicId = Guid.Parse("44444444-4444-4444-8444-444444444403");
+        const int runtimeId = 940004;
+        var releaseId = Guid.Parse("55555555-5555-4555-8555-555555555555");
+        var topologyPublicId = Guid.Parse("66666666-6666-4666-8666-666666666666");
+        var runtimePublicId = Guid.Parse("77777777-7777-4777-8777-777777777777");
+        var imageHash = new string('a', 64);
+        var releaseHash = new string('b', 64);
+        var requestHash = new string('c', 64);
         await context.Database.ExecuteSqlInterpolatedAsync($$"""
             INSERT INTO "WorkerNodes"
                 ("Id", "AgentPort", "AuthToken", "Capabilities", "CpuLoad", "CurrentContainers",
@@ -98,15 +97,26 @@ public sealed class DatabaseGovernanceMigrationTests : IAsyncLifetime
             VALUES
                 ({{node.Id}}, 5001, {{node.AuthToken}}, {{(byte)node.Capabilities}}, 0, 0,
                  0, {{node.HostAddress}}, false, true, false, 20, 5, 0, {{node.Name}}, CURRENT_TIMESTAMP,
-                 5000, 0, 0, 0, '{}', 0, false, 0, 0, 0, 28231, 0);
-
+                 5000, 0, 0, 0, '{}', 0, false, 0, 0, 0, 28231, 0)
+            """);
+        await context.Database.ExecuteSqlInterpolatedAsync($$"""
             INSERT INTO "ImageTemplates"
-                ("Id", "Name", "ContainsMalware", "FileSize", "ImageHash", "ImageType",
-                 "OSType", "Status", "UploadedAt")
+                ("Id", "Name", "OSType", "ImageType", "FileSize", "UploadedAt", "Status",
+                 "ContainsMalware", "ImageHash")
             VALUES
-                ({{templateId}}, 'phase4-template', false, 0, {{templateHash}},
-                 {{(byte)ImageType.Docker}}, {{(byte)OSType.Linux}},
-                 {{(byte)ImageStatus.Ready}}, now());
+                ({{templateId}}, 'phase4-template', 0, 0, 0, now(), 0, false, {{imageHash}});
+
+            INSERT INTO "TeamLabTopologies"
+                ("Id", "PublicId", "Name", "Revision", "SchemaVersion", "EditorMetadataJson",
+                 "CreatedAt", "UpdatedAt")
+            VALUES
+                ({{topologyId}}, {{topologyPublicId}}, 'phase4-topology', 0, 1, '{}'::jsonb, now(), now());
+
+            INSERT INTO "TeamLabTopologyReleases"
+                ("Id", "TopologyId", "Version", "SourceRevision", "SchemaVersion", "CanonicalJson",
+                 "ContentHash", "PublishedAt")
+            VALUES
+                ({{releaseId}}, {{topologyId}}, 1, 1, 1, '{}'::jsonb, {{releaseHash}}, now());
 
             INSERT INTO "TheoryQuestionBankItems"
                 ("Id", "Type", "BankName", "Title", "Content", "Options", "AnswerIndexes",
@@ -114,30 +124,12 @@ public sealed class DatabaseGovernanceMigrationTests : IAsyncLifetime
             VALUES
                 ({{questionId}}, 'SingleChoice', ' Network   Fundamentals ', 'CIDR', '',
                  '["A","B"]', '[0]', now(), now());
-            """);
-
-        await context.Database.ExecuteSqlInterpolatedAsync($$"""
-            INSERT INTO "TeamLabTopologies"
-                ("Id", "PublicId", "OwnerUserId", "Name", "Revision", "SchemaVersion",
-                 "EditorMetadataJson", "CreatedAt", "UpdatedAt")
-            VALUES
-                ({{topologyId}}, {{topologyPublicId}}, NULL, 'phase4-topology', 1, 1,
-                 '{}'::jsonb, now(), now());
-
-            INSERT INTO "TeamLabTopologyReleases"
-                ("Id", "TopologyId", "Version", "SourceRevision", "SchemaVersion",
-                 "CanonicalJson", "ContentHash", "PublishedById", "PublishedAt")
-            VALUES
-                ({{releaseId}}, {{topologyId}}, 1, 1, 1, '{}'::jsonb,
-                 {{new string('b', 64)}}, NULL, now());
-
             INSERT INTO "TeamLabRuntimes"
-                ("Id", "PublicId", "TopologyReleaseId", "CreatedById", "Generation",
-                 "ExternalReference", "CreateRequestHash", "EntryShardId", "Status",
-                 "IsOpenToPlayers", "LastError", "CreatedAt", "UpdatedAt")
+                ("Id", "CreateRequestHash", "CreatedAt", "Generation", "IsOpenToPlayers", "PublicId",
+                 "Status", "TopologyReleaseId")
             VALUES
-                ({{runtimeId}}, {{runtimePublicId}}, {{releaseId}}, NULL, 1, NULL,
-                 {{new string('c', 64)}}, NULL, 10, false, NULL, now(), now());
+                ({{runtimeId}}, {{requestHash}}, now(), 1, false, {{runtimePublicId}},
+                 {{(byte)TeamLabRuntimeStatus.Destroyed}}, {{releaseId}});
             """);
 
         var distributionId = Guid.Parse("44444444-4444-4444-8444-444444444444");
@@ -146,7 +138,7 @@ public sealed class DatabaseGovernanceMigrationTests : IAsyncLifetime
             INSERT INTO "ImageDistributionRecords"
                 ("Id", "ImageTemplateId", "WorkerNodeId", "ImageHash", "ImageType", "Status",
                  "ReferenceCount", "References", "CreatedAt")
-            VALUES ({{distributionId}}, {{templateId}}, {{node.Id}}, {{templateHash}}, 0, 2,
+            VALUES ({{distributionId}}, {{templateId}}, {{node.Id}}, {{imageHash}}, 0, 2,
                     2, {{references}}, '2026-01-01T00:00:00Z');
 
             INSERT INTO "Logs" ("Id", "TimeUtc", "Level", "Logger", "Message") VALUES

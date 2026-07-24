@@ -20,6 +20,7 @@ public static class ContainerHelper
     private const string Namespace = "gzctf-test";
     private const int MaxAttempts = 30;
     private const int DelayMs = 2000;
+    private const int LocalTestNodeCapacity = 10_000;
 
     public static async Task SetLocalNodeSchedulingAsync(
         IServiceProvider serviceProvider,
@@ -27,11 +28,17 @@ public static class ContainerHelper
     {
         using var scope = serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        await context.WorkerNodes
-            .Where(node => node.IsLocal)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(node => node.IsSchedulable, isSchedulable)
-                .SetProperty(node => node.MaxContainers, isSchedulable ? 10_000 : 20));
+        var localNodes = context.WorkerNodes.Where(node => node.IsLocal);
+        if (isSchedulable)
+        {
+            await localNodes.ExecuteUpdateAsync(setters => setters
+                .SetProperty(node => node.IsSchedulable, true)
+                .SetProperty(node => node.MaxContainers, LocalTestNodeCapacity));
+            return;
+        }
+
+        await localNodes.ExecuteUpdateAsync(setters => setters
+            .SetProperty(node => node.IsSchedulable, false));
     }
 
     public static async Task<IAsyncDisposable> EnableLocalNodeSchedulingAsync(

@@ -163,6 +163,28 @@ public enum ContainerStatus : byte
 }
 
 /// <summary>
+/// Player-facing container entry publication status.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<ContainerEntryStatus>))]
+public enum ContainerEntryStatus : byte
+{
+    /// <summary>
+    /// The runtime exists, but its public route has not been confirmed yet.
+    /// </summary>
+    Pending = 0,
+
+    /// <summary>
+    /// The route was applied by the configured gateway.
+    /// </summary>
+    Ready = 1,
+
+    /// <summary>
+    /// The gateway reported a route publication failure.
+    /// </summary>
+    Error = 2
+}
+
+/// <summary>
 /// Game announcement type
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<NoticeType>))]

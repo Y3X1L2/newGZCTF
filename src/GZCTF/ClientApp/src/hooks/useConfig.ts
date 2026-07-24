@@ -1,8 +1,13 @@
-import { useLocalStorage } from '@mantine/hooks'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { SWRConfiguration } from 'swr'
-import { PLATFORM_BRAND, PLATFORM_TITLE, joinPlatformSlogans } from '@Utils/Brand'
-import api, { ClientConfig, ContainerPortMappingType } from '@Api'
+import { PLATFORM_BRAND, joinPlatformSlogans } from '@Utils/Brand'
+import api from '@Api'
+import {
+  clientConfigStorageKey,
+  parseStoredClientConfig,
+  readStoredClientConfig,
+  storeClientConfig,
+} from './clientConfigStorage'
 
 export const OnceSWRConfig: SWRConfiguration = {
   refreshInterval: 0,
@@ -23,25 +28,24 @@ export const useConfig = () => {
     refreshWhenOffline: false,
   })
 
-  const [clientConfig, setClientConfig] = useLocalStorage<ClientConfig>({
-    key: 'client-config',
-    defaultValue: {
-      title: PLATFORM_TITLE,
-      slogan: joinPlatformSlogans([]),
-      portMapping: ContainerPortMappingType.Default,
-      footerInfo: null,
-      customTheme: null,
-      defaultLifetime: 120,
-      extensionDuration: 120,
-      renewalWindow: 10,
-    },
-  })
+  const [clientConfig, setClientConfig] = useState(readStoredClientConfig)
 
   useEffect(() => {
-    if (config) {
-      setClientConfig(config)
-    }
+    if (!config) return
+
+    setClientConfig(config)
+    storeClientConfig(config)
   }, [config])
+
+  useEffect(() => {
+    const syncStoredConfig = (event: StorageEvent) => {
+      if (event.key !== clientConfigStorageKey || !event.newValue) return
+      setClientConfig(parseStoredClientConfig(event.newValue))
+    }
+
+    window.addEventListener('storage', syncStoredConfig)
+    return () => window.removeEventListener('storage', syncStoredConfig)
+  }, [])
 
   return { config: config ?? clientConfig, error, mutate }
 }

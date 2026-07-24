@@ -1,0 +1,12 @@
+[Unit]
+Description=Poll the GZCTF port-map contract
+
+[Timer]
+OnBootSec=5s
+OnUnitActiveSec=3s
+AccuracySec=1s
+Unit=gzctf-port-map-sync.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target

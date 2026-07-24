@@ -1,4 +1,6 @@
 using GZCTF.Models.Request.Admin;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace GZCTF.Repositories.Interface;
 
@@ -6,6 +8,49 @@ namespace GZCTF.Repositories.Interface;
 /// 端口映射信息（用于 Nginx 代理同步）
 /// </summary>
 public record PortMappingEntry(int PublicPort, string IP, int Port, Guid LeaseId);
+
+public sealed class PortMapAckRequest
+{
+    public string Revision { get; set; } = string.Empty;
+    public bool Succeeded { get; set; }
+    public Guid[] LeaseIds { get; set; } = [];
+    public string? Error { get; set; }
+}
+
+public sealed record PortMapAckResponse(string Revision, int UpdatedEntries);
+
+public static class PortMappingRevision
+{
+    public static string Compute(IEnumerable<PortMappingEntry> mappings)
+    {
+        var canonical = string.Join('\n', mappings
+            .OrderBy(mapping => mapping.PublicPort)
+            .ThenBy(mapping => mapping.LeaseId)
+            .Select(mapping =>
+                $"{mapping.PublicPort}|{mapping.IP}|{mapping.Port}|{mapping.LeaseId:N}"));
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
+    }
+
+    public static bool Matches(
+        string? revision,
+        IEnumerable<Guid> acknowledgedLeaseIds,
+        IReadOnlyCollection<PortMappingEntry> currentMappings)
+    {
+        if (!string.Equals(revision, Compute(currentMappings), StringComparison.Ordinal))
+            return false;
+
+        var current = currentMappings.Select(mapping => mapping.LeaseId).Order().ToArray();
+        var acknowledged = acknowledgedLeaseIds.Distinct().Order().ToArray();
+        return current.SequenceEqual(acknowledged);
+    }
+
+    public static string NormalizeError(string? error)
+    {
+        const string fallback = "Public gateway failed to publish the instance route.";
+        var normalized = string.IsNullOrWhiteSpace(error) ? fallback : error.Trim();
+        return normalized[..Math.Min(normalized.Length, 512)];
+    }
+}
 
 public interface IContainerRepository : IRepository
 {
@@ -53,6 +98,15 @@ public interface IContainerRepository : IRepository
     /// <param name="token"></param>
     /// <returns></returns>
     public Task<PortMappingEntry[]> GetProxyPortMappingsAsync(CancellationToken token = default);
+
+    /// <summary>
+    /// Apply a gateway publication result to the current public port leases.
+    /// </summary>
+    public Task<int> SetEntryPublicationResultAsync(
+        IReadOnlyCollection<Guid> leaseIds,
+        ContainerEntryStatus status,
+        string? error,
+        CancellationToken token = default);
 
     /// <summary>
     /// Extend container lifetime

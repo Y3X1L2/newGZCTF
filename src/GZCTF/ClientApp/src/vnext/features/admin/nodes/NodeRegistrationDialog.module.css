@@ -1,0 +1,181 @@
+.content {
+  display: grid;
+  gap: var(--yn-space-6);
+}
+
+.stepper {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stepper li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  color: var(--yn-color-muted);
+  text-align: center;
+}
+
+.stepper li:not(:last-child)::after {
+  position: absolute;
+  top: 14px;
+  left: calc(50% + 18px);
+  width: calc(100% - 36px);
+  height: 1px;
+  background: var(--yn-color-border);
+  content: '';
+}
+
+.stepper li > span {
+  z-index: 1;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--yn-color-border);
+  border-radius: 50%;
+  background: var(--yn-color-surface);
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+}
+
+.stepper li[data-active],
+.stepper li[data-complete] {
+  color: var(--yn-color-text);
+}
+
+.stepper li[data-active] > span,
+.stepper li[data-complete] > span {
+  border-color: var(--yn-color-control-strong);
+  background: var(--yn-color-control-strong);
+  color: var(--yn-color-control-strong-text);
+}
+
+.stepper small {
+  font-size: 10px;
+}
+
+.formGrid,
+.previewGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yn-space-4);
+}
+
+.checkList h3,
+.confirmation h3,
+.result h3 {
+  margin: 0;
+  font-size: var(--yn-font-lg);
+}
+
+.checkList ul {
+  display: grid;
+  gap: 1px;
+  margin: var(--yn-space-3) 0 0;
+  padding: 0;
+  background: var(--yn-color-border);
+  border: 1px solid var(--yn-color-border);
+  list-style: none;
+}
+
+.checkList li {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: var(--yn-space-3);
+  padding: 0 var(--yn-space-4);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-text-secondary);
+}
+
+.checkList svg {
+  color: var(--yn-color-brand);
+}
+
+.previewGrid {
+  margin: 0;
+  gap: 1px;
+  background: var(--yn-color-border);
+  border: 1px solid var(--yn-color-border);
+}
+
+.previewGrid > div {
+  min-width: 0;
+  padding: var(--yn-space-4);
+  background: var(--yn-color-surface);
+}
+
+.previewGrid dt {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.previewGrid dd {
+  margin: 7px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--yn-color-text-secondary);
+}
+
+.confirmation,
+.result {
+  display: flex;
+  min-height: 168px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--yn-space-4);
+  padding: var(--yn-space-6);
+  border-block: 1px solid var(--yn-color-border);
+  text-align: left;
+}
+
+.confirmation > svg,
+.result > svg {
+  flex: 0 0 auto;
+  color: var(--yn-color-brand);
+}
+
+.confirmation p,
+.result p {
+  max-width: 520px;
+  margin: 7px 0 0;
+  color: var(--yn-color-muted);
+  line-height: 1.65;
+}
+
+.result {
+  flex-direction: column;
+  text-align: center;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 620px) {
+  .formGrid,
+  .previewGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .stepper small {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}

@@ -4,6 +4,7 @@ using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
+using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Modules.Runtime.Domain;
 using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
@@ -238,9 +239,14 @@ public sealed class RuntimeSchedulingService(
         }
 
         var resources = await ResolveResourcesAsync(ticket, token);
+        var requiresInstanceCredentials = ticket.Kind == DeploymentQueueKind.VirtualMachine;
         return await capacity.TryReserveAsync(ticket.Id, new FleetCapacityRequest(
             RequiredCapability(ticket), resources,
-            await ResolvePreferredNodeIdAsync(ticket, token), false), token);
+            await ResolvePreferredNodeIdAsync(ticket, token),
+            RequiredFeatures: requiresInstanceCredentials
+                ? [AgentFeatureIds.Kvm, AgentFeatureIds.CloudInit]
+                : null,
+            RequireRemote: requiresInstanceCredentials), token);
     }
 
     async Task<WorkloadResourceVector> ResolveResourcesAsync(

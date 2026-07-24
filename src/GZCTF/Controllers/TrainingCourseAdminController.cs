@@ -849,7 +849,9 @@ public class TrainingCourseAdminController(
             LastStatus = last?.Status,
             LastSubmittedAt = last?.SubmittedAt,
             LastIpAddress = last?.IpAddress,
-            InstanceEntry = instance?.Container is { Status: ContainerStatus.Running } container ? container.Entry : null,
+            InstanceEntry = instance?.Container is { Status: ContainerStatus.Running } container
+                ? container.ReadyEntry
+                : null,
             InstanceStopAt = instance?.Container is { Status: ContainerStatus.Running } runningContainer
                 ? runningContainer.ExpectStopAt
                 : null
