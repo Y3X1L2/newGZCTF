@@ -1,8 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
-using GZCTF.Models.Internal;
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Infrastructure.Concurrency;
+using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Services.Container.Manager;
@@ -90,6 +90,12 @@ public class ExerciseInstanceRepository(
 
         if (instance.IsLoaded)
         {
+            if (ShouldRegenerateLegacyDynamicFlag(instance))
+            {
+                instance.FlagContext!.Flag = instance.Exercise.GenerateDynamicFlag();
+                await SaveAsync(token);
+            }
+
             await transaction.CommitAsync(token);
             return instance;
         }
@@ -157,6 +163,13 @@ public class ExerciseInstanceRepository(
 
         return instance;
     }
+
+    internal static bool ShouldRegenerateLegacyDynamicFlag(ExerciseInstance instance) =>
+        instance.IsLoaded &&
+        instance.Container is null &&
+        instance.Exercise.Type == ChallengeType.DynamicContainer &&
+        instance.Exercise.FlagTemplate?.Contains("[TEAM_HASH]", StringComparison.Ordinal) == true &&
+        instance.FlagContext?.Flag.Contains("TestTeamHash", StringComparison.Ordinal) == true;
 
     public async Task<TaskResult<Container>> CreateContainer(ExerciseInstance instance, UserInfo user,
         CancellationToken token = default)
