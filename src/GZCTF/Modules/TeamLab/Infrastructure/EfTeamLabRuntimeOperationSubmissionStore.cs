@@ -17,6 +17,35 @@ public sealed class EfTeamLabRuntimeOperationSubmissionStore(
     {
         var existing = await FindExistingAsync(submission, cancellationToken);
         if (existing is not null) return Reuse(existing, submission.RequestHash);
+        await using var transaction = context.Database.IsRelational()
+            ? await context.Database.BeginTransactionAsync(cancellationToken)
+            : null;
+        if (transaction is not null && context.Database.IsNpgsql() && submission is
+            { ResourceType: "teamlab-runtime", ResourceId: not null })
+        {
+            var resourceLock = $"{submission.ResourceType}:{submission.ResourceId}";
+            await context.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(hashtextextended({resourceLock}, 0))", cancellationToken);
+        }
+        existing = await FindExistingAsync(submission, cancellationToken);
+        if (existing is not null)
+        {
+            if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+            return Reuse(existing, submission.RequestHash);
+        }
+        if (submission is { ResourceType: "teamlab-runtime", ResourceId: not null })
+        {
+            var active = await context.ApiOperations.AsNoTracking().AnyAsync(operation =>
+                operation.Kind == TeamLabRuntimeOperationApplicationService.OperationKind &&
+                operation.ResourceType == submission.ResourceType && operation.ResourceId == submission.ResourceId &&
+                (operation.Status == ApiOperationStatus.Pending || operation.Status == ApiOperationStatus.Running),
+                cancellationToken);
+            if (active)
+                throw new TeamLabApiContractException(
+                    "runtime_operation_in_progress",
+                    "Another lifecycle operation is already running for this TeamLab runtime.",
+                    409);
+        }
         var now = DateTimeOffset.UtcNow;
         var operation = new ApiOperation
         {
@@ -36,12 +65,14 @@ public sealed class EfTeamLabRuntimeOperationSubmissionStore(
         try
         {
             await context.SaveChangesAsync(cancellationToken);
+            if (transaction is not null) await transaction.CommitAsync(cancellationToken);
             auditContext.SetOperation(operation.Id, false);
             return new IdempotencyBeginResult(operation, false);
         }
         catch (DbUpdateException exception) when (
             exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
+            if (transaction is not null) await transaction.RollbackAsync(cancellationToken);
             context.ChangeTracker.Clear();
             existing = await FindExistingAsync(submission, cancellationToken);
             if (existing is null) throw;

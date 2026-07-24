@@ -33,6 +33,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\GZCTF.GuestControl.Contracts\GZCTF.GuestControl.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Aigamo.ResXGenerator" />
     <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" />
     <PackageReference Include="Cronos" />
@@ -202,6 +206,85 @@
       <FleetAgentBinary Include="$(FleetAgentPublishDir)GZCTF.Agent" />
       <ResolvedFileToPublish Include="@(FleetAgentBinary->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
         <RelativePath>agent/gzctf-agent</RelativePath>
+        <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="PublishEndpointSensor" AfterTargets="ComputeFilesToPublish">
+    <PropertyGroup>
+      <EndpointSensorLinuxDir>$(BaseIntermediateOutputPath)endpoint-sensor/linux-x64/</EndpointSensorLinuxDir>
+      <EndpointSensorWindowsDir>$(BaseIntermediateOutputPath)endpoint-sensor/win-x64/</EndpointSensorWindowsDir>
+    </PropertyGroup>
+
+    <Exec
+      Command="dotnet publish &quot;$(MSBuildThisFileDirectory)../GZCTF.EndpointSensor/GZCTF.EndpointSensor.csproj&quot; -c $(Configuration) -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=true -p:DebugType=None -p:DebugSymbols=false -o &quot;$(EndpointSensorLinuxDir)&quot;" />
+    <Exec
+      Command="dotnet publish &quot;$(MSBuildThisFileDirectory)../GZCTF.EndpointSensor/GZCTF.EndpointSensor.csproj&quot; -c $(Configuration) -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=true -p:DebugType=None -p:DebugSymbols=false -o &quot;$(EndpointSensorWindowsDir)&quot;" />
+
+    <ItemGroup>
+      <EndpointSensorLinux Include="$(EndpointSensorLinuxDir)GZCTF.EndpointSensor" />
+      <EndpointSensorWindows Include="$(EndpointSensorWindowsDir)GZCTF.EndpointSensor.exe" />
+      <ResolvedFileToPublish Include="@(EndpointSensorLinux->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>agent/endpoint-sensor/linux-x64/gzctf-endpoint-sensor</RelativePath>
+        <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="@(EndpointSensorWindows->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>agent/endpoint-sensor/win-x64/gzctf-endpoint-sensor.exe</RelativePath>
+        <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="PublishGuestSupervisor" AfterTargets="ComputeFilesToPublish">
+    <PropertyGroup>
+      <GuestSupervisorLinuxDir>$(BaseIntermediateOutputPath)guest-supervisor/linux-x64/</GuestSupervisorLinuxDir>
+      <GuestSupervisorWindowsDir>$(BaseIntermediateOutputPath)guest-supervisor/win-x64/</GuestSupervisorWindowsDir>
+    </PropertyGroup>
+
+    <Exec
+      Command="dotnet publish &quot;$(MSBuildThisFileDirectory)../GZCTF.GuestSupervisor/GZCTF.GuestSupervisor.csproj&quot; -c $(Configuration) -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false -o &quot;$(GuestSupervisorLinuxDir)&quot;" />
+    <Exec
+      Command="dotnet publish &quot;$(MSBuildThisFileDirectory)../GZCTF.GuestSupervisor/GZCTF.GuestSupervisor.csproj&quot; -c $(Configuration) -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false -o &quot;$(GuestSupervisorWindowsDir)&quot;" />
+
+    <GetFileHash Files="$(GuestSupervisorLinuxDir)GZCTF.GuestSupervisor" Algorithm="SHA256">
+      <Output TaskParameter="Items" ItemName="GuestSupervisorLinuxHash" />
+    </GetFileHash>
+    <GetFileHash Files="$(GuestSupervisorWindowsDir)GZCTF.GuestSupervisor.exe" Algorithm="SHA256">
+      <Output TaskParameter="Items" ItemName="GuestSupervisorWindowsHash" />
+    </GetFileHash>
+    <WriteLinesToFile File="$(GuestSupervisorLinuxDir)manifest.json"
+      Lines="{&quot;schemaVersion&quot;:1,&quot;runtimeIdentifier&quot;:&quot;linux-x64&quot;,&quot;sha256&quot;:&quot;%(GuestSupervisorLinuxHash.FileHash)&quot;}"
+      Overwrite="true" Encoding="UTF-8" />
+    <WriteLinesToFile File="$(GuestSupervisorWindowsDir)manifest.json"
+      Lines="{&quot;schemaVersion&quot;:1,&quot;runtimeIdentifier&quot;:&quot;win-x64&quot;,&quot;sha256&quot;:&quot;%(GuestSupervisorWindowsHash.FileHash)&quot;}"
+      Overwrite="true" Encoding="UTF-8" />
+
+    <ItemGroup>
+      <GuestSupervisorLinux Include="$(GuestSupervisorLinuxDir)GZCTF.GuestSupervisor" />
+      <GuestSupervisorLinuxManifest Include="$(GuestSupervisorLinuxDir)manifest.json" />
+      <GuestSupervisorWindows Include="$(GuestSupervisorWindowsDir)GZCTF.GuestSupervisor.exe" />
+      <GuestSupervisorWindowsManifest Include="$(GuestSupervisorWindowsDir)manifest.json" />
+      <ResolvedFileToPublish Include="@(GuestSupervisorLinux->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>agent/guest-supervisor/linux-x64/gzctf-guest-supervisor</RelativePath>
+        <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="@(GuestSupervisorLinuxManifest->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>agent/guest-supervisor/linux-x64/manifest.json</RelativePath>
+        <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="@(GuestSupervisorWindows->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>agent/guest-supervisor/win-x64/gzctf-guest-supervisor.exe</RelativePath>
+        <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Include="@(GuestSupervisorWindowsManifest->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>agent/guest-supervisor/win-x64/manifest.json</RelativePath>
         <CopyToPublishDirectory>Always</CopyToPublishDirectory>
         <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
       </ResolvedFileToPublish>

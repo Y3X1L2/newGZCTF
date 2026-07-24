@@ -60,8 +60,76 @@ public sealed class TeamLabRuntimePlanner(
             }
         }
 
-        var definition = TeamLabReleaseCodec.Decode(release.CanonicalJson);
-        await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(context, definition, cancellationToken);
+        return await CreatePlannedRuntimeAsync(
+            release,
+            runtimeOwnerUserId,
+            externalReference,
+            requestHash,
+            command.Overlays,
+            isScenarioBuild: false,
+            resolveScenarioArtifacts: true,
+            cancellationToken);
+    }
+
+    public async Task<TeamLabRuntimeCreateResult> CreateScenarioBuildAsync(
+        Guid releaseId,
+        Guid actorUserId,
+        string externalReference,
+        string requestHash,
+        IReadOnlyList<TeamLabRuntimeOverlayModel>? scenarioOverlays,
+        CancellationToken cancellationToken)
+    {
+        var release = await context.TeamLabTopologyReleases.AsNoTracking()
+            .Include(item => item.Topology)
+            .SingleOrDefaultAsync(item => item.Id == releaseId, cancellationToken)
+            ?? throw new TeamLabApiContractException("release_not_found", "The topology release was not found.", 404);
+        if (release.Topology.OwnerUserId != actorUserId)
+            throw new TeamLabApiContractException(
+                "insufficient_permission",
+                "The topology release is not owned by the scenario build actor.",
+                403);
+
+        var normalizedReference = NormalizeExternalReference(externalReference)
+                                  ?? throw new ArgumentException("Scenario build external reference is required.", nameof(externalReference));
+        var existing = await context.TeamLabRuntimes.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.CreatedById == actorUserId &&
+                                          item.ExternalReference == normalizedReference,
+                cancellationToken);
+        if (existing is not null)
+        {
+            if (!existing.IsScenarioBuild ||
+                !string.Equals(existing.CreateRequestHash, requestHash, StringComparison.Ordinal))
+                throw new TeamLabApiContractException(
+                    "external_reference_conflict",
+                    "The scenario build reference is already used by a different runtime request.",
+                    409);
+            return new TeamLabRuntimeCreateResult(existing.Id, existing.PublicId, true);
+        }
+
+        return await CreatePlannedRuntimeAsync(
+            release,
+            actorUserId,
+            normalizedReference,
+            requestHash,
+            scenarioOverlays,
+            isScenarioBuild: true,
+            resolveScenarioArtifacts: false,
+            cancellationToken);
+    }
+
+    private async Task<TeamLabRuntimeCreateResult> CreatePlannedRuntimeAsync(
+        TeamLabTopologyRelease release,
+        Guid runtimeOwnerUserId,
+        string? externalReference,
+        string requestHash,
+        IReadOnlyList<TeamLabRuntimeOverlayModel>? runtimeOverlays,
+        bool isScenarioBuild,
+        bool resolveScenarioArtifacts,
+        CancellationToken cancellationToken)
+    {
+        var definition = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
+        await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(
+            context, definition, cancellationToken, resolveScenarioArtifacts);
         var topologyNetworks = await context.TeamLabTopologyNetworks.AsNoTracking()
             .Where(item => item.TopologyId == release.TopologyId)
             .ToDictionaryAsync(item => item.Key, StringComparer.Ordinal, cancellationToken);
@@ -79,13 +147,21 @@ public sealed class TeamLabRuntimePlanner(
                 CreateRequestHash = requestHash,
                 Generation = 1,
                 Status = TeamLabRuntimeStatus.Planning,
+                IsScenarioBuild = isScenarioBuild,
+                IsOpenToPlayers = false,
                 CreatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow
             };
             context.TeamLabRuntimes.Add(runtime);
             await context.SaveChangesAsync(cancellationToken);
 
-            await PlanGenerationAsync(runtime, definition, topologyNetworks, command.Overlays, cancellationToken);
+            await PlanGenerationAsync(
+                runtime,
+                definition,
+                topologyNetworks,
+                runtimeOverlays,
+                resolveScenarioArtifacts,
+                cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return new TeamLabRuntimeCreateResult(runtime.Id, runtime.PublicId, false);
         }
@@ -94,6 +170,43 @@ public sealed class TeamLabRuntimePlanner(
         {
             throw new TeamLabApiContractException(
                 "address_pool_exhausted", "Concurrent address allocation exhausted an address pool.", 409);
+        }
+        catch (DbUpdateException exception) when (
+            externalReference is not null &&
+            exception.InnerException is PostgresException postgres &&
+            postgres.SqlState == PostgresErrorCodes.UniqueViolation &&
+            postgres.ConstraintName?.Contains(
+                "CreatedById_ExternalReference", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            context.ChangeTracker.Clear();
+            var existing = await context.TeamLabRuntimes.AsNoTracking()
+                .SingleOrDefaultAsync(item => item.CreatedById == runtimeOwnerUserId &&
+                                              item.ExternalReference == externalReference,
+                    cancellationToken);
+            if (existing is null) throw;
+            if (isScenarioBuild)
+            {
+                if (!existing.IsScenarioBuild ||
+                    !string.Equals(existing.CreateRequestHash, requestHash, StringComparison.Ordinal))
+                    throw new TeamLabApiContractException(
+                        "external_reference_conflict",
+                        "The scenario build reference is already used by a different runtime request.",
+                        409);
+                return new TeamLabRuntimeCreateResult(existing.Id, existing.PublicId, true);
+            }
+            if (existing.Status == TeamLabRuntimeStatus.Destroyed)
+                return await ResetAsync(
+                    existing.PublicId,
+                    runtimeOverlays,
+                    release.Id,
+                    requestHash,
+                    cancellationToken);
+            if (!string.Equals(existing.CreateRequestHash, requestHash, StringComparison.Ordinal))
+                throw new TeamLabApiContractException(
+                    "external_reference_conflict",
+                    "The external reference is already used by a different runtime request.",
+                    409);
+            return new TeamLabRuntimeCreateResult(existing.Id, existing.PublicId, true);
         }
     }
 
@@ -109,6 +222,8 @@ public sealed class TeamLabRuntimePlanner(
             .Include(item => item.Shards)
             .Include(item => item.Networks)
             .Include(item => item.Assets)
+            .Include(item => item.Infrastructure)
+            .Include(item => item.DependencyStates)
             .Include(item => item.SecretEnvelopes)
             .Include(item => item.Events)
             .SingleOrDefaultAsync(item => item.PublicId == runtimePublicId, cancellationToken)
@@ -127,8 +242,9 @@ public sealed class TeamLabRuntimePlanner(
                 "insufficient_permission",
                 "The target topology release is not owned by the runtime owner.",
                 403);
-        var definition = TeamLabReleaseCodec.Decode(release.CanonicalJson);
-        await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(context, definition, cancellationToken);
+        var definition = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
+        await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(
+            context, definition, cancellationToken, allowBakedSourceDrift: true);
         var topologyNetworks = await context.TeamLabTopologyNetworks.AsNoTracking()
             .Where(item => item.TopologyId == release.TopologyId)
             .ToDictionaryAsync(item => item.Key, StringComparer.Ordinal, cancellationToken);
@@ -140,16 +256,23 @@ public sealed class TeamLabRuntimePlanner(
         runtime.Status = TeamLabRuntimeStatus.Planning;
         runtime.LastError = null;
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
-        await PlanGenerationAsync(runtime, definition, topologyNetworks, runtimeOverlays, cancellationToken);
+        await PlanGenerationAsync(
+            runtime,
+            definition,
+            topologyNetworks,
+            runtimeOverlays,
+            resolveScenarioArtifacts: true,
+            cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new TeamLabRuntimeCreateResult(runtime.Id, runtime.PublicId, false);
     }
 
     private async Task PlanGenerationAsync(
         TeamLabRuntime runtime,
-        TeamLabTopologyDefinitionModel definition,
+        TeamLabExecutionTopology definition,
         IReadOnlyDictionary<string, TeamLabTopologyNetwork> topologyNetworks,
         IReadOnlyList<TeamLabRuntimeOverlayModel>? runtimeOverlays,
+        bool resolveScenarioArtifacts,
         CancellationToken cancellationToken)
     {
         using var activity = PlatformTelemetry.TeamLabActivitySource.StartActivity(
@@ -168,15 +291,78 @@ public sealed class TeamLabRuntimePlanner(
             .ToDictionary(item => item.key, item => item.Key, StringComparer.Ordinal);
         var groupByAsset = groups.SelectMany(group => group.AssetKeys.Select(key => (key, group.Key)))
             .ToDictionary(item => item.key, item => item.Key, StringComparer.Ordinal);
+        if (context.Database.IsRelational())
+        {
+            const string networkLeaseLock = "teamlab:network-lease-allocation";
+            await context.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(hashtextextended({networkLeaseLock}, 0))",
+                cancellationToken);
+        }
         var usedCidrs = await context.TeamLabNetworkLeases.AsNoTracking()
             .Where(item => item.ReleasedAt == null)
             .Select(item => item.AllocatedCidr)
             .ToArrayAsync(cancellationToken);
         var allocated = new List<IPNetwork>(definition.Networks.Count);
         var runtimeNetworkByKey = new Dictionary<string, TeamLabRuntimeNetwork>(StringComparer.Ordinal);
+        var scenarioArtifacts = resolveScenarioArtifacts
+            ? await context.TeamLabReleaseAssetArtifacts.AsNoTracking()
+                .Where(item => item.ReleaseId == runtime.TopologyReleaseId &&
+                               item.Status == TeamLabReleaseArtifactStatus.Ready &&
+                               item.ScenarioImageTemplateId.HasValue)
+                .ToDictionaryAsync(item => item.AssetKey,
+                    item => new ScenarioArtifactReference(
+                        item.ScenarioImageTemplateId!.Value,
+                        item.ArtifactDigest),
+                    StringComparer.Ordinal, cancellationToken)
+            : new Dictionary<string, ScenarioArtifactReference>(StringComparer.Ordinal);
+        if (resolveScenarioArtifacts)
+            foreach (var asset in definition.Assets.Where(item => item.BakeAtPublish))
+                if (!scenarioArtifacts.ContainsKey(asset.Key))
+                    throw new TeamLabApiContractException(
+                        "scenario_artifact_not_ready",
+                        $"Release scenario artifact for asset '{asset.Key}' is not ready.",
+                        409);
+        var resolvedTemplateIds = definition.Assets.ToDictionary(
+            item => item.Key,
+            item => resolveScenarioArtifacts && item.BakeAtPublish
+                ? scenarioArtifacts[item.Key].TemplateId
+                : item.ImageTemplateId,
+            StringComparer.Ordinal);
+        var templateIds = resolvedTemplateIds.Values.Distinct().ToArray();
+        var templateDigests = await context.ImageTemplates.AsNoTracking()
+            .Where(item => templateIds.Contains(item.Id))
+            .ToDictionaryAsync(item => item.Id, item => item.ImageHash, cancellationToken);
+        foreach (var asset in definition.Assets)
+        {
+            var resolvedTemplateId = resolvedTemplateIds[asset.Key];
+            var expectedDigest = resolveScenarioArtifacts && asset.BakeAtPublish
+                ? scenarioArtifacts[asset.Key].ArtifactDigest
+                : asset.ImageDigest;
+            if (!templateDigests.TryGetValue(resolvedTemplateId, out var currentDigest) ||
+                string.IsNullOrWhiteSpace(currentDigest))
+                throw new TeamLabApiContractException(
+                    "image_template_unavailable",
+                    $"Resolved image template {resolvedTemplateId} for asset '{asset.Key}' is unavailable.",
+                    409);
+            if (!string.IsNullOrWhiteSpace(expectedDigest) &&
+                !string.Equals(expectedDigest, currentDigest, StringComparison.Ordinal))
+                throw new TeamLabApiContractException(
+                    "image_template_digest_changed",
+                    $"Resolved image template {resolvedTemplateId} for asset '{asset.Key}' does not match the published digest.",
+                    409);
+        }
+        var bootstrapProfileIds = definition.Assets.Where(item => item.Bootstrap is not null)
+            .Select(item => item.Bootstrap!.ProfileId).Distinct().ToArray();
+        var bootstrapDigests = bootstrapProfileIds.Length == 0
+            ? new Dictionary<(Guid ProfileId, int Version), string>()
+            : (await context.BootstrapProfileVersions.AsNoTracking()
+                    .Where(item => bootstrapProfileIds.Contains(item.Profile.PublicId))
+                    .Select(item => new { item.Profile.PublicId, item.Version, item.ArtifactDigest })
+                    .ToArrayAsync(cancellationToken))
+                .ToDictionary(item => (item.PublicId, item.Version), item => item.ArtifactDigest);
         foreach (var network in definition.Networks.OrderBy(item => item.Key, StringComparer.Ordinal))
         {
-            var cidr = Allocate(network.AddressPool.PoolCidr, network.AddressPool.RuntimePrefixLength, usedCidrs.Concat(allocated));
+            var cidr = Allocate(network.AddressPoolCidr, network.RuntimePrefixLength, usedCidrs.Concat(allocated));
             if (cidr is null)
                 throw new TeamLabApiContractException("address_pool_exhausted", $"Address pool for network '{network.Key}' is exhausted.", 409);
             allocated.Add(cidr.Value);
@@ -190,7 +376,7 @@ public sealed class TeamLabRuntimePlanner(
                 Name = network.Name,
                 Cidr = cidr.Value.ToString(),
                 GatewayIp = HostAt(cidr.Value, 1),
-                BridgeName = LinuxName($"tl{runtime.Id}-{network.Key}"),
+                BridgeName = TeamLabResourceNameFactory.Bridge(runtime.Id, network.Key),
                 NetworkLease = new TeamLabNetworkLease
                 {
                     RuntimeId = runtime.Id,
@@ -204,7 +390,7 @@ public sealed class TeamLabRuntimePlanner(
         }
         foreach (var asset in definition.Assets.OrderBy(item => item.Key, StringComparer.Ordinal))
         {
-            var interfaces = asset.Interfaces.OrderBy(item => item.OrderIndex).Select(iface =>
+            var interfaces = asset.Interfaces.OrderBy(item => item.DisplayOrder).Select(iface =>
             {
                 var network = runtimeNetworkByKey[iface.NetworkKey];
                 var parsed = ParseNetwork(network.Cidr);
@@ -220,16 +406,65 @@ public sealed class TeamLabRuntimePlanner(
                 Kind = asset.Kind == TeamLabAssetKind.Docker ? TeamLabResourceKind.Docker : TeamLabResourceKind.Vm,
                 TopologyKey = asset.Key,
                 Name = asset.Name,
-                SourceTemplateId = asset.ImageTemplateId,
+                SourceTemplateId = resolvedTemplateIds[asset.Key],
                 NetworkKey = primary.NetworkKey,
                 IpAddress = primary.IpAddress,
                 MacAddress = primary.MacAddress,
                 InterfaceSummaryJson = JsonSerializer.Serialize(interfaces),
+                Status = TeamLabRuntimeStatus.Pending,
+                ExecutionStage = TeamLabAssetExecutionStage.Pending,
+                Stateless = asset.Stateless,
+                EndpointObservation = asset.EndpointObservation,
+                ImageDigest = resolveScenarioArtifacts && asset.BakeAtPublish
+                    ? scenarioArtifacts[asset.Key].ArtifactDigest
+                    : asset.ImageDigest ?? templateDigests.GetValueOrDefault(resolvedTemplateIds[asset.Key]),
+                BootstrapDigest = asset.Bootstrap is null || resolveScenarioArtifacts && asset.BakeAtPublish
+                    ? null
+                    : bootstrapDigests.GetValueOrDefault((asset.Bootstrap.ProfileId, asset.Bootstrap.Version))
+            });
+        }
+        var connectionsByNode = definition.Connections
+            .Where(item => item.ViaNodeKey is not null)
+            .GroupBy(item => item.ViaNodeKey!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        foreach (var infrastructure in definition.Infrastructure.OrderBy(item => item.Key, StringComparer.Ordinal))
+        {
+            var interfaces = infrastructure.Interfaces.Select(item =>
+                new TeamLabRuntimeInfrastructureInterfaceIntent(
+                    item.Key, item.NetworkKey, item.HostOffset, item.Primary)).ToArray();
+            var connections = connectionsByNode.GetValueOrDefault(infrastructure.Key) ?? [];
+            runtime.Infrastructure.Add(new TeamLabRuntimeInfrastructure
+            {
+                RuntimeId = runtime.Id,
+                Generation = runtime.Generation,
+                TopologyKey = infrastructure.Key,
+                Name = infrastructure.Name,
+                Kind = infrastructure.Kind,
+                NetworkKey = infrastructure.NetworkKey,
+                InterfaceSummaryJson = JsonSerializer.Serialize(interfaces),
+                ConnectionSummaryJson = JsonSerializer.Serialize(connections.Select(item =>
+                    new TeamLabRuntimeInfrastructureConnectionIntent(
+                        item.FromNetworkKey, item.ToNetworkKey, item.Direction)).ToArray()),
                 Status = TeamLabRuntimeStatus.Pending
             });
         }
+        foreach (var dependency in definition.Dependencies)
+        {
+            runtime.DependencyStates.Add(new TeamLabRuntimeDependencyState
+            {
+                RuntimeId = runtime.Id,
+                Generation = runtime.Generation,
+                AssetKey = dependency.AssetKey,
+                DependsOnKey = dependency.DependsOnKey,
+                Condition = dependency.Condition
+            });
+        }
         var envelope = overlayService.Protect(runtime.Id, runtime.Generation, runtimeOverlays,
-            definition.Assets.Select(item => item.Key).ToHashSet(StringComparer.Ordinal));
+            definition.Assets.Select(item => item.Key).ToHashSet(StringComparer.Ordinal),
+            definition.Assets
+                .Where(item => item.EndpointObservation != TeamLabEndpointObservationMode.Disabled)
+                .Select(item => item.Key)
+                .ToHashSet(StringComparer.Ordinal));
         if (envelope is not null) runtime.SecretEnvelopes.Add(envelope);
         runtime.Status = TeamLabRuntimeStatus.Scheduled;
         eventRecorder.Record(
@@ -242,6 +477,8 @@ public sealed class TeamLabRuntimePlanner(
         await context.SaveChangesAsync(cancellationToken);
         activity?.SetStatus(ActivityStatusCode.Ok);
     }
+
+    private sealed record ScenarioArtifactReference(int TemplateId, string ArtifactDigest);
 
     private static IPNetwork? Allocate(string poolCidr, int runtimePrefix, IEnumerable<IPNetwork> unavailable)
     {
@@ -299,7 +536,6 @@ public sealed class TeamLabRuntimePlanner(
         return $"02:42:{hash[0]:x2}:{hash[1]:x2}:{hash[2]:x2}:{hash[3]:x2}";
     }
 
-    private static string LinuxName(string value) => value.Length <= 15 ? value : value[..15];
 
     private static string? NormalizeExternalReference(string? value)
     {

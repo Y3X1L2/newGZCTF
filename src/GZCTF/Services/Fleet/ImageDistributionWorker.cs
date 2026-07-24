@@ -21,6 +21,7 @@ public sealed class ImageDistributionWorker(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await ReclaimLocalOrphanedClaimsAsync(stoppingToken);
         while (!stoppingToken.IsCancellationRequested)
         {
             var claimed = await ClaimBatchAsync(stoppingToken);
@@ -32,6 +33,31 @@ public sealed class ImageDistributionWorker(
 
             await Task.WhenAll(claimed.Select(record => ProcessOneAsync(record, stoppingToken)));
         }
+    }
+
+    async Task ReclaimLocalOrphanedClaimsAsync(CancellationToken token)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var localOwnerPrefix = $"image:{Environment.MachineName}:";
+        var now = DateTimeOffset.UtcNow;
+        var reclaimed = await context.ImageDistributionRecords
+            .Where(record => record.ClaimOwner != null &&
+                             record.ClaimOwner.StartsWith(localOwnerPrefix) &&
+                             record.ClaimOwner != _claimOwner)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(record => record.Status, record =>
+                    record.Operation == ImageDistributionOperation.Cleanup
+                        ? ImageDistributionStatus.CleanupPending
+                        : ImageDistributionStatus.Pending)
+                .SetProperty(record => record.ClaimOwner, (string?)null)
+                .SetProperty(record => record.ClaimExpiresAt, (DateTimeOffset?)null)
+                .SetProperty(record => record.NextAttemptAt, now)
+                .SetProperty(record => record.ProgressUpdatedAt, now), token);
+        if (reclaimed > 0)
+            logger.LogWarning(
+                "Reclaimed {Count} image distribution claim(s) left by an earlier process on {MachineName}.",
+                reclaimed, Environment.MachineName);
     }
 
     async Task<IReadOnlyList<ClaimedImageWork>> ClaimBatchAsync(CancellationToken token)
@@ -125,16 +151,11 @@ public sealed class ImageDistributionWorker(
                 .SingleOrDefaultAsync(token);
             var limits = AgentCapabilityEvaluator.Parse(manifestJson)?.ExecutionLimits;
             var category = work.Operation == ImageDistributionOperation.Cleanup
-                ? NodeDispatchCategory.Control
+                ? NodeDispatchCategory.Cleanup
                 : work.ImageType == ImageType.Docker
                     ? NodeDispatchCategory.DockerImageTransfer
                     : NodeDispatchCategory.VmImageTransfer;
-            var limit = category switch
-            {
-                NodeDispatchCategory.DockerImageTransfer => limits?.DockerImageTransfers ?? 2,
-                NodeDispatchCategory.VmImageTransfer => limits?.VmImageTransfers ?? 1,
-                _ => limits?.ControlOperations ?? 2
-            };
+            var limit = NodeDispatchLimitPolicy.Resolve(limits, category);
             var service = scope.ServiceProvider.GetRequiredService<ImageDistributionService>();
             using var correlationScope = correlation.Begin(work.Id);
             using var activity = PlatformTelemetry.ImageActivitySource.StartActivity(

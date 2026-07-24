@@ -68,10 +68,11 @@ public sealed class RuntimeFactReconciliationTests
     }
 
     [Fact]
-    public async Task MissingDockerInventory_CorrectsActiveContainerWithoutDeletingAnythingOnAgent()
+    public async Task MissingDockerInventory_OnLocalAgent_CorrectsActiveContainerWithoutDeletingAnythingOnAgent()
     {
         await using var context = CreateContext();
         var node = SeedNode(context, NodeCapability.Docker, AgentFeatureIds.Docker);
+        node.IsLocal = true;
         var container = new Container
         {
             Id = Guid.NewGuid(), ContainerId = "managed-container-id", Image = "registry/challenge:latest",
@@ -90,6 +91,7 @@ public sealed class RuntimeFactReconciliationTests
         Assert.Equal(ContainerStatus.Destroyed, container.Status);
         Assert.Equal(1, summary.MissingCount);
         Assert.Equal(1, summary.CorrectedCount);
+        Assert.Contains(node.Id, agent.RequestedNodes);
         Assert.False(agent.DestroyCalled);
         var codes = await context.OperationalEvents.Select(item => item.EventCode).ToArrayAsync();
         Assert.Contains(OperationalEventCodes.Recovery.ResourceMissing, codes);
@@ -323,6 +325,200 @@ public sealed class RuntimeFactReconciliationTests
     }
 
     [Fact]
+    public async Task TeamLabExpectedWorkload_RequiresCurrentGenerationAndActiveRuntime()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, NodeCapability.Docker, AgentFeatureIds.Docker);
+        var runtime = new TeamLabRuntime
+        {
+            Id = 91,
+            TopologyReleaseId = Guid.NewGuid(),
+            Generation = 2,
+            Status = TeamLabRuntimeStatus.Failed,
+            Assets =
+            [
+                new TeamLabRuntimeAsset
+                {
+                    Generation = 1,
+                    WorkerNodeId = node.Id,
+                    Kind = TeamLabResourceKind.Docker,
+                    TopologyKey = "old-entry",
+                    Name = "Old entry",
+                    RuntimeResourceId = "teamlab-old-entry",
+                    Status = TeamLabRuntimeStatus.Running
+                },
+                new TeamLabRuntimeAsset
+                {
+                    Generation = 2,
+                    WorkerNodeId = node.Id,
+                    Kind = TeamLabResourceKind.Docker,
+                    TopologyKey = "failed-entry",
+                    Name = "Failed entry",
+                    RuntimeResourceId = "teamlab-failed-entry",
+                    Status = TeamLabRuntimeStatus.Running
+                }
+            ]
+        };
+        context.TeamLabRuntimes.Add(runtime);
+        await context.SaveChangesAsync();
+        var agent = new InventoryAgentClient(new Dictionary<Guid, AgentRuntimeInventoryResponse>
+        {
+            [node.Id] = Inventory(containers: [])
+        });
+
+        var summary = await CreateService(context, agent).ReconcileAsync(
+            Guid.CreateVersion7(), TimeSpan.FromMinutes(10), CancellationToken.None);
+
+        Assert.Equal(0, summary.MissingCount);
+        Assert.All(runtime.Assets, asset => Assert.Equal(TeamLabRuntimeStatus.Running, asset.Status));
+        Assert.Equal(TeamLabRuntimeStatus.Failed, runtime.Status);
+    }
+
+    [Fact]
+    public async Task ActiveTeamLabLifecycleTicket_OwnsTransientMissingAndOrphanFacts()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, NodeCapability.Docker, AgentFeatureIds.Docker);
+        var runtime = new TeamLabRuntime
+        {
+            Id = 92,
+            TopologyReleaseId = Guid.NewGuid(),
+            Generation = 3,
+            Status = TeamLabRuntimeStatus.Running,
+            Assets =
+            [
+                new TeamLabRuntimeAsset
+                {
+                    Generation = 3,
+                    WorkerNodeId = node.Id,
+                    Kind = TeamLabResourceKind.Docker,
+                    TopologyKey = "entry",
+                    Name = "Entry",
+                    RuntimeResourceId = "teamlab-owned-entry",
+                    Status = TeamLabRuntimeStatus.Running
+                }
+            ]
+        };
+        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(runtime.Id, 0, 0) with
+        {
+            Operation = RuntimeOperationKind.Reset,
+            Generation = 4
+        });
+        ticket.Status = DeploymentQueueTicketStatus.Running;
+        ticket.StartedAt = DateTimeOffset.UtcNow;
+        context.AddRange(runtime, ticket);
+        await context.SaveChangesAsync();
+        var agent = new InventoryAgentClient(new Dictionary<Guid, AgentRuntimeInventoryResponse>
+        {
+            [node.Id] = Inventory(
+                containers:
+                [
+                    new AgentRuntimeInventoryResource(
+                        "transient-native", "transient", 3, "running", RuntimeId: runtime.Id)
+                ],
+                teamLabResources:
+                [
+                    new AgentRuntimeInventoryResource(
+                        "transient-control", "tl-control", 3, "running",
+                        ResourceKind: "managed-switch", RuntimeId: runtime.Id)
+                ])
+        });
+
+        var summary = await CreateService(context, agent).ReconcileAsync(
+            Guid.CreateVersion7(), TimeSpan.FromMinutes(10), CancellationToken.None);
+
+        Assert.Equal(0, summary.MissingCount);
+        Assert.Equal(0, summary.OrphanCount);
+        Assert.Equal(TeamLabRuntimeStatus.Running, runtime.Status);
+        Assert.Equal(TeamLabRuntimeStatus.Running, runtime.Assets.Single().Status);
+    }
+
+    [Fact]
+    public async Task TeamLabDestroy_ControlResourceResidual_ReplaysCleanup()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, NodeCapability.Docker, AgentFeatureIds.Docker);
+        var (runtime, ticket) = StaleTeamLabDestroy(node.Id, 93);
+        context.AddRange(runtime, ticket);
+        await context.SaveChangesAsync();
+        var agent = new InventoryAgentClient(new Dictionary<Guid, AgentRuntimeInventoryResponse>
+        {
+            [node.Id] = Inventory(
+                containers: [],
+                teamLabResources:
+                [
+                    new AgentRuntimeInventoryResource(
+                        "bridge-native", "tl93-net", runtime.Generation, "running",
+                        ResourceKind: "managed-switch", RuntimeId: runtime.Id)
+                ])
+        });
+
+        await CreateService(context, agent).ReconcileAsync(
+            Guid.CreateVersion7(), TimeSpan.FromMinutes(10), CancellationToken.None);
+
+        Assert.Equal(DeploymentQueueTicketStatus.Scheduled, ticket.Status);
+        Assert.NotEqual(TeamLabRuntimeStatus.Destroyed, runtime.Status);
+    }
+
+    [Fact]
+    public async Task TeamLabDestroy_DatabaseCleanupResidual_ReplaysCleanup()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, NodeCapability.Docker, AgentFeatureIds.Docker);
+        var (runtime, ticket) = StaleTeamLabDestroy(node.Id, 94);
+        runtime.AccessGrants.Add(new TeamLabAccessGrant
+        {
+            Generation = runtime.Generation,
+            PublicKey = "client-key",
+            Revoked = false
+        });
+        context.AddRange(runtime, ticket);
+        await context.SaveChangesAsync();
+        var agent = new InventoryAgentClient(new Dictionary<Guid, AgentRuntimeInventoryResponse>
+        {
+            [node.Id] = Inventory(containers: [], teamLabResources: [])
+        });
+
+        await CreateService(context, agent).ReconcileAsync(
+            Guid.CreateVersion7(), TimeSpan.FromMinutes(10), CancellationToken.None);
+
+        Assert.Equal(DeploymentQueueTicketStatus.Scheduled, ticket.Status);
+        Assert.False(runtime.AccessGrants.Single().Revoked);
+        Assert.NotEqual(TeamLabRuntimeStatus.Destroyed, runtime.Status);
+    }
+
+    [Fact]
+    public async Task TeamLabReset_PlanningCheckpoint_ReplaysWithoutChangingGeneration()
+    {
+        await using var context = CreateContext();
+        var runtime = new TeamLabRuntime
+        {
+            Id = 95,
+            TopologyReleaseId = Guid.NewGuid(),
+            Generation = 4,
+            Status = TeamLabRuntimeStatus.Scheduled
+        };
+        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(runtime.Id, 0, 0) with
+        {
+            Operation = RuntimeOperationKind.Reset,
+            Generation = 4
+        });
+        ticket.Status = DeploymentQueueTicketStatus.Running;
+        ticket.StartedAt = DateTimeOffset.UtcNow.AddMinutes(-30);
+        TeamLabResetCheckpointFacts.Record(
+            runtime, ticket.Id, ticket.Generation, TeamLabResetCheckpoint.PlanningNextGeneration);
+        context.AddRange(runtime, ticket);
+        await context.SaveChangesAsync();
+        var agent = new InventoryAgentClient(new Dictionary<Guid, AgentRuntimeInventoryResponse>());
+
+        await CreateService(context, agent).ReconcileAsync(
+            Guid.CreateVersion7(), TimeSpan.FromMinutes(10), CancellationToken.None);
+
+        Assert.Equal(DeploymentQueueTicketStatus.Scheduled, ticket.Status);
+        Assert.Equal(4, runtime.Generation);
+    }
+
+    [Fact]
     public async Task CreateWithoutPersistedResource_StillRequiresTicketRuntimeCapability()
     {
         await using var context = CreateContext();
@@ -425,9 +621,56 @@ public sealed class RuntimeFactReconciliationTests
             context,
             agent,
             capacity,
+            new GZCTF.Modules.TeamLab.Application.TeamLabRuntimeRecoveryPolicy(
+                Options.Create(new GZCTF.Models.Internal.TeamLabNetworkConfig())),
             new PollingDeploymentQueueWakeup(),
             writer,
             NullLogger<RuntimeFactReconciliationService>.Instance);
+    }
+
+    private static (TeamLabRuntime Runtime, DeploymentQueueTicket Ticket) StaleTeamLabDestroy(
+        Guid nodeId,
+        int runtimeId)
+    {
+        var runtime = new TeamLabRuntime
+        {
+            Id = runtimeId,
+            TopologyReleaseId = Guid.NewGuid(),
+            Generation = 2,
+            Status = TeamLabRuntimeStatus.Destroying,
+            Shards =
+            [
+                new TeamLabRuntimeShard
+                {
+                    Generation = 2,
+                    WorkerNodeId = nodeId,
+                    Status = TeamLabRuntimeStatus.Destroyed
+                }
+            ],
+            Assets =
+            [
+                new TeamLabRuntimeAsset
+                {
+                    Generation = 2,
+                    WorkerNodeId = nodeId,
+                    Kind = TeamLabResourceKind.Docker,
+                    TopologyKey = "entry",
+                    Name = "Entry",
+                    RuntimeResourceId = $"teamlab-{runtimeId}-entry",
+                    Status = TeamLabRuntimeStatus.Destroyed
+                }
+            ]
+        };
+        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(runtime.Id, 0, 0) with
+        {
+            Operation = RuntimeOperationKind.Destroy,
+            Generation = runtime.Generation,
+            TargetNodeId = nodeId
+        });
+        ticket.Status = DeploymentQueueTicketStatus.Running;
+        ticket.Stage = DeploymentStage.Destroying;
+        ticket.StartedAt = DateTimeOffset.UtcNow.AddMinutes(-30);
+        return (runtime, ticket);
     }
 
     private static WorkerNode SeedNode(
@@ -451,7 +694,7 @@ public sealed class RuntimeFactReconciliationTests
                 capability.HasFlag(NodeCapability.Kvm) ? 1 : 0,
                 0,
                 1),
-            new AgentHostFacts(8, 16L * 1024 * 1024 * 1024,
+            new AgentHostFacts(8, 16L * 1024 * 1024 * 1024, 0,
                 capability.HasFlag(NodeCapability.Kvm), capability.HasFlag(NodeCapability.Kvm)),
             DateTimeOffset.UtcNow));
         var node = new WorkerNode
@@ -504,12 +747,14 @@ public sealed class RuntimeFactReconciliationTests
 
     private static AgentRuntimeInventoryResponse Inventory(
         IReadOnlyList<AgentRuntimeInventoryResource>? containers = null,
-        IReadOnlyList<AgentRuntimeInventoryResource>? vms = null) => new(
+        IReadOnlyList<AgentRuntimeInventoryResource>? vms = null,
+        IReadOnlyList<AgentRuntimeInventoryResource>? teamLabResources = null) => new(
         containers is not null,
         vms is not null,
         containers ?? [],
         vms ?? [],
-        DateTimeOffset.UtcNow);
+        DateTimeOffset.UtcNow,
+        teamLabResources);
 
     private static AppDbContext CreateContext() => new(
         new DbContextOptionsBuilder<AppDbContext>()

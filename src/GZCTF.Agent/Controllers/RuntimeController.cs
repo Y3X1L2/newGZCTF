@@ -9,6 +9,7 @@ namespace GZCTF.Agent.Controllers;
 public sealed class RuntimeController(
     DockerService docker,
     KvmService kvm,
+    TeamLabNetworkService teamLab,
     AgentCapabilityService capabilities) : ControllerBase
 {
     [HttpGet("inventory")]
@@ -25,12 +26,14 @@ public sealed class RuntimeController(
         var vms = kvmSupported
             ? await kvm.GetManagedRuntimeInventoryAsync(token)
             : [];
+        var teamLabResources = await teamLab.GetManagedRuntimeInventoryAsync(token);
 
         return Ok(new RuntimeInventoryResponse(
             dockerSupported,
             kvmSupported,
             containers,
             vms,
-            DateTimeOffset.UtcNow));
+            DateTimeOffset.UtcNow,
+            teamLabResources));
     }
 }

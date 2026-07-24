@@ -132,17 +132,7 @@ install_docker() {
 
   configure_docker_daemon
   enable_service docker
-}
-
-json_array() {
-  local first=1
-  printf '['
-  for item in "$@"; do
-    [[ "$first" -eq 1 ]] || printf ','
-    first=0
-    printf '"%s"' "${item//\"/\\\"}"
-  done
-  printf ']'
+  verify_private_registry_pull
 }
 
 configure_docker_daemon() {
@@ -151,32 +141,96 @@ configure_docker_daemon() {
   fi
 
   if [[ "$check_only" -eq 1 ]]; then
-    log "check-only: would write /etc/docker/daemon.json"
+    log "check-only: would merge registry settings into /etc/docker/daemon.json"
     return
   fi
 
   mkdir -p /etc/docker
-  if [[ -f /etc/docker/daemon.json ]]; then
-    cp -a /etc/docker/daemon.json "/etc/docker/daemon.json.bak.$(date +%Y%m%d%H%M%S)"
+  if ! command -v python3 >/dev/null 2>&1; then
+    apt_install python3
   fi
 
-  {
-    printf '{\n'
-    local wrote=0
-    if [[ "${#registry_mirrors[@]}" -gt 0 ]]; then
-      printf '  "registry-mirrors": '
-      json_array "${registry_mirrors[@]}"
-      wrote=1
-    fi
-    if [[ "${#insecure_registries[@]}" -gt 0 ]]; then
-      [[ "$wrote" -eq 0 ]] || printf ',\n'
-      printf '  "insecure-registries": '
-      json_array "${insecure_registries[@]}"
-    fi
-    printf '\n}\n'
-  } > /etc/docker/daemon.json
+  local daemon_config="/etc/docker/daemon.json"
+  local tmp
+  tmp="$(mktemp "/etc/docker/daemon.json.tmp.XXXXXX")"
+  python3 - "$daemon_config" "$tmp" \
+    "$(printf '%s\n' "${registry_mirrors[@]}")" \
+    "$(printf '%s\n' "${insecure_registries[@]}")" <<'PY'
+import json
+import sys
+from pathlib import Path
 
-  systemctl restart docker >/dev/null 2>&1 || warn "docker restart failed"
+source = Path(sys.argv[1])
+target = Path(sys.argv[2])
+mirrors = [item for item in sys.argv[3].splitlines() if item]
+insecure = [item for item in sys.argv[4].splitlines() if item]
+
+original = source.read_bytes() if source.exists() else b""
+data = json.loads(original.decode()) if original.strip() else {}
+if not isinstance(data, dict):
+    raise SystemExit("Docker daemon configuration must be a JSON object.")
+
+changed = False
+for key, additions in (("registry-mirrors", mirrors), ("insecure-registries", insecure)):
+    if not additions:
+        continue
+    existing = data.get(key, [])
+    if not isinstance(existing, list) or any(not isinstance(item, str) for item in existing):
+        raise SystemExit(f"Docker daemon setting {key} must be an array of strings.")
+    merged = list(existing)
+    for item in additions:
+        if item not in merged:
+            merged.append(item)
+            changed = True
+    data[key] = merged
+
+if changed or not original.strip():
+    target.write_text(json.dumps(data, indent=2) + "\n")
+else:
+    target.write_bytes(original)
+PY
+
+  if [[ -f "$daemon_config" ]] && cmp -s "$tmp" "$daemon_config"; then
+    rm -f "$tmp"
+    log "Docker daemon registry settings are already current"
+    return
+  fi
+
+  if [[ -f "$daemon_config" ]]; then
+    local backup
+    backup="$(mktemp "${daemon_config}.bak.$(date +%Y%m%d%H%M%S).XXXXXX")"
+    cp -a "$daemon_config" "$backup"
+    chmod --reference="$daemon_config" "$tmp"
+    chown --reference="$daemon_config" "$tmp"
+    log "Backed up Docker daemon configuration to $backup"
+  else
+    chmod 0644 "$tmp"
+  fi
+
+  mv -f "$tmp" "$daemon_config"
+  systemctl restart docker
+  log "Docker daemon registry settings updated"
+}
+
+verify_private_registry_pull() {
+  if [[ "${#insecure_registries[@]}" -eq 0 ]]; then
+    return
+  fi
+  if [[ "$check_only" -eq 1 ]]; then
+    for registry in "${insecure_registries[@]}"; do
+      log "check-only: would pull ${registry%/}/gzctf/health/smoke:latest"
+    done
+    return
+  fi
+
+  local registry image
+  for registry in "${insecure_registries[@]}"; do
+    image="${registry%/}/gzctf/health/smoke:latest"
+    log "Verifying private registry pull: $image"
+    docker pull "$image"
+    docker image inspect "$image" >/dev/null
+    docker image rm "$image" >/dev/null 2>&1 || true
+  done
 }
 
 ensure_microsoft_repo() {
@@ -235,7 +289,37 @@ install_kvm() {
 
 install_teamlab_network_tools() {
   log "Installing TeamLab VPN/network tools"
-  apt_install wireguard-tools nftables iptables tcpdump dnsmasq-base
+  apt_install wireguard-tools nftables iptables tcpdump dnsmasq-base dnsutils gss-ntlmssp
+}
+
+configure_guest_management_network() {
+  if [[ ! -e /dev/kvm ]]; then
+    return
+  fi
+  if [[ "$check_only" -eq 1 ]]; then
+    log "check-only: would configure isolated gzmgt0 100.127.0.1/16"
+    return
+  fi
+  mkdir -p /var/lib/gzctf/teamlab/guest-control
+  chmod 700 /var/lib/gzctf/teamlab/guest-control
+  ip link show gzmgt0 >/dev/null 2>&1 || ip link add gzmgt0 type bridge
+  ip address replace 100.127.0.1/16 dev gzmgt0
+  ip link set gzmgt0 up
+  nft -f - <<'GZCTF_NFT'
+destroy table inet gzctf_guest_mgmt
+table inet gzctf_guest_mgmt {
+  chain input {
+    type filter hook input priority -10; policy accept;
+    iifname "gzmgt0" tcp dport 5443 accept
+    iifname "gzmgt0" drop
+  }
+  chain forward {
+    type filter hook forward priority -10; policy accept;
+    iifname "gzmgt0" drop
+    oifname "gzmgt0" drop
+  }
+}
+GZCTF_NFT
 }
 
 configure_image_dirs() {
@@ -296,6 +380,7 @@ main() {
   [[ "$need_dotnet" -eq 1 ]] && install_dotnet
   [[ "$need_kvm" -eq 1 ]] && install_kvm
   install_teamlab_network_tools
+  configure_guest_management_network
   configure_image_dirs
   print_status
 

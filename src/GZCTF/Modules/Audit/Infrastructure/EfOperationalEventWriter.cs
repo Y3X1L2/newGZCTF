@@ -19,10 +19,16 @@ public sealed class EfOperationalEventWriter(
     {
         "attempt", "generation", "stage", "operation", "workload",
         "httpStatus", "durationMs", "queuePosition", "dockerSlots", "vmSlots",
+        "cpuUnits", "memoryMiB", "storageMiB",
         "previousStatus", "currentStatus", "capability", "feature",
         "imageType", "digestPrefix", "sizeBytes", "routeCount", "assetCount",
         "shardCount", "decision", "reasonCode", "matchedCount", "missingCount",
-        "conflictCount", "orphanCount", "deferredCount", "correctedCount", "replayedCount"
+        "conflictCount", "orphanCount", "deferredCount", "correctedCount", "replayedCount",
+        "captureScope", "captureSegmentCount", "captureWorkerCount", "infrastructureCount",
+        "leaseCount", "pathCount", "packetExactCount", "processCorrelatedCount", "temporalCount", "rejectedCount",
+        "rebootCount", "assetKind", "assetKey", "infrastructureKind", "evidenceKind",
+        "placementElapsedMs", "placementGroupCount", "placementEdgeCount", "placementImprovementPasses",
+        "stateless", "result", "count", "reason", "errorCode"
     };
     private static readonly string[] SensitiveFragments =
     [

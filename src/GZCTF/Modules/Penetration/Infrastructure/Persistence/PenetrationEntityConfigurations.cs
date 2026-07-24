@@ -58,6 +58,10 @@ public sealed class PenetrationTeamRuntimeBindingEntityConfiguration : IEntityTy
         builder.ToTable("PenetrationTeamRuntimeBindings");
         builder.HasKey(item => new { item.GameId, item.TeamId });
         builder.HasIndex(item => item.RuntimeId).IsUnique();
+        builder.HasIndex(item => item.DestroyOperationId)
+            .IsUnique()
+            .HasFilter("\"DestroyOperationId\" IS NOT NULL");
+        builder.Property(item => item.Status).HasConversion<byte>();
         builder.HasOne<Game>()
             .WithMany()
             .HasForeignKey(item => item.GameId)
@@ -66,9 +70,22 @@ public sealed class PenetrationTeamRuntimeBindingEntityConfiguration : IEntityTy
             .WithMany()
             .HasForeignKey(item => item.TeamId)
             .OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne<GZCTF.Models.Data.TeamLabRuntime>()
+        builder.HasOne<TeamLabRuntime>()
             .WithMany()
             .HasForeignKey(item => item.RuntimeId)
             .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class PenetrationResetRecordEntityConfiguration : IEntityTypeConfiguration<PenetrationResetRecord>
+{
+    public void Configure(EntityTypeBuilder<PenetrationResetRecord> builder)
+    {
+        builder.Property(item => item.Status).HasConversion<byte>();
+        builder.Property(item => item.FailureClass).HasConversion<byte>();
+        builder.HasIndex(item => item.OperationId).IsUnique();
+        builder.HasIndex(item => new { item.RuntimeId, item.TargetGeneration })
+            .IsUnique()
+            .HasFilter("\"Status\" IN (0, 1)");
     }
 }

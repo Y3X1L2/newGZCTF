@@ -5,6 +5,7 @@ using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Audit.Infrastructure;
 using GZCTF.Modules.Runtime.Application;
+using GZCTF.Modules.Runtime.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -13,8 +14,7 @@ namespace GZCTF.Services.Fleet;
 
 public sealed record FleetCapacityRequest(
     NodeCapability RequiredCapability,
-    int DockerSlots,
-    int VmSlots,
+    WorkloadResourceVector Resources,
     Guid? PreferredNodeId = null,
     bool RequireTeamLab = false);
 
@@ -24,15 +24,27 @@ public sealed record FleetCapacityReservationResult(
     WorkerNode? Node,
     int DockerSlots,
     int VmSlots,
-    string Message)
+    string Message,
+    WorkloadResourceVector Resources = default)
 {
+    public static FleetCapacityReservationResult Reserved(WorkerNode node, WorkloadResourceVector resources) =>
+        new(true, node.Id, node, resources.DockerSlots, resources.VmSlots, "Capacity reserved.", resources);
     public static FleetCapacityReservationResult Reserved(WorkerNode node, int dockerSlots, int vmSlots) =>
-        new(true, node.Id, node, dockerSlots, vmSlots, "Capacity reserved.");
+        Reserved(node, new WorkloadResourceVector(0, 0, 0, dockerSlots, vmSlots));
     public static FleetCapacityReservationResult Failed(string message) =>
         new(false, null, null, 0, 0, message);
 }
 
-public sealed record FleetCapacityBatchItem(Guid NodeId, int DockerSlots, int VmSlots);
+public sealed record FleetCapacityBatchItem(Guid NodeId, WorkloadResourceVector Resources)
+{
+    public FleetCapacityBatchItem(Guid nodeId, int dockerSlots, int vmSlots)
+        : this(nodeId, new WorkloadResourceVector(0, 0, 0, dockerSlots, vmSlots))
+    {
+    }
+
+    public int DockerSlots => Resources.DockerSlots;
+    public int VmSlots => Resources.VmSlots;
+}
 
 public sealed record FleetCapacityBatchReservationResult(
     bool Success,
@@ -87,11 +99,13 @@ public sealed class FleetCapacityReservationService
     public async Task<FleetCapacityReservationResult> TryReserveAsync(Guid ticketId, FleetCapacityRequest request,
         CancellationToken token)
     {
-        var dockerSlots = Math.Max(0, request.DockerSlots);
-        var vmSlots = Math.Max(0, request.VmSlots);
-        if (dockerSlots == 0 && vmSlots == 0)
+        var requested = request.Resources;
+        if (!requested.IsNonNegative)
             return await CapacityBlockedAsync(ticketId, request.PreferredNodeId,
-                "No capacity slots were requested.", token);
+                "Capacity requests cannot contain negative resources.", token);
+        if (requested == WorkloadResourceVector.Zero)
+            return await CapacityBlockedAsync(ticketId, request.PreferredNodeId,
+                "No capacity resources were requested.", token);
 
         await using var lease = await AcquireSchedulerLeaseAsync(token);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, lease.LeaseLost);
@@ -109,24 +123,23 @@ public sealed class FleetCapacityReservationService
                     "Existing reservation references a missing node.", token,
                     OperationalEventCodes.Capacity.Conflict, OperationalErrorCodes.RuntimeIdentityConflict,
                     OperationalErrorCategory.Conflict, false);
-            return FleetCapacityReservationResult.Reserved(
-                existingNode, existing.DockerSlots, existing.VmSlots);
+            return FleetCapacityReservationResult.Reserved(existingNode, ToVector(existing));
         }
 
         var candidates = (await snapshots.LoadAsync(token))
             .Where(item => request.PreferredNodeId is null || item.Node.Id == request.PreferredNodeId)
-            .Where(item => eligibility.GetReason(item, request.RequiredCapability, dockerSlots, vmSlots,
+            .Where(item => eligibility.GetReason(item, request.RequiredCapability, requested,
                 request.RequireTeamLab) is null)
-            .OrderByDescending(item => eligibility.Score(item, dockerSlots, vmSlots))
+            .OrderByDescending(item => eligibility.Score(item, requested))
             .ThenBy(item => item.Node.Name, StringComparer.Ordinal)
             .ThenBy(item => item.Node.Id)
             .ToArray();
         var selected = candidates.FirstOrDefault();
         if (selected is null)
             return await CapacityBlockedAsync(ticketId, request.PreferredNodeId,
-                $"No schedulable node has enough capacity for Docker={dockerSlots}, VM={vmSlots}.", token);
+                $"No schedulable node has enough capacity for {Format(requested)}.", token);
 
-        context.FleetCapacityReservations.Add(NewReservation(ticketId, selected.Node.Id, dockerSlots, vmSlots));
+        context.FleetCapacityReservations.Add(NewReservation(ticketId, selected.Node.Id, requested));
         if (await LoadTicketAsync(ticketId, token) is { } ticket)
             events.Append(RuntimeOperationalEvents.Ticket(
                 ticket,
@@ -134,21 +147,27 @@ public sealed class FleetCapacityReservationService
                 OperationalEventOutcome.Succeeded,
                 "Node capacity was reserved for the runtime ticket.",
                 workerNodeId: selected.Node.Id,
-                detail: CapacityDetail(ticket, dockerSlots, vmSlots)));
+                detail: CapacityDetail(ticket, requested)));
         await context.SaveChangesAsync(token);
         logger.LogInformation("Reserved capacity for ticket {TicketId} on node {NodeId}: Docker={Docker}, VM={Vm}",
-            ticketId, selected.Node.Id, dockerSlots, vmSlots);
-        return FleetCapacityReservationResult.Reserved(selected.Node, dockerSlots, vmSlots);
+            ticketId, selected.Node.Id, requested.DockerSlots, requested.VmSlots);
+        return FleetCapacityReservationResult.Reserved(selected.Node, requested);
     }
 
     public async Task<FleetCapacityBatchReservationResult> TryReserveBatchAsync(Guid ticketId,
         IReadOnlyList<FleetCapacityBatchItem> items, bool requireTeamLab, CancellationToken token)
     {
+        if (items.Any(item => !item.Resources.IsNonNegative))
+        {
+            await CapacityBlockedAsync(ticketId, null,
+                "Capacity requests cannot contain negative resources.", token);
+            return FleetCapacityBatchReservationResult.Failed(
+                "Capacity requests cannot contain negative resources.");
+        }
         var normalized = items.GroupBy(item => item.NodeId)
             .Select(group => new FleetCapacityBatchItem(group.Key,
-                group.Sum(item => Math.Max(0, item.DockerSlots)),
-                group.Sum(item => Math.Max(0, item.VmSlots))))
-            .Where(item => item.DockerSlots > 0 || item.VmSlots > 0)
+                group.Aggregate(WorkloadResourceVector.Zero, (sum, item) => sum + item.Resources)))
+            .Where(item => item.Resources != WorkloadResourceVector.Zero)
             .OrderBy(item => item.NodeId).ToArray();
         if (normalized.Length == 0)
         {
@@ -171,8 +190,8 @@ public sealed class FleetCapacityReservationService
                 .ToDictionaryAsync(item => item.Id, token);
             return FleetCapacityBatchReservationResult.Reserved(existing
                 .Where(item => existingNodes.ContainsKey(item.WorkerNodeId))
-                .Select(item => FleetCapacityReservationResult.Reserved(existingNodes[item.WorkerNodeId],
-                    item.DockerSlots, item.VmSlots)).ToArray());
+                .Select(item => FleetCapacityReservationResult.Reserved(
+                    existingNodes[item.WorkerNodeId], ToVector(item))).ToArray());
         }
 
         var nodeIds = normalized.Select(item => item.NodeId).ToArray();
@@ -189,19 +208,18 @@ public sealed class FleetCapacityReservationService
             }
             var capability = (item.DockerSlots > 0 ? NodeCapability.Docker : NodeCapability.None) |
                              (item.VmSlots > 0 ? NodeCapability.Kvm : NodeCapability.None);
-            if (eligibility.GetReason(snapshot, capability, item.DockerSlots, item.VmSlots, requireTeamLab) is not null)
+            if (eligibility.GetReason(snapshot, capability, item.Resources, requireTeamLab) is not null)
             {
                 await CapacityBlockedAsync(ticketId, item.NodeId,
-                    $"Node {snapshot.Node.Name} has insufficient capacity for Docker={item.DockerSlots}, VM={item.VmSlots}.",
+                    $"Node {snapshot.Node.Name} has insufficient capacity for {Format(item.Resources)}.",
                     token);
                 return FleetCapacityBatchReservationResult.Failed(
-                    $"Node {snapshot.Node.Name} has insufficient capacity for Docker={item.DockerSlots}, VM={item.VmSlots}.");
+                    $"Node {snapshot.Node.Name} has insufficient capacity for {Format(item.Resources)}.");
             }
         }
 
         foreach (var item in normalized)
-            context.FleetCapacityReservations.Add(NewReservation(ticketId, item.NodeId, item.DockerSlots,
-                item.VmSlots));
+            context.FleetCapacityReservations.Add(NewReservation(ticketId, item.NodeId, item.Resources));
         if (await LoadTicketAsync(ticketId, token) is { } batchTicket)
             foreach (var item in normalized)
                 events.Append(RuntimeOperationalEvents.Ticket(
@@ -210,10 +228,10 @@ public sealed class FleetCapacityReservationService
                     OperationalEventOutcome.Succeeded,
                     "Node capacity was reserved for a runtime shard.",
                     workerNodeId: item.NodeId,
-                    detail: CapacityDetail(batchTicket, item.DockerSlots, item.VmSlots)));
+                    detail: CapacityDetail(batchTicket, item.Resources)));
         await context.SaveChangesAsync(token);
         return FleetCapacityBatchReservationResult.Reserved(normalized.Select(item =>
-            FleetCapacityReservationResult.Reserved(nodeSnapshots[item.NodeId].Node, item.DockerSlots, item.VmSlots)).ToArray());
+            FleetCapacityReservationResult.Reserved(nodeSnapshots[item.NodeId].Node, item.Resources)).ToArray());
     }
 
     public Task ConfirmAsync(Guid ticketId, Guid nodeId, CancellationToken token) =>
@@ -289,7 +307,7 @@ public sealed class FleetCapacityReservationService
                         WorkerNodeId: nodeId,
                         Operation: "runtime.capacity.expire"),
                     nodeId,
-                    CapacityDetail(ticket, reservation.DockerSlots, reservation.VmSlots)));
+                    CapacityDetail(ticket, ToVector(reservation))));
         }
         await context.SaveChangesAsync(token);
     }
@@ -318,19 +336,33 @@ public sealed class FleetCapacityReservationService
                     ? "Runtime capacity reservation was confirmed."
                     : "Runtime capacity reservation was released.",
                 workerNodeId: nodeId,
-                detail: CapacityDetail(ticket, reservation.DockerSlots, reservation.VmSlots)));
+                detail: CapacityDetail(ticket, ToVector(reservation))));
         await context.SaveChangesAsync(token);
     }
 
-    static FleetCapacityReservation NewReservation(Guid ticketId, Guid nodeId, int dockerSlots, int vmSlots) =>
+    static FleetCapacityReservation NewReservation(
+        Guid ticketId,
+        Guid nodeId,
+        WorkloadResourceVector resources) =>
         new()
         {
             DeploymentQueueTicketId = ticketId,
             WorkerNodeId = nodeId,
-            DockerSlots = dockerSlots,
-            VmSlots = vmSlots,
+            CpuUnits = resources.CpuUnits,
+            MemoryMiB = resources.MemoryMiB,
+            StorageMiB = resources.StorageMiB,
+            DockerSlots = resources.DockerSlots,
+            VmSlots = resources.VmSlots,
             ExpiresAt = DateTimeOffset.UtcNow.Add(ReservationLifetime)
         };
+
+    static WorkloadResourceVector ToVector(FleetCapacityReservation reservation) =>
+        new(
+            reservation.CpuUnits,
+            reservation.MemoryMiB,
+            reservation.StorageMiB,
+            reservation.DockerSlots,
+            reservation.VmSlots);
 
     async ValueTask<IDistributedLease> AcquireSchedulerLeaseAsync(CancellationToken token) =>
         await leaseProvider.AcquireAsync("fleet:scheduler", TimeSpan.FromSeconds(10), cancellationToken: token);
@@ -361,7 +393,8 @@ public sealed class FleetCapacityReservationService
                 new OperationalError(category, errorCode, message, retryable,
                     WorkerNodeId: nodeId, Operation: "runtime.capacity.reserve"),
                 nodeId,
-                CapacityDetail(ticket, ticket.DockerSlots, ticket.VmSlots)));
+                CapacityDetail(ticket, new WorkloadResourceVector(
+                    0, 0, 0, ticket.DockerSlots, ticket.VmSlots))));
             await context.SaveChangesAsync(token);
         }
         return FleetCapacityReservationResult.Failed(message);
@@ -369,15 +402,21 @@ public sealed class FleetCapacityReservationService
 
     static IReadOnlyDictionary<string, object?> CapacityDetail(
         DeploymentQueueTicket ticket,
-        int dockerSlots,
-        int vmSlots) =>
+        WorkloadResourceVector resources) =>
         new Dictionary<string, object?>
         {
             ["workload"] = ticket.Kind.ToString(),
             ["operation"] = ticket.Operation.ToString(),
             ["stage"] = ticket.Stage.ToString(),
-            ["dockerSlots"] = dockerSlots,
-            ["vmSlots"] = vmSlots,
+            ["cpuUnits"] = resources.CpuUnits,
+            ["memoryMiB"] = resources.MemoryMiB,
+            ["storageMiB"] = resources.StorageMiB,
+            ["dockerSlots"] = resources.DockerSlots,
+            ["vmSlots"] = resources.VmSlots,
             ["attempt"] = ticket.AttemptCount
         };
+
+    static string Format(WorkloadResourceVector resources) =>
+        $"CPU={resources.CpuUnits}, memory={resources.MemoryMiB} MiB, " +
+        $"storage={resources.StorageMiB} MiB, Docker={resources.DockerSlots}, VM={resources.VmSlots}";
 }

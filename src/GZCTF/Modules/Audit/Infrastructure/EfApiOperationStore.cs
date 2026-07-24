@@ -171,6 +171,8 @@ public sealed class EfApiOperationStore(AppDbContext context) : IApiOperationSto
                 "ResourceType" = COALESCE({resourceType}::text, "ResourceType"),
                 "ResourceId" = COALESCE({resourceId}::text, "ResourceId"),
                 "DeploymentQueueTicketId" = COALESCE({deploymentQueueTicketId}::uuid, "DeploymentQueueTicketId"),
+                "ErrorCode" = NULL,
+                "ErrorDetail" = NULL,
                 "UpdatedAt" = CURRENT_TIMESTAMP
             WHERE
                 "Id" = {id}
@@ -179,6 +181,43 @@ public sealed class EfApiOperationStore(AppDbContext context) : IApiOperationSto
                 AND "LeaseExpiresAt" > CURRENT_TIMESTAMP
             """, cancellationToken);
         return affectedRows > 0;
+    }
+
+    public async Task<bool> DeferAsync(
+        Guid id,
+        string leaseOwner,
+        string stage,
+        string reasonCode,
+        string reasonDetail,
+        TimeSpan delay,
+        CancellationToken cancellationToken)
+    {
+        if (delay < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(delay));
+        var normalizedStage = stage.Trim();
+        if (normalizedStage.Length is 0 or > 128)
+            throw new ArgumentOutOfRangeException(nameof(stage));
+        var code = reasonCode.Length <= 128 ? reasonCode : reasonCode[..128];
+        var detail = reasonDetail.Length <= 2048 ? reasonDetail : reasonDetail[..2048];
+        var running = ApiOperationStatus.Running;
+        var pending = ApiOperationStatus.Pending;
+        return await context.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "ApiOperations"
+            SET
+                "Status" = {pending},
+                "Stage" = {normalizedStage},
+                "ErrorCode" = {code},
+                "ErrorDetail" = {detail},
+                "LeaseOwner" = NULL,
+                "LeaseExpiresAt" = NULL,
+                "NextAttemptAt" = CURRENT_TIMESTAMP + {delay},
+                "UpdatedAt" = CURRENT_TIMESTAMP
+            WHERE
+                "Id" = {id}
+                AND "Status" = {running}
+                AND "LeaseOwner" = {leaseOwner}
+                AND "LeaseExpiresAt" > CURRENT_TIMESTAMP
+            """, cancellationToken) > 0;
     }
 
     public async Task<bool> RetryOrFailAsync(

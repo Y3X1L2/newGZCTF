@@ -1,5 +1,6 @@
 using GZCTF.Agent.Models;
 using Microsoft.Extensions.Options;
+using System.Runtime.InteropServices;
 
 namespace GZCTF.Agent.Services;
 
@@ -28,20 +29,41 @@ public sealed class AgentCapabilityService(
         {
             features.Add(AgentFeatureIds.Kvm);
             features.Add(AgentFeatureIds.VmDownload);
+            features.Add(AgentFeatureIds.VmQga);
+            features.Add(AgentFeatureIds.VmWindowsBootstrap);
             if (HasAnyCommand("cloud-localds", "genisoimage", "xorriso"))
                 features.Add(AgentFeatureIds.CloudInit);
         }
         if (teamLabStatus.Available)
-            features.Add(AgentFeatureIds.TeamLabFabric);
+        {
+            features.Add(AgentFeatureIds.TeamLabInfrastructure);
+            features.Add(AgentFeatureIds.TeamLabFabricLeasedLinks);
+            if (capabilities.Docker && capabilities.DnsProbe)
+                features.Add(AgentFeatureIds.TeamLabContainerNetworkFinalize);
+            if (HasEndpointSensorArtifacts())
+                features.Add(AgentFeatureIds.TeamLabEndpointSensor);
+            if (HasLibPcap())
+                features.Add(AgentFeatureIds.TeamLabObservation);
+        }
         if (capabilities.WireGuard)
             features.Add(AgentFeatureIds.WireGuard);
         if (capabilities.Tcpdump || capabilities.Dumpcap)
-        {
-            features.Add(AgentFeatureIds.Flow);
             features.Add(AgentFeatureIds.Pcap);
-        }
         features.Add(AgentFeatureIds.RuntimeInventory);
         features.Add(AgentFeatureIds.SelfUpdate);
+        features.Add(AgentFeatureIds.RuntimeSignals);
+        if (kvm) features.Add(AgentFeatureIds.VmReadinessSignals);
+        if (kvm && capabilities.Nftables && _config.GuestManagement.Enabled)
+            features.Add(AgentFeatureIds.VmGuestManagement);
+        if (kvm && features.Contains(AgentFeatureIds.VmGuestManagement) &&
+            HasAnyCommand("cloud-localds", "genisoimage", "xorriso"))
+        {
+            features.Add(AgentFeatureIds.VmConfigDriveV2);
+            features.Add(AgentFeatureIds.VmPreparedImage);
+        }
+        if (features.Contains(AgentFeatureIds.VmPreparedImage))
+            features.Add(AgentFeatureIds.VmPreparedImageUpload);
+        features.Add(AgentFeatureIds.BootstrapArtifactPull);
 
         var logicalCpu = Math.Max(1, Environment.ProcessorCount);
         var limits = new AgentExecutionLimits(
@@ -57,7 +79,7 @@ public sealed class AgentCapabilityService(
             ManifestSchemaVersion,
             features.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
             limits,
-            new AgentHostFacts(logicalCpu, ReadTotalMemory(), capabilities.KvmDevice,
+            new AgentHostFacts(logicalCpu, ReadTotalMemory(), ReadAvailableVmImageStorage(), capabilities.KvmDevice,
                 capabilities.CpuVirtualization),
             DateTimeOffset.UtcNow);
     }
@@ -69,12 +91,41 @@ public sealed class AgentCapabilityService(
         new[] { "/sbin", "/usr/sbin", "/bin", "/usr/bin", "/usr/local/bin" }
             .Any(path => File.Exists(Path.Combine(path, command))));
 
+    static bool HasLibPcap()
+    {
+        foreach (var name in new[] { "libpcap.so.1", "libpcap.so.0.8", "libpcap.so", "wpcap.dll" })
+        {
+            if (!NativeLibrary.TryLoad(name, out var handle)) continue;
+            NativeLibrary.Free(handle);
+            return true;
+        }
+        return false;
+    }
+
+    static bool HasEndpointSensorArtifacts() =>
+        File.Exists("/opt/gzctf/endpoint-sensor/linux-x64/gzctf-endpoint-sensor") &&
+        File.Exists("/opt/gzctf/endpoint-sensor/win-x64/gzctf-endpoint-sensor.exe");
+
     static long ReadTotalMemory()
     {
         try
         {
             var line = File.ReadLines("/proc/meminfo").First(item => item.StartsWith("MemTotal:"));
             return long.Parse(line.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1]) * 1024;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    static long ReadAvailableVmImageStorage()
+    {
+        try
+        {
+            const string imagePath = "/var/lib/gzctf/images";
+            var root = Path.GetPathRoot(Path.GetFullPath(imagePath));
+            return string.IsNullOrWhiteSpace(root) ? 0 : new DriveInfo(root).AvailableFreeSpace;
         }
         catch
         {

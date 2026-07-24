@@ -111,29 +111,29 @@ public sealed class ImageTemplateOwnershipMigrationTests : IAsyncLifetime
         {
             var migrator = context.Database.GetService<IMigrator>();
             await migrator.MigrateAsync(OwnershipMigration);
-            context.TrainingCourses.AddRange(
-                new TrainingCourse { Id = firstCourseId, Title = "first", Slug = "first-down" },
-                new TrainingCourse { Id = secondCourseId, Title = "second", Slug = "second-down" });
-            context.ImageTemplates.Add(new ImageTemplate
-            {
-                Id = templateId,
-                Name = "down",
-                ImageType = ImageType.Docker,
-                OSType = OSType.Linux,
-                Status = ImageStatus.Ready
-            });
-            context.TrainingCourseImageTemplateBindings.AddRange(
-                new()
-                {
-                    CourseId = secondCourseId,
-                    ImageTemplateId = templateId
-                },
-                new()
-                {
-                    CourseId = firstCourseId,
-                    ImageTemplateId = templateId
-                });
-            await context.SaveChangesAsync();
+            await context.Database.ExecuteSqlInterpolatedAsync($$"""
+                INSERT INTO "TrainingCourses"
+                    ("Id", "Title", "Slug", "Summary", "Description", "Tags", "Status",
+                     "EnrollmentPolicy", "CreatedAt", "UpdatedAt")
+                VALUES
+                    ({{firstCourseId}}, 'first', 'first-down', '', '', '[]', 'Draft',
+                     'TeacherApproval', now(), now()),
+                    ({{secondCourseId}}, 'second', 'second-down', '', '', '[]', 'Draft',
+                     'TeacherApproval', now(), now());
+
+                INSERT INTO "ImageTemplates"
+                    ("Id", "Name", "ContainsMalware", "FileSize", "ImageType", "OSType",
+                     "Status", "UploadedAt")
+                VALUES
+                    ({{templateId}}, 'down', false, 0, {{(byte)ImageType.Docker}},
+                     {{(byte)OSType.Linux}}, {{(byte)ImageStatus.Ready}}, now());
+
+                INSERT INTO "TrainingCourseImageTemplateBindings"
+                    ("CourseId", "ImageTemplateId", "AddedById", "AddedAt")
+                VALUES
+                    ({{secondCourseId}}, {{templateId}}, NULL, now()),
+                    ({{firstCourseId}}, {{templateId}}, NULL, now());
+                """);
 
             await migrator.MigrateAsync(PreviousMigration);
         }

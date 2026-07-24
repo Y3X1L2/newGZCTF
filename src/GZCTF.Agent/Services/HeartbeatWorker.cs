@@ -49,8 +49,8 @@ public class HeartbeatWorker : BackgroundService
                     CurrentVms = vms,
                     UsedPorts = 0,
                     CapabilityManifest = manifest,
-                    TeamLabFabricIp = (string?)null,
-                    TeamLabFabricStatus = teamLabStatus.Available && teamLabStatus.Enable ? 3 :
+                    TeamLabFabricIp = teamLabStatus.FabricIp,
+                    TeamLabFabricStatus = teamLabStatus.Available && teamLabStatus.Enable && teamLabStatus.FabricReady ? 3 :
                         teamLabStatus.Available ? 1 : 4
                 };
 

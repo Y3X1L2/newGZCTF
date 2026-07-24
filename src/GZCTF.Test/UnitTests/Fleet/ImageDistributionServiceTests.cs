@@ -10,7 +10,10 @@ using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Infrastructure;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Content.Infrastructure;
+using GZCTF.Modules.Content.Domain;
 using GZCTF.Modules.Runtime.Domain;
+using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Services.Fleet;
@@ -98,6 +101,120 @@ public class ImageDistributionServiceTests
         Assert.Contains(OperationalEventCodes.Image.TransferStarted, eventCodes);
         Assert.Contains(OperationalEventCodes.Image.VerifyStarted, eventCodes);
         Assert.Contains(OperationalEventCodes.Image.DistributionReady, eventCodes);
+    }
+
+    [Fact]
+    public async Task ProcessClaimedAsync_PreparedVmUsesImmutableRegistryProvenance()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, "kvm-node", NodeCapability.Kvm);
+        var source = SeedVmTemplate(context);
+        var artifact = new VmPreparedArtifact
+        {
+            Id = 7,
+            OSType = OSType.Windows,
+            Status = VmPreparedArtifactStatus.Ready,
+            ArtifactDigest = new string('d', 64),
+            ArtifactSize = 2048,
+            RegistryAddress = "10.24.0.28:5000",
+            RegistryRepository = "gzctf/vm-prepared/12",
+            RegistryTag = "f1-p1-dddd"
+        };
+        var prepared = new ImageTemplate
+        {
+            Id = 13,
+            Name = "prepared-win",
+            ImageType = ImageType.Qcow2,
+            OSType = OSType.Windows,
+            ImageHash = artifact.ArtifactDigest,
+            FileSize = artifact.ArtifactSize,
+            Status = ImageStatus.Ready,
+            VmArtifactStatus = VmArtifactStatus.Ready,
+            VmRuntimeMode = VmRuntimeMode.Managed,
+            PreparedArtifact = artifact
+        };
+        artifact.DerivedImageTemplate = prepared;
+        context.AddRange(artifact, prepared);
+        var record = new ImageDistributionRecord
+        {
+            ImageTemplateId = prepared.Id,
+            WorkerNodeId = node.Id,
+            ImageHash = prepared.ImageHash,
+            ImageType = prepared.ImageType,
+            Status = ImageDistributionStatus.Pulling,
+            ClaimOwner = "worker-1",
+            ClaimExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5)
+        };
+        context.ImageDistributionRecords.Add(record);
+        await context.SaveChangesAsync();
+        var agent = new RecordingAgentClient();
+
+        await CreateService(context, agent)
+            .ProcessClaimedAsync(record.Id, "worker-1", CancellationToken.None);
+
+        Assert.Equal([node.Id], agent.DownloadedPreparedVmNodes);
+        Assert.Empty(agent.DownloadedVmNodes);
+        Assert.Equal(ImageDistributionStatus.Ready,
+            (await context.ImageDistributionRecords.SingleAsync()).Status);
+    }
+
+    [Fact]
+    public async Task ProcessClaimedAsync_ScenarioVmUsesReleaseArtifactProvenance()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, "kvm-node", NodeCapability.Kvm);
+        var digest = new string('e', 64);
+        var scenario = new ImageTemplate
+        {
+            Id = 14,
+            Name = "scenario-ad-dc",
+            ImageType = ImageType.Qcow2,
+            OSType = OSType.Windows,
+            ImageHash = digest,
+            FileSize = 8192,
+            Status = ImageStatus.Ready,
+            VmArtifactStatus = VmArtifactStatus.Ready,
+            VmRuntimeMode = VmRuntimeMode.Scenario
+        };
+        context.ImageTemplates.Add(scenario);
+        context.TeamLabReleaseAssetArtifacts.Add(new TeamLabReleaseAssetArtifact
+        {
+            ReleaseId = Guid.NewGuid(),
+            AssetKey = "ad-dc",
+            SourceImageTemplateId = 12,
+            ScenarioImageTemplate = scenario,
+            CommitOperationId = Guid.NewGuid(),
+            Status = TeamLabReleaseArtifactStatus.Ready,
+            BuildIdentity = new string('f', 64),
+            ArtifactDigest = digest,
+            EvidenceDigest = new string('a', 64),
+            ArtifactSize = scenario.FileSize,
+            RegistryAddress = "10.24.0.28:5000",
+            RegistryRepository = "gzctf/teamlab/scenarios/release/ad-dc",
+            RegistryTag = "immutable",
+            ReadyAt = DateTimeOffset.UtcNow
+        });
+        var record = new ImageDistributionRecord
+        {
+            ImageTemplate = scenario,
+            WorkerNodeId = node.Id,
+            ImageHash = digest,
+            ImageType = ImageType.Qcow2,
+            Status = ImageDistributionStatus.Pulling,
+            ClaimOwner = "worker-1",
+            ClaimExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5)
+        };
+        context.ImageDistributionRecords.Add(record);
+        await context.SaveChangesAsync();
+        var agent = new RecordingAgentClient();
+
+        await CreateService(context, agent)
+            .ProcessClaimedAsync(record.Id, "worker-1", CancellationToken.None);
+
+        Assert.Equal([node.Id], agent.DownloadedPreparedVmNodes);
+        Assert.Empty(agent.DownloadedVmNodes);
+        Assert.Equal(ImageDistributionStatus.Ready,
+            (await context.ImageDistributionRecords.SingleAsync()).Status);
     }
 
     [Fact]
@@ -221,26 +338,70 @@ public class ImageDistributionServiceTests
         Assert.Equal(ImageDistributionOperation.Cleanup, record.Operation);
     }
 
+    [Fact]
+    public async Task ReconcileReferencesAsync_KeepsCacheForRunningImageCertification()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, "kvm-node", NodeCapability.Kvm);
+        var template = SeedVmTemplate(context);
+        var operation = new ApiOperation
+        {
+            Kind = "image-template.certify",
+            Status = ApiOperationStatus.Running,
+            ApiTokenId = Guid.NewGuid(),
+            RouteKey = "certify",
+            IdempotencyKey = "phase9-certification",
+            RequestHash = new string('b', 64)
+        };
+        context.ImageTemplateCertificationJobs.Add(new ImageTemplateCertificationJob
+        {
+            Operation = operation,
+            ImageTemplateId = template.Id,
+            ActorUserId = Guid.NewGuid()
+        });
+        context.ImageDistributionRecords.Add(new ImageDistributionRecord
+        {
+            ImageTemplateId = template.Id,
+            WorkerNodeId = node.Id,
+            ImageHash = template.ImageHash!,
+            ImageType = template.ImageType,
+            Status = ImageDistributionStatus.Ready,
+            References = [Reference(ImageDistributionReferenceKind.ImageCertification, template.Id)]
+        });
+        await context.SaveChangesAsync();
+
+        await CreateService(context, new RecordingAgentClient())
+            .ReconcileReferencesAsync(CancellationToken.None);
+
+        Assert.Single(await context.ImageDistributionReferences.ToArrayAsync());
+        Assert.Equal(ImageDistributionStatus.Ready,
+            (await context.ImageDistributionRecords.SingleAsync()).Status);
+    }
+
     static ImageDistributionService CreateService(AppDbContext context, RecordingAgentClient agent)
     {
         var registry = new DockerImageRegistryService(
             Options.Create(new DockerRegistrySettings { Address = "10.24.0.28:5000", Namespace = "ctf" }),
             BuildScopeFactory(context), agent, NullLogger<DockerImageRegistryService>.Instance);
+        var httpFactory = new ServiceCollection().AddHttpClient().BuildServiceProvider()
+            .GetRequiredService<IHttpClientFactory>();
         var vmRegistry = new Mock<VmImageRegistryService>(
             Options.Create(new DockerRegistrySettings { Address = "10.24.0.28:5000", Namespace = "ctf" }),
-            new ServiceCollection().AddHttpClient().BuildServiceProvider().GetRequiredService<IHttpClientFactory>(),
-            NullLogger<VmImageRegistryService>.Instance);
+            new OciArtifactRegistryClient(httpFactory, NullLogger<OciArtifactRegistryClient>.Instance));
         vmRegistry.Setup(service => service.EnsureArtifactAsync(
                 It.IsAny<ImageTemplate>(), It.IsAny<CancellationToken>()))
             .Returns<ImageTemplate, CancellationToken>((template, _) => Task.FromResult(
                 new VmImageArtifactReference("10.24.0.28:5000",
                     $"ctf/gzctf/vm-template/{template.Id}", template.ImageHash!,
                     $"sha256:{template.ImageHash}")));
+        vmRegistry.Setup(service => service.ArtifactExistsAsync(
+                It.IsAny<ImageTemplate>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
         var artifacts = new VmArtifactStore(
             Options.Create(new DockerRegistrySettings { Address = "10.24.0.28:5000", Namespace = "ctf" }),
             vmRegistry.Object, NullLogger<VmArtifactStore>.Instance);
         var writer = new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance);
-        return new ImageDistributionService(context, agent, registry, artifacts,
+        return new ImageDistributionService(context, agent, registry, artifacts, vmRegistry.Object,
             new ImageDistributionCoordinator(), new DeploymentExecutionContextAccessor(),
             writer, NullLogger<ImageDistributionService>.Instance);
     }
@@ -303,6 +464,7 @@ public class ImageDistributionServiceTests
     {
         public List<Guid> PulledDockerNodes { get; } = [];
         public List<Guid> DownloadedVmNodes { get; } = [];
+        public List<Guid> DownloadedPreparedVmNodes { get; } = [];
         public List<Guid> DeletedVmNodes { get; } = [];
         public Exception? DockerPullException { get; set; }
 
@@ -325,6 +487,20 @@ public class ImageDistributionServiceTests
             CancellationToken token = default)
         {
             DownloadedVmNodes.Add(nodeId);
+            return Task.FromResult(AgentVmImageDownloadResult.Ok(false, true, expectedSize, $"sha256:{hash}"));
+        }
+
+        public override Task<AgentVmImageDownloadResult> DownloadPreparedVmImageAsync(
+            Guid nodeId,
+            int templateId,
+            string hash,
+            long expectedSize,
+            string registryAddress,
+            string repository,
+            string tag,
+            CancellationToken token = default)
+        {
+            DownloadedPreparedVmNodes.Add(nodeId);
             return Task.FromResult(AgentVmImageDownloadResult.Ok(false, true, expectedSize, $"sha256:{hash}"));
         }
 

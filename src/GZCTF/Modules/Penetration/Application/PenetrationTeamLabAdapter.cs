@@ -52,7 +52,9 @@ public sealed class PenetrationTeamLabAdapter(
         else if (binding.TopologyId != topologyId)
         {
             var hasRuntime = await context.PenetrationTeamRuntimeBindings.AsNoTracking()
-                .AnyAsync(item => item.GameId == gameId, cancellationToken);
+                .AnyAsync(item => item.GameId == gameId &&
+                                  item.Status != PenetrationRuntimeBindingStatus.Destroyed,
+                    cancellationToken);
             if (hasRuntime) throw new InvalidOperationException("Destroy existing team runtimes before rebinding the topology.");
             binding.TopologyId = topologyId;
             binding.ActiveReleaseId = null;
@@ -137,6 +139,9 @@ public sealed class PenetrationTeamLabAdapter(
         else
         {
             runtimeBinding.RuntimeId = result.RuntimeId;
+            runtimeBinding.Status = PenetrationRuntimeBindingStatus.Active;
+            runtimeBinding.DestroyOperationId = null;
+            runtimeBinding.DestroyedAt = null;
         }
         await context.SaveChangesAsync(cancellationToken);
         return result;
@@ -150,40 +155,64 @@ public sealed class PenetrationTeamLabAdapter(
         CancellationToken cancellationToken)
     {
         var binding = await LoadRuntimeBindingAsync(gameId, teamId, cancellationToken);
+        if (binding.Status != PenetrationRuntimeBindingStatus.Active)
+            throw new InvalidOperationException("The TeamLab runtime is being destroyed or has already been destroyed.");
         var settings = await context.PenetrationGameLabBindings.AsNoTracking()
             .SingleAsync(item => item.GameId == gameId, cancellationToken);
-        var resetCount = await context.PenetrationResetRecords.AsNoTracking()
-            .CountAsync(item => item.RuntimeId == binding.RuntimeId, cancellationToken);
-        if (!byAdmin && resetCount >= settings.MaxResetCount)
-            throw new InvalidOperationException("Reset limit reached.");
         var runtime = await context.TeamLabRuntimes.AsNoTracking()
             .SingleAsync(item => item.Id == binding.RuntimeId, cancellationToken);
         if (settings.ActiveReleaseId is not { } releaseId)
             throw new InvalidOperationException("The game has no active TeamLab release.");
         var overlays = await objectives.BuildOverlaysAsync(gameId, teamId, releaseId, cancellationToken);
-        var result = await runtimes.ResetAndEnqueueAsync(
-            runtime.PublicId, new ResetTeamLabRuntimeModel(overlays, releaseId), null, cancellationToken);
-        context.PenetrationResetRecords.Add(new PenetrationResetRecord
+        var reset = await ReserveResetAsync(
+            binding.RuntimeId, userId, byAdmin, settings.MaxResetCount, cancellationToken);
+        try
         {
-            RuntimeId = binding.RuntimeId,
-            UserId = userId,
-            ByAdmin = byAdmin,
-            ResetAt = DateTimeOffset.UtcNow
-        });
-        await context.SaveChangesAsync(cancellationToken);
-        return result;
+            return await runtimes.ResetAndEnqueueAsync(
+                runtime.PublicId,
+                new ResetTeamLabRuntimeModel(overlays, releaseId),
+                reset.OperationId,
+                cancellationToken);
+        }
+        catch
+        {
+            await ReleaseFailedResetReservationAsync(reset.OperationId, cancellationToken);
+            throw;
+        }
     }
 
     public async Task DestroyTeamAsync(int gameId, int teamId, CancellationToken cancellationToken)
     {
+        await using var transaction = context.Database.IsRelational()
+            ? await context.Database.BeginTransactionAsync(cancellationToken)
+            : null;
+        if (context.Database.ProviderName?.Contains("Npgsql", StringComparison.Ordinal) == true)
+        {
+            var lockKey = $"penetration-destroy:{gameId}:{teamId}";
+            await context.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))",
+                cancellationToken);
+        }
+
         var binding = await LoadRuntimeBindingAsync(gameId, teamId, cancellationToken);
+        if (binding.Status == PenetrationRuntimeBindingStatus.Destroyed)
+            return;
         var runtimeId = await context.TeamLabRuntimes.AsNoTracking()
             .Where(item => item.Id == binding.RuntimeId)
             .Select(item => item.PublicId)
             .SingleAsync(cancellationToken);
-        await runtimes.DestroyAsync(runtimeId, cancellationToken);
-        context.PenetrationTeamRuntimeBindings.Remove(binding);
-        await context.SaveChangesAsync(cancellationToken);
+        var operationId = binding.DestroyOperationId ?? Guid.CreateVersion7();
+        if (binding.Status != PenetrationRuntimeBindingStatus.Destroying ||
+            binding.DestroyOperationId is null)
+        {
+            binding.Status = PenetrationRuntimeBindingStatus.Destroying;
+            binding.DestroyOperationId = operationId;
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        if (transaction is not null)
+            await transaction.CommitAsync(cancellationToken);
+
+        await runtimes.DestroyAndEnqueueAsync(runtimeId, operationId, null, cancellationToken);
     }
 
     public async Task DestroyGameAsync(int gameId, CancellationToken cancellationToken)
@@ -227,6 +256,79 @@ public sealed class PenetrationTeamLabAdapter(
         await context.PenetrationTeamRuntimeBindings
             .SingleOrDefaultAsync(item => item.GameId == gameId && item.TeamId == teamId, cancellationToken)
         ?? throw new InvalidOperationException("The team has no TeamLab runtime binding.");
+
+    private async Task<PenetrationResetRecord> ReserveResetAsync(
+        int runtimeId,
+        Guid userId,
+        bool byAdmin,
+        int maxResetCount,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = context.Database.IsRelational()
+            ? await context.Database.BeginTransactionAsync(cancellationToken)
+            : null;
+        if (context.Database.ProviderName?.Contains("Npgsql", StringComparison.Ordinal) == true)
+        {
+            var lockKey = $"penetration-reset:{runtimeId}";
+            await context.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))",
+                cancellationToken);
+        }
+
+        var targetGeneration = await context.TeamLabRuntimes.AsNoTracking()
+            .Where(item => item.Id == runtimeId)
+            .Select(item => item.Generation + 1)
+            .SingleAsync(cancellationToken);
+        var activeResetExists = await context.PenetrationResetRecords.AsNoTracking()
+            .AnyAsync(item => item.RuntimeId == runtimeId &&
+                              item.TargetGeneration == targetGeneration &&
+                              (item.Status == PenetrationResetStatus.Pending ||
+                               item.Status == PenetrationResetStatus.Running), cancellationToken);
+        if (activeResetExists)
+            throw new InvalidOperationException("A reset is already pending for this runtime generation.");
+
+        if (!byAdmin)
+        {
+            var consumed = await context.PenetrationResetRecords.AsNoTracking()
+                .CountAsync(item => item.RuntimeId == runtimeId && !item.ByAdmin &&
+                                    (item.Status == PenetrationResetStatus.Pending ||
+                                     item.Status == PenetrationResetStatus.Running ||
+                                     item.Status == PenetrationResetStatus.Succeeded ||
+                                     item.Status == PenetrationResetStatus.Failed &&
+                                     item.FailureClass == PenetrationResetFailureClass.Scenario),
+                    cancellationToken);
+            if (consumed >= maxResetCount)
+                throw new InvalidOperationException("Reset limit reached.");
+        }
+
+        var record = new PenetrationResetRecord
+        {
+            RuntimeId = runtimeId,
+            UserId = userId,
+            ByAdmin = byAdmin,
+            OperationId = Guid.CreateVersion7(),
+            TargetGeneration = targetGeneration,
+            Status = PenetrationResetStatus.Pending,
+            ResetAt = DateTimeOffset.UtcNow
+        };
+        context.PenetrationResetRecords.Add(record);
+        await context.SaveChangesAsync(cancellationToken);
+        if (transaction is not null)
+            await transaction.CommitAsync(cancellationToken);
+        return record;
+    }
+
+    private async Task ReleaseFailedResetReservationAsync(
+        Guid operationId,
+        CancellationToken cancellationToken)
+    {
+        var record = await context.PenetrationResetRecords.SingleAsync(
+            item => item.OperationId == operationId, cancellationToken);
+        record.Status = PenetrationResetStatus.Failed;
+        record.FailureClass = PenetrationResetFailureClass.Infrastructure;
+        record.CompletedAt = DateTimeOffset.UtcNow;
+        await context.SaveChangesAsync(cancellationToken);
+    }
 
     private static string Hash(CreateTeamLabRuntimeModel command)
     {

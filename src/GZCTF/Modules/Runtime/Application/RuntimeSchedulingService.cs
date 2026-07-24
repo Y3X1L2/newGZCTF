@@ -1,10 +1,13 @@
 using GZCTF.Infrastructure.Telemetry;
 using GZCTF.Models.Data;
+using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
+using GZCTF.Modules.Runtime.Domain;
 using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace GZCTF.Modules.Runtime.Application;
 
@@ -16,6 +19,7 @@ public sealed class RuntimeSchedulingService(
     IDeploymentQueueWakeup wakeup,
     IOperationalEventWriter events,
     OperationalCorrelation correlation,
+    IOptions<KvmSettings> kvmOptions,
     ILogger<RuntimeSchedulingService> logger)
 {
     static readonly TimeSpan ClaimTimeout = TimeSpan.FromMinutes(2);
@@ -75,7 +79,8 @@ public sealed class RuntimeSchedulingService(
                 context.ChangeTracker.Clear();
                 continue;
             }
-            if (!reservation.Success || reservation.NodeId is not { } nodeId)
+            var controlPlaneTicket = IsTeamLabControlPlaneTicket(ticket);
+            if (!reservation.Success || (!controlPlaneTicket && reservation.NodeId is null))
             {
                 ticket.Status = DeploymentQueueTicketStatus.Pending;
                 ticket.Stage = DeploymentStage.CapacityWaiting;
@@ -117,10 +122,13 @@ public sealed class RuntimeSchedulingService(
                 continue;
             }
 
+            var nodeId = reservation.NodeId;
             ticket.TargetNodeId = nodeId;
             ticket.Status = DeploymentQueueTicketStatus.Scheduled;
             ticket.Stage = DeploymentStage.NodeExecutionWaiting;
-            ticket.StageMessage = "Waiting for node execution capacity.";
+            ticket.StageMessage = controlPlaneTicket
+                ? "Waiting for platform control-plane execution capacity."
+                : "Waiting for node execution capacity.";
             ticket.BlockedReasonCode = null;
             ticket.NotBeforeAt = null;
             ticket.ClaimOwner = null;
@@ -134,7 +142,9 @@ public sealed class RuntimeSchedulingService(
                 ticket,
                 OperationalEventCodes.Runtime.SchedulingAssigned,
                 OperationalEventOutcome.Succeeded,
-                "Runtime scheduling assigned a worker node.",
+                controlPlaneTicket
+                    ? "Runtime scheduling assigned the platform control plane."
+                    : "Runtime scheduling assigned a worker node.",
                 workerNodeId: nodeId));
             await context.SaveChangesAsync(token);
             PlatformTelemetry.RecordRuntimeTransition(ticket.Kind.ToString(), ticket.Stage.ToString(), "assigned");
@@ -142,7 +152,7 @@ public sealed class RuntimeSchedulingService(
             scheduled++;
 
             logger.SystemLog(
-                $"Deployment scheduled: ticket={ticket.Id}, kind={ticket.Kind}, operation={ticket.Operation}, node={nodeId}, dockerSlots={ticket.DockerSlots}, vmSlots={ticket.VmSlots}.",
+                $"Deployment scheduled: ticket={ticket.Id}, kind={ticket.Kind}, operation={ticket.Operation}, node={nodeId?.ToString() ?? "control-plane"}, dockerSlots={ticket.DockerSlots}, vmSlots={ticket.VmSlots}.",
                 TaskStatus.Pending, LogLevel.Information);
         }
 
@@ -215,6 +225,10 @@ public sealed class RuntimeSchedulingService(
             ticket.TeamLabRuntimeId is { } teamLabRuntimeId)
             return await teamLabPlacement.BindAndReserveAsync(ticket.Id, teamLabRuntimeId, token);
 
+        if (IsTeamLabControlPlaneTicket(ticket))
+            return new FleetCapacityReservationResult(
+                true, null, null, 0, 0, "TeamLab control operation scheduled on the platform control plane.");
+
         if (ticket.Operation != RuntimeOperationKind.Create)
         {
             var controlNodeId = await ResolvePreferredNodeIdAsync(ticket, token);
@@ -223,10 +237,67 @@ public sealed class RuntimeSchedulingService(
                 : FleetCapacityReservationResult.Failed("Control operation target node is unavailable.");
         }
 
+        var resources = await ResolveResourcesAsync(ticket, token);
         return await capacity.TryReserveAsync(ticket.Id, new FleetCapacityRequest(
-            RequiredCapability(ticket), ticket.DockerSlots, ticket.VmSlots,
+            RequiredCapability(ticket), resources,
             await ResolvePreferredNodeIdAsync(ticket, token), false), token);
     }
+
+    async Task<WorkloadResourceVector> ResolveResourcesAsync(
+        DeploymentQueueTicket ticket,
+        CancellationToken token)
+    {
+        var specification = ticket.Kind switch
+        {
+            DeploymentQueueKind.GameContainer or
+            DeploymentQueueKind.ChallengeTestContainer or
+            DeploymentQueueKind.VirtualMachine => await context.GameChallenges.AsNoTracking()
+                .Where(challenge => challenge.Id == ticket.ChallengeId &&
+                                    (ticket.GameId == null || challenge.GameId == ticket.GameId))
+                .Select(challenge => new RuntimeResourceSpecification(
+                    challenge.CPUCount ?? 1,
+                    challenge.MemoryLimit ?? 64,
+                    challenge.StorageLimit ?? 256))
+                .SingleOrDefaultAsync(token),
+            DeploymentQueueKind.ExerciseContainer or DeploymentQueueKind.TrainingContainer =>
+                await context.ExerciseChallenges.AsNoTracking()
+                    .Where(challenge => challenge.Id == ticket.ChallengeId)
+                    .Select(challenge => new RuntimeResourceSpecification(
+                        challenge.CPUCount ?? 1,
+                        challenge.MemoryLimit ?? 64,
+                        challenge.StorageLimit ?? 256))
+                    .SingleOrDefaultAsync(token),
+            _ => null
+        } ?? new RuntimeResourceSpecification(0, 0, 0);
+
+        if (ticket.Kind == DeploymentQueueKind.VirtualMachine)
+        {
+            var vmCpu = specification.CpuUnits >= 1
+                ? specification.CpuUnits
+                : Math.Max(1, kvmOptions.Value.DefaultVmCpu);
+            var vmMemory = specification.MemoryMiB >= 1024
+                ? specification.MemoryMiB
+                : Math.Max(1024, kvmOptions.Value.DefaultVmMemoryMb);
+            return new WorkloadResourceVector(
+                vmCpu * 10L,
+                vmMemory,
+                specification.StorageMiB,
+                ticket.DockerSlots,
+                ticket.VmSlots);
+        }
+
+        return new WorkloadResourceVector(
+            specification.CpuUnits,
+            specification.MemoryMiB,
+            specification.StorageMiB,
+            ticket.DockerSlots,
+            ticket.VmSlots);
+    }
+
+    sealed record RuntimeResourceSpecification(int CpuUnits, int MemoryMiB, int StorageMiB);
+
+    internal static bool IsTeamLabControlPlaneTicket(DeploymentQueueTicket ticket) =>
+        ticket.Kind == DeploymentQueueKind.TeamLabRuntime && ticket.Operation != RuntimeOperationKind.Create;
 
     async Task<Guid?> ResolvePreferredNodeIdAsync(DeploymentQueueTicket ticket, CancellationToken token)
     {

@@ -40,6 +40,29 @@ public sealed class FakeImageImportExecutor : IImageImportExecutor
             $"Imported from {job.OriginalFileName}");
     }
 
+    public async Task<ImageImportArtifact> ImportVmQcow2Async(
+        ImageImportJob job,
+        CancellationToken cancellationToken)
+    {
+        Assert.True(File.Exists(job.StagedPath));
+        await using var stream = File.OpenRead(job.StagedPath!);
+        var digest = Convert.ToHexStringLower(
+            await SHA256.HashDataAsync(stream, cancellationToken));
+        Assert.Equal(job.ExpectedDigest, digest);
+        _executions.AddOrUpdate(job.OperationId, 1, (_, count) => count + 1);
+        return new ImageImportArtifact(
+            $"10.24.0.28:5000/gzctf/vm-imports/test:{digest}",
+            digest,
+            job.ContentLength,
+            $"Imported from {job.OriginalFileName}",
+            new ImportedVmArtifact(
+                "10.24.0.28:5000",
+                "gzctf/vm-imports/test",
+                digest,
+                digest,
+                job.ContentLength));
+    }
+
     public int ExecutionCount(Guid operationId) =>
         _executions.TryGetValue(operationId, out var count) ? count : 0;
 }

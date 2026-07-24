@@ -1,5 +1,4 @@
 using GZCTF.Modules.TeamLab.Contracts;
-using GZCTF.Services.Fleet;
 
 namespace GZCTF.Modules.TeamLab.Application;
 
@@ -25,7 +24,7 @@ public interface ITeamLabRuntimeApplicationService
         Guid ticketId,
         string? protectedPayload,
         CancellationToken cancellationToken);
-    Task<DeploymentQueueResult> DestroyAndEnqueueAsync(
+    Task<TeamLabQueueTicketResult> DestroyAndEnqueueAsync(
         Guid runtimeId,
         Guid? operationId,
         Guid? actorUserId,

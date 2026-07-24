@@ -5,7 +5,8 @@ namespace GZCTF.Modules.Content.Domain;
 public enum ImageImportSourceKind
 {
     DockerReference = 0,
-    DockerArchive = 1
+    DockerArchive = 1,
+    VmQcow2 = 2
 }
 
 public sealed class ImageImportJob
@@ -19,6 +20,7 @@ public sealed class ImageImportJob
     public string? ExpectedDigest { get; set; }
     public ImageType RequestedTemplateKind { get; set; }
     public OSType RequestedOsType { get; set; }
+    public VmNetworkMode RequestedVmNetworkMode { get; set; } = VmNetworkMode.Dhcp;
     public string RequestedName { get; set; } = string.Empty;
     public Guid? CreatedById { get; set; }
     public int? ImageTemplateId { get; set; }

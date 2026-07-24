@@ -10,6 +10,8 @@ public sealed class ImageTemplateEntityConfiguration : IEntityTypeConfiguration<
         builder.HasIndex(template => template.Name);
         builder.HasIndex(template => template.Status);
         builder.HasIndex(template => template.CreatedById);
+        builder.Property(template => template.VmArtifactStatus).HasConversion<byte>();
+        builder.HasIndex(template => template.PreparedArtifactId).IsUnique();
         builder.HasOne(template => template.CreatedBy)
             .WithMany()
             .HasForeignKey(template => template.CreatedById)

@@ -124,7 +124,9 @@ internal static class AppBuilderExtensions
             {
                 options.MaximumPayloadBytes = 8 * 1024 * 1024;
                 options.MaximumKeyLength = 512;
-            }).AddSerializer(new ScoreboardHybridCacheSerializer());
+            })
+                .AddSerializer(new ScoreboardHybridCacheSerializer())
+                .AddSerializer(new PostListHybridCacheSerializer());
         }
     }
 }

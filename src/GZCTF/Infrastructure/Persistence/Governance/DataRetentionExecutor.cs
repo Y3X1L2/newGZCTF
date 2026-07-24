@@ -38,6 +38,11 @@ public sealed class DataRetentionExecutor(
             cleaner.CleanTeamLabEventsAsync, cancellationToken);
         await CleanAsync("teamlab-flow-aggregate", leaseOwner, now,
             cleaner.CleanFlowAggregatesAsync, cancellationToken);
+        await CleanAsync("teamlab-observation", leaseOwner, now,
+            cleaner.CleanTeamLabObservationsAsync, cancellationToken);
+        await CleanAsync("teamlab-traffic-path", leaseOwner, now,
+            cleaner.CleanTeamLabTrafficPathsAsync, cancellationToken);
+        await CleanExpiredCapturesAsync(leaseOwner, now, cancellationToken);
         await CleanAsync("governance-run", leaseOwner, now,
             cleaner.CleanGovernanceRunsAsync, cancellationToken);
         await CleanAsync("worker-node-metric", leaseOwner, now,
@@ -242,6 +247,18 @@ public sealed class DataRetentionExecutor(
         var cutoff = now - policy.RawRetention!.Value;
         await RunAsync(dataSet, "clean-terminal", leaseOwner, cutoff, 0,
             () => action(cutoff, policy.DeleteBatchSize, cancellationToken),
+            cancellationToken, deleted: true);
+    }
+
+    private async Task CleanExpiredCapturesAsync(
+        string leaseOwner,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var policy = catalog.GetRequired("teamlab-capture");
+        await RunAsync("teamlab-capture", "expire-artifacts", leaseOwner, now, 0,
+            () => cleaner.CleanExpiredTeamLabCaptureArtifactsAsync(
+                now, policy.DeleteBatchSize, cancellationToken),
             cancellationToken, deleted: true);
     }
 

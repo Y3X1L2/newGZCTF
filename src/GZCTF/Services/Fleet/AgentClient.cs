@@ -1,8 +1,8 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using System.Net.Mime;
 using GZCTF.Infrastructure.Telemetry;
+using GZCTF.GuestControl.Contracts;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Contracts;
@@ -16,6 +16,9 @@ namespace GZCTF.Services.Fleet;
 
 public class AgentClient
 {
+    private static readonly TimeSpan TeamLabRequestTimeout = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan EndpointSensorStartTimeout = TimeSpan.FromMinutes(2);
+
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _config;
@@ -67,7 +70,7 @@ public class AgentClient
         var client = BuildClient(node);
         var body = JsonSerializer.Serialize(new
         {
-            config.Generation, config.Image, config.TeamId, config.ChallengeId, config.UserId,
+            config.RuntimeId, config.Generation, config.Image, config.TeamId, config.ChallengeId, config.UserId,
             config.ExposedPort, config.Flag, config.EnableTrafficCapture,
             config.MemoryLimit, config.CPUCount, config.StorageLimit,
             NetworkMode = config.NetworkMode.ToString(),
@@ -270,18 +273,15 @@ public class AgentClient
             response, "teamlab.status", node.Id, deadline.Token);
     }
 
-    public virtual async Task<TeamLabDryRunResponse?> CreateTeamLabBridgeAsync(Guid nodeId, TeamLabBridgeRequest request,
-        CancellationToken token) => await PostTeamLabAsync<TeamLabBridgeRequest, TeamLabDryRunResponse>(nodeId,
-        "/api/teamlab/bridges", request, token);
-
-    public virtual async Task<TeamLabDryRunResponse?> CreateTeamLabRouterAsync(Guid nodeId, TeamLabRouterRequest request,
-        CancellationToken token) => await PostTeamLabAsync<TeamLabRouterRequest, TeamLabDryRunResponse>(nodeId,
-        "/api/teamlab/routers", request, token);
-
     public virtual async Task<TeamLabDryRunResponse?> ConfigureTeamLabWireGuardAsync(Guid nodeId,
         TeamLabWireGuardRequest request, CancellationToken token) =>
         await PostTeamLabAsync<TeamLabWireGuardRequest, TeamLabDryRunResponse>(nodeId,
             "/api/teamlab/wireguard", request, token);
+
+    public virtual async Task<TeamLabDryRunResponse?> CleanupTeamLabWireGuardAsync(Guid nodeId,
+        TeamLabWireGuardCleanupRequest request, CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabWireGuardCleanupRequest, TeamLabDryRunResponse>(nodeId,
+            "/api/teamlab/wireguard/cleanup", request, token);
 
     public virtual async Task<TeamLabDryRunResponse?> CleanupTeamLabAsync(Guid nodeId, TeamLabCleanupRequest request,
         CancellationToken token) => await PostTeamLabAsync<TeamLabCleanupRequest, TeamLabDryRunResponse>(nodeId,
@@ -296,20 +296,44 @@ public class AgentClient
         await PostTeamLabAsync<TeamLabContainerAttachRequest, TeamLabDryRunResponse>(nodeId,
             "/api/teamlab/containers/attach", request, token);
 
-    public virtual async Task<TeamLabDryRunResponse?> ConfigureTeamLabDhcpDnsAsync(Guid nodeId,
-        TeamLabDhcpDnsRequest request, CancellationToken token) =>
-        await PostTeamLabAsync<TeamLabDhcpDnsRequest, TeamLabDryRunResponse>(nodeId,
-            "/api/teamlab/dhcp-dns", request, token);
+    public virtual async Task<TeamLabContainerNetworkFinalizeResponse?> FinalizeTeamLabContainerNetworkAsync(
+        Guid nodeId,
+        TeamLabContainerNetworkFinalizeRequest request,
+        CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabContainerNetworkFinalizeRequest, TeamLabContainerNetworkFinalizeResponse>(
+            nodeId, "/api/teamlab/containers/network/finalize", request, token);
 
-    public virtual async Task<TeamLabDryRunResponse?> ProbeTeamLabDhcpDnsAsync(Guid nodeId,
-        TeamLabDhcpDnsProbeRequest request, CancellationToken token) =>
-        await PostTeamLabAsync<TeamLabDhcpDnsProbeRequest, TeamLabDryRunResponse>(nodeId,
-            "/api/teamlab/dhcp-dns/probe", request, token);
+    public virtual async Task<TeamLabInfrastructureApplyResponse?> ApplyTeamLabInfrastructureAsync(
+        Guid nodeId,
+        TeamLabInfrastructureApplyRequest request,
+        CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabInfrastructureApplyRequest, TeamLabInfrastructureApplyResponse>(
+            nodeId, "/api/teamlab/shards/apply", request, token);
 
-    public virtual async Task<TeamLabDryRunResponse?> ApplyTeamLabFabricAsync(Guid nodeId,
-        TeamLabFabricApplyRequest request, CancellationToken token) =>
-        await PostTeamLabAsync<TeamLabFabricApplyRequest, TeamLabDryRunResponse>(nodeId,
-            "/api/teamlab/fabric/apply", request, token);
+    public virtual async Task<TeamLabInfrastructureStateResponse> GetTeamLabInfrastructureStateAsync(
+        Guid nodeId,
+        int runtimeId,
+        int generation,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token)
+                   ?? throw NodeNotFound(nodeId, "teamlab.infrastructure.state");
+        var client = BuildClient(node);
+        using var response = await client.GetAsync(
+            $"/api/teamlab/runtime/{runtimeId}/generation/{generation}/state", token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(
+                response,
+                "teamlab.infrastructure.state",
+                node.Id,
+                $"Agent TeamLab infrastructure state failed on node {node.Name} ({node.HostAddress}).",
+                token);
+        return await response.Content.ReadFromJsonAsync<TeamLabInfrastructureStateResponse>(token)
+               ?? throw InvalidAgentResponse(
+                   node.Id,
+                   "teamlab.infrastructure.state",
+                   $"Agent returned an empty TeamLab infrastructure state on node {node.Name} ({node.HostAddress}).");
+    }
 
     public virtual async Task<TeamLabCaptureResponse?> StartTeamLabCaptureAsync(Guid nodeId,
         TeamLabCaptureStartRequest request, CancellationToken token) =>
@@ -326,20 +350,43 @@ public class AgentClient
         await PostTeamLabAsync<TeamLabCaptureStatusRequest, TeamLabCaptureResponse>(nodeId,
             "/api/teamlab/capture/status", request, token);
 
-    public virtual async Task<TeamLabFlowResponse?> StartTeamLabFlowMetadataAsync(Guid nodeId,
-        TeamLabFlowStartRequest request, CancellationToken token) =>
-        await PostTeamLabAsync<TeamLabFlowStartRequest, TeamLabFlowResponse>(nodeId,
-            "/api/teamlab/flows/start", request, token);
+    public virtual async Task<TeamLabCaptureResponse?> UploadTeamLabCaptureAsync(Guid nodeId,
+        TeamLabCaptureUploadRequest request, CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabCaptureUploadRequest, TeamLabCaptureResponse>(nodeId,
+            "/api/teamlab/capture/upload", request, token);
 
-    public virtual async Task<TeamLabFlowResponse?> StopTeamLabFlowMetadataAsync(Guid nodeId,
-        TeamLabFlowStopRequest request, CancellationToken token) =>
-        await PostTeamLabAsync<TeamLabFlowStopRequest, TeamLabFlowResponse>(nodeId,
-            "/api/teamlab/flows/stop", request, token);
+    public virtual async Task<TeamLabCaptureResponse?> DeleteTeamLabCaptureAsync(Guid nodeId,
+        TeamLabCaptureDeleteRequest request, CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabCaptureDeleteRequest, TeamLabCaptureResponse>(nodeId,
+            "/api/teamlab/capture/delete", request, token);
 
-    public virtual async Task<TeamLabFlowResponse?> GetTeamLabFlowMetadataSnapshotAsync(Guid nodeId,
-        TeamLabFlowSnapshotRequest request, CancellationToken token) =>
-        await PostTeamLabAsync<TeamLabFlowSnapshotRequest, TeamLabFlowResponse>(nodeId,
-            "/api/teamlab/flows/snapshot", request, token);
+    public virtual async Task<TeamLabObservationBatchResponse?> ReadTeamLabObservationsAsync(
+        Guid nodeId,
+        TeamLabObservationBatchRequest request,
+        CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabObservationBatchRequest, TeamLabObservationBatchResponse>(
+            nodeId, "/api/teamlab/observations/read", request, token);
+
+    public virtual async Task<TeamLabEndpointSensorResponse?> RegisterTeamLabEndpointSensorAsync(
+        Guid nodeId,
+        TeamLabEndpointSensorRegistrationRequest request,
+        CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabEndpointSensorRegistrationRequest, TeamLabEndpointSensorResponse>(
+            nodeId, "/api/teamlab/sensors/register", request, token);
+
+    public virtual async Task<TeamLabEndpointSensorResponse?> RemoveTeamLabEndpointSensorAsync(
+        Guid nodeId,
+        TeamLabEndpointSensorRemoveRequest request,
+        CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabEndpointSensorRemoveRequest, TeamLabEndpointSensorResponse>(
+            nodeId, "/api/teamlab/sensors/remove", request, token);
+
+    public virtual async Task<TeamLabEndpointSensorResponse?> StartTeamLabEndpointSensorAsync(
+        Guid nodeId,
+        TeamLabEndpointSensorStartRequest request,
+        CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabEndpointSensorStartRequest, TeamLabEndpointSensorResponse>(
+            nodeId, "/api/teamlab/sensors/start", request, token, EndpointSensorStartTimeout);
 
     public virtual async Task<AgentSyncResponse> SyncAgentAsync(Guid nodeId, AgentSyncRequest request,
         CancellationToken token)
@@ -394,44 +441,19 @@ public class AgentClient
             : result with { Message = "Agent synchronized and capability manifest confirmed." };
     }
 
-    public virtual async Task<TeamLabCaptureDownloadResult?> DownloadTeamLabCaptureAsync(Guid nodeId,
-        int runtimeId, int jobId, CancellationToken token)
-    {
-        var node = await GetNodeAsync(nodeId, token);
-        if (node is null) return TeamLabCaptureDownloadResult.Failed($"Fleet node {nodeId} was not found.");
-
-        var client = BuildClient(node);
-        var path = $"/api/teamlab/capture/{runtimeId}/{jobId}/download";
-        var response = await client.GetAsync(path, HttpCompletionOption.ResponseHeadersRead, token);
-        if (!response.IsSuccessStatusCode)
-        {
-            var error = await ReadAgentErrorAsync(
-                response,
-                "teamlab.capture.download",
-                node.Id,
-                "Agent TeamLab capture download failed.",
-                token);
-            return TeamLabCaptureDownloadResult.Failed(error.Message);
-        }
-
-        var stream = await response.Content.ReadAsStreamAsync(token);
-        var fileName = response.Content.Headers.ContentDisposition?.FileNameStar
-                       ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"')
-                       ?? $"teamlab-capture-{runtimeId}-{jobId}.pcap";
-        var contentType = response.Content.Headers.ContentType?.ToString() ?? MediaTypeNames.Application.Octet;
-        var length = response.Content.Headers.ContentLength;
-        return TeamLabCaptureDownloadResult.FromStream(stream, fileName, contentType, length, response);
-    }
-
-    private async Task<TResponse?> PostTeamLabAsync<TRequest, TResponse>(Guid nodeId, string path, TRequest request,
-        CancellationToken token)
+    private async Task<TResponse?> PostTeamLabAsync<TRequest, TResponse>(
+        Guid nodeId,
+        string path,
+        TRequest request,
+        CancellationToken token,
+        TimeSpan? requestTimeout = null)
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null) return default;
 
         var client = BuildClient(node);
         var body = JsonSerializer.Serialize(request);
-        using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(60));
+        using var deadline = CreateDeadline(token, requestTimeout ?? TeamLabRequestTimeout);
         var response = await client.PostAsync(path, new StringContent(body, Encoding.UTF8, "application/json"),
             deadline.Token);
         return await ReadTeamLabResponseAsync<TResponse>(
@@ -637,6 +659,289 @@ public class AgentClient
                    $"Agent returned an empty VM response on node {node.Name} ({node.HostAddress}).");
     }
 
+    public virtual async Task<AgentCommitVmScenarioResponse> CommitVmScenarioAsync(
+        Guid nodeId,
+        AgentCommitVmScenarioRequest request,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token)
+                   ?? throw NodeNotFound(nodeId, "image.vm.scenario-commit");
+        var client = BuildClient(node);
+        using var deadline = CreateDeadline(token, TimeSpan.FromMinutes(45));
+        using var response = await client.PostAsync(
+            "/api/vms/scenario-artifacts",
+            new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json"),
+            deadline.Token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(
+                response,
+                "image.vm.scenario-commit",
+                node.Id,
+                $"Scenario artifact capture failed on node {node.Name} ({node.HostAddress}).",
+                token);
+        return await response.Content.ReadFromJsonAsync<AgentCommitVmScenarioResponse>(token)
+               ?? throw InvalidAgentResponse(
+                   node.Id,
+                   "image.vm.scenario-commit",
+                   $"Agent returned an empty scenario artifact response on node {node.Name} ({node.HostAddress}).");
+    }
+
+    public virtual async Task<GuestControlPrepareResponse> PrepareGuestControlAsync(
+        Guid nodeId,
+        GuestControlPrepareRequest request,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token)
+                   ?? throw NodeNotFound(nodeId, "vm.guest-control.prepare");
+        var client = BuildClient(node);
+        using var response = await client.PostAsync(
+            "/api/guest-control/prepare",
+            new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json"), token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(
+                response,
+                "vm.guest-control.prepare",
+                node.Id,
+                $"Guest control preparation failed on node {node.Name} ({node.HostAddress}).",
+                token);
+        return await response.Content.ReadFromJsonAsync<GuestControlPrepareResponse>(token)
+               ?? throw InvalidAgentResponse(node.Id, "vm.guest-control.prepare",
+                   "Agent returned an empty guest-control preparation response.");
+    }
+
+    public virtual async Task<GuestManagementEndpointInfo> GetGuestManagementEndpointAsync(
+        Guid nodeId,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token)
+                   ?? throw NodeNotFound(nodeId, "vm.guest-control.network");
+        var client = BuildClient(node);
+        using var response = await client.GetAsync("/api/guest-control/network", token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(
+                response,
+                "vm.guest-control.network",
+                node.Id,
+                $"Guest management endpoint query failed on node {node.Name} ({node.HostAddress}).",
+                token);
+        return await response.Content.ReadFromJsonAsync<GuestManagementEndpointInfo>(token)
+               ?? throw InvalidAgentResponse(node.Id, "vm.guest-control.network",
+                   "Agent returned an empty guest-management endpoint response.");
+    }
+
+    public virtual async Task<GuestControlStatus?> GetGuestControlStatusAsync(
+        Guid nodeId,
+        GuestAssetIdentity identity,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token)
+                   ?? throw NodeNotFound(nodeId, "vm.guest-control.status");
+        var client = BuildClient(node);
+        using var response = await client.PostAsync(
+            "/api/guest-control/status",
+            new StringContent(JsonSerializer.Serialize(identity), Encoding.UTF8, "application/json"), token);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(
+                response,
+                "vm.guest-control.status",
+                node.Id,
+                $"Guest control status query failed on node {node.Name} ({node.HostAddress}).",
+                token);
+        return await response.Content.ReadFromJsonAsync<GuestControlStatus>(token);
+    }
+
+    public virtual async Task StageGuestConformancePackageAsync(
+        Guid nodeId,
+        AgentGuestConformancePackageRequest request,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token)
+                   ?? throw NodeNotFound(nodeId, "vm.guest-control.conformance-package");
+        var client = BuildClient(node);
+        using var response = await client.PostAsync(
+            "/api/guest-control/conformance-package",
+            new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json"), token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(
+                response,
+                "vm.guest-control.conformance-package",
+                node.Id,
+                $"Guest conformance package staging failed on node {node.Name} ({node.HostAddress}).",
+                token);
+    }
+
+    public virtual async Task<bool> WaitVmCleanShutdownAsync(
+        Guid nodeId,
+        string vmName,
+        int timeoutSeconds,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token)
+                   ?? throw NodeNotFound(nodeId, "vm.wait-clean-shutdown");
+        var client = BuildClient(node);
+        using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(Math.Clamp(timeoutSeconds + 15, 30, 1815)));
+        using var response = await client.PostAsync(
+            $"/api/vms/{Uri.EscapeDataString(vmName)}/wait-clean-shutdown?timeoutSeconds={Math.Clamp(timeoutSeconds, 1, 1800)}",
+            null,
+            deadline.Token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(
+                response,
+                "vm.wait-clean-shutdown",
+                node.Id,
+                $"VM clean-shutdown wait failed on node {node.Name} ({node.HostAddress}).",
+                token);
+        var result = await response.Content.ReadFromJsonAsync<AgentVmCleanShutdownResponse>(token);
+        return result?.CleanShutdown == true;
+    }
+
+    public virtual async Task<AgentVmBootstrapApplyResponse> ApplyVmBootstrapAsync(
+        Guid nodeId,
+        string vmName,
+        AgentVmBootstrapApplyRequest request,
+        CancellationToken token) =>
+        await ApplyVmBootstrapAsync(nodeId, vmName, request, null, token);
+
+    public virtual async Task<AgentVmBootstrapApplyResponse> ApplyVmBootstrapAsync(
+        Guid nodeId,
+        string vmName,
+        AgentVmBootstrapApplyRequest request,
+        string? expectedNativeId,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token)
+                   ?? throw NodeNotFound(nodeId, "vm.bootstrap.apply");
+        var client = BuildClient(node);
+        using var deadline = CreateDeadline(token, TimeSpan.FromMinutes(45));
+        using var response = await client.PostAsync(
+            $"/api/vms/{Uri.EscapeDataString(vmName)}/bootstrap/apply{BuildVmIdentityQuery(null, expectedNativeId)}",
+            new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json"),
+            deadline.Token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(
+                response,
+                "vm.bootstrap.apply",
+                node.Id,
+                $"Agent VM bootstrap failed on node {node.Name} ({node.HostAddress}), VM {vmName}.",
+                token);
+        return await response.Content.ReadFromJsonAsync<AgentVmBootstrapApplyResponse>(token)
+               ?? throw InvalidAgentResponse(
+                   node.Id,
+                   "vm.bootstrap.apply",
+                   $"Agent returned an empty VM bootstrap response on node {node.Name} ({node.HostAddress}).");
+    }
+
+    public virtual async Task<AgentVmGuestStatusResponse> WaitVmGuestAsync(
+        Guid nodeId,
+        string vmName,
+        int timeoutSeconds,
+        CancellationToken token) =>
+        await WaitVmGuestAsync(nodeId, vmName, timeoutSeconds, null, null, token);
+
+    public virtual async Task<AgentVmGuestStatusResponse> WaitVmGuestAsync(
+        Guid nodeId,
+        string vmName,
+        int timeoutSeconds,
+        int? expectedGeneration,
+        string? expectedNativeId,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token)
+                   ?? throw NodeNotFound(nodeId, "vm.guest.wait");
+        var client = BuildClient(node);
+        using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(Math.Clamp(timeoutSeconds + 30, 40, 630)));
+        using var response = await client.PostAsync(
+            $"/api/vms/{Uri.EscapeDataString(vmName)}/guest/wait{BuildVmIdentityQuery(expectedGeneration, expectedNativeId)}",
+            new StringContent(JsonSerializer.Serialize(new { timeoutSeconds }), Encoding.UTF8, "application/json"),
+            deadline.Token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(
+                response,
+                "vm.guest.wait",
+                node.Id,
+                $"Agent VM guest wait failed on node {node.Name} ({node.HostAddress}), VM {vmName}.",
+                token);
+        return await response.Content.ReadFromJsonAsync<AgentVmGuestStatusResponse>(token)
+               ?? throw InvalidAgentResponse(
+                   node.Id,
+                   "vm.guest.wait",
+                   $"Agent returned an empty guest status on node {node.Name} ({node.HostAddress}).");
+    }
+
+    public virtual async Task<AgentVmBootstrapApplyResponse> CheckVmBootstrapHealthAsync(
+        Guid nodeId,
+        string vmName,
+        AgentVmBootstrapApplyRequest request,
+        CancellationToken token) =>
+        await CheckVmBootstrapHealthAsync(nodeId, vmName, request, null, token);
+
+    public virtual async Task<AgentVmBootstrapApplyResponse> CheckVmBootstrapHealthAsync(
+        Guid nodeId,
+        string vmName,
+        AgentVmBootstrapApplyRequest request,
+        string? expectedNativeId,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token)
+                   ?? throw NodeNotFound(nodeId, "vm.bootstrap.health");
+        var client = BuildClient(node);
+        using var deadline = CreateDeadline(token, TimeSpan.FromMinutes(30));
+        using var response = await client.PostAsync(
+            $"/api/vms/{Uri.EscapeDataString(vmName)}/bootstrap/health{BuildVmIdentityQuery(null, expectedNativeId)}",
+            new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json"),
+            deadline.Token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(
+                response,
+                "vm.bootstrap.health",
+                node.Id,
+                $"Agent VM health probe failed on node {node.Name} ({node.HostAddress}), VM {vmName}.",
+                token);
+        return await response.Content.ReadFromJsonAsync<AgentVmBootstrapApplyResponse>(token)
+               ?? throw InvalidAgentResponse(
+                   node.Id,
+                   "vm.bootstrap.health",
+                   $"Agent returned an empty VM health response on node {node.Name} ({node.HostAddress}).");
+    }
+
+    public virtual async Task<AgentVmCapabilityProbeResponse> ProbeVmCapabilitiesAsync(
+        Guid nodeId,
+        string vmName,
+        AgentVmCapabilityProbeRequest request,
+        CancellationToken token) =>
+        await ProbeVmCapabilitiesAsync(nodeId, vmName, request, null, null, token);
+
+    public virtual async Task<AgentVmCapabilityProbeResponse> ProbeVmCapabilitiesAsync(
+        Guid nodeId,
+        string vmName,
+        AgentVmCapabilityProbeRequest request,
+        int? expectedGeneration,
+        string? expectedNativeId,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token)
+                   ?? throw NodeNotFound(nodeId, "vm.capabilities.probe");
+        var client = BuildClient(node);
+        using var deadline = CreateDeadline(token, TimeSpan.FromMinutes(15));
+        using var response = await client.PostAsync(
+            $"/api/vms/{Uri.EscapeDataString(vmName)}/capabilities/probe{BuildVmIdentityQuery(expectedGeneration, expectedNativeId)}",
+            new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json"),
+            deadline.Token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(
+                response,
+                "vm.capabilities.probe",
+                node.Id,
+                $"Agent VM capability probe failed on node {node.Name} ({node.HostAddress}), VM {vmName}.",
+                token);
+        return await response.Content.ReadFromJsonAsync<AgentVmCapabilityProbeResponse>(token)
+               ?? throw InvalidAgentResponse(
+                   node.Id,
+                   "vm.capabilities.probe",
+                   $"Agent returned an empty VM capability response on node {node.Name} ({node.HostAddress}).");
+    }
+
     public virtual async Task DestroyVmAsync(Guid nodeId, string vmName, CancellationToken token)
         => await DestroyVmAsync(nodeId, vmName, null, null, token);
 
@@ -673,10 +978,19 @@ public class AgentClient
     }
 
     public async Task<AgentVmIpResponse?> GetVmIpAsync(Guid nodeId, string vmName, CancellationToken token) =>
-        await GetVmIpAsync(nodeId, vmName, [], token);
+        await GetVmIpAsync(nodeId, vmName, [], null, null, token);
 
     public async Task<AgentVmIpResponse?> GetVmIpAsync(Guid nodeId, string vmName,
-        IReadOnlyList<AgentVmNetworkInterfaceRequest> interfaces, CancellationToken token)
+        IReadOnlyList<AgentVmNetworkInterfaceRequest> interfaces, CancellationToken token) =>
+        await GetVmIpAsync(nodeId, vmName, interfaces, null, null, token);
+
+    public async Task<AgentVmIpResponse?> GetVmIpAsync(
+        Guid nodeId,
+        string vmName,
+        IReadOnlyList<AgentVmNetworkInterfaceRequest> interfaces,
+        int? expectedGeneration,
+        string? expectedNativeId,
+        CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null) return null;
@@ -684,7 +998,7 @@ public class AgentClient
         var client = BuildClient(node);
         try
         {
-            var path = $"/api/vms/{Uri.EscapeDataString(vmName)}/ip";
+            var path = $"/api/vms/{Uri.EscapeDataString(vmName)}/ip{BuildVmIdentityQuery(expectedGeneration, expectedNativeId)}";
             var response = interfaces.Count == 0
                 ? await client.GetAsync(path, token)
                 : await client.PostAsync(path,
@@ -898,6 +1212,104 @@ public class AgentClient
         return value.ToLowerInvariant();
     }
 
+    public virtual async Task<AgentVmImageDownloadResult> DownloadPreparedVmImageAsync(
+        Guid nodeId,
+        int templateId,
+        string hash,
+        long expectedSize,
+        string registryAddress,
+        string repository,
+        string tag,
+        CancellationToken token = default)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null)
+            return AgentVmImageDownloadResult.Failed($"Fleet node {nodeId} was not found.");
+        var digest = NormalizeSha256Digest(hash);
+        var body = JsonSerializer.Serialize(new
+        {
+            templateId,
+            hash = digest,
+            expectedSize,
+            registryAddress,
+            repository,
+            tag,
+            digest = $"sha256:{digest}"
+        });
+        var client = BuildClient(node);
+        using var deadline = CreateDeadline(token, TimeSpan.FromHours(2));
+        using var response = await client.PostAsync(
+            "/api/images/download-vm",
+            new StringContent(body, Encoding.UTF8, "application/json"), deadline.Token);
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await ReadAgentErrorAsync(
+                response,
+                "image.vm.download-prepared",
+                node.Id,
+                $"Agent prepared VM image download failed on node {node.Name} ({node.HostAddress}) for template {templateId}.",
+                token);
+            return AgentVmImageDownloadResult.Failed(error.Message);
+        }
+        return await response.Content.ReadFromJsonAsync<AgentVmImageDownloadResult>(token)
+               ?? AgentVmImageDownloadResult.Failed(
+                   $"Agent returned an empty prepared VM image response on node {node.Name} ({node.HostAddress}).");
+    }
+
+    public virtual async Task<AgentVmImagePublishResult> PublishVmImageAsync(
+        Guid nodeId,
+        int templateId,
+        string hash,
+        long expectedSize,
+        VmImageArtifactReference registryReference,
+        CancellationToken token = default)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null)
+            return AgentVmImagePublishResult.Failed($"Fleet node {nodeId} was not found.");
+        var digest = NormalizeSha256Digest(hash);
+        var body = JsonSerializer.Serialize(new
+        {
+            templateId,
+            hash = digest,
+            expectedSize,
+            registryTarget = new
+            {
+                registryAddress = registryReference.RegistryAddress,
+                repository = registryReference.Repository,
+                tag = registryReference.Tag
+            }
+        });
+        var client = BuildClient(node);
+        using var deadline = CreateDeadline(token, TimeSpan.FromHours(2));
+        using var response = await client.PostAsync(
+            "/api/images/publish-vm",
+            new StringContent(body, Encoding.UTF8, "application/json"), deadline.Token);
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await ReadAgentErrorAsync(
+                response,
+                "image.vm.publish",
+                node.Id,
+                $"Agent VM image publication failed on node {node.Name} ({node.HostAddress}) for template {templateId}.",
+                token);
+            return AgentVmImagePublishResult.Failed(error.Message);
+        }
+        return await response.Content.ReadFromJsonAsync<AgentVmImagePublishResult>(token)
+               ?? AgentVmImagePublishResult.Failed(
+                   $"Agent returned an empty VM image publication response on node {node.Name} ({node.HostAddress}).");
+    }
+
+    private static string BuildVmIdentityQuery(int? expectedGeneration, string? expectedNativeId)
+    {
+        var query = new List<string>(2);
+        if (expectedGeneration is { } generation)
+            query.Add($"generation={generation}");
+        if (!string.IsNullOrWhiteSpace(expectedNativeId))
+            query.Add($"nativeId={Uri.EscapeDataString(expectedNativeId)}");
+        return query.Count == 0 ? string.Empty : $"?{string.Join('&', query)}";
+    }
+
     private static AgentClientException NodeNotFound(Guid nodeId, string operation) =>
         new(new OperationalError(
             OperationalErrorCategory.NodeUnavailable,
@@ -1019,17 +1431,61 @@ public class AgentClient
             }
         }
     }
+
+    public virtual async Task<AgentBootstrapArtifactDownloadResult> DownloadBootstrapArtifactAsync(
+        Guid nodeId,
+        AgentBootstrapArtifactDownloadRequest request,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null)
+            return AgentBootstrapArtifactDownloadResult.Failed($"Fleet node {nodeId} was not found.");
+        var client = BuildClient(node);
+        using var deadline = CreateDeadline(token, TimeSpan.FromHours(2));
+        using var response = await client.PostAsJsonAsync(
+            "/api/images/download-bootstrap-artifact", request, deadline.Token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(
+                response,
+                "bootstrap.artifact.download",
+                node.Id,
+                $"Agent bootstrap artifact download failed on node {node.Name} ({node.HostAddress}).",
+                token);
+        return await response.Content.ReadFromJsonAsync<AgentBootstrapArtifactDownloadResult>(token)
+               ?? AgentBootstrapArtifactDownloadResult.Failed("Agent returned an empty bootstrap artifact response.");
+    }
+
+    public virtual async Task DeleteBootstrapArtifactAsync(
+        Guid nodeId,
+        Guid profileId,
+        int version,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token);
+        if (node is null) throw NodeNotFound(nodeId, "bootstrap.artifact.delete");
+        var client = BuildClient(node);
+        using var response = await client.DeleteAsync(
+            $"/api/images/bootstrap-artifact/{profileId:D}/{version}", token);
+        if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
+            throw await CreateAgentExceptionAsync(
+                response,
+                "bootstrap.artifact.delete",
+                node.Id,
+                $"Agent bootstrap artifact cleanup failed on node {node.Name} ({node.HostAddress}).",
+                token);
+    }
 }
 
 public class AgentCreateContainerResponse
 {
     public string ContainerId { get; set; } = string.Empty;
+    public string ContainerName { get; set; } = string.Empty;
     public string IP { get; set; } = string.Empty;
     public int Port { get; set; }
     public int PublicPort { get; set; }
 }
 
-public class AgentClientException : Exception
+public class AgentClientException : Exception, IOperationalFailureException
 {
     public OperationalError Error { get; }
 
@@ -1046,21 +1502,85 @@ public class AgentClientException : Exception
 
 public class AgentCreateVmRequest
 {
+    public Guid? OperationId { get; set; }
+    public int RuntimeId { get; set; }
     public int Generation { get; set; } = 1;
+    public int GuestReadyWarningAfterSeconds { get; set; } = 180;
     public int? TemplateId { get; set; }
     public string? TemplatePath { get; set; }
     public bool ImageEnsured { get; set; }
     public string VmName { get; set; } = string.Empty;
     public int Memory { get; set; } = 2048;
     public int Cpu { get; set; } = 2;
+    public string DefaultNetworkModel { get; set; } = "e1000e";
     public string? Flag { get; set; }
     public List<AgentVmNetworkInterfaceRequest> Interfaces { get; set; } = [];
     public AgentVmInitConfig? CloudInit { get; set; }
+    public AgentVmGuestControlConfig GuestControl { get; set; } = new();
+    public AgentVmManagementInterfaceConfig? ManagementInterface { get; set; }
+    public AgentVmGuestSupervisorConfig? GuestSupervisor { get; set; }
+}
+
+public sealed class AgentVmManagementInterfaceConfig
+{
+    public GuestAssetIdentity? Identity { get; set; }
+    public string BridgeName { get; set; } = "gzmgt0";
+    public string MacAddress { get; set; } = string.Empty;
+    public string IpAddress { get; set; } = string.Empty;
+    public int PrefixLength { get; set; } = 16;
+    public string HostAddress { get; set; } = "100.127.0.1";
+    public string Model { get; set; } = "e1000e";
+}
+
+public sealed class AgentVmGuestSupervisorConfig
+{
+    public GuestAssetIdentity Identity { get; set; } = null!;
+    public string EnrollmentToken { get; set; } = string.Empty;
+    public string WorkerServerCertificateSha256 { get; set; } = string.Empty;
+    public string EnrollmentEndpoint { get; set; } = string.Empty;
+    public string IntentDigest { get; set; } = string.Empty;
+}
+
+public sealed record AgentVmImageRegistryTarget(string RegistryAddress, string Repository, string Tag);
+
+public sealed record AgentCommitVmScenarioRequest(
+    Guid OperationId,
+    string VmName,
+    OSType OsType,
+    string BuildIdentity,
+    AgentVmImageRegistryTarget RegistryTarget);
+
+public sealed record AgentCommitVmScenarioResponse(
+    bool Success,
+    string ArtifactDigest,
+    long ArtifactSize,
+    string EvidenceDigest,
+    string RegistryAddress,
+    string Repository,
+    string Tag,
+    string? ErrorCode = null,
+    string? ErrorDetail = null);
+
+public sealed record AgentGuestConformancePackageRequest(
+    Guid ProfileId,
+    int Version,
+    string ArtifactDigest,
+    string ArtifactBase64);
+
+public sealed record AgentVmCleanShutdownResponse(bool CleanShutdown);
+
+public sealed class AgentVmGuestControlConfig
+{
+    public bool Enabled { get; set; } = true;
+    public bool Required { get; set; } = true;
+    public bool EndpointSensorChannel { get; set; }
+    public OSType? OsType { get; set; }
 }
 
 public class AgentVmNetworkInterfaceRequest
 {
     public string BridgeName { get; set; } = string.Empty;
+    public string? HostInterfaceName { get; set; }
     public string? MacAddress { get; set; }
     public string Model { get; set; } = "e1000e";
     public string? InterfaceName { get; set; }
@@ -1078,11 +1598,55 @@ public class AgentVmInitConfig
     public OSType OsType { get; set; } = OSType.Linux;
     public string Hostname { get; set; } = string.Empty;
     public string InstanceId { get; set; } = string.Empty;
+    public VmNetworkMode NetworkMode { get; set; } = VmNetworkMode.Dhcp;
     public string UserData { get; set; } = string.Empty;
     public string MetaData { get; set; } = string.Empty;
     public string NetworkConfig { get; set; } = string.Empty;
     public List<string> SensitiveKeys { get; set; } = [];
 }
+
+public sealed record AgentVmBootstrapApplyRequest(
+    Guid? OperationId,
+    int RuntimeId,
+    int Generation,
+    string AssetKey,
+    OSType OsType,
+    Guid? ProfileId,
+    int? ProfileVersion,
+    string? ArtifactDigest,
+    long? ArtifactSize,
+    string? ManifestJson,
+    IReadOnlyDictionary<string, string> Parameters,
+    IReadOnlyDictionary<string, string> Secrets,
+    IReadOnlyList<AgentVmNetworkInterfaceRequest> Interfaces,
+    bool RunHealthChecks = true);
+
+public sealed record AgentVmBootstrapApplyResponse(
+    bool Success,
+    string Stage,
+    string Message,
+    int RebootCount,
+    IReadOnlyList<string> CompletedSteps,
+    IReadOnlyList<string> PassedHealthChecks);
+
+public sealed record AgentVmGuestStatusResponse(
+    bool Ready,
+    string Message,
+    string? Version);
+
+public sealed record AgentVmCapabilityProbeRequest(
+    OSType OsType,
+    IReadOnlyList<string> Capabilities,
+    string? ExpectedMarkerPath = null,
+    string? ExpectedMarkerValue = null,
+    int TimeoutSeconds = 180);
+
+public sealed record AgentVmCapabilityProbeResponse(
+    bool Success,
+    IReadOnlyList<string> VerifiedCapabilities,
+    IReadOnlyDictionary<string, string> Evidence,
+    string? ErrorCode,
+    string? ErrorDetail);
 
 public class AgentCreateVmResponse
 {
@@ -1130,7 +1694,20 @@ public class AgentVmIpResponse
 public record AgentSyncRequest(
     string DownloadUrl,
     string? ExpectedSha256 = null,
+    string? LinuxSensorDownloadUrl = null,
+    string? LinuxSensorSha256 = null,
+    string? WindowsSensorDownloadUrl = null,
+    string? WindowsSensorSha256 = null,
+    AgentVmControlPlaneSyncConfig? VmControlPlane = null,
     bool Restart = true);
+
+public sealed record AgentVmControlPlaneSyncConfig(
+    bool Enabled,
+    string BridgeName = "gzmgt0",
+    string HostAddress = "100.127.0.1",
+    int PrefixLength = 16,
+    int ListenPort = 5443,
+    string GuestStateRoot = "/var/lib/gzctf/teamlab/guest-control");
 
 public record AgentSyncResponse(
     bool Success,
@@ -1152,6 +1729,39 @@ public record AgentVmImageDownloadResult(
         new(false, message, false, false, null, null);
 }
 
+public sealed record AgentVmImagePublishResult(
+    bool Success,
+    bool Verified,
+    long Size,
+    string? Digest,
+    string? ManifestDigest,
+    string? Message = null)
+{
+    public static AgentVmImagePublishResult Failed(string message) =>
+        new(false, false, 0, null, null, message);
+}
+
+public sealed record AgentBootstrapArtifactDownloadRequest(
+    Guid ProfileId,
+    int Version,
+    string RegistryAddress,
+    string Repository,
+    string Digest,
+    long ExpectedSize);
+
+public sealed record AgentBootstrapArtifactDownloadResult(
+    bool Success,
+    string Message,
+    bool AlreadyExists,
+    bool Verified,
+    string? LocalPath,
+    long Size,
+    string Digest)
+{
+    public static AgentBootstrapArtifactDownloadResult Failed(string message) =>
+        new(false, message, false, false, null, 0, string.Empty);
+}
+
 public record TeamLabStatusResponse(
     bool Available,
     bool Enable,
@@ -1166,7 +1776,10 @@ public record TeamLabStatusResponse(
     bool HasDumpcapCommand,
     TeamLabToolCapabilityReport Capabilities,
     DateTimeOffset CheckedAt,
-    string? Message = null);
+    string? Message = null,
+    string? FabricInterfaceName = null,
+    string? FabricIp = null,
+    bool FabricReady = false);
 
 public record TeamLabToolCapabilityReport(
     bool Docker,
@@ -1185,30 +1798,79 @@ public record TeamLabDryRunResponse(
     string Message,
     string[] Commands);
 
-public record TeamLabBridgeRequest(
-    int RuntimeId,
-    string BridgeName,
+public record TeamLabManagedSwitchIntent(
+    string Key,
+    string Name,
     string Cidr,
+    string GatewayIp,
+    string BridgeName,
+    string DhcpDnsServiceName,
+    TeamLabDhcpLeaseRequest[] Records,
+    TeamLabDnsRecordRequest[]? DnsRecords = null);
+
+public record TeamLabManagedRouterFragmentIntent(
+    string Key,
+    string[] NetworkKeys);
+
+public record TeamLabFabricUplinkIntent(
+    string FabricIp,
+    string HubAddressCidr,
+    string NodeAddressCidr,
+    string HostInterfaceName,
+    string NamespaceInterfaceName,
+    TeamLabStaticRouteRequest[] LocalRoutes,
+    TeamLabStaticRouteRequest[] RemoteRoutes);
+
+public record TeamLabObservationPointIntent(
+    Guid PublicId,
+    string TopologyKey,
+    byte Kind,
+    string InterfaceToken);
+
+public record TeamLabInfrastructureApplyRequest(
+    int RuntimeId,
+    int Generation,
+    int RouteVersion,
+    string RouterNamespace,
+    TeamLabManagedSwitchIntent[] Switches,
+    TeamLabManagedRouterFragmentIntent[] Routers,
+    TeamLabFabricUplinkIntent Fabric,
+    TeamLabForwardPolicyRequest[] ForwardPolicies,
+    TeamLabObservationPointIntent[] ObservationPoints,
     bool DryRun = true);
 
-public record TeamLabRouterInterfaceRequest(
-    string BridgeName,
-    string GatewayAddressCidr);
+public record TeamLabInfrastructureResourceFact(
+    string Kind,
+    string Key,
+    string NativeIdentity,
+    string Status);
+
+public record TeamLabInfrastructureApplyResponse(
+    bool Success,
+    bool DryRun,
+    string Message,
+    string? DesiredStateDigest,
+    bool AlreadyApplied,
+    TeamLabInfrastructureResourceFact[] Resources,
+    string[] Commands);
+
+public record TeamLabInfrastructureStateResponse(
+    bool Exists,
+    int RuntimeId,
+    int Generation,
+    int RouteVersion,
+    string? DesiredStateDigest,
+    TeamLabInfrastructureResourceFact[] Resources,
+    DateTimeOffset? AppliedAt);
 
 public record TeamLabStaticRouteRequest(
     string TargetCidr,
     string GatewayIp,
     string SourceIp = "");
 
-public record TeamLabRouterRequest(
-    int RuntimeId,
-    string NamespaceName,
-    TeamLabRouterInterfaceRequest[] Interfaces,
-    TeamLabStaticRouteRequest[] Routes,
-    bool DryRun = true);
-
 public record TeamLabWireGuardRequest(
     int RuntimeId,
+    int Generation,
     string NamespaceName,
     string InterfaceName,
     int ListenPort,
@@ -1221,16 +1883,35 @@ public record TeamLabWireGuardRequest(
     string[] PlayerBlockedCidrs,
     bool DryRun = true);
 
+public record TeamLabWireGuardCleanupRequest(
+    int RuntimeId,
+    int Generation,
+    string NamespaceName,
+    string InterfaceName,
+    bool DryRun = true);
+
 public record TeamLabCleanupRequest(
     int RuntimeId,
+    int Generation,
+    string RouterNamespace,
     string[] ResourceNames,
+    string[] SensorAssetKeys,
+    string[] FabricRemoteCidrs,
     bool DryRun = true);
 
 public record TeamLabProbeRequest(
     int RuntimeId,
     string NamespaceName,
     string TargetIp,
-    bool DryRun = true);
+    string? Kind = null,
+    int? Port = null,
+    bool DryRun = true)
+{
+    public TeamLabProbeRequest(int runtimeId, string namespaceName, string targetIp, bool dryRun)
+        : this(runtimeId, namespaceName, targetIp, null, null, dryRun)
+    {
+    }
+}
 
 public record TeamLabContainerAttachRequest(
     int RuntimeId,
@@ -1249,43 +1930,12 @@ public record TeamLabContainerAttachRequest(
 public record TeamLabDhcpLeaseRequest(
     string MacAddress,
     string IpAddress,
-    string Hostname);
+    string Hostname,
+    bool IsPrimary = true);
 
 public record TeamLabDnsRecordRequest(
     string Hostname,
     string IpAddress);
-
-public record TeamLabDhcpDnsRequest(
-    int RuntimeId,
-    string ServiceName,
-    string NamespaceName,
-    string BridgeName,
-    string InterfaceName,
-    string GatewayIp,
-    string Cidr,
-    string Domain,
-    TeamLabDhcpLeaseRequest[] Leases,
-    TeamLabDnsRecordRequest[] DnsRecords,
-    bool DryRun = true);
-
-public record TeamLabDhcpDnsProbeRequest(
-    int RuntimeId,
-    string NamespaceName,
-    string GatewayIp,
-    string Hostname,
-    bool DryRun = true);
-
-public record TeamLabFabricApplyRequest(
-    int RuntimeId,
-    int RouteVersion,
-    string FabricIp,
-    string? NamespaceName = null,
-    string NamespaceHostAddressCidr = "",
-    string NamespacePeerAddressCidr = "",
-    TeamLabStaticRouteRequest[]? LocalRoutes = null,
-    TeamLabStaticRouteRequest[]? Routes = null,
-    TeamLabForwardPolicyRequest[]? ForwardPolicies = null,
-    bool DryRun = true);
 
 public record TeamLabForwardPolicyRequest(
     string SourceCidr,
@@ -1294,82 +1944,178 @@ public record TeamLabForwardPolicyRequest(
 
 public record TeamLabCaptureStartRequest(
     int RuntimeId,
-    int JobId,
-    string Scope,
-    string InterfaceName,
+    int Generation,
+    Guid CaptureId,
+    Guid SegmentId,
+    Guid ObservationPointId,
+    string InterfaceToken,
     int MaxSeconds,
     long MaxBytes,
     bool DryRun = true);
 
+public record TeamLabContainerInterfaceExpectation(
+    string Name,
+    string AddressCidr,
+    string MacAddress);
+
+public record TeamLabContainerRouteExpectation(
+    string TargetCidr,
+    string? GatewayIp,
+    string InterfaceName);
+
+public record TeamLabContainerDnsProbeExpectation(
+    string Server,
+    string QueryName,
+    string ExpectedAddress);
+
+public record TeamLabContainerNetworkFinalizeRequest(
+    Guid OperationId,
+    int RuntimeId,
+    int Generation,
+    string ContainerId,
+    string ContainerName,
+    TeamLabContainerInterfaceExpectation[] Interfaces,
+    TeamLabContainerRouteExpectation[] Routes,
+    string[] DnsServers,
+    TeamLabContainerDnsProbeExpectation[] DnsProbes,
+    bool RequireNoDefaultRoute,
+    bool DryRun = false);
+
+public record TeamLabContainerNetworkFinalizeResponse(
+    bool Success,
+    bool DryRun,
+    string Message,
+    bool AlreadyFinalized,
+    string[] Commands);
+
 public record TeamLabCaptureStopRequest(
     int RuntimeId,
-    int JobId,
+    int Generation,
+    Guid CaptureId,
+    Guid SegmentId,
     bool DryRun = true);
 
 public record TeamLabCaptureStatusRequest(
     int RuntimeId,
-    int JobId,
+    int Generation,
+    Guid CaptureId,
+    Guid SegmentId,
+    bool DryRun = true);
+
+public record TeamLabCaptureDeleteRequest(
+    int RuntimeId,
+    int Generation,
+    Guid CaptureId,
+    Guid SegmentId,
+    bool DryRun = true);
+
+public record TeamLabCaptureUploadRequest(
+    int RuntimeId,
+    int Generation,
+    Guid CaptureId,
+    Guid SegmentId,
+    string UploadPath,
+    string UploadToken,
+    long MaxBytes,
     bool DryRun = true);
 
 public record TeamLabCaptureResponse(
     bool Success,
     bool DryRun,
     string Message,
+    Guid SegmentId,
     string? FilePath,
     long CapturedBytes,
     bool Running,
+    string? Sha256,
+    bool Uploaded,
     string[] Commands);
 
-public record TeamLabFlowStartRequest(
-    int RuntimeId,
-    int? ShardId,
-    int? NetworkId,
-    string NetworkKey,
-    string InterfaceName,
-    bool DryRun = true);
+public enum TeamLabObservationEvidenceKind : byte
+{
+    Packet = 0,
+    EndpointProcess = 1
+}
 
-public record TeamLabFlowStopRequest(
+public record TeamLabObservationBatchRequest(
     int RuntimeId,
-    string NetworkKey,
-    bool DryRun = true);
+    int Generation,
+    long AfterSequence = 0,
+    Guid? ObservationPointId = null,
+    int Limit = 500);
 
-public record TeamLabFlowSnapshotRequest(
-    int RuntimeId,
-    string NetworkKey,
-    long AfterCursor = 0,
-    bool DryRun = true);
-
-public record TeamLabFlowSample(
-    long Cursor,
+public record TeamLabObservationRecord(
+    long Sequence,
+    Guid? ObservationPointId,
+    string? AssetKey,
     DateTimeOffset CapturedAt,
     string SourceIp,
     int? SourcePort,
     string DestinationIp,
     int? DestinationPort,
     string Protocol,
-    long Bytes);
+    byte? TcpFlags,
+    int PacketLength,
+    string? PacketFingerprint,
+    string FlowFingerprint,
+    TeamLabObservationEvidenceKind EvidenceKind,
+    string? ProcessIdentityHash = null,
+    string Direction = "observed",
+    DateTimeOffset? FirstSeenAt = null,
+    DateTimeOffset? LastSeenAt = null,
+    long Packets = 1,
+    long? Bytes = null);
 
-public record TeamLabFlowResponse(
-    bool Success,
-    bool DryRun,
-    string Message,
-    long NextCursor,
-    TeamLabFlowSample[] Samples,
-    string[] Commands);
+public record TeamLabObservationHealth(
+    bool Running,
+    int RegisteredPointCount,
+    int ActiveInterfaceCount,
+    int ActiveFlowCount,
+    long DroppedCount,
+    long ParserFailureCount,
+    long SensorRejectedCount,
+    long SpoolBytes,
+    string? LastSensorErrorCode,
+    string? LastError);
 
-public sealed record TeamLabCaptureDownloadResult(
+public record TeamLabObservationBatchResponse(
     bool Success,
     string Message,
-    Stream? Stream,
-    string FileName,
-    string ContentType,
-    long? Length,
-    IDisposable? Owner)
+    long NextSequence,
+    long DroppedCount,
+    TeamLabObservationRecord[] Records,
+    TeamLabObservationHealth Health);
+
+public enum TeamLabEndpointSensorChannelMode : byte
 {
-    public static TeamLabCaptureDownloadResult Failed(string message) =>
-        new(false, message, null, string.Empty, MediaTypeNames.Application.Octet, null, null);
-
-    public static TeamLabCaptureDownloadResult FromStream(Stream stream, string fileName, string contentType,
-        long? length, IDisposable? owner) =>
-        new(true, string.Empty, stream, fileName, contentType, length, owner);
+    Vm = 0,
+    Docker = 1
 }
+
+public record TeamLabEndpointSensorRegistrationRequest(
+    int RuntimeId,
+    string RuntimePublicId,
+    int Generation,
+    string AssetKey,
+    string RuntimeResourceId,
+    int SensorVersion,
+    string HmacKeyBase64,
+    TeamLabEndpointSensorChannelMode Mode);
+
+public record TeamLabEndpointSensorRemoveRequest(
+    int RuntimeId,
+    int Generation,
+    string AssetKey);
+
+public record TeamLabEndpointSensorStartRequest(
+    int RuntimeId,
+    int Generation,
+    string AssetKey,
+    string RuntimeResourceId,
+    TeamLabEndpointSensorChannelMode Mode,
+    OSType? OsType = null);
+
+public record TeamLabEndpointSensorResponse(
+    bool Success,
+    string Message,
+    string? ChannelEndpoint = null);

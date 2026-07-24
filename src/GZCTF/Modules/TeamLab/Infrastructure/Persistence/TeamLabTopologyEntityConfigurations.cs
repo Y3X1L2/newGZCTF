@@ -13,6 +13,9 @@ public sealed class TeamLabTopologyEntityConfiguration : IEntityTypeConfiguratio
         builder.HasKey(item => item.Id);
         builder.Property(item => item.Name).HasMaxLength(128);
         builder.Property(item => item.EditorMetadataJson).HasColumnType("jsonb");
+        builder.Property(item => item.InfrastructureJson).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb");
+        builder.Property(item => item.DependenciesJson).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb");
+        builder.Property(item => item.ObservationJson).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
         builder.HasIndex(item => item.PublicId).IsUnique();
         builder.HasIndex(item => item.OwnerUserId);
         builder.HasIndex(item => item.CreatedByOperationId).IsUnique();
@@ -59,6 +62,9 @@ public sealed class TeamLabTopologyAssetEntityConfiguration : IEntityTypeConfigu
         builder.Property(item => item.Name).HasMaxLength(128);
         builder.Property(item => item.Kind).HasConversion<byte>();
         builder.Property(item => item.EnvironmentJson).HasColumnType("jsonb");
+        builder.Property(item => item.BootstrapJson).HasColumnType("jsonb");
+        builder.Property(item => item.EndpointObservation).HasConversion<byte>()
+            .HasDefaultValue(TeamLabEndpointObservationMode.Disabled);
         builder.Property(item => item.StartCommand).HasMaxLength(512);
         builder.Property(item => item.HealthCheckKind).HasConversion<byte?>();
         builder.HasIndex(item => new { item.TopologyId, item.Key }).IsUnique();
@@ -104,6 +110,8 @@ public sealed class TeamLabTopologyConnectionEntityConfiguration : IEntityTypeCo
         builder.Property(item => item.FromNetworkKey).HasMaxLength(63);
         builder.Property(item => item.ToNetworkKey).HasMaxLength(63);
         builder.Property(item => item.ViaAssetKey).HasMaxLength(63);
+        builder.Property(item => item.ViaNodeKey).HasMaxLength(63);
+        builder.Property(item => item.Direction).HasConversion<byte>();
         builder.HasIndex(item => new { item.TopologyId, item.Key }).IsUnique();
         builder.HasOne(item => item.Topology)
             .WithMany(item => item.Connections)
@@ -147,7 +155,7 @@ public sealed class TeamLabNetworkLeaseEntityConfiguration : IEntityTypeConfigur
         builder.Property(item => item.AllocatedCidr).HasColumnType("cidr");
         builder.HasIndex(item => new { item.RuntimeId, item.Generation, item.TopologyNetworkId }).IsUnique();
         builder.HasIndex(item => item.ReleasedAt);
-        builder.HasOne<GZCTF.Models.Data.TeamLabRuntime>()
+        builder.HasOne<TeamLabRuntime>()
             .WithMany()
             .HasForeignKey(item => item.RuntimeId)
             .OnDelete(DeleteBehavior.Cascade);

@@ -86,6 +86,7 @@ public sealed class RuntimeExecutionService(
             var claimedTicket = await context.DeploymentQueueTickets.SingleAsync(
                 ticket => ticket.Id == ticketId, token);
             AppendExecutionStarted(events, claimedTicket);
+            await ProjectLifecycleAsync(scope.ServiceProvider, claimedTicket, token);
             await context.SaveChangesAsync(token);
             await transaction.CommitAsync(token);
             return true;
@@ -99,6 +100,7 @@ public sealed class RuntimeExecutionService(
         ticket.ClaimExpiresAt = now.Add(ClaimTimeout);
         ticket.StartedAt = now;
         AppendExecutionStarted(events, ticket);
+        await ProjectLifecycleAsync(scope.ServiceProvider, ticket, token);
         await context.SaveChangesAsync(token);
         return true;
     }
@@ -119,7 +121,8 @@ public sealed class RuntimeExecutionService(
         using var activity = RuntimeOperationalEvents.StartActivity(ticket, "runtime.execute");
         var executionStartedAt = Stopwatch.GetTimestamp();
 
-        if (ticket.TargetNodeId is not { } nodeId)
+        var teamLabCoordinator = ticket.Kind == DeploymentQueueKind.TeamLabRuntime;
+        if (ticket.TargetNodeId is null && !teamLabCoordinator)
         {
             var error = new OperationalError(
                 OperationalErrorCategory.NodeUnavailable,
@@ -133,16 +136,21 @@ public sealed class RuntimeExecutionService(
             return;
         }
 
+        var nodeId = ticket.TargetNodeId ?? Guid.Empty;
+
         logger.SystemLog(
-            $"Deployment execution started: ticket={ticket.Id}, kind={ticket.Kind}, operation={ticket.Operation}, node={nodeId}.",
+            $"Deployment execution started: ticket={ticket.Id}, kind={ticket.Kind}, operation={ticket.Operation}, node={(teamLabCoordinator ? "control-plane" : nodeId)}.",
             TaskStatus.Pending, LogLevel.Information);
 
-        var manifest = await context.WorkerNodes.AsNoTracking()
-            .Where(item => item.Id == nodeId)
-            .Select(item => item.CapabilityManifestJson)
-            .SingleOrDefaultAsync(token);
+        var manifest = teamLabCoordinator
+            ? null
+            : await context.WorkerNodes.AsNoTracking()
+                .Where(item => item.Id == nodeId)
+                .Select(item => item.CapabilityManifestJson)
+                .SingleOrDefaultAsync(token);
         var category = ResolveCategory(ticket);
-        var limit = ResolveLimit(AgentCapabilityEvaluator.Parse(manifest), category);
+        var limit = NodeDispatchLimitPolicy.Resolve(
+            AgentCapabilityEvaluator.Parse(manifest)?.ExecutionLimits, category);
         if (ticket.Operation != RuntimeOperationKind.Create)
         {
             ticket.Stage = ticket.Operation switch
@@ -166,10 +174,15 @@ public sealed class RuntimeExecutionService(
         var renewalTask = RenewClaimLoopAsync(ticketId, claimOwner, executionCancellation, token);
         try
         {
-            await dispatchLimiter.RunAsync(nodeId, category, limit, async operationToken =>
-            {
-                result = await executor.ExecuteAsync(ticket, operationToken);
-            }, executionCancellation.Token);
+            if (teamLabCoordinator)
+                result = await executor.ExecuteAsync(ticket, executionCancellation.Token);
+            else
+                result = await dispatchLimiter.RunAsync(
+                    nodeId,
+                    category,
+                    limit,
+                    operationToken => executor.ExecuteAsync(ticket, operationToken),
+                    executionCancellation.Token);
         }
         finally
         {
@@ -230,6 +243,7 @@ public sealed class RuntimeExecutionService(
                 TaskStatus.Failed, LogLevel.Warning);
         }
 
+        await ProjectLifecycleAsync(scope.ServiceProvider, ticket, token);
         await context.SaveChangesAsync(token);
         PlatformTelemetry.RecordRuntimeDuration(
             ticket.Kind.ToString(), ticket.Operation.ToString(), Stopwatch.GetElapsedTime(executionStartedAt));
@@ -247,6 +261,7 @@ public sealed class RuntimeExecutionService(
             return;
         var error = RuntimeOperationalEvents.Failure(ticket, "runtime.execute", exception);
         await MarkFailedAsync(context, capacity, events, ticket, error, token, exception.Message);
+        await ProjectLifecycleAsync(scope.ServiceProvider, ticket, token);
         await context.SaveChangesAsync(token);
         PlatformTelemetry.RecordRuntimeTransition(ticket.Kind.ToString(), ticket.Stage.ToString(), "failed");
     }
@@ -391,6 +406,13 @@ public sealed class RuntimeExecutionService(
         return message.Length <= 1024 ? message : message[..1024];
     }
 
+    static Task ProjectLifecycleAsync(
+        IServiceProvider services,
+        DeploymentQueueTicket ticket,
+        CancellationToken token) =>
+        services.GetService<RuntimeTicketLifecycleDispatcher>()?.ProjectAsync(ticket, token) ??
+        Task.CompletedTask;
+
     static NodeDispatchCategory ResolveCategory(DeploymentQueueTicket ticket)
     {
         if (ticket.Operation != RuntimeOperationKind.Create)
@@ -402,19 +424,4 @@ public sealed class RuntimeExecutionService(
                 : NodeDispatchCategory.DockerCreate;
     }
 
-    static int ResolveLimit(AgentCapabilityManifest? manifest,
-        NodeDispatchCategory category)
-    {
-        var limits = manifest?.ExecutionLimits;
-        return Math.Max(1, category switch
-        {
-            NodeDispatchCategory.DockerCreate => limits?.DockerCreates ?? 1,
-            NodeDispatchCategory.VmCreate => limits?.VmCreates ?? 1,
-            NodeDispatchCategory.DockerImageTransfer => limits?.DockerImageTransfers ?? 1,
-            NodeDispatchCategory.VmImageTransfer => limits?.VmImageTransfers ?? 1,
-            NodeDispatchCategory.TeamLabNetwork => limits?.TeamLabNetworkOperations ?? 1,
-            NodeDispatchCategory.Control => limits?.ControlOperations ?? 1,
-            _ => 1
-        });
-    }
 }

@@ -20,7 +20,8 @@ public sealed class ImageImportStagingReconciler(
                 from job in context.ImageImportJobs.AsNoTracking()
                 join operation in context.ApiOperations.AsNoTracking()
                     on job.OperationId equals operation.Id
-                where job.SourceKind == ImageImportSourceKind.DockerArchive &&
+                where (job.SourceKind == ImageImportSourceKind.DockerArchive ||
+                       job.SourceKind == ImageImportSourceKind.VmQcow2) &&
                       job.StagedPath != null &&
                       job.StagedPath != string.Empty &&
                       (operation.Status == ApiOperationStatus.Pending ||

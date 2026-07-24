@@ -1,4 +1,5 @@
 using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.Modules.TeamLab.Domain.Runtime;
 
 namespace GZCTF.Modules.TeamLab.Application;
 
@@ -26,14 +27,11 @@ public sealed record TeamLabNodeInterfaceIntent(
     IReadOnlyList<string> Routes,
     IReadOnlyList<string> DnsServers);
 
-public sealed record TeamLabNodeDnsRecord(string Hostname, string IpAddress, string MacAddress);
-
-public sealed record TeamLabNodeShardApplyRequest(
-    int RuntimeId,
-    int Generation,
-    string RouterNamespace,
-    IReadOnlyList<TeamLabNodeNetworkIntent> Networks,
-    IReadOnlyDictionary<string, IReadOnlyList<TeamLabNodeDnsRecord>> RecordsByNetwork);
+public sealed record TeamLabNodeDnsRecord(
+    string Hostname,
+    string IpAddress,
+    string MacAddress,
+    bool IsPrimary = true);
 
 public sealed record TeamLabNodeRouteIntent(string TargetCidr, string GatewayIp, string SourceIp = "");
 
@@ -42,20 +40,81 @@ public sealed record TeamLabNodeForwardPolicy(
     string DestinationCidr,
     bool Allow);
 
-public sealed record TeamLabNodeRouteApplyRequest(
+public sealed record TeamLabNodeManagedSwitchIntent(
+    TeamLabNodeNetworkIntent Network,
+    string DhcpDnsServiceName,
+    IReadOnlyList<TeamLabNodeDnsRecord> Records,
+    IReadOnlyList<TeamLabNodeDnsRecord>? DnsRecords = null);
+
+public sealed record TeamLabNodeManagedRouterFragmentIntent(
+    string Key,
+    IReadOnlyList<string> NetworkKeys);
+
+public sealed record TeamLabNodeFabricIntent(
+    string FabricIp,
+    string HubAddressCidr,
+    string NodeAddressCidr,
+    string HostInterfaceName,
+    string NamespaceInterfaceName,
+    IReadOnlyList<TeamLabNodeRouteIntent> LocalRoutes,
+    IReadOnlyList<TeamLabNodeRouteIntent> RemoteRoutes);
+
+public sealed record TeamLabNodeObservationPointIntent(
+    Guid PublicId,
+    string TopologyKey,
+    TeamLabObservationPointKind Kind,
+    string InterfaceToken);
+
+public sealed record TeamLabNodeInfrastructureApplyRequest(
     int RuntimeId,
     int Generation,
     int RouteVersion,
-    string FabricIp,
     string RouterNamespace,
-    string NamespaceHostAddressCidr,
-    string NamespacePeerAddressCidr,
-    IReadOnlyList<TeamLabNodeRouteIntent> LocalRoutes,
-    IReadOnlyList<TeamLabNodeRouteIntent> RemoteRoutes,
-    IReadOnlyList<TeamLabNodeForwardPolicy> ForwardPolicies);
+    IReadOnlyList<TeamLabNodeManagedSwitchIntent> Switches,
+    IReadOnlyList<TeamLabNodeManagedRouterFragmentIntent> Routers,
+    TeamLabNodeFabricIntent Fabric,
+    IReadOnlyList<TeamLabNodeForwardPolicy> ForwardPolicies,
+    IReadOnlyList<TeamLabNodeObservationPointIntent> ObservationPoints);
+
+public sealed record TeamLabNodeInfrastructureResourceFact(
+    string Kind,
+    string Key,
+    string NativeIdentity,
+    string Status);
+
+public sealed record TeamLabNodeInfrastructureResult(
+    bool Success,
+    string Message,
+    string? DesiredStateDigest,
+    bool AlreadyApplied,
+    IReadOnlyList<TeamLabNodeInfrastructureResourceFact> Resources)
+{
+    public static TeamLabNodeInfrastructureResult Applied(
+        string digest,
+        bool alreadyApplied = false,
+        IReadOnlyList<TeamLabNodeInfrastructureResourceFact>? resources = null) =>
+        new(true, alreadyApplied ? "Infrastructure already matches desired state." : "Infrastructure applied.",
+            digest, alreadyApplied, resources ?? []);
+
+    public static TeamLabNodeInfrastructureResult Failed(string message) => new(false, message, null, false, []);
+}
+
+public sealed record TeamLabNodeInventoryResource(
+    string NativeId,
+    string StableName,
+    int Generation,
+    string State,
+    int? RuntimeId = null);
+
+public sealed record TeamLabNodeRuntimeInventory(
+    IReadOnlyList<TeamLabNodeInventoryResource> Containers,
+    IReadOnlyList<TeamLabNodeInventoryResource> Vms,
+    IReadOnlyList<TeamLabNodeInventoryResource> Infrastructure,
+    DateTimeOffset ObservedAt);
 
 public sealed record TeamLabNodeAssetCreateRequest(
     int RuntimeId,
+    Guid RuntimePublicId,
     int Generation,
     string AssetKey,
     string Name,
@@ -69,7 +128,25 @@ public sealed record TeamLabNodeAssetCreateRequest(
     bool ImageReady,
     IReadOnlyDictionary<string, string> Environment,
     IReadOnlyDictionary<string, string> Secrets,
-    IReadOnlyList<TeamLabNodeInterfaceIntent> Interfaces);
+    IReadOnlyList<TeamLabNodeInterfaceIntent> Interfaces,
+    TeamLabNodeBootstrapIntent? Bootstrap = null,
+    TeamLabNodeHealthIntent? Health = null,
+    string? DependencyReadyToken = null,
+    TeamLabEndpointObservationMode EndpointObservation = TeamLabEndpointObservationMode.Disabled,
+    string RouterNamespace = "",
+    string? StartCommand = null,
+    Guid? OperationId = null,
+    VmRuntimeMode? VmRuntimeMode = null,
+    VmNetworkMode? VmNetworkMode = null);
+
+public sealed record TeamLabNodeBootstrapIntent(
+    Guid ProfileId,
+    int Version,
+    IReadOnlyDictionary<string, string> Parameters);
+
+public sealed record TeamLabNodeHealthIntent(
+    TeamLabHealthCheckKind Kind,
+    int? Port);
 
 public sealed record TeamLabNodeAssetCreateResult(bool Success, string Message, string? RuntimeResourceId)
 {
@@ -77,20 +154,63 @@ public sealed record TeamLabNodeAssetCreateResult(bool Success, string Message, 
     public static TeamLabNodeAssetCreateResult Failed(string message) => new(false, message, null);
 }
 
+public sealed record TeamLabScenarioArtifactCommitRequest(
+    Guid OperationId,
+    string VmName,
+    OSType OsType,
+    string BuildIdentity,
+    string RegistryAddress,
+    string RegistryRepository,
+    string RegistryTag);
+
+public sealed record TeamLabScenarioArtifactCommitResult(
+    bool Success,
+    string ArtifactDigest,
+    long ArtifactSize,
+    string EvidenceDigest,
+    string RegistryAddress,
+    string RegistryRepository,
+    string RegistryTag,
+    string? ErrorCode,
+    string? ErrorDetail);
+
+public sealed record TeamLabNodeBootstrapResult(
+    bool Success,
+    string Message,
+    IReadOnlyList<string> CompletedSteps,
+    IReadOnlyList<string> PassedHealthChecks,
+    int RebootCount)
+{
+    public static TeamLabNodeBootstrapResult Completed(
+        IReadOnlyList<string>? steps = null,
+        IReadOnlyList<string>? healthChecks = null,
+        int rebootCount = 0) =>
+        new(true, "Bootstrap completed.", steps ?? [], healthChecks ?? [], rebootCount);
+
+    public static TeamLabNodeBootstrapResult Failed(string message) =>
+        new(false, message, [], [], 0);
+}
+
 public sealed record TeamLabNodeCleanupRequest(
     int RuntimeId,
     int Generation,
+    string RouterNamespace,
     IReadOnlyList<string> ResourceNames,
     IReadOnlyList<string> ContainerIds,
-    IReadOnlyList<string> VmNames);
+    IReadOnlyList<string> VmNames,
+    IReadOnlyList<string> SensorAssetKeys,
+    IReadOnlyList<string> FabricRemoteCidrs);
 
 public sealed record TeamLabNodeProbeRequest(
     int RuntimeId,
     string RouterNamespace,
-    string TargetIp);
+    string TargetIp,
+    TeamLabHealthCheckKind? Kind = null,
+    int? Port = null);
 
 public sealed record TeamLabNodeAccessApplyRequest(
     int RuntimeId,
+    int Generation,
     string RouterNamespace,
     string InterfaceName,
     int ListenPort,
@@ -102,65 +222,132 @@ public sealed record TeamLabNodeAccessApplyRequest(
     IReadOnlyList<string> PlayerAllowedCidrs,
     IReadOnlyList<string> PlayerBlockedCidrs);
 
-public sealed record TeamLabNodeFlowSample(
-    long Cursor,
+public sealed record TeamLabNodeAccessRemoveRequest(
+    int RuntimeId,
+    int Generation,
+    string RouterNamespace,
+    string InterfaceName);
+
+public sealed record TeamLabNodeObservationRecord(
+    long Sequence,
+    Guid? ObservationPointId,
+    string? AssetKey,
     DateTimeOffset CapturedAt,
     string SourceIp,
     int? SourcePort,
     string DestinationIp,
     int? DestinationPort,
     string Protocol,
-    long Bytes);
+    byte? TcpFlags,
+    int PacketLength,
+    string? PacketFingerprint,
+    string FlowFingerprint,
+    string EvidenceKind,
+    string? ProcessIdentityHash,
+    string Direction,
+    DateTimeOffset? FirstSeenAt = null,
+    DateTimeOffset? LastSeenAt = null,
+    long Packets = 1,
+    long? Bytes = null);
 
-public sealed record TeamLabNodeFlowResult(
+public sealed record TeamLabNodeObservationResult(
     bool Success,
     string Message,
-    long NextCursor,
-    IReadOnlyList<TeamLabNodeFlowSample> Samples);
+    long NextSequence,
+    long DroppedCount,
+    IReadOnlyList<TeamLabNodeObservationRecord> Records,
+    TeamLabNodeObservationHealth Health);
+
+public sealed record TeamLabNodeObservationHealth(
+    bool Running,
+    int RegisteredPointCount,
+    int ActiveInterfaceCount,
+    int ActiveFlowCount,
+    long DroppedCount,
+    long ParserFailureCount,
+    long SensorRejectedCount,
+    long SpoolBytes,
+    string? LastSensorErrorCode,
+    string? LastError)
+{
+    public static readonly TeamLabNodeObservationHealth Unavailable =
+        new(false, 0, 0, 0, 0, 0, 0, 0, null, "Observation health is unavailable.");
+}
 
 public sealed record TeamLabNodeCaptureStartRequest(
     int RuntimeId,
-    int JobId,
-    string Scope,
-    string InterfaceName,
+    int Generation,
+    Guid CaptureId,
+    Guid SegmentId,
+    Guid ObservationPointId,
+    string InterfaceToken,
     int MaxSeconds,
+    long MaxBytes);
+
+public sealed record TeamLabNodeCaptureUploadRequest(
+    int RuntimeId,
+    int Generation,
+    Guid CaptureId,
+    Guid SegmentId,
+    string UploadPath,
+    string UploadToken,
     long MaxBytes);
 
 public sealed record TeamLabNodeCaptureResult(
     bool Success,
     string Message,
-    string? FilePath,
+    Guid SegmentId,
     long CapturedBytes,
-    bool Running);
-
-public sealed record TeamLabNodeCaptureDownload(
-    bool Success,
-    string Message,
-    Stream? Stream,
-    string FileName,
-    string ContentType,
-    long? Length,
-    IDisposable? Owner);
+    bool Running,
+    string? Sha256,
+    bool Uploaded);
 
 public interface ITeamLabNodeExecutor
 {
-    Task<TeamLabNodeResult> ApplyShardAsync(Guid workerNodeId, TeamLabNodeShardApplyRequest request, CancellationToken cancellationToken);
-    Task<TeamLabNodeResult> ApplyRoutesAsync(Guid workerNodeId, TeamLabNodeRouteApplyRequest request, CancellationToken cancellationToken);
+    Task<TeamLabNodeRuntimeInventory> GetRuntimeInventoryAsync(
+        Guid workerNodeId,
+        CancellationToken cancellationToken);
+
+    Task<TeamLabNodeInfrastructureResult> ApplyInfrastructureAsync(
+        Guid workerNodeId,
+        TeamLabNodeInfrastructureApplyRequest request,
+        CancellationToken cancellationToken);
     Task<TeamLabNodeAssetCreateResult> CreateAssetAsync(Guid workerNodeId, TeamLabNodeAssetCreateRequest request, CancellationToken cancellationToken);
+    Task<TeamLabNodeResult> WaitForAssetReadyAsync(
+        Guid workerNodeId,
+        string runtimeResourceId,
+        TeamLabNodeAssetCreateRequest request,
+        CancellationToken cancellationToken);
+    Task<TeamLabNodeBootstrapResult> ApplyBootstrapAsync(
+        Guid workerNodeId,
+        string runtimeResourceId,
+        TeamLabNodeAssetCreateRequest request,
+        CancellationToken cancellationToken);
+    Task<TeamLabNodeBootstrapResult> ProbeAssetHealthAsync(
+        Guid workerNodeId,
+        string runtimeResourceId,
+        TeamLabNodeAssetCreateRequest request,
+        CancellationToken cancellationToken);
     Task<TeamLabNodeResult> DestroyAssetAsync(Guid workerNodeId, TeamLabAssetKind kind, string resourceId, CancellationToken cancellationToken);
+    Task<TeamLabScenarioArtifactCommitResult> CommitScenarioArtifactAsync(
+        Guid workerNodeId,
+        TeamLabScenarioArtifactCommitRequest request,
+        CancellationToken cancellationToken);
     Task<TeamLabNodeResult> CleanupShardAsync(Guid workerNodeId, TeamLabNodeCleanupRequest request, CancellationToken cancellationToken);
     Task<TeamLabNodeResult> ProbeAsync(Guid workerNodeId, TeamLabNodeProbeRequest request, CancellationToken cancellationToken);
     Task<TeamLabNodeResult> ConfigureAccessAsync(Guid workerNodeId, TeamLabNodeAccessApplyRequest request, CancellationToken cancellationToken);
-    Task<TeamLabNodeResult> StartFlowAsync(Guid workerNodeId, int runtimeId, int shardId, int networkId, string networkKey, string interfaceName, CancellationToken cancellationToken);
-    Task<TeamLabNodeResult> StopFlowAsync(Guid workerNodeId, int runtimeId, string networkKey, CancellationToken cancellationToken);
-    Task<TeamLabNodeFlowResult> GetFlowSnapshotAsync(
+    Task<TeamLabNodeResult> RemoveAccessAsync(Guid workerNodeId, TeamLabNodeAccessRemoveRequest request, CancellationToken cancellationToken);
+    Task<TeamLabNodeObservationResult> ReadObservationsAsync(
         Guid workerNodeId,
         int runtimeId,
-        string networkKey,
-        long afterCursor,
+        int generation,
+        long afterSequence,
+        Guid? observationPointId,
+        int limit,
         CancellationToken cancellationToken);
     Task<TeamLabNodeCaptureResult> StartCaptureAsync(Guid workerNodeId, TeamLabNodeCaptureStartRequest request, CancellationToken cancellationToken);
-    Task<TeamLabNodeCaptureResult> StopCaptureAsync(Guid workerNodeId, int runtimeId, int jobId, CancellationToken cancellationToken);
-    Task<TeamLabNodeCaptureResult> GetCaptureStatusAsync(Guid workerNodeId, int runtimeId, int jobId, CancellationToken cancellationToken);
-    Task<TeamLabNodeCaptureDownload> DownloadCaptureAsync(Guid workerNodeId, int runtimeId, int jobId, CancellationToken cancellationToken);
+    Task<TeamLabNodeCaptureResult> StopCaptureAsync(Guid workerNodeId, int runtimeId, int generation, Guid captureId, Guid segmentId, CancellationToken cancellationToken);
+    Task<TeamLabNodeCaptureResult> GetCaptureStatusAsync(Guid workerNodeId, int runtimeId, int generation, Guid captureId, Guid segmentId, CancellationToken cancellationToken);
+    Task<TeamLabNodeCaptureResult> UploadCaptureAsync(Guid workerNodeId, TeamLabNodeCaptureUploadRequest request, CancellationToken cancellationToken);
+    Task<TeamLabNodeCaptureResult> DeleteCaptureAsync(Guid workerNodeId, int runtimeId, int generation, Guid captureId, Guid segmentId, CancellationToken cancellationToken);
 }

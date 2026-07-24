@@ -45,12 +45,16 @@ public sealed class TeamLabAccessGrantService(
         CancellationToken cancellationToken)
     {
         var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
+        if (runtime.IsScenarioBuild)
+            throw new TeamLabApiContractException(
+                "scenario_runtime_access_forbidden",
+                "Scenario build runtimes never accept player access grants.",
+                409);
         if (runtime.Status != TeamLabRuntimeStatus.Running || runtime.PublicUdpMapping is null)
             throw new TeamLabApiContractException("runtime_not_ready", "The runtime is not ready for access.", 409);
         var entryShard = runtime.Shards.SingleOrDefault(item => item.Id == runtime.EntryShardId && item.Generation == runtime.Generation)
             ?? throw new TeamLabApiContractException("runtime_invalid", "The runtime entry shard is missing.", 500);
-        var entryNetwork = runtime.Networks.SingleOrDefault(item => item.ShardId == entryShard.Id && item.Generation == runtime.Generation)
-            ?? throw new TeamLabApiContractException("runtime_invalid", "The runtime entry network is missing.", 500);
+        var entryNetwork = ResolveEntryNetwork(runtime, entryShard);
         var publicEndpoint = !string.IsNullOrWhiteSpace(_gateway.PublicEndpoint)
             ? _gateway.PublicEndpoint.Trim()
             : _container.PublicEntry.Trim();
@@ -104,8 +108,9 @@ public sealed class TeamLabAccessGrantService(
         var applied = await executor.ConfigureAccessAsync(entryShard.WorkerNodeId,
             new TeamLabNodeAccessApplyRequest(
                 runtime.Id,
-                TeamLabRouteApplicationService.RouterName(runtime.Id, entryShard.Id),
-                TeamLabRouteApplicationService.WireGuardName(runtime.Id),
+                runtime.Generation,
+                TeamLabResourceNameFactory.RouterNamespace(runtime.Id, entryShard.Id),
+                TeamLabResourceNameFactory.WireGuardInterface(runtime.Id),
                 runtime.PublicUdpMapping.WorkerWireGuardPort,
                 serverAddress,
                 _protector.Unprotect(grant.ProtectedServerPrivateKey),
@@ -188,9 +193,13 @@ public sealed class TeamLabAccessGrantService(
         if (grant.Revoked)
             return;
         var entryShard = runtime.Shards.Single(item => item.Id == runtime.EntryShardId && item.Generation == runtime.Generation);
-        var cleanup = await executor.CleanupShardAsync(entryShard.WorkerNodeId,
-            new TeamLabNodeCleanupRequest(runtime.Id, runtime.Generation,
-                [TeamLabRouteApplicationService.WireGuardName(runtime.Id)], [], []), cancellationToken);
+        var cleanup = await executor.RemoveAccessAsync(entryShard.WorkerNodeId,
+            new TeamLabNodeAccessRemoveRequest(
+                runtime.Id,
+                runtime.Generation,
+                TeamLabResourceNameFactory.RouterNamespace(runtime.Id, entryShard.Id),
+                TeamLabResourceNameFactory.WireGuardInterface(runtime.Id)),
+            cancellationToken);
         if (!cleanup.Success)
             throw new TeamLabApiContractException(
                 "operation_failed", "The access grant could not be revoked from the runtime.", 500);
@@ -218,6 +227,19 @@ public sealed class TeamLabAccessGrantService(
             .Include(item => item.Events)
             .SingleOrDefaultAsync(item => item.PublicId == runtimePublicId, cancellationToken)
         ?? throw new TeamLabApiContractException("runtime_not_found", "The TeamLab runtime was not found.", 404);
+
+    internal static TeamLabRuntimeNetwork ResolveEntryNetwork(
+        TeamLabRuntime runtime,
+        TeamLabRuntimeShard entryShard)
+    {
+        var entryNetworks = runtime.Networks
+            .Where(item => item.Generation == runtime.Generation && item.IsEntry)
+            .ToArray();
+        if (entryNetworks.Length != 1 || entryNetworks[0].ShardId != entryShard.Id)
+            throw new TeamLabApiContractException(
+                "runtime_invalid", "The runtime entry network is missing or assigned to the wrong shard.", 500);
+        return entryNetworks[0];
+    }
 
     private static TeamLabAccessGrantModel ToModel(TeamLabRuntime runtime, TeamLabAccessGrant grant, string? downloadUrl) =>
         new(grant.PublicId, "WireGuard", grant.ClientAddress, grant.Endpoint, grant.AllowedIps, grant.Dns,

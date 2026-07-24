@@ -2,8 +2,11 @@ using GZCTF.Models.Data;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
+using GZCTF.Modules.Content.Domain;
 using GZCTF.Modules.Runtime.Domain;
+using GZCTF.Modules.TeamLab.Domain;
 using Microsoft.EntityFrameworkCore;
+using System.Collections.Concurrent;
 
 namespace GZCTF.Services.Fleet;
 
@@ -12,11 +15,14 @@ public class ImageDistributionService(
     AgentClient agentClient,
     DockerImageRegistryService dockerRegistry,
     VmArtifactStore vmArtifacts,
+    VmImageRegistryService vmRegistry,
     ImageDistributionCoordinator coordinator,
     DeploymentExecutionContextAccessor executionContext,
     IOperationalEventWriter events,
     ILogger<ImageDistributionService> logger)
 {
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> VmArtifactRecoveryGates =
+        new(StringComparer.Ordinal);
     static readonly NodeCapability DockerCapability = NodeCapability.Docker;
     static readonly NodeCapability VmCapability = NodeCapability.Kvm;
 
@@ -145,6 +151,11 @@ public class ImageDistributionService(
             .Select(reference => reference.ResourceId)
             .Distinct()
             .ToArray();
+        var certificationTemplateIds = records.SelectMany(record => record.References)
+            .Where(reference => reference.Kind == ImageDistributionReferenceKind.ImageCertification)
+            .Select(reference => reference.ResourceId)
+            .Distinct()
+            .ToArray();
 
         var gameReferences = (await context.GameChallenges.AsNoTracking()
                 .Where(challenge => gameIds.Contains(challenge.GameId) && challenge.ImageTemplateId.HasValue)
@@ -167,7 +178,14 @@ public class ImageDistributionService(
                 .ToArrayAsync(token))
             .Select(reference => (reference.RuntimeId, reference.TemplateId))
             .ToHashSet();
-
+        var activeCertificationTemplates = await context.ImageTemplateCertificationJobs.AsNoTracking()
+            .Where(job => certificationTemplateIds.Contains(job.ImageTemplateId) &&
+                          (job.Operation.Status == ApiOperationStatus.Pending ||
+                           job.Operation.Status == ApiOperationStatus.Running))
+            .Select(job => job.ImageTemplateId)
+            .Distinct()
+            .ToArrayAsync(token);
+        var activeCertificationTemplateSet = activeCertificationTemplates.ToHashSet();
         foreach (var record in records)
         {
             var invalidReferences = record.References.Where(reference => reference.Kind switch
@@ -178,6 +196,9 @@ public class ImageDistributionService(
                     !courseReferences.Contains((reference.ResourceId, record.ImageTemplateId)),
                 ImageDistributionReferenceKind.TeamLabRuntime =>
                     !runtimeReferences.Contains((reference.ResourceId, record.ImageTemplateId)),
+                ImageDistributionReferenceKind.ImageCertification =>
+                    reference.ResourceId != record.ImageTemplateId ||
+                    !activeCertificationTemplateSet.Contains(reference.ResourceId),
                 _ => true
             }).ToList();
             if (invalidReferences.Count > 0)
@@ -236,10 +257,26 @@ public class ImageDistributionService(
         Guid nodeId,
         ImageDistributionReferenceKey? reference,
         CancellationToken token)
+        => await EnsureVmTemplateOnNodeAsync(templateId, nodeId, reference, false, token);
+
+    public Task<AgentVmImageDownloadResult> EnsureVmTemplateForCertificationOnNodeAsync(
+        int templateId,
+        Guid nodeId,
+        CancellationToken token) =>
+        EnsureVmTemplateOnNodeAsync(templateId, nodeId,
+            ImageDistributionReferenceKey.ImageCertification(templateId), true, token);
+
+    private async Task<AgentVmImageDownloadResult> EnsureVmTemplateOnNodeAsync(
+        int templateId,
+        Guid nodeId,
+        ImageDistributionReferenceKey? reference,
+        bool allowImporting,
+        CancellationToken token)
     {
         var template = await context.ImageTemplates.AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == templateId, token);
-        if (template is null || template.Status != ImageStatus.Ready)
+        if (template is null || template.Status != ImageStatus.Ready &&
+            !(allowImporting && template.Status == ImageStatus.Importing))
             return AgentVmImageDownloadResult.Failed($"VM template {templateId} was not found.");
 
         var node = await context.WorkerNodes.AsNoTracking()
@@ -401,6 +438,7 @@ public class ImageDistributionService(
     {
         var record = await context.ImageDistributionRecords
             .Include(item => item.ImageTemplate)
+            .ThenInclude(item => item!.PreparedArtifact)
             .Include(item => item.WorkerNode)
             .Include(item => item.References)
             .SingleOrDefaultAsync(item => item.Id == recordId, token);
@@ -430,7 +468,11 @@ public class ImageDistributionService(
             var node = record.WorkerNode ??
                        throw new InvalidOperationException(
                            $"Worker node {record.WorkerNodeId} no longer exists.");
-            if (template.Status != ImageStatus.Ready)
+            var managedArtifactReady = template.Status == ImageStatus.Importing &&
+                                       template.VmRuntimeMode == VmRuntimeMode.Managed &&
+                                       template.VmArtifactStatus == VmArtifactStatus.Ready &&
+                                       template.PreparedArtifact is { Status: VmPreparedArtifactStatus.Ready };
+            if (template.Status != ImageStatus.Ready && !managedArtifactReady)
                 throw new InvalidOperationException(
                     $"Image template {template.Name} ({template.Id}) is not ready in storage.");
             if (!CanNodeUseImage(node, template))
@@ -447,10 +489,28 @@ public class ImageDistributionService(
             }
             else
             {
-                var artifact = await vmArtifacts.EnsureAndBuildDownloadAsync(template, node.Id, token);
                 await SetTransferStageAsync(record, ImageDistributionStage.Pulling, token);
-                var result = await agentClient.DownloadVmImageAsync(node.Id, template.Id, artifact.Sha256,
-                    artifact.DownloadUrl, artifact.Size, token);
+                AgentVmImageDownloadResult result;
+                if (template.VmArtifactStatus == VmArtifactStatus.Ready)
+                {
+                    var artifact = await ResolveImmutableVmArtifactAsync(template, token);
+                    result = await agentClient.DownloadPreparedVmImageAsync(
+                        node.Id,
+                        template.Id,
+                        artifact.Digest,
+                        artifact.Size,
+                        artifact.RegistryAddress,
+                        artifact.Repository,
+                        artifact.Tag,
+                        token);
+                }
+                else
+                {
+                    await EnsureVmArtifactAvailableAsync(template, node.Id, token);
+                    var artifact = await vmArtifacts.EnsureAndBuildDownloadAsync(template, node.Id, token);
+                    result = await agentClient.DownloadVmImageAsync(node.Id, template.Id, artifact.Sha256,
+                        artifact.DownloadUrl, artifact.Size, token);
+                }
                 if (!result.Success)
                     throw new InvalidOperationException(result.Message);
                 if (!result.Verified)
@@ -522,6 +582,115 @@ public class ImageDistributionService(
                 await context.SaveChangesAsync(token.IsCancellationRequested ? CancellationToken.None : token);
             }
         }
+    }
+
+    private async Task EnsureVmArtifactAvailableAsync(
+        ImageTemplate template,
+        Guid preferredNodeId,
+        CancellationToken token)
+    {
+        var imageHash = template.ImageHash
+                        ?? throw new InvalidOperationException(
+                            $"VM template {template.Name} ({template.Id}) has no image hash.");
+        if (await vmRegistry.ArtifactExistsAsync(template, token)) return;
+        if (!string.IsNullOrWhiteSpace(template.LocalFilePath) && File.Exists(template.LocalFilePath)) return;
+
+        var reference = vmRegistry.BuildReference(template);
+        var gateKey = $"{reference.RegistryAddress}/{reference.Repository}:{reference.Tag}";
+        var gate = VmArtifactRecoveryGates.GetOrAdd(gateKey, static _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(token);
+        try
+        {
+            if (await vmRegistry.ArtifactExistsAsync(template, token)) return;
+            var cachedNodeIds = await context.ImageDistributionRecords.AsNoTracking()
+                .Where(record => record.ImageTemplateId == template.Id &&
+                                 record.ImageHash == imageHash &&
+                                 record.Status == ImageDistributionStatus.Ready)
+                .OrderByDescending(record => record.WorkerNodeId == preferredNodeId)
+                .ThenByDescending(record => record.LastCheckedAt)
+                .Select(record => record.WorkerNodeId)
+                .Distinct()
+                .ToListAsync(token);
+            if (!cachedNodeIds.Contains(preferredNodeId)) cachedNodeIds.Insert(0, preferredNodeId);
+
+            List<string> failures = [];
+            foreach (var nodeId in cachedNodeIds)
+            {
+                var result = await agentClient.PublishVmImageAsync(
+                    nodeId, template.Id, imageHash, template.FileSize, reference, token);
+                if (!result.Success || !result.Verified)
+                {
+                    failures.Add(result.Message ?? $"node {nodeId} did not publish a verified artifact");
+                    continue;
+                }
+                if (await vmRegistry.ArtifactExistsAsync(template, token)) return;
+                failures.Add($"node {nodeId} returned success but the Registry artifact is unavailable");
+            }
+
+            throw new InvalidOperationException(
+                $"VM template {template.Name} ({template.Id}) is missing from Registry " +
+                $"{reference.RegistryAddress} and no verified worker cache could restore it. " +
+                string.Join("; ", failures));
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task<ImmutableVmArtifact> ResolveImmutableVmArtifactAsync(
+        ImageTemplate template,
+        CancellationToken token)
+    {
+        if (template.VmRuntimeMode == VmRuntimeMode.Scenario)
+        {
+            var artifact = await context.TeamLabReleaseAssetArtifacts.AsNoTracking()
+                .Where(item => item.ScenarioImageTemplateId == template.Id &&
+                               item.Status == TeamLabReleaseArtifactStatus.Ready)
+                .OrderByDescending(item => item.ReadyAt)
+                .Select(item => new ImmutableVmArtifact(
+                    item.ArtifactDigest,
+                    item.ArtifactSize,
+                    item.RegistryAddress,
+                    item.RegistryRepository,
+                    item.RegistryTag))
+                .FirstOrDefaultAsync(token);
+            if (artifact is null || !artifact.IsValidFor(template.ImageHash))
+                throw new InvalidOperationException(
+                    $"Scenario VM image {template.Name} ({template.Id}) has invalid immutable provenance.");
+            return artifact;
+        }
+
+        var prepared = template.PreparedArtifact;
+        if (prepared is not { Status: VmPreparedArtifactStatus.Ready })
+            throw new InvalidOperationException(
+                $"Prepared VM image {template.Name} ({template.Id}) has invalid immutable provenance.");
+        var result = new ImmutableVmArtifact(
+            prepared.ArtifactDigest,
+            prepared.ArtifactSize,
+            prepared.RegistryAddress,
+            prepared.RegistryRepository,
+            prepared.RegistryTag);
+        if (!result.IsValidFor(template.ImageHash))
+            throw new InvalidOperationException(
+                $"Prepared VM image {template.Name} ({template.Id}) has invalid immutable provenance.");
+        return result;
+    }
+
+    private sealed record ImmutableVmArtifact(
+        string Digest,
+        long Size,
+        string RegistryAddress,
+        string Repository,
+        string Tag)
+    {
+        public bool IsValidFor(string? imageHash) =>
+            Size > 0 &&
+            !string.IsNullOrWhiteSpace(RegistryAddress) &&
+            !string.IsNullOrWhiteSpace(Repository) &&
+            !string.IsNullOrWhiteSpace(Tag) &&
+            !string.IsNullOrWhiteSpace(Digest) &&
+            string.Equals(imageHash, Digest, StringComparison.OrdinalIgnoreCase);
     }
 
     async Task<ImageDistributionRecord> WaitForReadyAsync(

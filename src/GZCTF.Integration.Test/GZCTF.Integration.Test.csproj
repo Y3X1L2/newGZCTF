@@ -30,6 +30,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\GZCTF\GZCTF.csproj" />
+    <ProjectReference Include="..\GZCTF.Agent\GZCTF.Agent.csproj" />
+    <ProjectReference Include="..\GZCTF.GuestControl.Contracts\GZCTF.GuestControl.Contracts.csproj" />
   </ItemGroup>
 
 

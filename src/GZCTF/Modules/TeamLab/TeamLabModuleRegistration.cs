@@ -10,9 +10,11 @@ public static class TeamLabModuleRegistration
     {
         services.AddScoped<TeamLabTopologyValidator>();
         services.AddScoped<TeamLabReleaseService>();
+        services.AddScoped<TeamLabScenarioBakeService>();
         services.AddScoped<ITeamLabTopologyApplicationService, TeamLabTopologyApplicationService>();
         services.AddScoped<TeamLabRuntimeOverlayService>();
         services.AddScoped<TeamLabRuntimePlanner>();
+        services.AddScoped<TeamLabFabricLinkAllocator>();
         services.AddScoped<TeamLabEventRecorder>();
         services.AddScoped<TeamLabRuntimeProjectionService>();
         services.AddScoped<TeamLabAuthorizationService>();
@@ -23,8 +25,24 @@ public static class TeamLabModuleRegistration
             serviceProvider.GetRequiredService<RedisTeamLabTrafficIngestor>());
         services.AddScoped<PostgresTeamLabTrafficBatchWriter>();
         services.AddHostedService<TeamLabTrafficPersistenceWorker>();
+        services.AddScoped<TeamLabTrafficPathCorrelator>();
+        services.AddHostedService<TeamLabTrafficPathWorker>();
+        services.AddSingleton<TeamLabCaptureUploadTokenService>();
+        services.AddSingleton<TeamLabCaptureArtifactStore>();
+        services.AddScoped<TeamLabCaptureUploadService>();
+        services.AddScoped<TeamLabCaptureCoordinator>();
+        services.AddScoped<ITeamLabCaptureCleanup>(provider =>
+            provider.GetRequiredService<TeamLabCaptureCoordinator>());
+        services.AddHostedService<TeamLabCaptureCoordinatorWorker>();
         services.AddScoped<ITeamLabNodeExecutor, AgentTeamLabNodeExecutor>();
         services.AddScoped<TeamLabRouteApplicationService>();
+        services.AddScoped<TeamLabDeploymentStageMachine>();
+        services.AddScoped<ITeamLabDeploymentProgress>(serviceProvider =>
+            serviceProvider.GetRequiredService<TeamLabDeploymentStageMachine>());
+        services.AddScoped<ITeamLabArtifactDistribution, TeamLabArtifactDistribution>();
+        services.AddScoped<ITeamLabRuntimeQueue, TeamLabRuntimeQueue>();
+        services.AddScoped<TeamLabBootstrapOrchestrator>();
+        services.AddScoped<TeamLabRuntimeRecoveryPolicy>();
         services.AddScoped<TeamLabShardDeploymentService>();
         services.AddScoped<TeamLabRuntimeCleanupService>();
         services.AddScoped<ITeamLabRuntimeApplicationService, TeamLabRuntimeOrchestrator>();

@@ -10,6 +10,7 @@ public static class PlatformTelemetry
     public const string RuntimeMeterName = "GZCTF.Runtime";
     public const string AgentClientMeterName = "GZCTF.AgentClient";
     public const string OperationsMeterName = "GZCTF.Operations";
+    public const string TeamLabMeterName = "GZCTF.TeamLab";
     public const string RuntimeActivitySourceName = "GZCTF.Runtime";
     public const string AgentClientActivitySourceName = "GZCTF.AgentClient";
     public const string ImageActivitySourceName = "GZCTF.ImageDistribution";
@@ -24,6 +25,7 @@ public static class PlatformTelemetry
     private static readonly Meter RuntimeMeter = new(RuntimeMeterName);
     private static readonly Meter AgentClientMeter = new(AgentClientMeterName);
     private static readonly Meter OperationsMeter = new(OperationsMeterName);
+    private static readonly Meter TeamLabMeter = new(TeamLabMeterName);
     private static readonly Counter<long> AgentCalls =
         AgentClientMeter.CreateCounter<long>("gzctf_agent_calls_total");
     private static readonly Counter<long> AgentFailures =
@@ -38,6 +40,16 @@ public static class PlatformTelemetry
         RuntimeMeter.CreateCounter<long>("gzctf_runtime_recovery_decisions_total");
     private static readonly Histogram<double> RuntimeDuration =
         RuntimeMeter.CreateHistogram<double>("gzctf_runtime_stage_duration_seconds", "s");
+    private static readonly Counter<long> TeamLabLifecycle =
+        TeamLabMeter.CreateCounter<long>("gzctf_teamlab_lifecycle_total");
+    private static readonly Counter<long> TeamLabInfrastructure =
+        TeamLabMeter.CreateCounter<long>("gzctf_teamlab_infrastructure_total");
+    private static readonly Counter<long> TeamLabObservations =
+        TeamLabMeter.CreateCounter<long>("gzctf_teamlab_observations_total");
+    private static readonly Counter<long> TeamLabCaptures =
+        TeamLabMeter.CreateCounter<long>("gzctf_teamlab_capture_actions_total");
+    private static readonly Counter<long> TeamLabRecovery =
+        TeamLabMeter.CreateCounter<long>("gzctf_teamlab_recovery_decisions_total");
     private static Measurement<long>[] _queueDepth = [];
     private static Measurement<long>[] _nodeSummary = [];
 
@@ -107,6 +119,47 @@ public static class PlatformTelemetry
         {
             { "decision", decision },
             { "workload", workload }
+        });
+
+    public static void RecordTeamLabLifecycle(
+        string stage,
+        OperationalEventOutcome outcome,
+        OperationalErrorCategory? errorCategory = null) =>
+        TeamLabLifecycle.Add(1, new TagList
+        {
+            { "stage", stage },
+            { "result", outcome.ToString() },
+            { "error.category", errorCategory?.ToString() ?? "None" }
+        });
+
+    public static void RecordTeamLabInfrastructure(string result, string infrastructureKind) =>
+        TeamLabInfrastructure.Add(1, new TagList
+        {
+            { "result", result },
+            { "infrastructure.kind", infrastructureKind }
+        });
+
+    public static void RecordTeamLabObservation(string result, string evidenceKind, long count = 1) =>
+        TeamLabObservations.Add(count, new TagList
+        {
+            { "result", result },
+            { "evidence.kind", evidenceKind }
+        });
+
+    public static void RecordTeamLabCapture(string action, string scope, string result) =>
+        TeamLabCaptures.Add(1, new TagList
+        {
+            { "action", action },
+            { "capture.scope", scope },
+            { "result", result }
+        });
+
+    public static void RecordTeamLabRecovery(string decision, string assetKind, string result) =>
+        TeamLabRecovery.Add(1, new TagList
+        {
+            { "decision", decision },
+            { "asset.kind", assetKind },
+            { "result", result }
         });
 
     public static void UpdateQueueDepth(IEnumerable<Measurement<long>> measurements) =>

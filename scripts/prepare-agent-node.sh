@@ -201,7 +201,7 @@ install_kvm() {
 
 install_teamlab_network_tools() {
   log "Installing TeamLab VPN/network tools"
-  apt_install wireguard-tools nftables iptables tcpdump dnsmasq-base
+  apt_install wireguard-tools nftables iptables tcpdump tshark dnsmasq-base
 }
 
 print_status() {
@@ -243,6 +243,7 @@ print_status() {
 
   command -v wg >/dev/null 2>&1 && echo "WireGuard: $(wg --version 2>/dev/null || echo installed)" || echo "WireGuard: missing"
   command -v tcpdump >/dev/null 2>&1 && echo "tcpdump: $(tcpdump --version 2>/dev/null | head -n 1 || echo installed)" || echo "tcpdump: missing"
+  command -v dumpcap >/dev/null 2>&1 && echo "dumpcap: $(dumpcap --version 2>/dev/null | head -n 1 || echo installed)" || echo "dumpcap: missing"
   if command -v genisoimage >/dev/null 2>&1 || command -v xorriso >/dev/null 2>&1; then
     echo "cloud-init seed ISO tool: present"
   else

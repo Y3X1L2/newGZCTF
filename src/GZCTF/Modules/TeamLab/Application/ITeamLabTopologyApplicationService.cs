@@ -20,5 +20,5 @@ public interface ITeamLabTopologyApplicationService
     Task<TeamLabTopologyDetailModel> CreateForOperationAsync(CreateTeamLabTopologyModel model, Guid actorUserId, Guid operationId, CancellationToken cancellationToken);
     Task<TeamLabTopologyDetailModel> UpdateForOperationAsync(Guid topologyId, UpdateTeamLabTopologyModel model, Guid actorUserId, bool includeAll, Guid operationId, CancellationToken cancellationToken);
     Task DeleteForOperationAsync(Guid topologyId, Guid actorUserId, bool includeAll, Guid operationId, CancellationToken cancellationToken);
-    Task<TeamLabReleaseModel> PublishForOperationAsync(Guid topologyId, int revision, Guid actorUserId, bool includeAll, Guid operationId, CancellationToken cancellationToken);
+    Task<TeamLabReleaseModel> PublishForOperationAsync(Guid topologyId, int revision, Guid actorUserId, bool includeAll, Guid operationId, IReadOnlyList<TeamLabRuntimeOverlayModel>? scenarioOverlays, CancellationToken cancellationToken);
 }

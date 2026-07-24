@@ -13,6 +13,7 @@ public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
     {
         var runtime = await context.TeamLabRuntimes.AsNoTracking()
             .Include(item => item.Shards)
+            .ThenInclude(item => item.WorkerNode)
             .Include(item => item.Networks)
             .Include(item => item.Assets)
             .SingleOrDefaultAsync(item => item.PublicId == runtimePublicId, cancellationToken)
@@ -31,6 +32,8 @@ public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
                 .OrderBy(item => item.PublicId)
                 .Select(shard => new TeamLabRuntimeShardProjectionModel(
                     shard.PublicId,
+                    shard.WorkerNodeId,
+                    shard.WorkerNode.Name,
                     shard.Status,
                     runtime.Networks.Where(item => item.Generation == runtime.Generation && item.ShardId == shard.Id)
                         .Select(item => item.TopologyKey).Order(StringComparer.Ordinal).ToArray(),

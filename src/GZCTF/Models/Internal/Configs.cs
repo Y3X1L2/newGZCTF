@@ -603,6 +603,7 @@ public class TeamLabNetworkConfig
     public bool DryRun { get; set; }
 
     public string RuntimeNetworkBaseCidr { get; set; } = "10.180.0.0/16";
+    public string FabricLinkPool { get; set; } = "100.64.0.0/16";
     public int TeamSubnetPrefixLength { get; set; } = 24;
     public int PublicUdpPortStart { get; set; } = 32000;
     public int PublicUdpPortEnd { get; set; } = 32999;
@@ -611,6 +612,8 @@ public class TeamLabNetworkConfig
     public string BridgePrefix { get; set; } = "tl";
     public string RouterNamespacePrefix { get; set; } = "tlr";
     public string WireGuardInterfacePrefix { get; set; } = "tlwg";
+    public int RecoveryGraceSeconds { get; set; } = 30;
+    public bool EnableStatelessAutoRecovery { get; set; }
 }
 
 public class PublicUdpGatewayConfig

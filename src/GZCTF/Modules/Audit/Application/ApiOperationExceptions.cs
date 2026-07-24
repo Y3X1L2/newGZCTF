@@ -24,3 +24,14 @@ public class ApiOperationTerminalException(string code, string message) : Except
 {
     public string Code { get; } = code;
 }
+
+public sealed class ApiOperationDeferredException(
+    string stage,
+    string code,
+    string message,
+    TimeSpan delay) : Exception(message)
+{
+    public string Stage { get; } = stage;
+    public string Code { get; } = code;
+    public TimeSpan Delay { get; } = delay;
+}

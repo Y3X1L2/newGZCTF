@@ -265,6 +265,8 @@ docker-data/
 .codex/
 .codex-run/
 .codegraph/
+__pycache__/
+*.pyc
 artifacts/
 design-system/
 design-lab/

@@ -286,7 +286,8 @@ public class DeploymentExecutionService
             .Where(item => item.Id == runtimeId)
             .Select(item => (int?)item.Generation)
             .SingleOrDefaultAsync(token);
-        if (runtimeGeneration is not null && runtimeGeneration != ticket.Generation)
+        if (runtimeGeneration is not null && !TeamLabGenerationMatches(
+                ticket.Operation, ticket.Generation, runtimeGeneration.Value))
             return DeploymentExecutionResult.Failed("TeamLab control ticket has a stale runtime generation.");
         return ticket.Operation switch
         {
@@ -301,6 +302,13 @@ public class DeploymentExecutionService
             _ => DeploymentExecutionResult.Failed($"TeamLab operation {ticket.Operation} is not supported.")
         };
     }
+
+    internal static bool TeamLabGenerationMatches(
+        RuntimeOperationKind operation,
+        int ticketGeneration,
+        int runtimeGeneration) => operation == RuntimeOperationKind.Reset
+        ? ticketGeneration == runtimeGeneration || ticketGeneration == runtimeGeneration + 1
+        : ticketGeneration == runtimeGeneration;
 
     async Task<DeploymentExecutionResult> ExecuteAwdpControlAsync(DeploymentQueueTicket ticket,
         CancellationToken token)

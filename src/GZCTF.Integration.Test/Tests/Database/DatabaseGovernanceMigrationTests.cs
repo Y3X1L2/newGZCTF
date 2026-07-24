@@ -5,6 +5,8 @@ using GZCTF.Models.Data;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Runtime.Domain;
 using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.Modules.TeamLab.Infrastructure;
+using GZCTF.Storage;
 using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -77,31 +79,14 @@ public sealed class DatabaseGovernanceMigrationTests : IAsyncLifetime
             AuthToken = "phase4-test-token",
             Capabilities = NodeCapability.Docker | NodeCapability.Kvm
         };
-        var template = new ImageTemplate
-        {
-            Name = "phase4-template",
-            ImageType = ImageType.Docker,
-            OSType = OSType.Linux,
-            Status = ImageStatus.Ready,
-            ImageHash = new string('a', 64)
-        };
-        var topology = new TeamLabTopology { Name = "phase4-topology" };
-        var release = new TeamLabTopologyRelease
-        {
-            Topology = topology,
-            Version = 1,
-            SourceRevision = 1,
-            CanonicalJson = "{}",
-            ContentHash = new string('b', 64)
-        };
-        var question = new TheoryQuestionBankItem
-        {
-            Type = TheoryQuestionType.SingleChoice,
-            BankName = " Network   Fundamentals ",
-            Title = "CIDR",
-            Options = ["A", "B"],
-            AnswerIndexes = [0]
-        };
+        const int templateId = 940002;
+        const int questionId = 940003;
+        var templateHash = new string('a', 64);
+        const int topologyId = 940001;
+        const int runtimeId = 940001;
+        var topologyPublicId = Guid.Parse("44444444-4444-4444-8444-444444444401");
+        var releaseId = Guid.Parse("44444444-4444-4444-8444-444444444402");
+        var runtimePublicId = Guid.Parse("44444444-4444-4444-8444-444444444403");
         await context.Database.ExecuteSqlInterpolatedAsync($$"""
             INSERT INTO "WorkerNodes"
                 ("Id", "AgentPort", "AuthToken", "Capabilities", "CpuLoad", "CurrentContainers",
@@ -113,19 +98,47 @@ public sealed class DatabaseGovernanceMigrationTests : IAsyncLifetime
             VALUES
                 ({{node.Id}}, 5001, {{node.AuthToken}}, {{(byte)node.Capabilities}}, 0, 0,
                  0, {{node.HostAddress}}, false, true, false, 20, 5, 0, {{node.Name}}, CURRENT_TIMESTAMP,
-                 5000, 0, 0, 0, '{}', 0, false, 0, 0, 0, 28231, 0)
-            """);
-        context.AddRange(template, topology, release, question);
-        await context.SaveChangesAsync();
+                 5000, 0, 0, 0, '{}', 0, false, 0, 0, 0, 28231, 0);
 
-        var runtime = new TeamLabRuntime
-        {
-            TopologyReleaseId = release.Id,
-            Status = TeamLabRuntimeStatus.Running,
-            IsOpenToPlayers = true
-        };
-        context.TeamLabRuntimes.Add(runtime);
-        await context.SaveChangesAsync();
+            INSERT INTO "ImageTemplates"
+                ("Id", "Name", "ContainsMalware", "FileSize", "ImageHash", "ImageType",
+                 "OSType", "Status", "UploadedAt")
+            VALUES
+                ({{templateId}}, 'phase4-template', false, 0, {{templateHash}},
+                 {{(byte)ImageType.Docker}}, {{(byte)OSType.Linux}},
+                 {{(byte)ImageStatus.Ready}}, now());
+
+            INSERT INTO "TheoryQuestionBankItems"
+                ("Id", "Type", "BankName", "Title", "Content", "Options", "AnswerIndexes",
+                 "CreatedAt", "UpdatedAt")
+            VALUES
+                ({{questionId}}, 'SingleChoice', ' Network   Fundamentals ', 'CIDR', '',
+                 '["A","B"]', '[0]', now(), now());
+            """);
+
+        await context.Database.ExecuteSqlInterpolatedAsync($$"""
+            INSERT INTO "TeamLabTopologies"
+                ("Id", "PublicId", "OwnerUserId", "Name", "Revision", "SchemaVersion",
+                 "EditorMetadataJson", "CreatedAt", "UpdatedAt")
+            VALUES
+                ({{topologyId}}, {{topologyPublicId}}, NULL, 'phase4-topology', 1, 1,
+                 '{}'::jsonb, now(), now());
+
+            INSERT INTO "TeamLabTopologyReleases"
+                ("Id", "TopologyId", "Version", "SourceRevision", "SchemaVersion",
+                 "CanonicalJson", "ContentHash", "PublishedById", "PublishedAt")
+            VALUES
+                ({{releaseId}}, {{topologyId}}, 1, 1, 1, '{}'::jsonb,
+                 {{new string('b', 64)}}, NULL, now());
+
+            INSERT INTO "TeamLabRuntimes"
+                ("Id", "PublicId", "TopologyReleaseId", "CreatedById", "Generation",
+                 "ExternalReference", "CreateRequestHash", "EntryShardId", "Status",
+                 "IsOpenToPlayers", "LastError", "CreatedAt", "UpdatedAt")
+            VALUES
+                ({{runtimeId}}, {{runtimePublicId}}, {{releaseId}}, NULL, 1, NULL,
+                 {{new string('c', 64)}}, NULL, 10, false, NULL, now(), now());
+            """);
 
         var distributionId = Guid.Parse("44444444-4444-4444-8444-444444444444");
         const string references = "[{\"Kind\":0,\"Id\":7001},{\"Kind\":1,\"Id\":7002}]";
@@ -133,7 +146,7 @@ public sealed class DatabaseGovernanceMigrationTests : IAsyncLifetime
             INSERT INTO "ImageDistributionRecords"
                 ("Id", "ImageTemplateId", "WorkerNodeId", "ImageHash", "ImageType", "Status",
                  "ReferenceCount", "References", "CreatedAt")
-            VALUES ({{distributionId}}, {{template.Id}}, {{node.Id}}, {{template.ImageHash!}}, 0, 2,
+            VALUES ({{distributionId}}, {{templateId}}, {{node.Id}}, {{templateHash}}, 0, 2,
                     2, {{references}}, '2026-01-01T00:00:00Z');
 
             INSERT INTO "Logs" ("Id", "TimeUtc", "Level", "Logger", "Message") VALUES
@@ -145,9 +158,9 @@ public sealed class DatabaseGovernanceMigrationTests : IAsyncLifetime
                  "DestinationIp", "DestinationPort", "Protocol", "Bytes", "Packets",
                  "FirstSeenAt", "LastSeenAt", "CapturedAt")
             VALUES
-                (920001, {{runtime.Id}}, 1, 1, '10.10.1.5', 40000, '192.168.20.8', 80,
+                (920001, {{runtimeId}}, 1, 1, '10.10.1.5', 40000, '192.168.20.8', 80,
                  'TCP', 512, 1, '2026-01-10T00:01:00Z', '2026-01-10T00:01:00Z', '2026-01-10T00:01:00Z'),
-                (920002, {{runtime.Id}}, 1, 2, '10.10.1.5', 40001, '192.168.20.9', 443,
+                (920002, {{runtimeId}}, 1, 2, '10.10.1.5', 40001, '192.168.20.9', 443,
                  'TCP', 1024, 1, '2026-01-11T00:02:00Z', '2026-01-11T00:02:00Z', '2026-01-11T00:02:00Z');
 
             SET session_replication_role = replica;
@@ -157,7 +170,7 @@ public sealed class DatabaseGovernanceMigrationTests : IAsyncLifetime
             SET session_replication_role = origin;
             """);
 
-        return new SeedFacts(distributionId, question.Id, runtime.Id);
+        return new SeedFacts(distributionId, questionId, runtimeId);
     }
 
     private async Task AssertMigrationContractAsync(SeedFacts seed)
@@ -268,7 +281,8 @@ public sealed class DatabaseGovernanceMigrationTests : IAsyncLifetime
         };
         context.DeploymentQueueTickets.AddRange(terminal, active);
         await context.SaveChangesAsync();
-        var deleted = await new TerminalHistoryCleaner(context).CleanDeploymentTicketsAsync(
+        var deleted = await new TerminalHistoryCleaner(context)
+            .CleanDeploymentTicketsAsync(
             DateTimeOffset.UtcNow.AddDays(-180), 100, CancellationToken.None);
         Assert.Equal(1, deleted);
         Assert.True(await context.DeploymentQueueTickets.AnyAsync(item => item.Id == active.Id));

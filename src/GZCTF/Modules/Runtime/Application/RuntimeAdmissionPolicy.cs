@@ -13,17 +13,14 @@ public sealed class RuntimeAdmissionPolicy(AppDbContext context, IOptions<Runtim
     {
         if (request.Operation != RuntimeOperationKind.Create)
             return;
-        var ownerKey = RuntimeQueueSelector.OwnerKey(request.OwnerTeamId, request.OwnerUserId);
-        var pendingOwners = await context.DeploymentQueueTickets.AsNoTracking()
-            .Where(ticket => ticket.Operation == RuntimeOperationKind.Create &&
-                             ticket.Status == DeploymentQueueTicketStatus.Pending)
-            .Select(ticket => new { ticket.OwnerTeamId, ticket.OwnerUserId })
-            .ToArrayAsync(token);
-        var count = pendingOwners.Count(item =>
-            RuntimeQueueSelector.OwnerKey(item.OwnerTeamId, item.OwnerUserId) == ownerKey);
+        var fairnessKey = request.Identity.FairnessKey;
+        var count = await context.DeploymentQueueTickets.AsNoTracking()
+            .CountAsync(ticket => ticket.Operation == RuntimeOperationKind.Create &&
+                                  ticket.Status == DeploymentQueueTicketStatus.Pending &&
+                                  ticket.FairnessKey == fairnessKey, token);
         if (count >= Math.Max(1, _options.MaxQueuedCreatesPerOwner))
             throw new RuntimeQueueLimitException("owner_queue_limit_exceeded",
-                $"The deployment queue limit for {ownerKey} has been reached.");
+                $"The deployment queue limit for {fairnessKey} has been reached.");
     }
 }
 

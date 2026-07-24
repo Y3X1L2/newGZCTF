@@ -6,6 +6,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using GZCTF.Modules;
+using GZCTF.Modules.Content.Domain;
+using GZCTF.Modules.TeamLab.Domain;
 using ApiOperationEntity = GZCTF.Modules.Audit.Domain.ApiOperation;
 using ApiTokenEntity = GZCTF.Modules.Identity.Domain.ApiToken;
 using ApiTokenResourceGrantEntity = GZCTF.Modules.Identity.Domain.ApiTokenResourceGrant;
@@ -35,6 +37,7 @@ using DeploymentLifecycleAggregateEntity = GZCTF.Modules.Audit.Domain.Deployment
 using TeamLabTrafficFlowAggregateEntity = GZCTF.Modules.TeamLab.Domain.TeamLabTrafficFlowAggregate;
 using ProjectionRevisionEntity = GZCTF.Infrastructure.Cache.ProjectionRevision;
 using WorkerNodeMetricSampleEntity = GZCTF.Modules.Runtime.Domain.WorkerNodeMetricSample;
+using AgentRuntimeSignal = GZCTF.Modules.Runtime.Domain.AgentRuntimeSignal;
 
 namespace GZCTF.Models;
 
@@ -84,6 +87,14 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<ImageImportJobEntity> ImageImportJobs { get; set; } = null!;
     public DbSet<ChallengeMutationJobEntity> ChallengeMutationJobs { get; set; } = null!;
     public DbSet<ImageTemplate> ImageTemplates { get; set; } = null!;
+    public DbSet<BootstrapProfile> BootstrapProfiles => Set<BootstrapProfile>();
+    public DbSet<BootstrapProfileVersion> BootstrapProfileVersions => Set<BootstrapProfileVersion>();
+    public DbSet<BootstrapProfileOperationJob> BootstrapProfileOperationJobs => Set<BootstrapProfileOperationJob>();
+    public DbSet<BootstrapProfileDistribution> BootstrapProfileDistributions => Set<BootstrapProfileDistribution>();
+    public DbSet<ImageTemplateCapabilityCertification> ImageTemplateCapabilityCertifications => Set<ImageTemplateCapabilityCertification>();
+    public DbSet<ImageTemplateCertificationJob> ImageTemplateCertificationJobs => Set<ImageTemplateCertificationJob>();
+    public DbSet<VmPreparedArtifact> VmPreparedArtifacts => Set<VmPreparedArtifact>();
+    public DbSet<TeamLabReleaseAssetArtifact> TeamLabReleaseAssetArtifacts => Set<TeamLabReleaseAssetArtifact>();
     public DbSet<ImageDistributionRecord> ImageDistributionRecords { get; set; } = null!;
     public DbSet<ImageDistributionReferenceEntity> ImageDistributionReferences => Set<ImageDistributionReferenceEntity>();
     public DbSet<DockerRegistryMigrationTask> DockerRegistryMigrationTasks { get; set; } = null!;
@@ -138,6 +149,7 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TeamLabEvent> TeamLabEvents => Set<TeamLabEvent>();
     public DbSet<TeamLabTrafficFlow> TeamLabTrafficFlows => Set<TeamLabTrafficFlow>();
     public DbSet<TeamLabTrafficCaptureJob> TeamLabTrafficCaptureJobs => Set<TeamLabTrafficCaptureJob>();
+    public DbSet<TeamLabTrafficCaptureSegment> TeamLabTrafficCaptureSegments => Set<TeamLabTrafficCaptureSegment>();
     public DbSet<TeamLabAccessGrant> TeamLabAccessGrants => Set<TeamLabAccessGrant>();
     public DbSet<TeamLabRuntimeSecretEnvelope> TeamLabRuntimeSecretEnvelopes => Set<TeamLabRuntimeSecretEnvelope>();
     public DbSet<TeamLabTopologyEntity> TeamLabTopologies => Set<TeamLabTopologyEntity>();
@@ -147,6 +159,17 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TeamLabTopologyConnectionEntity> TeamLabTopologyConnections => Set<TeamLabTopologyConnectionEntity>();
     public DbSet<TeamLabTopologyReleaseEntity> TeamLabTopologyReleases => Set<TeamLabTopologyReleaseEntity>();
     public DbSet<TeamLabNetworkLeaseEntity> TeamLabNetworkLeases => Set<TeamLabNetworkLeaseEntity>();
+    public DbSet<TeamLabRuntimeInfrastructure> TeamLabRuntimeInfrastructures => Set<TeamLabRuntimeInfrastructure>();
+    public DbSet<TeamLabRuntimeInfrastructureFragment> TeamLabRuntimeInfrastructureFragments => Set<TeamLabRuntimeInfrastructureFragment>();
+    public DbSet<TeamLabFabricLinkLease> TeamLabFabricLinkLeases => Set<TeamLabFabricLinkLease>();
+    public DbSet<TeamLabRuntimeDependencyState> TeamLabRuntimeDependencyStates => Set<TeamLabRuntimeDependencyState>();
+    public DbSet<TeamLabBootstrapExecution> TeamLabBootstrapExecutions => Set<TeamLabBootstrapExecution>();
+    public DbSet<TeamLabObservationPoint> TeamLabObservationPoints => Set<TeamLabObservationPoint>();
+    public DbSet<TeamLabObservationCursor> TeamLabObservationCursors => Set<TeamLabObservationCursor>();
+    public DbSet<TeamLabTrafficObservation> TeamLabTrafficObservations => Set<TeamLabTrafficObservation>();
+    public DbSet<TeamLabTrafficPath> TeamLabTrafficPaths => Set<TeamLabTrafficPath>();
+    public DbSet<TeamLabTrafficPathHop> TeamLabTrafficPathHops => Set<TeamLabTrafficPathHop>();
+    public DbSet<TeamLabTrafficCorrelationCursor> TeamLabTrafficCorrelationCursors => Set<TeamLabTrafficCorrelationCursor>();
     public DbSet<TeamLabRuntimeOperationJobEntity> TeamLabRuntimeOperationJobs => Set<TeamLabRuntimeOperationJobEntity>();
     public DbSet<DataGovernanceRunEntity> DataGovernanceRuns => Set<DataGovernanceRunEntity>();
     public DbSet<OperationalLogAggregateEntity> OperationalLogAggregates => Set<OperationalLogAggregateEntity>();
@@ -154,6 +177,7 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TeamLabTrafficFlowAggregateEntity> TeamLabTrafficFlowAggregates => Set<TeamLabTrafficFlowAggregateEntity>();
     public DbSet<ProjectionRevisionEntity> ProjectionRevisions => Set<ProjectionRevisionEntity>();
     public DbSet<WorkerNodeMetricSampleEntity> WorkerNodeMetricSamples => Set<WorkerNodeMetricSampleEntity>();
+    public DbSet<AgentRuntimeSignal> AgentRuntimeSignals => Set<AgentRuntimeSignal>();
 
     private static ValueConverter<T?, string> GetJsonConverter<T>() where T : class, new() =>
         new(
@@ -1146,12 +1170,16 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
         {
             entity.Property(e => e.Status)
                 .HasConversion<byte>();
+
         });
 
         builder.Entity<TeamLabRuntimeShard>(entity =>
         {
             entity.Property(e => e.Status)
                 .HasConversion<byte>();
+
+            entity.HasIndex(e => new { e.RuntimeId, e.Generation, e.WorkerNodeId })
+                .IsUnique();
 
             entity.HasOne(e => e.Runtime)
                 .WithMany(e => e.Shards)
@@ -1166,6 +1194,9 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
 
         builder.Entity<TeamLabRuntimeNetwork>(entity =>
         {
+            entity.HasIndex(e => new { e.RuntimeId, e.Generation, e.TopologyKey })
+                .IsUnique();
+
             entity.HasOne(e => e.Runtime)
                 .WithMany(e => e.Networks)
                 .HasForeignKey(e => e.RuntimeId)
@@ -1190,6 +1221,17 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
             entity.Property(e => e.Status)
                 .HasConversion<byte>();
 
+            entity.Property(e => e.ExecutionStage)
+                .HasConversion<byte>();
+
+            entity.Property(e => e.EndpointObservation)
+                .HasConversion<byte>();
+
+            entity.HasIndex(e => new { e.RuntimeId, e.Generation, e.Kind, e.TopologyKey });
+            entity.HasIndex(e => e.AgentOperationId)
+                .IsUnique()
+                .HasFilter("\"AgentOperationId\" IS NOT NULL");
+
             entity.HasOne(e => e.Runtime)
                 .WithMany(e => e.Assets)
                 .HasForeignKey(e => e.RuntimeId)
@@ -1208,6 +1250,8 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
 
         builder.Entity<TeamLabVpnPeerRuntime>(entity =>
         {
+            entity.HasIndex(e => new { e.RuntimeId, e.Revoked });
+
             entity.HasOne(e => e.Runtime)
                 .WithMany(e => e.VpnPeers)
                 .HasForeignKey(e => e.RuntimeId)
@@ -1216,6 +1260,9 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
 
         builder.Entity<TeamLabPublicUdpMapping>(entity =>
         {
+            entity.HasIndex(e => e.RuntimeId).IsUnique();
+            entity.HasIndex(e => e.PublicUdpPort).IsUnique();
+
             entity.HasOne(e => e.Runtime)
                 .WithOne(e => e.PublicUdpMapping)
                 .HasForeignKey<TeamLabPublicUdpMapping>(e => e.RuntimeId)
@@ -1227,36 +1274,13 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
             entity.Property(e => e.Level)
                 .HasConversion<byte>();
 
+            entity.HasIndex(e => new { e.RuntimeId, e.CreatedAt });
+
             entity.HasOne(e => e.Runtime)
                 .WithMany(e => e.Events)
                 .HasForeignKey(e => e.RuntimeId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        builder.Entity<TeamLabTrafficCaptureJob>(entity =>
-        {
-            entity.Property(e => e.Status)
-                .HasConversion<byte>();
-
-            entity.HasOne(e => e.Runtime)
-                .WithMany(e => e.TrafficCaptureJobs)
-                .HasForeignKey(e => e.RuntimeId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.Shard)
-                .WithMany()
-                .HasForeignKey(e => e.ShardId)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            entity.HasOne(e => e.Network)
-                .WithMany()
-                .HasForeignKey(e => e.NetworkId)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            entity.HasOne(e => e.WorkerNode)
-                .WithMany()
-                .HasForeignKey(e => e.WorkerNodeId)
-                .OnDelete(DeleteBehavior.SetNull);
-        });
     }
 }

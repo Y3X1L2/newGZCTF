@@ -23,18 +23,28 @@ public sealed class ApiOperationWorker : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var handlerKinds = ResolveHandlerKinds().ToHashSet(StringComparer.Ordinal);
+        var active = new HashSet<Task>();
         while (!stoppingToken.IsCancellationRequested)
         {
+            active.RemoveWhere(task => task.IsCompleted);
             IReadOnlyList<Domain.ApiOperation> operations;
             try
             {
-                await using var scope = _scopeFactory.CreateAsyncScope();
-                var service = scope.ServiceProvider.GetRequiredService<ApiOperationService>();
-                operations = await service.ClaimAsync(
-                    _leaseOwner,
-                    LeaseDuration,
-                    BatchSize,
-                    stoppingToken);
+                var availableSlots = BatchSize - active.Count;
+                if (availableSlots > 0)
+                {
+                    await using var scope = _scopeFactory.CreateAsyncScope();
+                    var service = scope.ServiceProvider.GetRequiredService<ApiOperationService>();
+                    operations = await service.ClaimAsync(
+                        _leaseOwner,
+                        LeaseDuration,
+                        availableSlots,
+                        stoppingToken);
+                }
+                else
+                {
+                    operations = [];
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -47,15 +57,23 @@ public sealed class ApiOperationWorker : BackgroundService
                 continue;
             }
 
-            if (operations.Count == 0)
+            foreach (var operation in operations)
+                active.Add(ProcessSafelyAsync(operation, handlerKinds, stoppingToken));
+
+            if (active.Count == 0)
             {
                 await DelayAsync(stoppingToken);
                 continue;
             }
 
-            await Task.WhenAll(operations.Select(operation =>
-                ProcessSafelyAsync(operation, handlerKinds, stoppingToken)));
+            if (operations.Count > 0 && active.Count < BatchSize)
+                continue;
+
+            var poll = Task.Delay(PollInterval, stoppingToken);
+            await Task.WhenAny(active.Append(poll));
         }
+
+        await Task.WhenAll(active);
     }
 
     private async Task ProcessSafelyAsync(
@@ -114,6 +132,20 @@ public sealed class ApiOperationWorker : BackgroundService
         catch (OperationCanceledException) when (execution.IsCancellationRequested)
         {
             // A shutdown or lost lease leaves the operation recoverable after lease expiry.
+        }
+        catch (ApiOperationDeferredException exception)
+        {
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var service = scope.ServiceProvider.GetRequiredService<ApiOperationService>();
+            if (!await service.DeferAsync(
+                    operation.Id,
+                    _leaseOwner,
+                    exception.Stage,
+                    exception.Code,
+                    exception.Message,
+                    exception.Delay,
+                    stoppingToken))
+                _logger.LogWarning("Operation {OperationId} lost its lease while deferring", operation.Id);
         }
         catch (ApiOperationTerminalException exception)
         {

@@ -63,6 +63,24 @@ public sealed class TeamLabFoundationTopologyTests
         Assert.DoesNotContain("teamId", first, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void ReleaseCodec_PreservesFrozenImageDigest(int schemaVersion)
+    {
+        var expectedDigest = $"sha256:{new string('a', 64)}";
+        var source = CreateDefinition();
+        source = source with
+        {
+            Assets = source.Assets.Select(asset => asset with { ImageDigest = expectedDigest }).ToArray()
+        };
+
+        var canonical = TeamLabReleaseCodec.Encode(schemaVersion, source);
+        var decoded = TeamLabReleaseCodec.DecodeExecution(schemaVersion, canonical);
+
+        Assert.All(decoded.Assets, asset => Assert.Equal(expectedDigest, asset.ImageDigest));
+    }
+
     [Fact]
     public void Planner_SplitsIndependentNetworkGroupsWithoutExposingNodes()
     {
@@ -82,7 +100,8 @@ public sealed class TeamLabFoundationTopologyTests
             new TeamLabPlanningNodeSnapshot(Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), "node-b", true, false, 1, 0, .1f, .1f)
         };
 
-        var plan = TeamLabAssetPlanner.Build(Guid.NewGuid(), Guid.NewGuid(), source, nodes);
+        var plan = TeamLabAssetPlanner.Build(
+            Guid.NewGuid(), Guid.NewGuid(), TeamLabTopologyV2Compiler.Compile(source), nodes);
         var json = JsonSerializer.Serialize(plan);
 
         Assert.Equal(2, plan.Shards.Count);

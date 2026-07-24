@@ -1,6 +1,7 @@
 using GZCTF.Middlewares;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Contracts;
+using GZCTF.Modules.TeamLab.Infrastructure;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,6 +14,7 @@ public sealed class TeamLabAdminRuntimeController(
     ITeamLabRuntimeApplicationService runtimes,
     TeamLabRuntimeProjectionService projections,
     TeamLabTrafficApplicationService traffic,
+    TeamLabCaptureArtifactStore captureArtifacts,
     TeamLabAuthorizationService authorization,
     UserManager<UserInfo> users) : ControllerBase
 {
@@ -80,14 +82,19 @@ public sealed class TeamLabAdminRuntimeController(
     public async Task<IActionResult> DownloadCapture(Guid runtimeId, Guid captureId, CancellationToken cancellationToken)
     {
         await AuthorizeAsync(runtimeId, cancellationToken);
-        var download = await traffic.DownloadCaptureAsync(runtimeId, captureId, cancellationToken);
-        if (!download.Success || download.Stream is null)
+        var descriptor = await traffic.DownloadCaptureAsync(runtimeId, captureId, cancellationToken);
+        Response.ContentType = "application/x-tar";
+        Response.Headers.ContentDisposition = $"attachment; filename=\"{descriptor.FileName}\"";
+        try
         {
-            download.Owner?.Dispose();
-            return NotFound(new RequestResponse(download.Message, StatusCodes.Status404NotFound));
+            await captureArtifacts.WriteArchiveAsync(descriptor, Response.Body, cancellationToken);
+            return new EmptyResult();
         }
-        HttpContext.Response.RegisterForDispose(download.Owner ?? download.Stream);
-        return File(download.Stream, download.ContentType, download.FileName, enableRangeProcessing: true);
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            HttpContext.Abort();
+            return new EmptyResult();
+        }
     }
 
     private async Task AuthorizeAsync(Guid runtimeId, CancellationToken cancellationToken)

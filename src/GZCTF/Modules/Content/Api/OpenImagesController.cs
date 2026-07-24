@@ -21,6 +21,7 @@ public sealed class OpenImagesController(
     ImageImportApplicationService imports,
     IImageTemplateCatalog catalog,
     ImageTemplateDeletionService deletion,
+    ImageTemplateCertificationService certifications,
     IAuthorizationService authorization) : ControllerBase
 {
     [HttpPost("docker-references")]
@@ -85,6 +86,44 @@ public sealed class OpenImagesController(
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
     }
 
+    [HttpPost("vm-qcow2")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.ImagesWrite)]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(120L * 1024 * 1024 * 1024)]
+    [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = 120L * 1024 * 1024 * 1024)]
+    [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
+    public async Task<IActionResult> RegisterVmQcow2(
+        [FromForm] VmQcow2UploadModel model,
+        [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        var (tokenId, actorUserId) = GetActor();
+        await AuthorizeImageAsync(model.Name);
+        if (model.File.Length <= 0)
+            throw new ImageImportContractException(
+                "vm_image_size_invalid", "The qcow2 image is empty.", 400);
+        if (!string.Equals(Path.GetExtension(model.File.FileName), ".qcow2", StringComparison.OrdinalIgnoreCase))
+            throw new ImageImportContractException(
+                "vm_image_format_invalid", "Only qcow2 images are accepted.", 400);
+
+        await using var stream = model.File.OpenReadStream();
+        var result = await imports.SubmitVmQcow2Async(
+            tokenId,
+            new ActorContext(actorUserId, Role.Teacher, tokenId),
+            idempotencyKey,
+            stream,
+            model.File.FileName,
+            model.File.Length,
+            new VmQcow2ImportCommand(
+                model.Name,
+                model.OSType,
+                model.NetworkMode,
+                model.ExpectedDigest),
+            cancellationToken);
+        var operation = ApiOperationModel.FromEntity(result.Operation);
+        return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
+    }
+
     [HttpGet("{imageTemplateId:int}")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.ImagesRead)]
     [ProducesResponseType(typeof(OpenImageTemplateModel), StatusCodes.Status200OK)]
@@ -136,6 +175,43 @@ public sealed class OpenImagesController(
         }
 
         return NoContent();
+    }
+
+    [HttpPost("{imageTemplateId:int}/certifications")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.ImagesWrite)]
+    [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
+    public async Task<IActionResult> Certify(
+        int imageTemplateId,
+        ImageTemplateCertificationRequest model,
+        [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        var (tokenId, actorUserId) = GetActor();
+        var template = await catalog.FindDetailsAsync(imageTemplateId, cancellationToken);
+        if (template is null) return await NotFoundProblemAsync();
+        await AuthorizeImageAsync(template.Name);
+        var result = await certifications.SubmitAsync(
+            tokenId,
+            new ActorContext(actorUserId, Role.Teacher, tokenId),
+            imageTemplateId,
+            idempotencyKey,
+            model,
+            cancellationToken);
+        var operation = ApiOperationModel.FromEntity(result.Operation);
+        return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
+    }
+
+    [HttpGet("{imageTemplateId:int}/certifications")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.ImagesRead)]
+    public async Task<IActionResult> Certifications(
+        int imageTemplateId,
+        CancellationToken cancellationToken)
+    {
+        var (_, actorUserId) = GetActor();
+        var template = await catalog.FindDetailsAsync(imageTemplateId, cancellationToken);
+        if (template is null || !await CanAccessTemplateAsync(template, actorUserId))
+            return await NotFoundProblemAsync();
+        return Ok(await certifications.ListAsync(imageTemplateId, cancellationToken));
     }
 
     private (Guid TokenId, Guid ActorUserId) GetActor()
@@ -206,6 +282,32 @@ public sealed class DockerImageArchiveUploadModel
     [FromForm(Name = "osType")]
     [JsonPropertyName("osType")]
     public OSType OSType { get; set; }
+
+    [MaxLength(128)]
+    [FromForm(Name = "expectedDigest")]
+    [JsonPropertyName("expectedDigest")]
+    public string? ExpectedDigest { get; set; }
+}
+
+public sealed class VmQcow2UploadModel
+{
+    [Required]
+    [FromForm(Name = "file")]
+    [JsonPropertyName("file")]
+    public IFormFile File { get; set; } = null!;
+
+    [Required, MaxLength(256)]
+    [FromForm(Name = "name")]
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [FromForm(Name = "osType")]
+    [JsonPropertyName("osType")]
+    public OSType OSType { get; set; }
+
+    [FromForm(Name = "networkMode")]
+    [JsonPropertyName("networkMode")]
+    public VmNetworkMode NetworkMode { get; set; } = VmNetworkMode.Dhcp;
 
     [MaxLength(128)]
     [FromForm(Name = "expectedDigest")]

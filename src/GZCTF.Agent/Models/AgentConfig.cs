@@ -7,7 +7,21 @@ public class AgentConfig
     public string AuthToken { get; set; } = string.Empty;
     public int ListenPort { get; set; } = 5001;
     public int HeartbeatIntervalSeconds { get; set; } = 30;
+    public string OperationStateRoot { get; set; } = "/var/lib/gzctf/agent";
+    public GuestManagementConfig GuestManagement { get; set; } = new();
     public AgentExecutionLimitOverrides ExecutionLimits { get; set; } = new();
+}
+
+public sealed class GuestManagementConfig
+{
+    public bool Enabled { get; set; }
+    public string BridgeName { get; set; } = "gzmgt0";
+    public string HostAddress { get; set; } = "100.127.0.1";
+    public int PrefixLength { get; set; } = 16;
+    public int ListenPort { get; set; } = 5443;
+    public string StateRoot { get; set; } = "/var/lib/gzctf/teamlab/guest-control";
+    public int EnrollmentTtlMinutes { get; set; } = 15;
+    public int ClientCertificateLifetimeMinutes { get; set; } = 120;
 }
 
 public sealed class AgentExecutionLimitOverrides

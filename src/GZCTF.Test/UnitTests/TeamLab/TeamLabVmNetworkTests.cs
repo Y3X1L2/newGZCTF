@@ -26,13 +26,16 @@ public class TeamLabVmNetworkTests
                 new VmNetworkInterfaceRequest
                 {
                     BridgeName = "tl123-lab",
+                    HostInterfaceName = "tl123v12ab34",
                     MacAddress = "02:42:ac:10:00:02",
                     Model = "virtio"
                 }
             ]
         });
 
-        Assert.Equal("--network bridge=tl123-lab,model=virtio,mac=02:42:ac:10:00:02", args);
+        Assert.Equal(
+            "--network bridge=tl123-lab,model=virtio,mac=02:42:ac:10:00:02,target.dev=tl123v12ab34",
+            args);
     }
 
     [Fact]
@@ -112,6 +115,49 @@ public class TeamLabVmNetworkTests
         Assert.Contains("addresses: [10.90.0.17]", config);
         Assert.Contains("to: 10.90.0.32/28", config);
         Assert.Contains("via: 10.90.0.17", config);
+    }
+
+    [Fact]
+    public void BuildCloudInitNetworkConfig_OnlyPrimaryInterfaceGetsDefaultGateway()
+    {
+        var config = KvmService.BuildCloudInitNetworkConfig(new CreateVmRequest
+        {
+            Interfaces =
+            [
+                new VmNetworkInterfaceRequest
+                {
+                    BridgeName = "tl12-entry",
+                    InterfaceName = "eth0",
+                    MacAddress = "02:42:ac:10:00:04",
+                    IpAddress = "10.90.0.20",
+                    PrefixLength = 28,
+                    Gateway = "10.90.0.17",
+                    IsPrimary = true
+                },
+                new VmNetworkInterfaceRequest
+                {
+                    BridgeName = "tl12-core",
+                    InterfaceName = "eth1",
+                    MacAddress = "02:42:ac:10:00:05",
+                    IpAddress = "192.168.20.20",
+                    PrefixLength = 24,
+                    Gateway = "192.168.20.1",
+                    IsPrimary = false
+                }
+            ]
+        });
+
+        Assert.Contains("gateway4: 10.90.0.17", config);
+        Assert.DoesNotContain("gateway4: 192.168.20.1", config);
+        Assert.Equal(1, config.Split("gateway4:", StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
+    public void BuildCloudInitNetworkConfig_UsesValidEmptyEthernetMapWithoutStaticInterfaces()
+    {
+        var config = KvmService.BuildCloudInitNetworkConfig(new CreateVmRequest());
+
+        Assert.Equal("version: 2\nethernets: {}\n", config);
     }
 
     [Theory]

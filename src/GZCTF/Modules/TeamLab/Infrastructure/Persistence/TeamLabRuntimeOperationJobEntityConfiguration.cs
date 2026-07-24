@@ -21,7 +21,7 @@ public sealed class TeamLabRuntimeOperationJobEntityConfiguration : IEntityTypeC
             .WithOne()
             .HasForeignKey<TeamLabRuntimeOperationJob>(item => item.OperationId)
             .OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne<GZCTF.Models.Data.TeamLabRuntime>()
+        builder.HasOne<TeamLabRuntime>()
             .WithMany()
             .HasForeignKey(item => item.RuntimeId)
             .OnDelete(DeleteBehavior.SetNull);

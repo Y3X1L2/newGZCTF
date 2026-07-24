@@ -30,7 +30,8 @@ public static class ContainerHelper
         await context.WorkerNodes
             .Where(node => node.IsLocal)
             .ExecuteUpdateAsync(setters => setters
-                .SetProperty(node => node.IsSchedulable, isSchedulable));
+                .SetProperty(node => node.IsSchedulable, isSchedulable)
+                .SetProperty(node => node.MaxContainers, isSchedulable ? 10_000 : 20));
     }
 
     public static async Task<IAsyncDisposable> EnableLocalNodeSchedulingAsync(

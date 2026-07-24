@@ -72,7 +72,7 @@ public sealed record PenetrationWorkspaceModel(
 
 public sealed record PenetrationSubmitModel(
     int ObjectiveId,
-    [property: Required] string Flag);
+    [Required] string Flag);
 
 public sealed record PenetrationSubmitResultModel(bool Accepted, int Score, string Message);
 

@@ -27,6 +27,8 @@ public class DeploymentQueueTicket
     public int VmSlots { get; set; }
     public int Generation { get; set; } = 1;
     [MaxLength(256)] public string ActiveIdentity { get; set; } = string.Empty;
+    [MaxLength(256)] public string TenantKey { get; set; } = string.Empty;
+    [MaxLength(256)] public string FairnessKey { get; set; } = string.Empty;
     [MaxLength(256)] public string SubjectConcurrencyKey { get; set; } = string.Empty;
     [MaxLength(64)] public string? SubjectType { get; set; }
     [MaxLength(128)] public string? SubjectPublicId { get; set; }
@@ -57,7 +59,7 @@ public class DeploymentQueueTicket
     public static DeploymentQueueTicket Create(DeploymentQueueRequest request)
     {
         var activity = Activity.Current;
-        return new DeploymentQueueTicket
+        var ticket = new DeploymentQueueTicket
         {
         Kind = request.Kind,
         Operation = request.Operation,
@@ -75,7 +77,9 @@ public class DeploymentQueueTicket
         VmSlots = Math.Max(0, request.VmSlots),
         Generation = Math.Max(1, request.Generation),
         ActiveIdentity = BuildActiveIdentity(request),
-        SubjectConcurrencyKey = BuildSubjectConcurrencyKey(request),
+        TenantKey = request.Identity.TenantKey,
+        FairnessKey = request.Identity.FairnessKey,
+        SubjectConcurrencyKey = request.Identity.SubjectConcurrencyKey,
         SubjectType = request.SubjectType,
         SubjectPublicId = request.SubjectPublicId,
         SubjectDisplayName = request.SubjectDisplayName,
@@ -85,39 +89,14 @@ public class DeploymentQueueTicket
             TraceParent = activity?.Id,
             TraceState = activity?.TraceStateString
         };
+        return ticket;
     }
 
     public static string BuildActiveIdentity(DeploymentQueueRequest request) =>
         $"{request.Operation}:{BuildSubjectConcurrencyKey(request)}:{Math.Max(1, request.Generation)}";
 
-    public static string BuildSubjectConcurrencyKey(DeploymentQueueRequest request) => request.Kind switch
-    {
-        DeploymentQueueKind.GameContainer =>
-            $"game-container:{Required(request.GameId)}:{Required(request.OwnerTeamId)}:{Required(request.ChallengeId)}",
-        DeploymentQueueKind.ExerciseContainer =>
-            $"exercise-container:{Required(request.OwnerUserId)}:{Required(request.ChallengeId)}",
-        DeploymentQueueKind.TrainingContainer =>
-            $"training-container:{Required(request.OwnerUserId)}:{Required(request.ChallengeId)}",
-        DeploymentQueueKind.AwdpContainer =>
-            $"awdp-container:{Required(request.OwnerTeamId)}:{Required(request.AwdpServiceInstanceId)}",
-        DeploymentQueueKind.ChallengeTestContainer =>
-            request.SubjectType == "challenge-test-container"
-                ? $"challenge-test-container:{Required(request.GameId)}:{Required(request.ChallengeId)}"
-                : $"runtime-container:{RequiredText(request.SubjectPublicId)}",
-        DeploymentQueueKind.VirtualMachine =>
-            $"vm:{Required(request.GameId)}:{Required(request.OwnerUserId)}:{Required(request.ChallengeId)}:{Required(request.VmInstanceId)}",
-        DeploymentQueueKind.TeamLabRuntime =>
-            $"teamlab-runtime:{Required(request.TeamLabRuntimeId)}",
-        _ => throw new ArgumentOutOfRangeException(nameof(request), request.Kind, "Unknown deployment queue kind.")
-    };
-
-    static T Required<T>(T? value) where T : struct =>
-        value ?? throw new InvalidOperationException("Deployment queue request is missing a required identity field.");
-
-    static string RequiredText(string? value) =>
-        !string.IsNullOrWhiteSpace(value)
-            ? value
-            : throw new InvalidOperationException("Deployment queue request is missing a required text identity field.");
+    public static string BuildSubjectConcurrencyKey(DeploymentQueueRequest request) =>
+        request.Identity.SubjectConcurrencyKey;
 }
 
 public enum DeploymentQueueKind : byte
@@ -172,5 +151,15 @@ public enum DeploymentStage : byte
     RollingBack = 16,
     Ready = 17,
     Failed = 18,
-    Cancelled = 19
+    Cancelled = 19,
+    ArtifactsVerifying = 20,
+    NetworkApplying = 21,
+    RoutesApplying = 22,
+    AssetBooting = 23,
+    GuestWaiting = 24,
+    BootstrapInjecting = 25,
+    BootstrapRunning = 26,
+    GuestRebooting = 27,
+    HealthProbing = 28,
+    ObservationStarting = 29
 }

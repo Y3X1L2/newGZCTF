@@ -17,6 +17,7 @@ public sealed class TeamLabRuntimeOperationHandler(
     TeamLabAuthorizationService authorization,
     TeamLabAccessGrantService access,
     TeamLabTrafficApplicationService traffic,
+    TeamLabScenarioBakeService scenarioBakes,
     TeamLabRuntimeOperationPayloadProtector protector,
     ApiOperationService operations) : IApiOperationHandler
 {
@@ -168,7 +169,17 @@ public sealed class TeamLabRuntimeOperationHandler(
                 var result = await topologies.PublishForOperationAsync(
                     topologyId,
                     payload.PublishTopology?.Revision ?? throw MissingPayload("topology publish revision"),
-                    actorUserId, isAdministrator, operation.Id, cancellationToken);
+                    actorUserId,
+                    isAdministrator,
+                    operation.Id,
+                    payload.PublishTopology?.ScenarioOverlays,
+                    cancellationToken);
+                await scenarioBakes.EnsureReleaseReadyAsync(
+                    result.Id,
+                    actorUserId,
+                    operation.Id,
+                    payload.PublishTopology?.ScenarioOverlays,
+                    cancellationToken);
                 await operations.UpdateProgressAsync(operation.Id, leaseOwner, "release-published", 1, 1,
                     "teamlab-release", result.Id.ToString("D"), null, cancellationToken);
                 await CompleteJobAsync(job, result.ToOpen(), cancellationToken);

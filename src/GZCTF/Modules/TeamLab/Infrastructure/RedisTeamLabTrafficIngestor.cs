@@ -20,10 +20,11 @@ public sealed class RedisTeamLabTrafficIngestor(
 
     private static readonly LuaScript ProtectedTrimScript = LuaScript.Prepare(
         "local p = redis.call('XPENDING', @stream, @group); " +
-        "if p[1] == 0 then return redis.call('XTRIM', @stream, 'MAXLEN', '~', @maxLength); end; " +
-        "return redis.call('XTRIM', @stream, 'MINID', '~', p[2]);");
+        "if p[1] == 0 then return redis.call('XTRIM', @stream, 'MAXLEN', @targetLength); end; " +
+        "return redis.call('XTRIM', @stream, 'MINID', p[2]);");
 
     private readonly RedisKey _streamKey = keyspace.Create(RedisKeyPurpose.Stream, "teamlab-flow");
+    private readonly RedisKey _capacityLockKey = keyspace.Create(RedisKeyPurpose.Lock, "teamlab-flow-capacity");
     private readonly SemaphoreSlim _groupGate = new(1, 1);
     private readonly ConcurrentDictionary<string, RedisValue> _reclaimCursors = new(StringComparer.Ordinal);
     private int _groupReady;
@@ -47,7 +48,7 @@ public sealed class RedisTeamLabTrafficIngestor(
         {
             await EnsureConsumerGroupAsync(database);
             for (; completedBatches < batches.Count; completedBatches++)
-                await AppendBatchAsync(database, batches[completedBatches]);
+                await AppendBatchAsync(database, batches[completedBatches], cancellationToken);
 
             runtimeState.RecordSuccess("stream");
             telemetry.RecordOperation(RedisTelemetryPurpose.Stream, RedisTelemetryStatus.Success, stopwatch.Elapsed);
@@ -177,18 +178,41 @@ public sealed class RedisTeamLabTrafficIngestor(
         return batches;
     }
 
-    private async Task AppendBatchAsync(IDatabase database, IReadOnlyList<TeamLabTrafficEnvelope> batch)
+    private async Task AppendBatchAsync(
+        IDatabase database,
+        IReadOnlyList<TeamLabTrafficEnvelope> batch,
+        CancellationToken cancellationToken)
     {
-        var redisBatch = database.CreateBatch();
-        var writes = batch.Select(envelope => redisBatch.StreamAddAsync(_streamKey, ToEntries(envelope))).ToArray();
-        redisBatch.Execute();
-        await Task.WhenAll(writes);
-        await database.ScriptEvaluateAsync(ProtectedTrimScript, new
+        var owner = Guid.NewGuid().ToString("N");
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(5);
+        while (!await database.LockTakeAsync(_capacityLockKey, owner, TimeSpan.FromSeconds(30)))
         {
-            stream = _streamKey,
-            group = (RedisValue)ConsumerGroup,
-            maxLength = MaxStreamLength
-        });
+            if (DateTimeOffset.UtcNow >= deadline)
+                throw new TimeoutException("TeamLab traffic stream capacity lock timed out.");
+            await Task.Delay(25, cancellationToken);
+        }
+
+        try
+        {
+            await database.ScriptEvaluateAsync(ProtectedTrimScript, new
+            {
+                stream = _streamKey,
+                group = (RedisValue)ConsumerGroup,
+                targetLength = Math.Max(0, MaxStreamLength - batch.Count)
+            });
+            var length = await database.StreamLengthAsync(_streamKey);
+            if (length + batch.Count > MaxStreamLength)
+                throw new TeamLabTrafficStreamCapacityException();
+
+            var redisBatch = database.CreateBatch();
+            var writes = batch.Select(envelope => redisBatch.StreamAddAsync(_streamKey, ToEntries(envelope))).ToArray();
+            redisBatch.Execute();
+            await Task.WhenAll(writes);
+        }
+        finally
+        {
+            await database.LockReleaseAsync(_capacityLockKey, owner);
+        }
     }
 
     private async Task EnsureConsumerGroupAsync(IDatabase database)
@@ -275,18 +299,30 @@ public sealed class RedisTeamLabTrafficIngestor(
         new("runtimeId", envelope.RuntimeId),
         new("generation", envelope.Generation),
         new("shardId", envelope.ShardId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty),
-        new("networkId", envelope.NetworkId),
-        new("workerNodeId", envelope.WorkerNodeId?.ToString("D") ?? string.Empty),
+        new("networkId", envelope.NetworkId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty),
+        new("observationPointId", envelope.ObservationPointId),
+        new("observationPointKind", (int)envelope.ObservationPointKind),
+        new("assetId", envelope.AssetId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty),
+        new("workerNodeId", envelope.WorkerNodeId.ToString("D")),
         new("capturedAt", envelope.CapturedAt.ToUnixTimeMilliseconds()),
-        new("sourceCursor", envelope.SourceCursor),
-        new("fingerprint", envelope.Fingerprint),
+        new("sourceSequence", envelope.SourceSequence),
+        new("evidenceFingerprint", envelope.EvidenceFingerprint),
         new("sourceIp", envelope.SourceIp),
         new("sourcePort", envelope.SourcePort?.ToString(CultureInfo.InvariantCulture) ?? string.Empty),
         new("destinationIp", envelope.DestinationIp),
         new("destinationPort", envelope.DestinationPort?.ToString(CultureInfo.InvariantCulture) ?? string.Empty),
         new("protocol", envelope.Protocol),
+        new("tcpFlags", envelope.TcpFlags?.ToString(CultureInfo.InvariantCulture) ?? string.Empty),
+        new("packetLength", envelope.PacketLength),
+        new("packetFingerprint", envelope.PacketFingerprint ?? string.Empty),
+        new("flowFingerprint", envelope.FlowFingerprint),
+        new("processIdentityHash", envelope.ProcessIdentityHash ?? string.Empty),
+        new("evidenceKind", envelope.EvidenceKind),
+        new("direction", envelope.Direction),
         new("packets", envelope.Packets),
-        new("bytes", envelope.Bytes)
+        new("bytes", envelope.Bytes),
+        new("firstSeenAt", (envelope.FirstSeenAt ?? envelope.CapturedAt).ToUnixTimeMilliseconds()),
+        new("lastSeenAt", (envelope.LastSeenAt ?? envelope.CapturedAt).ToUnixTimeMilliseconds())
     ];
 
     private static TeamLabTrafficEnvelope FromEntry(StreamEntry entry)
@@ -301,28 +337,52 @@ public sealed class RedisTeamLabTrafficIngestor(
         int? NullableInt(string name) => values.GetValueOrDefault(name) is { Length: > 0 } value
             ? int.Parse(value, CultureInfo.InvariantCulture)
             : null;
-        Guid? NullableGuid(string name) => values.GetValueOrDefault(name) is { Length: > 0 } value
-            ? Guid.Parse(value)
+        byte? NullableByte(string name) => values.GetValueOrDefault(name) is { Length: > 0 } value
+            ? byte.Parse(value, CultureInfo.InvariantCulture)
             : null;
-
         var envelope = new TeamLabTrafficEnvelope(
             RequiredInt("schemaVersion"),
             RequiredInt("runtimeId"),
             RequiredInt("generation"),
             NullableInt("shardId"),
-            RequiredInt("networkId"),
-            NullableGuid("workerNodeId"),
+            NullableInt("networkId"),
+            RequiredInt("observationPointId"),
+            byte.Parse(Required("observationPointKind"), CultureInfo.InvariantCulture),
+            NullableInt("assetId"),
+            Guid.Parse(Required("workerNodeId")),
             DateTimeOffset.FromUnixTimeMilliseconds(RequiredLong("capturedAt")),
-            RequiredLong("sourceCursor"),
-            Required("fingerprint"),
+            RequiredLong("sourceSequence"),
+            Required("evidenceFingerprint"),
             Required("sourceIp"),
             NullableInt("sourcePort"),
             Required("destinationIp"),
             NullableInt("destinationPort"),
             Required("protocol"),
+            NullableByte("tcpFlags"),
+            RequiredInt("packetLength"),
+            values.GetValueOrDefault("packetFingerprint") is { Length: > 0 } packetFingerprint
+                ? packetFingerprint
+                : null,
+            Required("flowFingerprint"),
+            values.GetValueOrDefault("processIdentityHash") is { Length: > 0 } processIdentityHash
+                ? processIdentityHash
+                : null,
+            Required("evidenceKind"),
+            Required("direction"),
             RequiredLong("packets"),
-            RequiredLong("bytes"));
+            RequiredLong("bytes"),
+            DateTimeOffset.FromUnixTimeMilliseconds(
+                values.TryGetValue("firstSeenAt", out var firstSeenAt) && firstSeenAt.Length > 0
+                    ? long.Parse(firstSeenAt, CultureInfo.InvariantCulture)
+                    : RequiredLong("capturedAt")),
+            DateTimeOffset.FromUnixTimeMilliseconds(
+                values.TryGetValue("lastSeenAt", out var lastSeenAt) && lastSeenAt.Length > 0
+                    ? long.Parse(lastSeenAt, CultureInfo.InvariantCulture)
+                    : RequiredLong("capturedAt")));
         envelope.Validate();
         return envelope;
     }
+
+    private sealed class TeamLabTrafficStreamCapacityException()
+        : InvalidOperationException("TeamLab traffic stream reached its protected capacity.");
 }

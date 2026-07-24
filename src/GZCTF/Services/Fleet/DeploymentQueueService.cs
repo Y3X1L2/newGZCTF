@@ -41,6 +41,7 @@ public class DeploymentQueueService
     readonly RuntimeAdmissionPolicy? _admission;
     readonly IOperationalEventWriter _events;
     readonly OperationalCorrelation _correlation;
+    readonly RuntimeTicketLifecycleDispatcher _lifecycle;
 
     public DeploymentQueueService(AppDbContext context, ILogger<DeploymentQueueService> logger)
     {
@@ -49,6 +50,7 @@ public class DeploymentQueueService
         _wakeup = new PollingDeploymentQueueWakeup();
         _events = DefaultEvents(context);
         _correlation = new OperationalCorrelation();
+        _lifecycle = new RuntimeTicketLifecycleDispatcher([]);
     }
 
     public DeploymentQueueService(AppDbContext context, FleetCapacityReservationService capacity,
@@ -60,6 +62,7 @@ public class DeploymentQueueService
         _wakeup = new PollingDeploymentQueueWakeup();
         _events = DefaultEvents(context);
         _correlation = new OperationalCorrelation();
+        _lifecycle = new RuntimeTicketLifecycleDispatcher([]);
     }
 
     public DeploymentQueueService(AppDbContext context, FleetCapacityReservationService capacity,
@@ -71,6 +74,7 @@ public class DeploymentQueueService
         _logger = logger;
         _events = DefaultEvents(context);
         _correlation = new OperationalCorrelation();
+        _lifecycle = new RuntimeTicketLifecycleDispatcher([]);
     }
 
     public DeploymentQueueService(AppDbContext context, FleetCapacityReservationService capacity,
@@ -83,6 +87,7 @@ public class DeploymentQueueService
         _wakeup = wakeup;
         _events = DefaultEvents(context);
         _correlation = new OperationalCorrelation();
+        _lifecycle = new RuntimeTicketLifecycleDispatcher([]);
         _logger = logger;
     }
 
@@ -97,6 +102,23 @@ public class DeploymentQueueService
         _wakeup = wakeup;
         _events = events;
         _correlation = correlation;
+        _lifecycle = new RuntimeTicketLifecycleDispatcher([]);
+        _logger = logger;
+    }
+
+    public DeploymentQueueService(AppDbContext context, FleetCapacityReservationService capacity,
+        RuntimeAdmissionPolicy admission, IDeploymentQueueWakeup wakeup,
+        IOperationalEventWriter events, OperationalCorrelation correlation,
+        RuntimeTicketLifecycleDispatcher lifecycle,
+        ILogger<DeploymentQueueService> logger)
+    {
+        _context = context;
+        _capacity = capacity;
+        _admission = admission;
+        _wakeup = wakeup;
+        _events = events;
+        _correlation = correlation;
+        _lifecycle = lifecycle;
         _logger = logger;
     }
 
@@ -115,7 +137,7 @@ public class DeploymentQueueService
                 $"SELECT pg_advisory_xact_lock(hashtextextended({subjectKey}, 0))", token);
             if (request.Operation == RuntimeOperationKind.Create)
             {
-                var ownerAdmissionKey = $"runtime-owner-admission:{RuntimeQueueSelector.OwnerKey(request.OwnerTeamId, request.OwnerUserId)}";
+                var ownerAdmissionKey = $"runtime-owner-admission:{request.Identity.FairnessKey}";
                 await _context.Database.ExecuteSqlInterpolatedAsync(
                     $"SELECT pg_advisory_xact_lock(hashtextextended({ownerAdmissionKey}, 0))", token);
             }
@@ -325,6 +347,7 @@ public class DeploymentQueueService
             }));
         if (shouldReleaseCapacity)
             await ReleaseTicketCapacityAsync(ticket, nodeId, dockerSlots, vmSlots, token);
+        await _lifecycle.ProjectAsync(ticket, token);
         await _context.SaveChangesAsync(token);
         PlatformTelemetry.RecordRuntimeTransition(ticket.Kind.ToString(), ticket.Stage.ToString(), "cancelled");
 

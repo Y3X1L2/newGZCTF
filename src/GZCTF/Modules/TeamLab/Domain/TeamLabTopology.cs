@@ -7,10 +7,13 @@ public sealed class TeamLabTopology
     public Guid? OwnerUserId { get; set; }
     public string Name { get; set; } = string.Empty;
     public int Revision { get; set; }
-    public int SchemaVersion { get; set; } = 1;
+    public int SchemaVersion { get; set; } = 2;
     public Guid? CreatedByOperationId { get; set; }
     public Guid? LastMutationOperationId { get; set; }
     public string EditorMetadataJson { get; set; } = "{\"networks\":{},\"assets\":{}}";
+    public string InfrastructureJson { get; set; } = "[]";
+    public string DependenciesJson { get; set; } = "[]";
+    public string ObservationJson { get; set; } = "{}";
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public List<TeamLabTopologyNetwork> Networks { get; set; } = [];
@@ -51,6 +54,10 @@ public sealed class TeamLabTopologyAsset
     public TeamLabHealthCheckKind? HealthCheckKind { get; set; }
     public int? HealthCheckPort { get; set; }
     public int OrderIndex { get; set; }
+    public bool Stateless { get; set; }
+    public string? BootstrapJson { get; set; }
+    public TeamLabEndpointObservationMode EndpointObservation { get; set; }
+    public bool BakeAtPublish { get; set; }
     public TeamLabTopology Topology { get; set; } = null!;
     public List<TeamLabTopologyInterface> Interfaces { get; set; } = [];
 }
@@ -75,6 +82,8 @@ public sealed class TeamLabTopologyConnection
     public string Key { get; set; } = string.Empty;
     public string FromNetworkKey { get; set; } = string.Empty;
     public string ToNetworkKey { get; set; } = string.Empty;
-    public string ViaAssetKey { get; set; } = string.Empty;
+    public string? ViaAssetKey { get; set; }
+    public string? ViaNodeKey { get; set; }
+    public TeamLabConnectionDirection Direction { get; set; } = TeamLabConnectionDirection.Bidirectional;
     public TeamLabTopology Topology { get; set; } = null!;
 }

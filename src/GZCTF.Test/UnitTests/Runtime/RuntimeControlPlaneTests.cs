@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Net.Http;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Infrastructure.Concurrency;
@@ -14,6 +15,8 @@ using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Modules.Runtime.Infrastructure;
 using GZCTF.Modules.TeamLab.Application;
+using GZCTF.Modules.TeamLab.Contracts;
+using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Services.Fleet;
 using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
@@ -28,6 +31,28 @@ namespace GZCTF.Test.UnitTests.Runtime;
 
 public sealed class RuntimeControlPlaneTests
 {
+    [Fact]
+    public void GuestLifecycleStageComparison_DoesNotTreatNetworkAsBootstrapCompletion()
+    {
+        Assert.False(RuntimeSignalService.Reached(
+            AgentRuntimeSignalStage.NetworkApplied,
+            AgentRuntimeSignalStage.BootstrapCompleted));
+        Assert.True(RuntimeSignalService.Reached(
+            AgentRuntimeSignalStage.ObservationReady,
+            AgentRuntimeSignalStage.BootstrapCompleted));
+        Assert.False(RuntimeSignalService.Reached(
+            AgentRuntimeSignalStage.GuestReady,
+            AgentRuntimeSignalStage.NetworkApplied));
+    }
+    [Fact]
+    public void TeamLabResetTicket_MatchesBeforeAndAfterGenerationAdvance()
+    {
+        Assert.True(DeploymentExecutionService.TeamLabGenerationMatches(RuntimeOperationKind.Reset, 4, 3));
+        Assert.True(DeploymentExecutionService.TeamLabGenerationMatches(RuntimeOperationKind.Reset, 4, 4));
+        Assert.False(DeploymentExecutionService.TeamLabGenerationMatches(RuntimeOperationKind.Reset, 4, 5));
+        Assert.True(DeploymentExecutionService.TeamLabGenerationMatches(RuntimeOperationKind.Destroy, 3, 3));
+    }
+
     [Fact]
     public async Task Queue_DeduplicatesActiveSubject()
     {
@@ -232,6 +257,45 @@ public sealed class RuntimeControlPlaneTests
     }
 
     [Fact]
+    public async Task QueueSelector_RotatesFairnessKeysAndSerializesSubjects()
+    {
+        await using var context = CreateContext();
+        var firstTeam = DeploymentQueueTicket.Create(DeploymentQueueRequest.GameContainer(7, 1, 11));
+        firstTeam.CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-3);
+        var duplicateSubject = DeploymentQueueTicket.Create(DeploymentQueueRequest.GameContainer(7, 1, 11));
+        duplicateSubject.CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-2);
+        var secondTeam = DeploymentQueueTicket.Create(DeploymentQueueRequest.GameContainer(7, 2, 12));
+        secondTeam.CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        context.DeploymentQueueTickets.AddRange(firstTeam, duplicateSubject, secondTeam);
+        await context.SaveChangesAsync();
+        var selector = new RuntimeQueueSelector(context, Options.Create(new RuntimeSchedulingOptions
+        {
+            SchedulingBatchSize = 2,
+            EligibleWindowSize = 10,
+            MaxConcurrentCreatesPerTeam = 2
+        }));
+
+        var selectedIds = await selector.SelectAsync(DateTimeOffset.UtcNow, CancellationToken.None);
+        var selected = new[] { firstTeam, duplicateSubject, secondTeam }
+            .Where(ticket => selectedIds.Contains(ticket.Id))
+            .ToArray();
+
+        Assert.Equal(2, selected.Length);
+        Assert.Equal(2, selected.Select(ticket => ticket.FairnessKey).Distinct().Count());
+        Assert.Equal(2, selected.Select(ticket => ticket.SubjectConcurrencyKey).Distinct().Count());
+        Assert.Contains(firstTeam, selected);
+        Assert.DoesNotContain(duplicateSubject, selected);
+    }
+
+    [Fact]
+    public void WorkloadSchedulingIdentity_RejectsEmptyKeys()
+    {
+        Assert.Throws<ArgumentException>(() => new WorkloadSchedulingIdentity("", "team:1", "runtime:1"));
+        Assert.Throws<ArgumentException>(() => new WorkloadSchedulingIdentity("competition:1", " ", "runtime:1"));
+        Assert.Throws<ArgumentException>(() => new WorkloadSchedulingIdentity("competition:1", "team:1", ""));
+    }
+
+    [Fact]
     public async Task CapacitySnapshot_UsesLargestObservedFactAndAddsOwnedReservations()
     {
         await using var context = CreateContext();
@@ -260,15 +324,61 @@ public sealed class RuntimeControlPlaneTests
     }
 
     [Fact]
+    public async Task CapacitySnapshot_DoesNotDoubleCountTeamLabFactsAndTheirReservation()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, maxContainers: 10);
+        var runtime = new TeamLabRuntime
+        {
+            Id = 880,
+            TopologyReleaseId = Guid.NewGuid(),
+            Generation = 1,
+            Status = TeamLabRuntimeStatus.Deploying
+        };
+        runtime.Assets.Add(new TeamLabRuntimeAsset
+        {
+            Generation = 1,
+            TopologyKey = "entry",
+            PlacementGroupKey = "entry",
+            Name = "Entry",
+            Kind = TeamLabResourceKind.Docker,
+            WorkerNodeId = node.Id,
+            Status = TeamLabRuntimeStatus.Deploying
+        });
+        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(runtime.Id, 2, 0));
+        context.TeamLabRuntimes.Add(runtime);
+        context.DeploymentQueueTickets.Add(ticket);
+        context.FleetCapacityReservations.Add(new FleetCapacityReservation
+        {
+            DeploymentQueueTicketId = ticket.Id,
+            WorkerNodeId = node.Id,
+            DockerSlots = 2,
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5)
+        });
+        await context.SaveChangesAsync();
+
+        var snapshot = Assert.Single(await new NodeCapacitySnapshotService(context)
+            .LoadAsync(CancellationToken.None));
+
+        Assert.Equal(1, snapshot.FactDocker);
+        Assert.Equal(1, snapshot.ReservedDocker);
+        Assert.Equal(2, snapshot.AllocatedDocker);
+    }
+
+    [Fact]
     public async Task TeamLabScheduling_LateBindsThreePlusOneCapacityAcrossTwoNodes()
     {
         await using var context = CreateContext();
         var first = SeedTeamLabNode(context, "node-a", 3, "10.251.0.2");
         var second = SeedTeamLabNode(context, "node-b", 1, "10.251.0.3");
+        var releaseId = SeedTeamLabRelease(context,
+            Enumerable.Range(1, 3).Select(index => ReleaseAsset($"entry-{index}", "entry"))
+                .Append(ReleaseAsset("core-1", "core"))
+                .ToArray());
         var runtime = new TeamLabRuntime
         {
             Id = 900,
-            TopologyReleaseId = Guid.NewGuid(),
+            TopologyReleaseId = releaseId,
             Status = TeamLabRuntimeStatus.Scheduled,
             Networks =
             [
@@ -312,7 +422,273 @@ public sealed class RuntimeControlPlaneTests
             id => id == first.Id);
         Assert.Contains(await context.TeamLabRuntimeShards.Select(item => item.WorkerNodeId).ToArrayAsync(),
             id => id == second.Id);
+        Assert.Equal(2, await context.TeamLabFabricLinkLeases.CountAsync());
+        Assert.Equal(4, await context.TeamLabObservationPoints.CountAsync());
     }
+
+    [Fact]
+    public async Task TeamLabResetWithoutCurrentShard_RunsOnControlPlaneWithoutWorkerDependency()
+    {
+        await using var context = CreateContext();
+        var runtime = new TeamLabRuntime
+        {
+            Id = 902,
+            Generation = 2,
+            TopologyReleaseId = Guid.NewGuid(),
+            Status = TeamLabRuntimeStatus.Failed
+        };
+        context.TeamLabRuntimes.Add(runtime);
+        var queue = CreateQueue(context);
+        var queued = await queue.EnqueueAsync(DeploymentQueueRequest.TeamLab(runtime.Id, 2, 1) with
+        {
+            Operation = RuntimeOperationKind.Reset,
+            Generation = 3
+        }, CancellationToken.None);
+
+        var scheduled = await CreateScheduler(context).SchedulePendingAsync(CancellationToken.None);
+
+        Assert.Equal(1, scheduled);
+        var ticket = await context.DeploymentQueueTickets.SingleAsync(item => item.Id == queued.TicketId);
+        Assert.Equal(DeploymentQueueTicketStatus.Scheduled, ticket.Status);
+        Assert.Null(ticket.TargetNodeId);
+        Assert.Empty(await context.FleetCapacityReservations
+            .Where(item => item.DeploymentQueueTicketId == ticket.Id)
+            .ToArrayAsync());
+    }
+
+    [Fact]
+    public void TeamLabResetPlacement_CreditsResourcesRemovedAfterTheLastHeartbeat()
+    {
+        var node = new WorkerNode
+        {
+            Id = Guid.NewGuid(),
+            MaxContainers = 1,
+            MaxVms = 1,
+            LastHeartbeat = DateTimeOffset.UtcNow.AddSeconds(-10)
+        };
+        var cleanupCompletedAt = DateTimeOffset.UtcNow;
+        var runtime = new TeamLabRuntime { Generation = 2 };
+        runtime.Assets.Add(new TeamLabRuntimeAsset
+        {
+            Generation = 1,
+            WorkerNodeId = node.Id,
+            Kind = TeamLabResourceKind.Docker,
+            Status = TeamLabRuntimeStatus.Destroyed,
+            ExecutionUpdatedAt = cleanupCompletedAt
+        });
+        runtime.Assets.Add(new TeamLabRuntimeAsset
+        {
+            Generation = 1,
+            WorkerNodeId = node.Id,
+            Kind = TeamLabResourceKind.Vm,
+            Status = TeamLabRuntimeStatus.Destroyed,
+            ExecutionUpdatedAt = cleanupCompletedAt
+        });
+        var snapshot = new NodeCapacitySnapshot(node, 1, 1, 0, 0, 0, 0);
+
+        var credited = Assert.Single(TeamLabPhysicalPlacementService.ApplyCompletedGenerationCredits(
+            runtime, [snapshot]));
+
+        Assert.Equal(1, credited.AvailableDocker);
+        Assert.Equal(1, credited.AvailableVm);
+    }
+
+    [Fact]
+    public async Task TeamLabResetPlacement_ReusesExactPreviousPlacementDespiteStaleDynamicLoad()
+    {
+        await using var context = CreateContext();
+        var first = SeedTeamLabNode(context, "node-a", 1, "10.251.2.2");
+        var second = SeedTeamLabNode(context, "node-b", 1, "10.251.2.3");
+        var cleanupCompletedAt = DateTimeOffset.UtcNow;
+        foreach (var node in new[] { first, second })
+        {
+            node.CurrentContainers = 1;
+            node.MemoryLoad = 0.99f;
+            node.LastHeartbeat = cleanupCompletedAt.AddSeconds(-5);
+        }
+        var releaseId = SeedTeamLabRelease(context,
+            ReleaseAsset("entry-asset", "entry"),
+            ReleaseAsset("core-asset", "core"));
+
+        var previousEntry = RuntimeNetwork("entry", true);
+        previousEntry.WorkerNodeId = first.Id;
+        var previousCore = RuntimeNetwork("core", false);
+        previousCore.WorkerNodeId = second.Id;
+        var currentEntry = RuntimeNetwork("entry", true);
+        currentEntry.Generation = 2;
+        currentEntry.BridgeName = "tl-entry-g2";
+        var currentCore = RuntimeNetwork("core", false);
+        currentCore.Generation = 2;
+        currentCore.BridgeName = "tl-core-g2";
+        var runtime = new TeamLabRuntime
+        {
+            Id = 903,
+            Generation = 2,
+            TopologyReleaseId = releaseId,
+            Status = TeamLabRuntimeStatus.Scheduled,
+            Networks = [previousEntry, previousCore, currentEntry, currentCore]
+        };
+        runtime.Assets.AddRange([
+            PreviousAsset("entry", first.Id, cleanupCompletedAt),
+            PreviousAsset("core", second.Id, cleanupCompletedAt),
+            CurrentAsset("entry"),
+            CurrentAsset("core")]);
+        context.TeamLabRuntimes.Add(runtime);
+        await context.SaveChangesAsync();
+        var queue = CreateQueue(context);
+        var queued = await queue.EnqueueAsync(DeploymentQueueRequest.TeamLab(runtime.Id, 2, 0) with
+        {
+            Operation = RuntimeOperationKind.Reset,
+            Generation = 2
+        }, CancellationToken.None);
+
+        var reservation = await CreateTeamLabPlacement(context)
+            .BindAndReserveAsync(queued.TicketId, runtime.Id, CancellationToken.None);
+
+        Assert.True(reservation.Success, reservation.Message);
+        var currentPlacements = await context.TeamLabRuntimeNetworks
+            .Where(item => item.RuntimeId == runtime.Id && item.Generation == 2)
+            .ToDictionaryAsync(item => item.PlacementGroupKey, item => item.WorkerNodeId);
+        Assert.Equal(first.Id, currentPlacements["entry"]);
+        Assert.Equal(second.Id, currentPlacements["core"]);
+    }
+
+    [Fact]
+    public void NodeEligibility_DynamicLoadBypassMustBeExplicit()
+    {
+        var node = new WorkerNode
+        {
+            Status = NodeStatus.Online,
+            IsSchedulable = true,
+            Capabilities = NodeCapability.Docker,
+            MaxContainers = 1,
+            MemoryLoad = 0.99f,
+            LastHeartbeat = DateTimeOffset.UtcNow
+        };
+        var snapshot = new NodeCapacitySnapshot(node, 0, 0, 0, 0, 0, 0);
+        var eligibility = new NodeEligibilityEvaluator(Options.Create(new RuntimeSchedulingOptions()));
+
+        Assert.Equal("node_memory_overloaded",
+            eligibility.GetReason(snapshot, NodeCapability.Docker, 1, 0, requireTeamLab: false));
+        Assert.Null(eligibility.GetReason(snapshot, NodeCapability.Docker, 1, 0,
+            requireTeamLab: false, ignoreDynamicLoad: true));
+    }
+
+    [Fact]
+    public async Task TeamLabScheduling_MinimizesManagedRouterCrossNodeEdges()
+    {
+        await using var context = CreateContext();
+        SeedTeamLabNode(context, "node-a", 2, "10.251.1.2");
+        SeedTeamLabNode(context, "node-b", 1, "10.251.1.3");
+        var releaseId = SeedTeamLabRelease(context,
+            ReleaseAsset("entry-asset", "entry"),
+            ReleaseAsset("core-asset", "core"),
+            ReleaseAsset("data-asset", "data"));
+        var runtime = new TeamLabRuntime
+        {
+            Id = 901,
+            TopologyReleaseId = releaseId,
+            Status = TeamLabRuntimeStatus.Scheduled,
+            Networks =
+            [
+                RuntimeNetwork("entry", true),
+                RuntimeNetwork("core", false),
+                RuntimeNetwork("data", false)
+            ],
+            Infrastructure =
+            [
+                new TeamLabRuntimeInfrastructure
+                {
+                    Generation = 1,
+                    TopologyKey = "managed-router",
+                    Name = "Managed Router",
+                    Kind = TeamLabInfrastructureKind.ManagedRouter,
+                    InterfaceSummaryJson = JsonSerializer.Serialize(new[]
+                    {
+                        new TeamLabRuntimeInfrastructureInterfaceIntent("entry-if", "entry", 1, true),
+                        new TeamLabRuntimeInfrastructureInterfaceIntent("core-if", "core", 1, false),
+                        new TeamLabRuntimeInfrastructureInterfaceIntent("data-if", "data", 1, false)
+                    }),
+                    ConnectionSummaryJson = JsonSerializer.Serialize(new[]
+                    {
+                        new TeamLabRuntimeInfrastructureConnectionIntent(
+                            "entry", "core", TeamLabConnectionDirection.Bidirectional),
+                        new TeamLabRuntimeInfrastructureConnectionIntent(
+                            "core", "data", TeamLabConnectionDirection.FromTo)
+                    })
+                }
+            ]
+        };
+        foreach (var key in new[] { "entry", "core", "data" })
+        {
+            runtime.Assets.Add(new TeamLabRuntimeAsset
+            {
+                Generation = 1,
+                PlacementGroupKey = key,
+                TopologyKey = $"{key}-asset",
+                Name = key,
+                Kind = TeamLabResourceKind.Docker
+            });
+        }
+        context.TeamLabRuntimes.Add(runtime);
+        var queue = CreateQueue(context);
+        await queue.EnqueueAsync(DeploymentQueueRequest.TeamLab(runtime.Id, 3, 0), CancellationToken.None);
+
+        Assert.Equal(1, await CreateScheduler(context).SchedulePendingAsync(CancellationToken.None));
+
+        var placements = await context.TeamLabRuntimeNetworks
+            .ToDictionaryAsync(item => item.TopologyKey, item => item.WorkerNodeId);
+        Assert.Equal(placements["entry"], placements["core"]);
+        Assert.NotEqual(placements["core"], placements["data"]);
+        Assert.Equal(2, await context.TeamLabRuntimeInfrastructureFragments.CountAsync());
+        Assert.Equal(2, await context.TeamLabFabricLinkLeases.CountAsync());
+        Assert.Equal(7, await context.TeamLabObservationPoints.CountAsync());
+    }
+
+    static TeamLabRuntimeNetwork RuntimeNetwork(string key, bool entry) => new()
+    {
+        Generation = 1,
+        TopologyKey = key,
+        PlacementGroupKey = key,
+        Name = key,
+        Cidr = key switch
+        {
+            "entry" => "10.10.0.0/24",
+            "core" => "172.20.0.0/24",
+            _ => "192.168.30.0/24"
+        },
+        GatewayIp = key switch
+        {
+            "entry" => "10.10.0.1",
+            "core" => "172.20.0.1",
+            _ => "192.168.30.1"
+        },
+        BridgeName = $"tl-{key}",
+        IsEntry = entry
+    };
+
+    static TeamLabRuntimeAsset PreviousAsset(string groupKey, Guid nodeId, DateTimeOffset cleanupCompletedAt) =>
+        new()
+        {
+            Generation = 1,
+            PlacementGroupKey = groupKey,
+            TopologyKey = $"{groupKey}-asset",
+            Name = groupKey,
+            Kind = TeamLabResourceKind.Docker,
+            WorkerNodeId = nodeId,
+            Status = TeamLabRuntimeStatus.Destroyed,
+            ExecutionUpdatedAt = cleanupCompletedAt
+        };
+
+    static TeamLabRuntimeAsset CurrentAsset(string groupKey) => new()
+    {
+        Generation = 2,
+        PlacementGroupKey = groupKey,
+        TopologyKey = $"{groupKey}-asset",
+        Name = groupKey,
+        Kind = TeamLabResourceKind.Docker,
+        Status = TeamLabRuntimeStatus.Pending
+    };
 
     static RuntimeSchedulingService CreateScheduler(AppDbContext context)
     {
@@ -328,9 +704,22 @@ public sealed class RuntimeControlPlaneTests
                 NullLogger<FleetCapacityReservationService>.Instance),
             new RuntimeQueueSelector(context, schedulingOptions),
             new TeamLabPhysicalPlacementService(context, lease, snapshots, eligibility, writer, teamLabEvents,
-                Options.Create(new TeamLabNetworkConfig())),
-            new PollingDeploymentQueueWakeup(), writer, correlation,
+                new TeamLabFabricLinkAllocator(context, Options.Create(new TeamLabNetworkConfig())),
+                Options.Create(new TeamLabNetworkConfig()), schedulingOptions),
+            new PollingDeploymentQueueWakeup(), writer, correlation, Options.Create(new KvmSettings()),
             NullLogger<RuntimeSchedulingService>.Instance);
+    }
+
+    static TeamLabPhysicalPlacementService CreateTeamLabPlacement(AppDbContext context)
+    {
+        var lease = new LocalDevelopmentLeaseProvider();
+        var snapshots = new NodeCapacitySnapshotService(context);
+        var eligibility = new NodeEligibilityEvaluator(Options.Create(new RuntimeSchedulingOptions()));
+        var writer = new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance);
+        var teamLabEvents = new TeamLabEventRecorder(context, writer, new OperationalCorrelation());
+        return new TeamLabPhysicalPlacementService(context, lease, snapshots, eligibility, writer, teamLabEvents,
+            new TeamLabFabricLinkAllocator(context, Options.Create(new TeamLabNetworkConfig())),
+            Options.Create(new TeamLabNetworkConfig()), Options.Create(new RuntimeSchedulingOptions()));
     }
 
     static DeploymentQueueService CreateQueue(AppDbContext context)
@@ -360,6 +749,8 @@ public sealed class RuntimeControlPlaneTests
             context,
             agent,
             capacity,
+            new GZCTF.Modules.TeamLab.Application.TeamLabRuntimeRecoveryPolicy(
+                Options.Create(new GZCTF.Models.Internal.TeamLabNetworkConfig())),
             new PollingDeploymentQueueWakeup(),
             writer,
             NullLogger<RuntimeFactReconciliationService>.Instance);
@@ -416,14 +807,17 @@ public sealed class RuntimeControlPlaneTests
             TeamLabNetworkEnabled = true,
             TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
             TeamLabFabricStatus = TeamLabFabricStatus.Healthy,
-            TeamLabTunnelIp = tunnelIp
+            TeamLabTunnelIp = tunnelIp,
+            TeamLabFabricIp = tunnelIp
         };
         var manifest = AgentCapabilityEvaluator.Normalize(new AgentCapabilityManifest(
             "1.8.3-test", null, 1,
-            [AgentFeatureIds.Docker, AgentFeatureIds.DockerPull, AgentFeatureIds.TeamLabFabric,
+            [AgentFeatureIds.Docker, AgentFeatureIds.DockerPull, AgentFeatureIds.TeamLabInfrastructure,
+                AgentFeatureIds.TeamLabFabricLeasedLinks, AgentFeatureIds.TeamLabObservation,
                 AgentFeatureIds.WireGuard],
             new AgentExecutionLimits(2, 0, 2, 0, 4, 2),
-            new AgentHostFacts(8, 16L * 1024 * 1024 * 1024, false, false), DateTimeOffset.UtcNow));
+            new AgentHostFacts(8, 16L * 1024 * 1024 * 1024,
+                100L * 1024 * 1024 * 1024, false, false), DateTimeOffset.UtcNow));
         node.CapabilityManifestJson = manifest.Json;
         node.CapabilityManifestSchemaVersion = 1;
         node.CapabilityHash = manifest.Hash;
@@ -431,6 +825,52 @@ public sealed class RuntimeControlPlaneTests
         context.SaveChanges();
         return node;
     }
+
+    static Guid SeedTeamLabRelease(AppDbContext context, params TeamLabTopologyAssetModel[] assets)
+    {
+        var networkKeys = assets.SelectMany(asset => asset.Interfaces)
+            .Select(item => item.NetworkKey)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(item => item, StringComparer.Ordinal)
+            .ToArray();
+        var definition = new TeamLabTopologyDefinitionModel(
+            "runtime-placement-test",
+            networkKeys.Select((key, index) => new TeamLabTopologyNetworkModel(
+                key, key, new TeamLabAddressPoolModel($"10.{40 + index}.0.0/16", 24),
+                string.Equals(key, "entry", StringComparison.Ordinal))).ToArray(),
+            assets,
+            []);
+        var canonical = TeamLabReleaseCodec.Encode(2, definition);
+        var topology = new TeamLabTopology
+        {
+            Name = $"runtime-placement-{Guid.NewGuid():N}",
+            OwnerUserId = Guid.NewGuid()
+        };
+        var release = new TeamLabTopologyRelease
+        {
+            Topology = topology,
+            Version = 1,
+            SourceRevision = 1,
+            SchemaVersion = 2,
+            CanonicalJson = canonical,
+            ContentHash = TeamLabReleaseCodec.ComputeContentHash(2, canonical)
+        };
+        context.TeamLabTopologyReleases.Add(release);
+        context.SaveChanges();
+        return release.Id;
+    }
+
+    static TeamLabTopologyAssetModel ReleaseAsset(
+        string key,
+        string networkKey,
+        TeamLabAssetResourceModel? resources = null) => new(
+        key,
+        key,
+        TeamLabAssetKind.Docker,
+        1,
+        resources ?? new TeamLabAssetResourceModel(10, 256, 512),
+        [new TeamLabTopologyInterfaceModel("eth0", networkKey, 10, true)],
+        false);
 
     static AppDbContext CreateContext(string? databaseName = null) => new(
         new DbContextOptionsBuilder<AppDbContext>()

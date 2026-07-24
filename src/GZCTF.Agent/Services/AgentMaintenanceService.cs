@@ -1,13 +1,22 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using GZCTF.Agent.Models;
+using GZCTF.Agent.Services.GuestControl;
 
 namespace GZCTF.Agent.Services;
 
-public class AgentMaintenanceService(IHttpClientFactory httpClientFactory, ILogger<AgentMaintenanceService> logger)
+public class AgentMaintenanceService(
+    IHttpClientFactory httpClientFactory,
+    GuestManagementNetworkService guestManagementNetwork,
+    ILogger<AgentMaintenanceService> logger)
 {
     private const string InstalledAgentPath = "/usr/local/bin/gzctf-agent";
+    private const string LinuxSensorPath = "/opt/gzctf/endpoint-sensor/linux-x64/gzctf-endpoint-sensor";
+    private const string WindowsSensorPath = "/opt/gzctf/endpoint-sensor/win-x64/gzctf-endpoint-sensor.exe";
+    private const string AgentConfigPath = "/etc/gzctf-agent/appsettings.json";
     private static readonly string BackupDirectory = "/var/lib/gzctf/agent-backups";
 
     public async Task<AgentSyncResponse> SyncAgentAsync(AgentSyncRequest request, CancellationToken token)
@@ -15,20 +24,54 @@ public class AgentMaintenanceService(IHttpClientFactory httpClientFactory, ILogg
         if (!Uri.TryCreate(request.DownloadUrl, UriKind.Absolute, out var uri) ||
             uri.Scheme is not ("http" or "https"))
             return new AgentSyncResponse(false, "Invalid agent download URL.", CurrentVersion());
+        if (!TryOptionalUri(request.LinuxSensorDownloadUrl, out var linuxSensorUri) ||
+            !TryOptionalUri(request.WindowsSensorDownloadUrl, out var windowsSensorUri))
+            return new AgentSyncResponse(false, "Invalid managed artifact download URL.", CurrentVersion());
 
-        var tempPath = Path.Combine(Path.GetTempPath(), $"gzctf-agent-sync-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(Path.GetDirectoryName(InstalledAgentPath)!);
+        var tempPath = CreateSiblingTemporaryPath(InstalledAgentPath);
         try
         {
             Directory.CreateDirectory(BackupDirectory);
             var expectedSha = NormalizeSha256(request.ExpectedSha256);
+            var agentUpToDate = false;
             if (!string.IsNullOrWhiteSpace(expectedSha) && File.Exists(InstalledAgentPath))
             {
                 var currentSha = await ComputeFileSha256Async(InstalledAgentPath, token);
-                if (string.Equals(currentSha, expectedSha, StringComparison.OrdinalIgnoreCase))
-                    return new AgentSyncResponse(true, "Agent is already up to date.", CurrentVersion());
+                agentUpToDate = string.Equals(currentSha, expectedSha, StringComparison.OrdinalIgnoreCase);
             }
 
-            await DownloadAgentAsync(uri, tempPath, token);
+            if (request.VmControlPlane is { Enabled: true })
+            {
+                var network = await guestManagementNetwork.ApplyAsync(false, token);
+                if (!network.Success)
+                    throw new InvalidOperationException("Guest management network setup failed.");
+            }
+            var configChanged = request.VmControlPlane is not null &&
+                                await SyncVmControlPlaneConfigAsync(request.VmControlPlane, token);
+            var managedArtifactChanged = false;
+            if (linuxSensorUri is not null)
+                managedArtifactChanged |= await SyncManagedArtifactAsync(
+                    linuxSensorUri, request.LinuxSensorSha256, LinuxSensorPath, executable: true, token);
+            if (windowsSensorUri is not null)
+                managedArtifactChanged |= await SyncManagedArtifactAsync(
+                    windowsSensorUri, request.WindowsSensorSha256, WindowsSensorPath, executable: false, token);
+
+            if (agentUpToDate)
+            {
+                if (configChanged && request.Restart)
+                    _ = Task.Run(RestartAgentAfterResponseAsync, CancellationToken.None);
+                return new AgentSyncResponse(
+                    true,
+                    configChanged && request.Restart
+                        ? "Agent was current; VM control-plane configuration was synchronized and restart scheduled."
+                        : managedArtifactChanged || configChanged
+                        ? "Agent was current; managed runtime artifacts were synchronized."
+                        : "Agent and managed runtime artifacts are already up to date.",
+                    CurrentVersion());
+            }
+
+            await DownloadAsync(uri, tempPath, token);
 
             var fileInfo = new FileInfo(tempPath);
             if (!fileInfo.Exists || fileInfo.Length <= 0)
@@ -64,7 +107,7 @@ public class AgentMaintenanceService(IHttpClientFactory httpClientFactory, ILogg
                     : "Agent binary synchronized.",
                 CurrentVersion());
         }
-        catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             logger.LogWarning(ex, "Agent self-sync failed.");
             return new AgentSyncResponse(false, $"Agent sync failed: {ex.Message}", CurrentVersion());
@@ -75,7 +118,43 @@ public class AgentMaintenanceService(IHttpClientFactory httpClientFactory, ILogg
         }
     }
 
-    private async Task DownloadAgentAsync(Uri uri, string tempPath, CancellationToken token)
+    private async Task<bool> SyncManagedArtifactAsync(
+        Uri uri,
+        string? expectedSha256,
+        string installedPath,
+        bool executable,
+        CancellationToken token)
+    {
+        var expected = NormalizeSha256(expectedSha256)
+                       ?? throw new InvalidOperationException("Managed artifact sha256 is invalid.");
+        if (File.Exists(installedPath) && string.Equals(
+                await ComputeFileSha256Async(installedPath, token), expected, StringComparison.OrdinalIgnoreCase))
+            return false;
+        Directory.CreateDirectory(Path.GetDirectoryName(installedPath)!);
+        var temporary = CreateSiblingTemporaryPath(installedPath);
+        try
+        {
+            await DownloadAsync(uri, temporary, token);
+            var actual = await ComputeFileSha256Async(temporary, token);
+            if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"Managed artifact sha256 mismatch: expected {expected}, got {actual}.");
+            Directory.CreateDirectory(Path.GetDirectoryName(installedPath)!);
+            File.Move(temporary, installedPath, true);
+            if (executable && !RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                File.SetUnixFileMode(installedPath,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                    UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                    UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+            return true;
+        }
+        finally
+        {
+            TryDelete(temporary);
+        }
+    }
+
+    private async Task DownloadAsync(Uri uri, string tempPath, CancellationToken token)
     {
         var client = httpClientFactory.CreateClient();
         using var response = await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, token);
@@ -83,6 +162,58 @@ public class AgentMaintenanceService(IHttpClientFactory httpClientFactory, ILogg
         await using var source = await response.Content.ReadAsStreamAsync(token);
         await using var target = File.Create(tempPath);
         await source.CopyToAsync(target, token);
+    }
+
+    private static async Task<bool> SyncVmControlPlaneConfigAsync(
+        AgentVmControlPlaneSyncConfig desired,
+        CancellationToken token)
+    {
+        if (!File.Exists(AgentConfigPath))
+            throw new InvalidOperationException("Agent configuration file is missing.");
+        var root = JsonNode.Parse(await File.ReadAllTextAsync(AgentConfigPath, token)) as JsonObject
+                   ?? throw new InvalidDataException("Agent configuration is invalid.");
+        var agent = root["Agent"] as JsonObject;
+        if (agent is null)
+        {
+            agent = new JsonObject();
+            root["Agent"] = agent;
+        }
+
+        var guestManagement = JsonSerializer.SerializeToNode(new
+        {
+            desired.Enabled,
+            desired.BridgeName,
+            desired.HostAddress,
+            desired.PrefixLength,
+            desired.ListenPort,
+            StateRoot = desired.GuestStateRoot,
+            EnrollmentTtlMinutes = 15,
+            ClientCertificateLifetimeMinutes = 120
+        }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var legacyFactoryRemoved = agent.Remove("VmImageFactory");
+        var legacyBuilderRemoved = agent.Remove("VmImageBuilder");
+        if (!legacyFactoryRemoved &&
+            !legacyBuilderRemoved &&
+            JsonNode.DeepEquals(agent["GuestManagement"], guestManagement))
+            return false;
+
+        agent["GuestManagement"] = guestManagement;
+        var temporary = CreateSiblingTemporaryPath(AgentConfigPath);
+        try
+        {
+            await File.WriteAllTextAsync(
+                temporary,
+                root.ToJsonString(new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }),
+                token);
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                File.SetUnixFileMode(temporary, File.GetUnixFileMode(AgentConfigPath));
+            File.Move(temporary, AgentConfigPath, true);
+            return true;
+        }
+        finally
+        {
+            TryDelete(temporary);
+        }
     }
 
     private static async Task RestartAgentAfterResponseAsync()
@@ -127,6 +258,16 @@ public class AgentMaintenanceService(IHttpClientFactory httpClientFactory, ILogg
         return value.Length == 64 ? value.ToLowerInvariant() : null;
     }
 
+    private static bool TryOptionalUri(string? value, out Uri? uri)
+    {
+        uri = null;
+        if (string.IsNullOrWhiteSpace(value)) return true;
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var parsed) || parsed.Scheme is not ("http" or "https"))
+            return false;
+        uri = parsed;
+        return true;
+    }
+
     private static void TryDelete(string path)
     {
         try
@@ -138,5 +279,12 @@ public class AgentMaintenanceService(IHttpClientFactory httpClientFactory, ILogg
         {
             // Best-effort cleanup of a temporary download.
         }
+    }
+
+    internal static string CreateSiblingTemporaryPath(string installedPath)
+    {
+        var directory = Path.GetDirectoryName(installedPath)
+                        ?? throw new InvalidOperationException("Installed artifact path has no parent directory.");
+        return Path.Combine(directory, $".{Path.GetFileName(installedPath)}.sync-{Guid.NewGuid():N}");
     }
 }

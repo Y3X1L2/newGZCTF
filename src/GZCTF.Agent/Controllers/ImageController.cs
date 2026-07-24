@@ -1,5 +1,6 @@
 using GZCTF.Agent.Models;
 using GZCTF.Agent.Services;
+using GZCTF.Agent.Services.Vm;
 using Microsoft.AspNetCore.Mvc;
 using System.Net;
 using System.Net.Http.Headers;
@@ -14,11 +15,19 @@ public class ImageController : ControllerBase
     private readonly DockerService _docker;
     private readonly AgentOperationGate _gate;
     private readonly ImageTransferSingleFlight _singleFlight;
+    private readonly AgentOciArtifactUploader _ociUploader;
     private readonly ILogger<ImageController> _logger;
 
     public ImageController(DockerService docker, AgentOperationGate gate,
-        ImageTransferSingleFlight singleFlight, ILogger<ImageController> logger)
-    { _docker = docker; _gate = gate; _singleFlight = singleFlight; _logger = logger; }
+        ImageTransferSingleFlight singleFlight, AgentOciArtifactUploader ociUploader,
+        ILogger<ImageController> logger)
+    {
+        _docker = docker;
+        _gate = gate;
+        _singleFlight = singleFlight;
+        _ociUploader = ociUploader;
+        _logger = logger;
+    }
 
     [HttpPost("pull-docker")]
     public async Task<IActionResult> PullDockerImage([FromBody] PullDockerImageRequest request, CancellationToken token)
@@ -118,6 +127,52 @@ public class ImageController : ControllerBase
             size, expectedDigest ?? $"sha256:{actualHash}");
     }
 
+    [HttpPost("publish-vm")]
+    public async Task<IActionResult> PublishVmImage(
+        [FromBody] PublishVmImageRequest request,
+        CancellationToken token)
+    {
+        var hash = NormalizeSha256(request.Hash)
+                   ?? throw new ArgumentException("VM image digest is invalid.", nameof(request));
+        if (request.TemplateId <= 0 || request.ExpectedSize <= 0)
+            throw new ArgumentException("VM image cache identity is invalid.", nameof(request));
+        var key = $"vm-publish:{request.TemplateId}:{hash}";
+        var result = await _singleFlight.RunAsync(key, async sharedToken =>
+        {
+            await using var permit = await _gate.EnterAsync(
+                AgentOperationCategory.VmImageTransfer, sharedToken);
+            var path = Path.Combine("/var/lib/gzctf/images", $"{request.TemplateId}.qcow2");
+            if (!System.IO.File.Exists(path))
+                throw new AgentOperationException(
+                    "ImageTransfer", "image.vm.cache_missing",
+                    "The verified VM image cache is unavailable on this worker node.", false);
+            var size = new FileInfo(path).Length;
+            var actualHash = await ComputeSha256Async(path, sharedToken);
+            if (size != request.ExpectedSize ||
+                !string.Equals(actualHash, hash, StringComparison.Ordinal))
+                throw new AgentOperationException(
+                    "ImageTransfer", "image.vm.cache_verification_failed",
+                    "The worker VM image cache does not match the requested artifact.", false);
+            var uploaded = await _ociUploader.UploadVmTemplateAsync(
+                path,
+                request.RegistryTarget,
+                new Dictionary<string, string>
+                {
+                    ["org.gzctf.vm-template.id"] = request.TemplateId.ToString(),
+                    ["org.gzctf.vm-template.sha256"] = hash
+                },
+                sharedToken);
+            if (!string.Equals(uploaded.LayerDigest, $"sha256:{hash}", StringComparison.Ordinal) ||
+                uploaded.Size != size)
+                throw new AgentOperationException(
+                    "ImageTransfer", "image.vm.registry_verification_failed",
+                    "The published VM artifact does not match the verified worker cache.", false);
+            return new PublishVmImageResponse(
+                true, true, size, uploaded.LayerDigest, uploaded.ManifestDigest);
+        }, token);
+        return Ok(result);
+    }
+
     [HttpDelete("vm/{templateId:int}")]
     public IActionResult DeleteVmImage([FromRoute] int templateId, [FromQuery] string? hash)
     {
@@ -134,6 +189,83 @@ public class ImageController : ControllerBase
 
         return Ok(new { message = "VM image cache cleanup completed", removed });
     }
+
+    [HttpPost("download-bootstrap-artifact")]
+    public async Task<IActionResult> DownloadBootstrapArtifact(
+        [FromBody] DownloadBootstrapArtifactRequest request,
+        CancellationToken token)
+    {
+        var digest = NormalizeSha256(request.Digest)
+                     ?? throw new ArgumentException("Bootstrap artifact digest is invalid.", nameof(request));
+        if (request.ProfileId == Guid.Empty || request.Version <= 0 || request.ExpectedSize <= 0)
+            throw new ArgumentException("Bootstrap artifact identity is invalid.", nameof(request));
+        var key = $"bootstrap:{request.ProfileId:N}:{request.Version}:{digest}";
+        var result = await _singleFlight.RunAsync(key, async sharedToken =>
+        {
+            await using var permit = await _gate.EnterAsync(AgentOperationCategory.Control, sharedToken);
+            return await DownloadBootstrapArtifactCoreAsync(request, digest, sharedToken);
+        }, token);
+        return Ok(result);
+    }
+
+    [HttpDelete("bootstrap-artifact/{profileId:guid}/{version:int}")]
+    public IActionResult DeleteBootstrapArtifact(Guid profileId, int version)
+    {
+        var directory = BootstrapArtifactDirectory(profileId, version);
+        if (Directory.Exists(directory)) Directory.Delete(directory, true);
+        return Ok(new { message = "Bootstrap artifact cache cleanup completed" });
+    }
+
+    async Task<DownloadBootstrapArtifactResponse> DownloadBootstrapArtifactCoreAsync(
+        DownloadBootstrapArtifactRequest request,
+        string digest,
+        CancellationToken token)
+    {
+        var directory = BootstrapArtifactDirectory(request.ProfileId, request.Version);
+        var destination = Path.Combine(directory, $"{digest}.tar.gz");
+        if (System.IO.File.Exists(destination))
+        {
+            var current = await ComputeSha256Async(destination, token);
+            if (string.Equals(current, digest, StringComparison.Ordinal) &&
+                new FileInfo(destination).Length == request.ExpectedSize)
+                return new DownloadBootstrapArtifactResponse(
+                    true, "Bootstrap artifact already exists.", true, true, destination,
+                    request.ExpectedSize, $"sha256:{digest}");
+            System.IO.File.Delete(destination);
+        }
+        Directory.CreateDirectory(directory);
+        var temporary = destination + ".part";
+        var registry = NormalizeRegistryAddress(request.RegistryAddress);
+        var repository = request.Repository.Trim().Trim('/');
+        if (string.IsNullOrWhiteSpace(registry) || string.IsNullOrWhiteSpace(repository))
+            throw new ArgumentException("Bootstrap artifact registry reference is invalid.", nameof(request));
+        var client = HttpContext.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient();
+        client.Timeout = TimeSpan.FromHours(2);
+        var existingBytes = System.IO.File.Exists(temporary) ? new FileInfo(temporary).Length : 0;
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Get,
+            $"http://{registry}/v2/{repository}/blobs/sha256:{digest}");
+        if (existingBytes > 0) httpRequest.Headers.Range = new RangeHeaderValue(existingBytes, null);
+        using var response = await client.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, token);
+        var append = existingBytes > 0 && response.StatusCode == HttpStatusCode.PartialContent;
+        if (existingBytes > 0 && !append) TryDelete(temporary);
+        response.EnsureSuccessStatusCode();
+        await CopyResponseToFileAsync(response, temporary, digest, append, token);
+        var actual = await ComputeSha256Async(temporary, token);
+        var size = new FileInfo(temporary).Length;
+        if (!string.Equals(actual, digest, StringComparison.Ordinal) || size != request.ExpectedSize)
+        {
+            TryDelete(temporary);
+            throw new AgentOperationException(
+                "ImageTransfer", "bootstrap_artifact_verification_failed",
+                "Bootstrap artifact digest or size verification failed.", false);
+        }
+        System.IO.File.Move(temporary, destination, true);
+        return new DownloadBootstrapArtifactResponse(
+            true, "Bootstrap artifact downloaded.", false, true, destination, size, $"sha256:{actual}");
+    }
+
+    static string BootstrapArtifactDirectory(Guid profileId, int version) =>
+        Path.Combine("/var/lib/gzctf/bootstrap-profiles", profileId.ToString("N"), version.ToString());
 
     async Task DownloadVmImagePayloadAsync(DownloadVmImageRequest request, string tempPath, CancellationToken token)
     {

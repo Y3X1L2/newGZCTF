@@ -179,6 +179,7 @@ public static class AgentOperationName
             "pull-docker" => "image.docker.pull",
             "docker" when method == HttpMethod.Delete => "image.docker.delete",
             "download-vm" => "image.vm.download",
+            "publish-vm" => "image.vm.publish",
             "vm" when method == HttpMethod.Delete => "image.vm.delete",
             "ensure-docker-registry" => "image.registry.ensure",
             "configure-docker-registry" => "image.registry.configure",

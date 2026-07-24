@@ -85,7 +85,7 @@
 
 ## 3. Large Unit 1: Versioned Protocol and Durable State
 
-- [ ] Create the protocol assembly and define a strict compatibility contract.
+- [x] Create the protocol assembly and define a strict compatibility contract.
 
 ```csharp
 public static class GuestControlProtocol
@@ -118,13 +118,13 @@ public enum GuestLifecycleStage : byte
 }
 ```
 
-- [ ] Define enrollment requests around guest-generated ECDSA P-256 CSRs. The Worker never generates or returns a guest private key.
-- [ ] Extend runtime signals with control-plane stages while preserving numeric values for existing stages. Add explicit mapping rather than renumbering historical values.
-- [ ] Add prepared-artifact and preparation-job entities. A prepared artifact is uniquely keyed by `(sourceImageHash, factoryVersion, guestProtocolVersion, osType)`.
-- [ ] Add `PreparationContractVersion` and `GuestProtocolVersion` to capability certification. Legacy certifications remain readable but cannot satisfy TeamLab VM publication.
-- [ ] Replace `TeamLabBootstrapExecution.Attempt` behavior with immutable execution identity plus boot epoch. Keep the column only for migration backfill, set it to one, and prohibit increments in application code.
-- [ ] Add migration and model snapshot updates. Backfill existing VM images as `Raw`; do not create fake prepared artifacts.
-- [ ] Add contract tests for incompatible versions, stale generation, native UUID mismatch, duplicate sequence conflict, and prohibited attempt increments.
+- [x] Define enrollment requests around guest-generated ECDSA P-256 CSRs. The Worker never generates or returns a guest private key.
+- [x] Extend runtime signals with control-plane stages while preserving numeric values for existing stages. Add explicit mapping rather than renumbering historical values.
+- [x] Add prepared-artifact and preparation-job entities. A prepared artifact is uniquely keyed by `(sourceImageHash, factoryVersion, guestProtocolVersion, osType)`.
+- [x] Add `PreparationContractVersion` and `GuestProtocolVersion` to capability certification. Legacy certifications remain readable and fail the current-prepared compatibility predicate; publication enforcement remains the deliberate Large Unit 4 cutover.
+- [x] Replace `TeamLabBootstrapExecution.Attempt` behavior with immutable execution identity plus boot epoch. Keep the column only for migration backfill, set it to one, and prohibit increments in application code.
+- [x] Add migration and model snapshot updates. Backfill existing VM images as `Raw`; do not create fake prepared artifacts.
+- [x] Add contract tests for incompatible versions, stale generation, native UUID mismatch, duplicate sequence conflict, and prohibited attempt increments.
 
 **Large-unit gate:**
 
@@ -138,20 +138,20 @@ Expected: protocol versions negotiate deterministically; stale/conflicting event
 
 ## 4. Large Unit 2: Worker Management Network and mTLS Gateway
 
-- [ ] Add bootstrap configuration for `gzmgt0` with Worker-local `100.127.0.1/16`. The subnet is not announced through Fabric and has no host forwarding.
-- [ ] Implement deterministic lease allocation from `(runtimeId, generation, assetKey)` with collision detection under `AgentResourceLock`. Persist leases under the Agent TeamLab state root using atomic replace.
-- [ ] Apply nftables rules that allow guest-to-Worker TCP 5443, deny guest-to-guest forwarding, deny management-to-Fabric/player forwarding, and deny access to Agent port 5001.
-- [ ] Add a dedicated Kestrel HTTPS listener on `100.127.0.1:5443`. Keep platform bearer endpoints on port 5001. Middleware rejects a route arriving on the wrong listener before controller dispatch.
-- [ ] Implement Worker-local CA creation with private-key file mode `0600`, CA rotation metadata, and certificate subjects containing the exact asset identity digest.
-- [ ] Implement one-time enrollment:
+- [x] Add bootstrap configuration for `gzmgt0` with Worker-local `100.127.0.1/16`. The subnet is not announced through Fabric and has no host forwarding.
+- [x] Implement deterministic lease allocation from `(runtimeId, generation, assetKey)` with collision detection under `AgentResourceLock`. Persist leases under the Agent TeamLab state root using atomic replace.
+- [x] Apply nftables rules that allow guest-to-Worker TCP 5443, deny management-to-Fabric/player forwarding, and deny access to Agent port 5001. VM management taps additionally use Linux bridge port isolation to block same-bridge guest-to-guest L2 traffic.
+- [x] Add a dedicated Kestrel HTTPS listener on `100.127.0.1:5443`. Keep platform bearer endpoints on port 5001. Middleware rejects a route arriving on the wrong listener before controller dispatch.
+- [x] Implement Worker-local CA creation with private-key file mode `0600`, CA rotation metadata, and certificate subjects containing the exact asset identity digest.
+- [x] Implement one-time enrollment:
   - main platform prepares token, identity, intent digest, and expiry;
   - guest submits token plus CSR;
   - Agent atomically consumes token and signs a short-lived certificate;
   - a consumed, expired, wrong-UUID, or wrong-generation token is terminally rejected.
-- [ ] Store bootstrap intent encrypted with a Worker-local data-protection key. Config drive contains only the one-time token, CA pin, endpoint, and intent digest.
-- [ ] Validate guest mTLS certificate, body identity, monotonic sequence, boot epoch, and payload digest before projecting an event into `AgentRuntimeSignalPublisher`.
-- [ ] Attach a deterministic management NIC to every TeamLab VM and include it in exact-generation inventory and cleanup. Topology NIC configuration remains MAC-based, so management NIC ordering cannot alter challenge addresses.
-- [ ] Add Agent capability features:
+- [x] Store bootstrap intent and the recoverable pending token encrypted with a Worker-local AES-GCM key and exact-identity associated data. Config-drive materialization remains in Large Unit 3.
+- [x] Validate guest mTLS certificate, body identity, monotonic sequence, boot epoch, and payload digest before projecting an event into `AgentRuntimeSignalPublisher`.
+- [x] Add deterministic management-NIC domain/config contracts, bridge-port isolation, and exact-generation enrollment cleanup. TeamLab runtime activation remains the deliberate Large Unit 4 cutover after Guest Supervisor is available.
+- [x] Add Agent capability features:
 
 ```csharp
 public const string VmGuestManagement = "runtime.vm.guest-management.v1";
@@ -160,7 +160,7 @@ public const string VmPreparedImage = "image.vm.prepared.v1";
 public const string VmPreparedImageUpload = "image.vm.prepared-upload.v1";
 ```
 
-- [ ] Add dry-run/network tests that inspect commands and nft rules, plus integration tests using a generated client certificate against the management listener.
+- [x] Add dry-run/network tests that inspect commands and nft rules, plus integration tests using a generated client certificate against the management listener.
 
 **Large-unit gate:**
 
@@ -173,20 +173,20 @@ Expected: management traffic cannot reach player/Fabric paths; one token enrolls
 
 ## 5. Large Unit 3: Guest Supervisor and Config Drives
 
-- [ ] Extract connection inventory providers from EndpointSensor into `GZCTF.GuestTelemetry`. Keep output and HMAC behavior byte-compatible for the Unix-channel executable.
-- [ ] Build Guest Supervisor as a Windows service and Linux systemd service. It reads platform configuration from fixed OS-specific paths and never accepts inbound network connections.
-- [ ] Implement first enrollment, certificate persistence with OS ACLs, mTLS event delivery, boot epoch persistence, and server CA pinning.
-- [ ] Implement lifecycle compare-and-set. A stage executes only when the local checkpoint's expected predecessor and platform intent digest match.
-- [ ] Port bootstrap package execution from `VmBootstrapService` into Guest Supervisor:
+- [x] Extract connection inventory providers from EndpointSensor into `GZCTF.GuestTelemetry`. Keep output and HMAC behavior byte-compatible for the Unix-channel executable.
+- [x] Build Guest Supervisor as a Windows service and Linux systemd service. It reads platform configuration from fixed OS-specific paths and never accepts inbound network connections.
+- [x] Implement first enrollment, certificate persistence with OS ACLs, mTLS event delivery, boot epoch persistence, and server CA pinning.
+- [x] Implement lifecycle compare-and-set. A stage executes only when the local checkpoint's expected predecessor and platform intent digest match.
+- [x] Port bootstrap package execution from `VmBootstrapService` into Guest Supervisor:
   - verify manifest schema, artifact digest, and platform signature;
   - enforce declared OS, architecture, files, commands, services, ports, and reboot count;
   - persist step result before emitting the next event;
   - never repeat a failed or completed step automatically.
-- [ ] Implement secret retrieval only after enrollment. Store secrets with restrictive ACLs, redact them from output, and delete generation secrets during explicit cleanup.
-- [ ] Implement reboot semantics: persist `RebootRequested`, emit it, invoke the OS reboot locally, increment boot epoch on next service start, then emit `GuestReenrolledAfterBoot` without rerunning prior steps.
-- [ ] Implement Linux NoCloud output and Windows ConfigDrive v2 output. Network data matches topology NICs by MAC and includes the isolated management NIC without a default route.
-- [ ] Publish self-contained `linux-x64` and `win-x64` artifacts. Add deterministic package hashes to the release manifest.
-- [ ] Run Guest Supervisor unit tests with an in-memory mTLS gateway and filesystem checkpoint sandbox. Do not use sleeps; drive state changes with explicit test events.
+- [x] Implement secret retrieval only after enrollment. Store secrets with restrictive ACLs, redact them from output, and delete generation secrets during explicit cleanup.
+- [x] Implement reboot semantics: persist `RebootRequested`, emit it, invoke the OS reboot locally, increment boot epoch on next service start, then emit `GuestReenrolledAfterBoot` without rerunning prior steps.
+- [x] Implement Linux NoCloud output and Windows ConfigDrive v2 output. Network data matches topology NICs by MAC and includes the isolated management NIC without a default route.
+- [x] Publish self-contained `linux-x64` and `win-x64` artifacts. Add deterministic package hashes to the release manifest.
+- [x] Run Guest Supervisor unit tests with an in-memory gateway and filesystem checkpoint sandbox. Tests drive persisted state and boot epochs directly without timing sleeps.
 
 **Large-unit gate:**
 
@@ -199,20 +199,20 @@ Expected: Linux and Windows service hosts produce identical protocol facts; rebo
 
 ## 6. Large Unit 4: Image Factory and TeamLab Cutover
 
-- [ ] Add Open API submission for Windows/Linux image preparation with idempotency and one-time onboarding secret protection. Never return the supplied credential in operation payloads or logs.
-- [ ] Implement isolated preparation VM placement only on KVM nodes supporting management v1, prepared-image v1, image upload, and the requested OS preparation method.
-- [ ] Support two preparation inputs:
+- [x] Add Open API submission for Windows/Linux image preparation with idempotency and one-time onboarding secret protection. Never return the supplied credential in operation payloads or logs.
+- [x] Implement isolated preparation VM placement only on KVM nodes supporting management v1, prepared-image v1, image upload, and the requested OS preparation method.
+- [x] Support two preparation inputs:
   - platform-ready source with compatible Guest Supervisor/Cloudbase contract;
   - assisted Windows source with valid WinRM credential on the isolated e1000e preparation network.
-- [ ] Reject unsupported raw images before creating a derived template. Do not use offline registry mutation, password reset, credential guessing, or an automatic reboot as fallback.
-- [ ] In assisted Windows preparation, install fixed-digest Cloudbase-init, Guest Supervisor, drivers, and optional QGA packages from the Worker-local endpoint; run Sysprep/generalize and require a clean domain shutdown event.
-- [ ] Flatten the prepared overlay to a new qcow2, verify it, push it directly from Worker to the internal OCI registry, and return digest/size/provenance to the main platform.
-- [ ] Create a new `ImageTemplate` derivative linked to source template 69 or 34. Do not mutate source hash, status, file path, or certification.
-- [ ] Perform one fail-fast conformance deployment with QGA disabled. Require GuestEnrolled, NetworkApplied, no-op package completion, controlled reboot/resume, health, observation, and clean shutdown in one operation; any failed stage rejects the derivative.
-- [ ] Update TeamLab publication compatibility to require the current prepared-artifact and Guest Supervisor protocol certification. QGA capabilities remain optional metadata.
-- [ ] Change TeamLab VM creation to prepare enrollment and intent before domain start, then advance the existing dependency DAG from Guest Supervisor signals.
-- [ ] Remove QGA RPCs from TeamLab bootstrap/health and VM endpoint-sensor critical paths. Retain administrative QGA APIs for auxiliary diagnostics.
-- [ ] Ensure image distribution resolves runtime VM references to the prepared derivative digest and never prepares an image during deployment.
+- [x] Reject unsupported raw images before creating a derived template. Do not use offline registry mutation, password reset, credential guessing, or an automatic reboot as fallback.
+- [x] In assisted Windows preparation, install fixed-digest Cloudbase-init, Guest Supervisor, drivers, and optional QGA packages from the Worker-local endpoint; run Sysprep/generalize and require a clean domain shutdown event.
+- [x] Flatten the prepared overlay to a new qcow2, verify it, push it directly from Worker to the internal OCI registry, and return digest/size/provenance to the main platform.
+- [x] Create a new `ImageTemplate` derivative linked to source template 69 or 34. Do not mutate source hash, status, file path, or certification.
+- [x] Perform one fail-fast conformance deployment with QGA disabled. Require GuestEnrolled, NetworkApplied, no-op package completion, controlled reboot/resume, health, observation, and clean shutdown in one operation; any failed stage rejects the derivative.
+- [x] Update TeamLab publication compatibility to require the current prepared-artifact and Guest Supervisor protocol certification. QGA capabilities remain optional metadata.
+- [x] Change TeamLab VM creation to prepare enrollment and intent before domain start, then advance the existing dependency DAG from Guest Supervisor signals.
+- [x] Remove QGA RPCs from TeamLab bootstrap/health and VM endpoint-sensor critical paths. Retain administrative QGA APIs for auxiliary diagnostics.
+- [x] Ensure image distribution resolves runtime VM references to the prepared derivative digest and never prepares an image during deployment.
 
 **Large-unit gate:**
 
@@ -281,10 +281,98 @@ After the consolidated local gate:
 - [x] Approved isolated management plane, Cloudbase-init, Guest Supervisor, and Image Factory architecture.
 - [x] Wrote and committed `phase-09-vm-control-plane-stability-design.md` as commit `c48ca06`.
 - [x] Wrote this implementation plan.
-- [ ] Large Unit 1 complete.
-- [ ] Large Unit 2 complete.
-- [ ] Large Unit 3 complete.
-- [ ] Large Unit 4 complete.
+- [x] Large Unit 1 complete.
+- [x] Large Unit 2 complete.
+- [x] Large Unit 3 complete.
+- [x] Large Unit 4 complete: preparation submission, Worker Image Factory, immutable derivative publication, QGA-disabled conformance, TeamLab Guest Supervisor cutover, and online Worker artifact synchronization are closed locally.
 - [ ] Large Unit 5 complete.
 - [ ] Consolidated local gate complete.
 - [ ] Live acceptance complete.
+
+### 2026-07-17 Large Unit 1 Evidence
+
+- [x] Added dependency-free `GZCTF.GuestControl.Contracts` shared by the main platform and Worker Agent.
+- [x] Added strict protocol negotiation, CSR-only enrollment contracts, exact asset/generation/native-UUID/boot-epoch identity fences, and monotonic event conflict semantics.
+- [x] Added one-way source-to-prepared provenance, durable image preparation jobs, nullable certification protocol versions, and raw-template defaults.
+- [x] Added combined migration `20260717033200_AddVmPreparedArtifactControlPlaneAndFactoryCutover`; repeated historical attempts fail migration explicitly instead of being silently merged, and normal history receives unique execution identities.
+- [x] `dotnet build src/GZCTF.slnx -c Release --no-restore`: 0 warnings, 0 errors.
+- [x] Focused unit gate: 12 passed, 0 failed.
+- [x] PostgreSQL prepared-artifact migration/runtime-signal integration gate completed successfully.
+- [x] `dotnet ef migrations has-pending-model-changes`: no model changes pending.
+
+### 2026-07-17 Large Unit 2 Evidence
+
+- [x] Added `gzmgt0` bootstrap, `100.127.0.1/16` deterministic leases, nft host isolation, and Linux bridge port isolation for VM management taps.
+- [x] Added separate platform bearer and guest mTLS listener authentication; wrong-listener routes fail before controller dispatch.
+- [x] Added RSA-3072 Worker CA metadata, RSA service certificate for cross-provider TLS compatibility, and ECDSA P-256 guest CSR enforcement with identity-derived certificate subjects.
+- [x] Added encrypted one-time enrollment state, consumed-token rejection, exact generation/native UUID/boot epoch validation, and journal-before-ack event projection.
+- [x] Full solution build: 0 warnings, 0 errors.
+- [x] Focused management-network/enrollment/domain/capability gate completed successfully.
+- [x] Real Kestrel HTTPS integration gate completed enrollment without a client certificate, then accepted a lifecycle event only with the issued mTLS certificate.
+
+### 2026-07-17 Large Unit 3 Complete
+
+- [x] Physically extracted connection telemetry contracts and Linux/Windows providers into `GZCTF.GuestTelemetry`; EndpointSensor now consumes the shared library and retains its legacy transport/signing adapter.
+- [x] Added the cross-platform `GZCTF.GuestSupervisor` service host, fixed configuration locations, P-256 guest key generation, CA pinning, client certificate persistence, and OS-specific restrictive file ACL handling.
+- [x] Added boot identity/epoch persistence and a compare-and-set lifecycle engine with durable pending emission, so a process restart resends an already-persisted event but never reruns an acknowledged stage.
+- [x] Added exact-byte ECDSA manifest verification, SHA-256/size checked artifact download, bounded traversal-safe tar extraction, declared file/step/health execution, and durable `Running/Completed/RebootPending/Failed` step facts. Interrupted or failed steps are terminal and are never rerun automatically.
+- [x] Added encrypted Worker-side generation secret state and mTLS-only secret retrieval bound to certificate, runtime, generation, native VM UUID, boot epoch, and declared opaque references. Guest materialization uses restrictive OS ACLs and no secret value enters config-drive or operational facts.
+- [x] Added persisted reboot checkpoints and strict `RebootRequested -> boot epoch + 1 -> GuestReenrolledAfterBoot` validation. A same-boot restart cannot satisfy or repeat a rebooting step.
+- [x] Added topology and management NIC expectations to config-drive, guest-side MAC/IP/prefix verification, structured OpenStack routes, and an isolated management NIC without a default route.
+- [x] Added Windows service/systemd hosting plus deterministic self-contained `linux-x64` and `win-x64` release manifests. Verified both manifest hashes against their generated binaries.
+- [x] Fixed the Worker HTTPS certificate contract for Schannel: RSA server certificates now include key encipherment and Windows server/client private keys use persistent OS key containers. Real Kestrel anonymous enrollment followed by mTLS event ingestion passes.
+- [x] Focused Large Unit 3 gate passes: 44 unit tests and the real Kestrel guest gateway integration test pass. Existing solution dependency-advisory warnings remain tracked outside this unit; no compiler warning or error was introduced by Guest Supervisor code.
+
+### 2026-07-17 Large Unit 4 Complete
+
+- [x] Added idempotent Open API VM preparation, encrypted assisted-Windows onboarding credentials, deterministic capability-based Worker placement, and immutable source-to-derived provenance.
+- [x] Added Agent Image Factory preparation with isolated WinRM, fixed-digest package validation, Sysprep/clean shutdown, qcow2 flatten/check, and direct OCI publication.
+- [x] Cut TeamLab runtime and controlled certification over to the management NIC, ConfigDrive v2, mTLS Guest Supervisor lifecycle signals, static topology IP probing, and QGA-disabled domain creation.
+- [x] Runtime publication and scheduling reject raw, stale, uncertified, or protocol-incompatible VM templates; prepared image distribution resolves the immutable OCI artifact directly.
+- [x] Worker online synchronization now transfers Guest Supervisor with its SHA-256 and refreshes an existing Image Factory package manifest; KVM convergence checks require the new management/config-drive/prepared-image contract and no longer require QGA.
+- [x] Corrected manifest signing to the fixed-length P-256 IEEE P1363 format consumed by Guest Supervisor; platform signing, persisted signature, and guest verification now share one contract.
+- [x] Focused unit gate passes 37/37 and focused PostgreSQL/TeamLab integration gate passes 8/8 before the final API submission test addition.
+- [x] Full solution build completes with 0 errors; existing repository NuGet vulnerability advisories remain visible and unchanged by this unit.
+- [x] EF reports no pending model changes, and TeamLab/Content critical paths contain no `WaitVmGuestAsync`, `ApplyVmBootstrapAsync`, `CheckVmBootstrapHealthAsync`, `GetVmIpAsync`, or `VmQga` dependency.
+
+### 2026-07-17 Golden Image Architecture Correction
+
+- [x] Removed the unshipped `VmImagePreparationApplicationService`, assisted-Windows credential path, Worker VM factory controller, WinRM transport, package retry branches, and old public preparation route.
+- [x] Added explicit `VmImageBuildSource`, `VmImageBuildJob`, versioned recipe catalog, Packer/QEMU Worker capability, immutable OCI build output, and independent post-build certification.
+- [x] Added release-bundled, SHA-256-pinned builder dependencies and an internal OCI package distribution path; build Workers no longer download dependencies from public endpoints.
+- [x] Added `Managed`, `Opaque`, and `Scenario` template modes, DHCP/preconfigured networking, host-side Opaque health probing, and conditional guest-control requirements.
+- [x] Added release-time `BakeAtPublish` orchestration with an internal no-player runtime, scenario overlay flatten/check/upload, release-to-asset artifact mapping, repeated-publish reuse, and exact cleanup.
+- [x] Added a clean-cut migration that drops old factory state rather than preserving an invalid dual-track compatibility layer.
+- [x] Replaced preparation tests and OpenAPI documentation with source/recipe/build contracts.
+- [ ] Run the consolidated local gate, independent quality review, immutable release build, and full Docker/Linux/Windows/AD two-Worker acceptance.
+
+### 2026-07-20 Simplified Image Lifecycle Cutover
+
+The platform-side ISO/Packer builder described above is superseded and removed. The supported production path is now:
+
+```text
+external image pipeline -> qcow2 import -> SHA-256 verification -> immutable OCI artifact
+-> Opaque template -> controlled certification -> Managed template -> node distribution -> runtime
+```
+
+- [x] Removed platform build sources, recipes, Packer jobs, Worker builder endpoints, builder capability advertisement, and build-capacity reservation.
+- [x] Added `POST /api/open/v1/images/vm-qcow2` with streaming SHA-256 verification, immutable OCI publication, durable operation state, and automatic KVM-node distribution.
+- [x] Imported qcow2 templates are always `Opaque`; only a successful platform-controlled probe can promote the exact digest to `Managed`. External evidence never promotes runtime mode.
+- [x] Scenario baking requires an already certified `Managed` template. Legacy Windows templates are not implicitly certified.
+- [x] Migration `20260720153831_SimplifyVmImageLifecycle` removes the unshipped builder schema and retains only the runtime network-mode contract.
+- [x] The Chinese Open API guide and runtime OpenAPI document expose the qcow2 import route and no longer expose builder routes.
+- [x] Release solution build completed with zero errors; unit gate passed `614/614`, OpenAPI runtime documentation and comparator gates passed, EF reported no pending model changes, and `git diff --check` passed. The full local Testcontainers suite remains unavailable because Docker Desktop is not running on the development host.
+
+#### 2026-07-20 Live Import and Distribution Evidence
+
+- Immutable release: `phase9-qcow2-staging-20260720`.
+- Release archive SHA-256: `a4fe8af2d0e9f3d7f3dbd015818a0eca54dffbc2ee412ab35464a058278327b3`.
+- Import operation: `019f8052-b7a5-73f4-bf8c-baf1969b8979`; terminal stage `completed`, progress `3/3`, one attempt.
+- Imported test template: `113`; runtime mode `Opaque`, network mode `Dhcp`, prepared artifact `48` in `Ready` state.
+- Source/artifact SHA-256: `1b7af784841125887e688254229e282829e17245d0e47fe7280da9b68a30d9e1`.
+- OCI manifest digest: `sha256:bfa09673143ff81fd52215d57782b1641f7f48303e58035837fdac345b5d5904`.
+- Workers `10.0.7.118` and `10.0.7.125` both reached distribution status `Ready`; each local file was `196616` bytes and matched the source SHA-256 exactly.
+- Deleting template `113` returned HTTP `204`. The template, prepared artifact, distribution rows, both node caches, and OCI manifest were all absent afterward; all three database residue counts were zero.
+- The protected non-TeamLab VM on `10.0.7.125` was not modified.
+
+The remaining live gate is controlled certification of a genuinely Managed-capable external qcow2, followed by one mixed Docker/Linux/Windows/AD two-Worker runtime, reset, destroy, traffic evidence, and residue inspection.

@@ -36,12 +36,14 @@ public class ImageTemplateController : ControllerBase
     private readonly ImageTemplateDeletionService _deletionService;
     private readonly ImageImportApplicationService _imageImports;
     private readonly ImageDistributionService _imageDistribution;
+    private readonly ImageTemplateCertificationService _certifications;
     private readonly ILogger<ImageTemplateController> _logger;
 
     public ImageTemplateController(AppDbContext context, ImageStorage storage, IArchiveExtractor archiveExtractor,
         DockerImageRegistryService dockerRegistry,
         UserManager<UserInfo> userManager, ImageTemplateDeletionService deletionService,
         ImageImportApplicationService imageImports, ImageDistributionService imageDistribution,
+        ImageTemplateCertificationService certifications,
         ILogger<ImageTemplateController> logger)
     {
         _context = context;
@@ -52,6 +54,7 @@ public class ImageTemplateController : ControllerBase
         _deletionService = deletionService;
         _imageImports = imageImports;
         _imageDistribution = imageDistribution;
+        _certifications = certifications;
         _logger = logger;
     }
 
@@ -157,12 +160,15 @@ public class ImageTemplateController : ControllerBase
         if (template is null)
             return NotFound();
 
+        var certifications = await _certifications.ListAsync(template.Id, HttpContext.RequestAborted);
+
         return Ok(new
         {
             template.Id, template.Name, template.OSType, template.ImageType,
             template.FileSize, template.Status, template.Description,
             template.ErrorMessage, template.ContainsMalware, template.ImageHash, template.UploadedAt,
             template.RegistryUrl,
+            CapabilityCertifications = certifications
         });
     }
 

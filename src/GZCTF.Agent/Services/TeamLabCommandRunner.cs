@@ -30,12 +30,18 @@ public class TeamLabCommandRunner(ILogger<TeamLabCommandRunner> logger)
         await process.WaitForExitAsync(token);
 
         var output = string.Join('\n', new[] { stdout, stderr }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        output = NormalizeFailureOutput(process.ExitCode, output);
         if (process.ExitCode != 0)
             logger.LogWarning("TeamLab command failed with exit code {ExitCode}: {Command}\n{Output}",
                 process.ExitCode, command, output);
 
         return (process.ExitCode == 0, output);
     }
+
+    internal static string NormalizeFailureOutput(int exitCode, string output) =>
+        exitCode != 0 && string.IsNullOrWhiteSpace(output)
+            ? $"Command failed with exit code {exitCode}."
+            : output;
 
     internal static ProcessStartInfo CreateStartInfo(string command, bool redirectStandardInput)
     {

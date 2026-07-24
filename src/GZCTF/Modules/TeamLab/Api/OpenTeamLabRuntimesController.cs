@@ -7,11 +7,14 @@ using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NSwag.Annotations;
 
 namespace GZCTF.Modules.TeamLab.Api;
 
 [ApiController]
 [ApiExplorerSettings(GroupName = "open-v1")]
+[OpenApiTags("TeamLab - Runtimes")]
+[OpenApiTag("TeamLab - Runtimes", Description = "Create, inspect, reset, destroy, and access deployed TeamLab environments.")]
 [Route("api/open/v1/teamlab/runtimes")]
 [ProducesResponseType(typeof(ExternalApiProblemDetailsModel), StatusCodes.Status400BadRequest, "application/problem+json")]
 [ProducesResponseType(typeof(ExternalApiProblemDetailsModel), StatusCodes.Status401Unauthorized, "application/problem+json")]
@@ -27,6 +30,7 @@ public sealed class OpenTeamLabRuntimesController(
     TeamLabAccessGrantService access) : ControllerBase
 {
     [HttpPost]
+    [OpenApiOperation("Create a runtime", "Queues deployment of a released topology for one team or automation owner.")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
     [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Create(
@@ -42,6 +46,7 @@ public sealed class OpenTeamLabRuntimesController(
     }
 
     [HttpGet("{runtimeId:guid}")]
+    [OpenApiOperation("Get a runtime", "Returns the aggregated runtime, shard, network, and asset state.")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesRead)]
     [ProducesResponseType(typeof(OpenTeamLabRuntimeModel), StatusCodes.Status200OK)]
     public async Task<OpenTeamLabRuntimeModel> Get(Guid runtimeId, CancellationToken cancellationToken)
@@ -51,6 +56,7 @@ public sealed class OpenTeamLabRuntimesController(
     }
 
     [HttpPost("{runtimeId:guid}/reset")]
+    [OpenApiOperation("Reset a runtime", "Queues a controlled cleanup and redeployment using the runtime release and optional overlays.")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
     [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Reset(
@@ -68,6 +74,7 @@ public sealed class OpenTeamLabRuntimesController(
     }
 
     [HttpDelete("{runtimeId:guid}")]
+    [OpenApiOperation("Destroy a runtime", "Queues cleanup of all runtime shards, assets, routes, captures, and access grants.")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
     [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Destroy(
@@ -84,6 +91,7 @@ public sealed class OpenTeamLabRuntimesController(
     }
 
     [HttpGet("{runtimeId:guid}/events")]
+    [OpenApiOperation("List runtime events", "Returns cursor-paginated lifecycle and deployment events for troubleshooting and audit.")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesRead)]
     [ProducesResponseType(typeof(OpenTeamLabRuntimeEventPageModel), StatusCodes.Status200OK)]
     public async Task<OpenTeamLabRuntimeEventPageModel> Events(
@@ -97,6 +105,7 @@ public sealed class OpenTeamLabRuntimesController(
     }
 
     [HttpPost("{runtimeId:guid}/access-grants")]
+    [OpenApiOperation("Create a WireGuard access grant", "Queues creation of a short-lived, single-download player access configuration.")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
     [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> CreateAccessGrant(
@@ -116,6 +125,7 @@ public sealed class OpenTeamLabRuntimesController(
     }
 
     [HttpGet("{runtimeId:guid}/access-grants/{grantId:guid}/download")]
+    [OpenApiOperation("Download an access configuration", "Consumes the one-time download token and returns the WireGuard configuration file.")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesRead)]
     [Produces("application/x-wireguard-profile")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -131,6 +141,7 @@ public sealed class OpenTeamLabRuntimesController(
     }
 
     [HttpDelete("{runtimeId:guid}/access-grants/{grantId:guid}")]
+    [OpenApiOperation("Revoke an access grant", "Queues revocation and cleanup of an existing runtime access grant.")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
     [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> RevokeAccessGrant(

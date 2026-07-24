@@ -15,7 +15,8 @@ public enum ImageDistributionReferenceKind : byte
     Game = 0,
     TrainingCourse = 1,
     Exercise = 2,
-    TeamLabRuntime = 3
+    TeamLabRuntime = 3,
+    ImageCertification = 4
 }
 
 public readonly record struct ImageDistributionReferenceKey(
@@ -33,4 +34,7 @@ public readonly record struct ImageDistributionReferenceKey(
 
     public static ImageDistributionReferenceKey TeamLabRuntime(int runtimeId) =>
         new(ImageDistributionReferenceKind.TeamLabRuntime, runtimeId);
+
+    public static ImageDistributionReferenceKey ImageCertification(int imageTemplateId) =>
+        new(ImageDistributionReferenceKind.ImageCertification, imageTemplateId);
 }
