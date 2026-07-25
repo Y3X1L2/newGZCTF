@@ -48,6 +48,7 @@ export const platformModules: PlatformModule[] = [
     group: '学习与训练',
     description: '题库训练、专题练习与复盘',
     primary: true,
+    implemented: true,
   },
   {
     id: 'training',

@@ -9,6 +9,8 @@ public static class ApiTokenScopes
     public const string ChallengesRead = "challenges:read";
     public const string ChallengesWrite = "challenges:write";
     public const string ChallengesDelete = "challenges:delete";
+    public const string ExercisesRead = "exercises:read";
+    public const string ExercisesWrite = "exercises:write";
     public const string TeamLabTopologiesRead = "teamlab.topologies:read";
     public const string TeamLabTopologiesWrite = "teamlab.topologies:write";
     public const string TeamLabRuntimesRead = "teamlab.runtimes:read";
@@ -26,6 +28,8 @@ public static class ApiTokenScopes
         ChallengesRead,
         ChallengesWrite,
         ChallengesDelete,
+        ExercisesRead,
+        ExercisesWrite,
         TeamLabTopologiesRead,
         TeamLabTopologiesWrite,
         TeamLabRuntimesRead,

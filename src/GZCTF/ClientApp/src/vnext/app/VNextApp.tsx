@@ -51,6 +51,18 @@ const TeamsPage = lazy(() => import('../features/teams/TeamsPage').then((module)
 const UserProfilePage = lazy(() =>
   import('../features/profile/UserProfilePage').then((module) => ({ default: module.UserProfilePage }))
 )
+const PracticePage = lazy(() =>
+  import('../features/practice/PracticePage').then((module) => ({ default: module.PracticePage }))
+)
+const PracticeBrowsePage = lazy(() =>
+  import('../features/practice/PracticeBrowsePage').then((module) => ({ default: module.PracticeBrowsePage }))
+)
+const PracticeChallengePage = lazy(() =>
+  import('../features/practice/PracticeChallengePage').then((module) => ({ default: module.PracticeChallengePage }))
+)
+const PracticeStatsPage = lazy(() =>
+  import('../features/practice/PracticeStatsPage').then((module) => ({ default: module.PracticeStatsPage }))
+)
 const TrainingPage = lazy(() =>
   import('../features/training/catalog/TrainingPage').then((module) => ({ default: module.TrainingPage }))
 )
@@ -212,6 +224,10 @@ export function VNextApp() {
           <Route path="settings/:section?" element={<SettingsPage />} />
           <Route path="teams" element={<TeamsPage />} />
           <Route path="users/:userId" element={<UserProfilePage />} />
+          <Route path="practice" element={<PracticePage />} />
+          <Route path="practice/browse" element={<PracticeBrowsePage />} />
+          <Route path="practice/challenge/:id" element={<PracticeChallengePage />} />
+          <Route path="practice/stats" element={<PracticeStatsPage />} />
           <Route path="training" element={<TrainingPage />} />
           <Route path="training/courses/new" element={<TrainingCourseEditorPage />} />
           <Route path="training/courses/:courseId" element={<TrainingCoursePage />} />
