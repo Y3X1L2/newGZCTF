@@ -36,6 +36,7 @@ public static class IdentityModuleRegistration
             AddScopePolicy(options, ApiTokenScopes.ChallengesDelete);
             AddScopePolicy(options, ApiTokenScopes.ExercisesRead);
             AddScopePolicy(options, ApiTokenScopes.ExercisesWrite);
+            AddScopePolicy(options, ApiTokenScopes.ExercisesDelete);
         });
         return services;
     }

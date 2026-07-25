@@ -143,10 +143,25 @@ ExerciseChallenge 实体已被 Training 模块大量引用，修改需谨慎：
 - Token 格式：`gzctf_pat_{tokenId:N}.{base64url(32 bytes)}`
 - 认证方式：`Authorization: Bearer {token}`
 - 基础路径：`/api/open/v1/exercises`
-- 作用域：需在 `ApiTokenScopes` 注册 `exercises:read` / `exercises:write`
-- 速率限制：Redis Token Bucket（`X-RateLimit-*` 头）
-- 幂等性：写操作需 `Idempotency-Key` 请求头
-- 错误格式：`application/problem+json`
+- 作用域：`exercises:read` / `exercises:write`（已在 `ApiTokenScopes.cs` 注册，`IdentityModuleRegistration.cs` 已绑定策略 `scope:exercises:read` / `scope:exercises:write`）
+- 速率限制：Redis Token Bucket（`X-RateLimit-*` 头），`ApiTokenRateLimitMiddleware` 在 `/api/open/v1/*` 生效
+- 幂等性：写操作需 `Idempotency-Key` 请求头（`OpenChallengesController` 模式）
+- 错误格式：`application/problem+json`（`ExternalApiExceptionHandler` 处理）
+
+**分析结论（2026-07-25）：**
+
+1. **Token 基础设施完全就绪** — `ExercisesRead`/`ExercisesWrite` scopes 已定义、已注册到 `TeacherScopes` + `All` 集合、已通过 `AddScopePolicy` 绑定到授权策略、`ApiScopeAuthorizationHandler` 验证链完整（Token → ClaimsPrincipal → scope claim → policy requirement → handler check）。
+2. **内部 API `/api/Exercise`** — 使用 `[RequireUser]`（cookie-based），与 `GameController`/`TeamController`/`AwdpPlayerController` 完全一致，无问题。
+3. **外部 API `/api/open/v1/exercises`** — **尚未实现**（Phase 2 待处理），需要 `ExerciseOpenApiController`，模式参照 `OpenChallengesController`。
+4. **无 token 模式问题** — 整个Exercise模块的scope/策略/认证/限流链路完整，只需构建外部API控制器即可复用现有token基础设施。
+
+### External API Controller 模式（参照 `Modules/Ctf/Api/OpenChallengesController.cs`）
+- 路径：`/api/open/v1/exercises`
+- GET 端点使用 `[Authorize(Policy = "scope:" + ApiTokenScopes.ExercisesRead)]`
+- POST/DELETE 端点使用 `[Authorize(Policy = "scope:" + ApiTokenScopes.ExercisesWrite)]`
+- 幂等写操作需 `Idempotency-Key` 请求头（1-128 ASCII 字符）
+- 异步操作返回 `202 Accepted` + operation location
+- 错误返回 `application/problem+json`
 
 ### 实现步骤
 
