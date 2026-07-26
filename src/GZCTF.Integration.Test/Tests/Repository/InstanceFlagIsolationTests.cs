@@ -61,6 +61,58 @@ public class InstanceFlagIsolationTests(GZCTFApplicationFactory factory)
     }
 
     [Fact]
+    public async Task CreateTrainingContainer_WithLoadedRuntimeReferences_ReturnsExistingContainer()
+    {
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var repository = scope.ServiceProvider.GetRequiredService<IExerciseInstanceRepository>();
+        var suffix = Guid.NewGuid().ToString("N")[..6];
+        var user = CreateUser($"cr{suffix}");
+        var exercise = new ExerciseChallenge
+        {
+            Title = $"runtime-refresh-{suffix}",
+            Content = "runtime reference refresh",
+            Type = ChallengeType.DynamicContainer,
+            FlagTemplate = "flag{[TEAM_HASH]}",
+            ContainerImage = "test/runtime-refresh:latest",
+            ExposePort = 80,
+            IsEnabled = true
+        };
+        var flag = FlagContext.CreateInstanceFlag("flag{runtime-refresh}");
+        var container = new Container
+        {
+            Id = Guid.NewGuid(),
+            Image = exercise.ContainerImage,
+            ContainerId = $"pending-{suffix}",
+            Status = ContainerStatus.Pending,
+            IP = "127.0.0.1",
+            Port = 80
+        };
+        var instance = new ExerciseInstance
+        {
+            User = user,
+            Exercise = exercise,
+            IsLoaded = true,
+            FlagContext = flag,
+            Container = container
+        };
+
+        context.Add(instance);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var loaded = await repository.GetInstance(user, exercise.Id);
+
+        Assert.NotNull(loaded?.FlagContext);
+        Assert.NotNull(loaded.Container);
+
+        var result = await repository.CreateContainer(loaded, user);
+
+        Assert.Equal(GZCTF.Utils.TaskStatus.Success, result.Status);
+        Assert.Equal(container.Id, result.Result?.Id);
+    }
+
+    [Fact]
     public async Task StaticExercise_LoadsConfiguredFlagsWhileDynamicExerciseDoesNot()
     {
         using var scope = factory.Services.CreateScope();

@@ -308,22 +308,28 @@ public class ExerciseInstanceRepository(
         {
             instance.Container = null;
         }
+        else if (instance.Container?.Id == instance.ContainerId)
+        {
+            await Context.Entry(instance.Container).ReloadAsync(token);
+        }
         else
         {
-            var containerReference = Context.Entry(instance).Reference(e => e.Container);
-            containerReference.IsLoaded = false;
-            await containerReference.LoadAsync(token);
+            instance.Container = await Context.Containers
+                .SingleOrDefaultAsync(container => container.Id == instance.ContainerId, token);
         }
 
         if (instance.FlagId is null)
         {
             instance.FlagContext = null;
         }
+        else if (instance.FlagContext?.Id == instance.FlagId)
+        {
+            await Context.Entry(instance.FlagContext).ReloadAsync(token);
+        }
         else
         {
-            var flagReference = Context.Entry(instance).Reference(e => e.FlagContext);
-            flagReference.IsLoaded = false;
-            await flagReference.LoadAsync(token);
+            instance.FlagContext = await Context.FlagContexts
+                .SingleOrDefaultAsync(flag => flag.Id == instance.FlagId, token);
         }
     }
 
