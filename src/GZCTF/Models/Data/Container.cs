@@ -124,6 +124,9 @@ public class Container
     [NotMapped]
     public string? ReadyEntry => EntryStatus == ContainerEntryStatus.Ready ? Entry : null;
 
+    public bool IsActiveAt(DateTimeOffset timestamp) =>
+        Status is ContainerStatus.Pending or ContainerStatus.Running && ExpectStopAt > timestamp;
+
     /// <summary>
     /// Whether traffic capture is enabled
     /// </summary>

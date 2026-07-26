@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using GZCTF.Models.Data;
 using GZCTF.Models.Request.Training;
@@ -59,6 +60,55 @@ public class TrainingCourseChallengeDetailModelTests
                 Assert.Equal(2, second.OrderIndex);
                 Assert.Equal("Second step", second.Description);
             });
+    }
+
+    [Fact]
+    public void FromInstance_HidesExpiredContainerRuntime()
+    {
+        var exercise = CreateExercise(ChallengeType.DynamicContainer, []);
+        var instance = new ExerciseInstance
+        {
+            ExerciseId = exercise.Id,
+            Exercise = exercise,
+            Container = new Container
+            {
+                Status = ContainerStatus.Running,
+                ExpectStopAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+                EntryStatus = ContainerEntryStatus.Ready,
+                PublicIP = "203.195.157.191",
+                PublicPort = 30002
+            }
+        };
+
+        var model = TrainingCourseChallengeDetailModel.FromInstance(3, 4, instance, 0, false);
+
+        Assert.Null(model.Context.CloseTime);
+        Assert.Null(model.Context.InstanceEntry);
+    }
+
+    [Fact]
+    public void FromInstance_ExposesActiveContainerRuntime()
+    {
+        var exercise = CreateExercise(ChallengeType.DynamicContainer, []);
+        var stopAt = DateTimeOffset.UtcNow.AddMinutes(30);
+        var instance = new ExerciseInstance
+        {
+            ExerciseId = exercise.Id,
+            Exercise = exercise,
+            Container = new Container
+            {
+                Status = ContainerStatus.Running,
+                ExpectStopAt = stopAt,
+                EntryStatus = ContainerEntryStatus.Ready,
+                PublicIP = "203.195.157.191",
+                PublicPort = 30002
+            }
+        };
+
+        var model = TrainingCourseChallengeDetailModel.FromInstance(3, 4, instance, 0, false);
+
+        Assert.Equal(stopAt, model.Context.CloseTime);
+        Assert.Equal("203.195.157.191:30002", model.Context.InstanceEntry);
     }
 
     private static ExerciseChallenge CreateExercise(ChallengeType type, List<FlagContext> flags)

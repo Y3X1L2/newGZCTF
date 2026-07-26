@@ -177,7 +177,7 @@ public class ExerciseInstanceRepository(
 
         await ReloadInstanceRuntimeAsync(instance, token);
 
-        if (instance.Container is { Status: ContainerStatus.Pending or ContainerStatus.Running })
+        if (instance.Container?.IsActiveAt(DateTimeOffset.UtcNow) == true)
             return new TaskResult<Container>(TaskStatus.Success, instance.Container);
 
         if (instance.Container is not null)

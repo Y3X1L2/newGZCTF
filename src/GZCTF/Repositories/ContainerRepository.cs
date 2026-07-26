@@ -39,8 +39,13 @@ public class ContainerRepository(
         .Select(ContainerInstanceModel.FromContainer)
         .ToArray();
 
-    public Task<Container[]> GetDyingContainers(CancellationToken token = default) =>
-        Context.Containers.Where(c => c.ExpectStopAt < DateTimeOffset.UtcNow).ToArrayAsync(token);
+    public Task<Container[]> GetDyingContainers(CancellationToken token = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return Context.Containers
+            .Where(c => c.Status != ContainerStatus.Destroyed && c.ExpectStopAt < now)
+            .ToArrayAsync(token);
+    }
 
     public async Task<PortMappingEntry[]> GetProxyPortMappingsAsync(CancellationToken token = default)
     {

@@ -38,6 +38,12 @@ public class ClientFlagContext
     public long? FileSize { get; set; }
 
     internal static ClientFlagContext FromInstance(Container? container, string? url, long? fileSize) =>
+        FromActiveInstance(
+            container?.IsActiveAt(DateTimeOffset.UtcNow) == true ? container : null,
+            url,
+            fileSize);
+
+    static ClientFlagContext FromActiveInstance(Container? container, string? url, long? fileSize) =>
         new()
         {
             CloseTime = container?.ExpectStopAt,

@@ -238,16 +238,15 @@ public class DockerService
                 return;
             }
 
-            var generation = existing.Config.Labels is not null &&
-                             existing.Config.Labels.TryGetValue("GZCTF.Generation", out var value) &&
-                             int.TryParse(value, out var parsed)
-                ? parsed
-                : (int?)null;
-            if (generation != requiredGeneration)
+            if (!MatchesExpectedGeneration(existing.Config.Labels, requiredGeneration, out var legacyGeneration))
                 throw new AgentOperationException(
                     "Conflict", "runtime.identity_conflict",
                     "Container generation does not match the requested runtime identity.", false,
                     StatusCodes.Status409Conflict);
+            if (legacyGeneration)
+                _logger.LogWarning(
+                    "Destroying legacy GZCTF container {ContainerId} without a generation label as generation 1",
+                    containerId);
         }
 
         try
@@ -279,6 +278,24 @@ public class DockerService
         catch (DockerApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
         }
+    }
+
+    internal static bool MatchesExpectedGeneration(
+        IDictionary<string, string>? labels,
+        int requiredGeneration,
+        out bool legacyGeneration)
+    {
+        legacyGeneration = false;
+        if (labels is null)
+            return false;
+
+        if (labels.TryGetValue("GZCTF.Generation", out var value))
+            return int.TryParse(value, out var generation) && generation == requiredGeneration;
+
+        legacyGeneration = requiredGeneration == 1 &&
+                           labels.TryGetValue("ManagedBy", out var managedBy) &&
+                           string.Equals(managedBy, "GZCTF", StringComparison.Ordinal);
+        return legacyGeneration;
     }
 
     public async Task<AgentCommandResult> ExecuteContainerCommandAsync(string containerId,
