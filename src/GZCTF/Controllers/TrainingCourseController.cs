@@ -1,5 +1,5 @@
-using GZCTF.Middlewares;
 using GZCTF.Infrastructure.Cache;
+using GZCTF.Middlewares;
 using GZCTF.Models;
 using GZCTF.Models.Internal;
 using GZCTF.Models.Request.Game;
@@ -22,7 +22,6 @@ public class TrainingCourseController(
     AppDbContext context,
     UserManager<UserInfo> userManager,
     IExerciseInstanceRepository exerciseInstanceRepository,
-    IContainerRepository containerRepository,
     IConfigService configService,
     IPlatformCache cache,
     IOptionsSnapshot<ContainerPolicy> containerPolicy,
@@ -1065,14 +1064,6 @@ public class TrainingCourseController(
             return BadRequest(new RequestResponse("该课程题目不需要启动容器。"));
         if (instance.IsContainerOperationTooFrequent)
             return RequestResponse.Result("操作过于频繁，请稍后再试。", StatusCodes.Status429TooManyRequests);
-
-        if (instance.Container is not null)
-        {
-            if (instance.Container.Status == ContainerStatus.Running)
-                return Ok(ContainerInfoModel.FromContainer(instance.Container));
-
-            await containerRepository.DestroyContainer(instance.Container, token);
-        }
 
         var result = await exerciseInstanceRepository.CreateContainer(instance, user, token);
         if (result is QueuedTaskResult<Container> queued)

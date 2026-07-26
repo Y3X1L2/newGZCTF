@@ -1321,20 +1321,9 @@ public class TrainingCourseChallengeDetailModel
             Solved = solved,
             Attempts = attempts,
             Limit = instance.Exercise.SubmissionLimit,
-            // Dynamic flags belong to individual instances and must not be exposed as
-            // configured multi-flag steps when other users have loaded the same exercise.
-            Flags = !instance.Exercise.Type.IsDynamic() &&
-                    instance.Exercise.Flags is { Count: > 1 } flags
-                ? flags
-                    .OrderBy(flag => flag.OrderIndex)
-                    .Select(flag => new FlagStepInfo
-                    {
-                        Id = flag.Id,
-                        OrderIndex = flag.OrderIndex,
-                        Description = flag.Description
-                    })
-                    .ToList()
-                : null,
+            Flags = FlagStepProjection.FromConfiguredFlags(
+                instance.Exercise.Type,
+                instance.Exercise.Flags),
             Context = ClientFlagContext.FromInstance(
                 instance.Container,
                 instance.AttachmentUrl,

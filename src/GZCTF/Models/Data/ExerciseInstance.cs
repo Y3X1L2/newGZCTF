@@ -7,6 +7,21 @@ namespace GZCTF.Models.Data;
 [PrimaryKey(nameof(UserId), nameof(ExerciseId))]
 public class ExerciseInstance : Instance
 {
+    internal bool TryRegenerateLegacyDynamicFlag()
+    {
+        if (!IsLoaded ||
+            Container is not null ||
+            Exercise.Type != ChallengeType.DynamicContainer ||
+            Exercise.FlagTemplate?.Contains("[TEAM_HASH]", StringComparison.Ordinal) != true ||
+            FlagContext?.Flag.Contains("TestTeamHash", StringComparison.Ordinal) != true)
+            return false;
+
+        FlagContext.Flag = Exercise.GenerateDynamicFlag();
+        FlagContext.ExerciseId = null;
+        FlagContext.Exercise = null;
+        return true;
+    }
+
     /// <summary>
     /// Get instance attachment
     /// </summary>

@@ -79,7 +79,6 @@ public class ExerciseInstanceRepository(
             .Include(i => i.FlagContext)
             .Include(i => i.Container)
             .Include(i => i.Exercise)
-            .ThenInclude(e => e.Flags)
             .Where(e => e.ExerciseId == exerciseId && e.UserId == user.Id)
             .SingleOrDefaultAsync(token);
 
@@ -88,14 +87,11 @@ public class ExerciseInstanceRepository(
         if (instance is null)
             return null;
 
+        if (!instance.Exercise.Type.IsDynamic())
+            await Context.Entry(instance.Exercise).Collection(e => e.Flags).LoadAsync(token);
+
         if (instance.IsLoaded)
         {
-            if (ShouldRegenerateLegacyDynamicFlag(instance))
-            {
-                instance.FlagContext!.Flag = instance.Exercise.GenerateDynamicFlag();
-                await SaveAsync(token);
-            }
-
             await transaction.CommitAsync(token);
             return instance;
         }
@@ -113,18 +109,12 @@ public class ExerciseInstanceRepository(
             switch (instance.Exercise.Type)
             {
                 case ChallengeType.DynamicContainer:
-                    instance.FlagContext = new()
-                    {
-                        Exercise = exercise,
-                        // tiny probability will produce the same FLAG,
-                        // but this will not affect the correctness of the answer
-                        Flag = exercise.GenerateDynamicFlag(),
-                        IsOccupied = true
-                    };
+                    instance.FlagContext = FlagContext.CreateInstanceFlag(
+                        exercise.GenerateDynamicFlag());
                     break;
                 case ChallengeType.DynamicAttachment:
                     var flags = await Context.FlagContexts
-                        .Where(e => e.Exercise == exercise && !e.IsOccupied)
+                        .Where(e => e.ExerciseId == exercise.Id && !e.IsOccupied)
                         .ToListAsync(token);
 
                     if (flags.Count == 0)
@@ -164,13 +154,6 @@ public class ExerciseInstanceRepository(
         return instance;
     }
 
-    internal static bool ShouldRegenerateLegacyDynamicFlag(ExerciseInstance instance) =>
-        instance.IsLoaded &&
-        instance.Container is null &&
-        instance.Exercise.Type == ChallengeType.DynamicContainer &&
-        instance.Exercise.FlagTemplate?.Contains("[TEAM_HASH]", StringComparison.Ordinal) == true &&
-        instance.FlagContext?.Flag.Contains("TestTeamHash", StringComparison.Ordinal) == true;
-
     public async Task<TaskResult<Container>> CreateContainer(ExerciseInstance instance, UserInfo user,
         CancellationToken token = default)
     {
@@ -183,21 +166,39 @@ public class ExerciseInstanceRepository(
             return new TaskResult<Container>(TaskStatus.Failed);
         }
 
-        if (instance.ContainerId is not null && instance.Container is null)
-            await Context.Entry(instance).Reference(e => e.Container).LoadAsync(token);
+        await using var instanceLock = await lockService.AcquireAsync(
+            BuildInstanceRuntimeLockKey(user.Id, instance.ExerciseId),
+            TimeSpan.FromSeconds(10),
+            cancellationToken: token);
+        using var instanceLeaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            token,
+            instanceLock.LeaseLost);
+        token = instanceLeaseCancellation.Token;
+
+        await ReloadInstanceRuntimeAsync(instance, token);
+
+        if (instance.Container is { Status: ContainerStatus.Pending or ContainerStatus.Running })
+            return new TaskResult<Container>(TaskStatus.Success, instance.Container);
 
         if (instance.Container is not null)
-            return new TaskResult<Container>(TaskStatus.Success, instance.Container);
+        {
+            if (!await containerRepository.DestroyContainer(instance.Container, token))
+                return new TaskResult<Container>(TaskStatus.Failed);
+
+            instance.Container = null;
+            instance.ContainerId = null;
+        }
+
+        await RegenerateLegacyDynamicFlagAsync(instance, token);
 
         await using var ownerLock = await lockService.AcquireAsync(
             BuildContainerLimitLockKey(user.Id),
             TimeSpan.FromSeconds(10),
             cancellationToken: token);
-        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(token, ownerLock.LeaseLost);
-        token = leaseCancellation.Token;
+        using var ownerLeaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(token, ownerLock.LeaseLost);
+        token = ownerLeaseCancellation.Token;
 
-        if (instance.ContainerId is not null && instance.Container is null)
-            await Context.Entry(instance).Reference(e => e.Container).LoadAsync(token);
+        await ReloadInstanceRuntimeAsync(instance, token);
 
         if (instance.Container is not null)
             return new TaskResult<Container>(TaskStatus.Success, instance.Container);
@@ -226,11 +227,10 @@ public class ExerciseInstanceRepository(
                         user.UserName!, first.Exercise.Title,
                         first.Container!.LogId],
                     user, TaskStatus.Success);
-                await containerRepository.DestroyContainer(first.Container!, token);
+                if (!await containerRepository.DestroyContainer(first.Container!, token))
+                    return new TaskResult<Container>(TaskStatus.Failed);
             }
         }
-
-        await Context.Entry(instance).Reference(e => e.FlagContext).LoadAsync(token);
 
         if (deploymentExecutionContext.Current is null)
         {
@@ -296,6 +296,44 @@ public class ExerciseInstanceRepository(
 
     static string BuildContainerLimitLockKey(Guid userId) =>
         $"container-limit:exercise:user:{userId}";
+
+    static string BuildInstanceRuntimeLockKey(Guid userId, int exerciseId) =>
+        $"container-runtime:exercise:user:{userId}:challenge:{exerciseId}";
+
+    async Task ReloadInstanceRuntimeAsync(ExerciseInstance instance, CancellationToken token)
+    {
+        await Context.Entry(instance).ReloadAsync(token);
+
+        if (instance.ContainerId is null)
+        {
+            instance.Container = null;
+        }
+        else
+        {
+            var containerReference = Context.Entry(instance).Reference(e => e.Container);
+            containerReference.IsLoaded = false;
+            await containerReference.LoadAsync(token);
+        }
+
+        if (instance.FlagId is null)
+        {
+            instance.FlagContext = null;
+        }
+        else
+        {
+            var flagReference = Context.Entry(instance).Reference(e => e.FlagContext);
+            flagReference.IsLoaded = false;
+            await flagReference.LoadAsync(token);
+        }
+    }
+
+    async Task RegenerateLegacyDynamicFlagAsync(ExerciseInstance instance, CancellationToken token)
+    {
+        if (!instance.TryRegenerateLegacyDynamicFlag())
+            return;
+
+        await SaveAsync(token);
+    }
 
     async Task<int> CountActiveQueuedContainersAsync(Guid userId, int currentExerciseId, CancellationToken token) =>
         await Context.DeploymentQueueTickets.CountAsync(t =>

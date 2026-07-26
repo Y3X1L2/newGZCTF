@@ -1,7 +1,7 @@
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
-using GZCTF.Repositories.Interface;
 using GZCTF.Modules.TeamLab.Application;
+using GZCTF.Repositories.Interface;
 using GZCTF.Services.Container.Manager;
 using Microsoft.EntityFrameworkCore;
 
@@ -337,7 +337,7 @@ public class DeploymentExecutionService
         var instance = await _context.GameInstances
             .Include(i => i.FlagContext)
             .Include(i => i.Container)
-            .Include(i => i.Challenge).ThenInclude(c => c.Flags)
+            .Include(i => i.Challenge)
             .Include(i => i.Participation)
                 .ThenInclude(p => p.Team)
             .Include(i => i.Participation)
@@ -392,7 +392,7 @@ public class DeploymentExecutionService
         var instance = await _context.ExerciseInstances
             .Include(i => i.FlagContext)
             .Include(i => i.Container)
-            .Include(i => i.Exercise).ThenInclude(e => e.Flags)
+            .Include(i => i.Exercise)
             .SingleOrDefaultAsync(i => i.UserId == userId && i.ExerciseId == challengeId, token);
 
         if (instance is null)
