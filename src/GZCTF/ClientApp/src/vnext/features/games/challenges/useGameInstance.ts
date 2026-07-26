@@ -120,9 +120,14 @@ export function useGameInstance({
     try {
       const next = await gamePlayerApi.vmStatus(gameId, challengeId)
       if (activeChallengeRef.current !== challengeId) return
+      const nextPhase = next ? vmPhase(next) : 'idle'
       setVmStatus(next)
-      setError(null)
-      setPhase(next ? vmPhase(next) : 'idle')
+      setError(
+        nextPhase === 'failed'
+          ? (next?.queue?.errorMessage ?? next?.stageMessage ?? 'Windows 靶机创建失败，请联系管理员。')
+          : null
+      )
+      setPhase(nextPhase)
     } catch (requestError) {
       if (activeChallengeRef.current !== challengeId) return
       setError(errorMessage(requestError, 'Windows 靶机状态读取失败。'))

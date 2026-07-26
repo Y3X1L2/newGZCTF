@@ -150,6 +150,7 @@ restore_previous() {
 if ! "$NGINX_BIN" -t >"$work_dir/nginx-test.log" 2>&1; then
   restore_previous
   acknowledge false "Public gateway configuration validation failed." || true
+  cat "$work_dir/nginx-test.log" >&2
   printf 'nginx configuration validation failed; previous configuration restored\n' >&2
   exit 1
 fi
@@ -158,6 +159,7 @@ if ! "$NGINX_BIN" -s reload >"$work_dir/nginx-reload.log" 2>&1; then
   restore_previous
   "$NGINX_BIN" -t >/dev/null 2>&1 && "$NGINX_BIN" -s reload >/dev/null 2>&1 || true
   acknowledge false "Public gateway reload failed." || true
+  cat "$work_dir/nginx-reload.log" >&2
   printf 'nginx reload failed; previous configuration restored\n' >&2
   exit 1
 fi

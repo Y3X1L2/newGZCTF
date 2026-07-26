@@ -16,6 +16,7 @@ public class DockerService
     private readonly DockerConfig _config;
     private readonly ILogger<DockerService> _logger;
     private readonly AgentResourceLock _resourceLock;
+    private readonly SemaphoreSlim _registryConfigurationLock = new(1, 1);
     private static readonly TimeSpan FabricCommandTimeout = TimeSpan.FromSeconds(15);
 
     public DockerService(IOptions<DockerConfig> config, AgentResourceLock resourceLock,
@@ -668,55 +669,63 @@ public class DockerService
         if (!OperatingSystem.IsLinux())
             throw new NotSupportedException("Automatic Docker daemon registry configuration is only supported on Linux.");
 
-        Directory.CreateDirectory("/etc/docker");
-        const string daemonPath = "/etc/docker/daemon.json";
-        var data = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        if (File.Exists(daemonPath) && new FileInfo(daemonPath).Length > 0)
+        await _registryConfigurationLock.WaitAsync(token);
+        try
         {
-            try
+            Directory.CreateDirectory("/etc/docker");
+            const string daemonPath = "/etc/docker/daemon.json";
+            var data = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            if (File.Exists(daemonPath) && new FileInfo(daemonPath).Length > 0)
             {
-                var parsed = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
-                    await File.ReadAllTextAsync(daemonPath, token));
-                if (parsed is not null)
-                    foreach (var pair in parsed)
-                        data[pair.Key] = pair.Value.Clone();
+                try
+                {
+                    var parsed = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
+                        await File.ReadAllTextAsync(daemonPath, token));
+                    if (parsed is not null)
+                        foreach (var pair in parsed)
+                            data[pair.Key] = pair.Value.Clone();
+                }
+                catch (JsonException ex)
+                {
+                    _logger.LogWarning(ex, "Docker daemon.json is invalid; backing up and replacing it");
+                }
             }
-            catch (JsonException ex)
+
+            var registries = new List<string>();
+            if (data.TryGetValue("insecure-registries", out var existing) && existing is JsonElement element &&
+                element.ValueKind == JsonValueKind.Array)
             {
-                _logger.LogWarning(ex, "Docker daemon.json is invalid; backing up and replacing it");
+                registries.AddRange(element.EnumerateArray()
+                    .Where(e => e.ValueKind == JsonValueKind.String)
+                    .Select(e => e.GetString())
+                    .Where(s => !string.IsNullOrWhiteSpace(s))!);
             }
-        }
 
-        var registries = new List<string>();
-        if (data.TryGetValue("insecure-registries", out var existing) && existing is JsonElement element &&
-            element.ValueKind == JsonValueKind.Array)
+            var changed = false;
+            foreach (var registry in requestedRegistries)
+            {
+                if (registries.Contains(registry, StringComparer.OrdinalIgnoreCase))
+                    continue;
+
+                registries.Add(registry);
+                changed = true;
+            }
+            data["insecure-registries"] = registries;
+
+            if (!changed)
+                return;
+
+            if (File.Exists(daemonPath))
+                File.Copy(daemonPath, $"{daemonPath}.bak.{DateTimeOffset.UtcNow:yyyyMMddHHmmss}", true);
+            await File.WriteAllTextAsync(daemonPath,
+                JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true }), token);
+
+            await RunHostCommandAsync("systemctl", ["restart", "docker"], TimeSpan.FromSeconds(60), token);
+        }
+        finally
         {
-            registries.AddRange(element.EnumerateArray()
-                .Where(e => e.ValueKind == JsonValueKind.String)
-                .Select(e => e.GetString())
-                .Where(s => !string.IsNullOrWhiteSpace(s))!);
+            _registryConfigurationLock.Release();
         }
-
-        var changed = false;
-        foreach (var registry in requestedRegistries)
-        {
-            if (registries.Contains(registry, StringComparer.OrdinalIgnoreCase))
-                continue;
-
-            registries.Add(registry);
-            changed = true;
-        }
-        data["insecure-registries"] = registries;
-
-        if (!changed)
-            return;
-
-        if (File.Exists(daemonPath))
-            File.Copy(daemonPath, $"{daemonPath}.bak.{DateTimeOffset.UtcNow:yyyyMMddHHmmss}", true);
-        await File.WriteAllTextAsync(daemonPath,
-            JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true }), token);
-
-        await RunHostCommandAsync("systemctl", ["restart", "docker"], TimeSpan.FromSeconds(60), token);
     }
 
     static string NormalizeRegistryAddress(string value)

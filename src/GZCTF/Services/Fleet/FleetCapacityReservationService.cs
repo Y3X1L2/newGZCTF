@@ -115,33 +115,41 @@ public sealed class FleetCapacityReservationService
                 existingNode, existing.DockerSlots, existing.VmSlots);
         }
 
-        var candidates = (await snapshots.LoadAsync(token))
+        var evaluated = (await snapshots.LoadAsync(token))
             .Where(item => request.PreferredNodeId is null || item.Node.Id == request.PreferredNodeId)
-            .Where(item => !request.RequireRemote || !item.Node.IsLocal)
-            .Where(item => eligibility.GetReason(item, request.RequiredCapability, dockerSlots, vmSlots,
-                request.RequireTeamLab, request.RequiredFeatures) is null)
-            .OrderByDescending(item => eligibility.Score(item, dockerSlots, vmSlots))
-            .ThenBy(item => item.Node.Name, StringComparer.Ordinal)
-            .ThenBy(item => item.Node.Id)
+            .Select(item => new CapacityCandidate(
+                item,
+                request.RequireRemote && item.Node.IsLocal
+                    ? "remote_node_required"
+                    : eligibility.GetReason(item, request.RequiredCapability, dockerSlots, vmSlots,
+                        request.RequireTeamLab, request.RequiredFeatures)))
+            .ToArray();
+        var candidates = evaluated
+            .Where(item => item.RejectionReason is null)
+            .OrderByDescending(item => eligibility.Score(item.Snapshot, dockerSlots, vmSlots))
+            .ThenBy(item => item.Snapshot.Node.Name, StringComparer.Ordinal)
+            .ThenBy(item => item.Snapshot.Node.Id)
             .ToArray();
         var selected = candidates.FirstOrDefault();
         if (selected is null)
             return await CapacityBlockedAsync(ticketId, request.PreferredNodeId,
-                $"No schedulable node has enough capacity for Docker={dockerSlots}, VM={vmSlots}.", token);
+                BuildUnavailableMessage(dockerSlots, vmSlots,
+                    evaluated.Select(item => item.RejectionReason).OfType<string>()), token);
 
-        context.FleetCapacityReservations.Add(NewReservation(ticketId, selected.Node.Id, dockerSlots, vmSlots));
+        context.FleetCapacityReservations.Add(NewReservation(
+            ticketId, selected.Snapshot.Node.Id, dockerSlots, vmSlots));
         if (await LoadTicketAsync(ticketId, token) is { } ticket)
             events.Append(RuntimeOperationalEvents.Ticket(
                 ticket,
                 OperationalEventCodes.Capacity.Reserved,
                 OperationalEventOutcome.Succeeded,
                 "Node capacity was reserved for the runtime ticket.",
-                workerNodeId: selected.Node.Id,
+                workerNodeId: selected.Snapshot.Node.Id,
                 detail: CapacityDetail(ticket, dockerSlots, vmSlots)));
         await context.SaveChangesAsync(token);
         logger.LogInformation("Reserved capacity for ticket {TicketId} on node {NodeId}: Docker={Docker}, VM={Vm}",
-            ticketId, selected.Node.Id, dockerSlots, vmSlots);
-        return FleetCapacityReservationResult.Reserved(selected.Node, dockerSlots, vmSlots);
+            ticketId, selected.Snapshot.Node.Id, dockerSlots, vmSlots);
+        return FleetCapacityReservationResult.Reserved(selected.Snapshot.Node, dockerSlots, vmSlots);
     }
 
     public async Task<FleetCapacityBatchReservationResult> TryReserveBatchAsync(Guid ticketId,
@@ -334,6 +342,24 @@ public sealed class FleetCapacityReservationService
             VmSlots = vmSlots,
             ExpiresAt = DateTimeOffset.UtcNow.Add(ReservationLifetime)
         };
+
+    internal static string BuildUnavailableMessage(int dockerSlots, int vmSlots,
+        IEnumerable<string> rejectionReasons)
+    {
+        var summary = rejectionReasons
+            .GroupBy(reason => reason, StringComparer.Ordinal)
+            .Select(group => new { Reason = group.Key, Count = group.Count() })
+            .OrderByDescending(item => item.Count)
+            .ThenBy(item => item.Reason, StringComparer.Ordinal)
+            .Select(item => $"{item.Reason}={item.Count}")
+            .ToArray();
+        var detail = summary.Length == 0
+            ? "No node matched the requested node scope."
+            : $"Rejections: {string.Join(", ", summary)}.";
+        return $"No eligible node for Docker={dockerSlots}, VM={vmSlots}. {detail}";
+    }
+
+    sealed record CapacityCandidate(NodeCapacitySnapshot Snapshot, string? RejectionReason);
 
     async ValueTask<IDistributedLease> AcquireSchedulerLeaseAsync(CancellationToken token) =>
         await leaseProvider.AcquireAsync("fleet:scheduler", TimeSpan.FromSeconds(10), cancellationToken: token);

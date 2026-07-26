@@ -17,6 +17,15 @@ function dockerChallenge(entry: string | null, status?: ContainerEntryStatus): C
   } as ChallengeDetailModel
 }
 
+function windowsChallenge(): ChallengeDetailModel {
+  return {
+    id: 40,
+    type: ChallengeType.DynamicContainer,
+    environment: EnvironmentType.WindowsVM,
+    context: {},
+  } as ChallengeDetailModel
+}
+
 describe('useGameInstance', () => {
   afterEach(() => {
     vi.clearAllTimers()
@@ -124,6 +133,35 @@ describe('useGameInstance', () => {
       await vi.advanceTimersByTimeAsync(10_000)
     })
     expect(refreshChallenge).toHaveBeenCalledOnce()
+    unmount()
+  })
+
+  it('surfaces the deployment queue error for a failed Windows VM', async () => {
+    const queueError = 'Windows image is not verified for instance-specific Cloudbase-Init credentials.'
+    vi.spyOn(gamePlayerApi, 'vmStatus').mockResolvedValue({
+      vmInstanceId: '2a44adae-da82-4b52-98aa-cbf436b448bc',
+      status: 'Error',
+      stage: 'error',
+      stageMessage: queueError,
+      queue: { errorMessage: queueError },
+      createdAt: Date.now(),
+    })
+
+    const { result, unmount } = renderHook(() =>
+      useGameInstance({
+        challenge: windowsChallenge(),
+        gameId: 23,
+        refreshChallenge: vi.fn(),
+        updateChallenge: vi.fn(),
+      })
+    )
+
+    await act(async () => {
+      await result.current.refresh()
+    })
+
+    expect(result.current.phase).toBe('failed')
+    expect(result.current.error).toBe(queueError)
     unmount()
   })
 })

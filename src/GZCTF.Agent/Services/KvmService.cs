@@ -89,7 +89,8 @@ public class KvmService
         await RunCommandAsync(
             $"virt-install --name {ShellEscape(request.VmName)} --memory {request.Memory} --vcpus {request.Cpu} " +
             $"--metadata description={ShellEscape($"gzctf-generation={Math.Max(1, request.Generation)}")} " +
-            $"--disk path={ShellEscape(vmPath)} --osinfo detect=on,require=off --import --noautoconsole " +
+            $"{BuildVirtInstallBootAndDiskArguments(request, vmPath)} " +
+            $"--osinfo detect=on,require=off --import --noautoconsole " +
             $"{cloudInitArgs}{BuildVirtInstallNetworkArguments(request)} --graphics vnc,listen=0.0.0.0", token);
 
         var state = (await RunCommandAsync($"virsh domstate {ShellEscape(request.VmName)}", token)).Trim();
@@ -393,6 +394,14 @@ public class KvmService
             return "--network network=default,model=e1000e";
 
         return string.Join(' ', request.Interfaces.Select(BuildVirtInstallNetworkArgument));
+    }
+
+    internal static string BuildVirtInstallBootAndDiskArguments(CreateVmRequest request, string vmPath)
+    {
+        var disk = $"--disk path={ShellEscape(vmPath)}";
+        return request.CloudInit?.OsType == VmInitOsType.Windows
+            ? $"--machine q35 --boot uefi --events on_reboot=restart {disk},bus=sata"
+            : disk;
     }
 
     internal static string[] BuildTeamLabVmIpProbeCommands(CreateVmRequest request) =>
