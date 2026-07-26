@@ -20,6 +20,8 @@ public sealed class ExerciseService(
     public async Task<ExerciseChallenge?> GetExerciseByIdAsync(int exerciseId, CancellationToken token = default) =>
         await context.ExerciseChallenges
             .AsNoTracking()
+            .Include(e => e.Flags)
+            .Include(e => e.Attachment)
             .FirstOrDefaultAsync(e => e.Id == exerciseId && e.IsEnabled && e.TrainingCourseId == null, token);
 
     public async Task<ExerciseInfoModel[]> GetExerciseListAsync(ExerciseFilter? filter, CancellationToken token = default)

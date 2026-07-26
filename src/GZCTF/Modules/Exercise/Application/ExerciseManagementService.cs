@@ -1,3 +1,6 @@
+using GZCTF.Models;
+using GZCTF.Models.Data;
+using GZCTF.Modules.Exercise.Contracts;
 using GZCTF.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,6 +21,66 @@ public sealed class ExerciseManagementService(
         await context.SaveChangesAsync(token);
         return exercise;
     }
+
+    public async Task<ExerciseChallenge?> GetExerciseForUpdateAsync(int exerciseId, CancellationToken token = default) =>
+        await context.ExerciseChallenges
+            .Include(e => e.Flags)
+            .Include(e => e.Attachment)
+            .FirstOrDefaultAsync(e => e.Id == exerciseId, token);
+
+    public async Task<ExerciseChallenge> UpdateExerciseWithRelationsAsync(
+        ExerciseChallenge exercise,
+        List<ExerciseOpenApiFlagModel>? flags,
+        ExerciseOpenApiAttachmentModel? attachment,
+        CancellationToken token = default)
+    {
+        var existing = await context.ExerciseChallenges
+            .Include(e => e.Flags)
+            .Include(e => e.Attachment)
+            .FirstOrDefaultAsync(e => e.Id == exercise.Id, token)
+            ?? throw new InvalidOperationException($"Exercise {exercise.Id} not found");
+
+        context.Entry(existing).CurrentValues.SetValues(exercise);
+
+        if (flags is not null)
+        {
+            context.FlagContexts.RemoveRange(existing.Flags);
+            foreach (var flag in flags)
+            {
+                var flagCtx = new FlagContext
+                {
+                    Flag = flag.Flag,
+                    OrderIndex = flag.OrderIndex,
+                    Description = flag.Description,
+                    ScoreMode = flag.ScoreMode,
+                    FixedScore = flag.FixedScore,
+                    MaxAttempts = flag.MaxAttempts,
+                    AttachmentHash = flag.AttachmentHash,
+                    AnswerType = flag.AnswerType,
+                    CustomName = flag.CustomName,
+                    Exercise = existing,
+                    ExerciseId = exercise.Id
+                };
+                if (flag.Attachment is not null)
+                    flagCtx.Attachment = CreateAttachment(flag.Attachment);
+                context.FlagContexts.Add(flagCtx);
+            }
+        }
+
+        if (attachment is not null)
+        {
+            if (existing.Attachment is not null)
+                context.Attachments.Remove(existing.Attachment);
+            existing.Attachment = CreateAttachment(attachment);
+        }
+
+        await context.SaveChangesAsync(token);
+        return existing;
+    }
+
+    static Attachment? CreateAttachment(ExerciseOpenApiAttachmentModel? model) => model is null
+        ? null
+        : new Attachment { Type = FileType.Remote, RemoteUrl = model.RemoteUrl };
 
     public async Task RemoveExerciseAsync(int exerciseId, CancellationToken token = default)
     {

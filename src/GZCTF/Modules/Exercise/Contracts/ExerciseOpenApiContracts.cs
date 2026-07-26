@@ -1,11 +1,63 @@
 using System.ComponentModel.DataAnnotations;
 using System.Net.Mime;
 using System.Text.Json.Serialization;
+using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Utils;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GZCTF.Modules.Exercise.Contracts;
+
+public sealed class ExerciseOpenApiFlagModel
+{
+    [Required, MaxLength(Limits.MaxFlagLength)]
+    public string Flag { get; set; } = string.Empty;
+
+    [Range(0, 10_000)]
+    public int OrderIndex { get; set; }
+
+    [MaxLength(512)]
+    public string? Description { get; set; }
+
+    public FlagScoreMode ScoreMode { get; set; } = FlagScoreMode.InheritDecay;
+
+    [Range(0, 1_000_000)]
+    public int FixedScore { get; set; }
+
+    [Range(0, 100_000)]
+    public int MaxAttempts { get; set; }
+
+    [MaxLength(128)]
+    public string? AttachmentHash { get; set; }
+
+    public AnswerType AnswerType { get; set; } = AnswerType.Flag;
+
+    [MaxLength(64)]
+    public string? CustomName { get; set; }
+
+    public ExerciseOpenApiAttachmentModel? Attachment { get; set; }
+}
+
+public sealed class ExerciseOpenApiFlagInfoModel
+{
+    public int Id { get; set; }
+    public string Flag { get; set; } = string.Empty;
+    public int OrderIndex { get; set; }
+    public string? Description { get; set; }
+    public FlagScoreMode ScoreMode { get; set; }
+    public int FixedScore { get; set; }
+    public int MaxAttempts { get; set; }
+    public string? AttachmentHash { get; set; }
+    public AnswerType AnswerType { get; set; }
+    public string? CustomName { get; set; }
+    public ExerciseOpenApiAttachmentModel? Attachment { get; set; }
+}
+
+public sealed class ExerciseOpenApiAttachmentModel
+{
+    [Required, MaxLength(2048)]
+    public string RemoteUrl { get; set; } = string.Empty;
+}
 
 public sealed class ExerciseExternalModel
 {
@@ -28,6 +80,8 @@ public sealed class ExerciseExternalModel
     public EnvironmentType Environment { get; set; }
     public int? ImageTemplateId { get; set; }
     public string? FlagTemplate { get; set; }
+    public ExerciseOpenApiAttachmentModel? Attachment { get; set; }
+    public IReadOnlyList<ExerciseOpenApiFlagInfoModel> Flags { get; set; } = [];
 }
 
 public sealed class ExerciseExternalSummaryModel
@@ -77,6 +131,11 @@ public sealed class ExerciseCreateModel
     public EnvironmentType Environment { get; set; }
     public int? ImageTemplateId { get; set; }
     public string? FlagTemplate { get; set; }
+
+    [MaxLength(100)]
+    public List<ExerciseOpenApiFlagModel>? Flags { get; set; }
+
+    public ExerciseOpenApiAttachmentModel? Attachment { get; set; }
 }
 
 public sealed class ExerciseFlagSubmissionModel
@@ -118,6 +177,11 @@ public sealed class ExerciseImportItemModel
 
     public bool IsEnabled { get; set; } = true;
     public bool Credit { get; set; }
+
+    [MaxLength(100)]
+    public List<ExerciseOpenApiFlagModel>? Flags { get; set; }
+
+    public ExerciseOpenApiAttachmentModel? Attachment { get; set; }
 }
 
 public sealed class ExerciseImportResultItem

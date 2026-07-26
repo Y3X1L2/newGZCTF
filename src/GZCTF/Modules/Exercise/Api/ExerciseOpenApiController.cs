@@ -2,6 +2,8 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Net.Mime;
 using System.Security.Claims;
+using GZCTF.Models;
+using GZCTF.Models.Data;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Exercise.Application;
 using GZCTF.Modules.Exercise.Contracts;
@@ -86,6 +88,7 @@ public sealed class ExerciseOpenApiController(
                 Hints = item.Hints,
                 IsEnabled = item.IsEnabled,
             };
+            ApplyFlagsAndAttachment(exercise, item.Flags, item.Attachment);
             var created = await managementService.CreateExerciseAsync(exercise, cancellationToken);
             imported.Add(new ExerciseImportResultItem { ExternalId = item.ExternalId, ExerciseId = created.Id, Title = created.Title });
         }
@@ -123,6 +126,7 @@ public sealed class ExerciseOpenApiController(
             ImageTemplateId = model.ImageTemplateId,
             IsEnabled = model.IsEnabled,
         };
+        ApplyFlagsAndAttachment(exercise, model.Flags, model.Attachment);
         var created = await managementService.CreateExerciseAsync(exercise, cancellationToken);
         return CreatedAtAction(nameof(Get), new { exerciseId = created.Id }, toExternalModel(created));
     }
@@ -138,7 +142,7 @@ public sealed class ExerciseOpenApiController(
         CancellationToken cancellationToken = default)
     {
         _ = GetActor();
-        var existing = await exerciseService.GetExerciseByIdAsync(exerciseId, cancellationToken);
+        var existing = await managementService.GetExerciseForUpdateAsync(exerciseId, cancellationToken);
         if (existing is null)
             throw new ExerciseApiContractException(
                 "exercise_not_found", $"Exercise {exerciseId} not found.", 404);
@@ -162,7 +166,7 @@ public sealed class ExerciseOpenApiController(
         existing.ImageTemplateId = model.ImageTemplateId;
         existing.IsEnabled = model.IsEnabled;
 
-        var updated = await managementService.UpdateExerciseAsync(existing, cancellationToken);
+        var updated = await managementService.UpdateExerciseWithRelationsAsync(existing, model.Flags, model.Attachment, cancellationToken);
         return Ok(toExternalModel(updated));
     }
 
@@ -220,7 +224,29 @@ public sealed class ExerciseOpenApiController(
         Environment = exercise.Environment,
         ImageTemplateId = exercise.ImageTemplateId,
         FlagTemplate = exercise.FlagTemplate,
+        Attachment = toAttachmentModel(exercise.Attachment),
+        Flags = (exercise.Flags ?? []).Select(toFlagInfoModel).ToList(),
     };
+
+    private static ExerciseOpenApiFlagInfoModel toFlagInfoModel(FlagContext flag) => new()
+    {
+        Id = flag.Id,
+        Flag = flag.Flag,
+        OrderIndex = flag.OrderIndex,
+        Description = flag.Description,
+        ScoreMode = flag.ScoreMode,
+        FixedScore = flag.FixedScore,
+        MaxAttempts = flag.MaxAttempts,
+        AttachmentHash = flag.AttachmentHash,
+        AnswerType = flag.AnswerType,
+        CustomName = flag.CustomName,
+        Attachment = toAttachmentModel(flag.Attachment),
+    };
+
+    private static ExerciseOpenApiAttachmentModel? toAttachmentModel(Attachment? attachment) =>
+        attachment?.Type == FileType.Remote && !string.IsNullOrEmpty(attachment.RemoteUrl)
+            ? new ExerciseOpenApiAttachmentModel { RemoteUrl = attachment.RemoteUrl }
+            : null;
 
     private static ChallengeCategory[]? ParseCategories(string? value)
     {
@@ -271,8 +297,40 @@ public sealed class ExerciseOpenApiController(
         if (item.Hints is { Count: > 100 } ||
             item.Hints?.Any(hint => hint is null || hint.Length > 4096) == true)
             throw new ExerciseApiContractException("exercise_hints_invalid", "An exercise may contain at most 100 hints of 4,096 characters each.", 422);
+        if (item.Flags is { Count: > 100 })
+            throw new ExerciseApiContractException("exercise_flags_invalid", "An exercise may contain at most 100 flags.", 422);
+        if (item.Flags?.Any(f => string.IsNullOrWhiteSpace(f.Flag) || f.Flag.Length > Limits.MaxFlagLength) == true)
+            throw new ExerciseApiContractException("exercise_flag_content_invalid", $"Each flag must be between 1 and {Limits.MaxFlagLength} characters.", 422);
         return item;
     }
+
+    private static void ApplyFlagsAndAttachment(ExerciseChallenge exercise, List<ExerciseOpenApiFlagModel>? flags, ExerciseOpenApiAttachmentModel? attachment)
+    {
+        if (flags is { Count: > 0 })
+        {
+            exercise.Flags = flags.Select(f => new FlagContext
+            {
+                Flag = f.Flag,
+                OrderIndex = f.OrderIndex,
+                Description = f.Description,
+                ScoreMode = f.ScoreMode,
+                FixedScore = f.FixedScore,
+                MaxAttempts = f.MaxAttempts,
+                AttachmentHash = f.AttachmentHash,
+                AnswerType = f.AnswerType,
+                CustomName = f.CustomName,
+                Attachment = toAttachmentEntity(f.Attachment),
+                Exercise = exercise,
+            }).ToList();
+        }
+
+        if (attachment is not null)
+            exercise.Attachment = toAttachmentEntity(attachment);
+    }
+
+    private static Attachment? toAttachmentEntity(ExerciseOpenApiAttachmentModel? model) => model is null
+        ? null
+        : new Attachment { Type = FileType.Remote, RemoteUrl = model.RemoteUrl };
 
     private (Guid TokenId, Guid ActorUserId) GetActor()
     {

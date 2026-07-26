@@ -1,3 +1,6 @@
+using GZCTF.Models.Data;
+using GZCTF.Modules.Exercise.Contracts;
+
 namespace GZCTF.Modules.Exercise.Application;
 
 public interface IExerciseManagementService
@@ -7,4 +10,11 @@ public interface IExerciseManagementService
     Task RemoveExerciseAsync(int exerciseId, CancellationToken token = default);
     Task<ExerciseChallenge> ImportFromGameChallengeAsync(int gameChallengeId, CancellationToken token = default);
     Task<ExerciseChallenge[]> ImportFromGameAsync(int gameId, int[]? challengeIds = null, CancellationToken token = default);
+
+    Task<ExerciseChallenge?> GetExerciseForUpdateAsync(int exerciseId, CancellationToken token = default);
+    Task<ExerciseChallenge> UpdateExerciseWithRelationsAsync(
+        ExerciseChallenge exercise,
+        List<ExerciseOpenApiFlagModel>? flags,
+        ExerciseOpenApiAttachmentModel? attachment,
+        CancellationToken token = default);
 }
