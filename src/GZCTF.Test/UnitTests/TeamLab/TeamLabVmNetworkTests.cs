@@ -17,6 +17,31 @@ public class TeamLabVmNetworkTests
     }
 
     [Fact]
+    public void BuildVirtInstallBootAndDiskArguments_UsesUefiAndSataForWindows()
+    {
+        var args = KvmService.BuildVirtInstallBootAndDiskArguments(new CreateVmRequest
+        {
+            CloudInit = new VmInitConfig { OsType = VmInitOsType.Windows }
+        }, "/var/lib/gzctf/images/vm1.qcow2");
+
+        Assert.Equal(
+            "--machine q35 --boot uefi --events on_reboot=restart " +
+            "--disk path='/var/lib/gzctf/images/vm1.qcow2',bus=sata",
+            args);
+    }
+
+    [Fact]
+    public void BuildVirtInstallBootAndDiskArguments_PreservesLinuxDefaults()
+    {
+        var args = KvmService.BuildVirtInstallBootAndDiskArguments(new CreateVmRequest
+        {
+            CloudInit = new VmInitConfig { OsType = VmInitOsType.Linux }
+        }, "/var/lib/gzctf/images/vm1.qcow2");
+
+        Assert.Equal("--disk path='/var/lib/gzctf/images/vm1.qcow2'", args);
+    }
+
+    [Fact]
     public void BuildVirtInstallNetworkArguments_UsesTeamLabBridgeAndStableMac()
     {
         var args = KvmService.BuildVirtInstallNetworkArguments(new CreateVmRequest

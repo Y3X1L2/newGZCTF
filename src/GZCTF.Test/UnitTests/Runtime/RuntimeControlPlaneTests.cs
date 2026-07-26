@@ -174,6 +174,47 @@ public sealed class RuntimeControlPlaneTests
     }
 
     [Fact]
+    public async Task CapacityReservation_ExplainsWhyWindowsVmNodesWereRejected()
+    {
+        await using var context = CreateContext();
+        SeedVmNode(context, "local-cloud-init", isLocal: true,
+            [AgentFeatureIds.Kvm, AgentFeatureIds.CloudInit]);
+        SeedVmNode(context, "remote-kvm-only", isLocal: false,
+            [AgentFeatureIds.Kvm]);
+        var lease = new LocalDevelopmentLeaseProvider();
+        var service = new FleetCapacityReservationService(
+            context,
+            lease,
+            new NodeCapacitySnapshotService(context),
+            new NodeEligibilityEvaluator(Options.Create(new RuntimeSchedulingOptions())),
+            NullLogger<FleetCapacityReservationService>.Instance);
+
+        var result = await service.TryReserveAsync(Guid.NewGuid(), new FleetCapacityRequest(
+            NodeCapability.Kvm,
+            DockerSlots: 0,
+            VmSlots: 1,
+            RequiredFeatures: [AgentFeatureIds.Kvm, AgentFeatureIds.CloudInit],
+            RequireRemote: true), CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Contains("remote_node_required=1", result.Message);
+        Assert.Contains("agent_feature_unavailable=1", result.Message);
+    }
+
+    [Fact]
+    public void ExecutionFailure_PreservesSpecificErrorWrittenByRuntimeExecutor()
+    {
+        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.Vm(
+            1, Guid.NewGuid(), 2, Guid.NewGuid()));
+        ticket.Stage = DeploymentStage.Failed;
+        ticket.ErrorMessage = "Windows image is not verified for instance-specific Cloudbase-Init credentials.";
+
+        var message = RuntimeExecutionService.ResolveFailureMessage(ticket, "Queued VM creation failed.");
+
+        Assert.Equal(ticket.ErrorMessage, message);
+    }
+
+    [Fact]
     public async Task ConcurrentSchedulers_DoNotOversellNode()
     {
         var databaseName = Guid.NewGuid().ToString();

@@ -1651,8 +1651,7 @@ public class GameController(
         var vmInstance = await dbContext.VmInstances
             .Where(v => v.ChallengeId == challengeId
                         && v.UserId == context.User!.Id
-                        && v.Status != VmInstanceStatus.Destroyed
-                        && v.Status != VmInstanceStatus.Error)
+                        && v.Status != VmInstanceStatus.Destroyed)
             .OrderByDescending(v => v.CreatedAt)
             .FirstOrDefaultAsync(token);
 
@@ -1757,7 +1756,7 @@ public class GameController(
             return ("ready", "靶机已就绪");
 
         if (vm.Status == VmInstanceStatus.Error)
-            return ("error", "靶机创建失败");
+            return ("error", queue?.ErrorMessage ?? "靶机创建失败");
 
         if (vm.Status == VmInstanceStatus.Running)
             return ("vm-booting", "虚拟机已启动，正在配置远程桌面");

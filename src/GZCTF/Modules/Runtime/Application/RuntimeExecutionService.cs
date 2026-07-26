@@ -222,7 +222,8 @@ public sealed class RuntimeExecutionService(
         else
         {
             var error = RuntimeOperationalEvents.Failure(ticket, "runtime.execute");
-            await MarkFailedAsync(context, capacity, events, ticket, error, token, result.ErrorMessage);
+            var failureMessage = ResolveFailureMessage(ticket, result.ErrorMessage);
+            await MarkFailedAsync(context, capacity, events, ticket, error, token, failureMessage);
             activity?.SetStatus(ActivityStatusCode.Error, error.Code);
             PlatformTelemetry.RecordRuntimeTransition(ticket.Kind.ToString(), ticket.Stage.ToString(), "failed");
             logger.SystemLog(
@@ -233,6 +234,14 @@ public sealed class RuntimeExecutionService(
         await context.SaveChangesAsync(token);
         PlatformTelemetry.RecordRuntimeDuration(
             ticket.Kind.ToString(), ticket.Operation.ToString(), Stopwatch.GetElapsedTime(executionStartedAt));
+    }
+
+    internal static string? ResolveFailureMessage(DeploymentQueueTicket ticket, string? executionError)
+    {
+        if (ticket.Stage == DeploymentStage.Failed && !string.IsNullOrWhiteSpace(ticket.ErrorMessage))
+            return ticket.ErrorMessage;
+
+        return executionError;
     }
 
     async Task FailClaimedTicketAsync(Guid ticketId, string claimOwner, Exception exception, CancellationToken token)
