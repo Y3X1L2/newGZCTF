@@ -12,6 +12,7 @@ public class TeamLabRuntime
     public Guid? CreatedById { get; set; }
     public int Generation { get; set; } = 1;
     [MaxLength(256)] public string? ExternalReference { get; set; }
+    [MaxLength(128)] public string? CreationIdempotencyKey { get; set; }
     [MaxLength(128)] public string CreateRequestHash { get; set; } = string.Empty;
     public int? EntryShardId { get; set; }
     public TeamLabRuntimeStatus Status { get; set; } = TeamLabRuntimeStatus.Pending;

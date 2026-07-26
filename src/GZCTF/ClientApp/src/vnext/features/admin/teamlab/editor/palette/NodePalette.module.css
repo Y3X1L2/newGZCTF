@@ -1,0 +1,106 @@
+.palette {
+  display: flex;
+  z-index: 4;
+  width: 64px;
+  min-width: 64px;
+  min-height: 0;
+  flex-direction: column;
+  border-right: 1px solid var(--yn-color-border);
+  background: var(--yn-color-surface);
+}
+
+.groups {
+  display: grid;
+  min-height: 0;
+  gap: var(--yn-space-2);
+  overflow: visible;
+  padding: var(--yn-space-2);
+}
+
+.groups section + section {
+  padding-top: var(--yn-space-2);
+  border-top: 1px solid var(--yn-color-border);
+}
+
+.item {
+  position: relative;
+  display: grid;
+  width: 46px;
+  height: 46px;
+  margin: 0 0 var(--yn-space-2);
+  place-items: center;
+  border: 0;
+  border-radius: var(--yn-radius-sm);
+  background: transparent;
+  color: var(--yn-color-text-secondary);
+  cursor: grab;
+  transition:
+    background var(--yn-motion-fast) var(--yn-ease-standard),
+    color var(--yn-motion-fast) var(--yn-ease-standard);
+}
+
+.item:hover:not(:disabled),
+.item:focus-visible {
+  outline: none;
+  background: var(--yn-color-brand-soft);
+  color: var(--yn-color-brand-strong);
+}
+
+.item:active:not(:disabled) {
+  cursor: grabbing;
+}
+
+.item:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.tooltip {
+  position: absolute;
+  z-index: 10;
+  top: 50%;
+  left: calc(100% + var(--yn-space-2));
+  display: grid;
+  width: max-content;
+  max-width: 220px;
+  pointer-events: none;
+  gap: 1px;
+  padding: var(--yn-space-2) var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-sm);
+  background: var(--yn-color-surface);
+  box-shadow: var(--yn-shadow-surface);
+  color: var(--yn-color-text);
+  opacity: 0;
+  text-align: left;
+  transform: translate(4px, -50%);
+  transition:
+    opacity var(--yn-motion-fast) var(--yn-ease-standard),
+    transform var(--yn-motion-fast) var(--yn-ease-standard),
+    visibility 0s linear var(--yn-motion-fast);
+  visibility: hidden;
+}
+
+.item:hover .tooltip,
+.item:focus-visible .tooltip {
+  opacity: 1;
+  transform: translate(0, -50%);
+  transition-delay: 180ms, 180ms, 0s;
+  visibility: visible;
+}
+
+.tooltip strong {
+  font-size: var(--yn-font-sm);
+}
+
+.tooltip small {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item,
+  .tooltip {
+    transition: none;
+  }
+}

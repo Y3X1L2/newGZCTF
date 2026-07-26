@@ -39,7 +39,7 @@ function isLogEntry(value: unknown): value is AdminLogEntry {
   )
 }
 
-function parseLogPage(value: unknown, offset: number): AdminLogPage {
+export function parseAdminLogPage(value: unknown, offset = 0): AdminLogPage {
   if (Array.isArray(value) && value.every(isLogEntry)) {
     return { contract: 'offset', items: value, nextCursor: null, offset }
   }
@@ -70,7 +70,7 @@ export function createAdminLogApi(client: RuntimeJsonClient = runtimeJsonClient)
         resourceType: query.resourceType,
         resourceId: query.resourceId,
       })
-      return parseLogPage(value, offset)
+      return parseAdminLogPage(value, offset)
     },
   }
 }

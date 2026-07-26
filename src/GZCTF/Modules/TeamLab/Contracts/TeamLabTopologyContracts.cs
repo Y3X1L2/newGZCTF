@@ -67,7 +67,8 @@ public sealed record TeamLabEditorItemModel(
 
 public sealed record TeamLabTopologyEditorModel(
     IReadOnlyDictionary<string, TeamLabEditorItemModel> Networks,
-    IReadOnlyDictionary<string, TeamLabEditorItemModel> Assets);
+    IReadOnlyDictionary<string, TeamLabEditorItemModel> Assets,
+    IReadOnlyDictionary<string, TeamLabEditorItemModel>? Infrastructure = null);
 
 public sealed record CreateTeamLabTopologyModel(
     string Name,

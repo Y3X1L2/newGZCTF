@@ -36,11 +36,13 @@ public sealed class TeamLabRuntimeOrchestrator(
         Guid actorUserId,
         Guid runtimeOwnerUserId,
         string requestHash,
+        string? creationIdempotencyKey,
         Guid? operationId,
         string? subjectDisplayName,
         CancellationToken cancellationToken)
     {
-        var result = await planner.CreateAsync(command, runtimeOwnerUserId, requestHash, cancellationToken);
+        var result = await planner.CreateAsync(
+            command, runtimeOwnerUserId, requestHash, creationIdempotencyKey, cancellationToken);
         if (result.Reused) return result;
         var runtime = await context.TeamLabRuntimes.AsNoTracking()
             .Include(item => item.Assets)

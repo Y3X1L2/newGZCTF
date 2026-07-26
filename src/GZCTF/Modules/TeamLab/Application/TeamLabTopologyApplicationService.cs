@@ -37,7 +37,13 @@ public sealed class TeamLabTopologyApplicationService(
         CreateTeamLabTopologyModel model,
         Guid actorUserId,
         CancellationToken cancellationToken) =>
-        await CreateCoreAsync(model, actorUserId, null, cancellationToken);
+        await CreateCoreAsync(model, actorUserId, null, true, cancellationToken);
+
+    public async Task<TeamLabTopologyDetailModel> CreateDraftAsync(
+        CreateTeamLabTopologyModel model,
+        Guid actorUserId,
+        CancellationToken cancellationToken) =>
+        await CreateCoreAsync(model, actorUserId, null, false, cancellationToken);
 
     public async Task<TeamLabTopologyDetailModel> CreateForOperationAsync(
         CreateTeamLabTopologyModel model,
@@ -52,19 +58,21 @@ public sealed class TeamLabTopologyApplicationService(
             .SingleOrDefaultAsync(item => item.CreatedByOperationId == operationId, cancellationToken);
         return existing is not null
             ? ToDetail(existing)
-            : await CreateCoreAsync(model, actorUserId, operationId, cancellationToken);
+            : await CreateCoreAsync(model, actorUserId, operationId, true, cancellationToken);
     }
 
     private async Task<TeamLabTopologyDetailModel> CreateCoreAsync(
         CreateTeamLabTopologyModel model,
         Guid actorUserId,
         Guid? operationId,
+        bool requireValid,
         CancellationToken cancellationToken)
     {
         var definition = TeamLabReleaseCodec.Normalize(new TeamLabTopologyDefinitionModel(
             model.Name, model.Networks, model.Assets, model.Connections,
             model.Infrastructure, model.Dependencies, model.Observation));
-        await RequireValidAsync(definition, model.SchemaVersion, cancellationToken);
+        if (requireValid)
+            await RequireValidAsync(definition, model.SchemaVersion, cancellationToken);
         var topology = BuildTopology(definition, model.SchemaVersion, actorUserId);
         topology.CreatedByOperationId = operationId;
         topology.LastMutationOperationId = operationId;
@@ -129,7 +137,15 @@ public sealed class TeamLabTopologyApplicationService(
         Guid actorUserId,
         bool includeAll,
         CancellationToken cancellationToken) =>
-        await UpdateCoreAsync(topologyId, model, actorUserId, includeAll, null, cancellationToken);
+        await UpdateCoreAsync(topologyId, model, actorUserId, includeAll, null, true, cancellationToken);
+
+    public async Task<TeamLabTopologyDetailModel> UpdateDraftAsync(
+        Guid topologyId,
+        UpdateTeamLabTopologyModel model,
+        Guid actorUserId,
+        bool includeAll,
+        CancellationToken cancellationToken) =>
+        await UpdateCoreAsync(topologyId, model, actorUserId, includeAll, null, false, cancellationToken);
 
     public async Task<TeamLabTopologyDetailModel> UpdateForOperationAsync(
         Guid topologyId,
@@ -144,7 +160,7 @@ public sealed class TeamLabTopologyApplicationService(
                               (includeAll || item.OwnerUserId == actorUserId), cancellationToken);
         return alreadyApplied
             ? await GetAsync(topologyId, actorUserId, includeAll, cancellationToken)
-            : await UpdateCoreAsync(topologyId, model, actorUserId, includeAll, operationId, cancellationToken);
+            : await UpdateCoreAsync(topologyId, model, actorUserId, includeAll, operationId, true, cancellationToken);
     }
 
     private async Task<TeamLabTopologyDetailModel> UpdateCoreAsync(
@@ -153,12 +169,14 @@ public sealed class TeamLabTopologyApplicationService(
         Guid actorUserId,
         bool includeAll,
         Guid? operationId,
+        bool requireValid,
         CancellationToken cancellationToken)
     {
         var definition = TeamLabReleaseCodec.Normalize(new TeamLabTopologyDefinitionModel(
             model.Name, model.Networks, model.Assets, model.Connections,
             model.Infrastructure, model.Dependencies, model.Observation));
-        await RequireValidAsync(definition, model.SchemaVersion, cancellationToken);
+        if (requireValid)
+            await RequireValidAsync(definition, model.SchemaVersion, cancellationToken);
         var identity = await context.TeamLabTopologies.AsNoTracking()
             .Where(item => item.PublicId == topologyId && (includeAll || item.OwnerUserId == actorUserId))
             .Select(item => new { item.Id, item.Revision })
@@ -690,9 +708,13 @@ public sealed class TeamLabTopologyApplicationService(
     {
         var networkKeys = definition.Networks.Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
         var assetKeys = definition.Assets.Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
+        var infrastructureKeys = (definition.Infrastructure ?? [])
+            .Select(item => item.Key)
+            .ToHashSet(StringComparer.Ordinal);
         return new TeamLabTopologyEditorModel(
             NormalizeEditorItems(editor?.Networks, networkKeys),
-            NormalizeEditorItems(editor?.Assets, assetKeys));
+            NormalizeEditorItems(editor?.Assets, assetKeys),
+            NormalizeEditorItems(editor?.Infrastructure, infrastructureKeys));
     }
 
     private static IReadOnlyDictionary<string, TeamLabEditorItemModel> NormalizeEditorItems(
@@ -726,11 +748,13 @@ public sealed class TeamLabTopologyApplicationService(
         {
             return JsonSerializer.Deserialize<TeamLabTopologyEditorModel>(json)
                    ?? new TeamLabTopologyEditorModel(new Dictionary<string, TeamLabEditorItemModel>(),
+                       new Dictionary<string, TeamLabEditorItemModel>(),
                        new Dictionary<string, TeamLabEditorItemModel>());
         }
         catch (JsonException)
         {
             return new TeamLabTopologyEditorModel(new Dictionary<string, TeamLabEditorItemModel>(),
+                new Dictionary<string, TeamLabEditorItemModel>(),
                 new Dictionary<string, TeamLabEditorItemModel>());
         }
     }

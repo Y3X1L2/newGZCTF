@@ -117,8 +117,7 @@ for (const path of sourceFiles) {
 
   if (
     file === 'src/styles/YinyuDesignLab.css' ||
-    file === 'src/styles/YinyuTheme.css' ||
-    file === 'src/styles/YinyuRefinement.css'
+    file === 'src/styles/YinyuTheme.css'
   ) {
     globalCssLines += content.split(/\r?\n/).length
   }

@@ -35,7 +35,8 @@ public sealed class PenetrationGameLabBindingEntityConfiguration : IEntityTypeCo
     {
         builder.ToTable("PenetrationGameLabBindings");
         builder.HasKey(item => item.GameId);
-        builder.HasIndex(item => item.TopologyId).IsUnique();
+        builder.Property(item => item.ObjectiveRevision).IsConcurrencyToken();
+        builder.HasIndex(item => item.TopologyId);
         builder.HasOne<Game>()
             .WithOne()
             .HasForeignKey<PenetrationGameLabBinding>(item => item.GameId)
@@ -48,6 +49,10 @@ public sealed class PenetrationGameLabBindingEntityConfiguration : IEntityTypeCo
             .WithMany()
             .HasForeignKey(item => item.ActiveReleaseId)
             .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<TeamLabRollout>()
+            .WithMany()
+            .HasForeignKey(item => item.ActiveRolloutId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }
 

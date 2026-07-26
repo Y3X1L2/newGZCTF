@@ -1,0 +1,523 @@
+.page {
+  display: grid;
+  min-width: 0;
+  gap: var(--yn-space-6);
+  padding: var(--yn-space-6) var(--yn-page-gutter) var(--yn-space-8);
+}
+
+.headerActions,
+.sectionHeader,
+.sectionHeader > div,
+.releaseControl,
+.releaseFacts,
+.releaseFacts > span,
+.controlActions,
+.countLegend,
+.countLegend > span,
+.drawerActions,
+.runtimeLink,
+.notPrepared {
+  display: flex;
+  align-items: center;
+}
+
+.headerActions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--yn-space-3);
+}
+
+.releaseSection,
+.objectiveSection,
+.controlSection,
+.summary,
+.targetsSection {
+  min-width: 0;
+  padding-bottom: var(--yn-space-6);
+  border-bottom: 1px solid var(--yn-color-border);
+}
+
+.sectionHeader {
+  justify-content: space-between;
+  gap: var(--yn-space-4);
+  margin-bottom: var(--yn-space-4);
+}
+
+.sectionHeader > div {
+  display: block;
+  min-width: 0;
+}
+
+.sectionHeader span {
+  color: var(--yn-color-muted);
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+}
+
+.sectionHeader h2 {
+  margin: 4px 0 0;
+  font-size: var(--yn-font-lg);
+}
+
+.sectionHeader > code {
+  max-width: min(420px, 42vw);
+  overflow: hidden;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.releaseControl {
+  align-items: end;
+  gap: var(--yn-space-3);
+}
+
+.releaseControl label {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 6px;
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-sm);
+}
+
+.releaseControl select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: 4px;
+  background: var(--yn-color-surface);
+  color: var(--yn-color-text);
+  font: inherit;
+}
+
+.releaseControl select:focus {
+  border-color: var(--yn-color-brand);
+  outline: 2px solid color-mix(in srgb, var(--yn-color-brand) 18%, transparent);
+}
+
+.releaseFacts {
+  flex-wrap: wrap;
+  gap: var(--yn-space-4);
+  margin-top: var(--yn-space-3);
+  padding: var(--yn-space-3) 0;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-sm);
+}
+
+.releaseFacts > span:first-child {
+  gap: var(--yn-space-2);
+  color: var(--yn-color-text);
+}
+
+.releaseFacts time {
+  margin-left: auto;
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+}
+
+.warningText {
+  margin: var(--yn-space-2) 0 0;
+  color: var(--yn-color-warning);
+  font-size: var(--yn-font-sm);
+}
+
+.objectiveHeaderActions,
+.objectiveSettings,
+.objectiveTotal,
+.objectiveRow,
+.objectiveIdentity > span,
+.objectiveFacts,
+.objectiveRowActions {
+  display: flex;
+  align-items: center;
+}
+
+.objectiveHeaderActions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--yn-space-2);
+}
+
+.unsavedMark {
+  color: var(--yn-color-warning) !important;
+  font-family: var(--yn-font-sans) !important;
+  font-weight: 650;
+}
+
+.objectiveSettings {
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--yn-space-5);
+  margin: var(--yn-space-4) 0;
+}
+
+.objectiveSettings > label {
+  width: min(260px, 100%);
+}
+
+.objectiveTotal {
+  min-height: 42px;
+  gap: 7px;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-sm);
+}
+
+.objectiveTotal svg {
+  margin-right: 2px;
+  color: var(--yn-color-brand-strong);
+}
+
+.objectiveTotal strong {
+  color: var(--yn-color-text);
+  font-family: var(--yn-font-mono);
+}
+
+.objectiveList {
+  display: grid;
+  border-top: 1px solid var(--yn-color-border);
+}
+
+.objectiveRow {
+  min-width: 0;
+  gap: var(--yn-space-3);
+  padding: var(--yn-space-3) 0;
+  border-bottom: 1px solid var(--yn-color-border);
+}
+
+.objectiveOrder {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-sm);
+  color: var(--yn-color-muted);
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+}
+
+.objectiveIdentity {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 5px;
+}
+
+.objectiveIdentity > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.objectiveIdentity > span {
+  min-width: 0;
+  gap: var(--yn-space-2);
+  overflow: hidden;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.objectiveIdentity code,
+.objectiveIdentity > span > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.objectiveIdentity code {
+  color: var(--yn-color-text-secondary);
+  font-family: var(--yn-font-mono);
+}
+
+.objectiveFacts {
+  width: 170px;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 7px;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.objectiveFacts strong {
+  color: var(--yn-color-text);
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-base);
+}
+
+.objectiveFacts small {
+  padding-left: 7px;
+  border-left: 1px solid var(--yn-color-border);
+}
+
+.objectiveRowActions {
+  width: 132px;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.objectiveRowActions button {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--yn-radius-sm);
+  background: transparent;
+  color: var(--yn-color-muted);
+  cursor: pointer;
+  transition:
+    color var(--yn-motion-fast) var(--yn-ease-standard),
+    background-color var(--yn-motion-fast) var(--yn-ease-standard);
+}
+
+.objectiveRowActions button:hover:not(:disabled) {
+  background: var(--yn-color-surface-muted);
+  color: var(--yn-color-text);
+}
+
+.objectiveRowActions button:last-child:hover:not(:disabled) {
+  color: var(--yn-color-danger);
+}
+
+.objectiveRowActions button:focus-visible {
+  outline: none;
+  box-shadow: var(--yn-shadow-focus);
+}
+
+.objectiveRowActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.objectiveEmpty {
+  display: grid;
+  min-height: 120px;
+  place-items: center;
+  align-content: center;
+  gap: var(--yn-space-2);
+  border-block: 1px solid var(--yn-color-border);
+  color: var(--yn-color-muted);
+}
+
+.objectiveForm {
+  display: grid;
+  gap: var(--yn-space-5);
+}
+
+.objectiveFormGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yn-space-4);
+}
+
+.objectiveFormGrid:has(> :nth-child(3)) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.objectiveToggleGroup {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--yn-space-4);
+  border-block: 1px solid var(--yn-color-border);
+}
+
+.prerequisiteFieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.prerequisiteFieldset legend {
+  margin-bottom: var(--yn-space-3);
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-sm);
+  font-weight: 680;
+}
+
+.prerequisiteList {
+  display: grid;
+  max-height: 240px;
+  overflow-y: auto;
+  border-top: 1px solid var(--yn-color-border);
+}
+
+.prerequisiteList label {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--yn-space-2);
+  min-height: 42px;
+  border-bottom: 1px solid var(--yn-color-border);
+  cursor: pointer;
+}
+
+.prerequisiteList code {
+  max-width: 160px;
+  overflow: hidden;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.objectiveMuted {
+  margin: 0;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-sm);
+}
+
+.controlActions {
+  flex-wrap: wrap;
+  gap: var(--yn-space-2);
+}
+
+.countLegend {
+  flex-wrap: wrap;
+  gap: var(--yn-space-3);
+  padding-top: var(--yn-space-3);
+  color: var(--yn-color-muted);
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+}
+
+.countLegend > span {
+  gap: 5px;
+}
+
+.identityCell {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.identityCell code,
+.identityCell small {
+  overflow: hidden;
+  color: var(--yn-color-muted);
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawerActions {
+  width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--yn-space-2);
+}
+
+.targetDetail {
+  display: grid;
+  gap: var(--yn-space-4);
+}
+
+.targetDetail dl {
+  display: grid;
+  margin: 0;
+  border-top: 1px solid var(--yn-color-border);
+}
+
+.targetDetail dl > div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: var(--yn-space-3);
+  padding: var(--yn-space-3) 0;
+  border-bottom: 1px solid var(--yn-color-border);
+}
+
+.targetDetail dt {
+  color: var(--yn-color-muted);
+}
+
+.targetDetail dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.runtimeLink {
+  width: fit-content;
+  gap: var(--yn-space-2);
+  color: var(--yn-color-brand-strong);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.runtimeLink:hover {
+  color: var(--yn-color-brand);
+}
+
+.notPrepared {
+  min-width: 0;
+  justify-content: center;
+  gap: var(--yn-space-3);
+  color: var(--yn-color-muted);
+}
+
+.notPrepared > div {
+  flex: 1;
+}
+
+@media (max-width: 720px) {
+  .page {
+    padding-top: var(--yn-space-5);
+  }
+
+  .headerActions,
+  .releaseControl,
+  .sectionHeader,
+  .objectiveSettings {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .objectiveHeaderActions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .objectiveHeaderActions > button {
+    flex: 1;
+  }
+
+  .objectiveRow {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  .objectiveFacts,
+  .objectiveRowActions {
+    width: auto;
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .objectiveFormGrid,
+  .objectiveFormGrid:has(> :nth-child(3)),
+  .objectiveToggleGroup {
+    grid-template-columns: 1fr;
+  }
+
+  .releaseControl > button,
+  .controlActions > button {
+    width: 100%;
+  }
+
+  .releaseFacts time {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .sectionHeader > code {
+    max-width: 100%;
+  }
+}

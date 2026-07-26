@@ -7,6 +7,7 @@ using System.Diagnostics;
 using GZCTF.Infrastructure.Telemetry;
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
@@ -24,6 +25,7 @@ public sealed class TeamLabRuntimePlanner(
         CreateTeamLabRuntimeModel command,
         Guid runtimeOwnerUserId,
         string requestHash,
+        string? creationIdempotencyKey,
         CancellationToken cancellationToken)
     {
         var release = await context.TeamLabTopologyReleases.AsNoTracking()
@@ -35,6 +37,23 @@ public sealed class TeamLabRuntimePlanner(
                 "insufficient_permission",
                 "The topology release is not owned by the runtime owner.",
                 403);
+
+        var normalizedIdempotencyKey = string.IsNullOrWhiteSpace(creationIdempotencyKey)
+            ? null
+            : ExternalIdempotencyKey.Normalize(creationIdempotencyKey);
+        if (normalizedIdempotencyKey is not null)
+        {
+            var existing = await context.TeamLabRuntimes.AsNoTracking()
+                .SingleOrDefaultAsync(item => item.CreatedById == runtimeOwnerUserId &&
+                                              item.CreationIdempotencyKey == normalizedIdempotencyKey,
+                    cancellationToken);
+            if (existing is not null)
+            {
+                if (!string.Equals(existing.CreateRequestHash, requestHash, StringComparison.Ordinal))
+                    throw new IdempotencyConflictException();
+                return new TeamLabRuntimeCreateResult(existing.Id, existing.PublicId, true);
+            }
+        }
 
         var externalReference = NormalizeExternalReference(command.ExternalReference);
         if (externalReference is not null)
@@ -64,6 +83,7 @@ public sealed class TeamLabRuntimePlanner(
             release,
             runtimeOwnerUserId,
             externalReference,
+            normalizedIdempotencyKey,
             requestHash,
             command.Overlays,
             isScenarioBuild: false,
@@ -110,6 +130,7 @@ public sealed class TeamLabRuntimePlanner(
             release,
             actorUserId,
             normalizedReference,
+            null,
             requestHash,
             scenarioOverlays,
             isScenarioBuild: true,
@@ -121,6 +142,7 @@ public sealed class TeamLabRuntimePlanner(
         TeamLabTopologyRelease release,
         Guid runtimeOwnerUserId,
         string? externalReference,
+        string? creationIdempotencyKey,
         string requestHash,
         IReadOnlyList<TeamLabRuntimeOverlayModel>? runtimeOverlays,
         bool isScenarioBuild,
@@ -144,6 +166,7 @@ public sealed class TeamLabRuntimePlanner(
                 TopologyReleaseId = release.Id,
                 CreatedById = runtimeOwnerUserId,
                 ExternalReference = externalReference,
+                CreationIdempotencyKey = creationIdempotencyKey,
                 CreateRequestHash = requestHash,
                 Generation = 1,
                 Status = TeamLabRuntimeStatus.Planning,
@@ -170,6 +193,23 @@ public sealed class TeamLabRuntimePlanner(
         {
             throw new TeamLabApiContractException(
                 "address_pool_exhausted", "Concurrent address allocation exhausted an address pool.", 409);
+        }
+        catch (DbUpdateException exception) when (
+            creationIdempotencyKey is not null &&
+            exception.InnerException is PostgresException idempotencyPostgres &&
+            idempotencyPostgres.SqlState == PostgresErrorCodes.UniqueViolation &&
+            idempotencyPostgres.ConstraintName?.Contains(
+                "CreationIdempotencyKey", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            context.ChangeTracker.Clear();
+            var existing = await context.TeamLabRuntimes.AsNoTracking()
+                .SingleOrDefaultAsync(item => item.CreatedById == runtimeOwnerUserId &&
+                                              item.CreationIdempotencyKey == creationIdempotencyKey,
+                    cancellationToken);
+            if (existing is null) throw;
+            if (!string.Equals(existing.CreateRequestHash, requestHash, StringComparison.Ordinal))
+                throw new IdempotencyConflictException();
+            return new TeamLabRuntimeCreateResult(existing.Id, existing.PublicId, true);
         }
         catch (DbUpdateException exception) when (
             externalReference is not null &&

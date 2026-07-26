@@ -151,6 +151,8 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TeamLabTrafficCaptureJob> TeamLabTrafficCaptureJobs => Set<TeamLabTrafficCaptureJob>();
     public DbSet<TeamLabTrafficCaptureSegment> TeamLabTrafficCaptureSegments => Set<TeamLabTrafficCaptureSegment>();
     public DbSet<TeamLabAccessGrant> TeamLabAccessGrants => Set<TeamLabAccessGrant>();
+    public DbSet<TeamLabRollout> TeamLabRollouts => Set<TeamLabRollout>();
+    public DbSet<TeamLabRolloutTarget> TeamLabRolloutTargets => Set<TeamLabRolloutTarget>();
     public DbSet<TeamLabRuntimeSecretEnvelope> TeamLabRuntimeSecretEnvelopes => Set<TeamLabRuntimeSecretEnvelope>();
     public DbSet<TeamLabTopologyEntity> TeamLabTopologies => Set<TeamLabTopologyEntity>();
     public DbSet<TeamLabTopologyNetworkEntity> TeamLabTopologyNetworks => Set<TeamLabTopologyNetworkEntity>();

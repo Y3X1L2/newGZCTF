@@ -9,6 +9,7 @@ public interface ITeamLabRuntimeApplicationService
         Guid actorUserId,
         Guid runtimeOwnerUserId,
         string requestHash,
+        string? creationIdempotencyKey,
         Guid? operationId,
         string? subjectDisplayName,
         CancellationToken cancellationToken);

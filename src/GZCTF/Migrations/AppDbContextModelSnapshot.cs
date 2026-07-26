@@ -1982,16 +1982,16 @@ namespace GZCTF.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("RuntimeId");
-
                     b.HasIndex("OperationId")
                         .IsUnique();
+
+                    b.HasIndex("RuntimeId");
+
+                    b.HasIndex("UserId");
 
                     b.HasIndex("RuntimeId", "TargetGeneration")
                         .IsUnique()
                         .HasFilter("\"Status\" IN (0, 1)");
-
-                    b.HasIndex("UserId");
 
                     b.ToTable("PenetrationResetRecords");
                 });
@@ -4835,11 +4835,18 @@ namespace GZCTF.Migrations
                     b.Property<Guid?>("ActiveReleaseId")
                         .HasColumnType("uuid");
 
+                    b.Property<int?>("ActiveRolloutId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("MaxResetCount")
                         .HasColumnType("integer");
+
+                    b.Property<long>("ObjectiveRevision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
 
                     b.Property<int>("TopologyId")
                         .HasColumnType("integer");
@@ -4851,8 +4858,9 @@ namespace GZCTF.Migrations
 
                     b.HasIndex("ActiveReleaseId");
 
-                    b.HasIndex("TopologyId")
-                        .IsUnique();
+                    b.HasIndex("ActiveRolloutId");
+
+                    b.HasIndex("TopologyId");
 
                     b.ToTable("PenetrationGameLabBindings", (string)null);
                 });
@@ -5580,6 +5588,10 @@ namespace GZCTF.Migrations
                     b.Property<Guid?>("CreatedById")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CreationIdempotencyKey")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<int?>("EntryShardId")
                         .HasColumnType("integer");
 
@@ -5620,6 +5632,10 @@ namespace GZCTF.Migrations
                         .IsUnique();
 
                     b.HasIndex("TopologyReleaseId");
+
+                    b.HasIndex("CreatedById", "CreationIdempotencyKey")
+                        .IsUnique()
+                        .HasFilter("\"CreationIdempotencyKey\" IS NOT NULL");
 
                     b.HasIndex("CreatedById", "ExternalReference")
                         .IsUnique()
@@ -6414,6 +6430,156 @@ namespace GZCTF.Migrations
                         .IsUnique();
 
                     b.ToTable("TeamLabReleaseAssetArtifacts", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabRollout", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset?>("AccessOpenedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AdapterKind")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("DesiredAccessOpen")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("DrainRequested")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("DrainingAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExternalReference")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("PreparationRequested")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("PreparedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ReleaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<byte>("Status")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("ReleaseId");
+
+                    b.HasIndex("Status", "UpdatedAt");
+
+                    b.HasIndex("AdapterKind", "ExternalReference", "ReleaseId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" <> 5");
+
+                    b.ToTable("TeamLabRollouts", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabRolloutTarget", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("DestroyedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("ExternalSubject")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<Guid?>("LastOperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ReadyAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RolloutId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("RuntimeId")
+                        .HasColumnType("integer");
+
+                    b.Property<byte>("Status")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("RuntimeId")
+                        .IsUnique()
+                        .HasFilter("\"RuntimeId\" IS NOT NULL");
+
+                    b.HasIndex("RolloutId", "ExternalSubject")
+                        .IsUnique();
+
+                    b.HasIndex("RolloutId", "Status", "Id");
+
+                    b.ToTable("TeamLabRolloutTargets", (string)null);
                 });
 
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabRuntimeOperationJob", b =>
@@ -9098,6 +9264,11 @@ namespace GZCTF.Migrations
                         .HasForeignKey("ActiveReleaseId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.TeamLabRollout", null)
+                        .WithMany()
+                        .HasForeignKey("ActiveRolloutId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("GZCTF.Models.Data.Game", null)
                         .WithOne()
                         .HasForeignKey("GZCTF.Modules.Penetration.Domain.PenetrationGameLabBinding", "GameId")
@@ -9576,6 +9747,35 @@ namespace GZCTF.Migrations
                     b.Navigation("ScenarioImageTemplate");
 
                     b.Navigation("SourceImageTemplate");
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabRollout", b =>
+                {
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.TeamLabTopologyRelease", "Release")
+                        .WithMany()
+                        .HasForeignKey("ReleaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Release");
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabRolloutTarget", b =>
+                {
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.TeamLabRollout", "Rollout")
+                        .WithMany("Targets")
+                        .HasForeignKey("RolloutId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntime", "Runtime")
+                        .WithMany()
+                        .HasForeignKey("RuntimeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Rollout");
+
+                    b.Navigation("Runtime");
                 });
 
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabRuntimeOperationJob", b =>
@@ -10139,6 +10339,11 @@ namespace GZCTF.Migrations
                     b.Navigation("Assets");
 
                     b.Navigation("Networks");
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabRollout", b =>
+                {
+                    b.Navigation("Targets");
                 });
 
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabTopology", b =>

@@ -33,6 +33,25 @@ public sealed class TeamLabAccessGrantService(
     public async Task<TeamLabAccessGrantModel> CreateAsync(Guid runtimePublicId, CancellationToken cancellationToken)
         => await CreateCoreAsync(runtimePublicId, null, cancellationToken);
 
+    public async Task<IReadOnlyList<TeamLabAccessGrantModel>> ListAsync(
+        Guid runtimePublicId,
+        CancellationToken cancellationToken)
+    {
+        var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        return runtime.AccessGrants
+            .Where(item => item.Generation == runtime.Generation && !item.Revoked && item.ExpiresAt > now)
+            .OrderByDescending(item => item.CreatedAt)
+            .Select(item =>
+            {
+                var token = item.ConfigurationConsumedAt is null && !string.IsNullOrWhiteSpace(item.ProtectedDownloadToken)
+                    ? _protector.Unprotect(item.ProtectedDownloadToken)
+                    : null;
+                return ToModel(runtime, item, token is null ? null : DownloadUrl(runtime, item, token));
+            })
+            .ToArray();
+    }
+
     public async Task<TeamLabAccessGrantModel> CreateForOperationAsync(
         Guid runtimePublicId,
         Guid operationId,
@@ -216,6 +235,17 @@ public sealed class TeamLabAccessGrantService(
             "WireGuard access grant revoked.",
             workerNodeId: entryShard.WorkerNodeId);
         await context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task RevokeAllAsync(Guid runtimePublicId, CancellationToken cancellationToken)
+    {
+        var grantIds = await context.TeamLabAccessGrants.AsNoTracking()
+            .Where(item => item.Runtime.PublicId == runtimePublicId &&
+                           item.Generation == item.Runtime.Generation && !item.Revoked)
+            .Select(item => item.PublicId)
+            .ToArrayAsync(cancellationToken);
+        foreach (var grantId in grantIds)
+            await RevokeAsync(runtimePublicId, grantId, cancellationToken);
     }
 
     private async Task<TeamLabRuntime> LoadRuntimeAsync(Guid runtimePublicId, CancellationToken cancellationToken) =>

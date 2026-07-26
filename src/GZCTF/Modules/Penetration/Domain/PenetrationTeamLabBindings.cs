@@ -28,7 +28,9 @@ public sealed class PenetrationGameLabBinding
     public int GameId { get; set; }
     public int TopologyId { get; set; }
     public Guid? ActiveReleaseId { get; set; }
+    public int? ActiveRolloutId { get; set; }
     public int MaxResetCount { get; set; } = 3;
+    public long ObjectiveRevision { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

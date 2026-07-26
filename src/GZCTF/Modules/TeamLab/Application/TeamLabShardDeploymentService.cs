@@ -175,6 +175,8 @@ public sealed class TeamLabShardDeploymentService(
                     $"{item.Node.Key}: {item.Message}")));
         }
 
+        await VerifyRuntimeInventoryAsync(runtimeAssets, cancellationToken);
+
         runtime.Status = TeamLabRuntimeStatus.Probing;
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(cancellationToken);
@@ -186,6 +188,46 @@ public sealed class TeamLabShardDeploymentService(
             OperationalEventOutcome.Succeeded,
             "Runtime asset probes completed successfully.");
         await context.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task VerifyRuntimeInventoryAsync(
+        IReadOnlyCollection<TeamLabRuntimeAsset> assets,
+        CancellationToken cancellationToken)
+    {
+        var nodeAssets = assets
+            .Where(item => item.WorkerNodeId.HasValue && !string.IsNullOrWhiteSpace(item.RuntimeResourceId))
+            .GroupBy(item => item.WorkerNodeId!.Value)
+            .ToArray();
+        var snapshots = await Task.WhenAll(nodeAssets.Select(async group =>
+            (Assets: group.ToArray(), Inventory: await executor.GetRuntimeInventoryAsync(group.Key, cancellationToken))));
+        var failures = new List<string>();
+
+        foreach (var snapshot in snapshots)
+        foreach (var asset in snapshot.Assets)
+        {
+            var actual = asset.Kind == TeamLabResourceKind.Docker
+                ? snapshot.Inventory.Containers.FirstOrDefault(item =>
+                    item.NativeId.Equals(asset.RuntimeResourceId, StringComparison.Ordinal))
+                : snapshot.Inventory.Vms.FirstOrDefault(item =>
+                    item.StableName.Equals(asset.RuntimeResourceId, StringComparison.Ordinal));
+            if (actual is null)
+            {
+                failures.Add($"{asset.TopologyKey}: runtime resource is missing from node inventory");
+                continue;
+            }
+            if (actual.Generation != asset.Generation)
+            {
+                failures.Add(
+                    $"{asset.TopologyKey}: generation {actual.Generation} does not match {asset.Generation}");
+                continue;
+            }
+            if (!actual.State.Equals("running", StringComparison.OrdinalIgnoreCase))
+                failures.Add($"{asset.TopologyKey}: runtime resource state is {actual.State}");
+        }
+
+        if (failures.Count > 0)
+            throw new TeamLabRuntimeExecutionException(
+                $"Runtime inventory validation failed: {string.Join("; ", failures)}");
     }
 
     async Task PrepareImageAsync(

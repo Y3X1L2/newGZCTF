@@ -1,0 +1,40 @@
+.edge {
+  fill: none;
+  stroke: var(--yn-color-border-strong);
+  stroke-width: 2;
+  transition:
+    stroke var(--yn-motion-fast) var(--yn-ease-standard),
+    stroke-width var(--yn-motion-fast) var(--yn-ease-standard);
+}
+
+.network {
+  stroke: var(--yn-color-brand-strong);
+}
+
+.dependency {
+  stroke: var(--yn-color-warning);
+  stroke-dasharray: 7 5;
+}
+
+.traffic {
+  pointer-events: none;
+  stroke: var(--yn-color-info);
+  stroke-dasharray: 4 4;
+  stroke-width: 3;
+}
+
+.selected {
+  stroke: var(--yn-color-info);
+  stroke-width: 3;
+}
+
+.label {
+  fill: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-xs);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edge {
+    transition: none;
+  }
+}

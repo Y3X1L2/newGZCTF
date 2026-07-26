@@ -330,8 +330,11 @@ export function VNextDrawer({
         }`}
         onAnimationEnd={(event) => {
           if (event.currentTarget !== event.target) return
+          if (closeRequestedRef.current) {
+            finishClose()
+            return
+          }
           if (drawerState === 'opening') setDrawerState('open')
-          if (drawerState === 'closing') finishClose()
         }}
       >
         <header className={styles.dialogHeader}>

@@ -103,6 +103,9 @@ public class ImageDistributionService(
     public Task ReleaseTeamLabRuntimeReferencesAsync(int runtimeId, CancellationToken token) =>
         ReleaseReferenceAsync(ImageDistributionReferenceKey.TeamLabRuntime(runtimeId), token);
 
+    public Task ReleaseTeamLabRolloutReferencesAsync(int rolloutId, CancellationToken token) =>
+        ReleaseReferenceAsync(ImageDistributionReferenceKey.TeamLabRollout(rolloutId), token);
+
     public async Task CleanupUnreferencedAsync(CancellationToken token)
     {
         await ReconcileReferencesAsync(token);
@@ -156,6 +159,11 @@ public class ImageDistributionService(
             .Select(reference => reference.ResourceId)
             .Distinct()
             .ToArray();
+        var rolloutIds = records.SelectMany(record => record.References)
+            .Where(reference => reference.Kind == ImageDistributionReferenceKind.TeamLabRollout)
+            .Select(reference => reference.ResourceId)
+            .Distinct()
+            .ToArray();
 
         var gameReferences = (await context.GameChallenges.AsNoTracking()
                 .Where(challenge => gameIds.Contains(challenge.GameId) && challenge.ImageTemplateId.HasValue)
@@ -186,6 +194,11 @@ public class ImageDistributionService(
             .Distinct()
             .ToArrayAsync(token);
         var activeCertificationTemplateSet = activeCertificationTemplates.ToHashSet();
+        var activeRolloutIds = await context.TeamLabRollouts.AsNoTracking()
+            .Where(rollout => rolloutIds.Contains(rollout.Id) &&
+                              rollout.Status != TeamLabRolloutStatus.Completed)
+            .Select(rollout => rollout.Id)
+            .ToHashSetAsync(token);
         foreach (var record in records)
         {
             var invalidReferences = record.References.Where(reference => reference.Kind switch
@@ -199,6 +212,8 @@ public class ImageDistributionService(
                 ImageDistributionReferenceKind.ImageCertification =>
                     reference.ResourceId != record.ImageTemplateId ||
                     !activeCertificationTemplateSet.Contains(reference.ResourceId),
+                ImageDistributionReferenceKind.TeamLabRollout =>
+                    !activeRolloutIds.Contains(reference.ResourceId),
                 _ => true
             }).ToList();
             if (invalidReferences.Count > 0)

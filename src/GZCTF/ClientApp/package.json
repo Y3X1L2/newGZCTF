@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@babel/core": "^7.29.0",
+    "@dagrejs/dagre": "^3.0.0",
     "@emotion/react": "^11.14.0",
     "@gsap/react": "^2.1.2",
     "@mantine/carousel": "^9.0.1",

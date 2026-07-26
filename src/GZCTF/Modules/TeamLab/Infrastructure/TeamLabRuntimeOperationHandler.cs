@@ -82,6 +82,7 @@ public sealed class TeamLabRuntimeOperationHandler(
                         operation.ActorUserId ?? throw new ApiOperationTerminalException("authentication_required", "The operation actor is missing."),
                         operation.ActorUserId ?? throw new ApiOperationTerminalException("authentication_required", "The operation actor is missing."),
                         operation.RequestHash,
+                        null,
                         operationId,
                         payload.Create?.ExternalReference,
                         cancellationToken);

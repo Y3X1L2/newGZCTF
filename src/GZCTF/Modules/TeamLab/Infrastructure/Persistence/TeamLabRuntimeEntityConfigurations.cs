@@ -15,7 +15,11 @@ public sealed class TeamLabRuntimeFoundationEntityConfiguration : IEntityTypeCon
         builder.HasIndex(item => new { item.CreatedById, item.ExternalReference })
             .IsUnique()
             .HasFilter("\"ExternalReference\" IS NOT NULL");
+        builder.HasIndex(item => new { item.CreatedById, item.CreationIdempotencyKey })
+            .IsUnique()
+            .HasFilter("\"CreationIdempotencyKey\" IS NOT NULL");
         builder.Property(item => item.ExternalReference).HasMaxLength(256);
+        builder.Property(item => item.CreationIdempotencyKey).HasMaxLength(128);
         builder.Property(item => item.CreateRequestHash).HasMaxLength(128);
         builder.HasOne<TeamLabTopologyRelease>()
             .WithMany()

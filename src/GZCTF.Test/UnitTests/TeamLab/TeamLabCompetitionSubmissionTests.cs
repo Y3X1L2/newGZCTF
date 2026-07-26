@@ -58,9 +58,9 @@ public sealed class TeamLabCompetitionSubmissionTests
         var runtimes = new Mock<ITeamLabRuntimeApplicationService>();
         runtimes.Setup(item => item.PlanAndEnqueueAsync(
                 It.IsAny<CreateTeamLabRuntimeModel>(),
-                It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Guid?>(),
-                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-            .Returns(async (CreateTeamLabRuntimeModel command, Guid _, Guid _, string _, Guid? _,
+                It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string?>(),
+                It.IsAny<Guid?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Returns(async (CreateTeamLabRuntimeModel command, Guid _, Guid _, string _, string? _, Guid? _,
                 string? _, CancellationToken cancellationToken) =>
             {
                 lock (commands)

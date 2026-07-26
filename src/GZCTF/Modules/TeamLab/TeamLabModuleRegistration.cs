@@ -1,6 +1,7 @@
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Infrastructure;
 using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.TeamLab.Application.Rollouts;
 
 namespace GZCTF.Modules.TeamLab;
 
@@ -17,6 +18,7 @@ public static class TeamLabModuleRegistration
         services.AddScoped<TeamLabFabricLinkAllocator>();
         services.AddScoped<TeamLabEventRecorder>();
         services.AddScoped<TeamLabRuntimeProjectionService>();
+        services.AddScoped<TeamLabAdminQueryService>();
         services.AddScoped<TeamLabAuthorizationService>();
         services.AddScoped<TeamLabTrafficApplicationService>();
         services.AddSingleton<TeamLabTrafficLocalBuffer>();
@@ -47,6 +49,9 @@ public static class TeamLabModuleRegistration
         services.AddScoped<TeamLabRuntimeCleanupService>();
         services.AddScoped<ITeamLabRuntimeApplicationService, TeamLabRuntimeOrchestrator>();
         services.AddScoped<TeamLabAccessGrantService>();
+        services.AddScoped<ITeamLabRolloutApplicationService, TeamLabRolloutApplicationService>();
+        services.AddScoped<TeamLabRolloutCoordinator>();
+        services.AddHostedService<TeamLabRolloutCoordinatorWorker>();
         services.AddScoped<TeamLabRuntimeOperationPayloadProtector>();
         services.AddScoped<ITeamLabRuntimeOperationSubmissionStore, EfTeamLabRuntimeOperationSubmissionStore>();
         services.AddScoped<TeamLabRuntimeOperationApplicationService>();
