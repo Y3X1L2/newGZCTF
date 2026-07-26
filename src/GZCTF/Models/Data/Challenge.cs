@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Cryptography;
 using System.Text.Json.Serialization;
 
 namespace GZCTF.Models.Data;
@@ -142,8 +143,7 @@ public class Challenge
 
         var generator = new DynamicFlagGenerator(FlagTemplate);
 
-        // Always use TestTeamHash for [TEAM_HASH] in parameterless version
-        return generator.GenerateWithTeamHash(() => "TestTeamHash");
+        return generator.GenerateWithTeamHash(() => RandomNumberGenerator.GetHexString(12, true));
     }
 
     /// <summary>
