@@ -1,3 +1,5 @@
+using GZCTF.Models.Request.Exercise;
+
 namespace GZCTF.Modules.Exercise.Application;
 
 public interface IExerciseService

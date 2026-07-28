@@ -6,7 +6,7 @@ import { DataState, StatusPill } from '../../shared/Primitives'
 import { errorMessage } from '../../shared/errors'
 import styles from './SettingsPage.module.css'
 import { settingsApi, useApiTokens } from './settingsApi'
-
+import { TokenResourceGrant, TokenResourceList } from './TokenResourceGrant'
 const scopeOptions = [
   ['images:read', '读取镜像'],
   ['images:write', '写入镜像'],
@@ -14,13 +14,14 @@ const scopeOptions = [
   ['challenges:read', '读取比赛题目'],
   ['challenges:write', '导入比赛题目'],
   ['challenges:delete', '删除比赛题目'],
+  ['exercises:read', '读取练习题库'],
+  ['exercises:write', '写入练习题库'],
+  ['exercises:delete', '删除练习题库'],
   ['operations:read', '读取异步操作'],
 ] as const
-
 function formatTime(value?: number | null) {
   return value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(value) : '未设置'
 }
-
 export function TokenSettings() {
   const { data: tokens, error, mutate } = useApiTokens()
   const [createOpen, setCreateOpen] = useState(false)
@@ -28,6 +29,8 @@ export function TokenSettings() {
   const [scopes, setScopes] = useState<string[]>(['images:read'])
   const [requestsPerMinute, setRequestsPerMinute] = useState(60)
   const [expiresAt, setExpiresAt] = useState('')
+  const [resourceType, setResourceType] = useState('')
+  const [resourceId, setResourceId] = useState('')
   const [secret, setSecret] = useState<string | null>(null)
   const [revokeId, setRevokeId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -40,7 +43,10 @@ export function TokenSettings() {
       scopes,
       requestsPerMinute,
       expiresAt: expiresAt ? new Date(expiresAt).getTime() : null,
-      resources: [],
+      resources:
+        resourceType.trim() && resourceId.trim()
+          ? [{ resourceType: resourceType.trim(), resourceId: resourceId.trim() }]
+          : [],
     }
     setSubmitting(true)
     setFeedback(null)
@@ -52,6 +58,8 @@ export function TokenSettings() {
       setScopes(['images:read'])
       setRequestsPerMinute(60)
       setExpiresAt('')
+      setResourceType('')
+      setResourceId('')
       await mutate()
     } catch (requestError) {
       setFeedback(errorMessage(requestError, 'Token 创建失败。'))
@@ -98,6 +106,7 @@ export function TokenSettings() {
               <tr>
                 <th>名称</th>
                 <th>权限范围</th>
+                <th>资源授权</th>
                 <th>配额</th>
                 <th>最后使用</th>
                 <th>过期时间</th>
@@ -121,6 +130,9 @@ export function TokenSettings() {
                         ))}
                       </div>
                     </td>
+                    <td>
+                      <div className={styles.scopeList}><TokenResourceList resources={token.resources} /></div>
+                    </td>
                     <td>{token.requestsPerMinute ?? '-'} / min</td>
                     <td>{formatTime(token.lastUsedAt)}</td>
                     <td>{formatTime(token.expiresAt)}</td>
@@ -142,7 +154,7 @@ export function TokenSettings() {
               })}
               {!activeTokens.length ? (
                 <tr>
-                  <td className={styles.emptyCell} colSpan={7}>
+                  <td className={styles.emptyCell} colSpan={8}>
                     尚未创建 API Token。
                   </td>
                 </tr>
@@ -225,6 +237,7 @@ export function TokenSettings() {
               />
             </label>
           </div>
+          <TokenResourceGrant className={styles.formGrid} resourceId={resourceId} resourceType={resourceType} onResourceIdChange={setResourceId} onResourceTypeChange={setResourceType} />
           {feedback ? <InlineFeedback tone="danger">{feedback}</InlineFeedback> : null}
         </div>
       </VNextDialog>

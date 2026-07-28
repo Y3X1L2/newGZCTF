@@ -4,6 +4,10 @@ import { useVNextPageTitle } from '../../shared/useVNextPageTitle'
 import { DataState, PageHeading } from '../../shared/Primitives'
 import styles from './PracticePage.module.css'
 
+function barWidthClass(solved: number, total: number) {
+  return styles[`barWidth${Math.round((solved / Math.max(1, total)) * 10)}`]
+}
+
 export function PracticeStatsPage() {
   useVNextPageTitle('练习统计')
   const { data: exercises, error } = useExercises()
@@ -37,7 +41,7 @@ export function PracticeStatsPage() {
 
   return (
     <div className={styles.page}>
-      <PageHeading title="练习统计" description="个人解题进度与能力分析" />
+      <PageHeading eyebrow="EXERCISE PROGRESS" title="练习统计" description="个人解题进度与能力分析" />
 
       <DataState data={stats} error={error} loading={!exercises && !error}>
         {stats && (
@@ -62,7 +66,7 @@ export function PracticeStatsPage() {
                   <div key={cat} className={styles.statBar}>
                     <span>{cat}</span>
                     <div className={styles.barTrack}>
-                      <div className={styles.barFill} style={{ width: `${(solved / Math.max(1, total)) * 100}%` }} />
+                      <div className={`${styles.barFill} ${barWidthClass(solved, total)}`} />
                     </div>
                     <span>{solved}/{total}</span>
                   </div>
@@ -77,7 +81,7 @@ export function PracticeStatsPage() {
                   <div key={diff} className={styles.statBar}>
                     <span>{diff}</span>
                     <div className={styles.barTrack}>
-                      <div className={styles.barFill} style={{ width: `${(solved / Math.max(1, total)) * 100}%` }} />
+                      <div className={`${styles.barFill} ${barWidthClass(solved, total)}`} />
                     </div>
                     <span>{solved}/{total}</span>
                   </div>

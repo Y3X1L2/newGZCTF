@@ -59,15 +59,24 @@ export function StatusPill({ children, tone = 'neutral' }: { children: ReactNode
   return <span className={`${styles.statusPill} ${styles[`statusPill_${tone}`]}`}>{children}</span>
 }
 
-export function DataState({
+export function DataState<T>({
   title,
   description,
   loading = false,
+  data,
+  error,
+  children,
 }: {
-  title: string
-  description: string
+  title?: string
+  description?: string
   loading?: boolean
+  data?: T | null
+  error?: unknown
+  children?: ReactNode
 }) {
+  if (data) return <>{children}</>
+  const stateTitle = title ?? (error ? '加载失败' : loading ? '正在加载' : '暂无数据')
+  const stateDescription = description ?? (error ? '数据暂时无法读取，请稍后重试。' : '当前没有可显示的内容。')
   return (
     <div className={styles.dataState} role={loading ? 'status' : undefined}>
       {loading ? (
@@ -79,8 +88,8 @@ export function DataState({
       ) : (
         <span className={styles.emptyMark} aria-hidden="true" />
       )}
-      <strong>{title}</strong>
-      <p>{description}</p>
+      <strong>{stateTitle}</strong>
+      <p>{stateDescription}</p>
     </div>
   )
 }

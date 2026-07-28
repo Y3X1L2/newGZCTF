@@ -1,14 +1,12 @@
 using GZCTF.Repositories.Interface;
-using GZCTF.Infrastructure.Cache;
+using GZCTF.Models.Request.Exercise;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Modules.Exercise.Application;
 
 public sealed class ExerciseService(
     AppDbContext context,
-    IExerciseInstanceRepository instanceRepository,
-    IContainerRepository containerRepository,
-    IPlatformCache platformCache) : IExerciseService
+    IExerciseInstanceRepository instanceRepository) : IExerciseService
 {
     public async Task<ExerciseChallenge[]> GetExercisesAsync(CancellationToken token = default) =>
         await context.ExerciseChallenges
@@ -84,19 +82,19 @@ public sealed class ExerciseService(
         return await instanceRepository.CreateContainer(instance, user, token);
     }
 
-    static IQueryable<ExerciseInfoModel> BuildInfoModels(IQueryable<ExerciseChallenge> query) =>
+    IQueryable<ExerciseInfoModel> BuildInfoModels(IQueryable<ExerciseChallenge> query) =>
         query.Select(e => new ExerciseInfoModel
         {
             Id = e.Id,
             Title = e.Title,
             Difficulty = e.Difficulty,
             Category = e.Category,
+            Type = e.Type,
+            IsEnabled = e.IsEnabled,
             Tags = e.Tags ?? new(),
             Credit = e.Credit,
-            AcceptedCount = e.Flags
-                .Where(f => context.ExerciseInstances.Any(i =>
-                    i.ExerciseId == e.Id && i.SolveTimeUtc > DateTimeOffset.FromUnixTimeSeconds(0)))
-                .Count(),
+            AcceptedCount = context.ExerciseInstances.Count(i =>
+                i.ExerciseId == e.Id && i.SolveTimeUtc > DateTimeOffset.FromUnixTimeSeconds(0)),
             SubmissionCount = context.ExerciseInstances.Count(i => i.ExerciseId == e.Id)
         });
 }

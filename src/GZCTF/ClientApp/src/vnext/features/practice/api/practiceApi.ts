@@ -1,4 +1,5 @@
 import useSWR from 'swr'
+import { ContainerEntryStatus } from '@Api'
 
 const BASE = '/api/exercise'
 
@@ -9,7 +10,7 @@ export interface ExerciseChallengeDto {
   difficulty: string | null
   tags: string[] | null
   type: string | null
-  credit: number | null
+  credit: boolean
   content: string | null
   hints: string[] | null
   flags: { id: number; flag: string }[] | null
@@ -17,18 +18,25 @@ export interface ExerciseChallengeDto {
   submissionCount: number
 }
 
-export interface ExerciseContainerDto {
-  entry: string | null
-  entryStatus: string | null
-  entryReadyAt: number | null
-  entryError: string | null
-  closeTime: number | null
-  error: string | null
-}
-
 export interface ExerciseDetailDto {
-  exercise: ExerciseChallengeDto | null
-  container: ExerciseContainerDto | null
+  id: number
+  title: string
+  category: string
+  difficulty: string
+  tags: string[] | null
+  type: string
+  credit: boolean
+  content: string
+  hints: string[] | null
+  context: {
+    closeTime: number | null
+    instanceEntry: string | null
+    instanceEntryStatus: ContainerEntryStatus | null
+    instanceEntryReadyAt: number | null
+    instanceEntryError: string | null
+    url: string | null
+    fileSize: number | null
+  }
 }
 
 export interface ExerciseInfoDto {
@@ -37,7 +45,9 @@ export interface ExerciseInfoDto {
   difficulty: string | null
   category: string | null
   tags: string[] | null
-  credit: number | null
+  credit: boolean
+  type: string
+  isEnabled: boolean
   acceptedCount: number
   submissionCount: number
 }

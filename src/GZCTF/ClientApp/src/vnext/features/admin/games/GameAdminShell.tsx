@@ -79,6 +79,7 @@ export function GameAdminShell() {
             <StatusBadge tone={request.game.hidden ? 'warning' : 'success'}>
               {request.game.hidden ? '隐藏' : '公开'}
             </StatusBadge>
+            <StatusBadge tone="neutral">API 资源 game:{request.game.id}</StatusBadge>
           </div>
         </div>
         <nav aria-label="比赛管理页面" className={styles.tabs}>

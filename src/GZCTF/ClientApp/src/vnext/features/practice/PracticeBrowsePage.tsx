@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { Search, ChevronDown, X } from 'lucide-react'
-import { ChallengeCategory, Difficulty } from '@Api'
 import { useExercises } from './api/practiceApi'
 import { useVNextPageTitle } from '../../shared/useVNextPageTitle'
 import { DataState, PageHeading } from '../../shared/Primitives'
@@ -10,11 +9,11 @@ import styles from './PracticePage.module.css'
 const categoryLabels: Record<string, string> = {
   Web: 'Web', Pwn: 'Pwn', Reverse: 'Reverse', Crypto: 'Crypto',
   Misc: 'Misc', Forensics: 'Forensics', Mobile: 'Mobile',
-  Blockchain: 'Blockchain', Programming: 'Programming',
-  OSint: 'OSINT', Hardware: 'Hardware',
+  Blockchain: 'Blockchain', Hardware: 'Hardware', PPC: 'PPC', AI: 'AI',
+  Pentest: 'Pentest', OSINT: 'OSINT', IR: 'IR',
 }
 
-const difficultyOrder = ['Baby', 'Easy', 'Basic', 'Medium', 'Hard', 'Extreme', 'Insane']
+const difficultyOrder = ['Baby', 'Trivial', 'Easy', 'Normal', 'Medium', 'Hard', 'Expert', 'Insane']
 const allDifficulties = [...difficultyOrder]
 const allCategories = Object.keys(categoryLabels)
 
@@ -89,13 +88,15 @@ export function PracticeBrowsePage() {
 
   return (
     <div className={styles.page}>
-      <PageHeading title="题库浏览" description="筛选、搜索与查看所有练习题" />
+      <PageHeading eyebrow="EXERCISE CATALOG" title="题库浏览" description="筛选、搜索与查看所有练习题" />
 
       <div className={styles.searchBar}>
         <Search size={18} />
         <input
           className={styles.searchInput}
+          name="practice-catalog-search"
           placeholder="搜索题目名称或内容..."
+          type="search"
           value={localQuery}
           onChange={(e) => search(e.currentTarget.value)}
         />
@@ -174,7 +175,11 @@ export function PracticeBrowsePage() {
         ))}
       </div>
 
-      <DataState data={filtered} error={error} loading={!exercises && !error}>
+      {!exercises && !error ? (
+        <DataState description="正在读取题目和筛选条件。" loading title="题库加载中" />
+      ) : error ? (
+        <DataState description="练习题库暂时不可用，请稍后刷新。" title="题库加载失败" />
+      ) : filtered.length ? (
         <div className={styles.challengeList}>
           {filtered.map((ex) => (
             <Link key={ex.id} to={`/practice/challenge/${ex.id}`} className={styles.challengeCard}>
@@ -193,7 +198,12 @@ export function PracticeBrowsePage() {
             </Link>
           ))}
         </div>
-      </DataState>
+      ) : (
+        <div className={styles.emptySection}>
+          <span>00</span>
+          <div><strong>没有符合条件的题目</strong><p>调整关键词或筛选条件后重试。</p></div>
+        </div>
+      )}
     </div>
   )
 }

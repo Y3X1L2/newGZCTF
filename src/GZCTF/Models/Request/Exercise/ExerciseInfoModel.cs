@@ -26,6 +26,16 @@ public class ExerciseInfoModel
     public ChallengeCategory Category { get; set; }
 
     /// <summary>
+    /// Exercise challenge type.
+    /// </summary>
+    public ChallengeType Type { get; set; }
+
+    /// <summary>
+    /// Whether the exercise is enabled.
+    /// </summary>
+    public bool IsEnabled { get; set; }
+
+    /// <summary>
     /// Additional tags for the exercise
     /// </summary>
     public List<string>? Tags { get; set; } = new();
@@ -33,7 +43,7 @@ public class ExerciseInfoModel
     /// <summary>
     /// Exercise points
     /// </summary>
-    public int Credit { get; set; }
+    public bool Credit { get; set; }
 
     /// <summary>
     /// Number of people who solved the exercise

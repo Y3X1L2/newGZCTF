@@ -52,13 +52,14 @@ public class ExerciseController(
     {
         var user = await CurrentUser();
         var result = await exerciseService.CreateContainerAsync(user, id, token);
-        if (result.Status == TaskStatus.Faulted)
+        if (result.Status == TaskStatus.Failed)
             return BadRequest();
 
         return Ok(result);
     }
 
     [HttpPost("import")]
+    [RequireTeacher]
     public async Task<IActionResult> ImportFromGame([FromBody] ExerciseImportFromGameModel model, CancellationToken token)
     {
         var exercises = await managementService.ImportFromGameAsync(model.GameId, model.ChallengeIds, token);
@@ -66,6 +67,7 @@ public class ExerciseController(
     }
 
     [HttpPost]
+    [RequireTeacher]
     public async Task<IActionResult> CreateExercise([FromBody] ExerciseCreateModel model, CancellationToken token)
     {
         var exercise = new ExerciseChallenge
@@ -92,6 +94,7 @@ public class ExerciseController(
     }
 
     [HttpPut("{id:int}")]
+    [RequireTeacher]
     public async Task<IActionResult> UpdateExercise(int id, [FromBody] ExerciseCreateModel model, CancellationToken token)
     {
         var exercise = await managementService.UpdateExerciseAsync(
@@ -119,6 +122,7 @@ public class ExerciseController(
     }
 
     [HttpDelete("{id:int}")]
+    [RequireTeacher]
     public async Task<IActionResult> DeleteExercise(int id, CancellationToken token)
     {
         await managementService.RemoveExerciseAsync(id, token);

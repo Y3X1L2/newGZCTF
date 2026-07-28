@@ -1,10 +1,10 @@
 import { useCallback, useState } from 'react'
 import { useParams, Link } from 'react-router'
-import { ArrowLeft, LoaderCircle } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { useExerciseDetail, submitFlag, createContainer } from './api/practiceApi'
 import { useVNextPageTitle } from '../../shared/useVNextPageTitle'
-import { DataState, PageHeading, StatusPill } from '../../shared/Primitives'
-import { ActionButton, InlineFeedback } from '../../shared/Interaction'
+import { DataState } from '../../shared/Primitives'
+import { MarkdownContent } from '../../shared/MarkdownContent'
 import { FlagSubmission } from '../challenge-runtime/FlagSubmission'
 import { InstanceControl } from '../challenge-runtime/InstanceControl'
 import { ChallengeFeedback, FlagChallengeState, RuntimeInstanceController, RuntimeInstancePhase } from '../challenge-runtime/types'
@@ -21,7 +21,7 @@ export function PracticeChallengePage() {
   const { id } = useParams<{ id: string }>()
   const exerciseId = Number(id)
   const { data: detail, error, mutate } = useExerciseDetail(exerciseId)
-  useVNextPageTitle(detail?.exercise?.title ?? '题目')
+  useVNextPageTitle(detail?.title ?? '题目')
 
   const [flagValue, setFlagValue] = useState('')
   const [activeFlagId, setActiveFlagId] = useState<number | null>(null)
@@ -63,18 +63,18 @@ export function PracticeChallengePage() {
     }
   }, [exerciseId, mutate])
 
-  const runtimeController: RuntimeInstanceController | null = detail?.container
+  const containerChallenge = detail?.type === 'StaticContainer' || detail?.type === 'DynamicContainer'
+  const runtimeController: RuntimeInstanceController | null = detail && containerChallenge
     ? {
-        kind: 'container' as const,
-        phase: 'running' as RuntimeInstancePhase,
-        ...detail.container,
-        entry: detail.container.entry ?? null,
-        entryStatus: (detail.container.entryStatus ?? null) as never,
-        entryReadyAt: detail.container.entryReadyAt ?? null,
-        entryError: detail.container.entryError ?? null,
-        closeTime: detail.container.closeTime ?? null,
-        error: detail.container.error ?? null,
-        busy: false,
+        kind: 'docker' as const,
+        phase: (detail.context.instanceEntry || detail.context.closeTime ? 'running' : 'idle') as RuntimeInstancePhase,
+        entry: detail.context.instanceEntry,
+        entryStatus: detail.context.instanceEntryStatus,
+        entryReadyAt: detail.context.instanceEntryReadyAt,
+        entryError: detail.context.instanceEntryError,
+        closeTime: detail.context.closeTime,
+        error: null,
+        busy: containerPending,
         create: onCreateContainer,
         extend: async () => {},
         destroy: async () => {},
@@ -84,7 +84,7 @@ export function PracticeChallengePage() {
     : null
 
   const flagChallenge: FlagChallengeState = {
-    flags: (detail?.exercise?.flags ?? []).map(f => ({ id: f.id, orderIndex: null, description: null })),
+    flags: [],
     attempts: 0,
     limit: null,
   }
@@ -103,38 +103,27 @@ export function PracticeChallengePage() {
             <div className={styles.challengeDetailHeader}>
               <div className={styles.challengeDetailMeta}>
                 <span className={styles.challengeCategory}>
-                  {categoryLabels[detail.exercise?.category ?? ''] ?? detail.exercise?.category}
+                  {categoryLabels[detail.category] ?? detail.category}
                 </span>
-                <span>{detail.exercise?.difficulty}</span>
-                {detail.exercise?.tags?.map((t: string) => (
+                <span>{detail.difficulty}</span>
+                {detail.tags?.map((t: string) => (
                   <span key={t} className={styles.tag}>{t}</span>
                 ))}
               </div>
-              <h1 className={styles.challengeDetailTitle}>{detail.exercise?.title}</h1>
+              <h1 className={styles.challengeDetailTitle}>{detail.title}</h1>
             </div>
 
             <div className={styles.challengeDetailContent}>
               <div className={styles.challengeDescription}>
-                <div dangerouslySetInnerHTML={{ __html: detail.exercise?.content ?? '' }} />
-                {detail.exercise?.hints?.map((hint: string, i: number) => (
+                <MarkdownContent source={detail.content} />
+                {detail.hints?.map((hint: string, i: number) => (
                   <div key={i} className={styles.hint}>{hint}</div>
                 ))}
               </div>
 
               {runtimeController && (
                 <div className={styles.challengeSidebar}>
-                  {runtimeController.kind === 'idle' ? (
-                    <ActionButton
-                      icon={containerPending ? <LoaderCircle size={16} className={styles.spin} /> : undefined}
-                      tone="primary"
-                      onClick={onCreateContainer}
-                      disabled={containerPending}
-                    >
-                      {containerPending ? '启动中' : '启动环境'}
-                    </ActionButton>
-                  ) : (
-                    <InstanceControl controller={runtimeController} />
-                  )}
+                  <InstanceControl controller={runtimeController} />
                 </div>
               )}
 

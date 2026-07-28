@@ -4,6 +4,7 @@ using System.Net.Mime;
 using System.Security.Claims;
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using ExerciseFilter = GZCTF.Models.Request.Exercise.ExerciseFilter;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Exercise.Application;
 using GZCTF.Modules.Exercise.Contracts;
@@ -192,6 +193,18 @@ public sealed class ExerciseOpenApiController(
     }
 
     private static ExerciseExternalSummaryModel toSummary(ExerciseChallenge exercise) => new()
+    {
+        Id = exercise.Id,
+        Title = exercise.Title,
+        Category = exercise.Category,
+        Type = exercise.Type,
+        Difficulty = exercise.Difficulty,
+        Credit = exercise.Credit,
+        Tags = exercise.Tags ?? [],
+        IsEnabled = exercise.IsEnabled,
+    };
+
+    private static ExerciseExternalSummaryModel toSummary(GZCTF.Models.Request.Exercise.ExerciseInfoModel exercise) => new()
     {
         Id = exercise.Id,
         Title = exercise.Title,

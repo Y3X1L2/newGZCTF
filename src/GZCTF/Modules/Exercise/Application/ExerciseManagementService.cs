@@ -8,9 +8,7 @@ namespace GZCTF.Modules.Exercise.Application;
 
 public sealed class ExerciseManagementService(
     AppDbContext context,
-    IExerciseChallengeRepository exerciseRepository,
-    IBlobRepository blobRepository,
-    IGameChallengeRepository gameChallengeRepository) : IExerciseManagementService
+    IExerciseChallengeRepository exerciseRepository) : IExerciseManagementService
 {
     public async Task<ExerciseChallenge> CreateExerciseAsync(ExerciseChallenge exercise, CancellationToken token = default) =>
         await exerciseRepository.CreateExercise(exercise, token);

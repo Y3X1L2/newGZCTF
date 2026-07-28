@@ -13,7 +13,6 @@ public static class ExerciseModuleRegistration
         services.AddScoped<IExerciseInstanceRepository, ExerciseInstanceRepository>();
         services.AddScoped<IExerciseService, ExerciseService>();
         services.AddScoped<IExerciseManagementService, ExerciseManagementService>();
-        services.AddScoped<IImageTemplateReferenceProvider, ExerciseImageTemplateReferenceProvider>();
         return services;
     }
 }
