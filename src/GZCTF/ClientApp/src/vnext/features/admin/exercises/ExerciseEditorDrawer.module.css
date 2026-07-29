@@ -1,0 +1,69 @@
+.form,
+.form section,
+.flagList,
+.flagRow {
+  display: grid;
+  min-width: 0;
+  gap: var(--yn-space-4);
+}
+
+.form {
+  gap: var(--yn-space-7);
+}
+
+.form section + section {
+  padding-top: var(--yn-space-6);
+  border-top: 1px solid var(--yn-color-border);
+}
+
+.form h3 {
+  margin: 0;
+  font-size: var(--yn-font-lg);
+}
+
+.fieldGrid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yn-space-4);
+}
+
+.sectionTitle,
+.flagRowHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yn-space-3);
+}
+
+.flagRow {
+  padding: var(--yn-space-4);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface-muted);
+}
+
+.flagRowHeader button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--yn-radius-md);
+  background: transparent;
+  color: var(--yn-color-danger);
+  cursor: pointer;
+}
+
+.flagRowHeader button:hover {
+  border-color: var(--yn-color-danger);
+}
+
+.loading {
+  margin: 0;
+  color: var(--yn-color-muted);
+}
+
+@media (max-width: 720px) {
+  .fieldGrid { grid-template-columns: minmax(0, 1fr); }
+}

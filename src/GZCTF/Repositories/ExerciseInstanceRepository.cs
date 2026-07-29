@@ -44,20 +44,14 @@ public class ExerciseInstanceRepository(
             return [];
 
         var exercises = await Context.ExerciseInstances
-            .Where(i => i.UserId == user.Id && i.Exercise.IsEnabled)
+            .Where(i => i.UserId == user.Id && i.Exercise.IsEnabled && i.Exercise.TrainingCourseId == null)
             .ToArrayAsync(token);
-
-        if (exercises.Length > 0)
-            return exercises;
 
         await using var transaction = await Context.Database.BeginTransactionAsync(token);
 
-        var result = new List<ExerciseInstance>();
+        var result = exercises.ToList();
 
-        await foreach (var id in Context.ExerciseChallenges
-                           .Where(e => e.IsEnabled && e.TrainingCourseId == null &&
-                                       Context.ExerciseDependencies.All(d => d.TargetId != e.Id))
-                           .Select(e => e.Id).AsAsyncEnumerable().WithCancellation(token))
+        await foreach (var id in FetchNewChallenges(user, token))
         {
             var newInst = new ExerciseInstance { ExerciseId = id, UserId = user.Id, IsLoaded = false };
 
@@ -69,6 +63,53 @@ public class ExerciseInstanceRepository(
         await transaction.CommitAsync(token);
 
         return result.ToArray();
+    }
+
+    public async Task<ExerciseInstance?> GetOrCreatePublicInstance(
+        UserInfo user,
+        int exerciseId,
+        CancellationToken token = default)
+    {
+        var accessible = await Context.ExerciseChallenges.AnyAsync(exercise =>
+            exercise.Id == exerciseId &&
+            exercise.IsEnabled &&
+            exercise.TrainingCourseId == null &&
+            Context.ExerciseDependencies
+                .Where(dependency => dependency.TargetId == exercise.Id)
+                .All(dependency => Context.ExerciseInstances.Any(instance =>
+                    instance.UserId == user.Id &&
+                    instance.ExerciseId == dependency.SourceId &&
+                    instance.SolveTimeUtc > DateTimeOffset.FromUnixTimeSeconds(0))), token);
+        if (!accessible)
+            return null;
+
+        var exists = await Context.ExerciseInstances.AnyAsync(
+            instance => instance.UserId == user.Id && instance.ExerciseId == exerciseId,
+            token);
+        if (!exists)
+        {
+            var instance = new ExerciseInstance
+            {
+                UserId = user.Id,
+                ExerciseId = exerciseId,
+                IsLoaded = false
+            };
+            Context.ExerciseInstances.Add(instance);
+            try
+            {
+                await SaveAsync(token);
+            }
+            catch (DbUpdateException)
+            {
+                Context.Entry(instance).State = EntityState.Detached;
+                if (!await Context.ExerciseInstances.AnyAsync(
+                        item => item.UserId == user.Id && item.ExerciseId == exerciseId,
+                        token))
+                    throw;
+            }
+        }
+
+        return await GetInstance(user, exerciseId, token);
     }
 
     public async Task<ExerciseInstance?> GetInstance(UserInfo user, int exerciseId, CancellationToken token = default)
@@ -334,11 +375,16 @@ public class ExerciseInstanceRepository(
 
         if (targetFlag.MaxAttempts > 0)
         {
-            var attemptCount = await Context.TrainingCourseSubmissions.CountAsync(s =>
-                s.UserId == user.Id &&
-                s.CourseId == courseId &&
-                s.ExerciseChallengeId == instance.ExerciseId &&
-                s.FlagId == targetFlag.Id, token);
+            var attemptCount = courseId > 0
+                ? await Context.TrainingCourseSubmissions.CountAsync(s =>
+                    s.UserId == user.Id &&
+                    s.CourseId == courseId &&
+                    s.ExerciseChallengeId == instance.ExerciseId &&
+                    s.FlagId == targetFlag.Id, token)
+                : await Context.ExerciseSubmissions.CountAsync(s =>
+                    s.UserId == user.Id &&
+                    s.ExerciseChallengeId == instance.ExerciseId &&
+                    s.FlagId == targetFlag.Id, token);
             if (attemptCount >= targetFlag.MaxAttempts)
             {
                 await transaction.RollbackAsync(token);
@@ -359,13 +405,16 @@ public class ExerciseInstanceRepository(
             return (AnswerResult.WrongAnswer, targetFlag.Id);
         }
 
-        if (instance.SolveTimeUtc <= DateTimeOffset.FromUnixTimeSeconds(0))
-            instance.SolveTimeUtc = DateTimeOffset.UtcNow;
-
-        await foreach (var id in FetchNewChallenges(user, token))
+        if (courseId > 0)
         {
-            var newInst = new ExerciseInstance { ExerciseId = id, UserId = user.Id, IsLoaded = false };
-            Context.ExerciseInstances.Add(newInst);
+            if (instance.SolveTimeUtc <= DateTimeOffset.FromUnixTimeSeconds(0))
+                instance.SolveTimeUtc = DateTimeOffset.UtcNow;
+
+            await foreach (var id in FetchNewChallenges(user, token))
+            {
+                var newInst = new ExerciseInstance { ExerciseId = id, UserId = user.Id, IsLoaded = false };
+                Context.ExerciseInstances.Add(newInst);
+            }
         }
 
         await SaveAsync(token);

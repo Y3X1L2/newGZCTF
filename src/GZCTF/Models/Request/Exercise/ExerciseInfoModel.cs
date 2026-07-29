@@ -54,4 +54,19 @@ public class ExerciseInfoModel
     /// Number of submissions
     /// </summary>
     public int SubmissionCount { get; set; }
+
+    /// <summary>
+    /// Whether the current user completed this exercise.
+    /// </summary>
+    public bool Solved { get; set; }
+
+    /// <summary>
+    /// Accepted submissions made by the current user.
+    /// </summary>
+    public int UserAcceptedCount { get; set; }
+
+    /// <summary>
+    /// Total submissions made by the current user.
+    /// </summary>
+    public int UserSubmissionCount { get; set; }
 }

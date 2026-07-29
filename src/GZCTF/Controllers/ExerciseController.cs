@@ -24,7 +24,8 @@ public class ExerciseController(
     [HttpGet]
     public async Task<IActionResult> GetExercises([FromQuery] ExerciseFilter? filter, CancellationToken token)
     {
-        var exercises = await exerciseService.GetExerciseListAsync(filter, token);
+        var user = await CurrentUser();
+        var exercises = await exerciseService.GetExerciseListAsync(filter, token, user.Id);
         return Ok(exercises);
     }
 
@@ -39,12 +40,26 @@ public class ExerciseController(
         return Ok(detail);
     }
 
+    [HttpGet("{id:int}/manage")]
+    [RequireTeacher]
+    public async Task<IActionResult> GetExerciseForManagement(int id, CancellationToken token)
+    {
+        var exercise = await managementService.GetExerciseForUpdateAsync(id, token);
+        return exercise is null ? NotFound() : Ok(ExerciseManagementModel.FromExercise(exercise));
+    }
+
     [HttpPost("{id:int}/flag")]
     public async Task<IActionResult> SubmitFlag(int id, [FromBody] FlagSubmitModel model, CancellationToken token)
     {
         var user = await CurrentUser();
-        var (status, _) = await exerciseService.SubmitFlagAsync(user, id, model.Flag ?? string.Empty, model.FlagId, token);
-        return Ok(new { status });
+        var (status, flagId) = await exerciseService.SubmitFlagAsync(
+            user,
+            id,
+            model.Flag ?? string.Empty,
+            model.FlagId,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            token);
+        return Ok(new { status, flagId });
     }
 
     [HttpPost("{id:int}/container")]
@@ -52,10 +67,36 @@ public class ExerciseController(
     {
         var user = await CurrentUser();
         var result = await exerciseService.CreateContainerAsync(user, id, token);
-        if (result.Status == TaskStatus.Failed)
-            return BadRequest();
+        if (result is QueuedTaskResult<Container> queued)
+            return Accepted(new { status = "queued", queue = queued.QueueStatus });
+        if (result.Status == TaskStatus.NotFound)
+            return NotFound();
+        if (result.Status != TaskStatus.Success || result.Result is null)
+            return BadRequest(new RequestResponse("练习容器创建失败，请稍后重试。"));
 
-        return Ok(result);
+        return Ok(ContainerInfoModel.FromContainer(result.Result));
+    }
+
+    [HttpPost("{id:int}/container/extend")]
+    public async Task<IActionResult> ExtendContainer(int id, CancellationToken token)
+    {
+        var result = await exerciseService.ExtendContainerAsync(await CurrentUser(), id, token);
+        if (result.Status == TaskStatus.NotFound)
+            return NotFound();
+        if (result.Status != TaskStatus.Success || result.Result is null)
+            return BadRequest(new RequestResponse("当前实例无法延期。"));
+        return Accepted(result.Result);
+    }
+
+    [HttpDelete("{id:int}/container")]
+    public async Task<IActionResult> DestroyContainer(int id, CancellationToken token)
+    {
+        var result = await exerciseService.DestroyContainerAsync(await CurrentUser(), id, token);
+        if (result.Status == TaskStatus.NotFound)
+            return NotFound();
+        if (result.Status != TaskStatus.Success || result.Result is null)
+            return BadRequest(new RequestResponse("当前实例无法销毁。"));
+        return Accepted(result.Result);
     }
 
     [HttpPost("import")]
@@ -86,10 +127,15 @@ public class ExerciseController(
             CPUCount = model.CPUCount,
             ExposePort = model.ExposePort,
             FlagTemplate = model.FlagTemplate,
-            IsEnabled = true
+            IsEnabled = model.IsEnabled,
+            NetworkMode = model.NetworkMode,
+            Environment = model.Environment,
+            ImageTemplateId = model.ImageTemplateId,
+            SubmissionLimit = model.SubmissionLimit
         };
 
-        var created = await managementService.CreateExerciseAsync(exercise, token);
+        var created = await managementService.CreateExerciseWithRelationsAsync(
+            exercise, model.Flags, model.Attachment, token);
         return Ok(created);
     }
 
@@ -97,7 +143,7 @@ public class ExerciseController(
     [RequireTeacher]
     public async Task<IActionResult> UpdateExercise(int id, [FromBody] ExerciseCreateModel model, CancellationToken token)
     {
-        var exercise = await managementService.UpdateExerciseAsync(
+        var exercise = await managementService.UpdateExerciseWithRelationsAsync(
             new ExerciseChallenge
             {
                 Id = id,
@@ -115,8 +161,12 @@ public class ExerciseController(
                 CPUCount = model.CPUCount,
                 ExposePort = model.ExposePort,
                 FlagTemplate = model.FlagTemplate,
-                IsEnabled = true
-            }, token);
+                IsEnabled = model.IsEnabled,
+                NetworkMode = model.NetworkMode,
+                Environment = model.Environment,
+                ImageTemplateId = model.ImageTemplateId,
+                SubmissionLimit = model.SubmissionLimit
+            }, model.Flags, model.Attachment, token);
 
         return Ok(exercise);
     }

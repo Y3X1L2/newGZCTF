@@ -6,6 +6,7 @@ using GZCTF.Models;
 using GZCTF.Models.Data;
 using ExerciseFilter = GZCTF.Models.Request.Exercise.ExerciseFilter;
 using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Exercise.Application;
 using GZCTF.Modules.Exercise.Contracts;
 using GZCTF.Modules.Identity.Application;
@@ -21,7 +22,8 @@ namespace GZCTF.Modules.Exercise.Api;
 [Produces(MediaTypeNames.Application.Json, "application/problem+json")]
 public sealed class ExerciseOpenApiController(
     IExerciseService exerciseService,
-    IExerciseManagementService managementService) : ControllerBase
+    ExerciseExternalApplicationService mutations,
+    IAuthorizationService authorization) : ControllerBase
 {
     [HttpGet]
     [Authorize(Policy = "scope:" + ApiTokenScopes.ExercisesRead)]
@@ -34,7 +36,7 @@ public sealed class ExerciseOpenApiController(
         [FromQuery, Range(1, 100)] int limit = 50,
         CancellationToken cancellationToken = default)
     {
-        _ = GetActor();
+        await AuthorizeExerciseAsync("*");
         var filter = new ExerciseFilter
         {
             Search = search,
@@ -54,7 +56,7 @@ public sealed class ExerciseOpenApiController(
         int exerciseId,
         CancellationToken cancellationToken = default)
     {
-        _ = GetActor();
+        await AuthorizeExerciseAsync(exerciseId.ToString());
         var exercise = await exerciseService.GetExerciseByIdAsync(exerciseId, cancellationToken);
         if (exercise is null)
             throw new ExerciseApiContractException(
@@ -65,110 +67,73 @@ public sealed class ExerciseOpenApiController(
 
     [HttpPost("import")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.ExercisesWrite)]
-    [ProducesResponseType(typeof(ExerciseImportResult), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Import(
         [FromBody] ExerciseImportFromExternalModel model,
         [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
         CancellationToken cancellationToken = default)
     {
-        _ = GetActor();
-        ValidateIdempotencyKey(idempotencyKey);
+        await AuthorizeExerciseAsync("*");
+        var (tokenId, actorUserId) = GetActor();
         var normalized = model.Items.Select(NormalizeImportItem).ToArray();
-        var imported = new List<ExerciseImportResultItem>();
-        foreach (var item in normalized)
-        {
-            var exercise = new ExerciseChallenge
-            {
-                Title = item.Title,
-                Content = item.Content,
-                Category = item.Category,
-                Type = item.Type,
-                Difficulty = item.Difficulty,
-                Credit = item.Credit,
-                Tags = item.Tags ?? [],
-                Hints = item.Hints,
-                IsEnabled = item.IsEnabled,
-            };
-            ApplyFlagsAndAttachment(exercise, item.Flags, item.Attachment);
-            var created = await managementService.CreateExerciseAsync(exercise, cancellationToken);
-            imported.Add(new ExerciseImportResultItem { ExternalId = item.ExternalId, ExerciseId = created.Id, Title = created.Title });
-        }
-
-        return CreatedAtAction(nameof(List), new { }, new ExerciseImportResult(imported, []));
+        var result = await mutations.SubmitImportAsync(
+            tokenId,
+            new ActorContext(actorUserId, Role.Teacher, tokenId),
+            idempotencyKey,
+            normalized,
+            "POST:/api/open/v1/exercises/import",
+            cancellationToken);
+        return AcceptedOperation(result);
     }
 
     [HttpPost]
     [Authorize(Policy = "scope:" + ApiTokenScopes.ExercisesWrite)]
-    [ProducesResponseType(typeof(ExerciseExternalModel), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> Create(
         [FromBody] ExerciseCreateModel model,
+        [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
         CancellationToken cancellationToken = default)
     {
-        _ = GetActor();
-        var exercise = new ExerciseChallenge
-        {
-            Title = model.Title,
-            Content = model.Content,
-            Category = model.Category,
-            Type = model.Type,
-            Difficulty = model.Difficulty,
-            Credit = model.Credit,
-            Tags = model.Tags ?? [],
-            Hints = model.Hints,
-            ContainerImage = model.ContainerImage,
-            MemoryLimit = model.MemoryLimit,
-            StorageLimit = model.StorageLimit,
-            CPUCount = model.CPUCount,
-            ExposePort = model.ExposePort,
-            NetworkMode = model.NetworkMode,
-            FlagTemplate = model.FlagTemplate,
-            Environment = model.Environment,
-            ImageTemplateId = model.ImageTemplateId,
-            IsEnabled = model.IsEnabled,
-        };
-        ApplyFlagsAndAttachment(exercise, model.Flags, model.Attachment);
-        var created = await managementService.CreateExerciseAsync(exercise, cancellationToken);
-        return CreatedAtAction(nameof(Get), new { exerciseId = created.Id }, toExternalModel(created));
+        await AuthorizeExerciseAsync("*");
+        var (tokenId, actorUserId) = GetActor();
+        var result = await mutations.SubmitCreateAsync(
+            tokenId,
+            new ActorContext(actorUserId, Role.Teacher, tokenId),
+            idempotencyKey,
+            model,
+            "POST:/api/open/v1/exercises",
+            cancellationToken);
+        return AcceptedOperation(result);
     }
 
     [HttpPut("{exerciseId:int}")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.ExercisesWrite)]
-    [ProducesResponseType(typeof(ExerciseExternalModel), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> Update(
         int exerciseId,
         [FromBody] ExerciseCreateModel model,
+        [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
         CancellationToken cancellationToken = default)
     {
-        _ = GetActor();
-        var existing = await managementService.GetExerciseForUpdateAsync(exerciseId, cancellationToken);
+        await AuthorizeExerciseAsync(exerciseId.ToString());
+        var existing = await exerciseService.GetExerciseByIdAsync(exerciseId, cancellationToken);
         if (existing is null)
             throw new ExerciseApiContractException(
                 "exercise_not_found", $"Exercise {exerciseId} not found.", 404);
 
-        existing.Title = model.Title;
-        existing.Content = model.Content;
-        existing.Category = model.Category;
-        existing.Type = model.Type;
-        existing.Difficulty = model.Difficulty;
-        existing.Credit = model.Credit;
-        existing.Tags = model.Tags ?? [];
-        existing.Hints = model.Hints;
-        existing.ContainerImage = model.ContainerImage;
-        existing.MemoryLimit = model.MemoryLimit;
-        existing.StorageLimit = model.StorageLimit;
-        existing.CPUCount = model.CPUCount;
-        existing.ExposePort = model.ExposePort;
-        existing.NetworkMode = model.NetworkMode;
-        existing.FlagTemplate = model.FlagTemplate;
-        existing.Environment = model.Environment;
-        existing.ImageTemplateId = model.ImageTemplateId;
-        existing.IsEnabled = model.IsEnabled;
-
-        var updated = await managementService.UpdateExerciseWithRelationsAsync(existing, model.Flags, model.Attachment, cancellationToken);
-        return Ok(toExternalModel(updated));
+        var (tokenId, actorUserId) = GetActor();
+        var result = await mutations.SubmitUpdateAsync(
+            exerciseId,
+            tokenId,
+            new ActorContext(actorUserId, Role.Teacher, tokenId),
+            idempotencyKey,
+            model,
+            $"PUT:/api/open/v1/exercises/{exerciseId}",
+            cancellationToken);
+        return AcceptedOperation(result);
     }
 
     [HttpDelete("{exerciseId:int}")]
@@ -177,19 +142,23 @@ public sealed class ExerciseOpenApiController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(
         int exerciseId,
+        [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
         CancellationToken cancellationToken = default)
     {
-        _ = GetActor();
+        await AuthorizeExerciseAsync(exerciseId.ToString());
         var existing = await exerciseService.GetExerciseByIdAsync(exerciseId, cancellationToken);
         if (existing is null)
             throw new ExerciseApiContractException(
                 "exercise_not_found", $"Exercise {exerciseId} not found.", 404);
-        if (existing.TrainingCourseId is not null)
-            throw new ExerciseApiContractException(
-                "exercise_in_use", $"Exercise {exerciseId} is referenced by a training course and cannot be deleted.", 422);
-
-        await managementService.RemoveExerciseAsync(exerciseId, cancellationToken);
-        return NoContent();
+        var (tokenId, actorUserId) = GetActor();
+        var result = await mutations.SubmitDeleteAsync(
+            exerciseId,
+            tokenId,
+            new ActorContext(actorUserId, Role.Teacher, tokenId),
+            idempotencyKey,
+            $"DELETE:/api/open/v1/exercises/{exerciseId}",
+            cancellationToken);
+        return AcceptedOperation(result);
     }
 
     private static ExerciseExternalSummaryModel toSummary(ExerciseChallenge exercise) => new()
@@ -290,9 +259,6 @@ public sealed class ExerciseOpenApiController(
             .ToArray();
     }
 
-    private static void ValidateIdempotencyKey(string key) =>
-        ExternalIdempotencyKey.Normalize(key);
-
     private static ExerciseImportItemModel NormalizeImportItem(ExerciseImportItemModel item)
     {
         if (item is null)
@@ -317,33 +283,24 @@ public sealed class ExerciseOpenApiController(
         return item;
     }
 
-    private static void ApplyFlagsAndAttachment(ExerciseChallenge exercise, List<ExerciseOpenApiFlagModel>? flags, ExerciseOpenApiAttachmentModel? attachment)
+    private AcceptedResult AcceptedOperation(IdempotencyBeginResult result)
     {
-        if (flags is { Count: > 0 })
-        {
-            exercise.Flags = flags.Select(f => new FlagContext
-            {
-                Flag = f.Flag,
-                OrderIndex = f.OrderIndex,
-                Description = f.Description,
-                ScoreMode = f.ScoreMode,
-                FixedScore = f.FixedScore,
-                MaxAttempts = f.MaxAttempts,
-                AttachmentHash = f.AttachmentHash,
-                AnswerType = f.AnswerType,
-                CustomName = f.CustomName,
-                Attachment = toAttachmentEntity(f.Attachment),
-                Exercise = exercise,
-            }).ToList();
-        }
-
-        if (attachment is not null)
-            exercise.Attachment = toAttachmentEntity(attachment);
+        var operation = ApiOperationModel.FromEntity(result.Operation);
+        return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
     }
 
-    private static Attachment? toAttachmentEntity(ExerciseOpenApiAttachmentModel? model) => model is null
-        ? null
-        : new Attachment { Type = FileType.Remote, RemoteUrl = model.RemoteUrl };
+    private async Task AuthorizeExerciseAsync(string resourceId)
+    {
+        var result = await authorization.AuthorizeAsync(
+            User,
+            null,
+            new ApiResourceRequirement("exercise", resourceId, true));
+        if (!result.Succeeded)
+            throw new ExerciseApiContractException(
+                "insufficient_permission",
+                $"The token does not grant access to exercise resource {resourceId}.",
+                403);
+    }
 
     private (Guid TokenId, Guid ActorUserId) GetActor()
     {

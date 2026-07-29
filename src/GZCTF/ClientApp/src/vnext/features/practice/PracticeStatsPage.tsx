@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useExercises } from './api/practiceApi'
+import { ExerciseInfoDto } from './api/practiceApi'
 import { useVNextPageTitle } from '../../shared/useVNextPageTitle'
 import { DataState, PageHeading } from '../../shared/Primitives'
 import styles from './PracticePage.module.css'
@@ -8,12 +9,7 @@ function barWidthClass(solved: number, total: number) {
   return styles[`barWidth${Math.round((solved / Math.max(1, total)) * 10)}`]
 }
 
-export function PracticeStatsPage() {
-  useVNextPageTitle('练习统计')
-  const { data: exercises, error } = useExercises()
-
-  const stats = useMemo(() => {
-    if (!exercises) return null
+export function calculatePracticeStats(exercises: ExerciseInfoDto[]) {
     const total = exercises.length
     const byCategory = new Map<string, { total: number; solved: number }>()
     const byDifficulty = new Map<string, { total: number; solved: number }>()
@@ -24,20 +20,29 @@ export function PracticeStatsPage() {
 
       const catStats = byCategory.get(cat) ?? { total: 0, solved: 0 }
       catStats.total++
+      if (ex.solved) catStats.solved++
       byCategory.set(cat, catStats)
 
       const diffStats = byDifficulty.get(diff) ?? { total: 0, solved: 0 }
       diffStats.total++
+      if (ex.solved) diffStats.solved++
       byDifficulty.set(diff, diffStats)
     }
 
-    const solved = exercises.filter(e => (e.acceptedCount ?? 0) > 0).length
-    const accuracy = exercises.length > 0
-      ? Math.round((exercises.reduce((a, e) => a + (e.acceptedCount ?? 0), 0) / Math.max(1, exercises.reduce((a, e) => a + (e.submissionCount ?? 0), 0))) * 100)
+    const solved = exercises.filter(e => e.solved).length
+    const submissions = exercises.reduce((total, exercise) => total + exercise.userSubmissionCount, 0)
+    const accepted = exercises.reduce((total, exercise) => total + exercise.userAcceptedCount, 0)
+    const accuracy = submissions > 0
+      ? Math.round((accepted / submissions) * 100)
       : 0
 
     return { total, solved, accuracy, byCategory, byDifficulty }
-  }, [exercises])
+}
+
+export function PracticeStatsPage() {
+  useVNextPageTitle('练习统计')
+  const { data: exercises, error } = useExercises()
+  const stats = useMemo(() => exercises ? calculatePracticeStats(exercises) : null, [exercises])
 
   return (
     <div className={styles.page}>

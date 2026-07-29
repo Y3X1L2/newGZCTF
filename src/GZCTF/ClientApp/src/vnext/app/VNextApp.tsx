@@ -142,6 +142,9 @@ const AdminDashboardPage = lazy(() =>
 const AdminGamesPage = lazy(() =>
   import('../features/admin/games/AdminGamesPage').then((module) => ({ default: module.AdminGamesPage }))
 )
+const AdminExercisesPage = lazy(() =>
+  import('../features/admin/exercises/AdminExercisesPage').then((module) => ({ default: module.AdminExercisesPage }))
+)
 const AdminTheoryBankPage = lazy(() =>
   import('../features/admin/theory/AdminTheoryBankPage').then((module) => ({ default: module.AdminTheoryBankPage }))
 )
@@ -251,6 +254,7 @@ export function VNextApp() {
             <Route index element={<Navigate replace to="dashboard" />} />
             <Route path="dashboard" element={<AdminDashboardPage />} />
             <Route path="games" element={<AdminGamesPage />} />
+            <Route path="exercises" element={<AdminExercisesPage />} />
             <Route path="theory-bank" element={<AdminTheoryBankPage />} />
             <Route path="games/:gameId" element={<GameAdminShell />}>
               <Route index element={<Navigate replace to="info" />} />

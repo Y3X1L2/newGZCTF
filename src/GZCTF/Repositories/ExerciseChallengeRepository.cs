@@ -12,6 +12,9 @@ public class ExerciseChallengeRepository(AppDbContext context, IBlobRepository b
 {
     public async Task<ExerciseChallenge> CreateExercise(ExerciseChallenge exercise, CancellationToken token = default)
     {
+        if (exercise.TrainingCourseId is not null)
+            throw new InvalidOperationException("The public exercise repository cannot create course-owned exercises.");
+
         await Context.AddAsync(exercise, token);
         await SaveAsync(token);
         return exercise;
@@ -22,8 +25,16 @@ public class ExerciseChallengeRepository(AppDbContext context, IBlobRepository b
 
     public async Task RemoveExercise(ExerciseChallenge exercise, CancellationToken token = default)
     {
+        if (exercise.TrainingCourseId is not null)
+            throw new InvalidOperationException("The public exercise repository cannot remove course-owned exercises.");
+
         await blobRepository.DeleteAttachment(exercise.Attachment, token);
 
+        await Context.Entry(exercise).Collection(item => item.Flags).LoadAsync(token);
+        foreach (var flag in exercise.Flags)
+            await blobRepository.DeleteAttachment(flag.Attachment, token);
+
+        Context.RemoveRange(exercise.Flags);
         Context.Remove(exercise);
         await SaveAsync(token);
     }

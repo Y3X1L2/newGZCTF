@@ -13,6 +13,7 @@ using ApiTokenScopeGrantEntity = GZCTF.Modules.Identity.Domain.ApiTokenScopeGran
 using TrainingCourseImageTemplateBindingEntity = GZCTF.Modules.Training.Domain.TrainingCourseImageTemplateBinding;
 using ImageImportJobEntity = GZCTF.Modules.Content.Domain.ImageImportJob;
 using ChallengeMutationJobEntity = GZCTF.Modules.Ctf.Domain.ChallengeMutationJob;
+using ExerciseMutationJobEntity = GZCTF.Modules.Exercise.Domain.ExerciseMutationJob;
 using ExternalApiRequestAuditEntity = GZCTF.Modules.Audit.Domain.ExternalApiRequestAudit;
 using OperationalEventEntity = GZCTF.Modules.Audit.Domain.OperationalEvent;
 using TeamLabTopologyEntity = GZCTF.Modules.TeamLab.Domain.TeamLabTopology;
@@ -71,6 +72,7 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<FirstSolve> FirstSolves { get; set; } = null!;
     public DbSet<ExerciseInstance> ExerciseInstances { get; set; } = null!;
     public DbSet<ExerciseChallenge> ExerciseChallenges { get; set; } = null!;
+    public DbSet<ExerciseSubmission> ExerciseSubmissions { get; set; } = null!;
     public DbSet<UserParticipation> UserParticipations { get; set; } = null!;
     public DbSet<ExerciseDependency> ExerciseDependencies { get; set; } = null!;
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
@@ -83,6 +85,7 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TrainingCourseImageTemplateBindingEntity> TrainingCourseImageTemplateBindings { get; set; } = null!;
     public DbSet<ImageImportJobEntity> ImageImportJobs { get; set; } = null!;
     public DbSet<ChallengeMutationJobEntity> ChallengeMutationJobs { get; set; } = null!;
+    public DbSet<ExerciseMutationJobEntity> ExerciseMutationJobs { get; set; } = null!;
     public DbSet<ImageTemplate> ImageTemplates { get; set; } = null!;
     public DbSet<ImageDistributionRecord> ImageDistributionRecords { get; set; } = null!;
     public DbSet<ImageDistributionReferenceEntity> ImageDistributionReferences => Set<ImageDistributionReferenceEntity>();
@@ -369,6 +372,28 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .OnDelete(DeleteBehavior.SetNull);
 
             entity.Navigation(e => e.Exercise).AutoInclude();
+        });
+
+        builder.Entity<ExerciseSubmission>(entity =>
+        {
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(32);
+
+            entity.HasOne(e => e.ExerciseChallenge)
+                .WithMany()
+                .HasForeignKey(e => e.ExerciseChallengeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Flag)
+                .WithMany()
+                .HasForeignKey(e => e.FlagId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<Container>(entity =>

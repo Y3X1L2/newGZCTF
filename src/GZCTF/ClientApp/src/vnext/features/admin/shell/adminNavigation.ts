@@ -5,6 +5,7 @@ import {
   CircleGauge,
   FileClock,
   GraduationCap,
+  Dumbbell,
   ListTodo,
   Server,
   Settings2,
@@ -35,6 +36,7 @@ export const adminNavigation: AdminNavigationGroup[] = [
     label: '业务',
     items: [
       { id: 'games', label: '赛事管理', route: '/admin/games', icon: Trophy, implemented: true },
+      { id: 'exercises', label: '练习题库', route: '/admin/exercises', icon: Dumbbell, implemented: true },
       { id: 'theory-bank', label: '理论题库', route: '/admin/theory-bank', icon: BookOpenCheck, implemented: true },
     ],
   },

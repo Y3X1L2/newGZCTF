@@ -194,3 +194,8 @@ public sealed class ExerciseImportResultItem
 public sealed record ExerciseImportResult(
     IReadOnlyList<ExerciseImportResultItem> Imported,
     IReadOnlyList<string> Missing);
+
+public sealed record ExerciseMutationResult(
+    IReadOnlyList<ExerciseImportResultItem> Imported,
+    IReadOnlyList<int> Updated,
+    IReadOnlyList<int> Deleted);

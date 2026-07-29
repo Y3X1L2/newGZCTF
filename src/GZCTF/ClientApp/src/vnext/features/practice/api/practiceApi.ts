@@ -28,6 +28,28 @@ export interface ExerciseDetailDto {
   credit: boolean
   content: string
   hints: string[] | null
+  flags: {
+    id: number
+    orderIndex: number
+    description: string | null
+    customName: string | null
+    answerType: string
+    attachmentUrl: string | null
+    attachmentFileSize: number | null
+  }[]
+  solvedFlagIds: number[]
+  attempts: number
+  limit: number | null
+  solved: boolean
+  queue: {
+    status: string
+    operation: string
+    queuePosition: number
+    peopleAhead: number
+    targetNodeName: string | null
+    stageMessage: string | null
+    errorMessage: string | null
+  } | null
   context: {
     closeTime: number | null
     instanceEntry: string | null
@@ -50,12 +72,27 @@ export interface ExerciseInfoDto {
   isEnabled: boolean
   acceptedCount: number
   submissionCount: number
+  solved: boolean
+  userAcceptedCount: number
+  userSubmissionCount: number
+}
+
+async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init)
+  const body = await response.json().catch(() => null) as T | { message?: string; title?: string } | null
+  if (!response.ok) {
+    const detail = body && typeof body === 'object' && ('message' in body || 'title' in body)
+      ? body.message || body.title
+      : null
+    throw new Error(detail || `Request failed with status ${response.status}`)
+  }
+  return body as T
 }
 
 export function useExercises(filter?: string) {
   const { data, error, mutate } = useSWR<ExerciseInfoDto[]>(
     filter ? `${BASE}?${filter}` : BASE,
-    () => fetch(filter ? `${BASE}?${filter}` : BASE).then(r => r.json())
+    () => requestJson<ExerciseInfoDto[]>(filter ? `${BASE}?${filter}` : BASE)
   )
   return { data, error, mutate }
 }
@@ -63,7 +100,7 @@ export function useExercises(filter?: string) {
 export function useExerciseDetail(id: number) {
   const { data, error, mutate } = useSWR<ExerciseDetailDto>(
     id > 0 ? `${BASE}/${id}` : null,
-    () => fetch(`${BASE}/${id}`).then(r => r.json())
+    () => requestJson<ExerciseDetailDto>(`${BASE}/${id}`)
   )
   return { data, error, mutate }
 }
@@ -71,18 +108,27 @@ export function useExerciseDetail(id: number) {
 export async function submitFlag(id: number, flag: string, flagId?: number) {
   const body: Record<string, unknown> = { flag }
   if (flagId) body.flagId = flagId
-  const response = await fetch(`${BASE}/${id}/flag`, {
+  return requestJson<{ status: string; flagId: number | null }>(`${BASE}/${id}/flag`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  return response.json()
 }
 
 export async function createContainer(id: number) {
-  const response = await fetch(`${BASE}/${id}/container`, {
+  return requestJson(`${BASE}/${id}/container`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   })
-  return response.json()
+}
+
+export async function extendContainer(id: number) {
+  return requestJson(`${BASE}/${id}/container/extend`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+export async function destroyContainer(id: number) {
+  return requestJson(`${BASE}/${id}/container`, { method: 'DELETE' })
 }

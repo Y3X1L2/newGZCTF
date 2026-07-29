@@ -16,6 +16,14 @@ public interface IExerciseInstanceRepository : IRepository
     public Task<ExerciseInstance?> GetInstance(UserInfo user, int exerciseId, CancellationToken token = default);
 
     /// <summary>
+    /// Gets or creates an unlocked global exercise instance for the current user.
+    /// </summary>
+    public Task<ExerciseInstance?> GetOrCreatePublicInstance(
+        UserInfo user,
+        int exerciseId,
+        CancellationToken token = default);
+
+    /// <summary>
     /// 获取练习题实例
     /// </summary>
     /// <param name="user"></param>

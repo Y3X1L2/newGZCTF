@@ -1,12 +1,17 @@
 using GZCTF.Repositories.Interface;
 using GZCTF.Models.Request.Exercise;
+using GZCTF.Models.Internal;
+using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace GZCTF.Modules.Exercise.Application;
 
 public sealed class ExerciseService(
     AppDbContext context,
-    IExerciseInstanceRepository instanceRepository) : IExerciseService
+    IExerciseInstanceRepository instanceRepository,
+    DeploymentQueueService deploymentQueue,
+    IOptionsSnapshot<ContainerPolicy> containerPolicy) : IExerciseService
 {
     public async Task<ExerciseChallenge[]> GetExercisesAsync(CancellationToken token = default) =>
         await context.ExerciseChallenges
@@ -22,14 +27,17 @@ public sealed class ExerciseService(
             .Include(e => e.Attachment)
             .FirstOrDefaultAsync(e => e.Id == exerciseId && e.IsEnabled && e.TrainingCourseId == null, token);
 
-    public async Task<ExerciseInfoModel[]> GetExerciseListAsync(ExerciseFilter? filter, CancellationToken token = default)
+    public async Task<ExerciseInfoModel[]> GetExerciseListAsync(
+        ExerciseFilter? filter,
+        CancellationToken token = default,
+        Guid? userId = null)
     {
         var query = context.ExerciseChallenges
             .AsNoTracking()
             .Where(e => e.IsEnabled && e.TrainingCourseId == null);
 
         if (filter is null)
-            return await BuildInfoModels(query).ToArrayAsync(token);
+            return await BuildInfoModels(query, userId).ToArrayAsync(token);
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
@@ -51,38 +59,157 @@ public sealed class ExerciseService(
         if (filter.Credit.HasValue)
             query = query.Where(e => e.Credit == filter.Credit.Value);
 
-        return await BuildInfoModels(query).ToArrayAsync(token);
+        return await BuildInfoModels(query, userId).ToArrayAsync(token);
     }
 
     public async Task<ExerciseDetailModel?> GetExerciseDetailAsync(UserInfo user, int exerciseId, CancellationToken token = default)
     {
-        var instance = await instanceRepository.GetInstance(user, exerciseId, token);
+        var instance = await instanceRepository.GetOrCreatePublicInstance(user, exerciseId, token);
         if (instance is null)
             return null;
 
-        return ExerciseDetailModel.FromInstance(instance);
+        var submissions = context.ExerciseSubmissions
+            .AsNoTracking()
+            .Where(submission => submission.UserId == user.Id && submission.ExerciseChallengeId == exerciseId);
+        var attempts = await submissions.CountAsync(token);
+        var solvedFlagIds = await submissions
+            .Where(submission => submission.Status == AnswerResult.Accepted && submission.FlagId != null)
+            .Select(submission => submission.FlagId!.Value)
+            .Distinct()
+            .ToArrayAsync(token);
+        var queue = await deploymentQueue.GetLatestSubjectStatusAsync(
+            DeploymentQueueRequest.ExerciseContainer(user.Id, exerciseId), token);
+        var model = ExerciseDetailModel.FromInstance(instance, attempts, solvedFlagIds, queue);
+        PlayerRuntimeStatusProjection.Apply(model.Context, queue);
+        return model;
     }
 
     public async Task<(AnswerResult Status, int? FlagId)> SubmitFlagAsync(UserInfo user, int exerciseId, string answer,
-        int? flagId = null, CancellationToken token = default)
+        int? flagId = null, string? ipAddress = null, CancellationToken token = default)
     {
-        var instance = await instanceRepository.GetInstance(user, exerciseId, token);
+        var instance = await instanceRepository.GetOrCreatePublicInstance(user, exerciseId, token);
         if (instance is null)
             return (AnswerResult.NotFound, null);
 
-        return await instanceRepository.VerifyAnswer(user, instance, answer, 0, flagId, token);
+        var attempts = await context.ExerciseSubmissions.CountAsync(submission =>
+            submission.UserId == user.Id && submission.ExerciseChallengeId == exerciseId, token);
+        if (instance.Exercise.SubmissionLimit > 0 && attempts >= instance.Exercise.SubmissionLimit)
+            return (AnswerResult.WrongAnswer, flagId);
+
+        var result = await instanceRepository.VerifyAnswer(user, instance, answer, 0, flagId, token);
+        if (result.Status == AnswerResult.NotFound)
+            return result;
+
+        context.ExerciseSubmissions.Add(new ExerciseSubmission
+        {
+            UserId = user.Id,
+            ExerciseChallengeId = exerciseId,
+            Status = result.Status,
+            SubmittedAnswerHash = answer.ToSHA256String(),
+            FlagId = result.FlagId,
+            IpAddress = ipAddress ?? string.Empty
+        });
+
+        if (result.Status == AnswerResult.Accepted && result.FlagId.HasValue)
+        {
+            var requiredFlagIds = instance.Exercise.Type is ChallengeType.DynamicAttachment or ChallengeType.DynamicContainer
+                ? [result.FlagId.Value]
+                : await context.FlagContexts
+                    .Where(flag => flag.ExerciseId == exerciseId)
+                    .Select(flag => flag.Id)
+                    .ToArrayAsync(token);
+            var solvedFlagIds = await context.ExerciseSubmissions
+                .Where(submission =>
+                    submission.UserId == user.Id &&
+                    submission.ExerciseChallengeId == exerciseId &&
+                    submission.Status == AnswerResult.Accepted &&
+                    submission.FlagId != null)
+                .Select(submission => submission.FlagId!.Value)
+                .Distinct()
+                .ToArrayAsync(token);
+            if (requiredFlagIds.All(required => required == result.FlagId.Value || solvedFlagIds.Contains(required)))
+                instance.SolveTimeUtc = DateTimeOffset.UtcNow;
+        }
+
+        await context.SaveChangesAsync(token);
+        if (instance.SolveTimeUtc > DateTimeOffset.FromUnixTimeSeconds(0))
+            await instanceRepository.GetExerciseInstances(user, token);
+        return result;
     }
 
     public async Task<TaskResult<Container>> CreateContainerAsync(UserInfo user, int exerciseId, CancellationToken token = default)
     {
-        var instance = await instanceRepository.GetInstance(user, exerciseId, token);
+        var instance = await instanceRepository.GetOrCreatePublicInstance(user, exerciseId, token);
         if (instance is null)
-            return new TaskResult<Container>(TaskStatus.Failed);
+            return new TaskResult<Container>(TaskStatus.NotFound);
+        if (!instance.Exercise.Type.IsContainer())
+            return new TaskResult<Container>(TaskStatus.Denied);
+        if (instance.IsContainerOperationTooFrequent)
+            return new TaskResult<Container>(TaskStatus.Denied);
 
         return await instanceRepository.CreateContainer(instance, user, token);
     }
 
-    IQueryable<ExerciseInfoModel> BuildInfoModels(IQueryable<ExerciseChallenge> query) =>
+    public async Task<TaskResult<DeploymentQueueStatusModel>> ExtendContainerAsync(
+        UserInfo user,
+        int exerciseId,
+        CancellationToken token = default)
+    {
+        var instance = await instanceRepository.GetOrCreatePublicInstance(user, exerciseId, token);
+        if (instance is null)
+            return new TaskResult<DeploymentQueueStatusModel>(TaskStatus.NotFound);
+        if (!instance.Exercise.Type.IsContainer() || instance.Container is null)
+            return new TaskResult<DeploymentQueueStatusModel>(TaskStatus.Denied);
+        if (instance.Container.ExpectStopAt - DateTimeOffset.UtcNow >
+            TimeSpan.FromMinutes(containerPolicy.Value.RenewalWindow))
+            return new TaskResult<DeploymentQueueStatusModel>(TaskStatus.Denied);
+
+        var queued = await deploymentQueue.EnqueueAsync(DeploymentQueueRequest.ExerciseContainer(
+            user.Id, instance.ExerciseId) with
+        {
+            Operation = RuntimeOperationKind.Extend,
+            TargetNodeId = instance.Container.NodeId,
+            ExtensionSeconds = (int)TimeSpan.FromMinutes(containerPolicy.Value.ExtensionDuration).TotalSeconds,
+            SubjectDisplayName = user.UserName,
+            ResourceDisplayName = instance.Exercise.Title
+        }, token);
+        var status = await deploymentQueue.GetStatusAsync(queued.TicketId, token);
+        return status is null
+            ? new TaskResult<DeploymentQueueStatusModel>(TaskStatus.Failed)
+            : new TaskResult<DeploymentQueueStatusModel>(TaskStatus.Success, status);
+    }
+
+    public async Task<TaskResult<DeploymentQueueStatusModel>> DestroyContainerAsync(
+        UserInfo user,
+        int exerciseId,
+        CancellationToken token = default)
+    {
+        var instance = await instanceRepository.GetOrCreatePublicInstance(user, exerciseId, token);
+        if (instance is null)
+            return new TaskResult<DeploymentQueueStatusModel>(TaskStatus.NotFound);
+        if (!instance.Exercise.Type.IsContainer() || instance.Container is null)
+            return new TaskResult<DeploymentQueueStatusModel>(TaskStatus.Denied);
+        if (instance.IsContainerOperationTooFrequent)
+            return new TaskResult<DeploymentQueueStatusModel>(TaskStatus.Denied);
+
+        var queued = await deploymentQueue.EnqueueAsync(DeploymentQueueRequest.ExerciseContainer(
+            user.Id, instance.ExerciseId) with
+        {
+            Operation = RuntimeOperationKind.Stop,
+            Generation = instance.Container.RuntimeGeneration,
+            TargetNodeId = instance.Container.NodeId,
+            SubjectDisplayName = user.UserName,
+            ResourceDisplayName = instance.Exercise.Title
+        }, token);
+        instance.LastContainerOperation = DateTimeOffset.UtcNow;
+        await context.SaveChangesAsync(token);
+        var status = await deploymentQueue.GetStatusAsync(queued.TicketId, token);
+        return status is null
+            ? new TaskResult<DeploymentQueueStatusModel>(TaskStatus.Failed)
+            : new TaskResult<DeploymentQueueStatusModel>(TaskStatus.Success, status);
+    }
+
+    IQueryable<ExerciseInfoModel> BuildInfoModels(IQueryable<ExerciseChallenge> query, Guid? userId) =>
         query.Select(e => new ExerciseInfoModel
         {
             Id = e.Id,
@@ -95,6 +222,21 @@ public sealed class ExerciseService(
             Credit = e.Credit,
             AcceptedCount = context.ExerciseInstances.Count(i =>
                 i.ExerciseId == e.Id && i.SolveTimeUtc > DateTimeOffset.FromUnixTimeSeconds(0)),
-            SubmissionCount = context.ExerciseInstances.Count(i => i.ExerciseId == e.Id)
+            SubmissionCount = context.ExerciseSubmissions.Count(submission =>
+                submission.ExerciseChallengeId == e.Id),
+            Solved = userId.HasValue && context.ExerciseInstances.Any(instance =>
+                instance.UserId == userId.Value &&
+                instance.ExerciseId == e.Id &&
+                instance.SolveTimeUtc > DateTimeOffset.FromUnixTimeSeconds(0)),
+            UserAcceptedCount = userId.HasValue
+                ? context.ExerciseSubmissions.Count(submission =>
+                    submission.UserId == userId.Value &&
+                    submission.ExerciseChallengeId == e.Id &&
+                    submission.Status == AnswerResult.Accepted)
+                : 0,
+            UserSubmissionCount = userId.HasValue
+                ? context.ExerciseSubmissions.Count(submission =>
+                    submission.UserId == userId.Value && submission.ExerciseChallengeId == e.Id)
+                : 0
         });
 }
