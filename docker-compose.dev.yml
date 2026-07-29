@@ -9,6 +9,8 @@ services:
       POSTGRES_PASSWORD: devpass
     ports:
       - "5432:5432"
+    volumes:
+      - gzctf_dev_postgres:/var/lib/postgresql/data
     security_opt:
       - no-new-privileges:true
     read_only: true
@@ -35,3 +37,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+
+volumes:
+  gzctf_dev_postgres:
