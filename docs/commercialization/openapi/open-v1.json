@@ -2625,6 +2625,359 @@
         ]
       }
     },
+    "/api/open/v1/exercises": {
+      "get": {
+        "tags": [
+          "ExerciseOpenApi"
+        ],
+        "operationId": "ExerciseOpenApi_List",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 1
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 2
+          },
+          {
+            "name": "difficulty",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 3
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 4
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50,
+              "maximum": 100.0,
+              "minimum": 1.0
+            },
+            "x-position": 5
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExerciseExternalPageModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "ExerciseOpenApi"
+        ],
+        "operationId": "ExerciseOpenApi_Create",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExerciseCreateModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/exercises/{exerciseId}": {
+      "get": {
+        "tags": [
+          "ExerciseOpenApi"
+        ],
+        "operationId": "ExerciseOpenApi_Get",
+        "parameters": [
+          {
+            "name": "exerciseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExerciseExternalModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "ExerciseOpenApi"
+        ],
+        "operationId": "ExerciseOpenApi_Update",
+        "parameters": [
+          {
+            "name": "exerciseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExerciseCreateModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "ExerciseOpenApi"
+        ],
+        "operationId": "ExerciseOpenApi_Delete",
+        "parameters": [
+          {
+            "name": "exerciseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/exercises/import": {
+      "post": {
+        "tags": [
+          "ExerciseOpenApi"
+        ],
+        "operationId": "ExerciseOpenApi_Import",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExerciseImportFromExternalModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
     "/api/open/v1/games/{gameId}/challenges": {
       "get": {
         "tags": [
@@ -4553,14 +4906,14 @@
           5
         ]
       },
-      "OpenChallengePageModel": {
+      "ExerciseExternalPageModel": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/OpenChallengeSummaryModel"
+              "$ref": "#/components/schemas/ExerciseExternalSummaryModel"
             }
           },
           "nextCursor": {
@@ -4569,7 +4922,7 @@
           }
         }
       },
-      "OpenChallengeSummaryModel": {
+      "ExerciseExternalSummaryModel": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
@@ -4586,25 +4939,20 @@
           "type": {
             "$ref": "#/components/schemas/ChallengeType"
           },
-          "isEnabled": {
+          "difficulty": {
+            "$ref": "#/components/schemas/Difficulty"
+          },
+          "credit": {
             "type": "boolean"
           },
-          "deadlineUtc": {
-            "type": "integer",
-            "format": "uint64",
-            "nullable": true
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
-          "originalScore": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "environment": {
-            "$ref": "#/components/schemas/EnvironmentType"
-          },
-          "imageTemplateId": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
+          "isEnabled": {
+            "type": "boolean"
           }
         }
       },
@@ -4660,6 +5008,145 @@
           "DynamicContainer"
         ]
       },
+      "Difficulty": {
+        "type": "string",
+        "description": "Challenge difficulty",
+        "x-enumNames": [
+          "Baby",
+          "Trivial",
+          "Easy",
+          "Normal",
+          "Medium",
+          "Hard",
+          "Expert",
+          "Insane"
+        ],
+        "enum": [
+          "Baby",
+          "Trivial",
+          "Easy",
+          "Normal",
+          "Medium",
+          "Hard",
+          "Expert",
+          "Insane"
+        ]
+      },
+      "ExerciseExternalModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/components/schemas/ChallengeCategory"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ChallengeType"
+          },
+          "difficulty": {
+            "$ref": "#/components/schemas/Difficulty"
+          },
+          "credit": {
+            "type": "boolean"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hints": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "containerImage": {
+            "type": "string",
+            "nullable": true
+          },
+          "memoryLimit": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "storageLimit": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "cpuCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "exposePort": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "networkMode": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NetworkMode"
+              }
+            ]
+          },
+          "environment": {
+            "$ref": "#/components/schemas/EnvironmentType"
+          },
+          "imageTemplateId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "flagTemplate": {
+            "type": "string",
+            "nullable": true
+          },
+          "attachment": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ExerciseOpenApiAttachmentModel"
+              }
+            ]
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExerciseOpenApiFlagInfoModel"
+            }
+          }
+        }
+      },
+      "NetworkMode": {
+        "type": "string",
+        "description": "Container network mode",
+        "x-enumNames": [
+          "Open",
+          "Isolated",
+          "Custom"
+        ],
+        "enum": [
+          "Open",
+          "Isolated",
+          "Custom"
+        ]
+      },
       "EnvironmentType": {
         "type": "string",
         "description": "Environment type for challenge deployment",
@@ -4673,6 +5160,413 @@
           "Docker",
           "WindowsVM"
         ]
+      },
+      "ExerciseOpenApiAttachmentModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "remoteUrl"
+        ],
+        "properties": {
+          "remoteUrl": {
+            "type": "string",
+            "maxLength": 2048,
+            "minLength": 1
+          }
+        }
+      },
+      "ExerciseOpenApiFlagInfoModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "flag": {
+            "type": "string"
+          },
+          "orderIndex": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "scoreMode": {
+            "$ref": "#/components/schemas/FlagScoreMode"
+          },
+          "fixedScore": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "attachmentHash": {
+            "type": "string",
+            "nullable": true
+          },
+          "answerType": {
+            "$ref": "#/components/schemas/AnswerType"
+          },
+          "customName": {
+            "type": "string",
+            "nullable": true
+          },
+          "attachment": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ExerciseOpenApiAttachmentModel"
+              }
+            ]
+          }
+        }
+      },
+      "FlagScoreMode": {
+        "type": "string",
+        "description": "Flag score mode",
+        "x-enumNames": [
+          "InheritDecay",
+          "FixedScore"
+        ],
+        "enum": [
+          "InheritDecay",
+          "FixedScore"
+        ]
+      },
+      "AnswerType": {
+        "type": "string",
+        "description": "Answer type for challenge submission",
+        "x-enumNames": [
+          "Flag",
+          "File",
+          "Custom"
+        ],
+        "enum": [
+          "Flag",
+          "File",
+          "Custom"
+        ]
+      },
+      "ExerciseImportFromExternalModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/ExerciseImportItemModel"
+            }
+          }
+        }
+      },
+      "ExerciseImportItemModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "externalId",
+          "title",
+          "content"
+        ],
+        "properties": {
+          "externalId": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 1000000,
+            "minLength": 1
+          },
+          "category": {
+            "$ref": "#/components/schemas/ChallengeCategory"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ChallengeType"
+          },
+          "difficulty": {
+            "$ref": "#/components/schemas/Difficulty"
+          },
+          "tags": {
+            "type": "array",
+            "maxItems": 100,
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "hints": {
+            "type": "array",
+            "maxItems": 512,
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "credit": {
+            "type": "boolean"
+          },
+          "flags": {
+            "type": "array",
+            "maxItems": 100,
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/ExerciseOpenApiFlagModel"
+            }
+          },
+          "attachment": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ExerciseOpenApiAttachmentModel"
+              }
+            ]
+          }
+        }
+      },
+      "ExerciseOpenApiFlagModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "flag"
+        ],
+        "properties": {
+          "flag": {
+            "type": "string",
+            "maxLength": 127,
+            "minLength": 1
+          },
+          "orderIndex": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 10000.0,
+            "minimum": 0.0
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 512,
+            "nullable": true
+          },
+          "scoreMode": {
+            "$ref": "#/components/schemas/FlagScoreMode"
+          },
+          "fixedScore": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1000000.0,
+            "minimum": 0.0
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 100000.0,
+            "minimum": 0.0
+          },
+          "attachmentHash": {
+            "type": "string",
+            "maxLength": 128,
+            "nullable": true
+          },
+          "answerType": {
+            "$ref": "#/components/schemas/AnswerType"
+          },
+          "customName": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true
+          },
+          "attachment": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ExerciseOpenApiAttachmentModel"
+              }
+            ]
+          }
+        }
+      },
+      "ExerciseCreateModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "content"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1
+          },
+          "category": {
+            "$ref": "#/components/schemas/ChallengeCategory"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ChallengeType"
+          },
+          "difficulty": {
+            "$ref": "#/components/schemas/Difficulty"
+          },
+          "credit": {
+            "type": "boolean"
+          },
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "tags": {
+            "type": "array",
+            "maxItems": 100,
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "hints": {
+            "type": "array",
+            "maxItems": 512,
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "containerImage": {
+            "type": "string",
+            "nullable": true
+          },
+          "memoryLimit": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "storageLimit": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "cpuCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "exposePort": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "networkMode": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NetworkMode"
+              }
+            ]
+          },
+          "environment": {
+            "$ref": "#/components/schemas/EnvironmentType"
+          },
+          "imageTemplateId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "flagTemplate": {
+            "type": "string",
+            "nullable": true
+          },
+          "flags": {
+            "type": "array",
+            "maxItems": 100,
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/ExerciseOpenApiFlagModel"
+            }
+          },
+          "attachment": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ExerciseOpenApiAttachmentModel"
+              }
+            ]
+          }
+        }
+      },
+      "OpenChallengePageModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenChallengeSummaryModel"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "OpenChallengeSummaryModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/components/schemas/ChallengeCategory"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ChallengeType"
+          },
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "deadlineUtc": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "originalScore": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "environment": {
+            "$ref": "#/components/schemas/EnvironmentType"
+          },
+          "imageTemplateId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        }
       },
       "OpenChallengeModel": {
         "type": "object",
@@ -4786,20 +5680,6 @@
           }
         }
       },
-      "NetworkMode": {
-        "type": "string",
-        "description": "Container network mode",
-        "x-enumNames": [
-          "Open",
-          "Isolated",
-          "Custom"
-        ],
-        "enum": [
-          "Open",
-          "Isolated",
-          "Custom"
-        ]
-      },
       "OpenChallengeFlagInfoModel": {
         "type": "object",
         "additionalProperties": false,
@@ -4850,32 +5730,6 @@
             ]
           }
         }
-      },
-      "FlagScoreMode": {
-        "type": "string",
-        "description": "Flag score mode",
-        "x-enumNames": [
-          "InheritDecay",
-          "FixedScore"
-        ],
-        "enum": [
-          "InheritDecay",
-          "FixedScore"
-        ]
-      },
-      "AnswerType": {
-        "type": "string",
-        "description": "Answer type for challenge submission",
-        "x-enumNames": [
-          "Flag",
-          "File",
-          "Custom"
-        ],
-        "enum": [
-          "Flag",
-          "File",
-          "Custom"
-        ]
       },
       "OpenChallengeAttachmentInfoModel": {
         "type": "object",
