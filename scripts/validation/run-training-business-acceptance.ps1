@@ -82,8 +82,8 @@ function Wait-Queue {
     do {
         $queue = (Invoke-Api $Client GET "/api/v1/deployment-queue/$TicketId").Data
         $status = [string]$queue.status
-        if ($status -in @('3', 'Completed', 'Succeeded')) { return $queue }
-        if ($status -in @('4', '5', 'Failed', 'Cancelled')) {
+        if ($status -in @('4', 'Completed', 'Succeeded')) { return $queue }
+        if ($status -in @('5', '6', 'Failed', 'Cancelled')) {
             throw "queue $TicketId ended with status=$status error=$($queue.errorMessage)"
         }
         Start-Sleep -Seconds 2
