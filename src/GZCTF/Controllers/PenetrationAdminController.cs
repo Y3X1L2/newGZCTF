@@ -3,7 +3,9 @@ using System.Net.Mime;
 using GZCTF.Middlewares;
 using GZCTF.Modules.Penetration.Application;
 using GZCTF.Modules.Penetration.Contracts;
+using GZCTF.Modules.Penetration.Domain;
 using GZCTF.Modules.TeamLab.Application;
+using GZCTF.Modules.TeamLab.Domain.Runtime;
 using GZCTF.Repositories.Interface;
 using GZCTF.Utils;
 using Microsoft.AspNetCore.Identity;
@@ -20,7 +22,8 @@ public sealed class PenetrationAdminController(
     IGameRepository games,
     UserManager<UserInfo> users,
     PenetrationTeamLabAdapter adapter,
-    PenetrationObjectiveService objectives) : ControllerBase
+    PenetrationObjectiveService objectives,
+    AppDbContext context) : ControllerBase
 {
     [HttpGet("games/{gameId:int}/binding")]
     public async Task<IActionResult> GetBinding(int gameId, CancellationToken cancellationToken)
@@ -191,6 +194,79 @@ public sealed class PenetrationAdminController(
     {
         var (_, _, error) = await RequireManageableGameAsync(gameId, cancellationToken);
         return error ?? Ok(await adapter.ListRuntimesAsync(gameId, cancellationToken));
+    }
+
+    [HttpGet("games/{gameId:int}/teamlab/operators")]
+    public async Task<IActionResult> ListTeamLabOperators(int gameId, CancellationToken cancellationToken)
+    {
+        var (_, _, error) = await RequireManageableGameAsync(gameId, cancellationToken);
+        if (error is not null) return error;
+        var grants = await context.PenetrationTeamLabOperatorGrants.AsNoTracking()
+            .Where(item => item.GameId == gameId)
+            .OrderBy(item => item.User.UserName)
+            .Select(item => new TeamLabOperatorGrantModel(
+                item.UserId,
+                item.User.UserName ?? string.Empty,
+                item.User.RealName,
+                (item.Permissions & TeamLabOperatorPermission.ViewAssets) != 0,
+                (item.Permissions & TeamLabOperatorPermission.OperateAssets) != 0,
+                item.UpdatedAt))
+            .ToArrayAsync(cancellationToken);
+        return Ok(grants);
+    }
+
+    [HttpPut("games/{gameId:int}/teamlab/operators/{userId:guid}")]
+    public async Task<IActionResult> SetTeamLabOperator(
+        int gameId,
+        Guid userId,
+        TeamLabOperatorGrantWriteModel model,
+        CancellationToken cancellationToken)
+    {
+        var (_, actor, error) = await RequireManageableGameAsync(gameId, cancellationToken);
+        if (error is not null) return error;
+        if (!await context.Users.AsNoTracking().AnyAsync(item => item.Id == userId, cancellationToken))
+            return NotFound(new RequestResponse("User not found.", StatusCodes.Status404NotFound));
+
+        var permissions = model.ViewAssets || model.OperateAssets
+            ? TeamLabOperatorPermission.ViewAssets
+            : TeamLabOperatorPermission.None;
+        if (model.OperateAssets) permissions |= TeamLabOperatorPermission.OperateAssets;
+
+        var grant = await context.PenetrationTeamLabOperatorGrants
+            .SingleOrDefaultAsync(item => item.GameId == gameId && item.UserId == userId, cancellationToken);
+        if (permissions == TeamLabOperatorPermission.None)
+        {
+            if (grant is not null) context.Remove(grant);
+        }
+        else if (grant is null)
+        {
+            context.PenetrationTeamLabOperatorGrants.Add(new PenetrationTeamLabOperatorGrant
+            {
+                GameId = gameId,
+                UserId = userId,
+                Permissions = permissions,
+                GrantedByUserId = actor!.Id
+            });
+        }
+        else
+        {
+            grant.Permissions = permissions;
+            grant.GrantedByUserId = actor!.Id;
+            grant.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+        await context.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
+    [HttpDelete("games/{gameId:int}/teamlab/operators/{userId:guid}")]
+    public async Task<IActionResult> DeleteTeamLabOperator(int gameId, Guid userId, CancellationToken cancellationToken)
+    {
+        var (_, _, error) = await RequireManageableGameAsync(gameId, cancellationToken);
+        if (error is not null) return error;
+        await context.PenetrationTeamLabOperatorGrants
+            .Where(item => item.GameId == gameId && item.UserId == userId)
+            .ExecuteDeleteAsync(cancellationToken);
+        return NoContent();
     }
 
     [HttpGet("games/{gameId:int}/submissions")]

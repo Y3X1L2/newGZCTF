@@ -58,7 +58,10 @@ public sealed class TeamLabRuntimeOrchestrator(
             runtime.PublicId,
             WorkloadSchedulingIdentity.ForRuntime(runtime.Id, $"teamlab-runtime:{runtime.Id}", actorUserId),
             subjectDisplayName ?? runtime.ExternalReference ?? runtime.PublicId.ToString("D"),
-            $"{dockerSlots} Docker / {vmSlots} VM"), cancellationToken);
+            $"{dockerSlots} Docker / {vmSlots} VM",
+            // A create request for an existing external reference is turned into a reset by the
+            // planner, so the runtime may already be past its first generation.
+            runtime.Generation), cancellationToken);
         await LinkOperationAsync(operationId, runtime, queued.TicketId, cancellationToken);
         return result;
     }
@@ -90,8 +93,8 @@ public sealed class TeamLabRuntimeOrchestrator(
             WorkloadSchedulingIdentity.ForRuntime(runtime.Id, $"teamlab-runtime:{runtime.Id}", runtime.CreatedById),
             runtime.ExternalReference ?? runtime.PublicId.ToString("D"),
             $"reset generation {runtime.Generation + 1}",
-            RuntimeOperationKind.Reset,
             runtime.Generation + 1,
+            RuntimeOperationKind.Reset,
             null,
             protectedPayload,
             payloadHash), cancellationToken);
@@ -297,6 +300,14 @@ public sealed class TeamLabRuntimeOrchestrator(
             return await FailAsync(runtime, exception.Message, cancellationToken);
         }
 
+        // Captured before anything is deployed: assets of this generation that already carry a node
+        // resource id mean the generation is live on the nodes, so this run is a replay over running
+        // resources rather than a first deployment. Rolling back a replay would destroy a team's
+        // environment — including stateful assets the rebuild guard normally refuses to touch — and
+        // turn a transient network drift into permanent data loss.
+        var replayingLiveGeneration = runtime.Assets.Any(asset =>
+            asset.Generation == runtime.Generation && !string.IsNullOrWhiteSpace(asset.RuntimeResourceId));
+
         runtime.Status = TeamLabRuntimeStatus.Deploying;
         runtime.LastError = null;
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
@@ -350,12 +361,27 @@ public sealed class TeamLabRuntimeOrchestrator(
         {
             logger.LogWarning(exception, "TeamLab runtime {RuntimeId} deployment failed.", runtime.PublicId);
             TeamLabRuntimeOverlayService.Consume(envelope);
-            using var rollbackDeadline = new CancellationTokenSource(TimeSpan.FromMinutes(2));
-            var cleaned = await cleanup.CleanupAsync(runtime, rollbackDeadline.Token);
             activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
             var error = exception is IOperationalFailureException operationalFailure
                 ? operationalFailure.Error
                 : TeamLabFailure(runtime, "teamlab.deploy");
+
+            if (replayingLiveGeneration)
+            {
+                // Rollback only ever applies to a first deployment. Here the resources predate this
+                // run, so they are kept and the runtime is parked in a state an operator or the next
+                // reconcile pass can converge from.
+                logger.LogWarning(
+                    "TeamLab runtime {RuntimeId} replay failed; keeping generation {Generation} resources intact.",
+                    runtime.PublicId, runtime.Generation);
+                return await FailAsync(runtime,
+                    $"{exception.Message}; existing resources were kept because this was a replay of a live generation.",
+                    cancellationToken,
+                    error: error);
+            }
+
+            using var rollbackDeadline = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            var cleaned = await cleanup.CleanupAsync(runtime, rollbackDeadline.Token);
             return await FailAsync(runtime,
                 cleaned.Success ? exception.Message : $"{exception.Message}; cleanup: {cleaned.Message}",
                 rollbackDeadline.Token,
@@ -391,8 +417,8 @@ public sealed class TeamLabRuntimeOrchestrator(
                 actorUserId ?? runtime.CreatedById),
             runtime.ExternalReference ?? runtime.PublicId.ToString("D"),
             "destroy runtime",
-            RuntimeOperationKind.Destroy,
             runtime.Generation,
+            RuntimeOperationKind.Destroy,
             null), cancellationToken);
     }
 

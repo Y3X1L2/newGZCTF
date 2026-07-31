@@ -1,4 +1,5 @@
 import {
+  applyEdgeChanges,
   applyNodeChanges,
   Background,
   BackgroundVariant,
@@ -7,11 +8,12 @@ import {
   ReactFlowProvider,
   useReactFlow,
   type Connection,
+  type EdgeChange,
   type NodeChange,
   type OnNodeDrag,
   type OnSelectionChangeParams,
 } from '@xyflow/react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { TopologyDocument, TopologyNodeType } from '../../model/topologyDocument'
 import type { TopologySelection } from '../../model/topologySelection'
 import { teamLabEdgeTypes } from '../edges'
@@ -31,25 +33,84 @@ function allowPaletteDrop(event: React.DragEvent) {
   event.dataTransfer.dropEffect = 'copy'
 }
 
-function connectionCount(document: TopologyDocument, key: string) {
-  return Object.values(document.connections).filter(
-    (connection) =>
-      connection.type === 'membership' && (connection.nodeKey === key || connection.switchKey === key)
-  ).length
+function connectionCounts(document: TopologyDocument) {
+  const counts = new Map<string, number>()
+  for (const connection of Object.values(document.connections)) {
+    if (connection.type !== 'membership') continue
+    counts.set(connection.nodeKey, (counts.get(connection.nodeKey) ?? 0) + 1)
+    counts.set(connection.switchKey, (counts.get(connection.switchKey) ?? 0) + 1)
+  }
+  return counts
 }
 
-function flowNodes(document: TopologyDocument, selection: TopologySelection, readOnly: boolean): TeamLabFlowNode[] {
+function flowNodes(document: TopologyDocument, readOnly: boolean): TeamLabFlowNode[] {
+  const counts = connectionCounts(document)
   return Object.values(document.nodes).map((node) => ({
     id: node.key,
     type: node.type,
     position: { x: node.position.x, y: node.position.y },
-    selected: selection.nodeKeys.has(node.key),
+    selected: false,
     draggable: !readOnly,
-    data: { topologyNode: node, connectionCount: connectionCount(document, node.key), readOnly },
+    data: { topologyNode: node, connectionCount: counts.get(node.key) ?? 0, readOnly },
   }))
 }
 
-function flowEdges(document: TopologyDocument, selection: TopologySelection): TeamLabFlowEdge[] {
+function reconcileNodes(current: TeamLabFlowNode[], next: TeamLabFlowNode[]) {
+  const byId = new Map(current.map((node) => [node.id, node]))
+  let changed = current.length !== next.length
+  const reconciled = next.map((node) => {
+    const previous = byId.get(node.id)
+    if (
+      previous &&
+      previous.type === node.type &&
+      previous.position.x === node.position.x &&
+      previous.position.y === node.position.y &&
+      previous.draggable === node.draggable &&
+      previous.data.topologyNode === node.data.topologyNode &&
+      previous.data.connectionCount === node.data.connectionCount &&
+      previous.data.readOnly === node.data.readOnly
+    )
+      return previous
+    changed = true
+    return { ...node, selected: previous?.selected ?? false }
+  })
+  return changed ? reconciled : current
+}
+
+function reconcileEdges(current: TeamLabFlowEdge[], next: TeamLabFlowEdge[]) {
+  const byId = new Map(current.map((edge) => [edge.id, edge]))
+  let changed = current.length !== next.length
+  const reconciled = next.map((edge) => {
+    const previous = byId.get(edge.id)
+    if (
+      previous &&
+      previous.source === edge.source &&
+      previous.target === edge.target &&
+      previous.type === edge.type &&
+      previous.data?.connection === edge.data?.connection &&
+      previous.data?.label === edge.data?.label &&
+      Boolean(previous.markerStart) === Boolean(edge.markerStart) &&
+      Boolean(previous.markerEnd) === Boolean(edge.markerEnd)
+    )
+      return previous
+    changed = true
+    return { ...edge, selected: previous?.selected ?? false }
+  })
+  return changed ? reconciled : current
+}
+
+function applySelection<T extends { id: string; selected?: boolean }>(items: T[], selectedIds: ReadonlySet<string>) {
+  let changed = false
+  const next = items.map((item) => {
+    const selected = selectedIds.has(item.id)
+    if (Boolean(item.selected) === selected) return item
+    changed = true
+    return { ...item, selected }
+  })
+  return changed ? next : items
+}
+
+function flowEdges(document: TopologyDocument): TeamLabFlowEdge[] {
   return Object.values(document.connections).map((connection) => {
     if (connection.type === 'membership') {
       return {
@@ -57,7 +118,7 @@ function flowEdges(document: TopologyDocument, selection: TopologySelection): Te
         source: connection.nodeKey,
         target: connection.switchKey,
         type: 'network',
-        selected: selection.connectionKeys.has(connection.key),
+        selected: false,
         data: { connection, label: connection.primary ? '主网卡' : '' },
       }
     }
@@ -67,7 +128,7 @@ function flowEdges(document: TopologyDocument, selection: TopologySelection): Te
         source: connection.fromSwitchKey,
         target: connection.toSwitchKey,
         type: 'network',
-        selected: selection.connectionKeys.has(connection.key),
+        selected: false,
         markerStart: connection.direction === 'bidirectional' ? { type: MarkerType.ArrowClosed } : undefined,
         markerEnd: { type: MarkerType.ArrowClosed },
         data: { connection, label: connection.direction === 'bidirectional' ? '双向路由' : '单向路由' },
@@ -78,7 +139,7 @@ function flowEdges(document: TopologyDocument, selection: TopologySelection): Te
       source: connection.dependsOnKey,
       target: connection.assetKey,
       type: 'dependency',
-      selected: selection.connectionKeys.has(connection.key),
+      selected: false,
       markerEnd: { type: MarkerType.ArrowClosed },
       data: { connection, label: connection.condition },
     }
@@ -110,13 +171,21 @@ interface TeamLabCanvasProps {
 }
 
 function TeamLabCanvasInner(props: TeamLabCanvasProps) {
-  const [nodes, setNodes] = useState(() => flowNodes(props.document, props.selection, props.readOnly))
-  const edges = useMemo(() => flowEdges(props.document, props.selection), [props.document, props.selection])
+  const [nodes, setNodes] = useState(() =>
+    applySelection(flowNodes(props.document, props.readOnly), props.selection.nodeKeys)
+  )
+  const [edges, setEdges] = useState(() => applySelection(flowEdges(props.document), props.selection.connectionKeys))
   const flow = useReactFlow<TeamLabFlowNode, TeamLabFlowEdge>()
 
   useEffect(() => {
-    setNodes(flowNodes(props.document, props.selection, props.readOnly))
-  }, [props.document, props.readOnly, props.selection])
+    setNodes((current) => reconcileNodes(current, flowNodes(props.document, props.readOnly)))
+    setEdges((current) => reconcileEdges(current, flowEdges(props.document)))
+  }, [props.document, props.readOnly])
+
+  useEffect(() => {
+    setNodes((current) => applySelection(current, props.selection.nodeKeys))
+    setEdges((current) => applySelection(current, props.selection.connectionKeys))
+  }, [props.selection.connectionKeys, props.selection.nodeKeys])
 
   useEffect(() => {
     if (!props.focusNodeKey || !props.document.nodes[props.focusNodeKey]) return
@@ -136,6 +205,10 @@ function TeamLabCanvasInner(props: TeamLabCanvasProps) {
 
   const onNodesChange = useCallback(
     (changes: NodeChange<TeamLabFlowNode>[]) => setNodes((current) => applyNodeChanges(changes, current)),
+    []
+  )
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange<TeamLabFlowEdge>[]) => setEdges((current) => applyEdgeChanges(changes, current)),
     []
   )
   const onConnect = useCallback(
@@ -185,6 +258,7 @@ function TeamLabCanvasInner(props: TeamLabCanvasProps) {
         onConnect={onConnect}
         onDragOver={allowPaletteDrop}
         onDrop={onDrop}
+        onEdgesChange={onEdgesChange}
         onNodeDragStop={onNodeDragStop}
         onNodesChange={onNodesChange}
         onSelectionChange={onSelectionChange}

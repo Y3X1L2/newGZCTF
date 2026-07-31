@@ -53,15 +53,14 @@ public sealed class TeamLabFabricService(
         var hostAddress = TeamLabNetworkPrimitives.AddressFromCidr(request.NamespaceHostAddressCidr);
         var commands = new List<string>
         {
-            $"ip netns exec {namespaceName} ip link delete {namespaceInterface} 2>/dev/null || true",
-            $"ip link delete {hostInterface} 2>/dev/null || true",
-            $"ip link add {hostInterface} type veth peer name {namespaceInterface}",
-            $"ip addr flush dev {hostInterface}",
-            $"ip addr add {request.NamespaceHostAddressCidr} dev {hostInterface}",
+            TeamLabNetworkPrimitives.BuildEnsureVethPairCommand(
+                namespaceName, hostInterface, namespaceInterface),
+            $"ip link set {hostInterface} alias {TeamLabNetworkPrimitives.ShellQuote($"gzctf-teamlab-fabric:{request.RuntimeId}")}",
+            TeamLabNetworkPrimitives.BuildHostIpv4AddressConvergenceCommand(
+                hostInterface, request.NamespaceHostAddressCidr),
             $"ip link set {hostInterface} up",
-            $"ip link set {namespaceInterface} netns {namespaceName}",
-            $"ip netns exec {namespaceName} ip addr flush dev {namespaceInterface}",
-            $"ip netns exec {namespaceName} ip addr add {request.NamespacePeerAddressCidr} dev {namespaceInterface}",
+            TeamLabNetworkPrimitives.BuildNamespaceIpv4AddressConvergenceCommand(
+                namespaceName, namespaceInterface, request.NamespacePeerAddressCidr),
             $"ip netns exec {namespaceName} ip link set {namespaceInterface} up",
             "sysctl -w net.ipv4.ip_forward=1",
             $"ip netns exec {namespaceName} sysctl -w net.ipv4.ip_forward=1"

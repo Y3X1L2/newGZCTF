@@ -46,6 +46,7 @@ public static class ContentModuleRegistration
         services.AddScoped<BootstrapProfileApplicationService>();
         services.AddScoped<BootstrapProfileCompatibilityService>();
         services.AddScoped<ImageTemplateCertificationService>();
+        services.AddScoped<ImageRemoteAccessService>();
         services.AddScoped<VmImageCertificationProbeService>();
         services.AddSingleton<PreparedImageConformancePackageFactory>();
         services.AddScoped<IApiOperationHandler, BootstrapProfileOperationHandler>();

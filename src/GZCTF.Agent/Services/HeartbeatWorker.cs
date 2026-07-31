@@ -37,7 +37,6 @@ public class HeartbeatWorker : BackgroundService
                 var capabilityService = scope.ServiceProvider.GetRequiredService<AgentCapabilityService>();
                 var manifest = await capabilityService.GetManifestAsync(
                     await capabilityService.GetBinarySha256Async(), token);
-                await kvm.RestoreRdpProxiesAsync(token);
 
                 var payload = new
                 {

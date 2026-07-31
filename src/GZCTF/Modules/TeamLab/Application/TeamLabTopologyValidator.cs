@@ -3,13 +3,20 @@ using GZCTF.Modules.TeamLab.Contracts;
 
 namespace GZCTF.Modules.TeamLab.Application;
 
-public sealed class TeamLabTopologyValidator
+/// <summary>
+/// Validates a topology definition. Defaults to the platform address policy so a caller that
+/// forgets to supply one still rejects pools overlapping infrastructure rather than silently
+/// allowing host routes to be shadowed.
+/// </summary>
+public sealed class TeamLabTopologyValidator(TeamLabAddressPolicy? addressPolicy = null)
 {
     public const int MaxNetworks = 32;
     public const int MaxAssets = 128;
     public const int MaxInterfacesPerAsset = 8;
 
-    private readonly TeamLabTopologyStructureValidator _structure = new();
+    private readonly TeamLabTopologyStructureValidator _structure =
+        new(addressPolicy ?? TeamLabAddressPolicy.PlatformDefaults);
+
     private readonly TeamLabDependencyGraphValidator _dependencies = new();
 
     public TeamLabValidationResultModel Validate(TeamLabTopologyDefinitionModel definition, int schemaVersion = 2)

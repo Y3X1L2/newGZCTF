@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Net.WebSockets;
 
 namespace GZCTF.Agent.Services;
 
@@ -575,6 +576,65 @@ public class DockerService
             generation,
             inspect.State?.Running == true,
             inspect.State?.Pid ?? 0);
+    }
+
+    public async Task RunTeamLabTerminalAsync(
+        int runtimeId,
+        int generation,
+        string containerId,
+        WebSocket socket,
+        CancellationToken token)
+    {
+        var identity = await InspectTeamLabContainerAsync(containerId, token);
+        if (identity is null || !identity.Running || identity.RuntimeId != runtimeId || identity.Generation != generation)
+            throw new AgentOperationException("RemoteAccess", "remote_access.container_identity_mismatch",
+                "The requested container does not match the active TeamLab runtime identity.", false);
+
+        var exec = await _client.Exec.ExecCreateContainerAsync(containerId, new ContainerExecCreateParameters
+        {
+            AttachStdin = true,
+            AttachStdout = true,
+            AttachStderr = true,
+            Tty = true,
+            Cmd = ["/bin/sh"]
+        }, token);
+        using var stream = await _client.Exec.StartAndAttachContainerExecAsync(exec.ID, false, token);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var input = CopySocketToTerminalAsync(socket, stream, linked.Token);
+        var output = CopyTerminalToSocketAsync(socket, stream, linked.Token);
+        await Task.WhenAny(input, output);
+        linked.Cancel();
+        try { await Task.WhenAll(input, output); }
+        catch (OperationCanceledException) when (linked.IsCancellationRequested) { }
+    }
+
+    private static async Task CopySocketToTerminalAsync(WebSocket socket, MultiplexedStream terminal, CancellationToken token)
+    {
+        var buffer = new byte[8192];
+        while (socket.State == WebSocketState.Open && !token.IsCancellationRequested)
+        {
+            var result = await socket.ReceiveAsync(buffer, token);
+            if (result.MessageType == WebSocketMessageType.Close) break;
+            await terminal.WriteAsync(buffer, 0, result.Count, token);
+            while (!result.EndOfMessage)
+            {
+                result = await socket.ReceiveAsync(buffer, token);
+                if (result.MessageType == WebSocketMessageType.Close) return;
+                await terminal.WriteAsync(buffer, 0, result.Count, token);
+            }
+        }
+    }
+
+    private static async Task CopyTerminalToSocketAsync(WebSocket socket, MultiplexedStream terminal, CancellationToken token)
+    {
+        var buffer = new byte[8192];
+        while (socket.State == WebSocketState.Open && !token.IsCancellationRequested)
+        {
+            var result = await terminal.ReadOutputAsync(buffer, 0, buffer.Length, token);
+            if (result.EOF) break;
+            if (result.Count > 0)
+                await socket.SendAsync(buffer.AsMemory(0, result.Count), WebSocketMessageType.Text, true, token);
+        }
     }
 
     public async Task<IReadOnlyList<RuntimeInventoryResource>> GetManagedRuntimeInventoryAsync(

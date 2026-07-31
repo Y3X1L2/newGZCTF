@@ -45,6 +45,7 @@ export interface TeamLabRuntimeNetwork {
 }
 
 export interface TeamLabRuntimeAsset {
+  id: number
   key: string
   name: string
   kind: TeamLabAssetKind

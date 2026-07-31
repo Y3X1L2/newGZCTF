@@ -18,6 +18,48 @@ export interface DockerTemplateRegistration {
   registryAuth?: string | null
 }
 
+export interface ImageRemoteAccessConfiguration {
+  enabled: boolean
+  protocol: 'containerTerminal' | 'ssh' | 'rdp'
+  port: number
+  username: string | null
+  credentialMode: 'platformGenerated' | 'existingAccount'
+  hasCredential: boolean
+  updatedAt: number | null
+}
+
+function isRemoteProtocol(value: unknown): value is ImageRemoteAccessConfiguration['protocol'] {
+  return value === 'containerTerminal' || value === 'ssh' || value === 'rdp'
+}
+
+function isCredentialMode(value: unknown): value is ImageRemoteAccessConfiguration['credentialMode'] {
+  return value === 'platformGenerated' || value === 'existingAccount'
+}
+
+function parseRemoteAccess(value: unknown, label: string): ImageRemoteAccessConfiguration {
+  if (
+    !isRecord(value) ||
+    !isBoolean(value.enabled) ||
+    !isRemoteProtocol(value.protocol) ||
+    !isNumber(value.port) ||
+    !isNullableString(value.username) ||
+    !isCredentialMode(value.credentialMode) ||
+    !isBoolean(value.hasCredential) ||
+    !(value.updatedAt === null || isNumber(value.updatedAt))
+  ) {
+    return contractFailure(label, value)
+  }
+  return {
+    enabled: value.enabled,
+    protocol: value.protocol,
+    port: value.port,
+    username: value.username,
+    credentialMode: value.credentialMode,
+    hasCredential: value.hasCredential,
+    updatedAt: value.updatedAt,
+  }
+}
+
 function isImageTemplateIdentity(value: unknown): value is ImageTemplateIdentity {
   return (
     isRecord(value) &&
@@ -147,6 +189,20 @@ export function createImageTemplateAdminApi(client: RuntimeJsonClient = runtimeJ
       return parseIdentity(
         await client.patchJson(`/api/v1/image-templates/${id}/instance-credentials`, { supported }),
         'Windows credential capability update'
+      )
+    },
+
+    async remoteAccess(id: number) {
+      return parseRemoteAccess(
+        await client.get(`/api/v1/image-templates/${id}/remote-access`),
+        'Image remote access configuration'
+      )
+    },
+
+    async updateRemoteAccess(id: number, configuration: Omit<ImageRemoteAccessConfiguration, 'hasCredential' | 'updatedAt'> & { credential?: string | null }) {
+      return parseRemoteAccess(
+        await client.patchJson(`/api/v1/image-templates/${id}/remote-access`, configuration),
+        'Image remote access update'
       )
     },
 

@@ -30,4 +30,14 @@ describe('TeamLabDesignPage', () => {
     await waitFor(() => expect(onChange).toHaveBeenCalledTimes(2))
     expect(Object.values(onChange.mock.calls[1][0].nodes)).toHaveLength(0)
   })
+
+  it('keeps the canvas mounted when focus mode changes', () => {
+    const view = render(<TeamLabDesignPage initialDocument={createEmptyTopologyDocument('Demo')} />)
+    const canvas = view.container.querySelector('.react-flow')
+    expect(canvas).not.toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '专注模式' }))
+
+    expect(view.container.querySelector('.react-flow')).toBe(canvas)
+  })
 })

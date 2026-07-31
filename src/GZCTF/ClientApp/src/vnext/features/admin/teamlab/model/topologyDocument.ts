@@ -18,6 +18,7 @@ export interface TopologyPosition {
 
 export interface TopologySwitchNode {
   type: 'switch'
+  implicit?: boolean
   key: string
   name: string
   networkName: string

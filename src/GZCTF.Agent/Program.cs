@@ -6,6 +6,7 @@ using GZCTF.Agent.Services.RuntimeSignals;
 using GZCTF.Agent.Services.TeamLab;
 using GZCTF.Agent.Services.Vm;
 using GZCTF.Agent.Services.GuestControl;
+using GZCTF.Agent.Services.RemoteAccess;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
@@ -42,6 +43,7 @@ builder.Services.AddSingleton<DockerService>();
 builder.Services.AddSingleton<KvmService>();
 builder.Services.AddSingleton<VmGuestAgentService>();
 builder.Services.AddSingleton<VmBootstrapService>();
+builder.Services.AddSingleton<VmImageBackingChainInspector>();
 builder.Services.AddSingleton<VmRuntimeReadinessCoordinator>();
 builder.Services.AddHostedService(serviceProvider =>
     serviceProvider.GetRequiredService<VmRuntimeReadinessCoordinator>());
@@ -79,6 +81,7 @@ builder.Services.AddSingleton<GuestEventIngestor>();
 builder.Services.AddSingleton<AgentOciArtifactUploader>();
 builder.Services.AddSingleton<AgentOperationReceiptStore>();
 builder.Services.AddSingleton<VmScenarioArtifactService>();
+builder.Services.AddSingleton<RemoteAccessRelayService>();
 builder.Services.AddHostedService<HeartbeatWorker>();
 
 builder.Services.AddControllers()

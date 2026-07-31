@@ -25,6 +25,7 @@ public class KvmService
     private readonly ILogger<KvmService> _logger;
     private readonly AgentResourceLock _resourceLock;
     private readonly GuestEnrollmentStore? _guestEnrollmentStore;
+    private readonly RdpProxyAccessPolicy _consoleAccessPolicy;
 
     private static readonly Regex SafeNamePattern = new(@"^[a-zA-Z0-9_\-]+$", RegexOptions.Compiled);
     private static readonly Regex SafeMacPattern = new(@"^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$", RegexOptions.Compiled);
@@ -37,12 +38,21 @@ public class KvmService
         IOptions<KvmConfig> config,
         AgentResourceLock resourceLock,
         ILogger<KvmService> logger,
-        GuestEnrollmentStore? guestEnrollmentStore = null)
+        GuestEnrollmentStore? guestEnrollmentStore = null,
+        IOptions<AgentConfig>? agentConfig = null)
     {
         _config = config.Value;
         _resourceLock = resourceLock;
         _logger = logger;
         _guestEnrollmentStore = guestEnrollmentStore;
+        _consoleAccessPolicy = RdpProxyAccessPolicy.Create(
+            _config.RdpProxyAllowedSources, agentConfig?.Value.ServerUrl);
+        foreach (var invalid in _consoleAccessPolicy.InvalidSources)
+            _logger.LogError(
+                "Ignoring unparsable Kvm:RdpProxyAllowedSources entry {Source}; it grants nothing", invalid);
+        if (_consoleAccessPolicy.LoopbackOnly)
+            _logger.LogWarning(
+                "Console proxy accepts loopback only. Set Kvm:RdpProxyAllowedSources to the platform address, otherwise remote console will be refused.");
     }
 
     public async Task<CreateVmResponse?> CreateVmAsync(CreateVmRequest request, CancellationToken token)
@@ -451,22 +461,10 @@ public class KvmService
         return inventory.OrderBy(item => item.StableName, StringComparer.Ordinal).ToArray();
     }
 
-    public async Task RestoreRdpProxiesAsync(CancellationToken token)
-    {
-        var result = await RunCommandAsync("virsh list --name 2>/dev/null", token, throwOnError: false);
-        foreach (var vmName in result.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            token.ThrowIfCancellationRequested();
-            if (!SafeNamePattern.IsMatch(vmName) || RdpProxies.ContainsKey(vmName))
-                continue;
-
-            var ip = await GetIpAddressAsync(vmName, token);
-            if (string.IsNullOrEmpty(ip))
-                continue;
-
-            await EnsureRdpProxyAsync(vmName, ip, token);
-        }
-    }
+    // A bulk "restore every running VM's console proxy" pass used to run on every heartbeat, which
+    // meant every VM on the node permanently carried an open forwarder regardless of whether anyone
+    // had asked for a console. Proxies are now created only through the authenticated VmController
+    // endpoints, on demand, and torn down with the VM.
 
     public async Task<string?> GetIpAddressAsync(string vmName, CancellationToken token,
         IReadOnlyList<VmNetworkInterfaceRequest>? interfaces = null)
@@ -566,12 +564,14 @@ public class KvmService
             {
                 var listener = new TcpListener(IPAddress.Any, port);
                 listener.Start(64);
-                var proxy = new RdpProxy(vmName, ip, port, listener, _logger);
+                var proxy = new RdpProxy(vmName, ip, port, listener, _logger, _consoleAccessPolicy);
                 if (RdpProxies.TryAdd(vmName, proxy))
                 {
                     _ = proxy.RunAsync();
-                    _logger.LogInformation("RDP proxy for VM {VmName}: 0.0.0.0:{Port} -> {Ip}:3389",
-                        vmName, port, ipAddress);
+                    _logger.LogInformation(
+                        "Console proxy for VM {VmName}: :{Port} -> {Ip}:3389, accepting {Sources}",
+                        vmName, port, ipAddress,
+                        _consoleAccessPolicy.LoopbackOnly ? "loopback only" : "configured platform sources");
                     return Task.FromResult<int?>(port);
                 }
 
@@ -1210,18 +1210,26 @@ public class KvmService
         private readonly string _vmName;
         private readonly TcpListener _listener;
         private readonly ILogger _logger;
+        private readonly RdpProxyAccessPolicy _accessPolicy;
         private readonly CancellationTokenSource _cts = new();
 
         public IPAddress TargetIp { get; }
         public int Port { get; }
 
-        public RdpProxy(string vmName, IPAddress targetIp, int port, TcpListener listener, ILogger logger)
+        public RdpProxy(
+            string vmName,
+            IPAddress targetIp,
+            int port,
+            TcpListener listener,
+            ILogger logger,
+            RdpProxyAccessPolicy accessPolicy)
         {
             _vmName = vmName;
             TargetIp = targetIp;
             Port = port;
             _listener = listener;
             _logger = logger;
+            _accessPolicy = accessPolicy;
         }
 
         public async Task RunAsync()
@@ -1256,6 +1264,18 @@ public class KvmService
         private async Task HandleClientAsync(TcpClient client)
         {
             using var clientSocket = client;
+            // The forwarded stream reaches a tenant VM's RDP port with no protocol-level
+            // authentication of its own, so the peer address is the only thing that can be checked
+            // before bytes cross into the guest.
+            var peer = (clientSocket.Client.RemoteEndPoint as IPEndPoint)?.Address;
+            if (!_accessPolicy.IsAllowed(peer))
+            {
+                _logger.LogWarning(
+                    "Rejected console proxy connection from {Peer} for VM {VmName}; add the source to Kvm:RdpProxyAllowedSources if it is the platform",
+                    peer?.ToString() ?? "unknown", _vmName);
+                return;
+            }
+
             try
             {
                 using var target = new TcpClient();

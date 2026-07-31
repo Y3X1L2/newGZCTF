@@ -21,6 +21,7 @@ public sealed class GuestBootstrapPackageExecutor(
     IGuestGatewayClient enrollment,
     GuestBootstrapExecutionStore executionStore,
     GuestSecretStore secretStore,
+    GuestRemoteAccessProvisioner remoteAccess,
     ILogger<GuestBootstrapPackageExecutor> logger)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -33,7 +34,8 @@ public sealed class GuestBootstrapPackageExecutor(
         if (intent.ServicePackage is null)
         {
             await MaterializeRuntimeAsync(intent, cancellationToken);
-            _ = await EnsureSecretsAsync(intent, checkpoint.Identity, cancellationToken);
+            var runtimeSecrets = await EnsureSecretsAsync(intent, checkpoint.Identity, cancellationToken);
+            await remoteAccess.ApplyAsync(runtimeSecrets, cancellationToken);
             return new GuestBootstrapExecutionResult(true, false, 0, [], []);
         }
         var descriptor = intent.ServicePackage;
@@ -48,6 +50,7 @@ public sealed class GuestBootstrapPackageExecutor(
             descriptor, checkpoint.Identity, artifactDigest, manifest, cancellationToken);
         await MaterializeRuntimeAsync(intent, cancellationToken);
         var secrets = await EnsureSecretsAsync(intent, checkpoint.Identity, cancellationToken);
+        await remoteAccess.ApplyAsync(secrets, cancellationToken);
         var values = new Dictionary<string, string>(intent.Parameters ?? new Dictionary<string, string>(), StringComparer.Ordinal);
         foreach (var item in secrets) values[item.Key] = item.Value;
         foreach (var parameter in manifest.Parameters)

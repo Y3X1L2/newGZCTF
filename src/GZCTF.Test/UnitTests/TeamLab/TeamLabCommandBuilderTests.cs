@@ -250,8 +250,11 @@ public class TeamLabCommandBuilderTests
 
             Assert.True(result.Success, result.Message);
             Assert.False(result.AlreadyApplied);
-            Assert.Contains(runner.Commands, command =>
+            Assert.DoesNotContain(runner.Commands, command =>
                 command.Contains("ip netns delete tlr123", StringComparison.Ordinal));
+            Assert.Contains(runner.Commands, command =>
+                command.Contains("host_link", StringComparison.Ordinal) &&
+                command.Contains("peer_index", StringComparison.Ordinal));
         }
         finally
         {
@@ -286,6 +289,8 @@ public class TeamLabCommandBuilderTests
         Assert.Contains("ip route show exact 10.10.0.0/24", command, StringComparison.Ordinal);
         Assert.Contains("ip route show exact 192.168.50.0/24", command, StringComparison.Ordinal);
         Assert.Contains("TLR7BG3", command, StringComparison.Ordinal);
+        Assert.Contains("TLA7BG3", command, StringComparison.Ordinal);
+        Assert.Contains("TLI7BG3", command, StringComparison.Ordinal);
         Assert.Contains("TLM7BG3", command, StringComparison.Ordinal);
         Assert.Contains("TLF7BG3", command, StringComparison.Ordinal);
         Assert.Contains("policy drop", command, StringComparison.Ordinal);
@@ -381,7 +386,7 @@ public class TeamLabCommandBuilderTests
     }
 
     [Fact]
-    public async Task CreateRouterAsync_DryRunRecreatesNamespaceAndFlushesInterfaceAddresses()
+    public async Task CreateRouterAsync_DryRunConvergesNamespaceWithoutDestroyingLiveProcesses()
     {
         var service = CreateRouterService(enable: false);
 
@@ -396,10 +401,17 @@ public class TeamLabCommandBuilderTests
             DryRun: true), CancellationToken.None);
 
         Assert.True(result.Success);
-        Assert.Collection(result.Commands.Take(3),
-            command => Assert.Contains("ip netns pids tlr123 2>/dev/null | xargs -r kill 2>/dev/null || true", command),
-            command => Assert.Contains("ip netns delete tlr123 2>/dev/null || true", command),
-            command => Assert.Contains("ip netns add tlr123", command));
+        Assert.Contains(result.Commands,
+            command => command.Contains("grep -Fx 'tlr123'", StringComparison.Ordinal) &&
+                       command.Contains("ip netns add tlr123", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Commands,
+            command => command.Contains("ip netns pids", StringComparison.Ordinal) ||
+                       command.Contains("ip netns delete", StringComparison.Ordinal));
+        Assert.Contains(result.Commands,
+            command => command.Contains("host_link", StringComparison.Ordinal) &&
+                       command.Contains("peer_index", StringComparison.Ordinal));
+        Assert.Contains(result.Commands,
+            command => command.Contains("alias 'gzctf-teamlab-router:123'", StringComparison.Ordinal));
         Assert.Contains(result.Commands,
             command => command.Contains("ip netns exec tlr123 ip addr flush dev tlr123n0"));
         Assert.Contains(result.Commands,
@@ -833,16 +845,16 @@ public class TeamLabCommandBuilderTests
         Assert.Contains(result.Commands,
             command => command.Contains(
                 "iptables -A TLA7BG1 -i tlwg123 -s 10.250.0.2/32 -d 10.60.0.16/28 -j REJECT"));
-        var configureIndex = Array.FindIndex(result.Commands,
-            command => command.StartsWith("wg set tlwg123 ", StringComparison.Ordinal));
-        var moveIndex = Array.FindIndex(result.Commands,
-            command => command.Contains("ip link set tlwg123 netns tlr123", StringComparison.Ordinal));
-        Assert.True(configureIndex >= 0 && configureIndex < moveIndex);
+        var configureCommand = Assert.Single(result.Commands,
+            command => command.Contains("wg set tlwg123 private-key /dev/stdin", StringComparison.Ordinal));
+        Assert.True(
+            configureCommand.IndexOf("wg set tlwg123 private-key", StringComparison.Ordinal) <
+            configureCommand.IndexOf("ip link set tlwg123 netns tlr123", StringComparison.Ordinal));
         Assert.DoesNotContain(result.Commands, command => command.Contains(ValidInterfacePrivateKey));
     }
 
     [Fact]
-    public async Task ConfigureWireGuardAsync_DryRunDeletesExistingInterfacesAndFlushesAddressBeforeUp()
+    public async Task ConfigureWireGuardAsync_DryRunUpdatesExistingInterfaceWithoutDeletingIt()
     {
         var service = CreateService(enable: false);
 
@@ -862,11 +874,12 @@ public class TeamLabCommandBuilderTests
             DryRun: true), CancellationToken.None);
 
         Assert.True(result.Success);
-        Assert.Collection(result.Commands.Take(4),
-            command => Assert.Contains("printf '<redacted>'", command),
-            command => Assert.Contains("ip netns exec tlr123 ip link delete tlwg123 2>/dev/null || true", command),
-            command => Assert.Contains("ip link delete tlwg123 2>/dev/null || true", command),
-            command => Assert.Contains("ip link add tlwg123 type wireguard", command));
+        Assert.Contains(result.Commands, command => command.Contains("printf '<redacted>'", StringComparison.Ordinal));
+        Assert.Contains(result.Commands, command =>
+            command.Contains("if ip netns exec tlr123 ip link show dev tlwg123", StringComparison.Ordinal) &&
+            command.Contains("ip link add tlwg123 type wireguard", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Commands, command =>
+            command.StartsWith("ip netns exec tlr123 ip link delete tlwg123", StringComparison.Ordinal));
         Assert.Contains(result.Commands,
             command => command.Contains("ip netns exec tlr123 ip addr flush dev tlwg123"));
         Assert.Contains(result.Commands,
@@ -1206,8 +1219,18 @@ public class TeamLabCommandBuilderTests
     [Fact]
     public async Task ConfigureWireGuardAsync_RealExecutionStreamsPrivateKeyToWireGuard()
     {
+        using var stateRoot = new TempDirectory();
+        var stateDirectory = Path.Combine(stateRoot.Path, "runtime-123");
+        Directory.CreateDirectory(stateDirectory);
+        await File.WriteAllTextAsync(Path.Combine(stateDirectory, "active-generation.json"),
+            JsonSerializer.Serialize(new
+            {
+                runtimeId = 123,
+                generation = 1,
+                activatedAt = DateTimeOffset.UtcNow
+            }));
         var runner = new PrivateKeyAwareTeamLabCommandRunner(ValidInterfacePrivateKey);
-        var service = CreateService(enable: true, runner, dryRun: false);
+        var service = CreateService(enable: true, runner, dryRun: false, runtimeStateRoot: stateRoot.Path);
 
         var result = await service.ConfigureWireGuardAsync(new TeamLabWireGuardRequest(
             RuntimeId: 123,
@@ -1256,9 +1279,12 @@ public class TeamLabCommandBuilderTests
     private static TeamLabNetworkService CreateService(
         bool enable,
         TeamLabCommandRunner? runner = null,
-        bool dryRun = true)
+        bool dryRun = true,
+        string? runtimeStateRoot = null)
     {
-        var options = Options.Create(new AgentTeamLabConfig { Enable = enable, DryRun = dryRun });
+        var config = new AgentTeamLabConfig { Enable = enable, DryRun = dryRun };
+        if (runtimeStateRoot is not null) config.RuntimeStateRoot = runtimeStateRoot;
+        var options = Options.Create(config);
         runner ??= new TeamLabCommandRunner(NullLogger<TeamLabCommandRunner>.Instance);
         var commandExecutor = new TeamLabCommandExecutor(
             options,

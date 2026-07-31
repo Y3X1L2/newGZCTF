@@ -14,7 +14,7 @@ public interface ITeamLabTopologyApplicationService
     Task<TeamLabTopologyDetailModel> UpdateDraftAsync(Guid topologyId, UpdateTeamLabTopologyModel model, Guid actorUserId, bool includeAll, CancellationToken cancellationToken);
     Task DeleteAsync(Guid topologyId, Guid actorUserId, bool includeAll, CancellationToken cancellationToken);
     Task<TeamLabValidationResultModel> ValidateAsync(Guid topologyId, Guid actorUserId, bool includeAll, CancellationToken cancellationToken);
-    Task<TeamLabReleaseModel> PublishAsync(Guid topologyId, int revision, Guid actorUserId, bool includeAll, CancellationToken cancellationToken);
+    Task<TeamLabReleaseModel> PublishAsync(Guid topologyId, int revision, Guid actorUserId, bool includeAll, IReadOnlyList<TeamLabRuntimeOverlayModel>? scenarioOverlays, CancellationToken cancellationToken);
     Task<IReadOnlyList<TeamLabReleaseModel>> ListReleasesAsync(Guid topologyId, Guid actorUserId, bool includeAll, CancellationToken cancellationToken);
     Task<OpenTeamLabReleasePageModel> ListReleasesPageAsync(Guid topologyId, Guid actorUserId, bool includeAll, int limit, string? after, CancellationToken cancellationToken);
     Task<TeamLabReleaseModel> GetReleaseAsync(Guid topologyId, Guid releaseId, Guid actorUserId, bool includeAll, CancellationToken cancellationToken);

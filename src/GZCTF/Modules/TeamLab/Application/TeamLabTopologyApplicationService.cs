@@ -212,16 +212,6 @@ public sealed class TeamLabTopologyApplicationService(
         var removedNetworks = currentNetworks.Values
             .Where(item => !requestedNetworkKeys.Contains(item.Key))
             .ToArray();
-        if (removedNetworks.Length > 0)
-        {
-            var removedIds = removedNetworks.Select(item => item.Id).ToArray();
-            if (await context.TeamLabNetworkLeases.AsNoTracking()
-                    .AnyAsync(item => removedIds.Contains(item.TopologyNetworkId), cancellationToken))
-                throw new TeamLabApiContractException(
-                    "topology_network_in_use",
-                    "A network with runtime lease history cannot be removed; create a new topology for the incompatible network layout.",
-                    409);
-        }
 
         await context.TeamLabTopologyConnections.Where(item => item.TopologyId == identity.Id)
             .ExecuteDeleteAsync(cancellationToken);
@@ -334,10 +324,11 @@ public sealed class TeamLabTopologyApplicationService(
         int revision,
         Guid actorUserId,
         bool includeAll,
+        IReadOnlyList<TeamLabRuntimeOverlayModel>? scenarioOverlays,
         CancellationToken cancellationToken)
     {
         var topology = await RequireTopologyAsync(topologyId, actorUserId, includeAll, cancellationToken);
-        return await releases.PublishAsync(topology, revision, actorUserId, null, null, cancellationToken);
+        return await releases.PublishAsync(topology, revision, actorUserId, null, scenarioOverlays, cancellationToken);
     }
 
     public async Task<TeamLabReleaseModel> PublishForOperationAsync(

@@ -42,6 +42,69 @@ public sealed class TeamLabFoundationTopologyTests
     }
 
     [Fact]
+    public void Validate_RejectsAddressPoolOverlappingPlatformReservedRange()
+    {
+        // The pool's runtime CIDRs end up in the WorkerNode host routing table, so overlapping
+        // docker0 would shadow the node's own routes and break unrelated games on that node.
+        var source = CreateDefinition();
+        var conflicting = source with
+        {
+            Networks =
+            [
+                source.Networks[0] with { AddressPool = new TeamLabAddressPoolModel("172.17.0.0/16", 24) },
+                source.Networks[1]
+            ]
+        };
+
+        var result = new TeamLabTopologyValidator().Validate(conflicting);
+
+        Assert.False(result.Valid);
+        Assert.Contains(result.Issues, item => item.Code == "address_pool_reserved");
+    }
+
+    [Fact]
+    public void Validate_AcceptsPrivatePoolsOutsideReservedRanges()
+    {
+        var result = new TeamLabTopologyValidator().Validate(CreateDefinition());
+
+        Assert.DoesNotContain(result.Issues, item => item.Code == "address_pool_reserved");
+    }
+
+    [Fact]
+    public void Validate_RejectsAddressPoolOutsideTheConfiguredRuntimeRange()
+    {
+        // The platform allocates runtime networks from this range; a pool outside it produces host
+        // routes on the WorkerNode that the platform does not own.
+        var policy = GZCTF.Modules.TeamLab.Application.Validation.TeamLabAddressPolicy.ForPlatform(
+            null, "100.64.0.0/16", "10.180.0.0/16");
+
+        var result = new TeamLabTopologyValidator(policy).Validate(CreateDefinition());
+
+        Assert.False(result.Valid);
+        Assert.Contains(result.Issues, item => item.Code == "address_pool_out_of_platform_range");
+    }
+
+    [Fact]
+    public void Validate_AcceptsAddressPoolsInsideTheConfiguredRuntimeRange()
+    {
+        var policy = GZCTF.Modules.TeamLab.Application.Validation.TeamLabAddressPolicy.ForPlatform(
+            null, "100.64.0.0/16", "10.180.0.0/16");
+        var source = CreateDefinition();
+        var compliant = source with
+        {
+            Networks =
+            [
+                source.Networks[0] with { AddressPool = new TeamLabAddressPoolModel("10.180.0.0/18", 24) },
+                source.Networks[1] with { AddressPool = new TeamLabAddressPoolModel("10.180.64.0/18", 24) }
+            ]
+        };
+
+        var result = new TeamLabTopologyValidator(policy).Validate(compliant);
+
+        Assert.True(result.Valid, string.Join("; ", result.Issues.Select(item => item.Message)));
+    }
+
+    [Fact]
     public void ReleaseCodec_IsDeterministicAcrossInputOrder()
     {
         var source = CreateDefinition();

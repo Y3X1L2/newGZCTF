@@ -89,7 +89,13 @@ public sealed class TeamLabAdminTopologyController(
         CancellationToken cancellationToken)
     {
         var actor = await ActorAsync();
-        return await topologies.PublishAsync(topologyId, model.Revision, actor.Id, actor.Role >= Role.Admin, cancellationToken);
+        return await topologies.PublishAsync(
+            topologyId,
+            model.Revision,
+            actor.Id,
+            actor.Role >= Role.Admin,
+            model.ScenarioOverlays,
+            cancellationToken);
     }
 
     [HttpGet("topologies/{topologyId:guid}/releases")]

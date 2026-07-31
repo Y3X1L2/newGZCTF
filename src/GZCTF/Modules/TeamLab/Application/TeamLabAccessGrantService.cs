@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
@@ -24,6 +25,7 @@ public sealed class TeamLabAccessGrantService(
     IDataProtectionProvider protectionProvider,
     IOptions<PublicUdpGatewayConfig> gatewayOptions,
     IOptions<ContainerProvider> containerOptions,
+    IDistributedLeaseProvider locks,
     TeamLabEventRecorder eventRecorder)
 {
     private readonly IDataProtector _protector = protectionProvider.CreateProtector("GZCTF.TeamLab.WireGuardGrant.v1");
@@ -63,6 +65,11 @@ public sealed class TeamLabAccessGrantService(
         Guid? operationId,
         CancellationToken cancellationToken)
     {
+        await using var accessLease = await locks.AcquireAsync(
+            $"teamlab:access-grant:{runtimePublicId:D}",
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromMinutes(2),
+            cancellationToken);
         var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
         if (runtime.IsScenarioBuild)
             throw new TeamLabApiContractException(
@@ -83,6 +90,19 @@ public sealed class TeamLabAccessGrantService(
         var grant = operationId is { } operation
             ? runtime.AccessGrants.SingleOrDefault(item => item.ApiOperationId == operation)
             : null;
+        var activeGrant = runtime.AccessGrants.SingleOrDefault(item =>
+            item.Generation == runtime.Generation && !item.Revoked && item.ExpiresAt > DateTimeOffset.UtcNow);
+        if (grant is null && activeGrant is not null)
+        {
+            if (activeGrant.ConfigurationConsumedAt is not null ||
+                string.IsNullOrWhiteSpace(activeGrant.ProtectedDownloadToken))
+                throw new TeamLabApiContractException(
+                    "access_grant_already_active",
+                    "An access grant is already active. Revoke it explicitly before rotating the team VPN key.",
+                    409);
+            var existingToken = _protector.Unprotect(activeGrant.ProtectedDownloadToken);
+            return ToModel(runtime, activeGrant, DownloadUrl(runtime, activeGrant, existingToken));
+        }
         string token;
         if (grant is null)
         {
@@ -141,13 +161,6 @@ public sealed class TeamLabAccessGrantService(
         if (!applied.Success)
             throw new TeamLabApiContractException(
                 "operation_failed", "The access grant could not be applied to the runtime.", 500);
-        var revokedAt = DateTimeOffset.UtcNow;
-        foreach (var previous in runtime.AccessGrants.Where(item =>
-                     item.Id != grant.Id && item.Generation == runtime.Generation && !item.Revoked))
-        {
-            previous.Revoked = true;
-            previous.RevokedAt = revokedAt;
-        }
         grant.AppliedAt = DateTimeOffset.UtcNow;
         runtime.IsOpenToPlayers = true;
         eventRecorder.Record(

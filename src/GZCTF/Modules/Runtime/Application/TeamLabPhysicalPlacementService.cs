@@ -223,9 +223,19 @@ public sealed class TeamLabPhysicalPlacementService(
         if (!runtime.IsScenarioBuild)
         {
             if (runtime.PublicUdpMapping is null)
-                runtime.PublicUdpMapping = await AllocateUdpMappingAsync(runtime, entryNetwork.WorkerNodeId!.Value, token);
+            {
+                var (mapping, error) = await AllocateUdpMappingAsync(
+                    runtime, entryNetwork.WorkerNodeId!.Value, token);
+                if (error is not null)
+                    return FleetCapacityReservationResult.Failed(error);
+                runtime.PublicUdpMapping = mapping;
+            }
             else
-                await RefreshUdpMappingAsync(runtime, entryNetwork.WorkerNodeId!.Value, token);
+            {
+                var error = await RefreshUdpMappingAsync(runtime, entryNetwork.WorkerNodeId!.Value, token);
+                if (error is not null)
+                    return FleetCapacityReservationResult.Failed(error);
+            }
         }
 
         var reservations = generationAssets.GroupBy(item => item.WorkerNodeId!.Value)
@@ -848,47 +858,71 @@ public sealed class TeamLabPhysicalPlacementService(
             return left.HasValue && right.HasValue && left != right ? edge.Weight : 0;
         });
 
-    async Task<TeamLabPublicUdpMapping> AllocateUdpMappingAsync(TeamLabRuntime runtime, Guid nodeId,
-        CancellationToken token)
+    /// <summary>
+    /// Only mappings of runtimes that still exist occupy a port. A destroyed runtime's row would
+    /// otherwise hold its public port forever, and the pool is finite, so the platform would stop
+    /// scheduling any TeamLab runtime once it had created as many as the range holds.
+    /// </summary>
+    IQueryable<TeamLabPublicUdpMapping> LiveUdpMappings() =>
+        context.TeamLabPublicUdpMappings.AsNoTracking()
+            .Where(item => context.TeamLabRuntimes
+                .Any(runtime => runtime.Id == item.RuntimeId &&
+                                runtime.Status != TeamLabRuntimeStatus.Destroyed));
+
+    async Task<(TeamLabPublicUdpMapping? Mapping, string? Error)> AllocateUdpMappingAsync(
+        TeamLabRuntime runtime, Guid nodeId, CancellationToken token)
     {
         var node = await context.WorkerNodes.AsNoTracking().SingleAsync(item => item.Id == nodeId, token);
         if (string.IsNullOrWhiteSpace(node.TeamLabTunnelIp))
-            throw new InvalidOperationException($"Node '{node.Name}' has no TeamLab tunnel IP.");
-        var usedPublic = await context.TeamLabPublicUdpMappings.AsNoTracking()
+            return (null, $"Node '{node.Name}' has no TeamLab tunnel IP.");
+        var usedPublic = await LiveUdpMappings()
             .Select(item => item.PublicUdpPort).ToArrayAsync(token);
-        var usedWorker = await context.TeamLabPublicUdpMappings.AsNoTracking()
+        var usedWorker = await LiveUdpMappings()
             .Where(item => item.WorkerTunnelIp == node.TeamLabTunnelIp)
             .Select(item => item.WorkerWireGuardPort).ToArrayAsync(token);
-        return new TeamLabPublicUdpMapping
+
+        // Exhaustion is a capacity outcome, not an unexpected fault: throwing here escapes the
+        // per-ticket boundary and aborts the whole scheduling batch.
+        var publicPort = FirstFree(_network.PublicUdpPortStart, _network.PublicUdpPortEnd, usedPublic);
+        if (publicPort is null)
+            return (null, "public_udp_port_exhausted: no TeamLab public UDP port is available.");
+        var workerPort = FirstFree(
+            _network.WorkerWireGuardPortStart, _network.WorkerWireGuardPortEnd, usedWorker);
+        if (workerPort is null)
+            return (null, $"worker_wireguard_port_exhausted: node '{node.Name}' has no free WireGuard port.");
+
+        return (new TeamLabPublicUdpMapping
         {
             RuntimeId = runtime.Id,
             Generation = runtime.Generation,
-            PublicUdpPort = FirstFree(_network.PublicUdpPortStart, _network.PublicUdpPortEnd, usedPublic)
-                ?? throw new InvalidOperationException("No TeamLab public UDP port is available."),
+            PublicUdpPort = publicPort.Value,
             WorkerTunnelIp = node.TeamLabTunnelIp,
-            WorkerWireGuardPort = FirstFree(_network.WorkerWireGuardPortStart, _network.WorkerWireGuardPortEnd,
-                usedWorker) ?? throw new InvalidOperationException("No Worker WireGuard UDP port is available."),
+            WorkerWireGuardPort = workerPort.Value,
             RuleVersion = runtime.Generation
-        };
+        }, null);
     }
 
-    async Task RefreshUdpMappingAsync(TeamLabRuntime runtime, Guid nodeId, CancellationToken token)
+    async Task<string?> RefreshUdpMappingAsync(TeamLabRuntime runtime, Guid nodeId, CancellationToken token)
     {
         var mapping = runtime.PublicUdpMapping!;
         var node = await context.WorkerNodes.AsNoTracking().SingleAsync(item => item.Id == nodeId, token);
         if (string.IsNullOrWhiteSpace(node.TeamLabTunnelIp))
-            throw new InvalidOperationException($"Node '{node.Name}' has no TeamLab tunnel IP.");
-        var used = await context.TeamLabPublicUdpMappings.AsNoTracking()
+            return $"Node '{node.Name}' has no TeamLab tunnel IP.";
+        var used = await LiveUdpMappings()
             .Where(item => item.Id != mapping.Id && item.WorkerTunnelIp == node.TeamLabTunnelIp)
             .Select(item => item.WorkerWireGuardPort).ToArrayAsync(token);
+        var workerPort = FirstFree(
+            _network.WorkerWireGuardPortStart, _network.WorkerWireGuardPortEnd, used);
+        if (workerPort is null)
+            return $"worker_wireguard_port_exhausted: node '{node.Name}' has no free WireGuard port.";
+
         mapping.Generation = runtime.Generation;
         mapping.WorkerTunnelIp = node.TeamLabTunnelIp;
-        mapping.WorkerWireGuardPort = FirstFree(_network.WorkerWireGuardPortStart,
-            _network.WorkerWireGuardPortEnd, used)
-            ?? throw new InvalidOperationException("No Worker WireGuard UDP port is available.");
+        mapping.WorkerWireGuardPort = workerPort.Value;
         mapping.RuleVersion++;
         mapping.IsSynced = false;
         mapping.LastSyncError = null;
+        return null;
     }
 
     static NodeCapability Required(int docker, int vm) =>

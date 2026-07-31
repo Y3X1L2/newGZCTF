@@ -32,6 +32,7 @@ find "$next" -type d -exec chmod 0755 {} +
 find "$next" -type f -exec chmod 0644 {} +
 chmod 0755 \
   "$next/GZCTF" \
+  "$next/efbundle" \
   "$next/agent/gzctf-agent" \
   "$next/agent/endpoint-sensor/linux-x64/gzctf-endpoint-sensor" \
   "$next/agent/guest-supervisor/linux-x64/gzctf-guest-supervisor" \
@@ -58,6 +59,13 @@ if test -d "$current" && test ! -L "$current/appsettings.json"; then
   rm -f "$current/appsettings.json"
   ln -s "$config" "$current/appsettings.json"
 fi
+
+# Apply schema changes against the same persistent configuration that the new
+# service will use. EF migration bundles do not load the platform configuration
+# by themselves, so pass the configured database connection explicitly.
+database_connection="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["ConnectionStrings"]["Database"])' "$config")"
+test -n "$database_connection" || { echo "database connection is missing" >&2; exit 5; }
+(cd "$next" && ./efbundle --no-color --connection "$database_connection")
 
 systemctl stop gzctf.service
 if test -e "$previous"; then rm -rf "$previous"; fi

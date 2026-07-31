@@ -148,6 +148,18 @@ public partial class TeamLabNetworkService(
                     request.RuntimeId, request.Generation, liveState.Output);
         }
 
+        // Claim ownership before the first mutating command. The commands below create bridges,
+        // namespaces, veth pairs and dnsmasq processes; if one of them fails we return early and
+        // never reach the success-path write at the end of this method. ResolveCleanupOwnership
+        // decides what cleanup may delete from this marker, so registering it only on full success
+        // makes a half-applied generation look like an unowned leftover — cleanup then skips every
+        // deletion and still reports success, leaking resources no inventory can see. Writing it
+        // first also guarantees the marker exists before any resource whose name is shared across
+        // generations, which is what lets the fencing check below be trusted.
+        var executing = !_config.DryRun && !request.DryRun && _config.Enable;
+        if (executing)
+            await generationStore.WriteAsync(request.RuntimeId, request.Generation, token);
+
         var responses = new List<TeamLabDryRunResponse>();
         foreach (var item in normalized.Switches)
         {
@@ -163,6 +175,18 @@ public partial class TeamLabNetworkService(
             request.DryRun), token);
         responses.Add(router);
         if (!router.Success) return InfrastructureFailure(router.Message, request.DryRun, responses);
+
+        var inputPolicy = await firewallService.ApplyRouterInputPoliciesAsync(
+            request.RuntimeId,
+            request.Generation,
+            normalized.RouterNamespace,
+            normalized.Switches.Select((_, index) =>
+                TrimInterfaceName($"{normalized.RouterNamespace}n{index}")).ToArray(),
+            request.DryRun,
+            token);
+        responses.Add(inputPolicy);
+        if (!inputPolicy.Success)
+            return InfrastructureFailure(inputPolicy.Message, request.DryRun, responses);
 
         foreach (var (item, index) in normalized.Switches.Select((value, index) => (value, index)))
         {
@@ -208,6 +232,38 @@ public partial class TeamLabNetworkService(
         $"/run/gzctf-teamlab/runtime-{runtimeId}/generation-{generation}";
 
     internal static string RuntimeLockKey(int runtimeId) => $"teamlab-runtime:{runtimeId}";
+
+    /// <summary>
+    /// Decides whether a cleanup request may remove resources whose names are shared across
+    /// generations of the same runtime (bridges, router namespace, veth pairs, dnsmasq).
+    /// </summary>
+    /// <param name="activeGeneration">
+    /// Generation recorded on the node, or <c>null</c> when no marker exists.
+    /// </param>
+    internal static TeamLabCleanupOwnership ResolveCleanupOwnership(
+        int? activeGeneration,
+        int requestGeneration,
+        bool desiredStateExists,
+        bool dryRun)
+    {
+        if (activeGeneration is null)
+            // Desired state without a marker means the marker was lost rather than never written,
+            // so fail closed instead of guessing.
+            return desiredStateExists && !dryRun
+                ? TeamLabCleanupOwnership.Refuse
+                // No marker and no desired state: ownership is unproven. Shared names are reused
+                // across generations of a runtime, so removing them here could destroy resources a
+                // concurrent generation is using. Apply now claims the marker before its first
+                // mutating command, which is what makes a half-applied generation provably ours
+                // rather than something this branch has to infer.
+                : TeamLabCleanupOwnership.SharedResourcesNotOwned;
+
+        return activeGeneration == requestGeneration
+            ? TeamLabCleanupOwnership.OwnsSharedResources
+            // The marker names another generation. This is the fencing token: a late cleanup must
+            // never delete resources a newer generation is now using under the same names.
+            : TeamLabCleanupOwnership.SharedResourcesNotOwned;
+    }
 
     internal static string ResolveDesiredStatePath(int runtimeId, int generation) =>
         $"{ResolveDesiredStateDirectory(runtimeId, generation)}/state.json";
@@ -453,25 +509,50 @@ public partial class TeamLabNetworkService(
         }
 
         var runtimeChain = $"TLR{request.RuntimeId:X}G{request.Generation:X}";
+        var accessChain = $"TLA{request.RuntimeId:X}G{request.Generation:X}";
+        var inputChain = $"TLI{request.RuntimeId:X}G{request.Generation:X}";
         var mssChain = $"TLM{request.RuntimeId:X}G{request.Generation:X}";
         var fabricChain = $"TLF{request.RuntimeId:X}G{request.Generation:X}";
         var nftChecks = new List<string>
         {
+            $"ip netns exec {namespaceName} nft list chain inet gzctf_teamlab {inputChain} | grep -F 'hook input' >/dev/null",
+            $"ip netns exec {namespaceName} nft list chain inet gzctf_teamlab {inputChain} | grep -F 'policy drop' >/dev/null",
+            $"ip netns exec {namespaceName} nft list chain inet gzctf_teamlab {inputChain} | grep -F 'iifname \"lo\" accept' >/dev/null",
+            $"ip netns exec {namespaceName} nft list chain inet gzctf_teamlab {inputChain} | grep -F 'ct state established,related accept' >/dev/null",
+            $"ip netns exec {namespaceName} nft list chain inet gzctf_teamlab {accessChain} >/dev/null",
             $"ip netns exec {namespaceName} nft list chain inet gzctf_teamlab {runtimeChain} | grep -F 'hook forward' >/dev/null",
             $"ip netns exec {namespaceName} nft list chain inet gzctf_teamlab {runtimeChain} | grep -F 'policy drop' >/dev/null",
             $"ip netns exec {namespaceName} nft list chain inet gzctf_teamlab {runtimeChain} | grep -F 'ct state established,related accept' >/dev/null",
+            $"ip netns exec {namespaceName} nft list chain inet gzctf_teamlab {runtimeChain} | grep -F 'jump {accessChain}' >/dev/null",
             $"ip netns exec {namespaceName} nft list chain inet gzctf_teamlab {mssChain} | grep -F 'tcp option maxseg size set {fabricMss}' >/dev/null",
             $"nft list chain inet gzctf_teamlab {fabricChain} | grep -F 'hook forward' >/dev/null"
         };
         var iptablesChecks = new List<string>
         {
+            $"ip netns exec {namespaceName} iptables -C INPUT -j {inputChain}",
+            $"ip netns exec {namespaceName} iptables -C {inputChain} -i lo -j ACCEPT",
+            $"ip netns exec {namespaceName} iptables -C {inputChain} -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
+            $"ip netns exec {namespaceName} iptables -C {inputChain} -j REJECT",
+            $"ip netns exec {namespaceName} iptables -S {accessChain} >/dev/null",
             $"ip netns exec {namespaceName} iptables -C FORWARD -j {runtimeChain}",
             $"ip netns exec {namespaceName} iptables -C {runtimeChain} -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
+            $"ip netns exec {namespaceName} iptables -C {runtimeChain} -j {accessChain}",
             $"ip netns exec {namespaceName} iptables -C {runtimeChain} -j REJECT",
             $"ip netns exec {namespaceName} iptables -t mangle -C FORWARD -j {mssChain}",
             $"ip netns exec {namespaceName} iptables -t mangle -C {mssChain} -o {request.Fabric.NamespaceInterfaceName} -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss {fabricMss}",
             $"iptables -C FORWARD -j {fabricChain}"
         };
+        var playerInterface = TrimInterfaceName($"tlwg{request.RuntimeId}");
+        foreach (var index in Enumerable.Range(0, request.Switches.Length))
+        {
+            var routerInterface = TrimInterfaceName($"{namespaceName}n{index}");
+            nftChecks.Add($"ip netns exec {namespaceName} nft list chain inet gzctf_teamlab {inputChain} | grep -F 'iifname \"{routerInterface}\" udp dport 53 accept' >/dev/null");
+            nftChecks.Add($"ip netns exec {namespaceName} nft list chain inet gzctf_teamlab {inputChain} | grep -F 'iifname \"{routerInterface}\" udp dport 67 accept' >/dev/null");
+            iptablesChecks.Add($"ip netns exec {namespaceName} iptables -C {inputChain} -i {routerInterface} -p udp --dport 53 -j ACCEPT");
+            iptablesChecks.Add($"ip netns exec {namespaceName} iptables -C {inputChain} -i {routerInterface} -p udp --dport 67 -j ACCEPT");
+        }
+        nftChecks.Add($"ip netns exec {namespaceName} nft list chain inet gzctf_teamlab {inputChain} | grep -F 'iifname \"{playerInterface}\" udp dport 53 accept' >/dev/null");
+        iptablesChecks.Add($"ip netns exec {namespaceName} iptables -C {inputChain} -i {playerInterface} -p udp --dport 53 -j ACCEPT");
         foreach (var policy in request.ForwardPolicies)
         {
             var action = policy.Allow ? "accept" : "reject";
@@ -624,16 +705,36 @@ public partial class TeamLabNetworkService(
         validation = ValidateWireGuardKey(request.PeerPublicKey, nameof(request.PeerPublicKey));
         if (validation is not null) return Failure(validation, request.DryRun);
 
+        await using var runtimeLock = await resourceLock.AcquireAsync(RuntimeLockKey(request.RuntimeId), token);
+        if (!_config.DryRun && !request.DryRun && _config.Enable)
+        {
+            TeamLabActiveGeneration? activeGeneration;
+            try
+            {
+                activeGeneration = await generationStore.ReadAsync(request.RuntimeId, token);
+            }
+            catch (InvalidDataException exception)
+            {
+                return Failure(exception.Message, request.DryRun);
+            }
+            if (activeGeneration?.Generation != request.Generation)
+                return Failure(
+                    $"WireGuard access generation {request.Generation} is not active for runtime {request.RuntimeId}.",
+                    request.DryRun);
+        }
+
         var commands = new[]
         {
             "printf '<redacted>' | wg set <interface> private-key /dev/stdin",
-            $"ip netns exec {request.NamespaceName} ip link delete {request.InterfaceName} 2>/dev/null || true",
-            $"ip link delete {request.InterfaceName} 2>/dev/null || true",
-            $"ip link add {request.InterfaceName} type wireguard",
-            $"wg set {request.InterfaceName} private-key /dev/stdin listen-port {request.ListenPort} peer {request.PeerPublicKey} allowed-ips {request.PeerClientAddress}",
-            $"ip link set {request.InterfaceName} netns {request.NamespaceName}",
-            $"ip netns exec {request.NamespaceName} ip addr flush dev {request.InterfaceName}",
-            $"ip netns exec {request.NamespaceName} ip addr add {request.AddressCidr} dev {request.InterfaceName}",
+            $"if ip netns exec {request.NamespaceName} ip link show dev {request.InterfaceName} >/dev/null 2>&1; then " +
+            $"ip netns exec {request.NamespaceName} wg set {request.InterfaceName} private-key /dev/stdin listen-port {request.ListenPort} peer {request.PeerPublicKey} allowed-ips {request.PeerClientAddress}; " +
+            $"else ip link delete {request.InterfaceName} 2>/dev/null || true; ip link add {request.InterfaceName} type wireguard; " +
+            $"wg set {request.InterfaceName} private-key /dev/stdin listen-port {request.ListenPort} peer {request.PeerPublicKey} allowed-ips {request.PeerClientAddress}; " +
+            $"ip link set {request.InterfaceName} netns {request.NamespaceName}; fi",
+            $"for existing_peer in $(ip netns exec {request.NamespaceName} wg show {request.InterfaceName} peers); do " +
+            $"test \"$existing_peer\" = {ShellQuote(request.PeerPublicKey)} || ip netns exec {request.NamespaceName} wg set {request.InterfaceName} peer \"$existing_peer\" remove; done",
+            TeamLabNetworkPrimitives.BuildNamespaceIpv4AddressConvergenceCommand(
+                request.NamespaceName, request.InterfaceName, request.AddressCidr),
             $"ip netns exec {request.NamespaceName} ip link set {request.InterfaceName} up"
         };
 
@@ -658,6 +759,23 @@ public partial class TeamLabNetworkService(
         if (validation is not null) return Failure(validation, request.DryRun);
         validation = ValidateLinuxName(request.InterfaceName, nameof(request.InterfaceName));
         if (validation is not null) return Failure(validation, request.DryRun);
+        await using var runtimeLock = await resourceLock.AcquireAsync(RuntimeLockKey(request.RuntimeId), token);
+        if (!_config.DryRun && !request.DryRun && _config.Enable)
+        {
+            TeamLabActiveGeneration? activeGeneration;
+            try
+            {
+                activeGeneration = await generationStore.ReadAsync(request.RuntimeId, token);
+            }
+            catch (InvalidDataException exception)
+            {
+                return Failure(exception.Message, request.DryRun);
+            }
+            if (activeGeneration?.Generation != request.Generation)
+                return Failure(
+                    $"WireGuard cleanup generation {request.Generation} is not active for runtime {request.RuntimeId}.",
+                    request.DryRun);
+        }
         var commands = BuildPlayerAccessCleanupCommands(request.RuntimeId, request.Generation,
                 request.NamespaceName, request.InterfaceName)
             .Concat([
@@ -696,11 +814,13 @@ public partial class TeamLabNetworkService(
         var generationDirectory = ResolveDesiredStateDirectory(request.RuntimeId, request.Generation);
         var runtimeDirectory = Path.GetDirectoryName(generationDirectory)!;
         var desiredStateExists = File.Exists(ResolveDesiredStatePath(request.RuntimeId, request.Generation));
-        if (activeGeneration is null && desiredStateExists && !request.DryRun)
+        var ownership = ResolveCleanupOwnership(
+            activeGeneration?.Generation, request.Generation, desiredStateExists, request.DryRun);
+        if (ownership == TeamLabCleanupOwnership.Refuse)
             return Failure(
                 $"Active generation state is unavailable for runtime {request.RuntimeId}; refusing shared resource cleanup.",
                 request.DryRun);
-        var ownsSharedResources = activeGeneration?.Generation == request.Generation;
+        var ownsSharedResources = ownership == TeamLabCleanupOwnership.OwnsSharedResources;
         var commands = new List<string>();
         if (ownsSharedResources)
         {
@@ -1117,7 +1237,10 @@ public partial class TeamLabNetworkService(
         return string.IsNullOrWhiteSpace(value) ? $"Invalid {field}." : null;
     }
 
-    private static string TrimInterfaceName(string value) => value.Length <= 15 ? value : value[..15];
+    // Single source of truth: a second truncation here would silently diverge from the names the
+    // router and observation registry derive for the same interfaces.
+    private static string TrimInterfaceName(string value) =>
+        TeamLabNetworkPrimitives.TrimInterfaceName(value);
 
     private static string[] BuildPeerRouteCommands(string namespaceName, string interfaceName, string peerAllowedIps) =>
         peerAllowedIps.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)

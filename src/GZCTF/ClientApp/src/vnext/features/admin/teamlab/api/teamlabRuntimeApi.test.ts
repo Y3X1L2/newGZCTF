@@ -44,6 +44,7 @@ const runtimeWire = {
   networks: [{ key: 'edge', name: 'Edge', cidr: '10.20.1.0/24', gatewayIp: '10.20.1.1' }],
   assets: [
     {
+      id: 1,
       key: 'portal',
       name: 'Portal',
       kind: 0,

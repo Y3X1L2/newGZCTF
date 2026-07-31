@@ -63,6 +63,8 @@ public sealed class AgentCapabilityService(
         }
         if (features.Contains(AgentFeatureIds.VmPreparedImage))
             features.Add(AgentFeatureIds.VmPreparedImageUpload);
+        if (capabilities.Docker || kvm)
+            features.Add(AgentFeatureIds.RemoteAccessRelay);
         features.Add(AgentFeatureIds.BootstrapArtifactPull);
 
         var logicalCpu = Math.Max(1, Environment.ProcessorCount);

@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import shlex
 import sys
+from urllib.parse import unquote, urlparse
 
 import paramiko
 
@@ -17,12 +18,37 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def create_socks5_socket(proxy_url: str, host: str, port: int):
+    try:
+        import socks
+    except ImportError as exception:
+        raise RuntimeError("SOCKS5 deployment requires PySocks (install with: python -m pip install PySocks)") from exception
+
+    parsed = urlparse(proxy_url)
+    if parsed.scheme.lower() != "socks5" or not parsed.hostname or not parsed.port:
+        raise ValueError("--socks5 must be a socks5://[username:password@]host:port URL")
+    socket = socks.socksocket()
+    socket.set_proxy(
+        socks.SOCKS5,
+        parsed.hostname,
+        parsed.port,
+        username=unquote(parsed.username) if parsed.username else None,
+        password=unquote(parsed.password) if parsed.password else None,
+    )
+    socket.settimeout(20)
+    socket.connect((host, port))
+    return socket
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("archive", type=Path)
     parser.add_argument("--host", default=os.environ.get("GZCTF_DEPLOY_HOST"))
     parser.add_argument("--user", default=os.environ.get("GZCTF_DEPLOY_USER", "whoami"))
     parser.add_argument("--password", default=os.environ.get("GZCTF_DEPLOY_PASSWORD"))
+    parser.add_argument("--key-file", type=Path, default=os.environ.get("GZCTF_DEPLOY_KEY_FILE"))
+    parser.add_argument("--port", type=int, default=int(os.environ.get("GZCTF_DEPLOY_PORT", "22")))
+    parser.add_argument("--socks5", default=os.environ.get("GZCTF_DEPLOY_SOCKS5"))
     parser.add_argument("--release-id")
     parser.add_argument("--plan-only", action="store_true")
     args = parser.parse_args()
@@ -37,12 +63,28 @@ def main() -> int:
     if args.plan_only:
         return 0
     if not args.host or not args.password:
-        parser.error("host and password are required through arguments or GZCTF_DEPLOY_* environment variables")
+        parser.error("host and sudo password are required through arguments or GZCTF_DEPLOY_* environment variables")
+    if args.port not in range(1, 65536):
+        parser.error("port must be between 1 and 65535")
+    if args.key_file and not args.key_file.is_file():
+        parser.error(f"key file does not exist: {args.key_file}")
 
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(args.host, username=args.user, password=args.password, timeout=15,
-                   banner_timeout=15, auth_timeout=15, look_for_keys=False, allow_agent=False)
+    proxy_socket = create_socks5_socket(args.socks5, args.host, args.port) if args.socks5 else None
+    client.connect(
+        args.host,
+        port=args.port,
+        username=args.user,
+        password=args.password,
+        key_filename=str(args.key_file) if args.key_file else None,
+        sock=proxy_socket,
+        timeout=20,
+        banner_timeout=20,
+        auth_timeout=20,
+        look_for_keys=False,
+        allow_agent=False,
+    )
     prepare = "sudo -S -p '' install -d -m 0750 -o " + shlex.quote(args.user) + \
               " -g " + shlex.quote(args.user) + " /opt/gzctf/incoming"
     stdin, stdout, stderr = client.exec_command(prepare, timeout=20)

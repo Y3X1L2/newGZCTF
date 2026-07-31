@@ -213,6 +213,41 @@ public class GuacamoleService
             ["max-connections-per-user"] = "2"
         });
 
+    public static GuacamoleConnectionData BuildSshConnectionData(
+        string connectionName,
+        string host,
+        int port,
+        string username,
+        string credential)
+    {
+        var parameters = new Dictionary<string, string>
+        {
+            ["hostname"] = host,
+            ["port"] = port.ToString(),
+            ["username"] = username,
+            ["font-size"] = "14",
+            ["color-scheme"] = "gray-black",
+            ["enable-sftp"] = "false"
+        };
+
+        parameters[LooksLikePrivateKey(credential) ? "private-key" : "password"] = credential;
+
+        return new GuacamoleConnectionData(
+            connectionName,
+            "ROOT",
+            "ssh",
+            parameters,
+            new Dictionary<string, string>
+            {
+                ["max-connections"] = "2",
+                ["max-connections-per-user"] = "2"
+            });
+    }
+
+    private static bool LooksLikePrivateKey(string credential) =>
+        credential.Contains("-----BEGIN ", StringComparison.Ordinal) &&
+        credential.Contains("PRIVATE KEY-----", StringComparison.Ordinal);
+
     public sealed record GuacamoleConnectionData(
         string Name,
         string ParentIdentifier,

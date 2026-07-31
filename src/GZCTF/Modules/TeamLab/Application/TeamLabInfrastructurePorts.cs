@@ -50,8 +50,10 @@ public sealed record TeamLabQueueRequest(
     WorkloadSchedulingIdentity Identity,
     string SubjectDisplayName,
     string ResourceDisplayName,
+    // Required, not defaulted: capacity accounting keys reservations by the ticket's generation, so
+    // a stale default silently double-counts a runtime whose create request was turned into a reset.
+    int Generation,
     RuntimeOperationKind Operation = RuntimeOperationKind.Create,
-    int Generation = 1,
     Guid? TargetNodeId = null,
     string? ProtectedPayload = null,
     string? PayloadHash = null);

@@ -14,18 +14,23 @@ public class ImageController : ControllerBase
 {
     private readonly DockerService _docker;
     private readonly AgentOperationGate _gate;
+    private readonly AgentResourceLock _resourceLock;
     private readonly ImageTransferSingleFlight _singleFlight;
     private readonly AgentOciArtifactUploader _ociUploader;
+    private readonly VmImageBackingChainInspector _backingChain;
     private readonly ILogger<ImageController> _logger;
 
-    public ImageController(DockerService docker, AgentOperationGate gate,
+    public ImageController(DockerService docker, AgentOperationGate gate, AgentResourceLock resourceLock,
         ImageTransferSingleFlight singleFlight, AgentOciArtifactUploader ociUploader,
+        VmImageBackingChainInspector backingChain,
         ILogger<ImageController> logger)
     {
         _docker = docker;
         _gate = gate;
+        _resourceLock = resourceLock;
         _singleFlight = singleFlight;
         _ociUploader = ociUploader;
+        _backingChain = backingChain;
         _logger = logger;
     }
 
@@ -35,6 +40,8 @@ public class ImageController : ControllerBase
         await _singleFlight.RunAsync<object?>("docker:" + request.Image.Trim().ToLowerInvariant(),
             async sharedToken =>
             {
+                await using var cacheLock = await _resourceLock.AcquireAsync(
+                    "docker-image:" + request.Image.Trim().ToLowerInvariant(), sharedToken);
                 await using var permit = await _gate.EnterAsync(AgentOperationCategory.DockerImageTransfer,
                     sharedToken);
                 await _docker.PullImageAsync(request.Image, request.RegistryAuth, sharedToken);
@@ -46,6 +53,9 @@ public class ImageController : ControllerBase
     [HttpDelete("docker")]
     public async Task<IActionResult> DeleteDockerImage([FromQuery] string image, CancellationToken token)
     {
+        await using var cacheLock = await _resourceLock.AcquireAsync(
+            "docker-image:" + image.Trim().ToLowerInvariant(), token);
+        await using var permit = await _gate.EnterAsync(AgentOperationCategory.Control, token);
         await _docker.DeleteImageAsync(image, token);
         return Ok(new { message = "Docker image cache deleted" });
     }
@@ -76,9 +86,12 @@ public class ImageController : ControllerBase
     [HttpPost("download-vm")]
     public async Task<IActionResult> DownloadVmImage([FromBody] DownloadVmImageRequest request, CancellationToken token)
     {
-        var key = $"vm:{request.TemplateId?.ToString() ?? request.Hash}:{NormalizeSha256(request.Digest) ?? NormalizeSha256(request.Hash)}";
+        var cacheIdentity = NormalizeSha256(request.Digest) ?? NormalizeSha256(request.Hash) ??
+                            request.TemplateId?.ToString() ?? request.Hash;
+        var key = $"vm:{cacheIdentity}";
         var result = await _singleFlight.RunAsync(key, async sharedToken =>
         {
+            await using var cacheLock = await _resourceLock.AcquireAsync("vm-image:" + cacheIdentity, sharedToken);
             await using var permit = await _gate.EnterAsync(AgentOperationCategory.VmImageTransfer, sharedToken);
             return await DownloadVmImageCoreAsync(request, sharedToken);
         }, token);
@@ -100,6 +113,23 @@ public class ImageController : ControllerBase
                 string.Equals(currentHash, expectedHash, StringComparison.OrdinalIgnoreCase))
                 return new DownloadVmImageResponse(true, "Image already exists", true, true,
                     new FileInfo(destPath).Length, $"sha256:{currentHash}");
+
+            IReadOnlyList<VmImageBackingReference> references;
+            try
+            {
+                references = await _backingChain.FindReferencesAsync(storagePath, [destPath], token);
+            }
+            catch (InvalidOperationException exception)
+            {
+                throw new AgentOperationException(
+                    "ImageTransfer", "image.vm.cache_reference_check_failed", exception.Message, true);
+            }
+            if (references.Count > 0)
+                throw new AgentOperationException(
+                    "ImageTransfer",
+                    "image.vm.cache_in_use",
+                    $"VM image cache cannot be replaced while {references.Count} overlay(s) still use it.",
+                    true);
             System.IO.File.Delete(destPath);
         }
 
@@ -139,6 +169,7 @@ public class ImageController : ControllerBase
         var key = $"vm-publish:{request.TemplateId}:{hash}";
         var result = await _singleFlight.RunAsync(key, async sharedToken =>
         {
+            await using var cacheLock = await _resourceLock.AcquireAsync("vm-image:" + hash, sharedToken);
             await using var permit = await _gate.EnterAsync(
                 AgentOperationCategory.VmImageTransfer, sharedToken);
             var path = Path.Combine("/var/lib/gzctf/images", $"{request.TemplateId}.qcow2");
@@ -174,17 +205,52 @@ public class ImageController : ControllerBase
     }
 
     [HttpDelete("vm/{templateId:int}")]
-    public IActionResult DeleteVmImage([FromRoute] int templateId, [FromQuery] string? hash)
+    public async Task<IActionResult> DeleteVmImage(
+        [FromRoute] int templateId,
+        [FromQuery] string? hash,
+        CancellationToken token)
     {
         var storagePath = "/var/lib/gzctf/images";
-        var removed = 0;
-        foreach (var path in ResolveVmImageCachePaths(storagePath, templateId, hash))
+        var cacheIdentity = NormalizeSha256(hash) ?? templateId.ToString();
+        await using var cacheLock = await _resourceLock.AcquireAsync("vm-image:" + cacheIdentity, token);
+        await using var permit = await _gate.EnterAsync(AgentOperationCategory.Control, token);
+        var targets = ResolveVmImageCachePaths(storagePath, templateId, hash)
+            .Where(System.IO.File.Exists)
+            .ToArray();
+        if (targets.Length == 0)
+            return Ok(new { message = "VM image cache cleanup completed", removed = 0 });
+
+        // A cached template is the backing file of every VM overlay created from it, and that link
+        // exists only in qcow2 metadata. Deleting it while an overlay still points at it leaves that
+        // VM permanently unbootable — for any game on this node, not just the caller's.
+        IReadOnlyList<VmImageBackingReference> references;
+        try
         {
-            if (System.IO.File.Exists(path))
-            {
-                System.IO.File.Delete(path);
-                removed++;
-            }
+            references = await _backingChain.FindReferencesAsync(storagePath, targets, token);
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw new AgentOperationException(
+                "Control", "image.vm.cache_reference_check_failed", exception.Message, true);
+        }
+
+        if (references.Count > 0)
+        {
+            _logger.LogWarning(
+                "Refused VM image cache delete for template {TemplateId}: {Count} overlay(s) still back onto it",
+                templateId, references.Count);
+            throw new AgentOperationException(
+                "Control",
+                "image.vm.cache_in_use",
+                $"VM image cache is still the backing file of {references.Count} overlay(s) on this node.",
+                true);
+        }
+
+        var removed = 0;
+        foreach (var path in targets)
+        {
+            System.IO.File.Delete(path);
+            removed++;
         }
 
         return Ok(new { message = "VM image cache cleanup completed", removed });

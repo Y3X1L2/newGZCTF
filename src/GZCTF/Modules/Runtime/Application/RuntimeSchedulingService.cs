@@ -35,13 +35,41 @@ public sealed class RuntimeSchedulingService(
         var scheduled = 0;
         foreach (var ticketId in ticketIds)
         {
+            // Isolated per ticket: without this, one ticket that throws skips every ticket behind it
+            // for the rest of the tick, and a persistently failing one at the head of the queue
+            // starves the rest indefinitely.
+            try
+            {
+                if (await TryScheduleTicketAsync(ticketId, now, token))
+                    scheduled++;
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                await ReleaseFailedClaimAsync(ticketId, exception, token);
+            }
+        }
+
+        return scheduled;
+    }
+
+    /// <summary>
+    /// Schedules one ticket. Returns true when it was assigned; every other outcome — not claimed,
+    /// claim lost, cancelled, waiting for capacity — returns false.
+    /// </summary>
+    async Task<bool> TryScheduleTicketAsync(Guid ticketId, DateTimeOffset now, CancellationToken token)
+    {
+        {
             if (!await TryClaimAsync(context, ticketId, now, token))
-                continue;
+                return false;
 
             var ticket = await context.DeploymentQueueTickets.SingleAsync(item => item.Id == ticketId, token);
             var claimOwner = ticket.ClaimOwner;
             if (string.IsNullOrWhiteSpace(claimOwner))
-                continue;
+                return false;
             using var correlationScope = correlation.Begin(ticket.Id);
             using var activity = RuntimeOperationalEvents.StartActivity(ticket, "runtime.schedule");
             ticket.Stage = DeploymentStage.AdmissionChecking;
@@ -58,7 +86,7 @@ public sealed class RuntimeSchedulingService(
                 if (!await OwnsSchedulingClaimAsync(context, ticket.Id, claimOwner, token))
                 {
                     context.ChangeTracker.Clear();
-                    continue;
+                    return false;
                 }
                 ticket.Status = DeploymentQueueTicketStatus.Cancelled;
                 ticket.Stage = DeploymentStage.Cancelled;
@@ -71,14 +99,14 @@ public sealed class RuntimeSchedulingService(
                     "Runtime scheduling cancelled a non-deployable ticket."));
                 await context.SaveChangesAsync(token);
                 activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error, "not_deployable");
-                continue;
+                return false;
             }
 
             var reservation = await ReserveCapacityAsync(ticket, token);
             if (!await OwnsSchedulingClaimAsync(context, ticket.Id, claimOwner, token))
             {
                 context.ChangeTracker.Clear();
-                continue;
+                return false;
             }
             var controlPlaneTicket = IsTeamLabControlPlaneTicket(ticket);
             if (!reservation.Success || (!controlPlaneTicket && reservation.NodeId is null))
@@ -120,7 +148,7 @@ public sealed class RuntimeSchedulingService(
                     }));
                 await context.SaveChangesAsync(token);
                 PlatformTelemetry.RecordRuntimeTransition(ticket.Kind.ToString(), ticket.Stage.ToString(), "blocked");
-                continue;
+                return false;
             }
 
             var nodeId = reservation.NodeId;
@@ -150,14 +178,44 @@ public sealed class RuntimeSchedulingService(
             await context.SaveChangesAsync(token);
             PlatformTelemetry.RecordRuntimeTransition(ticket.Kind.ToString(), ticket.Stage.ToString(), "assigned");
             await wakeup.NotifyAsync(ticket.Id, token);
-            scheduled++;
 
             logger.SystemLog(
                 $"Deployment scheduled: ticket={ticket.Id}, kind={ticket.Kind}, operation={ticket.Operation}, node={nodeId?.ToString() ?? "control-plane"}, dockerSlots={ticket.DockerSlots}, vmSlots={ticket.VmSlots}.",
                 TaskStatus.Pending, LogLevel.Information);
+            return true;
         }
+    }
 
-        return scheduled;
+    /// <summary>
+    /// Returns a ticket whose scheduling threw to the queue with a backoff, so a failing ticket
+    /// cannot hold its claim and starve everything behind it. The change tracker is cleared first:
+    /// a failed SaveChanges leaves dirty entities that would otherwise corrupt the next ticket.
+    /// </summary>
+    async Task ReleaseFailedClaimAsync(Guid ticketId, Exception exception, CancellationToken token)
+    {
+        logger.SystemLog(
+            $"Deployment scheduling failed: ticket={ticketId}, error={exception.Message}",
+            TaskStatus.Failed, LogLevel.Warning);
+        try
+        {
+            context.ChangeTracker.Clear();
+            var retryAt = DateTimeOffset.UtcNow.AddSeconds(30);
+            await context.DeploymentQueueTickets
+                .Where(item => item.Id == ticketId)
+                .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(item => item.ClaimOwner, (string?)null)
+                        .SetProperty(item => item.ClaimExpiresAt, (DateTimeOffset?)null)
+                        .SetProperty(item => item.AttemptCount, item => item.AttemptCount + 1)
+                        .SetProperty(item => item.NotBeforeAt, retryAt),
+                    token);
+        }
+        catch (Exception releaseFailure) when (releaseFailure is not OperationCanceledException)
+        {
+            // The stale-claim sweep at the start of the next tick is the backstop.
+            logger.SystemLog(
+                $"Unable to release scheduling claim for ticket={ticketId}: {releaseFailure.Message}",
+                TaskStatus.Failed, LogLevel.Warning);
+        }
     }
 
     internal static async Task<bool> TryClaimAsync(AppDbContext db, Guid ticketId, DateTimeOffset now,

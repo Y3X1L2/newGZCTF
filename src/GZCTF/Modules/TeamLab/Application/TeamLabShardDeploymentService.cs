@@ -272,7 +272,7 @@ public sealed class TeamLabShardDeploymentService(
         var secrets = overlay?.Secrets ?? new Dictionary<string, string>();
         var scenarioArtifact = topologyAsset.BakeAtPublish && !runtime.IsScenarioBuild;
         return new TeamLabNodeAssetCreateRequest(
-                runtime.Id, runtime.PublicId, runtime.Generation, asset.TopologyKey, asset.Name, topologyAsset.Kind,
+                runtime.Id, asset.Id, runtime.PublicId, runtime.Generation, asset.TopologyKey, asset.Name, topologyAsset.Kind,
                 asset.SourceTemplateId ?? topologyAsset.ImageTemplateId, topologyAsset.CpuUnits, topologyAsset.MemoryMiB,
                 topologyAsset.StorageMiB, topologyAsset.ExposePort, topologyAsset.RoutingEnabled, imageReady,
                 environment, secrets, interfaces,
@@ -314,7 +314,7 @@ public sealed class TeamLabShardDeploymentService(
                         shard.WorkerNodeId, request, cancellationToken);
                     return new NodeExecution(
                         node, asset, request, created.Success, created.Message,
-                        created.RuntimeResourceId, TeamLabNodeBootstrapResult.Completed());
+                        created.RuntimeResourceId, created.NativeIdentity, TeamLabNodeBootstrapResult.Completed());
                 case TeamLabDeploymentNodeKind.GuestReady:
                     if (string.IsNullOrWhiteSpace(asset.RuntimeResourceId))
                         return NodeExecution.Failed(node, asset, request,
@@ -323,7 +323,7 @@ public sealed class TeamLabShardDeploymentService(
                         shard.WorkerNodeId, asset.RuntimeResourceId, request, cancellationToken);
                     return new NodeExecution(
                         node, asset, request, ready.Success, ready.Message,
-                        asset.RuntimeResourceId, TeamLabNodeBootstrapResult.Completed());
+                        asset.RuntimeResourceId, asset.NativeIdentity, TeamLabNodeBootstrapResult.Completed());
                 case TeamLabDeploymentNodeKind.Bootstrap:
                     if (string.IsNullOrWhiteSpace(asset.RuntimeResourceId))
                         return NodeExecution.Failed(node, asset, request,
@@ -332,7 +332,7 @@ public sealed class TeamLabShardDeploymentService(
                         shard.WorkerNodeId, asset.RuntimeResourceId, request, cancellationToken);
                     return new NodeExecution(
                         node, asset, request, bootstrap.Success, bootstrap.Message,
-                        asset.RuntimeResourceId, bootstrap);
+                        asset.RuntimeResourceId, asset.NativeIdentity, bootstrap);
                 case TeamLabDeploymentNodeKind.Health:
                     if (string.IsNullOrWhiteSpace(asset.RuntimeResourceId))
                         return NodeExecution.Failed(node, asset, request,
@@ -341,7 +341,7 @@ public sealed class TeamLabShardDeploymentService(
                         shard.WorkerNodeId, asset.RuntimeResourceId, request, cancellationToken);
                     return new NodeExecution(
                         node, asset, request, health.Success, health.Message,
-                        asset.RuntimeResourceId, health);
+                        asset.RuntimeResourceId, asset.NativeIdentity, health);
                 default:
                     throw new ArgumentOutOfRangeException(nameof(node.Kind));
             }
@@ -361,6 +361,7 @@ public sealed class TeamLabShardDeploymentService(
         {
             case TeamLabDeploymentNodeKind.Create:
                 result.Asset.RuntimeResourceId = result.RuntimeResourceId;
+                result.Asset.NativeIdentity = result.NativeIdentity;
                 if (result.Asset.Kind == TeamLabResourceKind.Vm)
                 {
                     result.Asset.ExecutionStage = TeamLabAssetExecutionStage.Pending;
@@ -588,6 +589,7 @@ public sealed class TeamLabShardDeploymentService(
         bool Success,
         string Message,
         string? RuntimeResourceId,
+        string? NativeIdentity,
         TeamLabNodeBootstrapResult BootstrapResult)
     {
         public static NodeExecution Failed(
@@ -595,7 +597,7 @@ public sealed class TeamLabShardDeploymentService(
             TeamLabRuntimeAsset asset,
             TeamLabNodeAssetCreateRequest request,
             string message) => new(
-            node, asset, request, false, message, asset.RuntimeResourceId,
+            node, asset, request, false, message, asset.RuntimeResourceId, asset.NativeIdentity,
             TeamLabNodeBootstrapResult.Failed(message));
     }
     private sealed record RuntimeInterfaceIntent(

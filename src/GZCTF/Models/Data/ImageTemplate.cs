@@ -151,4 +151,7 @@ public class ImageTemplate
 
     [JsonIgnore]
     public VmPreparedArtifact? PreparedArtifact { get; set; }
+
+    [JsonIgnore]
+    public ImageTemplateRemoteAccess? RemoteAccess { get; set; }
 }

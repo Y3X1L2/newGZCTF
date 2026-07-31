@@ -26,6 +26,7 @@ public static class AgentFeatureIds
     public const string VmConfigDriveV2 = "runtime.vm.config-drive-v2.v1";
     public const string VmPreparedImage = "image.vm.prepared.v1";
     public const string VmPreparedImageUpload = "image.vm.prepared-upload.v1";
+    public const string RemoteAccessRelay = "remote-access.relay.v1";
 }
 
 public sealed record AgentExecutionLimits(

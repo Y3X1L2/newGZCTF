@@ -6,7 +6,7 @@ using GZCTF.Modules.TeamLab.Domain;
 
 namespace GZCTF.Modules.TeamLab.Application.Validation;
 
-internal sealed partial class TeamLabTopologyStructureValidator
+internal sealed partial class TeamLabTopologyStructureValidator(TeamLabAddressPolicy addressPolicy)
 {
     public void Validate(
         TeamLabTopologyDefinitionModel definition,
@@ -60,6 +60,15 @@ internal sealed partial class TeamLabTopologyStructureValidator
             if (!IsRfc1918(start, end))
                 Add(issues, "address_pool_not_private", $"networks[{index}].addressPool.poolCidr",
                     "Address pool must be inside RFC1918 space.");
+            // Runtime CIDRs derived from this pool are installed in the WorkerNode host routing
+            // table, so anything the node already routes would be shadowed: both rules below keep
+            // tenant addressing inside the range the platform owns.
+            if (!addressPolicy.IsWithinAllowedPools(start, end))
+                Add(issues, "address_pool_out_of_platform_range", $"networks[{index}].addressPool.poolCidr",
+                    $"地址池必须完全落在平台运行时网段 {addressPolicy.AllowedPoolDescription} 之内，请改用该范围内的网段。");
+            if (addressPolicy.TryFindReservedConflict(start, end, out var conflict))
+                Add(issues, "address_pool_reserved", $"networks[{index}].addressPool.poolCidr",
+                    $"地址池与平台保留网段 {conflict.Cidr} 冲突（{conflict.Reason}），请改用其他网段。");
             if (network.AddressPool.RuntimePrefixLength <= poolPrefix || network.AddressPool.RuntimePrefixLength > 29)
                 Add(issues, "runtime_prefix_invalid", $"networks[{index}].addressPool.runtimePrefixLength",
                     "Runtime prefix must be more specific than the pool and no smaller than /29.");

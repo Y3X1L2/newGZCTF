@@ -216,3 +216,33 @@
     grid-column: auto;
   }
 }
+.remoteAccessForm {
+  display: grid;
+  gap: var(--yn-space-3);
+}
+
+.remoteAccessForm label {
+  display: grid;
+  gap: 6px;
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-sm);
+}
+
+.remoteAccessForm label:has(input[type='checkbox']) {
+  display: flex;
+  align-items: center;
+  gap: var(--yn-space-2);
+}
+
+.remoteAccessForm input:not([type='checkbox']),
+.remoteAccessForm select {
+  min-height: 38px;
+  padding: 0 var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: 4px;
+  background: var(--yn-color-surface);
+  color: var(--yn-color-text);
+  font: inherit;
+}
+
+.remoteAccessForm p { margin: 0; color: var(--yn-color-muted); font-size: var(--yn-font-sm); line-height: 1.6; }

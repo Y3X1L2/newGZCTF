@@ -48,6 +48,7 @@ public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
                                          item.Kind is TeamLabResourceKind.Docker or TeamLabResourceKind.Vm)
                 .OrderBy(item => item.TopologyKey, StringComparer.Ordinal)
                 .Select(item => new TeamLabRuntimeAssetProjectionModel(
+                    item.Id,
                     item.TopologyKey,
                     item.Name,
                     item.Kind == TeamLabResourceKind.Docker ? TeamLabAssetKind.Docker : TeamLabAssetKind.Vm,

@@ -1,6 +1,5 @@
 import { AlertTriangle, Cable, Check, Cloud, LoaderCircle, Network, Rocket, Save, Workflow } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import type { TeamLabImageOption } from '../api'
 import {
   addTopologyNode,
@@ -233,7 +232,7 @@ export function TeamLabDesignPage({
 
   const leftVisible = leftPanelOpen && !focusMode
   const rightVisible = rightPanelOpen && !focusMode
-  const content = (
+  return (
     <section className={`${styles.page} ${focusMode ? styles.focusMode : ''}`}>
       <header className={styles.header}>
         <div className={styles.title}>
@@ -262,7 +261,9 @@ export function TeamLabDesignPage({
         </div>
         <div className={styles.documentActions}>
           {publicationStatus ? (
-            <span className={styles.publicationStatus} data-state={publicationState}>{publicationStatus}</span>
+            <span className={styles.publicationStatus} data-state={publicationState}>
+              {publicationStatus}
+            </span>
           ) : null}
           {onValidate ? (
             <button className={styles.validateButton} onClick={validate} type="button">
@@ -348,7 +349,4 @@ export function TeamLabDesignPage({
       </div>
     </section>
   )
-  return focusMode && typeof globalThis.document !== 'undefined'
-    ? createPortal(content, globalThis.document.body)
-    : content
 }

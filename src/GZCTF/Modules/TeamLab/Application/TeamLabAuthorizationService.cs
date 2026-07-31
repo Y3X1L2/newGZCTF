@@ -3,7 +3,17 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Modules.TeamLab.Application;
 
-public sealed class TeamLabAuthorizationService(AppDbContext context)
+public interface ITeamLabRuntimeManagerAuthorizationProvider
+{
+    Task<bool> CanManageRuntimeAsync(
+        int runtimeId,
+        Guid actorUserId,
+        CancellationToken cancellationToken);
+}
+
+public sealed class TeamLabAuthorizationService(
+    AppDbContext context,
+    IEnumerable<ITeamLabRuntimeManagerAuthorizationProvider> managerProviders)
 {
     public async Task RequireRuntimeOwnerAsync(
         Guid runtimeId,
@@ -35,18 +45,13 @@ public sealed class TeamLabAuthorizationService(AppDbContext context)
             throw new TeamLabApiContractException("runtime_not_found", "The TeamLab runtime was not found.", 404);
         if (administrator || runtime.CreatedById == actorUserId) return;
 
-        var managesBoundGame = await context.PenetrationTeamRuntimeBindings.AsNoTracking()
-            .Where(item => item.RuntimeId == runtime.Id)
-            .Join(
-                context.Games.AsNoTracking(),
-                binding => binding.GameId,
-                game => game.Id,
-                (_, game) => game.OwnerId)
-            .AnyAsync(ownerId => ownerId == actorUserId, cancellationToken);
-        if (!managesBoundGame)
-            throw new TeamLabApiContractException(
-                "insufficient_permission",
-                "The runtime is not managed by the operation actor.",
-                403);
+        foreach (var provider in managerProviders)
+            if (await provider.CanManageRuntimeAsync(runtime.Id, actorUserId, cancellationToken))
+                return;
+
+        throw new TeamLabApiContractException(
+            "insufficient_permission",
+            "The runtime is not managed by the operation actor.",
+            403);
     }
 }

@@ -123,6 +123,14 @@ public sealed class TeamLabRuntimePlanner(
                     "external_reference_conflict",
                     "The scenario build reference is already used by a different runtime request.",
                     409);
+            if (existing.Status == TeamLabRuntimeStatus.Destroyed)
+                return await ResetCoreAsync(
+                    existing.PublicId,
+                    scenarioOverlays,
+                    release.Id,
+                    requestHash,
+                    resolveScenarioArtifacts: false,
+                    cancellationToken);
             return new TeamLabRuntimeCreateResult(existing.Id, existing.PublicId, true);
         }
 
@@ -152,12 +160,6 @@ public sealed class TeamLabRuntimePlanner(
         var definition = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
         await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(
             context, definition, cancellationToken, resolveScenarioArtifacts);
-        var topologyNetworks = await context.TeamLabTopologyNetworks.AsNoTracking()
-            .Where(item => item.TopologyId == release.TopologyId)
-            .ToDictionaryAsync(item => item.Key, StringComparer.Ordinal, cancellationToken);
-        if (topologyNetworks.Count != definition.Networks.Count)
-            throw new TeamLabApiContractException("release_invalid", "The release network catalog is incomplete.", 500);
-
         try
         {
             await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
@@ -181,7 +183,6 @@ public sealed class TeamLabRuntimePlanner(
             await PlanGenerationAsync(
                 runtime,
                 definition,
-                topologyNetworks,
                 runtimeOverlays,
                 resolveScenarioArtifacts,
                 cancellationToken);
@@ -232,6 +233,14 @@ public sealed class TeamLabRuntimePlanner(
                         "external_reference_conflict",
                         "The scenario build reference is already used by a different runtime request.",
                         409);
+                if (existing.Status == TeamLabRuntimeStatus.Destroyed)
+                    return await ResetCoreAsync(
+                        existing.PublicId,
+                        runtimeOverlays,
+                        release.Id,
+                        requestHash,
+                        resolveScenarioArtifacts: false,
+                        cancellationToken);
                 return new TeamLabRuntimeCreateResult(existing.Id, existing.PublicId, true);
             }
             if (existing.Status == TeamLabRuntimeStatus.Destroyed)
@@ -250,11 +259,26 @@ public sealed class TeamLabRuntimePlanner(
         }
     }
 
-    public async Task<TeamLabRuntimeCreateResult> ResetAsync(
+    public Task<TeamLabRuntimeCreateResult> ResetAsync(
         Guid runtimePublicId,
         IReadOnlyList<TeamLabRuntimeOverlayModel>? runtimeOverlays,
         Guid? targetReleaseId,
         string? createRequestHash,
+        CancellationToken cancellationToken) =>
+        ResetCoreAsync(
+            runtimePublicId,
+            runtimeOverlays,
+            targetReleaseId,
+            createRequestHash,
+            resolveScenarioArtifacts: true,
+            cancellationToken);
+
+    private async Task<TeamLabRuntimeCreateResult> ResetCoreAsync(
+        Guid runtimePublicId,
+        IReadOnlyList<TeamLabRuntimeOverlayModel>? runtimeOverlays,
+        Guid? targetReleaseId,
+        string? createRequestHash,
+        bool resolveScenarioArtifacts,
         CancellationToken cancellationToken)
     {
         var runtime = await context.TeamLabRuntimes
@@ -284,10 +308,7 @@ public sealed class TeamLabRuntimePlanner(
                 403);
         var definition = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
         await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(
-            context, definition, cancellationToken, allowBakedSourceDrift: true);
-        var topologyNetworks = await context.TeamLabTopologyNetworks.AsNoTracking()
-            .Where(item => item.TopologyId == release.TopologyId)
-            .ToDictionaryAsync(item => item.Key, StringComparer.Ordinal, cancellationToken);
+            context, definition, cancellationToken, allowBakedSourceDrift: resolveScenarioArtifacts);
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         runtime.Generation++;
         runtime.TopologyReleaseId = release.Id;
@@ -299,9 +320,8 @@ public sealed class TeamLabRuntimePlanner(
         await PlanGenerationAsync(
             runtime,
             definition,
-            topologyNetworks,
             runtimeOverlays,
-            resolveScenarioArtifacts: true,
+            resolveScenarioArtifacts,
             cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new TeamLabRuntimeCreateResult(runtime.Id, runtime.PublicId, false);
@@ -310,7 +330,6 @@ public sealed class TeamLabRuntimePlanner(
     private async Task PlanGenerationAsync(
         TeamLabRuntime runtime,
         TeamLabExecutionTopology definition,
-        IReadOnlyDictionary<string, TeamLabTopologyNetwork> topologyNetworks,
         IReadOnlyList<TeamLabRuntimeOverlayModel>? runtimeOverlays,
         bool resolveScenarioArtifacts,
         CancellationToken cancellationToken)
@@ -421,7 +440,8 @@ public sealed class TeamLabRuntimePlanner(
                 {
                     RuntimeId = runtime.Id,
                     Generation = runtime.Generation,
-                    TopologyNetworkId = topologyNetworks[network.Key].Id,
+                    TopologyReleaseId = runtime.TopologyReleaseId,
+                    NetworkKey = network.Key,
                     AllocatedCidr = cidr.Value
                 }
             };

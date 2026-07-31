@@ -136,3 +136,13 @@ public sealed record PenetrationWorkspaceUpdateModel(
     Guid RuntimeId,
     DateTimeOffset Time);
 
+public sealed record TeamLabOperatorGrantWriteModel(bool ViewAssets, bool OperateAssets);
+
+public sealed record TeamLabOperatorGrantModel(
+    Guid UserId,
+    string UserName,
+    string? DisplayName,
+    bool ViewAssets,
+    bool OperateAssets,
+    DateTimeOffset UpdatedAt);
+

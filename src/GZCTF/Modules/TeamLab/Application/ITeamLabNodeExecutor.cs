@@ -114,6 +114,7 @@ public sealed record TeamLabNodeRuntimeInventory(
 
 public sealed record TeamLabNodeAssetCreateRequest(
     int RuntimeId,
+    int RuntimeAssetId,
     Guid RuntimePublicId,
     int Generation,
     string AssetKey,
@@ -148,9 +149,9 @@ public sealed record TeamLabNodeHealthIntent(
     TeamLabHealthCheckKind Kind,
     int? Port);
 
-public sealed record TeamLabNodeAssetCreateResult(bool Success, string Message, string? RuntimeResourceId)
+public sealed record TeamLabNodeAssetCreateResult(bool Success, string Message, string? RuntimeResourceId, string? NativeIdentity = null)
 {
-    public static TeamLabNodeAssetCreateResult Created(string resourceId) => new(true, "Created", resourceId);
+    public static TeamLabNodeAssetCreateResult Created(string resourceId, string? nativeIdentity = null) => new(true, "Created", resourceId, nativeIdentity);
     public static TeamLabNodeAssetCreateResult Failed(string message) => new(false, message, null);
 }
 

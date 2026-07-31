@@ -27,6 +27,7 @@ public sealed class OpenTeamLabRuntimesController(
     TeamLabRuntimeProjectionService projections,
     TeamLabRuntimeOperationApplicationService operations,
     TeamLabAuthorizationService authorization,
+    TeamLabRuntimeLifecycleGuard lifecycleGuard,
     TeamLabAccessGrantService access) : ControllerBase
 {
     [HttpPost]
@@ -67,6 +68,7 @@ public sealed class OpenTeamLabRuntimesController(
     {
         await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
         var actor = Actor();
+        await RequireDirectLifecycleControlAsync(runtimeId, cancellationToken);
         var result = await operations.SubmitResetAsync(actor.TokenId, actor.UserId, idempotencyKey,
             $"POST:/api/open/v1/teamlab/runtimes/{runtimeId:D}/reset", runtimeId, model, cancellationToken);
         var operation = ApiOperationModel.FromEntity(result.Operation);
@@ -84,6 +86,7 @@ public sealed class OpenTeamLabRuntimesController(
     {
         await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
         var actor = Actor();
+        await RequireDirectLifecycleControlAsync(runtimeId, cancellationToken);
         var result = await operations.SubmitDestroyAsync(actor.TokenId, actor.UserId, idempotencyKey,
             $"DELETE:/api/open/v1/teamlab/runtimes/{runtimeId:D}", runtimeId, cancellationToken);
         var operation = ApiOperationModel.FromEntity(result.Operation);
@@ -162,6 +165,17 @@ public sealed class OpenTeamLabRuntimesController(
     {
         var actor = Actor();
         await authorization.RequireRuntimeOwnerAsync(runtimeId, actor.UserId, User.IsInRole(nameof(Role.Admin)), cancellationToken);
+    }
+
+    private async Task RequireDirectLifecycleControlAsync(
+        Guid runtimeId,
+        CancellationToken cancellationToken)
+    {
+        if (await lifecycleGuard.IsRolloutManagedAsync(runtimeId, cancellationToken))
+            throw new TeamLabApiContractException(
+                "runtime_managed_by_rollout",
+                "This runtime is managed by a competition rollout; use the competition lifecycle API.",
+                409);
     }
 
     private (Guid TokenId, Guid UserId) Actor()

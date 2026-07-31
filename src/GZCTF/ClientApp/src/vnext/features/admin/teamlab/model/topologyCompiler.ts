@@ -60,7 +60,7 @@ function compileEditor(document: TopologyDocument): TeamLabTopologyEditor {
   for (const node of Object.values(document.nodes).sort(byKey)) {
     if (node.type === 'switch') {
       networks[node.networkKey] = editorItem(node.position)
-      infrastructure[node.key] = editorItem(node.position)
+      if (!node.implicit || node.name !== node.networkName) infrastructure[node.key] = editorItem(node.position)
     } else if (node.type === 'router') {
       infrastructure[node.key] = editorItem(node.position)
     } else {
@@ -94,7 +94,11 @@ export function compileTopologyDocument(document: TopologyDocument): CreateTeamL
       orderIndex: node.orderIndex,
     })),
     infrastructure: nodes
-      .filter((node) => node.type === 'switch' || node.type === 'router')
+      .filter(
+        (node) =>
+          node.type === 'router' ||
+          (node.type === 'switch' && (!node.implicit || node.name !== node.networkName))
+      )
       .map((node) =>
         node.type === 'switch'
           ? {

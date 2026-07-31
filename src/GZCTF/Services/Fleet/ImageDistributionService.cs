@@ -165,13 +165,40 @@ public class ImageDistributionService(
             .Distinct()
             .ToArray();
 
-        var gameReferences = (await context.GameChallenges.AsNoTracking()
-                .Where(challenge => gameIds.Contains(challenge.GameId) && challenge.ImageTemplateId.HasValue)
-                .Select(challenge => new { challenge.GameId, TemplateId = challenge.ImageTemplateId!.Value })
-                .Distinct()
-                .ToArrayAsync(token))
-            .Select(reference => (reference.GameId, reference.TemplateId))
+        var gameChallenges = await context.GameChallenges.AsNoTracking()
+            .Where(challenge => gameIds.Contains(challenge.GameId) &&
+                                (challenge.Type == ChallengeType.StaticContainer ||
+                                 challenge.Type == ChallengeType.DynamicContainer))
+            .Select(challenge => new
+            {
+                challenge.GameId,
+                challenge.Environment,
+                challenge.ImageTemplateId,
+                challenge.ContainerImage
+            })
+            .ToArrayAsync(token);
+        var gameReferences = gameChallenges
+            .Where(challenge => challenge.ImageTemplateId.HasValue)
+            .Select(challenge => (challenge.GameId, challenge.ImageTemplateId!.Value))
             .ToHashSet();
+        foreach (var image in gameChallenges
+                     .Where(challenge => challenge.Environment == EnvironmentType.Docker &&
+                                         !challenge.ImageTemplateId.HasValue &&
+                                         !string.IsNullOrWhiteSpace(challenge.ContainerImage))
+                     .Select(challenge => challenge.ContainerImage!)
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var template = await FindReadyDockerTemplateAsync(
+                image,
+                await dockerRegistry.ResolveImageReferenceAsync(image, token),
+                token);
+            if (template is null)
+                continue;
+            foreach (var challenge in gameChallenges.Where(challenge =>
+                         !challenge.ImageTemplateId.HasValue &&
+                         string.Equals(challenge.ContainerImage, image, StringComparison.OrdinalIgnoreCase)))
+                gameReferences.Add((challenge.GameId, template.Id));
+        }
         var courseReferences = (await context.TrainingCourseImageTemplateBindings.AsNoTracking()
                 .Where(binding => courseIds.Contains(binding.CourseId))
                 .Select(binding => new { binding.CourseId, binding.ImageTemplateId })
@@ -241,6 +268,13 @@ public class ImageDistributionService(
             .Where(record => record.ImageTemplateId == templateId)
             .ToArrayAsync(token);
 
+        var active = records.FirstOrDefault(record =>
+            record.ClaimOwner is not null && record.ClaimExpiresAt > DateTimeOffset.UtcNow);
+        if (active is not null)
+            throw new InvalidOperationException(
+                $"Image template {templateId} cannot be deleted while node {active.WorkerNodeId} " +
+                "is processing its distribution or cleanup.");
+
         foreach (var record in records)
         {
             var references = await context.ImageDistributionReferences
@@ -248,8 +282,11 @@ public class ImageDistributionService(
                 .ToArrayAsync(token);
             context.ImageDistributionReferences.RemoveRange(references);
             QueueCleanup(record);
-            await CleanupRecordAsync(record, token, removeOnSuccess: false);
         }
+
+        await context.SaveChangesAsync(token);
+        foreach (var record in records)
+            await CleanupRecordAsync(record, token, removeOnSuccess: false);
 
         await context.SaveChangesAsync(token);
         var failure = records.FirstOrDefault(record =>
@@ -910,8 +947,22 @@ public class ImageDistributionService(
         CancellationToken token,
         bool removeOnSuccess = true)
     {
+        await using var transaction = context.Database.CurrentTransaction is null && context.Database.IsRelational()
+            ? await context.Database.BeginTransactionAsync(token)
+            : null;
+        await AcquireDistributionLockAsync(record.ImageTemplateId, record.WorkerNodeId, token);
         try
         {
+            await context.Entry(record).ReloadAsync(token);
+            if (record.Operation != ImageDistributionOperation.Cleanup ||
+                await context.ImageDistributionReferences.AsNoTracking().AnyAsync(
+                    reference => reference.DistributionRecordId == record.Id, token))
+            {
+                if (transaction is not null)
+                    await transaction.CommitAsync(token);
+                return;
+            }
+
             if (record.ImageType == ImageType.Docker)
             {
                 var image = record.ImageTemplate?.RegistryUrl ?? record.ImageTemplate?.Name;
@@ -924,7 +975,12 @@ public class ImageDistributionService(
                 if (await HasActiveVmUsingTemplateAsync(record, token))
                 {
                     record.Status = ImageDistributionStatus.CleanupPending;
+                    record.Stage = ImageDistributionStage.None;
                     record.ErrorMessage = "VM image cache is still referenced by an active VM on this node.";
+                    record.LastErrorCode = "image.vm.cache_in_use";
+                    record.ErrorCategory = OperationalErrorCategory.Storage;
+                    record.Retryable = true;
+                    record.NextAttemptAt = DateTimeOffset.UtcNow.AddMinutes(5);
                     record.LastCheckedAt = DateTimeOffset.UtcNow;
                     AppendImageEvent(
                         record,
@@ -933,6 +989,9 @@ public class ImageDistributionService(
                         "Image cache cleanup is waiting for active VM references.",
                         OperationalEventSeverity.Warning,
                         detail: ImageDetail(record, "active_vm_reference"));
+                    await context.SaveChangesAsync(token);
+                    if (transaction is not null)
+                        await transaction.CommitAsync(token);
                     return;
                 }
 
@@ -984,13 +1043,19 @@ public class ImageDistributionService(
                 "Failed to cleanup image template {TemplateId} on node {NodeId}.",
                 record.ImageTemplateId, record.WorkerNodeId);
         }
+
+        await context.SaveChangesAsync(token.IsCancellationRequested ? CancellationToken.None : token);
+        if (transaction is not null)
+            await transaction.CommitAsync(token.IsCancellationRequested ? CancellationToken.None : token);
     }
 
     async Task<bool> HasActiveVmUsingTemplateAsync(ImageDistributionRecord record, CancellationToken token) =>
+        // Anything short of Destroyed still owns an overlay whose backing file is this template;
+        // a Stopped or Error VM becomes permanently unbootable if the template is removed. Mirrors
+        // the TeamLab clause below, which already excludes only Destroyed.
         await context.VmInstances.AsNoTracking()
             .Where(vm => vm.NodeId == record.WorkerNodeId &&
-                         (vm.Status == VmInstanceStatus.Creating ||
-                          vm.Status == VmInstanceStatus.Running))
+                         vm.Status != VmInstanceStatus.Destroyed)
             .Join(context.GameChallenges.AsNoTracking(),
                 vm => vm.ChallengeId,
                 challenge => challenge.Id,
@@ -1009,6 +1074,7 @@ public class ImageDistributionService(
         return await context.WorkerNodes.AsNoTracking()
             .Where(n => n.Status == NodeStatus.Online &&
                         n.IsSchedulable &&
+                        (template.ImageType == ImageType.Docker ? n.MaxContainers > 0 : n.MaxVms > 0) &&
                         (n.Capabilities & capability) == capability)
             .OrderBy(n => n.Name)
             .ThenBy(n => n.Id)
@@ -1020,6 +1086,7 @@ public class ImageDistributionService(
         var capability = template.ImageType == ImageType.Docker ? DockerCapability : VmCapability;
         return node.Status == NodeStatus.Online &&
                node.IsSchedulable &&
+               (template.ImageType == ImageType.Docker ? node.MaxContainers > 0 : node.MaxVms > 0) &&
                (node.Capabilities & capability) == capability;
     }
 

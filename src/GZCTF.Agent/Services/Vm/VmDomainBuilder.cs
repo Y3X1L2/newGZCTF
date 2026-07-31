@@ -31,7 +31,11 @@ public static partial class VmDomainBuilder
                $"--metadata description={ShellEscape($"gzctf-generation={generation}")} " +
                $"--disk path={ShellEscape(overlayPath)} --osinfo detect=on,require=off --import --noautoconsole " +
                $"{media}{KvmService.BuildVirtInstallNetworkArguments(request)} {channels} " +
-               "--graphics vnc,listen=0.0.0.0";
+               // Bound to loopback: the VNC console has no password and no transport security, so a
+               // wildcard listener hands anyone who can route to the node a full pre-boot and
+               // post-login console on someone else's VM. Remote console is served by the
+               // authenticated proxy instead; nothing consumes the VNC port off-host.
+               "--graphics vnc,listen=127.0.0.1";
     }
 
     internal static string BuildChannelArguments(CreateVmRequest request)

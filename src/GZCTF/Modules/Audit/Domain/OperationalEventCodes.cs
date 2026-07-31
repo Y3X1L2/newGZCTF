@@ -113,6 +113,10 @@ public static class OperationalEventCodes
 
     public static class TeamLab
     {
+        public const string RemoteSessionCreated = "teamlab.remote_session.created";
+        public const string RemoteSessionConnected = "teamlab.remote_session.connected";
+        public const string RemoteSessionEnded = "teamlab.remote_session.ended";
+        public const string RemoteSessionFailed = "teamlab.remote_session.failed";
         public const string PlanStarted = "teamlab.plan.started";
         public const string PlanSucceeded = "teamlab.plan.succeeded";
         public const string PlacementSucceeded = "teamlab.placement.succeeded";
@@ -179,6 +183,10 @@ public static class OperationalEventCodes
         public const string StateCorrected = "recovery.state.corrected";
         public const string NodeUnavailable = "recovery.node.unavailable";
         public const string InventoryUnsupported = "recovery.inventory.unsupported";
+
+        /// <summary>A ticket waited past the deferral window, so the blocking condition is treated
+        /// as permanent instead of being waited on indefinitely.</summary>
+        public const string TicketDeferralExpired = "recovery.ticket.deferral_expired";
         public const string OrphanObserved = "recovery.orphan.observed";
     }
 

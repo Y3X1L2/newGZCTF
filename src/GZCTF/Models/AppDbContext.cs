@@ -38,6 +38,11 @@ using TeamLabTrafficFlowAggregateEntity = GZCTF.Modules.TeamLab.Domain.TeamLabTr
 using ProjectionRevisionEntity = GZCTF.Infrastructure.Cache.ProjectionRevision;
 using WorkerNodeMetricSampleEntity = GZCTF.Modules.Runtime.Domain.WorkerNodeMetricSample;
 using AgentRuntimeSignal = GZCTF.Modules.Runtime.Domain.AgentRuntimeSignal;
+using TeamLabRuntimeRemoteCredentialEntity = GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeRemoteCredential;
+using TeamLabRemoteSessionEntity = GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRemoteSession;
+using TeamLabRemoteAuditFileEntity = GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRemoteAuditFile;
+using ImageTemplateRemoteAccessEntity = GZCTF.Modules.Content.Domain.ImageTemplateRemoteAccess;
+using PenetrationTeamLabOperatorGrantEntity = GZCTF.Modules.Penetration.Domain.PenetrationTeamLabOperatorGrant;
 
 namespace GZCTF.Models;
 
@@ -87,6 +92,7 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<ImageImportJobEntity> ImageImportJobs { get; set; } = null!;
     public DbSet<ChallengeMutationJobEntity> ChallengeMutationJobs { get; set; } = null!;
     public DbSet<ImageTemplate> ImageTemplates { get; set; } = null!;
+    public DbSet<ImageTemplateRemoteAccessEntity> ImageTemplateRemoteAccesses => Set<ImageTemplateRemoteAccessEntity>();
     public DbSet<BootstrapProfile> BootstrapProfiles => Set<BootstrapProfile>();
     public DbSet<BootstrapProfileVersion> BootstrapProfileVersions => Set<BootstrapProfileVersion>();
     public DbSet<BootstrapProfileOperationJob> BootstrapProfileOperationJobs => Set<BootstrapProfileOperationJob>();
@@ -124,6 +130,7 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<PenetrationObjectiveEntity> PenetrationObjectives => Set<PenetrationObjectiveEntity>();
     public DbSet<PenetrationGameLabBindingEntity> PenetrationGameLabBindings => Set<PenetrationGameLabBindingEntity>();
     public DbSet<PenetrationTeamRuntimeBindingEntity> PenetrationTeamRuntimeBindings => Set<PenetrationTeamRuntimeBindingEntity>();
+    public DbSet<PenetrationTeamLabOperatorGrantEntity> PenetrationTeamLabOperatorGrants => Set<PenetrationTeamLabOperatorGrantEntity>();
     public DbSet<TrainingCourse> TrainingCourses { get; set; } = null!;
     public DbSet<TrainingCourseTeacher> TrainingCourseTeachers { get; set; } = null!;
     public DbSet<TrainingCourseEnrollment> TrainingCourseEnrollments { get; set; } = null!;
@@ -173,6 +180,9 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TeamLabTrafficPathHop> TeamLabTrafficPathHops => Set<TeamLabTrafficPathHop>();
     public DbSet<TeamLabTrafficCorrelationCursor> TeamLabTrafficCorrelationCursors => Set<TeamLabTrafficCorrelationCursor>();
     public DbSet<TeamLabRuntimeOperationJobEntity> TeamLabRuntimeOperationJobs => Set<TeamLabRuntimeOperationJobEntity>();
+    public DbSet<TeamLabRuntimeRemoteCredentialEntity> TeamLabRuntimeRemoteCredentials => Set<TeamLabRuntimeRemoteCredentialEntity>();
+    public DbSet<TeamLabRemoteSessionEntity> TeamLabRemoteSessions => Set<TeamLabRemoteSessionEntity>();
+    public DbSet<TeamLabRemoteAuditFileEntity> TeamLabRemoteAuditFiles => Set<TeamLabRemoteAuditFileEntity>();
     public DbSet<DataGovernanceRunEntity> DataGovernanceRuns => Set<DataGovernanceRunEntity>();
     public DbSet<OperationalLogAggregateEntity> OperationalLogAggregates => Set<OperationalLogAggregateEntity>();
     public DbSet<DeploymentLifecycleAggregateEntity> DeploymentLifecycleAggregates => Set<DeploymentLifecycleAggregateEntity>();

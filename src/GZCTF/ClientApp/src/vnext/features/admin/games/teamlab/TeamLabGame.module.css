@@ -31,10 +31,92 @@
 .objectiveSection,
 .controlSection,
 .summary,
-.targetsSection {
+.targetsSection,
+.operatorSection {
   min-width: 0;
   padding-bottom: var(--yn-space-6);
   border-bottom: 1px solid var(--yn-color-border);
+}
+
+.operatorDescription,
+.operatorEmpty {
+  margin: 0 0 var(--yn-space-4);
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-sm);
+}
+
+.operatorSearch,
+.operatorSearch label,
+.operatorCandidates li,
+.operatorCandidates li > div:last-child,
+.operatorList li,
+.operatorList li > div:last-child {
+  display: flex;
+  align-items: center;
+}
+
+.operatorSearch {
+  gap: var(--yn-space-2);
+  margin-bottom: var(--yn-space-3);
+}
+
+.operatorSearch label {
+  min-width: 0;
+  flex: 1;
+  gap: var(--yn-space-2);
+  min-height: 40px;
+  padding: 0 var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-sm);
+}
+
+.operatorSearch input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.operatorCandidates,
+.operatorList {
+  display: grid;
+  margin: var(--yn-space-3) 0 0;
+  padding: 0;
+  border-top: 1px solid var(--yn-color-border);
+  list-style: none;
+}
+
+.operatorCandidates li,
+.operatorList li {
+  justify-content: space-between;
+  gap: var(--yn-space-3);
+  min-height: 58px;
+  padding: var(--yn-space-2) 0;
+  border-bottom: 1px solid var(--yn-color-border);
+}
+
+.operatorCandidates li > div:first-child,
+.operatorList li > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.operatorCandidates small,
+.operatorList small {
+  overflow: hidden;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.operatorCandidates li > div:last-child,
+.operatorList li > div:last-child {
+  flex: 0 0 auto;
+  gap: var(--yn-space-2);
 }
 
 .sectionHeader {
@@ -478,6 +560,23 @@
   .objectiveSettings {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .operatorSearch,
+  .operatorCandidates li,
+  .operatorList li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .operatorCandidates li > div:last-child,
+  .operatorList li > div:last-child {
+    width: 100%;
+  }
+
+  .operatorCandidates li > div:last-child > button,
+  .operatorList li > div:last-child > button {
+    flex: 1;
   }
 
   .objectiveHeaderActions {

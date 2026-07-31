@@ -72,7 +72,7 @@ public sealed class ImageDistributionWorker(
                 (record.NextAttemptAt == null || record.NextAttemptAt <= now) &&
                 (record.Status == ImageDistributionStatus.Pending ||
                  record.Status == ImageDistributionStatus.CleanupPending ||
-                 record.Status == ImageDistributionStatus.Failed ||
+                 (record.Status == ImageDistributionStatus.Failed && record.Retryable) ||
                  record.Status == ImageDistributionStatus.Pulling))
             .OrderBy(record => record.Operation == ImageDistributionOperation.Cleanup ? 0 : 1)
             .ThenBy(record => record.NextAttemptAt)
@@ -94,6 +94,8 @@ public sealed class ImageDistributionWorker(
                 await using var transaction = await context.Database.BeginTransactionAsync(token);
                 var affected = await context.ImageDistributionRecords
                     .Where(record => record.Id == candidate.Id &&
+                                     record.Operation == candidate.Operation &&
+                                     record.Status == candidate.Status &&
                                      (record.ClaimOwner == null || record.ClaimExpiresAt <= now) &&
                                      (record.NextAttemptAt == null || record.NextAttemptAt <= now) &&
                                      record.Status != ImageDistributionStatus.Ready)
@@ -122,7 +124,8 @@ public sealed class ImageDistributionWorker(
 
             var record = await context.ImageDistributionRecords.SingleOrDefaultAsync(
                 item => item.Id == candidate.Id, token);
-            if (record is null || record.Status == ImageDistributionStatus.Ready ||
+            if (record is null || record.Operation != candidate.Operation || record.Status != candidate.Status ||
+                record.Status == ImageDistributionStatus.Ready ||
                 record.ClaimOwner is not null && record.ClaimExpiresAt > now)
                 continue;
             record.Status = status;

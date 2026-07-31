@@ -235,8 +235,12 @@ export function VNextDrawer({
     }
     const afterClose = afterCloseRef.current
     afterCloseRef.current = null
+    const drawer = ref.current
+    if (drawer?.open) drawer.close()
+    setDrawerState('closed')
     onClose()
     afterClose?.()
+    requestAnimationFrame(() => returnFocusRef.current?.focus())
   }
 
   const requestClose: DrawerRequestClose = (afterClose) => {

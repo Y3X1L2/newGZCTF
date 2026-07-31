@@ -153,6 +153,7 @@ export function parseTeamLabRuntime(value: unknown): TeamLabRuntime {
     assets: parse.array(item.assets, 'TeamLab runtime.assets', (entry, label) => {
       const asset = parse.record(entry, label)
       return {
+        id: parse.number(asset.id, `${label}.id`),
         key: parse.string(asset.key, `${label}.key`),
         name: parse.string(asset.name, `${label}.name`),
         kind: assetKind(asset.kind, `${label}.kind`),

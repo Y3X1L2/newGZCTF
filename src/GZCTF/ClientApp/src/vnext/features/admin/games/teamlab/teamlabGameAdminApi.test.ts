@@ -10,7 +10,7 @@ function client() {
     postForm: unexpected,
     putJson: vi.fn(),
     patchJson: unexpected,
-    delete: unexpected,
+    delete: vi.fn(async () => undefined),
   } satisfies RuntimeJsonClient
 }
 
@@ -84,5 +84,21 @@ describe('teamLabGameAdminApi', () => {
     const page = { items: [{ id: 'target-1', externalSubject: 'team:12', displayName: 'Alpha', runtimeId: null, status: 'pending', operationId: null, runtimeStatus: null, runtimeStage: null, createdAt: 1, updatedAt: 2, error: null }], nextCursor: null }
     expect(parseTeamLabGameTargetPage(page).items[0].teamId).toBe(12)
     expect(() => parseTeamLabGameTargetPage({ ...page, items: [{ ...page.items[0], externalSubject: 'user:12' }] })).toThrow('TeamLab rollout target page.items[0].externalSubject')
+  })
+
+  it('uses the dedicated operator grant contract for non-owner remote access', async () => {
+    const transport = client()
+    transport.get.mockResolvedValue([{ userId: '019f0000-0000-7000-8000-000000000005', userName: 'operator', displayName: '运维员', viewAssets: true, operateAssets: false, updatedAt: 1 }])
+    transport.putJson.mockResolvedValue(undefined)
+    const api = createTeamLabGameAdminApi(transport)
+    const userId = '019f0000-0000-7000-8000-000000000005'
+
+    await expect(api.operators(8)).resolves.toEqual([expect.objectContaining({ userId, operateAssets: false })])
+    await api.setOperator(8, userId, { viewAssets: true, operateAssets: true })
+    await api.deleteOperator(8, userId)
+
+    expect(transport.get).toHaveBeenCalledWith('/api/admin/pentest/games/8/teamlab/operators')
+    expect(transport.putJson).toHaveBeenCalledWith(`/api/admin/pentest/games/8/teamlab/operators/${userId}`, { viewAssets: true, operateAssets: true })
+    expect(transport.delete).toHaveBeenCalledWith(`/api/admin/pentest/games/8/teamlab/operators/${userId}`)
   })
 })

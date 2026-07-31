@@ -19,6 +19,7 @@ public sealed partial class VmBootstrapService(
     private const string WindowsIcaclsPath = @"C:\Windows\System32\icacls.exe";
     private const int MaxArchiveEntries = 1024;
     private const long MaxExpandedBytes = 256L * 1024 * 1024;
+    private const int StageExtractTimeoutSeconds = 300;
     private const string InventoryRoot = "/var/lib/gzctf/bootstrap-state";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -65,15 +66,17 @@ public sealed partial class VmBootstrapService(
         var templatedSources = manifest.Files.Where(item => item.Template)
             .Select(item => NormalizeArtifactPath(item.SourcePath)).ToHashSet(StringComparer.Ordinal);
 
+        var stagePlan = new List<GuestFileEntry>(files.Length);
         foreach (var file in files)
         {
             var relative = NormalizeArtifactPath(Path.GetRelativePath(hostStage, file));
-            var target = CombineGuestPath(request.OsType, guestStage, relative);
             var content = await File.ReadAllBytesAsync(file, cancellationToken);
             if (templatedSources.Contains(relative))
                 content = RenderTemplate(content, values);
-            await WriteGuestBytesAsync(vmName, request.OsType, target, content, "0600", cancellationToken);
+            stagePlan.Add(new GuestFileEntry(relative, content, "0600"));
         }
+
+        await PopulateGuestStageAsync(vmName, request.OsType, guestStage, stagePlan, cancellationToken);
 
         foreach (var file in manifest.Files)
         {
@@ -694,6 +697,74 @@ public sealed partial class VmBootstrapService(
         string mode,
         CancellationToken cancellationToken) =>
         await WriteGuestBytesAsync(vmName, osType, path, Encoding.UTF8.GetBytes(value), mode, cancellationToken);
+
+    /// <summary>
+    /// Materializes the bootstrap stage inside the guest. One tar transfer replaces the per-file
+    /// sequence (mkdir, open, write, flush, close, chmod), whose seven QGA round trips per file —
+    /// each a separate virsh process spawn — dominate bootstrap time for profiles built from many
+    /// small scripts. Falls back once to per-file writes, logging why, when the guest cannot
+    /// extract the archive.
+    /// </summary>
+    async Task PopulateGuestStageAsync(
+        string vmName,
+        VmInitOsType osType,
+        string guestStage,
+        IReadOnlyList<GuestFileEntry> plan,
+        CancellationToken cancellationToken)
+    {
+        var entries = GuestFileBatch.Deduplicate(plan);
+        if (entries.Count == 0)
+            return;
+
+        if (osType == VmInitOsType.Linux && entries.Count > 1)
+        {
+            try
+            {
+                await PopulateGuestStageBatchedAsync(vmName, guestStage, entries, cancellationToken);
+                return;
+            }
+            catch (InvalidOperationException exception)
+            {
+                logger.LogWarning(exception,
+                    "Batched guest stage transfer unavailable, using per-file writes: VM={VmName}, Files={FileCount}",
+                    vmName, entries.Count);
+            }
+        }
+
+        foreach (var entry in entries)
+            await WriteGuestBytesAsync(vmName, osType,
+                CombineGuestPath(osType, guestStage, entry.GuestPath), entry.Content, entry.Mode,
+                cancellationToken);
+    }
+
+    async Task PopulateGuestStageBatchedAsync(
+        string vmName,
+        string guestStage,
+        IReadOnlyList<GuestFileEntry> entries,
+        CancellationToken cancellationToken)
+    {
+        var archive = GuestFileBatch.BuildTarArchive(entries);
+        var archivePath = CombineGuestPath(VmInitOsType.Linux, guestStage, ".bootstrap-stage.tar");
+        await EnsureGuestDirectoryAsync(vmName, VmInitOsType.Linux, guestStage, cancellationToken);
+        try
+        {
+            await using (var stream = new MemoryStream(archive, writable: false))
+                await guest.WriteFileAsync(vmName, archivePath, stream, cancellationToken);
+            await RunRequiredAsync(vmName, new VmGuestCommandRequest(
+                "stage-extract", "/usr/bin/tar",
+                ["-xpf", archivePath, "-C", guestStage, "--no-same-owner"],
+                StageExtractTimeoutSeconds), cancellationToken);
+        }
+        finally
+        {
+            await guest.ExecuteAsync(vmName, new VmGuestCommandRequest(
+                "stage-cleanup", "/usr/bin/rm", ["-f", archivePath], 30), CancellationToken.None);
+        }
+
+        logger.LogInformation(
+            "Guest stage populated in one transfer: VM={VmName}, Files={FileCount}, Bytes={ArchiveBytes}",
+            vmName, entries.Count, archive.Length);
+    }
 
     async Task WriteGuestBytesAsync(
         string vmName,

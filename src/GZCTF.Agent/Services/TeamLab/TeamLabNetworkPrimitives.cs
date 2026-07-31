@@ -1,4 +1,6 @@
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace GZCTF.Agent.Services.TeamLab;
@@ -29,7 +31,51 @@ internal static partial class TeamLabNetworkPrimitives
 
     internal static string ShellQuote(string value) => $"'{value.Replace("'", "'\"'\"'")}'";
 
-    internal static string TrimInterfaceName(string value) => value.Length <= 15 ? value : value[..15];
+    /// <summary>
+    /// Fits an interface name into the kernel's 15-character limit without losing what makes it
+    /// unique. Plain truncation collapses distinct names — a 14-character namespace turns both
+    /// "&lt;ns&gt;h0" and "&lt;ns&gt;h1" into "&lt;ns&gt;h", so building the second veth pair deletes the first, and a
+    /// 15-character namespace makes a pair's two ends share one name. Mirrors the control plane's
+    /// TeamLabResourceNameFactory.LinuxName so both sides derive the same name for the same input.
+    /// </summary>
+    internal static string TrimInterfaceName(string value)
+    {
+        if (value.Length <= 15) return value;
+        var digest = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..6];
+        return $"{value[..8]}-{digest}";
+    }
+
+    internal static string BuildEnsureVethPairCommand(
+        string namespaceName,
+        string hostName,
+        string peerName) =>
+        $"if ip link show dev {hostName} >/dev/null 2>&1 && ip netns exec {namespaceName} ip link show dev {peerName} >/dev/null 2>&1; " +
+        $"then host_index=$(cat /sys/class/net/{hostName}/ifindex) && host_link=$(cat /sys/class/net/{hostName}/iflink) && " +
+        $"peer_index=$(ip netns exec {namespaceName} cat /sys/class/net/{peerName}/ifindex) && " +
+        $"peer_link=$(ip netns exec {namespaceName} cat /sys/class/net/{peerName}/iflink) && " +
+        "test \"$host_link\" = \"$peer_index\" && test \"$peer_link\" = \"$host_index\"; else false; fi || { " +
+        $"ip link delete {hostName} 2>/dev/null || true; " +
+        $"ip netns exec {namespaceName} ip link delete {peerName} 2>/dev/null || true; " +
+        $"ip link add {hostName} type veth peer name {peerName}; " +
+        $"ip link set {peerName} netns {namespaceName}; }}";
+
+    internal static string BuildHostIpv4AddressConvergenceCommand(string interfaceName, string addressCidr) =>
+        BuildIpv4AddressConvergenceCommand("ip", interfaceName, addressCidr);
+
+    internal static string BuildNamespaceIpv4AddressConvergenceCommand(
+        string namespaceName,
+        string interfaceName,
+        string addressCidr) =>
+        BuildIpv4AddressConvergenceCommand($"ip netns exec {namespaceName} ip", interfaceName, addressCidr);
+
+    private static string BuildIpv4AddressConvergenceCommand(
+        string ipCommand,
+        string interfaceName,
+        string addressCidr) =>
+        $"current=$({ipCommand} -o -4 addr show dev {interfaceName} scope global | awk '{{print $4}}' | sort | tr '\\n' ' '); " +
+        $"test \"$current\" = {ShellQuote($"{addressCidr} ")} || {{ " +
+        $"{ipCommand} addr flush dev {interfaceName} scope global; " +
+        $"{ipCommand} addr add {addressCidr} dev {interfaceName}; }}";
 
     internal static string AddressFromCidr(string cidr)
     {

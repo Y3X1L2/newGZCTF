@@ -131,6 +131,16 @@ public sealed class TeamLabDeploymentOrchestrationTests
         executor.Setup(item => item.ProbeAssetHealthAsync(
                 It.IsAny<Guid>(), "scenario-vm", It.IsAny<TeamLabNodeAssetCreateRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(TeamLabNodeBootstrapResult.Completed());
+        // Deployment ends with an inventory verification pass, so the node must report the VM it
+        // just created; without this the run fails inside verification instead of reaching the
+        // scenario-template assertions below.
+        executor.Setup(item => item.GetRuntimeInventoryAsync(
+                It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => new TeamLabNodeRuntimeInventory(
+                [],
+                [new TeamLabNodeInventoryResource("scenario-vm", "scenario-vm", runtime.Generation, "running")],
+                [],
+                DateTimeOffset.UtcNow));
         var writer = new Mock<IOperationalEventWriter>();
         var eventRecorder = new TeamLabEventRecorder(context, writer.Object, new OperationalCorrelation());
         var services = new ServiceCollection();

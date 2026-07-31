@@ -19,5 +19,6 @@ builder.Services.AddSingleton<IGuestGatewayClient>(services => services.GetRequi
 builder.Services.AddSingleton<GuestBootstrapPackageExecutor>();
 builder.Services.AddSingleton<GuestRebootController>();
 builder.Services.AddSingleton<GuestNetworkVerifier>();
+builder.Services.AddSingleton<GuestRemoteAccessProvisioner>();
 builder.Services.AddHostedService<GuestSupervisorWorker>();
 await builder.Build().RunAsync();

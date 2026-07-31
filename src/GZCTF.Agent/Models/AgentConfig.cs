@@ -49,4 +49,12 @@ public class KvmConfig
     public string ImageStoragePath { get; set; } = "/var/lib/gzctf/images";
     public int DefaultVmMemoryMb { get; set; } = 2048;
     public int DefaultVmCpu { get; set; } = 2;
+
+    /// <summary>
+    /// Addresses or CIDRs allowed to open a VM console proxy connection. The proxy forwards into a
+    /// tenant VM's RDP port without protocol-level authentication, so this is the control that keeps
+    /// it reachable only by the platform. Loopback is always allowed; when nothing else resolves,
+    /// the proxy accepts loopback only rather than everyone.
+    /// </summary>
+    public string[] RdpProxyAllowedSources { get; set; } = [];
 }

@@ -19,6 +19,7 @@ public sealed class TeamLabReleaseAssetArtifact
     public int SourceImageTemplateId { get; set; }
     public int? ScenarioImageTemplateId { get; set; }
     public int? BakeRuntimeId { get; set; }
+    public Guid? BakeAttemptOperationId { get; set; }
     public Guid CommitOperationId { get; set; }
     public TeamLabReleaseArtifactStatus Status { get; set; } = TeamLabReleaseArtifactStatus.Baking;
     [MaxLength(64)] public string BuildIdentity { get; set; } = string.Empty;

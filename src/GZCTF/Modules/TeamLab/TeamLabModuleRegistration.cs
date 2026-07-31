@@ -1,7 +1,10 @@
+using GZCTF.Models.Internal;
 using GZCTF.Modules.TeamLab.Application;
+using GZCTF.Modules.TeamLab.Application.Validation;
 using GZCTF.Modules.TeamLab.Infrastructure;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.TeamLab.Application.Rollouts;
+using Microsoft.Extensions.Options;
 
 namespace GZCTF.Modules.TeamLab;
 
@@ -9,7 +12,15 @@ public static class TeamLabModuleRegistration
 {
     public static IServiceCollection AddTeamLabModule(this IServiceCollection services)
     {
-        services.AddScoped<TeamLabTopologyValidator>();
+        // Built from configuration so tenant addressing stays inside the range the platform owns and
+        // clear of the networks its nodes already route; either overlap would replace host routes on
+        // the WorkerNode and break unrelated games running there.
+        services.AddScoped<TeamLabTopologyValidator>(provider =>
+        {
+            var network = provider.GetRequiredService<IOptions<TeamLabNetworkConfig>>().Value;
+            return new TeamLabTopologyValidator(TeamLabAddressPolicy.ForPlatform(
+                network.ReservedCidrs, network.FabricLinkPool, network.RuntimeNetworkBaseCidr));
+        });
         services.AddScoped<TeamLabReleaseService>();
         services.AddScoped<TeamLabScenarioBakeService>();
         services.AddScoped<ITeamLabTopologyApplicationService, TeamLabTopologyApplicationService>();
@@ -20,6 +31,11 @@ public static class TeamLabModuleRegistration
         services.AddScoped<TeamLabRuntimeProjectionService>();
         services.AddScoped<TeamLabAdminQueryService>();
         services.AddScoped<TeamLabAuthorizationService>();
+        services.AddScoped<TeamLabRemoteAccessAuthorizationService>();
+        services.AddScoped<TeamLabRemoteCredentialService>();
+        services.AddScoped<ITeamLabRemoteAccessService, TeamLabRemoteAccessService>();
+        services.AddHostedService<TeamLabRemoteSessionWorker>();
+        services.AddScoped<TeamLabRuntimeLifecycleGuard>();
         services.AddScoped<TeamLabTrafficApplicationService>();
         services.AddSingleton<TeamLabTrafficLocalBuffer>();
         services.AddSingleton<RedisTeamLabTrafficIngestor>();

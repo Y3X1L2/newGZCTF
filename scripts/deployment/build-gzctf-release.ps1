@@ -25,11 +25,22 @@ if (-not $SkipPublish) {
         -p:DebugType=None -p:DebugSymbols=false `
         -o $publishRoot
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE" }
+
+    # The release must carry its own migration runner. Production hosts only receive
+    # published artifacts, so applying migrations cannot depend on an installed SDK.
+    $migrationBundle = Join-Path $publishRoot "efbundle"
+    & dotnet ef migrations bundle `
+        --project (Join-Path $repoRoot "src/GZCTF/GZCTF.csproj") `
+        --startup-project (Join-Path $repoRoot "src/GZCTF/GZCTF.csproj") `
+        --configuration $Configuration --no-build --target-runtime linux-x64 --self-contained `
+        --output $migrationBundle --force
+    if ($LASTEXITCODE -ne 0) { throw "EF migration bundle failed with exit code $LASTEXITCODE" }
 }
 
 $required = @(
     "GZCTF",
     "GZCTF.dll",
+    "efbundle",
     "agent/gzctf-agent",
     "agent/endpoint-sensor/linux-x64/gzctf-endpoint-sensor",
     "agent/endpoint-sensor/win-x64/gzctf-endpoint-sensor.exe",

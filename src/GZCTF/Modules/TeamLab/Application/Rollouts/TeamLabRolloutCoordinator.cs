@@ -219,8 +219,7 @@ public sealed class TeamLabRolloutCoordinator(
         }
         foreach (var target in rollout.Targets
                      .Where(item => item.RuntimeId.HasValue && item.Status != TeamLabRolloutTargetStatus.Destroyed &&
-                                    item.Status is not TeamLabRolloutTargetStatus.Draining and
-                                        not TeamLabRolloutTargetStatus.CleanupPending)
+                                    item.Status != TeamLabRolloutTargetStatus.Draining)
                      .OrderBy(item => item.Id)
                      .Take(TargetBatchSize))
         {

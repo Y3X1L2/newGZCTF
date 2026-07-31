@@ -154,7 +154,7 @@ public sealed class RuntimeFactReconciliationTests
             Guid.CreateVersion7(), TimeSpan.FromMinutes(10), CancellationToken.None);
 
         Assert.Equal(VmInstanceStatus.Running, vm.Status);
-        Assert.Equal(DeploymentQueueTicketStatus.Running, ticket.Status);
+        Assert.Equal(DeploymentQueueTicketStatus.Pending, ticket.Status);
         Assert.Equal(OperationalErrorCodes.NodeOffline, ticket.ErrorCode);
         Assert.True(summary.DeferredCount >= 1);
         Assert.Empty(agent.RequestedNodes);
@@ -537,7 +537,7 @@ public sealed class RuntimeFactReconciliationTests
         await CreateService(context, agent).ReconcileAsync(
             Guid.CreateVersion7(), TimeSpan.FromMinutes(10), CancellationToken.None);
 
-        Assert.Equal(DeploymentQueueTicketStatus.Running, ticket.Status);
+        Assert.Equal(DeploymentQueueTicketStatus.Pending, ticket.Status);
         Assert.Equal(OperationalErrorCodes.AgentFeatureMissing, ticket.ErrorCode);
     }
 

@@ -123,10 +123,17 @@ describe('TeamLabInspector', () => {
     const onDocumentChange = vi.fn()
     render(<TeamLabInspector document={source} onDocumentChange={onDocumentChange} selection={selection(['edge'])} />)
 
-    fireEvent.change(screen.getByLabelText('交换机名称'), { target: { value: 'Ingress switch' } })
+    const name = screen.getByLabelText('交换机名称')
+    fireEvent.change(name, { target: { value: 'Ingress switch' } })
+    expect(onDocumentChange).not.toHaveBeenCalled()
+    fireEvent.blur(name)
 
     const updated = onDocumentChange.mock.calls[0][0] as TopologyDocument
-    expect(updated.nodes.edge).toMatchObject({ name: 'Ingress switch', networkKey: 'entry-net', runtimePrefixLength: 24 })
+    expect(updated.nodes.edge).toMatchObject({
+      name: 'Ingress switch',
+      networkKey: 'entry-net',
+      runtimePrefixLength: 24,
+    })
     expect(updated).not.toBe(source)
   })
 
@@ -164,24 +171,46 @@ describe('TeamLabInspector', () => {
   it('updates membership, route and dependency connections with dedicated editors', () => {
     const membershipChange = vi.fn()
     const membershipView = render(
-      <TeamLabInspector document={createDocument()} onDocumentChange={membershipChange} selection={selection([], ['app-edge'])} />
+      <TeamLabInspector
+        document={createDocument()}
+        onDocumentChange={membershipChange}
+        selection={selection([], ['app-edge'])}
+      />
     )
-    fireEvent.change(screen.getByLabelText('主机偏移'), { target: { value: '15' } })
-    expect((membershipChange.mock.calls[0][0] as TopologyDocument).connections['app-edge']).toMatchObject({ hostOffset: 15 })
+    const hostOffset = screen.getByLabelText('主机偏移')
+    fireEvent.change(hostOffset, { target: { value: '15' } })
+    fireEvent.blur(hostOffset)
+    expect((membershipChange.mock.calls[0][0] as TopologyDocument).connections['app-edge']).toMatchObject({
+      hostOffset: 15,
+    })
     membershipView.unmount()
 
     const routeChange = vi.fn()
     const routeView = render(
-      <TeamLabInspector document={createDocument()} onDocumentChange={routeChange} selection={selection([], ['route'])} />
+      <TeamLabInspector
+        document={createDocument()}
+        onDocumentChange={routeChange}
+        selection={selection([], ['route'])}
+      />
     )
     fireEvent.change(screen.getByLabelText('方向'), { target: { value: 'bidirectional' } })
-    expect((routeChange.mock.calls[0][0] as TopologyDocument).connections.route).toMatchObject({ direction: 'bidirectional' })
+    expect((routeChange.mock.calls[0][0] as TopologyDocument).connections.route).toMatchObject({
+      direction: 'bidirectional',
+    })
     routeView.unmount()
 
     const dependencyChange = vi.fn()
-    render(<TeamLabInspector document={createDocument()} onDocumentChange={dependencyChange} selection={selection([], ['dependency'])} />)
+    render(
+      <TeamLabInspector
+        document={createDocument()}
+        onDocumentChange={dependencyChange}
+        selection={selection([], ['dependency'])}
+      />
+    )
     fireEvent.change(screen.getByLabelText('就绪条件'), { target: { value: 'bootstrap-completed' } })
-    expect((dependencyChange.mock.calls[0][0] as TopologyDocument).connections.dependency).toMatchObject({ condition: 'bootstrap-completed' })
+    expect((dependencyChange.mock.calls[0][0] as TopologyDocument).connections.dependency).toMatchObject({
+      condition: 'bootstrap-completed',
+    })
   })
 
   it('edits document observation with no selection and summarizes multiple selections', () => {
@@ -195,7 +224,11 @@ describe('TeamLabInspector', () => {
     observationView.unmount()
 
     render(
-      <TeamLabInspector document={createDocument()} onDocumentChange={vi.fn()} selection={selection(['edge', 'app'], ['route'])} />
+      <TeamLabInspector
+        document={createDocument()}
+        onDocumentChange={vi.fn()}
+        selection={selection(['edge', 'app'], ['route'])}
+      />
     )
     expect(screen.getByText('已选择多个对象。为避免批量覆盖异构配置，请单选后编辑属性。')).toBeInTheDocument()
     expect(screen.queryByLabelText('交换机名称')).not.toBeInTheDocument()

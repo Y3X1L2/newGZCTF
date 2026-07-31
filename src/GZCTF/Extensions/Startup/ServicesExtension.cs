@@ -178,6 +178,7 @@ internal static class ServicesExtension
             builder.Services.AddScoped<FleetVmService>();
             builder.Services.AddSingleton<VmCredentialService>();
             builder.Services.AddSingleton<GuacamoleService>();
+            builder.Services.AddSingleton<GuacamoleRemoteSessionService>();
             builder.Services.AddHostedService<VmReadyService>();
             builder.Services.AddScoped<NodeTunnelService>();
             builder.Services.AddScoped<IPublicUdpGatewayProvider, PublicUdpGatewayProvider>();

@@ -56,12 +56,14 @@ public sealed class TeamLabScenarioBakeService(
             release,
             bakeAssets,
             sourceTemplates,
+            publishOperationId,
             cancellationToken);
         if (artifacts.All(IsReady))
         {
             await EnsureRuntimeCleanedAsync(artifacts, cancellationToken);
             return;
         }
+        await PrepareAttemptAsync(artifacts, publishOperationId, cancellationToken);
 
         var runtime = await EnsureBakeRuntimeAsync(
             release,
@@ -71,7 +73,11 @@ public sealed class TeamLabScenarioBakeService(
             cancellationToken);
         if (runtime.Status == TeamLabRuntimeStatus.Failed)
         {
-            await MarkFailedAsync(artifacts, runtime.LastError ?? "Scenario build runtime failed.", cancellationToken);
+            await MarkFailedAndRequireCleanupAsync(
+                runtime,
+                artifacts,
+                runtime.LastError ?? "Scenario build runtime failed.",
+                cancellationToken);
             throw Terminal("scenario_runtime_failed", runtime.LastError ?? "Scenario build runtime failed.");
         }
         if (runtime.Status == TeamLabRuntimeStatus.Destroyed)
@@ -135,6 +141,7 @@ public sealed class TeamLabScenarioBakeService(
         TeamLabTopologyRelease release,
         IReadOnlyList<TeamLabExecutionAsset> bakeAssets,
         IReadOnlyDictionary<int, ImageTemplate> sourceTemplates,
+        Guid publishOperationId,
         CancellationToken cancellationToken)
     {
         var existing = await context.TeamLabReleaseAssetArtifacts
@@ -167,6 +174,7 @@ public sealed class TeamLabScenarioBakeService(
                 ReleaseId = release.Id,
                 AssetKey = asset.Key,
                 SourceImageTemplateId = source.Id,
+                BakeAttemptOperationId = publishOperationId,
                 CommitOperationId = StableOperationId(identity),
                 BuildIdentity = identity
             };
@@ -190,6 +198,62 @@ public sealed class TeamLabScenarioBakeService(
                 string.Equals(asset.Key, item.AssetKey, StringComparison.Ordinal)))
             .OrderBy(item => item.AssetKey, StringComparer.Ordinal)
             .ToList();
+    }
+
+    private async Task PrepareAttemptAsync(
+        IReadOnlyList<TeamLabReleaseAssetArtifact> artifacts,
+        Guid publishOperationId,
+        CancellationToken cancellationToken)
+    {
+        var pending = artifacts.Where(item => !IsReady(item)).ToArray();
+        var failed = pending.Where(item => item.Status == TeamLabReleaseArtifactStatus.Failed).ToArray();
+        if (failed.Length > 0)
+        {
+            await EnsureFailedRuntimeCleanedAsync(artifacts, cancellationToken);
+            if (failed.Any(item => item.BakeAttemptOperationId == publishOperationId))
+                throw Terminal(
+                    "scenario_bake_failed",
+                    failed.Select(item => item.ErrorMessage).FirstOrDefault(item => !string.IsNullOrWhiteSpace(item))
+                    ?? "Scenario baking failed.");
+
+            foreach (var artifact in pending)
+            {
+                artifact.Status = TeamLabReleaseArtifactStatus.Baking;
+                artifact.ErrorMessage = null;
+                artifact.BakeAttemptOperationId = publishOperationId;
+            }
+            await context.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        if (pending.Any(item => item.BakeAttemptOperationId.HasValue &&
+                                item.BakeAttemptOperationId != publishOperationId))
+            throw Terminal(
+                "scenario_bake_in_progress",
+                "Scenario baking is already owned by another publish operation.");
+
+        if (pending.Any(item => !item.BakeAttemptOperationId.HasValue))
+        {
+            foreach (var artifact in pending) artifact.BakeAttemptOperationId = publishOperationId;
+            await context.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    private async Task EnsureFailedRuntimeCleanedAsync(
+        IReadOnlyList<TeamLabReleaseAssetArtifact> artifacts,
+        CancellationToken cancellationToken)
+    {
+        var runtimeIds = artifacts.Where(item => item.BakeRuntimeId.HasValue)
+            .Select(item => item.BakeRuntimeId!.Value).Distinct().ToArray();
+        if (runtimeIds.Length > 1)
+            throw Terminal("scenario_runtime_identity_conflict", "Scenario artifacts reference multiple build runtimes.");
+        if (runtimeIds.Length == 0) return;
+
+        var runtime = await RuntimeQuery().SingleOrDefaultAsync(item => item.Id == runtimeIds[0], cancellationToken);
+        if (runtime is null || runtime.Status == TeamLabRuntimeStatus.Destroyed) return;
+        var cleanupResult = await cleanup.CleanupAsync(runtime, markDestroyedOnSuccess: true, cancellationToken);
+        if (!cleanupResult.Success)
+            throw Deferred("scenario-cleanup", "scenario_cleanup_pending", cleanupResult.Message);
     }
 
     private async Task<TeamLabRuntime> EnsureBakeRuntimeAsync(
@@ -226,27 +290,21 @@ public sealed class TeamLabScenarioBakeService(
                       ?? throw Terminal("scenario_runtime_missing", "Scenario build runtime no longer exists.");
         if (!runtime.IsScenarioBuild || runtime.TopologyReleaseId != release.Id)
             throw Terminal("scenario_runtime_identity_conflict", "Scenario build runtime identity is invalid.");
-        if (runtime.Status is TeamLabRuntimeStatus.Failed or TeamLabRuntimeStatus.Destroyed &&
+        if (runtime.Status == TeamLabRuntimeStatus.Destroyed &&
             artifacts.Any(item => !IsReady(item)))
         {
-            foreach (var artifact in artifacts.Where(item => !IsReady(item)))
-            {
-                artifact.BakeRuntimeId = null;
-                artifact.Status = TeamLabReleaseArtifactStatus.Baking;
-                artifact.ErrorMessage = null;
-            }
-            await context.SaveChangesAsync(cancellationToken);
-            var replacement = await planner.CreateScenarioBuildAsync(
+            var resumed = await planner.CreateScenarioBuildAsync(
                 release.Id,
                 actorUserId,
                 $"scenario-bake:{release.Id:D}",
                 $"sha256:{release.ContentHash}",
                 scenarioOverlays,
                 cancellationToken);
-            runtimeId = replacement.RuntimeId;
-            foreach (var artifact in artifacts) artifact.BakeRuntimeId = runtimeId;
-            await context.SaveChangesAsync(cancellationToken);
-            runtime = await RuntimeQuery().SingleAsync(item => item.Id == runtimeId, cancellationToken);
+            if (resumed.RuntimeId != runtime.Id)
+                throw Terminal(
+                    "scenario_runtime_identity_conflict",
+                    "Scenario retry did not reuse the release build runtime.");
+            runtime = await RuntimeQuery().SingleAsync(item => item.Id == resumed.RuntimeId, cancellationToken);
         }
 
         var hasTicket = await context.DeploymentQueueTickets.AsNoTracking().AnyAsync(item =>
@@ -269,7 +327,8 @@ public sealed class TeamLabScenarioBakeService(
                 runtime.PublicId,
                 WorkloadSchedulingIdentity.ForRuntime(runtime.Id, $"teamlab-runtime:{runtime.Id}", actorUserId),
                 $"Scenario bake {release.Id:D}",
-                $"{dockerSlots} Docker / {vmSlots} VM scenario build"), cancellationToken);
+                $"{dockerSlots} Docker / {vmSlots} VM scenario build",
+                runtime.Generation), cancellationToken);
         }
         return runtime;
     }
@@ -400,13 +459,19 @@ public sealed class TeamLabScenarioBakeService(
         string error,
         CancellationToken cancellationToken)
     {
+        await MarkFailedAndRequireCleanupAsync(runtime, artifacts, error, cancellationToken);
+    }
+
+    private async Task MarkFailedAndRequireCleanupAsync(
+        TeamLabRuntime runtime,
+        IReadOnlyList<TeamLabReleaseAssetArtifact> artifacts,
+        string error,
+        CancellationToken cancellationToken)
+    {
         await MarkFailedAsync(artifacts, error, cancellationToken);
         var result = await cleanup.CleanupAsync(runtime, markDestroyedOnSuccess: true, cancellationToken);
         if (!result.Success)
-            logger.LogError(
-                "Scenario runtime {RuntimeId} cleanup failed after artifact error: {CleanupError}",
-                runtime.PublicId,
-                result.Message);
+            throw Deferred("scenario-cleanup", "scenario_cleanup_pending", result.Message);
     }
 
     private async Task MarkFailedAsync(

@@ -20,13 +20,26 @@ public sealed class PenetrationTeamLabAdapter(
     PenetrationObjectiveService objectives,
     ITeamLabRolloutApplicationService? rolloutApplication = null,
     IDistributedLeaseProvider? locks = null)
-    : ITeamLabRolloutTargetProvider
+    : ITeamLabRolloutTargetProvider, ITeamLabRuntimeManagerAuthorizationProvider
 {
     private readonly ITeamLabRolloutApplicationService _rollouts =
         rolloutApplication ?? new TeamLabRolloutApplicationService(context);
     private readonly IDistributedLeaseProvider? _locks = locks;
 
     public string AdapterKind => "penetration";
+
+    public Task<bool> CanManageRuntimeAsync(
+        int runtimeId,
+        Guid actorUserId,
+        CancellationToken cancellationToken) =>
+        context.PenetrationTeamRuntimeBindings.AsNoTracking()
+            .Where(item => item.RuntimeId == runtimeId)
+            .Join(
+                context.Games.AsNoTracking(),
+                binding => binding.GameId,
+                game => game.Id,
+                (_, game) => game.OwnerId)
+            .AnyAsync(ownerId => ownerId == actorUserId, cancellationToken);
 
     public async Task<PenetrationGameLabBindingModel?> GetBindingAsync(
         int gameId,

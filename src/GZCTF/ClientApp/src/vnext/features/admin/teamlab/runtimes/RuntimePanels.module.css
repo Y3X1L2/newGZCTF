@@ -470,6 +470,80 @@
   gap: 3px;
 }
 
+.remoteAssetList {
+  display: grid;
+  gap: var(--yn-space-2);
+}
+
+.remoteAssetList article {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yn-space-3);
+  padding: var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-sm);
+  background: var(--yn-color-surface-muted);
+}
+
+.remoteAssetList article > div,
+.remoteReason {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.remoteAssetList small,
+.remoteReason small {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.remoteReason {
+  gap: var(--yn-space-2);
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-sm);
+}
+
+.remoteReason textarea {
+  min-height: 96px;
+  resize: vertical;
+  padding: var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: 4px;
+  background: var(--yn-color-surface);
+  color: var(--yn-color-text);
+  font: inherit;
+}
+
+.remoteReason textarea:focus {
+  border-color: var(--yn-color-brand);
+  outline: 2px solid color-mix(in srgb, var(--yn-color-brand) 18%, transparent);
+}
+
+.terminalSurface {
+  display: grid;
+  gap: var(--yn-space-3);
+}
+
+.terminalSurface pre {
+  height: min(60vh, 560px);
+  margin: 0;
+  overflow: auto;
+  padding: var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: 4px;
+  background: #101418;
+  color: #e6edf3;
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-sm);
+  white-space: pre-wrap;
+}
+
+.terminalSurface form { display: flex; gap: var(--yn-space-2); }
+.terminalSurface input { min-width: 0; flex: 1; padding: 0 var(--yn-space-3); border: 1px solid var(--yn-color-border); border-radius: 4px; background: var(--yn-color-surface); color: var(--yn-color-text); font: inherit; }
+
 .accessList code,
 .accessList small {
   overflow: hidden;
@@ -495,4 +569,5 @@
   .eventTimeline li { grid-template-columns: 28px minmax(0, 1fr); }
   .eventTimeline time { grid-column: 2; }
   .accessList article { grid-template-columns: minmax(0, 1fr); }
+  .remoteAssetList article { align-items: stretch; flex-direction: column; }
 }

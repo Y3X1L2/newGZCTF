@@ -46,9 +46,15 @@ public sealed class AgentTeamLabNodeExecutor(
             cancellationToken);
         static TeamLabNodeInventoryResource Map(GZCTF.Modules.Runtime.Contracts.AgentRuntimeInventoryResource item) =>
             new(item.NativeId, item.StableName, item.Generation, item.State, item.RuntimeId);
+        // A missing response is a protocol failure and must stay distinguishable from a node that
+        // genuinely holds nothing; reporting it as an empty inventory would let deployment
+        // verification blame the assets instead of the unreachable node.
+        if (inventory is null)
+            throw new TeamLabRuntimeExecutionException(
+                $"WorkerNode {workerNodeId} returned no runtime inventory.");
         return new TeamLabNodeRuntimeInventory(
-            inventory.Containers.Select(Map).ToArray(),
-            inventory.Vms.Select(Map).ToArray(),
+            (inventory.Containers ?? []).Select(Map).ToArray(),
+            (inventory.Vms ?? []).Select(Map).ToArray(),
             (inventory.TeamLabResources ?? []).Select(Map).ToArray(),
             inventory.ObservedAt);
     }
@@ -153,7 +159,7 @@ public sealed class AgentTeamLabNodeExecutor(
                     sensor?.Message ?? "Required endpoint sensor channel could not be registered.");
             var result = request.Kind == TeamLabAssetKind.Docker
                 ? await CreateContainerAsync(workerNodeId, request, template, sensor?.ChannelEndpoint, cancellationToken)
-                : await CreateVmAsync(db, workerNodeId, request, template, cancellationToken);
+                : await CreateVmAsync(db, scope.ServiceProvider.GetRequiredService<TeamLabRemoteCredentialService>(), workerNodeId, request, template, cancellationToken);
             if (!result.Success && sensor is { Success: true })
                 await RemoveEndpointSensorAsync(workerNodeId, request, cancellationToken);
             return result;
@@ -632,6 +638,7 @@ public sealed class AgentTeamLabNodeExecutor(
 
     private async Task<TeamLabNodeAssetCreateResult> CreateVmAsync(
         AppDbContext db,
+        TeamLabRemoteCredentialService credentialService,
         Guid workerNodeId,
         TeamLabNodeAssetCreateRequest request,
         ImageTemplate template,
@@ -639,8 +646,13 @@ public sealed class AgentTeamLabNodeExecutor(
     {
         if (template.ImageType == ImageType.Docker)
             return TeamLabNodeAssetCreateResult.Failed($"Image template {template.Id} is not a VM template.");
+        var remoteConfiguration = await db.ImageTemplateRemoteAccesses.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.ImageTemplateId == template.Id, cancellationToken);
+        var requiresPlatformRemoteAccount = remoteConfiguration is
+            { Enabled: true, CredentialMode: RemoteCredentialMode.PlatformGenerated };
         var requiresGuestControl = request.Bootstrap is not null ||
-                                   request.EndpointObservation != TeamLabEndpointObservationMode.Disabled;
+                                   request.EndpointObservation != TeamLabEndpointObservationMode.Disabled ||
+                                   requiresPlatformRemoteAccount;
         if (requiresGuestControl && (template.VmRuntimeMode == VmRuntimeMode.Opaque ||
             template.VmArtifactStatus != VmArtifactStatus.Ready ||
             template.VmRuntimeMode == VmRuntimeMode.Managed &&
@@ -679,6 +691,20 @@ public sealed class AgentTeamLabNodeExecutor(
             var artifactDigest = template.VmRuntimeMode == VmRuntimeMode.Scenario
                 ? template.ImageHash!
                 : template.PreparedArtifact!.ArtifactDigest;
+            if (remoteConfiguration is { Enabled: true, CredentialMode: RemoteCredentialMode.PlatformGenerated })
+            {
+                var credential = await credentialService.EnsurePlatformCredentialAsync(
+                    request.RuntimeId, request.Generation, request.RuntimeAssetId, remoteConfiguration.Protocol, cancellationToken);
+                request = request with
+                {
+                    Secrets = request.Secrets.Concat(new[]
+                    {
+                        new KeyValuePair<string, string>("GZCTF_REMOTE_ACCESS_PROTOCOL", remoteConfiguration.Protocol.ToString()),
+                        new KeyValuePair<string, string>("GZCTF_REMOTE_ACCESS_USERNAME", credential.Username),
+                        new KeyValuePair<string, string>("GZCTF_REMOTE_ACCESS_PASSWORD", credentialService.RevealSecret(credential))
+                    }).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal)
+                };
+            }
             var (intent, protectedSecrets) = BuildGuestIntent(
                 request,
                 identity,
@@ -747,7 +773,7 @@ public sealed class AgentTeamLabNodeExecutor(
         var vm = await agent.CreateVmAsync(workerNodeId, vmRequest, cancellationToken);
         if (vm is null || string.IsNullOrWhiteSpace(vm.VmName))
             return TeamLabNodeAssetCreateResult.Failed($"Failed to create VM {request.Name}.");
-        return TeamLabNodeAssetCreateResult.Created(vm.VmName);
+        return TeamLabNodeAssetCreateResult.Created(vm.VmName, vm.NativeId);
     }
 
     public async Task<TeamLabNodeResult> WaitForAssetReadyAsync(
@@ -767,6 +793,7 @@ public sealed class AgentTeamLabNodeExecutor(
             operationId,
             request.Generation,
             AgentRuntimeSignalStage.NetworkApplied,
+            BoundedTimeout(_config.ManagedVmNetworkReadyTimeoutSeconds),
             cancellationToken);
         if (!guest.Ready)
             return TeamLabNodeResult.Failed(
@@ -861,10 +888,12 @@ public sealed class AgentTeamLabNodeExecutor(
             return TeamLabNodeBootstrapResult.Completed();
         if (request.OperationId is not { } operationId || operationId == Guid.Empty)
             return TeamLabNodeBootstrapResult.Failed("The TeamLab VM bootstrap operation identity is missing.");
+        var bootstrapTimeout = await ResolveBootstrapSignalTimeoutAsync(request, cancellationToken);
         var completed = await runtimeSignals.WaitForAsync(
             operationId,
             request.Generation,
             AgentRuntimeSignalStage.BootstrapCompleted,
+            bootstrapTimeout,
             cancellationToken);
         return completed.Ready
             ? TeamLabNodeBootstrapResult.Completed()
@@ -932,6 +961,7 @@ public sealed class AgentTeamLabNodeExecutor(
             operationId,
             request.Generation,
             AgentRuntimeSignalStage.ObservationReady,
+            BoundedTimeout(_config.ManagedVmObservationReadyTimeoutSeconds),
             cancellationToken);
         if (!lifecycle.Ready)
             return TeamLabNodeBootstrapResult.Failed(
@@ -978,6 +1008,42 @@ public sealed class AgentTeamLabNodeExecutor(
 
     private static bool RequiresGuestControl(TeamLabNodeAssetCreateRequest request) =>
         request.Bootstrap is not null || request.EndpointObservation != TeamLabEndpointObservationMode.Disabled;
+
+    private async Task<TimeSpan> ResolveBootstrapSignalTimeoutAsync(
+        TeamLabNodeAssetCreateRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Bootstrap is null)
+            return BoundedTimeout(_config.ManagedVmBootstrapOverheadSeconds);
+
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var manifestJson = await context.BootstrapProfileVersions.AsNoTracking()
+            .Where(item =>
+                item.Profile.PublicId == request.Bootstrap.ProfileId &&
+                item.Version == request.Bootstrap.Version &&
+                item.Status == BootstrapProfileVersionStatus.Ready)
+            .Select(item => item.ManifestJson)
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw new InvalidOperationException(
+                $"Bootstrap profile {request.Bootstrap.ProfileId:D} v{request.Bootstrap.Version} is not ready.");
+
+        var manifest = BootstrapProfileApplicationService.ParseAndValidateManifest(manifestJson);
+        var declaredSeconds = (long)Math.Max(1, _config.ManagedVmBootstrapOverheadSeconds) +
+                              manifest.Steps.Sum(item => (long)item.TimeoutSeconds) +
+                              manifest.HealthChecks.Sum(item => (long)item.TimeoutSeconds * item.Attempts) +
+                              (long)manifest.MaxReboots * Math.Max(1, _config.ManagedVmRebootAllowanceSeconds);
+        var maximumSeconds = Math.Max(1, _config.ManagedVmMaximumBootstrapTimeoutSeconds);
+        if (declaredSeconds > maximumSeconds)
+            throw new InvalidOperationException(
+                $"Bootstrap profile {request.Bootstrap.ProfileId:D} v{request.Bootstrap.Version} declares " +
+                $"{declaredSeconds} seconds of runtime work, exceeding the {maximumSeconds}-second online limit. " +
+                "Mark the asset BakeAtPublish and publish a scenario artifact instead.");
+
+        return TimeSpan.FromSeconds(declaredSeconds);
+    }
+
+    private static TimeSpan BoundedTimeout(int seconds) => TimeSpan.FromSeconds(Math.Max(1, seconds));
 
     private async Task<ResolvedBootstrap?> ResolveBootstrapAsync(
         AppDbContext context,

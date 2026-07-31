@@ -108,7 +108,13 @@ export function mapTopologyDetailToDocument(
 
   const nodes: Record<string, TopologyNode> = {}
   const connections: Record<string, TopologyConnection> = {}
-  const occupied = new Set<string>()
+  const explicitKeys = [
+    ...detail.definition.infrastructure.map((item) => item.key),
+    ...detail.definition.assets.map((item) => item.key),
+  ]
+  if (new Set(explicitKeys).size !== explicitKeys.length)
+    throw new Error('Topology infrastructure and asset keys must be globally unique.')
+  const occupied = new Set(explicitKeys)
   const switchKeysByNetwork = new Map<string, string>()
 
   sorted(detail.definition.networks).forEach((network, index) => {
@@ -118,6 +124,7 @@ export function mapTopologyDetailToDocument(
     switchKeysByNetwork.set(network.key, switchKey)
     nodes[switchKey] = {
       type: 'switch',
+      implicit: infrastructure === undefined,
       key: switchKey,
       name: infrastructure?.name ?? network.name,
       networkName: network.name,

@@ -94,6 +94,7 @@ public class TeamLabRuntimeAsset
     [MaxLength(64)] public string TopologyKey { get; set; } = string.Empty;
     [MaxLength(128)] public string Name { get; set; } = string.Empty;
     [MaxLength(256)] public string? RuntimeResourceId { get; set; }
+    [MaxLength(128)] public string? NativeIdentity { get; set; }
     public int? SourceTemplateId { get; set; }
     [MaxLength(512)] public string? Image { get; set; }
     [MaxLength(64)] public string? NetworkKey { get; set; }

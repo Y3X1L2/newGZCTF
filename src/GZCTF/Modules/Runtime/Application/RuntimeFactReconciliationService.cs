@@ -60,8 +60,15 @@ public sealed class RuntimeFactReconciliationService(
         var activeTeamLabOwners = await LoadActiveTeamLabLifecycleOwnersAsync(token);
         var expected = await LoadExpectedFactsAsync(activeTeamLabOwners, token);
         var expectedTeamLabControl = await LoadExpectedTeamLabControlFactsAsync(activeTeamLabOwners, token);
+        // Staleness means "nobody is executing this any more", not "this is taking a while".
+        // The executor renews its claim while it works, and legitimate deployments routinely run
+        // longer than the elapsed-time threshold — a Windows guest with a reboot-bearing bootstrap
+        // profile easily does. Reclaiming those restarts the deployment from scratch, doubling
+        // startup time, and rewrites the ExecutionStage of assets that are still in flight.
         var staleTickets = await context.DeploymentQueueTickets
             .Where(ticket => ticket.Status == DeploymentQueueTicketStatus.Running)
+            .Where(ticket => ticket.ClaimOwner == null || ticket.ClaimExpiresAt == null ||
+                             ticket.ClaimExpiresAt <= now)
             .Where(ticket => (ticket.StartedAt ?? ticket.AssignedAt ?? ticket.CreatedAt) < now - staleAfter)
             .OrderBy(ticket => ticket.CreatedAt)
             .ToArrayAsync(token);
@@ -1381,6 +1388,13 @@ public sealed class RuntimeFactReconciliationService(
         PlatformTelemetry.RecordRecoveryDecision("safe_replay", ticket.Kind.ToString());
     }
 
+    /// <summary>
+    /// How long a ticket may stay deferred waiting for an external condition (node back online,
+    /// agent upgraded) before the condition is treated as permanent. Long enough to survive a node
+    /// reboot, short enough that a retired node cannot strand a runtime indefinitely.
+    /// </summary>
+    private static readonly TimeSpan MaxDeferWindow = TimeSpan.FromHours(2);
+
     private async Task DeferTicketAsync(
         DeploymentQueueTicket ticket,
         TicketInspection inspection,
@@ -1395,6 +1409,37 @@ public sealed class RuntimeFactReconciliationService(
             : OperationalErrorCategory.NodeUnavailable;
         ticket.ErrorCode = inspection.ErrorCode;
         ticket.Retryable = true;
+
+        // A deferred ticket used to keep Status = Running, which holds the per-runtime concurrency
+        // slot; every later destroy or reset for that runtime was then blocked from scheduling
+        // forever, so its resources could never be reclaimed. Return it to the queue with a backoff
+        // instead: the retry is preserved and the slot is freed. Beyond the window the condition is
+        // treated as permanent rather than waited on indefinitely.
+        var waitingSince = ticket.StartedAt ?? ticket.AssignedAt ?? ticket.CreatedAt;
+        if (now - waitingSince > MaxDeferWindow)
+        {
+            FailTicket(ticket, inspection);
+            await ReleaseTicketCapacityAsync(ticket, token);
+            events.Append(RuntimeOperationalEvents.Ticket(
+                ticket,
+                OperationalEventCodes.Recovery.TicketDeferralExpired,
+                OperationalEventOutcome.Failed,
+                $"Ticket stayed deferred for over {MaxDeferWindow.TotalHours:0.#}h: {inspection.Message}",
+                OperationalEventSeverity.Error,
+                detail: RecoveryDetail(ticket, "defer_window_exceeded", inspection.ErrorCode)) with
+            {
+                CorrelationId = runId
+            });
+            PlatformTelemetry.RecordRecoveryDecision("defer_window_exceeded", ticket.Kind.ToString());
+            return;
+        }
+
+        ticket.Status = DeploymentQueueTicketStatus.Pending;
+        ticket.ClaimOwner = null;
+        ticket.ClaimExpiresAt = null;
+        ticket.AttemptCount++;
+        ticket.NotBeforeAt = now.AddSeconds(Math.Min(300, 15 << Math.Min(5, ticket.AttemptCount)));
+
         var code = inspection.ErrorCode == OperationalErrorCodes.AgentFeatureMissing
             ? OperationalEventCodes.Recovery.InventoryUnsupported
             : OperationalEventCodes.Recovery.NodeUnavailable;

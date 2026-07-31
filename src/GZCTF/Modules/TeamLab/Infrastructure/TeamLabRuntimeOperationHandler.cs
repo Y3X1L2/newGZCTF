@@ -15,6 +15,7 @@ public sealed class TeamLabRuntimeOperationHandler(
     ITeamLabRuntimeApplicationService runtimes,
     ITeamLabTopologyApplicationService topologies,
     TeamLabAuthorizationService authorization,
+    TeamLabRuntimeLifecycleGuard lifecycleGuard,
     TeamLabAccessGrantService access,
     TeamLabTrafficApplicationService traffic,
     TeamLabScenarioBakeService scenarioBakes,
@@ -30,6 +31,21 @@ public sealed class TeamLabRuntimeOperationHandler(
             ?? throw new ApiOperationTerminalException("teamlab_job_not_found", "The TeamLab operation job was not found.");
         if (job.ResultJson is not null) return;
         var operation = await context.ApiOperations.AsNoTracking().SingleAsync(item => item.Id == operationId, cancellationToken);
+
+        if (job.Kind is TeamLabRuntimeOperationKind.Reset or TeamLabRuntimeOperationKind.Destroy)
+        {
+            var lifecycleRuntimeId = job.RuntimePublicId;
+            if (!lifecycleRuntimeId.HasValue)
+                lifecycleRuntimeId = ReadPayload(job).RuntimeId;
+            if (!lifecycleRuntimeId.HasValue)
+                throw new ApiOperationTerminalException(
+                    "teamlab_payload_invalid",
+                    "Runtime lifecycle operation ID is missing.");
+            if (await lifecycleGuard.IsRolloutManagedAsync(lifecycleRuntimeId.Value, cancellationToken))
+                throw new ApiOperationTerminalException(
+                    "runtime_managed_by_rollout",
+                    "This runtime is managed by a competition rollout; use the competition lifecycle API.");
+        }
 
         if (job.Kind is >= TeamLabRuntimeOperationKind.TopologyCreate and <= TeamLabRuntimeOperationKind.CaptureStop)
         {

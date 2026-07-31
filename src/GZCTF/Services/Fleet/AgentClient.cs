@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using GZCTF.Infrastructure.Telemetry;
@@ -209,6 +210,35 @@ public class AgentClient
                 node.Id,
                 $"Agent network deletion failed on node {node.Name} ({node.HostAddress}), network {networkName}.",
                 token);
+        }
+    }
+
+    public async Task ProxyRemoteTerminalAsync(Guid nodeId, Guid sessionId, int runtimeId, int generation,
+        string containerId, DateTimeOffset expiresAt, WebSocket browser, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "remote.terminal");
+        using var agent = new ClientWebSocket();
+        agent.Options.SetRequestHeader("Authorization", $"Bearer {node.AuthToken}");
+        var uri = new Uri($"ws://{node.HostAddress}:{node.AgentPort}/api/remote-access/terminals/{sessionId:D}?runtimeId={runtimeId}&generation={generation}&containerId={Uri.EscapeDataString(containerId)}&expiresAt={Uri.EscapeDataString(expiresAt.ToString("O"))}");
+        await agent.ConnectAsync(uri, token);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var forward = CopyWebSocketAsync(browser, agent, linked.Token);
+        var reverse = CopyWebSocketAsync(agent, browser, linked.Token);
+        await Task.WhenAny(forward, reverse);
+        linked.Cancel();
+        try { await Task.WhenAll(forward, reverse); } catch (OperationCanceledException) { }
+        if (browser.State is WebSocketState.Open or WebSocketState.CloseReceived)
+            await browser.CloseAsync(WebSocketCloseStatus.NormalClosure, "terminal_closed", CancellationToken.None);
+    }
+
+    private static async Task CopyWebSocketAsync(WebSocket source, WebSocket target, CancellationToken token)
+    {
+        var buffer = new byte[8192];
+        while (source.State == WebSocketState.Open && target.State == WebSocketState.Open && !token.IsCancellationRequested)
+        {
+            var result = await source.ReceiveAsync(buffer, token);
+            if (result.MessageType == WebSocketMessageType.Close) return;
+            await target.SendAsync(buffer.AsMemory(0, result.Count), result.MessageType, result.EndOfMessage, token);
         }
     }
 
@@ -1212,6 +1242,32 @@ public class AgentClient
         return value.ToLowerInvariant();
     }
 
+    public virtual async Task<AgentRemoteRelayResponse> CreateRemoteRelayAsync(
+        Guid nodeId,
+        AgentRemoteRelayRequest request,
+        CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "remote_access.relay.create");
+        var client = BuildClient(node);
+        var response = await client.PostAsJsonAsync("/api/remote-access/relays", request, token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(response, "remote_access.relay.create", node.Id,
+                $"Agent remote relay creation failed on node {node.Name} ({node.HostAddress}).", token);
+        return await response.Content.ReadFromJsonAsync<AgentRemoteRelayResponse>(token)
+               ?? throw new AgentClientException(new OperationalError(OperationalErrorCategory.AgentProtocol,
+                   "remote_access.empty_response", "Agent returned an empty remote relay response.", false));
+    }
+
+    public virtual async Task DeleteRemoteRelayAsync(Guid nodeId, Guid sessionId, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "remote_access.relay.delete");
+        var client = BuildClient(node);
+        var response = await client.DeleteAsync($"/api/remote-access/relays/{sessionId:D}", token);
+        if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
+            throw await CreateAgentExceptionAsync(response, "remote_access.relay.delete", node.Id,
+                $"Agent remote relay cleanup failed on node {node.Name} ({node.HostAddress}).", token);
+    }
+
     public virtual async Task<AgentVmImageDownloadResult> DownloadPreparedVmImageAsync(
         Guid nodeId,
         int templateId,
@@ -1499,6 +1555,18 @@ public class AgentClientException : Exception, IOperationalFailureException
         Error = error;
     }
 }
+
+public sealed record AgentRemoteRelayRequest(
+    Guid SessionId,
+    int RuntimeId,
+    int Generation,
+    string VmName,
+    string NativeId,
+    string TargetAddress,
+    int TargetPort,
+    DateTimeOffset ExpiresAt);
+
+public sealed record AgentRemoteRelayResponse(Guid SessionId, int Port, DateTimeOffset ExpiresAt);
 
 public class AgentCreateVmRequest
 {

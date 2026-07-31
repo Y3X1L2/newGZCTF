@@ -70,9 +70,14 @@ public class EditControllerTests
         var provider = services.BuildServiceProvider();
         var queue = new DeploymentQueueService(context, NullLogger<DeploymentQueueService>.Instance);
         var userManager = CreateUserManager();
+        var actorId = Guid.CreateVersion7();
         userManager
             .Setup(m => m.GetUserAsync(It.IsAny<ClaimsPrincipal>()))
-            .ReturnsAsync(new UserInfo { Id = Guid.CreateVersion7(), UserName = "teacher" });
+            .ReturnsAsync(new UserInfo { Id = actorId, UserName = "teacher" });
+        var gameRepository = new Mock<IGameRepository>();
+        gameRepository
+            .Setup(repository => repository.GetGameById(3, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Game { Id = 3, OwnerId = actorId });
 
         var controller = new EditController(
             null!,
@@ -82,7 +87,7 @@ public class EditControllerTests
             challengeRepository,
             Mock.Of<IGameInstanceRepository>(),
             Mock.Of<IGameNoticeRepository>(),
-            Mock.Of<IGameRepository>(),
+            gameRepository.Object,
             context,
             Mock.Of<IBlobRepository>(),
             null!,

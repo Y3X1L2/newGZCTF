@@ -153,15 +153,17 @@ public sealed class TeamLabNetworkLeaseEntityConfiguration : IEntityTypeConfigur
         builder.ToTable("TeamLabNetworkLeases");
         builder.HasKey(item => item.Id);
         builder.Property(item => item.AllocatedCidr).HasColumnType("cidr");
-        builder.HasIndex(item => new { item.RuntimeId, item.Generation, item.TopologyNetworkId }).IsUnique();
+        builder.Property(item => item.NetworkKey).HasMaxLength(63);
+        builder.HasIndex(item => new { item.RuntimeId, item.Generation, item.NetworkKey }).IsUnique();
+        builder.HasIndex(item => new { item.TopologyReleaseId, item.NetworkKey });
         builder.HasIndex(item => item.ReleasedAt);
         builder.HasOne<TeamLabRuntime>()
             .WithMany()
             .HasForeignKey(item => item.RuntimeId)
             .OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne(item => item.TopologyNetwork)
+        builder.HasOne(item => item.TopologyRelease)
             .WithMany()
-            .HasForeignKey(item => item.TopologyNetworkId)
+            .HasForeignKey(item => item.TopologyReleaseId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

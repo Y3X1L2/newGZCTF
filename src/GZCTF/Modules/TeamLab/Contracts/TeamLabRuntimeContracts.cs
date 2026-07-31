@@ -38,6 +38,7 @@ public sealed record TeamLabRuntimeNetworkProjectionModel(
     string GatewayIp);
 
 public sealed record TeamLabRuntimeAssetProjectionModel(
+    int Id,
     string Key,
     string Name,
     TeamLabAssetKind Kind,

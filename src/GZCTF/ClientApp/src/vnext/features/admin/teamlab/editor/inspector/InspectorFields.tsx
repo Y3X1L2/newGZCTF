@@ -1,20 +1,68 @@
 import { ChevronDown, Plus, Trash2 } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { TopologyPosition } from '../../model/topologyDocument'
 import styles from './TeamLabInspector.module.css'
 
-export function InspectorSection({
-  title,
-  icon,
-  children,
+type DraftCommit = (value: string) => boolean | void
+
+function useCommittedDraft(value: string, onCommit?: DraftCommit) {
+  const [draft, setDraft] = useState(value)
+  const focused = useRef(false)
+
+  useEffect(() => {
+    if (!focused.current) setDraft(value)
+  }, [value])
+
+  const commit = () => {
+    focused.current = false
+    if (!onCommit || draft === value) return
+    if (onCommit(draft) === false) setDraft(value)
+  }
+
+  return {
+    draft,
+    setDraft,
+    onFocus: () => {
+      focused.current = true
+    },
+    onBlur: commit,
+  }
+}
+
+function KeyValueInput({
+  ariaLabel,
+  value,
+  onCommit,
+  disabled,
+  placeholder,
 }: {
-  title: string
-  icon?: ReactNode
-  children: ReactNode
+  ariaLabel: string
+  value: string
+  onCommit: DraftCommit
+  disabled?: boolean
+  placeholder: string
 }) {
+  const draft = useCommittedDraft(value, onCommit)
+  return (
+    <input
+      aria-label={ariaLabel}
+      disabled={disabled}
+      onBlur={draft.onBlur}
+      onChange={(event) => draft.setDraft(event.currentTarget.value)}
+      onFocus={draft.onFocus}
+      placeholder={placeholder}
+      value={draft.draft}
+    />
+  )
+}
+
+export function InspectorSection({ title, icon, children }: { title: string; icon?: ReactNode; children: ReactNode }) {
   return (
     <section className={styles.section}>
-      <h3>{icon}{title}</h3>
+      <h3>
+        {icon}
+        {title}
+      </h3>
       <div className={styles.sectionBody}>{children}</div>
     </section>
   )
@@ -23,7 +71,10 @@ export function InspectorSection({
 export function AdvancedSection({ summary, children }: { summary: string; children: ReactNode }) {
   return (
     <details className={styles.advanced}>
-      <summary><ChevronDown aria-hidden="true" size={15} />{summary}</summary>
+      <summary>
+        <ChevronDown aria-hidden="true" size={15} />
+        {summary}
+      </summary>
       <div className={styles.advancedBody}>{children}</div>
     </details>
   )
@@ -42,7 +93,7 @@ export function TextInput({
 }: {
   label: string
   value: string | number
-  onChange?: (value: string) => void
+  onChange?: DraftCommit
   disabled?: boolean
   type?: 'text' | 'number'
   min?: number
@@ -50,6 +101,8 @@ export function TextInput({
   step?: number
   hint?: string
 }) {
+  const sourceValue = String(value)
+  const draft = useCommittedDraft(sourceValue, onChange)
   return (
     <label className={styles.field}>
       <span>{label}</span>
@@ -57,11 +110,16 @@ export function TextInput({
         disabled={disabled}
         max={max}
         min={min}
-        onChange={onChange ? (event) => onChange(event.currentTarget.value) : undefined}
+        onBlur={draft.onBlur}
+        onChange={onChange ? (event) => draft.setDraft(event.currentTarget.value) : undefined}
+        onFocus={draft.onFocus}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur()
+        }}
         readOnly={!onChange}
         step={step}
         type={type}
-        value={value}
+        value={draft.draft}
       />
       {hint ? <small>{hint}</small> : null}
     </label>
@@ -81,10 +139,17 @@ export function TextAreaInput({
   disabled?: boolean
   hint?: string
 }) {
+  const draft = useCommittedDraft(value, onChange)
   return (
     <label className={styles.field}>
       <span>{label}</span>
-      <textarea disabled={disabled} onChange={(event) => onChange(event.currentTarget.value)} value={value} />
+      <textarea
+        disabled={disabled}
+        onBlur={draft.onBlur}
+        onChange={(event) => draft.setDraft(event.currentTarget.value)}
+        onFocus={draft.onFocus}
+        value={draft.draft}
+      />
       {hint ? <small>{hint}</small> : null}
     </label>
   )
@@ -128,7 +193,10 @@ export function ToggleInput({
 }) {
   return (
     <label className={styles.toggle}>
-      <span><strong>{label}</strong>{description ? <small>{description}</small> : null}</span>
+      <span>
+        <strong>{label}</strong>
+        {description ? <small>{description}</small> : null}
+      </span>
       <input
         checked={checked}
         disabled={disabled}
@@ -164,8 +232,11 @@ export function NumberInput({
       max={max}
       min={min}
       onChange={(next) => {
+        if (!next.trim()) return false
         const parsed = Number(next)
-        if (Number.isFinite(parsed)) onChange(parsed)
+        if (!Number.isFinite(parsed)) return false
+        onChange(parsed)
+        return true
       }}
       step={step}
       type="number"
@@ -186,8 +257,18 @@ export function PositionEditor({
   return (
     <div className={styles.stack}>
       <div className={styles.twoColumns}>
-        <NumberInput disabled={readOnly} label="画布 X" onChange={(x) => onChange({ ...position, x })} value={position.x} />
-        <NumberInput disabled={readOnly} label="画布 Y" onChange={(y) => onChange({ ...position, y })} value={position.y} />
+        <NumberInput
+          disabled={readOnly}
+          label="画布 X"
+          onChange={(x) => onChange({ ...position, x })}
+          value={position.x}
+        />
+        <NumberInput
+          disabled={readOnly}
+          label="画布 Y"
+          onChange={(y) => onChange({ ...position, y })}
+          value={position.y}
+        />
         <NumberInput
           disabled={readOnly || position.width === null}
           label="宽度"
@@ -242,28 +323,33 @@ export function KeyValueEditor({
 }) {
   const entries = Object.entries(values)
   const updateEntry = (oldKey: string, key: string, value: string) => {
+    const nextKey = key.trim()
+    if (!nextKey || (nextKey !== oldKey && nextKey in values)) return false
     const next = { ...values }
     delete next[oldKey]
-    if (key.trim()) next[key] = value
+    next[nextKey] = value
     onChange(next)
+    return true
   }
   return (
     <div className={styles.keyValueEditor}>
-      <div className={styles.inlineHeading}><strong>{label}</strong></div>
+      <div className={styles.inlineHeading}>
+        <strong>{label}</strong>
+      </div>
       {entries.length === 0 ? <p className={styles.muted}>{emptyText}</p> : null}
-      {entries.map(([key, value], index) => (
-        <div className={styles.keyValueRow} key={`entry-${index}`}>
-          <input
-            aria-label={`${label}键`}
+      {entries.map(([key, value]) => (
+        <div className={styles.keyValueRow} key={key}>
+          <KeyValueInput
+            ariaLabel={`${label}键`}
             disabled={readOnly}
-            onChange={(event) => updateEntry(key, event.currentTarget.value, value)}
+            onCommit={(nextKey) => updateEntry(key, nextKey, value)}
             placeholder="键"
             value={key}
           />
-          <input
-            aria-label={`${label}值`}
+          <KeyValueInput
+            ariaLabel={`${label}值`}
             disabled={readOnly}
-            onChange={(event) => updateEntry(key, key, event.currentTarget.value)}
+            onCommit={(nextValue) => updateEntry(key, key, nextValue)}
             placeholder="值"
             value={value}
           />
@@ -278,7 +364,9 @@ export function KeyValueEditor({
             }}
             title="删除"
             type="button"
-          ><Trash2 aria-hidden="true" size={15} /></button>
+          >
+            <Trash2 aria-hidden="true" size={15} />
+          </button>
         </div>
       ))}
       <button
@@ -291,7 +379,10 @@ export function KeyValueEditor({
           onChange({ ...values, [key]: '' })
         }}
         type="button"
-      ><Plus aria-hidden="true" size={15} />添加配置</button>
+      >
+        <Plus aria-hidden="true" size={15} />
+        添加配置
+      </button>
     </div>
   )
 }
