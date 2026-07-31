@@ -20,7 +20,7 @@ namespace GZCTF.Integration.Test.Tests.Database;
 public sealed class ImageTemplateOwnershipPersistenceTests(GZCTFApplicationFactory factory)
 {
     [Fact]
-    public async Task MaterializeImageTemplate_RemainsImportingUntilNodeDistributionCompletes()
+    public async Task MaterializeImageTemplate_IsReadyAfterStorageImportCompletes()
     {
         var ownerId = Guid.CreateVersion7();
         var operation = new ApiOperation
@@ -83,7 +83,7 @@ public sealed class ImageTemplateOwnershipPersistenceTests(GZCTFApplicationFacto
 
         context.ChangeTracker.Clear();
         var template = await context.ImageTemplates.SingleAsync(item => item.Id == descriptor.Id);
-        Assert.Equal(ImageStatus.Importing, template.Status);
+        Assert.Equal(ImageStatus.Ready, template.Status);
         Assert.Null(template.ErrorMessage);
 
         await context.ImageTemplates.Where(item => item.Id == descriptor.Id).ExecuteDeleteAsync();

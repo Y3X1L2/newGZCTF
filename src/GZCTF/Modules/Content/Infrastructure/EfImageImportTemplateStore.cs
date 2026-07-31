@@ -58,7 +58,7 @@ public sealed class EfImageImportTemplateStore(AppDbContext context) : IImageImp
         template.FileSize = artifact.ContentLength;
         template.Description = artifact.Description;
         template.OriginalArchiveName = job.OriginalFileName;
-        template.Status = ImageStatus.Importing;
+        template.Status = ImageStatus.Ready;
         template.ErrorMessage = null;
         template.UploadedAt = DateTimeOffset.UtcNow;
         if (existing is null)
