@@ -11,6 +11,7 @@ function createClient(overrides: Partial<RuntimeJsonClient> = {}): RuntimeJsonCl
     get: unexpected,
     postJson: unexpected,
     postForm: unexpected,
+    putJson: unexpected,
     patchJson: unexpected,
     delete: unexpected,
     ...overrides,

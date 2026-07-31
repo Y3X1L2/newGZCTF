@@ -1,11 +1,14 @@
 using GZCTF.Infrastructure.Telemetry;
 using GZCTF.Models.Data;
+using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Runtime.Contracts;
+using GZCTF.Modules.Runtime.Domain;
 using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace GZCTF.Modules.Runtime.Application;
 
@@ -17,6 +20,7 @@ public sealed class RuntimeSchedulingService(
     IDeploymentQueueWakeup wakeup,
     IOperationalEventWriter events,
     OperationalCorrelation correlation,
+    IOptions<KvmSettings> kvmOptions,
     ILogger<RuntimeSchedulingService> logger)
 {
     static readonly TimeSpan ClaimTimeout = TimeSpan.FromMinutes(2);
@@ -31,13 +35,41 @@ public sealed class RuntimeSchedulingService(
         var scheduled = 0;
         foreach (var ticketId in ticketIds)
         {
+            // Isolated per ticket: without this, one ticket that throws skips every ticket behind it
+            // for the rest of the tick, and a persistently failing one at the head of the queue
+            // starves the rest indefinitely.
+            try
+            {
+                if (await TryScheduleTicketAsync(ticketId, now, token))
+                    scheduled++;
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                await ReleaseFailedClaimAsync(ticketId, exception, token);
+            }
+        }
+
+        return scheduled;
+    }
+
+    /// <summary>
+    /// Schedules one ticket. Returns true when it was assigned; every other outcome — not claimed,
+    /// claim lost, cancelled, waiting for capacity — returns false.
+    /// </summary>
+    async Task<bool> TryScheduleTicketAsync(Guid ticketId, DateTimeOffset now, CancellationToken token)
+    {
+        {
             if (!await TryClaimAsync(context, ticketId, now, token))
-                continue;
+                return false;
 
             var ticket = await context.DeploymentQueueTickets.SingleAsync(item => item.Id == ticketId, token);
             var claimOwner = ticket.ClaimOwner;
             if (string.IsNullOrWhiteSpace(claimOwner))
-                continue;
+                return false;
             using var correlationScope = correlation.Begin(ticket.Id);
             using var activity = RuntimeOperationalEvents.StartActivity(ticket, "runtime.schedule");
             ticket.Stage = DeploymentStage.AdmissionChecking;
@@ -54,7 +86,7 @@ public sealed class RuntimeSchedulingService(
                 if (!await OwnsSchedulingClaimAsync(context, ticket.Id, claimOwner, token))
                 {
                     context.ChangeTracker.Clear();
-                    continue;
+                    return false;
                 }
                 ticket.Status = DeploymentQueueTicketStatus.Cancelled;
                 ticket.Stage = DeploymentStage.Cancelled;
@@ -67,16 +99,17 @@ public sealed class RuntimeSchedulingService(
                     "Runtime scheduling cancelled a non-deployable ticket."));
                 await context.SaveChangesAsync(token);
                 activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error, "not_deployable");
-                continue;
+                return false;
             }
 
             var reservation = await ReserveCapacityAsync(ticket, token);
             if (!await OwnsSchedulingClaimAsync(context, ticket.Id, claimOwner, token))
             {
                 context.ChangeTracker.Clear();
-                continue;
+                return false;
             }
-            if (!reservation.Success || reservation.NodeId is not { } nodeId)
+            var controlPlaneTicket = IsTeamLabControlPlaneTicket(ticket);
+            if (!reservation.Success || (!controlPlaneTicket && reservation.NodeId is null))
             {
                 ticket.Status = DeploymentQueueTicketStatus.Pending;
                 ticket.Stage = DeploymentStage.CapacityWaiting;
@@ -115,13 +148,16 @@ public sealed class RuntimeSchedulingService(
                     }));
                 await context.SaveChangesAsync(token);
                 PlatformTelemetry.RecordRuntimeTransition(ticket.Kind.ToString(), ticket.Stage.ToString(), "blocked");
-                continue;
+                return false;
             }
 
+            var nodeId = reservation.NodeId;
             ticket.TargetNodeId = nodeId;
             ticket.Status = DeploymentQueueTicketStatus.Scheduled;
             ticket.Stage = DeploymentStage.NodeExecutionWaiting;
-            ticket.StageMessage = "Waiting for node execution capacity.";
+            ticket.StageMessage = controlPlaneTicket
+                ? "Waiting for platform control-plane execution capacity."
+                : "Waiting for node execution capacity.";
             ticket.BlockedReasonCode = null;
             ticket.NotBeforeAt = null;
             ticket.ClaimOwner = null;
@@ -135,19 +171,51 @@ public sealed class RuntimeSchedulingService(
                 ticket,
                 OperationalEventCodes.Runtime.SchedulingAssigned,
                 OperationalEventOutcome.Succeeded,
-                "Runtime scheduling assigned a worker node.",
+                controlPlaneTicket
+                    ? "Runtime scheduling assigned the platform control plane."
+                    : "Runtime scheduling assigned a worker node.",
                 workerNodeId: nodeId));
             await context.SaveChangesAsync(token);
             PlatformTelemetry.RecordRuntimeTransition(ticket.Kind.ToString(), ticket.Stage.ToString(), "assigned");
             await wakeup.NotifyAsync(ticket.Id, token);
-            scheduled++;
 
             logger.SystemLog(
-                $"Deployment scheduled: ticket={ticket.Id}, kind={ticket.Kind}, operation={ticket.Operation}, node={nodeId}, dockerSlots={ticket.DockerSlots}, vmSlots={ticket.VmSlots}.",
+                $"Deployment scheduled: ticket={ticket.Id}, kind={ticket.Kind}, operation={ticket.Operation}, node={nodeId?.ToString() ?? "control-plane"}, dockerSlots={ticket.DockerSlots}, vmSlots={ticket.VmSlots}.",
                 TaskStatus.Pending, LogLevel.Information);
+            return true;
         }
+    }
 
-        return scheduled;
+    /// <summary>
+    /// Returns a ticket whose scheduling threw to the queue with a backoff, so a failing ticket
+    /// cannot hold its claim and starve everything behind it. The change tracker is cleared first:
+    /// a failed SaveChanges leaves dirty entities that would otherwise corrupt the next ticket.
+    /// </summary>
+    async Task ReleaseFailedClaimAsync(Guid ticketId, Exception exception, CancellationToken token)
+    {
+        logger.SystemLog(
+            $"Deployment scheduling failed: ticket={ticketId}, error={exception.Message}",
+            TaskStatus.Failed, LogLevel.Warning);
+        try
+        {
+            context.ChangeTracker.Clear();
+            var retryAt = DateTimeOffset.UtcNow.AddSeconds(30);
+            await context.DeploymentQueueTickets
+                .Where(item => item.Id == ticketId)
+                .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(item => item.ClaimOwner, (string?)null)
+                        .SetProperty(item => item.ClaimExpiresAt, (DateTimeOffset?)null)
+                        .SetProperty(item => item.AttemptCount, item => item.AttemptCount + 1)
+                        .SetProperty(item => item.NotBeforeAt, retryAt),
+                    token);
+        }
+        catch (Exception releaseFailure) when (releaseFailure is not OperationCanceledException)
+        {
+            // The stale-claim sweep at the start of the next tick is the backstop.
+            logger.SystemLog(
+                $"Unable to release scheduling claim for ticket={ticketId}: {releaseFailure.Message}",
+                TaskStatus.Failed, LogLevel.Warning);
+        }
     }
 
     internal static async Task<bool> TryClaimAsync(AppDbContext db, Guid ticketId, DateTimeOffset now,
@@ -216,6 +284,10 @@ public sealed class RuntimeSchedulingService(
             ticket.TeamLabRuntimeId is { } teamLabRuntimeId)
             return await teamLabPlacement.BindAndReserveAsync(ticket.Id, teamLabRuntimeId, token);
 
+        if (IsTeamLabControlPlaneTicket(ticket))
+            return new FleetCapacityReservationResult(
+                true, null, null, 0, 0, "TeamLab control operation scheduled on the platform control plane.");
+
         if (ticket.Operation != RuntimeOperationKind.Create)
         {
             var controlNodeId = await ResolvePreferredNodeIdAsync(ticket, token);
@@ -224,17 +296,72 @@ public sealed class RuntimeSchedulingService(
                 : FleetCapacityReservationResult.Failed("Control operation target node is unavailable.");
         }
 
+        var resources = await ResolveResourcesAsync(ticket, token);
         var requiresInstanceCredentials = ticket.Kind == DeploymentQueueKind.VirtualMachine;
         return await capacity.TryReserveAsync(ticket.Id, new FleetCapacityRequest(
-            RequiredCapability(ticket),
-            ticket.DockerSlots,
-            ticket.VmSlots,
+            RequiredCapability(ticket), resources,
             await ResolvePreferredNodeIdAsync(ticket, token),
             RequiredFeatures: requiresInstanceCredentials
                 ? [AgentFeatureIds.Kvm, AgentFeatureIds.CloudInit]
                 : null,
             RequireRemote: requiresInstanceCredentials), token);
     }
+
+    async Task<WorkloadResourceVector> ResolveResourcesAsync(
+        DeploymentQueueTicket ticket,
+        CancellationToken token)
+    {
+        var specification = ticket.Kind switch
+        {
+            DeploymentQueueKind.GameContainer or
+            DeploymentQueueKind.ChallengeTestContainer or
+            DeploymentQueueKind.VirtualMachine => await context.GameChallenges.AsNoTracking()
+                .Where(challenge => challenge.Id == ticket.ChallengeId &&
+                                    (ticket.GameId == null || challenge.GameId == ticket.GameId))
+                .Select(challenge => new RuntimeResourceSpecification(
+                    challenge.CPUCount ?? 1,
+                    challenge.MemoryLimit ?? 64,
+                    challenge.StorageLimit ?? 256))
+                .SingleOrDefaultAsync(token),
+            DeploymentQueueKind.ExerciseContainer or DeploymentQueueKind.TrainingContainer =>
+                await context.ExerciseChallenges.AsNoTracking()
+                    .Where(challenge => challenge.Id == ticket.ChallengeId)
+                    .Select(challenge => new RuntimeResourceSpecification(
+                        challenge.CPUCount ?? 1,
+                        challenge.MemoryLimit ?? 64,
+                        challenge.StorageLimit ?? 256))
+                    .SingleOrDefaultAsync(token),
+            _ => null
+        } ?? new RuntimeResourceSpecification(0, 0, 0);
+
+        if (ticket.Kind == DeploymentQueueKind.VirtualMachine)
+        {
+            var vmCpu = specification.CpuUnits >= 1
+                ? specification.CpuUnits
+                : Math.Max(1, kvmOptions.Value.DefaultVmCpu);
+            var vmMemory = specification.MemoryMiB >= 1024
+                ? specification.MemoryMiB
+                : Math.Max(1024, kvmOptions.Value.DefaultVmMemoryMb);
+            return new WorkloadResourceVector(
+                vmCpu * 10L,
+                vmMemory,
+                specification.StorageMiB,
+                ticket.DockerSlots,
+                ticket.VmSlots);
+        }
+
+        return new WorkloadResourceVector(
+            specification.CpuUnits,
+            specification.MemoryMiB,
+            specification.StorageMiB,
+            ticket.DockerSlots,
+            ticket.VmSlots);
+    }
+
+    sealed record RuntimeResourceSpecification(int CpuUnits, int MemoryMiB, int StorageMiB);
+
+    internal static bool IsTeamLabControlPlaneTicket(DeploymentQueueTicket ticket) =>
+        ticket.Kind == DeploymentQueueKind.TeamLabRuntime && ticket.Operation != RuntimeOperationKind.Create;
 
     async Task<Guid?> ResolvePreferredNodeIdAsync(DeploymentQueueTicket ticket, CancellationToken token)
     {

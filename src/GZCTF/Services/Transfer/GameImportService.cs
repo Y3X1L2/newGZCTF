@@ -33,9 +33,10 @@ public class GameImportService(
     /// Import game from ZIP file
     /// </summary>
     /// <param name="zipStream">ZIP file stream</param>
+    /// <param name="ownerId">ID of the user who will own the imported game</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>Imported game ID, or null if import failed</returns>
-    public async Task<int?> ImportGameAsync(Stream zipStream, CancellationToken ct = default)
+    public async Task<int?> ImportGameAsync(Stream zipStream, Guid ownerId, CancellationToken ct = default)
     {
         // Create temporary working directory
         var workDir = Path.Combine(Path.GetTempPath(), $"gzctf-import-{Guid.NewGuid()}");
@@ -53,7 +54,7 @@ public class GameImportService(
             await VerifyFilesAsync(context, ct);
 
             // Import to database with transaction
-            var gameId = await ImportToDatabaseAsync(context, ct);
+            var gameId = await ImportToDatabaseAsync(context, ownerId, ct);
 
             return gameId;
         }
@@ -190,7 +191,7 @@ public class GameImportService(
     /// <summary>
     /// Import data to database with transaction and atomicity guarantee
     /// </summary>
-    private async Task<int> ImportToDatabaseAsync(ImportContext context, CancellationToken ct)
+    private async Task<int> ImportToDatabaseAsync(ImportContext context, Guid ownerId, CancellationToken ct)
     {
         TransferValidator.ValidateRecursive(context.Game, "Game");
         foreach (var challenge in context.Challenges)
@@ -206,6 +207,7 @@ public class GameImportService(
             // Create new game
             var game = new Game
             {
+                OwnerId = ownerId,
                 Title = context.Game.Title,
                 Summary = context.Game.Summary,
                 Content = context.Game.Content,

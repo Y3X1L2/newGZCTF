@@ -71,6 +71,10 @@ public class NodeTunnelService(
         var probe = await ProbeNodeAsync(node, token);
         if (!probe.Success)
             return new TeamLabNodeEnableResult(false, probe.Message, []);
+        if (probe.Status is not { FabricReady: true } ||
+            !string.Equals(probe.Status.FabricIp, normalizedTunnelIp, StringComparison.Ordinal))
+            return new TeamLabNodeEnableResult(false,
+                $"WorkerNode Fabric interface '{probe.Status?.FabricInterfaceName ?? "unknown"}' does not own tunnel IP {normalizedTunnelIp}.", []);
 
         var previousStatus = node.TeamLabTunnelStatus;
         node.TeamLabNetworkEnabled = true;

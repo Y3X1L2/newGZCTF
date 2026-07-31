@@ -200,9 +200,22 @@ normal heartbeat、status poll 和成功的普通 Agent call 只进入 span/metr
 | `teamlab.plan.succeeded` | Succeeded |
 | `teamlab.placement.succeeded` | Succeeded |
 | `teamlab.deploy.started` | Started |
+| `teamlab.infrastructure.apply_started` | Started |
+| `teamlab.infrastructure.applied` | Succeeded |
+| `teamlab.infrastructure.apply_failed` | Failed |
+| `teamlab.infrastructure.drift_detected` | Observed |
+| `teamlab.infrastructure.replay_queued` | Recovered |
+| `teamlab.infrastructure.replayed` | Recovered |
+| `teamlab.fabric.lease_allocated` | Succeeded |
+| `teamlab.fabric.lease_released` | Succeeded |
 | `teamlab.network.applied` | Succeeded |
 | `teamlab.asset.created` | Succeeded |
 | `teamlab.asset.create_failed` | Failed |
+| `teamlab.bootstrap.succeeded` | Succeeded |
+| `teamlab.bootstrap.failed` | Failed |
+| `teamlab.bootstrap.rebooted` | Observed |
+| `teamlab.health.succeeded` | Succeeded |
+| `teamlab.health.failed` | Failed |
 | `teamlab.route.applied` | Succeeded |
 | `teamlab.probe.succeeded` | Succeeded |
 | `teamlab.ready` | Succeeded |
@@ -220,6 +233,16 @@ normal heartbeat、status poll 和成功的普通 Agent call 只进入 span/metr
 | `teamlab.capture.started` | Started |
 | `teamlab.capture.stopped` | Succeeded |
 | `teamlab.capture.failed` | Failed |
+| `teamlab.capture.segment_uploaded` | Succeeded |
+| `teamlab.capture.downloaded` | Succeeded |
+| `teamlab.capture.expired` | Succeeded |
+| `teamlab.observation.degraded` | Blocked |
+| `teamlab.observation.dropped` | Observed |
+| `teamlab.observation.recovered` | Recovered |
+| `teamlab.sensor.authentication_degraded` | Observed |
+| `teamlab.traffic.path_derived` | Observed |
+| `teamlab.recovery.rebuild_allowed` | Recovered |
+| `teamlab.recovery.rebuild_blocked` | Blocked |
 | `teamlab.access.opened` | Succeeded |
 | `teamlab.access.revoked` | Succeeded |
 
@@ -262,7 +285,10 @@ Generic mutation code:
 - `previousStatus`、`currentStatus`；
 - `capability`、`feature`；
 - `imageType`、`digestPrefix`、`sizeBytes`；
-- `routeCount`、`assetCount`、`shardCount`；
+- `routeCount`、`assetCount`、`shardCount`、`infrastructureCount`、`leaseCount`；
+- `captureScope`、`captureSegmentCount`、`captureWorkerCount`、`pathCount`；
+- `packetExactCount`、`processCorrelatedCount`、`temporalCount`、`rejectedCount`、`rebootCount`；
+- `assetKind`、`infrastructureKind`、`evidenceKind`、`errorCode`；
 - `decision`、`reasonCode`。
 
 禁止键及不区分大小写变体：

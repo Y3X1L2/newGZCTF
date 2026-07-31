@@ -34,6 +34,15 @@ public static class IdentityModuleRegistration
             AddScopePolicy(options, ApiTokenScopes.ChallengesRead);
             AddScopePolicy(options, ApiTokenScopes.ChallengesWrite);
             AddScopePolicy(options, ApiTokenScopes.ChallengesDelete);
+            AddScopePolicy(options, ApiTokenScopes.TeamLabTopologiesRead);
+            AddScopePolicy(options, ApiTokenScopes.TeamLabTopologiesWrite);
+            AddScopePolicy(options, ApiTokenScopes.TeamLabRuntimesRead);
+            AddScopePolicy(options, ApiTokenScopes.TeamLabRuntimesWrite);
+            AddScopePolicy(options, ApiTokenScopes.TeamLabTrafficRead);
+            AddScopePolicy(options, ApiTokenScopes.TeamLabCaptureRead);
+            AddScopePolicy(options, ApiTokenScopes.TeamLabCaptureWrite);
+            AddScopePolicy(options, ApiTokenScopes.BootstrapProfilesRead);
+            AddScopePolicy(options, ApiTokenScopes.BootstrapProfilesWrite);
         });
         return services;
     }

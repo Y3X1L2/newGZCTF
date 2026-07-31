@@ -46,6 +46,9 @@ public sealed class PenetrationPlayerController(
     {
         var actor = await GetContextAsync(gameId, true, cancellationToken);
         if (actor.Error is not null) return actor.Error;
+        if (!await adapter.IsPlayerAccessOpenAsync(gameId, cancellationToken))
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new RequestResponse("The TeamLab environment is not open to players.", StatusCodes.Status403Forbidden));
         var runtimeId = await ResolveRuntimePublicIdAsync(gameId, actor.Participation!.TeamId, cancellationToken);
         var grant = await access.CreateAsync(runtimeId, cancellationToken);
         var downloadToken = grant.ConfigurationDownloadUrl?.Split("token=", 2, StringSplitOptions.None).ElementAtOrDefault(1);

@@ -16,18 +16,34 @@ public sealed partial class TeamLabRuntimeOverlayService(IDataProtectionProvider
         int runtimeId,
         int generation,
         IReadOnlyList<TeamLabRuntimeOverlayModel>? overlays,
-        IReadOnlySet<string> assetKeys)
+        IReadOnlySet<string> assetKeys,
+        IReadOnlySet<string>? sensorAssetKeys = null)
     {
-        if (overlays is null || overlays.Count == 0) return null;
-        var normalized = overlays.OrderBy(item => item.AssetKey, StringComparer.Ordinal)
-            .Select(item => Normalize(item, assetKeys)).ToArray();
-        var payload = JsonSerializer.Serialize(normalized);
+        var normalized = (overlays ?? [])
+            .OrderBy(item => item.AssetKey, StringComparer.Ordinal)
+            .Select(item => Normalize(item, assetKeys))
+            .ToDictionary(item => item.AssetKey, StringComparer.Ordinal);
+        foreach (var assetKey in sensorAssetKeys ?? new HashSet<string>())
+        {
+            if (!assetKeys.Contains(assetKey))
+                throw new TeamLabApiContractException("topology_invalid", $"Sensor asset '{assetKey}' does not exist.", 422);
+            var current = normalized.GetValueOrDefault(assetKey) ??
+                          new TeamLabRuntimeOverlayModel(assetKey, null, null);
+            var secrets = new SortedDictionary<string, string>(StringComparer.Ordinal);
+            foreach (var pair in current.Secrets ?? new Dictionary<string, string>())
+                secrets[pair.Key] = pair.Value;
+            secrets["GZCTF_SENSOR_HMAC"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+            normalized[assetKey] = current with { Secrets = secrets };
+        }
+        if (normalized.Count == 0) return null;
+        var payloadItems = normalized.Values.OrderBy(item => item.AssetKey, StringComparer.Ordinal).ToArray();
+        var payload = JsonSerializer.Serialize(payloadItems);
         return new TeamLabRuntimeSecretEnvelope
         {
             RuntimeId = runtimeId,
             Generation = generation,
             ProtectedPayload = _protector.Protect(payload),
-            PayloadHash = $"sha256:{Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(normalized)))}",
+            PayloadHash = $"sha256:{Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(payloadItems)))}",
             ExpiresAt = DateTimeOffset.UtcNow.AddHours(2)
         };
     }
@@ -75,8 +91,11 @@ public sealed partial class TeamLabRuntimeOverlayService(IDataProtectionProvider
         foreach (var pair in values)
         {
             var key = pair.Key.Trim();
-            if (!EnvironmentKeyRegex().IsMatch(key))
+            if (!EnvironmentKeyRegex().IsMatch(key) &&
+                (!secret || !BootstrapParameterKeyRegex().IsMatch(key)))
                 throw new TeamLabApiContractException("topology_invalid", $"Overlay key '{key}' is invalid.", 422);
+            if (key.StartsWith("GZCTF_SENSOR_", StringComparison.Ordinal))
+                throw new TeamLabApiContractException("topology_invalid", $"Overlay key '{key}' is reserved by the platform.", 422);
             if (pair.Value is null || pair.Value.Length > (secret ? 4096 : 16384))
                 throw new TeamLabApiContractException("topology_invalid", $"Overlay value '{key}' is too large.", 422);
             normalized[key] = pair.Value;
@@ -86,4 +105,7 @@ public sealed partial class TeamLabRuntimeOverlayService(IDataProtectionProvider
 
     [GeneratedRegex("^[A-Z_][A-Z0-9_]{0,63}$", RegexOptions.CultureInvariant)]
     private static partial Regex EnvironmentKeyRegex();
+
+    [GeneratedRegex("^[a-z][a-zA-Z0-9_.-]{0,62}$", RegexOptions.CultureInvariant)]
+    private static partial Regex BootstrapParameterKeyRegex();
 }

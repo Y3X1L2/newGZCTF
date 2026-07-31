@@ -17,6 +17,7 @@ import {
 } from '../shared/AdminWorkbench'
 import styles from './AdminNodeDetailPage.module.css'
 import { NodeResourceTab } from './NodeResourceTab'
+import { NodeCapacitySettings, type NodeCapacitySettingsValue } from './NodeCapacitySettings'
 import { formatHeartbeat, formatLoad, nodeStatusMeta, tunnelStatusMeta, useAdminNode } from './useAdminNodes'
 
 const tabs = [
@@ -49,7 +50,15 @@ function Fact({ label, value, wide = false }: { label: string; value: React.Reac
   )
 }
 
-function CapacityPanel({ node }: { node: NodeSummary }) {
+function CapacityPanel({
+  node,
+  disabled,
+  onSave,
+}: {
+  node: NodeSummary
+  disabled: boolean
+  onSave: (value: NodeCapacitySettingsValue) => Promise<void>
+}) {
   return (
     <section className={styles.panel}>
       <header>
@@ -61,13 +70,13 @@ function CapacityPanel({ node }: { node: NodeSummary }) {
           detail={`${node.allocatedContainers} 已分配 · ${node.reservedContainers} 已预留`}
           label="Docker 槽位"
           max={node.maxContainers}
-          value={node.allocatedContainers + node.reservedContainers}
+          value={node.allocatedContainers}
         />
         <ResourceMeter
           detail={`${node.allocatedVms} 已分配 · ${node.reservedVms} 已预留`}
           label="VM 槽位"
           max={node.maxVms}
-          value={node.allocatedVms + node.reservedVms}
+          value={node.allocatedVms}
         />
         <ResourceMeter label="CPU 负载" max={100} value={Math.round(node.cpuLoad * 100)} />
         <ResourceMeter label="内存负载" max={100} value={Math.round(node.memoryLoad * 100)} />
@@ -84,6 +93,7 @@ function CapacityPanel({ node }: { node: NodeSummary }) {
         <Fact label="CPU" value={formatLoad(node.cpuLoad)} />
         <Fact label="内存" value={formatLoad(node.memoryLoad)} />
       </Facts>
+      <NodeCapacitySettings disabled={disabled} node={node} onSave={onSave} />
     </section>
   )
 }
@@ -119,6 +129,12 @@ export function AdminNodeDetailPage() {
     } finally {
       setWorking(null)
     }
+  }
+
+  const saveCapacity = async (value: NodeCapacitySettingsValue) => {
+    if (!node) return
+    await nodeAdminApi.update(node.id, value)
+    await refresh()
   }
 
   const syncAgent = async () => {
@@ -272,7 +288,9 @@ export function AdminNodeDetailPage() {
 
       <div className={styles.tabContent}>
         {activeTab === 'resources' ? <NodeResourceTab nodeId={node.id} onMutated={refresh} /> : null}
-        {activeTab === 'capacity' ? <CapacityPanel node={node} /> : null}
+        {activeTab === 'capacity' ? (
+          <CapacityPanel disabled={Boolean(working)} node={node} onSave={saveCapacity} />
+        ) : null}
         {activeTab === 'network' ? (
           <section className={styles.panel}>
             <header>

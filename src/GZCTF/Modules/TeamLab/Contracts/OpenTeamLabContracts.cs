@@ -7,14 +7,22 @@ public sealed record OpenCreateTeamLabTopologyModel(
     string Name,
     IReadOnlyList<TeamLabTopologyNetworkModel> Networks,
     IReadOnlyList<TeamLabTopologyAssetModel> Assets,
-    IReadOnlyList<TeamLabTopologyConnectionModel> Connections);
+    IReadOnlyList<TeamLabTopologyConnectionModel> Connections,
+    IReadOnlyList<TeamLabTopologyInfrastructureModel>? Infrastructure = null,
+    IReadOnlyList<TeamLabTopologyDependencyModel>? Dependencies = null,
+    TeamLabObservationPolicyModel? Observation = null,
+    int SchemaVersion = 2);
 
 public sealed record OpenUpdateTeamLabTopologyModel(
     int Revision,
     string Name,
     IReadOnlyList<TeamLabTopologyNetworkModel> Networks,
     IReadOnlyList<TeamLabTopologyAssetModel> Assets,
-    IReadOnlyList<TeamLabTopologyConnectionModel> Connections);
+    IReadOnlyList<TeamLabTopologyConnectionModel> Connections,
+    IReadOnlyList<TeamLabTopologyInfrastructureModel>? Infrastructure = null,
+    IReadOnlyList<TeamLabTopologyDependencyModel>? Dependencies = null,
+    TeamLabObservationPolicyModel? Observation = null,
+    int SchemaVersion = 2);
 
 public sealed record OpenTeamLabTopologyDetailModel(
     Guid Id,
@@ -91,15 +99,24 @@ public sealed record OpenTeamLabCaptureModel(
     DateTimeOffset? StartedAt,
     DateTimeOffset? CompletedAt,
     DateTimeOffset? ExpiresAt,
+    IReadOnlyList<TeamLabCaptureSegmentModel> Segments,
     OpenTeamLabFailureModel? Failure);
 
 public static class OpenTeamLabContractMapper
 {
     public static CreateTeamLabTopologyModel ToInternal(this OpenCreateTeamLabTopologyModel model) =>
-        new(model.Name, model.Networks, model.Assets, model.Connections);
+        new(model.Name, model.Networks, model.Assets, model.Connections,
+            Infrastructure: model.Infrastructure,
+            Dependencies: model.Dependencies,
+            Observation: model.Observation,
+            SchemaVersion: model.SchemaVersion);
 
     public static UpdateTeamLabTopologyModel ToInternal(this OpenUpdateTeamLabTopologyModel model) =>
-        new(model.Revision, model.Name, model.Networks, model.Assets, model.Connections);
+        new(model.Revision, model.Name, model.Networks, model.Assets, model.Connections,
+            Infrastructure: model.Infrastructure,
+            Dependencies: model.Dependencies,
+            Observation: model.Observation,
+            SchemaVersion: model.SchemaVersion);
 
     public static OpenTeamLabTopologyDetailModel ToOpen(this TeamLabTopologyDetailModel model) =>
         new(model.Id, model.Revision, model.SchemaVersion, model.Definition, model.CreatedAt, model.UpdatedAt);
@@ -139,7 +156,7 @@ public static class OpenTeamLabContractMapper
 
     public static OpenTeamLabCaptureModel ToOpen(this TeamLabCaptureModel model) =>
         new(model.Id, model.Status, model.Scope, model.NetworkKey, model.MaxBytes, model.MaxSeconds,
-            model.CapturedBytes, model.CreatedAt, model.StartedAt, model.CompletedAt, model.ExpiresAt,
+            model.CapturedBytes, model.CreatedAt, model.StartedAt, model.CompletedAt, model.ExpiresAt, model.Segments,
             Failure(model.Status == TeamLabTrafficCaptureStatus.Failed, model.Error,
                 "capture", "teamlab_capture_failed"));
 

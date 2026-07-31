@@ -25,6 +25,40 @@ namespace GZCTF.Test.UnitTests.Services;
 public sealed class ImageImportStagingTests
 {
     [Fact]
+    public async Task StageAsync_AcceptsVmQcow2WithVerifiedDigest()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"gzctf-staging-test-{Guid.NewGuid():N}");
+        var environment = new Mock<IHostEnvironment>();
+        environment.SetupGet(item => item.ContentRootPath).Returns(root);
+        var store = new FileImageImportStagingStore(
+            environment.Object,
+            Options.Create(new DockerRegistrySettings { MaxUploadSizeGb = 1 }));
+        var bytes = Encoding.UTF8.GetBytes("qcow2-smoke");
+        var digest = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes));
+
+        try
+        {
+            await using var stream = new MemoryStream(bytes);
+            var staged = await store.StageAsync(
+                stream,
+                "managed-linux.qcow2",
+                bytes.LongLength,
+                digest,
+                ImageImportStagingKind.VmQcow2,
+                CancellationToken.None);
+
+            Assert.EndsWith(".qcow2", staged.Path, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(digest, staged.ContentDigest);
+            Assert.True(File.Exists(staged.Path));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public async Task DeleteUnreferencedAsync_PreservesActiveFileAndDeletesOldOrphan()
     {
         var root = Path.Combine(Path.GetTempPath(), $"gzctf-staging-test-{Guid.NewGuid():N}");
@@ -69,12 +103,15 @@ public sealed class ImageImportStagingTests
         await using var context = new AppDbContext(options);
         var pending = CreateImport("pending.tar", ApiOperationStatus.Pending);
         var running = CreateImport("running.tar", ApiOperationStatus.Running);
+        var pendingVm = CreateImport("pending.qcow2", ApiOperationStatus.Pending, ImageImportSourceKind.VmQcow2);
         var succeeded = CreateImport("succeeded.tar", ApiOperationStatus.Succeeded);
         context.AddRange(
             pending.Operation,
             pending.Job,
             running.Operation,
             running.Job,
+            pendingVm.Operation,
+            pendingVm.Job,
             succeeded.Operation,
             succeeded.Job);
         await context.SaveChangesAsync();
@@ -99,9 +136,10 @@ public sealed class ImageImportStagingTests
         await reconciler.ReconcileAsync(now, CancellationToken.None);
 
         Assert.NotNull(activePaths);
-        Assert.Equal(2, activePaths.Count);
+        Assert.Equal(3, activePaths.Count);
         Assert.Contains("pending.tar", activePaths);
         Assert.Contains("running.tar", activePaths);
+        Assert.Contains("pending.qcow2", activePaths);
         Assert.DoesNotContain("succeeded.tar", activePaths);
         Assert.Equal(now.AddHours(-1), cutoff);
     }
@@ -125,6 +163,7 @@ public sealed class ImageImportStagingTests
                 It.IsAny<string>(),
                 It.IsAny<long>(),
                 It.IsAny<string?>(),
+                It.IsAny<ImageImportStagingKind>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(staged);
         var service = new ImageImportApplicationService(
@@ -132,7 +171,7 @@ public sealed class ImageImportStagingTests
             Mock.Of<IImageImportExecutor>(),
             Mock.Of<IImageImportTemplateStore>(),
             staging.Object,
-            new DockerImageReferencePolicy());
+            new DockerImageReferencePolicy(Options.Create(new DockerRegistrySettings())));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.SubmitDockerArchiveAsync(
             Guid.CreateVersion7(),
@@ -161,12 +200,14 @@ public sealed class ImageImportStagingTests
             fileName,
             bytes.LongLength,
             null,
+            ImageImportStagingKind.DockerArchive,
             CancellationToken.None);
     }
 
     private static (ApiOperation Operation, ImageImportJob Job) CreateImport(
         string stagedPath,
-        ApiOperationStatus status)
+        ApiOperationStatus status,
+        ImageImportSourceKind sourceKind = ImageImportSourceKind.DockerArchive)
     {
         var operation = new ApiOperation
         {
@@ -180,7 +221,7 @@ public sealed class ImageImportStagingTests
         return (operation, new ImageImportJob
         {
             OperationId = operation.Id,
-            SourceKind = ImageImportSourceKind.DockerArchive,
+            SourceKind = sourceKind,
             StagedPath = stagedPath,
             RequestedName = stagedPath,
             RequestedTemplateKind = ImageType.Docker,

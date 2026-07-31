@@ -161,6 +161,8 @@ public class ReviewFindingRegressionTests
             new ConfigurationBuilder().Build(),
             NullLogger<AgentClient>.Instance);
         return new RuntimeFactReconciliationService(context, agent, capacity,
+            new GZCTF.Modules.TeamLab.Application.TeamLabRuntimeRecoveryPolicy(
+                Options.Create(new GZCTF.Models.Internal.TeamLabNetworkConfig())),
             new PollingDeploymentQueueWakeup(), writer,
             NullLogger<RuntimeFactReconciliationService>.Instance);
     }

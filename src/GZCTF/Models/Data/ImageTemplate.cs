@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using GZCTF.Modules.Content.Domain;
 
 namespace GZCTF.Models.Data;
 
@@ -23,6 +24,19 @@ public enum ImageStatus : byte
     Importing = 1,
     Error = 2,
     Deleting = 3
+}
+
+public enum VmRuntimeMode : byte
+{
+    Managed = 0,
+    Opaque = 1,
+    Scenario = 2
+}
+
+public enum VmNetworkMode : byte
+{
+    Dhcp = 0,
+    Preconfigured = 1
 }
 
 public class ImageTemplate
@@ -123,4 +137,21 @@ public class ImageTemplate
 
     [JsonIgnore]
     public UserInfo? CreatedBy { get; set; }
+
+    [JsonIgnore]
+    public List<ImageTemplateCapabilityCertification> CapabilityCertifications { get; set; } = [];
+
+    public VmArtifactStatus VmArtifactStatus { get; set; } = VmArtifactStatus.None;
+
+    public VmRuntimeMode VmRuntimeMode { get; set; } = VmRuntimeMode.Opaque;
+
+    public VmNetworkMode VmNetworkMode { get; set; } = VmNetworkMode.Dhcp;
+
+    public long? PreparedArtifactId { get; set; }
+
+    [JsonIgnore]
+    public VmPreparedArtifact? PreparedArtifact { get; set; }
+
+    [JsonIgnore]
+    public ImageTemplateRemoteAccess? RemoteAccess { get; set; }
 }

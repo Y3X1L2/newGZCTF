@@ -44,6 +44,15 @@ public interface IApiOperationStore
         Guid? deploymentQueueTicketId,
         CancellationToken cancellationToken);
 
+    Task<bool> DeferAsync(
+        Guid id,
+        string leaseOwner,
+        string stage,
+        string reasonCode,
+        string reasonDetail,
+        TimeSpan delay,
+        CancellationToken cancellationToken);
+
     Task<bool> RetryOrFailAsync(
         Guid id,
         string leaseOwner,

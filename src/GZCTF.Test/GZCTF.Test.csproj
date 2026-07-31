@@ -27,6 +27,10 @@
   <ItemGroup>
     <ProjectReference Include="..\GZCTF\GZCTF.csproj" />
     <ProjectReference Include="..\GZCTF.Agent\GZCTF.Agent.csproj" />
+    <ProjectReference Include="..\GZCTF.EndpointSensor\GZCTF.EndpointSensor.csproj" />
+    <ProjectReference Include="..\GZCTF.GuestControl.Contracts\GZCTF.GuestControl.Contracts.csproj" />
+    <ProjectReference Include="..\GZCTF.GuestTelemetry\GZCTF.GuestTelemetry.csproj" />
+    <ProjectReference Include="..\GZCTF.GuestSupervisor\GZCTF.GuestSupervisor.csproj" />
     <None Include="..\GZCTF\appsettings*" />
   </ItemGroup>
 </Project>

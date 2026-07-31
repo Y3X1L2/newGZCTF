@@ -1,6 +1,6 @@
 import { App } from '@App'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter } from 'react-router'
+import { createBrowserRouter, RouterProvider } from 'react-router'
 
 const staleChunkReloadKey = 'gzctf:stale-chunk-reload'
 
@@ -52,9 +52,6 @@ window.addEventListener(
 document.documentElement.lang = 'zh-CN'
 
 const app = ReactDOM.createRoot(document.getElementById('root')!)
+const router = createBrowserRouter([{ path: '*', element: <App /> }])
 
-app.render(
-  <BrowserRouter>
-    <App />
-  </BrowserRouter>
-)
+app.render(<RouterProvider router={router} />)

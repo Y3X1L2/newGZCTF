@@ -1,0 +1,129 @@
+.page {
+  width: min(var(--yn-page-max-width), 100%);
+  margin: 0 auto;
+  padding: var(--yn-space-7) var(--yn-page-gutter) 72px;
+}
+
+.page > section:nth-of-type(1) {
+  margin-top: var(--yn-space-5);
+}
+
+.searchBox {
+  display: flex;
+  min-width: min(320px, 100%);
+  min-height: 42px;
+  flex: 1;
+  align-items: center;
+  gap: var(--yn-space-2);
+  padding: 0 var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-muted);
+}
+
+.searchBox:focus-within {
+  border-color: var(--yn-color-border-strong);
+}
+
+.searchBox input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--yn-color-text);
+  box-shadow: none;
+}
+
+.page select {
+  min-height: 42px;
+  padding: 0 34px 0 var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-text-secondary);
+}
+
+.sceneIdentity {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.sceneIdentity strong,
+.sceneIdentity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sceneIdentity strong {
+  color: var(--yn-color-text);
+}
+
+.sceneIdentity small,
+.muted {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.mono {
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+}
+
+.iconButton {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--yn-radius-md);
+  background: transparent;
+  color: var(--yn-color-muted);
+  cursor: pointer;
+}
+
+.iconButton:hover,
+.iconButton:focus-visible {
+  border-color: var(--yn-color-border);
+  outline: 0;
+  background: var(--yn-color-surface-muted);
+  color: var(--yn-color-text);
+}
+
+.dialogForm {
+  display: grid;
+  gap: var(--yn-space-2);
+}
+
+.dialogForm label {
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-sm);
+  font-weight: 650;
+}
+
+.dialogForm input {
+  min-height: 44px;
+  padding: 0 var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-text);
+}
+
+.dialogForm input:focus {
+  border-color: var(--yn-color-border-strong);
+  outline: 0;
+}
+
+@media (max-width: 760px) {
+  .page {
+    padding-top: var(--yn-space-5);
+  }
+
+  .searchBox {
+    width: 100%;
+    min-width: 100%;
+  }
+}

@@ -24,16 +24,33 @@ public static class ContentModuleRegistration
         services.AddScoped<IImageTemplateReferenceProvider, ExerciseImageTemplateReferenceProvider>();
         services.AddScoped<IImageTemplateReferenceProvider, TrainingImageTemplateReferenceProvider>();
         services.AddScoped<IImageTemplateReferenceProvider, TeamLabImageTemplateReferenceProvider>();
+        services.AddScoped<IBootstrapProfileReferenceProvider, TeamLabBootstrapProfileReferenceProvider>();
         services.AddScoped<ITrainingCourseDeletionStore, EfTrainingCourseDeletionStore>();
         services.AddScoped<TrainingCourseDeletionService>();
         services.AddScoped<IImageImportSubmissionStore, EfImageImportSubmissionStore>();
         services.AddSingleton<IImageImportStagingStore, FileImageImportStagingStore>();
         services.AddScoped<IImageImportExecutor, DockerImageImportExecutor>();
+        services.AddScoped<IVmQcow2ImageImportExecutor, VmQcow2ImageImportExecutor>();
         services.AddScoped<IImageImportTemplateStore, EfImageImportTemplateStore>();
         services.AddScoped<ImageImportApplicationService>();
         services.AddSingleton<DockerImageReferencePolicy>();
         services.AddScoped<ImageImportStagingReconciler>();
         services.AddScoped<IApiOperationHandler, ImageImportOperationHandler>();
+        services.AddScoped<OciArtifactRegistryClient>();
+        services.AddScoped<BootstrapProfileArtifactService>();
+        services.AddScoped<IBootstrapProfileArtifactStagingService>(serviceProvider =>
+            serviceProvider.GetRequiredService<BootstrapProfileArtifactService>());
+        services.AddScoped<BootstrapProfileDistributionService>();
+        services.AddScoped<IBootstrapProfileDistributionService>(serviceProvider =>
+            serviceProvider.GetRequiredService<BootstrapProfileDistributionService>());
+        services.AddScoped<BootstrapProfileApplicationService>();
+        services.AddScoped<BootstrapProfileCompatibilityService>();
+        services.AddScoped<ImageTemplateCertificationService>();
+        services.AddScoped<ImageRemoteAccessService>();
+        services.AddScoped<VmImageCertificationProbeService>();
+        services.AddSingleton<PreparedImageConformancePackageFactory>();
+        services.AddScoped<IApiOperationHandler, BootstrapProfileOperationHandler>();
+        services.AddScoped<IApiOperationHandler, ImageTemplateCertificationOperationHandler>();
         services.AddHostedService<ImageImportStagingReconcileService>();
         services.AddHostedService<ImageTemplateDeletionReconcileService>();
         services.AddScoped<IApiTokenResourceGrantPolicy, ImageApiTokenResourceGrantPolicy>();

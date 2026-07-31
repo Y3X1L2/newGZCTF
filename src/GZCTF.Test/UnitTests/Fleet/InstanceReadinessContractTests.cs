@@ -125,7 +125,7 @@ public sealed class InstanceReadinessContractTests
             AgentCapabilityEvaluator.SupportedManifestSchema,
             features,
             new AgentExecutionLimits(1, 1, 1, 1, 1, 1),
-            new AgentHostFacts(4, 8L * 1024 * 1024 * 1024, true, true),
+            new AgentHostFacts(4, 8L * 1024 * 1024 * 1024, 0, true, true),
             DateTimeOffset.UtcNow);
 
         return new WorkerNode

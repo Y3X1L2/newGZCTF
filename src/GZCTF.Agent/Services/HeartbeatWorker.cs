@@ -37,7 +37,6 @@ public class HeartbeatWorker : BackgroundService
                 var capabilityService = scope.ServiceProvider.GetRequiredService<AgentCapabilityService>();
                 var manifest = await capabilityService.GetManifestAsync(
                     await capabilityService.GetBinarySha256Async(), token);
-                await kvm.RestoreRdpProxiesAsync(token);
 
                 var payload = new
                 {
@@ -49,8 +48,8 @@ public class HeartbeatWorker : BackgroundService
                     CurrentVms = vms,
                     UsedPorts = 0,
                     CapabilityManifest = manifest,
-                    TeamLabFabricIp = (string?)null,
-                    TeamLabFabricStatus = teamLabStatus.Available && teamLabStatus.Enable ? 3 :
+                    TeamLabFabricIp = teamLabStatus.FabricIp,
+                    TeamLabFabricStatus = teamLabStatus.Available && teamLabStatus.Enable && teamLabStatus.FabricReady ? 3 :
                         teamLabStatus.Available ? 1 : 4
                 };
 

@@ -1,4 +1,5 @@
 global using GZCTF.Models.Data;
+global using GZCTF.Modules.TeamLab.Domain.Runtime;
 global using GZCTF.Utils;
 global using static GZCTF.Server;
 global using AppDbContext = GZCTF.Models.AppDbContext;
@@ -18,6 +19,14 @@ Log.Logger = LogHelper.GetInitLogger();
 
 Banner();
 
+if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_TEMP")))
+{
+    var requestTempPath = Path.GetFullPath(
+        Path.Combine(AppContext.BaseDirectory, PathHelper.Base, "tmp", "aspnetcore"));
+    Directory.CreateDirectory(requestTempPath);
+    Environment.SetEnvironmentVariable("ASPNETCORE_TEMP", requestTempPath);
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 await PathHelper.EnsureDirsAsync(builder.Environment);
@@ -32,7 +41,7 @@ builder.ConfigureTelemetry();
 builder.AddServiceConfigurations();
 builder.AddCustomServices();
 builder.AddWebServices();
-builder.AddDevelopmentServices();
+builder.AddOpenApiServices();
 
 var app = builder.Build();
 

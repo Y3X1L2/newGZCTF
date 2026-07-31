@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "operatingSystems": ["Windows"],
+  "assetKinds": ["Vm"],
+  "requiredTemplateCapabilities": [
+    "bootstrap.firstboot.v1",
+    "guest.qga.v1",
+    "network.e1000e.v1",
+    "windows.powershell.v1"
+  ],
+  "parameters": [
+    { "key": "service_name", "type": "String", "required": true, "secret": false },
+    { "key": "service_port", "type": "Integer", "required": true, "secret": false },
+    { "key": "flag", "type": "String", "required": true, "secret": true }
+  ],
+  "files": [],
+  "steps": [
+    { "id": "install", "entrypoint": "bin/install.ps1", "timeoutSeconds": 600, "runAs": "system", "reboot": "IfRequested" }
+  ],
+  "healthChecks": [
+    { "id": "service-port", "kind": "Tcp", "target": "${service_port}", "timeoutSeconds": 5, "attempts": 36 }
+  ],
+  "maxReboots": 1
+}

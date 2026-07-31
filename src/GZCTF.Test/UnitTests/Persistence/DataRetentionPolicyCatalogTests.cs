@@ -16,6 +16,7 @@ public sealed class DataRetentionPolicyCatalogTests
         [
             "participation", "submission", "training-progress", "theory-answer",
             "awdp-competition", "system-log", "operational-event", "teamlab-flow", "teamlab-flow-aggregate",
+            "teamlab-observation", "teamlab-traffic-path", "teamlab-capture",
             "deployment-ticket", "api-operation", "teamlab-event", "governance-run",
             "worker-node-metric"
         ];

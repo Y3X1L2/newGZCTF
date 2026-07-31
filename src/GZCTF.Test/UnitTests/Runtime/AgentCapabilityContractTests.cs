@@ -22,9 +22,10 @@ public sealed class AgentCapabilityContractTests
     public void CapabilityManifest_RoundTripsAcrossAgentAndPlatformContracts()
     {
         var source = new AgentManifest("1.8.3", "sha256", 1,
-            [AgentFeatureIds.Docker, AgentFeatureIds.TeamLabFabric],
+            [AgentFeatureIds.Docker, AgentFeatureIds.TeamLabInfrastructure,
+                AgentFeatureIds.TeamLabFabricLeasedLinks],
             new AgentLimits(4, 2, 2, 1, 4, 2),
-            new AgentHostFacts(16, 32L * 1024 * 1024 * 1024, true, true),
+            new AgentHostFacts(16, 32L * 1024 * 1024 * 1024, 0, true, true),
             DateTimeOffset.Parse("2026-07-13T00:00:00Z"));
 
         var json = JsonSerializer.Serialize(source, new JsonSerializerOptions(JsonSerializerDefaults.Web));

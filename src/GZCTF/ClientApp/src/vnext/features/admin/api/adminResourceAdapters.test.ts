@@ -13,6 +13,7 @@ function createClient(get: RuntimeJsonClient['get']): RuntimeJsonClient {
     get,
     postJson: unexpected,
     postForm: unexpected,
+    putJson: unexpected,
     patchJson: unexpected,
     delete: unexpected,
   }

@@ -113,13 +113,32 @@ public static class OperationalEventCodes
 
     public static class TeamLab
     {
+        public const string RemoteSessionCreated = "teamlab.remote_session.created";
+        public const string RemoteSessionConnected = "teamlab.remote_session.connected";
+        public const string RemoteSessionEnded = "teamlab.remote_session.ended";
+        public const string RemoteSessionFailed = "teamlab.remote_session.failed";
         public const string PlanStarted = "teamlab.plan.started";
         public const string PlanSucceeded = "teamlab.plan.succeeded";
         public const string PlacementSucceeded = "teamlab.placement.succeeded";
         public const string DeployStarted = "teamlab.deploy.started";
+        public const string InfrastructureApplyStarted = "teamlab.infrastructure.apply_started";
+        public const string InfrastructureApplied = "teamlab.infrastructure.applied";
+        public const string InfrastructureApplyFailed = "teamlab.infrastructure.apply_failed";
+        public const string InfrastructureDriftDetected = "teamlab.infrastructure.drift_detected";
+        public const string InfrastructureReplayQueued = "teamlab.infrastructure.replay_queued";
+        public const string InfrastructureReplayed = "teamlab.infrastructure.replayed";
+        public const string FabricLeaseAllocated = "teamlab.fabric.lease_allocated";
+        public const string FabricLeaseReleased = "teamlab.fabric.lease_released";
         public const string NetworkApplied = "teamlab.network.applied";
         public const string AssetCreated = "teamlab.asset.created";
         public const string AssetCreateFailed = "teamlab.asset.create_failed";
+        public const string GuestReady = "teamlab.guest.ready";
+        public const string GuestReadinessFailed = "teamlab.guest.readiness_failed";
+        public const string BootstrapSucceeded = "teamlab.bootstrap.succeeded";
+        public const string BootstrapFailed = "teamlab.bootstrap.failed";
+        public const string BootstrapRebooted = "teamlab.bootstrap.rebooted";
+        public const string HealthSucceeded = "teamlab.health.succeeded";
+        public const string HealthFailed = "teamlab.health.failed";
         public const string RouteApplied = "teamlab.route.applied";
         public const string ProbeSucceeded = "teamlab.probe.succeeded";
         public const string Ready = "teamlab.ready";
@@ -137,6 +156,16 @@ public static class OperationalEventCodes
         public const string CaptureStarted = "teamlab.capture.started";
         public const string CaptureStopped = "teamlab.capture.stopped";
         public const string CaptureFailed = "teamlab.capture.failed";
+        public const string CaptureSegmentUploaded = "teamlab.capture.segment_uploaded";
+        public const string CaptureDownloaded = "teamlab.capture.downloaded";
+        public const string CaptureExpired = "teamlab.capture.expired";
+        public const string ObservationDegraded = "teamlab.observation.degraded";
+        public const string ObservationDropped = "teamlab.observation.dropped";
+        public const string ObservationRecovered = "teamlab.observation.recovered";
+        public const string SensorAuthenticationDegraded = "teamlab.sensor.authentication_degraded";
+        public const string TrafficPathDerived = "teamlab.traffic.path_derived";
+        public const string GuardedRebuildAllowed = "teamlab.recovery.rebuild_allowed";
+        public const string GuardedRebuildBlocked = "teamlab.recovery.rebuild_blocked";
         public const string AccessOpened = "teamlab.access.opened";
         public const string AccessRevoked = "teamlab.access.revoked";
         public const string SnapshotImported = "teamlab.snapshot.imported";
@@ -154,6 +183,10 @@ public static class OperationalEventCodes
         public const string StateCorrected = "recovery.state.corrected";
         public const string NodeUnavailable = "recovery.node.unavailable";
         public const string InventoryUnsupported = "recovery.inventory.unsupported";
+
+        /// <summary>A ticket waited past the deferral window, so the blocking condition is treated
+        /// as permanent instead of being waited on indefinitely.</summary>
+        public const string TicketDeferralExpired = "recovery.ticket.deferral_expired";
         public const string OrphanObserved = "recovery.orphan.observed";
     }
 

@@ -34,19 +34,29 @@ public sealed record TeamLabTopologyAssetModel(
     IReadOnlyDictionary<string, string>? Environment = null,
     string? StartCommand = null,
     TeamLabHealthCheckModel? HealthCheck = null,
-    int OrderIndex = 0);
+    int OrderIndex = 0,
+    bool Stateless = false,
+    TeamLabBootstrapReferenceModel? Bootstrap = null,
+    TeamLabEndpointObservationMode EndpointObservation = TeamLabEndpointObservationMode.Disabled,
+    bool BakeAtPublish = false,
+    string? ImageDigest = null);
 
 public sealed record TeamLabTopologyConnectionModel(
     string Key,
     string FromNetworkKey,
     string ToNetworkKey,
-    string ViaAssetKey);
+    string? ViaAssetKey = null,
+    string? ViaNodeKey = null,
+    TeamLabConnectionDirection? Direction = null);
 
 public sealed record TeamLabTopologyDefinitionModel(
     string Name,
     IReadOnlyList<TeamLabTopologyNetworkModel> Networks,
     IReadOnlyList<TeamLabTopologyAssetModel> Assets,
-    IReadOnlyList<TeamLabTopologyConnectionModel> Connections);
+    IReadOnlyList<TeamLabTopologyConnectionModel> Connections,
+    IReadOnlyList<TeamLabTopologyInfrastructureModel>? Infrastructure = null,
+    IReadOnlyList<TeamLabTopologyDependencyModel>? Dependencies = null,
+    TeamLabObservationPolicyModel? Observation = null);
 
 public sealed record TeamLabEditorItemModel(
     double X,
@@ -57,14 +67,19 @@ public sealed record TeamLabEditorItemModel(
 
 public sealed record TeamLabTopologyEditorModel(
     IReadOnlyDictionary<string, TeamLabEditorItemModel> Networks,
-    IReadOnlyDictionary<string, TeamLabEditorItemModel> Assets);
+    IReadOnlyDictionary<string, TeamLabEditorItemModel> Assets,
+    IReadOnlyDictionary<string, TeamLabEditorItemModel>? Infrastructure = null);
 
 public sealed record CreateTeamLabTopologyModel(
     string Name,
     IReadOnlyList<TeamLabTopologyNetworkModel> Networks,
     IReadOnlyList<TeamLabTopologyAssetModel> Assets,
     IReadOnlyList<TeamLabTopologyConnectionModel> Connections,
-    TeamLabTopologyEditorModel? Editor = null);
+    TeamLabTopologyEditorModel? Editor = null,
+    IReadOnlyList<TeamLabTopologyInfrastructureModel>? Infrastructure = null,
+    IReadOnlyList<TeamLabTopologyDependencyModel>? Dependencies = null,
+    TeamLabObservationPolicyModel? Observation = null,
+    int SchemaVersion = 2);
 
 public sealed record UpdateTeamLabTopologyModel(
     int Revision,
@@ -72,9 +87,15 @@ public sealed record UpdateTeamLabTopologyModel(
     IReadOnlyList<TeamLabTopologyNetworkModel> Networks,
     IReadOnlyList<TeamLabTopologyAssetModel> Assets,
     IReadOnlyList<TeamLabTopologyConnectionModel> Connections,
-    TeamLabTopologyEditorModel? Editor = null);
+    TeamLabTopologyEditorModel? Editor = null,
+    IReadOnlyList<TeamLabTopologyInfrastructureModel>? Infrastructure = null,
+    IReadOnlyList<TeamLabTopologyDependencyModel>? Dependencies = null,
+    TeamLabObservationPolicyModel? Observation = null,
+    int SchemaVersion = 2);
 
-public sealed record PublishTeamLabTopologyModel(int Revision);
+public sealed record PublishTeamLabTopologyModel(
+    int Revision,
+    IReadOnlyList<TeamLabRuntimeOverlayModel>? ScenarioOverlays = null);
 
 public sealed record TeamLabTopologySummaryModel(
     Guid Id,

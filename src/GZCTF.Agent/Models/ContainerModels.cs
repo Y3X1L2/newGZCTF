@@ -2,6 +2,7 @@ namespace GZCTF.Agent.Models;
 
 public class CreateContainerRequest
 {
+    public int RuntimeId { get; set; }
     public int Generation { get; set; } = 1;
     public string Image { get; set; } = string.Empty;
     public string TeamId { get; set; } = string.Empty;
@@ -31,6 +32,14 @@ public class CreateContainerRequest
     public bool RemoveDefaultRoute { get; set; }
     public bool EnableIpForwarding { get; set; }
     public List<ContainerNetworkAttachment> NetworkAttachments { get; set; } = [];
+    public List<ContainerBindMount> BindMounts { get; set; } = [];
+}
+
+public class ContainerBindMount
+{
+    public string Source { get; set; } = string.Empty;
+    public string Destination { get; set; } = string.Empty;
+    public bool ReadOnly { get; set; } = true;
 }
 
 public class ContainerNetworkAttachment
@@ -45,6 +54,7 @@ public class ContainerNetworkAttachment
 public class AgentContainerResponse
 {
     public string ContainerId { get; set; } = string.Empty;
+    public string ContainerName { get; set; } = string.Empty;
     public string IP { get; set; } = string.Empty;
     public int Port { get; set; }
     public int PublicPort { get; set; }

@@ -36,13 +36,21 @@ export class RuntimeApiError extends Error {
 export interface RuntimeJsonClient {
   get(path: string, query?: RuntimeQuery): Promise<unknown>
   postJson(path: string, body?: unknown, query?: RuntimeQuery): Promise<unknown>
+  postJsonWithHeaders?(
+    path: string,
+    body: unknown,
+    headers: Readonly<Record<string, string>>,
+    query?: RuntimeQuery
+  ): Promise<unknown>
   postForm(
     path: string,
     body: Record<string, unknown>,
     query?: RuntimeQuery,
     options?: RuntimeUploadOptions
   ): Promise<unknown>
+  putJson(path: string, body: unknown, query?: RuntimeQuery): Promise<unknown>
   patchJson(path: string, body: unknown, query?: RuntimeQuery): Promise<unknown>
+  deleteJson?(path: string, query?: RuntimeQuery): Promise<unknown>
   delete(path: string, query?: RuntimeQuery): Promise<void>
 }
 
@@ -127,6 +135,9 @@ export const runtimeJsonClient: RuntimeJsonClient = {
   postJson(path, body, query) {
     return requestJson({ path, method: 'POST', query, body, type: ContentType.Json }, true)
   },
+  postJsonWithHeaders(path, body, headers, query) {
+    return requestJson({ path, method: 'POST', query, body, headers: { ...headers }, type: ContentType.Json }, true)
+  },
   postForm(path, body, query, options) {
     const onUploadProgress: FullRequestParams['onUploadProgress'] = options?.onProgress
       ? (event) => options.onProgress?.(event.total ? Math.min(1, event.loaded / event.total) : null)
@@ -136,8 +147,14 @@ export const runtimeJsonClient: RuntimeJsonClient = {
       true
     )
   },
+  putJson(path, body, query) {
+    return requestJson({ path, method: 'PUT', query, body, type: ContentType.Json }, true)
+  },
   patchJson(path, body, query) {
     return requestJson({ path, method: 'PATCH', query, body, type: ContentType.Json }, true)
+  },
+  deleteJson(path, query) {
+    return requestJson({ path, method: 'DELETE', query }, false)
   },
   async delete(path, query) {
     await requestJson({ path, method: 'DELETE', query }, true)

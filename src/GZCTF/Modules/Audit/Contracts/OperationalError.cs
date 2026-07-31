@@ -19,6 +19,11 @@ public sealed record AgentErrorResponse(
     string Operation,
     string CorrelationId);
 
+public interface IOperationalFailureException
+{
+    OperationalError Error { get; }
+}
+
 public static class OperationalErrorCodes
 {
     public const string AuthorizationForbidden = "auth.forbidden";
@@ -28,6 +33,7 @@ public static class OperationalErrorCodes
     public const string RuntimeResourceMissing = "runtime.resource_missing";
     public const string RuntimeNoEligibleNode = "runtime.no_eligible_node";
     public const string RuntimeCapacityExhausted = "runtime.capacity_exhausted";
+    public const string RecoveryDeferred = "recovery.deferred";
     public const string ImageRegistryUnreachable = "image.registry_unreachable";
     public const string ImageRegistryFailed = "image.registry_failed";
     public const string ImageArtifactMissing = "image.artifact_missing";
@@ -45,7 +51,10 @@ public static class OperationalErrorCodes
     public const string DockerOperationFailed = "docker.operation_failed";
     public const string KvmOperationFailed = "kvm.operation_failed";
     public const string NetworkOperationFailed = "network.operation_failed";
+    public const string BootstrapOperationFailed = "bootstrap.operation_failed";
     public const string HealthProbeTimeout = "health.probe_timeout";
+    public const string ObservationUnavailable = "observation.unavailable";
+    public const string SensorAuthenticationFailed = "observation.sensor_authentication_failed";
     public const string StorageUnavailable = "storage.unavailable";
     public const string StorageFileNotFound = "storage.file_not_found";
     public const string DatabaseUnavailable = "database.unavailable";

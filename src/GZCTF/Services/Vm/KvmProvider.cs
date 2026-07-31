@@ -254,8 +254,11 @@ public class KvmProvider : IVirtualMachineProvider
                       <source file='{escapedImage}'/>
                       <target dev='sda' bus='sata'/>
                     </disk>
-                    <graphics type='vnc' port='-1' autoport='yes' listen='0.0.0.0'>
-                      <listen type='address' address='0.0.0.0'/>
+                    <!-- Loopback only: this VNC console has no password and no transport security,
+                         so a wildcard listener would expose a full console on someone else's VM to
+                         anyone who can route to the host. -->
+                    <graphics type='vnc' port='-1' autoport='yes' listen='127.0.0.1'>
+                      <listen type='address' address='127.0.0.1'/>
                     </graphics>
                     <video>
                       <model type='qxl' ram='65536' vram='65536' vgamem='16384' heads='1'/>

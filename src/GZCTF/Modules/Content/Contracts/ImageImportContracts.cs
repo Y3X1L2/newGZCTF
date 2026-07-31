@@ -29,8 +29,22 @@ public sealed record DockerImageArchiveImportCommand(
     OSType OSType,
     string? ExpectedDigest);
 
+public sealed record VmQcow2ImportCommand(
+    string Name,
+    OSType OSType,
+    VmNetworkMode NetworkMode,
+    string? ExpectedDigest);
+
+public sealed record ImportedVmArtifact(
+    string RegistryAddress,
+    string Repository,
+    string Tag,
+    string Digest,
+    long Size);
+
 public sealed record ImageImportArtifact(
     string RegistryUrl,
     string? ImageHash,
     long ContentLength,
-    string Description);
+    string Description,
+    ImportedVmArtifact? VmArtifact = null);

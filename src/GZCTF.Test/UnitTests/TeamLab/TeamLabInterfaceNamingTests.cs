@@ -1,0 +1,61 @@
+using System;
+using System.Linq;
+using GZCTF.Agent.Services.TeamLab;
+using GZCTF.Modules.TeamLab.Application;
+using Xunit;
+
+namespace GZCTF.Test.UnitTests.TeamLab;
+
+/// <summary>
+/// Interface names must stay unique after being fitted into the kernel's 15-character limit.
+/// Two interfaces sharing a name makes "ip link delete" for a later one tear down an earlier veth
+/// pair, silently wiring a segment to the wrong bridge.
+/// </summary>
+public class TeamLabInterfaceNamingTests
+{
+    [Theory]
+    [InlineData(14)] // "<ns>h0" and "<ns>h1" both truncate to "<ns>h"
+    [InlineData(15)] // "<ns>h0" and "<ns>n0" both truncate to "<ns>"
+    public void DerivedRouterInterfaces_StayUniqueForLongNamespaces(int namespaceLength)
+    {
+        var ns = new string('t', namespaceLength);
+
+        var derived = Enumerable.Range(0, 4)
+            .SelectMany(index => new[]
+            {
+                TeamLabNetworkPrimitives.TrimInterfaceName($"{ns}h{index}"),
+                TeamLabNetworkPrimitives.TrimInterfaceName($"{ns}n{index}")
+            })
+            .ToArray();
+
+        Assert.Equal(derived.Length, derived.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(derived, name => Assert.True(name.Length <= 15, $"'{name}' exceeds 15 characters"));
+    }
+
+    [Fact]
+    public void ShortNamesArePreservedVerbatim()
+    {
+        Assert.Equal("tlr12-3h0", TeamLabNetworkPrimitives.TrimInterfaceName("tlr12-3h0"));
+    }
+
+    [Fact]
+    public void NamingIsDeterministic()
+    {
+        var first = TeamLabNetworkPrimitives.TrimInterfaceName("tlr123456789-42n7");
+        var second = TeamLabNetworkPrimitives.TrimInterfaceName("tlr123456789-42n7");
+
+        Assert.Equal(first, second);
+    }
+
+    [Fact]
+    public void AgentAndControlPlaneDeriveTheSameName()
+    {
+        // Both sides name the same interfaces; diverging algorithms would make the agent configure
+        // one device while the control plane records another.
+        const string value = "tlr987654321-123n0";
+
+        Assert.Equal(
+            TeamLabResourceNameFactory.LinuxName(value),
+            TeamLabNetworkPrimitives.TrimInterfaceName(value));
+    }
+}

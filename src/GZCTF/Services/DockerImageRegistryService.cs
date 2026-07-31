@@ -84,8 +84,6 @@ public class DockerImageRegistryService
     {
         var endpoint = await GetActiveEndpointAsync(token)
                        ?? throw new InvalidOperationException("Internal Docker registry address is not configured.");
-
-        await ConfigureManagedRegistryTrustAsync(token);
         return endpoint;
     }
 
@@ -729,24 +727,12 @@ fi
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var templateImages = await context.ImageTemplates.AsNoTracking()
-            .Where(t => t.ImageType == ImageType.Docker && !string.IsNullOrWhiteSpace(t.RegistryUrl))
-            .Select(t => t.RegistryUrl)
-            .ToArrayAsync(token);
-
         if (endpoint is not null)
             candidates.Add(NormalizeRegistryAddress(endpoint.Address));
 
         var configured = NormalizeRegistryAddress(_settings.NormalizedAddress);
         if (!string.IsNullOrWhiteSpace(configured))
             candidates.Add(configured);
-
-        var fixedRegistry = NormalizeRegistryAddress(DockerRegistrySettings.FixedAddress);
-        if (!string.IsNullOrWhiteSpace(fixedRegistry))
-            candidates.Add(fixedRegistry);
-
-        foreach (var image in templateImages)
-            AddRegistryCandidateFromImage(candidates, image);
 
         return candidates;
     }

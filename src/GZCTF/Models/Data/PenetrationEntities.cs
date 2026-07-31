@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using GZCTF.Modules.Penetration.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Models.Data;
@@ -51,6 +52,16 @@ public class PenetrationResetRecord
     public Guid? UserId { get; set; }
 
     public bool ByAdmin { get; set; }
+
+    public Guid OperationId { get; set; }
+
+    public int TargetGeneration { get; set; }
+
+    public PenetrationResetStatus Status { get; set; } = PenetrationResetStatus.Pending;
+
+    public PenetrationResetFailureClass FailureClass { get; set; }
+
+    public DateTimeOffset? CompletedAt { get; set; }
 
     public DateTimeOffset ResetAt { get; set; } = DateTimeOffset.UtcNow;
 

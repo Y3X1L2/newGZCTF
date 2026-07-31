@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+set -eu
+
+unit="gzctf-endpoint-sensor.service"
+binary="/opt/gzctf/endpoint-sensor/gzctf-endpoint-sensor"
+
+if [ ! -x "$binary" ]; then
+  echo "The Worker Agent has not injected the endpoint sensor binary." >&2
+  exit 1
+fi
+
+if ! systemctl cat "$unit" >/dev/null 2>&1; then
+  echo "The Worker Agent has not installed the endpoint sensor service." >&2
+  exit 1
+fi
+
+systemctl enable --now "$unit"

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "operatingSystems": ["Linux"],
+  "assetKinds": ["Vm"],
+  "requiredTemplateCapabilities": [
+    "bootstrap.firstboot.v1",
+    "guest.qga.v1",
+    "linux.cloud-init.nocloud.v1",
+    "network.virtio.v1"
+  ],
+  "parameters": [
+    { "key": "service_name", "type": "String", "required": true, "secret": false },
+    { "key": "service_port", "type": "Integer", "required": true, "secret": false },
+    { "key": "flag", "type": "String", "required": true, "secret": true }
+  ],
+  "files": [
+    { "sourcePath": "files/gzctf-runtime.service", "targetPath": "/etc/systemd/system/gzctf-runtime.service", "mode": "0644", "template": true },
+    { "sourcePath": "files/server.py", "targetPath": "/opt/gzctf/service/server.py", "mode": "0755", "template": false }
+  ],
+  "steps": [
+    { "id": "install", "entrypoint": "bin/install.sh", "timeoutSeconds": 300, "runAs": "system", "reboot": "None" }
+  ],
+  "healthChecks": [
+    { "id": "service-port", "kind": "Tcp", "target": "${service_port}", "timeoutSeconds": 5, "attempts": 24 }
+  ],
+  "maxReboots": 0
+}

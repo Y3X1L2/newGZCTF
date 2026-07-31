@@ -1,4 +1,5 @@
 using GZCTF.Agent.Models;
+using GZCTF.GuestControl.Contracts;
 
 namespace GZCTF.Agent.Middlewares;
 
@@ -71,6 +72,7 @@ public sealed class AgentCorrelationErrorMiddleware(
     private static int ResolveStatusCode(Exception exception) => exception switch
     {
         AgentOperationException operational => operational.StatusCode,
+        GuestControlProtocolException => StatusCodes.Status409Conflict,
         ArgumentException or FormatException => StatusCodes.Status400BadRequest,
         FileNotFoundException => StatusCodes.Status404NotFound,
         UnauthorizedAccessException => StatusCodes.Status403Forbidden,
@@ -99,6 +101,10 @@ internal static class AgentErrorClassifier
         if (exception is ArgumentException or FormatException)
             return new AgentErrorResponse(
                 "Validation", "request.invalid", "The Agent request is invalid.", false,
+                operation, correlationId);
+        if (exception is GuestControlProtocolException protocol)
+            return new AgentErrorResponse(
+                "GuestControl", protocol.Code, "The guest control protocol fact was rejected.", false,
                 operation, correlationId);
         if (exception is UnauthorizedAccessException)
             return new AgentErrorResponse(
@@ -141,6 +147,7 @@ internal static class AgentOperation
                 "pull-docker" => "image.docker.pull",
                 "docker" => "image.docker.delete",
                 "download-vm" => "image.vm.download",
+                "publish-vm" => "image.vm.publish",
                 "vm" => "image.vm.delete",
                 "ensure-docker-registry" => "image.registry.ensure",
                 "configure-docker-registry" => "image.registry.configure",
@@ -154,6 +161,8 @@ internal static class AgentOperation
             "containers" => ResolveContainer(request.Method, segments),
             "teamlab" => ResolveTeamLab(request.Method, segments),
             "runtime" => "runtime.inventory",
+            "guest-control" when segments.Length >= 3 => $"guest-control.{string.Join('.', segments.Skip(2))}",
+            "guest" when segments.Length >= 4 => $"guest.{string.Join('.', segments.Skip(3))}",
             _ => "unknown"
         };
     }
@@ -192,7 +201,8 @@ internal static class AgentOperation
     public static (string Category, string Code, bool Retryable) ClassifyFailure(PathString path)
     {
         if (path.StartsWithSegments("/api/images/pull-docker", StringComparison.OrdinalIgnoreCase) ||
-            path.StartsWithSegments("/api/images/download-vm", StringComparison.OrdinalIgnoreCase))
+            path.StartsWithSegments("/api/images/download-vm", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWithSegments("/api/images/publish-vm", StringComparison.OrdinalIgnoreCase))
             return ("ImageTransfer", "image.transfer_failed", true);
         if (path.StartsWithSegments("/api/images", StringComparison.OrdinalIgnoreCase))
             return ("ImageRegistry", "image.registry_failed", true);
@@ -206,6 +216,8 @@ internal static class AgentOperation
             return ("Docker", "docker.operation_failed", true);
         if (path.StartsWithSegments("/api/maintenance", StringComparison.OrdinalIgnoreCase))
             return ("AgentProtocol", "agent.sync_failed", true);
+        if (path.StartsWithSegments("/api/guest", StringComparison.OrdinalIgnoreCase))
+            return ("GuestControl", "guest.control_failed", false);
         return ("Unknown", "operation.unclassified_failure", false);
     }
 }

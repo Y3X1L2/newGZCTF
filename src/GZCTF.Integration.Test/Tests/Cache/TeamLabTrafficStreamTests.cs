@@ -1,5 +1,6 @@
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Modules.TeamLab.Application;
+using GZCTF.Modules.TeamLab.Domain.Runtime;
 using GZCTF.Modules.TeamLab.Infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -47,9 +48,9 @@ public sealed class TeamLabTrafficStreamTests : IAsyncLifetime
             runtimeState,
             telemetry,
             NullLogger<RedisTeamLabTrafficIngestor>.Instance);
-        var sample = new TeamLabNodeFlowSample(
-            1, DateTimeOffset.UtcNow, "10.1.0.2", 45000, "192.168.1.10", 443, "tcp", 256);
-        var envelope = TeamLabTrafficEnvelope.Create(10, 2, 3, 4, Guid.NewGuid(), sample);
+        var sample = Observation(1);
+        var envelope = TeamLabTrafficEnvelope.Create(
+            10, 2, 3, 4, 5, TeamLabObservationPointKind.NetworkBridge, null, Guid.NewGuid(), sample);
 
         var enqueue = await ingestor.EnqueueAsync([envelope], CancellationToken.None);
         var first = await ingestor.ReadAsync("consumer-a", 10, TimeSpan.FromMilliseconds(50),
@@ -61,7 +62,7 @@ public sealed class TeamLabTrafficStreamTests : IAsyncLifetime
         Assert.Equal(1, enqueue.AcceptedCount);
         Assert.Single(first.Messages);
         var message = Assert.Single(reclaimed.Messages);
-        Assert.Equal(envelope.Fingerprint, message.Envelope.Fingerprint);
+        Assert.Equal(envelope.EvidenceFingerprint, message.Envelope.EvidenceFingerprint);
         Assert.NotNull(message.StreamId);
         await ingestor.AcknowledgeAsync([message.StreamId!], CancellationToken.None);
     }
@@ -72,9 +73,9 @@ public sealed class TeamLabTrafficStreamTests : IAsyncLifetime
         var ingestor = CreateIngestor();
         var workerNodeId = Guid.NewGuid();
         var envelopes = Enumerable.Range(1, 30)
-            .Select(cursor => TeamLabTrafficEnvelope.Create(10, 2, 3, 4, workerNodeId,
-                new TeamLabNodeFlowSample(cursor, DateTimeOffset.UtcNow, "10.1.0.2", 45000,
-                    "192.168.1.10", 443, "tcp", 256)))
+            .Select(cursor => TeamLabTrafficEnvelope.Create(
+                10, 2, 3, 4, 5, TeamLabObservationPointKind.NetworkBridge, null, workerNodeId,
+                Observation(cursor)))
             .ToArray();
         await ingestor.EnqueueAsync(envelopes, CancellationToken.None);
         var pending = await ingestor.ReadAsync("consumer-a", envelopes.Length, TimeSpan.FromMilliseconds(50),
@@ -116,4 +117,22 @@ public sealed class TeamLabTrafficStreamTests : IAsyncLifetime
             telemetry,
             NullLogger<RedisTeamLabTrafficIngestor>.Instance);
     }
+
+    private static TeamLabNodeObservationRecord Observation(long sequence) => new(
+        sequence,
+        Guid.NewGuid(),
+        null,
+        DateTimeOffset.UtcNow,
+        "10.1.0.2",
+        45000,
+        "192.168.1.10",
+        443,
+        "tcp",
+        null,
+        256,
+        "sha256:" + new string('b', 64),
+        "sha256:" + new string('a', 64),
+        "Packet",
+        null,
+        "observed");
 }

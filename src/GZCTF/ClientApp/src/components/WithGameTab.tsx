@@ -6,7 +6,6 @@ import {
   mdiFileDocumentCheckOutline,
   mdiFlagOutline,
   mdiMonitorEye,
-  mdiNetworkOutline,
   mdiSwordCross,
 } from '@mdi/js'
 import { Icon } from '@mdi/react'
@@ -73,7 +72,6 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
 
   const isAwdGame = game?.gameType === GameType.AWDP || game?.gameType === GameType.Mixed
   const isTheoryGame = game?.gameType === GameType.Theory || game?.gameType === GameType.Mixed
-  const isPentestGame = game?.gameType === GameType.Penetration || game?.gameType === GameType.Mixed
   const isTheoryOnly = game?.gameType === GameType.Theory
   const isPentestOnly = game?.gameType === GameType.Penetration
 
@@ -85,19 +83,6 @@ export const WithGameTab: FC<React.PropsWithChildren> = ({ children }) => {
             title: t('game.tab.challenge'),
             path: 'challenges',
             link: 'challenges',
-            requireJoin: true,
-            requireRole: Role.User,
-            requireAwd: false,
-          },
-        ]
-      : []),
-    ...(isPentestGame
-      ? [
-          {
-            icon: mdiNetworkOutline,
-            title: '渗透演练',
-            path: 'pentest',
-            link: 'pentest',
             requireJoin: true,
             requireRole: Role.User,
             requireAwd: false,

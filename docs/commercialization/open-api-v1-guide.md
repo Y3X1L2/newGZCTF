@@ -1,378 +1,212 @@
 # YINYU 平台 Open API v1 使用指南
 
-本文档描述当前已实现的 `/api/open/v1` 外部接口。它面向出题工具、内容流水线和受控自动化脚本，不适用于浏览器前端内部接口。
+本文说明外部系统调用 `/api/open/v1` 的稳定契约。机器可读契约以
+`docs/commercialization/openapi/open-v1.json` 为准；部署后可通过 `/api-docs/`
+查看中文 Swagger 页面，通过 `/openapi/open-v1.json` 获取实时 JSON。
 
-## 1. 接入信息
+## 1. 身份认证
 
-| 项目 | 值 |
-| --- | --- |
-| 基础路径 | `https://{platform-host}/api/open/v1` |
-| 认证方式 | `Authorization: Bearer {token}` |
-| 请求格式 | JSON；Docker archive 上传使用 `multipart/form-data` |
-| 时间格式 | Unix 毫秒；可空时间为 `null` |
-| 错误格式 | `application/problem+json` |
-| OpenAPI 快照 | `docs/commercialization/openapi/open-v1.json` |
-| 开发环境 OpenAPI | `/openapi/open-v1.json` |
-
-`/api/...` 下的其他接口属于平台内部接口，不承诺外部兼容性，不应由出题工具调用。
-
-## 2. 创建 API Token
-
-教师及以上角色在“账户 -> API Token”或管理员 Token 页面创建令牌。令牌明文只显示一次，格式为：
-
-```text
-gzctf_pat_{tokenId}.{secret}
-```
-
-创建比赛题目导入令牌时至少选择：
-
-```text
-challenges:read
-challenges:write
-challenges:delete
-operations:read
-```
-
-并添加比赛资源授权：
-
-```text
-resourceType = game
-resourceId   = 123
-```
-
-`game:123` 只允许访问比赛 `123`；教师只能签发自己创建并拥有的具体比赛授权。`game:*` 和全局 `*:*` 只有管理员可以签发。题目接口强制要求显式 `game` 授权，只有 scope 而没有比赛授权会返回 `403 insufficient_permission`。升级前已存在且没有所有者记录的比赛，需要由管理员签发具体比赛授权；新建比赛会自动记录创建者。
-
-镜像导入还需要 `images:read`、`images:write`、`images:delete`。Token 支持过期、撤销和每分钟请求配额；创建者账号失效或角色降到教师以下后，Token 自动失效。
-
-## 3. 通用请求规则
-
-### 3.1 认证
-
-```bash
-curl -H "Authorization: Bearer $GZCTF_TOKEN" \
-  https://platform.example/api/open/v1/games/123/challenges
-```
-
-不要把 Token 放入 URL、日志、Git 仓库或脚本命令行历史。生产接入必须使用 HTTPS。
-
-### 3.2 Idempotency-Key
-
-所有题目写操作都要求：
+所有接口使用 Bearer API Token：
 
 ```http
-Idempotency-Key: import-web-series-20260711-001
+Authorization: Bearer gzctf_pat_...
 ```
 
-键长为 1-128，仅允许 ASCII 字母、数字、`-`、`_`、`.`。
+Token 必须包含接口要求的 scope。资源授权可进一步限制到具体比赛、镜像或
+TeamLab 资源。平台不会因为调用者拥有写 scope 而绕过资源授权。
 
-- 同一个 Token、同一路由、相同 Key 和相同请求体：返回原 operation，不重复建题或删除。
-- 相同 Key 但请求体不同：返回 `409 idempotency_conflict`。
-- operation 正在执行时重复请求：仍返回相同 operation ID。
+## 2. 幂等异步操作
 
-### 3.3 异步 operation
+所有异步写接口必须携带：
 
-题目导入和删除返回 `202 Accepted`：
-
-```json
-{
-  "id": "019bb4f0-6b26-7a8a-a523-b8727df5cf62",
-  "kind": "ctf.challenge-mutation.v1",
-  "status": 0,
-  "stage": "pending",
-  "resourceType": "game",
-  "resourceId": "123",
-  "currentProgress": 0,
-  "totalProgress": 0,
-  "attemptCount": 0,
-  "errorCode": null,
-  "errorDetail": null,
-  "result": null
-}
+```http
+Idempotency-Key: caller-stable-operation-id
 ```
 
-状态值：
+服务返回 `202 Accepted` 和 `ApiOperation`。相同 Token、路由、
+`Idempotency-Key` 与请求内容会复用同一 operation；相同 key 配合不同内容返回
+`409 idempotency_conflict`。
 
-| 值 | 状态 |
+轮询操作：
+
+```bash
+curl https://platform.example/api/open/v1/operations/$OPERATION_ID \
+  -H "Authorization: Bearer $GZCTF_TOKEN"
+```
+
+终态为 `Succeeded`、`Failed` 或 `Cancelled`。调用方应展示 `stage`、进度和
+`errorCode/errorDetail`，不要通过更换幂等键盲目重试未知状态的写操作。
+
+## 3. 统一错误
+
+错误响应使用 `application/problem+json`，包含稳定 `code` 与 `traceId`。
+
+| 状态码 | 含义 |
 | --- | --- |
-| `0` | Pending |
-| `1` | Running |
-| `2` | Succeeded |
-| `3` | Failed |
+| `400` | 请求格式、摘要或字段非法 |
+| `401` | Token 缺失、失效或过期 |
+| `403` | scope 或资源授权不足 |
+| `404` | 资源不存在，或调用方不可见 |
+| `409` | 幂等冲突、资源占用或状态冲突 |
+| `422` | 业务契约不成立 |
+| `429` | 调用频率超限 |
+| `503` | 依赖暂时不可用 |
 
-轮询：
+对 `429` 和可重试 `503` 按响应头退避；对 `400/403/404/409/422` 修正请求或
+状态后再提交。
 
-```bash
-curl -H "Authorization: Bearer $GZCTF_TOKEN" \
-  https://platform.example/api/open/v1/operations/019bb4f0-6b26-7a8a-a523-b8727df5cf62
-```
+## 4. 镜像 API
 
-operation 只能由发起它的 Token 查询。建议第一秒后开始轮询，随后使用 1、2、4、8 秒退避，最大间隔 10 秒。
+所需 scope：读取 `images:read`，导入和认证 `images:write`，删除
+`images:delete`。
 
-题目导入阶段：
+### 4.1 Docker 镜像
 
-```text
-pending -> challenge-validating -> challenge-persisting
-        -> challenge-image-distributing -> challenges-imported -> completed
-```
-
-删除阶段：
-
-```text
-pending -> challenge-runtime-stopping -> challenge-deleting
-        -> challenges-deleted -> completed
-```
-
-服务重启后 Pending/Running operation 会从数据库恢复。请求正文只在任务执行期间保留；成功或终止失败后会清除包含 Flag 的任务正文。
-
-### 3.4 错误响应
-
-```json
-{
-  "title": "The request could not be processed.",
-  "status": 422,
-  "detail": "Dynamic container challenges require a valid flagTemplate.",
-  "instance": "/api/open/v1/games/123/challenges/batch",
-  "code": "challenge_flag_template_invalid",
-  "traceId": "00-..."
-}
-```
-
-| HTTP | 含义 |
-| --- | --- |
-| `400` | JSON、游标、请求字段或 Idempotency-Key 格式错误 |
-| `401` | Token 缺失、无效、过期或已撤销 |
-| `403` | 缺少 scope 或比赛资源授权 |
-| `404` | 比赛、题目或 operation 不存在 |
-| `409` | Idempotency-Key 与原请求冲突 |
-| `422` | 题目配置在业务语义上无效 |
-| `429` | Token 请求配额耗尽，按 `Retry-After` 重试 |
-| `503` | Redis 配额后端不可用，外部 API 暂停写入 |
-
-## 4. 题目接口
-
-### 4.1 接口清单
-
-| Method | 路径 | Scope | 说明 |
-| --- | --- | --- | --- |
-| `GET` | `/games/{gameId}/challenges` | `challenges:read` | 游标分页查询题目 |
-| `GET` | `/games/{gameId}/challenges/{challengeId}` | `challenges:read` | 查询题目完整配置和 Flag |
-| `POST` | `/games/{gameId}/challenges` | `challenges:write` | 导入一个题目 |
-| `POST` | `/games/{gameId}/challenges/batch` | `challenges:write` | 原子批量导入 1-100 个题目 |
-| `DELETE` | `/games/{gameId}/challenges/{challengeId}` | `challenges:delete` | 停止环境并删除一个题目 |
-| `POST` | `/games/{gameId}/challenges/batch-delete` | `challenges:delete` | 批量停止环境并删除 1-100 个题目 |
-
-这里的“题目”是某个比赛中的 `GameChallenge`。Phase 10 的全局题目池是独立领域，不会改变这些比赛题目接口的 v1 语义。
-
-### 4.2 题目类型和环境
-
-`type`：
-
-```text
-StaticAttachment
-StaticContainer
-DynamicAttachment
-DynamicContainer
-```
-
-`environment`：
-
-```text
-None
-Docker
-WindowsVM
-```
-
-规则：
-
-- Attachment 类型只能使用 `None`，不能填写容器或 VM 字段。
-- Container 类型省略 `environment` 时默认使用 `Docker`。
-- Docker 必须填写 `containerImage` 和 `exposePort`，不能填写 `imageTemplateId`。
-- Docker 镜像必须先通过镜像 API 注册为 `Ready` 模板，`containerImage` 使用镜像导入结果中的规范 Registry 引用；平台会把比赛题目绑定到该全局模板并记录节点分发事实。
-- WindowsVM 必须填写已就绪 Windows VM 模板的 `imageTemplateId`，不能填写 Docker 字段。
-- 启用的非 DynamicContainer 题目必须至少包含一个 Flag。
-- DynamicContainer 必须提供有效 `flagTemplate`，例如 `flag{web_[TEAM_HASH]}`。
-- 一个批次最多 100 题，`externalId` 在批次内必须唯一。
-
-支持分类：`Misc`、`Crypto`、`Pwn`、`Web`、`Reverse`、`Blockchain`、`Forensics`、`Hardware`、`Mobile`、`PPC`、`AI`、`Pentest`、`OSINT`、`IR`。
-
-### 4.3 导入一个静态题目
-
-```bash
-curl -X POST https://platform.example/api/open/v1/games/123/challenges \
-  -H "Authorization: Bearer $GZCTF_TOKEN" \
-  -H "Idempotency-Key: challenge-web-intro-001" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "externalId": "web-intro",
-    "title": "Web Intro",
-    "content": "访问附件并提交 Flag。",
-    "category": "Web",
-    "type": "StaticAttachment",
-    "isEnabled": true,
-    "originalScore": 500,
-    "minScoreRate": 0.25,
-    "difficulty": 5,
-    "flags": [
-      {
-        "flag": "flag{web_intro}",
-        "orderIndex": 0,
-        "scoreMode": "InheritDecay",
-        "answerType": "Flag"
-      }
-    ],
-    "attachment": {
-      "remoteUrl": "https://assets.example/challenges/web-intro.zip"
-    }
-  }'
-```
-
-远程附件只接受绝对 `http` 或 `https` URL。外部 API 当前不接受平台本地文件 hash；本地附件上传将在内容资产 API 中提供独立受控上传流程。
-
-### 4.4 批量导入 Docker 与 Windows VM 题目
-
-批量导入是整批原子操作：任何一题配置无效时不会创建任何题目。数据库写入成功后会触发比赛镜像预分发；节点暂时离线不会回滚已经创建的题目，失败的分发事实由平台后台 reconcile 继续处理，并在镜像分发状态和后续部署阶段显示。
-
-```bash
-curl -X POST https://platform.example/api/open/v1/games/123/challenges/batch \
-  -H "Authorization: Bearer $GZCTF_TOKEN" \
-  -H "Idempotency-Key: batch-summer-2026-001" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "items": [
-      {
-        "externalId": "web-dynamic-01",
-        "title": "Dynamic Web",
-        "content": "获取环境地址并完成利用。",
-        "category": "Web",
-        "type": "DynamicContainer",
-        "environment": "Docker",
-        "containerImage": "10.24.0.28:5000/challenges/web:v1",
-        "exposePort": 8080,
-        "flagTemplate": "flag{web_[TEAM_HASH]}",
-        "cpuCount": 2,
-        "memoryLimit": 256,
-        "storageLimit": 512,
-        "networkMode": "Isolated",
-        "isEnabled": true,
-        "originalScore": 500
-      },
-      {
-        "externalId": "windows-ad-01",
-        "title": "Windows Lab",
-        "content": "通过远程桌面进入靶机。",
-        "category": "Pentest",
-        "type": "StaticContainer",
-        "environment": "WindowsVM",
-        "imageTemplateId": 42,
-        "isEnabled": false,
-        "originalScore": 1000,
-        "flags": [
-          { "flag": "flag{windows_lab}", "orderIndex": 0 }
-        ]
-      }
-    ]
-  }'
-```
-
-成功后的 operation `result`：
-
-```json
-{
-  "gameId": 123,
-  "imported": [
-    { "externalId": "web-dynamic-01", "challengeId": 501 },
-    { "externalId": "windows-ad-01", "challengeId": 502 }
-  ],
-  "deleted": [],
-  "missing": []
-}
-```
-
-客户端必须保存 `externalId -> challengeId` 映射，不要依赖题目标题定位资源。
-
-### 4.5 分页查询
-
-```bash
-curl -H "Authorization: Bearer $GZCTF_TOKEN" \
-  "https://platform.example/api/open/v1/games/123/challenges?limit=50"
-```
-
-```json
-{
-  "items": [
-    {
-      "id": 501,
-      "title": "Dynamic Web",
-      "category": "Web",
-      "type": "DynamicContainer",
-      "environment": "Docker",
-      "isEnabled": true,
-      "originalScore": 500
-    }
-  ],
-  "nextCursor": "AAAB9Q"
-}
-```
-
-下一页把 `nextCursor` 原样放入 `after`。游标是不可解释的稳定标识，客户端不得自行构造。
-
-详情接口会返回完整题目内容和 Flag。Flag 属于敏感配置，只应在受控出题系统中处理，不应转发给选手端或写入日志。
-
-### 4.6 删除题目
-
-单题：
-
-```bash
-curl -X DELETE https://platform.example/api/open/v1/games/123/challenges/501 \
-  -H "Authorization: Bearer $GZCTF_TOKEN" \
-  -H "Idempotency-Key: delete-challenge-501-001"
-```
-
-批量：
-
-```bash
-curl -X POST https://platform.example/api/open/v1/games/123/challenges/batch-delete \
-  -H "Authorization: Bearer $GZCTF_TOKEN" \
-  -H "Idempotency-Key: delete-retired-set-001" \
-  -H "Content-Type: application/json" \
-  -d '{"challengeIds":[501,502,503]}'
-```
-
-删除任务会先停止该题所有运行环境和测试环境，再删除题目、Flag 和附件关系，最后刷新计分缓存。不存在的题目按幂等删除处理，放入 `result.missing`，不会让整个任务失败。
-
-## 5. 镜像接口
-
-| Method | 路径 | Scope | 说明 |
-| --- | --- | --- | --- |
-| `POST` | `/images/docker-references` | `images:write` | 注册内部或公开 Docker 引用 |
-| `POST` | `/images/docker-archives` | `images:write` | 上传 Docker archive |
-| `GET` | `/images/{imageTemplateId}` | `images:read` | 查询镜像模板 |
-| `DELETE` | `/images/{imageTemplateId}` | `images:delete` | 删除未被引用的镜像模板 |
-
-Docker 引用示例：
+注册 Registry 引用：
 
 ```bash
 curl -X POST https://platform.example/api/open/v1/images/docker-references \
   -H "Authorization: Bearer $GZCTF_TOKEN" \
-  -H "Idempotency-Key: image-web-v1-001" \
+  -H "Idempotency-Key: docker-web-v1" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"web-v1","registryUrl":"10.24.0.28:5000/labs/web:v1","osType":"Linux"}'
+```
+
+上传 Docker archive：
+
+```bash
+curl -X POST https://platform.example/api/open/v1/images/docker-archives \
+  -H "Authorization: Bearer $GZCTF_TOKEN" \
+  -H "Idempotency-Key: docker-web-archive-v1" \
+  -F "file=@web-image.tar;type=application/x-tar" \
+  -F "name=web-v1" \
+  -F "sourceImage=web:v1" \
+  -F "osType=Linux" \
+  -F "expectedDigest=$ARCHIVE_SHA256"
+```
+
+平台将镜像统一解析到内部 Registry，并异步预分发到可调度 Docker 节点。
+
+### 4.2 VM qcow2 导入
+
+平台不在线安装操作系统，也不接收 Windows 管理员凭据。外部 CI/Image Factory
+负责生成 qcow2；平台只负责摘要校验、OCI 主副本、认证、分发和运行。
+
+```bash
+curl -X POST https://platform.example/api/open/v1/images/vm-qcow2 \
+  -H "Authorization: Bearer $GZCTF_TOKEN" \
+  -H "Idempotency-Key: win2022-managed-candidate-v1" \
+  -F "file=@windows-server-2022.qcow2;type=application/octet-stream" \
+  -F "name=Windows Server 2022 Managed Candidate" \
+  -F "osType=Windows" \
+  -F "networkMode=Dhcp" \
+  -F "expectedDigest=$QCOW2_SHA256"
+```
+
+字段说明：
+
+| 字段 | 说明 |
+| --- | --- |
+| `file` | 必须为 `.qcow2`，最大 120 GiB |
+| `name` | 当前所有者下唯一的模板名称 |
+| `osType` | `Linux` 或 `Windows` |
+| `networkMode` | `Dhcp` 或 `Preconfigured` |
+| `expectedDigest` | 推荐必填，SHA-256，可带 `sha256:` 前缀 |
+
+导入流程为：流式暂存和摘要校验、写入内部 OCI Registry、记录不可变 artifact、
+创建 `Opaque` 模板、按 KVM 能力异步分发。导入成功不会自动授予 `Managed`。
+
+### 4.3 受控认证
+
+只有 `controlled-probe` 成功后，Opaque 候选模板才升级为 Managed：
+
+```bash
+curl -X POST https://platform.example/api/open/v1/images/$IMAGE_ID/certifications \
+  -H "Authorization: Bearer $GZCTF_TOKEN" \
+  -H "Idempotency-Key: certify-$IMAGE_ID-v1" \
   -H "Content-Type: application/json" \
   -d '{
-    "name":"web-lab-v1",
-    "registryUrl":"10.24.0.28:5000/challenges/web:v1",
-    "osType":"Linux"
+    "probeKind":"controlled-probe",
+    "capabilities":[
+      "windows.cloudbase-init.v1",
+      "windows.powershell.v1",
+      "guest.qga.v1",
+      "guest.supervisor.v1",
+      "image.vm.prepared.v1",
+      "network.e1000e.v1",
+      "bootstrap.firstboot.v1"
+    ]
   }'
 ```
 
-允许的引用来源只有固定内部 Registry `10.24.0.28:5000`，或无需凭据且 DNS 全部解析到公网地址的公开 Registry。回环、链路本地、私网第三方 Registry 和携带 URL 凭据的引用会返回 `422 image_reference_forbidden`。
+平台会在隔离管理网启动临时 VM，验证初始化、Guest Supervisor、声明能力、受控
+重启、观测就绪与干净关机，然后精确清理临时 domain、overlay 和配置盘。
 
-## 6. 推荐的自动化流程
+`external-evidence` 只登记供应链证据摘要，不会把 Opaque 模板升级为 Managed。
+镜像摘要变化后，旧认证不再有效。
 
-1. 创建最小 scope、限定 `game:{id}` 的短期 Token。
-2. 通过镜像 API 上传或注册运行镜像，轮询到 `Succeeded`。
-3. 调用题目批量导入接口，为每题提供稳定 `externalId`。
-4. 轮询 operation；成功后保存返回的 challenge ID 映射。
-5. 使用分页和详情接口做导入后核对。
-6. 比赛下线题目时调用删除接口并轮询完成。
-7. 流水线结束后撤销 Token；不要复用长期全局 Token。
+### 4.4 查询与删除
 
-对 `429` 和暂时性 `503` 按响应头退避；对 `400/403/404/409/422` 修正请求或授权后再提交。不要用新 Idempotency-Key 盲目重试状态未知的写操作，应先查询原 operation。
+```bash
+curl https://platform.example/api/open/v1/images/$IMAGE_ID \
+  -H "Authorization: Bearer $GZCTF_TOKEN"
+
+curl -X DELETE https://platform.example/api/open/v1/images/$IMAGE_ID \
+  -H "Authorization: Bearer $GZCTF_TOKEN"
+```
+
+删除会先检查比赛、课程、练习和 TeamLab 引用，再清理节点缓存、OCI artifact 和
+artifact 元数据。仍被引用时返回 `409 asset_in_use`。
+
+## 5. Bootstrap Profile
+
+Bootstrap Profile 是签名、版本化的服务注入包，不接受拓扑中的任意脚本文本。
+
+| 方法 | 路径 | Scope |
+| --- | --- | --- |
+| `POST/GET` | `/bootstrap-profiles` | `bootstrap-profiles:write/read` |
+| `GET/DELETE` | `/bootstrap-profiles/{profileId}` | `bootstrap-profiles:read/write` |
+| `POST` | `/bootstrap-profiles/{profileId}/versions` | `bootstrap-profiles:write` |
+| `GET` | `/bootstrap-profiles/{profileId}/versions/{version}` | `bootstrap-profiles:read` |
+
+Managed 模板必须具有 Profile manifest 声明的当前认证能力。Opaque 模板不能执行
+需要 Guest Supervisor 的 Profile。
+
+## 6. 题目批量导入
+
+题目写操作使用 `games.challenges:write`，读取使用 `games.challenges:read`。单题与
+批量接口都使用稳定 `externalId`，并返回可恢复的 `ApiOperation`。单次批量最多
+100 题；调用方应保存 `externalId -> challengeId` 映射。
+
+具体路径、请求 schema 和删除接口以 Swagger 的 `Challenges` 分组为准。
+
+## 7. TeamLab 组网 API
+
+| 能力 | 路径前缀 | Scope |
+| --- | --- | --- |
+| 能力查询 | `/teamlab/capabilities` | `teamlab.topologies:read` |
+| 拓扑与发布 | `/teamlab/topologies` | `teamlab.topologies:read/write` |
+| Runtime 生命周期 | `/teamlab/runtimes` | `teamlab.runtimes:read/write` |
+| 流量与路径 | `/teamlab/runtimes/{id}/traffic` | `teamlab.traffic:read` |
+| PCAP | `/teamlab/runtimes/{id}/captures` | `teamlab.capture:read/write` |
+
+Topology v2 只表达逻辑资产、交换机、路由器、网段、连接、依赖、Bootstrap 和观测
+意图，不接受 WorkerNode ID、bridge、namespace、Fabric IP 或宿主机命令。
+
+Runtime 可拆分为多个 shard。一个逻辑网段归属一个 Worker，跨节点通过 L3 Fabric
+路由；未声明连接的网段保持隔离。Docker 只调度到 Docker 节点，VM 只调度到 KVM
+节点，缺少 KVM 不影响 Docker 组网。
+
+写操作返回 operation。创建成功后可查询 runtime 聚合状态、创建一次性 WireGuard
+访问授权、读取流量与有序 path、按需启动 PCAP。销毁后授权立即失效，平台清理所有
+shard、路由、capture 和镜像运行引用。
+
+## 8. 自动化建议
+
+1. 为流水线签发最小 scope、短有效期 Token。
+2. 使用稳定业务 ID 生成 `Idempotency-Key`。
+3. 先导入并认证镜像，再发布 Bootstrap 和 TeamLab topology。
+4. 轮询 operation 到终态，记录 `traceId` 和资源 ID。
+5. 仅在契约明确可重试时重试；未知结果先查询原 operation。
+6. 流式处理大文件上传和 PCAP 下载，避免完整载入内存。
+7. 流水线结束后撤销 Token，不复用长期全局 Token。

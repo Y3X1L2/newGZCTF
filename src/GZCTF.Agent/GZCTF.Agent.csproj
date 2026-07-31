@@ -16,7 +16,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\GZCTF.GuestControl.Contracts\GZCTF.GuestControl.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Docker.DotNet" />
+    <PackageReference Include="PacketDotNet" />
+    <PackageReference Include="SharpPcap" />
   </ItemGroup>
 
 </Project>

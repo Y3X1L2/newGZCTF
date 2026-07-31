@@ -96,7 +96,7 @@ public class PublicUdpGatewayProvider(
         return
         [
             BuildNftRemoveCommand(comment),
-            $"{_config.NftBinaryPath} add rule {_config.NftTable} prerouting udp dport {mapping.PublicUdpPort} dnat to {mapping.WorkerTunnelIp}:{mapping.WorkerWireGuardPort} comment \"{comment}\"",
+            $"{_config.NftBinaryPath} add rule {_config.NftTable} prerouting udp dport {mapping.PublicUdpPort} dnat ip to {mapping.WorkerTunnelIp}:{mapping.WorkerWireGuardPort} comment \"{comment}\"",
             $"{_config.NftBinaryPath} add rule {_config.NftTable} postrouting ip daddr {mapping.WorkerTunnelIp} udp dport {mapping.WorkerWireGuardPort} masquerade comment \"{comment}\""
         ];
     }

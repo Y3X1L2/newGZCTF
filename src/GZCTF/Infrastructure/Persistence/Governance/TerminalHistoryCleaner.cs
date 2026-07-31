@@ -1,9 +1,44 @@
+using GZCTF.Modules.TeamLab.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Infrastructure.Persistence.Governance;
 
 public sealed class TerminalHistoryCleaner(AppDbContext context)
 {
+    public async Task<int> CleanExpiredTeamLabCaptureArtifactsAsync(
+        DateTimeOffset now,
+        int batchSize,
+        CancellationToken cancellationToken)
+    {
+        var segments = await context.TeamLabTrafficCaptureSegments
+            .Include(item => item.CaptureJob)
+            .Where(item => item.CaptureJob.ExpiresAt <= now &&
+                           item.Status != TeamLabTrafficCaptureSegmentStatus.Expired)
+            .OrderBy(item => item.CaptureJob.ExpiresAt)
+            .ThenBy(item => item.Id)
+            .Take(batchSize)
+            .ToArrayAsync(cancellationToken);
+        foreach (var segment in segments)
+        {
+            segment.Status = TeamLabTrafficCaptureSegmentStatus.CleanupPending;
+            segment.LastError = "Capture artifact cleanup is pending and will be coordinated with the WorkerNode.";
+            segment.UpdatedAt = now;
+        }
+        if (segments.Length == 0) return 0;
+        var jobIds = segments.Select(item => item.CaptureJobId).Distinct().ToArray();
+        var jobs = await context.TeamLabTrafficCaptureJobs
+            .Include(item => item.Segments)
+            .Where(item => jobIds.Contains(item.Id))
+            .ToArrayAsync(cancellationToken);
+        foreach (var job in jobs)
+        {
+            job.Status = TeamLabTrafficCaptureStatus.CleanupPending;
+            job.LastError = "Capture artifact cleanup is pending and will be retried.";
+        }
+        await context.SaveChangesAsync(cancellationToken);
+        return segments.Length;
+    }
+
     public Task<int> CleanOperationalEventsAsync(DateTimeOffset cutoff, int batchSize,
         CancellationToken cancellationToken) => context.Database.ExecuteSqlInterpolatedAsync($$"""
         WITH candidates AS (
@@ -88,6 +123,28 @@ public sealed class TerminalHistoryCleaner(AppDbContext context)
             ORDER BY "BucketStart", "Id" LIMIT {{batchSize}} FOR UPDATE SKIP LOCKED
         )
         DELETE FROM "TeamLabTrafficFlowAggregates" target USING candidates
+        WHERE target."Id" = candidates."Id"
+        """, cancellationToken);
+
+    public Task<int> CleanTeamLabObservationsAsync(DateTimeOffset cutoff, int batchSize,
+        CancellationToken cancellationToken) => context.Database.ExecuteSqlInterpolatedAsync($$"""
+        WITH candidates AS (
+            SELECT "Id" FROM "TeamLabTrafficObservations"
+            WHERE "ObservedAt" < {{cutoff}}
+            ORDER BY "ObservedAt", "Id" LIMIT {{batchSize}} FOR UPDATE SKIP LOCKED
+        )
+        DELETE FROM "TeamLabTrafficObservations" target USING candidates
+        WHERE target."Id" = candidates."Id"
+        """, cancellationToken);
+
+    public Task<int> CleanTeamLabTrafficPathsAsync(DateTimeOffset cutoff, int batchSize,
+        CancellationToken cancellationToken) => context.Database.ExecuteSqlInterpolatedAsync($$"""
+        WITH candidates AS (
+            SELECT "Id" FROM "TeamLabTrafficPaths"
+            WHERE "EndedAt" < {{cutoff}}
+            ORDER BY "EndedAt", "Id" LIMIT {{batchSize}} FOR UPDATE SKIP LOCKED
+        )
+        DELETE FROM "TeamLabTrafficPaths" target USING candidates
         WHERE target."Id" = candidates."Id"
         """, cancellationToken);
 

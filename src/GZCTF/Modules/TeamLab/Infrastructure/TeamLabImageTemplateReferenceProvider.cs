@@ -20,10 +20,10 @@ public sealed class TeamLabImageTemplateReferenceProvider(AppDbContext context)
                 Module, "topology-asset", asset.Id.ToString(), asset.Name))
             .ToArrayAsync(cancellationToken);
         var releases = await context.TeamLabTopologyReleases.AsNoTracking()
-            .Select(release => new { release.Id, release.Version, release.CanonicalJson })
+            .Select(release => new { release.Id, release.Version, release.SchemaVersion, release.CanonicalJson })
             .ToArrayAsync(cancellationToken);
         var releaseReferences = releases
-            .Where(release => TeamLabReleaseCodec.Decode(release.CanonicalJson).Assets
+            .Where(release => TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson).Assets
                 .Any(asset => asset.ImageTemplateId == imageTemplateId))
             .Select(release => new ImageTemplateReference(
                 Module, "topology-release", release.Id.ToString("D"), $"TeamLab release v{release.Version}"));

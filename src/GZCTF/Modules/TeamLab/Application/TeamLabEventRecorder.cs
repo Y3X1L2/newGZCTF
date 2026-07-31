@@ -1,4 +1,5 @@
 using GZCTF.Models.Data;
+using GZCTF.Infrastructure.Telemetry;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
@@ -60,6 +61,7 @@ public sealed class TeamLabEventRecorder(
             ResourceType: "teamlab-runtime",
             ResourceId: runtime.PublicId.ToString(),
             ResourceDisplayName: runtime.ExternalReference ?? runtime.PublicId.ToString()));
+        PlatformTelemetry.RecordTeamLabLifecycle(stage, outcome, error?.Category);
         return localEvent;
     }
 

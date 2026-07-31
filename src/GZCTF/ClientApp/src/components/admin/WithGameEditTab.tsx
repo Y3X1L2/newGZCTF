@@ -6,7 +6,6 @@ import {
   mdiFlagOutline,
   mdiKeyboardBackspace,
   mdiMonitorDashboard,
-  mdiNetworkOutline,
   mdiSwordCross,
   mdiTagOutline,
   mdiTextBoxOutline,
@@ -38,7 +37,6 @@ export const WithGameEditTab: FC<GameEditTabProps> = ({ children, contentPos, he
 
   const isAwdGame = game?.gameType === GameType.AWDP || game?.gameType === GameType.Mixed
   const isTheoryGame = game?.gameType === GameType.Theory || game?.gameType === GameType.Mixed
-  const isPentestGame = game?.gameType === GameType.Penetration || game?.gameType === GameType.Mixed
   const isTheoryOnly = game?.gameType === GameType.Theory
   const isPentestOnly = game?.gameType === GameType.Penetration
 
@@ -49,7 +47,6 @@ export const WithGameEditTab: FC<GameEditTabProps> = ({ children, contentPos, he
       ? [{ icon: mdiFlagOutline, title: t('admin.tab.games.challenges'), path: 'challenges' }]
       : []),
     ...(isAwdGame ? [{ icon: mdiSwordCross, title: t('admin.tab.games.awd'), path: 'awdp-services' }] : []),
-    ...(isPentestGame ? [{ icon: mdiNetworkOutline, title: '渗透编排', path: 'pentest' }] : []),
     ...(isTheoryGame
       ? [
           { icon: mdiFileDocumentCheckOutline, title: '理论试卷', path: 'theory-paper' },

@@ -2,7 +2,9 @@ using System.Net.Sockets;
 using Docker.DotNet;
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Services.Container.Provider;
+using GZCTF.Services.Fleet;
 using GZCTF.Utils;
 using k8s;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +23,15 @@ public static class ContainerHelper
     private const int MaxAttempts = 30;
     private const int DelayMs = 2000;
     private const int LocalTestNodeCapacity = 10_000;
+    private static readonly (string Json, string Hash, NodeCapability Capabilities) LocalTestManifest =
+        AgentCapabilityEvaluator.Normalize(new AgentCapabilityManifest(
+            "integration-test",
+            null,
+            AgentCapabilityEvaluator.SupportedManifestSchema,
+            [AgentFeatureIds.Docker],
+            new AgentExecutionLimits(32, 0, 8, 0),
+            new AgentHostFacts(64, 64L * 1024 * 1024 * 1024, 1024L * 1024 * 1024 * 1024),
+            DateTimeOffset.UtcNow));
 
     public static async Task SetLocalNodeSchedulingAsync(
         IServiceProvider serviceProvider,
@@ -33,7 +44,11 @@ public static class ContainerHelper
         {
             await localNodes.ExecuteUpdateAsync(setters => setters
                 .SetProperty(node => node.IsSchedulable, true)
-                .SetProperty(node => node.MaxContainers, LocalTestNodeCapacity));
+                .SetProperty(node => node.MaxContainers, LocalTestNodeCapacity)
+                .SetProperty(node => node.CapabilityManifestSchemaVersion,
+                    AgentCapabilityEvaluator.SupportedManifestSchema)
+                .SetProperty(node => node.CapabilityManifestJson, LocalTestManifest.Json)
+                .SetProperty(node => node.CapabilityHash, LocalTestManifest.Hash));
             return;
         }
 

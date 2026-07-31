@@ -4,15 +4,28 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using GZCTF.Agent.Models;
+using GZCTF.Agent.Services.Observation;
+using GZCTF.Agent.Services.Vm;
+using GZCTF.Agent.Services.GuestControl;
 using Microsoft.Extensions.Options;
 
 namespace GZCTF.Agent.Services;
 
 public class KvmService
 {
+    internal enum VmCreateDisposition
+    {
+        Create,
+        Reuse,
+        Replace,
+        Conflict
+    }
+
     private readonly KvmConfig _config;
     private readonly ILogger<KvmService> _logger;
     private readonly AgentResourceLock _resourceLock;
+    private readonly GuestEnrollmentStore? _guestEnrollmentStore;
+    private readonly RdpProxyAccessPolicy _consoleAccessPolicy;
 
     private static readonly Regex SafeNamePattern = new(@"^[a-zA-Z0-9_\-]+$", RegexOptions.Compiled);
     private static readonly Regex SafeMacPattern = new(@"^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$", RegexOptions.Compiled);
@@ -21,8 +34,26 @@ public class KvmService
     private const int RdpProxyPortStart = 46000;
     private const int RdpProxyPortCount = 10000;
 
-    public KvmService(IOptions<KvmConfig> config, AgentResourceLock resourceLock, ILogger<KvmService> logger)
-    { _config = config.Value; _resourceLock = resourceLock; _logger = logger; }
+    public KvmService(
+        IOptions<KvmConfig> config,
+        AgentResourceLock resourceLock,
+        ILogger<KvmService> logger,
+        GuestEnrollmentStore? guestEnrollmentStore = null,
+        IOptions<AgentConfig>? agentConfig = null)
+    {
+        _config = config.Value;
+        _resourceLock = resourceLock;
+        _logger = logger;
+        _guestEnrollmentStore = guestEnrollmentStore;
+        _consoleAccessPolicy = RdpProxyAccessPolicy.Create(
+            _config.RdpProxyAllowedSources, agentConfig?.Value.ServerUrl);
+        foreach (var invalid in _consoleAccessPolicy.InvalidSources)
+            _logger.LogError(
+                "Ignoring unparsable Kvm:RdpProxyAllowedSources entry {Source}; it grants nothing", invalid);
+        if (_consoleAccessPolicy.LoopbackOnly)
+            _logger.LogWarning(
+                "Console proxy accepts loopback only. Set Kvm:RdpProxyAllowedSources to the platform address, otherwise remote console will be refused.");
+    }
 
     public async Task<CreateVmResponse?> CreateVmAsync(CreateVmRequest request, CancellationToken token)
     {
@@ -39,19 +70,66 @@ public class KvmService
 
         var domainId = (await RunCommandAsync($"virsh domuuid {ShellEscape(request.VmName)} 2>/dev/null", token,
             throwOnError: false)).Trim();
-        var recordedGeneration = await ReadGenerationAsync(generationPath, token);
-        if (!string.IsNullOrWhiteSpace(domainId))
+        var domainExists = !string.IsNullOrWhiteSpace(domainId);
+        var domainGeneration = domainExists
+            ? await ReadDomainGenerationAsync(request.VmName, token)
+            : null;
+        var sidecarGeneration = await ReadGenerationAsync(generationPath, token);
+        var requestedGeneration = Math.Max(1, request.Generation);
+        var disposition = EvaluateCreateDisposition(
+            domainExists,
+            domainGeneration,
+            sidecarGeneration,
+            File.Exists(vmPath),
+            requestedGeneration);
+
+        if (disposition == VmCreateDisposition.Conflict)
+            throw new InvalidOperationException(
+                $"runtime_identity_conflict: VM {request.VmName} identity is inconsistent or belongs to an unknown/future generation " +
+                $"(domain={domainGeneration?.ToString() ?? "unknown"}, sidecar={sidecarGeneration?.ToString() ?? "unknown"}, requested={requestedGeneration}).");
+
+        if (disposition == VmCreateDisposition.Replace)
         {
-            recordedGeneration ??= await ReadDomainGenerationAsync(request.VmName, token);
-            if (recordedGeneration != request.Generation)
+            if (_guestEnrollmentStore is not null && domainGeneration is { } replacedGeneration)
+                await _guestEnrollmentStore.RevokeVmAsync(
+                    request.VmName, replacedGeneration, domainId, token);
+            await StopRdpProxyAsync(request.VmName);
+            if (domainExists)
+            {
+                await RunCommandAsync($"virsh destroy {ShellEscape(request.VmName)} 2>/dev/null || true", token);
+                await RunCommandAsync(
+                    $"virsh undefine {ShellEscape(request.VmName)} --remove-all-storage 2>/dev/null || true", token);
+            }
+            CleanupVmArtifacts(request.VmName);
+            domainId = string.Empty;
+            domainExists = false;
+            domainGeneration = null;
+            sidecarGeneration = null;
+        }
+
+        if (disposition == VmCreateDisposition.Reuse)
+        {
+            var conflict = GetIdentityConflict(
+                request.VmName,
+                domainId,
+                domainGeneration,
+                sidecarGeneration,
+                requestedGeneration,
+                expectedNativeId: null,
+                allowMissingSidecar: true);
+            if (conflict is not null)
                 throw new InvalidOperationException(
-                    $"runtime_identity_conflict: VM {request.VmName} exists with generation {recordedGeneration?.ToString() ?? "unknown"}.");
-            if (!File.Exists(generationPath))
-                await File.WriteAllTextAsync(generationPath, Math.Max(1, request.Generation).ToString(), token);
+                    $"runtime_identity_conflict: {conflict}");
+            if (sidecarGeneration is null)
+            {
+                await File.WriteAllTextAsync(generationPath, requestedGeneration.ToString(), token);
+                sidecarGeneration = requestedGeneration;
+            }
             var existingState = (await RunCommandAsync($"virsh domstate {ShellEscape(request.VmName)}", token,
                 throwOnError: false)).Trim();
             if (!existingState.Equals("running", StringComparison.OrdinalIgnoreCase))
                 await RunCommandAsync($"virsh start {ShellEscape(request.VmName)}", token);
+            await ConfigureManagementPortIsolationAsync(request, token);
             return new CreateVmResponse
             {
                 VmName = request.VmName,
@@ -63,54 +141,86 @@ public class KvmService
             };
         }
         if (File.Exists(vmPath))
-        {
-            if (recordedGeneration is not null && recordedGeneration != request.Generation)
-                throw new InvalidOperationException(
-                    $"runtime_identity_conflict: VM overlay {request.VmName} belongs to generation {recordedGeneration}.");
             File.Delete(vmPath);
-        }
 
         if (!string.IsNullOrEmpty(templatePath))
             await RunCommandAsync($"qemu-img create -f qcow2 -b {ShellEscape(templatePath)} -F qcow2 {ShellEscape(vmPath)}", token);
         else
             await RunCommandAsync($"qemu-img create -f qcow2 {ShellEscape(vmPath)} 20G", token);
 
-        CloudInitSeedFiles? cloudInitFiles = null;
-        var cloudInitArgs = string.Empty;
-        if (request.CloudInit?.Enabled == true)
+        try
         {
-            cloudInitFiles = await WriteCloudInitSeedFilesAsync(request, token);
-            var directCloudInit = await SupportsVirtInstallCloudInitAsync(token);
-            if (!directCloudInit)
-                await CreateCloudInitSeedIsoAsync(cloudInitFiles, token);
-            cloudInitArgs = BuildVirtInstallCloudInitArguments(cloudInitFiles, directCloudInit) + " ";
+            var mediaArguments = new List<string>();
+            if (request.CloudInit?.Enabled == true && request.GuestSupervisor is null)
+            {
+                var cloudInitFiles = await WriteCloudInitSeedFilesAsync(request, token);
+                var directCloudInit = await SupportsVirtInstallCloudInitAsync(token);
+                if (!directCloudInit)
+                    await CreateCloudInitSeedIsoAsync(cloudInitFiles, token);
+                mediaArguments.Add(BuildVirtInstallCloudInitArguments(cloudInitFiles, directCloudInit));
+            }
+            if (request.GuestSupervisor is not null)
+            {
+                var configDrive = GuestConfigDriveBuilder.Build(
+                    request,
+                    Path.Combine(GetRuntimeInjectionDirectory(request.VmName), "guest-config"));
+                await CreateIsoAsync(
+                    configDrive.IsoPath,
+                    configDrive.VolumeLabel,
+                    configDrive.Files,
+                    token);
+                mediaArguments.Add(
+                    $"--disk path={ShellEscape(configDrive.IsoPath)},device=cdrom,readonly=on");
+            }
+            if (request.GuestControl.EndpointSensorChannel)
+                mediaArguments.Add(await CreateEndpointSensorInjectionIsoAsync(request, token));
+
+            var domainArguments = VmDomainBuilder.BuildVirtInstallArguments(
+                request, vmPath, string.Join(' ', mediaArguments));
+            await RunCommandAsync($"virt-install {domainArguments}", token);
+
+            var state = (await RunCommandAsync($"virsh domstate {ShellEscape(request.VmName)}", token)).Trim();
+            if (!state.Equals("running", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"VM {request.VmName} was created but is not running (state: {state})");
+            await File.WriteAllTextAsync(generationPath, Math.Max(1, request.Generation).ToString(), token);
+            domainId = (await RunCommandAsync(
+                $"virsh domuuid {ShellEscape(request.VmName)} 2>/dev/null", token, throwOnError: false)).Trim();
+            var createdDomainGeneration = string.IsNullOrWhiteSpace(domainId)
+                ? null
+                : await ReadDomainGenerationAsync(request.VmName, token);
+            var createdSidecarGeneration = await ReadGenerationAsync(generationPath, token);
+            var createdConflict = GetIdentityConflict(
+                request.VmName,
+                domainId,
+                createdDomainGeneration,
+                createdSidecarGeneration,
+                requestedGeneration,
+                expectedNativeId: null);
+            if (createdConflict is not null)
+                throw new InvalidOperationException($"runtime_identity_conflict: {createdConflict}");
+            await ConfigureManagementPortIsolationAsync(request, token);
+
+            return new CreateVmResponse
+            {
+                VmName = request.VmName,
+                NativeId = domainId,
+                Generation = Math.Max(1, request.Generation),
+                Status = "Running",
+                VncAddress = await GetVncAddressAsync(request.VmName, token),
+                Interfaces = request.Interfaces
+            };
         }
-
-        await RunCommandAsync(
-            $"virt-install --name {ShellEscape(request.VmName)} --memory {request.Memory} --vcpus {request.Cpu} " +
-            $"--metadata description={ShellEscape($"gzctf-generation={Math.Max(1, request.Generation)}")} " +
-            $"{BuildVirtInstallBootAndDiskArguments(request, vmPath)} " +
-            $"--osinfo detect=on,require=off --import --noautoconsole " +
-            $"{cloudInitArgs}{BuildVirtInstallNetworkArguments(request)} --graphics vnc,listen=0.0.0.0", token);
-
-        var state = (await RunCommandAsync($"virsh domstate {ShellEscape(request.VmName)}", token)).Trim();
-        if (!state.Equals("running", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException($"VM {request.VmName} was created but is not running (state: {state})");
-        await File.WriteAllTextAsync(generationPath, Math.Max(1, request.Generation).ToString(), token);
-        domainId = (await RunCommandAsync(
-            $"virsh domuuid {ShellEscape(request.VmName)} 2>/dev/null", token, throwOnError: false)).Trim();
-        if (string.IsNullOrWhiteSpace(domainId))
-            throw new InvalidOperationException($"VM {request.VmName} has no stable libvirt domain identity.");
-
-        return new CreateVmResponse
+        catch
         {
-            VmName = request.VmName,
-            NativeId = domainId,
-            Generation = Math.Max(1, request.Generation),
-            Status = "Running",
-            VncAddress = await GetVncAddressAsync(request.VmName, token),
-            Interfaces = request.Interfaces
-        };
+            await RunCommandAsync(
+                $"virsh destroy {ShellEscape(request.VmName)} 2>/dev/null || true", CancellationToken.None,
+                throwOnError: false);
+            await RunCommandAsync(
+                $"virsh undefine {ShellEscape(request.VmName)} --remove-all-storage 2>/dev/null || true",
+                CancellationToken.None, throwOnError: false);
+            CleanupVmArtifacts(request.VmName);
+            throw;
+        }
     }
 
     public async Task DestroyVmAsync(
@@ -123,26 +233,76 @@ public class KvmService
         await using var identityLock = await _resourceLock.AcquireAsync($"vm:{vmName}", token);
         var nativeId = (await RunCommandAsync(
             $"virsh domuuid {ShellEscape(vmName)} 2>/dev/null", token, throwOnError: false)).Trim();
+        var generationPath = Path.Combine(_config.ImageStoragePath, $"{vmName}.generation");
+        var sidecarGeneration = await ReadGenerationAsync(generationPath, token);
         if (string.IsNullOrWhiteSpace(nativeId))
+        {
+            var overlayPath = Path.Combine(_config.ImageStoragePath, $"{vmName}.qcow2");
+            if (!File.Exists(overlayPath) && sidecarGeneration is null)
+            {
+                if (_guestEnrollmentStore is not null && expectedGeneration is { } preparedGeneration)
+                    await _guestEnrollmentStore.RevokeVmAsync(
+                        vmName, Math.Max(1, preparedGeneration), expectedNativeId, token);
+                return;
+            }
+            if (sidecarGeneration is null or < 1 ||
+                expectedGeneration is { } requestedGeneration && sidecarGeneration > Math.Max(1, requestedGeneration))
+                throw new AgentOperationException(
+                    "Conflict", "runtime.identity_conflict",
+                    $"VM {vmName} orphaned artifacts have an unknown or future generation.", false,
+                    StatusCodes.Status409Conflict);
+            if (_guestEnrollmentStore is not null && sidecarGeneration is { } orphanGeneration)
+                await _guestEnrollmentStore.RevokeVmAsync(vmName, orphanGeneration, null, token);
+            CleanupVmArtifacts(vmName);
             return;
-        var generation = await ReadDomainGenerationAsync(vmName, token);
-        if (expectedGeneration is { } requiredGeneration && generation != requiredGeneration)
+        }
+        var domainGeneration = await ReadDomainGenerationAsync(vmName, token);
+        var conflict = GetIdentityConflict(
+            vmName, nativeId, domainGeneration, sidecarGeneration, expectedGeneration, expectedNativeId);
+        if (conflict is not null)
             throw new AgentOperationException(
                 "Conflict", "runtime.identity_conflict",
-                $"VM {vmName} generation does not match the requested runtime identity.", false,
-                StatusCodes.Status409Conflict);
-        if (!string.IsNullOrWhiteSpace(expectedNativeId) &&
-            !nativeId.Equals(expectedNativeId, StringComparison.OrdinalIgnoreCase))
-            throw new AgentOperationException(
-                "Conflict", "runtime.identity_conflict",
-                $"VM {vmName} native identity does not match the requested runtime identity.", false,
+                conflict, false,
                 StatusCodes.Status409Conflict);
         await StopRdpProxyAsync(vmName);
         await RunCommandAsync($"virsh destroy {ShellEscape(vmName)} 2>/dev/null || true", token);
         await RunCommandAsync($"virsh undefine {ShellEscape(vmName)} --remove-all-storage 2>/dev/null || true", token);
-        CleanupCloudInitSeed(vmName);
-        var generationPath = Path.Combine(_config.ImageStoragePath, $"{vmName}.generation");
-        if (File.Exists(generationPath)) File.Delete(generationPath);
+        if (_guestEnrollmentStore is not null)
+            await _guestEnrollmentStore.RevokeVmAsync(
+                vmName, domainGeneration!.Value, nativeId, token);
+        CleanupVmArtifacts(vmName);
+    }
+
+    public async Task<bool> WaitForCleanShutdownAsync(
+        string vmName,
+        int timeoutSeconds,
+        CancellationToken token)
+    {
+        if (!SafeNamePattern.IsMatch(vmName))
+            throw new ArgumentException("Invalid VM name", nameof(vmName));
+        timeoutSeconds = Math.Clamp(timeoutSeconds, 1, 1800);
+        if (await IsDomainShutOffAsync(vmName, token))
+            return true;
+        try
+        {
+            await RunCommandAsync(
+                $"LC_ALL=C virsh event --domain {ShellEscape(vmName)} --event lifecycle --loop --timeout {timeoutSeconds} " +
+                "| awk '/Stopped|Shutdown|shut off/{found=1; exit} END{exit found?0:1}'",
+                token);
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        return await IsDomainShutOffAsync(vmName, token);
+    }
+
+    async Task<bool> IsDomainShutOffAsync(string vmName, CancellationToken token)
+    {
+        var state = (await RunCommandAsync(
+            $"LC_ALL=C virsh domstate {ShellEscape(vmName)} 2>/dev/null",
+            token,
+            throwOnError: false)).Trim();
+        return state.Contains("shut off", StringComparison.OrdinalIgnoreCase);
     }
 
     static async Task<int?> ReadGenerationAsync(string path, CancellationToken token)
@@ -169,6 +329,100 @@ public class KvmService
             .Split(['\r', '\n', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries)
             .FirstOrDefault();
         return int.TryParse(value, out var generation) ? generation : null;
+    }
+
+    internal static bool IsStaleGeneration(int? existingGeneration, int requestedGeneration) =>
+        existingGeneration is { } existing && existing >= 1 && existing < Math.Max(1, requestedGeneration);
+
+    internal static VmCreateDisposition EvaluateCreateDisposition(
+        bool domainExists,
+        int? domainGeneration,
+        int? sidecarGeneration,
+        bool overlayExists,
+        int requestedGeneration)
+    {
+        requestedGeneration = Math.Max(1, requestedGeneration);
+        if (domainExists)
+        {
+            if (domainGeneration is null or < 1)
+                return VmCreateDisposition.Conflict;
+            if (sidecarGeneration is { } sidecar && sidecar != domainGeneration)
+                return VmCreateDisposition.Conflict;
+            if (domainGeneration < requestedGeneration)
+                return VmCreateDisposition.Replace;
+            return domainGeneration == requestedGeneration
+                ? VmCreateDisposition.Reuse
+                : VmCreateDisposition.Conflict;
+        }
+
+        if (sidecarGeneration is { } orphanGeneration)
+        {
+            if (orphanGeneration < 1 || orphanGeneration > requestedGeneration)
+                return VmCreateDisposition.Conflict;
+            return VmCreateDisposition.Replace;
+        }
+
+        return overlayExists
+            ? VmCreateDisposition.Conflict
+            : VmCreateDisposition.Create;
+    }
+
+    internal static string? GetIdentityConflict(
+        string vmName,
+        string? nativeId,
+        int? domainGeneration,
+        int? sidecarGeneration,
+        int? expectedGeneration,
+        string? expectedNativeId,
+        bool allowMissingSidecar = false)
+    {
+        if (string.IsNullOrWhiteSpace(nativeId))
+            return $"VM {vmName} has no libvirt native identity.";
+        if (domainGeneration is null or < 1)
+            return $"VM {vmName} has no managed domain generation.";
+        if ((sidecarGeneration is null && !allowMissingSidecar) || sidecarGeneration is < 1)
+            return $"VM {vmName} has no managed sidecar generation.";
+        if (sidecarGeneration is { } actualSidecarGeneration && domainGeneration != actualSidecarGeneration)
+            return $"VM {vmName} domain generation {domainGeneration} does not match sidecar generation {sidecarGeneration}.";
+        if (expectedGeneration is { } requiredGeneration && domainGeneration != Math.Max(1, requiredGeneration))
+            return $"VM {vmName} generation does not match the requested runtime identity.";
+
+        var stableNativeId = VmDomainBuilder.BuildStableDomainId(vmName, domainGeneration.Value).ToString("D");
+        if (!nativeId.Equals(stableNativeId, StringComparison.OrdinalIgnoreCase) ||
+            !string.IsNullOrWhiteSpace(expectedNativeId) &&
+            !nativeId.Equals(expectedNativeId.Trim(), StringComparison.OrdinalIgnoreCase))
+            return $"VM {vmName} native identity does not match the requested runtime identity.";
+        return null;
+    }
+
+    public async Task<T> ExecuteWithIdentityAsync<T>(
+        string vmName,
+        int? expectedGeneration,
+        string? expectedNativeId,
+        Func<CancellationToken, Task<T>> action,
+        CancellationToken token)
+    {
+        if (!SafeNamePattern.IsMatch(vmName))
+            throw new AgentOperationException(
+                "Conflict", "runtime.identity_conflict", "VM name is invalid.", false,
+                StatusCodes.Status409Conflict);
+
+        await using var identityLock = await _resourceLock.AcquireAsync($"vm:{vmName}", token);
+        var nativeId = (await RunCommandAsync(
+            $"virsh domuuid {ShellEscape(vmName)} 2>/dev/null", token, throwOnError: false)).Trim();
+        var domainGeneration = string.IsNullOrWhiteSpace(nativeId)
+            ? null
+            : await ReadDomainGenerationAsync(vmName, token);
+        var sidecarGeneration = await ReadGenerationAsync(
+            Path.Combine(_config.ImageStoragePath, $"{vmName}.generation"), token);
+        var conflict = GetIdentityConflict(
+            vmName, nativeId, domainGeneration, sidecarGeneration, expectedGeneration, expectedNativeId);
+        if (conflict is not null)
+            throw new AgentOperationException(
+                "Conflict", "runtime.identity_conflict", conflict, false,
+                StatusCodes.Status409Conflict);
+
+        return await action(token);
     }
 
     public async Task<int> GetVmCountAsync(CancellationToken token)
@@ -207,22 +461,10 @@ public class KvmService
         return inventory.OrderBy(item => item.StableName, StringComparer.Ordinal).ToArray();
     }
 
-    public async Task RestoreRdpProxiesAsync(CancellationToken token)
-    {
-        var result = await RunCommandAsync("virsh list --name 2>/dev/null", token, throwOnError: false);
-        foreach (var vmName in result.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            token.ThrowIfCancellationRequested();
-            if (!SafeNamePattern.IsMatch(vmName) || RdpProxies.ContainsKey(vmName))
-                continue;
-
-            var ip = await GetIpAddressAsync(vmName, token);
-            if (string.IsNullOrEmpty(ip))
-                continue;
-
-            await EnsureRdpProxyAsync(vmName, ip, token);
-        }
-    }
+    // A bulk "restore every running VM's console proxy" pass used to run on every heartbeat, which
+    // meant every VM on the node permanently carried an open forwarder regardless of whether anyone
+    // had asked for a console. Proxies are now created only through the authenticated VmController
+    // endpoints, on demand, and torn down with the VM.
 
     public async Task<string?> GetIpAddressAsync(string vmName, CancellationToken token,
         IReadOnlyList<VmNetworkInterfaceRequest>? interfaces = null)
@@ -242,20 +484,20 @@ public class KvmService
         var result = await RunCommandAsync($"virsh domifaddr {ShellEscape(vmName)} --source agent 2>/dev/null",
             token, throwOnError: false);
         diagnostics.Add(SummarizeCommand("domifaddr-agent", result));
-        var ip = ParseFirstNonLoopbackIp(result);
+        var ip = ParsePreferredInterfaceIp(result, interfaces);
         if (ip is not null)
             return new VmIpLookupResult(ip, "Matched virsh domifaddr --source agent.");
 
         result = await RunCommandAsync($"virsh domifaddr {ShellEscape(vmName)} 2>/dev/null",
             token, throwOnError: false);
         diagnostics.Add(SummarizeCommand("domifaddr", result));
-        ip = ParseFirstNonLoopbackIp(result);
+        ip = ParsePreferredInterfaceIp(result, interfaces);
         if (ip is not null)
             return new VmIpLookupResult(ip, "Matched virsh domifaddr.");
 
         if (interfaces is { Count: > 0 })
         {
-            foreach (var iface in interfaces.Where(i =>
+            foreach (var iface in PreferredInterfaces(interfaces).Where(i =>
                          !string.IsNullOrWhiteSpace(i.BridgeName) &&
                          !string.IsNullOrWhiteSpace(i.MacAddress)))
             {
@@ -322,12 +564,14 @@ public class KvmService
             {
                 var listener = new TcpListener(IPAddress.Any, port);
                 listener.Start(64);
-                var proxy = new RdpProxy(vmName, ip, port, listener, _logger);
+                var proxy = new RdpProxy(vmName, ip, port, listener, _logger, _consoleAccessPolicy);
                 if (RdpProxies.TryAdd(vmName, proxy))
                 {
                     _ = proxy.RunAsync();
-                    _logger.LogInformation("RDP proxy for VM {VmName}: 0.0.0.0:{Port} -> {Ip}:3389",
-                        vmName, port, ipAddress);
+                    _logger.LogInformation(
+                        "Console proxy for VM {VmName}: :{Port} -> {Ip}:3389, accepting {Sources}",
+                        vmName, port, ipAddress,
+                        _consoleAccessPolicy.LoopbackOnly ? "loopback only" : "configured platform sources");
                     return Task.FromResult<int?>(port);
                 }
 
@@ -390,10 +634,46 @@ public class KvmService
 
     internal static string BuildVirtInstallNetworkArguments(CreateVmRequest request)
     {
-        if (request.Interfaces.Count == 0)
-            return "--network network=default,model=e1000e";
+        var interfaces = request.Interfaces.ToList();
+        if (request.ManagementInterface is { } management)
+            interfaces.Add(new VmNetworkInterfaceRequest
+            {
+                BridgeName = management.BridgeName,
+                MacAddress = management.MacAddress,
+                Model = management.Model,
+                InterfaceName = "gzmgmt0",
+                IpAddress = management.IpAddress,
+                PrefixLength = management.PrefixLength
+            });
+        if (interfaces.Count == 0)
+        {
+            var model = string.IsNullOrWhiteSpace(request.DefaultNetworkModel)
+                ? "e1000e"
+                : request.DefaultNetworkModel.Trim();
+            if (!SafeNamePattern.IsMatch(model))
+                throw new ArgumentException("Invalid default VM network model.", nameof(request.DefaultNetworkModel));
+            return $"--network network=default,model={model}";
+        }
 
-        return string.Join(' ', request.Interfaces.Select(BuildVirtInstallNetworkArgument));
+        return string.Join(' ', interfaces.Select(BuildVirtInstallNetworkArgument));
+    }
+
+    internal static string? BuildManagementPortIsolationCommand(CreateVmRequest request)
+    {
+        if (request.ManagementInterface is not { } management) return null;
+        if (!SafeNamePattern.IsMatch(request.VmName) || !SafeNamePattern.IsMatch(management.BridgeName))
+            throw new ArgumentException("Invalid VM management interface identity.", nameof(request));
+        return $"tap=$(virsh domiflist {ShellEscape(request.VmName)} | " +
+               $"awk '$3 == \"{management.BridgeName}\" {{ print $1; exit }}'); " +
+               "test -n \"$tap\" && bridge link set dev \"$tap\" isolated on";
+    }
+
+    private async Task ConfigureManagementPortIsolationAsync(
+        CreateVmRequest request,
+        CancellationToken cancellationToken)
+    {
+        var command = BuildManagementPortIsolationCommand(request);
+        if (command is not null) await RunCommandAsync(command, cancellationToken);
     }
 
     internal static string BuildVirtInstallBootAndDiskArguments(CreateVmRequest request, string vmPath)
@@ -428,17 +708,42 @@ public class KvmService
             mac = $",mac={iface.MacAddress.ToLowerInvariant()}";
         }
 
-        return $"--network bridge={iface.BridgeName},model={model}{mac}";
+        var target = string.Empty;
+        if (!string.IsNullOrWhiteSpace(iface.HostInterfaceName))
+        {
+            var hostInterfaceName = iface.HostInterfaceName.Trim();
+            if (!SafeInterfacePattern.IsMatch(hostInterfaceName) || hostInterfaceName.Length > 15)
+                throw new ArgumentException("Invalid VM host interface name.", nameof(iface.HostInterfaceName));
+            target = $",target.dev={hostInterfaceName}";
+        }
+
+        return $"--network bridge={iface.BridgeName},model={model}{mac}{target}";
     }
 
     internal static string BuildCloudInitNetworkConfig(CreateVmRequest request)
     {
+        var interfaces = request.CloudInit?.NetworkMode == VmInitNetworkMode.Preconfigured
+            ? new List<VmNetworkInterfaceRequest>()
+            : request.Interfaces.Where(iface => !string.IsNullOrWhiteSpace(iface.MacAddress)).ToList();
+        if (request.ManagementInterface is { } management)
+            interfaces.Add(new VmNetworkInterfaceRequest
+            {
+                BridgeName = management.BridgeName,
+                MacAddress = management.MacAddress,
+                Model = management.Model,
+                InterfaceName = "gzmgmt0",
+                IpAddress = management.IpAddress,
+                PrefixLength = management.PrefixLength
+            });
+        if (interfaces.Count == 0)
+            return "version: 2\nethernets: {}\n";
+
         var builder = new System.Text.StringBuilder();
         builder.AppendLine("version: 2");
         builder.AppendLine("ethernets:");
 
         var index = 0;
-        foreach (var iface in request.Interfaces.Where(HasStaticCloudInitNetworkIntent))
+        foreach (var iface in interfaces)
         {
             var macAddress = iface.MacAddress!;
             if (!SafeMacPattern.IsMatch(macAddress))
@@ -458,11 +763,22 @@ public class KvmService
             builder.AppendLine("    match:");
             builder.AppendLine($"      macaddress: \"{macAddress.ToLowerInvariant()}\"");
             builder.AppendLine($"    set-name: {name}");
+            var useDhcp = request.CloudInit?.NetworkMode == VmInitNetworkMode.Dhcp &&
+                          !string.Equals(name, "gzmgmt0", StringComparison.Ordinal);
+            if (useDhcp)
+            {
+                builder.AppendLine("    dhcp4: true");
+                builder.AppendLine("    dhcp6: false");
+                builder.AppendLine("    optional: true");
+                AppendRoutes(builder, iface);
+                index++;
+                continue;
+            }
             builder.AppendLine("    dhcp4: false");
             builder.AppendLine("    dhcp6: false");
             builder.AppendLine($"    addresses: [{iface.IpAddress}/{iface.PrefixLength}]");
 
-            if (!string.IsNullOrWhiteSpace(iface.Gateway))
+            if (iface.IsPrimary && !string.IsNullOrWhiteSpace(iface.Gateway))
             {
                 if (!IsValidIpv4(iface.Gateway))
                     throw new ArgumentException("Invalid VM gateway address.", nameof(iface.Gateway));
@@ -482,24 +798,27 @@ public class KvmService
                 builder.AppendLine($"      addresses: [{string.Join(", ", dns)}]");
             }
 
-            var routes = iface.Routes
-                .Select(ParseRoute)
-                .Cast<(string To, string Via)>()
-                .ToArray();
-            if (routes.Length > 0)
-            {
-                builder.AppendLine("    routes:");
-                foreach (var route in routes)
-                {
-                    builder.AppendLine($"      - to: {route.To}");
-                    builder.AppendLine($"        via: {route.Via}");
-                }
-            }
+            AppendRoutes(builder, iface);
 
             index++;
         }
 
         return builder.ToString();
+    }
+
+    private static void AppendRoutes(System.Text.StringBuilder builder, VmNetworkInterfaceRequest iface)
+    {
+        var routes = iface.Routes
+            .Select(ParseRoute)
+            .Cast<(string To, string Via)>()
+            .ToArray();
+        if (routes.Length == 0) return;
+        builder.AppendLine("    routes:");
+        foreach (var route in routes)
+        {
+            builder.AppendLine($"      - to: {route.To}");
+            builder.AppendLine($"        via: {route.Via}");
+        }
     }
 
     internal static string BuildVirtInstallCloudInitArguments(CloudInitSeedFiles files, bool useDirectCloudInit)
@@ -554,30 +873,64 @@ public class KvmService
     private async Task CreateCloudInitSeedIsoAsync(CloudInitSeedFiles files, CancellationToken token)
     {
         var dir = Path.GetDirectoryName(files.UserDataPath)!;
-        var genisoimage = await RunCommandAsync("command -v genisoimage || command -v mkisofs || command -v xorriso",
-            token, throwOnError: false);
-        var tool = genisoimage.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        await CreateIsoAsync(
+            files.IsoPath,
+            "CIDATA",
+            [
+                ("user-data", Path.Combine(dir, "user-data")),
+                ("meta-data", Path.Combine(dir, "meta-data")),
+                ("network-config", Path.Combine(dir, "network-config"))
+            ],
+            token);
+    }
+
+    private async Task<string> CreateEndpointSensorInjectionIsoAsync(
+        CreateVmRequest request,
+        CancellationToken token)
+    {
+        var osType = request.GuestControl.OsType
+                     ?? throw new InvalidOperationException("Endpoint sensor injection requires a VM OS type.");
+        var sourcePath = osType == VmInitOsType.Windows
+            ? EndpointSensorChannelService.WindowsSensorPath
+            : EndpointSensorChannelService.LinuxSensorPath;
+        var fileName = osType == VmInitOsType.Windows
+            ? EndpointSensorChannelService.WindowsSensorFileName
+            : EndpointSensorChannelService.LinuxSensorFileName;
+        if (!File.Exists(sourcePath))
+            throw new InvalidOperationException($"Endpoint sensor artifact is unavailable for {osType}.");
+
+        var root = Path.Combine(GetRuntimeInjectionDirectory(request.VmName), "endpoint-sensor");
+        if (Directory.Exists(root))
+            Directory.Delete(root, recursive: true);
+        Directory.CreateDirectory(root);
+        var isoPath = Path.Combine(root, "endpoint-sensor.iso");
+        await CreateIsoAsync(
+            isoPath,
+            EndpointSensorChannelService.InjectionVolumeLabel,
+            [(fileName, sourcePath)],
+            token);
+        return $"--disk path={ShellEscape(isoPath)},device=cdrom,readonly=on";
+    }
+
+    private async Task CreateIsoAsync(
+        string outputPath,
+        string volumeLabel,
+        IReadOnlyList<(string TargetName, string SourcePath)> files,
+        CancellationToken token)
+    {
+        var resolved = await RunCommandAsync(
+            "command -v genisoimage || command -v mkisofs || command -v xorriso",
+            token,
+            throwOnError: false);
+        var tool = resolved.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
         if (string.IsNullOrWhiteSpace(tool))
-            throw new InvalidOperationException("cloud-init seed ISO requires genisoimage, mkisofs, or xorriso.");
-
-        if (tool.EndsWith("xorriso", StringComparison.Ordinal))
-        {
-            await RunCommandAsync(
-                $"{ShellEscape(tool)} -as mkisofs -output {ShellEscape(files.IsoPath)} -volid CIDATA -joliet -rock " +
-                "-graft-points " +
-                $"user-data={ShellEscape(Path.Combine(dir, "user-data"))} " +
-                $"meta-data={ShellEscape(Path.Combine(dir, "meta-data"))} " +
-                $"network-config={ShellEscape(Path.Combine(dir, "network-config"))}",
-                token);
-            return;
-        }
-
+            throw new InvalidOperationException("VM injection media requires genisoimage, mkisofs, or xorriso.");
+        var grafts = string.Join(' ', files.Select(file =>
+            $"{file.TargetName}={ShellEscape(file.SourcePath)}"));
+        var compatibility = tool.EndsWith("xorriso", StringComparison.Ordinal) ? "-as mkisofs " : string.Empty;
         await RunCommandAsync(
-            $"{ShellEscape(tool)} -output {ShellEscape(files.IsoPath)} -volid CIDATA -joliet -rock " +
-            "-graft-points " +
-            $"user-data={ShellEscape(Path.Combine(dir, "user-data"))} " +
-            $"meta-data={ShellEscape(Path.Combine(dir, "meta-data"))} " +
-            $"network-config={ShellEscape(Path.Combine(dir, "network-config"))}",
+            $"{ShellEscape(tool)} {compatibility}-output {ShellEscape(outputPath)} " +
+            $"-volid {ShellEscape(volumeLabel)} -joliet -rock -graft-points {grafts}",
             token);
     }
 
@@ -615,6 +968,9 @@ public class KvmService
     private string GetCloudInitSeedDirectory(string vmName) =>
         Path.Combine(_config.ImageStoragePath, "cloud-init", vmName);
 
+    private string GetRuntimeInjectionDirectory(string vmName) =>
+        Path.Combine(_config.ImageStoragePath, "runtime-injection", vmName);
+
     private void CleanupCloudInitSeed(string vmName)
     {
         var root = GetCloudInitSeedDirectory(vmName);
@@ -622,17 +978,31 @@ public class KvmService
             Directory.Delete(root, recursive: true);
     }
 
+    private void CleanupVmArtifacts(string vmName)
+    {
+        CleanupCloudInitSeed(vmName);
+        var injectionRoot = GetRuntimeInjectionDirectory(vmName);
+        if (Directory.Exists(injectionRoot)) Directory.Delete(injectionRoot, recursive: true);
+        var overlayPath = Path.Combine(_config.ImageStoragePath, $"{vmName}.qcow2");
+        if (File.Exists(overlayPath)) File.Delete(overlayPath);
+        var generationPath = Path.Combine(_config.ImageStoragePath, $"{vmName}.generation");
+        if (File.Exists(generationPath)) File.Delete(generationPath);
+        var bootstrapPath = Path.Combine("/var/lib/gzctf/vm-runtime", vmName);
+        if (Directory.Exists(bootstrapPath)) Directory.Delete(bootstrapPath, recursive: true);
+    }
+
     private async Task<string> RunCommandAsync(string cmd, CancellationToken token, bool throwOnError = true)
     {
         var psi = new ProcessStartInfo
         {
             FileName = "/bin/bash",
-            Arguments = $"-c \"{cmd}\"",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true
         };
+        psi.ArgumentList.Add("-c");
+        psi.ArgumentList.Add(cmd);
         using var process = Process.Start(psi);
         if (process is null) return "";
         var stdoutTask = process.StandardOutput.ReadToEndAsync(token);
@@ -681,6 +1051,54 @@ public class KvmService
         }
 
         return null;
+    }
+
+    internal static string? ParsePreferredInterfaceIp(
+        string output,
+        IReadOnlyList<VmNetworkInterfaceRequest>? interfaces)
+    {
+        if (interfaces is not { Count: > 0 })
+            return ParseFirstNonLoopbackIp(output);
+
+        var lines = output.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries);
+        var preferredInterfaces = PreferredInterfaces(interfaces);
+        foreach (var iface in preferredInterfaces)
+        {
+            if (string.IsNullOrWhiteSpace(iface.MacAddress) || !SafeMacPattern.IsMatch(iface.MacAddress))
+                continue;
+            var macAddress = iface.MacAddress.ToLowerInvariant();
+            foreach (var line in lines)
+            {
+                if (!line.Contains(macAddress, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var ip = ParseFirstNonLoopbackIp(line);
+                if (ip is not null &&
+                    (string.IsNullOrWhiteSpace(iface.IpAddress) ||
+                     ip.Equals(iface.IpAddress, StringComparison.Ordinal)))
+                    return ip;
+            }
+        }
+
+        foreach (var iface in preferredInterfaces)
+        {
+            if (string.IsNullOrWhiteSpace(iface.IpAddress))
+                continue;
+            foreach (var line in lines)
+            {
+                var ip = ParseFirstNonLoopbackIp(line);
+                if (ip?.Equals(iface.IpAddress, StringComparison.Ordinal) == true)
+                    return ip;
+            }
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<VmNetworkInterfaceRequest> PreferredInterfaces(
+        IReadOnlyList<VmNetworkInterfaceRequest> interfaces)
+    {
+        var primary = interfaces.Where(item => item.IsPrimary).ToArray();
+        return primary.Length > 0 ? primary : interfaces;
     }
 
     private static string? ParseMacAddress(string output)
@@ -800,18 +1218,26 @@ public class KvmService
         private readonly string _vmName;
         private readonly TcpListener _listener;
         private readonly ILogger _logger;
+        private readonly RdpProxyAccessPolicy _accessPolicy;
         private readonly CancellationTokenSource _cts = new();
 
         public IPAddress TargetIp { get; }
         public int Port { get; }
 
-        public RdpProxy(string vmName, IPAddress targetIp, int port, TcpListener listener, ILogger logger)
+        public RdpProxy(
+            string vmName,
+            IPAddress targetIp,
+            int port,
+            TcpListener listener,
+            ILogger logger,
+            RdpProxyAccessPolicy accessPolicy)
         {
             _vmName = vmName;
             TargetIp = targetIp;
             Port = port;
             _listener = listener;
             _logger = logger;
+            _accessPolicy = accessPolicy;
         }
 
         public async Task RunAsync()
@@ -846,6 +1272,18 @@ public class KvmService
         private async Task HandleClientAsync(TcpClient client)
         {
             using var clientSocket = client;
+            // The forwarded stream reaches a tenant VM's RDP port with no protocol-level
+            // authentication of its own, so the peer address is the only thing that can be checked
+            // before bytes cross into the guest.
+            var peer = (clientSocket.Client.RemoteEndPoint as IPEndPoint)?.Address;
+            if (!_accessPolicy.IsAllowed(peer))
+            {
+                _logger.LogWarning(
+                    "Rejected console proxy connection from {Peer} for VM {VmName}; add the source to Kvm:RdpProxyAllowedSources if it is the platform",
+                    peer?.ToString() ?? "unknown", _vmName);
+                return;
+            }
+
             try
             {
                 using var target = new TcpClient();

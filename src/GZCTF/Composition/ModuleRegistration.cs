@@ -45,12 +45,16 @@ public static class ModuleRegistration
         services.AddScoped<TheoryStatisticsProjectionService>();
         services.AddScoped<UserProfileQueryService>();
         services.AddSingleton<RedisDeploymentQueueWakeup>();
+        services.AddSingleton<RedisRuntimeSignalWakeup>();
         services.AddSingleton<PollingDeploymentQueueWakeup>();
         services.AddSingleton<IDeploymentQueueWakeup>(serviceProvider =>
             serviceProvider.GetRequiredService<IOptions<RedisRuntimeOptions>>().Value.Mode ==
             RedisRuntimeMode.Disabled
                 ? serviceProvider.GetRequiredService<PollingDeploymentQueueWakeup>()
                 : serviceProvider.GetRequiredService<RedisDeploymentQueueWakeup>());
+        services.AddSingleton<IRuntimeSignalWakeup>(serviceProvider =>
+            serviceProvider.GetRequiredService<RedisRuntimeSignalWakeup>());
+        services.AddScoped<RuntimeSignalService>();
         services.AddSingleton<PostgresNodeLiveStateFallback>();
         services.AddSingleton<RedisNodeLiveStateStore>();
         services.AddSingleton<INodeLiveStateStore>(serviceProvider =>

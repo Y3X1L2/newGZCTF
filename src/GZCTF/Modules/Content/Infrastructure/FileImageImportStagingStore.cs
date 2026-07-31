@@ -10,7 +10,7 @@ namespace GZCTF.Modules.Content.Infrastructure;
 
 public sealed class FileImageImportStagingStore : IImageImportStagingStore
 {
-    private static readonly string[] AllowedExtensions = [".tar", ".tar.gz", ".tgz"];
+    private static readonly string[] DockerArchiveExtensions = [".tar", ".tar.gz", ".tgz"];
     private readonly string _root;
     private readonly long _maxUploadSize;
 
@@ -28,20 +28,15 @@ public sealed class FileImageImportStagingStore : IImageImportStagingStore
         string originalFileName,
         long declaredLength,
         string? expectedDigest,
+        ImageImportStagingKind kind,
         CancellationToken cancellationToken)
     {
         var safeName = Path.GetFileName(originalFileName);
-        var extension = GetExtension(safeName);
+        var extension = GetExtension(safeName, kind);
         if (string.IsNullOrWhiteSpace(safeName) || extension is null)
-            throw new ImageImportContractException(
-                "image_archive_invalid",
-                "Unsupported Docker archive format. Allowed: .tar, .tar.gz, .tgz.",
-                400);
+            throw InvalidFormat(kind);
         if (declaredLength is <= 0 || declaredLength > _maxUploadSize)
-            throw new ImageImportContractException(
-                "image_archive_size_invalid",
-                "Docker archive size is invalid or exceeds the configured limit.",
-                400);
+            throw InvalidSize(kind, "size is invalid or exceeds the configured limit");
 
         Directory.CreateDirectory(_root);
         var id = Guid.NewGuid().ToString("N");
@@ -67,10 +62,7 @@ public sealed class FileImageImportStagingStore : IImageImportStagingStore
                         break;
                     written += read;
                     if (written > _maxUploadSize)
-                        throw new ImageImportContractException(
-                            "image_archive_size_invalid",
-                            "Docker archive exceeds the configured upload limit.",
-                            400);
+                        throw InvalidSize(kind, "exceeds the configured upload limit");
                     hash.AppendData(buffer.AsSpan(0, read));
                     await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
                 }
@@ -79,10 +71,7 @@ public sealed class FileImageImportStagingStore : IImageImportStagingStore
             }
 
             if (written != declaredLength)
-                throw new ImageImportContractException(
-                    "image_archive_size_invalid",
-                    "Docker archive length does not match the uploaded content.",
-                    400);
+                throw InvalidSize(kind, "length does not match the uploaded content");
             var digest = Convert.ToHexStringLower(hash.GetHashAndReset());
             var normalizedExpected = NormalizeDigest(expectedDigest);
             if (normalizedExpected is not null &&
@@ -188,9 +177,27 @@ public sealed class FileImageImportStagingStore : IImageImportStagingStore
         ? StringComparison.OrdinalIgnoreCase
         : StringComparison.Ordinal;
 
-    private static string? GetExtension(string fileName) =>
-        AllowedExtensions.FirstOrDefault(extension =>
-            fileName.EndsWith(extension, StringComparison.OrdinalIgnoreCase));
+    private static string? GetExtension(string fileName, ImageImportStagingKind kind) => kind switch
+    {
+        ImageImportStagingKind.DockerArchive => DockerArchiveExtensions.FirstOrDefault(extension =>
+            fileName.EndsWith(extension, StringComparison.OrdinalIgnoreCase)),
+        ImageImportStagingKind.VmQcow2 when fileName.EndsWith(".qcow2", StringComparison.OrdinalIgnoreCase) =>
+            ".qcow2",
+        _ => null
+    };
+
+    private static ImageImportContractException InvalidFormat(ImageImportStagingKind kind) => kind switch
+    {
+        ImageImportStagingKind.VmQcow2 => new ImageImportContractException(
+            "vm_qcow2_invalid", "Unsupported VM image format. Allowed: .qcow2.", 400),
+        _ => new ImageImportContractException(
+            "image_archive_invalid", "Unsupported Docker archive format. Allowed: .tar, .tar.gz, .tgz.", 400)
+    };
+
+    private static ImageImportContractException InvalidSize(ImageImportStagingKind kind, string reason) =>
+        kind == ImageImportStagingKind.VmQcow2
+            ? new ImageImportContractException("vm_qcow2_size_invalid", $"VM qcow2 {reason}.", 400)
+            : new ImageImportContractException("image_archive_size_invalid", $"Docker archive {reason}.", 400);
 
     private static string? NormalizeDigest(string? value)
     {

@@ -1,6 +1,13 @@
 # 商业化总纲审计进度记录
 
-更新时间：2026-07-13
+更新时间：2026-07-15
+
+## 2026-07-15 Phase 9 本地开发闭环
+
+- Phase 9 后端大单元 1-10 已完成：Topology v2、显式交换机/路由器、多节点 L3 Fabric、Docker/Linux VM/Windows VM/混合分片、Bootstrap Profile、VM guest control、依赖 DAG、守护式恢复、全观察点流量元数据、Endpoint Sensor、多段 PCAP、API/审计/迁移闭环均已落地。
+- 独立质量审查确认的 9 项重要问题和 1 项次要问题均已关闭，覆盖 Bootstrap 授权、暂不支持的 Docker Profile fail-closed、PCAP 双端清理、Fabric lease 回填、Contract 完整性、旧 capture 迁移、observation spool 代际与容量、PCAP 重试证据保护和 Redis stream 跨副本背压。
+- 最终本地门禁：Release solution build `0` warning / `0` error，单元测试 `513/513`，PostgreSQL/Redis 集成测试 `232/232`，EF 无 pending model changes，OpenAPI 快照一致且向后兼容，模块边界、旧实现和敏感日志扫描通过，`git diff --check` 通过。
+- 本轮严格按用户要求未连接、部署或测试 `10.24.0.118`；真实 Docker/Linux VM/Windows VM、多 WorkerNode、WireGuard、服务注入、跨节点流量路径与销毁残留验收保留在 Phase 9 文档第 12 节，不能以本地测试替代。
 
 ## 2026-07-13 Phase 7 计划编写与代码事实基线
 
@@ -366,3 +373,20 @@
 - 最终门禁通过：solution build 0 warning/0 error，单元测试 488/488，PostgreSQL 集成测试 223/223，前端 strict TypeScript 通过，EF 无 pending model changes，query-plan contract 7/7，`git diff --check` 通过。
 - 真实 PostgreSQL 16 PITR 演练通过：WAL archive/base backup 后执行 Phase 4 Contract，恢复至 `2026-07-12 10:28:44.597477+00`；migration head 回到 Phase 3，升级前标记计数 1、升级后标记计数 0。演练脚本为 `scripts/database/rehearse-pitr.ps1`，临时容器和 volume 已自动清理。
 - Phase 4 已闭环完成；本阶段未部署、未连接或修改生产服务器。
+## 2026-07-16 Phase 9 Consolidated Acceptance Gate
+
+- Status: in progress; completion is blocked on the consolidated local gate and live Docker/Linux/Windows/AD acceptance.
+- Review coverage: VM/Windows/AD identity and bootstrap, TeamLab data plane and access, traffic/PCAP, runtime control and cleanup, Agent/Registry/image distribution.
+- Confirmed critical corrections are being implemented as one batch: generation-safe VM recovery, partial-batch compensation, real dnsmasq/data-plane readiness, control-plane reset/destroy, declared service health checks, collision-safe names, complete round-trip path correlation, cursor/spool durability, and persistent Windows networking.
+- Validation policy: no repeated deploy-after-each-small-change loop. Run one focused local Release/unit gate after the integrated patch, then deploy once to `10.0.7.118` and `10.0.7.125` for the full acceptance matrix and residue cleanup.
+- Local result: full Release solution build `0` warnings / `0` errors; selected unit gate `171/171`; Phase 9 integration gate `6/6`; audit/foundation follow-up `13/13`. Live deployment and mixed Docker/Linux/Windows/AD evidence remain pending.
+
+## 2026-07-22 Phase 9 Final Acceptance
+
+- Phase 9 networking foundation is `APPROVED`. The immutable release `phase9-reset-placement-final3-20260722` was deployed through the standard atomic release flow; archive SHA-256 is `7c7485eef1e9328ee21013b63c582499d07f14504817ffdb1fb49d56b96966e5`.
+- The independent review's 3 P1 and 9 P2 findings are closed. The complete unit suite previously passed `622/622`, the focused review gate passed `140/140`, and Release builds passed. The last narrow reset-placement correction was verified by the successful live reset; repeated local test execution was stopped after the known Windows testhost orphan-process condition.
+- Runtime `019f899b-5629-7cd2-ac41-f4e2d5b00020` ran two Docker assets, one Managed Linux VM, and one Opaque Windows VM across physical Workers `10.0.7.118` and `10.0.7.125`, using four mixed RFC1918 networks.
+- Player WireGuard reached only the entry network; direct access to all internal networks was denied. Traffic observation persisted 100 flows and one correlated path; runtime PCAP uploaded and verified `11/11` segments.
+- Reset completed from generation 1 to generation 2 with unchanged physical placement, invalidated the old player grant, and accepted the replacement grant. Destroy completed in about `10.6s`; both Workers had no acceptance-runtime container, domain, namespace, link, process, or file residue.
+- Machine evidence is `artifacts/phase9-review-mixed-20260722-final3.json` (SHA-256 `8DF373DB94B3D379B2EAB36CA46F84A9C4E8065FCAF9B86CD2A2B6C9897FB47B`); PCAP evidence is `artifacts/phase9-review-mixed-20260722-final3-019f89a1-94ab-7d6c-a0de-c3f70d6bfa05.tar` (SHA-256 `1758D413C1D37710B57C4AEBA4223FF95D976C41ABF7A786056A1ED00169C149`).
+- AD DS, domain membership, and application installation remain image or signed Bootstrap Profile content. Phase 9 provides the reusable placement, networking, VM/container lifecycle, health-contract, and observation substrate and does not hard-code those services.

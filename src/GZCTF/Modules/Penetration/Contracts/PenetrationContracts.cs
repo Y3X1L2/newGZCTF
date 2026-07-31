@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using GZCTF.Models.Data;
+using GZCTF.Modules.TeamLab.Contracts;
 
 namespace GZCTF.Modules.Penetration.Contracts;
 
@@ -17,9 +18,11 @@ public sealed record PenetrationObjectiveWriteModel(
     bool Visible,
     bool Checkpoint,
     IReadOnlyList<string>? PrerequisiteKeys,
-    int OrderIndex);
+    int OrderIndex,
+    int? Id = null);
 
 public sealed record ReplacePenetrationObjectivesModel(
+    long Revision,
     int MaxResetCount,
     IReadOnlyList<PenetrationObjectiveWriteModel> Objectives);
 
@@ -43,7 +46,21 @@ public sealed record PenetrationGameLabBindingModel(
     Guid TopologyId,
     Guid? ActiveReleaseId,
     int MaxResetCount,
+    long ObjectiveRevision,
     IReadOnlyList<PenetrationObjectiveModel> Objectives);
+
+public sealed record PenetrationReleaseOptionModel(
+    Guid TopologyId,
+    string TopologyName,
+    Guid ReleaseId,
+    int Version,
+    int NetworkCount,
+    int AssetCount,
+    DateTimeOffset PublishedAt);
+
+public sealed record PenetrationGameTeamLabModel(
+    PenetrationGameLabBindingModel? Binding,
+    TeamLabRolloutModel? Rollout);
 
 public sealed record PenetrationWorkspaceObjectiveModel(
     int Id,
@@ -72,7 +89,7 @@ public sealed record PenetrationWorkspaceModel(
 
 public sealed record PenetrationSubmitModel(
     int ObjectiveId,
-    [property: Required] string Flag);
+    [Required] string Flag);
 
 public sealed record PenetrationSubmitResultModel(bool Accepted, int Score, string Message);
 
@@ -118,4 +135,14 @@ public sealed record PenetrationWorkspaceUpdateModel(
     int TeamId,
     Guid RuntimeId,
     DateTimeOffset Time);
+
+public sealed record TeamLabOperatorGrantWriteModel(bool ViewAssets, bool OperateAssets);
+
+public sealed record TeamLabOperatorGrantModel(
+    Guid UserId,
+    string UserName,
+    string? DisplayName,
+    bool ViewAssets,
+    bool OperateAssets,
+    DateTimeOffset UpdatedAt);
 

@@ -901,6 +901,14 @@ runtime_rollback_incomplete
 - Agent capability rollout 先发布 Agent，再启用主站 feature requirement。缺 manifest 节点标记不可调度，不猜测旧能力。
 - 镜像分发 worker 可单独停止；停止时编辑保存和已 Ready 节点启动仍可用，缺缓存启动进入明确等待，不回退到不可观察的同步请求。
 
+## 2026-07-24 Unified TeamLab Scheduling Follow-up
+
+The shared runtime scheduler now accounts for ordinary Docker/VM workloads and TeamLab shards in one CPU, memory, storage, Docker-slot, and VM-slot ledger. TeamLab placement treats a network as the unsplittable placement unit, uses deterministic tie-breaks, bounds local improvement work, and atomically reserves the complete shard plan after capacity revalidation.
+
+Node execution is limited by worker and operation category. Docker create, VM create, image transfer, network mutation, probe, control, and cleanup no longer share an entry-node or whole-runtime semaphore. Manifest limits remain authoritative within platform safety caps, allowing independent nodes and categories to progress without exceeding a node's declared execution budget.
+
+Penetration runtime reset and destroy ownership is durable. Reset quota is reserved before enqueue and infrastructure failures release it. Destroy retains the game/team binding and one operation identity until factual runtime cleanup succeeds. The development baseline and remaining production sign-off requirements are recorded in `docs/commercialization/benchmarks/teamlab-unified-scheduling-baseline.md`.
+
 ## 7. Phase 6 完成定义
 
 只有同时满足以下条件才可宣布完成：

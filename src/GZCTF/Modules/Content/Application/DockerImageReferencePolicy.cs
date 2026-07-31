@@ -2,19 +2,20 @@ using System.Net;
 using System.Net.Sockets;
 using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Application;
+using Microsoft.Extensions.Options;
 
 namespace GZCTF.Modules.Content.Application;
 
-public sealed class DockerImageReferencePolicy
+public sealed class DockerImageReferencePolicy(IOptions<DockerRegistrySettings> options)
 {
-    private const string InternalRegistry = DockerRegistrySettings.FixedAddress;
+    private readonly string _internalRegistry = options.Value.NormalizedAddress;
 
     public async Task ValidateAsync(string imageReference, CancellationToken cancellationToken)
     {
         var registry = ExtractRegistry(imageReference);
         if (registry is null || string.Equals(
                 registry,
-                InternalRegistry,
+                _internalRegistry,
                 StringComparison.OrdinalIgnoreCase))
             return;
 
