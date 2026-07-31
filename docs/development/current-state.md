@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-更新时间：2026-07-31
+更新时间：2026-08-01
 
 本文件是跨会话的短期状态入口。长期规则见根目录 `AGENTS.md`，完整目标见 `docs/platform-commercialization-master-plan.md`。状态变化后应更新本文件，不通过追加整段聊天记录维护记忆。
 
@@ -10,8 +10,8 @@
 | --- | --- |
 | 主仓库 | `https://github.com/Y3X1L2/newGZCTF.git` |
 | 稳定分支 | `main` |
-| 本快照代码基线 | `f56221b1fca46199645e820d358cc30c601228ee` |
-| 基线说明 | `fix: repair image import distribution state`；其后的纯文档提交不改变该代码基线 |
+| 本快照代码基线 | `1f8d5cca8da9a8491b9feefb3a2ba1f7879cbc2f` |
+| 基线说明 | Phase 9 TeamLab 组网、远程操作基础和 vNext 管理前端，包含 Schema v1 草稿读取兼容 |
 | 本机正式工作区 | `D:\Work\newGZCTF` |
 | Git 结构 | 独立仓库，`.git` 位于正式工作区，不再依赖 linked worktree |
 | 本机历史归档 | `D:\Work\newGZCTF-local-archive`，不属于源码事实 |
@@ -35,12 +35,11 @@ vNext 正式路由和实现状态以以下文件为准：
 - `src/GZCTF/ClientApp/src/vnext/app/VNextApp.tsx`
 - `src/GZCTF/ClientApp/src/vnext/app/shell/moduleRegistry.ts`
 
-截至本快照，首页、赛事、战队、培训、认证、个人主页、理论及主要通用管理页面已经接入 vNext。以下入口仍未标记为完整实现：
+截至本快照，首页、赛事、战队、培训、认证、个人主页、理论、TeamLab 及主要通用管理页面已经接入 vNext。以下入口仍未标记为完整实现：
 
 - `/practice`：自主练习产品切片尚未进入稳定主线。
-- `/admin/teamlab`：TeamLab 正式管理前端尚未完成；后端基础和历史页面不等于 vNext 产品闭环。
 
-不得用旧页面套壳、mock 数据或隐藏跳转把这两个入口描述成已完成。
+不得用旧页面套壳、mock 数据或隐藏跳转把未实现入口描述成已完成。TeamLab 的真实双 Worker 故障注入、远程操作效率和长期流量保留仍属于现场验收，不因页面完成而视为签收。
 
 ## 3. 商业化阶段状态
 
@@ -54,7 +53,8 @@ vNext 正式路由和实现状态以以下文件为准：
 | Phase 5 | Redis、租约、缓存失效和高频缓冲代码完成 | 双主、k6 和基础设施断网演练属于预发布验收 |
 | Phase 6 | 统一队列、调度、容量、并发和 Agent 能力代码完成 | 500-owner/300-create、双主接管和目标硬件吞吐未形成最终签收 |
 | Phase 7 | 结构化事件、日志、关联、Agent inventory 和恢复代码完成 | 生产观测链和真实故障恢复仍需持续验收 |
-| Phase 8-14 | 尚未按总纲全部完成 | VM 统一、TeamLab 商业闭环、内容资产/出题 API、练习、培训理论增强、AWDP 展示和商业验收 |
+| Phase 9 | TeamLab 拓扑、发布、运行时、组网、远程操作审计基础和 vNext 管理端已部署 | 双 Worker 故障注入、QGA 大文件效率、长期流量留存和规模验收未签收 |
+| Phase 8、10-14 | 尚未按总纲全部完成 | VM 统一、内容资产/出题 API、练习、培训理论增强、AWDP 展示和商业验收 |
 
 阶段文档中的“代码完成”不等于已经通过真实生产容量、故障和多节点验收。
 
@@ -70,6 +70,8 @@ vNext 正式路由和实现状态以以下文件为准：
 - 首页编排动画和丝带绘制时序优化。
 - 镜像存储导入完成后模板进入 `Ready`，节点分发不再与模板 `Importing` 状态互锁。
 - 永久失败的镜像分发任务不再无限自动重试，只有 `Retryable=true` 才重试。
+- TeamLab vNext 提供场景库、拓扑设计、发布、运行时、比赛绑定和受审计远程操作入口。
+- 旧 Penetration 迁移产生的 Schema v1 拓扑可以打开，下一次保存时由编辑器统一编译为 Schema v2；未知 Schema 仍拒绝加载。
 
 镜像状态修复验收记录：后端全量单元测试 `531/531`、镜像分发专项 `8/8`、PostgreSQL 集成测试 `1/1`。线上 `ClosureChallenge` 已从长期“导入中”恢复为 Ready，并完成三个节点分发。
 
@@ -86,7 +88,18 @@ vNext 正式路由和实现状态以以下文件为准：
 
 不得在本文记录服务器密码、IAM token、Cookie、SSH 私钥或数据库连接串。
 
-生产发布物历史上没有可靠嵌入 Git SHA。虽然 `f56221b` 对应的镜像状态修复已经部署并通过页面/日志验证，下一次发布前仍须现场核对服务、release 目录、迁移头和制品摘要，不能只根据本文推断服务器二进制身份。
+当前生产发布事实：
+
+- release：`phase09-1f8d5cc`
+- Git SHA：`1f8d5cca8da9a8491b9feefb3a2ba1f7879cbc2f`
+- 发布目录：`/opt/gzctf/releases/phase09-1f8d5cc/publish`
+- 回退目录：`/opt/gzctf/releases/phase09-b8ec1b2/publish`
+- 数据库迁移头：`20260730095038_AddTeamLabRemoteAccessSchema`
+- 本次数据库备份：`/opt/gzctf-vnext/backups/phase09-1f8d5cc/database.dump`
+- 主站、本机 Agent、内网入口和公网入口已通过冒烟；3 个 WorkerNode 在线，活动部署队列为 0。
+- 发布构建通过前端 `214/214`、locale、lint、TypeScript、架构和 production build 门禁；Phase 9 合并提交此前通过后端单元 `758/758` 和集成 `265/265`。
+
+生产库仍有一个 2026-07-24 创建的 admin Windows VM 测试实例。它使用 Phase 9 之前的随机 libvirt UUID，不符合当前稳定运行身份校验，不能用于验证 Agent 重启后的 RDP 代理恢复。不要修改数据库绕过身份校验；需要验收时应销毁该测试实例并用当前版本重新创建。
 
 ## 6. 现行缺口入口
 
@@ -101,7 +114,7 @@ vNext 正式路由和实现状态以以下文件为准：
 
 ## 7. 下一任务起点
 
-当前没有正在编辑但未提交的源码任务。新任务应：
+当前 Phase 9 发布代码已提交；若本文档之后产生状态提交，生产二进制 SHA 仍以第 5 节为准。新任务应：
 
 1. `git fetch origin --prune` 并确认本地基线。
 2. 从 `origin/main` 建立新的 `codex/<task-name>` 分支。
@@ -112,6 +125,6 @@ vNext 正式路由和实现状态以以下文件为准：
 推荐后续产品方向需要由负责人选择，不应由旧聊天自动延续：
 
 - 完成自主练习模块的独立产品切片。
-- 等 TeamLab 队友后端/契约稳定后实现 vNext 管理前端。
+- 完成 TeamLab 双 Worker 故障注入、远程操作效率和长期流量留存验收。
 - 按 Phase 8-14 继续商业化主线。
 - 优先处理线上明确复现的稳定性问题。
