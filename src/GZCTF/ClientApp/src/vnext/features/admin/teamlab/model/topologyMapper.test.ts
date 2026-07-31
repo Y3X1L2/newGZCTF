@@ -144,6 +144,51 @@ describe('topology API round trip', () => {
     expect(document.nodes['switch-client']?.position).toEqual(source.editor.networks.client)
   })
 
+  it('opens schema v1 topologies and upgrades them to schema v2 when compiled', () => {
+    const source = detail()
+    source.schemaVersion = 1
+    source.definition.infrastructure = []
+    source.definition.dependencies = []
+    source.definition.observation = {
+      flowMetadataEnabled: true,
+      onDemandPcapEnabled: true,
+      endpointObservation: 'optional',
+    }
+    source.definition.assets = source.definition.assets.map((asset) => ({
+      ...asset,
+      routingEnabled: asset.key === 'web',
+      stateless: false,
+      bootstrap: null,
+      endpointObservation: 'disabled',
+      bakeAtPublish: false,
+      imageDigest: null,
+    }))
+    source.definition.connections = source.definition.connections.map((connection) => ({
+      ...connection,
+      viaAssetKey: 'web',
+      viaNodeKey: null,
+      direction: 'bidirectional',
+    }))
+
+    const document = mapTopologyDetailToDocument(source, { resolveVmDeviceType: () => 'linux-vm' })
+    const compiled = compileTopologyDocument(document)
+
+    expect(document.schemaVersion).toBe(2)
+    expect(compiled.schemaVersion).toBe(2)
+    expect(compiled.networks).toEqual(source.definition.networks)
+    expect(compiled.assets).toEqual([...source.definition.assets].sort((left, right) => left.key.localeCompare(right.key)))
+    expect(compiled.connections).toEqual(source.definition.connections)
+  })
+
+  it('still rejects unknown topology schema versions', () => {
+    const source = detail()
+    source.schemaVersion = 3
+
+    expect(() => mapTopologyDetailToDocument(source, { resolveVmDeviceType: () => 'linux-vm' })).toThrow(
+      'Topology schema version 3 is not supported by this editor.'
+    )
+  })
+
   it('preserves interface names that are reused by different assets', () => {
     const source = detail()
     source.definition.assets[0].interfaces[0].key = 'eth0'

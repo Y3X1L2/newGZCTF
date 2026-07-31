@@ -103,7 +103,7 @@ export function mapTopologyDetailToDocument(
   detail: TeamLabTopologyDetail,
   options: TopologyMapperOptions
 ): TopologyDocument {
-  if (detail.schemaVersion !== 2)
+  if (detail.schemaVersion !== 1 && detail.schemaVersion !== 2)
     throw new Error(`Topology schema version ${detail.schemaVersion} is not supported by this editor.`)
 
   const nodes: Record<string, TopologyNode> = {}
