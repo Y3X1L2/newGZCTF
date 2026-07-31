@@ -39,6 +39,22 @@ public sealed class RegistrySetupScriptTests
     }
 
     [Fact]
+    public void ReleaseActivationScript_PreservesAtomicReleaseLayoutAndStopsWritersBeforeMigration()
+    {
+        var script = ReadRepositoryFile("scripts", "deployment", "activate-gzctf-release.sh");
+
+        Assert.Contains("test -L \"$current\"", script, StringComparison.Ordinal);
+        Assert.Contains("release_root=\"$root/releases/$release_id\"", script, StringComparison.Ordinal);
+        Assert.Contains("mv -Tf \"$next_link\" \"$current\"", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("mv \"$current\" \"$previous\"", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("mv \"$current/files\"", script, StringComparison.Ordinal);
+
+        var stop = script.IndexOf("systemctl stop gzctf.service", StringComparison.Ordinal);
+        var migrate = script.IndexOf("./efbundle --no-color", StringComparison.Ordinal);
+        Assert.True(stop >= 0 && migrate > stop, "The application must stop before migrations run.");
+    }
+
+    [Fact]
     public async Task OciArtifactDelete_MethodNotAllowedRemainsFailure()
     {
         var handler = new RecordingHandler(request => request.Method switch
