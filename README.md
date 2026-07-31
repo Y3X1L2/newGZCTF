@@ -38,6 +38,8 @@ YINYU 安全综合演练平台基于开源 GZCTF 二次开发，面向 CTF 竞�
 
 ## 本地开发
 
+开始开发前请先阅读根目录 `AGENTS.md` 和 `docs/development/current-state.md`。前者定义长期开发规范，后者记录当前主线、已完成阶段、环境和已知缺口。
+
 ### 依赖
 
 - .NET 10 SDK
@@ -133,12 +135,13 @@ dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj
 
 ## 前端维护注意事项
 
-当前前端经过多轮视觉调整，样式集中在 `src/GZCTF/ClientApp/src/styles/YinyuRefinement.css`。后续修改页面样式时建议遵守：
+当前正式前端位于 `src/GZCTF/ClientApp/src/vnext`。后续修改遵守：
 
-- 优先复用已有组件和页面 class，避免在文件末尾堆叠新的 hard-lock 覆盖。
-- 针对页面写清晰的作用域，例如 `.yy-team-page`、`.yy-training-page`。
-- 修改宽度时优先使用父容器的 `100%`，谨慎使用 `100vw`，避免和左侧导航/AppShell 叠加导致横向滚动条。
-- 修改后至少检查桌面、笔记本宽度和关键路由的滚动行为。
+- 使用 vNext 壳层、语义 Token、CSS Module、feature controller/hook 和 API adapter。
+- 不在 `YinyuRefinement.css`、`YinyuTheme.css` 或文件末尾新增跨页面 hard-lock 覆盖。
+- 未实现页面显示正式空态或待建设状态，不加载旧页面套壳，不伪造业务数据。
+- 修改后检查 390、1366、1920、2560 宽度、日夜主题、滚动行为和页面切换。
+- 详细规则见 `docs/yinyu-vnext-development-guardrails.md` 和 `docs/commercialization/frontend-component-boundary.md`。
 
 ## 分支与提交
 
