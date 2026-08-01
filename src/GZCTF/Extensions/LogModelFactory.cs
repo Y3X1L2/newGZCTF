@@ -32,7 +32,7 @@ internal static class LogModelFactory
             Logger = LogHelper.GetLogPropertyValue<string>(sourceContext, "Unknown") ?? string.Empty,
             RemoteIP = LogHelper.GetLogPropertyValue<IPAddress>(ip, null),
             Status = logEvent.Exception is null
-                ? LogHelper.GetLogPropertyValue(status, TaskStatus.Failed)
+                ? LogHelper.GetLogPropertyValue(status, TaskStatus.Success)
                 : TaskStatus.Failed,
             Exception = logEvent.Exception?.ToString(),
             CorrelationId = LogHelper.GetLogPropertyValue<Guid?>(correlationId, null),

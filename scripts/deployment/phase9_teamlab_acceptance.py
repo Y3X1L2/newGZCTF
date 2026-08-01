@@ -514,9 +514,9 @@ try:
                 if args.windows_template_id is not None:
                     asset["imageTemplateId"] = args.windows_template_id
                     asset["resources"] = {
-                        "cpuUnits": 40,
-                        "memoryMiB": 8192,
-                        "storageMiB": 30720,
+                        "cpuUnits": 20,
+                        "memoryMiB": 4096,
+                        "storageMiB": 8192,
                     }
                     if args.swap_vm_networks:
                         asset["interfaces"][0]["networkKey"] = "data"

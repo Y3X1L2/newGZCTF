@@ -1,6 +1,6 @@
-import { Activity, ArrowLeft, Boxes, FileClock, RotateCcw, Trash2 } from 'lucide-react'
+import { Activity, ArrowLeft, Boxes, FileClock, RotateCcw, Trash2, Wrench } from 'lucide-react'
 import { useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import { ActionButton, InlineFeedback, VNextConfirmDialog } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
@@ -25,11 +25,12 @@ import { useRuntimeLogs } from './useRuntimeLogs'
 import { useTeamLabRuntime } from './useTeamLabRuntime'
 import { useTrafficObservability } from './useTrafficObservability'
 
-type RuntimeTab = 'overview' | 'events' | 'traffic' | 'capture'
+type RuntimeTab = 'overview' | 'operations' | 'events' | 'traffic' | 'capture'
 
 export function TeamLabRuntimeDetailPage() {
   const { topologyId = '', runtimeId = '' } = useParams()
-  const [tab, setTab] = useState<RuntimeTab>('overview')
+  const [searchParams] = useSearchParams()
+  const [tab, setTab] = useState<RuntimeTab>(() => searchParams.get('tab') === 'operations' ? 'operations' : 'overview')
   const [resetOpen, setResetOpen] = useState(false)
   const [destroyOpen, setDestroyOpen] = useState(false)
   const [acting, setActing] = useState(false)
@@ -162,6 +163,10 @@ export function TeamLabRuntimeDetailPage() {
           <Boxes size={16} />
           部署概览
         </button>
+        <button data-active={tab === 'operations' || undefined} onClick={() => setTab('operations')} type="button">
+          <Wrench size={16} />
+          资产运维
+        </button>
         <button data-active={tab === 'events' || undefined} onClick={() => setTab('events')} type="button">
           <FileClock size={16} />
           事件与日志
@@ -181,11 +186,11 @@ export function TeamLabRuntimeDetailPage() {
           <>
             <RuntimeStageTimeline runtime={runtime} />
             <RuntimeAccessPanel canCreate={runtime.status === 'running'} runtimeId={runtime.id} />
-            <RuntimeRemoteAccessPanel runtime={runtime} />
             <RuntimeShardTable runtime={runtime} />
             <RuntimeTopologyView runtime={runtime} />
           </>
         ) : null}
+        {tab === 'operations' ? <RuntimeRemoteAccessPanel runtime={runtime} /> : null}
         {tab === 'events' ? (
           <div className={styles.split}>
             <RuntimeEventPanel error={events.error} events={events.events} loading={events.isLoading} />

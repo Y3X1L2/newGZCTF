@@ -11,7 +11,7 @@ import { teamLabAdminApi, teamLabAdminKeys, teamLabRuntimeApi } from '../api'
 import { useTeamLabScene } from '../shared/TeamLabSceneShell'
 import { ReleaseReadinessPanel } from './ReleaseReadinessPanel'
 import { ReleaseTimeline } from './ReleaseTimeline'
-import { TrialRunDialog } from './TrialRunDialog'
+import { createTrialIdempotencyKey, TrialRunDialog } from './TrialRunDialog'
 import styles from './TeamLabReleasesPage.module.css'
 
 export function TeamLabReleasesPage() {
@@ -42,7 +42,7 @@ export function TeamLabReleasesPage() {
     setCreatingTrial(true)
     setOperationError(null)
     try {
-      const runtime = await teamLabRuntimeApi.createTrial(crypto.randomUUID(), {
+      const runtime = await teamLabRuntimeApi.createTrial(createTrialIdempotencyKey(), {
         releaseId: selectedRelease.id,
         constraints: null,
         overlays: null,

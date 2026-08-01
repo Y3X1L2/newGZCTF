@@ -1,6 +1,19 @@
 import { VNextConfirmDialog } from '../../../../shared/Interaction'
 import type { TeamLabRelease } from '../api'
 
+export function createTrialIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+    return `teamlab-trial-${crypto.randomUUID()}`
+
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16)
+    crypto.getRandomValues(bytes)
+    return `teamlab-trial-${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`
+  }
+
+  return `teamlab-trial-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+}
+
 export function TrialRunDialog({
   release,
   open,
