@@ -214,7 +214,13 @@ public sealed class TeamLabRuntimeCleanupService(
         foreach (var envelope in runtime.SecretEnvelopes.Where(item => item.Generation == generation))
             TeamLabRuntimeOverlayService.Consume(envelope);
         if (runtime.PublicUdpMapping is { } mapping && mapping.Generation == generation)
+        {
             mapping.IsSynced = false;
+            // A destroyed runtime no longer owns its public UDP port. Keeping this row makes the
+            // allocation query and the database uniqueness constraint disagree forever.
+            if (markRuntimeDestroyed)
+                context.TeamLabPublicUdpMappings.Remove(mapping);
+        }
         var leases = await context.TeamLabNetworkLeases
             .Where(item => item.RuntimeId == runtime.Id && item.Generation == generation && item.ReleasedAt == null)
             .ToArrayAsync(cancellationToken);
