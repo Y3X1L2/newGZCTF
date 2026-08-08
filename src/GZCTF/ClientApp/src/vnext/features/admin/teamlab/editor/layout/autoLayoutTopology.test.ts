@@ -104,12 +104,15 @@ describe('autoLayoutTopology', () => {
         y: region.y + (region.height ?? 0) / 2,
       }
     })
-    // A routed chain should extend outward on its root branch. Rotating every
-    // depth around the entry makes the route look like unrelated networks.
+    // A routed chain keeps increasing its distance from the entry, while later
+    // hops fan out from the root ray so a deep branch is not rendered as one
+    // unreadable vertical or horizontal line.
     expect(chainCentres[0].y).toBeLessThan(centreY)
-    expect(chainCentres[1].y).toBeLessThan(chainCentres[0].y)
-    expect(chainCentres[2].y).toBeLessThan(chainCentres[1].y)
-    expect(chainCentres.every((centre) => Math.abs(centre.x - centreX) <= 4)).toBe(true)
+    expect(Math.hypot(chainCentres[1].x - centreX, chainCentres[1].y - centreY))
+      .toBeGreaterThan(Math.hypot(chainCentres[0].x - centreX, chainCentres[0].y - centreY))
+    expect(Math.hypot(chainCentres[2].x - centreX, chainCentres[2].y - centreY))
+      .toBeGreaterThan(Math.hypot(chainCentres[1].x - centreX, chainCentres[1].y - centreY))
+    expect(chainCentres.some((centre) => Math.abs(centre.x - centreX) > 4)).toBe(true)
   })
 
   it('rebuilds oversized manual regions into a compact overview when requested', () => {

@@ -31,6 +31,21 @@ describe('TeamLabDesignPage', () => {
     expect(Object.values(onChange.mock.calls[1][0].nodes)).toHaveLength(0)
   })
 
+  it('keeps every rapid palette command when React has not rendered between clicks', async () => {
+    const onChange = vi.fn()
+    render(<TeamLabDesignPage initialDocument={createEmptyTopologyDocument('Demo')} onDocumentChange={onChange} />)
+
+    const addSwitch = screen.getByRole('button', { name: /交换机.*承载一个隔离网段/ })
+    fireEvent.click(addSwitch)
+    fireEvent.click(addSwitch)
+    fireEvent.click(addSwitch)
+
+    await waitFor(() => {
+      const latestDocument = onChange.mock.calls.at(-1)?.[0]
+      expect(Object.values(latestDocument.nodes)).toHaveLength(3)
+    })
+  })
+
   it('keeps the canvas mounted when focus mode changes', () => {
     const view = render(<TeamLabDesignPage initialDocument={createEmptyTopologyDocument('Demo')} />)
     const canvas = view.container.querySelector('.react-flow')

@@ -190,6 +190,24 @@ function radialDirection(index: number, total: number) {
   return { x: Math.cos(angle), y: Math.sin(angle) }
 }
 
+function branchDirection(
+  rootDirection: { x: number; y: number },
+  rootIndex: number,
+  rank: number
+) {
+  if (rank <= 1) return rootDirection
+
+  // A long route must remain visibly related to its entry branch, but placing
+  // every hop on the same ray turns a valid topology into an unreadable line.
+  // Expand later hops into a deterministic fan while their distance from the
+  // entry still expresses the routing depth.
+  const turn = Math.min(Math.PI / 2, (rank - 1) * (Math.PI / 4)) * (rootIndex % 2 === 0 ? 1 : -1)
+  return {
+    x: rootDirection.x * Math.cos(turn) - rootDirection.y * Math.sin(turn),
+    y: rootDirection.x * Math.sin(turn) + rootDirection.y * Math.cos(turn),
+  }
+}
+
 function directionSlotOrder(
   slots: readonly { x: number; y: number }[],
   direction: { x: number; y: number }
@@ -335,6 +353,7 @@ export function autoLayoutTopology(document: TopologyDocument): TopologyDocument
   const rootDirections = new Map(
     rootPlans.map((plan, index) => [plan.switchKey, radialDirection(index, rootPlans.length)])
   )
+  const rootIndexes = new Map(rootPlans.map((plan, index) => [plan.switchKey, index]))
   const occupiedSlots = new Set<string>()
   let outerRing = 0
   for (const rank of [...plansByRank.keys()].sort((left, right) => left - right)) {
@@ -350,7 +369,11 @@ export function autoLayoutTopology(document: TopologyDocument): TopologyDocument
       const candidates = ringSlots(ring).filter((slot) => !occupiedSlots.has(`${ring}:${slot.x}:${slot.y}`))
       const plan = plansAtRank[planIndex]
       if (!plan) break
-      const direction = plan.rootSwitchKey ? rootDirections.get(plan.rootSwitchKey) : undefined
+      const rootDirection = plan.rootSwitchKey ? rootDirections.get(plan.rootSwitchKey) : undefined
+      const rootIndex = plan.rootSwitchKey ? rootIndexes.get(plan.rootSwitchKey) : undefined
+      const direction = rootDirection && rootIndex !== undefined
+        ? branchDirection(rootDirection, rootIndex, rank)
+        : undefined
       const slots = direction ? directionSlotOrder(candidates, direction) : candidates
       const slot = slots[0]
       if (!slot) {
