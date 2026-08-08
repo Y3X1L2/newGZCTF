@@ -182,8 +182,9 @@ public class GZCTFApplicationFactory : WebApplicationFactory<Program>, IAsyncLif
             services.Replace(ServiceDescriptor.Singleton<IApiTokenRateLimitStore>(provider =>
                 provider.GetRequiredService<FaultInjectingApiTokenRateLimitStore>()));
             services.AddSingleton<ApiOperationHandlerExecutionRecorder>();
-            services.AddScoped<GZCTF.Modules.Audit.Application.IApiOperationHandler,
-                Tests.Api.Fixtures.CompletingApiOperationHandler>();
+            services.AddKeyedScoped<GZCTF.Modules.Audit.Application.IApiOperationHandler,
+                Tests.Api.Fixtures.CompletingApiOperationHandler>(
+                Tests.Api.Fixtures.CompletingApiOperationHandler.OperationKind);
             services.RemoveAll<IImageImportExecutor>();
             services.AddSingleton<Tests.Api.Fixtures.FakeImageImportExecutor>();
             services.AddSingleton<IImageImportExecutor>(provider =>

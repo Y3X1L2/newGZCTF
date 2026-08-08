@@ -108,6 +108,7 @@ export interface TopologyDocument {
   nodes: Readonly<Record<string, TopologyNode>>
   connections: Readonly<Record<string, TopologyConnection>>
   observation: TeamLabObservationPolicy
+  networkLayouts: Readonly<Record<string, TopologyPosition>>
 }
 
 export const defaultTopologyPosition = (): TopologyPosition => ({
@@ -123,6 +124,7 @@ export const createEmptyTopologyDocument = (name: string): TopologyDocument => (
   name,
   nodes: {},
   connections: {},
+  networkLayouts: {},
   observation: {
     flowMetadataEnabled: true,
     onDemandPcapEnabled: true,

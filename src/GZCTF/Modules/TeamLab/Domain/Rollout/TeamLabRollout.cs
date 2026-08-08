@@ -11,7 +11,8 @@ public enum TeamLabRolloutStatus : byte
     Draining = 4,
     Completed = 5,
     Blocked = 6,
-    Failed = 7
+    Failed = 7,
+    Archived = 8
 }
 
 public enum TeamLabRolloutTargetStatus : byte
@@ -23,13 +24,15 @@ public enum TeamLabRolloutTargetStatus : byte
     Failed = 4,
     Draining = 5,
     CleanupPending = 6,
-    Destroyed = 7
+    Destroyed = 7,
+    Paused = 8
 }
 
 public sealed class TeamLabRollout
 {
     public int Id { get; set; }
     public Guid PublicId { get; set; } = Guid.CreateVersion7();
+    public Guid? ControlScopeId { get; set; }
     public Guid ReleaseId { get; set; }
     public Guid OwnerUserId { get; set; }
     public Guid CreatedByUserId { get; set; }
@@ -39,7 +42,10 @@ public sealed class TeamLabRollout
     public bool PreparationRequested { get; set; }
     public bool DesiredAccessOpen { get; set; }
     public bool DrainRequested { get; set; }
+    public bool PauseRequested { get; set; }
     public int Revision { get; set; }
+    public Guid? CreatedByOperationId { get; set; }
+    public Guid? LastMutationOperationId { get; set; }
     [MaxLength(2048)] public string? LastError { get; set; }
     public DateTimeOffset? PreparedAt { get; set; }
     public DateTimeOffset? AccessOpenedAt { get; set; }
@@ -48,6 +54,7 @@ public sealed class TeamLabRollout
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public TeamLabTopologyRelease Release { get; set; } = null!;
+    public TeamLabControlScope? ControlScope { get; set; }
     public List<TeamLabRolloutTarget> Targets { get; set; } = [];
 }
 
@@ -59,6 +66,8 @@ public sealed class TeamLabRolloutTarget
     [MaxLength(256)] public string ExternalSubject { get; set; } = string.Empty;
     [MaxLength(256)] public string DisplayName { get; set; } = string.Empty;
     public int? RuntimeId { get; set; }
+    public bool IsDesired { get; set; } = true;
+    public bool RebuildRequested { get; set; }
     public TeamLabRolloutTargetStatus Status { get; set; } = TeamLabRolloutTargetStatus.Pending;
     public Guid? LastOperationId { get; set; }
     [MaxLength(2048)] public string? LastError { get; set; }

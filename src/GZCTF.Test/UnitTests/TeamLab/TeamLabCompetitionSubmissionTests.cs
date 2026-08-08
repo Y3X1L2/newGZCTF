@@ -80,10 +80,19 @@ public sealed class TeamLabCompetitionSubmissionTests
                 {
                     lock (commands) activeSubmissions--;
                 }
-            });
+        });
 
         var objectives = new PenetrationObjectiveService(context, null!, null!, null!, null!, null!);
-        var adapter = new PenetrationTeamLabAdapter(context, runtimes.Object, objectives);
+        var topologyService = new Mock<ITeamLabTopologyApplicationService>();
+        topologyService
+            .Setup(item => item.GetStorageReferenceAsync(topology.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TeamLabTopologyStorageReference(
+                topology.Id, topology.PublicId, topology.OwnerUserId, null));
+        var adapter = new PenetrationTeamLabAdapter(
+            context, runtimes.Object,
+            topologyService.Object,
+            Mock.Of<ITeamLabControlPlaneOperationService>(),
+            objectives);
 
         var result = await adapter.DeployGameAsync(gameId, Guid.NewGuid(), CancellationToken.None);
 

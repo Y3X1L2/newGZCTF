@@ -42,11 +42,15 @@ public sealed class OperationsController(
             ApiTokenResourceClaim.TryParse(claim.Value, out var type, out var resourceId) &&
             (string.Equals(type, "operation", StringComparison.Ordinal) || type == "*") &&
             (string.Equals(resourceId, id.ToString("D"), StringComparison.OrdinalIgnoreCase) || resourceId == "*"));
+        var isAdministrator = User.FindAll(ApiTokenClaimTypes.Resource).Any(claim =>
+            ApiTokenResourceClaim.TryParse(claim.Value, out var type, out var resourceId) &&
+            (string.Equals(type, "operation", StringComparison.Ordinal) || type == "*") &&
+            resourceId == "*");
         var operation = await operations.GetAccessibleAsync(
             id,
             tokenId,
             actorUserId,
-            User.IsInRole(nameof(Role.Admin)),
+            isAdministrator,
             hasExplicitGrant,
             cancellationToken);
         if (operation is null)

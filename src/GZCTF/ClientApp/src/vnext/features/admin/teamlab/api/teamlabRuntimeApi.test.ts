@@ -175,8 +175,16 @@ describe('TeamLab runtime contract boundary', () => {
           createdAt: 1_790_000_010_000,
         },
       ])
-      .mockResolvedValueOnce({ items: [], nextCursor: null })
-      .mockResolvedValueOnce({ items: [], nextCursor: 'path-next' })
+      .mockResolvedValueOnce({
+        items: [],
+        nextCursor: null,
+        completeness: { complete: true, droppedRecords: 0 },
+      })
+      .mockResolvedValueOnce({
+        items: [],
+        nextCursor: 'path-next',
+        completeness: { complete: true, droppedRecords: 0 },
+      })
       .mockResolvedValueOnce(pathWire)
       .mockResolvedValueOnce(captureWire)
     const api = createTeamLabRuntimeApi(runtimeClient({ get }))

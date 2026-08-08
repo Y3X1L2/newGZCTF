@@ -11,6 +11,7 @@ public sealed class RemoteAccessRelayService(
     KvmService kvm,
     IOptions<AgentConfig> agentConfig,
     IOptions<KvmConfig> kvmConfig,
+    TeamLabTerminalSessionRegistry terminals,
     ILogger<RemoteAccessRelayService> logger)
 {
     private const int FirstPort = 47000;
@@ -35,6 +36,14 @@ public sealed class RemoteAccessRelayService(
         if (!IPAddress.TryParse(verified.IpAddress, out var guestAddress) || !guestAddress.Equals(targetAddress))
             throw new AgentOperationException("RemoteAccess", "remote_access.asset_identity_mismatch", "The requested target does not match the active VM identity.", false);
 
+        var management = await kvm.ExecuteWithIdentityAsync(
+            request.VmName, request.Generation, request.NativeId,
+            token => kvm.GetManagementIpAddressWithDiagnosticAsync(request.VmName, token), cancellationToken);
+        if (!IPAddress.TryParse(management.IpAddress, out var managementAddress))
+            throw new AgentOperationException("RemoteAccess", "remote_access.management_address_unavailable",
+                "The VM management address is unavailable; remote operations cannot use the player network.", false);
+        await EnsureTargetReachableAsync(managementAddress, request.TargetPort, cancellationToken);
+
         if (_relays.TryGetValue(request.SessionId, out var existing))
             return new RemoteRelayResponse(request.SessionId, existing.Port, existing.ExpiresAt);
 
@@ -46,7 +55,7 @@ public sealed class RemoteAccessRelayService(
             {
                 var listener = new TcpListener(IPAddress.Any, port);
                 listener.Start(16);
-                var relay = new Relay(request.SessionId, port, targetAddress, request.TargetPort, request.ExpiresAt,
+                var relay = new Relay(request.SessionId, port, managementAddress, request.TargetPort, request.ExpiresAt,
                     listener, _sourcePolicy, _relays, logger);
                 if (_relays.TryAdd(request.SessionId, relay))
                 {
@@ -65,6 +74,28 @@ public sealed class RemoteAccessRelayService(
     {
         if (_relays.TryRemove(sessionId, out var relay)) relay.Dispose();
         return Task.CompletedTask;
+    }
+
+    public Task CancelTerminalAsync(Guid sessionId)
+    {
+        terminals.Cancel(sessionId);
+        return Task.CompletedTask;
+    }
+
+    private static async Task EnsureTargetReachableAsync(IPAddress address, int port, CancellationToken cancellationToken)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(5));
+        using var client = new TcpClient();
+        try
+        {
+            await client.ConnectAsync(address, port, deadline.Token);
+        }
+        catch (Exception exception) when (exception is SocketException or OperationCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            throw new AgentOperationException("RemoteAccess", "remote_access.target_unreachable",
+                $"The VM management service at {address}:{port} is not reachable.", false);
+        }
     }
 
     private sealed class Relay(
@@ -121,7 +152,10 @@ public sealed class RemoteAccessRelayService(
                     await Task.WhenAny(source.CopyToAsync(destination, token), destination.CopyToAsync(source, token));
                 }
                 catch (OperationCanceledException) { }
-                catch (SocketException) { }
+                catch (SocketException exception)
+                {
+                    logger.LogWarning(exception, "TeamLab remote relay {SessionId} lost its guest connection", sessionId);
+                }
             }
         }
     }

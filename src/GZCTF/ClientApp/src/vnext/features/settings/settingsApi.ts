@@ -1,7 +1,25 @@
 import api, { ApiTokenCreateModel, ProfileUpdateModel } from '@Api'
+import { runtimeJsonClient } from '../admin/api/runtimeJsonClient'
 
 export function useApiTokens() {
   return api.apiTokens.useApiTokensList({ revalidateOnFocus: false })
+}
+
+export interface ControlScopeOption {
+  id: string
+  key: string
+  displayName: string
+}
+
+function parseControlScopeOption(value: unknown, label: string): ControlScopeOption {
+  if (!value || typeof value !== 'object') throw new Error(`${label}: not an object`)
+  const record = value as Record<string, unknown>
+  if (typeof record.id !== 'string' || !record.id) throw new Error(`${label}: missing id`)
+  return {
+    id: record.id,
+    key: typeof record.key === 'string' ? record.key : '',
+    displayName: typeof record.displayName === 'string' ? record.displayName : '',
+  }
 }
 
 export const settingsApi = {
@@ -24,5 +42,10 @@ export const settingsApi = {
   },
   async revokeToken(tokenId: string) {
     await api.apiTokens.apiTokensRevoke(tokenId)
+  },
+  async listControlScopes(): Promise<ControlScopeOption[]> {
+    const payload = await runtimeJsonClient.get('/api/admin/teamlab/scopes')
+    if (!Array.isArray(payload)) throw new Error('Control scope list: not an array')
+    return payload.map((item, index) => parseControlScopeOption(item, `Control scope ${index}`))
   },
 }

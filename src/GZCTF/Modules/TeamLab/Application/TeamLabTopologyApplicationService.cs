@@ -14,9 +14,34 @@ public sealed class TeamLabTopologyApplicationService(
     AppDbContext context,
     TeamLabTopologyValidator validator,
     TeamLabReleaseService releases,
+    TeamLabControlScopeService controlScopes,
     BootstrapProfileCompatibilityService bootstrapCompatibility,
     NodeCapacitySnapshotService capacitySnapshots) : ITeamLabTopologyApplicationService
 {
+    public async Task<TeamLabTopologyStorageReference> GetStorageReferenceAsync(
+        Guid topologyId, Guid actorUserId, bool includeAll, CancellationToken cancellationToken)
+    {
+        var item = await context.TeamLabTopologies.AsNoTracking()
+            .Where(topology => topology.PublicId == topologyId &&
+                               (includeAll || topology.OwnerUserId == actorUserId))
+            .Select(topology => new TeamLabTopologyStorageReference(
+                topology.Id, topology.PublicId, topology.OwnerUserId, topology.ControlScopeId))
+            .SingleOrDefaultAsync(cancellationToken);
+        return item ?? throw new TeamLabApiContractException(
+            "topology_not_found", "未找到 TeamLab 拓扑或无权访问。", 404);
+    }
+
+    public async Task<TeamLabTopologyStorageReference> GetStorageReferenceAsync(
+        int storageId, CancellationToken cancellationToken)
+    {
+        var item = await context.TeamLabTopologies.AsNoTracking()
+            .Where(topology => topology.Id == storageId)
+            .Select(topology => new TeamLabTopologyStorageReference(
+                topology.Id, topology.PublicId, topology.OwnerUserId, topology.ControlScopeId))
+            .SingleOrDefaultAsync(cancellationToken);
+        return item ?? throw new TeamLabApiContractException("topology_not_found", "未找到 TeamLab 拓扑。", 404);
+    }
+
     public TeamLabCapabilitiesModel GetCapabilities() => new(
         "v1",
         [1, 2],
@@ -74,6 +99,9 @@ public sealed class TeamLabTopologyApplicationService(
         if (requireValid)
             await RequireValidAsync(definition, model.SchemaVersion, cancellationToken);
         var topology = BuildTopology(definition, model.SchemaVersion, actorUserId);
+        topology.ControlScopeId = model.ControlScopeId is { } scopeId
+            ? (await controlScopes.RequireWritableAsync(scopeId, cancellationToken)).Id
+            : (await controlScopes.EnsurePlatformScopeAsync(cancellationToken)).Id;
         topology.CreatedByOperationId = operationId;
         topology.LastMutationOperationId = operationId;
         topology.EditorMetadataJson = SerializeEditor(NormalizeEditor(model.Editor, definition));
@@ -92,7 +120,7 @@ public sealed class TeamLabTopologyApplicationService(
         return await query.OrderByDescending(item => item.UpdatedAt)
             .ThenBy(item => item.PublicId)
             .Select(item => new TeamLabTopologySummaryModel(
-                item.PublicId, item.Name, item.Revision, item.SchemaVersion, item.CreatedAt, item.UpdatedAt))
+                item.PublicId, item.ControlScopeId, item.Name, item.Revision, item.SchemaVersion, item.CreatedAt, item.UpdatedAt))
             .ToArrayAsync(cancellationToken);
     }
 
@@ -115,7 +143,33 @@ public sealed class TeamLabTopologyApplicationService(
             .ThenBy(item => item.PublicId)
             .Take(normalizedLimit + 1)
             .Select(item => new TeamLabTopologySummaryModel(
-                item.PublicId, item.Name, item.Revision, item.SchemaVersion, item.CreatedAt, item.UpdatedAt))
+                item.PublicId, item.ControlScopeId, item.Name, item.Revision, item.SchemaVersion, item.CreatedAt, item.UpdatedAt))
+            .ToArrayAsync(cancellationToken);
+        var page = rows.Take(normalizedLimit).ToArray();
+        var nextCursor = rows.Length > normalizedLimit
+            ? new GuidTimeCursor(page[^1].UpdatedAt, page[^1].Id).Encode()
+            : null;
+        return new OpenTeamLabTopologyPageModel(page, nextCursor);
+    }
+
+    public async Task<OpenTeamLabTopologyPageModel> ListPageForScopesAsync(
+        IReadOnlySet<Guid> scopeIds,
+        int limit,
+        string? after,
+        CancellationToken cancellationToken)
+    {
+        if (scopeIds.Count == 0) return new OpenTeamLabTopologyPageModel([], null);
+        var normalizedLimit = Math.Clamp(limit, 1, 100);
+        var cursor = DecodeCursor(after, "topology_cursor_invalid");
+        var query = context.TeamLabTopologies.AsNoTracking().Where(item =>
+            item.ControlScopeId.HasValue && scopeIds.Contains(item.ControlScopeId.Value));
+        if (cursor is { } value)
+            query = query.Where(item => item.UpdatedAt < value.Time ||
+                                        item.UpdatedAt == value.Time && item.PublicId.CompareTo(value.Id) > 0);
+        var rows = await query.OrderByDescending(item => item.UpdatedAt).ThenBy(item => item.PublicId)
+            .Take(normalizedLimit + 1)
+            .Select(item => new TeamLabTopologySummaryModel(
+                item.PublicId, item.ControlScopeId, item.Name, item.Revision, item.SchemaVersion, item.CreatedAt, item.UpdatedAt))
             .ToArrayAsync(cancellationToken);
         var page = rows.Take(normalizedLimit).ToArray();
         var nextCursor = rows.Length > normalizedLimit
@@ -200,7 +254,7 @@ public sealed class TeamLabTopologyApplicationService(
         if (updated == 0)
             throw new TeamLabApiContractException(
                 "topology_revision_conflict",
-                $"Topology revision is {identity.Revision}, not {model.Revision}.",
+                $"拓扑修订号为 {identity.Revision}，不是 {model.Revision}",
                 409);
 
         var currentNetworks = await context.TeamLabTopologyNetworks
@@ -264,7 +318,7 @@ public sealed class TeamLabTopologyApplicationService(
         if (await context.TeamLabTopologyReleases.AnyAsync(item => item.TopologyId == topology.Id, cancellationToken))
             throw new TeamLabApiContractException(
                 "release_immutable",
-                "A topology with published releases cannot be deleted.",
+                "已发布版本的拓扑无法删除",
                 409);
         context.TeamLabTopologies.Remove(topology);
         await context.SaveChangesAsync(cancellationToken);
@@ -399,7 +453,7 @@ public sealed class TeamLabTopologyApplicationService(
         var topology = await RequireTopologyIdentityAsync(topologyId, actorUserId, includeAll, cancellationToken);
         var release = await context.TeamLabTopologyReleases.AsNoTracking()
             .SingleOrDefaultAsync(item => item.TopologyId == topology.Id && item.Id == releaseId, cancellationToken)
-            ?? throw new TeamLabApiContractException("release_not_found", "The topology release was not found.", 404);
+            ?? throw new TeamLabApiContractException("release_not_found", "未找到该拓扑版本", 404);
         return TeamLabReleaseService.ToModel(release, topology.PublicId);
     }
 
@@ -413,7 +467,7 @@ public sealed class TeamLabTopologyApplicationService(
         var topology = await RequireTopologyIdentityAsync(topologyId, actorUserId, includeAll, cancellationToken);
         var release = await context.TeamLabTopologyReleases.AsNoTracking()
             .SingleOrDefaultAsync(item => item.TopologyId == topology.Id && item.Id == releaseId, cancellationToken)
-            ?? throw new TeamLabApiContractException("release_not_found", "The topology release was not found.", 404);
+            ?? throw new TeamLabApiContractException("release_not_found", "未找到该拓扑版本", 404);
         var nodes = (await capacitySnapshots.LoadAsync(cancellationToken))
             .Where(item => item.Node.IsSchedulable && item.Node.TeamLabNetworkEnabled &&
                            item.Node.TeamLabTunnelStatus == TeamLabTunnelStatus.Healthy &&
@@ -477,12 +531,12 @@ public sealed class TeamLabTopologyApplicationService(
             if (!templates.TryGetValue(asset.ImageTemplateId, out var template) || template.Status != ImageStatus.Ready)
                 throw new TeamLabApiContractException(
                     "image_template_unavailable",
-                    $"Image template {asset.ImageTemplateId} for asset '{asset.AssetKey}' is not ready.",
+                    $"资产 '{asset.AssetKey}' 的镜像模板 {asset.ImageTemplateId} 尚未就绪",
                     422);
             if (string.IsNullOrWhiteSpace(template.ImageHash))
                 throw new TeamLabApiContractException(
                     "image_template_unavailable",
-                    $"Image template {asset.ImageTemplateId} for asset '{asset.AssetKey}' has no immutable digest.",
+                    $"资产 '{asset.AssetKey}' 的镜像模板 {asset.ImageTemplateId} 没有不可变摘要",
                     422);
             var kindMatches = asset.Kind == TeamLabAssetKind.Docker
                 ? template.ImageType == ImageType.Docker
@@ -490,13 +544,13 @@ public sealed class TeamLabTopologyApplicationService(
             if (!kindMatches)
                 throw new TeamLabApiContractException(
                     "image_template_unavailable",
-                    $"Image template {asset.ImageTemplateId} for asset '{asset.AssetKey}' does not match asset kind {asset.Kind}.",
+                    $"资产 '{asset.AssetKey}' 的镜像模板 {asset.ImageTemplateId} 与资产类型 {asset.Kind} 不匹配",
                     422);
             if (!string.IsNullOrWhiteSpace(asset.ImageDigest) &&
                 !string.Equals(asset.ImageDigest, template.ImageHash, StringComparison.Ordinal))
                 throw new TeamLabApiContractException(
                     "image_template_digest_changed",
-                    $"Image template {asset.ImageTemplateId} for asset '{asset.AssetKey}' no longer matches the published digest.",
+                    $"资产 '{asset.AssetKey}' 的镜像模板 {asset.ImageTemplateId} 不再匹配已发布摘要",
                     409);
         }
     }
@@ -640,7 +694,9 @@ public sealed class TeamLabTopologyApplicationService(
                 Key = model.Key,
                 Name = model.Name,
                 Kind = model.Kind,
-                ImageTemplateId = model.ImageTemplateId,
+                // Draft assets may be created before an image is selected. The publish validator
+                // rejects that state; persisting it as null keeps the draft outside the image FK.
+                ImageTemplateId = model.ImageTemplateId > 0 ? model.ImageTemplateId : null,
                 CpuUnits = model.Resources.CpuUnits,
                 MemoryMiB = model.Resources.MemoryMiB,
                 StorageMiB = model.Resources.StorageMiB,
@@ -690,7 +746,7 @@ public sealed class TeamLabTopologyApplicationService(
     }
 
     private static TeamLabTopologyDetailModel ToDetail(TeamLabTopology topology) =>
-        new(topology.PublicId, topology.Revision, topology.SchemaVersion, ToDefinition(topology),
+        new(topology.PublicId, topology.ControlScopeId, topology.Revision, topology.SchemaVersion, ToDefinition(topology),
             DeserializeEditor(topology.EditorMetadataJson), topology.CreatedAt, topology.UpdatedAt);
 
     private static TeamLabTopologyEditorModel NormalizeEditor(
@@ -763,7 +819,7 @@ public sealed class TeamLabTopologyApplicationService(
     }
 
     private static TeamLabApiContractException NotFound() =>
-        new("topology_not_found", "The TeamLab topology was not found.", 404);
+        new("topology_not_found", "未找到 TeamLab 拓扑", 404);
 
     private static GuidTimeCursor? DecodeCursor(string? value, string errorCode)
     {
@@ -774,7 +830,7 @@ public sealed class TeamLabTopologyApplicationService(
         }
         catch (InvalidTimeCursorException)
         {
-            throw new TeamLabApiContractException(errorCode, "The pagination cursor is invalid.", 400);
+            throw new TeamLabApiContractException(errorCode, "分页游标无效", 400);
         }
     }
 

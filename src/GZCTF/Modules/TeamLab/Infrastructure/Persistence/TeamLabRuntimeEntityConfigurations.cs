@@ -12,6 +12,7 @@ public sealed class TeamLabRuntimeFoundationEntityConfiguration : IEntityTypeCon
     {
         builder.HasIndex(item => item.PublicId).IsUnique();
         builder.HasIndex(item => item.TopologyReleaseId);
+        builder.HasIndex(item => item.ControlScopeId);
         builder.HasIndex(item => new { item.CreatedById, item.ExternalReference })
             .IsUnique()
             .HasFilter("\"ExternalReference\" IS NOT NULL");
@@ -24,6 +25,10 @@ public sealed class TeamLabRuntimeFoundationEntityConfiguration : IEntityTypeCon
         builder.HasOne<TeamLabTopologyRelease>()
             .WithMany()
             .HasForeignKey(item => item.TopologyReleaseId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(item => item.ControlScope)
+            .WithMany()
+            .HasForeignKey(item => item.ControlScopeId)
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<UserInfo>()
             .WithMany()
@@ -44,6 +49,23 @@ public sealed class TeamLabRuntimeNetworkFoundationEntityConfiguration : IEntity
             .WithOne()
             .HasForeignKey<TeamLabRuntimeNetwork>(item => item.NetworkLeaseId)
             .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public sealed class TeamLabEventEntityConfiguration : IEntityTypeConfiguration<TeamLabEvent>
+{
+    public void Configure(EntityTypeBuilder<TeamLabEvent> builder)
+    {
+        builder.HasIndex(item => new { item.ControlScopeId, item.Id })
+            .HasFilter("\"ControlScopeId\" IS NOT NULL")
+            .HasDatabaseName("IX_TeamLabEvents_Scope_Cursor");
+        builder.HasIndex(item => item.OperationId)
+            .HasFilter("\"OperationId\" IS NOT NULL")
+            .HasDatabaseName("IX_TeamLabEvents_Operation");
+        builder.HasOne(item => item.Runtime)
+            .WithMany(item => item.Events)
+            .HasForeignKey(item => item.RuntimeId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
 

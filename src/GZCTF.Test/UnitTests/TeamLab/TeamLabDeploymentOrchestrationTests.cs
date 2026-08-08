@@ -13,6 +13,7 @@ using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Domain;
+using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Contracts;
@@ -178,7 +179,8 @@ public sealed class TeamLabDeploymentOrchestrationTests
     [Fact]
     public void Capabilities_AdvertiseTheImplementedWindowsVmRuntime()
     {
-        var service = new TeamLabTopologyApplicationService(null!, null!, null!, null!, null!);
+        var service = new TeamLabTopologyApplicationService(null!, null!, null!, null!, null!,
+            new NodeCapacitySnapshotService(null!));
 
         Assert.True(service.GetCapabilities().Features.WindowsVm);
     }
@@ -236,8 +238,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
             CaptureCleanup(),
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
-            RemoteAccess(),
-            new TeamLabRemoteCredentialService(context, new EphemeralDataProtectionProvider()));
+            RemoteAccess());
 
         var result = await cleanup.CleanupAsync(runtime, CancellationToken.None);
 
@@ -294,8 +295,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
             CaptureCleanup(),
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
-            RemoteAccess(),
-            new TeamLabRemoteCredentialService(context, new EphemeralDataProtectionProvider()));
+            RemoteAccess());
 
         var result = await cleanup.CleanupAsync(runtime, CancellationToken.None);
 
@@ -340,8 +340,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
             CaptureCleanup(),
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
-            RemoteAccess(),
-            new TeamLabRemoteCredentialService(context, new EphemeralDataProtectionProvider()));
+            RemoteAccess());
 
         var result = await cleanup.CleanupAsync(runtime, CancellationToken.None);
 
@@ -383,8 +382,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
             captureCleanup.Object,
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
-            RemoteAccess(),
-            new TeamLabRemoteCredentialService(context, new EphemeralDataProtectionProvider()));
+            RemoteAccess());
 
         var result = await cleanup.CleanupAsync(runtime, markDestroyedOnSuccess: true, CancellationToken.None);
 
@@ -398,7 +396,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
     public void DependencyGraph_UnlocksIndependentAssetsAndExactDependencyCondition()
     {
         var topology = Topology(
-            [Asset("entry"), Asset("dependent"), Asset("independent")],
+            [Asset("entry", TeamLabHealthCheckKind.Http), Asset("dependent"), Asset("independent")],
             [new TeamLabExecutionDependency(
                 "dependent", "entry", TeamLabDependencyCondition.ServiceReady)]);
         var graph = TeamLabDependencyGraph.Compile(topology);
@@ -587,7 +585,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
         dependencies,
         new TeamLabExecutionObservationPolicy(true, true, TeamLabEndpointObservationMode.Disabled));
 
-    private static TeamLabExecutionAsset Asset(string key) => new(
+    private static TeamLabExecutionAsset Asset(string key, TeamLabHealthCheckKind? healthCheckKind = null) => new(
         key,
         key,
         TeamLabAssetKind.Docker,
@@ -600,8 +598,8 @@ public sealed class TeamLabDeploymentOrchestrationTests
         null,
         new Dictionary<string, string>(),
         null,
-        null,
-        null,
+        healthCheckKind,
+        healthCheckKind is null ? null : 8080,
         0,
         true,
         null,

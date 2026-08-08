@@ -11,8 +11,21 @@ namespace GZCTF.Modules.Penetration.Application;
 /// runtime orchestration services.
 /// </summary>
 public sealed class PenetrationTeamLabRemoteAccessAuthorizationProvider(AppDbContext context)
-    : ITeamLabRemoteAccessAuthorizationProvider
+    : ITeamLabRemoteAccessAuthorizationProvider, ITeamLabRuntimeManagerAuthorizationProvider
 {
+    public Task<bool> CanManageRuntimeAsync(
+        int runtimeId,
+        Guid actorUserId,
+        CancellationToken cancellationToken) =>
+        context.PenetrationTeamRuntimeBindings.AsNoTracking()
+            .Where(item => item.RuntimeId == runtimeId)
+            .Join(
+                context.Games.AsNoTracking(),
+                binding => binding.GameId,
+                game => game.Id,
+                (_, game) => game.OwnerId)
+            .AnyAsync(ownerId => ownerId == actorUserId, cancellationToken);
+
     public async Task<TeamLabOperatorPermission> GetRemoteAccessPermissionsAsync(
         int runtimeId,
         Guid actorUserId,

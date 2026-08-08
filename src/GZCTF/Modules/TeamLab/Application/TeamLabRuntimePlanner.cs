@@ -26,16 +26,17 @@ public sealed class TeamLabRuntimePlanner(
         Guid runtimeOwnerUserId,
         string requestHash,
         string? creationIdempotencyKey,
+        Func<TeamLabRuntime, CancellationToken, Task>? admitPlannedRuntime,
         CancellationToken cancellationToken)
     {
         var release = await context.TeamLabTopologyReleases.AsNoTracking()
             .Include(item => item.Topology)
             .SingleOrDefaultAsync(item => item.Id == command.ReleaseId, cancellationToken)
-            ?? throw new TeamLabApiContractException("release_not_found", "The topology release was not found.", 404);
+            ?? throw new TeamLabApiContractException("release_not_found", "未找到拓扑版本", 404);
         if (release.Topology.OwnerUserId != runtimeOwnerUserId)
             throw new TeamLabApiContractException(
                 "insufficient_permission",
-                "The topology release is not owned by the runtime owner.",
+                "拓扑版本不属于运行时所有者",
                 403);
 
         var normalizedIdempotencyKey = string.IsNullOrWhiteSpace(creationIdempotencyKey)
@@ -64,16 +65,17 @@ public sealed class TeamLabRuntimePlanner(
             if (existing is not null)
             {
                 if (existing.Status == TeamLabRuntimeStatus.Destroyed)
-                    return await ResetAsync(
+                    return await ResetAndAdmitAsync(
                         existing.PublicId,
                         command.Overlays,
                         command.ReleaseId,
                         requestHash,
+                        admitPlannedRuntime,
                         cancellationToken);
                 if (!string.Equals(existing.CreateRequestHash, requestHash, StringComparison.Ordinal))
                     throw new TeamLabApiContractException(
                         "external_reference_conflict",
-                        "The external reference is already used by a different runtime request.",
+                        "外部引用已被其他运行时请求占用",
                         409);
                 return new TeamLabRuntimeCreateResult(existing.Id, existing.PublicId, true);
             }
@@ -88,7 +90,8 @@ public sealed class TeamLabRuntimePlanner(
             command.Overlays,
             isScenarioBuild: false,
             resolveScenarioArtifacts: true,
-            cancellationToken);
+            admitPlannedRuntime: admitPlannedRuntime,
+            cancellationToken: cancellationToken);
     }
 
     public async Task<TeamLabRuntimeCreateResult> CreateScenarioBuildAsync(
@@ -102,11 +105,11 @@ public sealed class TeamLabRuntimePlanner(
         var release = await context.TeamLabTopologyReleases.AsNoTracking()
             .Include(item => item.Topology)
             .SingleOrDefaultAsync(item => item.Id == releaseId, cancellationToken)
-            ?? throw new TeamLabApiContractException("release_not_found", "The topology release was not found.", 404);
+            ?? throw new TeamLabApiContractException("release_not_found", "未找到拓扑版本", 404);
         if (release.Topology.OwnerUserId != actorUserId)
             throw new TeamLabApiContractException(
                 "insufficient_permission",
-                "The topology release is not owned by the scenario build actor.",
+                "拓扑版本不属于场景构建操作者",
                 403);
 
         var normalizedReference = NormalizeExternalReference(externalReference)
@@ -121,7 +124,7 @@ public sealed class TeamLabRuntimePlanner(
                 !string.Equals(existing.CreateRequestHash, requestHash, StringComparison.Ordinal))
                 throw new TeamLabApiContractException(
                     "external_reference_conflict",
-                    "The scenario build reference is already used by a different runtime request.",
+                    "场景构建引用已被其他运行时请求占用",
                     409);
             if (existing.Status == TeamLabRuntimeStatus.Destroyed)
                 return await ResetCoreAsync(
@@ -130,7 +133,8 @@ public sealed class TeamLabRuntimePlanner(
                     release.Id,
                     requestHash,
                     resolveScenarioArtifacts: false,
-                    cancellationToken);
+                    admitPlannedRuntime: null,
+                    cancellationToken: cancellationToken);
             return new TeamLabRuntimeCreateResult(existing.Id, existing.PublicId, true);
         }
 
@@ -143,7 +147,8 @@ public sealed class TeamLabRuntimePlanner(
             scenarioOverlays,
             isScenarioBuild: true,
             resolveScenarioArtifacts: false,
-            cancellationToken);
+            admitPlannedRuntime: null,
+            cancellationToken: cancellationToken);
     }
 
     private async Task<TeamLabRuntimeCreateResult> CreatePlannedRuntimeAsync(
@@ -155,6 +160,7 @@ public sealed class TeamLabRuntimePlanner(
         IReadOnlyList<TeamLabRuntimeOverlayModel>? runtimeOverlays,
         bool isScenarioBuild,
         bool resolveScenarioArtifacts,
+        Func<TeamLabRuntime, CancellationToken, Task>? admitPlannedRuntime,
         CancellationToken cancellationToken)
     {
         var definition = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
@@ -166,6 +172,7 @@ public sealed class TeamLabRuntimePlanner(
             var runtime = new TeamLabRuntime
             {
                 TopologyReleaseId = release.Id,
+                ControlScopeId = release.ControlScopeId,
                 CreatedById = runtimeOwnerUserId,
                 ExternalReference = externalReference,
                 CreationIdempotencyKey = creationIdempotencyKey,
@@ -186,6 +193,8 @@ public sealed class TeamLabRuntimePlanner(
                 runtimeOverlays,
                 resolveScenarioArtifacts,
                 cancellationToken);
+            if (admitPlannedRuntime is not null)
+                await admitPlannedRuntime(runtime, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return new TeamLabRuntimeCreateResult(runtime.Id, runtime.PublicId, false);
         }
@@ -193,7 +202,7 @@ public sealed class TeamLabRuntimePlanner(
             exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.ExclusionViolation })
         {
             throw new TeamLabApiContractException(
-                "address_pool_exhausted", "Concurrent address allocation exhausted an address pool.", 409);
+                "address_pool_exhausted", "并发地址分配已耗尽地址池", 409);
         }
         catch (DbUpdateException exception) when (
             creationIdempotencyKey is not null &&
@@ -238,17 +247,19 @@ public sealed class TeamLabRuntimePlanner(
                         existing.PublicId,
                         runtimeOverlays,
                         release.Id,
-                        requestHash,
-                        resolveScenarioArtifacts: false,
-                        cancellationToken);
+                    requestHash,
+                    resolveScenarioArtifacts: false,
+                    admitPlannedRuntime: null,
+                    cancellationToken: cancellationToken);
                 return new TeamLabRuntimeCreateResult(existing.Id, existing.PublicId, true);
             }
             if (existing.Status == TeamLabRuntimeStatus.Destroyed)
-                return await ResetAsync(
+                return await ResetAndAdmitAsync(
                     existing.PublicId,
                     runtimeOverlays,
                     release.Id,
                     requestHash,
+                    admitPlannedRuntime,
                     cancellationToken);
             if (!string.Equals(existing.CreateRequestHash, requestHash, StringComparison.Ordinal))
                 throw new TeamLabApiContractException(
@@ -271,7 +282,24 @@ public sealed class TeamLabRuntimePlanner(
             targetReleaseId,
             createRequestHash,
             resolveScenarioArtifacts: true,
-            cancellationToken);
+            admitPlannedRuntime: null,
+            cancellationToken: cancellationToken);
+
+    private Task<TeamLabRuntimeCreateResult> ResetAndAdmitAsync(
+        Guid runtimePublicId,
+        IReadOnlyList<TeamLabRuntimeOverlayModel>? runtimeOverlays,
+        Guid? targetReleaseId,
+        string? createRequestHash,
+        Func<TeamLabRuntime, CancellationToken, Task>? admitPlannedRuntime,
+        CancellationToken cancellationToken) =>
+        ResetCoreAsync(
+            runtimePublicId,
+            runtimeOverlays,
+            targetReleaseId,
+            createRequestHash,
+            resolveScenarioArtifacts: true,
+            admitPlannedRuntime: admitPlannedRuntime,
+            cancellationToken: cancellationToken);
 
     private async Task<TeamLabRuntimeCreateResult> ResetCoreAsync(
         Guid runtimePublicId,
@@ -279,6 +307,7 @@ public sealed class TeamLabRuntimePlanner(
         Guid? targetReleaseId,
         string? createRequestHash,
         bool resolveScenarioArtifacts,
+        Func<TeamLabRuntime, CancellationToken, Task>? admitPlannedRuntime,
         CancellationToken cancellationToken)
     {
         var runtime = await context.TeamLabRuntimes
@@ -291,20 +320,20 @@ public sealed class TeamLabRuntimePlanner(
             .Include(item => item.SecretEnvelopes)
             .Include(item => item.Events)
             .SingleOrDefaultAsync(item => item.PublicId == runtimePublicId, cancellationToken)
-            ?? throw new TeamLabApiContractException("runtime_not_found", "The TeamLab runtime was not found.", 404);
+            ?? throw new TeamLabApiContractException("runtime_not_found", "未找到 TeamLab 运行时", 404);
         if (runtime.Status != TeamLabRuntimeStatus.Destroyed)
-            throw new TeamLabApiContractException("runtime_cleanup_pending", "The current runtime generation is not fully cleaned.", 409);
+            throw new TeamLabApiContractException("runtime_cleanup_pending", "当前运行时 generation 尚未完全清理", 409);
         var releaseId = targetReleaseId ?? runtime.TopologyReleaseId;
         if (releaseId == Guid.Empty)
-            throw new TeamLabApiContractException("runtime_invalid", "The runtime has no topology release.", 500);
+            throw new TeamLabApiContractException("runtime_invalid", "运行时未关联拓扑版本", 500);
         var release = await context.TeamLabTopologyReleases.AsNoTracking()
             .Include(item => item.Topology)
             .SingleOrDefaultAsync(item => item.Id == releaseId, cancellationToken)
-            ?? throw new TeamLabApiContractException("release_not_found", "The topology release was not found.", 404);
+            ?? throw new TeamLabApiContractException("release_not_found", "未找到拓扑版本", 404);
         if (release.Topology.OwnerUserId != runtime.CreatedById)
             throw new TeamLabApiContractException(
                 "insufficient_permission",
-                "The target topology release is not owned by the runtime owner.",
+                "目标拓扑版本不属于运行时所有者",
                 403);
         var definition = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
         await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(
@@ -312,6 +341,7 @@ public sealed class TeamLabRuntimePlanner(
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         runtime.Generation++;
         runtime.TopologyReleaseId = release.Id;
+        runtime.ControlScopeId = release.ControlScopeId;
         if (createRequestHash is not null) runtime.CreateRequestHash = createRequestHash;
         runtime.EntryShardId = null;
         runtime.Status = TeamLabRuntimeStatus.Planning;
@@ -323,6 +353,8 @@ public sealed class TeamLabRuntimePlanner(
             runtimeOverlays,
             resolveScenarioArtifacts,
             cancellationToken);
+        if (admitPlannedRuntime is not null)
+            await admitPlannedRuntime(runtime, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new TeamLabRuntimeCreateResult(runtime.Id, runtime.PublicId, false);
     }
@@ -379,7 +411,7 @@ public sealed class TeamLabRuntimePlanner(
                 if (!scenarioArtifacts.ContainsKey(asset.Key))
                     throw new TeamLabApiContractException(
                         "scenario_artifact_not_ready",
-                        $"Release scenario artifact for asset '{asset.Key}' is not ready.",
+                        $"资源 '{asset.Key}' 的发布场景 artifact 尚未就绪",
                         409);
         var resolvedTemplateIds = definition.Assets.ToDictionary(
             item => item.Key,
@@ -401,13 +433,13 @@ public sealed class TeamLabRuntimePlanner(
                 string.IsNullOrWhiteSpace(currentDigest))
                 throw new TeamLabApiContractException(
                     "image_template_unavailable",
-                    $"Resolved image template {resolvedTemplateId} for asset '{asset.Key}' is unavailable.",
+                    $"资源 '{asset.Key}' 解析到的镜像模板 {resolvedTemplateId} 不可用",
                     409);
             if (!string.IsNullOrWhiteSpace(expectedDigest) &&
                 !string.Equals(expectedDigest, currentDigest, StringComparison.Ordinal))
                 throw new TeamLabApiContractException(
                     "image_template_digest_changed",
-                    $"Resolved image template {resolvedTemplateId} for asset '{asset.Key}' does not match the published digest.",
+                    $"资源 '{asset.Key}' 解析到的镜像模板 {resolvedTemplateId} 与已发布 digest 不匹配",
                     409);
         }
         var bootstrapProfileIds = definition.Assets.Where(item => item.Bootstrap is not null)
@@ -423,7 +455,7 @@ public sealed class TeamLabRuntimePlanner(
         {
             var cidr = Allocate(network.AddressPoolCidr, network.RuntimePrefixLength, usedCidrs.Concat(allocated));
             if (cidr is null)
-                throw new TeamLabApiContractException("address_pool_exhausted", $"Address pool for network '{network.Key}' is exhausted.", 409);
+                throw new TeamLabApiContractException("address_pool_exhausted", $"网络 '{network.Key}' 的地址池已耗尽", 409);
             allocated.Add(cidr.Value);
             var runtimeNetwork = new TeamLabRuntimeNetwork
             {
@@ -561,7 +593,7 @@ public sealed class TeamLabRuntimePlanner(
         var parts = cidr.Split('/');
         if (parts.Length != 2 || !IPAddress.TryParse(parts[0], out var address) ||
             address.AddressFamily != AddressFamily.InterNetwork || !int.TryParse(parts[1], out var prefix))
-            throw new TeamLabApiContractException("release_invalid", $"CIDR '{cidr}' is invalid.", 500);
+            throw new TeamLabApiContractException("release_invalid", $"CIDR '{cidr}' 无效", 500);
         return new IPNetwork(address, prefix);
     }
 
@@ -576,7 +608,7 @@ public sealed class TeamLabRuntimePlanner(
     {
         var range = ToRange(network);
         if (offset <= 0 || (uint)offset >= range.End - range.Start)
-            throw new TeamLabApiContractException("topology_invalid", "A host offset is outside its runtime network.", 422);
+            throw new TeamLabApiContractException("topology_invalid", "主机偏移超出运行时网络范围", 422);
         return FromUInt32(range.Start + (uint)offset).ToString();
     }
 
@@ -602,7 +634,7 @@ public sealed class TeamLabRuntimePlanner(
         if (string.IsNullOrWhiteSpace(value)) return null;
         var normalized = value.Trim();
         if (normalized.Length > 256)
-            throw new TeamLabApiContractException("topology_invalid", "External reference cannot exceed 256 characters.", 422);
+            throw new TeamLabApiContractException("topology_invalid", "外部引用不能超过 256 个字符", 422);
         return normalized;
     }
 

@@ -176,6 +176,7 @@ function document(): TopologyDocument {
       },
     },
     observation: { flowMetadataEnabled: true, onDemandPcapEnabled: true, endpointObservation: 'required' },
+    networkLayouts: {},
   }
 }
 

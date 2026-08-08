@@ -7,7 +7,6 @@ import type {
 
 export const terminalRuntimeStatuses = new Set<TeamLabRuntimeStatus>([
   'failed',
-  'stopped',
   'destroyed',
 ])
 
@@ -39,7 +38,7 @@ export const runtimeStatusLabels: Record<TeamLabRuntimeStatus, string> = {
   running: '运行就绪',
   failed: '执行失败',
   'cleanup-pending': '等待清理',
-  stopped: '已停止',
+  paused: '已暂停',
   destroying: '正在销毁',
   destroyed: '已销毁',
 }

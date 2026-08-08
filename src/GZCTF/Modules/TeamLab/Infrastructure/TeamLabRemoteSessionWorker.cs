@@ -17,7 +17,7 @@ public sealed class TeamLabRemoteSessionWorker(
                 await scope.ServiceProvider.GetRequiredService<ITeamLabRemoteAccessService>().ExpireAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
-            catch (Exception exception) { logger.LogError(exception, "TeamLab remote session expiry cleanup failed"); }
+            catch (Exception exception) { logger.LogError(exception, "TeamLab 远程会话过期清理失败"); }
         }
     }
 }

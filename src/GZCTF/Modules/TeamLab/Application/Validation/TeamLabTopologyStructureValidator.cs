@@ -106,7 +106,7 @@ internal sealed partial class TeamLabTopologyStructureValidator(TeamLabAddressPo
         ValidateKey(asset.Key, $"{path}.key", issues);
         ValidateName(asset.Name, $"{path}.name", "Asset", issues);
         if (asset.ImageTemplateId <= 0)
-            Add(issues, "image_template_invalid", $"{path}.imageTemplateId", "A positive image template ID is required.");
+            Add(issues, "image_template_invalid", $"{path}.imageTemplateId", "请为该资产选择可用镜像模板。");
         if (asset.Resources.CpuUnits <= 0 || asset.Resources.MemoryMiB <= 0 || asset.Resources.StorageMiB <= 0)
             Add(issues, "asset_resources_invalid", $"{path}.resources", "CPU, memory and storage must be positive.");
         if (asset.BakeAtPublish && asset.Kind != TeamLabAssetKind.Vm)

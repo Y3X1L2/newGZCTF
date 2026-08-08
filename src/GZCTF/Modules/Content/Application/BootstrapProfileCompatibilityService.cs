@@ -19,6 +19,11 @@ public sealed class BootstrapProfileCompatibilityService(AppDbContext context)
         var assets = definition.Assets.Where(item => item.Bootstrap is not null).ToArray();
         var vmAssets = definition.Assets.Where(item => item.Kind == TeamLabAssetKind.Vm).ToArray();
         if (assets.Length == 0 && vmAssets.Length == 0) return [];
+        if (assets.Any(item => item.Kind == TeamLabAssetKind.Docker))
+            throw new TeamLabApiContractException(
+                "bootstrap_profile_incompatible",
+                "Docker 资产暂不支持服务注入。请选择虚拟机资产，或关闭该资产的服务注入。",
+                409);
         var profileIds = assets.Select(item => item.Bootstrap!.ProfileId).Distinct().ToArray();
         var versions = await context.BootstrapProfileVersions.AsNoTracking().Include(item => item.Profile)
             .Where(item => profileIds.Contains(item.Profile.PublicId) &&
@@ -78,8 +83,10 @@ public sealed class BootstrapProfileCompatibilityService(AppDbContext context)
             var reference = asset.Bootstrap!;
             var profileVersion = versions.SingleOrDefault(item =>
                 item.Profile.PublicId == reference.ProfileId && item.Version == reference.Version)
-                ?? throw Conflict(
-                    $"Bootstrap profile {reference.ProfileId:D} version {reference.Version} is not ready.");
+                ?? throw new TeamLabApiContractException(
+                    "service_profile_not_found",
+                    $"服务目录 {reference.ProfileId:D} v{reference.Version} 不存在、已下架或尚未发布就绪。",
+                    404);
             if (!templates.TryGetValue(asset.ImageTemplateId, out var template) ||
                 string.IsNullOrWhiteSpace(template.ImageHash))
                 throw Conflict($"Image template {asset.ImageTemplateId} is not ready for bootstrap validation.");

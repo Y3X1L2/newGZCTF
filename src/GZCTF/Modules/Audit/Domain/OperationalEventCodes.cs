@@ -147,6 +147,12 @@ public static class OperationalEventCodes
         public const string ResetStarted = "teamlab.reset.started";
         public const string ResetSucceeded = "teamlab.reset.succeeded";
         public const string ResetFailed = "teamlab.reset.failed";
+        public const string PauseStarted = "teamlab.pause.started";
+        public const string PauseSucceeded = "teamlab.pause.succeeded";
+        public const string PauseFailed = "teamlab.pause.failed";
+        public const string ResumeStarted = "teamlab.resume.started";
+        public const string ResumeSucceeded = "teamlab.resume.succeeded";
+        public const string ResumeBlocked = "teamlab.resume.blocked";
         public const string DestroyStarted = "teamlab.destroy.started";
         public const string DestroySucceeded = "teamlab.destroy.succeeded";
         public const string DestroyFailed = "teamlab.destroy.failed";

@@ -36,7 +36,7 @@ public sealed class TeamLabScenarioBakeService(
     {
         var release = await context.TeamLabTopologyReleases.AsNoTracking()
             .SingleOrDefaultAsync(item => item.Id == releaseId, cancellationToken)
-            ?? throw Terminal("release_not_found", "The topology release was not found for scenario baking.");
+            ?? throw Terminal("release_not_found", "未找到用于场景烘焙的拓扑版本");
         var definition = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
         var bakeAssets = definition.Assets.Where(item => item.BakeAtPublish)
             .OrderBy(item => item.Key, StringComparer.Ordinal)
@@ -76,14 +76,14 @@ public sealed class TeamLabScenarioBakeService(
             await MarkFailedAndRequireCleanupAsync(
                 runtime,
                 artifacts,
-                runtime.LastError ?? "Scenario build runtime failed.",
+                runtime.LastError ?? "场景构建运行时失败",
                 cancellationToken);
-            throw Terminal("scenario_runtime_failed", runtime.LastError ?? "Scenario build runtime failed.");
+            throw Terminal("scenario_runtime_failed", runtime.LastError ?? "场景构建运行时失败");
         }
         if (runtime.Status == TeamLabRuntimeStatus.Destroyed)
         {
-            await MarkFailedAsync(artifacts, "Scenario build runtime was destroyed before artifacts were committed.", cancellationToken);
-            throw Terminal("scenario_runtime_destroyed", "Scenario build runtime was destroyed before artifacts were committed.");
+            await MarkFailedAsync(artifacts, "场景构建运行时在 artifacts 提交前被销毁", cancellationToken);
+            throw Terminal("scenario_runtime_destroyed", "场景构建运行时在 artifacts 提交前被销毁");
         }
         if (runtime.Status != TeamLabRuntimeStatus.Running)
             throw Deferred(
@@ -104,7 +104,7 @@ public sealed class TeamLabScenarioBakeService(
                     string.IsNullOrWhiteSpace(runtimeAsset.RuntimeResourceId))
                     throw Terminal(
                         "scenario_runtime_asset_missing",
-                        $"Scenario runtime asset '{asset.Key}' has no committed VM identity.");
+                        $"场景运行时资源 '{asset.Key}' 缺少已提交的 VM 标识");
                 var source = sourceTemplates[asset.ImageTemplateId];
                 await CommitArtifactAsync(
                     release,
@@ -127,7 +127,7 @@ public sealed class TeamLabScenarioBakeService(
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Scenario artifact commit failed for release {ReleaseId}", release.Id);
+            logger.LogError(exception, "场景 artifact 提交失败，版本 {ReleaseId}", release.Id);
             await FailAndCleanupAsync(runtime, artifacts, exception.Message, cancellationToken);
             throw Terminal("scenario_artifact_commit_failed", exception.Message);
         }
@@ -159,7 +159,7 @@ public sealed class TeamLabScenarioBakeService(
                 if (!string.Equals(artifact.BuildIdentity, identity, StringComparison.Ordinal))
                     throw Terminal(
                         "scenario_build_identity_changed",
-                        $"Scenario build identity changed for immutable release asset '{asset.Key}'.");
+                        $"不可变发布资源 '{asset.Key}' 的场景构建标识已变化");
                 continue;
             }
 
@@ -214,7 +214,7 @@ public sealed class TeamLabScenarioBakeService(
                 throw Terminal(
                     "scenario_bake_failed",
                     failed.Select(item => item.ErrorMessage).FirstOrDefault(item => !string.IsNullOrWhiteSpace(item))
-                    ?? "Scenario baking failed.");
+                    ?? "场景烘焙失败");
 
             foreach (var artifact in pending)
             {
@@ -230,7 +230,7 @@ public sealed class TeamLabScenarioBakeService(
                                 item.BakeAttemptOperationId != publishOperationId))
             throw Terminal(
                 "scenario_bake_in_progress",
-                "Scenario baking is already owned by another publish operation.");
+                "场景烘焙已被其他发布操作占用");
 
         if (pending.Any(item => !item.BakeAttemptOperationId.HasValue))
         {
@@ -246,7 +246,7 @@ public sealed class TeamLabScenarioBakeService(
         var runtimeIds = artifacts.Where(item => item.BakeRuntimeId.HasValue)
             .Select(item => item.BakeRuntimeId!.Value).Distinct().ToArray();
         if (runtimeIds.Length > 1)
-            throw Terminal("scenario_runtime_identity_conflict", "Scenario artifacts reference multiple build runtimes.");
+            throw Terminal("scenario_runtime_identity_conflict", "场景 artifacts 引用了多个构建运行时");
         if (runtimeIds.Length == 0) return;
 
         var runtime = await RuntimeQuery().SingleOrDefaultAsync(item => item.Id == runtimeIds[0], cancellationToken);
@@ -266,7 +266,7 @@ public sealed class TeamLabScenarioBakeService(
         var runtimeIds = artifacts.Where(item => item.BakeRuntimeId.HasValue)
             .Select(item => item.BakeRuntimeId!.Value).Distinct().ToArray();
         if (runtimeIds.Length > 1)
-            throw Terminal("scenario_runtime_identity_conflict", "Scenario artifacts reference multiple build runtimes.");
+            throw Terminal("scenario_runtime_identity_conflict", "场景 artifacts 引用了多个构建运行时");
         int runtimeId;
         if (runtimeIds.Length == 0)
         {
@@ -287,9 +287,9 @@ public sealed class TeamLabScenarioBakeService(
         }
 
         var runtime = await RuntimeQuery().SingleOrDefaultAsync(item => item.Id == runtimeId, cancellationToken)
-                      ?? throw Terminal("scenario_runtime_missing", "Scenario build runtime no longer exists.");
+                      ?? throw Terminal("scenario_runtime_missing", "场景构建运行时已不存在");
         if (!runtime.IsScenarioBuild || runtime.TopologyReleaseId != release.Id)
-            throw Terminal("scenario_runtime_identity_conflict", "Scenario build runtime identity is invalid.");
+            throw Terminal("scenario_runtime_identity_conflict", "场景构建运行时标识无效");
         if (runtime.Status == TeamLabRuntimeStatus.Destroyed &&
             artifacts.Any(item => !IsReady(item)))
         {
@@ -303,7 +303,7 @@ public sealed class TeamLabScenarioBakeService(
             if (resumed.RuntimeId != runtime.Id)
                 throw Terminal(
                     "scenario_runtime_identity_conflict",
-                    "Scenario retry did not reuse the release build runtime.");
+                    "场景重试未复用发布构建运行时");
             runtime = await RuntimeQuery().SingleAsync(item => item.Id == resumed.RuntimeId, cancellationToken);
         }
 
@@ -341,17 +341,17 @@ public sealed class TeamLabScenarioBakeService(
         var bakeKeys = bakeAssets.Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
         var normalized = overlays.OrderBy(item => item.AssetKey, StringComparer.Ordinal).ToArray();
         if (normalized.Select(item => item.AssetKey).Distinct(StringComparer.Ordinal).Count() != normalized.Length)
-            throw Terminal("scenario_overlay_duplicate", "Scenario overlays contain duplicate asset keys.");
+            throw Terminal("scenario_overlay_duplicate", "场景 overlays 包含重复的资源 key");
         foreach (var overlay in normalized)
         {
             if (!bakeKeys.Contains(overlay.AssetKey))
                 throw Terminal(
                     "scenario_overlay_asset_invalid",
-                    $"Scenario overlay asset '{overlay.AssetKey}' is not marked BakeAtPublish.");
+                    $"场景 overlay 资源 '{overlay.AssetKey}' 未标记为 BakeAtPublish");
             if (overlay.Environment is { Count: > 0 })
                 throw Terminal(
                     "scenario_overlay_environment_forbidden",
-                    "Scenario publication accepts protected secrets only; environment belongs in the topology definition.");
+                    "场景发布仅接受受保护的 secrets，环境应写入拓扑定义");
         }
         return normalized;
     }
@@ -384,7 +384,7 @@ public sealed class TeamLabScenarioBakeService(
             if (!response.Success || artifactDigest is null || evidenceDigest is null || response.ArtifactSize <= 0)
                 throw Terminal(
                     response.ErrorCode ?? "scenario_artifact_result_invalid",
-                    response.ErrorDetail ?? $"Scenario artifact result for '{artifact.AssetKey}' is invalid.");
+                    response.ErrorDetail ?? $"资源 '{artifact.AssetKey}' 的场景 artifact 结果无效");
             artifact.ArtifactDigest = artifactDigest;
             artifact.EvidenceDigest = evidenceDigest;
             artifact.ArtifactSize = response.ArtifactSize;
@@ -520,7 +520,7 @@ public sealed class TeamLabScenarioBakeService(
                     BootstrapProfileCompatibilityService.IsCurrentManagedCertification(certification, template)))
                 throw Terminal(
                     "scenario_source_not_managed",
-                    $"BakeAtPublish asset '{asset.Key}' requires a ready, certified Managed VM template.");
+                    $"BakeAtPublish 资源 '{asset.Key}' 需要已就绪且已认证的 Managed VM 模板");
         }
     }
 

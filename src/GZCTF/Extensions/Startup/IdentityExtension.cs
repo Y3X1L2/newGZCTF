@@ -7,12 +7,15 @@ namespace GZCTF.Extensions.Startup;
 internal static class IdentityExtension
 {
     private const string RequestScheme = "GzctfRequest";
+    private const string DataProtectionApplicationName = "GZCTF";
 
     extension(WebApplicationBuilder builder)
     {
         public void ConfigureIdentity()
         {
-            builder.Services.AddDataProtection().PersistKeysToDbContext<AppDbContext>();
+            builder.Services.AddDataProtection()
+                .SetApplicationName(DataProtectionApplicationName)
+                .PersistKeysToDbContext<AppDbContext>();
 
             builder.Services.AddAuthentication(o =>
                 {

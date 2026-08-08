@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Models;
+using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Application.Rollouts;
 using GZCTF.Modules.TeamLab.Contracts;
@@ -24,7 +25,8 @@ public sealed class TeamLabAdminContractTests
         await using var context = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
         var service = new TeamLabTopologyApplicationService(
-            context, new TeamLabTopologyValidator(), null!, null!, null!);
+            context, new TeamLabTopologyValidator(), null!, new TeamLabControlScopeService(context), null!,
+            new NodeCapacitySnapshotService(context));
         var request = new CreateTeamLabTopologyModel(
             "Draft", [], [], [],
             new TeamLabTopologyEditorModel(
@@ -137,6 +139,27 @@ public sealed class TeamLabAdminContractTests
         Assert.True(prepared.PreparationRequested);
         Assert.Equal("preparing", prepared.Status);
         Assert.Single(context.TeamLabRollouts);
+    }
+
+    [Fact]
+    public async Task RolloutResume_RequeuesCoordinationAfterPause()
+    {
+        await using var context = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        var ownerId = Guid.CreateVersion7();
+        var service = new TeamLabRolloutApplicationService(context);
+        var rollout = await service.EnsureAsync(
+            Guid.CreateVersion7(), ownerId, ownerId, "penetration", "game:18", CancellationToken.None);
+        var entity = await context.TeamLabRollouts.SingleAsync(item => item.PublicId == rollout.Id);
+        entity.Status = TeamLabRolloutStatus.Ready;
+        entity.PauseRequested = true;
+        entity.PreparationRequested = false;
+        await context.SaveChangesAsync();
+
+        var resumed = await service.RequestResumeAsync(rollout.Id, CancellationToken.None);
+
+        Assert.False(resumed.PauseRequested);
+        Assert.True(resumed.PreparationRequested);
     }
 
     [Fact]

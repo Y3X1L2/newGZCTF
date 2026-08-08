@@ -12,7 +12,6 @@ public sealed record ImageRemoteAccessModel(
     TeamLabRemoteProtocol Protocol,
     int Port,
     string? Username,
-    RemoteCredentialMode CredentialMode,
     bool HasCredential,
     DateTimeOffset? UpdatedAt);
 
@@ -21,8 +20,8 @@ public sealed record UpdateImageRemoteAccessModel(
     TeamLabRemoteProtocol Protocol,
     int Port,
     string? Username,
-    RemoteCredentialMode CredentialMode,
-    string? Credential);
+    string? Credential,
+    bool ClearCredential = false);
 
 public sealed class ImageRemoteAccessService(AppDbContext context, IDataProtectionProvider protectionProvider)
 {
@@ -34,7 +33,7 @@ public sealed class ImageRemoteAccessService(AppDbContext context, IDataProtecti
             .SingleOrDefaultAsync(item => item.ImageTemplateId == imageTemplateId, cancellationToken);
         return configuration is null
             ? new ImageRemoteAccessModel(false, TeamLabRemoteProtocol.Ssh, 22, null,
-                RemoteCredentialMode.PlatformGenerated, false, null)
+                false, null)
             : ToModel(configuration);
     }
 
@@ -55,13 +54,13 @@ public sealed class ImageRemoteAccessService(AppDbContext context, IDataProtecti
         configuration.Protocol = request.Protocol;
         configuration.Port = request.Port;
         configuration.Username = string.IsNullOrWhiteSpace(request.Username) ? null : request.Username.Trim();
-        configuration.CredentialMode = request.CredentialMode;
-        if (request.CredentialMode == RemoteCredentialMode.PlatformGenerated)
+        if (request.ClearCredential)
             configuration.ProtectedSecret = null;
         else if (!string.IsNullOrWhiteSpace(request.Credential))
             configuration.ProtectedSecret = _protector.Protect(request.Credential);
-        else if (string.IsNullOrWhiteSpace(configuration.ProtectedSecret))
-            throw new InvalidOperationException("An existing-account remote access configuration requires a password or private key.");
+        else if (request.Enabled && request.Protocol != TeamLabRemoteProtocol.ContainerTerminal &&
+                 string.IsNullOrWhiteSpace(configuration.ProtectedSecret))
+            throw new InvalidOperationException("启用虚拟机运维接入时必须设置密码或 SSH 私钥。");
         configuration.UpdatedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(cancellationToken);
         return ToModel(configuration);
@@ -73,7 +72,7 @@ public sealed class ImageRemoteAccessService(AppDbContext context, IDataProtecti
             : _protector.Unprotect(configuration.ProtectedSecret);
 
     private static ImageRemoteAccessModel ToModel(ImageTemplateRemoteAccess item) => new(
-        item.Enabled, item.Protocol, item.Port, item.Username, item.CredentialMode,
+        item.Enabled, item.Protocol, item.Port, item.Username,
         !string.IsNullOrWhiteSpace(item.ProtectedSecret), item.UpdatedAt);
 
     private static void Validate(ImageTemplate template, UpdateImageRemoteAccessModel request)
@@ -87,7 +86,8 @@ public sealed class ImageRemoteAccessService(AppDbContext context, IDataProtecti
             throw new InvalidOperationException("RDP remote access requires a Windows image.");
         if (request.Protocol == TeamLabRemoteProtocol.Ssh && template.OSType != OSType.Linux)
             throw new InvalidOperationException("SSH remote access requires a Linux image.");
-        if (request.CredentialMode == RemoteCredentialMode.ExistingAccount && string.IsNullOrWhiteSpace(request.Username))
-            throw new InvalidOperationException("An existing-account remote access configuration requires a username.");
+        if (request.Enabled && request.Protocol != TeamLabRemoteProtocol.ContainerTerminal &&
+            string.IsNullOrWhiteSpace(request.Username))
+            throw new InvalidOperationException("启用虚拟机运维接入时必须设置用户名。");
     }
 }

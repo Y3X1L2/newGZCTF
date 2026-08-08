@@ -26,7 +26,7 @@ public sealed partial class TeamLabRuntimeOverlayService(IDataProtectionProvider
         foreach (var assetKey in sensorAssetKeys ?? new HashSet<string>())
         {
             if (!assetKeys.Contains(assetKey))
-                throw new TeamLabApiContractException("topology_invalid", $"Sensor asset '{assetKey}' does not exist.", 422);
+                throw new TeamLabApiContractException("topology_invalid", $"sensor 资源 '{assetKey}' 不存在", 422);
             var current = normalized.GetValueOrDefault(assetKey) ??
                           new TeamLabRuntimeOverlayModel(assetKey, null, null);
             var secrets = new SortedDictionary<string, string>(StringComparer.Ordinal);
@@ -52,7 +52,7 @@ public sealed partial class TeamLabRuntimeOverlayService(IDataProtectionProvider
     {
         if (envelope?.ProtectedPayload is null) return new Dictionary<string, TeamLabRuntimeOverlayModel>();
         if (envelope.ExpiresAt <= DateTimeOffset.UtcNow)
-            throw new TeamLabApiContractException("runtime_overlay_expired", "The runtime overlay has expired.", 409);
+            throw new TeamLabApiContractException("runtime_overlay_expired", "运行时 overlay 已过期", 409);
         try
         {
             var payload = _protector.Unprotect(envelope.ProtectedPayload);
@@ -61,7 +61,7 @@ public sealed partial class TeamLabRuntimeOverlayService(IDataProtectionProvider
         }
         catch (CryptographicException)
         {
-            throw new TeamLabApiContractException("runtime_overlay_invalid", "The runtime overlay cannot be decrypted.", 500);
+            throw new TeamLabApiContractException("runtime_overlay_invalid", "运行时 overlay 无法解密", 500);
         }
     }
 
@@ -76,7 +76,7 @@ public sealed partial class TeamLabRuntimeOverlayService(IDataProtectionProvider
     {
         var assetKey = overlay.AssetKey.Trim();
         if (!assetKeys.Contains(assetKey))
-            throw new TeamLabApiContractException("topology_invalid", $"Overlay asset '{assetKey}' does not exist.", 422);
+            throw new TeamLabApiContractException("topology_invalid", $"overlay 资源 '{assetKey}' 不存在", 422);
         var environment = NormalizeValues(overlay.Environment, false);
         var secrets = NormalizeValues(overlay.Secrets, true);
         return new TeamLabRuntimeOverlayModel(assetKey, environment, secrets);
@@ -93,11 +93,11 @@ public sealed partial class TeamLabRuntimeOverlayService(IDataProtectionProvider
             var key = pair.Key.Trim();
             if (!EnvironmentKeyRegex().IsMatch(key) &&
                 (!secret || !BootstrapParameterKeyRegex().IsMatch(key)))
-                throw new TeamLabApiContractException("topology_invalid", $"Overlay key '{key}' is invalid.", 422);
+                throw new TeamLabApiContractException("topology_invalid", $"overlay key '{key}' 无效", 422);
             if (key.StartsWith("GZCTF_SENSOR_", StringComparison.Ordinal))
-                throw new TeamLabApiContractException("topology_invalid", $"Overlay key '{key}' is reserved by the platform.", 422);
+                throw new TeamLabApiContractException("topology_invalid", $"overlay key '{key}' 已被平台保留", 422);
             if (pair.Value is null || pair.Value.Length > (secret ? 4096 : 16384))
-                throw new TeamLabApiContractException("topology_invalid", $"Overlay value '{key}' is too large.", 422);
+                throw new TeamLabApiContractException("topology_invalid", $"overlay value '{key}' 过大", 422);
             normalized[key] = pair.Value;
         }
         return normalized;

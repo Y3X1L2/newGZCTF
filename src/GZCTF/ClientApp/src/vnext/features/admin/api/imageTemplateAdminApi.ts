@@ -23,7 +23,6 @@ export interface ImageRemoteAccessConfiguration {
   protocol: 'containerTerminal' | 'ssh' | 'rdp'
   port: number
   username: string | null
-  credentialMode: 'platformGenerated' | 'existingAccount'
   hasCredential: boolean
   updatedAt: number | null
 }
@@ -32,8 +31,8 @@ function isRemoteProtocol(value: unknown): value is ImageRemoteAccessConfigurati
   return value === 'containerTerminal' || value === 'ssh' || value === 'rdp'
 }
 
-function isCredentialMode(value: unknown): value is ImageRemoteAccessConfiguration['credentialMode'] {
-  return value === 'platformGenerated' || value === 'existingAccount'
+function isNullableRemoteProtocol(value: unknown): value is ImageTemplateSummary['remoteAccessProtocol'] {
+  return value === null || value === undefined || isRemoteProtocol(value)
 }
 
 function parseRemoteAccess(value: unknown, label: string): ImageRemoteAccessConfiguration {
@@ -43,7 +42,6 @@ function parseRemoteAccess(value: unknown, label: string): ImageRemoteAccessConf
     !isRemoteProtocol(value.protocol) ||
     !isNumber(value.port) ||
     !isNullableString(value.username) ||
-    !isCredentialMode(value.credentialMode) ||
     !isBoolean(value.hasCredential) ||
     !(value.updatedAt === null || isNumber(value.updatedAt))
   ) {
@@ -54,7 +52,6 @@ function parseRemoteAccess(value: unknown, label: string): ImageRemoteAccessConf
     protocol: value.protocol,
     port: value.port,
     username: value.username,
-    credentialMode: value.credentialMode,
     hasCredential: value.hasCredential,
     updatedAt: value.updatedAt,
   }
@@ -87,6 +84,7 @@ function isImageTemplateSummary(value: unknown): value is ImageTemplateSummary {
     isNullableString(value.registryUrl) &&
     (value.containsMalware === undefined || isBoolean(value.containsMalware)) &&
     (value.supportsInstanceCredentials === undefined || isBoolean(value.supportsInstanceCredentials)) &&
+    isNullableRemoteProtocol(value.remoteAccessProtocol) &&
     (value.canManage === undefined || isBoolean(value.canManage))
   )
 }
@@ -199,7 +197,7 @@ export function createImageTemplateAdminApi(client: RuntimeJsonClient = runtimeJ
       )
     },
 
-    async updateRemoteAccess(id: number, configuration: Omit<ImageRemoteAccessConfiguration, 'hasCredential' | 'updatedAt'> & { credential?: string | null }) {
+    async updateRemoteAccess(id: number, configuration: Omit<ImageRemoteAccessConfiguration, 'hasCredential' | 'updatedAt'> & { credential?: string | null; clearCredential?: boolean }) {
       return parseRemoteAccess(
         await client.patchJson(`/api/v1/image-templates/${id}/remote-access`, configuration),
         'Image remote access update'

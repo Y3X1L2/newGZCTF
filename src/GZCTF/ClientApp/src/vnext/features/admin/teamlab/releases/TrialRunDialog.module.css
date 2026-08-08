@@ -1,0 +1,53 @@
+.content {
+  display: grid;
+  gap: 16px;
+}
+
+.content > p,
+.requirements p {
+  margin: 0;
+}
+
+.requirements {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid var(--vnext-border-subtle);
+  padding-top: 16px;
+}
+
+.requirements strong {
+  color: var(--vnext-text-strong);
+}
+
+.requirements p {
+  color: var(--vnext-text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+  margin-top: 4px;
+}
+
+.secretField {
+  display: grid;
+  gap: 6px;
+  color: var(--vnext-text-muted);
+  font-size: 13px;
+}
+
+.secretField span {
+  overflow-wrap: anywhere;
+}
+
+.secretField input {
+  background: var(--vnext-surface-raised);
+  border: 1px solid var(--vnext-border-default);
+  border-radius: 4px;
+  color: var(--vnext-text-strong);
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.secretField input:focus-visible {
+  border-color: var(--vnext-accent-primary);
+  outline: 2px solid color-mix(in srgb, var(--vnext-accent-primary) 25%, transparent);
+  outline-offset: 1px;
+}

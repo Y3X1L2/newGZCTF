@@ -8,6 +8,7 @@ public class TeamLabRuntime
 {
     [Key] public int Id { get; set; }
     public Guid PublicId { get; set; } = Guid.CreateVersion7();
+    public Guid? ControlScopeId { get; set; }
     public Guid TopologyReleaseId { get; set; }
     public Guid? CreatedById { get; set; }
     public int Generation { get; set; } = 1;
@@ -40,6 +41,7 @@ public class TeamLabRuntime
     public List<TeamLabTrafficPath> TrafficPaths { get; set; } = [];
     public List<TeamLabTrafficCorrelationCursor> TrafficCorrelationCursors { get; set; } = [];
     public List<TeamLabTrafficCaptureJob> TrafficCaptureJobs { get; set; } = [];
+    public TeamLabControlScope? ControlScope { get; set; }
 }
 
 public class TeamLabRuntimeShard

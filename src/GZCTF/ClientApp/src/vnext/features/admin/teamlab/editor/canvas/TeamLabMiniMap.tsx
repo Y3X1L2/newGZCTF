@@ -6,7 +6,7 @@ export function TeamLabMiniMap() {
     <MiniMap
       ariaLabel="拓扑小地图"
       className={styles.miniMap}
-      nodeClassName={(node) => styles[`miniMap_${node.type ?? 'docker'}`]}
+      nodeClassName={(node) => styles[`miniMap_${node.type ?? 'docker'}`] ?? styles.miniMap_region}
       nodeStrokeWidth={2}
       pannable
       zoomable

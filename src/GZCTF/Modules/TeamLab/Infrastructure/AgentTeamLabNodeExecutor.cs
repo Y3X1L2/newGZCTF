@@ -159,7 +159,7 @@ public sealed class AgentTeamLabNodeExecutor(
                     sensor?.Message ?? "Required endpoint sensor channel could not be registered.");
             var result = request.Kind == TeamLabAssetKind.Docker
                 ? await CreateContainerAsync(workerNodeId, request, template, sensor?.ChannelEndpoint, cancellationToken)
-                : await CreateVmAsync(db, scope.ServiceProvider.GetRequiredService<TeamLabRemoteCredentialService>(), workerNodeId, request, template, cancellationToken);
+                : await CreateVmAsync(db, workerNodeId, request, template, cancellationToken);
             if (!result.Success && sensor is { Success: true })
                 await RemoveEndpointSensorAsync(workerNodeId, request, cancellationToken);
             return result;
@@ -167,7 +167,7 @@ public sealed class AgentTeamLabNodeExecutor(
         catch (Exception exception) when (exception is AgentClientException or HttpRequestException or TaskCanceledException or InvalidOperationException)
         {
             logger.LogWarning(exception,
-                "TeamLab asset creation failed: runtime={RuntimeId}, generation={Generation}, asset={AssetKey}, node={NodeId}",
+                "TeamLab 资源创建失败: runtime={RuntimeId}, generation={Generation}, asset={AssetKey}, node={NodeId}",
                 request.RuntimeId, request.Generation, request.AssetKey, workerNodeId);
             if (sensor is { Success: true })
                 await RemoveEndpointSensorAsync(workerNodeId, request, CancellationToken.None);
@@ -183,6 +183,54 @@ public sealed class AgentTeamLabNodeExecutor(
             workerNodeId,
             NodeDispatchCategory.Cleanup,
             operationToken => DestroyAssetCoreAsync(workerNodeId, kind, resourceId, null, operationToken),
+            cancellationToken);
+
+    public Task<TeamLabNodeResult> PauseAssetAsync(
+        Guid workerNodeId,
+        TeamLabAssetKind kind,
+        string resourceId,
+        int generation,
+        CancellationToken cancellationToken) =>
+        ChangeAssetLifecycleAsync(workerNodeId, kind, resourceId, generation, pause: true, cancellationToken);
+
+    public Task<TeamLabNodeResult> ResumeAssetAsync(
+        Guid workerNodeId,
+        TeamLabAssetKind kind,
+        string resourceId,
+        int generation,
+        CancellationToken cancellationToken) =>
+        ChangeAssetLifecycleAsync(workerNodeId, kind, resourceId, generation, pause: false, cancellationToken);
+
+    private Task<TeamLabNodeResult> ChangeAssetLifecycleAsync(
+        Guid workerNodeId,
+        TeamLabAssetKind kind,
+        string resourceId,
+        int generation,
+        bool pause,
+        CancellationToken cancellationToken) =>
+        DispatchAsync(
+            workerNodeId,
+            NodeDispatchCategory.Cleanup,
+            async operationToken =>
+            {
+                try
+                {
+                    var request = new TeamLabAssetLifecycleRequest(
+                        kind == TeamLabAssetKind.Docker ? "docker" : "vm",
+                        resourceId,
+                        generation,
+                        _config.DryRun);
+                    var response = pause
+                        ? await agent.PauseTeamLabAssetAsync(workerNodeId, request, operationToken)
+                        : await agent.ResumeTeamLabAssetAsync(workerNodeId, request, operationToken);
+                    return RequireMutation(response,
+                        pause ? "TeamLab asset pause failed." : "TeamLab asset resume failed.");
+                }
+                catch (Exception exception) when (exception is AgentClientException or HttpRequestException or TaskCanceledException)
+                {
+                    return TeamLabNodeResult.Failed(exception.Message);
+                }
+            },
             cancellationToken);
 
     public Task<TeamLabScenarioArtifactCommitResult> CommitScenarioArtifactAsync(
@@ -638,7 +686,6 @@ public sealed class AgentTeamLabNodeExecutor(
 
     private async Task<TeamLabNodeAssetCreateResult> CreateVmAsync(
         AppDbContext db,
-        TeamLabRemoteCredentialService credentialService,
         Guid workerNodeId,
         TeamLabNodeAssetCreateRequest request,
         ImageTemplate template,
@@ -646,13 +693,8 @@ public sealed class AgentTeamLabNodeExecutor(
     {
         if (template.ImageType == ImageType.Docker)
             return TeamLabNodeAssetCreateResult.Failed($"Image template {template.Id} is not a VM template.");
-        var remoteConfiguration = await db.ImageTemplateRemoteAccesses.AsNoTracking()
-            .SingleOrDefaultAsync(item => item.ImageTemplateId == template.Id, cancellationToken);
-        var requiresPlatformRemoteAccount = remoteConfiguration is
-            { Enabled: true, CredentialMode: RemoteCredentialMode.PlatformGenerated };
         var requiresGuestControl = request.Bootstrap is not null ||
-                                   request.EndpointObservation != TeamLabEndpointObservationMode.Disabled ||
-                                   requiresPlatformRemoteAccount;
+                                   request.EndpointObservation != TeamLabEndpointObservationMode.Disabled;
         if (requiresGuestControl && (template.VmRuntimeMode == VmRuntimeMode.Opaque ||
             template.VmArtifactStatus != VmArtifactStatus.Ready ||
             template.VmRuntimeMode == VmRuntimeMode.Managed &&
@@ -691,20 +733,6 @@ public sealed class AgentTeamLabNodeExecutor(
             var artifactDigest = template.VmRuntimeMode == VmRuntimeMode.Scenario
                 ? template.ImageHash!
                 : template.PreparedArtifact!.ArtifactDigest;
-            if (remoteConfiguration is { Enabled: true, CredentialMode: RemoteCredentialMode.PlatformGenerated })
-            {
-                var credential = await credentialService.EnsurePlatformCredentialAsync(
-                    request.RuntimeId, request.Generation, request.RuntimeAssetId, remoteConfiguration.Protocol, cancellationToken);
-                request = request with
-                {
-                    Secrets = request.Secrets.Concat(new[]
-                    {
-                        new KeyValuePair<string, string>("GZCTF_REMOTE_ACCESS_PROTOCOL", remoteConfiguration.Protocol.ToString()),
-                        new KeyValuePair<string, string>("GZCTF_REMOTE_ACCESS_USERNAME", credential.Username),
-                        new KeyValuePair<string, string>("GZCTF_REMOTE_ACCESS_PASSWORD", credentialService.RevealSecret(credential))
-                    }).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal)
-                };
-            }
             var (intent, protectedSecrets) = BuildGuestIntent(
                 request,
                 identity,
@@ -830,7 +858,7 @@ public sealed class AgentTeamLabNodeExecutor(
         var message = response?.Message ?? "Endpoint sensor could not be started.";
         if (request.EndpointObservation == TeamLabEndpointObservationMode.Optional)
             logger.LogWarning(
-                "Optional TeamLab endpoint sensor is unavailable: runtime={RuntimeId}, generation={Generation}, asset={AssetKey}, node={NodeId}, reason={Reason}",
+                "可选的 TeamLab endpoint sensor 不可用: runtime={RuntimeId}, generation={Generation}, asset={AssetKey}, node={NodeId}, reason={Reason}",
                 request.RuntimeId, request.Generation, request.AssetKey, workerNodeId, message);
         return TeamLabNodeResult.Failed(message);
     }
@@ -1181,6 +1209,13 @@ public sealed class AgentTeamLabNodeExecutor(
         new(route.TargetCidr, route.GatewayIp, route.SourceIp);
 
     private TeamLabNodeResult RequireMutation(TeamLabDryRunResponse? response, string fallback) =>
+        response is not { Success: true }
+            ? TeamLabNodeResult.Failed(response?.Message ?? fallback)
+            : response.DryRun
+                ? TeamLabNodeResult.Failed(response.Message)
+                : TeamLabNodeResult.Ok(response.Message);
+
+    private TeamLabNodeResult RequireMutation(TeamLabAssetLifecycleResponse? response, string fallback) =>
         response is not { Success: true }
             ? TeamLabNodeResult.Failed(response?.Message ?? fallback)
             : response.DryRun

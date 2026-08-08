@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, CircleDashed, PlayCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, CircleDashed, Download, PlayCircle } from 'lucide-react'
 import { ActionButton } from '../../../../shared/Interaction'
 import { StatusBadge } from '../../shared/AdminWorkbench'
 import type { TeamLabAdminReleaseReadiness } from '../api'
@@ -9,18 +9,22 @@ import styles from './TeamLabReleasesPage.module.css'
 export function ReleaseReadinessPanel({
   readiness,
   creatingTrial,
+  preparingImages,
   onCreateTrial,
+  onPrepareImages,
 }: {
   readiness: TeamLabAdminReleaseReadiness
   creatingTrial: boolean
+  preparingImages: boolean
   onCreateTrial: () => void
+  onPrepareImages: () => void
 }) {
   return (
     <div className={styles.readinessStack}>
       <section aria-labelledby="release-readiness-heading" className={styles.detailSection}>
         <header className={styles.sectionHeading}>
           <div>
-            <span>RUNTIME READINESS</span>
+            <span>运行准备</span>
             <h3 id="release-readiness-heading">运行就绪度</h3>
           </div>
           <StatusBadge tone={readiness.ready ? 'success' : 'warning'}>
@@ -63,6 +67,14 @@ export function ReleaseReadinessPanel({
               <TeamLabRuntimeStatusBadge status={readiness.latestTrialRuntime.status} />
             </span>
           ) : <span className={styles.latestTrial}>尚未创建试运行</span>}
+          <ActionButton
+            disabled={!readiness.images.length || preparingImages}
+            icon={<Download size={16} />}
+            onClick={onPrepareImages}
+            type="button"
+          >
+            {preparingImages ? '正在准备镜像' : '准备镜像'}
+          </ActionButton>
           <ActionButton
             disabled={!readiness.ready || creatingTrial}
             icon={<PlayCircle size={16} />}

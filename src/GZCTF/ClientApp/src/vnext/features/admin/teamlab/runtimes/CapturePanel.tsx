@@ -75,7 +75,7 @@ export function CapturePanel({ runtimeId, networks }: { runtimeId: string; netwo
   return (
     <section className={styles.panel} aria-labelledby="capture-title">
       <header className={styles.panelHeader}>
-        <div><span>ON-DEMAND PCAP</span><h3 id="capture-title">按需抓包</h3></div>
+        <div><span>抓包取证</span><h3 id="capture-title">按需抓包</h3></div>
         {capture.data ? <StatusBadge pulse={Boolean(active)} tone={capture.data.status === 'completed' ? 'success' : capture.data.status === 'failed' ? 'danger' : 'info'}>{captureStatusLabels[capture.data.status]}</StatusBadge> : null}
       </header>
       <div className={styles.captureLayout}>

@@ -184,7 +184,7 @@ public sealed class TeamLabTrafficPathCorrelator(
         await context.SaveChangesAsync(cancellationToken);
         if (created > 0)
             logger.LogDebug(
-                "Derived {Count} TeamLab traffic path(s) for runtime {RuntimeId} generation {Generation}",
+                "为 runtime {RuntimeId} 的 generation {Generation} 推导出 {Count} 条 TeamLab 流量路径",
                 created, source.RuntimeId, source.Generation);
         return created;
     }

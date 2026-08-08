@@ -72,7 +72,23 @@ public sealed class TeamLabRuntimeQueue(DeploymentQueueService queue) : ITeamLab
         TeamLabQueueRequest request,
         CancellationToken cancellationToken)
     {
-        var queued = await queue.EnqueueAsync(DeploymentQueueRequest.TeamLab(
+        var queued = await queue.EnqueueAsync(ToDeploymentRequest(request), cancellationToken);
+        return new TeamLabQueueTicketResult(queued.TicketId);
+    }
+
+    public async Task<TeamLabQueueTicketResult> EnqueueInCurrentTransactionAsync(
+        TeamLabQueueRequest request,
+        CancellationToken cancellationToken)
+    {
+        var queued = await queue.EnqueueInCurrentTransactionAsync(ToDeploymentRequest(request), cancellationToken);
+        return new TeamLabQueueTicketResult(queued.TicketId);
+    }
+
+    public Task NotifyAsync(Guid ticketId, CancellationToken cancellationToken) =>
+        queue.NotifyAsync(ticketId, cancellationToken);
+
+    private static DeploymentQueueRequest ToDeploymentRequest(TeamLabQueueRequest request) =>
+        DeploymentQueueRequest.TeamLab(
             request.RuntimeId,
             request.DockerSlots,
             request.VmSlots,
@@ -88,7 +104,5 @@ public sealed class TeamLabRuntimeQueue(DeploymentQueueService queue) : ITeamLab
             TargetNodeId = request.TargetNodeId,
             ProtectedPayload = request.ProtectedPayload,
             PayloadHash = request.PayloadHash
-        }, cancellationToken);
-        return new TeamLabQueueTicketResult(queued.TicketId);
-    }
+        };
 }

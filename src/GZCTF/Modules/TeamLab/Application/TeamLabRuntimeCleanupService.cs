@@ -20,8 +20,7 @@ public sealed class TeamLabRuntimeCleanupService(
     ITeamLabCaptureCleanup captureCleanup,
     IPublicUdpGatewayProvider publicGateway,
     TeamLabEventRecorder eventRecorder,
-    ITeamLabRemoteAccessService remoteAccess,
-    TeamLabRemoteCredentialService remoteCredentials)
+    ITeamLabRemoteAccessService remoteAccess)
 {
     public Task<TeamLabNodeResult> CleanupAsync(
         TeamLabRuntime runtime,
@@ -35,7 +34,6 @@ public sealed class TeamLabRuntimeCleanupService(
     {
         var generation = runtime.Generation;
         await remoteAccess.EndRuntimeSessionsAsync(runtime.Id, generation, "runtime_cleanup", cancellationToken);
-        await remoteCredentials.RevokeGenerationAsync(runtime.Id, generation, cancellationToken);
         if (runtime.Status != TeamLabRuntimeStatus.Destroying)
             runtime.Status = TeamLabRuntimeStatus.CleanupPending;
         runtime.IsOpenToPlayers = false;

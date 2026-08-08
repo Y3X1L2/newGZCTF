@@ -247,6 +247,13 @@ internal static class ServicesExtension
                 client.DefaultRequestHeaders.Accept.Add(
                     new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
             });
+            builder.Services.AddHttpClient("TeamLabWebhook", client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(30);
+            }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                AllowAutoRedirect = false
+            });
 
             builder.Services.AddResponseCaching();
         }

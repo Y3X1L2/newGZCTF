@@ -9,9 +9,10 @@ public sealed class CompletingApiOperationHandler(
     AppDbContext context,
     ApiOperationHandlerExecutionRecorder recorder) : IApiOperationHandler
 {
+    public const string OperationKind = "test.complete";
     private readonly Guid _instanceId = Guid.NewGuid();
 
-    public string Kind => "test.complete";
+    public string Kind => OperationKind;
 
     public async Task ExecuteAsync(Guid operationId, string leaseOwner, CancellationToken cancellationToken)
     {

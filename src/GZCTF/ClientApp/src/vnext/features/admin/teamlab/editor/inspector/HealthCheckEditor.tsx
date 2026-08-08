@@ -17,6 +17,7 @@ export function HealthCheckEditor({
         checked={healthCheck !== null}
         disabled={readOnly}
         description="用于判断服务是否真正可用"
+        help="healthChecks"
         label="启用健康检查"
         onChange={(enabled) => onChange(enabled ? { kind: 'tcp', port: 80 } : null)}
       />

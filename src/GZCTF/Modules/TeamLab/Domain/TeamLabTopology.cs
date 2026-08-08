@@ -4,6 +4,7 @@ public sealed class TeamLabTopology
 {
     public int Id { get; set; }
     public Guid PublicId { get; set; } = Guid.CreateVersion7();
+    public Guid? ControlScopeId { get; set; }
     public Guid? OwnerUserId { get; set; }
     public string Name { get; set; } = string.Empty;
     public int Revision { get; set; }
@@ -20,6 +21,7 @@ public sealed class TeamLabTopology
     public List<TeamLabTopologyAsset> Assets { get; set; } = [];
     public List<TeamLabTopologyConnection> Connections { get; set; } = [];
     public List<TeamLabTopologyRelease> Releases { get; set; } = [];
+    public TeamLabControlScope? ControlScope { get; set; }
 }
 
 public sealed class TeamLabTopologyNetwork

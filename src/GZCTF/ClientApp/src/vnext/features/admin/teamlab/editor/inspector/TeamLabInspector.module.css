@@ -36,6 +36,7 @@
 }
 
 .section {
+  position: relative;
   display: grid;
   gap: var(--yn-space-3);
   padding: var(--yn-space-4);
@@ -62,12 +63,20 @@
 }
 
 .field {
+  position: relative;
   display: grid;
   min-width: 0;
   gap: 6px;
   color: var(--yn-color-text-secondary);
   font-size: var(--yn-font-sm);
   font-weight: 650;
+}
+
+.field > span {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
 }
 
 .field input,
@@ -160,13 +169,21 @@
 }
 
 .toggle strong {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
   font-size: var(--yn-font-sm);
 }
 
 .toggle input {
   position: absolute;
+  right: 0;
+  width: 38px;
+  height: 22px;
   opacity: 0;
-  pointer-events: none;
+  cursor: pointer;
+  z-index: 1;
 }
 
 .toggle > i {
@@ -177,6 +194,7 @@
   border: 1px solid var(--yn-color-border-strong);
   border-radius: 999px;
   background: var(--yn-color-surface-muted);
+  pointer-events: none;
   transition:
     border-color var(--yn-motion-fast) var(--yn-ease-standard),
     background-color var(--yn-motion-fast) var(--yn-ease-standard);
@@ -369,6 +387,40 @@
 .empty strong {
   color: var(--yn-color-text-secondary);
   font-size: var(--yn-font-sm);
+}
+
+.regionSummary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--yn-space-3);
+  padding: var(--yn-space-4);
+  border-bottom: 1px solid var(--yn-color-border);
+  background: var(--yn-color-brand-soft);
+  color: var(--yn-color-brand-strong);
+}
+
+.regionSummary > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.regionSummary strong,
+.regionSummary span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.regionSummary strong {
+  color: var(--yn-color-text);
+  font-size: var(--yn-font-sm);
+}
+
+.regionSummary span {
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-xs);
 }
 
 .summaryContent {

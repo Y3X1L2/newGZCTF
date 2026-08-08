@@ -1,0 +1,238 @@
+.picker {
+  display: grid;
+  min-width: 0;
+  gap: var(--yn-space-3);
+}
+
+.searchRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--yn-space-2);
+  padding: 0 var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-sm);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-muted);
+}
+
+.searchRow:focus-within {
+  border-color: var(--yn-color-brand);
+  box-shadow: var(--yn-shadow-focus);
+}
+
+.searchRow input {
+  min-width: 0;
+  width: 100%;
+  min-height: 34px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--yn-color-text);
+  font: inherit;
+}
+
+.field {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-sm);
+  font-weight: 650;
+}
+
+.field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-sm);
+  outline: none;
+  background: var(--yn-color-surface);
+  color: var(--yn-color-text);
+  font: inherit;
+  font-weight: 500;
+}
+
+.field select:focus {
+  border-color: var(--yn-color-brand);
+  box-shadow: var(--yn-shadow-focus);
+}
+
+.field select:disabled {
+  background: var(--yn-color-surface-muted);
+  color: var(--yn-color-muted);
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: var(--yn-space-2);
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.spin {
+  animation: serviceProfileSpin 0.9s linear infinite;
+}
+
+@keyframes serviceProfileSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.detail {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  padding: var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-sm);
+  background: var(--yn-color-surface-muted);
+}
+
+.detail > div {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: var(--yn-space-2);
+  padding: var(--yn-space-2) 0;
+  border-bottom: 1px solid var(--yn-color-border);
+}
+
+.detail > div:last-child {
+  border-bottom: 0;
+}
+
+.detail dt {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.detail dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-xs);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.detail dd a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yn-space-1);
+  color: var(--yn-color-brand-strong);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.detail dd a:hover,
+.detail dd a:focus-visible {
+  text-decoration: underline;
+}
+
+.parameters {
+  display: grid;
+  min-width: 0;
+  gap: var(--yn-space-2);
+}
+
+.inlineHeading {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--yn-space-2);
+}
+
+.inlineHeading strong {
+  font-size: var(--yn-font-xs);
+}
+
+.inlineHeading small {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.parameter {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  padding: var(--yn-space-2) var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-sm);
+  background: var(--yn-color-surface);
+}
+
+.parameter > span {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--yn-space-2);
+}
+
+.parameter strong {
+  font-size: var(--yn-font-xs);
+  font-family: var(--yn-font-mono);
+}
+
+.parameter small {
+  display: flex;
+  min-width: 0;
+  gap: 4px;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+  overflow-wrap: anywhere;
+}
+
+.parameter code {
+  font-family: var(--yn-font-mono);
+}
+
+.parameter input {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-sm);
+  outline: none;
+  background: var(--yn-color-surface);
+  color: var(--yn-color-text);
+  font: inherit;
+  font-weight: 500;
+}
+
+.parameter input:focus {
+  border-color: var(--yn-color-brand);
+  box-shadow: var(--yn-shadow-focus);
+}
+
+.parameter input:disabled {
+  background: var(--yn-color-surface-muted);
+  color: var(--yn-color-muted);
+}
+
+.reference {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--yn-space-2);
+  margin: 0;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.reference code {
+  font-family: var(--yn-font-mono);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}

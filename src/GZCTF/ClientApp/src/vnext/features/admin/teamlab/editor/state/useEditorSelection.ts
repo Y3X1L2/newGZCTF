@@ -6,6 +6,10 @@ import {
 } from '../../model/topologySelection'
 import type { TopologyDocument } from '../../model/topologyDocument'
 
+function sameKeys(left: ReadonlySet<string>, right: ReadonlySet<string>) {
+  return left.size === right.size && [...left].every((key) => right.has(key))
+}
+
 export function useEditorSelection(document: TopologyDocument) {
   const [selection, setSelection] = useState<TopologySelection>(emptyTopologySelection)
 
@@ -14,9 +18,19 @@ export function useEditorSelection(document: TopologyDocument) {
   }, [document])
 
   const select = useCallback((nodeKeys: Iterable<string>, connectionKeys: Iterable<string>) => {
-    setSelection({ nodeKeys: new Set(nodeKeys), connectionKeys: new Set(connectionKeys) })
+    const nextNodes = new Set(nodeKeys)
+    const nextConnections = new Set(connectionKeys)
+    setSelection((current) =>
+      sameKeys(current.nodeKeys, nextNodes) && sameKeys(current.connectionKeys, nextConnections)
+        ? current
+        : { nodeKeys: nextNodes, connectionKeys: nextConnections }
+    )
   }, [])
-  const clear = useCallback(() => setSelection(emptyTopologySelection()), [])
+  const clear = useCallback(() => {
+    setSelection((current) =>
+      current.nodeKeys.size === 0 && current.connectionKeys.size === 0 ? current : emptyTopologySelection()
+    )
+  }, [])
 
   return { selection, setSelection, select, clear }
 }

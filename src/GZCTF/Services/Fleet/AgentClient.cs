@@ -317,6 +317,20 @@ public class AgentClient
         CancellationToken token) => await PostTeamLabAsync<TeamLabCleanupRequest, TeamLabDryRunResponse>(nodeId,
         "/api/teamlab/cleanup", request, token);
 
+    public virtual async Task<TeamLabAssetLifecycleResponse?> PauseTeamLabAssetAsync(
+        Guid nodeId,
+        TeamLabAssetLifecycleRequest request,
+        CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabAssetLifecycleRequest, TeamLabAssetLifecycleResponse>(
+            nodeId, "/api/teamlab/assets/pause", request, token);
+
+    public virtual async Task<TeamLabAssetLifecycleResponse?> ResumeTeamLabAssetAsync(
+        Guid nodeId,
+        TeamLabAssetLifecycleRequest request,
+        CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabAssetLifecycleRequest, TeamLabAssetLifecycleResponse>(
+            nodeId, "/api/teamlab/assets/resume", request, token);
+
     public virtual async Task<TeamLabDryRunResponse?> ProbeTeamLabAsync(Guid nodeId, TeamLabProbeRequest request,
         CancellationToken token) => await PostTeamLabAsync<TeamLabProbeRequest, TeamLabDryRunResponse>(nodeId,
         "/api/teamlab/probe", request, token);
@@ -1268,6 +1282,16 @@ public class AgentClient
                 $"Agent remote relay cleanup failed on node {node.Name} ({node.HostAddress}).", token);
     }
 
+    public virtual async Task CancelRemoteTerminalAsync(Guid nodeId, Guid sessionId, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "remote_access.terminal.cancel");
+        var client = BuildClient(node);
+        var response = await client.DeleteAsync($"/api/remote-access/terminals/{sessionId:D}", token);
+        if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
+            throw await CreateAgentExceptionAsync(response, "remote_access.terminal.cancel", node.Id,
+                $"Agent terminal cancellation failed on node {node.Name} ({node.HostAddress}).", token);
+    }
+
     public virtual async Task<AgentVmImageDownloadResult> DownloadPreparedVmImageAsync(
         Guid nodeId,
         int templateId,
@@ -1966,6 +1990,18 @@ public record TeamLabCleanupRequest(
     string[] SensorAssetKeys,
     string[] FabricRemoteCidrs,
     bool DryRun = true);
+
+public record TeamLabAssetLifecycleRequest(
+    string Kind,
+    string ResourceId,
+    int Generation,
+    bool DryRun = false);
+
+public record TeamLabAssetLifecycleResponse(
+    bool Success,
+    bool DryRun,
+    string State,
+    string Message);
 
 public record TeamLabProbeRequest(
     int RuntimeId,

@@ -166,7 +166,7 @@ public sealed class PostgresTeamLabTrafficBatchWriter(
             await insertFlows.ExecuteNonQueryAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        logger.LogDebug("Persisted TeamLab traffic batch: received={Received}, inserted={Inserted}",
+        logger.LogDebug("已持久化 TeamLab 流量批次：received={Received}, inserted={Inserted}",
             envelopes.Count, inserted);
         return inserted;
     }

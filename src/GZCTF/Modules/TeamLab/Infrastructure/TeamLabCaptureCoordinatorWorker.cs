@@ -23,7 +23,7 @@ public sealed class TeamLabCaptureCoordinatorWorker(
             }
             catch (Exception exception)
             {
-                logger.LogWarning(exception, "TeamLab capture coordination cycle failed.");
+                logger.LogWarning(exception, "TeamLab 抓包协调周期执行失败");
             }
         } while (await timer.WaitForNextTickAsync(stoppingToken));
     }

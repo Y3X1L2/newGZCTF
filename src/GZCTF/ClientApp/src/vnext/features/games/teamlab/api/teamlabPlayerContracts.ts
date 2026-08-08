@@ -7,7 +7,7 @@ export type TeamLabPlayerRuntimeStatus =
   | 'running'
   | 'failed'
   | 'cleanup-pending'
-  | 'stopped'
+  | 'paused'
   | 'destroying'
   | 'destroyed'
 

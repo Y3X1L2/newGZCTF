@@ -26,6 +26,7 @@ public class KvmService
     private readonly AgentResourceLock _resourceLock;
     private readonly GuestEnrollmentStore? _guestEnrollmentStore;
     private readonly RdpProxyAccessPolicy _consoleAccessPolicy;
+    private readonly GuestManagementConfig _guestManagement;
 
     private static readonly Regex SafeNamePattern = new(@"^[a-zA-Z0-9_\-]+$", RegexOptions.Compiled);
     private static readonly Regex SafeMacPattern = new(@"^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$", RegexOptions.Compiled);
@@ -45,6 +46,7 @@ public class KvmService
         _resourceLock = resourceLock;
         _logger = logger;
         _guestEnrollmentStore = guestEnrollmentStore;
+        _guestManagement = agentConfig?.Value.GuestManagement ?? new GuestManagementConfig { Enabled = false };
         _consoleAccessPolicy = RdpProxyAccessPolicy.Create(
             _config.RdpProxyAllowedSources, agentConfig?.Value.ServerUrl);
         foreach (var invalid in _consoleAccessPolicy.InvalidSources)
@@ -272,6 +274,30 @@ public class KvmService
                 vmName, domainGeneration!.Value, nativeId, token);
         CleanupVmArtifacts(vmName);
     }
+
+    public Task<bool> SuspendVmAsync(string vmName, int expectedGeneration, CancellationToken token) =>
+        ExecuteWithIdentityAsync(
+            vmName,
+            expectedGeneration,
+            null,
+            async identityToken =>
+            {
+                await RunCommandAsync($"virsh suspend {ShellEscape(vmName)}", identityToken);
+                return true;
+            },
+            token);
+
+    public Task<bool> ResumeVmAsync(string vmName, int expectedGeneration, CancellationToken token) =>
+        ExecuteWithIdentityAsync(
+            vmName,
+            expectedGeneration,
+            null,
+            async identityToken =>
+            {
+                await RunCommandAsync($"virsh resume {ShellEscape(vmName)}", identityToken);
+                return true;
+            },
+            token);
 
     public async Task<bool> WaitForCleanShutdownAsync(
         string vmName,
@@ -585,6 +611,29 @@ public class KvmService
 
         _logger.LogWarning("No available RDP proxy port for VM {VmName}", vmName);
         return Task.FromResult<int?>(null);
+    }
+
+    public async Task<VmIpLookupResult> GetManagementIpAddressWithDiagnosticAsync(
+        string vmName,
+        CancellationToken token)
+    {
+        if (!SafeNamePattern.IsMatch(vmName))
+            return new VmIpLookupResult(null, "Invalid VM name.");
+        if (!_guestManagement.Enabled || !IPAddress.TryParse(_guestManagement.HostAddress, out var hostAddress) ||
+            hostAddress.AddressFamily != AddressFamily.InterNetwork ||
+            _guestManagement.PrefixLength is < 1 or > 32)
+            return new VmIpLookupResult(null, "Guest management network is unavailable.");
+
+        var output = await RunCommandAsync(
+            $"virsh domifaddr {ShellEscape(vmName)} --source agent 2>/dev/null",
+            token,
+            throwOnError: false);
+        var managementAddress = ParseAddressInSubnet(output, hostAddress, _guestManagement.PrefixLength);
+        return new VmIpLookupResult(
+            managementAddress,
+            managementAddress is null
+                ? $"No guest management address found in {_guestManagement.HostAddress}/{_guestManagement.PrefixLength}."
+                : "Matched the guest management address through QEMU Guest Agent.");
     }
 
     private async Task<string> GetVncAddressAsync(string vmName, CancellationToken token)
@@ -1053,6 +1102,25 @@ public class KvmService
         return null;
     }
 
+    private static string? ParseAddressInSubnet(string output, IPAddress networkAddress, int prefixLength)
+    {
+        var network = ToUInt32(networkAddress);
+        var mask = prefixLength == 0 ? 0u : uint.MaxValue << (32 - prefixLength);
+        foreach (var line in output.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries))
+        foreach (var part in line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var candidate = part.Trim(',', ';');
+            if (candidate.Contains('/')) candidate = candidate.Split('/')[0];
+            if (!IPAddress.TryParse(candidate, out var address) ||
+                address.AddressFamily != AddressFamily.InterNetwork ||
+                (ToUInt32(address) & mask) != (network & mask))
+                continue;
+            return address.ToString();
+        }
+
+        return null;
+    }
+
     internal static string? ParsePreferredInterfaceIp(
         string output,
         IReadOnlyList<VmNetworkInterfaceRequest>? interfaces)
@@ -1099,6 +1167,12 @@ public class KvmService
     {
         var primary = interfaces.Where(item => item.IsPrimary).ToArray();
         return primary.Length > 0 ? primary : interfaces;
+    }
+
+    private static uint ToUInt32(IPAddress address)
+    {
+        var bytes = address.GetAddressBytes();
+        return ((uint)bytes[0] << 24) | ((uint)bytes[1] << 16) | ((uint)bytes[2] << 8) | bytes[3];
     }
 
     private static string? ParseMacAddress(string output)

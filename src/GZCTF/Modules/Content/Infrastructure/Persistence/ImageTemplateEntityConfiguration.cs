@@ -32,6 +32,5 @@ public sealed class ImageTemplateRemoteAccessEntityConfiguration : IEntityTypeCo
             table.HasCheckConstraint("CK_ImageTemplateRemoteAccesses_Port", "\"Port\" >= 1 AND \"Port\" <= 65535"));
         builder.HasKey(item => item.ImageTemplateId);
         builder.Property(item => item.Protocol).HasConversion<byte>();
-        builder.Property(item => item.CredentialMode).HasConversion<byte>();
     }
 }

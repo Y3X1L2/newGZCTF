@@ -7,6 +7,8 @@ using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Audit.Infrastructure;
 using GZCTF.Modules.Identity.Application;
+using GZCTF.Modules.TeamLab.Application;
+using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -115,7 +117,7 @@ public sealed class ApiOperationPersistenceTests(GZCTFApplicationFactory factory
         };
         await using (var context = database.CreateContext())
         {
-            await SeedTokenAsync(context, operation.ApiTokenId);
+            await SeedTokenAsync(context, operation.ApiTokenId!.Value);
             context.ApiOperations.Add(operation);
             await context.SaveChangesAsync();
         }
@@ -197,7 +199,7 @@ public sealed class ApiOperationPersistenceTests(GZCTFApplicationFactory factory
 
         await using (var context = database.CreateContext())
         {
-            await SeedTokenAsync(context, operation.ApiTokenId);
+            await SeedTokenAsync(context, operation.ApiTokenId!.Value);
             context.ApiOperations.Add(operation);
             await context.SaveChangesAsync();
             await context.Database.ExecuteSqlInterpolatedAsync($"""
@@ -330,6 +332,60 @@ public sealed class ApiOperationPersistenceTests(GZCTFApplicationFactory factory
     }
 
     [Fact]
+    public async Task ConcurrentTeamLabSubmission_UsesBrowserActorAsIdempotencyIdentity()
+    {
+        var actorId = Guid.CreateVersion7();
+        var otherActorId = Guid.CreateVersion7();
+        var scopeId = Guid.CreateVersion7();
+        var key = Guid.NewGuid().ToString("N");
+        var route = $"POST:/api/open/v1/teamlab/scopes/{scopeId:D}/archive#scope:{scopeId:D}";
+
+        await using (var seedScope = factory.Services.CreateAsyncScope())
+        {
+            var seedContext = seedScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await SeedUserAsync(seedContext, actorId);
+            await SeedUserAsync(seedContext, otherActorId);
+        }
+
+        async Task<Guid> SubmitAsync(Guid actor, string hash)
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            var store = scope.ServiceProvider.GetRequiredService<ITeamLabRuntimeOperationSubmissionStore>();
+            var result = await store.SubmitAsync(new TeamLabRuntimeOperationSubmission(
+                null,
+                actor,
+                scopeId,
+                route,
+                key,
+                hash,
+                "teamlab-scope",
+                scopeId.ToString("D"),
+                new TeamLabRuntimeOperationJob
+                {
+                    Kind = TeamLabRuntimeOperationKind.RolloutArchive,
+                    PayloadHash = $"sha256:{hash}"
+                }), CancellationToken.None);
+            return result.Operation.Id;
+        }
+
+        var ids = await Task.WhenAll(
+            SubmitAsync(actorId, "same-request-hash"),
+            SubmitAsync(actorId, "same-request-hash"));
+
+        Assert.Equal(ids[0], ids[1]);
+        await Assert.ThrowsAsync<IdempotencyConflictException>(() =>
+            SubmitAsync(actorId, "changed-request-hash"));
+
+        var otherActorOperation = await SubmitAsync(otherActorId, "same-request-hash");
+        Assert.NotEqual(ids[0], otherActorOperation);
+
+        await using var verificationScope = factory.Services.CreateAsyncScope();
+        var context = verificationScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(2, await context.ApiOperations.CountAsync(item =>
+            item.ApiTokenId == null && item.RouteKey == route && item.IdempotencyKey == key));
+    }
+
+    [Fact]
     public async Task OperationsApi_OnlyReturnsOperationsOwnedByCurrentToken()
     {
         var issued = await IssueOperationsTokenAsync();
@@ -391,6 +447,26 @@ public sealed class ApiOperationPersistenceTests(GZCTFApplicationFactory factory
             SecretHash = new byte[32],
             CreatedAt = DateTimeOffset.UtcNow,
             ExpiresAt = DateTimeOffset.UtcNow.AddHours(1)
+        });
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task SeedUserAsync(AppDbContext context, Guid userId)
+    {
+        if (await context.Users.AnyAsync(user => user.Id == userId))
+            return;
+
+        var suffix = userId.ToString("N")[^7..];
+        context.Users.Add(new UserInfo
+        {
+            Id = userId,
+            UserName = $"opactor-{suffix}",
+            NormalizedUserName = $"OPACTOR-{suffix.ToUpperInvariant()}",
+            Email = $"operation-actor-{suffix}@example.test",
+            NormalizedEmail = $"OPERATION-ACTOR-{suffix.ToUpperInvariant()}@EXAMPLE.TEST",
+            EmailConfirmed = true,
+            Role = Role.Teacher,
+            RegisterTimeUtc = DateTimeOffset.UtcNow
         });
         await context.SaveChangesAsync();
     }

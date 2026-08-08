@@ -35,7 +35,8 @@ public static class ContentModuleRegistration
         services.AddScoped<ImageImportApplicationService>();
         services.AddSingleton<DockerImageReferencePolicy>();
         services.AddScoped<ImageImportStagingReconciler>();
-        services.AddScoped<IApiOperationHandler, ImageImportOperationHandler>();
+        services.AddKeyedScoped<IApiOperationHandler, ImageImportOperationHandler>(
+            ImageImportApplicationService.OperationKind);
         services.AddScoped<OciArtifactRegistryClient>();
         services.AddScoped<BootstrapProfileArtifactService>();
         services.AddScoped<IBootstrapProfileArtifactStagingService>(serviceProvider =>
@@ -49,8 +50,10 @@ public static class ContentModuleRegistration
         services.AddScoped<ImageRemoteAccessService>();
         services.AddScoped<VmImageCertificationProbeService>();
         services.AddSingleton<PreparedImageConformancePackageFactory>();
-        services.AddScoped<IApiOperationHandler, BootstrapProfileOperationHandler>();
-        services.AddScoped<IApiOperationHandler, ImageTemplateCertificationOperationHandler>();
+        services.AddKeyedScoped<IApiOperationHandler, BootstrapProfileOperationHandler>(
+            BootstrapProfileApplicationService.OperationKind);
+        services.AddKeyedScoped<IApiOperationHandler, ImageTemplateCertificationOperationHandler>(
+            ImageTemplateCertificationService.OperationKind);
         services.AddHostedService<ImageImportStagingReconcileService>();
         services.AddHostedService<ImageTemplateDeletionReconcileService>();
         services.AddScoped<IApiTokenResourceGrantPolicy, ImageApiTokenResourceGrantPolicy>();

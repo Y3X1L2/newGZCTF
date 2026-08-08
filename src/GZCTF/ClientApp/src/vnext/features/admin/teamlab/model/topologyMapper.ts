@@ -192,6 +192,12 @@ export function mapTopologyDetailToDocument(
     nodes,
     connections,
     observation: { ...detail.definition.observation },
+    networkLayouts: Object.fromEntries(
+      sorted(detail.definition.networks).map((network) => [
+        network.key,
+        position(detail.editor, 'network', network.key, 0),
+      ])
+    ),
   }
 }
 

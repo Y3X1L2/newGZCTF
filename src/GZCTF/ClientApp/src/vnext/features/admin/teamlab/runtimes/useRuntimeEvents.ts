@@ -4,37 +4,70 @@ import { teamLabRuntimeApi, teamLabRuntimeKeys, type TeamLabRuntimeEvent, type T
 import { runtimeRefreshInterval } from './runtimePresentation'
 
 const eventLimit = 200
+// Bound accumulated events: the panel renders the newest slice; keeping unbounded
+// history would grow memory and request chains linearly on long-running runtimes.
+const maxEvents = 500
 
-export function useRuntimeEvents(runtimeId: string, status: TeamLabRuntimeStatus | undefined, generation = 0) {
-  const identity = `${runtimeId}:${generation}`
-  const cursor = useRef({ identity, value: 0 })
+export interface TeamLabEventFilters {
+  generation: number | null
+  stage: string
+}
+
+export const emptyTeamLabEventFilters = (): TeamLabEventFilters => ({ generation: null, stage: '' })
+
+export function useRuntimeEvents(
+  runtimeId: string,
+  status: TeamLabRuntimeStatus | undefined,
+  filters: TeamLabEventFilters
+) {
+  const identity = `${runtimeId}:${filters.generation ?? ''}:${filters.stage}`
+  const identityRef = useRef(identity)
+  identityRef.current = identity
+  // Cursor state is keyed by identity: a filter switch derives cursor 0 in the same
+  // render, so no request is ever issued with a stale (new filter, old cursor) pair.
+  const [page, setPage] = useState({ identity, cursor: 0 })
+  const cursor = page.identity === identity ? page.cursor : 0
   const [events, setEvents] = useState<readonly TeamLabRuntimeEvent[]>([])
-  if (cursor.current.identity !== identity) cursor.current = { identity, value: 0 }
+
+  useEffect(() => {
+    setEvents([])
+  }, [identity])
+
   const request = useSWR(
-    runtimeId ? [...teamLabRuntimeKeys.events(runtimeId), generation, eventLimit] : null,
-    () => teamLabRuntimeApi.listEvents(runtimeId, cursor.current.value, eventLimit),
+    runtimeId
+      ? [...teamLabRuntimeKeys.events(runtimeId), filters.generation ?? 0, filters.stage, cursor, eventLimit]
+      : null,
+    () =>
+      teamLabRuntimeApi.listEvents(runtimeId, cursor, eventLimit, {
+        generation: filters.generation,
+        stage: filters.stage,
+      }),
     {
-      keepPreviousData: true,
+      // No keepPreviousData: the previous filter's page must never be merged into
+      // the current identity's event list.
       revalidateOnFocus: true,
       refreshInterval: () => runtimeRefreshInterval(status),
     }
   )
 
   useEffect(() => {
-    setEvents([])
-  }, [identity])
-
-  useEffect(() => {
-    if (!request.data?.length) return
-    const page = request.data
-    cursor.current.value = Math.max(cursor.current.value, ...page.map((event) => event.cursor))
+    const pageData = request.data
+    if (!pageData?.length) return
+    // Double guard: keepPreviousData is off, but never merge or advance for an
+    // identity that changed while the request was in flight.
+    if (identityRef.current !== identity) return
     setEvents((current) => {
       const merged = new Map(current.map((event) => [event.cursor, event]))
-      page.forEach((event) => merged.set(event.cursor, event))
-      return [...merged.values()].sort((left, right) => left.cursor - right.cursor)
+      pageData.forEach((event) => merged.set(event.cursor, event))
+      return [...merged.values()].sort((left, right) => left.cursor - right.cursor).slice(-maxEvents)
     })
-    if (page.length === eventLimit) void request.mutate()
-  }, [request.data, request.mutate])
+    // A full page means more history exists: advance the cursor so the next page
+    // is fetched with a new cache key instead of an unbounded mutate chain.
+    if (pageData.length === eventLimit) {
+      const nextCursor = Math.max(cursor, ...pageData.map((event) => event.cursor))
+      setPage((current) => (current.identity === identity && current.cursor === nextCursor ? current : { identity, cursor: nextCursor }))
+    }
+  }, [cursor, identity, request.data])
 
   return {
     events,

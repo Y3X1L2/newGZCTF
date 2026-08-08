@@ -74,7 +74,7 @@ export function TeamLabRuntimesPage() {
   return (
     <section className={styles.page}>
       <header className={styles.pageHeader}>
-        <div><span>TRIAL RUNTIMES</span><h2>试运行管理</h2><p>查看当前场景各发布版本的部署、分片和观测状态。</p></div>
+        <div><span>试运行实例</span><h2>试运行管理</h2><p>查看当前场景各发布版本的部署、分片和观测状态。</p></div>
         <RefreshIndicator active={request.isValidating && Boolean(request.data)} label={request.isValidating ? '同步中' : '状态已同步'} />
       </header>
       {!request.data && !request.error ? <DataState description="正在读取场景试运行记录。" loading title="试运行加载中" /> : request.error ? (

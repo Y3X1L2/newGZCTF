@@ -22,6 +22,7 @@ export type TeamLabGameTargetStatus =
   | 'draining'
   | 'cleanuppending'
   | 'destroyed'
+  | 'paused'
 
 export interface TeamLabGameObjective {
   id: number
@@ -91,6 +92,7 @@ export interface TeamLabGameRolloutCounts {
   failed: number
   draining: number
   destroyed: number
+  paused: number
 }
 
 export interface TeamLabGameRollout {
@@ -161,13 +163,14 @@ const rolloutStatuses = {
 const targetStatuses = {
   pending: 'pending', provisioning: 'provisioning', ready: 'ready', accessopen: 'accessopen',
   failed: 'failed', draining: 'draining', cleanuppending: 'cleanuppending', destroyed: 'destroyed',
+  paused: 'paused',
 } as const
 const runtimeStatuses = {
   0: 'pending', 1: 'planning', 2: 'scheduled', 3: 'deploying', 4: 'probing', 5: 'running',
-  6: 'failed', 7: 'cleanup-pending', 8: 'stopped', 9: 'destroying', 10: 'destroyed',
+  6: 'failed', 7: 'cleanup-pending', 8: 'paused', 9: 'destroying', 10: 'destroyed',
   Pending: 'pending', Planning: 'planning', Scheduled: 'scheduled', Deploying: 'deploying',
   Probing: 'probing', Running: 'running', Failed: 'failed', CleanupPending: 'cleanup-pending',
-  Stopped: 'stopped', Destroying: 'destroying', Destroyed: 'destroyed',
+  Paused: 'paused', Destroying: 'destroying', Destroyed: 'destroyed',
 } as const
 
 function nullable<T>(value: unknown, label: string, parser: (input: unknown, inputLabel: string) => T): T | null {
@@ -216,6 +219,7 @@ function parseCounts(value: unknown): TeamLabGameRolloutCounts {
     failed: parse.number(item.failed, 'TeamLab rollout counts.failed'),
     draining: parse.number(item.draining, 'TeamLab rollout counts.draining'),
     destroyed: parse.number(item.destroyed, 'TeamLab rollout counts.destroyed'),
+    paused: parse.number(item.paused, 'TeamLab rollout counts.paused'),
   }
 }
 

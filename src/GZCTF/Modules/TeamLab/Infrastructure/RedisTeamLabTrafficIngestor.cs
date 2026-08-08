@@ -59,7 +59,7 @@ public sealed class RedisTeamLabTrafficIngestor(
             runtimeState.RecordFailure("stream", "stream-append-failed");
             telemetry.RecordOperation(RedisTelemetryPurpose.Stream, RedisTelemetryStatus.Failure, stopwatch.Elapsed);
             logger.LogWarning(exception,
-                "TeamLab traffic stream append failed; buffering {Count} samples locally",
+                "TeamLab 流量流追加失败，将在本地缓冲 {Count} 条样本",
                 batches.Skip(completedBatches).Sum(batch => batch.Count));
             return BufferLocally(batches, completedBatches);
         }
@@ -106,7 +106,7 @@ public sealed class RedisTeamLabTrafficIngestor(
             if (malformedIds.Count > 0)
             {
                 await database.StreamAcknowledgeAsync(_streamKey, ConsumerGroup, malformedIds.ToArray());
-                logger.LogError("Discarded {Count} malformed TeamLab traffic stream entries", malformedIds.Count);
+                logger.LogError("已丢弃 {Count} 条格式错误的 TeamLab 流量流条目", malformedIds.Count);
             }
 
             runtimeState.RecordSuccess("stream");
@@ -114,7 +114,7 @@ public sealed class RedisTeamLabTrafficIngestor(
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             runtimeState.RecordFailure("stream", "stream-read-failed");
-            logger.LogWarning(exception, "TeamLab traffic stream read failed; consuming local fallback only");
+            logger.LogWarning(exception, "TeamLab 流量流读取失败，仅消费本地回退数据");
         }
 
         if (messages.Count < take)
@@ -252,7 +252,7 @@ public sealed class RedisTeamLabTrafficIngestor(
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             runtimeState.RecordFailure("stream", "connection-unavailable");
-            logger.LogWarning(exception, "Redis is unavailable for TeamLab traffic ingestion");
+            logger.LogWarning(exception, "Redis 不可用，TeamLab 流量摄取失败");
             return null;
         }
     }

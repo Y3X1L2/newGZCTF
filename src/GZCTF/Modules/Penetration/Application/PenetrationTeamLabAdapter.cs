@@ -17,29 +17,18 @@ namespace GZCTF.Modules.Penetration.Application;
 public sealed class PenetrationTeamLabAdapter(
     AppDbContext context,
     ITeamLabRuntimeApplicationService runtimes,
+    ITeamLabTopologyApplicationService topologies,
+    ITeamLabControlPlaneOperationService operations,
     PenetrationObjectiveService objectives,
     ITeamLabRolloutApplicationService? rolloutApplication = null,
     IDistributedLeaseProvider? locks = null)
-    : ITeamLabRolloutTargetProvider, ITeamLabRuntimeManagerAuthorizationProvider
+    : ITeamLabRolloutTargetProvider
 {
     private readonly ITeamLabRolloutApplicationService _rollouts =
         rolloutApplication ?? new TeamLabRolloutApplicationService(context);
     private readonly IDistributedLeaseProvider? _locks = locks;
 
     public string AdapterKind => "penetration";
-
-    public Task<bool> CanManageRuntimeAsync(
-        int runtimeId,
-        Guid actorUserId,
-        CancellationToken cancellationToken) =>
-        context.PenetrationTeamRuntimeBindings.AsNoTracking()
-            .Where(item => item.RuntimeId == runtimeId)
-            .Join(
-                context.Games.AsNoTracking(),
-                binding => binding.GameId,
-                game => game.Id,
-                (_, game) => game.OwnerId)
-            .AnyAsync(ownerId => ownerId == actorUserId, cancellationToken);
 
     public async Task<PenetrationGameLabBindingModel?> GetBindingAsync(
         int gameId,
@@ -48,10 +37,7 @@ public sealed class PenetrationTeamLabAdapter(
         var binding = await context.PenetrationGameLabBindings.AsNoTracking()
             .SingleOrDefaultAsync(item => item.GameId == gameId, cancellationToken);
         if (binding is null) return null;
-        var topologyId = await context.TeamLabTopologies.AsNoTracking()
-            .Where(item => item.Id == binding.TopologyId)
-            .Select(item => item.PublicId)
-            .SingleAsync(cancellationToken);
+        var topologyId = (await topologies.GetStorageReferenceAsync(binding.TopologyId, cancellationToken)).Id;
         return new PenetrationGameLabBindingModel(
             gameId, topologyId, binding.ActiveReleaseId, binding.MaxResetCount,
             binding.ObjectiveRevision,
@@ -72,13 +58,8 @@ public sealed class PenetrationTeamLabAdapter(
             cancellationToken, lease.LeaseLost);
         if (leaseCancellation is not null) cancellationToken = leaseCancellation.Token;
 
-        var topologyId = await context.TeamLabTopologies.AsNoTracking()
-            .Where(item => item.PublicId == topologyPublicId &&
-                           (administrator || item.OwnerUserId == actorUserId))
-            .Select(item => (int?)item.Id)
-            .SingleOrDefaultAsync(cancellationToken)
-            ?? throw new TeamLabApiContractException(
-                "topology_not_found", "The TeamLab topology was not found or is not managed by this user.", 404);
+        var topologyId = (await topologies.GetStorageReferenceAsync(
+            topologyPublicId, actorUserId, administrator, cancellationToken)).StorageId;
         var binding = await context.PenetrationGameLabBindings
             .SingleOrDefaultAsync(item => item.GameId == gameId, cancellationToken);
         if (binding is null)
@@ -90,11 +71,8 @@ public sealed class PenetrationTeamLabAdapter(
         {
             if (binding.ActiveRolloutId is { } rolloutId)
             {
-                var status = await context.TeamLabRollouts.AsNoTracking()
-                    .Where(item => item.Id == rolloutId)
-                    .Select(item => (TeamLabRolloutStatus?)item.Status)
-                    .SingleOrDefaultAsync(cancellationToken);
-                if (status is not null and not TeamLabRolloutStatus.Completed)
+                var active = await _rollouts.GetByStorageIdAsync(rolloutId, cancellationToken);
+                if (active is not null && active.Status != "completed")
                     throw new TeamLabApiContractException(
                         "rollout_active", "Drain the active rollout before rebinding the topology.", 409);
             }
@@ -144,17 +122,14 @@ public sealed class PenetrationTeamLabAdapter(
         var binding = await context.PenetrationGameLabBindings
             .SingleOrDefaultAsync(item => item.GameId == gameId, cancellationToken)
             ?? throw new InvalidOperationException("The game has no TeamLab topology binding.");
-        var release = await context.TeamLabTopologyReleases.AsNoTracking()
-            .SingleOrDefaultAsync(item => item.Id == releasePublicId && item.TopologyId == binding.TopologyId &&
-                                          (administrator || item.Topology.OwnerUserId == actorUserId),
-                cancellationToken)
-            ?? throw new TeamLabApiContractException(
-                "release_not_found", "The release does not belong to a managed topology.", 404);
+        var topology = await topologies.GetStorageReferenceAsync(binding.TopologyId, cancellationToken);
+        var release = await topologies.GetReleaseAsync(
+            topology.Id, releasePublicId, actorUserId, administrator, cancellationToken);
         if (binding.ActiveRolloutId is { } activeRolloutId)
         {
-            var active = await context.TeamLabRollouts.AsNoTracking()
-                .SingleAsync(item => item.Id == activeRolloutId, cancellationToken);
-            if (active.Status != TeamLabRolloutStatus.Completed && active.ReleaseId != release.Id)
+            var active = await _rollouts.GetByStorageIdAsync(activeRolloutId, cancellationToken)
+                ?? throw new TeamLabApiContractException("rollout_not_found", "未找到 TeamLab rollout。", 404);
+            if (active.Status != "completed" && active.ReleaseId != release.Id)
                 throw new InvalidOperationException("Drain the active rollout before selecting another release.");
             if (active.ReleaseId != release.Id) binding.ActiveRolloutId = null;
         }
@@ -190,22 +165,17 @@ public sealed class PenetrationTeamLabAdapter(
         bool administrator,
         CancellationToken cancellationToken)
     {
-        var query = context.TeamLabTopologyReleases.AsNoTracking();
-        if (!administrator)
-            query = query.Where(item => item.Topology.OwnerUserId == actorUserId);
-        var rows = await query.OrderBy(item => item.Topology.Name).ThenByDescending(item => item.Version)
-            .Select(item => new
-            {
-                item.Topology.PublicId,
-                item.Topology.Name,
-                item.Id,
-                item.Version,
-                NetworkCount = item.Topology.Networks.Count,
-                AssetCount = item.Topology.Assets.Count,
-                item.PublishedAt
-            }).ToArrayAsync(cancellationToken);
-        return rows.Select(item => new PenetrationReleaseOptionModel(
-            item.PublicId, item.Name, item.Id, item.Version, item.NetworkCount, item.AssetCount, item.PublishedAt)).ToArray();
+        var available = await topologies.ListAsync(actorUserId, administrator, cancellationToken);
+        var result = new List<PenetrationReleaseOptionModel>();
+        foreach (var topology in available.OrderBy(item => item.Name))
+        foreach (var release in (await topologies.ListReleasesAsync(
+                     topology.Id, actorUserId, administrator, cancellationToken)).OrderByDescending(item => item.Version))
+        {
+            var detail = await topologies.GetAsync(topology.Id, actorUserId, administrator, cancellationToken);
+            result.Add(new PenetrationReleaseOptionModel(topology.Id, topology.Name, release.Id, release.Version,
+                detail.Definition.Networks.Count, detail.Definition.Assets.Count, release.PublishedAt));
+        }
+        return result;
     }
 
     public async Task<PenetrationGameTeamLabModel> GetGameTeamLabAsync(
@@ -233,7 +203,10 @@ public sealed class PenetrationTeamLabAdapter(
             cancellationToken, lease.LeaseLost);
         if (leaseCancellation is not null) cancellationToken = leaseCancellation.Token;
         var rollout = await EnsureRolloutAsync(gameId, actorUserId, administrator, cancellationToken);
-        return await _rollouts.RequestPreparationAsync(rollout.Id, cancellationToken);
+        await operations.SubmitRolloutPrepareAsync(null, actorUserId,
+            $"penetration:{gameId}:prepare:{rollout.Revision}", rollout.Id,
+            RequireScope(rollout), cancellationToken);
+        return rollout;
     }
 
     public async Task<TeamLabRolloutModel> SetAccessAsync(
@@ -250,7 +223,10 @@ public sealed class PenetrationTeamLabAdapter(
             cancellationToken, lease.LeaseLost);
         if (leaseCancellation is not null) cancellationToken = leaseCancellation.Token;
         var rollout = await EnsureRolloutAsync(gameId, actorUserId, administrator, cancellationToken);
-        return await _rollouts.SetAccessAsync(rollout.Id, open, cancellationToken);
+        await operations.SubmitRolloutSetAccessAsync(null, actorUserId,
+            $"penetration:{gameId}:access:{open}:{rollout.Revision}", rollout.Id,
+            RequireScope(rollout), open, cancellationToken);
+        return rollout;
     }
 
     public async Task<TeamLabRolloutModel> DrainAsync(
@@ -266,7 +242,36 @@ public sealed class PenetrationTeamLabAdapter(
             cancellationToken, lease.LeaseLost);
         if (leaseCancellation is not null) cancellationToken = leaseCancellation.Token;
         var rollout = await EnsureRolloutAsync(gameId, actorUserId, administrator, cancellationToken);
-        return await _rollouts.RequestDrainAsync(rollout.Id, cancellationToken);
+        await operations.SubmitRolloutDrainAsync(null, actorUserId,
+            $"penetration:{gameId}:drain:{rollout.Revision}", rollout.Id,
+            RequireScope(rollout), cancellationToken);
+        return rollout;
+    }
+
+    public async Task<TeamLabRolloutModel> PauseAsync(
+        int gameId,
+        Guid actorUserId,
+        bool administrator,
+        CancellationToken cancellationToken)
+    {
+        var rollout = await EnsureRolloutAsync(gameId, actorUserId, administrator, cancellationToken);
+        await operations.SubmitRolloutPauseAsync(null, actorUserId,
+            $"penetration:{gameId}:pause:{rollout.Revision}", rollout.Id,
+            RequireScope(rollout), cancellationToken);
+        return rollout;
+    }
+
+    public async Task<TeamLabRolloutModel> ResumeAsync(
+        int gameId,
+        Guid actorUserId,
+        bool administrator,
+        CancellationToken cancellationToken)
+    {
+        var rollout = await EnsureRolloutAsync(gameId, actorUserId, administrator, cancellationToken);
+        await operations.SubmitRolloutResumeAsync(null, actorUserId,
+            $"penetration:{gameId}:resume:{rollout.Revision}", rollout.Id,
+            RequireScope(rollout), cancellationToken);
+        return rollout;
     }
 
     public async Task<TeamLabRolloutTargetPageModel> ListRolloutTargetsAsync(
@@ -280,12 +285,16 @@ public sealed class PenetrationTeamLabAdapter(
         return await _rollouts.ListTargetsAsync(rolloutId, after, limit, cancellationToken);
     }
 
-    public async Task<bool> IsPlayerAccessOpenAsync(int gameId, CancellationToken cancellationToken) =>
-        await context.PenetrationGameLabBindings.AsNoTracking()
-            .Where(item => item.GameId == gameId && item.ActiveRolloutId.HasValue)
-            .AnyAsync(item => context.TeamLabRollouts.Any(rollout => rollout.Id == item.ActiveRolloutId &&
-                rollout.Status == TeamLabRolloutStatus.Ready && rollout.DesiredAccessOpen &&
-                !rollout.DrainRequested), cancellationToken);
+    public async Task<bool> IsPlayerAccessOpenAsync(int gameId, CancellationToken cancellationToken)
+    {
+        var rolloutId = await context.PenetrationGameLabBindings.AsNoTracking()
+            .Where(item => item.GameId == gameId)
+            .Select(item => item.ActiveRolloutId)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (rolloutId is null) return false;
+        var rollout = await _rollouts.GetByStorageIdAsync(rolloutId.Value, cancellationToken);
+        return rollout is { Status: "ready", DesiredAccessOpen: true, DrainRequested: false };
+    }
 
     public async Task SynchronizeTargetsAsync(TeamLabRollout rollout, CancellationToken cancellationToken)
     {
@@ -309,9 +318,13 @@ public sealed class PenetrationTeamLabAdapter(
             .Distinct()
             .OrderBy(item => item.TeamId)
             .ToArrayAsync(cancellationToken);
-        var existing = await context.TeamLabRolloutTargets
-            .Where(item => item.RolloutId == rollout.Id)
-            .ToDictionaryAsync(item => item.ExternalSubject, cancellationToken);
+        var existing = rollout.Targets.ToDictionary(item => item.ExternalSubject, StringComparer.Ordinal);
+        var desiredSubjects = accepted.Select(item => $"team:{item.TeamId}").ToHashSet(StringComparer.Ordinal);
+        foreach (var target in rollout.Targets)
+        {
+            target.IsDesired = desiredSubjects.Contains(target.ExternalSubject);
+            target.UpdatedAt = DateTimeOffset.UtcNow;
+        }
         foreach (var team in accepted)
         {
             var subject = $"team:{team.TeamId}";
@@ -320,7 +333,7 @@ public sealed class PenetrationTeamLabAdapter(
                 if (target.DisplayName != team.Name) target.DisplayName = team.Name;
                 continue;
             }
-            context.TeamLabRolloutTargets.Add(new TeamLabRolloutTarget
+            rollout.Targets.Add(new TeamLabRolloutTarget
             {
                 RolloutId = rollout.Id,
                 ExternalSubject = subject,
@@ -361,10 +374,7 @@ public sealed class PenetrationTeamLabAdapter(
             ?? throw new InvalidOperationException("The game has no TeamLab topology binding.");
         if (binding.ActiveReleaseId is not { } releaseId)
             throw new InvalidOperationException("Publish and activate a TeamLab topology release before deployment.");
-        var runtimeOwnerUserId = await context.TeamLabTopologies.AsNoTracking()
-            .Where(item => item.Id == binding.TopologyId)
-            .Select(item => item.OwnerUserId)
-            .SingleAsync(cancellationToken)
+        var runtimeOwnerUserId = (await topologies.GetStorageReferenceAsync(binding.TopologyId, cancellationToken)).OwnerUserId
             ?? throw new InvalidOperationException("The bound TeamLab topology has no owner.");
         var overlays = await objectives.BuildOverlaysAsync(gameId, teamId, releaseId, cancellationToken);
         var command = new CreateTeamLabRuntimeModel(
@@ -406,8 +416,7 @@ public sealed class PenetrationTeamLabAdapter(
             throw new InvalidOperationException("The TeamLab runtime is being destroyed or has already been destroyed.");
         var settings = await context.PenetrationGameLabBindings.AsNoTracking()
             .SingleAsync(item => item.GameId == gameId, cancellationToken);
-        var runtime = await context.TeamLabRuntimes.AsNoTracking()
-            .SingleAsync(item => item.Id == binding.RuntimeId, cancellationToken);
+        var runtime = await runtimes.GetByStorageIdAsync(binding.RuntimeId, cancellationToken);
         if (settings.ActiveReleaseId is not { } releaseId)
             throw new InvalidOperationException("The game has no active TeamLab release.");
         var overlays = await objectives.BuildOverlaysAsync(gameId, teamId, releaseId, cancellationToken);
@@ -415,11 +424,12 @@ public sealed class PenetrationTeamLabAdapter(
             binding.RuntimeId, userId, byAdmin, settings.MaxResetCount, cancellationToken);
         try
         {
-            return await runtimes.ResetAndEnqueueAsync(
-                runtime.PublicId,
-                new ResetTeamLabRuntimeModel(overlays, releaseId),
-                reset.OperationId,
-                cancellationToken);
+            var command = new ResetTeamLabRuntimeModel(overlays, releaseId);
+            var rolloutId = await ActiveRolloutStorageIdAsync(gameId, cancellationToken);
+            return rolloutId is { } activeRolloutId
+                ? await runtimes.ResetRolloutTargetAndEnqueueAsync(
+                    runtime.Id, activeRolloutId, command, reset.OperationId, cancellationToken)
+                : await runtimes.ResetAndEnqueueAsync(runtime.Id, command, reset.OperationId, cancellationToken);
         }
         catch
         {
@@ -444,10 +454,7 @@ public sealed class PenetrationTeamLabAdapter(
         var binding = await LoadRuntimeBindingAsync(gameId, teamId, cancellationToken);
         if (binding.Status == PenetrationRuntimeBindingStatus.Destroyed)
             return;
-        var runtimeId = await context.TeamLabRuntimes.AsNoTracking()
-            .Where(item => item.Id == binding.RuntimeId)
-            .Select(item => item.PublicId)
-            .SingleAsync(cancellationToken);
+        var runtime = await runtimes.GetByStorageIdAsync(binding.RuntimeId, cancellationToken);
         var operationId = binding.DestroyOperationId ?? Guid.CreateVersion7();
         if (binding.Status != PenetrationRuntimeBindingStatus.Destroying ||
             binding.DestroyOperationId is null)
@@ -459,7 +466,15 @@ public sealed class PenetrationTeamLabAdapter(
         if (transaction is not null)
             await transaction.CommitAsync(cancellationToken);
 
-        await runtimes.DestroyAndEnqueueAsync(runtimeId, operationId, null, cancellationToken);
+        var rolloutId = await ActiveRolloutStorageIdAsync(gameId, cancellationToken);
+        if (rolloutId is { } activeRolloutId)
+        {
+            var actorUserId = await RuntimeOwnerIdAsync(binding.RuntimeId, cancellationToken);
+            await runtimes.DestroyRolloutTargetAndEnqueueAsync(
+                runtime.Id, activeRolloutId, operationId, actorUserId, cancellationToken);
+            return;
+        }
+        await runtimes.DestroyAndEnqueueAsync(runtime.Id, operationId, null, cancellationToken);
     }
 
     public async Task DestroyGameAsync(int gameId, CancellationToken cancellationToken)
@@ -469,6 +484,21 @@ public sealed class PenetrationTeamLabAdapter(
             .Select(item => item.TeamId)
             .ToArrayAsync(cancellationToken);
         foreach (var teamId in teams) await DestroyTeamAsync(gameId, teamId, cancellationToken);
+    }
+
+    public async Task EnsureGameDrainedBeforeDeleteAsync(
+        int gameId, Guid actorUserId, CancellationToken cancellationToken)
+    {
+        var rolloutId = await ActiveRolloutPublicIdAsync(gameId, cancellationToken);
+        if (rolloutId is null) return;
+        var rollout = await _rollouts.GetAsync(rolloutId.Value, cancellationToken);
+        if (rollout is null || rollout.Status is "completed" or "archived") return;
+        if (!rollout.DrainRequested)
+            await operations.SubmitRolloutDrainAsync(null, actorUserId,
+                $"penetration:{gameId}:delete-drain:{rollout.Revision}", rollout.Id,
+                RequireScope(rollout), cancellationToken);
+        throw new TeamLabApiContractException(
+            "rollout_not_drained", "比赛组网环境正在清理；全部资源清理完成后才能删除比赛。", 409);
     }
 
     public async Task<IReadOnlyList<PenetrationRuntimeBindingModel>> ListRuntimesAsync(
@@ -481,19 +511,19 @@ public sealed class PenetrationTeamLabAdapter(
             {
                 item.TeamId,
                 TeamName = context.Teams.Where(team => team.Id == item.TeamId).Select(team => team.Name).First(),
-                Runtime = context.TeamLabRuntimes.Where(runtime => runtime.Id == item.RuntimeId).Select(runtime => new
-                {
-                    runtime.PublicId, runtime.Generation, runtime.Status,
-                    ShardCount = runtime.Shards.Count(shard => shard.Generation == runtime.Generation),
-                    AssetCount = runtime.Assets.Count(asset => asset.Generation == runtime.Generation),
-                    runtime.CreatedAt, runtime.UpdatedAt, runtime.LastError
-                }).First()
+                item.RuntimeId
             }).OrderBy(item => item.TeamName)
             .ToArrayAsync(cancellationToken);
-        return rows.Select(item => new PenetrationRuntimeBindingModel(
-            item.TeamId, item.TeamName, item.Runtime.PublicId, item.Runtime.Generation, item.Runtime.Status,
-            item.Runtime.Status.ToString().ToLowerInvariant(), item.Runtime.ShardCount, item.Runtime.AssetCount, item.Runtime.CreatedAt,
-            item.Runtime.UpdatedAt, item.Runtime.LastError)).ToArray();
+        var result = new List<PenetrationRuntimeBindingModel>(rows.Length);
+        foreach (var item in rows)
+        {
+            var runtime = await runtimes.GetByStorageIdAsync(item.RuntimeId, cancellationToken);
+            result.Add(new PenetrationRuntimeBindingModel(
+                item.TeamId, item.TeamName, runtime.Id, runtime.Generation, runtime.Status,
+                runtime.Stage, runtime.Shards.Count, runtime.Assets.Count, runtime.CreatedAt,
+                runtime.UpdatedAt, runtime.Error));
+        }
+        return result;
     }
 
     private async Task<PenetrationTeamRuntimeBinding> LoadRuntimeBindingAsync(
@@ -522,10 +552,7 @@ public sealed class PenetrationTeamLabAdapter(
                 cancellationToken);
         }
 
-        var targetGeneration = await context.TeamLabRuntimes.AsNoTracking()
-            .Where(item => item.Id == runtimeId)
-            .Select(item => item.Generation + 1)
-            .SingleAsync(cancellationToken);
+        var targetGeneration = (await runtimes.GetByStorageIdAsync(runtimeId, cancellationToken)).Generation + 1;
         var activeResetExists = await context.PenetrationResetRecords.AsNoTracking()
             .AnyAsync(item => item.RuntimeId == runtimeId &&
                               item.TargetGeneration == targetGeneration &&
@@ -596,20 +623,15 @@ public sealed class PenetrationTeamLabAdapter(
         if (binding.ActiveReleaseId is not { } releaseId)
             throw new TeamLabApiContractException(
                 "release_not_selected", "Select a published TeamLab release first.", 409);
-        var ownerId = await context.TeamLabTopologies.AsNoTracking()
-            .Where(item => item.Id == binding.TopologyId)
-            .Select(item => item.OwnerUserId)
-            .SingleAsync(cancellationToken);
+        var topology = await topologies.GetStorageReferenceAsync(binding.TopologyId, cancellationToken);
+        var ownerId = topology.OwnerUserId;
         if (!administrator && ownerId != actorUserId)
             throw new TeamLabApiContractException(
                 "insufficient_permission", "The bound topology is not managed by this user.", 403);
         var rollout = await _rollouts.EnsureAsync(
             releaseId, ownerId ?? actorUserId, actorUserId, AdapterKind,
             $"penetration-game:{gameId}", cancellationToken);
-        var rolloutKey = await context.TeamLabRollouts.AsNoTracking()
-            .Where(item => item.PublicId == rollout.Id)
-            .Select(item => item.Id)
-            .SingleAsync(cancellationToken);
+        var rolloutKey = await _rollouts.GetStorageIdAsync(rollout.Id, cancellationToken);
         if (binding.ActiveRolloutId != rolloutKey)
         {
             binding.ActiveRolloutId = rolloutKey;
@@ -619,20 +641,42 @@ public sealed class PenetrationTeamLabAdapter(
         return rollout;
     }
 
-    private async Task<Guid?> ActiveRolloutPublicIdAsync(
-        int gameId,
-        CancellationToken cancellationToken) =>
-        await context.PenetrationGameLabBindings.AsNoTracking()
-            .Where(item => item.GameId == gameId && item.ActiveRolloutId.HasValue)
-            .Select(item => context.TeamLabRollouts.Where(rollout => rollout.Id == item.ActiveRolloutId)
-                .Select(rollout => (Guid?)rollout.PublicId).Single())
+    private async Task<Guid?> ActiveRolloutPublicIdAsync(int gameId, CancellationToken cancellationToken)
+    {
+        var storageId = await context.PenetrationGameLabBindings.AsNoTracking()
+            .Where(item => item.GameId == gameId)
+            .Select(item => item.ActiveRolloutId)
             .SingleOrDefaultAsync(cancellationToken);
+        return storageId is null
+            ? null
+            : (await _rollouts.GetByStorageIdAsync(storageId.Value, cancellationToken))?.Id;
+    }
+
+    private Task<int?> ActiveRolloutStorageIdAsync(int gameId, CancellationToken cancellationToken) =>
+        context.PenetrationGameLabBindings.AsNoTracking()
+            .Where(item => item.GameId == gameId)
+            .Select(item => item.ActiveRolloutId)
+            .SingleOrDefaultAsync(cancellationToken);
+
+    private async Task<Guid> RuntimeOwnerIdAsync(int runtimeId, CancellationToken cancellationToken)
+    {
+        var ownerId = await context.TeamLabRuntimes.AsNoTracking()
+            .Where(item => item.Id == runtimeId)
+            .Select(item => item.CreatedById)
+            .SingleAsync(cancellationToken);
+        return ownerId ?? throw new TeamLabApiContractException(
+            "runtime_owner_missing", "该 TeamLab 运行环境缺少所有者，无法执行比赛生命周期操作。", 409);
+    }
 
     private static int ParseGameReference(string reference) =>
         reference.StartsWith("penetration-game:", StringComparison.Ordinal) &&
         int.TryParse(reference[17..], out var gameId)
             ? gameId
             : throw new InvalidOperationException("The penetration rollout game reference is invalid.");
+
+    private static Guid RequireScope(TeamLabRolloutModel rollout) =>
+        rollout.ControlScopeId ?? throw new TeamLabApiContractException(
+            "teamlab_scope_missing", "TeamLab rollout 缺少控制范围。", 409);
 
     private static int ParseTeamSubject(string subject) =>
         subject.StartsWith("team:", StringComparison.Ordinal) && int.TryParse(subject[5..], out var teamId)

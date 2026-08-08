@@ -67,7 +67,13 @@ fi
 
 database_connection="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["ConnectionStrings"]["Database"])' "$release/appsettings.json")"
 test -n "$database_connection" || { echo "database connection is missing" >&2; exit 5; }
-(cd "$release" && ./efbundle --no-color --connection "$database_connection")
+if ! (cd "$release" && ./efbundle --no-color --connection "$database_connection"); then
+  echo "migration failed; restoring previous release services" >&2
+  systemctl start gzctf-agent.service || true
+  systemctl start gzctf.service || true
+  rm -rf "$release_root"
+  exit 5
+fi
 unset database_connection
 
 rm -f "$next_link" "$previous_link"

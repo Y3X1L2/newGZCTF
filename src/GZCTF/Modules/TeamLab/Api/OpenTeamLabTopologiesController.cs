@@ -24,16 +24,17 @@ namespace GZCTF.Modules.TeamLab.Api;
 [ProducesResponseType(typeof(ExternalApiProblemDetailsModel), StatusCodes.Status422UnprocessableEntity, "application/problem+json")]
 public sealed class OpenTeamLabTopologiesController(
     ITeamLabTopologyApplicationService topologies,
+    TeamLabScopeAuthorizationService scopeAuthorization,
     TeamLabRuntimeOperationApplicationService operations) : ControllerBase
 {
     [HttpGet("capabilities")]
-    [OpenApiOperation("Get TeamLab capabilities", "Returns the topology schema and feature capabilities supported by this platform version.")]
+    [OpenApiOperation("获取 TeamLab 能力", "返回本平台版本支持的拓扑 schema 与功能能力。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabTopologiesRead)]
     [ProducesResponseType(typeof(TeamLabCapabilitiesModel), StatusCodes.Status200OK)]
     public ActionResult<TeamLabCapabilitiesModel> Capabilities() => Ok(topologies.GetCapabilities());
 
     [HttpPost("topologies")]
-    [OpenApiOperation("Create a topology", "Queues creation of a reusable TeamLab topology draft.")]
+    [OpenApiOperation("创建拓扑", "提交创建可复用的 TeamLab 拓扑草稿。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabTopologiesWrite)]
     [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Create(
@@ -42,30 +43,39 @@ public sealed class OpenTeamLabTopologiesController(
         CancellationToken cancellationToken)
     {
         var actor = Actor();
+        RequireScopeGrant(model.ControlScopeId);
         var result = await operations.SubmitTopologyCreateAsync(
             actor.TokenId, actor.UserId, idempotencyKey, model.ToInternal(), cancellationToken);
         return AcceptedOperation(result);
     }
 
     [HttpGet("topologies")]
-    [OpenApiOperation("List topologies", "Returns a cursor-paginated list of topologies visible to the current API token owner.")]
+    [OpenApiOperation("列出拓扑", "返回当前 API token 属主可见的 cursor 分页拓扑列表。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabTopologiesRead)]
     [ProducesResponseType(typeof(OpenTeamLabTopologyPageModel), StatusCodes.Status200OK)]
-    public Task<OpenTeamLabTopologyPageModel> List(
+    public async Task<OpenTeamLabTopologyPageModel> List(
         [FromQuery, Range(1, 100)] int limit = 50,
         [FromQuery] string? after = null,
-        CancellationToken cancellationToken = default) =>
-        topologies.ListPageAsync(ActorUserId(), IsAdministrator(), limit, after, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        var actor = Actor();
+        var scopes = await scopeAuthorization.ListReadableScopesAsync(actor.TokenId, IsAdministrator(), cancellationToken);
+        return await topologies.ListPageForScopesAsync(scopes, limit, after, cancellationToken);
+    }
 
     [HttpGet("topologies/{topologyId:guid}")]
-    [OpenApiOperation("Get a topology", "Returns the complete editable topology definition.")]
+    [OpenApiOperation("获取拓扑", "返回完整的可编辑拓扑定义。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabTopologiesRead)]
     [ProducesResponseType(typeof(OpenTeamLabTopologyDetailModel), StatusCodes.Status200OK)]
-    public async Task<OpenTeamLabTopologyDetailModel> Get(Guid topologyId, CancellationToken cancellationToken) =>
-        (await topologies.GetAsync(topologyId, ActorUserId(), IsAdministrator(), cancellationToken)).ToOpen();
+    public async Task<OpenTeamLabTopologyDetailModel> Get(Guid topologyId, CancellationToken cancellationToken)
+    {
+        var actor = Actor();
+        await scopeAuthorization.RequireTopologyScopeAsync(topologyId, actor.TokenId, IsAdministrator(), false, cancellationToken);
+        return (await topologies.GetAsync(topologyId, actor.UserId, true, cancellationToken)).ToOpen();
+    }
 
     [HttpPut("topologies/{topologyId:guid}")]
-    [OpenApiOperation("Update a topology", "Queues replacement of the editable topology definition.")]
+    [OpenApiOperation("更新拓扑", "提交替换可编辑的拓扑定义。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabTopologiesWrite)]
     [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Update(
@@ -75,13 +85,15 @@ public sealed class OpenTeamLabTopologiesController(
         CancellationToken cancellationToken)
     {
         var actor = Actor();
+        var scopeId = await scopeAuthorization.RequireTopologyScopeAsync(
+            topologyId, actor.TokenId, IsAdministrator(), true, cancellationToken);
         var result = await operations.SubmitTopologyUpdateAsync(
-            actor.TokenId, actor.UserId, idempotencyKey, topologyId, model.ToInternal(), cancellationToken);
+            actor.TokenId, actor.UserId, idempotencyKey, topologyId, scopeId, model.ToInternal(), cancellationToken);
         return AcceptedOperation(result);
     }
 
     [HttpDelete("topologies/{topologyId:guid}")]
-    [OpenApiOperation("Delete a topology", "Queues deletion of a topology that is no longer in use.")]
+    [OpenApiOperation("删除拓扑", "提交删除不再使用的拓扑。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabTopologiesWrite)]
     [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Delete(
@@ -90,20 +102,26 @@ public sealed class OpenTeamLabTopologiesController(
         CancellationToken cancellationToken)
     {
         var actor = Actor();
+        var scopeId = await scopeAuthorization.RequireTopologyScopeAsync(
+            topologyId, actor.TokenId, IsAdministrator(), true, cancellationToken);
         var result = await operations.SubmitTopologyDeleteAsync(
-            actor.TokenId, actor.UserId, idempotencyKey, topologyId, cancellationToken);
+            actor.TokenId, actor.UserId, idempotencyKey, topologyId, scopeId, cancellationToken);
         return AcceptedOperation(result);
     }
 
     [HttpPost("topologies/{topologyId:guid}/validate")]
-    [OpenApiOperation("Validate a topology", "Validates topology structure, addressing, connectivity, assets, and deployment constraints without publishing it.")]
+    [OpenApiOperation("校验拓扑", "在不发布的情况下校验拓扑结构、寻址、连通性、资产与部署约束。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabTopologiesRead)]
     [ProducesResponseType(typeof(TeamLabValidationResultModel), StatusCodes.Status200OK)]
-    public Task<TeamLabValidationResultModel> Validate(Guid topologyId, CancellationToken cancellationToken) =>
-        topologies.ValidateAsync(topologyId, ActorUserId(), IsAdministrator(), cancellationToken);
+    public async Task<TeamLabValidationResultModel> Validate(Guid topologyId, CancellationToken cancellationToken)
+    {
+        var actor = Actor();
+        await scopeAuthorization.RequireTopologyScopeAsync(topologyId, actor.TokenId, IsAdministrator(), false, cancellationToken);
+        return await topologies.ValidateAsync(topologyId, actor.UserId, true, cancellationToken);
+    }
 
     [HttpPost("topologies/{topologyId:guid}/releases")]
-    [OpenApiOperation("Publish a topology release", "Validates and queues creation of an immutable topology release for runtime deployment.")]
+    [OpenApiOperation("发布拓扑版本", "校验并提交创建用于运行时部署的不可变拓扑版本。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabTopologiesWrite)]
     [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Publish(
@@ -113,49 +131,61 @@ public sealed class OpenTeamLabTopologiesController(
         CancellationToken cancellationToken)
     {
         var actor = Actor();
+        var scopeId = await scopeAuthorization.RequireTopologyScopeAsync(
+            topologyId, actor.TokenId, IsAdministrator(), true, cancellationToken);
         var result = await operations.SubmitTopologyPublishAsync(
-            actor.TokenId, actor.UserId, idempotencyKey, topologyId, model, cancellationToken);
+            actor.TokenId, actor.UserId, idempotencyKey, topologyId, scopeId, model, cancellationToken);
         return AcceptedOperation(result);
     }
 
     [HttpGet("topologies/{topologyId:guid}/releases")]
-    [OpenApiOperation("List topology releases", "Returns immutable releases for a topology using cursor pagination.")]
+    [OpenApiOperation("列出拓扑版本", "使用 cursor 分页返回拓扑的不可变版本列表。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabTopologiesRead)]
     [ProducesResponseType(typeof(OpenTeamLabReleasePageModel), StatusCodes.Status200OK)]
-    public Task<OpenTeamLabReleasePageModel> ListReleases(
+    public async Task<OpenTeamLabReleasePageModel> ListReleases(
         Guid topologyId,
         [FromQuery, Range(1, 100)] int limit = 50,
         [FromQuery] string? after = null,
-        CancellationToken cancellationToken = default) =>
-        topologies.ListReleasesPageAsync(
-            topologyId, ActorUserId(), IsAdministrator(), limit, after, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        var actor = Actor();
+        await scopeAuthorization.RequireTopologyScopeAsync(topologyId, actor.TokenId, IsAdministrator(), false, cancellationToken);
+        return await topologies.ListReleasesPageAsync(topologyId, actor.UserId, true, limit, after, cancellationToken);
+    }
 
     [HttpGet("topologies/{topologyId:guid}/releases/{releaseId:guid}")]
-    [OpenApiOperation("Get a topology release", "Returns one immutable topology release and its compiled definition.")]
+    [OpenApiOperation("获取拓扑版本", "返回一个不可变拓扑版本及其编译后的定义。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabTopologiesRead)]
     [ProducesResponseType(typeof(OpenTeamLabReleaseModel), StatusCodes.Status200OK)]
     public async Task<OpenTeamLabReleaseModel> GetRelease(
         Guid topologyId,
         Guid releaseId,
-        CancellationToken cancellationToken) =>
-        (await topologies.GetReleaseAsync(
-            topologyId, releaseId, ActorUserId(), IsAdministrator(), cancellationToken)).ToOpen();
+        CancellationToken cancellationToken)
+    {
+        var actor = Actor();
+        await scopeAuthorization.RequireTopologyScopeAsync(topologyId, actor.TokenId, IsAdministrator(), false, cancellationToken);
+        await scopeAuthorization.RequireReleaseScopeAsync(releaseId, actor.TokenId, IsAdministrator(), false, cancellationToken);
+        return (await topologies.GetReleaseAsync(topologyId, releaseId, actor.UserId, true, cancellationToken)).ToOpen();
+    }
 
     [HttpPost("topologies/{topologyId:guid}/releases/{releaseId:guid}/plan")]
-    [OpenApiOperation("Plan runtime placement", "Builds a deployment plan for the release without creating runtime resources.")]
+    [OpenApiOperation("规划运行时部署", "在不创建运行时资源的情况下为版本构建部署计划。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabTopologiesRead)]
     [ProducesResponseType(typeof(TeamLabPlanModel), StatusCodes.Status200OK)]
-    public Task<TeamLabPlanModel> Plan(Guid topologyId, Guid releaseId, CancellationToken cancellationToken) =>
-        topologies.PlanAsync(topologyId, releaseId, ActorUserId(), IsAdministrator(), cancellationToken);
-
-    private Guid ActorUserId() => Actor().UserId;
+    public async Task<TeamLabPlanModel> Plan(Guid topologyId, Guid releaseId, CancellationToken cancellationToken)
+    {
+        var actor = Actor();
+        await scopeAuthorization.RequireTopologyScopeAsync(topologyId, actor.TokenId, IsAdministrator(), false, cancellationToken);
+        await scopeAuthorization.RequireReleaseScopeAsync(releaseId, actor.TokenId, IsAdministrator(), false, cancellationToken);
+        return await topologies.PlanAsync(topologyId, releaseId, actor.UserId, true, cancellationToken);
+    }
 
     private (Guid TokenId, Guid UserId) Actor()
     {
         if (Guid.TryParse(User.FindFirstValue(ApiTokenClaimTypes.TokenId), out var tokenId) &&
             Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
             return (tokenId, userId);
-        throw new TeamLabApiContractException("authentication_required", "Authentication is required.", 401);
+        throw new TeamLabApiContractException("authentication_required", "需要身份认证。", 401);
     }
 
     private AcceptedResult AcceptedOperation(GZCTF.Modules.Audit.Application.IdempotencyBeginResult result)
@@ -164,5 +194,25 @@ public sealed class OpenTeamLabTopologiesController(
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
     }
 
-    private bool IsAdministrator() => User.IsInRole(nameof(Role.Admin));
+    /// <summary>
+    /// Open v1 endpoints are always served to API tokens, never to browser
+    /// cookie sessions (the policy scheme forwards /api/open/v1 to the token
+    /// scheme exclusively). Administrator capability on open v1 must therefore
+    /// be expressed as a wildcard resource grant, not the token creator's role.
+    /// </summary>
+    private bool IsAdministrator() => User.FindAll(ApiTokenClaimTypes.Resource).Any(claim =>
+        ApiTokenResourceClaim.TryParse(claim.Value, out var type, out var id) &&
+        type == "teamlab-scope" && id == "*");
+
+    private void RequireScopeGrant(Guid? scopeId)
+    {
+        if (scopeId is null)
+            throw new TeamLabApiContractException("scope_not_found", "未找到 TeamLab 控制范围。", 404);
+        if (IsAdministrator()) return;
+        var granted = User.FindAll(ApiTokenClaimTypes.Resource).Any(claim =>
+            ApiTokenResourceClaim.TryParse(claim.Value, out var type, out var id) &&
+            type == "teamlab-scope" && id == scopeId.Value.ToString("D"));
+        if (!granted)
+            throw new TeamLabApiContractException("scope_not_found", "未找到 TeamLab 控制范围。", 404);
+    }
 }

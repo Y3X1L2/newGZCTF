@@ -1,13 +1,33 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using GZCTF.Models.Data;
 
 namespace GZCTF.Modules.TeamLab.Domain.Runtime;
 
+[JsonConverter(typeof(TeamLabRemoteProtocolJsonConverter))]
 public enum TeamLabRemoteProtocol : byte
 {
     ContainerTerminal = 1,
     Ssh = 2,
     Rdp = 3
+}
+
+public sealed class TeamLabRemoteProtocolJsonConverter : JsonConverter<TeamLabRemoteProtocol>
+{
+    public override TeamLabRemoteProtocol Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+        Enum.TryParse<TeamLabRemoteProtocol>(reader.GetString(), ignoreCase: true, out var value)
+            ? value
+            : throw new JsonException("Unknown TeamLabRemoteProtocol value.");
+
+    public override void Write(Utf8JsonWriter writer, TeamLabRemoteProtocol value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(value switch
+        {
+            TeamLabRemoteProtocol.ContainerTerminal => "containerTerminal",
+            TeamLabRemoteProtocol.Ssh => "ssh",
+            TeamLabRemoteProtocol.Rdp => "rdp",
+            _ => value.ToString()
+        });
 }
 
 public enum TeamLabRemoteSessionStatus : byte
@@ -20,34 +40,12 @@ public enum TeamLabRemoteSessionStatus : byte
     Failed = 6
 }
 
-public enum RemoteCredentialMode : byte
-{
-    PlatformGenerated = 1,
-    ExistingAccount = 2
-}
-
 [Flags]
 public enum TeamLabOperatorPermission : byte
 {
     None = 0,
     ViewAssets = 1,
     OperateAssets = 2
-}
-
-public sealed class TeamLabRuntimeRemoteCredential
-{
-    public long Id { get; set; }
-    public int RuntimeId { get; set; }
-    public int Generation { get; set; }
-    public int RuntimeAssetId { get; set; }
-    public TeamLabRemoteProtocol Protocol { get; set; }
-    [MaxLength(128)] public string Username { get; set; } = string.Empty;
-    [MaxLength(8192)] public string? ProtectedSecret { get; set; }
-    public RemoteCredentialMode Mode { get; set; }
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
-    public DateTimeOffset? RevokedAt { get; set; }
-    public TeamLabRuntime Runtime { get; set; } = null!;
-    public TeamLabRuntimeAsset RuntimeAsset { get; set; } = null!;
 }
 
 public sealed class TeamLabRemoteSession

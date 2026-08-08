@@ -7,8 +7,11 @@ import {
   copyTopologyFragment,
   deleteTopologyItems,
   duplicateTopologyNodes,
+  moveNetworkRegion,
   moveTopologyNode,
   pasteTopologyFragment,
+  resizeNetworkRegion,
+  setNetworkCollapsed,
   type TopologyFragment,
 } from '../model/topologyCommands'
 import type { TopologyDocument, TopologyNodeType } from '../model/topologyDocument'
@@ -83,6 +86,7 @@ export function TeamLabDesignPage({
   const [leftPanelOpen, setLeftPanelOpen] = useState(true)
   const [rightPanelOpen, setRightPanelOpen] = useState(true)
   const [focusMode, setFocusMode] = useState(false)
+  const [selectedNetworkKey, setSelectedNetworkKey] = useState<string | null>(null)
   const [layoutRequest, setLayoutRequest] = useState(0)
   const [feedback, setFeedback] = useState<string | null>(null)
   const clipboard = useRef<TopologyFragment | null>(null)
@@ -153,6 +157,27 @@ export function TeamLabDesignPage({
     },
     [commit, document, effectiveReadOnly]
   )
+  const moveRegion = useCallback(
+    (networkKey: string, delta: { x: number; y: number }) => {
+      if (effectiveReadOnly) return
+      commit(moveNetworkRegion(document, networkKey, delta).document)
+    },
+    [commit, document, effectiveReadOnly]
+  )
+  const toggleRegion = useCallback(
+    (networkKey: string, collapsed: boolean) => {
+      if (effectiveReadOnly) return
+      commit(setNetworkCollapsed(document, networkKey, collapsed).document)
+    },
+    [commit, document, effectiveReadOnly]
+  )
+  const resizeRegion = useCallback(
+    (networkKey: string, width: number, height: number) => {
+      if (effectiveReadOnly) return
+      commit(resizeNetworkRegion(document, networkKey, width, height).document)
+    },
+    [commit, document, effectiveReadOnly]
+  )
   const deleteSelection = useCallback(() => {
     if (effectiveReadOnly || (selection.nodeKeys.size === 0 && selection.connectionKeys.size === 0)) return
     commit(deleteTopologyItems(document, selection).document)
@@ -201,6 +226,14 @@ export function TeamLabDesignPage({
   const toggleFocus = useCallback(() => setFocusMode((value) => !value), [])
   const toggleLeftPanel = useCallback(() => setLeftPanelOpen((value) => !value), [])
   const toggleRightPanel = useCallback(() => setRightPanelOpen((value) => !value), [])
+  const selectCanvasItems = useCallback((nodeKeys: readonly string[], connectionKeys: readonly string[]) => {
+    select(nodeKeys, connectionKeys)
+    if (nodeKeys.length > 0 || connectionKeys.length > 0) setSelectedNetworkKey(null)
+  }, [select])
+  const selectNetworkRegion = useCallback((networkKey: string | null) => {
+    setSelectedNetworkKey(networkKey)
+    if (networkKey) clear()
+  }, [clear])
   const addPaletteNode = useCallback((type: TopologyNodeType) => addNode(type), [addNode])
   const useNetworkConnections = useCallback(() => setConnectionMode('network'), [])
   const useDependencyConnections = useCallback(() => setConnectionMode('dependency'), [])
@@ -236,7 +269,7 @@ export function TeamLabDesignPage({
     <section className={`${styles.page} ${focusMode ? styles.focusMode : ''}`}>
       <header className={styles.header}>
         <div className={styles.title}>
-          <span>TOPOLOGY DESIGN</span>
+          <span>拓扑设计</span>
           <strong>{document.name}</strong>
         </div>
         <div aria-label="连接类型" className={styles.connectionModes} role="group">
@@ -326,15 +359,20 @@ export function TeamLabDesignPage({
           onAddNode={addNode}
           onAutoLayout={autoLayout}
           onConnectNodes={connectNodes}
-          onMoveNodes={moveNodes}
+onMoveNodes={moveNodes}
+          onMoveRegion={moveRegion}
           onRedo={redoDocument}
-          onSelectionChange={select}
+          onResizeRegion={resizeRegion}
+          onSelectionChange={selectCanvasItems}
+          onNetworkRegionSelect={selectNetworkRegion}
           onToggleFocus={toggleFocus}
           onToggleLeftPanel={toggleLeftPanel}
+          onToggleRegion={toggleRegion}
           onToggleRightPanel={toggleRightPanel}
           onUndo={undoDocument}
           readOnly={effectiveReadOnly}
           rightPanelOpen={rightPanelOpen}
+          selectedNetworkKey={selectedNetworkKey}
           selection={selection}
         />
         {rightVisible ? (
@@ -343,6 +381,7 @@ export function TeamLabDesignPage({
             imageOptions={imageOptions}
             onDocumentChange={commit}
             readOnly={effectiveReadOnly}
+            selectedNetworkKey={selectedNetworkKey}
             selection={selection}
           />
         ) : null}

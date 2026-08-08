@@ -2,6 +2,7 @@ using GZCTF.Models;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.TeamLab.Application;
+using GZCTF.Modules.TeamLab.Domain.Runtime;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -43,7 +44,7 @@ public sealed class EfTeamLabRuntimeOperationSubmissionStore(
             if (active)
                 throw new TeamLabApiContractException(
                     "runtime_operation_in_progress",
-                    "Another lifecycle operation is already running for this TeamLab runtime.",
+                    "此 TeamLab 运行时已有其他生命周期操作正在运行。",
                     409);
         }
         var now = DateTimeOffset.UtcNow;
@@ -61,7 +62,27 @@ public sealed class EfTeamLabRuntimeOperationSubmissionStore(
             UpdatedAt = now
         };
         submission.Job.OperationId = operation.Id;
-        context.AddRange(operation, submission.Job);
+        var resourceId = Guid.TryParse(submission.ResourceId, out var parsedResourceId)
+            ? parsedResourceId
+            : operation.Id;
+        var notification = new TeamLabEvent
+        {
+            ControlScopeId = submission.ControlScopeId,
+            Generation = 0,
+            Stage = "operation",
+            Level = TeamLabEventLevel.Info,
+            Message = "TeamLab 操作已受理。",
+            ObjectType = submission.ResourceType,
+            ObjectId = submission.ResourceId,
+            UserId = submission.ActorUserId,
+            ResourceType = submission.ResourceType,
+            ResourcePublicId = resourceId,
+            ResourceVersion = 1,
+            OperationId = operation.Id,
+            ResourceUrl = $"/api/open/v1/operations/{operation.Id:D}",
+            CreatedAt = now
+        };
+        context.AddRange(operation, submission.Job, notification);
         try
         {
             await context.SaveChangesAsync(cancellationToken);
@@ -84,7 +105,9 @@ public sealed class EfTeamLabRuntimeOperationSubmissionStore(
         TeamLabRuntimeOperationSubmission submission,
         CancellationToken cancellationToken) =>
         context.ApiOperations.AsNoTracking().SingleOrDefaultAsync(operation =>
-            operation.ApiTokenId == submission.ApiTokenId && operation.RouteKey == submission.RouteKey &&
+            operation.ApiTokenId == submission.ApiTokenId &&
+            (submission.ApiTokenId != null || operation.ActorUserId == submission.ActorUserId) &&
+            operation.RouteKey == submission.RouteKey &&
             operation.IdempotencyKey == submission.IdempotencyKey, cancellationToken);
 
     private IdempotencyBeginResult Reuse(ApiOperation operation, string requestHash)

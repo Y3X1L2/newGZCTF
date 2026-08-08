@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-更新时间：2026-08-01
+更新时间：2026-08-08
 
 本文件是跨会话的短期状态入口。长期规则见根目录 `AGENTS.md`，完整目标见 `docs/platform-commercialization-master-plan.md`。状态变化后应更新本文件，不通过追加整段聊天记录维护记忆。
 
@@ -133,3 +133,39 @@ vNext 正式路由和实现状态以以下文件为准：
 - 完成 TeamLab 双 Worker 故障注入、远程操作效率和长期流量留存验收。
 - 按 Phase 8-14 继续商业化主线。
 - 优先处理线上明确复现的稳定性问题。
+
+---
+
+## 2026-08-07 会话追加：TeamLab 外部控制面收尾（计划 2026-08-02-teamlab-external-control-plane.md Tasks 2/6/7/8/9/10）
+
+### 已完成并验证（候选分支 `codex/phase-09-teamlab-networking`，服务器统一发布待执行）
+
+- **Task 6（镜像准备 + 服务目录外部契约）**：`GET/POST /api/open/v1/teamlab/preparations/releases/{id}`（planAvailable/preparing/readyToStart/blocked/notStarted 状态机 + per-template 就绪投影 + `ReleasePreparation` 操作 kind）；`GET /api/open/v1/teamlab/service-profiles[/{id}?version=]`（参数 schema/默认值/执行特性/SecretSupply=runtime-overlay，绝不暴露脚本与密钥）；capabilities 翻 `ServiceProfiles=true`；发布校验缺失/下架 profile 报稳定错误码 `service_profile_not_found`（404）。
+- **Task 7（观测/权限投影）**：四级权限统一评估（StateRead/MetadataRead/RemoteSessionOperate/LifecycleManage）收敛到 `TeamLabAuthorizationService`，浏览器管理员/属主行为不变；事件查询支持 generation/stage 过滤；批量 remote availability 端点 `GET /api/admin/teamlab/runtimes/{id}/remote-access` 替代逐资产扇出。
+- **Task 9（Penetration 迁移）**：`ITeamLabUsageProjectionProvider` 边界（TeamLab 空实现 + Penetration 适配实现，DI 后注册生效）；`TeamLabAdminQueryService` 不再引用任何 Penetration DbSet（架构测试守护）。
+- **Task 10（Webhook）**：scope 级订阅（DataProtection 加密密钥、HTTPS-only + SSRF 校验含 DNS rebinding/重定向防护、事件类型白名单 422、FromEventId 起始游标、HMAC-SHA256 至少一次投递、失败指数退避 + 有界失败记录 + 重放端点）、迁移 `20260806123654_AddTeamLabWebhookSubscriptions`（ApiOperationId 唯一索引防崩溃重复建行）、`TeamLabWebhookDeliveryWorker` 投递（每订阅 advisory 锁 + `(Active, NextDeliveryAt)` 索引）。
+- **Task 2 残余**：capabilities 补 `PauseResume=true`/`EditorLayoutVersion`；`service_profile_not_found` 发布校验。
+- **Task 8（前端网络区域工作台）**：网络区域容器渲染（成员包围盒派生/拖拽带动成员/折叠保留交换机/双击聚焦/缩放持久化）、`networkLayouts` 文档模型 + 命令 + mapper/compiler 持久化（editor.networks 兼容）、确定性自动布局生成区域、帮助系统（FieldHelpButton/teamLabFieldHelp）、服务目录选择器（ServiceProfilePicker）、空画布 Shift 拖拽框选提示。
+- **Task 7 前端**：日志 cursor 分页 + "加载更早"、事件 generation/stage 筛选、批量 remote availability 轮询接入、终端错误态与重试、连接取消竞态与弹窗拦截修复。
+- **多 agent 交叉审查**：后端 2 份（并发/错误处理 + 使用者闭环）、前端 2 份（体感 + 架构），P1 级发现全部修复并补回归测试（含 SWR 缓存隔离、区域命令不可变、分页 identity 竞态、双归属 router 不随区域移动）。
+
+### 验证结果（全量）
+
+- 后端：`dotnet test src/GZCTF.Test` Release **787 通过 / 0 失败**（含新增 28 个 webhook/准备/目录单元测试 + 架构守护测试）；`dotnet build src/GZCTF.slnx -c Release` 通过。
+- 前端（ClientApp）：`validate:locales` / `lint:check` / `check` / `check:architecture` / `test`（**222 通过**）/ `build` 全部通过。
+- 迁移：`20260806123654_AddTeamLabWebhookSubscriptions` 已生成（含快照），**尚未在生产库应用**。
+
+### 已知限制（记录，未处理）
+
+- 隐式交换机首次保存/加载后相对区域出现 48px 偏移（P2-7，第二份前端审查）；日志过滤变化时首帧会以旧 cursor 发一次请求（P2-9）；事件列表上限 500 条（有界保留）。
+- 尚未跑：PostgreSQL 生产副本前向迁移验证、双节点真实基础设施验收（webhook 端到端、区域工作台人工复核）、OpenAPI JSON 生成对比。
+- 本轮所有改动均在工作区未提交（含协作者既有未提交改动），需在合并前统一提交整理。
+
+## 2026-08-08 会话追加：外部控制面部署与验收
+
+- 测试服务器 `10.0.7.118` 已原子切换到 `/opt/gzctf/releases/controlplane-20260808-1835/publish`，回退 release 为 `controlplane-20260808-0922`；发布前数据库备份位于 `/opt/gzctf-vnext/backups/20260808T183700Z/gzctf.dump`。
+- 数据库迁移头为 `20260808085200_NormalizeApiOperationActorIdempotency`。主站、Agent、首页和两个节点 inventory 均正常，`ApiOperationWorker` 已启动；验收结束时 `ApiOperations` 与 `TeamLabRuntimeOperationJobs` 的等待/运行数量均为 0。
+- API-token-only 实测通过：管理员通配授权 token 可创建并归档 control scope；受限 token 仅能读取其获授 scope。对同一 webhook 请求并发提交 5 次只得到同一个 operation；同一幂等键但不同请求体稳定返回 `409`；创建和撤销均由 Worker 到达 `Succeeded`。验收 token、测试 webhook 与活动记录已精确清理。
+- 本地聚焦验证通过：TeamLab 单元用例 `233/233`；operation/worker PostgreSQL 用例 `10/10`；发布门禁通过前端 `78/78` 测试文件、`222/222` 用例、locale、lint、TypeScript、架构和 production build。
+- 浏览器实测管理端场景设计页在 1366/1920 宽度没有横向溢出或重叠；登录后没有相关 API `401/404` 或控制台错误。Cookie 管理端服务目录 `GET /api/admin/teamlab/service-profiles` 返回 `200`，已不再错误调用 Token-only Open API。
+- 本轮只完成服务端控制面与界面基本验收。计划要求的外部 token-only 完整双节点场景链路，以及 operation/rollout 终态 webhook 事件模型，仍需单独设计和现场验收，不得将其标记为完成。

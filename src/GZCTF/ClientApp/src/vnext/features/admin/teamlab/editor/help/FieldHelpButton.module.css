@@ -1,0 +1,64 @@
+.help {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  margin-inline-start: var(--yn-space-1);
+  vertical-align: middle;
+}
+
+.help button {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--yn-color-muted);
+  cursor: help;
+  padding: 0;
+}
+
+.help button:hover,
+.help button:focus-visible {
+  outline: none;
+  background: var(--yn-color-brand-soft);
+  color: var(--yn-color-brand-strong);
+}
+
+.popover {
+  position: fixed;
+  z-index: var(--yn-z-overlay, 1000);
+  left: var(--teamlab-help-left);
+  top: var(--teamlab-help-top);
+  display: grid;
+  width: min(320px, calc(100vw - 32px));
+  gap: var(--yn-space-1);
+  padding: var(--yn-space-2) var(--yn-space-3);
+  border: 1px solid var(--yn-color-border-strong);
+  border-radius: var(--yn-radius-sm);
+  background: var(--yn-color-surface);
+  box-shadow: var(--yn-shadow-overlay);
+  color: var(--yn-color-text);
+  pointer-events: none;
+  overflow-wrap: anywhere;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+.popover[data-placement='above'] {
+  transform: translateY(-100%);
+}
+
+.popover strong {
+  font-size: var(--yn-font-sm);
+}
+
+.popover span {
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-xs);
+  font-weight: 450;
+  line-height: 1.55;
+  white-space: normal;
+  word-break: break-word;
+}

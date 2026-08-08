@@ -8,10 +8,12 @@ public sealed record OpenCreateTeamLabTopologyModel(
     IReadOnlyList<TeamLabTopologyNetworkModel> Networks,
     IReadOnlyList<TeamLabTopologyAssetModel> Assets,
     IReadOnlyList<TeamLabTopologyConnectionModel> Connections,
+    TeamLabTopologyEditorModel? Editor = null,
     IReadOnlyList<TeamLabTopologyInfrastructureModel>? Infrastructure = null,
     IReadOnlyList<TeamLabTopologyDependencyModel>? Dependencies = null,
     TeamLabObservationPolicyModel? Observation = null,
-    int SchemaVersion = 2);
+    int SchemaVersion = 2,
+    Guid? ControlScopeId = null);
 
 public sealed record OpenUpdateTeamLabTopologyModel(
     int Revision,
@@ -19,6 +21,7 @@ public sealed record OpenUpdateTeamLabTopologyModel(
     IReadOnlyList<TeamLabTopologyNetworkModel> Networks,
     IReadOnlyList<TeamLabTopologyAssetModel> Assets,
     IReadOnlyList<TeamLabTopologyConnectionModel> Connections,
+    TeamLabTopologyEditorModel? Editor = null,
     IReadOnlyList<TeamLabTopologyInfrastructureModel>? Infrastructure = null,
     IReadOnlyList<TeamLabTopologyDependencyModel>? Dependencies = null,
     TeamLabObservationPolicyModel? Observation = null,
@@ -26,9 +29,11 @@ public sealed record OpenUpdateTeamLabTopologyModel(
 
 public sealed record OpenTeamLabTopologyDetailModel(
     Guid Id,
+    Guid? ControlScopeId,
     int Revision,
     int SchemaVersion,
     TeamLabTopologyDefinitionModel Definition,
+    TeamLabTopologyEditorModel Editor,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
@@ -43,7 +48,8 @@ public sealed record OpenTeamLabReleaseModel(
     int SourceRevision,
     int SchemaVersion,
     string ContentHash,
-    DateTimeOffset PublishedAt);
+    DateTimeOffset PublishedAt,
+    TeamLabTopologyEditorModel? Editor = null);
 
 public sealed record OpenTeamLabReleasePageModel(
     IReadOnlyList<OpenTeamLabReleaseModel> Items,
@@ -52,7 +58,16 @@ public sealed record OpenTeamLabReleasePageModel(
 public sealed record OpenTeamLabFailureModel(
     string Code,
     string Stage,
-    bool Retryable);
+    bool Retryable,
+    IReadOnlyList<string>? Actions = null,
+    string? ResourceType = null,
+    string? ResourceId = null,
+    string? Detail = null);
+
+public sealed record OpenTeamLabRuntimeSubStageModel(
+    string Id,
+    string Status,
+    string? Message);
 
 public sealed record OpenTeamLabRuntimeShardModel(
     Guid Id,
@@ -81,7 +96,14 @@ public sealed record OpenTeamLabRuntimeModel(
     IReadOnlyList<OpenTeamLabRuntimeAssetModel> Assets,
     DateTimeOffset CreatedAt,
     DateTimeOffset? UpdatedAt,
-    OpenTeamLabFailureModel? Failure);
+    OpenTeamLabFailureModel? Failure,
+    Guid? CurrentOperationId = null,
+    Guid? DeploymentQueueTicketId = null,
+    DeploymentQueueTicketStatus? QueueStatus = null,
+    IReadOnlyList<OpenTeamLabRuntimeSubStageModel>? SubStages = null,
+    Guid? ControlScopeId = null,
+    int? ReleaseVersion = null,
+    IReadOnlyList<string>? RecoveryActions = null);
 
 public sealed record OpenTeamLabRuntimeEventPageModel(
     IReadOnlyList<TeamLabRuntimeEventModel> Items,
@@ -105,25 +127,26 @@ public sealed record OpenTeamLabCaptureModel(
 public static class OpenTeamLabContractMapper
 {
     public static CreateTeamLabTopologyModel ToInternal(this OpenCreateTeamLabTopologyModel model) =>
-        new(model.Name, model.Networks, model.Assets, model.Connections,
+        new(model.Name, model.Networks, model.Assets, model.Connections, model.Editor,
             Infrastructure: model.Infrastructure,
             Dependencies: model.Dependencies,
             Observation: model.Observation,
-            SchemaVersion: model.SchemaVersion);
+            SchemaVersion: model.SchemaVersion,
+            ControlScopeId: model.ControlScopeId);
 
     public static UpdateTeamLabTopologyModel ToInternal(this OpenUpdateTeamLabTopologyModel model) =>
-        new(model.Revision, model.Name, model.Networks, model.Assets, model.Connections,
+        new(model.Revision, model.Name, model.Networks, model.Assets, model.Connections, model.Editor,
             Infrastructure: model.Infrastructure,
             Dependencies: model.Dependencies,
             Observation: model.Observation,
             SchemaVersion: model.SchemaVersion);
 
     public static OpenTeamLabTopologyDetailModel ToOpen(this TeamLabTopologyDetailModel model) =>
-        new(model.Id, model.Revision, model.SchemaVersion, model.Definition, model.CreatedAt, model.UpdatedAt);
+        new(model.Id, model.ControlScopeId, model.Revision, model.SchemaVersion, model.Definition, model.Editor, model.CreatedAt, model.UpdatedAt);
 
     public static OpenTeamLabReleaseModel ToOpen(this TeamLabReleaseModel model) =>
         new(model.Id, model.TopologyId, model.Version, model.SourceRevision, model.SchemaVersion,
-            model.ContentHash, model.PublishedAt);
+            model.ContentHash, model.PublishedAt, model.Editor);
 
     public static OpenTeamLabRuntimeModel ToOpen(this TeamLabRuntimeProjectionModel model) =>
         new(
@@ -138,8 +161,7 @@ public static class OpenTeamLabContractMapper
                 item.Status,
                 item.NetworkKeys,
                 item.AssetKeys,
-                Failure(item.Status == TeamLabRuntimeStatus.Failed, item.Error,
-                    "shard", "teamlab_shard_failed"))).ToArray(),
+                Failure(item.Failure))).ToArray(),
             model.Networks,
             model.Assets.Select(item => new OpenTeamLabRuntimeAssetModel(
                 item.Key,
@@ -147,12 +169,18 @@ public static class OpenTeamLabContractMapper
                 item.Kind,
                 item.PrimaryIp,
                 item.Status,
-                Failure(item.Status == TeamLabRuntimeStatus.Failed, item.Error,
-                    "asset", "teamlab_asset_failed"))).ToArray(),
+                Failure(item.Failure))).ToArray(),
             model.CreatedAt,
             model.UpdatedAt,
-            Failure(model.Status is TeamLabRuntimeStatus.Failed or TeamLabRuntimeStatus.CleanupPending,
-                model.Error, model.Stage, "teamlab_runtime_failed"));
+            Failure(model.Failure),
+            model.CurrentOperationId,
+            model.DeploymentQueueTicketId,
+            model.QueueStatus,
+            model.SubStages?.Select(item => new OpenTeamLabRuntimeSubStageModel(
+                item.Id, item.Status, item.Message)).ToArray(),
+            model.ControlScopeId,
+            model.ReleaseVersion,
+            model.RecoveryActions);
 
     public static OpenTeamLabCaptureModel ToOpen(this TeamLabCaptureModel model) =>
         new(model.Id, model.Status, model.Scope, model.NetworkKey, model.MaxBytes, model.MaxSeconds,
@@ -166,4 +194,16 @@ public static class OpenTeamLabContractMapper
         string stage,
         string code) =>
         !failed && string.IsNullOrWhiteSpace(error) ? null : new OpenTeamLabFailureModel(code, stage, false);
+
+    private static OpenTeamLabFailureModel? Failure(TeamLabFailureProjectionModel? failure) =>
+        failure is null
+            ? null
+            : new OpenTeamLabFailureModel(
+                failure.Code,
+                failure.Stage,
+                failure.Retryable,
+                failure.Actions,
+                failure.ResourceType,
+                failure.ResourceId,
+                failure.Detail);
 }

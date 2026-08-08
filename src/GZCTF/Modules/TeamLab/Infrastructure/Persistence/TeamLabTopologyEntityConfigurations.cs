@@ -18,12 +18,17 @@ public sealed class TeamLabTopologyEntityConfiguration : IEntityTypeConfiguratio
         builder.Property(item => item.ObservationJson).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
         builder.HasIndex(item => item.PublicId).IsUnique();
         builder.HasIndex(item => item.OwnerUserId);
+        builder.HasIndex(item => item.ControlScopeId);
         builder.HasIndex(item => item.CreatedByOperationId).IsUnique();
         builder.HasIndex(item => item.LastMutationOperationId).IsUnique();
         builder.HasOne<UserInfo>()
             .WithMany()
             .HasForeignKey(item => item.OwnerUserId)
             .OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne(item => item.ControlScope)
+            .WithMany()
+            .HasForeignKey(item => item.ControlScopeId)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<ApiOperation>()
             .WithMany()
             .HasForeignKey(item => item.CreatedByOperationId)
@@ -127,14 +132,20 @@ public sealed class TeamLabTopologyReleaseEntityConfiguration : IEntityTypeConfi
         builder.ToTable("TeamLabTopologyReleases");
         builder.HasKey(item => item.Id);
         builder.Property(item => item.CanonicalJson).HasColumnType("jsonb");
+        builder.Property(item => item.EditorMetadataJson).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
         builder.Property(item => item.ContentHash).HasMaxLength(128);
         builder.HasIndex(item => new { item.TopologyId, item.Version }).IsUnique();
         builder.HasIndex(item => new { item.TopologyId, item.SourceRevision, item.ContentHash }).IsUnique();
         builder.HasIndex(item => item.ApiOperationId).IsUnique();
+        builder.HasIndex(item => item.ControlScopeId);
         builder.HasOne(item => item.Topology)
             .WithMany(item => item.Releases)
             .HasForeignKey(item => item.TopologyId)
             .OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(item => item.ControlScope)
+            .WithMany()
+            .HasForeignKey(item => item.ControlScopeId)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<UserInfo>()
             .WithMany()
             .HasForeignKey(item => item.PublishedById)

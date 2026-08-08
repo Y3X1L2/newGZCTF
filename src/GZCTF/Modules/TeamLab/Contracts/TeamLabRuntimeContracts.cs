@@ -29,7 +29,8 @@ public sealed record TeamLabRuntimeShardProjectionModel(
     TeamLabRuntimeStatus Status,
     IReadOnlyList<string> NetworkKeys,
     IReadOnlyList<string> AssetKeys,
-    string? Error);
+    string? Error,
+    TeamLabFailureProjectionModel? Failure = null);
 
 public sealed record TeamLabRuntimeNetworkProjectionModel(
     string Key,
@@ -45,7 +46,22 @@ public sealed record TeamLabRuntimeAssetProjectionModel(
     string? RuntimeResourceId,
     string? PrimaryIp,
     TeamLabRuntimeStatus Status,
-    string? Error);
+    string? Error,
+    TeamLabFailureProjectionModel? Failure = null);
+
+public sealed record TeamLabFailureProjectionModel(
+    string Code,
+    string Stage,
+    bool Retryable,
+    IReadOnlyList<string> Actions,
+    string? ResourceType,
+    string? ResourceId,
+    string? Detail);
+
+public sealed record TeamLabRuntimeSubStageProjectionModel(
+    string Id,
+    string Status,
+    string? Message);
 
 public sealed record TeamLabRuntimeProjectionModel(
     Guid Id,
@@ -59,7 +75,15 @@ public sealed record TeamLabRuntimeProjectionModel(
     IReadOnlyList<TeamLabRuntimeAssetProjectionModel> Assets,
     DateTimeOffset CreatedAt,
     DateTimeOffset? UpdatedAt,
-    string? Error);
+    string? Error,
+    Guid? CurrentOperationId = null,
+    Guid? DeploymentQueueTicketId = null,
+    DeploymentQueueTicketStatus? QueueStatus = null,
+    IReadOnlyList<TeamLabRuntimeSubStageProjectionModel>? SubStages = null,
+    Guid? ControlScopeId = null,
+    int? ReleaseVersion = null,
+    IReadOnlyList<string>? RecoveryActions = null,
+    TeamLabFailureProjectionModel? Failure = null);
 
 public sealed record TeamLabRuntimeEventModel(
     long Cursor,

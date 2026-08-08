@@ -10,7 +10,7 @@ public enum TeamLabRuntimeStatus : byte
     Running = 5,
     Failed = 6,
     CleanupPending = 7,
-    Stopped = 8,
+    Paused = 8,
     Destroying = 9,
     Destroyed = 10
 }

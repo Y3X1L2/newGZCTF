@@ -42,11 +42,11 @@ public sealed class TeamLabCaptureCoordinator(
                 if (job is null || job.Status == TeamLabTrafficCaptureStatus.Expired) continue;
                 await ExpireAsync(job, DateTimeOffset.UtcNow, cancellationToken);
                 if (job.Status != TeamLabTrafficCaptureStatus.Expired)
-                    errors.Add(job.LastError ?? $"Capture job {job.PublicId:D} cleanup is pending.");
+                    errors.Add(job.LastError ?? $"抓包任务 {job.PublicId:D} 清理待处理");
             }
             catch (TimeoutException)
             {
-                errors.Add($"Capture job {jobId} is currently owned by another cleanup operation.");
+                errors.Add($"抓包任务 {jobId} 当前由其他清理操作持有");
             }
         }
         return errors;
@@ -167,7 +167,7 @@ public sealed class TeamLabCaptureCoordinator(
             {
                 segment.Status = TeamLabTrafficCaptureSegmentStatus.Captured;
                 segment.LastError = result.Success && result.Uploaded
-                    ? "Capture upload completed but persisted state was not confirmed."
+                    ? "抓包上传已完成但持久化状态未确认"
                     : result.Message;
                 segment.UpdatedAt = DateTimeOffset.UtcNow;
             }
@@ -226,7 +226,7 @@ public sealed class TeamLabCaptureCoordinator(
                 {
                     objectDeleted = false;
                     logger.LogWarning(exception,
-                        "Failed to delete expired TeamLab capture object for segment {SegmentId}.", segment.PublicId);
+                        "删除已过期 TeamLab 抓包对象失败，分片 {SegmentId}", segment.PublicId);
                 }
             }
             segment.Status = agentDeleted && objectDeleted
@@ -236,15 +236,15 @@ public sealed class TeamLabCaptureCoordinator(
             segment.LastError = segment.Status == TeamLabTrafficCaptureSegmentStatus.Expired
                 ? null
                 : !agentDeleted && !objectDeleted
-                    ? "Agent and object-storage capture cleanup are pending."
+                    ? "Agent 与对象存储抓包清理待处理"
                     : !agentDeleted
-                        ? "Agent capture cleanup is pending."
-                        : "Object-storage capture cleanup is pending.";
+                        ? "Agent 抓包清理待处理"
+                        : "对象存储抓包清理待处理";
         }
         if (job.Segments.Any(item => item.Status != TeamLabTrafficCaptureSegmentStatus.Expired))
         {
             job.Status = TeamLabTrafficCaptureStatus.CleanupPending;
-            job.LastError = "Capture artifact cleanup is pending and will be retried.";
+            job.LastError = "抓包产物清理待处理，将重试";
             await context.SaveChangesAsync(cancellationToken);
             return;
         }
@@ -290,12 +290,12 @@ public sealed class TeamLabCaptureCoordinator(
                 catch (Exception exception) when (exception is not OperationCanceledException)
                 {
                     logger.LogWarning(exception,
-                        "TeamLab capture coordination failed for segment {SegmentId} on node {WorkerNodeId}.",
+                        "TeamLab 抓包协调失败，分片 {SegmentId}，节点 {WorkerNodeId}",
                         segment.PublicId, segment.WorkerNodeId);
                     results.Add(new CaptureNodeResult(segment,
                         new TeamLabNodeCaptureResult(
                             false,
-                            "Agent capture coordination failed.",
+                            "Agent 抓包协调失败",
                             segment.PublicId,
                             segment.CapturedBytes,
                             false,

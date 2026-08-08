@@ -33,6 +33,9 @@ public sealed class TeamLabTrafficApplicationService(
         Guid runtimePublicId,
         string? after,
         int limit,
+        string? queryText,
+        string? protocol,
+        string? networkKey,
         CancellationToken cancellationToken)
     {
         var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
@@ -40,6 +43,25 @@ public sealed class TeamLabTrafficApplicationService(
         var take = Math.Clamp(limit, 1, 200);
         var query = context.TeamLabTrafficFlows.AsNoTracking()
             .Where(item => item.RuntimeId == runtime.Id && item.Generation == runtime.Generation);
+        if (!string.IsNullOrWhiteSpace(queryText))
+        {
+            var term = queryText.Trim();
+            query = query.Where(item => item.SourceIp.Contains(term) || item.DestinationIp.Contains(term));
+        }
+        if (!string.IsNullOrWhiteSpace(protocol))
+        {
+            var normalizedProtocol = protocol.Trim().ToUpperInvariant();
+            query = query.Where(item => item.Protocol == normalizedProtocol);
+        }
+        if (!string.IsNullOrWhiteSpace(networkKey))
+        {
+            var normalizedNetworkKey = networkKey.Trim();
+            var networkIds = runtime.Networks
+                .Where(item => item.TopologyKey == normalizedNetworkKey)
+                .Select(item => item.Id)
+                .ToArray();
+            query = query.Where(item => item.NetworkId != null && networkIds.Contains(item.NetworkId.Value));
+        }
         if (cursor is { } decoded)
             query = query.Where(item => item.CapturedAt > decoded.Time ||
                                         item.CapturedAt == decoded.Time && item.Id > decoded.Id);
@@ -62,13 +84,17 @@ public sealed class TeamLabTrafficApplicationService(
         return new TeamLabTrafficFlowPageModel(page,
             rows.Length > take && page.Length > 0
                 ? new TimeCursor(rows[take - 1].CapturedAt, rows[take - 1].Id).Encode()
-                : null);
+                : null,
+            await GetCompletenessAsync(runtime, cancellationToken));
     }
 
     public async Task<TeamLabTrafficPathPageModel> GetPathsAsync(
         Guid runtimePublicId,
         string? after,
         int limit,
+        string? queryText,
+        string? protocol,
+        TeamLabPathConfidence? confidence,
         CancellationToken cancellationToken)
     {
         var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
@@ -76,6 +102,18 @@ public sealed class TeamLabTrafficApplicationService(
         var take = Math.Clamp(limit, 1, 100);
         var query = context.TeamLabTrafficPaths.AsNoTracking()
             .Where(item => item.RuntimeId == runtime.Id && item.Generation == runtime.Generation);
+        if (!string.IsNullOrWhiteSpace(queryText))
+        {
+            var term = queryText.Trim();
+            query = query.Where(item => item.SourceIp.Contains(term) || item.DestinationIp.Contains(term));
+        }
+        if (!string.IsNullOrWhiteSpace(protocol))
+        {
+            var normalizedProtocol = protocol.Trim().ToUpperInvariant();
+            query = query.Where(item => item.Protocol == normalizedProtocol);
+        }
+        if (confidence is { } expectedConfidence)
+            query = query.Where(item => item.Confidence == expectedConfidence);
         if (cursor is { } decoded)
             query = query.Where(item => item.StartedAt > decoded.Time ||
                                         item.StartedAt == decoded.Time && item.Id > decoded.Id);
@@ -112,7 +150,8 @@ public sealed class TeamLabTrafficApplicationService(
             page,
             rows.Length > take && page.Length > 0
                 ? new TimeCursor(rows[take - 1].StartedAt, rows[take - 1].Id).Encode()
-                : null);
+                : null,
+            await GetCompletenessAsync(runtime, cancellationToken));
     }
 
     public async Task<TeamLabTrafficPathModel> GetPathAsync(
@@ -138,7 +177,7 @@ public sealed class TeamLabTrafficApplicationService(
                 item.EndedAt
             })
             .SingleOrDefaultAsync(cancellationToken)
-            ?? throw new TeamLabApiContractException("traffic_path_not_found", "The traffic path was not found.", 404);
+            ?? throw new TeamLabApiContractException("traffic_path_not_found", "未找到该流量路径", 404);
         var hops = await context.TeamLabTrafficPathHops.AsNoTracking()
             .Where(item => item.PathId == path.Id)
             .OrderBy(item => item.Ordinal)
@@ -200,10 +239,10 @@ public sealed class TeamLabTrafficApplicationService(
     {
         if (model.MaxSeconds is < 1 or > 86400 || model.MaxBytes is < 1024 or > 10L * 1024 * 1024 * 1024 ||
             model.ExpiresInSeconds is < 60 or > 604800)
-            throw new TeamLabApiContractException("capture_limit_exceeded", "Capture limits exceed the platform policy.", 422);
+            throw new TeamLabApiContractException("capture_limit_exceeded", "抓包限制超出平台策略", 422);
         var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
         if (runtime.Status != TeamLabRuntimeStatus.Running)
-            throw new TeamLabApiContractException("runtime_not_ready", "The runtime is not ready for capture.", 409);
+            throw new TeamLabApiContractException("runtime_not_ready", "运行时尚未就绪，无法抓包", 409);
 
         await using var captureLock = await locks.AcquireAsync(
             $"teamlab:capture-start:{runtime.Id}:{runtime.Generation}",
@@ -253,7 +292,7 @@ public sealed class TeamLabTrafficApplicationService(
         CancellationToken cancellationToken)
     {
         if (job.Segments.Count == 0)
-            throw new TeamLabApiContractException("capture_scope_empty", "The capture scope has no observation points.", 422);
+            throw new TeamLabApiContractException("capture_scope_empty", "抓包范围没有观测点", 422);
         if (AssignSegmentBudgets(job))
             await context.SaveChangesAsync(cancellationToken);
 
@@ -281,7 +320,7 @@ public sealed class TeamLabTrafficApplicationService(
             await StopStartedSegmentsAsync(runtime, job, results, cancellationToken);
             job.Status = TeamLabTrafficCaptureStatus.Failed;
             job.CompletedAt = now;
-            job.LastError = $"{failed.Length} capture segment(s) failed to start.";
+            job.LastError = $"{failed.Length} 个抓包分片启动失败";
         }
         else
         {
@@ -312,7 +351,7 @@ public sealed class TeamLabTrafficApplicationService(
         await context.SaveChangesAsync(cancellationToken);
         if (failed.Length > 0)
             throw new TeamLabApiContractException(
-                "operation_failed", "The traffic capture could not be started.", 500);
+                "operation_failed", "流量抓包无法启动", 500);
         return ToModel(job);
     }
 
@@ -322,7 +361,7 @@ public sealed class TeamLabTrafficApplicationService(
         if (job.MaxBytes < job.Segments.Count)
             throw new TeamLabApiContractException(
                 "capture_budget_too_small",
-                "Capture MaxBytes must allow at least one byte per observation segment.",
+                "抓包 MaxBytes 必须允许每个观测分片至少一个字节",
                 422);
 
         var ordered = job.Segments.OrderBy(item => item.PublicId).ToArray();
@@ -385,7 +424,7 @@ public sealed class TeamLabTrafficApplicationService(
         var failed = results.Where(item => !item.Result.Success).ToArray();
         job.CapturedBytes = job.Segments.Sum(item => item.CapturedBytes);
         job.Status = failed.Length == 0 ? TeamLabTrafficCaptureStatus.Stopping : TeamLabTrafficCaptureStatus.Failed;
-        job.LastError = failed.Length == 0 ? null : $"{failed.Length} capture segment(s) failed to stop.";
+        job.LastError = failed.Length == 0 ? null : $"{failed.Length} 个抓包分片停止失败";
         if (failed.Length > 0) job.CompletedAt = now;
         eventRecorder.Record(
             runtime,
@@ -406,7 +445,7 @@ public sealed class TeamLabTrafficApplicationService(
             "stop", job.Scope, failed.Length == 0 ? "success" : "failure");
         await context.SaveChangesAsync(cancellationToken);
         if (failed.Length > 0)
-            throw new TeamLabApiContractException("operation_failed", "The traffic capture could not be stopped.", 500);
+            throw new TeamLabApiContractException("operation_failed", "流量抓包无法停止", 500);
         return ToModel(job);
     }
 
@@ -424,7 +463,7 @@ public sealed class TeamLabTrafficApplicationService(
             .ThenBy(item => item.ObservationPoint.PublicId)
             .ToArray();
         if (job.ExpiresAt <= DateTimeOffset.UtcNow || segments.Length == 0)
-            throw new TeamLabApiContractException("capture_not_found", "The capture is unavailable or expired.", 404);
+            throw new TeamLabApiContractException("capture_not_found", "抓包不可用或已过期", 404);
         eventRecorder.Record(
             runtime,
             "capture-download",
@@ -562,7 +601,7 @@ public sealed class TeamLabTrafficApplicationService(
                     new OperationalError(
                         OperationalErrorCategory.AgentTransport,
                         OperationalErrorCodes.ObservationUnavailable,
-                        "Traffic observation read failed.",
+                        "流量观测读取失败",
                         true,
                         WorkerNodeId: source.WorkerNodeId,
                         Operation: "teamlab.observation.read"),
@@ -621,7 +660,7 @@ public sealed class TeamLabTrafficApplicationService(
         }
         if (prepared.BlockedByUnresolvedRecord)
             logger.LogWarning(
-                "TeamLab observation cursor stopped at sequence {Sequence} because the next record could not be resolved: runtime={RuntimeId}, generation={Generation}, node={WorkerNodeId}",
+                "TeamLab 观测游标在序列 {Sequence} 停止，因为下一条记录无法解析：runtime={RuntimeId}、generation={Generation}、node={WorkerNodeId}",
                 cursor.LastSequence, source.RuntimeId, source.Generation, source.WorkerNodeId);
         var droppedDelta = cursor.DroppedCount - previousDropped;
         if (droppedDelta > 0)
@@ -650,7 +689,7 @@ public sealed class TeamLabTrafficApplicationService(
                 new OperationalError(
                     OperationalErrorCategory.Authorization,
                     OperationalErrorCodes.SensorAuthenticationFailed,
-                    "Endpoint sensor event validation rejected one or more records.",
+                    "终端传感器事件校验拒绝了一条或多条记录",
                     false,
                     WorkerNodeId: source.WorkerNodeId,
                     Operation: "teamlab.sensor.verify"),
@@ -768,7 +807,7 @@ public sealed class TeamLabTrafficApplicationService(
             var network = runtime.Networks.SingleOrDefault(item => item.Generation == runtime.Generation &&
                                                                    item.TopologyKey == networkKey)
                           ?? throw new TeamLabApiContractException(
-                              "topology_invalid", "The capture network was not found.", 422);
+                              "topology_invalid", "未找到该抓包网络", 422);
             selected = points.Where(item =>
                     item.NetworkId == network.Id ||
                     item.Kind == TeamLabObservationPointKind.RouterFragment &&
@@ -787,7 +826,7 @@ public sealed class TeamLabTrafficApplicationService(
                 .Distinct()
                 .ToArrayAsync(cancellationToken);
             if (pointIds.Length == 0)
-                throw new TeamLabApiContractException("traffic_path_not_found", "The traffic path was not found.", 404);
+                throw new TeamLabApiContractException("traffic_path_not_found", "未找到该流量路径", 404);
             selected = points.Where(item => pointIds.Contains(item.Id)).ToArray();
         }
         else
@@ -796,7 +835,7 @@ public sealed class TeamLabTrafficApplicationService(
             var endpoints = points.Where(item => item.Kind == TeamLabObservationPointKind.WorkloadEndpoint &&
                                                  item.Asset?.TopologyKey == assetKey).ToArray();
             if (endpoints.Length == 0)
-                throw new TeamLabApiContractException("topology_invalid", "The capture asset was not found.", 422);
+                throw new TeamLabApiContractException("topology_invalid", "未找到该抓包资产", 422);
             var networkIds = endpoints.Where(item => item.NetworkId.HasValue)
                 .Select(item => item.NetworkId!.Value).ToHashSet();
             var shardIds = endpoints.Where(item => item.ShardId.HasValue)
@@ -816,7 +855,7 @@ public sealed class TeamLabTrafficApplicationService(
             .ToArray();
         if (selected.Length == 0)
             throw new TeamLabApiContractException(
-                "capture_scope_empty", "The capture scope has no enabled observation points.", 422);
+                "capture_scope_empty", "抓包范围没有启用的观测点", 422);
         return selected;
     }
 
@@ -838,12 +877,12 @@ public sealed class TeamLabTrafficApplicationService(
                     catch (Exception exception) when (exception is not OperationCanceledException)
                     {
                         logger.LogWarning(exception,
-                            "TeamLab capture request failed for segment {SegmentId} on node {WorkerNodeId}.",
+                            "TeamLab 抓包请求失败，分片 {SegmentId}，节点 {WorkerNodeId}",
                             segment.PublicId, segment.WorkerNodeId);
                         results.Add(new CaptureNodeResult(segment,
                             new TeamLabNodeCaptureResult(
                                 false,
-                                "Agent capture request failed.",
+                                "Agent 抓包请求失败",
                                 segment.PublicId,
                                 segment.CapturedBytes,
                                 false,
@@ -917,7 +956,7 @@ public sealed class TeamLabTrafficApplicationService(
         else
         {
             segment.Status = TeamLabTrafficCaptureSegmentStatus.Failed;
-            segment.LastError = "Capture segment completed without a verified artifact.";
+            segment.LastError = "抓包分片完成但缺少已验证产物";
             segment.CompletedAt ??= now;
         }
     }
@@ -938,7 +977,7 @@ public sealed class TeamLabTrafficApplicationService(
         {
             job.Status = TeamLabTrafficCaptureStatus.Failed;
             job.CompletedAt ??= now;
-            job.LastError ??= "One or more capture segments failed.";
+            job.LastError ??= "一个或多个抓包分片失败";
         }
         else if (job.Segments.Any(item => item.Status is TeamLabTrafficCaptureSegmentStatus.Stopping or
                      TeamLabTrafficCaptureSegmentStatus.Captured or TeamLabTrafficCaptureSegmentStatus.Uploading))
@@ -974,7 +1013,7 @@ public sealed class TeamLabTrafficApplicationService(
                 return $"asset:{assetKey}";
         }
         throw new TeamLabApiContractException(
-            "capture_scope_invalid", "Capture scope must be runtime, network, path:{id}, or asset:{key}.", 422);
+            "capture_scope_invalid", "抓包范围必须是 runtime、network、path:{id} 或 asset:{key}", 422);
     }
 
     private static bool FragmentContainsNetwork(string json, string networkKey)
@@ -999,7 +1038,16 @@ public sealed class TeamLabTrafficApplicationService(
     private async Task<TeamLabRuntime> LoadRuntimeAsync(Guid runtimePublicId, CancellationToken cancellationToken) =>
         await context.TeamLabRuntimes.Include(item => item.Shards).Include(item => item.Networks)
             .SingleOrDefaultAsync(item => item.PublicId == runtimePublicId, cancellationToken)
-        ?? throw new TeamLabApiContractException("runtime_not_found", "The TeamLab runtime was not found.", 404);
+        ?? throw new TeamLabApiContractException("runtime_not_found", "未找到 TeamLab 运行时", 404);
+
+    private async Task<TeamLabTrafficCompletenessModel> GetCompletenessAsync(
+        TeamLabRuntime runtime, CancellationToken cancellationToken)
+    {
+        var dropped = await context.TeamLabObservationPoints.AsNoTracking()
+            .Where(item => item.RuntimeId == runtime.Id && item.Generation == runtime.Generation)
+            .SumAsync(item => (long?)item.DroppedPackets, cancellationToken) ?? 0;
+        return new TeamLabTrafficCompletenessModel(dropped == 0, dropped);
+    }
 
     private async Task<(TeamLabRuntime Runtime, TeamLabTrafficCaptureJob Job)> LoadCaptureAsync(
         Guid runtimePublicId,
@@ -1009,7 +1057,7 @@ public sealed class TeamLabTrafficApplicationService(
         var job = await CaptureQuery()
             .SingleOrDefaultAsync(item => item.Runtime.PublicId == runtimePublicId && item.PublicId == captureId &&
                                           item.Generation == item.Runtime.Generation, cancellationToken)
-            ?? throw new TeamLabApiContractException("capture_not_found", "The capture was not found.", 404);
+            ?? throw new TeamLabApiContractException("capture_not_found", "未找到该抓包", 404);
         return (job.Runtime, job);
     }
 
@@ -1050,7 +1098,7 @@ public sealed class TeamLabTrafficApplicationService(
         new(
             OperationalErrorCategory.Network,
             OperationalErrorCodes.NetworkOperationFailed,
-            "TeamLab traffic capture operation failed.",
+            "TeamLab 流量抓包操作失败",
             true,
             WorkerNodeId: workerNodeId,
             Operation: "teamlab.capture");
@@ -1064,7 +1112,7 @@ public sealed class TeamLabTrafficApplicationService(
         }
         catch (InvalidTimeCursorException)
         {
-            throw new TeamLabApiContractException("traffic_cursor_invalid", "The traffic cursor is invalid.", 400);
+            throw new TeamLabApiContractException("traffic_cursor_invalid", "流量游标无效", 400);
         }
     }
 

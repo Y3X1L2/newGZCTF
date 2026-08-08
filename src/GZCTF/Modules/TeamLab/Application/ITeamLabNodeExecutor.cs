@@ -329,6 +329,18 @@ public interface ITeamLabNodeExecutor
         string runtimeResourceId,
         TeamLabNodeAssetCreateRequest request,
         CancellationToken cancellationToken);
+    Task<TeamLabNodeResult> PauseAssetAsync(
+        Guid workerNodeId,
+        TeamLabAssetKind kind,
+        string resourceId,
+        int generation,
+        CancellationToken cancellationToken);
+    Task<TeamLabNodeResult> ResumeAssetAsync(
+        Guid workerNodeId,
+        TeamLabAssetKind kind,
+        string resourceId,
+        int generation,
+        CancellationToken cancellationToken);
     Task<TeamLabNodeResult> DestroyAssetAsync(Guid workerNodeId, TeamLabAssetKind kind, string resourceId, CancellationToken cancellationToken);
     Task<TeamLabScenarioArtifactCommitResult> CommitScenarioArtifactAsync(
         Guid workerNodeId,

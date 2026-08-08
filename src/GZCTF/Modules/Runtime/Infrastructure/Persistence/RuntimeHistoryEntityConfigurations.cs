@@ -86,7 +86,14 @@ public sealed class ImageDistributionReferenceEntityConfiguration : IEntityTypeC
         builder.Property(item => item.Kind).HasConversion<byte>();
         builder.HasIndex(item => new { item.DistributionRecordId, item.Kind, item.ResourceId })
             .IsUnique().HasDatabaseName("UX_ImageDistributionReferences_Record_Kind_Resource");
+        builder.HasIndex(item => new { item.DistributionRecordId, item.Kind, item.ResourcePublicId })
+            .IsUnique()
+            .HasFilter("\"ResourcePublicId\" IS NOT NULL")
+            .HasDatabaseName("UX_ImageDistributionReferences_Record_Kind_PublicResource");
         builder.HasIndex(item => new { item.Kind, item.ResourceId })
             .HasDatabaseName("IX_ImageDistributionReferences_Kind_Resource");
+        builder.HasIndex(item => new { item.Kind, item.ResourcePublicId })
+            .HasFilter("\"ResourcePublicId\" IS NOT NULL")
+            .HasDatabaseName("IX_ImageDistributionReferences_Kind_PublicResource");
     }
 }

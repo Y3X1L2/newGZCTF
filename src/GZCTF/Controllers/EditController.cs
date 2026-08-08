@@ -10,6 +10,8 @@ using GZCTF.Services;
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Fleet;
 using GZCTF.Services.Transfer;
+using GZCTF.Modules.Penetration.Application;
+using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Utils;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -320,6 +322,19 @@ public class EditController(
     {
         var (game, error) = await RequireManageableGameAsync(id, token);
         if (error is not null) return error;
+
+        try
+        {
+            var actor = await userManager.GetUserAsync(User)
+                ?? throw new UnauthorizedAccessException();
+            using var scope = scopeFactory.CreateScope();
+            var penetrationTeamLab = scope.ServiceProvider.GetRequiredService<PenetrationTeamLabAdapter>();
+            await penetrationTeamLab.EnsureGameDrainedBeforeDeleteAsync(id, actor.Id, token);
+        }
+        catch (TeamLabApiContractException exception)
+        {
+            return StatusCode(exception.StatusCode, new RequestResponse(exception.Message, exception.StatusCode));
+        }
 
         return await gameRepository.DeleteGame(game!, token) switch
         {

@@ -122,13 +122,38 @@ public class DeploymentQueueService
         _logger = logger;
     }
 
-    public async Task<DeploymentQueueResult> EnqueueAsync(DeploymentQueueRequest request, CancellationToken token)
+    public Task<DeploymentQueueResult> EnqueueAsync(DeploymentQueueRequest request, CancellationToken token) =>
+        EnqueueCoreAsync(request, notifyAfterCommit: true, token);
+
+    /// <summary>
+    /// Persists a ticket in the caller's existing database transaction. The caller must notify the
+    /// queue only after committing that transaction, otherwise a worker could observe a ticket
+    /// whose runtime plan has not become visible yet.
+    /// </summary>
+    public Task<DeploymentQueueResult> EnqueueInCurrentTransactionAsync(
+        DeploymentQueueRequest request,
+        CancellationToken token)
+    {
+        if (_context.Database.IsRelational() && _context.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("A relational deployment ticket admission requires an active transaction.");
+        return EnqueueCoreAsync(request, notifyAfterCommit: false, token);
+    }
+
+    public async Task NotifyAsync(Guid ticketId, CancellationToken token) =>
+        await _wakeup.NotifyAsync(ticketId, token);
+
+    async Task<DeploymentQueueResult> EnqueueCoreAsync(
+        DeploymentQueueRequest request,
+        bool notifyAfterCommit,
+        CancellationToken token)
     {
         using var activity = PlatformTelemetry.RuntimeActivitySource.StartActivity("runtime.enqueue", ActivityKind.Producer);
         activity?.SetTag("runtime.workload", request.Kind.ToString());
         activity?.SetTag("runtime.operation", request.Operation.ToString());
         var subjectKey = DeploymentQueueTicket.BuildSubjectConcurrencyKey(request);
-        await using var transaction = _context.Database.IsRelational()
+        if (notifyAfterCommit && _context.Database.IsRelational() && _context.Database.CurrentTransaction is not null)
+            throw new InvalidOperationException("Use EnqueueInCurrentTransactionAsync when the caller owns the transaction.");
+        await using var transaction = notifyAfterCommit && _context.Database.IsRelational()
             ? await _context.Database.BeginTransactionAsync(token)
             : null;
         if (_context.Database.ProviderName?.Contains("Npgsql", StringComparison.Ordinal) == true)
@@ -267,7 +292,8 @@ public class DeploymentQueueService
             ?? DeploymentQueueStatusModel.FromTicket(ticket, queuePosition: 0);
         if (transaction is not null)
             await transaction.CommitAsync(token);
-        await _wakeup.NotifyAsync(ticket.Id, token);
+        if (notifyAfterCommit)
+            await _wakeup.NotifyAsync(ticket.Id, token);
         return DeploymentQueueResult.FromStatus(status, reusedExistingTicket: false);
     }
 

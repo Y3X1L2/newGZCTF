@@ -15,6 +15,7 @@ export interface TeamLabImageOption {
   id: number
   name: string
   deviceType: 'docker' | VmDeviceType
+  remoteAccessProtocol?: 'ssh' | 'rdp' | null
 }
 
 const imagePageSize = 100
@@ -39,6 +40,10 @@ export async function listTeamLabImageOptions(): Promise<readonly TeamLabImageOp
           : template.osType === OSType.Windows
             ? 'windows-vm'
             : 'linux-vm',
+      remoteAccessProtocol:
+        template.remoteAccessProtocol === 'ssh' || template.remoteAccessProtocol === 'rdp'
+          ? template.remoteAccessProtocol
+          : null,
     }))
     .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN') || left.id - right.id)
 }

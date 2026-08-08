@@ -5,6 +5,7 @@ using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Identity.Application;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Contracts;
+using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Modules.TeamLab.Infrastructure;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -26,39 +27,48 @@ namespace GZCTF.Modules.TeamLab.Api;
 public sealed class OpenTeamLabTrafficController(
     TeamLabTrafficApplicationService traffic,
     TeamLabCaptureArtifactStore captureArtifacts,
-    TeamLabAuthorizationService authorization,
+    TeamLabScopeAuthorizationService scopeAuthorization,
     TeamLabRuntimeOperationApplicationService operations) : ControllerBase
 {
     [HttpGet("traffic/flows")]
-    [OpenApiOperation("List traffic flows", "Returns cursor-paginated, runtime-scoped flow metadata collected from the TeamLab data plane.")]
+    [OpenApiOperation("列出流量记录", "返回由 TeamLab 数据平面采集的 cursor 分页、运行时范围的流量元数据。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabTrafficRead)]
     [ProducesResponseType(typeof(TeamLabTrafficFlowPageModel), StatusCodes.Status200OK)]
     public async Task<TeamLabTrafficFlowPageModel> GetFlows(
         Guid runtimeId,
         [FromQuery] string? after = null,
         [FromQuery, Range(1, 100)] int limit = 50,
+        [FromQuery] string? query = null,
+        [FromQuery] string? protocol = null,
+        [FromQuery] string? networkKey = null,
         CancellationToken cancellationToken = default)
     {
         await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
-        return await traffic.GetFlowsAsync(runtimeId, after, limit, cancellationToken);
+        return await traffic.GetFlowsAsync(runtimeId, after, limit, query, protocol, networkKey, cancellationToken);
     }
 
     [HttpGet("traffic/paths")]
-    [OpenApiOperation("List correlated traffic paths", "Returns end-to-end traffic path correlations across participating assets and network segments.")]
+    [OpenApiOperation("列出关联流量路径", "返回跨参与资产与网段的端到端流量路径关联。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabTrafficRead)]
     [ProducesResponseType(typeof(TeamLabTrafficPathPageModel), StatusCodes.Status200OK)]
     public async Task<TeamLabTrafficPathPageModel> GetPaths(
         Guid runtimeId,
         [FromQuery] string? after = null,
         [FromQuery, Range(1, 100)] int limit = 50,
+        [FromQuery] string? query = null,
+        [FromQuery] string? protocol = null,
+        [FromQuery] string? confidence = null,
         CancellationToken cancellationToken = default)
     {
         await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
-        return await traffic.GetPathsAsync(runtimeId, after, limit, cancellationToken);
+        if (!TeamLabPathConfidenceFilter.TryParse(confidence, out var parsedConfidence))
+            throw new TeamLabApiContractException("traffic_filter_invalid", "流量可信度筛选条件无效。", 400);
+        return await traffic.GetPathsAsync(runtimeId, after, limit, query, protocol,
+            parsedConfidence, cancellationToken);
     }
 
     [HttpGet("traffic/paths/{pathId:guid}")]
-    [OpenApiOperation("Get a traffic path", "Returns the ordered hops and evidence for one correlated traffic path.")]
+    [OpenApiOperation("获取流量路径", "返回一条关联流量路径的有序跳点与证据。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabTrafficRead)]
     [ProducesResponseType(typeof(TeamLabTrafficPathModel), StatusCodes.Status200OK)]
     public async Task<TeamLabTrafficPathModel> GetPath(
@@ -71,7 +81,7 @@ public sealed class OpenTeamLabTrafficController(
     }
 
     [HttpPost("captures")]
-    [OpenApiOperation("Start a packet capture", "Queues a bounded packet capture for selected runtime shards or network segments.")]
+    [OpenApiOperation("开始抓包", "为选定的运行时分片或网段提交有上限的抓包任务。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabCaptureWrite)]
     [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> StartCapture(
@@ -82,13 +92,14 @@ public sealed class OpenTeamLabTrafficController(
     {
         await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
         var actor = Actor();
+        var scopeId = await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken);
         var result = await operations.SubmitCaptureStartAsync(
-            actor.TokenId, actor.UserId, idempotencyKey, runtimeId, model, cancellationToken);
+            actor.TokenId, actor.UserId, idempotencyKey, runtimeId, scopeId, model, cancellationToken);
         return AcceptedOperation(result);
     }
 
     [HttpGet("captures/{captureId:guid}")]
-    [OpenApiOperation("Get packet capture status", "Returns capture scope, limits, progress, artifact state, and retention metadata.")]
+    [OpenApiOperation("获取抓包状态", "返回抓包范围、限额、进度、产物状态与保留元数据。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabCaptureRead)]
     [ProducesResponseType(typeof(OpenTeamLabCaptureModel), StatusCodes.Status200OK)]
     public async Task<OpenTeamLabCaptureModel> GetCapture(
@@ -101,7 +112,7 @@ public sealed class OpenTeamLabTrafficController(
     }
 
     [HttpPost("captures/{captureId:guid}/stop")]
-    [OpenApiOperation("Stop a packet capture", "Queues an early stop and finalization of a running packet capture.")]
+    [OpenApiOperation("停止抓包", "提交提前停止并归档正在运行的抓包任务。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabCaptureWrite)]
     [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> StopCapture(
@@ -112,13 +123,14 @@ public sealed class OpenTeamLabTrafficController(
     {
         await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
         var actor = Actor();
+        var scopeId = await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken);
         var result = await operations.SubmitCaptureStopAsync(
-            actor.TokenId, actor.UserId, idempotencyKey, runtimeId, captureId, cancellationToken);
+            actor.TokenId, actor.UserId, idempotencyKey, runtimeId, scopeId, captureId, cancellationToken);
         return AcceptedOperation(result);
     }
 
     [HttpGet("captures/{captureId:guid}/download")]
-    [OpenApiOperation("Download a packet capture", "Streams the finalized runtime capture archive.")]
+    [OpenApiOperation("下载抓包文件", "流式返回已完成的运行时抓包归档文件。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabCaptureRead)]
     [Produces("application/x-tar")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -145,17 +157,29 @@ public sealed class OpenTeamLabTrafficController(
 
     private async Task AuthorizeRuntimeAsync(Guid runtimeId, CancellationToken cancellationToken)
     {
-        var actor = Actor();
-        await authorization.RequireRuntimeOwnerAsync(
-            runtimeId, actor.UserId, User.IsInRole(nameof(Role.Admin)), cancellationToken);
+        await RequireRuntimeScopeAsync(runtimeId, false, cancellationToken);
     }
+
+    private async Task<Guid> RequireRuntimeScopeAsync(
+        Guid runtimeId,
+        bool writable,
+        CancellationToken cancellationToken)
+    {
+        var actor = Actor();
+        return await scopeAuthorization.RequireRuntimeScopeAsync(
+            runtimeId, actor.TokenId, IsAdministrator(), writable, cancellationToken);
+    }
+
+    private bool IsAdministrator() => User.FindAll(ApiTokenClaimTypes.Resource).Any(claim =>
+        ApiTokenResourceClaim.TryParse(claim.Value, out var type, out var id) &&
+        type == "teamlab-scope" && id == "*");
 
     private (Guid TokenId, Guid UserId) Actor()
     {
         if (Guid.TryParse(User.FindFirstValue(ApiTokenClaimTypes.TokenId), out var tokenId) &&
             Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
             return (tokenId, userId);
-        throw new TeamLabApiContractException("authentication_required", "Authentication is required.", 401);
+        throw new TeamLabApiContractException("authentication_required", "需要身份认证。", 401);
     }
 
     private AcceptedResult AcceptedOperation(GZCTF.Modules.Audit.Application.IdempotencyBeginResult result)

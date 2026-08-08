@@ -12,10 +12,11 @@
 }
 
 .header {
-  display: flex;
+  display: grid;
   min-height: 64px;
   align-items: center;
   gap: var(--yn-space-4);
+  grid-template-columns: minmax(220px, 1fr) auto auto;
   padding: var(--yn-space-3) var(--yn-space-4);
   border-bottom: 1px solid var(--yn-color-border);
   background: var(--yn-color-surface);
@@ -23,7 +24,7 @@
 
 .title {
   display: grid;
-  min-width: 140px;
+  min-width: 0;
   gap: 1px;
 }
 
@@ -42,6 +43,7 @@
 
 .connectionModes {
   display: flex;
+  white-space: nowrap;
   padding: 3px;
   border: 1px solid var(--yn-color-border);
   border-radius: var(--yn-radius-md);
@@ -72,8 +74,7 @@
 .metrics {
   display: flex;
   min-width: 0;
-  flex: 1;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: var(--yn-space-3);
   color: var(--yn-color-muted);
   font-size: var(--yn-font-xs);
@@ -111,6 +112,7 @@
   display: flex;
   align-items: center;
   gap: var(--yn-space-2);
+  justify-self: end;
 }
 
 .publicationStatus {
@@ -179,6 +181,7 @@
 
 .workspace {
   display: flex;
+  grid-row: 3;
   min-width: 0;
   min-height: 0;
 }
@@ -195,6 +198,10 @@
 }
 
 @media (max-width: 1100px) {
+  .header {
+    grid-template-columns: minmax(180px, 1fr) auto;
+  }
+
   .metrics {
     display: none;
   }
@@ -207,6 +214,7 @@
   }
 
   .header {
+    display: flex;
     flex-wrap: wrap;
   }
 

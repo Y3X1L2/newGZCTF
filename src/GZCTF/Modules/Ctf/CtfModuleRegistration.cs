@@ -12,7 +12,8 @@ public static class CtfModuleRegistration
         services.AddScoped<IExternalChallengeCatalog, EfExternalChallengeCatalog>();
         services.AddScoped<IChallengeMutationSubmissionStore, EfChallengeMutationSubmissionStore>();
         services.AddScoped<ChallengeExternalApplicationService>();
-        services.AddScoped<IApiOperationHandler, ChallengeMutationOperationHandler>();
+        services.AddKeyedScoped<IApiOperationHandler, ChallengeMutationOperationHandler>(
+            ChallengeExternalApplicationService.OperationKind);
         services.AddScoped<IApiOperationResultProvider, ChallengeMutationResultProvider>();
         services.AddScoped<IApiTokenResourceGrantPolicy, GameApiTokenResourceGrantPolicy>();
         return services;

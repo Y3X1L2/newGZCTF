@@ -171,6 +171,18 @@ public record TeamLabCleanupRequest(
     string[] FabricRemoteCidrs,
     bool DryRun = true);
 
+public record TeamLabAssetLifecycleRequest(
+    string Kind,
+    string ResourceId,
+    int Generation,
+    bool DryRun = false);
+
+public record TeamLabAssetLifecycleResponse(
+    bool Success,
+    bool DryRun,
+    string State,
+    string Message);
+
 public record TeamLabProbeRequest(
     int RuntimeId,
     string NamespaceName,

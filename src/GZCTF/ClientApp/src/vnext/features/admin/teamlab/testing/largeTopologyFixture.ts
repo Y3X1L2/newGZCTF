@@ -139,5 +139,6 @@ export function createLargeTopologyFixture(): TopologyDocument {
       onDemandPcapEnabled: true,
       endpointObservation: 'optional',
     },
+    networkLayouts: {},
   }
 }

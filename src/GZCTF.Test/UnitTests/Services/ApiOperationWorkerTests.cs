@@ -51,7 +51,8 @@ public sealed class ApiOperationWorkerTests
         services.AddSingleton(store.Object);
         services.AddScoped<ApiOperationService>();
         services.AddSingleton(state);
-        services.AddScoped<IApiOperationHandler, BlockingHandler>();
+        services.AddKeyedScoped<IApiOperationHandler, BlockingHandler>(BlockingHandler.OperationKind);
+        services.AddKeyedScoped<IApiOperationHandler, UnresolvableHandler>(UnresolvableHandler.OperationKind);
         await using var provider = services.BuildServiceProvider();
         var worker = new ApiOperationWorker(
             provider.GetRequiredService<IServiceScopeFactory>(),
@@ -114,7 +115,7 @@ public sealed class ApiOperationWorkerTests
         services.AddSingleton(store.Object);
         services.AddScoped<ApiOperationService>();
         services.AddSingleton(state);
-        services.AddScoped<IApiOperationHandler, TerminalFailureHandler>();
+        services.AddKeyedScoped<IApiOperationHandler, TerminalFailureHandler>(TerminalFailureHandler.OperationKind);
         await using var provider = services.BuildServiceProvider();
         var worker = new ApiOperationWorker(
             provider.GetRequiredService<IServiceScopeFactory>(),
@@ -220,5 +221,16 @@ public sealed class ApiOperationWorkerTests
             new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource TerminalFailureNotified { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private sealed class MissingHandlerDependency;
+
+    private sealed class UnresolvableHandler(MissingHandlerDependency _) : IApiOperationHandler
+    {
+        public const string OperationKind = "test.unresolvable";
+        public string Kind => OperationKind;
+
+        public Task ExecuteAsync(Guid operationId, string leaseOwner, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
     }
 }

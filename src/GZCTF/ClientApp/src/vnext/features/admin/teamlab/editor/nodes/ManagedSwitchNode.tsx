@@ -11,7 +11,7 @@ export const ManagedSwitchNode = memo(function ManagedSwitchNode({ data, selecte
     <TopologyNodeShell
       badge={node.isEntry ? '入口' : undefined}
       details={[node.poolCidr, `${data.connectionCount} 端口`]}
-      eyebrow="Managed switch"
+      eyebrow="托管交换机"
       icon={<Network size={18} />}
       readOnly={data.readOnly}
       selected={selected}

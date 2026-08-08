@@ -8,7 +8,9 @@ namespace GZCTF.Agent.Controllers;
 
 [ApiController]
 [Route("api/remote-access")]
-public sealed class RemoteAccessController(RemoteAccessRelayService relays) : ControllerBase
+public sealed class RemoteAccessController(
+    RemoteAccessRelayService relays,
+    TeamLabTerminalSessionRegistry terminals) : ControllerBase
 {
     [HttpPost("relays")]
     public Task<RemoteRelayResponse> CreateRelay(CreateRemoteRelayRequest request, CancellationToken cancellationToken) =>
@@ -18,6 +20,13 @@ public sealed class RemoteAccessController(RemoteAccessRelayService relays) : Co
     public async Task<IActionResult> DeleteRelay(Guid sessionId)
     {
         await relays.DeleteAsync(sessionId);
+        return NoContent();
+    }
+
+    [HttpDelete("terminals/{sessionId:guid}")]
+    public async Task<IActionResult> CancelTerminal(Guid sessionId)
+    {
+        await relays.CancelTerminalAsync(sessionId);
         return NoContent();
     }
 
@@ -42,11 +51,19 @@ public sealed class RemoteAccessController(RemoteAccessRelayService relays) : Co
             throw new AgentOperationException("RemoteAccess", "remote_access.invalid_terminal_request",
                 "The terminal request is invalid.", false);
 
-        using var expiry = new CancellationTokenSource(expiresAt - DateTimeOffset.UtcNow);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, expiry.Token);
-        using var socket = await HttpContext.WebSockets.AcceptWebSocketAsync();
-        await docker.RunTeamLabTerminalAsync(runtimeId, generation, containerId, socket, linked.Token);
-        if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
-            await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "terminal_closed", CancellationToken.None);
+        var terminalToken = terminals.Attach(sessionId, expiresAt);
+        try
+        {
+            using var expiry = new CancellationTokenSource(expiresAt - DateTimeOffset.UtcNow);
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, expiry.Token, terminalToken);
+            using var socket = await HttpContext.WebSockets.AcceptWebSocketAsync();
+            await docker.RunTeamLabTerminalAsync(runtimeId, generation, containerId, socket, linked.Token);
+            if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+                await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "terminal_closed", CancellationToken.None);
+        }
+        finally
+        {
+            terminals.Detach(sessionId);
+        }
     }
 }

@@ -153,6 +153,24 @@ public sealed class PenetrationAdminController(
             gameId, actor!.Id, actor.Role >= Role.Admin, cancellationToken), StatusCodes.Status202Accepted);
     }
 
+    [HttpPost("games/{gameId:int}/teamlab/pause")]
+    public async Task<IActionResult> PauseTeamLab(int gameId, CancellationToken cancellationToken)
+    {
+        var (_, actor, error) = await RequireManageableGameAsync(gameId, cancellationToken);
+        if (error is not null) return error;
+        return await ExecuteTeamLabAsync(() => adapter.PauseAsync(
+            gameId, actor!.Id, actor.Role >= Role.Admin, cancellationToken), StatusCodes.Status202Accepted);
+    }
+
+    [HttpPost("games/{gameId:int}/teamlab/resume")]
+    public async Task<IActionResult> ResumeTeamLab(int gameId, CancellationToken cancellationToken)
+    {
+        var (_, actor, error) = await RequireManageableGameAsync(gameId, cancellationToken);
+        if (error is not null) return error;
+        return await ExecuteTeamLabAsync(() => adapter.ResumeAsync(
+            gameId, actor!.Id, actor.Role >= Role.Admin, cancellationToken), StatusCodes.Status202Accepted);
+    }
+
     [HttpGet("games/{gameId:int}/teamlab/targets")]
     public async Task<IActionResult> ListTeamLabTargets(
         int gameId,

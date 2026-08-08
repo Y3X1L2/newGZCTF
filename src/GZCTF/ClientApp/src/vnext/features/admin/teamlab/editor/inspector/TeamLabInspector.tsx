@@ -7,13 +7,21 @@ import { InspectorSection, TextInput } from './InspectorFields'
 import type { InspectorDocumentProps } from './inspectorTypes'
 import type { TeamLabImageOption } from '../../api'
 import { NetworkInterfacesEditor } from './NetworkInterfacesEditor'
+import { NetworkRegionInspector } from './NetworkRegionInspector'
 import { ObservationEditor } from './ObservationEditor'
 import { RouterInspector } from './RouterInspector'
 import { SwitchInspector } from './SwitchInspector'
 import styles from './TeamLabInspector.module.css'
 
+const connectionTypeLabels = {
+  membership: '网卡连接',
+  route: '网段路由',
+  dependency: '启动依赖',
+} as const
+
 export interface TeamLabInspectorProps extends InspectorDocumentProps {
   selection: TopologySelection
+  selectedNetworkKey?: string | null
   imageOptions?: readonly TeamLabImageOption[]
 }
 
@@ -31,13 +39,24 @@ function SelectionSummary({ document, selection }: { document: TopologyDocument;
       <p>已选择多个对象。为避免批量覆盖异构配置，请单选后编辑属性。</p>
       <ul className={styles.selectionList}>
         {nodes.map((node) => <li key={node.key}><strong>{node.name}</strong><code>{node.key}</code></li>)}
-        {connections.map((connection) => <li key={connection.key}><strong>{connection.type}</strong><code>{connection.key}</code></li>)}
+        {connections.map((connection) => (
+          <li key={connection.key}>
+            <strong>{connectionTypeLabels[connection.type]}</strong><code>{connection.key}</code>
+          </li>
+        ))}
       </ul>
     </div>
   )
 }
 
-export function TeamLabInspector({ document, selection, onDocumentChange, readOnly, imageOptions = [] }: TeamLabInspectorProps) {
+export function TeamLabInspector({
+  document,
+  selection,
+  onDocumentChange,
+  readOnly,
+  imageOptions = [],
+  selectedNetworkKey = null,
+}: TeamLabInspectorProps) {
   const nodes = [...selection.nodeKeys].map((key) => document.nodes[key]).filter((node) => node !== undefined)
   const connections = [...selection.connectionKeys]
     .map((key) => document.connections[key])
@@ -45,7 +64,16 @@ export function TeamLabInspector({ document, selection, onDocumentChange, readOn
   const selectedCount = nodes.length + connections.length
 
   let content
-  if (selectedCount === 0) {
+  if (selectedNetworkKey) {
+    content = (
+      <NetworkRegionInspector
+        document={document}
+        networkKey={selectedNetworkKey}
+        onDocumentChange={onDocumentChange}
+        readOnly={readOnly}
+      />
+    )
+  } else if (selectedCount === 0) {
     content = (
       <>
         <div className={styles.empty}><Radar aria-hidden="true" size={22} /><strong>场景观测策略</strong><span>选择节点或连接可编辑其属性</span></div>
@@ -85,7 +113,7 @@ export function TeamLabInspector({ document, selection, onDocumentChange, readOn
   return (
     <aside aria-label="属性检查器" className={styles.panel}>
       <header className={styles.panelHeader}>
-        <span>INSPECTOR</span>
+        <span>属性检查器</span>
         <strong><Layers3 aria-hidden="true" size={17} />属性配置</strong>
       </header>
       <div className={styles.content}>{content}</div>

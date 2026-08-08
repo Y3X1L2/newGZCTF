@@ -1,7 +1,7 @@
 import useSWR from 'swr'
 import { teamLabPlayerApi, teamLabPlayerKeys } from './api'
 
-const terminalStatuses = new Set(['failed', 'stopped', 'destroyed'])
+const terminalStatuses = new Set(['failed', 'destroyed'])
 
 export function usePlayerTeamLab(gameId: number) {
   const valid = Number.isInteger(gameId) && gameId > 0
