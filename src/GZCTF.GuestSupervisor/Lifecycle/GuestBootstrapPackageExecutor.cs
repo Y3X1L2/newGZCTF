@@ -249,7 +249,11 @@ public sealed class GuestBootstrapPackageExecutor(
         Directory.CreateDirectory(root);
         var path = Path.Combine(root, "runtime.json");
         await File.WriteAllBytesAsync(path,
-            JsonSerializer.SerializeToUtf8Bytes(new { Parameters = intent.Parameters }, JsonOptions), cancellationToken);
+            JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                Environment = intent.RuntimeEnvironment,
+                Parameters = intent.Parameters
+            }, JsonOptions), cancellationToken);
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
     }
 

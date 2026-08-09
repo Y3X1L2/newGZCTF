@@ -1149,13 +1149,15 @@ public sealed class AgentTeamLabNodeExecutor(
         ResolvedBootstrap? bootstrap,
         Uri artifactEndpoint)
     {
-        var parameters = request.Environment
-            .Concat(bootstrap?.Parameters ?? new Dictionary<string, string>())
+        var runtimeEnvironment = request.Environment
             .Append(new KeyValuePair<string, string>("GZCTF_RUNTIME_ID", request.RuntimeId.ToString()))
             .Append(new KeyValuePair<string, string>("GZCTF_TOPOLOGY_KEY", request.AssetKey))
             .GroupBy(item => item.Key, StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Last().Value, StringComparer.Ordinal);
+        var parameters = (bootstrap?.Parameters ?? new Dictionary<string, string>())
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Value, StringComparer.Ordinal);
         var suppliedSecrets = request.Secrets
             .Concat(bootstrap?.Secrets ?? new Dictionary<string, string>())
             .GroupBy(item => item.Key, StringComparer.Ordinal)
@@ -1197,7 +1199,8 @@ public sealed class AgentTeamLabNodeExecutor(
             expiresAt,
             servicePackage,
             references,
-            parameters);
+            parameters,
+            runtimeEnvironment);
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             JsonSerializer.SerializeToUtf8Bytes(draft)));
         return (draft with { IntentDigest = digest }, protectedSecrets);

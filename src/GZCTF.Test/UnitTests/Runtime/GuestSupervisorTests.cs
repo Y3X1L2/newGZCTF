@@ -255,7 +255,12 @@ public sealed class GuestSupervisorTests
             var intent = new GuestBootstrapIntent(
                 GuestControlProtocol.SchemaVersion, GuestControlProtocol.SchemaVersion,
                 Identity(), intentDigest, "sha256:prepared", descriptor.ArtifactDigest,
-                DateTimeOffset.UtcNow.AddMinutes(5), descriptor, [], new Dictionary<string, string>());
+                DateTimeOffset.UtcNow.AddMinutes(5), descriptor, [], new Dictionary<string, string>(),
+                new Dictionary<string, string>
+                {
+                    ["GZCTF_RUNTIME_ID"] = "42",
+                    ["TEAMLAB_TEST_ENVIRONMENT"] = "kept outside service parameters"
+                });
             await new GuestIntentStore(root).SaveAsync(intent, CancellationToken.None);
             var config = new GuestSupervisorConfiguration(
                 GuestControlProtocol.SchemaVersion, Identity(), new Uri("https://127.0.0.1/enroll"),
