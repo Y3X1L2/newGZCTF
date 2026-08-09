@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Modules.Content.Domain;
@@ -24,6 +25,12 @@ public sealed record UpdateImageRemoteAccessModel(
     RemoteCredentialMode CredentialMode,
     string? Credential);
 
+public sealed record CompetitionWindowsRdpProfile(
+    int ImageTemplateId,
+    int Port,
+    string Username,
+    string Password);
+
 public sealed class ImageRemoteAccessService(AppDbContext context, IDataProtectionProvider protectionProvider)
 {
     private readonly IDataProtector _protector = protectionProvider.CreateProtector("GZCTF.TeamLab.ImageRemoteAccess.v1");
@@ -36,6 +43,33 @@ public sealed class ImageRemoteAccessService(AppDbContext context, IDataProtecti
             ? new ImageRemoteAccessModel(false, TeamLabRemoteProtocol.Ssh, 22, null,
                 RemoteCredentialMode.PlatformGenerated, false, null)
             : ToModel(configuration);
+    }
+
+    public async Task<bool> HasCompetitionWindowsRdpProfileAsync(
+        int imageTemplateId,
+        CancellationToken cancellationToken) =>
+        await GetCompetitionWindowsRdpProfileAsync(imageTemplateId, cancellationToken) is not null;
+
+    public async Task<CompetitionWindowsRdpProfile?> GetCompetitionWindowsRdpProfileAsync(
+        int imageTemplateId,
+        CancellationToken cancellationToken)
+    {
+        var configuration = await LoadCompetitionWindowsConfigurationAsync(imageTemplateId, cancellationToken);
+        if (!IsCompetitionWindowsRdpConfiguration(configuration))
+            return null;
+
+        try
+        {
+            return new CompetitionWindowsRdpProfile(
+                imageTemplateId,
+                configuration!.Port,
+                configuration.Username!.Trim(),
+                RevealSecret(configuration));
+        }
+        catch (CryptographicException)
+        {
+            return null;
+        }
     }
 
     public async Task<ImageRemoteAccessModel> UpdateAsync(
@@ -60,7 +94,7 @@ public sealed class ImageRemoteAccessService(AppDbContext context, IDataProtecti
             configuration.ProtectedSecret = null;
         else if (!string.IsNullOrWhiteSpace(request.Credential))
             configuration.ProtectedSecret = _protector.Protect(request.Credential);
-        else if (string.IsNullOrWhiteSpace(configuration.ProtectedSecret))
+        else if (request.Enabled && string.IsNullOrWhiteSpace(configuration.ProtectedSecret))
             throw new InvalidOperationException("An existing-account remote access configuration requires a password or private key.");
         configuration.UpdatedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(cancellationToken);
@@ -71,6 +105,29 @@ public sealed class ImageRemoteAccessService(AppDbContext context, IDataProtecti
         string.IsNullOrWhiteSpace(configuration.ProtectedSecret)
             ? throw new InvalidOperationException("The image remote access configuration has no credential.")
             : _protector.Unprotect(configuration.ProtectedSecret);
+
+    private Task<ImageTemplateRemoteAccess?> LoadCompetitionWindowsConfigurationAsync(
+        int imageTemplateId,
+        CancellationToken cancellationToken) =>
+        context.ImageTemplates.AsNoTracking()
+            .Where(template =>
+                template.Id == imageTemplateId &&
+                template.OSType == OSType.Windows &&
+                template.ImageType != ImageType.Docker &&
+                template.Status == ImageStatus.Ready)
+            .Select(template => template.RemoteAccess)
+            .SingleOrDefaultAsync(cancellationToken);
+
+    internal static bool IsCompetitionWindowsRdpConfiguration(ImageTemplateRemoteAccess? configuration) =>
+        configuration is
+        {
+            Enabled: true,
+            Protocol: TeamLabRemoteProtocol.Rdp,
+            CredentialMode: RemoteCredentialMode.ExistingAccount,
+            Port: >= 1 and <= 65535
+        } &&
+        !string.IsNullOrWhiteSpace(configuration.Username) &&
+        !string.IsNullOrWhiteSpace(configuration.ProtectedSecret);
 
     private static ImageRemoteAccessModel ToModel(ImageTemplateRemoteAccess item) => new(
         item.Enabled, item.Protocol, item.Port, item.Username, item.CredentialMode,
@@ -87,7 +144,8 @@ public sealed class ImageRemoteAccessService(AppDbContext context, IDataProtecti
             throw new InvalidOperationException("RDP remote access requires a Windows image.");
         if (request.Protocol == TeamLabRemoteProtocol.Ssh && template.OSType != OSType.Linux)
             throw new InvalidOperationException("SSH remote access requires a Linux image.");
-        if (request.CredentialMode == RemoteCredentialMode.ExistingAccount && string.IsNullOrWhiteSpace(request.Username))
+        if (request.Enabled && request.CredentialMode == RemoteCredentialMode.ExistingAccount &&
+            string.IsNullOrWhiteSpace(request.Username))
             throw new InvalidOperationException("An existing-account remote access configuration requires a username.");
     }
 }

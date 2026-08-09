@@ -6,8 +6,10 @@ import {
   EnvironmentType,
   GameInfoModel,
   GameType,
+  ImageStatus,
+  ImageType,
+  OSType,
 } from '@Api'
-import { runtimeTemplateAvailable } from '../../challenge-runtime/imageTemplateCapabilities'
 import type { ImageTemplateSummary } from '../api'
 import type { AdminStatusTone } from '../shared/AdminWorkbench'
 
@@ -170,5 +172,10 @@ export function challengeConfigurationIssues(challenge: ChallengeInfoModel | Cha
 }
 
 export function templateAvailableForEnvironment(template: ImageTemplateSummary, environment: EnvironmentType) {
-  return runtimeTemplateAvailable(template, environment)
+  if (template.status !== ImageStatus.Ready) return false
+  if (environment === EnvironmentType.Docker) return template.imageType === ImageType.Docker
+  if (environment === EnvironmentType.WindowsVM) {
+    return template.imageType !== ImageType.Docker && template.osType === OSType.Windows
+  }
+  return false
 }

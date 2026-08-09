@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-更新时间：2026-08-01
+更新时间：2026-08-09
 
 本文件是跨会话的短期状态入口。长期规则见根目录 `AGENTS.md`，完整目标见 `docs/platform-commercialization-master-plan.md`。状态变化后应更新本文件，不通过追加整段聊天记录维护记忆。
 
@@ -10,13 +10,16 @@
 | --- | --- |
 | 主仓库 | `https://github.com/Y3X1L2/newGZCTF.git` |
 | 稳定分支 | `main` |
-| 本快照代码基线 | `1f8d5cca8da9a8491b9feefb3a2ba1f7879cbc2f` |
-| 基线说明 | Phase 9 TeamLab 组网、远程操作基础和 vNext 管理前端，包含 Schema v1 草稿读取兼容 |
+| 本快照代码基线 | `cb801a7`（`origin/main`，2026-08-09 本机最后成功读取） |
+| 基线说明 | Phase 9 TeamLab 运行操作访问闭环；Windows VM 修复候选从该提交建立 |
 | 本机正式工作区 | `D:\Work\newGZCTF` |
 | Git 结构 | 独立仓库，`.git` 位于正式工作区，不再依赖 linked worktree |
 | 本机历史归档 | `D:\Work\newGZCTF-local-archive`，不属于源码事实 |
 
 当前 HEAD 必须通过 `git rev-parse HEAD` 实时读取。开始新任务前仍须重新 `fetch`，不能假定本表中的代码基线或远端关系永久有效。
+
+当前本地 Windows VM 候选位于独立工作区 `D:\Work\newGZCTF-windows-vm-repair`、分支
+`codex/windows-vm-repair`。该分支尚未部署生产；不要把本节的候选能力当作 10.24 当前运行事实。
 
 ## 2. 产品与代码状态
 
@@ -66,7 +69,7 @@ vNext 正式路由和实现状态以以下文件为准：
 - 培训动态 Flag 不再暴露管理员测试步骤。
 - 过期培训实例恢复和运行引用安全重载。
 - 培训理论提交后的答案回顾。
-- Windows VM 创建和凭据注入链路稳定化；当前没有合格、已认证的新 Windows 基础镜像。
+- 普通比赛 Windows VM 固定镜像凭据候选已完成代码和自动化门禁：不再生成实例随机密码或注入 Cloudbase-Init，提供 Guacamole 和内网 mstsc；真实 KVM 双实例尚未验收，尚未部署生产。
 - 首页编排动画和丝带绘制时序优化。
 - 镜像存储导入完成后模板进入 `Ready`，节点分发不再与模板 `Importing` 状态互锁。
 - 永久失败的镜像分发任务不再无限自动重试，只有 `Retryable=true` 才重试。
@@ -74,6 +77,12 @@ vNext 正式路由和实现状态以以下文件为准：
 - 旧 Penetration 迁移产生的 Schema v1 拓扑可以打开，下一次保存时由编辑器统一编译为 Schema v2；未知 Schema 仍拒绝加载。
 
 镜像状态修复验收记录：后端全量单元测试 `531/531`、镜像分发专项 `8/8`、PostgreSQL 集成测试 `1/1`。线上 `ClosureChallenge` 已从长期“导入中”恢复为 Ready，并完成三个节点分发。
+
+Windows VM 固定凭据候选自动化记录：Release 解决方案 0 warning/0 error；后端单元
+`763/763`、集成 `265/265`；前端 `218/218`，locale、lint、TypeScript、架构和 production build
+均通过。普通比赛 VM 调度要求 KVM 与 VM image download，不再要求 Cloud-Init；比赛题目编辑器不再依赖
+旧 `SupportsInstanceCredentials` 字段筛选模板。待真实 KVM 验收固定凭据、双实例、Guacamole、mstsc、
+剪贴板、许可有效期和销毁残留。
 
 ## 5. 已知环境
 

@@ -42,7 +42,8 @@ public class VmInstance
     public string RdpUsername { get; set; } = "player";
 
     /// <summary>
-    /// Data Protection ciphertext for the instance-specific RDP password.
+    /// Legacy Data Protection ciphertext for pre-fixed-credential VM instances.
+    /// New competition instances leave this field empty.
     /// </summary>
     [JsonIgnore]
     [MaxLength(2048)]

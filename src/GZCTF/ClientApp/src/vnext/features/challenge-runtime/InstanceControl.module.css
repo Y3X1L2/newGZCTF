@@ -170,6 +170,95 @@
   color: var(--yn-color-text);
 }
 
+.rdpPanel {
+  display: grid;
+  gap: var(--yn-space-3);
+}
+
+.rdpCredentials {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--yn-color-border-strong);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+}
+
+.rdpCredential {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto 72px minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: var(--yn-space-2);
+  padding-left: 14px;
+}
+
+.rdpCredential + .rdpCredential {
+  border-top: 1px solid var(--yn-color-border);
+}
+
+.rdpCredential > svg {
+  color: var(--yn-color-muted);
+}
+
+.rdpCredential > span {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.rdpCredential code {
+  min-width: 0;
+  padding: 11px 0;
+  overflow: hidden;
+  color: var(--yn-color-text);
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rdpCredential button {
+  display: grid;
+  width: 40px;
+  height: 100%;
+  place-items: center;
+  border: 0;
+  border-left: 1px solid var(--yn-color-border);
+  background: transparent;
+  color: var(--yn-color-muted);
+  cursor: pointer;
+}
+
+.rdpCredential button:hover {
+  background: var(--yn-color-canvas-raised);
+  color: var(--yn-color-text);
+}
+
+.rdpActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--yn-space-2);
+}
+
+.rdpActions > a {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--yn-space-2);
+  padding: 0 var(--yn-space-3);
+  border: 1px solid var(--yn-color-border-strong);
+  border-radius: var(--yn-radius-sm);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-text);
+  font-size: var(--yn-font-sm);
+  text-decoration: none;
+}
+
+.rdpActions > a:hover {
+  background: var(--yn-color-canvas-raised);
+}
+
 .runtimeActions {
   display: flex;
   justify-content: flex-end;
@@ -200,6 +289,14 @@
 
   .runtimeActions {
     flex-wrap: wrap;
+  }
+
+  .rdpCredential {
+    grid-template-columns: auto minmax(0, 1fr) 40px;
+  }
+
+  .rdpCredential > span {
+    display: none;
   }
 }
 

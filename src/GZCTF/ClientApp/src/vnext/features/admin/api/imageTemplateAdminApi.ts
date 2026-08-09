@@ -185,13 +185,6 @@ export function createImageTemplateAdminApi(client: RuntimeJsonClient = runtimeJ
       return parseIdentity(await client.postJson('/api/v1/image-templates/import-local', data), 'Local image import')
     },
 
-    async setInstanceCredentialCapability(id: number, supported: boolean) {
-      return parseIdentity(
-        await client.patchJson(`/api/v1/image-templates/${id}/instance-credentials`, { supported }),
-        'Windows credential capability update'
-      )
-    },
-
     async remoteAccess(id: number) {
       return parseRemoteAccess(
         await client.get(`/api/v1/image-templates/${id}/remote-access`),

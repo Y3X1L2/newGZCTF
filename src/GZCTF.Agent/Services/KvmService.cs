@@ -544,12 +544,46 @@ public class KvmService
             ip is null ? string.Join(" | ", diagnostics) : "Matched virbr0 neighbor table.");
     }
 
-    public Task<int?> EnsureRdpProxyAsync(string vmName, string ipAddress, CancellationToken token)
+    internal static async Task<bool> IsTcpPortReadyAsync(
+        string ipAddress,
+        int targetPort,
+        CancellationToken token)
     {
-        if (!SafeNamePattern.IsMatch(vmName) || !IPAddress.TryParse(ipAddress, out var ip))
+        if (!IPAddress.TryParse(ipAddress, out var ip) || targetPort is < 1 or > 65535)
+            return false;
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(2));
+        try
+        {
+            using var client = new TcpClient(ip.AddressFamily);
+            await client.ConnectAsync(ip, targetPort, timeout.Token);
+            return true;
+        }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (SocketException)
+        {
+            return false;
+        }
+    }
+
+    public Task<int?> EnsureRdpProxyAsync(
+        string vmName,
+        string ipAddress,
+        int targetPort,
+        CancellationToken token)
+    {
+        if (!SafeNamePattern.IsMatch(vmName) ||
+            !IPAddress.TryParse(ipAddress, out var ip) ||
+            targetPort is < 1 or > 65535)
             return Task.FromResult<int?>(null);
 
-        if (RdpProxies.TryGetValue(vmName, out var existing) && existing.TargetIp.Equals(ip))
+        if (RdpProxies.TryGetValue(vmName, out var existing) &&
+            existing.TargetIp.Equals(ip) &&
+            existing.TargetPort == targetPort)
             return Task.FromResult<int?>(existing.Port);
 
         if (RdpProxies.TryRemove(vmName, out existing))
@@ -564,13 +598,14 @@ public class KvmService
             {
                 var listener = new TcpListener(IPAddress.Any, port);
                 listener.Start(64);
-                var proxy = new RdpProxy(vmName, ip, port, listener, _logger, _consoleAccessPolicy);
+                var proxy = new RdpProxy(
+                    vmName, ip, targetPort, port, listener, _logger, _consoleAccessPolicy);
                 if (RdpProxies.TryAdd(vmName, proxy))
                 {
                     _ = proxy.RunAsync();
                     _logger.LogInformation(
-                        "Console proxy for VM {VmName}: :{Port} -> {Ip}:3389, accepting {Sources}",
-                        vmName, port, ipAddress,
+                        "Console proxy for VM {VmName}: :{Port} -> {Ip}:{TargetPort}, accepting {Sources}",
+                        vmName, port, ipAddress, targetPort,
                         _consoleAccessPolicy.LoopbackOnly ? "loopback only" : "configured platform sources");
                     return Task.FromResult<int?>(port);
                 }
@@ -1222,11 +1257,13 @@ public class KvmService
         private readonly CancellationTokenSource _cts = new();
 
         public IPAddress TargetIp { get; }
+        public int TargetPort { get; }
         public int Port { get; }
 
         public RdpProxy(
             string vmName,
             IPAddress targetIp,
+            int targetPort,
             int port,
             TcpListener listener,
             ILogger logger,
@@ -1234,6 +1271,7 @@ public class KvmService
         {
             _vmName = vmName;
             TargetIp = targetIp;
+            TargetPort = targetPort;
             Port = port;
             _listener = listener;
             _logger = logger;
@@ -1287,7 +1325,7 @@ public class KvmService
             try
             {
                 using var target = new TcpClient();
-                await target.ConnectAsync(TargetIp, 3389, _cts.Token);
+                await target.ConnectAsync(TargetIp, TargetPort, _cts.Token);
 
                 await using var clientStream = clientSocket.GetStream();
                 await using var targetStream = target.GetStream();

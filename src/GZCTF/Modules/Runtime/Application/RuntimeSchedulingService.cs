@@ -297,14 +297,14 @@ public sealed class RuntimeSchedulingService(
         }
 
         var resources = await ResolveResourcesAsync(ticket, token);
-        var requiresInstanceCredentials = ticket.Kind == DeploymentQueueKind.VirtualMachine;
+        var isCompetitionVm = ticket.Kind == DeploymentQueueKind.VirtualMachine;
         return await capacity.TryReserveAsync(ticket.Id, new FleetCapacityRequest(
             RequiredCapability(ticket), resources,
             await ResolvePreferredNodeIdAsync(ticket, token),
-            RequiredFeatures: requiresInstanceCredentials
-                ? [AgentFeatureIds.Kvm, AgentFeatureIds.CloudInit]
+            RequiredFeatures: isCompetitionVm
+                ? [AgentFeatureIds.Kvm, AgentFeatureIds.VmDownload]
                 : null,
-            RequireRemote: requiresInstanceCredentials), token);
+            RequireRemote: isCompetitionVm), token);
     }
 
     async Task<WorkloadResourceVector> ResolveResourcesAsync(

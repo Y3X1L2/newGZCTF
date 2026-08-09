@@ -10,6 +10,7 @@ using GZCTF.Services;
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Fleet;
 using GZCTF.Services.Transfer;
+using GZCTF.Modules.Content.Application;
 using GZCTF.Utils;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -44,6 +45,7 @@ public class EditController(
     IDivisionRepository divisionRepository,
     IStringLocalizer<Program> localizer,
     DeploymentQueueService deploymentQueue,
+    ImageRemoteAccessService imageRemoteAccess,
     IServiceScopeFactory scopeFactory) : Controller
 {
     bool HasContainerRuntimeConfig(GameChallenge challenge) =>
@@ -61,14 +63,10 @@ public class EditController(
         await IsReadyWindowsVmTemplate(challenge.ImageTemplateId.Value, token);
 
     Task<bool> IsReadyWindowsVmTemplate(int templateId, CancellationToken token) =>
-        dbContext.ImageTemplates.AnyAsync(t =>
-            t.Id == templateId &&
-            t.OSType == OSType.Windows &&
-            t.ImageType != ImageType.Docker &&
-            t.Status == ImageStatus.Ready, token);
+        imageRemoteAccess.HasCompetitionWindowsRdpProfileAsync(templateId, token);
 
     BadRequestObjectResult WindowsVmRuntimeConfigError() =>
-        BadRequest(new RequestResponse("Windows 虚拟机题目必须选择就绪的 Windows 镜像模板。"));
+        BadRequest(new RequestResponse("Windows 虚拟机题目必须选择就绪且已配置固定 RDP 账号的 Windows 镜像模板。"));
 
     async Task<(Game? Game, IActionResult? Error)> RequireManageableGameAsync(
         int gameId,

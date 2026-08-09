@@ -1,15 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  ChallengeDetailModel,
-  ChallengeType,
-  ClientFlagContext,
-  ContainerEntryStatus,
-  EnvironmentType,
-  VmStatusResponse,
-} from '@Api'
+import { ChallengeDetailModel, ChallengeType, ClientFlagContext, ContainerEntryStatus, EnvironmentType } from '@Api'
 import { errorMessage } from '../../../shared/errors'
 import { RuntimeInstanceController, RuntimeInstancePhase } from '../../challenge-runtime/types'
-import { gamePlayerApi } from '../gamePlayerApi'
+import { gamePlayerApi, PlayerVmStatus } from '../gamePlayerApi'
 
 function challengeInstanceKind(challenge?: ChallengeDetailModel): RuntimeInstanceController['kind'] {
   const container =
@@ -18,10 +11,10 @@ function challengeInstanceKind(challenge?: ChallengeDetailModel): RuntimeInstanc
   return challenge.environment === EnvironmentType.WindowsVM ? 'windows' : 'docker'
 }
 
-function vmPhase(status: VmStatusResponse): RuntimeInstancePhase {
+function vmPhase(status: PlayerVmStatus): RuntimeInstancePhase {
   if (status.status === 'Error' || status.stage === 'error') return 'failed'
   if (status.status === 'Destroyed' || status.status === 'Stopped') return 'idle'
-  if (status.rdpUrl || status.stage === 'ready') return 'running'
+  if ((status.rdpHost && status.rdpPort) || status.rdpUrl || status.stage === 'ready') return 'running'
   if (status.queue?.queuePosition || status.queue?.peopleAhead) return 'queued'
   return 'provisioning'
 }
@@ -56,7 +49,7 @@ export function useGameInstance({
   const instanceEntryError = challenge?.context?.instanceEntryError ?? null
   const closeTime = challenge?.context?.closeTime ?? null
   const [phase, setPhase] = useState<RuntimeInstancePhase>('idle')
-  const [vmStatus, setVmStatus] = useState<VmStatusResponse | null>(null)
+  const [vmStatus, setVmStatus] = useState<PlayerVmStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
   const activeChallengeRef = useRef(challengeId)
   const provisioningStartedRef = useRef<number | null>(null)
@@ -158,8 +151,8 @@ export function useGameInstance({
       const response = await gamePlayerApi.createInstance(gameId, challengeId)
       if (activeChallengeRef.current !== challengeId) return
       if (kind === 'docker') {
-        const entryStatus = response.entryStatus ??
-          (response.entry ? ContainerEntryStatus.Ready : ContainerEntryStatus.Pending)
+        const entryStatus =
+          response.entryStatus ?? (response.entry ? ContainerEntryStatus.Ready : ContainerEntryStatus.Pending)
         updateChallenge({
           ...challenge,
           context: {
@@ -247,7 +240,9 @@ export function useGameInstance({
     phase,
     entry:
       kind === 'windows'
-        ? (vmStatus?.rdpUrl ?? vmStatus?.ipAddress ?? null)
+        ? vmStatus?.rdpHost && vmStatus.rdpPort
+          ? `${vmStatus.rdpHost}:${vmStatus.rdpPort}`
+          : (vmStatus?.rdpUrl ?? vmStatus?.ipAddress ?? null)
         : instanceEntry,
     entryStatus: kind === 'docker' ? instanceEntryStatus : null,
     entryReadyAt: kind === 'docker' ? instanceEntryReadyAt : null,

@@ -1,5 +1,12 @@
 import api, { AnswerResult, GameJoinModel, VmStatusResponse } from '@Api'
 
+export type PlayerVmStatus = VmStatusResponse & {
+  rdpHost?: string | null
+  rdpPort?: number | null
+  rdpUsername?: string | null
+  rdpPassword?: string | null
+}
+
 const swrOptions = { revalidateOnFocus: false } as const
 
 export function usePlayerGame(gameId: number, enabled: boolean) {
@@ -67,7 +74,7 @@ export const gamePlayerApi = {
       const body = (await response.json().catch(() => null)) as { title?: string } | null
       throw new Error(body?.title || `Windows 靶机状态读取失败 (${response.status})`)
     }
-    return (await response.json()) as VmStatusResponse
+    return (await response.json()) as PlayerVmStatus
   },
   async submitFlag(gameId: number, challengeId: number, flag: string, flagId: number | null) {
     const response = await api.game.gameSubmit(gameId, challengeId, { flag, ...(flagId ? { flagId } : {}) })

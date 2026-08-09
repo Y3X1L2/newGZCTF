@@ -59,6 +59,7 @@ public class GameController(
     IGameInstanceRepository gameInstanceRepository,
     IParticipationRepository participationRepository,
     GamePhaseService gamePhaseService,
+    CompetitionVmAccessService vmAccess,
     IDistributedLeaseProvider lockService,
     IOptionsSnapshot<ContainerPolicy> containerPolicy,
     IOptionsSnapshot<KvmSettings> kvmSettings,
@@ -1388,6 +1389,13 @@ public class GameController(
         // Route to VM if challenge uses Windows VM
         if (instance.Challenge.Environment == EnvironmentType.WindowsVM)
         {
+            var accessProfile = instance.Challenge.ImageTemplateId is { } imageTemplateId
+                ? await vmAccess.GetImageProfileAsync(imageTemplateId, token)
+                : null;
+            if (accessProfile is null)
+                return BadRequest(new RequestResponse(
+                    "Windows 虚拟机镜像未配置可用的固定 RDP 账号，请联系管理员。"));
+
             await using var vmCreateLock = await lockService.AcquireAsync(
                 $"vm-create:{challengeId}:{context.User!.Id}",
                 TimeSpan.FromSeconds(10),
@@ -1419,10 +1427,10 @@ public class GameController(
                 RuntimeGeneration = runtimeGeneration,
                 ProviderName = "KVM",
                 OSType = OSType.Windows,
+                RdpUsername = accessProfile.Username,
                 Status = VmInstanceStatus.Creating,
                 CreatedAt = DateTimeOffset.UtcNow,
             };
-            HttpContext.RequestServices.GetRequiredService<VmCredentialService>().Initialize(vmInstance);
             dbContext.VmInstances.Add(vmInstance);
             await dbContext.SaveChangesAsync(token);
 
@@ -1649,6 +1657,7 @@ public class GameController(
             return context.Result;
 
         var vmInstance = await dbContext.VmInstances
+            .Include(v => v.Challenge)
             .Where(v => v.ChallengeId == challengeId
                         && v.UserId == context.User!.Id
                         && v.Status != VmInstanceStatus.Destroyed)
@@ -1657,6 +1666,14 @@ public class GameController(
 
         if (vmInstance is null)
             return NotFound(new RequestResponse("No VM instance found", StatusCodes.Status404NotFound));
+
+        Response.Headers.CacheControl = "no-store, private";
+        Response.Headers.Pragma = "no-cache";
+
+        var nativeAccess = vmInstance.Status == VmInstanceStatus.Running &&
+                           vmInstance.Challenge?.ImageTemplateId is { } imageTemplateId
+            ? await vmAccess.GetAccessAsync(vmInstance, imageTemplateId, token)
+            : null;
 
         // Generate authenticated URL with Guacamole token for direct RDP access
         var rdpUrl = vmInstance.RdpUrl;
@@ -1677,7 +1694,11 @@ public class GameController(
             Stage = stage.Stage,
             StageMessage = stage.Message,
             Queue = queueStatus,
-            IpAddress = vmInstance.IpAddress,
+            IpAddress = nativeAccess?.IpAddress ?? vmInstance.IpAddress,
+            RdpHost = nativeAccess?.Host,
+            RdpPort = nativeAccess?.Port,
+            RdpUsername = nativeAccess?.Username,
+            RdpPassword = nativeAccess?.Password,
             RdpUrl = rdpUrl,
             CreatedAt = vmInstance.CreatedAt
         });

@@ -178,15 +178,15 @@ public sealed class RuntimeControlPlaneTests
     }
 
     [Fact]
-    public async Task Scheduler_AssignsWindowsVmOnlyToRemoteCloudInitNode()
+    public async Task Scheduler_AssignsCompetitionVmOnlyToRemoteImageDownloadNode()
     {
         await using var context = CreateContext();
         SeedVmNode(context, "local", isLocal: true,
-            [AgentFeatureIds.Kvm, AgentFeatureIds.CloudInit]);
+            [AgentFeatureIds.Kvm, AgentFeatureIds.VmDownload]);
         SeedVmNode(context, "remote-kvm-only", isLocal: false,
             [AgentFeatureIds.Kvm]);
-        var eligible = SeedVmNode(context, "remote-cloud-init", isLocal: false,
-            [AgentFeatureIds.Kvm, AgentFeatureIds.CloudInit]);
+        var eligible = SeedVmNode(context, "remote-image-download", isLocal: false,
+            [AgentFeatureIds.Kvm, AgentFeatureIds.VmDownload]);
         context.DeploymentQueueTickets.Add(DeploymentQueueTicket.Create(
             DeploymentQueueRequest.Vm(1, Guid.NewGuid(), 2, Guid.NewGuid())));
         await context.SaveChangesAsync();
@@ -203,8 +203,8 @@ public sealed class RuntimeControlPlaneTests
     public async Task CapacityReservation_ExplainsWhyWindowsVmNodesWereRejected()
     {
         await using var context = CreateContext();
-        SeedVmNode(context, "local-cloud-init", isLocal: true,
-            [AgentFeatureIds.Kvm, AgentFeatureIds.CloudInit]);
+        SeedVmNode(context, "local-image-download", isLocal: true,
+            [AgentFeatureIds.Kvm, AgentFeatureIds.VmDownload]);
         SeedVmNode(context, "remote-kvm-only", isLocal: false,
             [AgentFeatureIds.Kvm]);
         var lease = new LocalDevelopmentLeaseProvider();
@@ -218,7 +218,7 @@ public sealed class RuntimeControlPlaneTests
         var result = await service.TryReserveAsync(Guid.NewGuid(), new FleetCapacityRequest(
             NodeCapability.Kvm,
             new WorkloadResourceVector(0, 0, 0, 0, 1),
-            RequiredFeatures: [AgentFeatureIds.Kvm, AgentFeatureIds.CloudInit],
+            RequiredFeatures: [AgentFeatureIds.Kvm, AgentFeatureIds.VmDownload],
             RequireRemote: true), CancellationToken.None);
 
         Assert.False(result.Success);
@@ -232,7 +232,7 @@ public sealed class RuntimeControlPlaneTests
         var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.Vm(
             1, Guid.NewGuid(), 2, Guid.NewGuid()));
         ticket.Stage = DeploymentStage.Failed;
-        ticket.ErrorMessage = "Windows image is not verified for instance-specific Cloudbase-Init credentials.";
+        ticket.ErrorMessage = "Windows image has no enabled fixed-account RDP configuration.";
 
         var message = RuntimeExecutionService.ResolveFailureMessage(ticket, "Queued VM creation failed.");
 

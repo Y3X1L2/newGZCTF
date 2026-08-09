@@ -4,9 +4,7 @@ using GZCTF.Models.Data;
 using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Fleet;
-using GZCTF.Services.Vm;
 using GZCTF.Utils;
-using Microsoft.AspNetCore.DataProtection;
 using Xunit;
 
 namespace GZCTF.Test.UnitTests.Fleet;
@@ -66,54 +64,30 @@ public sealed class InstanceReadinessContractTests
     }
 
     [Fact]
-    public void VmCredentials_AreUniqueProtectedAndCloudbaseConsumable()
-    {
-        var service = new VmCredentialService(new EphemeralDataProtectionProvider());
-        var first = new VmInstance { VmName = "vm-first" };
-        var second = new VmInstance { VmName = "vm-second" };
-
-        service.Initialize(first);
-        service.Initialize(second);
-        var firstPassword = service.RevealPassword(first);
-        var secondPassword = service.RevealPassword(second);
-
-        Assert.NotEqual(firstPassword, secondPassword);
-        Assert.NotEqual(firstPassword, first.RdpPasswordProtected);
-        Assert.DoesNotContain("qwer1234!", firstPassword, StringComparison.Ordinal);
-
-        var cloudInit = FleetVmService.BuildWindowsCloudInit(first, firstPassword);
-        Assert.True(cloudInit.Enabled);
-        Assert.Contains(firstPassword, cloudInit.UserData, StringComparison.Ordinal);
-        Assert.Contains("RemoteDesktop-UserMode-In-*", cloudInit.UserData, StringComparison.Ordinal);
-        Assert.Contains("GZCTF-RDP-In-TCP", cloudInit.UserData, StringComparison.Ordinal);
-        Assert.DoesNotContain("qwer1234!", cloudInit.UserData, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void VmCredentialContract_RejectsUnsupportedNodeAndImage()
+    public void CompetitionVmContract_RequiresKvmImageDistributionAndReadyWindowsImage()
     {
         var unsupported = CreateNode([AgentFeatureIds.Kvm]);
-        var supported = CreateNode([AgentFeatureIds.Kvm, AgentFeatureIds.CloudInit]);
+        var supported = CreateNode([AgentFeatureIds.Kvm, AgentFeatureIds.VmDownload]);
 
-        Assert.NotNull(FleetVmService.ValidateCredentialNode(unsupported));
-        Assert.Null(FleetVmService.ValidateCredentialNode(supported));
+        Assert.NotNull(FleetVmService.ValidateNode(unsupported));
+        Assert.Null(FleetVmService.ValidateNode(supported));
         supported.IsLocal = true;
-        Assert.NotNull(FleetVmService.ValidateCredentialNode(supported));
-        Assert.NotNull(FleetVmService.ValidateCredentialImage(null));
-        Assert.NotNull(FleetVmService.ValidateCredentialImage(new ImageTemplate()));
-        Assert.NotNull(FleetVmService.ValidateCredentialImage(new ImageTemplate
+        supported.Capabilities = NodeCapability.Kvm;
+        Assert.NotNull(FleetVmService.ValidateNode(supported));
+        Assert.NotNull(FleetVmService.ValidateImage(null));
+        Assert.NotNull(FleetVmService.ValidateImage(new ImageTemplate()));
+        Assert.NotNull(FleetVmService.ValidateImage(new ImageTemplate
         {
             OSType = OSType.Windows,
             ImageType = ImageType.Qcow2,
-            Status = ImageStatus.Error,
-            SupportsInstanceCredentials = true
+            Status = ImageStatus.Error
         }));
-        Assert.Null(FleetVmService.ValidateCredentialImage(new ImageTemplate
+        Assert.Null(FleetVmService.ValidateImage(new ImageTemplate
         {
             OSType = OSType.Windows,
             ImageType = ImageType.Qcow2,
             Status = ImageStatus.Ready,
-            SupportsInstanceCredentials = true
+            SupportsInstanceCredentials = false
         }));
     }
 
