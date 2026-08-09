@@ -833,6 +833,10 @@ public class TrainingCourseAdminController(
         var last = submissions.OrderByDescending(s => s.SubmittedAt).FirstOrDefault();
         var acceptedCount = submissions.Count(s => s.Status == AnswerResult.Accepted);
         var challenge = link.CourseChallenge.ExerciseChallenge;
+        var activeContainer = instance?.Container is { Status: ContainerStatus.Running } container &&
+                              container.IsActiveAt(DateTimeOffset.UtcNow)
+            ? container
+            : null;
 
         return new TrainingCourseStudentChallengeLearningModel
         {
@@ -849,12 +853,8 @@ public class TrainingCourseAdminController(
             LastStatus = last?.Status,
             LastSubmittedAt = last?.SubmittedAt,
             LastIpAddress = last?.IpAddress,
-            InstanceEntry = instance?.Container is { Status: ContainerStatus.Running } container
-                ? container.ReadyEntry
-                : null,
-            InstanceStopAt = instance?.Container is { Status: ContainerStatus.Running } runningContainer
-                ? runningContainer.ExpectStopAt
-                : null
+            InstanceEntry = activeContainer?.ReadyEntry,
+            InstanceStopAt = activeContainer?.ExpectStopAt
         };
     }
 

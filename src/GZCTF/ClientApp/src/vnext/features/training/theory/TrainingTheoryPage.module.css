@@ -75,6 +75,10 @@
   color: var(--yn-color-brand-strong);
 }
 
+.submittedPanel > div:first-child > .reviewWarningIcon {
+  color: var(--yn-color-warning);
+}
+
 .submittedPanel span {
   display: grid;
   min-width: 0;

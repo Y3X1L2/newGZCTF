@@ -7,6 +7,9 @@ public sealed class FleetCapacityReservation
     [Key] public Guid Id { get; set; } = Guid.CreateVersion7();
     public Guid DeploymentQueueTicketId { get; set; }
     public Guid WorkerNodeId { get; set; }
+    public long CpuUnits { get; set; }
+    public long MemoryMiB { get; set; }
+    public long StorageMiB { get; set; }
     public int DockerSlots { get; set; }
     public int VmSlots { get; set; }
     public CapacityReservationStatus Status { get; set; } = CapacityReservationStatus.Active;

@@ -801,10 +801,24 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
         }
 
         if (!string.IsNullOrWhiteSpace(config.StartCommand))
-            createParameters.Cmd = ["sh", "-c", config.StartCommand];
+            createParameters.Cmd = BuildStartCommand(config.StartCommand, isolatedHostNetwork);
 
         return createParameters;
     }
+
+    internal static IList<string> BuildStartCommand(string command, bool waitForManagedNetwork) =>
+        waitForManagedNetwork
+            ?
+            [
+                "sh",
+                "-c",
+                "while :; do for path in /sys/class/net/*; do if [ \"${path##*/}\" != \"lo\" ] && [ \"$(cat \"$path/operstate\" 2>/dev/null)\" = \"up\" ]; then sleep 0.2; exec \"$@\"; fi; done; sleep 0.1; done",
+                "teamlab-network-gate",
+                "sh",
+                "-c",
+                command
+            ]
+            : ["sh", "-c", command];
 
     private async Task EnsureCustomNetworksAsync(GZCTF.Models.Internal.ContainerConfig config,
         IReadOnlyList<ContainerNetworkAttachment> attachments, CancellationToken token)

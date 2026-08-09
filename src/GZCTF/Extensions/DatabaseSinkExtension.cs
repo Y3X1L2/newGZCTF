@@ -37,7 +37,11 @@ public sealed class DatabaseSink : ILogEventSink, IDisposable
     public DatabaseSink(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider;
-        _writerTask = Task.Run(() => WriteToDatabaseAsync(_forceStop.Token));
+        _writerTask = Task.Factory.StartNew(
+            () => WriteToDatabase(_forceStop.Token),
+            CancellationToken.None,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default);
     }
 
     public void Emit(LogEvent logEvent)
@@ -94,7 +98,7 @@ public sealed class DatabaseSink : ILogEventSink, IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private async Task WriteToDatabaseAsync(CancellationToken token)
+    private void WriteToDatabase(CancellationToken token)
     {
         List<LogModel> pending = [];
         while (!token.IsCancellationRequested)
@@ -104,7 +108,7 @@ public sealed class DatabaseSink : ILogEventSink, IDisposable
 
             try
             {
-                await _flushSignal.WaitAsync(FlushInterval, token);
+                _flushSignal.Wait(FlushInterval, token);
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
@@ -123,7 +127,7 @@ public sealed class DatabaseSink : ILogEventSink, IDisposable
 
             try
             {
-                await FlushAsync(pending, token);
+                Flush(pending, token);
                 pending.Clear();
                 DatabaseLogSinkMetrics.SetBuffered(Volatile.Read(ref _bufferedCount));
             }
@@ -136,7 +140,8 @@ public sealed class DatabaseSink : ILogEventSink, IDisposable
                 DatabaseLogSinkMetrics.RecordFlushFailure();
                 try
                 {
-                    await Task.Delay(RetryInterval, token);
+                    token.WaitHandle.WaitOne(RetryInterval);
+                    token.ThrowIfCancellationRequested();
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
@@ -146,13 +151,13 @@ public sealed class DatabaseSink : ILogEventSink, IDisposable
         }
     }
 
-    private async Task FlushAsync(List<LogModel> pending, CancellationToken token)
+    private void Flush(List<LogModel> pending, CancellationToken token)
     {
         var started = Stopwatch.GetTimestamp();
-        await using var scope = _serviceProvider.CreateAsyncScope();
+        using var scope = _serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        await context.Logs.AddRangeAsync(pending, token);
-        await context.SaveChangesAsync(token);
+        context.Logs.AddRange(pending);
+        context.SaveChanges(true);
         DatabaseLogSinkMetrics.RecordFlush(pending.Count, Stopwatch.GetElapsedTime(started));
     }
 

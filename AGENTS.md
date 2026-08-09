@@ -1,297 +1,170 @@
-# YINYU 安全综合演练平台 — AGENTS 上下文
+# YINYU 项目协作规范
 
-## 项目概况
+本文件适用于整个仓库。开发者、Codex 和其他 AI 在开始任务前必须先阅读本文件。它只保存长期稳定的规则；会变化的提交、部署和进度信息维护在 `docs/development/current-state.md`。
 
-| 属性 | 值 |
-|------|------|
-| 名称 | YINYU 安全综合演练平台（基于 GZCTF 二次开发） |
-| 技术栈 | 后端 ASP.NET Core 10 + EF Core + PostgreSQL 16 + Redis 7 + SignalR |
-| 前端 | React 19 + TypeScript 5 + Mantine v9 + Vite + pnpm monorepo |
-| 架构 | 12 模块 Clean Architecture 插件 + Docker/KVM 节点编排 |
-| 分支 | `vnext`（主开发线，全新 UI 重构中） |
-| 模式 | CTF / AWDP / Theory / Training / Penetration / Exercise / TeamLab |
+## 1. 必读顺序
 
-## 项目结构
+1. `AGENTS.md`
+2. `docs/development/current-state.md`
+3. `README.md`
+4. `docs/platform-commercialization-master-plan.md`
+5. 与任务直接相关的模块文档
 
-```
-D:\newGZCTF/
-├── .github/workflows/quality.yml   # CI
-├── docs/                            # 产品/技术文档
-│   ├── archive/                     # 旧文档归档
-│   ├── commercialization/           # 商业化架构（模块边界、API 契约、缓存、数据库）
-│   ├── deploy/                      # 部署指南
-│   ├── operations/                  # 运维手册
-│   └── *.md                         # 设计文档（IAM、AWDP、UI、审计等）
-├── scenarios/nebulamind/            # 企业渗透场景（12 服务、21 FLAG、5 安全域）
-├── scripts/test-challenge/          # 测试挑战示例
-├── src/
-│   ├── GZCTF/                       # 主 Web 应用（后端 + 前端 ClientApp）
-│   ├── GZCTF.Agent/                 # 节点代理（Docker/KVM 编排）
-│   ├── GZCTF.AppHost/               # .NET Aspire 编排
-│   ├── GZCTF.Test/                  # 单元测试（20 个子目录）
-│   └── GZCTF.Integration.Test/      # 集成测试
-├── tests/e2e/                       # Playwright E2E
-├── docker-compose.yml               # 生产编排
-├── docker-compose.dev.yml           # 开发本地依赖
-└── README.md
-```
+涉及架构、前端或部署时还必须阅读：
 
-## 后端模块架构（12 模块）
+- 架构边界：`docs/commercialization/module-boundary-map.md`
+- API 标准：`docs/commercialization/external-api-standard.md`
+- 前端边界：`docs/commercialization/frontend-component-boundary.md`
+- 前端视觉契约：`docs/commercialization/frontend-style-token-contract.md`
+- vNext 设计与开发边界：`docs/yinyu-vnext-development-guardrails.md`
+- 生产发布：`docs/operations/vnext-maintenance-window-rollout.md`
 
-`src/GZCTF/Modules/` 下每个模块遵循 Clean Architecture：
+`docs/archive/` 只保存历史材料，不是当前设计或实现依据。历史计划中的路径、分支、测试数量和部署状态不得直接当作当前事实。
 
-```
-Module/
-├── Application/    # 服务接口 + 实现
-├── Domain/         # 领域模型
-└── Infrastructure/ # 基础设施（持久化等）
-```
+## 2. 事实优先级
 
-| 模块 | 状态 | 说明 |
-|------|------|------|
-| Identity | ✅ | 身份认证 + API Token |
-| Audit | ✅ | 审计日志 |
-| Content | ✅ | 内容管理（公告、帖子） |
-| Ctf | ✅ | CTF 竞赛管理 |
-| Awdp | ✅ | AWDP 攻防对抗 |
-| Theory | ✅ | 理论考试 |
-| Training | ✅ | 培训课程 |
-| Penetration | ✅ | 渗透测试（开发中） |
-| **Exercise** | **✅ 已完成** | **自主练习（后端 + 前端完整实现）** |
-| Runtime | ✅ | 容器运行时 |
-| TeamLab | ✅ | 团队实验室 |
-| Composition | ✅ | 模块注册中心 |
+发生冲突时按以下顺序判断：
 
-### 基础设施层
+1. 当前运行行为和真实请求/日志
+2. 当前 `main` 源码与数据库迁移
+3. 当前自动化测试
+4. `docs/development/current-state.md`
+5. 现行架构、契约和阶段文档
+6. README、历史记录和归档文档
 
-| 目录 | 说明 |
-|------|------|
-| `Infrastructure/Cache/` | Redis 分布式缓存 |
-| `Infrastructure/Persistence/` | EF Core DbContext + 迁移 |
-| `Infrastructure/Telemetry/` | 遥测监控 |
-| `Infrastructure/Concurrency/` | 并发控制 |
-| `Services/` | 业务服务（文件、容器、排名） |
-| `Hubs/` | SignalR Hub（实时事件、计分板、容器 I/O） |
-| `Middlewares/` | 中间件（限流等） |
-| `Migrations/` | 数据库迁移 |
+不能用旧文档推翻当前运行证据。发现文档过期时，在同一任务中修正文档或明确记录缺口。
 
-## Exercise（自主练习）模块当前状态
+## 3. 仓库与技术边界
 
-**核心发现：整个模块只有空壳**
+- 主仓库：`https://github.com/Y3X1L2/newGZCTF.git`
+- 稳定分支：`main`
+- 后端：`.NET 10 / ASP.NET Core / EF Core / PostgreSQL / Redis`
+- 前端：`React 19 / TypeScript / Vite / Mantine / pnpm`
+- 执行面：`GZCTF.Agent / Docker / KVM / libvirt / Guacamole`
+- 架构形态：模块化单体主站加独立 Agent 执行面
 
-| 组件 | 路径 | 状态 |
-|------|------|------|
-| Controller | `Controllers/ExerciseController.cs` | **已完成** — 搜索/CRUD/提交Flag/容器/从赛事导入 |
-| 服务接口 | `Modules/Exercise/Application/IExerciseService.cs` | **已创建** — 搜索、详情、Flag提交、容器 |
-| 服务接口 | `Modules/Exercise/Application/IExerciseManagementService.cs` | **已创建** — CRUD、从赛事导入 |
-| 服务实现 | `Modules/Exercise/Application/ExerciseService.cs` | **已创建** — ILike 搜索/多条件筛选/详情/Flag/容器 |
-| 服务实现 | `Modules/Exercise/Application/ExerciseManagementService.cs` | **已创建** — 完整的 CRUD + ImportFromGame |
-| 模块注册 | `Modules/Exercise/ExerciseModuleRegistration.cs` | **已创建** — DI 注册全部服务 + 仓库 + ImageTemplate |
-| 模块注册 | `Composition/ModuleRegistration.cs` | **已注册** — `services.AddExerciseModule()` |
-| API Token | `Modules/Identity/Application/ApiTokenScopes.cs` | **已添加** — `ExercisesRead` / `ExercisesWrite` 作用域 + 策略 |
-| 请求 DTO | `Models/Request/Exercise/ExerciseFilter.cs` | **已创建** — Search/Category/Difficulty/Tags/Credit 范围 |
-| 请求 DTO | `Models/Request/Exercise/ExerciseImportFromGameModel.cs` | **已创建** — fromGameId + challengeIds |
-| 请求 DTO | `Models/Request/Exercise/ExerciseCreateModel.cs` | **已创建** — Create/Update 统一 DTO |
-| 数据模型 | `Models/Data/ExerciseChallenge.cs` | 已定义（未改动） |
-| 数据模型 | `Models/Data/ExerciseInstance.cs` | 已定义（未改动） |
-| 仓库 | `Repositories/ExerciseChallengeRepository.cs` + `ExerciseInstanceRepository.cs` | 已存在（未改动，被服务调用） |
-| 前端路由 | `ClientApp/.../VNextApp.tsx` | **已添加** — 4 个 practice 路由 + lazy import |
-| 前端模块注册 | `ClientApp/.../moduleRegistry.ts` | **已激活** — `implemented: true` |
-| 前端 API | `features/practice/api/practiceApi.ts` | **已创建** — useExercises/useExerciseDetail/submitFlag/createContainer |
-| 前端首页 | `features/practice/PracticePage.tsx` | **已创建** — 分类网格 + 最近更新 |
-| 前端浏览页 | `features/practice/PracticeBrowsePage.tsx` | **已创建** — 搜索 + 分类/难度/标签筛选 + 卡片网格 |
-| 前端题目页 | `features/practice/PracticeChallengePage.tsx` | **已创建** — 详情 + FlagSubmission + InstanceControl |
-| 前端统计页 | `features/practice/PracticeStatsPage.tsx` | **已创建** — 总数/解答数/正确率 + 分类/难度柱状图 |
-| 前端样式 | `features/practice/PracticePage.module.css` | **已创建** — 作用域样式 |
-| 关键依赖 | ExerciseChallenge 被 Training 模块引用 | 未改动 |
+后端调用方向固定为：
 
-### 关键依赖关系
-
-ExerciseChallenge 实体已被 Training 模块大量引用，修改需谨慎：
-- `TrainingCourseChallenge.ExerciseChallengeId`
-- `TrainingChapterChallenge.ExerciseChallengeId`
-- `TrainingLabRecord.ExerciseChallengeId`
-- `TrainingAnswerRecord.ExerciseChallengeId`
-- `FlagContext.ExerciseId`
-- `DeploymentQueueTicket.ExerciseContainer`
-- `UserInfo.ExerciseVisible`
-
-## 项目计划：自主练习模块
-
-### 目标
-对标青少年 CTF 练习平台，实现独立的自主练习子系统。
-
-### 功能特性
-
-| 功能 | 说明 |
-|------|------|
-| 题库池 | Web/Pwn/Reverse/Crypto/Misc/Forensics 分类 + 难度 + 标签筛选 |
-| 题目类型 | 复用 StaticAttachment/DynamicAttachment/StaticContainer/DynamicContainer |
-| **关键词搜索** | 按标题/内容关键词匹配题目（模糊搜索，支持中文分词） |
-| **标签过滤** | 按 Tags 数组精确匹配（如 "SQL注入","RCE" 等多标签组合） |
-| **难度匹配** | 按 Difficulty 枚举筛选（Baby~Insane 8 级），支持多选范围 |
-| **从赛事导入题目** | 管理员从现有 CTF 赛事一键导入题目到练习池，保留原分类/标签/难度/附件 |
-| 练习模式 | 自由刷题 + 专题训练（如 "SQL注入专项"） |
-| 进度追踪 | 已完成/未完成、解题数、正确率、热力图 |
-| AI 出题 | 通过 External API + Token 接口让 AI 写入题目 |
-| 个人统计 | 解题趋势图、分类雷达图、能力图谱 |
-
-### API + Token 体系
-
-**复用现有标准 External API（Identity 模块已就绪）：**
-
-- Token 格式：`gzctf_pat_{tokenId:N}.{base64url(32 bytes)}`
-- 认证方式：`Authorization: Bearer {token}`
-- 基础路径：`/api/open/v1/exercises`
-- 作用域：`exercises:read` / `exercises:write`（已在 `ApiTokenScopes.cs` 注册，`IdentityModuleRegistration.cs` 已绑定策略 `scope:exercises:read` / `scope:exercises:write`）
-- 速率限制：Redis Token Bucket（`X-RateLimit-*` 头），`ApiTokenRateLimitMiddleware` 在 `/api/open/v1/*` 生效
-- 幂等性：写操作需 `Idempotency-Key` 请求头（`OpenChallengesController` 模式）
-- 错误格式：`application/problem+json`（`ExternalApiExceptionHandler` 处理）
-
-**分析结论（2026-07-25）：**
-
-1. **Token 基础设施完全就绪** — `ExercisesRead`/`ExercisesWrite` scopes 已定义、已注册到 `TeacherScopes` + `All` 集合、已通过 `AddScopePolicy` 绑定到授权策略、`ApiScopeAuthorizationHandler` 验证链完整（Token → ClaimsPrincipal → scope claim → policy requirement → handler check）。
-2. **内部 API `/api/Exercise`** — 使用 `[RequireUser]`（cookie-based），与 `GameController`/`TeamController`/`AwdpPlayerController` 完全一致，无问题。
-3. **外部 API `/api/open/v1/exercises`** — **尚未实现**（Phase 2 待处理），需要 `ExerciseOpenApiController`，模式参照 `OpenChallengesController`。
-4. **无 token 模式问题** — 整个Exercise模块的scope/策略/认证/限流链路完整，只需构建外部API控制器即可复用现有token基础设施。
-
-### External API Controller 模式（参照 `Modules/Ctf/Api/OpenChallengesController.cs`）
-- 路径：`/api/open/v1/exercises`
-- GET 端点使用 `[Authorize(Policy = "scope:" + ApiTokenScopes.ExercisesRead)]`
-- POST/DELETE 端点使用 `[Authorize(Policy = "scope:" + ApiTokenScopes.ExercisesWrite)]`
-- 幂等写操作需 `Idempotency-Key` 请求头（1-128 ASCII 字符）
-- 异步操作返回 `202 Accepted` + operation location
-- 错误返回 `application/problem+json`
-
-### 实现步骤
-
-```
-阶段 1 — 后端模块骨架        ✅ 已完成
-├── 补全 Modules/Exercise/Application/
-├── 创建 ExerciseModuleRegistration.cs
-├── 在 ModuleRegistration.cs 注册
-├── 扩展 ApiTokenScopes（ExercisesRead / ExercisesWrite）
-└── 实现 ExerciseController（CRUD + 搜索/筛选 + Flag提交 + 容器 + 从赛事导入）
-
-阶段 2 — External API        ⏳ 待处理
-├── 实现 ExerciseOpenApiController（/api/open/v1/exercises）
-├── 集成 Idempotency + Rate Limit
-└── 实现 POST /api/open/v1/exercises/generate（AI 出题）
-
-阶段 3 — 前端页面            ✅ 已完成
-├── PracticePage.tsx（首页 + 分类导航）
-├── PracticeBrowsePage.tsx（题库浏览 + 筛选 + 搜索）
-├── PracticeChallengePage.tsx（题目详情 + Flag提交 + 容器）
-├── PracticeStatsPage.tsx（个人统计柱状图）
-├── VNextApp.tsx 路由 + API hooks + moduleRegistry 激活
-└── vite build 通过
-
-阶段 4 — AI 出题             ⏳ 待处理
-├── 定义 AI 出题请求/响应契约
-├── 异步出题队列
-└── Webhook 回调
+```text
+HTTP/Frontend -> Contracts -> Application -> Domain -> Infrastructure ports
+Business Application -> Runtime Application -> Fleet/VM/TeamLab ports -> AgentClient -> Agent
 ```
 
-## 团队协作规范
+约束：
 
-### Git 分支策略
-```
-main（稳定）
- └── vnext（主开发线）
-      ├── feature/exercise-backend
-      ├── feature/exercise-frontend
-      ├── feature/xxx（队友）
-      └── ...
-```
-- 禁止直接 push main 和 vnext
-- 每个功能建 feature 分支
-- 合并前必须 `pnpm build` + `dotnet test`
+- Controller 只处理协议、授权、用例调用和 HTTP 映射，不直接编排 Agent 命令。
+- 跨模块读取使用公开 query contract，跨模块写入使用 application command。
+- PostgreSQL 是业务和运行状态事实源；Redis 只承载缓存、协调和高频缓冲。
+- `DeploymentQueueTicket` 是 Docker、VM、培训、AWDP 和 TeamLab 运行任务的统一事实，不建立第二套队列。
+- Agent 只执行已经校验的本机操作，不读取比赛、课程、计分或权限实体。
+- 运行恢复读取数据库当前事实和 Agent inventory，不从日志文本反推业务状态。
+- 具体允许依赖以 `module-boundary-map.md` 为准。
 
-### 提交前验证
-```bash
-dotnet build src/GZCTF/GZCTF.csproj
-dotnet test src/GZCTF.Test/GZCTF.Test.csproj
+## 4. 前端规则
+
+当前正式前端位于 `src/GZCTF/ClientApp/src/vnext`。新增或重构页面必须：
+
+- 使用 vNext 壳层、语义 Token、CSS Module 和 feature API adapter。
+- 遵循 `Route -> feature controller/hook -> feature panel -> foundation component` 依赖方向。
+- 页面不直接访问生成 API 文件，不把请求、DTO 转换和视觉状态堆在一个大组件中。
+- 通用展示组件不得包含业务请求、路由 ID 或权限逻辑。
+- 不新增 `YinyuRefinement.css`、`YinyuTheme.css` 或无作用域全局选择器来覆盖页面。
+- 不通过加载旧页面或旧壳层填补未实现路由；接口缺失时显示真实空态或待建设状态。
+- 不伪造统计、通知、运行实例、活动或成功结果。
+- 支持日间/夜间、键盘操作和 `prefers-reduced-motion`。
+- 在 390、1366、1920、2560 像素宽度检查重叠、横向滚动和布局抽动。
+- 生成代码不可手工修改；契约变化后重新生成并审核差异。
+
+## 5. 后端与数据规则
+
+- 优先扩展现有模块 contract 和 application service，不从 Controller 直接穿透其他模块的 DbSet。
+- EF 实体、迁移、模型快照和读写路径必须在同一变更中闭环。
+- 不修改或删除历史 migration 来掩盖当前模型问题；新迁移必须支持生产备份后的前向升级。
+- Flag、token、密码、Cookie、WireGuard 私钥、Registry 凭据和完整 user-data 不得写入日志、测试快照、文档或提交。
+- 动态 Flag 必须按实例隔离；管理员预览值不能进入正式实例。
+- 镜像模板主状态和节点分发状态必须分开表达，失败重试必须遵守 `Retryable`。
+- Docker 与 KVM 能力独立判断；缺少 KVM 不能阻断 Docker 调度。
+
+## 6. Git 工作流
+
+任务开始时执行：
+
+```powershell
+git status --short --branch
+git fetch origin --prune
+git log -5 --oneline --decorate
+```
+
+规则：
+
+- 从最新 `origin/main` 创建 `codex/<task-name>` 分支；小型紧急修复也要保持提交边界清晰。
+- 不覆盖或回滚他人的未提交改动，不使用 force push，不改写已共享历史。
+- 一个提交只表达一个可验证意图；源码、测试和必要文档一起提交。
+- 合并前检查远端是否前进，使用快进、正常 merge 或经过审查的 rebase，不覆盖远端。
+- 禁止把本地归档、发布制品、数据库副本、镜像、凭据和测试 Cookie 提交到仓库。
+
+## 7. 验证门禁
+
+根据影响范围选择最小充分测试；共享契约、调度、计分、迁移和认证变更需要扩大验证。
+
+文档与通用门禁：
+
+```powershell
+git diff --check
+```
+
+前端：
+
+```powershell
 cd src/GZCTF/ClientApp
-pnpm build        # TypeScript 严格检查 + 构建
-pnpm lint
+pnpm validate:locales
+pnpm lint:check
+pnpm check
+pnpm check:architecture
+pnpm test
+pnpm build
 ```
-- 提交格式：`feat(scope): msg` / `fix(scope): msg` / `refactor(scope): msg`
-- 不提交：密码、密钥、连接字符串、`appsettings.json`（有 Template）
 
-### 职责边界
+后端：
 
-| 你（练习模块） | 队友 |
-|----------------|------|
-| Exercise 后端模块 | Training 模块完善 |
-| 练习前端全部页面 | AWDP 功能 |
-| External API + Token 对接 | Penetration 渗透模块 |
-| AI 出题接口 | 运维/部署 |
-| 题库管理 | 系统管理功能 |
-
-### 架构约束（来自 docs/commercialization/module-boundary-map.md）
-- Controller → Contract (DTO) → Application Service → Domain → Infrastructure
-- Controller 不得直接访问 AppDbContext、Docker、libvirt
-- 所有 write 操作需要 Idempotency-Key
-
-### 前端注意事项（来自 README）
-- 样式用作用域 class（如 `.yy-practice-page`），写在 `.module.css` 中
-- 优先复用 Mantine 组件，避免 hard-lock 覆盖
-- 使用 `@Api` 自动生成的 TypeScript 类型（OpenAPI → TypeScript）
-- 修改后检查桌面 + 笔记本宽度滚动行为
-
-## 关键参考文件
-
-### 后端（架构模板 — Training 模块）
-- `src/GZCTF/Modules/Training/Application/`
-- `src/GZCTF/Modules/Training/Domain/`
-- `src/GZCTF/Modules/Training/Infrastructure/`
-
-### 后端（API Token 体系）
-- `src/GZCTF/Modules/Identity/Domain/ApiToken.cs`
-- `src/GZCTF/Modules/Identity/Application/ApiTokenIssuer.cs`
-- `src/GZCTF/Modules/Identity/Application/ApiTokenValidator.cs`
-- `src/GZCTF/Modules/Identity/Application/ApiTokenScopes.cs`
-- `src/GZCTF/Modules/Identity/Infrastructure/ApiTokenAuthenticationHandler.cs`
-
-### 后端（External API）
-- `docs/commercialization/external-api-standard.md`
-- `docs/commercialization/open-api-v1-guide.md`
-- `Controllers/VNextController.cs`
-
-### 后端（模块注册）
-- `src/GZCTF/Modules/Composition/ModuleRegistration.cs`
-
-### 前端（架构模板 — Training UI）
-- `src/GZCTF/ClientApp/src/vnext/features/training/catalog/`
-- `src/GZCTF/ClientApp/src/vnext/features/training/chapter/`
-- `src/GZCTF/ClientApp/src/vnext/features/training/course/`
-
-### 前端（挑战运行时 — Flag 提交）
-- `src/GZCTF/ClientApp/src/vnext/features/challenge-runtime/`
-
-### 前端（模块注册）
-- `src/GZCTF/ClientApp/src/vnext/app/shell/moduleRegistry.ts`
-
-## 开发环境命令
-```bash
-# 启动本地依赖（PostgreSQL + Redis + guacd）
-docker compose -f docker-compose.dev.yml up -d
-
-# 后端构建
-dotnet restore src/GZCTF/GZCTF.csproj
-dotnet build src/GZCTF/GZCTF.csproj
-
-# 前端
-cd src/GZCTF/ClientApp
-pnpm install
-pnpm dev      # 开发服务器
-pnpm build    # 生产构建 + 类型检查
-
-# 测试
-dotnet test src/GZCTF.Test/GZCTF.Test.csproj
-dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj
-
-# 数据库迁移
-dotnet ef migrations add MigrationName
-dotnet ef database update
+```powershell
+dotnet build src/GZCTF.slnx -c Release
+dotnet test src/GZCTF.Test/GZCTF.Test.csproj -c Release
+dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj -c Release
 ```
+
+说明：
+
+- 小改动可以先跑定向测试，但最终报告必须明确哪些全量测试未执行。
+- 数据迁移必须在 PostgreSQL Testcontainers 或生产数据库副本上验证升级和恢复。
+- Docker、VM、镜像、Agent、TeamLab、AWDP 和公网入口不能只靠 mock 判断完成；真实基础设施验收单独记录。
+- AWDP 自动操作可能触发本机安全软件时，保留自动化代码门禁，把真实攻击/修补流程交给授权测试人员按 `docs/yinyu-awdp-manual-acceptance.md` 执行。
+
+## 8. 部署规则
+
+- 未收到明确部署指令时，不修改生产服务器、数据库、节点、Registry 或公网网关。
+- 发布前确认提交已推送、数据库已备份、发布物可识别、回滚目录存在。
+- 使用独立 release 目录和原子软链接切换，不原地覆盖运行目录。
+- 禁止使用 `scripts/deploy.sh`、`scripts/deploy-server.py` 和 `scripts/one-click-deploy.*` 进行生产发布；这些是历史脚本。
+- 生产步骤以 `docs/operations/vnext-maintenance-window-rollout.md` 为准。
+- 部署后检查服务状态、首页、关键 API、日志、数据库迁移、节点、队列、镜像和至少一条真实业务链路。
+- 不在仓库中保存服务器密码、IAM token、浏览器 Cookie 或私钥。
+
+## 9. 会话与交接协议
+
+新任务开始：
+
+1. 读取本文件和 `current-state.md`。
+2. 核对 Git、远端和用户最新要求，不延续聊天中的过时假设。
+3. 对照当前代码验证任务涉及的真实入口、API 和测试。
+4. 大任务先建立可落盘、可更新的计划文档；小修复直接实现并验证。
+
+任务结束：
+
+1. 记录最终提交、改动范围和测试结果。
+2. 如部署，记录环境、发布物身份、备份和冒烟结果。
+3. 如项目状态发生变化，更新 `docs/development/current-state.md`。
+4. 未完成事项写入现有缺口文档或任务交接记录，不只留在聊天中。
+5. 使用 `docs/development/task-handoff-template.md` 交接跨会话或跨人员工作。
+
+`current-state.md` 只记录已经证实的当前事实。不要写计划中的功能为“已完成”，不要复制整段聊天记录，也不要保存凭据。

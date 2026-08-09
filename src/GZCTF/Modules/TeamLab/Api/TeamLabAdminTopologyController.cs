@@ -11,16 +11,33 @@ namespace GZCTF.Modules.TeamLab.Api;
 [Route("api/admin/teamlab")]
 public sealed class TeamLabAdminTopologyController(
     ITeamLabTopologyApplicationService topologies,
+    TeamLabAdminQueryService queries,
     UserManager<UserInfo> users) : ControllerBase
 {
     [HttpGet("capabilities")]
     public TeamLabCapabilitiesModel Capabilities() => topologies.GetCapabilities();
 
     [HttpGet("topologies")]
-    public async Task<IReadOnlyList<TeamLabTopologySummaryModel>> List(CancellationToken cancellationToken)
+    public async Task<TeamLabAdminScenePageModel> List(
+        [FromQuery] string? search = null,
+        [FromQuery] string? owner = null,
+        [FromQuery] Guid? ownerId = null,
+        [FromQuery] string? status = null,
+        [FromQuery] string? after = null,
+        [FromQuery] int limit = 30,
+        CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync();
-        return await topologies.ListAsync(actor.Id, actor.Role == Role.Admin, cancellationToken);
+        return await queries.ListScenesAsync(
+            actor.Id,
+            actor.Role >= Role.Admin,
+            search,
+            owner,
+            ownerId,
+            status,
+            after,
+            limit,
+            cancellationToken);
     }
 
     [HttpPost("topologies")]
@@ -29,7 +46,7 @@ public sealed class TeamLabAdminTopologyController(
         CancellationToken cancellationToken)
     {
         var actor = await ActorAsync();
-        var topology = await topologies.CreateAsync(model, actor.Id, cancellationToken);
+        var topology = await topologies.CreateDraftAsync(model, actor.Id, cancellationToken);
         return Created($"/api/admin/teamlab/topologies/{topology.Id:D}", topology);
     }
 
@@ -37,7 +54,7 @@ public sealed class TeamLabAdminTopologyController(
     public async Task<TeamLabTopologyDetailModel> Get(Guid topologyId, CancellationToken cancellationToken)
     {
         var actor = await ActorAsync();
-        return await topologies.GetAsync(topologyId, actor.Id, actor.Role == Role.Admin, cancellationToken);
+        return await topologies.GetAsync(topologyId, actor.Id, actor.Role >= Role.Admin, cancellationToken);
     }
 
     [HttpPut("topologies/{topologyId:guid}")]
@@ -47,14 +64,14 @@ public sealed class TeamLabAdminTopologyController(
         CancellationToken cancellationToken)
     {
         var actor = await ActorAsync();
-        return await topologies.UpdateAsync(topologyId, model, actor.Id, actor.Role == Role.Admin, cancellationToken);
+        return await topologies.UpdateDraftAsync(topologyId, model, actor.Id, actor.Role >= Role.Admin, cancellationToken);
     }
 
     [HttpDelete("topologies/{topologyId:guid}")]
     public async Task<IActionResult> Delete(Guid topologyId, CancellationToken cancellationToken)
     {
         var actor = await ActorAsync();
-        await topologies.DeleteAsync(topologyId, actor.Id, actor.Role == Role.Admin, cancellationToken);
+        await topologies.DeleteAsync(topologyId, actor.Id, actor.Role >= Role.Admin, cancellationToken);
         return NoContent();
     }
 
@@ -62,7 +79,7 @@ public sealed class TeamLabAdminTopologyController(
     public async Task<TeamLabValidationResultModel> Validate(Guid topologyId, CancellationToken cancellationToken)
     {
         var actor = await ActorAsync();
-        return await topologies.ValidateAsync(topologyId, actor.Id, actor.Role == Role.Admin, cancellationToken);
+        return await topologies.ValidateAsync(topologyId, actor.Id, actor.Role >= Role.Admin, cancellationToken);
     }
 
     [HttpPost("topologies/{topologyId:guid}/releases")]
@@ -72,21 +89,38 @@ public sealed class TeamLabAdminTopologyController(
         CancellationToken cancellationToken)
     {
         var actor = await ActorAsync();
-        return await topologies.PublishAsync(topologyId, model.Revision, actor.Id, actor.Role == Role.Admin, cancellationToken);
+        return await topologies.PublishAsync(
+            topologyId,
+            model.Revision,
+            actor.Id,
+            actor.Role >= Role.Admin,
+            model.ScenarioOverlays,
+            cancellationToken);
     }
 
     [HttpGet("topologies/{topologyId:guid}/releases")]
     public async Task<IReadOnlyList<TeamLabReleaseModel>> Releases(Guid topologyId, CancellationToken cancellationToken)
     {
         var actor = await ActorAsync();
-        return await topologies.ListReleasesAsync(topologyId, actor.Id, actor.Role == Role.Admin, cancellationToken);
+        return await topologies.ListReleasesAsync(topologyId, actor.Id, actor.Role >= Role.Admin, cancellationToken);
     }
 
     [HttpPost("topologies/{topologyId:guid}/releases/{releaseId:guid}/plan")]
     public async Task<TeamLabPlanModel> Plan(Guid topologyId, Guid releaseId, CancellationToken cancellationToken)
     {
         var actor = await ActorAsync();
-        return await topologies.PlanAsync(topologyId, releaseId, actor.Id, actor.Role == Role.Admin, cancellationToken);
+        return await topologies.PlanAsync(topologyId, releaseId, actor.Id, actor.Role >= Role.Admin, cancellationToken);
+    }
+
+    [HttpGet("topologies/{topologyId:guid}/releases/{releaseId:guid}/readiness")]
+    public async Task<TeamLabAdminReleaseReadinessModel> Readiness(
+        Guid topologyId,
+        Guid releaseId,
+        CancellationToken cancellationToken)
+    {
+        var actor = await ActorAsync();
+        return await queries.GetReleaseReadinessAsync(
+            topologyId, releaseId, actor.Id, actor.Role >= Role.Admin, cancellationToken);
     }
 
     private async Task<UserInfo> ActorAsync() =>

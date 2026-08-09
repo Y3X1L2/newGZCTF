@@ -8,7 +8,9 @@ using GZCTF.Models.Data;
 using GZCTF.Modules.Penetration.Contracts;
 using GZCTF.Modules.Penetration.Domain;
 using GZCTF.Modules.TeamLab.Contracts;
+using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Repositories.Interface;
+using GZCTF.Services.Config;
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Infrastructure.Concurrency;
 using Microsoft.AspNetCore.SignalR;
@@ -22,10 +24,12 @@ public sealed class PenetrationObjectiveService(
     IDistributedLeaseProvider locks,
     IGameEventRepository events,
     IHubContext<UserHub, IUserClient> hub,
-    ILogger<PenetrationObjectiveService> logger)
+    ILogger<PenetrationObjectiveService> logger,
+    IConfigService? configService = null)
 {
     private static readonly TimeSpan SubmitRateWindow = TimeSpan.FromMinutes(1);
     private const int SubmitRateLimit = 5;
+    private readonly byte[] _flagKey = configService?.GetXorKey() ?? [];
 
     public async Task<IReadOnlyList<PenetrationObjectiveModel>> ListAsync(
         int gameId,
@@ -43,38 +47,100 @@ public sealed class PenetrationObjectiveService(
         ReplacePenetrationObjectivesModel model,
         CancellationToken cancellationToken)
     {
+        await using var lease = await locks.AcquireAsync(
+            ConfigurationLeaseKey(gameId), TimeSpan.FromSeconds(10), cancellationToken: cancellationToken);
+        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken, lease.LeaseLost);
+        cancellationToken = leaseCancellation.Token;
+
         var binding = await context.PenetrationGameLabBindings
             .SingleOrDefaultAsync(item => item.GameId == gameId, cancellationToken)
             ?? throw new InvalidOperationException("The game has no TeamLab topology binding.");
+        if (binding.ObjectiveRevision != model.Revision)
+            throw new DbUpdateConcurrencyException("The scoring objective configuration changed. Reload it and try again.");
+        if (binding.ActiveRolloutId is { } rolloutId)
+        {
+            var rolloutStatus = await context.TeamLabRollouts.AsNoTracking()
+                .Where(item => item.Id == rolloutId)
+                .Select(item => (TeamLabRolloutStatus?)item.Status)
+                .SingleOrDefaultAsync(cancellationToken);
+            if (rolloutStatus is not null and not TeamLabRolloutStatus.Completed)
+                throw new InvalidOperationException("Drain the active rollout before changing scoring objectives.");
+        }
+
         var assetKeys = await context.TeamLabTopologyAssets.AsNoTracking()
             .Where(item => item.TopologyId == binding.TopologyId)
             .Select(item => item.Key)
             .ToHashSetAsync(cancellationToken);
-        Validate(model.Objectives, assetKeys);
-
         var existing = await context.PenetrationObjectives
             .Where(item => item.GameId == gameId)
             .ToArrayAsync(cancellationToken);
-        context.PenetrationObjectives.RemoveRange(existing);
-        context.PenetrationObjectives.AddRange(model.Objectives.Select(item => new PenetrationObjective
+        var existingByKey = existing.ToDictionary(item => item.Key, StringComparer.Ordinal);
+        var existingById = existing.ToDictionary(item => item.Id);
+        Validate(model.Objectives, assetKeys, existingByKey, existingById);
+        var submittedObjectiveIds = await context.PenetrationSubmissions.AsNoTracking()
+            .Where(item => item.GameId == gameId)
+            .Select(item => item.ObjectiveId)
+            .Distinct()
+            .ToHashSetAsync(cancellationToken);
+
+        var retainedIds = new HashSet<int>();
+        foreach (var item in model.Objectives)
         {
-            GameId = gameId,
-            Key = item.Key.Trim(),
-            TopologyAssetKey = item.AssetKey.Trim(),
-            Title = item.Title.Trim(),
-            Description = Clean(item.Description),
-            Category = string.IsNullOrWhiteSpace(item.Category) ? "General" : item.Category.Trim(),
-            Score = item.Score,
-            IsDynamic = item.Dynamic,
-            StaticFlag = item.Dynamic ? null : Clean(item.StaticFlag),
-            FlagTemplate = item.Dynamic ? Clean(item.FlagTemplate) : null,
-            MaxAttempts = item.MaxAttempts,
-            IsVisible = item.Visible,
-            IsCheckpoint = item.Checkpoint,
-            PrerequisiteObjectiveKeysJson = JsonSerializer.Serialize(item.PrerequisiteKeys ?? []),
-            OrderIndex = item.OrderIndex
-        }));
+            var key = item.Key.Trim();
+            PenetrationObjective? objective = null;
+            if (item.Id is { } objectiveId)
+                objective = existingById[objectiveId];
+            else
+                existingByKey.TryGetValue(key, out objective);
+
+            if (objective is null)
+            {
+                objective = new PenetrationObjective { GameId = gameId, Key = key };
+                context.PenetrationObjectives.Add(objective);
+            }
+            else
+            {
+                retainedIds.Add(objective.Id);
+                if (submittedObjectiveIds.Contains(objective.Id) && HasProtectedContractChange(objective, item))
+                    throw new InvalidOperationException(
+                        $"Objective '{objective.Key}' has submission history and its scoring contract cannot be changed.");
+            }
+
+            objective.TopologyAssetKey = item.AssetKey.Trim();
+            objective.Title = item.Title.Trim();
+            objective.Description = Clean(item.Description);
+            objective.Category = string.IsNullOrWhiteSpace(item.Category) ? "General" : item.Category.Trim();
+            objective.Score = item.Score;
+            objective.StaticFlag = item.Dynamic ? null : Clean(item.StaticFlag) ??
+                (!objective.IsDynamic ? objective.StaticFlag : null);
+            objective.FlagTemplate = item.Dynamic ? Clean(item.FlagTemplate) ??
+                (objective.IsDynamic ? objective.FlagTemplate : null) : null;
+            objective.IsDynamic = item.Dynamic;
+            objective.MaxAttempts = item.MaxAttempts;
+            objective.IsVisible = item.Visible;
+            objective.IsCheckpoint = item.Checkpoint;
+            objective.PrerequisiteObjectiveKeysJson = JsonSerializer.Serialize(item.PrerequisiteKeys ?? []);
+            objective.OrderIndex = item.OrderIndex;
+        }
+
+        var removed = existing.Where(item => !retainedIds.Contains(item.Id)).ToArray();
+        if (removed.Length > 0)
+        {
+            var submittedIds = removed.Select(item => item.Id)
+                .Where(submittedObjectiveIds.Contains)
+                .ToArray();
+            if (submittedIds.Length > 0)
+            {
+                var submittedKeys = submittedIds.Select(id => existingById[id].Key);
+                throw new InvalidOperationException(
+                    $"Objectives with submission history cannot be deleted: {string.Join(", ", submittedKeys)}.");
+            }
+            context.PenetrationObjectives.RemoveRange(removed);
+        }
+
         binding.MaxResetCount = Math.Clamp(model.MaxResetCount, 0, 100);
+        binding.ObjectiveRevision++;
         binding.UpdatedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(cancellationToken);
         return await ListAsync(gameId, cancellationToken);
@@ -240,11 +306,15 @@ public sealed class PenetrationObjectiveService(
         return new(rows, total);
     }
 
-    internal static string BuildFlag(PenetrationObjective objective, int gameId, int teamId, int releaseVersion)
+    internal string BuildFlag(PenetrationObjective objective, int gameId, int teamId, int releaseVersion)
     {
         if (!objective.IsDynamic) return objective.StaticFlag ?? string.Empty;
+        if (_flagKey.Length < 16)
+            throw new InvalidOperationException("The server flag signing key is not configured.");
         var material = $"{gameId}:{teamId}:{objective.TopologyAssetKey}:{objective.Key}:{releaseVersion}";
-        var token = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material))).ToLowerInvariant()[..16];
+        var token = Convert.ToHexString(HMACSHA256.HashData(
+            _flagKey, Encoding.UTF8.GetBytes($"teamlab-penetration-flag:v1:{material}")))
+            .ToLowerInvariant()[..32];
         var template = string.IsNullOrWhiteSpace(objective.FlagTemplate) ? "flag{[TEAM_HASH]}" : objective.FlagTemplate;
         return template.Replace("[TEAM_HASH]", token, StringComparison.OrdinalIgnoreCase)
             .Replace("[TOKEN]", token, StringComparison.OrdinalIgnoreCase);
@@ -264,7 +334,7 @@ public sealed class PenetrationObjectiveService(
                 UserId = submission.UserId,
                 GameId = submission.GameId,
                 Type = EventType.FlagSubmit,
-                Values = [submission.Status.ToString(), submission.Answer, $"[渗透] {objective.Title}", objective.Id.ToString()]
+                Values = [submission.Status.ToString(), objective.Key, $"[渗透] {objective.Title}", objective.Id.ToString()]
             }, cancellationToken);
             await hub.Clients.Group(UserHub.PenetrationTeamGroupName(submission.GameId, submission.TeamId))
                 .ReceivedPenetrationWorkspaceUpdate(new PenetrationWorkspaceUpdateModel(
@@ -281,23 +351,65 @@ public sealed class PenetrationObjectiveService(
         item.IsDynamic, item.MaxAttempts, item.IsVisible, item.IsCheckpoint,
         DeserializeKeys(item.PrerequisiteObjectiveKeysJson), item.OrderIndex);
 
-    private static void Validate(IReadOnlyList<PenetrationObjectiveWriteModel> objectives, IReadOnlySet<string> assetKeys)
+    private static void Validate(
+        IReadOnlyList<PenetrationObjectiveWriteModel> objectives,
+        IReadOnlySet<string> assetKeys,
+        IReadOnlyDictionary<string, PenetrationObjective> existingByKey,
+        IReadOnlyDictionary<int, PenetrationObjective> existingById)
     {
         if (objectives.Count > 256) throw new InvalidOperationException("A game cannot contain more than 256 objectives.");
         var keys = objectives.Select(item => item.Key.Trim()).ToHashSet(StringComparer.Ordinal);
         if (keys.Count != objectives.Count || keys.Any(string.IsNullOrWhiteSpace))
             throw new InvalidOperationException("Objective keys must be non-empty and unique.");
+        var requestedIds = objectives.Where(item => item.Id.HasValue).Select(item => item.Id!.Value).ToArray();
+        if (requestedIds.Distinct().Count() != requestedIds.Length || requestedIds.Any(id => !existingById.ContainsKey(id)))
+            throw new InvalidOperationException("Objective ids must identify unique objectives in this game.");
         foreach (var item in objectives)
         {
-            if (!assetKeys.Contains(item.AssetKey.Trim())) throw new InvalidOperationException($"Asset '{item.AssetKey}' does not exist.");
-            if (string.IsNullOrWhiteSpace(item.Title) || item.Score < 0 || item.MaxAttempts < 0)
+            var key = item.Key.Trim();
+            if (item.Id is { } id && !string.Equals(existingById[id].Key, key, StringComparison.Ordinal))
+                throw new InvalidOperationException($"Objective key '{existingById[id].Key}' is immutable after creation.");
+            if (!assetKeys.Contains(item.AssetKey.Trim()))
+                throw new InvalidOperationException($"Asset '{item.AssetKey}' does not exist.");
+            if (key.Length > 63 || item.AssetKey.Trim().Length > 63 ||
+                string.IsNullOrWhiteSpace(item.Title) || item.Title.Trim().Length > 128 ||
+                (item.Description?.Trim().Length ?? 0) > 1024 ||
+                (!string.IsNullOrWhiteSpace(item.Category) && item.Category.Trim().Length > 64) ||
+                (Clean(item.StaticFlag)?.Length ?? 0) > Limits.MaxFlagLength ||
+                (Clean(item.FlagTemplate)?.Length ?? 0) > Limits.MaxFlagTemplateLength ||
+                item.Score < 0 || item.MaxAttempts < 0)
                 throw new InvalidOperationException($"Objective '{item.Key}' has invalid title, score, or attempt limit.");
-            if (!item.Dynamic && string.IsNullOrWhiteSpace(item.StaticFlag))
+            var previous = item.Id is { } objectiveId
+                ? existingById[objectiveId]
+                : existingByKey.GetValueOrDefault(key);
+            if (!item.Dynamic && string.IsNullOrWhiteSpace(item.StaticFlag) &&
+                (previous is null || previous.IsDynamic || string.IsNullOrWhiteSpace(previous.StaticFlag)))
                 throw new InvalidOperationException($"Objective '{item.Key}' requires a static flag.");
-            if ((item.PrerequisiteKeys ?? []).Any(key => !keys.Contains(key) || key == item.Key))
+            if ((item.PrerequisiteKeys ?? []).Any(prerequisite => !keys.Contains(prerequisite) || prerequisite == key))
                 throw new InvalidOperationException($"Objective '{item.Key}' has an invalid prerequisite.");
         }
     }
+
+    private static bool HasProtectedContractChange(
+        PenetrationObjective previous,
+        PenetrationObjectiveWriteModel next)
+    {
+        if (!string.Equals(previous.TopologyAssetKey, next.AssetKey.Trim(), StringComparison.Ordinal) ||
+            previous.Score != next.Score || previous.IsDynamic != next.Dynamic ||
+            previous.MaxAttempts != next.MaxAttempts)
+            return true;
+
+        var previousPrerequisites = DeserializeKeys(previous.PrerequisiteObjectiveKeysJson)
+            .Order(StringComparer.Ordinal);
+        var nextPrerequisites = (next.PrerequisiteKeys ?? []).Order(StringComparer.Ordinal);
+        if (!previousPrerequisites.SequenceEqual(nextPrerequisites, StringComparer.Ordinal)) return true;
+
+        var suppliedSecret = next.Dynamic ? Clean(next.FlagTemplate) : Clean(next.StaticFlag);
+        var previousSecret = next.Dynamic ? previous.FlagTemplate : previous.StaticFlag;
+        return suppliedSecret is not null && !string.Equals(suppliedSecret, previousSecret, StringComparison.Ordinal);
+    }
+
+    internal static string ConfigurationLeaseKey(int gameId) => $"penetration:configuration:{gameId}";
 
     internal static IReadOnlyList<string> DeserializeKeys(string json)
     {

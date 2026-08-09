@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Net.WebSockets;
 
 namespace GZCTF.Agent.Services;
 
@@ -16,6 +17,7 @@ public class DockerService
     private readonly DockerConfig _config;
     private readonly ILogger<DockerService> _logger;
     private readonly AgentResourceLock _resourceLock;
+    private readonly SemaphoreSlim _registryConfigurationLock = new(1, 1);
     private static readonly TimeSpan FabricCommandTimeout = TimeSpan.FromSeconds(15);
 
     public DockerService(IOptions<DockerConfig> config, AgentResourceLock resourceLock,
@@ -33,6 +35,7 @@ public class DockerService
         await using var identityLock = await _resourceLock.AcquireAsync($"container:{containerName}", token);
         var fabricManagementNetwork = request.UsePenetrationFabric && request.PublishPort;
         var isolatedHostNetwork = request.UseHostNetworkNone || request.UsePenetrationFabric;
+        var gateForTeamLabNetwork = isolatedHostNetwork;
         var attachments = isolatedHostNetwork
             ?
             (fabricManagementNetwork
@@ -79,6 +82,7 @@ public class DockerService
                 ["TeamId"] = request.TeamId,
                 ["UserId"] = request.UserId.ToString(),
                 ["ManagedBy"] = "GZCTF",
+                ["GZCTF.RuntimeId"] = request.RuntimeId.ToString(),
                 ["GZCTF.Generation"] = Math.Max(1, request.Generation).ToString()
             },
             HostConfig = new HostConfig
@@ -95,6 +99,7 @@ public class DockerService
                     ? fabricManagementNetwork ? primaryNetwork : "none"
                     : primaryNetwork,
                 DNS = dnsServers.Length > 0 ? dnsServers : null,
+                Binds = request.BindMounts.Select(BuildBindMount).ToList(),
             },
             ExposedPorts = request.PublishPort ? new Dictionary<string, EmptyStruct> { [portSpec] = new() } : null,
             NetworkingConfig = !isolatedHostNetwork &&
@@ -126,8 +131,24 @@ public class DockerService
             createParams.HostConfig.Sysctls["net.ipv4.ip_forward"] = "1";
         }
 
-        if (!string.IsNullOrWhiteSpace(request.StartCommand))
-            createParams.Cmd = ["sh", "-c", request.StartCommand];
+        if (gateForTeamLabNetwork)
+        {
+            ImageInspectResponse image;
+            try
+            {
+                image = await _client.Images.InspectImageAsync(request.Image, token);
+            }
+            catch (DockerApiException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+            {
+                throw new InvalidOperationException($"image_not_ready: Docker image {request.Image} is not present.",
+                    exception);
+            }
+            var gated = BuildGatedCommand(image.Config?.Entrypoint, image.Config?.Cmd, request.StartCommand);
+            createParams.Entrypoint = gated.Entrypoint;
+            createParams.Cmd = gated.Command;
+        }
+        else if (!string.IsNullOrWhiteSpace(request.StartCommand))
+            createParams.Cmd = BuildStartCommand(request.StartCommand);
 
         try
         {
@@ -136,8 +157,14 @@ public class DockerService
                              existing.Config.Labels.TryGetValue("GZCTF.Generation", out var label)
                 ? label
                 : null;
+            var runtimeId = existing.Config.Labels is not null &&
+                            existing.Config.Labels.TryGetValue("GZCTF.RuntimeId", out var runtimeLabel)
+                ? runtimeLabel
+                : null;
             if (!string.Equals(existing.Config.Image, request.Image, StringComparison.Ordinal) ||
-                !string.Equals(generation, Math.Max(1, request.Generation).ToString(), StringComparison.Ordinal))
+                !string.Equals(generation, Math.Max(1, request.Generation).ToString(), StringComparison.Ordinal) ||
+                gateForTeamLabNetwork &&
+                !string.Equals(runtimeId, request.RuntimeId.ToString(), StringComparison.Ordinal))
                 throw new InvalidOperationException(
                     $"runtime_identity_conflict: container {containerName} exists with a different image or generation.");
             if (existing.State?.Running != true)
@@ -237,16 +264,15 @@ public class DockerService
                 return;
             }
 
-            var generation = existing.Config.Labels is not null &&
-                             existing.Config.Labels.TryGetValue("GZCTF.Generation", out var value) &&
-                             int.TryParse(value, out var parsed)
-                ? parsed
-                : (int?)null;
-            if (generation != requiredGeneration)
+            if (!MatchesExpectedGeneration(existing.Config.Labels, requiredGeneration, out var legacyGeneration))
                 throw new AgentOperationException(
                     "Conflict", "runtime.identity_conflict",
                     "Container generation does not match the requested runtime identity.", false,
                     StatusCodes.Status409Conflict);
+            if (legacyGeneration)
+                _logger.LogWarning(
+                    "Destroying legacy GZCTF container {ContainerId} without a generation label as generation 1",
+                    containerId);
         }
 
         try
@@ -278,6 +304,24 @@ public class DockerService
         catch (DockerApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
         }
+    }
+
+    internal static bool MatchesExpectedGeneration(
+        IDictionary<string, string>? labels,
+        int requiredGeneration,
+        out bool legacyGeneration)
+    {
+        legacyGeneration = false;
+        if (labels is null)
+            return false;
+
+        if (labels.TryGetValue("GZCTF.Generation", out var value))
+            return int.TryParse(value, out var generation) && generation == requiredGeneration;
+
+        legacyGeneration = requiredGeneration == 1 &&
+                           labels.TryGetValue("ManagedBy", out var managedBy) &&
+                           string.Equals(managedBy, "GZCTF", StringComparison.Ordinal);
+        return legacyGeneration;
     }
 
     public async Task<AgentCommandResult> ExecuteContainerCommandAsync(string containerId,
@@ -373,7 +417,7 @@ public class DockerService
         if (!OperatingSystem.IsLinux())
             return AgentFabricResult.Unsupported("当前 Agent 未运行在 Linux 宿主中，不支持渗透 fabric 网络。");
 
-        var pid = await GetContainerPid(containerId, token);
+        var pid = await GetContainerPidAsync(containerId, token);
         if (pid <= 0)
             return AgentFabricResult.Failed(null, "无法获取容器 PID，不能配置渗透 fabric 网卡。");
 
@@ -419,7 +463,7 @@ public class DockerService
         if (!OperatingSystem.IsLinux())
             return AgentFabricResult.Unsupported("当前 Agent 未运行在 Linux 宿主中，不支持渗透 fabric 网络。");
 
-        var pid = await GetContainerPid(containerId, token);
+        var pid = await GetContainerPidAsync(containerId, token);
         if (pid <= 0)
             return AgentFabricResult.Failed(null, "无法获取容器 PID，不能开启转发。");
 
@@ -438,7 +482,7 @@ public class DockerService
         if (!OperatingSystem.IsLinux())
             return AgentFabricResult.Unsupported("当前 Agent 未运行在 Linux 宿主中，不支持渗透 fabric 网络。");
 
-        var pid = await GetContainerPid(containerId, token);
+        var pid = await GetContainerPidAsync(containerId, token);
         if (pid <= 0)
             return AgentFabricResult.Failed(null, "无法获取容器 PID，不能写入路由。");
 
@@ -456,7 +500,7 @@ public class DockerService
         if (!OperatingSystem.IsLinux())
             return AgentFabricResult.Unsupported("当前 Agent 未运行在 Linux 宿主中，不支持渗透 fabric 网络。");
 
-        var pid = await GetContainerPid(containerId, token);
+        var pid = await GetContainerPidAsync(containerId, token);
         if (pid <= 0)
             return AgentFabricResult.Failed(null, "无法获取容器 PID，不能执行连通探测。");
 
@@ -493,6 +537,124 @@ public class DockerService
         return containers.Count;
     }
 
+    internal static IList<string> BuildStartCommand(string command) => ["sh", "-c", command];
+
+    internal static GatedContainerCommand BuildGatedCommand(
+        IEnumerable<string>? imageEntrypoint,
+        IEnumerable<string>? imageCmd,
+        string? startCommand)
+    {
+        var payload = (imageEntrypoint ?? []).ToList();
+        if (string.IsNullOrWhiteSpace(startCommand))
+            payload.AddRange(imageCmd ?? []);
+        else
+            payload.AddRange(["sh", "-c", startCommand]);
+
+        return new GatedContainerCommand(
+            [
+                "sh",
+                "-c",
+                "while [ ! -f /tmp/.gzctf-teamlab-network-ready ]; do sleep 0.05; done; exec \"$@\"",
+                "teamlab-network-gate"
+            ],
+            payload);
+    }
+
+    public async Task<TeamLabDockerContainerIdentity?> InspectTeamLabContainerAsync(
+        string containerId,
+        CancellationToken token)
+    {
+        ContainerInspectResponse inspect;
+        try
+        {
+            inspect = await _client.Containers.InspectContainerAsync(containerId, token);
+        }
+        catch (DockerContainerNotFoundException)
+        {
+            return null;
+        }
+        catch (DockerApiException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        var labels = inspect.Config.Labels;
+        var runtimeId = labels is not null && labels.TryGetValue("GZCTF.RuntimeId", out var runtimeValue) &&
+                        int.TryParse(runtimeValue, out var parsedRuntime)
+            ? parsedRuntime
+            : 0;
+        var generation = labels is not null && labels.TryGetValue("GZCTF.Generation", out var generationValue) &&
+                         int.TryParse(generationValue, out var parsedGeneration)
+            ? parsedGeneration
+            : 0;
+        return new TeamLabDockerContainerIdentity(
+            inspect.ID,
+            inspect.Name.Trim('/'),
+            runtimeId,
+            generation,
+            inspect.State?.Running == true,
+            inspect.State?.Pid ?? 0);
+    }
+
+    public async Task RunTeamLabTerminalAsync(
+        int runtimeId,
+        int generation,
+        string containerId,
+        WebSocket socket,
+        CancellationToken token)
+    {
+        var identity = await InspectTeamLabContainerAsync(containerId, token);
+        if (identity is null || !identity.Running || identity.RuntimeId != runtimeId || identity.Generation != generation)
+            throw new AgentOperationException("RemoteAccess", "remote_access.container_identity_mismatch",
+                "The requested container does not match the active TeamLab runtime identity.", false);
+
+        var exec = await _client.Exec.ExecCreateContainerAsync(containerId, new ContainerExecCreateParameters
+        {
+            AttachStdin = true,
+            AttachStdout = true,
+            AttachStderr = true,
+            Tty = true,
+            Cmd = ["/bin/sh"]
+        }, token);
+        using var stream = await _client.Exec.StartAndAttachContainerExecAsync(exec.ID, false, token);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var input = CopySocketToTerminalAsync(socket, stream, linked.Token);
+        var output = CopyTerminalToSocketAsync(socket, stream, linked.Token);
+        await Task.WhenAny(input, output);
+        linked.Cancel();
+        try { await Task.WhenAll(input, output); }
+        catch (OperationCanceledException) when (linked.IsCancellationRequested) { }
+    }
+
+    private static async Task CopySocketToTerminalAsync(WebSocket socket, MultiplexedStream terminal, CancellationToken token)
+    {
+        var buffer = new byte[8192];
+        while (socket.State == WebSocketState.Open && !token.IsCancellationRequested)
+        {
+            var result = await socket.ReceiveAsync(buffer, token);
+            if (result.MessageType == WebSocketMessageType.Close) break;
+            await terminal.WriteAsync(buffer, 0, result.Count, token);
+            while (!result.EndOfMessage)
+            {
+                result = await socket.ReceiveAsync(buffer, token);
+                if (result.MessageType == WebSocketMessageType.Close) return;
+                await terminal.WriteAsync(buffer, 0, result.Count, token);
+            }
+        }
+    }
+
+    private static async Task CopyTerminalToSocketAsync(WebSocket socket, MultiplexedStream terminal, CancellationToken token)
+    {
+        var buffer = new byte[8192];
+        while (socket.State == WebSocketState.Open && !token.IsCancellationRequested)
+        {
+            var result = await terminal.ReadOutputAsync(buffer, 0, buffer.Length, token);
+            if (result.EOF) break;
+            if (result.Count > 0)
+                await socket.SendAsync(buffer.AsMemory(0, result.Count), WebSocketMessageType.Text, true, token);
+        }
+    }
+
     public async Task<IReadOnlyList<RuntimeInventoryResource>> GetManagedRuntimeInventoryAsync(
         CancellationToken token)
     {
@@ -525,12 +687,18 @@ public class DockerService
                 if (string.IsNullOrWhiteSpace(container.ID) || string.IsNullOrWhiteSpace(stableName))
                     return null;
 
+                var runtimeId = container.Labels.TryGetValue("GZCTF.RuntimeId", out var runtimeValue) &&
+                                int.TryParse(runtimeValue, out var parsedRuntimeId) && parsedRuntimeId > 0
+                    ? parsedRuntimeId
+                    : (int?)null;
+
                 return new RuntimeInventoryResource(
                     container.ID,
                     stableName,
                     generation,
                     container.State ?? "unknown",
-                    container.Image);
+                    container.Image,
+                    RuntimeId: runtimeId);
             })
             .OfType<RuntimeInventoryResource>()
             .OrderBy(item => item.StableName, StringComparer.Ordinal)
@@ -668,55 +836,63 @@ public class DockerService
         if (!OperatingSystem.IsLinux())
             throw new NotSupportedException("Automatic Docker daemon registry configuration is only supported on Linux.");
 
-        Directory.CreateDirectory("/etc/docker");
-        const string daemonPath = "/etc/docker/daemon.json";
-        var data = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        if (File.Exists(daemonPath) && new FileInfo(daemonPath).Length > 0)
+        await _registryConfigurationLock.WaitAsync(token);
+        try
         {
-            try
+            Directory.CreateDirectory("/etc/docker");
+            const string daemonPath = "/etc/docker/daemon.json";
+            var data = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            if (File.Exists(daemonPath) && new FileInfo(daemonPath).Length > 0)
             {
-                var parsed = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
-                    await File.ReadAllTextAsync(daemonPath, token));
-                if (parsed is not null)
-                    foreach (var pair in parsed)
-                        data[pair.Key] = pair.Value.Clone();
+                try
+                {
+                    var parsed = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
+                        await File.ReadAllTextAsync(daemonPath, token));
+                    if (parsed is not null)
+                        foreach (var pair in parsed)
+                            data[pair.Key] = pair.Value.Clone();
+                }
+                catch (JsonException ex)
+                {
+                    _logger.LogWarning(ex, "Docker daemon.json is invalid; backing up and replacing it");
+                }
             }
-            catch (JsonException ex)
+
+            var registries = new List<string>();
+            if (data.TryGetValue("insecure-registries", out var existing) && existing is JsonElement element &&
+                element.ValueKind == JsonValueKind.Array)
             {
-                _logger.LogWarning(ex, "Docker daemon.json is invalid; backing up and replacing it");
+                registries.AddRange(element.EnumerateArray()
+                    .Where(e => e.ValueKind == JsonValueKind.String)
+                    .Select(e => e.GetString())
+                    .Where(s => !string.IsNullOrWhiteSpace(s))!);
             }
-        }
 
-        var registries = new List<string>();
-        if (data.TryGetValue("insecure-registries", out var existing) && existing is JsonElement element &&
-            element.ValueKind == JsonValueKind.Array)
+            var changed = false;
+            foreach (var registry in requestedRegistries)
+            {
+                if (registries.Contains(registry, StringComparer.OrdinalIgnoreCase))
+                    continue;
+
+                registries.Add(registry);
+                changed = true;
+            }
+            data["insecure-registries"] = registries;
+
+            if (!changed)
+                return;
+
+            if (File.Exists(daemonPath))
+                File.Copy(daemonPath, $"{daemonPath}.bak.{DateTimeOffset.UtcNow:yyyyMMddHHmmss}", true);
+            await File.WriteAllTextAsync(daemonPath,
+                JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true }), token);
+
+            await RunHostCommandAsync("systemctl", ["restart", "docker"], TimeSpan.FromSeconds(60), token);
+        }
+        finally
         {
-            registries.AddRange(element.EnumerateArray()
-                .Where(e => e.ValueKind == JsonValueKind.String)
-                .Select(e => e.GetString())
-                .Where(s => !string.IsNullOrWhiteSpace(s))!);
+            _registryConfigurationLock.Release();
         }
-
-        var changed = false;
-        foreach (var registry in requestedRegistries)
-        {
-            if (registries.Contains(registry, StringComparer.OrdinalIgnoreCase))
-                continue;
-
-            registries.Add(registry);
-            changed = true;
-        }
-        data["insecure-registries"] = registries;
-
-        if (!changed)
-            return;
-
-        if (File.Exists(daemonPath))
-            File.Copy(daemonPath, $"{daemonPath}.bak.{DateTimeOffset.UtcNow:yyyyMMddHHmmss}", true);
-        await File.WriteAllTextAsync(daemonPath,
-            JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true }), token);
-
-        await RunHostCommandAsync("systemctl", ["restart", "docker"], TimeSpan.FromSeconds(60), token);
     }
 
     static string NormalizeRegistryAddress(string value)
@@ -810,7 +986,7 @@ public class DockerService
         }
     }
 
-    async Task<long> GetContainerPid(string containerId, CancellationToken token)
+    public async Task<long> GetContainerPidAsync(string containerId, CancellationToken token)
     {
         try
         {
@@ -934,6 +1110,7 @@ public class DockerService
         return new AgentContainerResponse
         {
             ContainerId = inspect.ID,
+            ContainerName = inspect.Name.Trim('/'),
             IP = network?.IPAMConfig?.IPv4Address ?? network?.IPAddress ?? string.Empty,
             Port = exposedPort,
             PublicPort = int.TryParse(portBinding?.HostPort, out var port) ? port : 0
@@ -995,6 +1172,19 @@ public class DockerService
         return attachments;
     }
 
+    private static string BuildBindMount(ContainerBindMount mount)
+    {
+        var source = Path.GetFullPath(mount.Source);
+        var destination = Path.GetFullPath(mount.Destination);
+        var sourceAllowed = source.StartsWith("/run/gzctf-sensor/", StringComparison.Ordinal) ||
+                            source.StartsWith("/opt/gzctf/endpoint-sensor/", StringComparison.Ordinal);
+        var destinationAllowed = destination.StartsWith("/run/gzctf/", StringComparison.Ordinal) ||
+                                 destination.StartsWith("/opt/gzctf/", StringComparison.Ordinal);
+        if (!sourceAllowed || !destinationAllowed || source.Contains(':') || destination.Contains(':'))
+            throw new InvalidOperationException("Container bind mount is outside the managed sensor paths.");
+        return $"{source}:{destination}:{(mount.ReadOnly ? "ro" : "rw")}";
+    }
+
     public static string BuildContainerName(CreateContainerRequest request)
     {
         var fingerprint = string.Join('|',
@@ -1022,3 +1212,15 @@ public class DockerService
         return builder.Length == 0 ? "none" : builder.ToString()[..Math.Min(builder.Length, 32)];
     }
 }
+
+internal sealed record GatedContainerCommand(
+    IList<string> Entrypoint,
+    IList<string> Command);
+
+public sealed record TeamLabDockerContainerIdentity(
+    string ContainerId,
+    string ContainerName,
+    int RuntimeId,
+    int Generation,
+    bool Running,
+    long Pid);

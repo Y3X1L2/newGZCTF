@@ -22,6 +22,7 @@ public class DockerImageRegistryService
 {
     public const string InternalReferencePrefix = "gzctf-internal://";
     private static readonly TimeSpan DockerCommandTimeout = TimeSpan.FromMinutes(30);
+    private static readonly SemaphoreSlim LocalRegistryTrustLock = new(1, 1);
 
     static readonly Regex RepositoryRegex = new("^[a-z0-9]+(?:[._/-][a-z0-9]+)*$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -83,8 +84,6 @@ public class DockerImageRegistryService
     {
         var endpoint = await GetActiveEndpointAsync(token)
                        ?? throw new InvalidOperationException("Internal Docker registry address is not configured.");
-
-        await ConfigureManagedRegistryTrustAsync(token);
         return endpoint;
     }
 
@@ -557,14 +556,18 @@ docker run -d \
         if (normalized.Length == 0)
             return;
 
-        Directory.CreateDirectory("/etc/docker");
-        var quotedRegistries = string.Join(' ', normalized.Select(ShellQuote));
-        var script = $$"""
+        await LocalRegistryTrustLock.WaitAsync(token);
+        try
+        {
+            Directory.CreateDirectory("/etc/docker");
+            var quotedRegistries = string.Join(' ', normalized.Select(ShellQuote));
+            var script = $$"""
 set -euo pipefail
 registries=({{quotedRegistries}})
 path="/etc/docker/daemon.json"
-if [ -f "$path" ]; then cp -a "$path" "$path.bak.$(date +%Y%m%d%H%M%S)" || true; fi
-python3 - "${registries[@]}" <<'PY' > /tmp/gzctf-daemon.json
+tmp="$(mktemp /tmp/gzctf-daemon.XXXXXX.json)"
+trap 'rm -f "$tmp"' EXIT
+python3 - "${registries[@]}" <<'PY' > "$tmp"
 import json, os, sys
 path="/etc/docker/daemon.json"
 requested=[r.strip() for r in sys.argv[1:] if r.strip()]
@@ -584,19 +587,23 @@ for registry in requested:
 data["insecure-registries"]=registries
 print(json.dumps(data, ensure_ascii=False, indent=2))
 PY
-if [ -f "$path" ] && cmp -s /tmp/gzctf-daemon.json "$path"; then
-  rm -f /tmp/gzctf-daemon.json
+if [ -f "$path" ] && cmp -s "$tmp" "$path"; then
   exit 0
 fi
-install -m 0644 /tmp/gzctf-daemon.json "$path"
-rm -f /tmp/gzctf-daemon.json
+if [ -f "$path" ]; then cp -a "$path" "$path.bak.$(date +%Y%m%d%H%M%S)" || true; fi
+install -m 0644 "$tmp" "$path"
 if command -v systemctl >/dev/null 2>&1; then
   systemctl restart docker
 else
   service docker restart
 fi
 """;
-        await RunProcessAsync("bash", ["-lc", script], TimeSpan.FromSeconds(90), token);
+            await RunProcessAsync("bash", ["-lc", script], TimeSpan.FromSeconds(90), token);
+        }
+        finally
+        {
+            LocalRegistryTrustLock.Release();
+        }
     }
 
     public static string NormalizeRegistryAddress(string? value)
@@ -720,24 +727,12 @@ fi
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var templateImages = await context.ImageTemplates.AsNoTracking()
-            .Where(t => t.ImageType == ImageType.Docker && !string.IsNullOrWhiteSpace(t.RegistryUrl))
-            .Select(t => t.RegistryUrl)
-            .ToArrayAsync(token);
-
         if (endpoint is not null)
             candidates.Add(NormalizeRegistryAddress(endpoint.Address));
 
         var configured = NormalizeRegistryAddress(_settings.NormalizedAddress);
         if (!string.IsNullOrWhiteSpace(configured))
             candidates.Add(configured);
-
-        var fixedRegistry = NormalizeRegistryAddress(DockerRegistrySettings.FixedAddress);
-        if (!string.IsNullOrWhiteSpace(fixedRegistry))
-            candidates.Add(fixedRegistry);
-
-        foreach (var image in templateImages)
-            AddRegistryCandidateFromImage(candidates, image);
 
         return candidates;
     }

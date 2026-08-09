@@ -17,6 +17,7 @@ public sealed class ImageImportJobEntityConfiguration : IEntityTypeConfiguration
         builder.Property(job => job.OriginalFileName).HasMaxLength(256);
         builder.Property(job => job.ExpectedDigest).HasMaxLength(128);
         builder.Property(job => job.RequestedName).HasMaxLength(256);
+        builder.Property(job => job.RequestedVmNetworkMode).HasConversion<byte>();
         builder.HasIndex(job => job.ImageTemplateId);
         builder.HasIndex(job => new { job.CreatedById, job.RequestedName });
 

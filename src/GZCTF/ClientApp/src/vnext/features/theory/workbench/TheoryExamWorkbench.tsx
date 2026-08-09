@@ -2,6 +2,8 @@ import {
   AlertTriangle,
   Bookmark,
   Check,
+  CircleCheck,
+  CircleX,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -11,12 +13,19 @@ import {
   X,
 } from 'lucide-react'
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react'
-import { TheoryAnswerSheetEditModel, TheoryPlayerPaperModel, TheoryPlayerQuestionModel, TheoryQuestionType } from '@Api'
+import { TheoryAnswerSheetEditModel, TheoryPlayerPaperModel, TheoryQuestionType } from '@Api'
 import { ActionButton, InlineFeedback, VNextDialog } from '../../../shared/Interaction'
 import { MarkdownContent } from '../../../shared/MarkdownContent'
 import { StatusPill } from '../../../shared/Primitives'
 import styles from './TheoryExamWorkbench.module.css'
+import { TheoryReviewFilter, TheoryReviewSummary } from './TheoryReviewSummary'
+import { buildTheoryReview, ReviewableTheoryQuestion, TheoryReviewItem, TheoryReviewState } from './theoryReview'
 import { useTheoryExamSession } from './useTheoryExamSession'
+
+interface IndexedTheoryQuestion {
+  question: ReviewableTheoryQuestion
+  questionIndex: number
+}
 
 function questionTypeLabel(type?: TheoryQuestionType) {
   if (type === TheoryQuestionType.MultipleChoice) return '多选题'
@@ -46,6 +55,12 @@ function optionKey(index: number) {
   return index < 26 ? String.fromCharCode(65 + index) : String(index + 1)
 }
 
+function reviewStateLabel(state: TheoryReviewState) {
+  if (state === 'correct') return '回答正确'
+  if (state === 'unanswered') return '未作答'
+  return '回答错误'
+}
+
 function TheoryQuestion({
   question,
   selectedIndexes,
@@ -54,14 +69,16 @@ function TheoryQuestion({
   onChange,
   review,
   onToggleReview,
+  reviewResult,
 }: {
-  question: TheoryPlayerQuestionModel
+  question: ReviewableTheoryQuestion
   selectedIndexes: number[]
   disabled: boolean
   direction: 'forward' | 'backward'
   onChange: (selectedIndexes: number[]) => void
   review: boolean
   onToggleReview: () => void
+  reviewResult?: TheoryReviewItem
 }) {
   const multiple = question.type === TheoryQuestionType.MultipleChoice
   const questionId = question.id ?? 0
@@ -84,6 +101,11 @@ function TheoryQuestion({
       <header className={styles.questionHeader}>
         <div className={styles.questionMeta}>
           <StatusPill tone="info">{questionTypeLabel(question.type)}</StatusPill>
+          {reviewResult ? (
+            <StatusPill tone={reviewResult.state === 'correct' ? 'success' : 'warning'}>
+              {reviewStateLabel(reviewResult.state)}
+            </StatusPill>
+          ) : null}
           <span>{question.score ?? 0} 分</span>
         </div>
         {!disabled ? (
@@ -101,9 +123,18 @@ function TheoryQuestion({
         <legend className={styles.srOnly}>{questionTypeLabel(question.type)}选项</legend>
         {(question.options ?? []).map((option, index) => {
           const checked = selected.has(index)
+          const correct = reviewResult?.correctIndexes.includes(index) ?? false
+          const incorrect = Boolean(reviewResult && checked && !correct)
           const inputId = `theory-${questionId}-${index}`
+          const className = correct
+            ? styles.optionCorrect
+            : incorrect
+              ? styles.optionIncorrect
+              : checked
+                ? styles.optionSelected
+                : styles.option
           return (
-            <label className={checked ? styles.optionSelected : styles.option} htmlFor={inputId} key={inputId}>
+            <label className={className} htmlFor={inputId} key={inputId}>
               <input
                 checked={checked}
                 id={inputId}
@@ -114,7 +145,13 @@ function TheoryQuestion({
               />
               <span className={styles.optionKey}>{optionKey(index)}</span>
               <span className={styles.optionText}>{option}</span>
-              {checked ? <Check aria-hidden="true" size={18} /> : null}
+              {correct ? (
+                <CircleCheck aria-hidden="true" size={18} />
+              ) : incorrect ? (
+                <CircleX aria-hidden="true" size={18} />
+              ) : checked ? (
+                <Check aria-hidden="true" size={18} />
+              ) : null}
             </label>
           )
         })}
@@ -124,45 +161,59 @@ function TheoryQuestion({
 }
 
 function QuestionIndex({
-  questions,
+  entries,
   answers,
   activeIndex,
   reviewQuestionIds,
+  reviewResults,
   onSelect,
 }: {
-  questions: TheoryPlayerQuestionModel[]
+  entries: IndexedTheoryQuestion[]
   answers: Record<number, number[]>
   activeIndex: number
   reviewQuestionIds: Set<number>
+  reviewResults: Map<number, TheoryReviewItem>
   onSelect: (index: number) => void
 }) {
+  const reviewing = reviewResults.size > 0
   return (
     <div className={styles.indexContent}>
       <div className={styles.indexGrid}>
-        {questions.map((question, index) => {
+        {entries.map(({ question, questionIndex }) => {
           const questionId = question.id ?? 0
           const answered = (answers[questionId]?.length ?? 0) > 0
           const review = reviewQuestionIds.has(questionId)
-          const active = activeIndex === index
+          const result = reviewResults.get(questionId)
+          const active = activeIndex === questionIndex
           const className = active
             ? styles.indexItemActive
-            : review
-              ? styles.indexItemReview
-              : answered
-                ? styles.indexItemAnswered
-                : styles.indexItem
+            : result?.state === 'correct'
+              ? styles.indexItemCorrect
+              : result
+                ? styles.indexItemIncorrect
+                : review
+                  ? styles.indexItemReview
+                  : answered
+                    ? styles.indexItemAnswered
+                    : styles.indexItem
           return (
             <button
-              aria-label={`第 ${index + 1} 题，${questionTypeLabel(question.type)}，${answered ? '已作答' : '未作答'}${review ? '，待检查' : ''}`}
+              aria-label={`第 ${questionIndex + 1} 题，${questionTypeLabel(question.type)}，${result ? reviewStateLabel(result.state) : answered ? '已作答' : '未作答'}${review ? '，待检查' : ''}`}
               className={className}
               key={questionId}
-              onClick={() => onSelect(index)}
+              onClick={() => onSelect(questionIndex)}
               type="button"
             >
-              <strong>{index + 1}</strong>
+              <strong>{questionIndex + 1}</strong>
               <small>{questionTypeShort(question.type)}</small>
-              {answered ? <Check aria-hidden="true" size={13} /> : null}
-              {review ? <Bookmark aria-hidden="true" fill="currentColor" size={12} /> : null}
+              {result?.state === 'correct' ? (
+                <CircleCheck aria-hidden="true" size={13} />
+              ) : result ? (
+                <CircleX aria-hidden="true" size={13} />
+              ) : answered ? (
+                <Check aria-hidden="true" size={13} />
+              ) : null}
+              {!reviewing && review ? <Bookmark aria-hidden="true" fill="currentColor" size={12} /> : null}
             </button>
           )
         })}
@@ -172,14 +223,29 @@ function QuestionIndex({
           <i className={styles.legendCurrent} />
           当前
         </span>
-        <span>
-          <i className={styles.legendAnswered} />
-          已答
-        </span>
-        <span>
-          <i className={styles.legendReview} />
-          待检查
-        </span>
+        {reviewing ? (
+          <>
+            <span>
+              <i className={styles.legendCorrect} />
+              正确
+            </span>
+            <span>
+              <i className={styles.legendIncorrect} />
+              错误 / 未答
+            </span>
+          </>
+        ) : (
+          <>
+            <span>
+              <i className={styles.legendAnswered} />
+              已答
+            </span>
+            <span>
+              <i className={styles.legendReview} />
+              待检查
+            </span>
+          </>
+        )}
       </div>
     </div>
   )
@@ -229,17 +295,19 @@ export function TheoryExamWorkbench({
   submit,
   deadline,
   onSubmitted,
+  revealCorrectAnswers = false,
 }: {
   initialPaper: TheoryPlayerPaperModel
   saveDraft: (data: TheoryAnswerSheetEditModel) => Promise<TheoryPlayerPaperModel>
   submit: (data: TheoryAnswerSheetEditModel) => Promise<TheoryPlayerPaperModel>
   deadline?: number | null
   onSubmitted?: (paper: TheoryPlayerPaperModel) => void
+  revealCorrectAnswers?: boolean
 }) {
   const session = useTheoryExamSession({ initialPaper, saveDraft, submit, onSubmitted })
   const questions = useMemo(
     () =>
-      [...(session.paper.questions ?? [])]
+      ([...(session.paper.questions ?? [])] as ReviewableTheoryQuestion[])
         .filter((question) => question.id !== undefined)
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
     [session.paper.questions]
@@ -248,17 +316,48 @@ export function TheoryExamWorkbench({
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward')
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [indexOpen, setIndexOpen] = useState(false)
+  const [questionFilter, setQuestionFilter] = useState<TheoryReviewFilter>('all')
+
+  const reviewDataMissing = session.submitted && revealCorrectAnswers && (session.paper.answers?.length ?? 0) === 0
+  const reviewSummary = useMemo(() => buildTheoryReview(questions, session.answers), [questions, session.answers])
+  const canReview = session.submitted && revealCorrectAnswers && !reviewDataMissing && reviewSummary.available
+  const reviewResults = useMemo(
+    () => new Map(canReview ? reviewSummary.items.map((item) => [item.question.id ?? 0, item]) : []),
+    [canReview, reviewSummary.items]
+  )
+  const indexedQuestions = useMemo<IndexedTheoryQuestion[]>(
+    () => questions.map((question, questionIndex) => ({ question, questionIndex })),
+    [questions]
+  )
+  const visibleQuestions = useMemo(
+    () =>
+      questionFilter === 'review' && canReview
+        ? indexedQuestions.filter(({ question }) => reviewResults.get(question.id ?? 0)?.state !== 'correct')
+        : indexedQuestions,
+    [canReview, indexedQuestions, questionFilter, reviewResults]
+  )
+  const visiblePosition = visibleQuestions.findIndex(({ questionIndex }) => questionIndex === currentIndex)
 
   useEffect(() => {
     if (!questions.length) return
     setCurrentIndex((current) => Math.min(current, questions.length - 1))
   }, [questions.length])
 
+  useEffect(() => {
+    if (questionFilter !== 'review' || !canReview) return
+    if (!visibleQuestions.length) {
+      setQuestionFilter('all')
+      return
+    }
+    if (visiblePosition < 0) setCurrentIndex(visibleQuestions[0].questionIndex)
+  }, [canReview, questionFilter, visiblePosition, visibleQuestions])
+
   const answeredCount = questions.filter((question) => (session.answers[question.id ?? 0]?.length ?? 0) > 0).length
   const unansweredCount = Math.max(0, questions.length - answeredCount)
   const progress = questions.length ? Math.round((answeredCount / questions.length) * 100) : 0
   const currentQuestion = questions[currentIndex]
   const currentQuestionId = currentQuestion?.id ?? 0
+  const currentReviewResult = reviewResults.get(currentQuestionId)
 
   const goToQuestion = (nextIndex: number) => {
     const bounded = Math.min(Math.max(nextIndex, 0), questions.length - 1)
@@ -267,6 +366,12 @@ export function TheoryExamWorkbench({
     setCurrentIndex(bounded)
     setIndexOpen(false)
     void session.saveDraftNow()
+  }
+
+  const goToRelativeQuestion = (offset: number) => {
+    if (visiblePosition < 0) return
+    const next = visibleQuestions[visiblePosition + offset]
+    if (next) goToQuestion(next.questionIndex)
   }
 
   const saveLabel =
@@ -321,11 +426,15 @@ export function TheoryExamWorkbench({
         <div className={styles.progressRow}>
           <div>
             <span>
-              {answeredCount} / {questions.length} 已作答
+              {reviewDataMissing ? '该历史答卷缺少逐题作答记录' : `${answeredCount} / ${questions.length} 已作答`}
             </span>
-            <strong>{progress}%</strong>
+            <strong>{reviewDataMissing ? '--' : `${progress}%`}</strong>
           </div>
-          <progress aria-label="答题进度" max={questions.length} value={answeredCount} />
+          <progress
+            aria-label={reviewDataMissing ? '逐题作答记录不可用' : '答题进度'}
+            max={Math.max(questions.length, 1)}
+            value={reviewDataMissing ? 0 : answeredCount}
+          />
         </div>
         <div className={styles.examFacts}>
           <span>
@@ -353,10 +462,23 @@ export function TheoryExamWorkbench({
         </div>
       ) : null}
       {session.submitError ? <InlineFeedback tone="danger">{session.submitError}</InlineFeedback> : null}
-      {session.submitted ? (
+      {reviewDataMissing ? (
+        <InlineFeedback>
+          这份历史答卷只保留了总成绩，没有保存逐题选择，系统无法可靠还原错题。成绩记录仍然保留；可使用“重新作答”生成完整复盘数据。
+        </InlineFeedback>
+      ) : session.submitted ? (
         <InlineFeedback tone="success">
           答卷已于 {formatTimestamp(session.paper.submittedAt)} 提交，当前页面为只读状态。
         </InlineFeedback>
+      ) : null}
+
+      {canReview ? (
+        <TheoryReviewSummary
+          filter={questionFilter}
+          onFilterChange={setQuestionFilter}
+          questionCount={questions.length}
+          review={reviewSummary}
+        />
       ) : null}
 
       <div className={styles.mobileIndexBar}>
@@ -379,26 +501,28 @@ export function TheoryExamWorkbench({
               onToggleReview={() => session.toggleReview(currentQuestionId)}
               question={currentQuestion}
               review={session.reviewQuestionIds.has(currentQuestionId)}
+              reviewResult={currentReviewResult}
               selectedIndexes={session.answers[currentQuestionId] ?? []}
             />
           ) : null}
 
           <nav aria-label="题目切换" className={styles.questionNavigation}>
             <ActionButton
-              disabled={currentIndex <= 0}
+              disabled={visiblePosition <= 0}
               icon={<ChevronLeft size={17} />}
-              onClick={() => goToQuestion(currentIndex - 1)}
+              onClick={() => goToRelativeQuestion(-1)}
               type="button"
             >
               上一题
             </ActionButton>
             <span>
               第 {currentIndex + 1} / {questions.length} 题
+              {questionFilter === 'review' ? ` · 错题 ${visiblePosition + 1} / ${visibleQuestions.length}` : ''}
             </span>
             <ActionButton
-              disabled={currentIndex >= questions.length - 1}
+              disabled={visiblePosition < 0 || visiblePosition >= visibleQuestions.length - 1}
               icon={<ChevronRight size={17} />}
-              onClick={() => goToQuestion(currentIndex + 1)}
+              onClick={() => goToRelativeQuestion(1)}
               type="button"
             >
               下一题
@@ -414,9 +538,10 @@ export function TheoryExamWorkbench({
           <QuestionIndex
             activeIndex={currentIndex}
             answers={session.answers}
+            entries={visibleQuestions}
             onSelect={goToQuestion}
-            questions={questions}
             reviewQuestionIds={session.reviewQuestionIds}
+            reviewResults={reviewResults}
           />
         </aside>
       </div>
@@ -473,9 +598,10 @@ export function TheoryExamWorkbench({
         <QuestionIndex
           activeIndex={currentIndex}
           answers={session.answers}
+          entries={visibleQuestions}
           onSelect={goToQuestion}
-          questions={questions}
           reviewQuestionIds={session.reviewQuestionIds}
+          reviewResults={reviewResults}
         />
       </MobileQuestionIndex>
     </div>

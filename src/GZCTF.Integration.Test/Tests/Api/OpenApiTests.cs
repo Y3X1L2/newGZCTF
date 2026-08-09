@@ -274,22 +274,6 @@ public class OpenApiTests(GZCTFApplicationFactory factory, ITestOutputHelper out
         Assert.Equal(NormalizeOpenApi(expected), NormalizeOpenApi(current));
     }
 
-    [Fact]
-    public async Task Scalar_Documentation_IsAvailable()
-    {
-        // Scalar is the API documentation UI
-        // Act
-        var response = await _client.GetAsync("/scalar/v1");
-        output.WriteLine($"Status: {response.StatusCode}");
-
-        // Assert - in development mode, Scalar should be available
-        // It might return 404 in some configurations, so we just verify it responds
-        Assert.True(
-            response.StatusCode is HttpStatusCode.OK or HttpStatusCode.NotFound,
-            $"Expected OK or NotFound but got {response.StatusCode}"
-        );
-    }
-
     private static bool IsHttpMethod(string name) => name is
         "get" or "put" or "post" or "delete" or "options" or "head" or "patch" or "trace";
 

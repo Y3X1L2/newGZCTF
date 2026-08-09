@@ -1,3 +1,5 @@
+using GZCTF.Modules.Content.Domain;
+
 namespace GZCTF.Modules.Content.Contracts;
 
 public sealed record ImageTemplateReference(
@@ -24,6 +26,9 @@ public sealed record ImageTemplateDetails(
     string? Description,
     string? ErrorMessage,
     string? ImageHash,
+    VmArtifactStatus VmArtifactStatus,
+    VmRuntimeMode VmRuntimeMode,
+    VmNetworkMode VmNetworkMode,
     DateTimeOffset UploadedAt);
 
 public sealed record OpenImageTemplateModel(
@@ -37,6 +42,9 @@ public sealed record OpenImageTemplateModel(
     string? Description,
     string? ErrorMessage,
     string? ImageHash,
+    VmArtifactStatus VmArtifactStatus,
+    VmRuntimeMode VmRuntimeMode,
+    VmNetworkMode VmNetworkMode,
     DateTimeOffset UploadedAt)
 {
     public static OpenImageTemplateModel FromDetails(ImageTemplateDetails details) => new(
@@ -50,6 +58,9 @@ public sealed record OpenImageTemplateModel(
         details.Description,
         details.ErrorMessage,
         details.ImageHash,
+        details.VmArtifactStatus,
+        details.VmRuntimeMode,
+        details.VmNetworkMode,
         details.UploadedAt);
 }
 

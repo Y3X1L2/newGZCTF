@@ -692,8 +692,6 @@ public class NodesController : ControllerBase
         var token = HttpContext.RequestAborted;
         var node = await _context.WorkerNodes.AsNoTracking().FirstOrDefaultAsync(n => n.Id == id, token);
         if (node is null) return NotFound();
-        if (node.IsLocal)
-            return BadRequest(new { message = "Local node is updated together with the platform deployment." });
 
         var requestBaseUrl = $"{Request.Scheme}://{Request.Host}{Request.PathBase}";
         var serverUrl = NodeDeployService.ResolveServerUrl(
@@ -712,8 +710,16 @@ public class NodesController : ControllerBase
         {
             var result = await agentClient.SyncAgentAsync(id,
                 new AgentSyncRequest(
-                    $"{serverUrl.TrimEnd('/')}/api/agent/download",
-                    NodeDeployService.ComputeAgentBinarySha256()),
+                    DownloadUrl: $"{serverUrl.TrimEnd('/')}/api/agent/download",
+                    ExpectedSha256: NodeDeployService.ComputeAgentBinarySha256(),
+                    LinuxSensorDownloadUrl: $"{serverUrl.TrimEnd('/')}/api/agent/endpoint-sensor/linux-x64/download",
+                    LinuxSensorSha256: NodeDeployService.ComputeBundledArtifactSha256(
+                        "agent", "endpoint-sensor", "linux-x64", "gzctf-endpoint-sensor"),
+                    WindowsSensorDownloadUrl: $"{serverUrl.TrimEnd('/')}/api/agent/endpoint-sensor/win-x64/download",
+                    WindowsSensorSha256: NodeDeployService.ComputeBundledArtifactSha256(
+                        "agent", "endpoint-sensor", "win-x64", "gzctf-endpoint-sensor.exe"),
+                    VmControlPlane: new AgentVmControlPlaneSyncConfig(
+                        node.TeamLabNetworkEnabled && node.Capabilities.HasFlag(NodeCapability.Kvm))),
                 token);
             await _events.AppendAndSaveAsync(NodeOperationalEvents.Create(
                 node,
@@ -929,6 +935,42 @@ public class NodesController : ControllerBase
         return File(System.IO.File.OpenRead(path), "application/octet-stream", "gzctf-agent");
     }
 
+    [HttpGet("/api/agent/endpoint-sensor/linux-x64/download")]
+    [AllowAnonymous]
+    public IActionResult DownloadLinuxEndpointSensor() =>
+        DownloadBundledAgentArtifact(
+            ["endpoint-sensor", "linux-x64", "gzctf-endpoint-sensor"],
+            "gzctf-endpoint-sensor");
+
+    [HttpGet("/api/agent/endpoint-sensor/win-x64/download")]
+    [AllowAnonymous]
+    public IActionResult DownloadWindowsEndpointSensor() =>
+        DownloadBundledAgentArtifact(
+            ["endpoint-sensor", "win-x64", "gzctf-endpoint-sensor.exe"],
+            "gzctf-endpoint-sensor.exe");
+
+    [HttpGet("/api/agent/guest-supervisor/linux-x64/download")]
+    [AllowAnonymous]
+    public IActionResult DownloadLinuxGuestSupervisor() =>
+        DownloadBundledAgentArtifact(
+            ["guest-supervisor", "linux-x64", "gzctf-guest-supervisor"],
+            "gzctf-guest-supervisor");
+
+    [HttpGet("/api/agent/guest-supervisor/win-x64/download")]
+    [AllowAnonymous]
+    public IActionResult DownloadWindowsGuestSupervisor() =>
+        DownloadBundledAgentArtifact(
+            ["guest-supervisor", "win-x64", "gzctf-guest-supervisor.exe"],
+            "gzctf-guest-supervisor.exe");
+
+    IActionResult DownloadBundledAgentArtifact(string[] pathParts, string downloadName)
+    {
+        var path = Path.Combine([AppDomain.CurrentDomain.BaseDirectory, "agent", .. pathParts]);
+        if (!System.IO.File.Exists(path))
+            return NotFound(new { message = "Agent artifact not available" });
+        return File(System.IO.File.OpenRead(path), "application/octet-stream", downloadName);
+    }
+
     static string[] GetUnschedulableReasons(NodeCapacitySnapshot snapshot, NodeEligibilityEvaluator eligibility)
     {
         var dockerReason = eligibility.GetReason(snapshot, NodeCapability.Docker, 1, 0, false,
@@ -988,8 +1030,7 @@ public class NodesController : ControllerBase
 
     static string? TeamLabReason(NodeCapacitySnapshot snapshot, NodeEligibilityEvaluator eligibility,
         NodeCapability capability, int dockerSlots, int vmSlots) =>
-        eligibility.GetReason(snapshot, capability, dockerSlots, vmSlots, true,
-            [AgentFeatureIds.TeamLabFabric]);
+        eligibility.GetReason(snapshot, capability, dockerSlots, vmSlots, true);
 
     PublicPortPool GetPublicPortPool()
         => CreatePortPool(

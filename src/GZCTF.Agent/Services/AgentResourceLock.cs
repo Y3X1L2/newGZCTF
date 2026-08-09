@@ -8,28 +8,66 @@ public sealed class AgentResourceLock
 
     public async ValueTask<IAsyncDisposable> AcquireAsync(string key, CancellationToken token)
     {
-        var entry = _entries.AddOrUpdate(key, _ => new Entry(), (_, current) =>
+        while (true)
         {
-            Interlocked.Increment(ref current.References);
-            return current;
-        });
-        await entry.Gate.WaitAsync(token);
-        return new Releaser(this, key, entry);
+            var entry = _entries.GetOrAdd(key, static _ => new Entry());
+            if (!entry.TryAddReference())
+                continue;
+
+            try
+            {
+                await entry.Gate.WaitAsync(token);
+                return new Releaser(this, key, entry);
+            }
+            catch
+            {
+                ReleaseReference(key, entry);
+                throw;
+            }
+        }
     }
 
     sealed class Entry
     {
         public readonly SemaphoreSlim Gate = new(1, 1);
-        public int References = 1;
+        int _references;
+
+        public bool TryAddReference()
+        {
+            while (true)
+            {
+                var current = Volatile.Read(ref _references);
+                if (current < 0)
+                    return false;
+                if (Interlocked.CompareExchange(ref _references, current + 1, current) == current)
+                    return true;
+            }
+        }
+
+        public bool ReleaseAndTryRetire()
+        {
+            if (Interlocked.Decrement(ref _references) != 0)
+                return false;
+            return Interlocked.CompareExchange(ref _references, -1, 0) == 0;
+        }
+    }
+
+    void ReleaseReference(string key, Entry entry)
+    {
+        if (entry.ReleaseAndTryRetire())
+            _entries.TryRemove(new KeyValuePair<string, Entry>(key, entry));
     }
 
     sealed class Releaser(AgentResourceLock owner, string key, Entry entry) : IAsyncDisposable
     {
+        int _disposed;
+
         public ValueTask DisposeAsync()
         {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                return ValueTask.CompletedTask;
             entry.Gate.Release();
-            if (Interlocked.Decrement(ref entry.References) == 0)
-                owner._entries.TryRemove(new KeyValuePair<string, Entry>(key, entry));
+            owner.ReleaseReference(key, entry);
             return ValueTask.CompletedTask;
         }
     }

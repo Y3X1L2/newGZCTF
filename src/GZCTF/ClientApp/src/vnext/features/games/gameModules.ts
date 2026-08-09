@@ -64,7 +64,7 @@ export const gameModuleDefinitions = [
     description: '进入多网段渗透任务',
     icon: Network,
     types: [GameType.Penetration, GameType.Mixed],
-    implemented: false,
+    implemented: true,
   },
 ] satisfies readonly GameModuleDefinition[]
 

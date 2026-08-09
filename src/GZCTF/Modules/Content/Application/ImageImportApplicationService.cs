@@ -23,6 +23,12 @@ public sealed record StagedImageImport(
     long ContentLength,
     string ContentDigest);
 
+public enum ImageImportStagingKind
+{
+    DockerArchive,
+    VmQcow2
+}
+
 public interface IImageImportStagingStore
 {
     Task<StagedImageImport> StageAsync(
@@ -30,6 +36,7 @@ public interface IImageImportStagingStore
         string originalFileName,
         long declaredLength,
         string? expectedDigest,
+        ImageImportStagingKind kind,
         CancellationToken cancellationToken);
 
     Task VerifyAsync(ImageImportJob job, CancellationToken cancellationToken);
@@ -58,6 +65,10 @@ public interface IImageImportExecutor
     Task<ImageImportArtifact> ImportDockerArchiveAsync(
         ImageImportJob job,
         CancellationToken cancellationToken);
+
+    Task<ImageImportArtifact> ImportVmQcow2Async(
+        ImageImportJob job,
+        CancellationToken cancellationToken);
 }
 
 public interface IImageImportTemplateStore
@@ -79,6 +90,7 @@ public sealed class ImageImportApplicationService(
     public const string OperationKind = "image.import";
     public const string DockerReferenceRouteKey = "POST:/api/open/v1/images/docker-references";
     public const string DockerArchiveRouteKey = "POST:/api/open/v1/images/docker-archives";
+    public const string VmQcow2RouteKey = "POST:/api/open/v1/images/vm-qcow2";
 
     public async Task<IdempotencyBeginResult> SubmitDockerReferenceAsync(
         Guid apiTokenId,
@@ -139,6 +151,7 @@ public sealed class ImageImportApplicationService(
             originalFileName,
             contentLength,
             normalized.ExpectedDigest,
+            ImageImportStagingKind.DockerArchive,
             cancellationToken);
         var requestHash = ComputeRequestHash(normalized, staged.ContentDigest);
         var job = CreateArchiveJob(actor.UserId.Value, normalized, staged);
@@ -150,6 +163,68 @@ public sealed class ImageImportApplicationService(
                     apiTokenId,
                     actor.UserId.Value,
                     DockerArchiveRouteKey,
+                    normalizedKey,
+                    requestHash,
+                    job),
+                cancellationToken);
+            if (result.Reused)
+                await staging.DeleteAsync(staged.Path, cancellationToken);
+            return result;
+        }
+        catch (IdempotencyConflictException)
+        {
+            await staging.DeleteAsync(staged.Path, CancellationToken.None);
+            throw;
+        }
+    }
+
+    public async Task<IdempotencyBeginResult> SubmitVmQcow2Async(
+        Guid apiTokenId,
+        ActorContext actor,
+        string idempotencyKey,
+        Stream source,
+        string originalFileName,
+        long contentLength,
+        VmQcow2ImportCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (!actor.UserId.HasValue)
+            throw new ImageImportContractException(
+                "authentication_required", "Authentication is required.", 401);
+
+        var normalizedKey = ExternalIdempotencyKey.Normalize(idempotencyKey);
+        var normalized = Normalize(command);
+        var staged = await staging.StageAsync(
+            source,
+            originalFileName,
+            contentLength,
+            normalized.ExpectedDigest,
+            ImageImportStagingKind.VmQcow2,
+            cancellationToken);
+        var requestHash = ComputeRequestHash(normalized, staged.ContentDigest);
+        var job = new ImageImportJob
+        {
+            SourceKind = ImageImportSourceKind.VmQcow2,
+            SourceReference = $"qcow2:sha256:{staged.ContentDigest}",
+            StagedPath = staged.Path,
+            OriginalFileName = staged.OriginalFileName,
+            ContentLength = staged.ContentLength,
+            ExpectedDigest = staged.ContentDigest,
+            RequestedTemplateKind = ImageType.Qcow2,
+            RequestedOsType = normalized.OSType,
+            RequestedVmNetworkMode = normalized.NetworkMode,
+            RequestedName = normalized.Name,
+            CreatedById = actor.UserId,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        try
+        {
+            var result = await store.SubmitAsync(
+                new ImageImportSubmission(
+                    apiTokenId,
+                    actor.UserId.Value,
+                    VmQcow2RouteKey,
                     normalizedKey,
                     requestHash,
                     job),
@@ -207,6 +282,7 @@ public sealed class ImageImportApplicationService(
             originalFileName,
             contentLength,
             normalized.ExpectedDigest,
+            ImageImportStagingKind.DockerArchive,
             cancellationToken);
         var job = CreateArchiveJob(actor.UserId.Value, normalized, staged);
         try
@@ -230,6 +306,8 @@ public sealed class ImageImportApplicationService(
                 await executor.ImportDockerReferenceAsync(job, cancellationToken),
             ImageImportSourceKind.DockerArchive =>
                 await executor.ImportDockerArchiveAsync(job, cancellationToken),
+            ImageImportSourceKind.VmQcow2 =>
+                await executor.ImportVmQcow2Async(job, cancellationToken),
             _ => throw new ApiOperationTerminalException(
                 "image_source_unsupported", "The image import source is not supported.")
         };
@@ -297,6 +375,22 @@ public sealed class ImageImportApplicationService(
         };
     }
 
+    private static VmQcow2ImportCommand Normalize(VmQcow2ImportCommand command)
+    {
+        var name = command.Name.Trim();
+        if (name.Length is < 1 or > 256)
+            throw new ImageImportContractException(
+                "image_name_invalid", "Image template name is invalid.", 400);
+        if (!Enum.IsDefined(command.OSType) || !Enum.IsDefined(command.NetworkMode))
+            throw new ImageImportContractException(
+                "vm_image_contract_invalid", "VM operating system or network mode is invalid.", 400);
+        return command with
+        {
+            Name = name,
+            ExpectedDigest = NormalizeDigest(command.ExpectedDigest)
+        };
+    }
+
     private static string ComputeRequestHash(DockerImageReferenceImportCommand command)
     {
         var payload = JsonSerializer.SerializeToUtf8Bytes(command);
@@ -306,6 +400,12 @@ public sealed class ImageImportApplicationService(
     private static string ComputeRequestHash(
         DockerImageArchiveImportCommand command,
         string contentDigest)
+    {
+        var payload = JsonSerializer.SerializeToUtf8Bytes(new { command, contentDigest });
+        return Convert.ToHexStringLower(SHA256.HashData(payload));
+    }
+
+    private static string ComputeRequestHash(VmQcow2ImportCommand command, string contentDigest)
     {
         var payload = JsonSerializer.SerializeToUtf8Bytes(new { command, contentDigest });
         return Convert.ToHexStringLower(SHA256.HashData(payload));

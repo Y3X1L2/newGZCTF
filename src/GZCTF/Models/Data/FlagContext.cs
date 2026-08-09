@@ -6,6 +6,16 @@ namespace GZCTF.Models.Data;
 [Index(nameof(ChallengeId))]
 public class FlagContext
 {
+    internal static FlagContext CreateInstanceFlag(string flag)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(flag);
+        return new FlagContext
+        {
+            Flag = flag,
+            IsOccupied = true
+        };
+    }
+
     [Key]
     public int Id { get; set; }
 

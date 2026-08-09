@@ -20,6 +20,8 @@ public sealed class DeploymentQueueTicketEntityConfiguration : IEntityTypeConfig
         builder.HasIndex(item => item.SubjectConcurrencyKey).IsUnique()
             .HasFilter("\"Status\" IN (0, 1, 2, 3)")
             .HasDatabaseName("UX_DeploymentQueueTickets_SubjectConcurrencyKey");
+        builder.HasIndex(item => new { item.Status, item.FairnessKey, item.CreatedAt })
+            .HasDatabaseName("IX_DeploymentQueueTickets_Status_Fairness_Created");
         builder.HasIndex(item => new { item.Status, item.NotBeforeAt, item.CreatedAt, item.Id })
             .HasDatabaseName("IX_DeploymentQueueTickets_Status_NotBefore_Created_Id");
         builder.HasIndex(item => new { item.TargetNodeId, item.Status, item.CreatedAt, item.Id })

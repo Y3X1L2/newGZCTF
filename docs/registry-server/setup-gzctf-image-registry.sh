@@ -45,6 +45,7 @@ install_docker=1
 configure_ufw=1
 configure_local_insecure=0
 check_only=0
+docker_daemon_changed=0
 allow_cidrs=()
 registry_mirrors=()
 
@@ -180,39 +181,76 @@ write_docker_daemon_config() {
   fi
 
   mkdir -p /etc/docker
-  if [[ -f /etc/docker/daemon.json ]]; then
-    cp -a /etc/docker/daemon.json "/etc/docker/daemon.json.bak.$(date +%Y%m%d%H%M%S)"
+  if ! command -v python3 >/dev/null 2>&1; then
+    apt_install python3
   fi
 
-  python3 - "$insecure_ref" "$configure_local_insecure" "${registry_mirrors[@]}" <<'PY'
+  local daemon_config="/etc/docker/daemon.json"
+  local tmp
+  tmp="$(mktemp "/etc/docker/daemon.json.tmp.XXXXXX")"
+  python3 - "$daemon_config" "$tmp" "$insecure_ref" "$configure_local_insecure" \
+    "$(printf '%s\n' "${registry_mirrors[@]}")" <<'PY'
 import json
 import sys
 from pathlib import Path
 
-path = Path("/etc/docker/daemon.json")
-registry = sys.argv[1]
-configure_insecure = sys.argv[2] == "1"
-mirrors = sys.argv[3:]
+source = Path(sys.argv[1])
+target = Path(sys.argv[2])
+registry = sys.argv[3]
+configure_insecure = sys.argv[4] == "1"
+mirrors = [item for item in sys.argv[5].splitlines() if item]
 
-data = {}
-if path.exists() and path.read_text().strip():
-    data = json.loads(path.read_text())
+original = source.read_bytes() if source.exists() else b""
+data = json.loads(original.decode()) if original.strip() else {}
+if not isinstance(data, dict):
+    raise SystemExit("Docker daemon configuration must be a JSON object.")
+
+changed = False
 
 if mirrors:
     existing = data.get("registry-mirrors") or []
+    if not isinstance(existing, list) or any(not isinstance(item, str) for item in existing):
+        raise SystemExit("Docker daemon setting registry-mirrors must be an array of strings.")
     for mirror in mirrors:
         if mirror not in existing:
             existing.append(mirror)
+            changed = True
     data["registry-mirrors"] = existing
 
 if configure_insecure:
     existing = data.get("insecure-registries") or []
+    if not isinstance(existing, list) or any(not isinstance(item, str) for item in existing):
+        raise SystemExit("Docker daemon setting insecure-registries must be an array of strings.")
     if registry not in existing:
         existing.append(registry)
+        changed = True
     data["insecure-registries"] = existing
 
-path.write_text(json.dumps(data, indent=2) + "\n")
+if changed or not original.strip():
+    target.write_text(json.dumps(data, indent=2) + "\n")
+else:
+    target.write_bytes(original)
 PY
+
+  if [[ -f "$daemon_config" ]] && cmp -s "$tmp" "$daemon_config"; then
+    rm -f "$tmp"
+    log "Docker daemon registry settings are already current"
+    return
+  fi
+
+  if [[ -f "$daemon_config" ]]; then
+    local backup
+    backup="$(mktemp "${daemon_config}.bak.$(date +%Y%m%d%H%M%S).XXXXXX")"
+    cp -a "$daemon_config" "$backup"
+    chmod --reference="$daemon_config" "$tmp"
+    chown --reference="$daemon_config" "$tmp"
+    log "Backed up Docker daemon configuration to $backup"
+  else
+    chmod 0644 "$tmp"
+  fi
+
+  mv -f "$tmp" "$daemon_config"
+  docker_daemon_changed=1
 }
 
 install_or_configure_docker() {
@@ -234,7 +272,9 @@ install_or_configure_docker() {
   fi
 
   systemctl enable --now docker
-  systemctl restart docker
+  if [[ "$docker_daemon_changed" -eq 1 ]]; then
+    systemctl restart docker
+  fi
 }
 
 write_registry_config() {
@@ -376,14 +416,149 @@ configure_firewall() {
   done
 }
 
+verify_registry_delete() {
+  if [[ "$check_only" -eq 1 ]]; then
+    return
+  fi
+
+  local base="http://127.0.0.1:$port"
+  local repository="gzctf/health/smoke"
+  local smoke_tag="latest"
+  local delete_tag="delete-probe-$(date +%s)-$$-$RANDOM"
+  local manifest_media_type="application/vnd.docker.distribution.manifest.v2+json"
+  local probe_dir config_file delete_config_file manifest_file delete_manifest_file response_file headers_file
+  local config_digest delete_config_digest config_size delete_config_size status manifest_digest
+  probe_dir="$(mktemp -d)"
+  config_file="$probe_dir/config.json"
+  delete_config_file="$probe_dir/delete-config.json"
+  manifest_file="$probe_dir/manifest.json"
+  delete_manifest_file="$probe_dir/delete-manifest.json"
+  response_file="$probe_dir/response.txt"
+  headers_file="$probe_dir/headers.txt"
+
+  printf '%s' '{"architecture":"amd64","config":{},"created":"1970-01-01T00:00:00Z","history":[],"os":"linux","rootfs":{"diff_ids":[],"type":"layers"}}' > "$config_file"
+  printf '%s' "{\"architecture\":\"amd64\",\"config\":{\"Labels\":{\"gzctf.delete-probe\":\"$delete_tag\"}},\"created\":\"1970-01-01T00:00:00Z\",\"history\":[],\"os\":\"linux\",\"rootfs\":{\"diff_ids\":[],\"type\":\"layers\"}}" > "$delete_config_file"
+  config_digest="sha256:$(sha256sum "$config_file" | awk '{print $1}')"
+  delete_config_digest="sha256:$(sha256sum "$delete_config_file" | awk '{print $1}')"
+  config_size="$(wc -c < "$config_file" | tr -d ' ')"
+  delete_config_size="$(wc -c < "$delete_config_file" | tr -d ' ')"
+  cat > "$manifest_file" <<EOF
+{"schemaVersion":2,"mediaType":"$manifest_media_type","config":{"mediaType":"application/vnd.docker.container.image.v1+json","size":$config_size,"digest":"$config_digest"},"layers":[]}
+EOF
+  cat > "$delete_manifest_file" <<EOF
+{"schemaVersion":2,"mediaType":"$manifest_media_type","config":{"mediaType":"application/vnd.docker.container.image.v1+json","size":$delete_config_size,"digest":"$delete_config_digest"},"layers":[]}
+EOF
+
+  if ! status="$(curl -sS -o "$response_file" -w '%{http_code}' -X POST \
+      -H 'Content-Type: application/octet-stream' --data-binary "@$config_file" \
+      "$base/v2/$repository/blobs/uploads/?digest=$config_digest")"; then
+    rm -rf "$probe_dir"
+    echo "Registry smoke config upload failed." >&2
+    return 1
+  fi
+  if [[ "$status" != "201" ]]; then
+    head -c 1024 "$response_file" >&2 || true
+    rm -rf "$probe_dir"
+    echo "Registry smoke config upload failed with HTTP $status." >&2
+    return 1
+  fi
+
+  if ! status="$(curl -sS -o "$response_file" -w '%{http_code}' -X POST \
+      -H 'Content-Type: application/octet-stream' --data-binary "@$delete_config_file" \
+      "$base/v2/$repository/blobs/uploads/?digest=$delete_config_digest")"; then
+    rm -rf "$probe_dir"
+    echo "Registry delete probe config upload failed." >&2
+    return 1
+  fi
+  if [[ "$status" != "201" ]]; then
+    head -c 1024 "$response_file" >&2 || true
+    rm -rf "$probe_dir"
+    echo "Registry delete probe config upload failed with HTTP $status." >&2
+    return 1
+  fi
+
+  if ! status="$(curl -sS -o "$response_file" -w '%{http_code}' -X PUT \
+      -H "Content-Type: $manifest_media_type" --data-binary "@$manifest_file" \
+      "$base/v2/$repository/manifests/$smoke_tag")"; then
+    rm -rf "$probe_dir"
+    echo "Registry smoke manifest publish failed." >&2
+    return 1
+  fi
+  if [[ "$status" != "201" ]]; then
+    head -c 1024 "$response_file" >&2 || true
+    rm -rf "$probe_dir"
+    echo "Registry smoke manifest publish failed with HTTP $status." >&2
+    return 1
+  fi
+
+  if ! status="$(curl -sS -o "$response_file" -w '%{http_code}' -X PUT \
+      -H "Content-Type: $manifest_media_type" --data-binary "@$delete_manifest_file" \
+      "$base/v2/$repository/manifests/$delete_tag")"; then
+    rm -rf "$probe_dir"
+    echo "Registry delete probe manifest publish failed." >&2
+    return 1
+  fi
+  if [[ "$status" != "201" ]]; then
+    head -c 1024 "$response_file" >&2 || true
+    rm -rf "$probe_dir"
+    echo "Registry delete probe manifest publish failed with HTTP $status." >&2
+    return 1
+  fi
+
+  if ! status="$(curl -sS -D "$headers_file" -o /dev/null -w '%{http_code}' -I \
+      -H "Accept: $manifest_media_type" "$base/v2/$repository/manifests/$delete_tag")"; then
+    rm -rf "$probe_dir"
+    echo "Registry delete probe digest resolution failed." >&2
+    return 1
+  fi
+  manifest_digest="$(awk 'tolower($1) == "docker-content-digest:" {gsub("\\r", "", $2); print $2}' \
+    "$headers_file" | tail -n 1)"
+  if [[ "$status" != "200" || -z "$manifest_digest" ]]; then
+    rm -rf "$probe_dir"
+    echo "Registry delete probe did not return Docker-Content-Digest (HTTP $status)." >&2
+    return 1
+  fi
+
+  if ! status="$(curl -sS -o "$response_file" -w '%{http_code}' -X DELETE \
+      "$base/v2/$repository/manifests/$manifest_digest")"; then
+    rm -rf "$probe_dir"
+    echo "Registry manifest delete verification failed." >&2
+    return 1
+  fi
+  if [[ "$status" != "202" ]]; then
+    head -c 1024 "$response_file" >&2 || true
+    rm -rf "$probe_dir"
+    echo "Registry manifest delete verification failed with HTTP $status." >&2
+    return 1
+  fi
+
+  if ! status="$(curl -sS -o /dev/null -w '%{http_code}' -I \
+      -H "Accept: $manifest_media_type" "$base/v2/$repository/manifests/$delete_tag")"; then
+    rm -rf "$probe_dir"
+    echo "Registry manifest delete verification follow-up failed." >&2
+    return 1
+  fi
+  rm -rf "$probe_dir"
+  if [[ "$status" != "404" ]]; then
+    echo "Registry manifest delete verification failed: deleted tag returned HTTP $status." >&2
+    return 1
+  fi
+
+  log "Registry manifest deletion verified; smoke image published at $host:$port/$repository:$smoke_tag"
+}
+
 verify_registry() {
   if [[ "$check_only" -eq 1 ]]; then
     return
   fi
 
+  if ! command -v curl >/dev/null 2>&1; then
+    apt_install curl
+  fi
   log "Verifying registry API"
   curl -fsS "http://127.0.0.1:$port/v2/" >/dev/null
   curl -fsS "http://$host:$port/v2/" >/dev/null || warn "Cannot verify registry through http://$host:$port/v2/ from this server"
+  verify_registry_delete
 }
 
 print_next_steps() {
@@ -416,10 +591,7 @@ Then restart Docker and the related GZCTF service/agent:
 
 Smoke test from platform and worker nodes:
 
-  docker pull hello-world:latest
-  docker tag hello-world:latest $registry_ref/ctf/smoke/hello-world:latest
-  docker push $registry_ref/ctf/smoke/hello-world:latest
-  docker pull $registry_ref/ctf/smoke/hello-world:latest
+  docker pull $registry_ref/gzctf/health/smoke:latest
 EOF
 }
 

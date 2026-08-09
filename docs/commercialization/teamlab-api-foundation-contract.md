@@ -125,6 +125,21 @@ Phase 3 退出时 API 已可供外部调用。Phase 9 提升能力覆盖和商�
 - 保存成功 revision 原子加一。
 - validate 不修改草稿。
 
+### 4.4 Phase 9 topology schema v2
+
+公开 API v1 同时接受不可变 release schema v1 和 v2。新发布默认使用 schema v2；历史 v1 release 只通过单一 normalizer 解码，不保留第二套运行时部署实现。
+
+schema v2 在既有 network/asset 基础上增加：
+
+- 显式 `managed-switch` 与 `managed-router` 基础设施节点；
+- 带方向的 L3 connection，不引入端口级 ACL；
+- asset dependency DAG，条件为 network-ready、guest-ready、bootstrap-completed、service-ready；
+- digest-pinned Bootstrap Profile 引用、参数和 secret 参数声明；
+- `disabled`、`preferred`、`required` endpoint observation 模式；
+- stateless 标记，仅用于满足全部受控恢复条件后的自动重建。
+
+平台生成稳定 placement group、runtime infrastructure、fragment、observation point 和 desired-state digest。调用方不能提交 WorkerNode、bridge、namespace、Fabric 地址、宿主命令或任意脚本文本。
+
 ## 5. 不可变 release
 
 发布流程：
@@ -257,6 +272,8 @@ DELETE /runtimes/{runtimeId}/access-grants/{grantId}
 
 ```text
 GET    /runtimes/{runtimeId}/traffic/flows?after={cursor}&limit=100
+GET    /runtimes/{runtimeId}/traffic/paths?after={cursor}&limit=100
+GET    /runtimes/{runtimeId}/traffic/paths/{pathId}
 POST   /runtimes/{runtimeId}/captures
 GET    /runtimes/{runtimeId}/captures/{captureId}
 POST   /runtimes/{runtimeId}/captures/{captureId}/stop
@@ -264,9 +281,12 @@ GET    /runtimes/{runtimeId}/captures/{captureId}/download
 ```
 
 - flow 返回聚合后的五元组、方向、字节数、包数、firstSeen、lastSeen、shard public ID 和 network topology key。
+- path 返回按时间排序的 observation hops；`PacketExact` 只来自相同包指纹，`TemporallyRelated` 来自同一受信 endpoint process identity 的时间关联，不能伪装成包级确定性。
 - capture 请求必须指定 scope、maxSeconds、maxBytes 和 expiresInSeconds，服务端应用更严格上限。
-- capture 下载需要 `teamlab.capture:read` 和对应 runtime grant。
-- Phase 3 保持当前可用采集能力；Phase 5 完成批写和保留，Phase 9 完成全部关键抓包点和协议验收。
+- capture scope 支持 runtime、network、asset 和已派生 path。一个 capture job 在每个必要 WorkerNode/observation point 上创建独立 segment。
+- Agent 使用短期、绑定 capture/segment/node/大小/SHA-256 的上传授权流式写入 BlobStorage；摘要或大小不匹配时对象必须删除。
+- download 返回 tar 流，包含 `manifest.json` 和所有可用 segment；主服务不能把完整 PCAP 载入内存。
+- capture 下载需要 `teamlab.capture:read` 和 runtime 所有权授权，并写入敏感下载审计事件。
 
 ## 11. Endpoint 清单
 
@@ -289,6 +309,8 @@ DELETE /runtimes/{runtimeId}
 GET    /runtimes/{runtimeId}/events
 POST   /runtimes/{runtimeId}/access-grants
 GET    /runtimes/{runtimeId}/traffic/flows
+GET    /runtimes/{runtimeId}/traffic/paths
+GET    /runtimes/{runtimeId}/traffic/paths/{pathId}
 POST   /runtimes/{runtimeId}/captures
 GET    /runtimes/{runtimeId}/captures/{captureId}
 POST   /runtimes/{runtimeId}/captures/{captureId}/stop
@@ -304,15 +326,18 @@ GET    /runtimes/{runtimeId}/captures/{captureId}/download
 ```json
 {
   "apiVersion": "v1",
-  "topologySchemaVersions": [1],
+  "topologySchemaVersions": [1, 2],
   "assetKinds": ["Docker", "Vm"],
   "networkModel": "L3RoutedFabric",
   "features": {
     "multiNode": true,
     "linuxVm": true,
-    "windowsVm": false,
+    "windowsVm": true,
     "trafficFlows": true,
-    "onDemandPcap": true
+    "trafficPaths": true,
+    "onDemandPcap": true,
+    "bootstrapProfiles": true,
+    "endpointObservation": true
   },
   "limits": {
     "networksPerTopology": 32,

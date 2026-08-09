@@ -1,0 +1,14 @@
+.session {
+  display: grid;
+  min-width: 0;
+  gap: var(--yn-space-3);
+}
+
+.validating {
+  padding: var(--yn-space-2) var(--yn-space-3);
+  border: 1px solid var(--yn-color-info);
+  border-radius: var(--yn-radius-sm);
+  background: var(--yn-color-info-soft);
+  color: var(--yn-color-info);
+  font-size: var(--yn-font-sm);
+}

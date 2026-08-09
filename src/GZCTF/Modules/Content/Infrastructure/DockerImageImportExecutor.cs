@@ -11,7 +11,8 @@ namespace GZCTF.Modules.Content.Infrastructure;
 public sealed class DockerImageImportExecutor(
     DockerImageRegistryService registry,
     IImageImportStagingStore staging,
-    DockerImageReferencePolicy referencePolicy) : IImageImportExecutor
+    DockerImageReferencePolicy referencePolicy,
+    IVmQcow2ImageImportExecutor vmQcow2) : IImageImportExecutor
 {
     public async Task<ImageImportArtifact> ImportDockerReferenceAsync(
         ImageImportJob job,
@@ -81,4 +82,8 @@ public sealed class DockerImageImportExecutor(
             job.ContentLength,
             $"Imported from {job.OriginalFileName}");
     }
+
+    public Task<ImageImportArtifact> ImportVmQcow2Async(
+        ImageImportJob job,
+        CancellationToken cancellationToken) => vmQcow2.ImportAsync(job, cancellationToken);
 }

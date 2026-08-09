@@ -124,13 +124,12 @@ public sealed class DatabaseGovernanceMigrationTests : IAsyncLifetime
             VALUES
                 ({{questionId}}, 'SingleChoice', ' Network   Fundamentals ', 'CIDR', '',
                  '["A","B"]', '[0]', now(), now());
-
             INSERT INTO "TeamLabRuntimes"
                 ("Id", "CreateRequestHash", "CreatedAt", "Generation", "IsOpenToPlayers", "PublicId",
                  "Status", "TopologyReleaseId")
             VALUES
-                ({{runtimeId}}, {{requestHash}}, now(), 1, true, {{runtimePublicId}},
-                 {{(byte)TeamLabRuntimeStatus.Running}}, {{releaseId}});
+                ({{runtimeId}}, {{requestHash}}, now(), 1, false, {{runtimePublicId}},
+                 {{(byte)TeamLabRuntimeStatus.Destroyed}}, {{releaseId}});
             """);
 
         var distributionId = Guid.Parse("44444444-4444-4444-8444-444444444444");
@@ -274,7 +273,8 @@ public sealed class DatabaseGovernanceMigrationTests : IAsyncLifetime
         };
         context.DeploymentQueueTickets.AddRange(terminal, active);
         await context.SaveChangesAsync();
-        var deleted = await new TerminalHistoryCleaner(context).CleanDeploymentTicketsAsync(
+        var deleted = await new TerminalHistoryCleaner(context)
+            .CleanDeploymentTicketsAsync(
             DateTimeOffset.UtcNow.AddDays(-180), 100, CancellationToken.None);
         Assert.Equal(1, deleted);
         Assert.True(await context.DeploymentQueueTickets.AnyAsync(item => item.Id == active.Id));

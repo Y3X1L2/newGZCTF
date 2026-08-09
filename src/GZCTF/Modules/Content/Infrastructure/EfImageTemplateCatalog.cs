@@ -33,6 +33,9 @@ public sealed class EfImageTemplateCatalog(
                 template.Description,
                 template.ErrorMessage,
                 template.ImageHash,
+                template.VmArtifactStatus,
+                template.VmRuntimeMode,
+                template.VmNetworkMode,
                 template.UploadedAt))
             .SingleOrDefaultAsync(cancellationToken);
 
@@ -80,7 +83,9 @@ public sealed class EfImageTemplateCatalog(
 
     public async Task CompleteDeletionAsync(int id, CancellationToken cancellationToken)
     {
-        var template = await context.ImageTemplates.SingleOrDefaultAsync(
+        var template = await context.ImageTemplates
+            .Include(item => item.PreparedArtifact)
+            .SingleOrDefaultAsync(
             item => item.Id == id && item.Status == ImageStatus.Deleting,
             cancellationToken);
         if (template is null)
@@ -89,7 +94,10 @@ public sealed class EfImageTemplateCatalog(
         try
         {
             await artifactCleaner.CleanupAsync(template, cancellationToken);
+            var preparedArtifact = template.PreparedArtifact;
             context.ImageTemplates.Remove(template);
+            if (preparedArtifact is not null)
+                context.VmPreparedArtifacts.Remove(preparedArtifact);
             await context.SaveChangesAsync(cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException ||

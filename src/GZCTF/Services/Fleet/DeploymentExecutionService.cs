@@ -1,7 +1,7 @@
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
-using GZCTF.Repositories.Interface;
 using GZCTF.Modules.TeamLab.Application;
+using GZCTF.Repositories.Interface;
 using GZCTF.Services.Container.Manager;
 using Microsoft.EntityFrameworkCore;
 
@@ -286,7 +286,8 @@ public class DeploymentExecutionService
             .Where(item => item.Id == runtimeId)
             .Select(item => (int?)item.Generation)
             .SingleOrDefaultAsync(token);
-        if (runtimeGeneration is not null && runtimeGeneration != ticket.Generation)
+        if (runtimeGeneration is not null && !TeamLabGenerationMatches(
+                ticket.Operation, ticket.Generation, runtimeGeneration.Value))
             return DeploymentExecutionResult.Failed("TeamLab control ticket has a stale runtime generation.");
         return ticket.Operation switch
         {
@@ -301,6 +302,13 @@ public class DeploymentExecutionService
             _ => DeploymentExecutionResult.Failed($"TeamLab operation {ticket.Operation} is not supported.")
         };
     }
+
+    internal static bool TeamLabGenerationMatches(
+        RuntimeOperationKind operation,
+        int ticketGeneration,
+        int runtimeGeneration) => operation == RuntimeOperationKind.Reset
+        ? ticketGeneration == runtimeGeneration || ticketGeneration == runtimeGeneration + 1
+        : ticketGeneration == runtimeGeneration;
 
     async Task<DeploymentExecutionResult> ExecuteAwdpControlAsync(DeploymentQueueTicket ticket,
         CancellationToken token)
@@ -337,7 +345,7 @@ public class DeploymentExecutionService
         var instance = await _context.GameInstances
             .Include(i => i.FlagContext)
             .Include(i => i.Container)
-            .Include(i => i.Challenge).ThenInclude(c => c.Flags)
+            .Include(i => i.Challenge)
             .Include(i => i.Participation)
                 .ThenInclude(p => p.Team)
             .Include(i => i.Participation)
@@ -392,7 +400,7 @@ public class DeploymentExecutionService
         var instance = await _context.ExerciseInstances
             .Include(i => i.FlagContext)
             .Include(i => i.Container)
-            .Include(i => i.Exercise).ThenInclude(e => e.Flags)
+            .Include(i => i.Exercise)
             .SingleOrDefaultAsync(i => i.UserId == userId && i.ExerciseId == challengeId, token);
 
         if (instance is null)

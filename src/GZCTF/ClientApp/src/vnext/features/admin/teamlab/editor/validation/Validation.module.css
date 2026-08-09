@@ -1,0 +1,57 @@
+.issueList {
+  display: grid;
+  gap: var(--yn-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.issueList li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--yn-space-3);
+  padding: var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-sm);
+  background: var(--yn-color-surface-muted);
+  color: var(--yn-color-warning);
+}
+
+.issueList div {
+  display: grid;
+  min-width: 0;
+  gap: var(--yn-space-1);
+}
+
+.issueList strong {
+  color: var(--yn-color-text);
+  font-size: var(--yn-font-sm);
+}
+
+.issueList code {
+  overflow: hidden;
+  color: var(--yn-color-muted);
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.issueList button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-sm);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-text);
+  cursor: pointer;
+}
+
+.empty {
+  margin: 0;
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-sm);
+}

@@ -25,4 +25,8 @@ public sealed class BlockingImageImportExecutor : IImageImportExecutor
         await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         throw new InvalidOperationException("The blocking executor was released without cancellation.");
     }
+
+    public Task<ImageImportArtifact> ImportVmQcow2Async(
+        ImageImportJob job,
+        CancellationToken cancellationToken) => ImportDockerArchiveAsync(job, cancellationToken);
 }

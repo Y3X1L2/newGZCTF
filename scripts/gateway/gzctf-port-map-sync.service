@@ -14,7 +14,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/etc/nginx/stream-conf.d /var/lib/gzctf-gateway /run/lock
+ReadWritePaths=/etc/nginx/stream-conf.d /var/lib/gzctf-gateway /run/lock /run/nginx.pid /var/log/nginx
 
 [Install]
 WantedBy=multi-user.target

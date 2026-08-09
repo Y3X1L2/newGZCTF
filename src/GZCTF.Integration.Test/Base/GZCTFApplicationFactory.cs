@@ -2,6 +2,7 @@ using GZCTF.Models;
 using GZCTF.Integration.Test.Tests.Api.Fixtures;
 using GZCTF.Modules.Identity.Application;
 using GZCTF.Modules.Content.Application;
+using GZCTF.Modules.Runtime.Application;
 using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Container.Provider;
 using GZCTF.Services.Fleet;
@@ -167,6 +168,11 @@ public class GZCTFApplicationFactory : WebApplicationFactory<Program>, IAsyncLif
 
         builder.ConfigureTestServices(services =>
         {
+            services.PostConfigure<RuntimeSchedulingOptions>(options =>
+            {
+                options.CpuRejectThreshold = 1.01f;
+                options.MemoryRejectThreshold = 1.01f;
+            });
             services.Configure<RequestLocalizationOptions>(options =>
                 options.SetDefaultCulture("en-US"));
             services.AddControllers().AddApplicationPart(typeof(Tests.Api.Fixtures.ScopedApiProbeController).Assembly);

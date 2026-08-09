@@ -1,9 +1,8 @@
-using System.Net;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
+using System.Collections.Concurrent;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
+using GZCTF.Modules.Content.Infrastructure;
+using GZCTF.Modules.Content.Domain;
 using Microsoft.Extensions.Options;
 
 namespace GZCTF.Services.Fleet;
@@ -16,279 +15,109 @@ public sealed record VmImageArtifactReference(
 
 public class VmImageRegistryService(
     IOptions<DockerRegistrySettings> options,
-    IHttpClientFactory httpClientFactory,
-    ILogger<VmImageRegistryService> logger)
+    OciArtifactRegistryClient registry)
 {
-    const string ArtifactType = "application/vnd.gzctf.vm-template.qcow2";
-    const string BlobMediaType = "application/octet-stream";
-    const string ManifestMediaType = "application/vnd.oci.image.manifest.v1+json";
-    readonly DockerRegistrySettings _settings = options.Value;
+    private const string ArtifactType = "application/vnd.gzctf.vm-template.qcow2";
+    private const string BlobMediaType = "application/octet-stream";
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> ArtifactGates =
+        new(StringComparer.Ordinal);
+    private readonly DockerRegistrySettings _settings = options.Value;
 
     public VmImageArtifactReference BuildReference(ImageTemplate template)
     {
         if (string.IsNullOrWhiteSpace(template.ImageHash))
             throw new InvalidOperationException($"VM template {template.Id} has no image hash.");
-
-        var repository = BuildRepository(template.Id);
         return new VmImageArtifactReference(
             _settings.NormalizedAddress,
-            repository,
+            BuildRepository(template.Id),
             template.ImageHash,
-            $"sha256:{template.ImageHash}");
+            $"sha256:{OciArtifactRegistryClient.NormalizeDigest(template.ImageHash)}");
     }
 
-    public virtual async Task<VmImageArtifactReference> EnsureArtifactAsync(ImageTemplate template,
+    public virtual async Task<VmImageArtifactReference> EnsureArtifactAsync(
+        ImageTemplate template,
         CancellationToken token = default)
     {
         if (template.ImageType == ImageType.Docker)
             throw new InvalidOperationException("Docker image templates cannot be pushed as VM artifacts.");
         if (string.IsNullOrWhiteSpace(template.ImageHash))
             throw new InvalidOperationException($"VM template {template.Name} ({template.Id}) has no image hash.");
-
         var reference = BuildReference(template);
-        if (await ManifestExistsAsync(reference, token))
-            return reference;
-
-        if (string.IsNullOrWhiteSpace(template.LocalFilePath))
-            throw new InvalidOperationException(
-                $"VM template {template.Name} ({template.Id}) has no local file path for registry bootstrap.");
-        var path = Path.GetFullPath(template.LocalFilePath);
-        if (!File.Exists(path))
-            throw new FileNotFoundException(
-                $"VM template file for {template.Name} ({template.Id}) was not found.", path);
-
-        await PushArtifactAsync(reference, path, template.ImageHash, token);
-        return reference;
+        var gateKey = $"{reference.RegistryAddress}/{reference.Repository}:{reference.Tag}";
+        var gate = ArtifactGates.GetOrAdd(gateKey, static _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(token);
+        try
+        {
+            if (await ArtifactExistsAsync(template, token)) return reference;
+            if (string.IsNullOrWhiteSpace(template.LocalFilePath))
+                throw new InvalidOperationException(
+                    $"VM template {template.Name} ({template.Id}) has no local file path for registry bootstrap.");
+            var artifact = await registry.PushFileAsync(
+                reference.RegistryAddress,
+                reference.Repository,
+                reference.Tag,
+                template.LocalFilePath,
+                template.ImageHash,
+                ArtifactType,
+                BlobMediaType,
+                new Dictionary<string, string>
+                {
+                    ["org.gzctf.vm-template.id"] = template.Id.ToString(),
+                    ["org.gzctf.vm-template.sha256"] = OciArtifactRegistryClient.NormalizeDigest(template.ImageHash)
+                },
+                token);
+            return new VmImageArtifactReference(
+                artifact.RegistryAddress, artifact.Repository, artifact.Tag, artifact.Digest);
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
-    public virtual async Task DeleteArtifactAsync(ImageTemplate template, CancellationToken token = default)
+    public virtual Task<bool> ArtifactExistsAsync(ImageTemplate template, CancellationToken token = default)
+    {
+        if (template.FileSize <= 0)
+            throw new InvalidOperationException($"VM template {template.Name} ({template.Id}) has no valid file size.");
+        var reference = BuildReference(template);
+        return registry.ExistsAsync(new OciArtifactReference(
+            reference.RegistryAddress,
+            reference.Repository,
+            reference.Tag,
+            reference.Digest,
+            template.FileSize), token);
+    }
+
+    public virtual Task DeleteArtifactAsync(ImageTemplate template, CancellationToken token = default)
     {
         if (template.ImageType == ImageType.Docker || string.IsNullOrWhiteSpace(template.ImageHash))
-            return;
-
+            return Task.CompletedTask;
+        if (template.PreparedArtifact is { Status: VmPreparedArtifactStatus.Ready } prepared &&
+            prepared.ArtifactSize > 0 &&
+            !string.IsNullOrWhiteSpace(prepared.RegistryAddress) &&
+            !string.IsNullOrWhiteSpace(prepared.RegistryRepository) &&
+            !string.IsNullOrWhiteSpace(prepared.RegistryTag) &&
+            !string.IsNullOrWhiteSpace(prepared.ArtifactDigest))
+            return registry.DeleteAsync(new OciArtifactReference(
+                prepared.RegistryAddress,
+                prepared.RegistryRepository,
+                prepared.RegistryTag,
+                $"sha256:{OciArtifactRegistryClient.NormalizeDigest(prepared.ArtifactDigest)}",
+                prepared.ArtifactSize), token);
         var reference = BuildReference(template);
-        var client = httpClientFactory.CreateClient();
-        var manifestUrl =
-            $"http://{reference.RegistryAddress}/v2/{reference.Repository}/manifests/{reference.Tag}";
-        using var head = new HttpRequestMessage(HttpMethod.Head, manifestUrl);
-        head.Headers.Accept.ParseAdd(ManifestMediaType);
-        using var headResponse = await client.SendAsync(head, token);
-        if (headResponse.StatusCode == HttpStatusCode.NotFound)
-            return;
-        if (!headResponse.IsSuccessStatusCode)
-        {
-            var body = await headResponse.Content.ReadAsStringAsync(token);
-            throw new InvalidOperationException(
-                $"Failed to resolve VM template artifact {reference.Repository}:{reference.Tag} from " +
-                $"{reference.RegistryAddress}: {(int)headResponse.StatusCode} {headResponse.StatusCode}. {Trim(body)}");
-        }
-
-        if (!headResponse.Headers.TryGetValues("Docker-Content-Digest", out var digestValues))
-            throw new InvalidOperationException(
-                $"Registry {reference.RegistryAddress} did not return Docker-Content-Digest for " +
-                $"{reference.Repository}:{reference.Tag}.");
-        var manifestDigest = digestValues.FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(manifestDigest))
-            throw new InvalidOperationException(
-                $"Registry {reference.RegistryAddress} returned an empty manifest digest for " +
-                $"{reference.Repository}:{reference.Tag}.");
-
-        using var response = await client.DeleteAsync(
-            $"http://{reference.RegistryAddress}/v2/{reference.Repository}/manifests/" +
-            Uri.EscapeDataString(manifestDigest), token);
-        if (!response.IsSuccessStatusCode && response.StatusCode != HttpStatusCode.NotFound)
-        {
-            var body = await response.Content.ReadAsStringAsync(token);
-            throw new InvalidOperationException(
-                $"Failed to delete VM template artifact {reference.Repository}@{manifestDigest} from " +
-                $"{reference.RegistryAddress}: {(int)response.StatusCode} {response.StatusCode}. {Trim(body)}");
-        }
+        return registry.DeleteAsync(new OciArtifactReference(
+            reference.RegistryAddress,
+            reference.Repository,
+            reference.Tag,
+            reference.Digest,
+            template.FileSize), token);
     }
 
-    string BuildRepository(int templateId)
+    private string BuildRepository(int templateId)
     {
-        var ns = _settings.NormalizedNamespace;
         var path = $"gzctf/vm-template/{templateId}";
-        return string.IsNullOrWhiteSpace(ns) ? path : $"{ns}/{path}";
-    }
-
-    async Task<bool> ManifestExistsAsync(VmImageArtifactReference reference, CancellationToken token)
-    {
-        var client = httpClientFactory.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Head,
-            $"http://{reference.RegistryAddress}/v2/{reference.Repository}/manifests/{reference.Tag}");
-        request.Headers.Accept.ParseAdd(ManifestMediaType);
-        using var response = await client.SendAsync(request, token);
-        return response.StatusCode == HttpStatusCode.OK;
-    }
-
-    async Task PushArtifactAsync(VmImageArtifactReference reference, string filePath, string expectedSha256,
-        CancellationToken token)
-    {
-        var blobDigest = $"sha256:{NormalizeSha256(expectedSha256)}";
-        var size = new FileInfo(filePath).Length;
-        var client = httpClientFactory.CreateClient();
-        var uploadUrl = await StartBlobUploadAsync(client, reference, token);
-        uploadUrl = await UploadBlobChunksAsync(client, uploadUrl, filePath, token);
-        await CompleteBlobUploadAsync(client, uploadUrl, blobDigest, token);
-
-        var configBytes = Encoding.UTF8.GetBytes("{}");
-        var configDigest = $"sha256:{Convert.ToHexString(SHA256.HashData(configBytes)).ToLowerInvariant()}";
-        var configUpload = await StartBlobUploadAsync(client, reference, token);
-        await CompleteBlobUploadAsync(client, configUpload, configDigest, configBytes, token);
-
-        var manifest = new
-        {
-            schemaVersion = 2,
-            mediaType = ManifestMediaType,
-            artifactType = ArtifactType,
-            config = new
-            {
-                mediaType = "application/vnd.oci.empty.v1+json",
-                digest = configDigest,
-                size = configBytes.Length
-            },
-            layers = new[]
-            {
-                new
-                {
-                    mediaType = BlobMediaType,
-                    digest = blobDigest,
-                    size
-                }
-            },
-            annotations = new Dictionary<string, string>
-            {
-                ["org.opencontainers.image.title"] = Path.GetFileName(filePath),
-                ["org.gzctf.vm-template.sha256"] = NormalizeSha256(expectedSha256)
-            }
-        };
-
-        using var content = new StringContent(JsonSerializer.Serialize(manifest), Encoding.UTF8, ManifestMediaType);
-        using var response = await client.PutAsync(
-            $"http://{reference.RegistryAddress}/v2/{reference.Repository}/manifests/{reference.Tag}",
-            content, token);
-        if (!response.IsSuccessStatusCode)
-        {
-            var body = await response.Content.ReadAsStringAsync(token);
-            throw new InvalidOperationException(
-                $"Failed to push VM template manifest to {reference.RegistryAddress}/{reference.Repository}:{reference.Tag}: {(int)response.StatusCode} {response.StatusCode}. {Trim(body)}");
-        }
-
-        logger.LogInformation("Pushed VM template artifact {Repository}:{Tag} to {Registry}.",
-            reference.Repository, reference.Tag, reference.RegistryAddress);
-    }
-
-    static async Task<Uri> StartBlobUploadAsync(HttpClient client, VmImageArtifactReference reference,
-        CancellationToken token)
-    {
-        using var response = await client.PostAsync(
-            $"http://{reference.RegistryAddress}/v2/{reference.Repository}/blobs/uploads/",
-            content: null, token);
-        if (!response.IsSuccessStatusCode)
-        {
-            var body = await response.Content.ReadAsStringAsync(token);
-            throw new InvalidOperationException(
-                $"Failed to start VM artifact upload: {(int)response.StatusCode} {response.StatusCode}. {Trim(body)}");
-        }
-
-        var location = response.Headers.Location
-                       ?? throw new InvalidOperationException("Registry did not return an upload location.");
-        return location.IsAbsoluteUri
-            ? location
-            : new Uri($"http://{reference.RegistryAddress}{location}");
-    }
-
-    static async Task<Uri> UploadBlobChunksAsync(HttpClient client, Uri uploadUrl, string filePath,
-        CancellationToken token)
-    {
-        const int chunkSize = 32 * 1024 * 1024;
-        var buffer = new byte[chunkSize];
-        long offset = 0;
-        await using var stream = File.OpenRead(filePath);
-
-        while (true)
-        {
-            var read = await stream.ReadAsync(buffer, token);
-            if (read <= 0)
-                break;
-
-            using var content = new ByteArrayContent(buffer, 0, read);
-            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(BlobMediaType);
-            content.Headers.ContentRange = new System.Net.Http.Headers.ContentRangeHeaderValue(
-                offset, offset + read - 1);
-            using var response = await client.PatchAsync(uploadUrl, content, token);
-            if (response.StatusCode != HttpStatusCode.Accepted && !response.IsSuccessStatusCode)
-            {
-                var body = await response.Content.ReadAsStringAsync(token);
-                throw new InvalidOperationException(
-                    $"Failed to upload VM artifact blob chunk at {offset}: {(int)response.StatusCode} {response.StatusCode}. {Trim(body)}");
-            }
-
-            uploadUrl = ResolveUploadLocation(referenceAddress(uploadUrl), response.Headers.Location);
-            offset += read;
-        }
-
-        return uploadUrl;
-    }
-
-    static string referenceAddress(Uri uploadUrl) => $"{uploadUrl.Scheme}://{uploadUrl.Authority}";
-
-    static async Task CompleteBlobUploadAsync(HttpClient client, Uri uploadUrl, string digest, CancellationToken token)
-    {
-        var uri = AppendDigest(uploadUrl, digest);
-        using var response = await client.PutAsync(uri, content: null, token);
-        if (!response.IsSuccessStatusCode && response.StatusCode != HttpStatusCode.Created)
-        {
-            var body = await response.Content.ReadAsStringAsync(token);
-            throw new InvalidOperationException(
-                $"Failed to complete VM artifact blob {digest}: {(int)response.StatusCode} {response.StatusCode}. {Trim(body)}");
-        }
-    }
-
-    static async Task CompleteBlobUploadAsync(HttpClient client, Uri uploadUrl, string digest, byte[] bytes,
-        CancellationToken token)
-    {
-        var uri = AppendDigest(uploadUrl, digest);
-        using var content = new ByteArrayContent(bytes);
-        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/vnd.oci.empty.v1+json");
-        using var response = await client.PutAsync(uri, content, token);
-        if (!response.IsSuccessStatusCode && response.StatusCode != HttpStatusCode.Created)
-        {
-            var body = await response.Content.ReadAsStringAsync(token);
-            throw new InvalidOperationException(
-                $"Failed to upload VM artifact config {digest}: {(int)response.StatusCode} {response.StatusCode}. {Trim(body)}");
-        }
-    }
-
-    static Uri AppendDigest(Uri uploadUrl, string digest)
-    {
-        var separator = string.IsNullOrWhiteSpace(uploadUrl.Query) ? "?" : "&";
-        return new Uri($"{uploadUrl}{separator}digest={Uri.EscapeDataString(digest)}");
-    }
-
-    static Uri ResolveUploadLocation(string baseAddress, Uri? location)
-    {
-        if (location is null)
-            throw new InvalidOperationException("Registry did not return an upload location.");
-        return location.IsAbsoluteUri ? location : new Uri($"{baseAddress}{location}");
-    }
-
-    static string NormalizeSha256(string value)
-    {
-        value = value.Trim();
-        if (value.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
-            value = value["sha256:".Length..];
-        if (value.Length != 64)
-            throw new InvalidOperationException("VM image sha256 digest is invalid.");
-        return value.ToLowerInvariant();
-    }
-
-    static string Trim(string? body)
-    {
-        if (string.IsNullOrWhiteSpace(body))
-            return string.Empty;
-        body = body.Trim();
-        return body.Length <= 1024 ? body : body[..1024] + "...";
+        return string.IsNullOrWhiteSpace(_settings.NormalizedNamespace)
+            ? path
+            : $"{_settings.NormalizedNamespace}/{path}";
     }
 }

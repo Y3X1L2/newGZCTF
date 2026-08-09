@@ -58,13 +58,43 @@ public sealed class EfImageImportTemplateStore(AppDbContext context) : IImageImp
         template.FileSize = artifact.ContentLength;
         template.Description = artifact.Description;
         template.OriginalArchiveName = job.OriginalFileName;
-        template.Status = ImageStatus.Importing;
+        template.Status = ImageStatus.Ready;
         template.ErrorMessage = null;
         template.UploadedAt = DateTimeOffset.UtcNow;
         if (existing is null)
         {
             context.ImageTemplates.Add(template);
             await context.SaveChangesAsync(cancellationToken);
+        }
+
+        if (artifact.VmArtifact is { } vmArtifact)
+        {
+            var prepared = template.PreparedArtifactId.HasValue
+                ? await context.VmPreparedArtifacts.SingleAsync(
+                    item => item.Id == template.PreparedArtifactId.Value, cancellationToken)
+                : new VmPreparedArtifact();
+            prepared.OSType = job.RequestedOsType;
+            prepared.Status = VmPreparedArtifactStatus.Ready;
+            prepared.ArtifactDigest = vmArtifact.Digest;
+            prepared.ArtifactSize = vmArtifact.Size;
+            prepared.RegistryAddress = vmArtifact.RegistryAddress;
+            prepared.RegistryRepository = vmArtifact.Repository;
+            prepared.RegistryTag = vmArtifact.Tag;
+            prepared.ErrorMessage = null;
+            prepared.PreparedAt = DateTimeOffset.UtcNow;
+            if (prepared.Id == 0)
+            {
+                context.VmPreparedArtifacts.Add(prepared);
+                await context.SaveChangesAsync(cancellationToken);
+                template.PreparedArtifactId = prepared.Id;
+            }
+            template.VmRuntimeMode = VmRuntimeMode.Opaque;
+            template.VmNetworkMode = job.RequestedVmNetworkMode;
+            template.VmArtifactStatus = VmArtifactStatus.Ready;
+        }
+        else
+        {
+            template.VmArtifactStatus = VmArtifactStatus.None;
         }
 
         if (persistJobLink)
@@ -76,6 +106,8 @@ public sealed class EfImageImportTemplateStore(AppDbContext context) : IImageImp
         {
             await context.SaveChangesAsync(cancellationToken);
         }
+
+        await context.SaveChangesAsync(cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
         return new ImageTemplateDescriptor(template.Id, template.CreatedById, template.Name);

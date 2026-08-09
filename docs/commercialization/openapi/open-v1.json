@@ -10,8 +10,10 @@
     "/api/open/v1/teamlab/runtimes": {
       "post": {
         "tags": [
-          "OpenTeamLabRuntimes"
+          "TeamLab - Runtimes"
         ],
+        "summary": "Create a runtime",
+        "description": "Queues deployment of a released topology for one team or automation owner.",
         "operationId": "OpenTeamLabRuntimes_Create",
         "parameters": [
           {
@@ -119,8 +121,10 @@
     "/api/open/v1/teamlab/runtimes/{runtimeId}": {
       "get": {
         "tags": [
-          "OpenTeamLabRuntimes"
+          "TeamLab - Runtimes"
         ],
+        "summary": "Get a runtime",
+        "description": "Returns the aggregated runtime, shard, network, and asset state.",
         "operationId": "OpenTeamLabRuntimes_Get",
         "parameters": [
           {
@@ -214,8 +218,10 @@
       },
       "delete": {
         "tags": [
-          "OpenTeamLabRuntimes"
+          "TeamLab - Runtimes"
         ],
+        "summary": "Destroy a runtime",
+        "description": "Queues cleanup of all runtime shards, assets, routes, captures, and access grants.",
         "operationId": "OpenTeamLabRuntimes_Destroy",
         "parameters": [
           {
@@ -321,8 +327,10 @@
     "/api/open/v1/teamlab/runtimes/{runtimeId}/reset": {
       "post": {
         "tags": [
-          "OpenTeamLabRuntimes"
+          "TeamLab - Runtimes"
         ],
+        "summary": "Reset a runtime",
+        "description": "Queues a controlled cleanup and redeployment using the runtime release and optional overlays.",
         "operationId": "OpenTeamLabRuntimes_Reset",
         "parameters": [
           {
@@ -440,8 +448,10 @@
     "/api/open/v1/teamlab/runtimes/{runtimeId}/events": {
       "get": {
         "tags": [
-          "OpenTeamLabRuntimes"
+          "TeamLab - Runtimes"
         ],
+        "summary": "List runtime events",
+        "description": "Returns cursor-paginated lifecycle and deployment events for troubleshooting and audit.",
         "operationId": "OpenTeamLabRuntimes_Events",
         "parameters": [
           {
@@ -558,8 +568,10 @@
     "/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants": {
       "post": {
         "tags": [
-          "OpenTeamLabRuntimes"
+          "TeamLab - Runtimes"
         ],
+        "summary": "Create a WireGuard access grant",
+        "description": "Queues creation of a short-lived, single-download player access configuration.",
         "operationId": "OpenTeamLabRuntimes_CreateAccessGrant",
         "parameters": [
           {
@@ -677,8 +689,10 @@
     "/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants/{grantId}/download": {
       "get": {
         "tags": [
-          "OpenTeamLabRuntimes"
+          "TeamLab - Runtimes"
         ],
+        "summary": "Download an access configuration",
+        "description": "Consumes the one-time download token and returns the WireGuard configuration file.",
         "operationId": "OpenTeamLabRuntimes_DownloadAccessConfiguration",
         "parameters": [
           {
@@ -785,8 +799,10 @@
     "/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants/{grantId}": {
       "delete": {
         "tags": [
-          "OpenTeamLabRuntimes"
+          "TeamLab - Runtimes"
         ],
+        "summary": "Revoke an access grant",
+        "description": "Queues revocation and cleanup of an existing runtime access grant.",
         "operationId": "OpenTeamLabRuntimes_RevokeAccessGrant",
         "parameters": [
           {
@@ -902,8 +918,10 @@
     "/api/open/v1/teamlab/capabilities": {
       "get": {
         "tags": [
-          "OpenTeamLabTopologies"
+          "TeamLab - Topologies"
         ],
+        "summary": "Get TeamLab capabilities",
+        "description": "Returns the topology schema and feature capabilities supported by this platform version.",
         "operationId": "OpenTeamLabTopologies_Capabilities",
         "responses": {
           "400": {
@@ -987,8 +1005,10 @@
     "/api/open/v1/teamlab/topologies": {
       "post": {
         "tags": [
-          "OpenTeamLabTopologies"
+          "TeamLab - Topologies"
         ],
+        "summary": "Create a topology",
+        "description": "Queues creation of a reusable TeamLab topology draft.",
         "operationId": "OpenTeamLabTopologies_Create",
         "parameters": [
           {
@@ -1094,8 +1114,10 @@
       },
       "get": {
         "tags": [
-          "OpenTeamLabTopologies"
+          "TeamLab - Topologies"
         ],
+        "summary": "List topologies",
+        "description": "Returns a cursor-paginated list of topologies visible to the current API token owner.",
         "operationId": "OpenTeamLabTopologies_List",
         "parameters": [
           {
@@ -1202,8 +1224,10 @@
     "/api/open/v1/teamlab/topologies/{topologyId}": {
       "get": {
         "tags": [
-          "OpenTeamLabTopologies"
+          "TeamLab - Topologies"
         ],
+        "summary": "Get a topology",
+        "description": "Returns the complete editable topology definition.",
         "operationId": "OpenTeamLabTopologies_Get",
         "parameters": [
           {
@@ -1297,8 +1321,10 @@
       },
       "put": {
         "tags": [
-          "OpenTeamLabTopologies"
+          "TeamLab - Topologies"
         ],
+        "summary": "Update a topology",
+        "description": "Queues replacement of the editable topology definition.",
         "operationId": "OpenTeamLabTopologies_Update",
         "parameters": [
           {
@@ -1414,8 +1440,10 @@
       },
       "delete": {
         "tags": [
-          "OpenTeamLabTopologies"
+          "TeamLab - Topologies"
         ],
+        "summary": "Delete a topology",
+        "description": "Queues deletion of a topology that is no longer in use.",
         "operationId": "OpenTeamLabTopologies_Delete",
         "parameters": [
           {
@@ -1521,8 +1549,10 @@
     "/api/open/v1/teamlab/topologies/{topologyId}/validate": {
       "post": {
         "tags": [
-          "OpenTeamLabTopologies"
+          "TeamLab - Topologies"
         ],
+        "summary": "Validate a topology",
+        "description": "Validates topology structure, addressing, connectivity, assets, and deployment constraints without publishing it.",
         "operationId": "OpenTeamLabTopologies_Validate",
         "parameters": [
           {
@@ -1618,8 +1648,10 @@
     "/api/open/v1/teamlab/topologies/{topologyId}/releases": {
       "post": {
         "tags": [
-          "OpenTeamLabTopologies"
+          "TeamLab - Topologies"
         ],
+        "summary": "Publish a topology release",
+        "description": "Validates and queues creation of an immutable topology release for runtime deployment.",
         "operationId": "OpenTeamLabTopologies_Publish",
         "parameters": [
           {
@@ -1735,8 +1767,10 @@
       },
       "get": {
         "tags": [
-          "OpenTeamLabTopologies"
+          "TeamLab - Topologies"
         ],
+        "summary": "List topology releases",
+        "description": "Returns immutable releases for a topology using cursor pagination.",
         "operationId": "OpenTeamLabTopologies_ListReleases",
         "parameters": [
           {
@@ -1853,8 +1887,10 @@
     "/api/open/v1/teamlab/topologies/{topologyId}/releases/{releaseId}": {
       "get": {
         "tags": [
-          "OpenTeamLabTopologies"
+          "TeamLab - Topologies"
         ],
+        "summary": "Get a topology release",
+        "description": "Returns one immutable topology release and its compiled definition.",
         "operationId": "OpenTeamLabTopologies_GetRelease",
         "parameters": [
           {
@@ -1960,8 +1996,10 @@
     "/api/open/v1/teamlab/topologies/{topologyId}/releases/{releaseId}/plan": {
       "post": {
         "tags": [
-          "OpenTeamLabTopologies"
+          "TeamLab - Topologies"
         ],
+        "summary": "Plan runtime placement",
+        "description": "Builds a deployment plan for the release without creating runtime resources.",
         "operationId": "OpenTeamLabTopologies_Plan",
         "parameters": [
           {
@@ -2067,8 +2105,10 @@
     "/api/open/v1/teamlab/runtimes/{runtimeId}/traffic/flows": {
       "get": {
         "tags": [
-          "OpenTeamLabTraffic"
+          "TeamLab - Traffic and Captures"
         ],
+        "summary": "List traffic flows",
+        "description": "Returns cursor-paginated, runtime-scoped flow metadata collected from the TeamLab data plane.",
         "operationId": "OpenTeamLabTraffic_GetFlows",
         "parameters": [
           {
@@ -2182,11 +2222,242 @@
         ]
       }
     },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/traffic/paths": {
+      "get": {
+        "tags": [
+          "TeamLab - Traffic and Captures"
+        ],
+        "summary": "List correlated traffic paths",
+        "description": "Returns end-to-end traffic path correlations across participating assets and network segments.",
+        "operationId": "OpenTeamLabTraffic_GetPaths",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 2
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50,
+              "maximum": 100.0,
+              "minimum": 1.0
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabTrafficPathPageModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/traffic/paths/{pathId}": {
+      "get": {
+        "tags": [
+          "TeamLab - Traffic and Captures"
+        ],
+        "summary": "Get a traffic path",
+        "description": "Returns the ordered hops and evidence for one correlated traffic path.",
+        "operationId": "OpenTeamLabTraffic_GetPath",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "pathId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabTrafficPathModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
     "/api/open/v1/teamlab/runtimes/{runtimeId}/captures": {
       "post": {
         "tags": [
-          "OpenTeamLabTraffic"
+          "TeamLab - Traffic and Captures"
         ],
+        "summary": "Start a packet capture",
+        "description": "Queues a bounded packet capture for selected runtime shards or network segments.",
         "operationId": "OpenTeamLabTraffic_StartCapture",
         "parameters": [
           {
@@ -2304,8 +2575,10 @@
     "/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}": {
       "get": {
         "tags": [
-          "OpenTeamLabTraffic"
+          "TeamLab - Traffic and Captures"
         ],
+        "summary": "Get packet capture status",
+        "description": "Returns capture scope, limits, progress, artifact state, and retention metadata.",
         "operationId": "OpenTeamLabTraffic_GetCapture",
         "parameters": [
           {
@@ -2411,8 +2684,10 @@
     "/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}/stop": {
       "post": {
         "tags": [
-          "OpenTeamLabTraffic"
+          "TeamLab - Traffic and Captures"
         ],
+        "summary": "Stop a packet capture",
+        "description": "Queues an early stop and finalization of a running packet capture.",
         "operationId": "OpenTeamLabTraffic_StopCapture",
         "parameters": [
           {
@@ -2528,8 +2803,10 @@
     "/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}/download": {
       "get": {
         "tags": [
-          "OpenTeamLabTraffic"
+          "TeamLab - Traffic and Captures"
         ],
+        "summary": "Download a packet capture",
+        "description": "Streams the finalized runtime capture archive.",
         "operationId": "OpenTeamLabTraffic_DownloadCapture",
         "parameters": [
           {
@@ -3323,6 +3600,310 @@
         ]
       }
     },
+    "/api/open/v1/bootstrap-profiles": {
+      "post": {
+        "tags": [
+          "OpenBootstrapProfiles"
+        ],
+        "operationId": "OpenBootstrapProfiles_Create",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BootstrapProfileCreateModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "OpenBootstrapProfiles"
+        ],
+        "operationId": "OpenBootstrapProfiles_List",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50,
+              "maximum": 100.0,
+              "minimum": 1.0
+            },
+            "x-position": 1
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BootstrapProfileCursorPage"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/bootstrap-profiles/{profileId}": {
+      "get": {
+        "tags": [
+          "OpenBootstrapProfiles"
+        ],
+        "operationId": "OpenBootstrapProfiles_Get",
+        "parameters": [
+          {
+            "name": "profileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "OpenBootstrapProfiles"
+        ],
+        "operationId": "OpenBootstrapProfiles_Delete",
+        "parameters": [
+          {
+            "name": "profileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/bootstrap-profiles/{profileId}/versions": {
+      "post": {
+        "tags": [
+          "OpenBootstrapProfiles"
+        ],
+        "operationId": "OpenBootstrapProfiles_PublishVersion",
+        "parameters": [
+          {
+            "name": "profileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "artifact": {
+                    "type": "string",
+                    "format": "binary",
+                    "nullable": true
+                  },
+                  "manifest": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "version": {
+                    "type": "integer",
+                    "format": "int32",
+                    "nullable": true
+                  },
+                  "expectedDigest": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/bootstrap-profiles/{profileId}/versions/{version}": {
+      "get": {
+        "tags": [
+          "OpenBootstrapProfiles"
+        ],
+        "operationId": "OpenBootstrapProfiles_GetVersion",
+        "parameters": [
+          {
+            "name": "profileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "maximum": 2147483647.0,
+              "minimum": 1.0
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
     "/api/open/v1/images/docker-references": {
       "post": {
         "tags": [
@@ -3445,6 +4026,73 @@
         ]
       }
     },
+    "/api/open/v1/images/vm-qcow2": {
+      "post": {
+        "tags": [
+          "OpenImages"
+        ],
+        "operationId": "OpenImages_RegisterVmQcow2",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "nullable": true
+                  },
+                  "name": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "osType": {
+                    "$ref": "#/components/schemas/OSType"
+                  },
+                  "networkMode": {
+                    "$ref": "#/components/schemas/VmNetworkMode"
+                  },
+                  "expectedDigest": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
     "/api/open/v1/images/{imageTemplateId}": {
       "get": {
         "tags": [
@@ -3528,6 +4176,101 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/images/{imageTemplateId}/certifications": {
+      "post": {
+        "tags": [
+          "OpenImages"
+        ],
+        "operationId": "OpenImages_Certify",
+        "parameters": [
+          {
+            "name": "imageTemplateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageTemplateCertificationRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "OpenImages"
+        ],
+        "operationId": "OpenImages_Certifications",
+        "parameters": [
+          {
+            "name": "imageTemplateId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
                 }
               }
             }
@@ -4185,6 +4928,32 @@
             "items": {
               "$ref": "#/components/schemas/TeamLabTopologyConnectionModel"
             }
+          },
+          "infrastructure": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyInfrastructureModel"
+            }
+          },
+          "dependencies": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyDependencyModel"
+            }
+          },
+          "observation": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TeamLabObservationPolicyModel"
+              }
+            ]
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -4279,6 +5048,27 @@
           "orderIndex": {
             "type": "integer",
             "format": "int32"
+          },
+          "stateless": {
+            "type": "boolean"
+          },
+          "bootstrap": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TeamLabBootstrapReferenceModel"
+              }
+            ]
+          },
+          "endpointObservation": {
+            "$ref": "#/components/schemas/TeamLabEndpointObservationMode"
+          },
+          "bakeAtPublish": {
+            "type": "boolean"
+          },
+          "imageDigest": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -4348,6 +5138,40 @@
           1
         ]
       },
+      "TeamLabBootstrapReferenceModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "profileId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "TeamLabEndpointObservationMode": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Disabled",
+          "Optional",
+          "Required"
+        ],
+        "enum": [
+          0,
+          1,
+          2
+        ]
+      },
       "TeamLabTopologyConnectionModel": {
         "type": "object",
         "additionalProperties": false,
@@ -4362,7 +5186,115 @@
             "type": "string"
           },
           "viaAssetKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "viaNodeKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "direction": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TeamLabConnectionDirection"
+              }
+            ]
+          }
+        }
+      },
+      "TeamLabConnectionDirection": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "FromTo",
+          "Bidirectional"
+        ],
+        "enum": [
+          0,
+          1
+        ]
+      },
+      "TeamLabTopologyInfrastructureModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
             "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TeamLabInfrastructureKind"
+          },
+          "interfaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyInterfaceModel"
+            }
+          },
+          "networkKey": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TeamLabInfrastructureKind": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "ManagedSwitch",
+          "ManagedRouter"
+        ],
+        "enum": [
+          0,
+          1
+        ]
+      },
+      "TeamLabTopologyDependencyModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "assetKey": {
+            "type": "string"
+          },
+          "dependsOnKey": {
+            "type": "string"
+          },
+          "condition": {
+            "$ref": "#/components/schemas/TeamLabDependencyCondition"
+          }
+        }
+      },
+      "TeamLabDependencyCondition": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "NetworkReady",
+          "GuestReady",
+          "ServiceReady",
+          "BootstrapCompleted"
+        ],
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "TeamLabObservationPolicyModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "flowMetadataEnabled": {
+            "type": "boolean"
+          },
+          "onDemandPcapEnabled": {
+            "type": "boolean"
+          },
+          "endpointObservation": {
+            "$ref": "#/components/schemas/TeamLabEndpointObservationMode"
           }
         }
       },
@@ -4464,6 +5396,28 @@
             "items": {
               "$ref": "#/components/schemas/TeamLabTopologyConnectionModel"
             }
+          },
+          "infrastructure": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyInfrastructureModel"
+            }
+          },
+          "dependencies": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyDependencyModel"
+            }
+          },
+          "observation": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TeamLabObservationPolicyModel"
+              }
+            ]
           }
         }
       },
@@ -4495,6 +5449,32 @@
             "items": {
               "$ref": "#/components/schemas/TeamLabTopologyConnectionModel"
             }
+          },
+          "infrastructure": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyInfrastructureModel"
+            }
+          },
+          "dependencies": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyDependencyModel"
+            }
+          },
+          "observation": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TeamLabObservationPolicyModel"
+              }
+            ]
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -4535,6 +5515,13 @@
           "revision": {
             "type": "integer",
             "format": "int32"
+          },
+          "scenarioOverlays": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/TeamLabRuntimeOverlayModel"
+            }
           }
         }
       },
@@ -4635,6 +5622,18 @@
           },
           "planHash": {
             "type": "string"
+          },
+          "managedInfrastructureCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "bootstrapArtifactCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "observationPointEstimate": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -4684,6 +5683,10 @@
           },
           "routingEnabled": {
             "type": "boolean"
+          },
+          "imageDigest": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -4732,6 +5735,13 @@
           "vmSlots": {
             "type": "integer",
             "format": "int32"
+          },
+          "infrastructureKeys": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -4801,6 +5811,216 @@
             "format": "uint64"
           }
         }
+      },
+      "TeamLabTrafficPathPageModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTrafficPathSummaryModel"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TeamLabTrafficPathSummaryModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "confidence": {
+            "$ref": "#/components/schemas/TeamLabPathConfidence"
+          },
+          "sourceIp": {
+            "type": "string"
+          },
+          "sourcePort": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "destinationIp": {
+            "type": "string"
+          },
+          "destinationPort": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "endedAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "hopCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "TeamLabPathConfidence": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "PacketExact",
+          "ProcessCorrelated",
+          "TemporallyRelated"
+        ],
+        "enum": [
+          0,
+          1,
+          2
+        ]
+      },
+      "TeamLabTrafficPathModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "confidence": {
+            "$ref": "#/components/schemas/TeamLabPathConfidence"
+          },
+          "sourceIp": {
+            "type": "string"
+          },
+          "sourcePort": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "destinationIp": {
+            "type": "string"
+          },
+          "destinationPort": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "endedAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "hops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTrafficPathHopModel"
+            }
+          }
+        }
+      },
+      "TeamLabTrafficPathHopModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ordinal": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "observedAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "evidenceKind": {
+            "$ref": "#/components/schemas/TeamLabTrafficEvidenceKind"
+          },
+          "observationPointKind": {
+            "$ref": "#/components/schemas/TeamLabObservationPointKind"
+          },
+          "shardId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "networkKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "infrastructureKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "assetKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "direction": {
+            "type": "string"
+          },
+          "sourceIp": {
+            "type": "string"
+          },
+          "sourcePort": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "destinationIp": {
+            "type": "string"
+          },
+          "destinationPort": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "protocol": {
+            "type": "string"
+          }
+        }
+      },
+      "TeamLabTrafficEvidenceKind": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Packet",
+          "EndpointProcess"
+        ],
+        "enum": [
+          0,
+          1
+        ]
+      },
+      "TeamLabObservationPointKind": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "NetworkBridge",
+          "RouterFragment",
+          "FabricUplink",
+          "WorkloadEndpoint"
+        ],
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ]
       },
       "CreateTeamLabCaptureModel": {
         "type": "object",
@@ -4876,6 +6096,12 @@
             "format": "uint64",
             "nullable": true
           },
+          "segments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabCaptureSegmentModel"
+            }
+          },
           "failure": {
             "nullable": true,
             "oneOf": [
@@ -4895,7 +6121,8 @@
           "Stopping",
           "Completed",
           "Failed",
-          "Expired"
+          "Expired",
+          "CleanupPending"
         ],
         "enum": [
           0,
@@ -4903,7 +6130,82 @@
           2,
           3,
           4,
-          5
+          5,
+          6
+        ]
+      },
+      "TeamLabCaptureSegmentModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TeamLabTrafficCaptureSegmentStatus"
+          },
+          "observationPointId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "observationPointKind": {
+            "$ref": "#/components/schemas/TeamLabObservationPointKind"
+          },
+          "networkKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "infrastructureKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "assetKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "capturedBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "uploadedBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sha256": {
+            "type": "string",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TeamLabTrafficCaptureSegmentStatus": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Pending",
+          "Running",
+          "Stopping",
+          "Captured",
+          "Uploading",
+          "Uploaded",
+          "Failed",
+          "Expired",
+          "CleanupPending"
+        ],
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
         ]
       },
       "ExerciseExternalPageModel": {
@@ -6017,6 +7319,83 @@
           }
         }
       },
+      "BootstrapProfileCreateModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "BootstrapProfileCursorPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BootstrapProfileModel"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "BootstrapProfileModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/BootstrapProfileStatus"
+          },
+          "latestVersion": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          }
+        }
+      },
+      "BootstrapProfileStatus": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Active",
+          "Deleting",
+          "Deleted"
+        ],
+        "enum": [
+          0,
+          1,
+          2
+        ]
+      },
       "DockerImageReferenceImportModel": {
         "type": "object",
         "additionalProperties": false,
@@ -6051,6 +7430,18 @@
         "x-enumNames": [
           "Linux",
           "Windows"
+        ],
+        "enum": [
+          0,
+          1
+        ]
+      },
+      "VmNetworkMode": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Dhcp",
+          "Preconfigured"
         ],
         "enum": [
           0,
@@ -6097,6 +7488,15 @@
             "type": "string",
             "nullable": true
           },
+          "vmArtifactStatus": {
+            "$ref": "#/components/schemas/VmArtifactStatus"
+          },
+          "vmRuntimeMode": {
+            "$ref": "#/components/schemas/VmRuntimeMode"
+          },
+          "vmNetworkMode": {
+            "$ref": "#/components/schemas/VmNetworkMode"
+          },
           "uploadedAt": {
             "type": "integer",
             "format": "uint64"
@@ -6134,6 +7534,57 @@
           2,
           3
         ]
+      },
+      "VmArtifactStatus": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "None",
+          "Building",
+          "Ready",
+          "Failed",
+          "Invalidated"
+        ],
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "VmRuntimeMode": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Managed",
+          "Opaque",
+          "Scenario"
+        ],
+        "enum": [
+          0,
+          1,
+          2
+        ]
+      },
+      "ImageTemplateCertificationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "evidenceDigest": {
+            "type": "string",
+            "nullable": true
+          },
+          "probeKind": {
+            "type": "string"
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -6144,5 +7595,19 @@
         "bearerFormat": "GZCTF API token"
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "TeamLab - Runtimes",
+      "description": "Create, inspect, reset, destroy, and access deployed TeamLab environments."
+    },
+    {
+      "name": "TeamLab - Topologies",
+      "description": "Design, validate, publish, and plan multi-segment TeamLab network topologies."
+    },
+    {
+      "name": "TeamLab - Traffic and Captures",
+      "description": "Query traffic flows and paths, and manage bounded packet captures for a TeamLab runtime."
+    }
+  ]
 }

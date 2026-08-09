@@ -8,6 +8,7 @@ import { VNextErrorFallback } from './vnext/app/VNextErrorFallback'
 import { VNextThemeProvider } from './vnext/app/VNextThemeProvider'
 import './vnext/design/globals.css'
 import './vnext/design/tokens.css'
+import '@xyflow/react/dist/style.css'
 
 export const App: FC = () => {
   const swrConfig = useMemo(() => createSWRConfig(), [])

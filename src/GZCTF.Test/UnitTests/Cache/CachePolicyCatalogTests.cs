@@ -2,7 +2,9 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using GZCTF.Infrastructure.Cache;
+using GZCTF.Models.Data;
 using GZCTF.Models.Request.Game;
 using GZCTF.Utils;
 using Xunit;
@@ -55,5 +57,33 @@ public sealed class CachePolicyCatalogTests
         Assert.Single(restored.Items);
         Assert.Single(restored.Divisions);
         Assert.NotNull(restored.ChallengeMap);
+    }
+
+    [Fact]
+    public void PostListSerializer_PreservesIpAddress()
+    {
+        var expected = new DataWithModifiedTime<Post[]>(
+        [
+            new Post
+            {
+                Id = "phase009",
+                Title = "Phase 9",
+                Summary = "Validation",
+                Content = "Ready",
+                Author = new UserInfo
+                {
+                    UserName = "admin",
+                    IP = IPAddress.Parse("10.0.7.118")
+                }
+            }
+        ], DateTimeOffset.FromUnixTimeSeconds(1_700_000_000));
+        var writer = new ArrayBufferWriter<byte>();
+        var serializer = new PostListHybridCacheSerializer();
+
+        serializer.Serialize(expected, writer);
+        var restored = serializer.Deserialize(new ReadOnlySequence<byte>(writer.WrittenMemory));
+
+        Assert.Equal(expected.Data[0].Author!.IP, restored.Data[0].Author!.IP);
+        Assert.Equal(expected.LastModifiedTimeUtc, restored.LastModifiedTimeUtc);
     }
 }

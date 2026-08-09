@@ -235,8 +235,12 @@ export function VNextDrawer({
     }
     const afterClose = afterCloseRef.current
     afterCloseRef.current = null
+    const drawer = ref.current
+    if (drawer?.open) drawer.close()
+    setDrawerState('closed')
     onClose()
     afterClose?.()
+    requestAnimationFrame(() => returnFocusRef.current?.focus())
   }
 
   const requestClose: DrawerRequestClose = (afterClose) => {
@@ -330,8 +334,11 @@ export function VNextDrawer({
         }`}
         onAnimationEnd={(event) => {
           if (event.currentTarget !== event.target) return
+          if (closeRequestedRef.current) {
+            finishClose()
+            return
+          }
           if (drawerState === 'opening') setDrawerState('open')
-          if (drawerState === 'closing') finishClose()
         }}
       >
         <header className={styles.dialogHeader}>

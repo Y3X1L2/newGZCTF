@@ -330,6 +330,46 @@ public sealed class OpenImageApiTests(GZCTFApplicationFactory factory) : IAsyncL
     }
 
     [Fact]
+    public async Task RegisterVmQcow2_CreatesOpaqueImmutableCandidate()
+    {
+        var issued = await IssueTokenAsync([ApiTokenScopes.ImagesWrite, ApiTokenScopes.OperationsRead]);
+        var key = Guid.NewGuid().ToString("N");
+        var image = "minimal qcow2 fixture"u8.ToArray();
+        var digest = Convert.ToHexStringLower(SHA256.HashData(image));
+        using var content = new MultipartFormDataContent
+        {
+            { new ByteArrayContent(image), "file", "managed-candidate.qcow2" },
+            { new StringContent($"vm-{key[..8]}"), "name" },
+            { new StringContent(((int)OSType.Windows).ToString()), "osType" },
+            { new StringContent(((int)VmNetworkMode.Dhcp).ToString()), "networkMode" },
+            { new StringContent(digest), "expectedDigest" }
+        };
+        using var message = new HttpRequestMessage(HttpMethod.Post, "/api/open/v1/images/vm-qcow2")
+        {
+            Content = content
+        };
+        message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", issued.PlainTextToken);
+        message.Headers.Add("Idempotency-Key", key);
+        using var response = await factory.CreateClient().SendAsync(message);
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var operation = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var templateId = await WaitForImportedTemplateAsync(operation.GetProperty("id").GetGuid());
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var template = await context.ImageTemplates.AsNoTracking()
+            .Include(item => item.PreparedArtifact)
+            .SingleAsync(item => item.Id == templateId);
+        Assert.Equal(ImageStatus.Ready, template.Status);
+        Assert.Equal(VmRuntimeMode.Opaque, template.VmRuntimeMode);
+        Assert.Equal(VmArtifactStatus.Ready, template.VmArtifactStatus);
+        Assert.Equal(VmNetworkMode.Dhcp, template.VmNetworkMode);
+        Assert.Equal(digest, template.ImageHash);
+        Assert.Equal(digest, template.PreparedArtifact?.ArtifactDigest);
+        Assert.False(string.IsNullOrWhiteSpace(template.PreparedArtifact?.RegistryRepository));
+    }
+
+    [Fact]
     public async Task RegisterDockerArchive_RecoversAfterWebHostRestart()
     {
         var contentRoot = Path.Combine(

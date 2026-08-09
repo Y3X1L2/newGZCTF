@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "operatingSystems": ["Linux"],
+  "assetKinds": ["Vm"],
+  "requiredTemplateCapabilities": [
+    "bootstrap.firstboot.v1",
+    "guest.qga.v1",
+    "guest.virtio-serial.v1"
+  ],
+  "parameters": [
+    { "key": "runtime_id", "type": "Integer", "required": true, "secret": false },
+    { "key": "sensor_token", "type": "String", "required": true, "secret": true }
+  ],
+  "files": [],
+  "steps": [
+    { "id": "install-sensor", "entrypoint": "bin/install-sensor", "timeoutSeconds": 300, "runAs": "system", "reboot": "None" }
+  ],
+  "healthChecks": [
+    { "id": "sensor-ready", "kind": "Entrypoint", "target": "bin/health-sensor", "timeoutSeconds": 10, "attempts": 12 }
+  ],
+  "maxReboots": 0
+}

@@ -1,4 +1,4 @@
-import { BadgeCheck, Box, Eye, FileArchive, FolderInput, Search, Trash2, Upload } from 'lucide-react'
+import { BadgeCheck, Box, Eye, FileArchive, FolderInput, Search, Trash2, Upload, Wrench } from 'lucide-react'
 import { ChangeEvent, useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import { ImageStatus, ImageType, OSType } from '@Api'
@@ -23,6 +23,7 @@ import {
 import { numericEnumValue, useAdminQueryState } from '../shared/useAdminQueryState'
 import styles from './AdminImagesPage.module.css'
 import { ImageActionDialog, type ImageActionMode } from './ImageActionDialog'
+import { ImageRemoteAccessDialog } from './ImageRemoteAccessDialog'
 import {
   formatAdminTime,
   formatBytes,
@@ -47,6 +48,7 @@ export function AdminImagesPage() {
   const [actionMode, setActionMode] = useState<ImageActionMode | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ImageTemplateSummary | null>(null)
+  const [remoteAccessTarget, setRemoteAccessTarget] = useState<ImageTemplateSummary | null>(null)
   const [actionFailure, setActionFailure] = useState<string | null>(null)
   const { images, error, isLoading, isRefreshing, mutate } = useAdminImages({})
   const { registry } = useDockerRegistry()
@@ -369,6 +371,11 @@ export function AdminImagesPage() {
                 </ActionButton>
               ) : null}
               {selected.canManage !== false ? (
+                <ActionButton icon={<Wrench size={16} />} onClick={() => setRemoteAccessTarget(selected)} type="button">
+                  配置运维入口
+                </ActionButton>
+              ) : null}
+              {selected.canManage !== false ? (
                 <ActionButton
                   icon={<Trash2 size={16} />}
                   onClick={() => setDeleteTarget(selected)}
@@ -452,6 +459,8 @@ export function AdminImagesPage() {
       {actionMode ? (
         <ImageActionDialog mode={actionMode} onClose={() => setActionMode(null)} onCompleted={completed} open />
       ) : null}
+
+      <ImageRemoteAccessDialog onClose={() => setRemoteAccessTarget(null)} template={remoteAccessTarget} />
 
       <VNextConfirmDialog
         confirmLabel="删除模板"

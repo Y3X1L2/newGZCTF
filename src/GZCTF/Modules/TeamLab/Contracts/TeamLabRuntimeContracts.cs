@@ -24,6 +24,8 @@ public sealed record ResetTeamLabRuntimeModel(
 
 public sealed record TeamLabRuntimeShardProjectionModel(
     Guid Id,
+    Guid WorkerNodeId,
+    string WorkerNodeName,
     TeamLabRuntimeStatus Status,
     IReadOnlyList<string> NetworkKeys,
     IReadOnlyList<string> AssetKeys,
@@ -36,6 +38,7 @@ public sealed record TeamLabRuntimeNetworkProjectionModel(
     string GatewayIp);
 
 public sealed record TeamLabRuntimeAssetProjectionModel(
+    int Id,
     string Key,
     string Name,
     TeamLabAssetKind Kind,

@@ -8,7 +8,6 @@ using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
-using GZCTF.Services.Fleet;
 using GZCTF.Services.TeamLab;
 using GZCTF.Modules.Runtime.Application;
 using Microsoft.EntityFrameworkCore;
@@ -21,12 +20,13 @@ public sealed class TeamLabRuntimeOrchestrator(
     TeamLabRuntimeProjectionService projections,
     TeamLabRuntimeOverlayService overlays,
     TeamLabShardDeploymentService deployment,
+    ITeamLabDeploymentProgress stageMachine,
     TeamLabTrafficApplicationService traffic,
     TeamLabRuntimeCleanupService cleanup,
-    ImageDistributionService imageDistribution,
+    ITeamLabArtifactDistribution imageDistribution,
     TeamLabPhysicalPlacementService placement,
     TeamLabRuntimeOperationPayloadProtector operationPayloads,
-    DeploymentQueueService queue,
+    ITeamLabRuntimeQueue queue,
     IPublicUdpGatewayProvider publicGateway,
     TeamLabEventRecorder eventRecorder,
     ILogger<TeamLabRuntimeOrchestrator> logger) : ITeamLabRuntimeApplicationService
@@ -36,26 +36,32 @@ public sealed class TeamLabRuntimeOrchestrator(
         Guid actorUserId,
         Guid runtimeOwnerUserId,
         string requestHash,
+        string? creationIdempotencyKey,
         Guid? operationId,
         string? subjectDisplayName,
         CancellationToken cancellationToken)
     {
-        var result = await planner.CreateAsync(command, runtimeOwnerUserId, requestHash, cancellationToken);
+        var result = await planner.CreateAsync(
+            command, runtimeOwnerUserId, requestHash, creationIdempotencyKey, cancellationToken);
         if (result.Reused) return result;
         var runtime = await context.TeamLabRuntimes.AsNoTracking()
             .Include(item => item.Assets)
             .SingleAsync(item => item.Id == result.RuntimeId, cancellationToken);
         var dockerSlots = runtime.Assets.Count(item => item.Generation == runtime.Generation && item.Kind == TeamLabResourceKind.Docker);
         var vmSlots = runtime.Assets.Count(item => item.Generation == runtime.Generation && item.Kind == TeamLabResourceKind.Vm);
-        var queued = await queue.EnqueueAsync(DeploymentQueueRequest.TeamLab(
+        var queued = await queue.EnqueueAsync(new TeamLabQueueRequest(
             runtime.Id,
             dockerSlots,
             vmSlots,
             actorUserId,
             operationId,
             runtime.PublicId,
+            WorkloadSchedulingIdentity.ForRuntime(runtime.Id, $"teamlab-runtime:{runtime.Id}", actorUserId),
             subjectDisplayName ?? runtime.ExternalReference ?? runtime.PublicId.ToString("D"),
-            $"{dockerSlots} Docker / {vmSlots} VM"), cancellationToken);
+            $"{dockerSlots} Docker / {vmSlots} VM",
+            // A create request for an existing external reference is turned into a reset by the
+            // planner, so the runtime may already be past its first generation.
+            runtime.Generation), cancellationToken);
         await LinkOperationAsync(operationId, runtime, queued.TicketId, cancellationToken);
         return result;
     }
@@ -72,26 +78,26 @@ public sealed class TeamLabRuntimeOrchestrator(
         var runtime = await LoadRuntimeByPublicIdAsync(runtimeId, cancellationToken);
         if (runtime.Status is TeamLabRuntimeStatus.Destroying or TeamLabRuntimeStatus.CleanupPending)
             throw new TeamLabApiContractException("runtime_cleanup_pending", "Runtime cleanup is already pending.", 409);
-        var entryNodeId = runtime.Shards
-            .Where(shard => shard.Generation == runtime.Generation && shard.Id == runtime.EntryShardId)
-            .Select(shard => (Guid?)shard.WorkerNodeId)
-            .FirstOrDefault();
         var dockerSlots = runtime.Assets.Count(item => item.Generation == runtime.Generation && item.Kind == TeamLabResourceKind.Docker);
         var vmSlots = runtime.Assets.Count(item => item.Generation == runtime.Generation && item.Kind == TeamLabResourceKind.Vm);
         var payload = new TeamLabRuntimeOperationPayload(null, runtime.PublicId, command);
         var protectedPayload = operationPayloads.Protect(payload);
         var payloadHash = $"sha256:{Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(payload)))}";
-        var queued = await queue.EnqueueAsync(DeploymentQueueRequest.TeamLab(
-            runtime.Id, dockerSlots, vmSlots, runtime.CreatedById, operationId, runtime.PublicId,
+        var queued = await queue.EnqueueAsync(new TeamLabQueueRequest(
+            runtime.Id,
+            dockerSlots,
+            vmSlots,
+            runtime.CreatedById,
+            operationId,
+            runtime.PublicId,
+            WorkloadSchedulingIdentity.ForRuntime(runtime.Id, $"teamlab-runtime:{runtime.Id}", runtime.CreatedById),
             runtime.ExternalReference ?? runtime.PublicId.ToString("D"),
-            $"reset generation {runtime.Generation + 1}") with
-        {
-            Operation = RuntimeOperationKind.Reset,
-            Generation = runtime.Generation + 1,
-            TargetNodeId = entryNodeId,
-            ProtectedPayload = protectedPayload,
-            PayloadHash = payloadHash
-        }, cancellationToken);
+            $"reset generation {runtime.Generation + 1}",
+            runtime.Generation + 1,
+            RuntimeOperationKind.Reset,
+            null,
+            protectedPayload,
+            payloadHash), cancellationToken);
         eventRecorder.Record(
             runtime,
             "reset",
@@ -124,42 +130,122 @@ public sealed class TeamLabRuntimeOrchestrator(
 
         var command = payload.Reset ?? new ResetTeamLabRuntimeModel(null);
         var runtime = await LoadRuntimeAsync(runtimeId, cancellationToken);
-        runtime.Status = TeamLabRuntimeStatus.Destroying;
-        runtime.IsOpenToPlayers = false;
+        var ticket = await context.DeploymentQueueTickets
+            .SingleAsync(item => item.Id == ticketId, cancellationToken);
+        if (ticket.TeamLabRuntimeId != runtime.Id || ticket.Operation != RuntimeOperationKind.Reset)
+            return TeamLabNodeResult.Failed("TeamLab reset ticket does not own this runtime.");
+        var targetGeneration = ticket.Generation;
+        var checkpoint = TeamLabResetCheckpointFacts.Get(runtime, ticketId);
         using var activity = PlatformTelemetry.TeamLabActivitySource.StartActivity(
             "teamlab.reset", ActivityKind.Internal);
         activity?.SetTag("gzctf.teamlab_runtime_id", runtime.Id);
-        activity?.SetTag("teamlab.generation", runtime.Generation);
-        eventRecorder.Record(
-            runtime,
-            "reset",
-            TeamLabEventLevel.Info,
-            OperationalEventCodes.TeamLab.ResetStarted,
-            OperationalEventOutcome.Started,
-            "Runtime generation reset started.");
-        await context.SaveChangesAsync(cancellationToken);
-        var cleaned = await cleanup.CleanupAsync(runtime, cancellationToken);
-        if (!cleaned.Success)
-            return await FailAsync(runtime, cleaned.Message, cancellationToken, cleanupPending: true,
-                OperationalEventCodes.TeamLab.ResetFailed, "reset");
-        runtime.Status = TeamLabRuntimeStatus.Destroyed;
-        await context.SaveChangesAsync(cancellationToken);
+        activity?.SetTag("teamlab.generation", targetGeneration);
 
-        await planner.ResetAsync(runtime.PublicId, command.Overlays, command.ReleaseId, null, cancellationToken);
-        var reserved = await placement.BindAndReserveAsync(ticketId, runtime.Id, cancellationToken);
-        if (!reserved.Success || reserved.NodeId is not { } entryNodeId)
-            return await FailAsync(runtime, reserved.Message, cancellationToken, false,
-                OperationalEventCodes.TeamLab.ResetFailed, "reset");
+        if (checkpoint is null)
+        {
+            if (runtime.Generation == targetGeneration && runtime.Status == TeamLabRuntimeStatus.Running)
+                return TeamLabNodeResult.Ok("Runtime reset is already complete.");
+            if (runtime.Generation != targetGeneration - 1)
+                return await FailAsync(
+                    runtime,
+                    "Reset target generation does not follow the persisted runtime generation.",
+                    cancellationToken,
+                    eventCode: OperationalEventCodes.TeamLab.ResetFailed,
+                    stage: "reset");
 
-        var ticket = await context.DeploymentQueueTickets.SingleAsync(item => item.Id == ticketId, cancellationToken);
-        var replanned = await context.TeamLabRuntimes.Include(item => item.Assets)
-            .SingleAsync(item => item.Id == runtime.Id, cancellationToken);
-        ticket.TargetNodeId = entryNodeId;
-        ticket.DockerSlots = replanned.Assets.Count(item =>
-            item.Generation == replanned.Generation && item.Kind == TeamLabResourceKind.Docker);
-        ticket.VmSlots = replanned.Assets.Count(item =>
-            item.Generation == replanned.Generation && item.Kind == TeamLabResourceKind.Vm);
-        await context.SaveChangesAsync(cancellationToken);
+            runtime.Status = TeamLabRuntimeStatus.Destroying;
+            runtime.IsOpenToPlayers = false;
+            TeamLabResetCheckpointFacts.Record(
+                runtime, ticketId, targetGeneration, TeamLabResetCheckpoint.CleaningPreviousGeneration);
+            eventRecorder.Record(
+                runtime,
+                "reset",
+                TeamLabEventLevel.Info,
+                OperationalEventCodes.TeamLab.ResetStarted,
+                OperationalEventOutcome.Started,
+                "Runtime generation reset started.");
+            await context.SaveChangesAsync(cancellationToken);
+            checkpoint = TeamLabResetCheckpoint.CleaningPreviousGeneration;
+        }
+
+        if (checkpoint == TeamLabResetCheckpoint.CleaningPreviousGeneration)
+        {
+            if (runtime.Generation == targetGeneration - 1 &&
+                runtime.Status != TeamLabRuntimeStatus.Destroyed)
+            {
+                runtime.Status = TeamLabRuntimeStatus.Destroying;
+                runtime.IsOpenToPlayers = false;
+                await context.SaveChangesAsync(cancellationToken);
+                var cleaned = await cleanup.CleanupAsync(
+                    runtime, markDestroyedOnSuccess: true, cancellationToken);
+                if (!cleaned.Success)
+                    return await FailAsync(runtime, cleaned.Message, cancellationToken, cleanupPending: true,
+                        OperationalEventCodes.TeamLab.ResetFailed, "reset");
+            }
+            if (runtime.Generation != targetGeneration - 1 && runtime.Generation != targetGeneration)
+                return await FailAsync(
+                    runtime,
+                    "Reset cleanup checkpoint conflicts with the persisted generation.",
+                    cancellationToken,
+                    eventCode: OperationalEventCodes.TeamLab.ResetFailed,
+                    stage: "reset");
+
+            TeamLabResetCheckpointFacts.Record(
+                runtime, ticketId, targetGeneration, TeamLabResetCheckpoint.PlanningNextGeneration);
+            await context.SaveChangesAsync(cancellationToken);
+            checkpoint = TeamLabResetCheckpoint.PlanningNextGeneration;
+        }
+
+        if (checkpoint == TeamLabResetCheckpoint.PlanningNextGeneration)
+        {
+            if (runtime.Generation == targetGeneration - 1)
+            {
+                if (runtime.Status != TeamLabRuntimeStatus.Destroyed)
+                    return await FailAsync(
+                        runtime,
+                        "Previous generation cleanup is not complete.",
+                        cancellationToken,
+                        cleanupPending: true,
+                        OperationalEventCodes.TeamLab.ResetFailed,
+                        "reset");
+                await planner.ResetAsync(
+                    runtime.PublicId, command.Overlays, command.ReleaseId, null, cancellationToken);
+            }
+            if (runtime.Generation != targetGeneration)
+                return await FailAsync(
+                    runtime,
+                    "Reset planning checkpoint conflicts with the target generation.",
+                    cancellationToken,
+                    eventCode: OperationalEventCodes.TeamLab.ResetFailed,
+                    stage: "reset");
+
+            TeamLabResetCheckpointFacts.Record(
+                runtime, ticketId, targetGeneration, TeamLabResetCheckpoint.ReservingNextGeneration);
+            await context.SaveChangesAsync(cancellationToken);
+            checkpoint = TeamLabResetCheckpoint.ReservingNextGeneration;
+        }
+
+        if (checkpoint == TeamLabResetCheckpoint.ReservingNextGeneration)
+        {
+            var reserved = await placement.BindAndReserveAsync(ticketId, runtime.Id, cancellationToken);
+            if (!reserved.Success || reserved.NodeId is not { } entryNodeId)
+                return await FailAsync(runtime, reserved.Message, cancellationToken, false,
+                    OperationalEventCodes.TeamLab.ResetFailed, "reset");
+
+            ticket.TargetNodeId = entryNodeId;
+            ticket.DockerSlots = runtime.Assets.Count(item =>
+                item.Generation == targetGeneration && item.Kind == TeamLabResourceKind.Docker);
+            ticket.VmSlots = runtime.Assets.Count(item =>
+                item.Generation == targetGeneration && item.Kind == TeamLabResourceKind.Vm);
+            TeamLabResetCheckpointFacts.Record(
+                runtime, ticketId, targetGeneration, TeamLabResetCheckpoint.DeployingNextGeneration);
+            await context.SaveChangesAsync(cancellationToken);
+            checkpoint = TeamLabResetCheckpoint.DeployingNextGeneration;
+        }
+
+        if (checkpoint != TeamLabResetCheckpoint.DeployingNextGeneration)
+            return TeamLabNodeResult.Failed("TeamLab reset checkpoint is invalid.");
+
         var resetResult = await ExecuteQueuedAsync(runtime.Id, cancellationToken);
         if (resetResult.Success)
         {
@@ -194,7 +280,14 @@ public sealed class TeamLabRuntimeOrchestrator(
         if (releaseId == Guid.Empty)
             return TeamLabNodeResult.Failed("Runtime has no topology release.");
         var release = await context.TeamLabTopologyReleases.AsNoTracking().SingleAsync(item => item.Id == releaseId, cancellationToken);
-        var definition = TeamLabReleaseCodec.Decode(release.CanonicalJson);
+        var definition = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
+        if (!runtime.IsScenarioBuild)
+            definition = definition with
+            {
+                Assets = definition.Assets.Select(asset => asset.BakeAtPublish
+                    ? asset with { Bootstrap = null, BakeAtPublish = false }
+                    : asset).ToArray()
+            };
         var envelope = runtime.SecretEnvelopes.SingleOrDefault(item => item.Generation == runtime.Generation);
         IReadOnlyDictionary<string, TeamLabRuntimeOverlayModel> overlayValues;
         try
@@ -203,8 +296,17 @@ public sealed class TeamLabRuntimeOrchestrator(
         }
         catch (TeamLabApiContractException exception)
         {
+            TeamLabRuntimeOverlayService.Consume(envelope);
             return await FailAsync(runtime, exception.Message, cancellationToken);
         }
+
+        // Captured before anything is deployed: assets of this generation that already carry a node
+        // resource id mean the generation is live on the nodes, so this run is a replay over running
+        // resources rather than a first deployment. Rolling back a replay would destroy a team's
+        // environment — including stateful assets the rebuild guard normally refuses to touch — and
+        // turn a transient network drift into permanent data loss.
+        var replayingLiveGeneration = runtime.Assets.Any(asset =>
+            asset.Generation == runtime.Generation && !string.IsNullOrWhiteSpace(asset.RuntimeResourceId));
 
         runtime.Status = TeamLabRuntimeStatus.Deploying;
         runtime.LastError = null;
@@ -228,6 +330,10 @@ public sealed class TeamLabRuntimeOrchestrator(
                 var gateway = await publicGateway.SyncMappingAsync(runtime.PublicUdpMapping, cancellationToken);
                 if (!gateway.Success) throw new TeamLabRuntimeExecutionException(gateway.Message);
             }
+            await stageMachine.SetAsync(
+                TeamLabDeploymentStage.ObservationStarting,
+                "Starting TeamLab observation collectors.",
+                cancellationToken);
             await traffic.StartCollectorsAsync(runtime, cancellationToken);
             TeamLabRuntimeOverlayService.Consume(envelope);
             runtime.Status = TeamLabRuntimeStatus.Running;
@@ -251,17 +357,34 @@ public sealed class TeamLabRuntimeOrchestrator(
             activity?.SetStatus(ActivityStatusCode.Ok);
             return TeamLabNodeResult.Ok("Runtime deployment completed.");
         }
-        catch (Exception exception) when (exception is TeamLabRuntimeExecutionException or AgentClientException or HttpRequestException or TaskCanceledException)
+        catch (Exception exception) when (exception is TeamLabRuntimeExecutionException or IOperationalFailureException or HttpRequestException or TaskCanceledException)
         {
             logger.LogWarning(exception, "TeamLab runtime {RuntimeId} deployment failed.", runtime.PublicId);
-            var cleaned = await cleanup.CleanupAsync(runtime, cancellationToken);
+            TeamLabRuntimeOverlayService.Consume(envelope);
             activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
-            var error = exception is AgentClientException agentException
-                ? agentException.Error
+            var error = exception is IOperationalFailureException operationalFailure
+                ? operationalFailure.Error
                 : TeamLabFailure(runtime, "teamlab.deploy");
+
+            if (replayingLiveGeneration)
+            {
+                // Rollback only ever applies to a first deployment. Here the resources predate this
+                // run, so they are kept and the runtime is parked in a state an operator or the next
+                // reconcile pass can converge from.
+                logger.LogWarning(
+                    "TeamLab runtime {RuntimeId} replay failed; keeping generation {Generation} resources intact.",
+                    runtime.PublicId, runtime.Generation);
+                return await FailAsync(runtime,
+                    $"{exception.Message}; existing resources were kept because this was a replay of a live generation.",
+                    cancellationToken,
+                    error: error);
+            }
+
+            using var rollbackDeadline = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            var cleaned = await cleanup.CleanupAsync(runtime, rollbackDeadline.Token);
             return await FailAsync(runtime,
                 cleaned.Success ? exception.Message : $"{exception.Message}; cleanup: {cleaned.Message}",
-                cancellationToken,
+                rollbackDeadline.Token,
                 cleanupPending: !cleaned.Success,
                 error: error);
         }
@@ -274,25 +397,29 @@ public sealed class TeamLabRuntimeOrchestrator(
         return await projections.GetAsync(runtimeId, cancellationToken);
     }
 
-    public async Task<DeploymentQueueResult> DestroyAndEnqueueAsync(
+    public async Task<TeamLabQueueTicketResult> DestroyAndEnqueueAsync(
         Guid runtimeId,
         Guid? operationId,
         Guid? actorUserId,
         CancellationToken cancellationToken)
     {
         var runtime = await LoadRuntimeByPublicIdAsync(runtimeId, cancellationToken);
-        var entryNodeId = runtime.Shards
-            .Where(shard => shard.Generation == runtime.Generation && shard.Id == runtime.EntryShardId)
-            .Select(shard => (Guid?)shard.WorkerNodeId)
-            .FirstOrDefault();
-        return await queue.EnqueueAsync(DeploymentQueueRequest.TeamLab(
-            runtime.Id, 0, 0, actorUserId ?? runtime.CreatedById, operationId, runtime.PublicId,
-            runtime.ExternalReference ?? runtime.PublicId.ToString("D"), "destroy runtime") with
-        {
-            Operation = RuntimeOperationKind.Destroy,
-            Generation = runtime.Generation,
-            TargetNodeId = entryNodeId
-        }, cancellationToken);
+        return await queue.EnqueueAsync(new TeamLabQueueRequest(
+            runtime.Id,
+            0,
+            0,
+            actorUserId ?? runtime.CreatedById,
+            operationId,
+            runtime.PublicId,
+            WorkloadSchedulingIdentity.ForRuntime(
+                runtime.Id,
+                $"teamlab-runtime:{runtime.Id}",
+                actorUserId ?? runtime.CreatedById),
+            runtime.ExternalReference ?? runtime.PublicId.ToString("D"),
+            "destroy runtime",
+            runtime.Generation,
+            RuntimeOperationKind.Destroy,
+            null), cancellationToken);
     }
 
     public async Task<TeamLabNodeResult> ExecuteQueuedDestroyAsync(int runtimeId,
@@ -303,6 +430,8 @@ public sealed class TeamLabRuntimeOrchestrator(
             return TeamLabNodeResult.Ok("Runtime is already destroyed.");
         runtime.Status = TeamLabRuntimeStatus.Destroying;
         runtime.IsOpenToPlayers = false;
+        foreach (var envelope in runtime.SecretEnvelopes)
+            TeamLabRuntimeOverlayService.Consume(envelope);
         using var activity = PlatformTelemetry.TeamLabActivitySource.StartActivity(
             "teamlab.destroy", ActivityKind.Internal);
         activity?.SetTag("gzctf.teamlab_runtime_id", runtime.Id);
@@ -317,8 +446,9 @@ public sealed class TeamLabRuntimeOrchestrator(
         var result = await cleanup.CleanupAsync(runtime, cancellationToken);
         if (result.Success)
         {
-            await imageDistribution.ReleaseTeamLabRuntimeReferencesAsync(runtime.Id, cancellationToken);
-            runtime.Status = TeamLabRuntimeStatus.Destroyed;
+            await imageDistribution.ReleaseRuntimeAsync(runtime.Id, cancellationToken);
+            await TeamLabRuntimeCleanupService.FinalizeGenerationAsync(
+                context, runtime, runtime.Generation, markRuntimeDestroyed: true, cancellationToken);
             eventRecorder.Record(
                 runtime,
                 "destroy",
@@ -386,10 +516,15 @@ public sealed class TeamLabRuntimeOrchestrator(
         .Include(item => item.Shards).ThenInclude(item => item.Assets)
         .Include(item => item.Networks).ThenInclude(item => item.NetworkLease)
         .Include(item => item.Assets)
+        .Include(item => item.Infrastructure).ThenInclude(item => item.Fragments)
+        .Include(item => item.DependencyStates)
+        .Include(item => item.BootstrapExecutions)
+        .Include(item => item.ObservationPoints)
+        .Include(item => item.FabricLinkLeases)
         .Include(item => item.AccessGrants)
         .Include(item => item.VpnPeers)
         .Include(item => item.SecretEnvelopes)
-        .Include(item => item.TrafficCaptureJobs)
+        .Include(item => item.TrafficCaptureJobs).ThenInclude(item => item.Segments)
         .Include(item => item.Events);
 
     private async Task LinkOperationAsync(
@@ -416,4 +551,10 @@ public sealed class TeamLabRuntimeOrchestrator(
             Operation: operation);
 
     private static string Trim(string value) => value.Length <= 1024 ? value : value[..1024];
+
+    private static void ConsumeGenerationEnvelopes(TeamLabRuntime runtime, int generation)
+    {
+        foreach (var envelope in runtime.SecretEnvelopes.Where(item => item.Generation == generation))
+            TeamLabRuntimeOverlayService.Consume(envelope);
+    }
 }

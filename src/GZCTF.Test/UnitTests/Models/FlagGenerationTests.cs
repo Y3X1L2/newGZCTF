@@ -365,18 +365,19 @@ public class ChallengeFlagGenerationTests
     }
 
     [Fact]
-    public void GenerateDynamicFlag_Parameterless_WithTeamHashPlaceholder_ReplacesWithTestTeamHash()
+    public void GenerateDynamicFlag_Parameterless_WithTeamHashPlaceholder_GeneratesUniqueHashes()
     {
         // Arrange
         var challenge = CreateChallenge("flag{[TEAM_HASH]}");
 
         // Act
-        var flag = challenge.GenerateDynamicFlag();
+        var firstFlag = challenge.GenerateDynamicFlag();
+        var secondFlag = challenge.GenerateDynamicFlag();
 
         // Assert
-        Assert.NotNull(flag);
-        Assert.Equal("flag{TestTeamHash}", flag);
-        Assert.DoesNotContain("[TEAM_HASH]", flag);
+        Assert.Matches(@"^flag\{[a-f0-9]{12}\}$", firstFlag);
+        Assert.Matches(@"^flag\{[a-f0-9]{12}\}$", secondFlag);
+        Assert.NotEqual(firstFlag, secondFlag);
     }
 
     [Fact]
@@ -514,7 +515,7 @@ public class ChallengeFlagGenerationTests
         Assert.StartsWith("flag{{hello}}_", flag);
         Assert.DoesNotContain("[GUID]", flag);
         Assert.DoesNotContain("[TEAM_HASH]", flag);
-        Assert.EndsWith("}_{TestTeamHash}", flag);
+        Assert.Matches(@"_\{[a-f0-9]{12}\}$", flag);
         // Should contain a GUID pattern in the middle
         var guidPattern = @"\{[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\}";
         Assert.Matches(guidPattern, flag);
@@ -536,7 +537,7 @@ public class ChallengeFlagGenerationTests
     }
 
     [Fact]
-    public void GenerateDynamicFlag_Parameterless_WithMultipleTeamHash_UsesTestTeamHash()
+    public void GenerateDynamicFlag_Parameterless_WithMultipleTeamHash_ReusesGeneratedHash()
     {
         // Arrange
         var challenge = CreateChallenge("flag{[TEAM_HASH]-[TEAM_HASH]-[TEAM_HASH]}");
@@ -545,7 +546,7 @@ public class ChallengeFlagGenerationTests
         var flag = challenge.GenerateDynamicFlag();
 
         // Assert
-        Assert.Equal("flag{TestTeamHash-TestTeamHash-TestTeamHash}", flag);
+        Assert.Matches(@"^flag\{([a-f0-9]{12})-\1-\1\}$", flag);
     }
 
     [Fact]

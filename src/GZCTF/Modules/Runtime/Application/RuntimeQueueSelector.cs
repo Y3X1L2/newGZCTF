@@ -33,8 +33,14 @@ public sealed class RuntimeQueueSelector(AppDbContext context, IOptions<RuntimeS
         if (window.Length == 0)
             return [];
 
-        var selected = window.Where(ticket => ticket.Operation != RuntimeOperationKind.Create)
-            .Take(_options.SchedulingBatchSize).ToList();
+        var selectedSubjects = blockedSubjects;
+        var selected = new List<DeploymentQueueTicket>();
+        foreach (var ticket in window.Where(ticket => ticket.Operation != RuntimeOperationKind.Create))
+        {
+            if (!selectedSubjects.Add(ticket.SubjectConcurrencyKey)) continue;
+            selected.Add(ticket);
+            if (selected.Count == _options.SchedulingBatchSize) break;
+        }
         var remaining = Math.Max(0, _options.SchedulingBatchSize - selected.Count);
         if (remaining == 0)
             return selected.Select(ticket => ticket.Id).ToArray();
@@ -44,12 +50,12 @@ public sealed class RuntimeQueueSelector(AppDbContext context, IOptions<RuntimeS
                              (ticket.Status == DeploymentQueueTicketStatus.Scheduling ||
                               ticket.Status == DeploymentQueueTicketStatus.Scheduled ||
                               ticket.Status == DeploymentQueueTicketStatus.Running))
-            .Select(ticket => new { ticket.OwnerTeamId, ticket.OwnerUserId })
+            .GroupBy(ticket => ticket.FairnessKey)
+            .Select(group => new { FairnessKey = group.Key, Count = group.Count() })
             .ToArrayAsync(token);
-        var activeCounts = active.GroupBy(item => OwnerKey(item.OwnerTeamId, item.OwnerUserId))
-            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        var activeCounts = active.ToDictionary(item => item.FairnessKey, item => item.Count, StringComparer.Ordinal);
         var groups = window.Where(ticket => ticket.Operation == RuntimeOperationKind.Create)
-            .GroupBy(ticket => OwnerKey(ticket.OwnerTeamId, ticket.OwnerUserId), StringComparer.Ordinal)
+            .GroupBy(ticket => ticket.FairnessKey, StringComparer.Ordinal)
             .ToDictionary(group => group.Key,
                 group => new Queue<DeploymentQueueTicket>(group.OrderBy(item => item.CreatedAt)
                     .ThenBy(item => item.Id)), StringComparer.Ordinal);
@@ -64,6 +70,13 @@ public sealed class RuntimeQueueSelector(AppDbContext context, IOptions<RuntimeS
                          .ToArray())
             {
                 var queue = groups[owner];
+                while (queue.Count > 0 && selectedSubjects.Contains(queue.Peek().SubjectConcurrencyKey))
+                    queue.Dequeue();
+                if (queue.Count == 0)
+                {
+                    groups.Remove(owner);
+                    continue;
+                }
                 var ticket = queue.Peek();
                 var limit = ticket.OwnerTeamId is not null
                     ? _options.MaxConcurrentCreatesPerTeam
@@ -71,6 +84,7 @@ public sealed class RuntimeQueueSelector(AppDbContext context, IOptions<RuntimeS
                 if (activeCounts.GetValueOrDefault(owner) < Math.Max(1, limit))
                 {
                     selected.Add(queue.Dequeue());
+                    selectedSubjects.Add(ticket.SubjectConcurrencyKey);
                     activeCounts[owner] = activeCounts.GetValueOrDefault(owner) + 1;
                     remaining--;
                     progressed = true;
@@ -86,8 +100,4 @@ public sealed class RuntimeQueueSelector(AppDbContext context, IOptions<RuntimeS
 
         return selected.Select(ticket => ticket.Id).ToArray();
     }
-
-    public static string OwnerKey(int? teamId, Guid? userId) => teamId is { } team
-        ? $"team:{team}"
-        : userId is { } user ? $"user:{user:D}" : "system";
 }

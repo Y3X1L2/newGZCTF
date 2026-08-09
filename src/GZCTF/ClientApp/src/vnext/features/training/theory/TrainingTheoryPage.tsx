@@ -1,4 +1,4 @@
-import { ArrowLeft, BookOpenCheck, CheckCircle2, RotateCcw } from 'lucide-react'
+import { ArrowLeft, BookOpenCheck, CheckCircle2, RotateCcw, TriangleAlert } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import {
@@ -78,6 +78,7 @@ export function TrainingTheoryPage() {
   }
 
   const submitted = paper.status === TheoryAnswerSheetStatus.Submitted
+  const reviewDataMissing = submitted && paper.showCorrectAnswerAfterSubmit && (paper.answers?.length ?? 0) === 0
 
   return (
     <div className={styles.page}>
@@ -99,16 +100,28 @@ export function TrainingTheoryPage() {
       {submitted ? (
         <section className={styles.submittedPanel}>
           <div>
-            <CheckCircle2 size={21} />
+            {reviewDataMissing ? (
+              <TriangleAlert className={styles.reviewWarningIcon} size={21} />
+            ) : (
+              <CheckCircle2 size={21} />
+            )}
             <span>
               <strong>
                 得分 {paper.score ?? 0} / {paper.totalScore ?? 0}
               </strong>
-              <small>{paper.passed ? '已通过课后练习' : `尚未达到 ${paper.passRate ?? 0}% 通过线`}</small>
+              <small>
+                {reviewDataMissing
+                  ? '历史答卷缺少逐题作答记录'
+                  : paper.passed
+                    ? '已通过课后练习'
+                    : `尚未达到 ${paper.passRate ?? 0}% 通过线`}
+              </small>
             </span>
           </div>
           <div className={styles.submittedActions}>
-            <StatusPill tone={paper.passed ? 'success' : 'warning'}>{paper.passed ? '已通过' : '未通过'}</StatusPill>
+            <StatusPill tone={reviewDataMissing ? 'warning' : paper.passed ? 'success' : 'warning'}>
+              {reviewDataMissing ? '复盘不可用' : paper.passed ? '已通过' : '未通过'}
+            </StatusPill>
             {paper.allowRetake ? (
               <ActionButton
                 disabled={retrying}
@@ -136,6 +149,7 @@ export function TrainingTheoryPage() {
         initialPaper={paper}
         key={`${paper.paperId ?? 0}:${paper.attemptNumber ?? 0}:${paper.status ?? 'draft'}`}
         onSubmitted={onSubmitted}
+        revealCorrectAnswers={paper.showCorrectAnswerAfterSubmit === true}
         saveDraft={saveDraft}
         submit={submit}
       />

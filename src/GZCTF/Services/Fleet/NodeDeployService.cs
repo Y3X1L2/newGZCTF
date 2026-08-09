@@ -112,7 +112,22 @@ public class NodeDeployService
             var agentUrl = $"{serverUrl.TrimEnd('/')}/api/agent/download";
             RunChecked(ssh, BuildAgentInstallScript(agentUrl, node.Id, sudo, ComputeAgentBinarySha256()),
                 "Install agent binary");
-
+            RunChecked(ssh, BuildManagedArtifactInstallScript(
+                    $"{serverUrl.TrimEnd('/')}/api/agent/endpoint-sensor/linux-x64/download",
+                    "/opt/gzctf/endpoint-sensor/linux-x64/gzctf-endpoint-sensor",
+                    sudo,
+                    ComputeBundledArtifactSha256(
+                        "agent", "endpoint-sensor", "linux-x64", "gzctf-endpoint-sensor"),
+                    executable: true),
+                "Install Linux endpoint sensor");
+            RunChecked(ssh, BuildManagedArtifactInstallScript(
+                    $"{serverUrl.TrimEnd('/')}/api/agent/endpoint-sensor/win-x64/download",
+                    "/opt/gzctf/endpoint-sensor/win-x64/gzctf-endpoint-sensor.exe",
+                    sudo,
+                    ComputeBundledArtifactSha256(
+                        "agent", "endpoint-sensor", "win-x64", "gzctf-endpoint-sensor.exe"),
+                    executable: false),
+                "Install Windows endpoint sensor");
             WriteRemoteFileIfChanged(ssh, sudo, "/etc/systemd/system/gzctf-agent.service",
                 BuildAgentServiceContent(dotnetRoot), "Write agent systemd unit");
 
@@ -538,18 +553,45 @@ install_teamlab_network_tools() {
 
   case "$pm" in
     apt)
-      install_pkgs wireguard-tools nftables iptables tcpdump genisoimage xorriso cloud-image-utils dnsmasq-base
+      install_pkgs wireguard-tools nftables iptables tcpdump tshark genisoimage xorriso cloud-image-utils dnsmasq-base
       ;;
     dnf|yum)
-      install_pkgs wireguard-tools nftables iptables tcpdump xorriso cloud-utils-growpart dnsmasq || true
+      install_pkgs wireguard-tools nftables iptables tcpdump wireshark-cli xorriso cloud-utils-growpart dnsmasq || true
       ;;
     zypper)
-      install_pkgs wireguard-tools nftables iptables tcpdump xorriso dnsmasq || true
+      install_pkgs wireguard-tools nftables iptables tcpdump wireshark xorriso dnsmasq || true
       ;;
     pacman)
-      install_pkgs wireguard-tools nftables iptables-nft tcpdump xorriso cloud-image-utils dnsmasq || true
+      install_pkgs wireguard-tools nftables iptables-nft tcpdump wireshark-cli xorriso cloud-image-utils dnsmasq || true
       ;;
   esac
+}
+
+configure_guest_management_network() {
+  if ! kvm_ready; then
+    return
+  fi
+  run_sudo mkdir -p /var/lib/gzctf/teamlab/guest-control
+  run_sudo chmod 700 /var/lib/gzctf/teamlab/guest-control
+  run_sudo ip link show gzmgt0 >/dev/null 2>&1 || run_sudo ip link add gzmgt0 type bridge
+  run_sudo ip address replace 100.127.0.1/16 dev gzmgt0
+  run_sudo ip link set gzmgt0 up
+  run_sudo nft -f - <<'GZCTF_NFT'
+destroy table inet gzctf_guest_mgmt
+table inet gzctf_guest_mgmt {
+  chain input {
+    type filter hook input priority -10; policy accept;
+    iifname "gzmgt0" ct state established,related accept
+    iifname "gzmgt0" tcp dport 5443 accept
+    iifname "gzmgt0" drop
+  }
+  chain forward {
+    type filter hook forward priority -10; policy accept;
+    iifname "gzmgt0" drop
+    oifname "gzmgt0" drop
+  }
+}
+GZCTF_NFT
 }
 
 kvm_ready() {
@@ -565,6 +607,7 @@ teamlab_tools_ready() {
   need_cmd wg || return 1
   { need_cmd iptables || need_cmd nft; } || return 1
   need_cmd tcpdump || return 1
+  need_cmd dumpcap || return 1
   { need_cmd genisoimage || need_cmd mkisofs || need_cmd xorriso || need_cmd cloud-localds; } || return 1
 }
 
@@ -576,6 +619,7 @@ print_capability_summary() {
   echo "Qemu-img: $(qemu-img --version 2>/dev/null | head -n 1 || echo unavailable)"
   echo "WireGuard: $(wg --version 2>/dev/null || echo unavailable)"
   echo "Tcpdump: $(tcpdump --version 2>/dev/null | head -n 1 || echo unavailable)"
+  echo "Dumpcap: $(dumpcap --version 2>/dev/null | head -n 1 || echo unavailable)"
   echo "Cloud-init ISO: $(command -v genisoimage || command -v mkisofs || command -v xorriso || echo unavailable)"
   if [ -e /dev/kvm ] && grep -Eq '(^flags|^Features).* (vmx|svm)( |$)' /proc/cpuinfo 2>/dev/null; then
     echo "KVM hardware: available"
@@ -625,6 +669,7 @@ install_docker
 configure_docker_registry
 install_kvm
 install_teamlab_network_tools
+configure_guest_management_network
 install_dotnet_runtime
 
 print_capability_summary
@@ -672,7 +717,19 @@ fi
                 NodeId = node.Id,
                 node.AuthToken,
                 ListenPort = node.AgentPort,
-                HeartbeatIntervalSeconds = 30
+                HeartbeatIntervalSeconds = 30,
+                OperationStateRoot = "/var/lib/gzctf/agent",
+                GuestManagement = new
+                {
+                    Enabled = teamLabEnable && node.Capabilities.HasFlag(NodeCapability.Kvm),
+                    BridgeName = "gzmgt0",
+                    HostAddress = "100.127.0.1",
+                    PrefixLength = 16,
+                    ListenPort = 5443,
+                    StateRoot = "/var/lib/gzctf/teamlab/guest-control",
+                    EnrollmentTtlMinutes = 15,
+                    ClientCertificateLifetimeMinutes = 120
+                }
             },
             Docker = new
             {
@@ -891,6 +948,36 @@ rm -f "$tmp"
 {{sudo}} test -x /usr/local/bin/gzctf-agent
 """);
 
+    internal static string BuildManagedArtifactInstallScript(
+        string downloadUrl,
+        string installedPath,
+        string sudo,
+        string? expectedSha256,
+        bool executable) =>
+        NormalizeShellScript($$"""
+expected_sha={{BashQuote(expectedSha256 ?? string.Empty)}}
+installed={{BashQuote(installedPath)}}
+if [ -n "$expected_sha" ] && command -v sha256sum >/dev/null 2>&1 && {{sudo}} test -f "$installed"; then
+  current_sha="$({{sudo}} sha256sum "$installed" | awk '{print $1}')"
+  if [ "$current_sha" = "$expected_sha" ]; then
+    exit 0
+  fi
+fi
+tmp="/tmp/gzctf-artifact-$(date +%s)-$$"
+trap 'rm -f "$tmp"' EXIT
+download_status=127
+command -v wget >/dev/null 2>&1 && wget -q -O "$tmp" {{BashQuote(downloadUrl)}} && download_status=0
+[ "$download_status" -eq 0 ] || { command -v curl >/dev/null 2>&1 && curl -fsSL {{BashQuote(downloadUrl)}} -o "$tmp" && download_status=0; }
+[ "$download_status" -eq 0 ] || { echo "wget or curl is required to download the artifact" >&2; exit 127; }
+test -s "$tmp"
+if [ -n "$expected_sha" ] && command -v sha256sum >/dev/null 2>&1; then
+  downloaded_sha="$(sha256sum "$tmp" | awk '{print $1}')"
+  [ "$downloaded_sha" = "$expected_sha" ] || { echo "Downloaded artifact sha256 mismatch" >&2; exit 1; }
+fi
+{{sudo}} mkdir -p {{BashQuote(Path.GetDirectoryName(installedPath) ?? "/opt/gzctf/endpoint-sensor")}}
+{{sudo}} install -m {{(executable ? "0755" : "0644")}} "$tmp" "$installed"
+""");
+
     private static void WriteRemoteFileIfChanged(SshClient ssh, string sudo, string remotePath, string content, string step)
     {
         var tmp = $"/tmp/gzctf-agent-{Guid.NewGuid():N}";
@@ -910,8 +997,11 @@ rm -f {{BashQuote(tmp)}}
     }
 
     internal static string? ComputeAgentBinarySha256()
+        => ComputeBundledArtifactSha256("agent", "gzctf-agent");
+
+    internal static string? ComputeBundledArtifactSha256(params string[] pathParts)
     {
-        var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "agent", "gzctf-agent");
+        var path = Path.Combine([AppDomain.CurrentDomain.BaseDirectory, .. pathParts]);
         if (!File.Exists(path))
             return null;
 

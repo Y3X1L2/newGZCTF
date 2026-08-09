@@ -6,6 +6,7 @@ import {
   Flag,
   Layers3,
   Megaphone,
+  Network,
   Settings2,
   Swords,
   UserCheck,
@@ -29,6 +30,10 @@ const baseTabs = [
 export interface GameAdminOutletContext {
   game: GameInfoModel
   mutateGame: () => Promise<unknown>
+}
+
+export function supportsTeamLabGame(gameType: GameInfoModel['gameType']) {
+  return gameType === GameType.Penetration || gameType === GameType.Mixed
 }
 
 export function GameAdminShell() {
@@ -59,6 +64,9 @@ export function GameAdminShell() {
       : []),
     ...(request.game.gameType === GameType.AWDP || request.game.gameType === GameType.Mixed
       ? [{ label: 'AWDP 管理', route: 'awdp-services', icon: Swords }]
+      : []),
+    ...(supportsTeamLabGame(request.game.gameType)
+      ? [{ label: 'TeamLab 编排', route: 'teamlab', icon: Network }]
       : []),
   ]
   return (

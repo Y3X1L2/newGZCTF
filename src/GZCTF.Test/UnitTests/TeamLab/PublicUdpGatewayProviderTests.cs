@@ -36,6 +36,7 @@ public class PublicUdpGatewayProviderTests
         Assert.False(result.Success);
         Assert.Contains("not enabled", result.Message);
         Assert.Contains("32001", string.Join('\n', result.Commands));
+        Assert.Contains("dnat ip to 10.250.0.10:42001", string.Join('\n', result.Commands));
         Assert.False(mapping.IsSynced);
         Assert.NotNull(mapping.LastSyncError);
     }

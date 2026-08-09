@@ -64,6 +64,16 @@ public sealed class ApiOperationService(IApiOperationStore store)
             deploymentQueueTicketId,
             cancellationToken);
 
+    public Task<bool> DeferAsync(
+        Guid id,
+        string leaseOwner,
+        string stage,
+        string reasonCode,
+        string reasonDetail,
+        TimeSpan delay,
+        CancellationToken cancellationToken) =>
+        store.DeferAsync(id, leaseOwner, stage, reasonCode, reasonDetail, delay, cancellationToken);
+
     public Task<bool> RetryOrFailAsync(
         Guid id,
         string leaseOwner,

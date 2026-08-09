@@ -13,6 +13,12 @@
   <Project Path="GZCTF.Agent/GZCTF.Agent.csproj">
     <BuildType Solution="GenAPI|*" Project="Debug" />
   </Project>
+  <Project Path="GZCTF.GuestControl.Contracts/GZCTF.GuestControl.Contracts.csproj" />
+  <Project Path="GZCTF.GuestTelemetry/GZCTF.GuestTelemetry.csproj" />
+  <Project Path="GZCTF.GuestSupervisor/GZCTF.GuestSupervisor.csproj" />
+  <Project Path="GZCTF.EndpointSensor/GZCTF.EndpointSensor.csproj">
+    <BuildType Solution="GenAPI|*" Project="Debug" />
+  </Project>
   <Project Path="GZCTF.AppHost/GZCTF.AppHost.csproj">
     <BuildType Solution="GenAPI|*" Project="Debug" />
   </Project>

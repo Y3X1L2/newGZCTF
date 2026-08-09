@@ -36,12 +36,15 @@ public class ImageTemplateController : ControllerBase
     private readonly ImageTemplateDeletionService _deletionService;
     private readonly ImageImportApplicationService _imageImports;
     private readonly ImageDistributionService _imageDistribution;
+    private readonly ImageTemplateCertificationService _certifications;
+    private readonly ImageRemoteAccessService _remoteAccess;
     private readonly ILogger<ImageTemplateController> _logger;
 
     public ImageTemplateController(AppDbContext context, ImageStorage storage, IArchiveExtractor archiveExtractor,
         DockerImageRegistryService dockerRegistry,
         UserManager<UserInfo> userManager, ImageTemplateDeletionService deletionService,
         ImageImportApplicationService imageImports, ImageDistributionService imageDistribution,
+        ImageTemplateCertificationService certifications, ImageRemoteAccessService remoteAccess,
         ILogger<ImageTemplateController> logger)
     {
         _context = context;
@@ -52,6 +55,8 @@ public class ImageTemplateController : ControllerBase
         _deletionService = deletionService;
         _imageImports = imageImports;
         _imageDistribution = imageDistribution;
+        _certifications = certifications;
+        _remoteAccess = remoteAccess;
         _logger = logger;
     }
 
@@ -159,6 +164,8 @@ public class ImageTemplateController : ControllerBase
         if (template is null)
             return NotFound();
 
+        var certifications = await _certifications.ListAsync(template.Id, HttpContext.RequestAborted);
+
         return Ok(new
         {
             template.Id, template.Name, template.OSType, template.ImageType,
@@ -166,7 +173,34 @@ public class ImageTemplateController : ControllerBase
             template.ErrorMessage, template.ContainsMalware, template.ImageHash, template.UploadedAt,
             template.RegistryUrl, template.SupportsInstanceCredentials,
             CanManage = CanManageTemplate(actor, template),
+            CapabilityCertifications = certifications
         });
+    }
+
+    [HttpGet("{id:int}/remote-access")]
+    [RequireTeacher]
+    public async Task<IActionResult> GetRemoteAccess(int id, CancellationToken cancellationToken)
+    {
+        var actor = await CurrentUser();
+        var template = await _context.ImageTemplates.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+        if (template is null) return NotFound();
+        if (!CanManageTemplate(actor, template)) return Forbid();
+        return Ok(await _remoteAccess.GetAsync(id, cancellationToken));
+    }
+
+    [HttpPatch("{id:int}/remote-access")]
+    [RequireTeacher]
+    public async Task<IActionResult> UpdateRemoteAccess(
+        int id,
+        [FromBody] UpdateImageRemoteAccessModel model,
+        CancellationToken cancellationToken)
+    {
+        var actor = await CurrentUser();
+        var template = await _context.ImageTemplates.SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+        if (template is null) return NotFound();
+        if (!CanManageTemplate(actor, template)) return Forbid();
+        try { return Ok(await _remoteAccess.UpdateAsync(template, model, cancellationToken)); }
+        catch (InvalidOperationException exception) { return BadRequest(new { message = exception.Message }); }
     }
 
     /// <summary>

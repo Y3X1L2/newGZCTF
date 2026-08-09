@@ -24,7 +24,7 @@ public sealed class ImageImportOperationHandler(
     {
         var stagedPath = await context.ImageImportJobs.AsNoTracking()
             .Where(job => job.OperationId == operationId &&
-                          job.SourceKind == ImageImportSourceKind.DockerArchive)
+                          job.SourceKind != ImageImportSourceKind.DockerReference)
             .Select(job => job.StagedPath)
             .SingleOrDefaultAsync(cancellationToken);
         await staging.DeleteAsync(stagedPath, cancellationToken);
@@ -67,12 +67,12 @@ public sealed class ImageImportOperationHandler(
         }
         catch (ApiOperationTerminalException)
         {
-            if (job.SourceKind == ImageImportSourceKind.DockerArchive)
+            if (job.SourceKind != ImageImportSourceKind.DockerReference)
                 await staging.DeleteAsync(job.StagedPath, CancellationToken.None);
             throw;
         }
 
-        if (job.SourceKind == ImageImportSourceKind.DockerArchive)
+        if (job.SourceKind != ImageImportSourceKind.DockerReference)
             await staging.DeleteAsync(job.StagedPath, CancellationToken.None);
 
         await RequireLeaseAsync(
@@ -85,16 +85,10 @@ public sealed class ImageImportOperationHandler(
             template.Id);
         var distributionRecords = await distribution.DistributeToCapableNodesAsync(
             template, cancellationToken);
-        var failedDistribution = distributionRecords.FirstOrDefault(
-            record => record.Status == ImageDistributionStatus.Failed);
-        if (failedDistribution is not null)
-            throw new InvalidOperationException(
-                failedDistribution.ErrorMessage ??
-                $"Image template {template.Name} could not be distributed to all capable nodes.");
         await RequireLeaseAsync(
             operationId,
             leaseOwner,
-            "image-distributed",
+            "image-distribution-queued",
             3,
             3,
             cancellationToken,

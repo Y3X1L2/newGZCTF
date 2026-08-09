@@ -31,7 +31,6 @@ public class LocalNodeRegistrar : IHostedService
         {
             ApplyLocalNodeRefresh(localNode, hostAddress, capabilities, localSchedulable, DateTimeOffset.UtcNow);
             await context.SaveChangesAsync(token);
-            await ConfigureRegistryTrustAsync(scope.ServiceProvider, capabilities, token);
             _logger.LogInformation("Refreshed local server node: {Id}, capabilities={Capabilities}",
                 localNode.Id, capabilities);
             return;
@@ -52,7 +51,6 @@ public class LocalNodeRegistrar : IHostedService
 
         context.WorkerNodes.Add(node);
         await context.SaveChangesAsync(token);
-        await ConfigureRegistryTrustAsync(scope.ServiceProvider, capabilities, token);
         _logger.LogInformation("Registered local server node: {Id}, capabilities={Capabilities}",
             node.Id, capabilities);
     }
@@ -127,24 +125,6 @@ public class LocalNodeRegistrar : IHostedService
         catch
         {
             return false;
-        }
-    }
-
-    private async Task ConfigureRegistryTrustAsync(IServiceProvider services, NodeCapability capabilities,
-        CancellationToken token)
-    {
-        if ((capabilities & NodeCapability.Docker) != NodeCapability.Docker)
-            return;
-
-        try
-        {
-            var registry = services.GetRequiredService<DockerImageRegistryService>();
-            await registry.ConfigureManagedRegistryTrustAsync(token);
-            await registry.RepairLegacyLocalRegistryImageReferencesAsync(token);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogWarning(ex, "Failed to configure the local Docker registry trust.");
         }
     }
 

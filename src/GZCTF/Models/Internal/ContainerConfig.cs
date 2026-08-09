@@ -2,6 +2,7 @@ namespace GZCTF.Models.Internal;
 
 public class ContainerConfig
 {
+    public int RuntimeId { get; set; }
     public int Generation { get; set; } = 1;
     /// <summary>
     /// Container image
@@ -161,6 +162,15 @@ public class ContainerConfig
     /// Explicit network attachments. When present, these supersede NetworkName/IPAddress/AdditionalNetworkNames.
     /// </summary>
     public List<ContainerNetworkAttachment> NetworkAttachments { get; set; } = [];
+
+    public List<ContainerBindMount> BindMounts { get; set; } = [];
+}
+
+public class ContainerBindMount
+{
+    public string Source { get; set; } = string.Empty;
+    public string Destination { get; set; } = string.Empty;
+    public bool ReadOnly { get; set; } = true;
 }
 
 public class ContainerNetworkAttachment

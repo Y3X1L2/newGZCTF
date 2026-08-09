@@ -671,6 +671,7 @@ public class NodesControllerTests
             TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
             TeamLabFabricStatus = TeamLabFabricStatus.Healthy,
             TeamLabTunnelIp = "10.250.0.31",
+            TeamLabFabricIp = "10.250.0.31",
             CapabilityManifestJson = AgentCapabilityEvaluator.Normalize(CreateManifest(includeKvm: false)).Json,
             MaxContainers = 5,
             MaxVms = 0
@@ -714,6 +715,10 @@ public class NodesControllerTests
         var agentDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "agent");
         Directory.CreateDirectory(agentDir);
         await File.WriteAllBytesAsync(Path.Combine(agentDir, "gzctf-agent"), [1, 2, 3, 4]);
+        var supervisorDir = Path.Combine(agentDir, "guest-supervisor", "win-x64");
+        Directory.CreateDirectory(supervisorDir);
+        await File.WriteAllBytesAsync(
+            Path.Combine(supervisorDir, "gzctf-guest-supervisor.exe"), [5, 6, 7, 8]);
         var nodeId = Guid.Parse("ffffffff-aaaa-bbbb-cccc-dddddddddddd");
         context.WorkerNodes.Add(new WorkerNode
         {
@@ -750,6 +755,7 @@ public class NodesControllerTests
         Assert.Equal("http://10.24.0.27/api/agent/download", agent.Request?.DownloadUrl);
         Assert.True(agent.Request?.Restart);
         Assert.False(string.IsNullOrWhiteSpace(agent.Request?.ExpectedSha256));
+        Assert.False(agent.Request?.VmControlPlane?.Enabled);
     }
 
     static AgentCapabilityManifest CreateManifest(bool includeKvm)
@@ -758,7 +764,9 @@ public class NodesControllerTests
         {
             AgentFeatureIds.Docker,
             AgentFeatureIds.DockerPull,
-            AgentFeatureIds.TeamLabFabric,
+            AgentFeatureIds.TeamLabInfrastructure,
+            AgentFeatureIds.TeamLabFabricLeasedLinks,
+            AgentFeatureIds.TeamLabObservation,
             AgentFeatureIds.WireGuard,
             AgentFeatureIds.Pcap
         };
@@ -769,7 +777,7 @@ public class NodesControllerTests
         }
         return new AgentCapabilityManifest("1.8.3-test", "abc", 1, features.ToArray(),
             new AgentExecutionLimits(2, includeKvm ? 1 : 0, 2, includeKvm ? 1 : 0, 4, 2),
-            new AgentHostFacts(8, 16L * 1024 * 1024 * 1024, includeKvm, includeKvm),
+            new AgentHostFacts(8, 16L * 1024 * 1024 * 1024, 0, includeKvm, includeKvm),
             DateTimeOffset.UtcNow);
     }
 

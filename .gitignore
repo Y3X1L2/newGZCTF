@@ -15,12 +15,16 @@
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
+!src/GZCTF/ClientApp/src/vnext/features/admin/teamlab/releases/
+!src/GZCTF/ClientApp/src/vnext/features/admin/teamlab/releases/**
 x64/
 x86/
 build/
 bld/
 bin/
 Bin/
+!scenarios/bootstrap-profiles/**/bin/
+!scenarios/bootstrap-profiles/**/bin/**
 obj/
 Obj/
 
@@ -254,6 +258,8 @@ _Pvt_Extensions
 **/*.xml
 **/log/**
 **/files/**
+!scenarios/bootstrap-profiles/**/files/
+!scenarios/bootstrap-profiles/**/files/**
 **/uploads/**
 docker-data/
 **/.DS_Store
@@ -265,6 +271,8 @@ docker-data/
 .codex/
 .codex-run/
 .codegraph/
+__pycache__/
+*.pyc
 artifacts/
 design-system/
 design-lab/

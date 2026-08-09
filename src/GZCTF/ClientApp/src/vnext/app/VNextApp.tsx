@@ -148,6 +148,27 @@ const AdminExercisesPage = lazy(() =>
 const AdminTheoryBankPage = lazy(() =>
   import('../features/admin/theory/AdminTheoryBankPage').then((module) => ({ default: module.AdminTheoryBankPage }))
 )
+const TeamLabWorkspacePage = lazy(() =>
+  import('../features/games/teamlab/TeamLabWorkspacePage').then((module) => ({ default: module.TeamLabWorkspacePage }))
+)
+const TeamLabLibraryPage = lazy(() =>
+  import('../features/admin/teamlab/library/TeamLabLibraryPage').then((module) => ({ default: module.TeamLabLibraryPage }))
+)
+const TeamLabSceneShell = lazy(() =>
+  import('../features/admin/teamlab/shared/TeamLabSceneShell').then((module) => ({ default: module.TeamLabSceneShell }))
+)
+const TeamLabDesignRoute = lazy(() =>
+  import('../features/admin/teamlab/editor/TeamLabDesignRoute').then((module) => ({ default: module.TeamLabDesignRoute }))
+)
+const TeamLabRuntimesPage = lazy(() =>
+  import('../features/admin/teamlab/runtimes/TeamLabRuntimesPage').then((module) => ({ default: module.TeamLabRuntimesPage }))
+)
+const TeamLabRuntimeDetailPage = lazy(() =>
+  import('../features/admin/teamlab/runtimes/TeamLabRuntimeDetailPage').then((module) => ({ default: module.TeamLabRuntimeDetailPage }))
+)
+const TeamLabReleasesPage = lazy(() =>
+  import('../features/admin/teamlab/releases/TeamLabReleasesPage').then((module) => ({ default: module.TeamLabReleasesPage }))
+)
 const GameAdminShell = lazy(() =>
   import('../features/admin/games/GameAdminShell').then((module) => ({ default: module.GameAdminShell }))
 )
@@ -195,6 +216,11 @@ const AdminGameNoticesPage = lazy(() =>
     default: module.AdminGameNoticesPage,
   }))
 )
+const AdminGameTeamLabPage = lazy(() =>
+  import('../features/admin/games/teamlab/AdminGameTeamLabPage').then((module) => ({
+    default: module.AdminGameTeamLabPage,
+  }))
+)
 
 export function VNextApp() {
   return (
@@ -220,6 +246,7 @@ export function VNextApp() {
               <Route path="theory" element={<GameTheoryPage />} />
               <Route path="theory-scoreboard" element={<TheoryScoreboardPage />} />
               <Route path="awdp" element={<AwdpWorkspacePage />} />
+              <Route path="pentest" element={<TeamLabWorkspacePage />} />
             </Route>
           </Route>
           <Route path="posts" element={<PostsPage />} />
@@ -256,6 +283,14 @@ export function VNextApp() {
             <Route path="games" element={<AdminGamesPage />} />
             <Route path="exercises" element={<AdminExercisesPage />} />
             <Route path="theory-bank" element={<AdminTheoryBankPage />} />
+            <Route path="teamlab" element={<TeamLabLibraryPage />} />
+            <Route path="teamlab/:topologyId" element={<TeamLabSceneShell />}>
+              <Route index element={<Navigate replace to="design" />} />
+              <Route path="design" element={<TeamLabDesignRoute />} />
+              <Route path="releases" element={<TeamLabReleasesPage />} />
+              <Route path="runtimes" element={<TeamLabRuntimesPage />} />
+              <Route path="runtimes/:runtimeId" element={<TeamLabRuntimeDetailPage />} />
+            </Route>
             <Route path="games/:gameId" element={<GameAdminShell />}>
               <Route index element={<Navigate replace to="info" />} />
               <Route path="info" element={<AdminGameInfoPage />} />
@@ -268,6 +303,7 @@ export function VNextApp() {
               <Route path="theory-paper" element={<AdminTheoryPaperPage />} />
               <Route path="theory-results" element={<AdminTheoryResultsPage />} />
               <Route path="awdp-services" element={<AdminAwdpPage />} />
+              <Route path="teamlab" element={<AdminGameTeamLabPage />} />
             </Route>
             <Route path="images" element={<AdminImagesPage />} />
             <Route path="nodes" element={<AdminNodesPage />} />

@@ -1,7 +1,7 @@
+using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
-using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
@@ -39,7 +39,7 @@ public class GameInstanceRepository(
         var instance = await Context.GameInstances
             .Include(i => i.FlagContext)
             .Include(i => i.Container)
-            .Include(i => i.Challenge).ThenInclude(c => c.Flags)
+            .Include(i => i.Challenge)
             .Where(e => e.ChallengeId == challengeId && e.Participation == part)
             .SingleOrDefaultAsync(token);
 
@@ -54,6 +54,8 @@ public class GameInstanceRepository(
         }
 
         var challenge = instance.Challenge;
+        if (!challenge.Type.IsDynamic())
+            await Context.Entry(challenge).Collection(c => c.Flags).LoadAsync(token);
 
         if (!challenge.IsEnabled)
         {
@@ -73,16 +75,12 @@ public class GameInstanceRepository(
             {
                 // dynamic flag dispatch
                 case ChallengeType.DynamicContainer:
-                    instance.FlagContext = new()
-                    {
-                        Challenge = challenge,
-                        Flag = challenge.GenerateDynamicFlag(part),
-                        IsOccupied = true
-                    };
+                    instance.FlagContext = FlagContext.CreateInstanceFlag(
+                        challenge.GenerateDynamicFlag(part));
                     break;
                 case ChallengeType.DynamicAttachment:
                     var flags = await Context.FlagContexts
-                        .Where(e => e.Challenge == challenge && !e.IsOccupied)
+                        .Where(e => e.ChallengeId == challenge.Id && !e.IsOccupied)
                         .ToListAsync(token);
 
                     if (flags.Count == 0)

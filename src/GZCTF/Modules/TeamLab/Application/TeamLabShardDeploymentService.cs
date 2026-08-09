@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using GZCTF.Models;
 using GZCTF.Models.Data;
@@ -5,8 +7,8 @@ using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.Modules.TeamLab.Domain.Runtime;
 using GZCTF.Services;
-using GZCTF.Services.Fleet;
 using GZCTF.Modules.Runtime.Domain;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,14 +16,16 @@ namespace GZCTF.Modules.TeamLab.Application;
 
 public sealed class TeamLabShardDeploymentService(
     AppDbContext context,
+    IServiceScopeFactory scopeFactory,
     ITeamLabNodeExecutor executor,
     TeamLabRouteApplicationService routes,
-    IServiceScopeFactory scopeFactory,
-    TeamLabEventRecorder eventRecorder)
+    TeamLabEventRecorder eventRecorder,
+    ITeamLabDeploymentProgress stageMachine,
+    TeamLabBootstrapOrchestrator bootstrapOrchestrator)
 {
     public async Task DeployAsync(
         TeamLabRuntime runtime,
-        TeamLabTopologyDefinitionModel definition,
+        TeamLabExecutionTopology definition,
         IReadOnlyDictionary<string, TeamLabRuntimeOverlayModel> overlays,
         CancellationToken cancellationToken)
     {
@@ -43,25 +47,27 @@ public sealed class TeamLabShardDeploymentService(
                     runtime.Id,
                     runtime.Shards.Single(shard => shard.Id == item.ShardId).WorkerNodeId,
                     templates[item.TemplateId], cancellationToken));
-        var networkTasks = currentShards.ToDictionary(
-            shard => shard.Id,
-            shard => executor.ApplyShardAsync(
-                shard.WorkerNodeId, BuildShardRequest(runtime, shard), cancellationToken));
-
-        var networkApply = await Task.WhenAll(networkTasks.Values);
-        var networkError = networkApply.FirstOrDefault(item => !item.Success);
-        if (networkError is not null)
+        await stageMachine.SetAsync(
+            TeamLabDeploymentStage.ArtifactsVerifying,
+            "Verifying runtime images and bootstrap artifacts on assigned nodes.",
+            cancellationToken);
+        try
         {
-            try
-            {
-                await Task.WhenAll(imagePreparation.Values);
-            }
-            catch (Exception)
-            {
-                // The network failure remains the primary dependency failure.
-            }
-            throw new TeamLabRuntimeExecutionException(networkError.Message);
+            await stageMachine.SetAsync(
+                TeamLabDeploymentStage.NetworkApplying,
+                "Applying managed TeamLab network desired state.",
+                cancellationToken);
+            await routes.ApplyAsync(runtime, definition, cancellationToken);
         }
+        catch
+        {
+            await ObserveImagePreparationAsync(imagePreparation.Values);
+            throw;
+        }
+        await stageMachine.SetAsync(
+            TeamLabDeploymentStage.RoutesApplying,
+            "Managed routes and directional policies are ready.",
+            cancellationToken);
         eventRecorder.Record(
             runtime,
             "network",
@@ -78,7 +84,6 @@ public sealed class TeamLabShardDeploymentService(
             });
         await context.SaveChangesAsync(cancellationToken);
 
-        await routes.ApplyAsync(runtime, definition, cancellationToken);
         eventRecorder.Record(
             runtime,
             "route",
@@ -94,89 +99,87 @@ public sealed class TeamLabShardDeploymentService(
                 ["shardCount"] = currentShards.Length
             });
         await context.SaveChangesAsync(cancellationToken);
+        MarkDependenciesSatisfied(runtime, null, TeamLabDependencyCondition.NetworkReady);
+        await context.SaveChangesAsync(cancellationToken);
+
+        foreach (var asset in runtimeAssets.Where(item => item.AgentOperationId is null))
+            asset.AgentOperationId = Guid.CreateVersion7();
+        await context.SaveChangesAsync(cancellationToken);
+
         var topologyAssets = definition.Assets.ToDictionary(item => item.Key, StringComparer.Ordinal);
         var allowedRoutes = BuildAllowedRoutes(runtime, definition);
-        foreach (var orderGroup in definition.Assets.GroupBy(item => item.OrderIndex).OrderBy(item => item.Key))
-        {
-            var groupAssets = runtimeAssets.Where(item =>
-                    orderGroup.Any(source => source.Key == item.TopologyKey))
-                .OrderBy(item => item.TopologyKey, StringComparer.Ordinal).ToArray();
-            var results = await Task.WhenAll(groupAssets.Select(async asset =>
-            {
-                if (asset.SourceTemplateId is { } templateId)
-                    await imagePreparation[(asset.ShardId, templateId)];
-                return await CreateAssetAsync(
-                    runtime, asset, topologyAssets[asset.TopologyKey], overlays.GetValueOrDefault(asset.TopologyKey),
-                    allowedRoutes, imageReady: true, cancellationToken);
-            }));
-            foreach (var result in results)
-            {
-                result.Asset.Status = result.Result.Success ? TeamLabRuntimeStatus.Running : TeamLabRuntimeStatus.Failed;
-                result.Asset.RuntimeResourceId = result.Result.RuntimeResourceId;
-                result.Asset.LastError = result.Result.Success ? null : Trim(result.Result.Message);
-                var shard = runtime.Shards.Single(item => item.Id == result.Asset.ShardId);
-                eventRecorder.Record(
+        var work = runtimeAssets.ToDictionary(
+            item => item.TopologyKey,
+            item => new AssetWork(
+                item,
+                BuildAssetRequest(
                     runtime,
-                    "asset",
-                    result.Result.Success ? TeamLabEventLevel.Success : TeamLabEventLevel.Error,
-                    result.Result.Success
-                        ? OperationalEventCodes.TeamLab.AssetCreated
-                        : OperationalEventCodes.TeamLab.AssetCreateFailed,
-                    result.Result.Success
-                        ? OperationalEventOutcome.Succeeded
-                        : OperationalEventOutcome.Failed,
-                    result.Result.Success
-                        ? "Runtime asset was created."
-                        : "Runtime asset creation failed.",
-                    result.Result.Success
-                        ? null
-                        : new OperationalError(
-                            result.Asset.Kind == TeamLabResourceKind.Vm
-                                ? OperationalErrorCategory.Kvm
-                                : OperationalErrorCategory.Docker,
-                            result.Asset.Kind == TeamLabResourceKind.Vm
-                                ? OperationalErrorCodes.KvmOperationFailed
-                                : OperationalErrorCodes.DockerOperationFailed,
-                            "TeamLab asset creation failed.",
-                            true,
-                            WorkerNodeId: shard.WorkerNodeId,
-                            Operation: "teamlab.asset.create"),
-                    shard.WorkerNodeId,
-                    new Dictionary<string, object?>
-                    {
-                        ["generation"] = runtime.Generation,
-                        ["stage"] = "asset",
-                        ["assetCount"] = 1,
-                        ["imageType"] = result.Asset.Kind.ToString()
-                    });
+                    item,
+                    topologyAssets[item.TopologyKey],
+                    templates[item.SourceTemplateId!.Value],
+                    overlays.GetValueOrDefault(item.TopologyKey),
+                    allowedRoutes,
+                    imageReady: true)),
+            StringComparer.Ordinal);
+        var graph = TeamLabDependencyGraph.Compile(definition);
+        var completed = TeamLabDependencyGraph.RestoreCompletedNodes(runtimeAssets);
+        var scheduled = new HashSet<string>(StringComparer.Ordinal);
+        while (completed.Count < graph.Count)
+        {
+            if (!graph.TryTakeReadyBatch(completed, scheduled, out var batch))
+                throw new TeamLabRuntimeExecutionException(
+                    $"TeamLab dependency execution stalled: {string.Join("; ", graph.DescribeBlocked(completed, scheduled))}");
+            foreach (var node in batch) scheduled.Add(node.Key);
+            await SetBatchStageAsync(batch, cancellationToken);
+            var tasks = batch.Select(async node =>
+            {
+                var item = work[node.AssetKey];
+                var request = item.Request with
+                {
+                    DependencyReadyToken = BuildDependencyReadyToken(runtime, node.AssetKey)
+                };
+                return await ExecuteNodeAsync(
+                    runtime,
+                    node,
+                    item.Asset,
+                    request,
+                    imagePreparation,
+                    cancellationToken);
+            }).ToArray();
+            var results = await Task.WhenAll(tasks);
+            var orderedResults = results.OrderBy(item => item.Node.Key, StringComparer.Ordinal).ToArray();
+            foreach (var result in orderedResults)
+            {
+                if (result.Success)
+                {
+                    ApplyNodeSuccess(runtime, result);
+                    completed.Add(result.Node.Key);
+                    scheduled.Remove(result.Node.Key);
+                    RecordAssetEvent(runtime, result, success: true);
+                    continue;
+                }
+
+                result.Asset.ExecutionStage = TeamLabAssetExecutionStage.Failed;
+                result.Asset.Status = TeamLabRuntimeStatus.Failed;
+                result.Asset.LastError = Trim(result.Message);
+                result.Asset.ExecutionUpdatedAt = DateTimeOffset.UtcNow;
+                MarkDependenciesFailed(runtime, result.Asset.TopologyKey, result.Message);
+                if (result.Node.Kind == TeamLabDeploymentNodeKind.Bootstrap)
+                    bootstrapOrchestrator.RecordFailure(runtime, result.Asset, result.Request, result.Message);
+                RecordAssetEvent(runtime, result, success: false);
             }
             await context.SaveChangesAsync(cancellationToken);
-            var assetFailure = results.FirstOrDefault(item => !item.Result.Success);
-            if (assetFailure is not null)
-                throw new TeamLabRuntimeExecutionException(assetFailure.Result.Message);
+            var failures = orderedResults.Where(item => !item.Success).ToArray();
+            if (failures.Length > 0)
+                throw new TeamLabRuntimeExecutionException(string.Join("; ", failures.Select(item =>
+                    $"{item.Node.Key}: {item.Message}")));
         }
+
+        await VerifyRuntimeInventoryAsync(runtimeAssets, cancellationToken);
 
         runtime.Status = TeamLabRuntimeStatus.Probing;
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(cancellationToken);
-        var probeFailure = new System.Collections.Concurrent.ConcurrentQueue<string>();
-        await Parallel.ForEachAsync(runtimeAssets.Where(item =>
-                item.Kind is (TeamLabResourceKind.Docker or TeamLabResourceKind.Vm) &&
-                !(item.Kind == TeamLabResourceKind.Vm && item.SourceTemplateId is { } templateId &&
-                  templates.GetValueOrDefault(templateId)?.OSType == OSType.Windows)),
-            new ParallelOptions { MaxDegreeOfParallelism = 16, CancellationToken = cancellationToken },
-            async (asset, probeToken) =>
-            {
-                var shard = runtime.Shards.Single(item => item.Id == asset.ShardId);
-                var probe = await executor.ProbeAsync(shard.WorkerNodeId,
-                    new TeamLabNodeProbeRequest(runtime.Id,
-                        TeamLabRouteApplicationService.RouterName(runtime.Id, shard.Id), asset.IpAddress!),
-                    probeToken);
-                if (!probe.Success)
-                    probeFailure.Enqueue(probe.Message);
-            });
-        if (probeFailure.TryPeek(out var failure))
-            throw new TeamLabRuntimeExecutionException(failure);
         eventRecorder.Record(
             runtime,
             "probe",
@@ -187,6 +190,46 @@ public sealed class TeamLabShardDeploymentService(
         await context.SaveChangesAsync(cancellationToken);
     }
 
+    private async Task VerifyRuntimeInventoryAsync(
+        IReadOnlyCollection<TeamLabRuntimeAsset> assets,
+        CancellationToken cancellationToken)
+    {
+        var nodeAssets = assets
+            .Where(item => item.WorkerNodeId.HasValue && !string.IsNullOrWhiteSpace(item.RuntimeResourceId))
+            .GroupBy(item => item.WorkerNodeId!.Value)
+            .ToArray();
+        var snapshots = await Task.WhenAll(nodeAssets.Select(async group =>
+            (Assets: group.ToArray(), Inventory: await executor.GetRuntimeInventoryAsync(group.Key, cancellationToken))));
+        var failures = new List<string>();
+
+        foreach (var snapshot in snapshots)
+        foreach (var asset in snapshot.Assets)
+        {
+            var actual = asset.Kind == TeamLabResourceKind.Docker
+                ? snapshot.Inventory.Containers.FirstOrDefault(item =>
+                    item.NativeId.Equals(asset.RuntimeResourceId, StringComparison.Ordinal))
+                : snapshot.Inventory.Vms.FirstOrDefault(item =>
+                    item.StableName.Equals(asset.RuntimeResourceId, StringComparison.Ordinal));
+            if (actual is null)
+            {
+                failures.Add($"{asset.TopologyKey}: runtime resource is missing from node inventory");
+                continue;
+            }
+            if (actual.Generation != asset.Generation)
+            {
+                failures.Add(
+                    $"{asset.TopologyKey}: generation {actual.Generation} does not match {asset.Generation}");
+                continue;
+            }
+            if (!actual.State.Equals("running", StringComparison.OrdinalIgnoreCase))
+                failures.Add($"{asset.TopologyKey}: runtime resource state is {actual.State}");
+        }
+
+        if (failures.Count > 0)
+            throw new TeamLabRuntimeExecutionException(
+                $"Runtime inventory validation failed: {string.Join("; ", failures)}");
+    }
+
     async Task PrepareImageAsync(
         int runtimeId,
         Guid workerNodeId,
@@ -194,78 +237,314 @@ public sealed class TeamLabShardDeploymentService(
         CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
-        var distribution = scope.ServiceProvider.GetRequiredService<ImageDistributionService>();
-        if (template.ImageType == ImageType.Docker)
-        {
-            var image = DockerImageReference.ResolvePullTarget(template.Name, template.RegistryUrl).FullImage;
-            await distribution.EnsureDockerImageOnNodeAsync(
-                image, workerNodeId, ImageDistributionReferenceKey.TeamLabRuntime(runtimeId), cancellationToken);
-            return;
-        }
-
-        var result = await distribution.EnsureVmTemplateOnNodeAsync(
-            template.Id, workerNodeId, ImageDistributionReferenceKey.TeamLabRuntime(runtimeId), cancellationToken);
-        if (!result.Success)
-            throw new TeamLabRuntimeExecutionException(result.Message);
+        var scopedArtifacts = scope.ServiceProvider.GetRequiredService<ITeamLabArtifactDistribution>();
+        await scopedArtifacts.EnsureImageAsync(runtimeId, workerNodeId, template, cancellationToken);
     }
 
-    private TeamLabNodeShardApplyRequest BuildShardRequest(TeamLabRuntime runtime, TeamLabRuntimeShard shard)
-    {
-        var networks = runtime.Networks.Where(item => item.Generation == runtime.Generation && item.ShardId == shard.Id)
-            .OrderBy(item => item.TopologyKey, StringComparer.Ordinal).ToArray();
-        var records = networks.ToDictionary(
-            network => network.TopologyKey,
-            network => (IReadOnlyList<TeamLabNodeDnsRecord>)runtime.Assets
-                .Where(asset => asset.Generation == runtime.Generation && asset.ShardId == shard.Id)
-                .SelectMany(asset => ParseInterfaces(asset).Where(iface => iface.NetworkKey == network.TopologyKey)
-                    .Select(iface => new TeamLabNodeDnsRecord(asset.TopologyKey, iface.IpAddress, iface.MacAddress)))
-                .ToArray(),
-            StringComparer.Ordinal);
-        return new TeamLabNodeShardApplyRequest(
-            runtime.Id,
-            runtime.Generation,
-            TeamLabRouteApplicationService.RouterName(runtime.Id, shard.Id),
-            networks.Select(item => new TeamLabNodeNetworkIntent(
-                item.TopologyKey, item.Name, item.Cidr, item.GatewayIp, item.BridgeName)).ToArray(),
-            records);
-    }
-
-    private async Task<AssetCreation> CreateAssetAsync(
+    private static TeamLabNodeAssetCreateRequest BuildAssetRequest(
         TeamLabRuntime runtime,
         TeamLabRuntimeAsset asset,
-        TeamLabTopologyAssetModel topologyAsset,
+        TeamLabExecutionAsset topologyAsset,
+        ImageTemplate template,
         TeamLabRuntimeOverlayModel? overlay,
         IReadOnlyDictionary<string, IReadOnlyList<string>> allowedRoutes,
-        bool imageReady,
-        CancellationToken cancellationToken)
+        bool imageReady)
     {
         var shard = runtime.Shards.Single(item => item.Id == asset.ShardId);
-        var interfaces = ParseInterfaces(asset).Select(iface =>
+        var parsedInterfaces = ParseInterfaces(asset).ToArray();
+        var primaryInterface = parsedInterfaces.SingleOrDefault(iface => iface.Primary) ?? parsedInterfaces.FirstOrDefault();
+        var interfaces = parsedInterfaces.Select(iface =>
         {
             var network = runtime.Networks.Single(item => item.Generation == runtime.Generation && item.TopologyKey == iface.NetworkKey);
+            IReadOnlyList<string> dnsServers = iface.Key == primaryInterface?.Key
+                ? [network.GatewayIp]
+                : [];
             return new TeamLabNodeInterfaceIntent(
                 iface.Key, iface.NetworkKey, network.BridgeName, iface.IpAddress, iface.PrefixLength,
                 iface.MacAddress, iface.Primary,
                 allowedRoutes.GetValueOrDefault(iface.NetworkKey) ?? [],
-                runtime.Networks.Where(item => item.Generation == runtime.Generation).Select(item => item.GatewayIp).ToArray());
+                dnsServers);
         }).ToArray();
-        var environment = (topologyAsset.Environment ?? new Dictionary<string, string>())
+        var environment = topologyAsset.Environment
             .Concat(overlay?.Environment ?? new Dictionary<string, string>())
             .GroupBy(item => item.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Last().Value, StringComparer.Ordinal);
         var secrets = overlay?.Secrets ?? new Dictionary<string, string>();
-        var result = await executor.CreateAssetAsync(shard.WorkerNodeId,
-            new TeamLabNodeAssetCreateRequest(
-                runtime.Id, runtime.Generation, asset.TopologyKey, asset.Name, topologyAsset.Kind,
-                topologyAsset.ImageTemplateId, topologyAsset.Resources.CpuUnits, topologyAsset.Resources.MemoryMiB,
-                topologyAsset.Resources.StorageMiB, topologyAsset.ExposePort, topologyAsset.RoutingEnabled, imageReady,
-                environment, secrets, interfaces), cancellationToken);
-        return new AssetCreation(asset, result);
+        var scenarioArtifact = topologyAsset.BakeAtPublish && !runtime.IsScenarioBuild;
+        return new TeamLabNodeAssetCreateRequest(
+                runtime.Id, asset.Id, runtime.PublicId, runtime.Generation, asset.TopologyKey, asset.Name, topologyAsset.Kind,
+                asset.SourceTemplateId ?? topologyAsset.ImageTemplateId, topologyAsset.CpuUnits, topologyAsset.MemoryMiB,
+                topologyAsset.StorageMiB, topologyAsset.ExposePort, topologyAsset.RoutingEnabled, imageReady,
+                environment, secrets, interfaces,
+                topologyAsset.Bootstrap is null || scenarioArtifact
+                    ? null
+                    : new TeamLabNodeBootstrapIntent(
+                        topologyAsset.Bootstrap.ProfileId,
+                        topologyAsset.Bootstrap.Version,
+                        topologyAsset.Bootstrap.Parameters),
+                topologyAsset.HealthCheckKind is { } healthKind
+                    ? new TeamLabNodeHealthIntent(healthKind, topologyAsset.HealthCheckPort)
+                    : null,
+                null,
+                topologyAsset.EndpointObservation,
+                TeamLabResourceNameFactory.RouterNamespace(runtime.Id, shard.Id),
+                topologyAsset.StartCommand,
+                asset.AgentOperationId,
+                topologyAsset.Kind == TeamLabAssetKind.Vm ? template.VmRuntimeMode : null,
+                topologyAsset.Kind == TeamLabAssetKind.Vm ? template.VmNetworkMode : null);
+    }
+
+    private async Task<NodeExecution> ExecuteNodeAsync(
+        TeamLabRuntime runtime,
+        TeamLabDeploymentNode node,
+        TeamLabRuntimeAsset asset,
+        TeamLabNodeAssetCreateRequest request,
+        IReadOnlyDictionary<(int? ShardId, int TemplateId), Task> imagePreparation,
+        CancellationToken cancellationToken)
+    {
+        var shard = runtime.Shards.Single(item => item.Id == asset.ShardId);
+        try
+        {
+            switch (node.Kind)
+            {
+                case TeamLabDeploymentNodeKind.Create:
+                    if (asset.SourceTemplateId is { } templateId)
+                        await imagePreparation[(asset.ShardId, templateId)];
+                    var created = await executor.CreateAssetAsync(
+                        shard.WorkerNodeId, request, cancellationToken);
+                    return new NodeExecution(
+                        node, asset, request, created.Success, created.Message,
+                        created.RuntimeResourceId, created.NativeIdentity, TeamLabNodeBootstrapResult.Completed());
+                case TeamLabDeploymentNodeKind.GuestReady:
+                    if (string.IsNullOrWhiteSpace(asset.RuntimeResourceId))
+                        return NodeExecution.Failed(node, asset, request,
+                            "Runtime asset identity is missing before guest readiness.");
+                    var ready = await executor.WaitForAssetReadyAsync(
+                        shard.WorkerNodeId, asset.RuntimeResourceId, request, cancellationToken);
+                    return new NodeExecution(
+                        node, asset, request, ready.Success, ready.Message,
+                        asset.RuntimeResourceId, asset.NativeIdentity, TeamLabNodeBootstrapResult.Completed());
+                case TeamLabDeploymentNodeKind.Bootstrap:
+                    if (string.IsNullOrWhiteSpace(asset.RuntimeResourceId))
+                        return NodeExecution.Failed(node, asset, request,
+                            "Runtime asset identity is missing before bootstrap.");
+                    var bootstrap = await executor.ApplyBootstrapAsync(
+                        shard.WorkerNodeId, asset.RuntimeResourceId, request, cancellationToken);
+                    return new NodeExecution(
+                        node, asset, request, bootstrap.Success, bootstrap.Message,
+                        asset.RuntimeResourceId, asset.NativeIdentity, bootstrap);
+                case TeamLabDeploymentNodeKind.Health:
+                    if (string.IsNullOrWhiteSpace(asset.RuntimeResourceId))
+                        return NodeExecution.Failed(node, asset, request,
+                            "Runtime asset identity is missing before health probing.");
+                    var health = await executor.ProbeAssetHealthAsync(
+                        shard.WorkerNodeId, asset.RuntimeResourceId, request, cancellationToken);
+                    return new NodeExecution(
+                        node, asset, request, health.Success, health.Message,
+                        asset.RuntimeResourceId, asset.NativeIdentity, health);
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(node.Kind));
+            }
+        }
+        catch (Exception exception) when (
+            exception is IOperationalFailureException or HttpRequestException or TaskCanceledException or InvalidOperationException)
+        {
+            return NodeExecution.Failed(node, asset, request, exception.Message);
+        }
+    }
+
+    private void ApplyNodeSuccess(TeamLabRuntime runtime, NodeExecution result)
+    {
+        result.Asset.LastError = null;
+        result.Asset.ExecutionUpdatedAt = DateTimeOffset.UtcNow;
+        switch (result.Node.Kind)
+        {
+            case TeamLabDeploymentNodeKind.Create:
+                result.Asset.RuntimeResourceId = result.RuntimeResourceId;
+                result.Asset.NativeIdentity = result.NativeIdentity;
+                if (result.Asset.Kind == TeamLabResourceKind.Vm)
+                {
+                    result.Asset.ExecutionStage = TeamLabAssetExecutionStage.Pending;
+                    result.Asset.Status = TeamLabRuntimeStatus.Deploying;
+                }
+                else
+                {
+                    result.Asset.ExecutionStage = TeamLabAssetExecutionStage.GuestReady;
+                    result.Asset.Status = TeamLabRuntimeStatus.Probing;
+                    MarkDependenciesSatisfied(
+                        runtime, result.Asset.TopologyKey, TeamLabDependencyCondition.GuestReady);
+                }
+                break;
+            case TeamLabDeploymentNodeKind.GuestReady:
+                result.Asset.ExecutionStage = TeamLabAssetExecutionStage.GuestReady;
+                result.Asset.Status = TeamLabRuntimeStatus.Probing;
+                MarkDependenciesSatisfied(
+                    runtime, result.Asset.TopologyKey, TeamLabDependencyCondition.GuestReady);
+                break;
+            case TeamLabDeploymentNodeKind.Bootstrap:
+                result.Asset.ExecutionStage = TeamLabAssetExecutionStage.BootstrapCompleted;
+                result.Asset.Status = TeamLabRuntimeStatus.Deploying;
+                bootstrapOrchestrator.RecordSuccess(
+                    runtime, result.Asset, result.Request, result.BootstrapResult);
+                MarkDependenciesSatisfied(
+                    runtime, result.Asset.TopologyKey, TeamLabDependencyCondition.BootstrapCompleted);
+                break;
+            case TeamLabDeploymentNodeKind.Health:
+                result.Asset.ExecutionStage = TeamLabAssetExecutionStage.ServiceReady;
+                result.Asset.Status = TeamLabRuntimeStatus.Running;
+                MarkDependenciesSatisfied(
+                    runtime, result.Asset.TopologyKey, TeamLabDependencyCondition.ServiceReady);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(result.Node.Kind));
+        }
+    }
+
+    private async Task SetBatchStageAsync(
+        IReadOnlyList<TeamLabDeploymentNode> batch,
+        CancellationToken cancellationToken)
+    {
+        var kinds = batch.Select(item => item.Kind).Distinct().Order().ToArray();
+        var kind = kinds[0];
+        var (stage, message) = kind switch
+        {
+            TeamLabDeploymentNodeKind.Create =>
+                (TeamLabDeploymentStage.AssetBooting, "Creating independent runtime assets in parallel."),
+            TeamLabDeploymentNodeKind.GuestReady =>
+                (TeamLabDeploymentStage.AssetBooting, "Waiting for VM guest readiness signals."),
+            TeamLabDeploymentNodeKind.Bootstrap =>
+                (TeamLabDeploymentStage.BootstrapInjecting, "Injecting and executing bootstrap profiles."),
+            TeamLabDeploymentNodeKind.Health =>
+                (TeamLabDeploymentStage.HealthProbing, "Running service and network health probes."),
+            _ => throw new ArgumentOutOfRangeException()
+        };
+        if (kinds.Length > 1)
+            message = $"Executing {batch.Count} ready DAG nodes across {string.Join(", ", kinds.Select(item => item.ToString().ToLowerInvariant()))} stages.";
+        await stageMachine.SetAsync(stage, message, cancellationToken);
+    }
+
+    private static void MarkDependenciesSatisfied(
+        TeamLabRuntime runtime,
+        string? dependsOnKey,
+        TeamLabDependencyCondition condition)
+    {
+        foreach (var state in runtime.DependencyStates.Where(item =>
+                     item.Generation == runtime.Generation && item.Condition == condition &&
+                     (condition == TeamLabDependencyCondition.NetworkReady || item.DependsOnKey == dependsOnKey)))
+        {
+            state.Status = TeamLabDependencyStateStatus.Satisfied;
+            state.SatisfiedAt = DateTimeOffset.UtcNow;
+            state.LastError = null;
+        }
+    }
+
+    private static void MarkDependenciesFailed(
+        TeamLabRuntime runtime,
+        string dependsOnKey,
+        string message)
+    {
+        foreach (var state in runtime.DependencyStates.Where(item =>
+                     item.Generation == runtime.Generation && item.DependsOnKey == dependsOnKey &&
+                     item.Status == TeamLabDependencyStateStatus.Pending))
+        {
+            state.Status = TeamLabDependencyStateStatus.Failed;
+            state.LastError = Trim(message);
+        }
+    }
+
+    private static string? BuildDependencyReadyToken(TeamLabRuntime runtime, string assetKey)
+    {
+        var facts = runtime.DependencyStates.Where(item =>
+                item.Generation == runtime.Generation && item.AssetKey == assetKey &&
+                item.Status == TeamLabDependencyStateStatus.Satisfied)
+            .OrderBy(item => item.DependsOnKey, StringComparer.Ordinal)
+            .ThenBy(item => item.Condition)
+            .Select(item => new { item.DependsOnKey, item.Condition, item.SatisfiedAt })
+            .ToArray();
+        return facts.Length == 0
+            ? null
+            : $"sha256:{Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(facts)))}";
+    }
+
+    private void RecordAssetEvent(TeamLabRuntime runtime, NodeExecution result, bool success)
+    {
+        var shard = runtime.Shards.Single(item => item.Id == result.Asset.ShardId);
+        var (successCode, failureCode, category, errorCode) = result.Node.Kind switch
+        {
+            TeamLabDeploymentNodeKind.Create => (
+                OperationalEventCodes.TeamLab.AssetCreated,
+                OperationalEventCodes.TeamLab.AssetCreateFailed,
+                result.Asset.Kind == TeamLabResourceKind.Vm
+                    ? OperationalErrorCategory.Kvm
+                    : OperationalErrorCategory.Docker,
+                result.Asset.Kind == TeamLabResourceKind.Vm
+                    ? OperationalErrorCodes.KvmOperationFailed
+                    : OperationalErrorCodes.DockerOperationFailed),
+            TeamLabDeploymentNodeKind.GuestReady => (
+                OperationalEventCodes.TeamLab.GuestReady,
+                OperationalEventCodes.TeamLab.GuestReadinessFailed,
+                OperationalErrorCategory.Kvm,
+                OperationalErrorCodes.KvmOperationFailed),
+            TeamLabDeploymentNodeKind.Bootstrap => (
+                OperationalEventCodes.TeamLab.BootstrapSucceeded,
+                OperationalEventCodes.TeamLab.BootstrapFailed,
+                OperationalErrorCategory.AgentProtocol,
+                OperationalErrorCodes.BootstrapOperationFailed),
+            TeamLabDeploymentNodeKind.Health => (
+                OperationalEventCodes.TeamLab.HealthSucceeded,
+                OperationalEventCodes.TeamLab.HealthFailed,
+                OperationalErrorCategory.HealthCheck,
+                OperationalErrorCodes.HealthProbeTimeout),
+            _ => throw new ArgumentOutOfRangeException()
+        };
+        eventRecorder.Record(
+            runtime,
+            result.Node.Kind.ToString().ToLowerInvariant(),
+            success ? TeamLabEventLevel.Success : TeamLabEventLevel.Error,
+            success ? successCode : failureCode,
+            success ? OperationalEventOutcome.Succeeded : OperationalEventOutcome.Failed,
+            success
+                ? $"Runtime asset stage {result.Node.Kind} completed."
+                : $"Runtime asset stage {result.Node.Kind} failed.",
+            success
+                ? null
+                : new OperationalError(
+                    category,
+                    errorCode,
+                    "TeamLab asset stage failed.",
+                    true,
+                    WorkerNodeId: shard.WorkerNodeId,
+                    Operation: $"teamlab.asset.{result.Node.Kind.ToString().ToLowerInvariant()}"),
+            shard.WorkerNodeId,
+            new Dictionary<string, object?>
+            {
+                ["generation"] = runtime.Generation,
+                ["stage"] = result.Node.Kind.ToString(),
+                ["assetKey"] = result.Asset.TopologyKey,
+                ["imageType"] = result.Asset.Kind.ToString()
+            });
+        if (success && result.Node.Kind == TeamLabDeploymentNodeKind.Bootstrap &&
+            result.BootstrapResult.RebootCount > 0)
+            eventRecorder.Record(
+                runtime,
+                "bootstrap",
+                TeamLabEventLevel.Info,
+                OperationalEventCodes.TeamLab.BootstrapRebooted,
+                OperationalEventOutcome.Observed,
+                "Bootstrap completed required guest reboot cycles.",
+                workerNodeId: shard.WorkerNodeId,
+                detail: new Dictionary<string, object?>
+                {
+                    ["generation"] = runtime.Generation,
+                    ["stage"] = "bootstrap",
+                    ["assetKind"] = result.Asset.Kind.ToString(),
+                    ["rebootCount"] = result.BootstrapResult.RebootCount
+                });
     }
 
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildAllowedRoutes(
         TeamLabRuntime runtime,
-        TeamLabTopologyDefinitionModel definition)
+        TeamLabExecutionTopology definition)
     {
         var networkByKey = runtime.Networks.Where(item => item.Generation == runtime.Generation)
             .ToDictionary(item => item.TopologyKey, StringComparer.Ordinal);
@@ -276,13 +555,6 @@ public sealed class TeamLabShardDeploymentService(
             targets[connection.FromNetworkKey].Add(networkByKey[connection.ToNetworkKey].Cidr);
             targets[connection.ToNetworkKey].Add(networkByKey[connection.FromNetworkKey].Cidr);
         }
-        foreach (var asset in definition.Assets.Where(item => item.RoutingEnabled))
-        {
-            var attached = asset.Interfaces.Select(item => item.NetworkKey).Distinct(StringComparer.Ordinal).ToArray();
-            foreach (var source in attached)
-            foreach (var target in attached.Where(item => item != source))
-                if (targets.ContainsKey(source) && networkByKey.ContainsKey(target)) targets[source].Add(networkByKey[target].Cidr);
-        }
         return targets.ToDictionary(
             item => item.Key,
             item => (IReadOnlyList<string>)item.Value.Order(StringComparer.Ordinal).ToArray(),
@@ -292,9 +564,42 @@ public sealed class TeamLabShardDeploymentService(
     private static RuntimeInterfaceIntent[] ParseInterfaces(TeamLabRuntimeAsset asset) =>
         JsonSerializer.Deserialize<RuntimeInterfaceIntent[]>(asset.InterfaceSummaryJson) ?? [];
 
+    private static async Task ObserveImagePreparationAsync(IEnumerable<Task> tasks)
+    {
+        try
+        {
+            await Task.WhenAll(tasks);
+        }
+        catch
+        {
+            // Infrastructure failure remains the primary deployment failure.
+        }
+    }
+
     private static string Trim(string value) => value.Length <= 1024 ? value : value[..1024];
 
-    private sealed record AssetCreation(TeamLabRuntimeAsset Asset, TeamLabNodeAssetCreateResult Result);
+    private sealed record AssetWork(
+        TeamLabRuntimeAsset Asset,
+        TeamLabNodeAssetCreateRequest Request);
+
+    private sealed record NodeExecution(
+        TeamLabDeploymentNode Node,
+        TeamLabRuntimeAsset Asset,
+        TeamLabNodeAssetCreateRequest Request,
+        bool Success,
+        string Message,
+        string? RuntimeResourceId,
+        string? NativeIdentity,
+        TeamLabNodeBootstrapResult BootstrapResult)
+    {
+        public static NodeExecution Failed(
+            TeamLabDeploymentNode node,
+            TeamLabRuntimeAsset asset,
+            TeamLabNodeAssetCreateRequest request,
+            string message) => new(
+            node, asset, request, false, message, asset.RuntimeResourceId, asset.NativeIdentity,
+            TeamLabNodeBootstrapResult.Failed(message));
+    }
     private sealed record RuntimeInterfaceIntent(
         string Key,
         string NetworkKey,

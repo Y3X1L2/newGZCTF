@@ -1,6 +1,7 @@
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Modules.Penetration.Contracts;
+using GZCTF.Modules.Penetration.Domain;
 using GZCTF.Modules.TeamLab.Application;
 using Microsoft.EntityFrameworkCore;
 
@@ -47,7 +48,13 @@ public sealed class PenetrationWorkspaceService(
                 Solved = group.Any(item => item.Status == AnswerResult.Accepted)
             }).ToDictionaryAsync(item => item.ObjectiveId, cancellationToken);
         var resetCount = await context.PenetrationResetRecords.AsNoTracking()
-            .CountAsync(item => item.RuntimeId == binding.RuntimeId, cancellationToken);
+            .CountAsync(item => item.RuntimeId == binding.RuntimeId && !item.ByAdmin &&
+                                (item.Status == PenetrationResetStatus.Pending ||
+                                 item.Status == PenetrationResetStatus.Running ||
+                                 item.Status == PenetrationResetStatus.Succeeded ||
+                                 item.Status == PenetrationResetStatus.Failed &&
+                                 item.FailureClass == PenetrationResetFailureClass.Scenario),
+                cancellationToken);
         return new PenetrationWorkspaceModel(
             gameId, teamId, teamName, runtime.Id, runtime.Status, runtime.Stage, resetCount, metadata.MaxResetCount,
             objectives.Select(item =>

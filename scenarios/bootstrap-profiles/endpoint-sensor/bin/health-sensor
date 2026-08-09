@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+set -eu
+
+systemctl is-active --quiet gzctf-endpoint-sensor.service

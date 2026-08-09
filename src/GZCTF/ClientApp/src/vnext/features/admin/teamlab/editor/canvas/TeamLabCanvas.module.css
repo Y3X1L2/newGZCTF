@@ -1,0 +1,146 @@
+.canvas {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 520px;
+  overflow: hidden;
+  background: var(--yn-color-canvas);
+}
+
+.canvas :global(.react-flow__pane) {
+  cursor: grab;
+}
+
+.canvas :global(.react-flow__pane.dragging) {
+  cursor: grabbing;
+}
+
+.canvas :global(.react-flow__node) {
+  cursor: grab;
+  transition: transform 280ms var(--yn-ease-standard);
+}
+
+.canvas :global(.react-flow__node.dragging) {
+  cursor: grabbing;
+  transition: none;
+}
+
+.canvas :global(.react-flow__selection) {
+  border: 1px solid var(--yn-color-brand);
+  background: var(--yn-color-brand-soft);
+  opacity: 0.4;
+}
+
+.canvas :global(.react-flow__edge.selected) {
+  z-index: 3;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--yn-space-1);
+  padding: var(--yn-space-1);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+  box-shadow: var(--yn-shadow-surface);
+}
+
+.toolbar button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: var(--yn-radius-sm);
+  background: transparent;
+  color: var(--yn-color-text-secondary);
+  cursor: pointer;
+}
+
+.toolbar button:hover:not(:disabled),
+.toolbar button[aria-pressed='true'] {
+  background: var(--yn-color-brand-soft);
+  color: var(--yn-color-brand-strong);
+}
+
+.toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.toolbar > span {
+  width: 1px;
+  height: 20px;
+  margin: 0 2px;
+  background: var(--yn-color-border);
+}
+
+.miniMap {
+  overflow: hidden;
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+  box-shadow: var(--yn-shadow-surface);
+}
+
+.miniMap_switch {
+  fill: var(--yn-color-brand);
+}
+
+.miniMap_router {
+  fill: var(--yn-color-warning);
+}
+
+.miniMap_docker {
+  fill: var(--yn-color-info);
+}
+
+.miniMap_linux-vm {
+  fill: var(--yn-color-muted);
+}
+
+.miniMap_windows-vm {
+  fill: var(--yn-color-info);
+}
+
+.emptyState {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  pointer-events: none;
+  gap: var(--yn-space-1);
+  color: var(--yn-color-muted);
+  text-align: center;
+  transform: translate(-50%, -50%);
+}
+
+.emptyState strong {
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-lg);
+}
+
+.emptyState span {
+  font-size: var(--yn-font-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas :global(.react-flow__node) {
+    transition: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .canvas {
+    min-height: 420px;
+  }
+
+  .toolbar button:nth-of-type(n + 7) {
+    display: none;
+  }
+
+  .miniMap {
+    display: none;
+  }
+}

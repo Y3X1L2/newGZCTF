@@ -21,6 +21,13 @@ function answersFromPaper(paper: TheoryPlayerPaperModel): AnswerRecord {
   )
 }
 
+function paperRevision(paper: TheoryPlayerPaperModel) {
+  const answers = (paper.answers ?? [])
+    .map((answer) => `${answer.paperQuestionId ?? 0}:${(answer.selectedIndexes ?? []).join(',')}`)
+    .join('|')
+  return [paper.paperId ?? 0, paper.status ?? 'draft', paper.updatedAt ?? 0, paper.submittedAt ?? 0, answers].join(':')
+}
+
 function answerPayload(answers: AnswerRecord): TheoryAnswerSheetEditModel {
   const models: TheoryAnswerModel[] = Object.entries(answers).map(([paperQuestionId, selectedIndexes]) => ({
     paperQuestionId: Number(paperQuestionId),
@@ -34,7 +41,8 @@ function sameAnswer(left: number[], right: number[]) {
 }
 
 export function useTheoryExamSession({ initialPaper, saveDraft, submit, onSubmitted }: TheoryExamSource) {
-  const initialAnswers = useMemo(() => answersFromPaper(initialPaper), [initialPaper.paperId])
+  const initialRevision = paperRevision(initialPaper)
+  const initialAnswers = useMemo(() => answersFromPaper(initialPaper), [initialRevision])
   const [paper, setPaper] = useState(initialPaper)
   const [answers, setAnswers] = useState<AnswerRecord>(initialAnswers)
   const [answerRevision, setAnswerRevision] = useState(0)
@@ -76,7 +84,7 @@ export function useTheoryExamSession({ initialPaper, saveDraft, submit, onSubmit
     setSaveError(null)
     setSubmitError(null)
     setReviewQuestionIds(new Set())
-  }, [initialPaper.paperId])
+  }, [initialRevision])
 
   const submitted = paper.status === TheoryAnswerSheetStatus.Submitted
 

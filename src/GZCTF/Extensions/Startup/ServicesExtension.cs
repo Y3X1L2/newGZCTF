@@ -150,6 +150,7 @@ internal static class ServicesExtension
             builder.Services.AddScoped<DeploymentQueueViewService>();
             builder.Services.AddScoped<DeploymentExecutionContextAccessor>();
             builder.Services.AddScoped<DeploymentExecutionService>();
+            builder.Services.AddScoped<RuntimeTicketLifecycleDispatcher>();
             builder.Services.AddScoped<RuntimeSchedulingService>();
             builder.Services.AddScoped<RuntimeFactReconciliationService>();
             builder.Services.AddSingleton<RuntimeExecutionService>();
@@ -177,6 +178,7 @@ internal static class ServicesExtension
             builder.Services.AddScoped<FleetVmService>();
             builder.Services.AddSingleton<VmCredentialService>();
             builder.Services.AddSingleton<GuacamoleService>();
+            builder.Services.AddSingleton<GuacamoleRemoteSessionService>();
             builder.Services.AddHostedService<VmReadyService>();
             builder.Services.AddScoped<NodeTunnelService>();
             builder.Services.AddScoped<IPublicUdpGatewayProvider, PublicUdpGatewayProvider>();
@@ -249,22 +251,22 @@ internal static class ServicesExtension
             builder.Services.AddResponseCaching();
         }
 
-        internal void AddDevelopmentServices()
+        internal void AddOpenApiServices()
         {
-            if (!builder.Environment.IsDevelopment())
-                return;
-
-            builder.Services.AddOpenApiDocument(settings =>
+            if (builder.Environment.IsDevelopment())
             {
-                settings.DocumentName = "v1";
-                settings.Version = "v1";
-                settings.Title = "YINYU CTF Platform API";
-                settings.Description = "YINYU CTF Platform API Document";
-                settings.UseControllerSummaryAsTagDescription = true;
-                settings.SchemaSettings.TypeMappers.Add(new OpenApiDateTimeOffsetToUIntMapper());
-                settings.SchemaSettings.TypeMappers.Add(new OpenApiIPAddressToStringMapper());
-                settings.SchemaSettings.ReflectionService = new GenericsSystemTextJsonReflectionService();
-            });
+                builder.Services.AddOpenApiDocument(settings =>
+                {
+                    settings.DocumentName = "v1";
+                    settings.Version = "v1";
+                    settings.Title = "YINYU CTF Platform API";
+                    settings.Description = "YINYU CTF Platform internal API document";
+                    settings.UseControllerSummaryAsTagDescription = true;
+                    settings.SchemaSettings.TypeMappers.Add(new OpenApiDateTimeOffsetToUIntMapper());
+                    settings.SchemaSettings.TypeMappers.Add(new OpenApiIPAddressToStringMapper());
+                    settings.SchemaSettings.ReflectionService = new GenericsSystemTextJsonReflectionService();
+                });
+            }
 
             builder.Services.AddOpenApiDocument(settings =>
             {

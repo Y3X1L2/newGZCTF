@@ -1321,17 +1321,9 @@ public class TrainingCourseChallengeDetailModel
             Solved = solved,
             Attempts = attempts,
             Limit = instance.Exercise.SubmissionLimit,
-            Flags = instance.Exercise.Flags is { Count: > 1 }
-                ? instance.Exercise.Flags
-                    .OrderBy(flag => flag.OrderIndex)
-                    .Select(flag => new FlagStepInfo
-                    {
-                        Id = flag.Id,
-                        OrderIndex = flag.OrderIndex,
-                        Description = flag.Description
-                    })
-                    .ToList()
-                : null,
+            Flags = FlagStepProjection.FromConfiguredFlags(
+                instance.Exercise.Type,
+                instance.Exercise.Flags),
             Context = ClientFlagContext.FromInstance(
                 instance.Container,
                 instance.AttachmentUrl,

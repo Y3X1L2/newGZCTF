@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "operatingSystems": ["Windows"],
+  "assetKinds": ["Vm"],
+  "requiredTemplateCapabilities": [
+    "bootstrap.firstboot.v1",
+    "guest.qga.v1",
+    "network.e1000e.v1",
+    "windows.powershell.v1"
+  ],
+  "parameters": [
+    { "key": "domain_fqdn", "type": "String", "required": true, "secret": false },
+    { "key": "netbios_name", "type": "String", "required": true, "secret": false },
+    { "key": "safe_mode_password", "type": "String", "required": true, "secret": true }
+  ],
+  "files": [],
+  "steps": [
+    { "id": "install-ad-ds", "entrypoint": "bin/install-ad-domain.ps1", "timeoutSeconds": 1800, "runAs": "system", "reboot": "Required" },
+    { "id": "configure-domain", "entrypoint": "bin/configure-domain.ps1", "timeoutSeconds": 900, "runAs": "system", "reboot": "IfRequested" }
+  ],
+  "healthChecks": [
+    { "id": "domain-services", "kind": "Entrypoint", "target": "bin/health-ad-domain.ps1", "timeoutSeconds": 30, "attempts": 40 }
+  ],
+  "maxReboots": 2
+}

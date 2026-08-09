@@ -608,7 +608,23 @@ public class TeamLabNetworkConfig
     /// </summary>
     public bool DryRun { get; set; }
 
-    public string RuntimeNetworkBaseCidr { get; set; } = "10.180.0.0/16";
+    /// <summary>
+    /// When set, topology address pools must sit entirely inside this range. Empty by default: the
+    /// value was never consumed before, so existing deployments have pools spread across RFC1918 and
+    /// turning it on without migrating them would make every saved topology fail validation. Set it
+    /// once the deployment's topologies have been moved into the range.
+    /// </summary>
+    public string RuntimeNetworkBaseCidr { get; set; } = string.Empty;
+
+    public string FabricLinkPool { get; set; } = "100.64.0.0/16";
+
+    /// <summary>
+    /// Address ranges topologies may not claim, in addition to the built-in ones. Runtime CIDRs are
+    /// installed in the WorkerNode host routing table, so anything the node itself routes must be
+    /// listed here: node management LANs, extra Docker address pools, storage and database networks.
+    /// Site-specific by nature, which is why it has no useful default.
+    /// </summary>
+    public string[] ReservedCidrs { get; set; } = [];
     public int TeamSubnetPrefixLength { get; set; } = 24;
     public int PublicUdpPortStart { get; set; } = 32000;
     public int PublicUdpPortEnd { get; set; } = 32999;
@@ -617,6 +633,13 @@ public class TeamLabNetworkConfig
     public string BridgePrefix { get; set; } = "tl";
     public string RouterNamespacePrefix { get; set; } = "tlr";
     public string WireGuardInterfacePrefix { get; set; } = "tlwg";
+    public int ManagedVmNetworkReadyTimeoutSeconds { get; set; } = 600;
+    public int ManagedVmObservationReadyTimeoutSeconds { get; set; } = 300;
+    public int ManagedVmBootstrapOverheadSeconds { get; set; } = 300;
+    public int ManagedVmRebootAllowanceSeconds { get; set; } = 300;
+    public int ManagedVmMaximumBootstrapTimeoutSeconds { get; set; } = 28800;
+    public int RecoveryGraceSeconds { get; set; } = 30;
+    public bool EnableStatelessAutoRecovery { get; set; }
 }
 
 public class PublicUdpGatewayConfig

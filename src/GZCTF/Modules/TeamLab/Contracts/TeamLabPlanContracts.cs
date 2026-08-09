@@ -21,14 +21,16 @@ public sealed record TeamLabPlanAssetModel(
     int ImageTemplateId,
     TeamLabAssetResourceModel Resources,
     IReadOnlyList<TeamLabPlanInterfaceModel> Interfaces,
-    bool RoutingEnabled);
+    bool RoutingEnabled,
+    string? ImageDigest = null);
 
 public sealed record TeamLabPlanShardModel(
     string Key,
     IReadOnlyList<string> NetworkKeys,
     IReadOnlyList<string> AssetKeys,
     int DockerSlots,
-    int VmSlots);
+    int VmSlots,
+    IReadOnlyList<string>? InfrastructureKeys = null);
 
 public sealed record TeamLabPlanModel(
     Guid TopologyId,
@@ -39,4 +41,7 @@ public sealed record TeamLabPlanModel(
     int CrossShardConnections,
     IReadOnlyList<string> RequiredCapabilities,
     IReadOnlyList<string> Warnings,
-    string PlanHash);
+    string PlanHash,
+    int ManagedInfrastructureCount = 0,
+    int BootstrapArtifactCount = 0,
+    int ObservationPointEstimate = 0);

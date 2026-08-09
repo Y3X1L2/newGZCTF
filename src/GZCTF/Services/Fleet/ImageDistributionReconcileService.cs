@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using GZCTF.Modules.Runtime.Domain;
 
 namespace GZCTF.Services.Fleet;
 
@@ -23,7 +24,18 @@ public class ImageDistributionReconcileService(
         using var timer = new PeriodicTimer(Interval);
         while (!stoppingToken.IsCancellationRequested)
         {
-            await ReconcileOnceAsync(stoppingToken);
+            try
+            {
+                await ReconcileOnceAsync(stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(exception, "Image distribution reconciliation failed; the next scheduled pass will retry.");
+            }
 
             try
             {
@@ -44,9 +56,13 @@ public class ImageDistributionReconcileService(
         var distribution = scope.ServiceProvider.GetRequiredService<ImageDistributionService>();
         var now = DateTimeOffset.UtcNow;
 
-        var endedGameIds = await context.Games.AsNoTracking()
-            .Where(g => g.EndTimeUtc < now)
-            .Select(g => g.Id)
+        var endedGameIds = await context.ImageDistributionReferences.AsNoTracking()
+            .Where(reference => reference.Kind == ImageDistributionReferenceKind.Game)
+            .Join(context.Games.AsNoTracking().Where(game => game.EndTimeUtc < now),
+                reference => reference.ResourceId,
+                game => game.Id,
+                (_, game) => game.Id)
+            .Distinct()
             .ToArrayAsync(token);
 
         foreach (var gameId in endedGameIds)

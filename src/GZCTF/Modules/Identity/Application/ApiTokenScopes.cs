@@ -19,6 +19,8 @@ public static class ApiTokenScopes
     public const string TeamLabTrafficRead = "teamlab.traffic:read";
     public const string TeamLabCaptureRead = "teamlab.capture:read";
     public const string TeamLabCaptureWrite = "teamlab.capture:write";
+    public const string BootstrapProfilesRead = "bootstrap-profiles:read";
+    public const string BootstrapProfilesWrite = "bootstrap-profiles:write";
 
     public static readonly IReadOnlySet<string> TeacherScopes = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -38,7 +40,9 @@ public static class ApiTokenScopes
         TeamLabRuntimesWrite,
         TeamLabTrafficRead,
         TeamLabCaptureRead,
-        TeamLabCaptureWrite
+        TeamLabCaptureWrite,
+        BootstrapProfilesRead,
+        BootstrapProfilesWrite
     };
 
     public static readonly IReadOnlySet<string> All = TeacherScopes;

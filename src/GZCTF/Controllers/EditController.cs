@@ -10,6 +10,7 @@ using GZCTF.Services;
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Fleet;
 using GZCTF.Services.Transfer;
+using GZCTF.Utils;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -68,6 +69,23 @@ public class EditController(
 
     BadRequestObjectResult WindowsVmRuntimeConfigError() =>
         BadRequest(new RequestResponse("Windows 虚拟机题目必须选择就绪的 Windows 镜像模板。"));
+
+    async Task<(Game? Game, IActionResult? Error)> RequireManageableGameAsync(
+        int gameId,
+        CancellationToken token)
+    {
+        var game = await gameRepository.GetGameById(gameId, token);
+        if (game is null)
+            return (null, NotFound(new RequestResponse(
+                localizer[nameof(Resources.Program.Game_NotFound)], StatusCodes.Status404NotFound)));
+        var actor = await userManager.GetUserAsync(User);
+        if (actor is null)
+            return (null, Unauthorized(new RequestResponse("Login required.", StatusCodes.Status401Unauthorized)));
+        if (!ResourceOwnershipPolicy.CanManage(game.OwnerId, actor.Id, actor.Role))
+            return (null, StatusCode(StatusCodes.Status403Forbidden,
+                new RequestResponse("You do not manage this game.", StatusCodes.Status403Forbidden)));
+        return (game, null);
+    }
 
     void QueueGameImageDistribution(int gameId, string reason)
     {
@@ -275,13 +293,10 @@ public class EditController(
     public async Task<IActionResult> UpdateGame([FromRoute] int id, [FromBody] GameInfoModel model,
         CancellationToken token)
     {
-        var game = await gameRepository.GetGameById(id, token);
+        var (game, error) = await RequireManageableGameAsync(id, token);
+        if (error is not null) return error;
 
-        if (game is null)
-            return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Game_NotFound)],
-                StatusCodes.Status404NotFound));
-
-        game.Update(model);
+        game!.Update(model);
         await gameRepository.UpdateGame(game, token);
         QueueGameImageDistribution(game.Id, "game update");
 
@@ -303,13 +318,10 @@ public class EditController(
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteGame([FromRoute] int id, CancellationToken token)
     {
-        var game = await gameRepository.GetGameById(id, token);
+        var (game, error) = await RequireManageableGameAsync(id, token);
+        if (error is not null) return error;
 
-        if (game is null)
-            return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Game_NotFound)],
-                StatusCodes.Status404NotFound));
-
-        return await gameRepository.DeleteGame(game, token) switch
+        return await gameRepository.DeleteGame(game!, token) switch
         {
             TaskStatus.Success => Ok(),
             _ => BadRequest(
@@ -331,13 +343,10 @@ public class EditController(
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteGameWriteUps([FromRoute] int id, CancellationToken token)
     {
-        var game = await gameRepository.GetGameById(id, token);
+        var (game, error) = await RequireManageableGameAsync(id, token);
+        if (error is not null) return error;
 
-        if (game is null)
-            return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Game_NotFound)],
-                StatusCodes.Status404NotFound));
-
-        await gameRepository.DeleteAllWriteUps(game, token);
+        await gameRepository.DeleteAllWriteUps(game!, token);
 
         return Ok();
     }
@@ -357,6 +366,9 @@ public class EditController(
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateGamePoster([FromRoute] int id, IFormFile file, CancellationToken token)
     {
+        var (game, authorizationError) = await RequireManageableGameAsync(id, token);
+        if (authorizationError is not null) return authorizationError;
+
         switch (file.Length)
         {
             case 0:
@@ -365,18 +377,12 @@ public class EditController(
                 return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.File_SizeTooLarge)]));
         }
 
-        var game = await gameRepository.GetGameById(id, token);
-
-        if (game is null)
-            return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Game_NotFound)],
-                StatusCodes.Status404NotFound));
-
         var poster = await blobService.CreateOrUpdateImage(file, "poster", 0, token);
 
         if (poster is null)
             return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.File_CreationFailed)]));
 
-        game.PosterHash = poster.Hash;
+        game!.PosterHash = poster.Hash;
         await gameRepository.UpdateGame(game, token);
 
         return Ok(poster.Url());
@@ -398,17 +404,14 @@ public class EditController(
     public async Task<IActionResult> AddGameNotice([FromRoute] int id, [FromBody] GameNoticeModel model,
         CancellationToken token)
     {
-        var game = await gameRepository.GetGameById(id, token);
-
-        if (game is null)
-            return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Game_NotFound)],
-                StatusCodes.Status404NotFound));
+        var (game, error) = await RequireManageableGameAsync(id, token);
+        if (error is not null) return error;
 
         var res = await gameNoticeRepository.AddNotice(
             new()
             {
                 Values = [model.Content],
-                GameId = game.Id,
+                GameId = game!.Id,
                 Type = NoticeType.Normal,
                 PublishTimeUtc = DateTimeOffset.UtcNow
             }, token);
@@ -456,6 +459,9 @@ public class EditController(
     public async Task<IActionResult> UpdateGameNotice([FromRoute] int id, [FromRoute] int noticeId,
         [FromBody] GameNoticeModel model, CancellationToken token = default)
     {
+        var (_, error) = await RequireManageableGameAsync(id, token);
+        if (error is not null) return error;
+
         var notice = await gameNoticeRepository.GetNoticeById(id, noticeId, token);
 
         if (notice is null)
@@ -486,6 +492,9 @@ public class EditController(
     public async Task<IActionResult> DeleteGameNotice([FromRoute] int id, [FromRoute] int noticeId,
         CancellationToken token)
     {
+        var (_, error) = await RequireManageableGameAsync(id, token);
+        if (error is not null) return error;
+
         var notice = await gameNoticeRepository.GetNoticeById(id, noticeId, token);
 
         if (notice is null)
@@ -518,12 +527,10 @@ public class EditController(
     public async Task<IActionResult> CreateDivision([FromRoute] int id, [FromBody] DivisionCreateModel model,
         CancellationToken token)
     {
-        var game = await gameRepository.GetGameById(id, token);
-        if (game is null)
-            return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Game_NotFound)],
-                StatusCodes.Status404NotFound));
+        var (game, error) = await RequireManageableGameAsync(id, token);
+        if (error is not null) return error;
 
-        var division = await divisionRepository.CreateDivision(game, model, token);
+        var division = await divisionRepository.CreateDivision(game!, model, token);
 
         return Ok(division);
     }
@@ -568,6 +575,9 @@ public class EditController(
     public async Task<IActionResult> UpdateDivision([FromRoute] int id, [FromRoute] int divisionId,
         [FromBody] DivisionEditModel model, CancellationToken token)
     {
+        var (_, error) = await RequireManageableGameAsync(id, token);
+        if (error is not null) return error;
+
         var division = await divisionRepository.GetDivision(id, divisionId, token);
         if (division is null)
             return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Division_NotFound)],
@@ -594,6 +604,9 @@ public class EditController(
     public async Task<IActionResult> DeleteDivision([FromRoute] int id, [FromRoute] int divisionId,
         CancellationToken token)
     {
+        var (_, error) = await RequireManageableGameAsync(id, token);
+        if (error is not null) return error;
+
         var division = await divisionRepository.GetDivision(id, divisionId, token);
         if (division is null)
             return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Division_NotFound)],
@@ -620,11 +633,8 @@ public class EditController(
     public async Task<IActionResult> AddGameChallenge([FromRoute] int id, [FromBody] ChallengeInfoModel model,
         CancellationToken token)
     {
-        var game = await gameRepository.GetGameById(id, token);
-
-        if (game is null)
-            return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Game_NotFound)],
-                StatusCodes.Status404NotFound));
+        var (game, error) = await RequireManageableGameAsync(id, token);
+        if (error is not null) return error;
 
         var environment = model.Type.IsContainer()
             ? model.Environment ?? EnvironmentType.Docker
@@ -638,7 +648,7 @@ public class EditController(
             (!model.ImageTemplateId.HasValue || !await IsReadyWindowsVmTemplate(model.ImageTemplateId.Value, token)))
             return WindowsVmRuntimeConfigError();
 
-        var res = await challengeRepository.CreateChallenge(game,
+        var res = await challengeRepository.CreateChallenge(game!,
             new GameChallenge
             {
                 Title = model.Title,
@@ -651,7 +661,7 @@ public class EditController(
             }, token);
 
         await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, id.ToString(), token);
-        QueueGameImageDistribution(game.Id, "challenge create");
+        QueueGameImageDistribution(game!.Id, "challenge create");
 
         return Ok(ChallengeEditDetailModel.FromChallenge(res));
     }
@@ -694,6 +704,9 @@ public class EditController(
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> FlushScoreboardCache([FromRoute] int id, CancellationToken token)
     {
+        var (_, error) = await RequireManageableGameAsync(id, token);
+        if (error is not null) return error;
+
         await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, id.ToString(), token);
         return Ok();
     }
@@ -749,13 +762,10 @@ public class EditController(
     public async Task<IActionResult> UpdateGameChallenge([FromRoute] int id, [FromRoute] int cId,
         [FromBody] ChallengeUpdateModel model, CancellationToken token)
     {
+        var (game, authorizationError) = await RequireManageableGameAsync(id, token);
+        if (authorizationError is not null) return authorizationError;
+
         await using var transaction = await challengeRepository.BeginTransactionAsync(token);
-
-        var game = await gameRepository.GetGameById(id, token);
-
-        if (game is null)
-            return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Game_NotFound)],
-                StatusCodes.Status404NotFound));
 
         var res = await challengeRepository.GetChallenge(id, cId, token);
 
@@ -804,9 +814,9 @@ public class EditController(
                         return WindowsVmRuntimeConfigError();
 
                     // Will also update IsEnabled
-                    await challengeRepository.EnsureInstances(res, game, token);
+                    await challengeRepository.EnsureInstances(res, game!, token);
 
-                    if (game.IsActive)
+                    if (game!.IsActive)
                         await gameNoticeRepository.AddNotice(
                             new() { Game = game, Type = NoticeType.NewChallenge, Values = [res.Title] }, token);
                     break;
@@ -819,7 +829,7 @@ public class EditController(
                 break;
         }
 
-        if (game.IsActive && res.IsEnabled && hintUpdated)
+        if (game!.IsActive && res.IsEnabled && hintUpdated)
             await gameNoticeRepository.AddNotice(
                 new() { Game = game, Type = NoticeType.NewHint, Values = [res.Title] },
                 token);
@@ -851,6 +861,9 @@ public class EditController(
     public async Task<IActionResult> CreateTestContainer([FromRoute] int id, [FromRoute] int cId,
         CancellationToken token)
     {
+        var (_, error) = await RequireManageableGameAsync(id, token);
+        if (error is not null) return error;
+
         var challenge = await challengeRepository.GetChallenge(id, cId, token);
 
         if (challenge is null)
@@ -887,6 +900,9 @@ public class EditController(
     public async Task<IActionResult> DestroyTestContainer([FromRoute] int id, [FromRoute] int cId,
         CancellationToken token)
     {
+        var (_, error) = await RequireManageableGameAsync(id, token);
+        if (error is not null) return error;
+
         var challenge = await challengeRepository.GetChallenge(id, cId, token);
 
         if (challenge is null)
@@ -936,6 +952,9 @@ public class EditController(
     public async Task<IActionResult> RemoveGameChallenge([FromRoute] int id, [FromRoute] int cId,
         CancellationToken token)
     {
+        var (_, error) = await RequireManageableGameAsync(id, token);
+        if (error is not null) return error;
+
         var res = await challengeRepository.GetChallenge(id, cId, token);
 
         if (res is null)
@@ -967,6 +986,9 @@ public class EditController(
     public async Task<IActionResult> UpdateAttachment([FromRoute] int id, [FromRoute] int cId,
         [FromBody] AttachmentCreateModel model, CancellationToken token)
     {
+        var (_, error) = await RequireManageableGameAsync(id, token);
+        if (error is not null) return error;
+
         var challenge = await challengeRepository.GetChallenge(id, cId, token);
 
         if (challenge is null)
@@ -1001,6 +1023,9 @@ public class EditController(
     public async Task<IActionResult> AddFlags([FromRoute] int id, [FromRoute] int cId,
         [FromBody] FlagCreateModel[] models, CancellationToken token)
     {
+        var (_, error) = await RequireManageableGameAsync(id, token);
+        if (error is not null) return error;
+
         var challenge = await challengeRepository.GetChallenge(id, cId, token);
 
         if (challenge is null)
@@ -1031,6 +1056,9 @@ public class EditController(
     public async Task<IActionResult> RemoveFlag([FromRoute] int id, [FromRoute] int cId, [FromRoute] int fId,
         CancellationToken token)
     {
+        var (_, error) = await RequireManageableGameAsync(id, token);
+        if (error is not null) return error;
+
         var challenge = await challengeRepository.GetChallenge(id, cId, token);
 
         if (challenge is null)
@@ -1063,6 +1091,9 @@ public class EditController(
     public async Task<IActionResult> UpdateFlag(int id, int cId, int fId, [FromBody] FlagCreateModel model,
         CancellationToken token)
     {
+        var (_, error) = await RequireManageableGameAsync(id, token);
+        if (error is not null) return error;
+
         var challenge = await challengeRepository.GetChallenge(id, cId, token);
 
         if (challenge is null)
@@ -1113,6 +1144,9 @@ public class EditController(
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> ExportGame([FromRoute] int id, CancellationToken token = default)
     {
+        var (_, authorizationError) = await RequireManageableGameAsync(id, token);
+        if (authorizationError is not null) return authorizationError;
+
         try
         {
             var result = await exportService.ExportGameAsync(id, token);
@@ -1174,6 +1208,10 @@ public class EditController(
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = long.MaxValue)]
     public async Task<IActionResult> ImportGame(IFormFile file, CancellationToken token = default)
     {
+        var actor = await userManager.GetUserAsync(User);
+        if (actor is null)
+            return Unauthorized(new RequestResponse("Login required.", StatusCodes.Status401Unauthorized));
+
         switch (file.Length)
         {
             case 0:
@@ -1204,7 +1242,7 @@ public class EditController(
         try
         {
             await using var stream = file.OpenReadStream();
-            var gameId = await importService.ImportGameAsync(stream, token);
+            var gameId = await importService.ImportGameAsync(stream, actor.Id, token);
 
             if (gameId is null)
             {

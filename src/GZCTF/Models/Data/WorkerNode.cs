@@ -49,6 +49,12 @@ public class WorkerNode
     [MaxLength(8192)] public string CapabilityManifestJson { get; set; } = "{}";
     [MaxLength(64)] public string? CapabilityHash { get; set; }
     public DateTimeOffset? CapabilityObservedAt { get; set; }
+    public AgentUpdateState AgentUpdateState { get; set; } = AgentUpdateState.Stable;
+    public bool AgentUpdateWasSchedulable { get; set; }
+    [MaxLength(128)] public string? AgentUpdateExpectedSha256 { get; set; }
+    [MaxLength(1024)] public string? AgentUpdateLastError { get; set; }
+    public DateTimeOffset? AgentUpdateStartedAt { get; set; }
+    public DateTimeOffset? AgentUpdateCompletedAt { get; set; }
 
     [Timestamp] public uint ConcurrencyToken { get; set; }
 
@@ -71,3 +77,12 @@ public enum NodeCapability : byte { None = 0, Docker = 1, Kvm = 2 }
 public enum NodeStatus : byte { Unknown = 0, Online = 1, Offline = 2, Busy = 3, Error = 4 }
 public enum TeamLabTunnelStatus : byte { Unknown = 0, Disabled = 1, Probing = 2, Healthy = 3, Error = 4 }
 public enum TeamLabFabricStatus : byte { Unknown = 0, Disabled = 1, Probing = 2, Healthy = 3, Error = 4 }
+public enum AgentUpdateState : byte
+{
+    Stable = 0,
+    Cordoned = 1,
+    Syncing = 2,
+    AwaitingHeartbeat = 3,
+    VerifyingFabric = 4,
+    Failed = 5
+}

@@ -8,8 +8,11 @@ public sealed class DataRetentionOptions
 
     [Range(1, 3650)] public int SystemLogDays { get; set; } = 30;
     [Range(1, 3650)] public int OperationalEventDays { get; set; } = 180;
-    [Range(1, 3650)] public int TeamLabFlowDays { get; set; } = 7;
+    [Range(1, 3650)] public int TeamLabFlowDays { get; set; } = 30;
     [Range(1, 3650)] public int TeamLabFlowAggregateDays { get; set; } = 180;
+    [Range(1, 3650)] public int TeamLabObservationDays { get; set; } = 7;
+    [Range(1, 3650)] public int TeamLabTrafficPathDays { get; set; } = 30;
+    [Range(1, 3650)] public int TeamLabCaptureDays { get; set; } = 7;
     [Range(1, 3650)] public int DeploymentTicketDays { get; set; } = 180;
     [Range(1, 3650)] public int ApiOperationDays { get; set; } = 90;
     [Range(1, 3650)] public int TeamLabEventDays { get; set; } = 180;

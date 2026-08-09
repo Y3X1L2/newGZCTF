@@ -2,17 +2,6 @@ using GZCTF.Models.Request.Shared;
 
 namespace GZCTF.Models.Request.Game;
 
-/// <summary>
-/// Multi-flag step metadata — exposed to players for guided solving.
-/// Does NOT contain the actual flag values.
-/// </summary>
-public class FlagStepInfo
-{
-    public int Id { get; set; }
-    public int OrderIndex { get; set; }
-    public string? Description { get; set; }
-}
-
 public class ChallengeDetailModel
 {
     public int Id { get; set; }
@@ -32,21 +21,6 @@ public class ChallengeDetailModel
     internal static ChallengeDetailModel FromInstance(GameInstance gameInstance, int attemptCount,
         ChallengeInfo? scoreboardChallenge = null)
     {
-        var flags = gameInstance.Challenge.Flags;
-        List<FlagStepInfo>? flagSteps = null;
-        if (flags is { Count: > 1 })
-        {
-            flagSteps = flags
-                .OrderBy(f => f.OrderIndex)
-                .Select(f => new FlagStepInfo
-                {
-                    Id = f.Id,
-                    OrderIndex = f.OrderIndex,
-                    Description = f.Description,
-                })
-                .ToList();
-        }
-
         return new()
         {
             Id = gameInstance.Challenge.Id,
@@ -60,7 +34,9 @@ public class ChallengeDetailModel
             Limit = gameInstance.Challenge.SubmissionLimit,
             Deadline = gameInstance.Challenge.DeadlineUtc,
             Attempts = attemptCount,
-            Flags = flagSteps,
+            Flags = FlagStepProjection.FromConfiguredFlags(
+                gameInstance.Challenge.Type,
+                gameInstance.Challenge.Flags),
             Context = ClientFlagContext.FromInstance(
                 gameInstance.Container,
                 gameInstance.AttachmentUrl,

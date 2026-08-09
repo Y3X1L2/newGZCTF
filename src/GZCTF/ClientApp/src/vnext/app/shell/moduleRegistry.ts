@@ -103,6 +103,7 @@ export const platformModules: PlatformModule[] = [
     group: '管理与运维',
     description: '多节点拓扑、运行环境与流量观测',
     adminOnly: true,
+    implemented: true,
   },
   {
     id: 'admin',
