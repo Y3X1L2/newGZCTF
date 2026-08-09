@@ -18,6 +18,13 @@
 
 当前 HEAD 必须通过 `git rev-parse HEAD` 实时读取。开始新任务前仍须重新 `fetch`，不能假定本表中的代码基线或远端关系永久有效。
 
+## 1.1 TeamLab 现场验收状态（2026-08-09）
+
+- 候选提交 `0ee455b` 已部署到测试服务器的独立 release；主站、Agent、首页、`ApiOperationWorker` 和两个 Agent inventory 已通过发布后冒烟。
+- 数据库已前向应用 `20260809041834_NormalizeImageDistributionReferenceIdentity`，修复多个 TeamLab 发布版本共享镜像引用时的覆盖风险。
+- 当前混合验收场景的 v3 试运行仍处于真实 `Scheduled/已排队` 状态。原因是两个 VM 的存储声明各为 20480 MiB，而两台测试节点可用镜像空间分别约为 6.1 GiB 和 18.3 GiB；不满足调度器的容量契约。
+- 三队混合运行、服务注入实际执行、远程运维、流量/PCAP、暂停恢复和完整清理尚未签收。细节见 `docs/development/test-plans/2026-08-09-teamlab-usability-acceptance.md`。
+
 ## 2. 产品与代码状态
 
 当前平台已形成以下主要能力：
