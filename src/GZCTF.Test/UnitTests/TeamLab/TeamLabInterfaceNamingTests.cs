@@ -58,4 +58,17 @@ public class TeamLabInterfaceNamingTests
             TeamLabResourceNameFactory.LinuxName(value),
             TeamLabNetworkPrimitives.TrimInterfaceName(value));
     }
+
+    [Fact]
+    public void WorkloadGuestInterfaces_AreIndependentFromTopologyKeys()
+    {
+        var names = Enumerable.Range(0, TeamLabTopologyValidator.MaxInterfacesPerAsset)
+            .Select(TeamLabResourceNameFactory.WorkloadGuestInterface)
+            .ToArray();
+
+        Assert.Equal("eth0", names[0]);
+        Assert.Equal("eth7", names[^1]);
+        Assert.Equal(names.Length, names.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(names, name => Assert.True(name.Length <= 15));
+    }
 }

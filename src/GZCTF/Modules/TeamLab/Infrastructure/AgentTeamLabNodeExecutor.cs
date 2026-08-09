@@ -596,15 +596,23 @@ public sealed class AgentTeamLabNodeExecutor(
             config.EnvironmentVariables["GZCTF_SENSOR_HMAC"] = request.Secrets["GZCTF_SENSOR_HMAC"];
         }
         var container = await agent.CreateContainerOrThrowAsync(workerNodeId, config, cancellationToken);
-        foreach (var iface in request.Interfaces)
+        var interfaces = request.Interfaces
+            .Select((iface, index) => new
+            {
+                Interface = iface,
+                GuestName = TeamLabResourceNameFactory.WorkloadGuestInterface(index)
+            })
+            .ToArray();
+        foreach (var item in interfaces)
         {
+            var iface = item.Interface;
             var attach = await agent.AttachTeamLabContainerAsync(workerNodeId,
                 new TeamLabContainerAttachRequest(
                     request.RuntimeId,
                     container.ContainerId,
                     iface.BridgeName,
                     TeamLabResourceNameFactory.WorkloadHostInterface(request.RuntimeId, request.AssetKey, iface.Key),
-                    iface.Key,
+                    item.GuestName,
                     $"{iface.IpAddress}/{iface.PrefixLength}",
                     iface.MacAddress,
                     false,
@@ -628,18 +636,18 @@ public sealed class AgentTeamLabNodeExecutor(
             return TeamLabNodeAssetCreateResult.Failed("The TeamLab container operation identity is missing.");
         }
 
-        var routes = request.Interfaces
-            .SelectMany(iface => iface.Routes.Select(route => new TeamLabContainerRouteExpectation(
+        var routes = interfaces
+            .SelectMany(item => item.Interface.Routes.Select(route => new TeamLabContainerRouteExpectation(
                 route,
-                Gateway(iface.IpAddress, iface.PrefixLength),
-                iface.Key)))
+                Gateway(item.Interface.IpAddress, item.Interface.PrefixLength),
+                item.GuestName)))
             .DistinctBy(route => (route.TargetCidr, route.GatewayIp, route.InterfaceName))
             .ToArray();
-        var dnsProbes = request.Interfaces
-            .SelectMany(iface => iface.DnsServers.Select(server => new TeamLabContainerDnsProbeExpectation(
+        var dnsProbes = interfaces
+            .SelectMany(item => item.Interface.DnsServers.Select(server => new TeamLabContainerDnsProbeExpectation(
                 server,
                 Hostname(request.AssetKey),
-                iface.IpAddress)))
+                item.Interface.IpAddress)))
             .DistinctBy(probe => (probe.Server, probe.QueryName, probe.ExpectedAddress))
             .ToArray();
         var finalized = await agent.FinalizeTeamLabContainerNetworkAsync(
@@ -650,10 +658,10 @@ public sealed class AgentTeamLabNodeExecutor(
                 request.Generation,
                 container.ContainerId,
                 container.ContainerName,
-                request.Interfaces.Select(iface => new TeamLabContainerInterfaceExpectation(
-                    iface.Key,
-                    $"{iface.IpAddress}/{iface.PrefixLength}",
-                    iface.MacAddress)).ToArray(),
+                interfaces.Select(item => new TeamLabContainerInterfaceExpectation(
+                    item.GuestName,
+                    $"{item.Interface.IpAddress}/{item.Interface.PrefixLength}",
+                    item.Interface.MacAddress)).ToArray(),
                 routes,
                 request.Interfaces.SelectMany(iface => iface.DnsServers)
                     .Distinct(StringComparer.Ordinal).ToArray(),
@@ -1015,14 +1023,14 @@ public sealed class AgentTeamLabNodeExecutor(
 
     private static List<AgentVmNetworkInterfaceRequest> BuildVmInterfaces(
         TeamLabNodeAssetCreateRequest request,
-        ImageTemplate template) => request.Interfaces.Select(iface => new AgentVmNetworkInterfaceRequest
+        ImageTemplate template) => request.Interfaces.Select((iface, index) => new AgentVmNetworkInterfaceRequest
     {
         BridgeName = iface.BridgeName,
         HostInterfaceName = TeamLabResourceNameFactory.WorkloadHostInterface(
             request.RuntimeId, request.AssetKey, iface.Key),
         MacAddress = iface.MacAddress,
         Model = template.OSType == OSType.Windows ? "e1000e" : "virtio",
-        InterfaceName = iface.Key,
+        InterfaceName = TeamLabResourceNameFactory.WorkloadGuestInterface(index),
         IpAddress = iface.IpAddress,
         PrefixLength = iface.PrefixLength,
         Gateway = iface.Primary ? Gateway(iface.IpAddress, iface.PrefixLength) : null,

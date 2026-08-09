@@ -11,6 +11,17 @@ public static class TeamLabResourceNameFactory
     public static string DhcpDnsService(int runtimeId, string networkKey) => LinuxName($"tld{runtimeId}-{networkKey}");
     public static string FabricHostInterface(int runtimeId) => LinuxName($"tlrf{runtimeId}");
     public static string FabricNamespaceInterface(int runtimeId) => LinuxName($"tlrf{runtimeId}n");
+
+    /// <summary>
+    /// Returns the device name used inside a workload guest.
+    /// Topology interface keys are business identifiers and may be longer than Linux's
+    /// 15-character device-name limit, so they must never be sent to the guest as a device name.
+    /// </summary>
+    public static string WorkloadGuestInterface(int interfaceIndex) =>
+        interfaceIndex >= 0
+            ? $"eth{interfaceIndex}"
+            : throw new ArgumentOutOfRangeException(nameof(interfaceIndex));
+
     public static string WorkloadHostInterface(int runtimeId, string assetKey, string interfaceKey)
     {
         var stableId = BitConverter.ToInt32(
