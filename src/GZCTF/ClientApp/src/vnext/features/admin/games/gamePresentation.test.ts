@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { ChallengeCategory, ChallengeType, EnvironmentType, GameType } from '@Api'
+import { ChallengeCategory, ChallengeType, EnvironmentType, GameType, ImageStatus, ImageType, OSType } from '@Api'
 import {
   challengeConfigurationIssues,
   emptyGameCreateDraft,
   fromLocalDateTimeInput,
   gameCreatePayload,
   gameLifecycle,
+  templateAvailableForEnvironment,
   toLocalDateTimeInput,
   validateGameCreateDraft,
   validateGameImportFile,
@@ -68,5 +69,27 @@ describe('game admin presentation', () => {
         exposePort: null,
       })
     ).toEqual(['缺少 Docker 镜像', '缺少暴露端口'])
+  })
+
+  it('offers ready Windows templates without the legacy Cloudbase credential flag', () => {
+    const template = {
+      id: 41,
+      name: 'fixed-rdp',
+      status: ImageStatus.Ready,
+      imageType: ImageType.Qcow2,
+      osType: OSType.Windows,
+      fileSize: 1,
+      description: null,
+      errorMessage: null,
+      imageHash: 'sha256',
+      uploadedAt: Date.now(),
+      registryUrl: null,
+      supportsInstanceCredentials: false,
+    }
+
+    expect(templateAvailableForEnvironment(template, EnvironmentType.WindowsVM)).toBe(true)
+    expect(
+      templateAvailableForEnvironment({ ...template, status: ImageStatus.Error }, EnvironmentType.WindowsVM)
+    ).toBe(false)
   })
 })

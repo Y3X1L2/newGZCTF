@@ -137,7 +137,7 @@ describe('useGameInstance', () => {
   })
 
   it('surfaces the deployment queue error for a failed Windows VM', async () => {
-    const queueError = 'Windows image is not verified for instance-specific Cloudbase-Init credentials.'
+    const queueError = 'Windows image has no enabled fixed-account RDP configuration.'
     vi.spyOn(gamePlayerApi, 'vmStatus').mockResolvedValue({
       vmInstanceId: '2a44adae-da82-4b52-98aa-cbf436b448bc',
       status: 'Error',

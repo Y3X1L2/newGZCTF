@@ -29,8 +29,10 @@ public class GuacamoleServiceTests
         Assert.Equal("3389", data.Parameters["port"]);
         Assert.Equal("player", data.Parameters["username"]);
         Assert.Equal("Vm-Credential-Example!", data.Parameters["password"]);
-        Assert.Equal("false", data.Parameters["disable-clipboard"]);
-        Assert.Equal("true", data.Parameters["enable-clipboard"]);
+        Assert.Equal("false", data.Parameters["disable-copy"]);
+        Assert.Equal("false", data.Parameters["disable-paste"]);
+        Assert.DoesNotContain("disable-clipboard", data.Parameters.Keys);
+        Assert.DoesNotContain("enable-clipboard", data.Parameters.Keys);
         Assert.Equal("2", data.Attributes["max-connections-per-user"]);
     }
 

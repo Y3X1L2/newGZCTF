@@ -10,6 +10,7 @@ using GZCTF.Services;
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Fleet;
 using GZCTF.Services.Transfer;
+using GZCTF.Modules.Content.Application;
 using GZCTF.Modules.Penetration.Application;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Utils;
@@ -46,6 +47,7 @@ public class EditController(
     IDivisionRepository divisionRepository,
     IStringLocalizer<Program> localizer,
     DeploymentQueueService deploymentQueue,
+    ImageRemoteAccessService imageRemoteAccess,
     IServiceScopeFactory scopeFactory) : Controller
 {
     bool HasContainerRuntimeConfig(GameChallenge challenge) =>
@@ -63,14 +65,10 @@ public class EditController(
         await IsReadyWindowsVmTemplate(challenge.ImageTemplateId.Value, token);
 
     Task<bool> IsReadyWindowsVmTemplate(int templateId, CancellationToken token) =>
-        dbContext.ImageTemplates.AnyAsync(t =>
-            t.Id == templateId &&
-            t.OSType == OSType.Windows &&
-            t.ImageType != ImageType.Docker &&
-            t.Status == ImageStatus.Ready, token);
+        imageRemoteAccess.HasCompetitionWindowsRdpProfileAsync(templateId, token);
 
     BadRequestObjectResult WindowsVmRuntimeConfigError() =>
-        BadRequest(new RequestResponse("Windows 虚拟机题目必须选择就绪的 Windows 镜像模板。"));
+        BadRequest(new RequestResponse("Windows 虚拟机题目必须选择就绪且已配置固定 RDP 账号的 Windows 镜像模板。"));
 
     async Task<(Game? Game, IActionResult? Error)> RequireManageableGameAsync(
         int gameId,
@@ -322,19 +320,6 @@ public class EditController(
     {
         var (game, error) = await RequireManageableGameAsync(id, token);
         if (error is not null) return error;
-
-        try
-        {
-            var actor = await userManager.GetUserAsync(User)
-                ?? throw new UnauthorizedAccessException();
-            using var scope = scopeFactory.CreateScope();
-            var penetrationTeamLab = scope.ServiceProvider.GetRequiredService<PenetrationTeamLabAdapter>();
-            await penetrationTeamLab.EnsureGameDrainedBeforeDeleteAsync(id, actor.Id, token);
-        }
-        catch (TeamLabApiContractException exception)
-        {
-            return StatusCode(exception.StatusCode, new RequestResponse(exception.Message, exception.StatusCode));
-        }
 
         return await gameRepository.DeleteGame(game!, token) switch
         {

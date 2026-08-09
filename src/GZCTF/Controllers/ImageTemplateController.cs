@@ -227,42 +227,6 @@ public class ImageTemplateController : ControllerBase
     }
 
     /// <summary>
-    /// Certify whether a Windows VM image consumes instance-specific Cloudbase-Init credentials.
-    /// </summary>
-    [HttpPatch("{id:int}/instance-credentials")]
-    [RequireTeacher]
-    public async Task<IActionResult> SetInstanceCredentialCapability(
-        int id,
-        [FromBody] ImageCredentialCapabilityUpdate request,
-        CancellationToken token)
-    {
-        var actor = await CurrentUser();
-        var template = await _context.ImageTemplates.SingleOrDefaultAsync(item => item.Id == id, token);
-        if (template is null)
-            return NotFound();
-        if (!CanManageTemplate(actor, template))
-            return Forbid();
-        if (template.OSType != OSType.Windows || template.ImageType == ImageType.Docker)
-            return BadRequest(new { message = "Credential capability only applies to Windows VM images." });
-        if (request.Supported && template.Status != ImageStatus.Ready)
-            return BadRequest(new { message = "Only ready Windows VM images can be certified." });
-
-        template.SupportsInstanceCredentials = request.Supported;
-        await _context.SaveChangesAsync(token);
-        _logger.LogInformation(
-            "Windows image template {TemplateId} credential capability set to {Supported} by {UserId}",
-            template.Id, request.Supported, actor.Id);
-        return Ok(new
-        {
-            template.Id,
-            template.Name,
-            template.OSType,
-            template.ImageType,
-            template.SupportsInstanceCredentials
-        });
-    }
-
-    /// <summary>
     /// Import VM image from local filesystem path.
     /// </summary>
     [HttpPost("import-local")]
@@ -587,9 +551,4 @@ public class LocalImportRequest
     [Required]
     public string LocalPath { get; set; } = string.Empty;
     public string? DisplayName { get; set; }
-}
-
-public class ImageCredentialCapabilityUpdate
-{
-    public bool Supported { get; set; }
 }

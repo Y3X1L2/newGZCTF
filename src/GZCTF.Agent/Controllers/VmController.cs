@@ -55,22 +55,28 @@ public class VmController(
         string vmName,
         [FromQuery] int? generation,
         [FromQuery] string? nativeId,
+        [FromQuery] int? rdpPort,
         CancellationToken token)
     {
+        var targetPort = rdpPort ?? 3389;
         var response = await _kvm.ExecuteWithIdentityAsync(
             vmName, generation, nativeId, async identityToken =>
             {
                 var lookup = await _kvm.GetIpAddressWithDiagnosticAsync(vmName, identityToken);
-                var rdpPort = string.IsNullOrEmpty(lookup.IpAddress)
+                var rdpReady = !string.IsNullOrEmpty(lookup.IpAddress) &&
+                               await KvmService.IsTcpPortReadyAsync(lookup.IpAddress, targetPort, identityToken);
+                var proxyPort = !rdpReady
                     ? null
-                    : await _kvm.EnsureRdpProxyAsync(vmName, lookup.IpAddress, identityToken);
+                    : await _kvm.EnsureRdpProxyAsync(vmName, lookup.IpAddress!, targetPort, identityToken);
                 return new VmIpResponse
                 {
                     VmName = vmName,
                     IpAddress = lookup.IpAddress,
-                    RdpPort = rdpPort,
-                    Status = string.IsNullOrEmpty(lookup.IpAddress) ? "Pending" : "Ready",
-                    Diagnostic = lookup.Diagnostic
+                    RdpPort = proxyPort,
+                    Status = proxyPort.HasValue ? "Ready" : "Pending",
+                    Diagnostic = rdpReady
+                        ? lookup.Diagnostic
+                        : $"{lookup.Diagnostic} RDP target port {targetPort} is not ready.".Trim()
                 };
             }, token);
         return Ok(response);
@@ -81,24 +87,30 @@ public class VmController(
         string vmName,
         [FromQuery] int? generation,
         [FromQuery] string? nativeId,
+        [FromQuery] int? rdpPort,
         [FromBody] VmIpQueryRequest request,
         CancellationToken token)
     {
+        var targetPort = rdpPort ?? 3389;
         var response = await _kvm.ExecuteWithIdentityAsync(
             vmName, generation, nativeId, async identityToken =>
             {
                 var lookup = await _kvm.GetIpAddressWithDiagnosticAsync(
                     vmName, identityToken, request.Interfaces);
-                var rdpPort = string.IsNullOrEmpty(lookup.IpAddress)
+                var rdpReady = !string.IsNullOrEmpty(lookup.IpAddress) &&
+                               await KvmService.IsTcpPortReadyAsync(lookup.IpAddress, targetPort, identityToken);
+                var proxyPort = !rdpReady
                     ? null
-                    : await _kvm.EnsureRdpProxyAsync(vmName, lookup.IpAddress, identityToken);
+                    : await _kvm.EnsureRdpProxyAsync(vmName, lookup.IpAddress!, targetPort, identityToken);
                 return new VmIpResponse
                 {
                     VmName = vmName,
                     IpAddress = lookup.IpAddress,
-                    RdpPort = rdpPort,
-                    Status = string.IsNullOrEmpty(lookup.IpAddress) ? "Pending" : "Ready",
-                    Diagnostic = lookup.Diagnostic
+                    RdpPort = proxyPort,
+                    Status = proxyPort.HasValue ? "Ready" : "Pending",
+                    Diagnostic = rdpReady
+                        ? lookup.Diagnostic
+                        : $"{lookup.Diagnostic} RDP target port {targetPort} is not ready.".Trim()
                 };
             }, token);
         return Ok(response);

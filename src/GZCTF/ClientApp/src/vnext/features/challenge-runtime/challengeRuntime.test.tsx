@@ -99,6 +99,33 @@ describe('challenge runtime contract', () => {
     expect(screen.queryByRole('link', { name: '打开实例入口' })).not.toBeInTheDocument()
   })
 
+  it('shows browser and native RDP access from the shared Windows runtime contract', () => {
+    render(
+      <InstanceControl
+        controller={controller({
+          kind: 'windows',
+          phase: 'running',
+          entry: '10.24.0.30:46001',
+          vmStatus: {
+            rdpHost: '10.24.0.30',
+            rdpPort: 46001,
+            rdpUsername: 'player',
+            rdpPassword: 'fixed-password',
+            rdpUrl: '/guacamole/#/client/connection',
+          },
+        })}
+      />
+    )
+
+    expect(screen.getByText('10.24.0.30:46001')).toBeInTheDocument()
+    expect(screen.getByText('player')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '浏览器远程桌面' })).toHaveAttribute(
+      'href',
+      '/guacamole/#/client/connection'
+    )
+    expect(screen.getByRole('button', { name: '下载 RDP' })).toBeInTheDocument()
+  })
+
   it('submits a trimmed non-empty Flag through the shared form contract', async () => {
     const onSubmit = vi.fn()
     const onValueChange = vi.fn()

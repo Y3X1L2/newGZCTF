@@ -459,12 +459,12 @@ curl -fsS "http://127.0.0.1:${METRIC_PORT}/healthz" \
 
 ### 8.3 Windows VM
 
-1. 选择一份按 `docs/operations/windows-cloudbase-init-image.md` 制作并认证的镜像。
-2. 使用同一模板连续创建两个实例。
-3. 确认两个实例密码不同，数据库不保存明文密码。
-4. 分别验证 RDP 和 Guacamole。
-5. 销毁两个实例，确认 KVM、Guacamole、端口和数据库记录收敛。
-6. 检查平台、Agent 和 Guacamole 日志不存在明文密码。
+1. 选择一份按 `docs/operations/windows-vm-quick-deployment-guide.md` 制作并配置固定 RDP 账号的镜像。
+2. 使用两个不同选手账号从同一模板同时创建两个实例。
+3. 确认 VM、overlay、NVRAM、运行身份和 Worker 代理端口相互独立。
+4. 使用同一组镜像固定凭据分别验证 Guacamole 与内网原生 RDP，并检查双向文本剪贴板。
+5. 销毁两个实例，确认 KVM、Guacamole、代理端口、容量和数据库状态收敛。
+6. 检查平台、Agent 和 Guacamole 日志不存在 RDP 凭据。
 
 任何一步失败都阻止开放写入；不能以“Docker 正常”替代 Windows VM 验收。
 

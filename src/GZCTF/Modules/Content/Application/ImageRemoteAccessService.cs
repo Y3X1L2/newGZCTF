@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Modules.Content.Domain;
@@ -23,7 +24,16 @@ public sealed record UpdateImageRemoteAccessModel(
     string? Credential,
     bool ClearCredential = false);
 
-public sealed class ImageRemoteAccessService(AppDbContext context, IDataProtectionProvider protectionProvider)
+public sealed record CompetitionWindowsRdpProfile(
+    int ImageTemplateId,
+    int Port,
+    string Username,
+    string Password);
+
+public sealed class ImageRemoteAccessService(
+    AppDbContext context,
+    IDataProtectionProvider protectionProvider,
+    ILogger<ImageRemoteAccessService>? logger = null)
 {
     private readonly IDataProtector _protector = protectionProvider.CreateProtector("GZCTF.TeamLab.ImageRemoteAccess.v1");
 
@@ -35,6 +45,36 @@ public sealed class ImageRemoteAccessService(AppDbContext context, IDataProtecti
             ? new ImageRemoteAccessModel(false, TeamLabRemoteProtocol.Ssh, 22, null,
                 false, null)
             : ToModel(configuration);
+    }
+
+    public async Task<bool> HasCompetitionWindowsRdpProfileAsync(
+        int imageTemplateId,
+        CancellationToken cancellationToken) =>
+        await GetCompetitionWindowsRdpProfileAsync(imageTemplateId, cancellationToken) is not null;
+
+    public async Task<CompetitionWindowsRdpProfile?> GetCompetitionWindowsRdpProfileAsync(
+        int imageTemplateId,
+        CancellationToken cancellationToken)
+    {
+        var configuration = await LoadCompetitionWindowsConfigurationAsync(imageTemplateId, cancellationToken);
+        if (!IsCompetitionWindowsRdpConfiguration(configuration))
+            return null;
+
+        try
+        {
+            return new CompetitionWindowsRdpProfile(
+                imageTemplateId,
+                configuration!.Port,
+                configuration.Username!.Trim(),
+                RevealSecret(configuration));
+        }
+        catch (CryptographicException exception)
+        {
+            logger?.LogWarning(exception,
+                "Unable to decrypt remote access credential for image template {ImageTemplateId}",
+                imageTemplateId);
+            return null;
+        }
     }
 
     public async Task<ImageRemoteAccessModel> UpdateAsync(
@@ -71,6 +111,28 @@ public sealed class ImageRemoteAccessService(AppDbContext context, IDataProtecti
             ? throw new InvalidOperationException("The image remote access configuration has no credential.")
             : _protector.Unprotect(configuration.ProtectedSecret);
 
+    private Task<ImageTemplateRemoteAccess?> LoadCompetitionWindowsConfigurationAsync(
+        int imageTemplateId,
+        CancellationToken cancellationToken) =>
+        context.ImageTemplates.AsNoTracking()
+            .Where(template =>
+                template.Id == imageTemplateId &&
+                template.OSType == OSType.Windows &&
+                template.ImageType != ImageType.Docker &&
+                template.Status == ImageStatus.Ready)
+            .Select(template => template.RemoteAccess)
+            .SingleOrDefaultAsync(cancellationToken);
+
+    internal static bool IsCompetitionWindowsRdpConfiguration(ImageTemplateRemoteAccess? configuration) =>
+        configuration is
+        {
+            Enabled: true,
+            Protocol: TeamLabRemoteProtocol.Rdp,
+            Port: >= 1 and <= 65535
+        } &&
+        !string.IsNullOrWhiteSpace(configuration.Username) &&
+        !string.IsNullOrWhiteSpace(configuration.ProtectedSecret);
+
     private static ImageRemoteAccessModel ToModel(ImageTemplateRemoteAccess item) => new(
         item.Enabled, item.Protocol, item.Port, item.Username,
         !string.IsNullOrWhiteSpace(item.ProtectedSecret), item.UpdatedAt);
@@ -88,6 +150,6 @@ public sealed class ImageRemoteAccessService(AppDbContext context, IDataProtecti
             throw new InvalidOperationException("SSH remote access requires a Linux image.");
         if (request.Enabled && request.Protocol != TeamLabRemoteProtocol.ContainerTerminal &&
             string.IsNullOrWhiteSpace(request.Username))
-            throw new InvalidOperationException("启用虚拟机运维接入时必须设置用户名。");
+            throw new InvalidOperationException("An existing-account remote access configuration requires a username.");
     }
 }

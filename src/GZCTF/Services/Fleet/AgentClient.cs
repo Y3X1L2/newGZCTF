@@ -1034,6 +1034,27 @@ public class AgentClient
         IReadOnlyList<AgentVmNetworkInterfaceRequest> interfaces,
         int? expectedGeneration,
         string? expectedNativeId,
+        CancellationToken token) =>
+        await GetVmIpAsync(
+            nodeId, vmName, interfaces, expectedGeneration, expectedNativeId, 3389, token);
+
+    public async Task<AgentVmIpResponse?> GetVmIpAsync(
+        Guid nodeId,
+        string vmName,
+        int rdpTargetPort,
+        int? expectedGeneration,
+        string? expectedNativeId,
+        CancellationToken token) =>
+        await GetVmIpAsync(
+            nodeId, vmName, [], expectedGeneration, expectedNativeId, rdpTargetPort, token);
+
+    private async Task<AgentVmIpResponse?> GetVmIpAsync(
+        Guid nodeId,
+        string vmName,
+        IReadOnlyList<AgentVmNetworkInterfaceRequest> interfaces,
+        int? expectedGeneration,
+        string? expectedNativeId,
+        int rdpTargetPort,
         CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
@@ -1042,12 +1063,15 @@ public class AgentClient
         var client = BuildClient(node);
         try
         {
-            var path = $"/api/vms/{Uri.EscapeDataString(vmName)}/ip{BuildVmIdentityQuery(expectedGeneration, expectedNativeId)}";
+            using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(5));
+            var identityQuery = BuildVmIdentityQuery(expectedGeneration, expectedNativeId);
+            var separator = string.IsNullOrEmpty(identityQuery) ? '?' : '&';
+            var path = $"/api/vms/{Uri.EscapeDataString(vmName)}/ip{identityQuery}{separator}rdpPort={rdpTargetPort}";
             var response = interfaces.Count == 0
-                ? await client.GetAsync(path, token)
+                ? await client.GetAsync(path, deadline.Token)
                 : await client.PostAsync(path,
                     new StringContent(JsonSerializer.Serialize(new { interfaces }), Encoding.UTF8,
-                        "application/json"), token);
+                        "application/json"), deadline.Token);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("Agent VM IP lookup failed on node {NodeId}: {Status}",
@@ -1055,7 +1079,11 @@ public class AgentClient
                 return null;
             }
 
-            return await response.Content.ReadFromJsonAsync<AgentVmIpResponse>(token);
+            return await response.Content.ReadFromJsonAsync<AgentVmIpResponse>(deadline.Token);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
