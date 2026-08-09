@@ -31,6 +31,27 @@ public sealed partial class VmBootstrapService(
         VmBootstrapApplyRequest request,
         CancellationToken cancellationToken)
     {
+        try
+        {
+            return await ApplyCoreAsync(vmName, request, cancellationToken);
+        }
+        catch (VmBootstrapCommandException exception)
+        {
+            return Failed(
+                exception.Stage,
+                exception.Message,
+                exception.ErrorCode,
+                exception.StepId,
+                exception.Category,
+                exception.ExitCode);
+        }
+    }
+
+    private async Task<VmBootstrapApplyResponse> ApplyCoreAsync(
+        string vmName,
+        VmBootstrapApplyRequest request,
+        CancellationToken cancellationToken)
+    {
         var ready = await guest.WaitReadyAsync(vmName, TimeSpan.FromMinutes(3), cancellationToken);
         if (!ready.Ready)
             return Failed("guest-ready", ready.Message);
@@ -140,8 +161,13 @@ public sealed partial class VmBootstrapService(
                 cancellationToken);
             var rebootRequested = result.ExitCode is 194 or 3010;
             if (!result.Success && !rebootRequested)
-                throw new InvalidOperationException(
-                    $"Bootstrap step '{step.Id}' failed ({result.Category}, exit={result.ExitCode?.ToString() ?? "none"}).");
+                throw new VmBootstrapCommandException(
+                    "step-execute",
+                    "bootstrap_step_failed",
+                    step.Id,
+                    result.Category,
+                    result.ExitCode,
+                    $"Bootstrap step '{step.Id}' failed.");
             completedSteps.Add(step.Id);
 
             var mustReboot = step.Reboot.Equals("Required", StringComparison.OrdinalIgnoreCase) ||
@@ -1082,8 +1108,29 @@ public sealed partial class VmBootstrapService(
         return index > 0 ? path[..index] : throw new InvalidOperationException("Guest target path has no parent.");
     }
 
-    static VmBootstrapApplyResponse Failed(string stage, string message) =>
-        new(false, stage, message, 0, [], []);
+    static VmBootstrapApplyResponse Failed(
+        string stage,
+        string message,
+        string? errorCode = null,
+        string? failedStep = null,
+        string? failureCategory = null,
+        int? exitCode = null) =>
+        new(false, stage, message, 0, [], [], errorCode, failedStep, failureCategory, exitCode);
+
+    private sealed class VmBootstrapCommandException(
+        string stage,
+        string errorCode,
+        string stepId,
+        string category,
+        int? exitCode,
+        string message) : InvalidOperationException(message)
+    {
+        public string Stage { get; } = stage;
+        public string ErrorCode { get; } = errorCode;
+        public string StepId { get; } = stepId;
+        public string Category { get; } = category;
+        public int? ExitCode { get; } = exitCode;
+    }
 
     static VmCapabilityProbeResponse ProbeFailed(
         IReadOnlyList<string> verified,

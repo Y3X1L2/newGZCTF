@@ -143,7 +143,7 @@ public class VmController(
     {
         await using var permit = await gate.EnterAsync(AgentOperationCategory.Control, token);
         await EmitAsync(vmName, request, AgentRuntimeSignalStage.BootstrapRunning,
-            AgentRuntimeSignalOutcome.Started, null, token);
+            AgentRuntimeSignalOutcome.Started, null, null, token);
         try
         {
             var result = await _kvm.ExecuteWithIdentityAsync(
@@ -155,6 +155,7 @@ public class VmController(
                 result.Success ? AgentRuntimeSignalStage.BootstrapCompleted : AgentRuntimeSignalStage.Failed,
                 result.Success ? AgentRuntimeSignalOutcome.Ready : AgentRuntimeSignalOutcome.Failed,
                 result.Success ? null : "runtime.bootstrap_failed",
+                result.Success ? null : BootstrapFailureFacts(result),
                 token);
             return Ok(result);
         }
@@ -184,6 +185,7 @@ public class VmController(
                 result.Success ? AgentRuntimeSignalStage.HealthReady : AgentRuntimeSignalStage.Failed,
                 result.Success ? AgentRuntimeSignalOutcome.Ready : AgentRuntimeSignalOutcome.Failed,
                 result.Success ? null : "runtime.health_failed",
+                result.Success ? null : BootstrapFailureFacts(result),
                 token);
             return Ok(result);
         }
@@ -214,6 +216,7 @@ public class VmController(
         AgentRuntimeSignalStage stage,
         AgentRuntimeSignalOutcome outcome,
         string? errorCode,
+        IReadOnlyDictionary<string, string>? facts,
         CancellationToken cancellationToken)
     {
         if (request.OperationId is not { } operationId || operationId == Guid.Empty)
@@ -227,7 +230,27 @@ public class VmController(
             stage,
             outcome,
             errorCode,
-            Retryable: false), cancellationToken);
+            Retryable: false,
+            Facts: facts), cancellationToken);
+    }
+
+    private static IReadOnlyDictionary<string, string>? BootstrapFailureFacts(
+        VmBootstrapApplyResponse result)
+    {
+        var facts = new Dictionary<string, string>(StringComparer.Ordinal);
+        Add("stage", result.Stage);
+        Add("errorCode", result.ErrorCode);
+        Add("stepId", result.FailedStep);
+        Add("category", result.FailureCategory);
+        if (result.ExitCode is { } exitCode)
+            facts["exitCode"] = exitCode.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return facts.Count == 0 ? null : facts;
+
+        void Add(string key, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                facts[key] = value.Length <= 256 ? value : value[..256];
+        }
     }
 
     private async Task TryEmitFailureAsync(
@@ -239,7 +262,7 @@ public class VmController(
         try
         {
             await EmitAsync(vmName, request, AgentRuntimeSignalStage.Failed,
-                AgentRuntimeSignalOutcome.Failed, errorCode, CancellationToken.None);
+                AgentRuntimeSignalOutcome.Failed, errorCode, null, CancellationToken.None);
         }
         catch (Exception signalException)
         {

@@ -931,10 +931,18 @@ public sealed class AgentTeamLabNodeExecutor(
             AgentRuntimeSignalStage.BootstrapCompleted,
             bootstrapTimeout,
             cancellationToken);
-        return completed.Ready
-            ? TeamLabNodeBootstrapResult.Completed()
-            : TeamLabNodeBootstrapResult.Failed(
-                $"VM bootstrap did not complete: {completed.ErrorCode ?? "runtime.bootstrap_signal_missing"}");
+        if (completed.Ready)
+            return TeamLabNodeBootstrapResult.Completed();
+
+        var errorCode = completed.ErrorCode ?? "runtime.bootstrap_signal_missing";
+        var detail = completed.Facts is { Count: > 0 }
+            ? string.Join(", ", completed.Facts.OrderBy(item => item.Key)
+                .Select(item => $"{item.Key}={item.Value}"))
+            : null;
+        return TeamLabNodeBootstrapResult.Failed(
+            detail is null
+                ? $"VM bootstrap did not complete: {errorCode}"
+                : $"VM bootstrap did not complete: {errorCode} ({detail})");
     }
 
     public async Task<TeamLabNodeBootstrapResult> ProbeAssetHealthAsync(
@@ -1158,8 +1166,10 @@ public sealed class AgentTeamLabNodeExecutor(
         var parameters = (bootstrap?.Parameters ?? new Dictionary<string, string>())
             .OrderBy(item => item.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Value, StringComparer.Ordinal);
-        var suppliedSecrets = request.Secrets
-            .Concat(bootstrap?.Secrets ?? new Dictionary<string, string>())
+        // A service package accepts only its manifest-declared secret parameters.
+        // Runtime-owned secrets, such as the endpoint sensor credential, remain on
+        // their dedicated Agent path and must not become package template values.
+        var suppliedSecrets = (bootstrap?.Secrets ?? request.Secrets)
             .GroupBy(item => item.Key, StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Last().Value, StringComparer.Ordinal);

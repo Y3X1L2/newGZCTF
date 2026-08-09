@@ -238,7 +238,11 @@ public sealed record VmBootstrapApplyResponse(
     string Message,
     int RebootCount,
     IReadOnlyList<string> CompletedSteps,
-    IReadOnlyList<string> PassedHealthChecks);
+    IReadOnlyList<string> PassedHealthChecks,
+    string? ErrorCode = null,
+    string? FailedStep = null,
+    string? FailureCategory = null,
+    int? ExitCode = null);
 
 public sealed record VmCapabilityProbeRequest(
     VmInitOsType OsType,

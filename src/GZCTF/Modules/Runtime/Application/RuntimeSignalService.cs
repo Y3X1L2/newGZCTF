@@ -13,7 +13,8 @@ public sealed record RuntimeSignalWaitResult(
     bool Failed,
     string? ErrorCode,
     long Sequence,
-    AgentRuntimeSignalStage? Stage);
+    AgentRuntimeSignalStage? Stage,
+    IReadOnlyDictionary<string, string>? Facts = null);
 
 public sealed class RuntimeSignalConflictException(string message) : Exception(message);
 public sealed class RuntimeSignalNodeNotFoundException : Exception { }
@@ -154,7 +155,8 @@ public sealed class RuntimeSignalService(
                     if (signal.Outcome == AgentRuntimeSignalOutcome.Failed ||
                         signal.Stage == AgentRuntimeSignalStage.Failed)
                         return new RuntimeSignalWaitResult(
-                            false, true, signal.ErrorCode, signal.Sequence, signal.Stage);
+                            false, true, signal.ErrorCode, signal.Sequence, signal.Stage,
+                            ParseFacts(signal.FactsJson));
                     if (signal.Outcome == AgentRuntimeSignalOutcome.Ready && Reached(signal.Stage, expectedStage))
                         return new RuntimeSignalWaitResult(
                             true, false, null, signal.Sequence, signal.Stage);
@@ -188,6 +190,19 @@ public sealed class RuntimeSignalService(
 
     private static string? NullIfWhiteSpace(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static IReadOnlyDictionary<string, string>? ParseFacts(string factsJson)
+    {
+        try
+        {
+            var facts = JsonSerializer.Deserialize<Dictionary<string, string>>(factsJson, JsonOptions);
+            return facts is { Count: > 0 } ? facts : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     private static bool FixedTimeEquals(string left, string right)
     {
