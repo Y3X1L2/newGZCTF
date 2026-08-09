@@ -19,12 +19,14 @@ export function createTrialIdempotencyKey(): string {
 export function TrialRunDialog({
   release,
   requiredRuntimeSecrets,
+  submitting = false,
   open,
   onClose,
   onConfirm,
 }: {
   release: TeamLabRelease | null
   requiredRuntimeSecrets: readonly { assetKey: string; assetName: string; parameterKey: string }[]
+  submitting?: boolean
   open: boolean
   onClose: () => void
   onConfirm: (overlays: readonly TeamLabRuntimeOverlay[] | null) => Promise<boolean>
@@ -64,9 +66,9 @@ export function TrialRunDialog({
       eyebrow="TRIAL RUNTIME"
       footer={
         <>
-          <ActionButton onClick={onClose} type="button">取消</ActionButton>
-          <ActionButton disabled={missing.length > 0} onClick={() => void submit()} tone="primary" type="button">
-            创建试运行
+          <ActionButton disabled={submitting} onClick={onClose} type="button">取消</ActionButton>
+          <ActionButton disabled={missing.length > 0 || submitting} onClick={() => void submit()} tone="primary" type="button">
+            {submitting ? '正在创建' : '创建试运行'}
           </ActionButton>
         </>
       }
@@ -86,7 +88,7 @@ export function TrialRunDialog({
               const key = fieldKey(requirement.assetKey, requirement.parameterKey)
               return (
                 <label className={styles.secretField} key={key}>
-                  <span>{requirement.assetName} · <code>{requirement.parameterKey}</code></span>
+                  <span>{requirement.assetName} · <code>{requirement.parameterKey}</code>（必填）</span>
                   <input
                     aria-label={`${requirement.assetName} 的运行时密钥 ${requirement.parameterKey}`}
                     autoComplete="new-password"

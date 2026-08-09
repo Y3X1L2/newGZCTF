@@ -37,9 +37,10 @@ export function TeamLabReleasesPage() {
     () => teamLabAdminApi.releaseReadiness(scene.id, selectedRelease!.id),
     { keepPreviousData: false, revalidateOnFocus: true }
   )
+  const readinessMatchesSelection = readinessRequest.data?.releaseId === selectedRelease?.id
 
   const createTrial = async (overlays: readonly TeamLabRuntimeOverlay[] | null) => {
-    if (!selectedRelease || !readinessRequest.data?.ready || creatingTrial) return false
+    if (!selectedRelease || !readinessMatchesSelection || !readinessRequest.data?.ready || creatingTrial) return false
     setCreatingTrial(true)
     setOperationError(null)
     try {
@@ -129,7 +130,9 @@ export function TeamLabReleasesPage() {
             <ReleaseReadinessPanel
               creatingTrial={creatingTrial}
               preparingImages={preparingImages}
-              onCreateTrial={() => setTrialOpen(true)}
+              onCreateTrial={() => {
+                if (readinessMatchesSelection) setTrialOpen(true)
+              }}
               onPrepareImages={() => void prepareImages()}
               readiness={readinessRequest.data}
             />
@@ -142,6 +145,7 @@ export function TeamLabReleasesPage() {
         open={trialOpen}
         release={selectedRelease}
         requiredRuntimeSecrets={readinessRequest.data?.requiredRuntimeSecrets ?? []}
+        submitting={creatingTrial}
       />
     </section>
   )
