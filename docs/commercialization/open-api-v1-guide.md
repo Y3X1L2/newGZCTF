@@ -180,6 +180,50 @@ Managed 模板必须具有 Profile manifest 声明的当前认证能力。Opaque
 
 具体路径、请求 schema 和删除接口以 Swagger 的 `Challenges` 分组为准。
 
+## 6.1 公共练习题库 API（Exercise）
+
+Exercise 是不属于任何培训课程的公共练习题库。它与比赛题目使用不同资源域，
+不能用 `game:*` 授权代替 `exercise:*`。
+
+| 方法 | 路径 | Scope | 结果 |
+|---|---|---|---|
+| GET | `/api/open/v1/exercises` | `exercises:read` | 题目摘要列表 |
+| GET | `/api/open/v1/exercises/{exerciseId}` | `exercises:read` | 题目、Flag、远程附件 |
+| POST | `/api/open/v1/exercises` | `exercises:write` | `202` + operation |
+| POST | `/api/open/v1/exercises/import` | `exercises:write` | `202` + operation，1-100 题 |
+| PUT | `/api/open/v1/exercises/{exerciseId}` | `exercises:write` | `202` + operation |
+| DELETE | `/api/open/v1/exercises/{exerciseId}` | `exercises:delete` | `202` + operation |
+
+读列表/创建/批量导入需要资源 grant `exercise:*`；按 ID 读取、修改或删除需要
+`exercise:{exerciseId}`。所有写请求必须提供 `Idempotency-Key`。题目创建和导入
+均由 `ApiOperationWorker` 异步执行，重试同一请求必须复用原 operation：
+
+```bash
+export GZCTF_BASE_URL=https://platform.example/api/open/v1
+export GZCTF_TOKEN='gzctf_pat_...'
+curl -X POST "$GZCTF_BASE_URL/exercises/import" \
+  -H "Authorization: Bearer $GZCTF_TOKEN" \
+  -H "Idempotency-Key: ai-pipeline-20260809-001" \
+  -H 'Content-Type: application/json' \
+  --data-binary @exercise-import.json
+curl "$GZCTF_BASE_URL/operations/$OPERATION_ID" \
+  -H "Authorization: Bearer $GZCTF_TOKEN"
+```
+
+导入体为 `{ "items": [...] }`，每项必须有 `externalId`、`title`、`content`、
+`category`、`type`、`difficulty`；`flags` 最多 100 个，支持多 Flag。附件只能使用
+`attachment.remoteUrl`（http/https），Open API 不接收 multipart 题目附件；平台服务端
+会下载并复制远程内容。动态容器使用 `flagTemplate`，容器字段按 DTO/OpenAPI schema
+填写。`externalId` 只用于导入结果关联，不是平台主键。
+
+## 6.2 Token 责任与审计
+
+Token 由平台管理员/教师在现有 API Token 管理界面签发，明文只展示一次，平台数据库
+只保存 hash。每个 AI、CI 或操作者使用独立 Token，禁止共享。Token 的创建者用户 ID、
+Token ID、scope、resource grant、请求路由、IP 摘要、traceId、operationId 和幂等命中
+会写入 `ExternalApiRequestAudit`，因此管理员可按 Token 和创建者追溯“谁在何时上传了
+哪一批题”。Authorization 值、Flag 和附件内容不会写入审计日志。
+
 ## 7. TeamLab 组网 API
 
 | 能力 | 路径前缀 | Scope |

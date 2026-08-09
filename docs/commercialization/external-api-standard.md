@@ -75,6 +75,9 @@ scope 使用 `resource:action`：
 | `challenges:read` | 查询出题人可访问的题目资产。 |
 | `challenges:write` | 向显式授权的比赛单个或批量导入题目。 |
 | `challenges:delete` | 删除显式授权比赛中的题目。 |
+| `exercises:read` | 查询公共练习题库。 |
+| `exercises:write` | 创建、导入和修改公共练习题。 |
+| `exercises:delete` | 删除公共练习题。 |
 | `teamlab.topologies:read` | Phase 3 查询可访问拓扑和 release。 |
 | `teamlab.topologies:write` | Phase 3 编辑、验证和发布拓扑。 |
 | `teamlab.runtimes:read` | Phase 3 查询 runtime、事件和访问状态。 |
@@ -83,6 +86,10 @@ scope 使用 `resource:action`：
 | `teamlab.capture:write` | Phase 3 创建和停止抓包任务。 |
 
 resource grant 使用显式 `(resourceType, resourceId)` 行。比赛题目接口必须具有 `game:{gameId}` 或 `game:*`；教师只能签发自己拥有的具体比赛授权，`game:*` 和 `*:*` 只能由管理员签发。空 grant 不授予任何比赛。镜像接口仍按模板创建者和 `image:{name}` 授权；其他资源类型的 grant 会在签发时被拒绝。
+
+公共练习接口使用 `resourceType=exercise`：列表、创建和批量导入需要
+`exercise:*`，单题读取、更新和删除需要 `exercise:{exerciseId}`。培训课程题目
+(`TrainingCourseId != null`) 不属于公共练习资源，Exercise token 不能访问或修改。
 
 ## 3. HTTP 语义
 
@@ -210,6 +217,21 @@ POST   /api/open/v1/games/{gameId}/challenges/batch-delete
 - 数据库提交后触发比赛镜像预分发；分发失败重试时不重复创建题目。
 - 删除先停止运行实例和测试环境，再删除题目；不存在的题目作为幂等成功记录在 `result.missing`。
 - 完整字段、枚举、curl 示例和轮询流程见 `docs/commercialization/open-api-v1-guide.md`。
+
+## 8.2 公共练习题目接口
+
+```text
+GET    /api/open/v1/exercises
+GET    /api/open/v1/exercises/{exerciseId}
+POST   /api/open/v1/exercises
+POST   /api/open/v1/exercises/import
+PUT    /api/open/v1/exercises/{exerciseId}
+DELETE /api/open/v1/exercises/{exerciseId}
+```
+
+这些写接口均创建持久化 `ExerciseMutationJob` 和 `ApiOperation`，由可恢复 worker 执行；
+资源授权、幂等键和审计规则与本标准第 5、6、10 节相同。附件契约仅允许远程 URL，
+平台会在导入时复制附件，不共享比赛题目附件实体。
 
 ## 9. 并发与配额
 
