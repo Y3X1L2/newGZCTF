@@ -18,8 +18,8 @@
 
 当前 HEAD 必须通过 `git rev-parse HEAD` 实时读取。开始新任务前仍须重新 `fetch`，不能假定本表中的代码基线或远端关系永久有效。
 
-当前本地 Windows VM 候选位于独立工作区 `D:\Work\newGZCTF-windows-vm-repair`、分支
-`codex/windows-vm-repair`。该分支尚未部署生产；不要把本节的候选能力当作 10.24 当前运行事实。
+当前 Windows VM 修复位于独立工作区 `D:\Work\newGZCTF-windows-vm-repair`、分支
+`codex/windows-vm-repair`，提交 `861e7c6` 已部署到 `10.24.0.27` 做真实验收。
 
 ## 2. 产品与代码状态
 
@@ -69,7 +69,7 @@ vNext 正式路由和实现状态以以下文件为准：
 - 培训动态 Flag 不再暴露管理员测试步骤。
 - 过期培训实例恢复和运行引用安全重载。
 - 培训理论提交后的答案回顾。
-- 普通比赛 Windows VM 固定镜像凭据候选已完成代码和自动化门禁：不再生成实例随机密码或注入 Cloudbase-Init，提供 Guacamole 和内网 mstsc；真实 KVM 双实例尚未验收，尚未部署生产。
+- 普通比赛 Windows VM 固定镜像凭据已完成代码、自动化门禁和单实例真实 KVM 验收：不再生成实例随机密码或注入 Cloudbase-Init，提供 Guacamole 和内网 mstsc；双实例、原生 mstsc 和剪贴板仍需人工验收。
 - 首页编排动画和丝带绘制时序优化。
 - 镜像存储导入完成后模板进入 `Ready`，节点分发不再与模板 `Importing` 状态互锁。
 - 永久失败的镜像分发任务不再无限自动重试，只有 `Retryable=true` 才重试。
@@ -99,12 +99,12 @@ Windows VM 固定凭据候选自动化记录：Release 解决方案 0 warning/0 
 
 当前生产发布事实：
 
-- release：`phase09-1f8d5cc`
-- Git SHA：`1f8d5cca8da9a8491b9feefb3a2ba1f7879cbc2f`
-- 发布目录：`/opt/gzctf/releases/phase09-1f8d5cc/publish`
+- release：`windows-vm-rdp-861e7c6-20260809T084800Z`
+- Git SHA：`861e7c6`（`origin/codex/windows-vm-repair`，二进制 hotfix）
+- 发布目录：`/opt/gzctf/releases/windows-vm-rdp-861e7c6-20260809T084800Z/publish`
 - 回退目录：`/opt/gzctf/releases/phase09-b8ec1b2/publish`
 - 数据库迁移头：`20260730095038_AddTeamLabRemoteAccessSchema`
-- 本次数据库备份：`/opt/gzctf-vnext/backups/phase09-1f8d5cc/database.dump`
+- 本次数据库备份：本次为无迁移二进制 hotfix，沿用上一维护窗口备份；未新增迁移头。
 - 主站、本机 Agent、内网入口和公网入口已通过冒烟；3 个 WorkerNode 在线，活动部署队列为 0。
 - 发布构建通过前端 `214/214`、locale、lint、TypeScript、架构和 production build 门禁；Phase 9 合并提交此前通过后端单元 `758/758` 和集成 `265/265`。
 - 发布后完成 35 项只读业务冒烟及 12 项通用管理写入验收；临时用户、战队、学员组和系统页脚均已清理或恢复。
@@ -113,7 +113,7 @@ Windows VM 固定凭据候选自动化记录：Release 解决方案 0 warning/0 
 - CTF 与培训自动验收脚本的队列终态判断已对齐当前枚举：`Succeeded=4`、`Failed=5`、`Cancelled=6`，避免把成功任务误报为失败。
 - 发布后主站当前激活周期没有 Error 级 journal；内网与公网首页复核均为 HTTP 200。
 
-生产库仍有一个 2026-07-24 创建的 admin Windows VM 测试实例。它使用 Phase 9 之前的随机 libvirt UUID，不符合当前稳定运行身份校验，不能用于验证 Agent 重启后的 RDP 代理恢复。不要修改数据库绕过身份校验；需要验收时应销毁该测试实例并用当前版本重新创建。
+10.24 当前保留一台由本次版本创建的 Windows VM 验收实例，供人工继续验证；验收结束后应通过正式 API 销毁，并核对 domain、overlay、RDP 代理、Guacamole 连接和队列无残留。
 
 ## 6. 现行缺口入口
 
@@ -123,6 +123,8 @@ Windows VM 固定凭据候选自动化记录：Release 解决方案 0 warning/0 
 - AWDP 人工验收：`docs/yinyu-awdp-manual-acceptance.md`
 - Windows VM 简明规范：`docs/operations/windows-vm-quick-deployment-guide.md`
 - 生产发布手册：`docs/operations/vnext-maintenance-window-rollout.md`
+
+本次 Windows VM hotfix 另外修复了 release 目录变化导致 Data Protection 应用判别符变化的问题，并在发布后重新保存了题目绑定镜像的远程访问配置。后续 release 重启不会再因目录变化使固定凭据失效。
 
 `docs/yinyu-vnext-production-baseline-20260721.md` 是 2026-07-21 的历史采样，不代表当前服务器仍停留在其中记录的版本。
 

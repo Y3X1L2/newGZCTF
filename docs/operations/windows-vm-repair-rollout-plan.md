@@ -1,6 +1,6 @@
 # 比赛 Windows VM 固定凭据改造计划
 
-> 状态：代码与自动化门禁完成，等待真实 KVM 验收
+> 状态：单实例真实 KVM 验收完成；等待双实例、原生 mstsc 与剪贴板人工验收
 > 更新时间：2026-08-09
 > 代码基线：`cb801a7`
 > 开发分支：`codex/windows-vm-repair`
@@ -195,7 +195,8 @@ Agent 使用已有静态 `Kvm:RdpProxyAllowedSources`。部署时允许内网或
 - [x] 清理普通比赛的旧 Cloudbase 管理入口和文案
 - [x] 完成定向后端、前端和架构测试
 - [x] 完成全量构建与回归门禁
-- [ ] 在真实 KVM 环境完成双实例人工验收
+- [x] 在真实 KVM 环境完成单实例固定凭据、Agent 代理和 Guacamole 验收
+- [ ] 在真实 KVM 环境完成双实例、原生 mstsc 与剪贴板人工验收
 - [x] 更新 `docs/development/current-state.md` 和当前执行记录
 
 ## 7. 进度记录
@@ -212,4 +213,6 @@ Agent 使用已有静态 `Kvm:RdpProxyAllowedSources`。部署时允许内网或
 | 2026-08-09 | 已完成 | 删除无调用者的旧 `instance-credentials` 写接口和前端 adapter；数据库字段只保留为历史兼容数据，不再提供新写入入口。 |
 | 2026-08-09 | 已完成 | Release 解决方案 0 warning/0 error；后端单元 `763/763`、集成 `265/265`、前端 `218/218` 及 locale/lint/TypeScript/架构/build 全部通过。 |
 | 2026-08-09 | 已确认 | 实时 OpenAPI 包含新增 RDP 字段；完整 `genapi` 同时产生约 2 万行历史契约漂移，本分支继续使用 feature adapter，生成快照治理仍按现有缺口文档单独处理。 |
-| 2026-08-09 | 待执行 | 候选镜像固定凭据、双实例、Guacamole、mstsc、剪贴板、许可有效期和销毁残留需要真实 KVM 环境验收。 |
+| 2026-08-09 | 已完成 | 在 10.24.0.27 / Worker 10.24.0.31 完成单实例冷启动、DHCP、3389、Agent RDP 代理和 Guacamole 登录；固定凭据实际以镜像配置为准。 |
+| 2026-08-09 | 已完成 | 修复 release 目录变化导致 Data Protection 判别符变化的问题；重新保存模板 #1 的远程访问配置，服务二次重启后 API 仍返回原生 RDP 字段。 |
+| 2026-08-09 | 待人工验收 | 双实例、原生 mstsc、剪贴板、许可有效期和销毁残留仍由测试人员按清单验收。 |
