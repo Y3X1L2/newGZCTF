@@ -105,6 +105,7 @@ var app = builder.Build();
 
 app.UseMiddleware<AgentCorrelationErrorMiddleware>();
 app.UseMiddleware<AgentEndpointAuthenticationMiddleware>();
+app.UseWebSockets();
 
 app.MapControllers();
 

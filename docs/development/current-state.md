@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-更新时间：2026-08-08
+更新时间：2026-08-10
 
 本文件是跨会话的短期状态入口。长期规则见根目录 `AGENTS.md`，完整目标见 `docs/platform-commercialization-master-plan.md`。状态变化后应更新本文件，不通过追加整段聊天记录维护记忆。
 
@@ -27,6 +27,21 @@
 - 2026-08-09 候选 release `teamlab-e2e-7f66871-r2-20260809` 已在 118 原子激活。真实页面创建 v4 试运行已到达 VM bootstrap，Docker 网络创建不再出现接口名超长错误；Linux 服务包因标准 tar 的 `./` 根目录条目被 Guest Supervisor 误判为非法相对路径而失败，失败运行已自动清理。修复将 `./` 仅作为归档语法规范化，仍拒绝绝对路径和路径穿越；定向回归 `Bootstrap_StandardTarDotPrefixIsAccepted` 已通过，待重新发布后复验。
 - 修复提交为 `7f66871`，已推送至 `origin/codex/phase-09-teamlab-networking`。2026-08-09 本机未取得 118 的发布 SSH 认证，测试服务器仍运行此前候选；不得将旧制品上的 Docker 创建失败视为修复后的验收结论。
 - 三队混合运行、服务注入实际执行、远程运维、流量/PCAP、暂停恢复和完整清理尚未签收。细节见 `docs/development/test-plans/2026-08-09-teamlab-usability-acceptance.md`。
+- 后续验收优先验证不启用服务注入的混合运行、远程运维、观测和生命周期。Linux 服务注入失败已定位为模板 `79` 内置旧 Guest Supervisor 与当前运行时契约不匹配；处理方式是新的不可变模板导入、分发和认证，未通过前不将服务注入写为通过。
+
+### 2026-08-10 已证实现状
+
+- 当前代码基线 `5ad761a159d87bb82866bfe4d1e484c5a2e4b755` 已推送到 `main`，并已在 118/125 验收环境以统一主站和 Agent 制品部署。主站、首页和两个节点 inventory 正常。
+- 验收场景的 v5 设计校验与发布已通过；创建试运行后，网络与两台 VM 已成功完成创建及来宾就绪。唯一当前阻断是 Docker 资产在运行库存校验时为 `exited`，运行时随后完成自动清理。该结论来自真实页面事件时间线和运行时错误，尚未把混合试运行标记为通过。
+- 后续首先定位 Docker 退出的根因；服务注入暂不阻塞其它验收。只有 Docker、Linux VM、Windows VM 均稳定运行后，才继续管理员运维、流量观测、生命周期和并发控制验收。
+
+### 2026-08-10 r4 试运行成功基线（后续验收起点）
+
+- v5 失败已完成根因确认：Docker 模板 `#114 Phase9 Immutable Portal` 启动时要求 `NM_AI_CONSOLE_API_URL`，场景未配置该业务镜像依赖，容器退出码为 `1`。该问题不属于 TeamLab 网络、分发或调度链路，未为单个镜像增加平台特判、等待或重试。
+- 管理端将 Docker 资产替换为独立常驻镜像 `admin-Test-Web-v1 (#15)` 后，场景发布 v6（Release `019fe773-7565-7f3f-a250-ea0252d4ce02`），真实试运行 Runtime `019fe774-2f19-70ec-a8a0-7d3557022faf`（数据库 ID `117`）进入 `Ready`。页面、数据库、125 节点 Docker 与 libvirt 状态一致：Docker、Linux VM、Windows VM 均运行，网段为 `10.80.1.0/24`、`172.20.1.0/24`、`192.168.81.0/24`。
+- 管理员容器终端曾无法输入。主站记录 Agent WebSocket 握手 `426 Upgrade Required`，根因是 `GZCTF.Agent` 未启用 WebSocket 中间件。已在认证之后、Controller 映射之前添加 `app.UseWebSockets()`；本地 Agent Release 构建通过，并仅在 125 部署该 Agent 二进制。新会话真实显示 shell 提示符，执行 `echo TEAMLAB_TERMINAL_OK` 已取得回显；旧失败会话正确以 `terminal_disconnected` 收敛。
+- 通过受审计容器终端发送 ICMP：Docker 到 Linux VM 成功；Docker 到 Windows VM 未响应，当前符合 Windows 默认 ICMP 防火墙策略，不能据此判定网络失败。流量页面已经出现本运行时的 ICMP、UDP、ARP 元数据；端到端路径暂无数据，待继续核对采集关联条件与投影结果。
+- 后续优先验收：流量筛选与详情、日志/事件关联、暂停/恢复/重置/销毁、终端会话回收和权限边界。服务注入保持低优先级，不阻塞上述验收。
 
 ## 2. 产品与代码状态
 
@@ -179,3 +194,12 @@ vNext 正式路由和实现状态以以下文件为准：
 - 本地聚焦验证通过：TeamLab 单元用例 `233/233`；operation/worker PostgreSQL 用例 `10/10`；发布门禁通过前端 `78/78` 测试文件、`222/222` 用例、locale、lint、TypeScript、架构和 production build。
 - 浏览器实测管理端场景设计页在 1366/1920 宽度没有横向溢出或重叠；登录后没有相关 API `401/404` 或控制台错误。Cookie 管理端服务目录 `GET /api/admin/teamlab/service-profiles` 返回 `200`，已不再错误调用 Token-only Open API。
 - 本轮只完成服务端控制面与界面基本验收。计划要求的外部 token-only 完整双节点场景链路，以及 operation/rollout 终态 webhook 事件模型，仍需单独设计和现场验收，不得将其标记为完成。
+
+## 2026-08-10 TeamLab 现场验收更新
+
+- 旧 Agent 遗留的第 1 代 UEFI Windows VM 缺少 generation 旁车，重置的第 2 代清理请求曾被身份围栏拒绝。兼容规则仅允许销毁路径处理稳定 UUID 匹配、域代次严格早于请求代次且旁车缺失的旧域；创建、暂停、恢复仍为严格身份校验。
+- 现场又确认 UEFI NVRAM 会使旧 undefine 命令失败。销毁逻辑已改为受检的 managed-save、storage、NVRAM 一体清理，不再吞掉正式删除错误；定向单元 22/22 通过，125 已部署 Agent 修复。
+- 新试运行 019fe8e0-700e-7471-8381-eec77b9404ca 已两次 Ready（重置后为第 2 代）。真实页面完成容器终端命令、终端回收审计、Docker 到 Linux VM ICMP、流量协议筛选、日志/事件阶段筛选。服务注入未参与本轮，也不阻塞验收。
+- 调试授权创建和撤销已在同一运行时真实执行，撤销后页面不存在有效授权或下载入口；当前第 2 代保持 Ready。
+- 该运行时已完成最终销毁；页面与 125 节点均确认不存在 tl118-* 域、overlay、旁车或容器残留。单队混合试运行的创建、重置和销毁链路已通过。
+- 当前仍待：端到端路径关联、Linux SSH/Windows RDP（模板尚未配置静态运维账号）、正式比赛三队与权限边界、并发命令、销毁后的完整资源核对。125 上发现 tl106 至 tl116 历史 VM 域，必须先以数据库事实核对后再清理，禁止按名称删除。

@@ -112,3 +112,44 @@ passed
 - 当前阻断原因已查明：v3 的两个 VM 各声明 20480 MiB 存储。118 可用镜像空间约 6.1 GiB，125 约 18.3 GiB，任一节点都不能满足对应 VM 放置组；队列稳定给出 `node_capacity_exhausted`，未产生重复 runtime 或错误资源。
 - 125 上发现并清除了 8 个历史已销毁 TeamLab runtime 遗留的 libvirt 域定义（`tl96` 至 `tl104`）。它们在数据库中均为 Destroyed，且没有关联运行资产；磁盘 overlay 早已不存在。未触碰仍运行的普通 VM、镜像模板或其他场景资源。
 - 三队混合运行、服务注入实际执行、SSH/RDP/终端、流量/PCAP、暂停恢复和最终清理仍待验收。现有两节点的真实磁盘容量不足以在不降低场景声明资源的前提下并发承载三支当前规格的混合队伍；不得通过绕过调度器、伪造容量或修改数据库来签收该项。
+
+## 2026-08-09 后续验收优先级
+
+- 当前测试服务器运行独立 release `teamlab-e2e-bootstrap-facts-r3-20260809`。主站与 Agent 已运行，首页、迁移和节点 inventory 已通过冒烟；本地 `main` 已包含后续 Guest Supervisor 诊断和运行环境文件修复，但尚未作为下一轮候选发布。
+- 已定位的服务注入失败根因是 Linux 模板 `79` 内置旧版 Guest Supervisor，旧二进制不会生成服务包所需的来宾运行环境文件。该问题不影响 Docker、未启用服务注入的 Linux/Windows VM、网络、状态控制、运维、日志或流量能力的验收。
+- 服务注入改为低优先级项：必须通过新不可变模板的导入、分发和认证闭环处理，禁止修改既有模板、队伍 overlay 或用延长等待掩盖失败。
+- 下一轮优先验收：独立低负载 Docker + Linux VM + Windows VM 试运行（不启用服务注入）、管理员静态 SSH/RDP/容器终端、日志/事件/流量检索与筛选、暂停/恢复/重置/销毁、重复命令和并发命令收敛。
+- 三队并发混合运行仍以节点实际可用镜像空间为前提；先完成单队全链路与并发控制命令验收，再根据容量事实决定可同时创建的队伍数量，不能把硬件不足伪报为调度通过。
+
+## 2026-08-10 r4 现场进展与当前阻断
+
+- 已将提交 `5ad761a` 的统一主站与 Agent 发布到验收环境：118 激活 `teamlab-e2e-5ad761a1-r4-20260810`，125 Agent 激活对应 r3 制品。主站、两个 Agent inventory 和首页均通过冒烟；118 仅清理已确认不再被服务引用的历史 release 与失败半成品，保留当前 release、回退候选和本轮数据库备份。
+- 浏览器以管理员身份真实修改验收场景 `TeamLab E2E Acceptance 20260809`：右侧检查器现可独立滚动，Linux VM 的服务注入已关闭；保存为修订 `28` 后校验通过，并发布为 v5 `019fe767-c7ed-7d75-9256-fc04b6547e1a`。页面同时显示 Docker、Linux、Windows 三类镜像均有 2 个就绪节点，试运行可创建。
+- v5 试运行 `019fe768-557b-7325-a3a4-ee2eeebbd2ef` 是本轮失败清理证据，不重试、不复用。规划、Fabric 租约、节点放置、网络、路由、基础设施、Docker/两台 VM 创建，以及两台 VM 的 GuestReady 和 Bootstrap 均完成；运行库存校验时 Docker 状态为 `exited`，控制面准确报出 `Runtime inventory validation failed: docker: runtime resource state is exited`，随后自动清理并释放 Fabric 租约。
+- 当前验收优先级调整：先只读定位 Docker 为何在创建后退出；在 Docker、Linux VM、Windows VM 同时稳定运行前，不进入服务注入验收。Docker 根因修复后，继续验证管理员 SSH/RDP/容器终端、日志/事件/流量与路径筛选、暂停/恢复/重置/销毁和命令并发收敛。服务注入仍是低优先级，必须使用新不可变模板完成，不能靠修改现有模板或运行时补丁签收。
+
+## 2026-08-10 v6 运行基线与本轮顺序
+
+- v5 Docker 退出是镜像业务依赖缺失：`#114 Phase9 Immutable Portal` 要求 `NM_AI_CONSOLE_API_URL`，未在场景中提供时以退出码 `1` 结束。该失败保留为镜像配置诊断证据，不向调度、网络或运行时增加例外逻辑。
+- 已使用独立常驻 Docker 镜像发布 v6，并创建试运行 `019fe774-2f19-70ec-a8a0-7d3557022faf`。该运行时为 `Ready`，在 125 节点实际存在并运行 Docker、Linux VM 和 Windows VM，三个网段同时存在；此运行时作为观测、运维和生命周期验收对象。
+- 容器终端的 WebSocket `426 Upgrade Required` 已定位为 Agent 管线缺少 `UseWebSockets`，不是 Guacamole、权限或浏览器问题。部署 Agent 修复后，管理员真实进入容器 shell 并执行 `echo TEAMLAB_TERMINAL_OK` 得到回显；失败会话收敛为 `terminal_disconnected`。
+- 已产生 Docker 到 Linux VM 的真实 ICMP 流量；流量页面显示 ICMP、UDP、ARP 记录。Docker 到 Windows VM 无 ICMP 回应，待以 TCP/RDP 或 Windows 防火墙规则进一步验证，不把默认 ICMP 禁止误写为组网失败。
+- 本轮先完成流量/路径筛选、日志事件关联、远程会话回收和生命周期控制；服务注入保持低优先级，待新的不可变模板导入和认证完成后再执行。
+
+## 2026-08-10 后续现场验收
+
+- 第二版兼容清理已使历史运行时从“待清理”收敛为“已销毁”。随后发现 UEFI Windows 域仍可残留：virsh undefine --remove-all-storage 未删除 NVRAM，且旧代码吞掉了命令错误。
+- 修复后的正式销毁命令包含 --managed-save、--remove-all-storage 和 --nvram，不再静默成功。定向回归扩展为 22/22 通过，并已在 125 对遗留域验证域、overlay 和 NVRAM 同时移除。
+- 125 已部署修复 Agent（SHA-256 60f8a02e0b8b001e0d35bc16366967d127841d1242416cf96dd8067ccd717d8d），服务状态为 active。
+- 新试运行 019fe8e0-700e-7471-8381-eec77b9404ca 在 96 秒进入 Ready；Docker、Linux VM、Windows VM、3 个网段和 1 个分片均由页面与节点一致确认。管理员容器终端真实执行 Docker 到 Linux VM 的 ICMP，主动关闭后写入远程会话审计事件。
+- 流量页面以输入式协议筛选 ICMP 返回 Docker 10.80.1.10 与 Linux VM 172.20.1.20 的双向报文；日志页按 ready 阶段和 teamlab.ready 精确代码均能定位相同运行时。事件消息仍存在英文，需按中文产品契约单独修复。
+- 已从页面真实重置该运行时：第 2 代再次进入 Ready，节点当前仅有该运行时的 tl118-linux-vm 与 tl118-wi-864822，描述均为 gzctf-generation=2；旧 tl117-* 不存在。另发现 tl106 至 tl116 历史域，归属尚未核对，禁止按名称批量删除。
+- 运行时调试授权已创建并撤销：创建后页面展示隔离地址、到期时间和下载入口；撤销后收敛为“暂无有效授权”，页面控制台无平台相关错误。当前运行保持第 2 代 Ready，供后续正式比赛、权限与最终销毁验收使用。
+- 最终销毁已完成：页面状态为 destroyed；125 节点无 tl118-* libvirt 域、qcow2 overlay、generation 旁车或容器残留。此次单队混合试运行的创建、重置和销毁链路通过。
+
+## 2026-08-10 生命周期清理复验
+
+- 已在真实页面点击重置，运行时进入第 2 代并准确投影为“等待清理”，没有错误地展示为就绪。
+- 根因已在 125 节点确认：第 1 代 Windows VM 由旧 Agent 创建，具有稳定 libvirt UUID 与有效代次，但没有 `.generation` 旁车。当前第 2 代的清理请求因此被旧规则拒绝，随后同名 overlay 被占用。
+- 候选修复只针对销毁路径：仅当域代次有效、严格早于请求代次、旁车缺失且稳定 UUID（及传入 native ID）均匹配时，按域自身第 1 代身份删除。未知域、同代/未来代域、UUID 不匹配域以及所有创建、暂停、恢复操作仍保持严格拒绝。
+- 定向回归 `VmGuestControlTests` 已通过（21/21）。第二版 Agent 制品待部署到 125；部署后优先完成“继续清理 -> 无残留 -> 新试运行再次 Ready”，再继续运维、流量、日志、权限和生命周期验收。服务注入仍不阻塞本轮。

@@ -99,8 +99,7 @@ public class KvmService
             if (domainExists)
             {
                 await RunCommandAsync($"virsh destroy {ShellEscape(request.VmName)} 2>/dev/null || true", token);
-                await RunCommandAsync(
-                    $"virsh undefine {ShellEscape(request.VmName)} --remove-all-storage 2>/dev/null || true", token);
+                await RunCommandAsync(BuildVmUndefineCommand(request.VmName), token);
             }
             CleanupVmArtifacts(request.VmName);
             domainId = string.Empty;
@@ -218,7 +217,7 @@ public class KvmService
                 $"virsh destroy {ShellEscape(request.VmName)} 2>/dev/null || true", CancellationToken.None,
                 throwOnError: false);
             await RunCommandAsync(
-                $"virsh undefine {ShellEscape(request.VmName)} --remove-all-storage 2>/dev/null || true",
+                $"{BuildVmUndefineCommand(request.VmName)} 2>/dev/null || true",
                 CancellationToken.None, throwOnError: false);
             CleanupVmArtifacts(request.VmName);
             throw;
@@ -259,8 +258,14 @@ public class KvmService
             return;
         }
         var domainGeneration = await ReadDomainGenerationAsync(vmName, token);
+        // Older Agents did not persist generation sidecars. A verified older domain may only be
+        // removed by a later cleanup request; non-destructive operations remain strictly fenced.
+        var allowLegacyCleanup = CanDestroyLegacyDomainWithoutSidecar(
+            domainGeneration, sidecarGeneration, expectedGeneration);
         var conflict = GetIdentityConflict(
-            vmName, nativeId, domainGeneration, sidecarGeneration, expectedGeneration, expectedNativeId);
+            vmName, nativeId, domainGeneration, sidecarGeneration,
+            allowLegacyCleanup ? domainGeneration : expectedGeneration,
+            expectedNativeId, allowLegacyCleanup);
         if (conflict is not null)
             throw new AgentOperationException(
                 "Conflict", "runtime.identity_conflict",
@@ -268,7 +273,7 @@ public class KvmService
                 StatusCodes.Status409Conflict);
         await StopRdpProxyAsync(vmName);
         await RunCommandAsync($"virsh destroy {ShellEscape(vmName)} 2>/dev/null || true", token);
-        await RunCommandAsync($"virsh undefine {ShellEscape(vmName)} --remove-all-storage 2>/dev/null || true", token);
+        await RunCommandAsync(BuildVmUndefineCommand(vmName), token);
         if (_guestEnrollmentStore is not null)
             await _guestEnrollmentStore.RevokeVmAsync(
                 vmName, domainGeneration!.Value, nativeId, token);
@@ -420,6 +425,15 @@ public class KvmService
             return $"VM {vmName} native identity does not match the requested runtime identity.";
         return null;
     }
+
+    internal static bool CanDestroyLegacyDomainWithoutSidecar(
+        int? domainGeneration,
+        int? sidecarGeneration,
+        int? expectedGeneration) =>
+        sidecarGeneration is null &&
+        domainGeneration is { } actualGeneration &&
+        expectedGeneration is { } requestedGeneration &&
+        actualGeneration >= 1 && actualGeneration < requestedGeneration;
 
     public async Task<T> ExecuteWithIdentityAsync<T>(
         string vmName,
@@ -687,6 +701,9 @@ public class KvmService
     }
 
     private static string ShellEscape(string arg) => $"'{arg.Replace("'", "'\\''")}'";
+
+    internal static string BuildVmUndefineCommand(string vmName) =>
+        $"virsh undefine {ShellEscape(vmName)} --managed-save --remove-all-storage --nvram";
 
     internal string ResolveTemplatePath(CreateVmRequest request)
     {
