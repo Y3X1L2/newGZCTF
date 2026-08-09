@@ -28,6 +28,28 @@ export interface ImageRemoteAccessConfiguration {
   updatedAt: number | null
 }
 
+const remoteProtocolByValue = {
+  1: 'containerTerminal',
+  2: 'ssh',
+  3: 'rdp',
+} as const
+
+const remoteProtocolValue = {
+  containerTerminal: 1,
+  ssh: 2,
+  rdp: 3,
+} as const
+
+const credentialModeByValue = {
+  1: 'platformGenerated',
+  2: 'existingAccount',
+} as const
+
+const credentialModeValue = {
+  platformGenerated: 1,
+  existingAccount: 2,
+} as const
+
 function isRemoteProtocol(value: unknown): value is ImageRemoteAccessConfiguration['protocol'] {
   return value === 'containerTerminal' || value === 'ssh' || value === 'rdp'
 }
@@ -36,14 +58,30 @@ function isCredentialMode(value: unknown): value is ImageRemoteAccessConfigurati
   return value === 'platformGenerated' || value === 'existingAccount'
 }
 
+function parseRemoteProtocol(value: unknown): ImageRemoteAccessConfiguration['protocol'] | null {
+  if (isRemoteProtocol(value)) return value
+  return isNumber(value) && value in remoteProtocolByValue
+    ? remoteProtocolByValue[value as keyof typeof remoteProtocolByValue]
+    : null
+}
+
+function parseCredentialMode(value: unknown): ImageRemoteAccessConfiguration['credentialMode'] | null {
+  if (isCredentialMode(value)) return value
+  return isNumber(value) && value in credentialModeByValue
+    ? credentialModeByValue[value as keyof typeof credentialModeByValue]
+    : null
+}
+
 function parseRemoteAccess(value: unknown, label: string): ImageRemoteAccessConfiguration {
+  const protocol = isRecord(value) ? parseRemoteProtocol(value.protocol) : null
+  const credentialMode = isRecord(value) ? parseCredentialMode(value.credentialMode) : null
   if (
     !isRecord(value) ||
     !isBoolean(value.enabled) ||
-    !isRemoteProtocol(value.protocol) ||
+    protocol === null ||
     !isNumber(value.port) ||
     !isNullableString(value.username) ||
-    !isCredentialMode(value.credentialMode) ||
+    credentialMode === null ||
     !isBoolean(value.hasCredential) ||
     !(value.updatedAt === null || isNumber(value.updatedAt))
   ) {
@@ -51,10 +89,10 @@ function parseRemoteAccess(value: unknown, label: string): ImageRemoteAccessConf
   }
   return {
     enabled: value.enabled,
-    protocol: value.protocol,
+    protocol,
     port: value.port,
     username: value.username,
-    credentialMode: value.credentialMode,
+    credentialMode,
     hasCredential: value.hasCredential,
     updatedAt: value.updatedAt,
   }
@@ -194,7 +232,11 @@ export function createImageTemplateAdminApi(client: RuntimeJsonClient = runtimeJ
 
     async updateRemoteAccess(id: number, configuration: Omit<ImageRemoteAccessConfiguration, 'hasCredential' | 'updatedAt'> & { credential?: string | null }) {
       return parseRemoteAccess(
-        await client.patchJson(`/api/v1/image-templates/${id}/remote-access`, configuration),
+        await client.patchJson(`/api/v1/image-templates/${id}/remote-access`, {
+          ...configuration,
+          protocol: remoteProtocolValue[configuration.protocol],
+          credentialMode: credentialModeValue[configuration.credentialMode],
+        }),
         'Image remote access update'
       )
     },
