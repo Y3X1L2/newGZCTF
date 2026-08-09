@@ -99,6 +99,7 @@ public sealed class GuestSupervisorWorker(
         catch (Exception exception)
         {
             var errorCode = ErrorCode(exception);
+            var facts = FailureFacts(exception);
             if (current is not null && current.Stage != GuestLifecycleStage.Failed)
             {
                 try
@@ -116,7 +117,8 @@ public sealed class GuestSupervisorWorker(
                         GuestLifecycleOutcome.Failed,
                         current.UpdatedAt,
                         digest,
-                        errorCode), CancellationToken.None);
+                        errorCode,
+                        facts), CancellationToken.None);
                     await lifecycle.MarkEmissionAcknowledgedAsync(current, CancellationToken.None);
                 }
                 catch (Exception projectionError)
@@ -131,12 +133,32 @@ public sealed class GuestSupervisorWorker(
     }
 
     private static string ErrorCode(Exception exception)
+        => exception is GuestBootstrapFailureException bootstrap
+            ? bootstrap.ErrorCode
+            : ErrorCodeFromMessage(exception);
+
+    private static string ErrorCodeFromMessage(Exception exception)
     {
         var value = exception.Message.Split(':', 2)[0];
         if (value.Length is > 0 and <= 128 &&
             value.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.'))
             return value;
         return "guest_supervisor_failed";
+    }
+
+    private static IReadOnlyDictionary<string, string>? FailureFacts(Exception exception)
+    {
+        if (exception is not GuestBootstrapFailureException bootstrap)
+            return null;
+
+        var facts = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["failedStep"] = bootstrap.StepId,
+            ["failureCategory"] = bootstrap.Category
+        };
+        if (bootstrap.ExitCode is { } exitCode)
+            facts["exitCode"] = exitCode.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return facts;
     }
 
     private async Task<GuestLocalCheckpoint> AdvanceIfAsync(

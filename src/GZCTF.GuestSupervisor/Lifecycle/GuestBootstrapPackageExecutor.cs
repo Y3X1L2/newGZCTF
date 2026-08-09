@@ -16,6 +16,19 @@ public sealed record GuestBootstrapExecutionResult(
     IReadOnlyList<string> CompletedSteps,
     IReadOnlyList<string> PassedHealthChecks);
 
+public sealed class GuestBootstrapFailureException(
+    string errorCode,
+    string stepId,
+    string category,
+    int? exitCode,
+    string message) : InvalidOperationException(message)
+{
+    public string ErrorCode { get; } = errorCode;
+    public string StepId { get; } = stepId;
+    public string Category { get; } = category;
+    public int? ExitCode { get; } = exitCode;
+}
+
 public sealed class GuestBootstrapPackageExecutor(
     GuestSupervisorConfiguration configuration,
     IGuestGatewayClient enrollment,
@@ -35,6 +48,8 @@ public sealed class GuestBootstrapPackageExecutor(
         {
             await MaterializeRuntimeAsync(intent, cancellationToken);
             var runtimeSecrets = await EnsureSecretsAsync(intent, checkpoint.Identity, cancellationToken);
+            await MaterializeRuntimeEnvironmentAsync(
+                MergeValues(intent.Parameters, runtimeSecrets), cancellationToken);
             await remoteAccess.ApplyAsync(runtimeSecrets, cancellationToken);
             return new GuestBootstrapExecutionResult(true, false, 0, [], []);
         }
@@ -57,6 +72,7 @@ public sealed class GuestBootstrapPackageExecutor(
             if (!values.ContainsKey(parameter.Key) && parameter.DefaultValue is not null)
                 values[parameter.Key] = parameter.DefaultValue;
         GuestPackageContract.ValidateValues(manifest, values);
+        await MaterializeRuntimeEnvironmentAsync(values, cancellationToken);
         await MaterializeFilesAsync(manifest, packageRoot, values, cancellationToken);
 
         var steps = state.Steps.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
@@ -65,7 +81,9 @@ public sealed class GuestBootstrapPackageExecutor(
             if (steps.TryGetValue(step.Id, out var existing))
             {
                 if (existing.Status == "Failed")
-                    throw new InvalidOperationException($"guest_bootstrap_step_failed:{step.Id}");
+                    throw new GuestBootstrapFailureException(
+                        "bootstrap_step_failed", step.Id, "persisted", existing.ExitCode,
+                        "A previously failed bootstrap step cannot be resumed automatically.");
                 if (existing.Status == "Running")
                     throw new InvalidOperationException($"guest_bootstrap_step_interrupted:{step.Id}");
                 if (existing.Status == "Completed") continue;
@@ -102,7 +120,9 @@ public sealed class GuestBootstrapPackageExecutor(
                         "Failed", result.ExitCode, Digest(result.Output), checkpoint.Identity.BootEpoch, DateTimeOffset.UtcNow);
                     state = state with { Steps = steps };
                     await executionStore.SaveAsync(state, cancellationToken);
-                    throw new InvalidOperationException($"guest_bootstrap_step_failed:{step.Id}");
+                    throw new GuestBootstrapFailureException(
+                        "bootstrap_step_failed", step.Id, result.Category, result.ExitCode,
+                        "The bootstrap step failed.");
                 }
                 var reboot = string.Equals(step.Reboot, "Required", StringComparison.OrdinalIgnoreCase) ||
                              string.Equals(step.Reboot, "IfRequested", StringComparison.OrdinalIgnoreCase) && requested;
@@ -242,7 +262,6 @@ public sealed class GuestBootstrapPackageExecutor(
         GuestBootstrapIntent intent,
         CancellationToken cancellationToken)
     {
-        if (intent.Parameters is null) return;
         var root = OperatingSystem.IsWindows()
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "GZCTF", "Runtime")
             : "/opt/gzctf/runtime";
@@ -255,6 +274,41 @@ public sealed class GuestBootstrapPackageExecutor(
                 Parameters = intent.Parameters
             }, JsonOptions), cancellationToken);
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+    }
+
+    private static async Task MaterializeRuntimeEnvironmentAsync(
+        IReadOnlyDictionary<string, string> values,
+        CancellationToken cancellationToken)
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var root = "/opt/gzctf/runtime";
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "env");
+        await File.WriteAllBytesAsync(path, BuildLinuxEnvironmentFile(values), cancellationToken);
+        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+    }
+
+    private static IReadOnlyDictionary<string, string> MergeValues(
+        IReadOnlyDictionary<string, string>? parameters,
+        IReadOnlyDictionary<string, string> secrets)
+    {
+        var values = new Dictionary<string, string>(parameters ?? new Dictionary<string, string>(), StringComparer.Ordinal);
+        foreach (var (name, value) in secrets) values[name] = value;
+        return values;
+    }
+
+    internal static byte[] BuildLinuxEnvironmentFile(IReadOnlyDictionary<string, string> values)
+    {
+        var environment = new StringBuilder();
+        foreach (var (name, value) in values.OrderBy(item => item.Key, StringComparer.Ordinal))
+        {
+            if (string.IsNullOrWhiteSpace(name) || !char.IsLetter(name[0]) && name[0] != '_' ||
+                name.Skip(1).Any(character => !char.IsLetterOrDigit(character) && character != '_'))
+                throw new InvalidDataException("guest_runtime_environment_key_invalid");
+            environment.Append(name).Append("='")
+                .Append(value.Replace("'", "'\\''", StringComparison.Ordinal)).Append("'\n");
+        }
+        return Encoding.UTF8.GetBytes(environment.ToString());
     }
 
     private async Task<ProcessResult> RunStepAsync(
