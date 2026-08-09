@@ -99,7 +99,7 @@ public sealed class TeamLabRemoteAccessService(
         {
             if (session.Protocol == TeamLabRemoteProtocol.ContainerTerminal)
             {
-                session.Status = TeamLabRemoteSessionStatus.Ready;
+                await ActivateSessionAsync(session, runtime, cancellationToken);
                 events.Record(runtime, "remote-access", TeamLabEventLevel.Success,
                     OperationalEventCodes.TeamLab.RemoteSessionCreated, OperationalEventOutcome.Succeeded,
                     $"已为 {asset.Name} 创建容器远程终端会话", workerNodeId: session.WorkerNodeId,
@@ -137,7 +137,7 @@ public sealed class TeamLabRemoteAccessService(
                 session.GuacamoleUserId = guacamoleSession.UserId;
                 cache.Set(ConnectUrlKey(session.PublicId), guacamoleSession.ConnectUrl, TimeSpan.FromMinutes(5));
             }
-            session.Status = TeamLabRemoteSessionStatus.Ready;
+            await ActivateSessionAsync(session, runtime, cancellationToken);
             events.Record(runtime, "remote-access", TeamLabEventLevel.Success,
                 OperationalEventCodes.TeamLab.RemoteSessionCreated, OperationalEventOutcome.Succeeded,
                 $"已为 {asset.Name} 创建 {session.Protocol} 远程会话", workerNodeId: session.WorkerNodeId,
@@ -147,10 +147,7 @@ public sealed class TeamLabRemoteAccessService(
         }
         catch
         {
-            session.Status = TeamLabRemoteSessionStatus.Failed;
-            session.EndedAt = DateTimeOffset.UtcNow;
-            session.EndReason = "relay_create_failed";
-            await context.SaveChangesAsync(CancellationToken.None);
+            await MarkFailedCreationAsync(session, CancellationToken.None);
             try { await guacamole.DeleteAsync(session.GuacamoleConnectionId, session.GuacamoleUserId, CancellationToken.None); }
             catch { }
             try { await relays.DeleteAsync(session.WorkerNodeId, session.PublicId, CancellationToken.None); }
@@ -178,15 +175,13 @@ public sealed class TeamLabRemoteAccessService(
             ?? throw new TeamLabApiContractException("remote_session_not_found", "未找到远程访问会话", 404);
         await authorization.RequireAsync(session.Runtime.PublicId, actorId, administrator,
             TeamLabOperatorPermission.OperateAssets, cancellationToken);
-        if (session.Status != TeamLabRemoteSessionStatus.Ready || session.ExpiresAt <= DateTimeOffset.UtcNow)
-            throw new TeamLabApiContractException("remote_session_unavailable", "远程访问会话当前不可用", 409);
         if (session.Protocol == TeamLabRemoteProtocol.ContainerTerminal)
             throw new TeamLabApiContractException("remote_session_terminal", "该会话请使用终端接口访问", 409);
         if (!cache.TryGetValue<string>(ConnectUrlKey(sessionId), out var url) || string.IsNullOrWhiteSpace(url))
             throw new TeamLabApiContractException("remote_session_connect_expired", "一次性远程连接链接已过期，请创建新会话", 409);
+        if (!await ConnectSessionAsync(session, cancellationToken))
+            throw new TeamLabApiContractException("remote_session_unavailable", "远程访问会话当前不可用", 409);
         cache.Remove(ConnectUrlKey(sessionId));
-        session.ConnectedAt ??= DateTimeOffset.UtcNow;
-        session.Status = TeamLabRemoteSessionStatus.Connected;
         events.Record(session.Runtime, "remote-access", TeamLabEventLevel.Success,
             OperationalEventCodes.TeamLab.RemoteSessionConnected, OperationalEventOutcome.Succeeded,
             $"已为 {session.RuntimeAsset.Name} 建立 {session.Protocol} 远程会话连接", workerNodeId: session.WorkerNodeId,
@@ -201,11 +196,10 @@ public sealed class TeamLabRemoteAccessService(
             .SingleOrDefaultAsync(item => item.PublicId == sessionId, cancellationToken)
             ?? throw new TeamLabApiContractException("remote_session_not_found", "未找到远程访问会话", 404);
         await authorization.RequireAsync(session.Runtime.PublicId, actorId, administrator, TeamLabOperatorPermission.OperateAssets, cancellationToken);
-        if (session.Protocol != TeamLabRemoteProtocol.ContainerTerminal || session.Status != TeamLabRemoteSessionStatus.Ready || session.ExpiresAt <= DateTimeOffset.UtcNow)
+        if (session.Protocol != TeamLabRemoteProtocol.ContainerTerminal)
             throw new TeamLabApiContractException("remote_session_unavailable", "终端会话当前不可用", 409);
-        session.ConnectedAt ??= DateTimeOffset.UtcNow;
-        session.Status = TeamLabRemoteSessionStatus.Connected;
-        await context.SaveChangesAsync(cancellationToken);
+        if (!await ConnectSessionAsync(session, cancellationToken))
+            throw new TeamLabApiContractException("remote_session_unavailable", "终端会话当前不可用", 409);
         try
         {
             await relays.ProxyTerminalAsync(session.WorkerNodeId, session.PublicId, session.RuntimeId, session.Generation,
@@ -281,9 +275,13 @@ public sealed class TeamLabRemoteAccessService(
         CancellationToken cancellationToken)
     {
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        await LockSessionCapacityAsync(TeamLabRuntimeCleanupService.RuntimeLockKey(session.RuntimeId), cancellationToken);
         await LockSessionCapacityAsync(OperatorLockKey(session.RequestedByUserId), cancellationToken);
         await LockSessionCapacityAsync(NodeLockKey(session.WorkerNodeId), cancellationToken);
 
+        await context.Entry(asset.Runtime).ReloadAsync(cancellationToken);
+        if (asset.Runtime.Status != TeamLabRuntimeStatus.Running)
+            throw new TeamLabApiContractException("remote_access_runtime_unavailable", "运行时当前不允许建立运维会话", 409);
         await RequireSessionCapacityAsync(asset, session.Protocol, session.RequestedByUserId, cancellationToken);
         context.TeamLabRemoteSessions.Add(session);
         try
@@ -330,6 +328,52 @@ public sealed class TeamLabRemoteAccessService(
     {
         var bytes = workerNodeId.ToByteArray();
         return BitConverter.ToInt64(bytes, 0) ^ BitConverter.ToInt64(bytes, 8) ^ 0x544C524E00000000L;
+    }
+
+    private async Task ActivateSessionAsync(
+        TeamLabRemoteSession session,
+        TeamLabRuntime runtime,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        await LockSessionCapacityAsync(TeamLabRuntimeCleanupService.RuntimeLockKey(runtime.Id), cancellationToken);
+        await context.Entry(session).ReloadAsync(cancellationToken);
+        await context.Entry(runtime).ReloadAsync(cancellationToken);
+        if (session.Status != TeamLabRemoteSessionStatus.Creating || runtime.Status != TeamLabRuntimeStatus.Running)
+            throw new TeamLabApiContractException(
+                "remote_access_runtime_unavailable",
+                "运行时正在停止或已停止，无法建立运维会话",
+                409);
+        session.Status = TeamLabRemoteSessionStatus.Ready;
+        await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    private async Task MarkFailedCreationAsync(TeamLabRemoteSession session, CancellationToken cancellationToken)
+    {
+        await context.Entry(session).ReloadAsync(cancellationToken);
+        if (session.Status != TeamLabRemoteSessionStatus.Creating)
+            return;
+        session.Status = TeamLabRemoteSessionStatus.Failed;
+        session.EndedAt = DateTimeOffset.UtcNow;
+        session.EndReason = "relay_create_failed";
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task<bool> ConnectSessionAsync(TeamLabRemoteSession session, CancellationToken cancellationToken)
+    {
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        await LockSessionCapacityAsync(TeamLabRuntimeCleanupService.RuntimeLockKey(session.RuntimeId), cancellationToken);
+        await context.Entry(session).ReloadAsync(cancellationToken);
+        await context.Entry(session.Runtime).ReloadAsync(cancellationToken);
+        if (session.Status != TeamLabRemoteSessionStatus.Ready || session.ExpiresAt <= DateTimeOffset.UtcNow ||
+            session.Runtime.Status != TeamLabRuntimeStatus.Running)
+            return false;
+        session.ConnectedAt ??= DateTimeOffset.UtcNow;
+        session.Status = TeamLabRemoteSessionStatus.Connected;
+        await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return true;
     }
 
     private async Task<bool> CompleteEndingAsync(TeamLabRemoteSession session, string reason, Guid actorId, CancellationToken cancellationToken)

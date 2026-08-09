@@ -63,9 +63,9 @@ public sealed class TeamLabTrafficApplicationService(
             query = query.Where(item => item.NetworkId != null && networkIds.Contains(item.NetworkId.Value));
         }
         if (cursor is { } decoded)
-            query = query.Where(item => item.CapturedAt > decoded.Time ||
-                                        item.CapturedAt == decoded.Time && item.Id > decoded.Id);
-        var rows = await query.OrderBy(item => item.CapturedAt).ThenBy(item => item.Id)
+            query = query.Where(item => item.CapturedAt < decoded.Time ||
+                                        item.CapturedAt == decoded.Time && item.Id < decoded.Id);
+        var rows = await query.OrderByDescending(item => item.CapturedAt).ThenByDescending(item => item.Id)
             .Take(take + 1)
             .Select(item => new
             {
@@ -115,9 +115,9 @@ public sealed class TeamLabTrafficApplicationService(
         if (confidence is { } expectedConfidence)
             query = query.Where(item => item.Confidence == expectedConfidence);
         if (cursor is { } decoded)
-            query = query.Where(item => item.StartedAt > decoded.Time ||
-                                        item.StartedAt == decoded.Time && item.Id > decoded.Id);
-        var rows = await query.OrderBy(item => item.StartedAt).ThenBy(item => item.Id)
+            query = query.Where(item => item.StartedAt < decoded.Time ||
+                                        item.StartedAt == decoded.Time && item.Id < decoded.Id);
+        var rows = await query.OrderByDescending(item => item.StartedAt).ThenByDescending(item => item.Id)
             .Take(take + 1)
             .Select(item => new
             {

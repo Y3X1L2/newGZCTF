@@ -1165,7 +1165,9 @@ public class ImageDistributionService(
                     ("Id", "DistributionRecordId", "Kind", "ResourceId", "CreatedAt")
                 VALUES
                     ({{Guid.CreateVersion7()}}, {{record.Id}}, {{(byte)key.Kind}}, {{key.ResourceId}}, CURRENT_TIMESTAMP)
-                ON CONFLICT ("DistributionRecordId", "Kind", "ResourceId") DO NOTHING
+                ON CONFLICT ("DistributionRecordId", "Kind", "ResourceId")
+                    WHERE "ResourcePublicId" IS NULL
+                DO UPDATE SET "CreatedAt" = CURRENT_TIMESTAMP
                 """, token);
             return affected > 0;
         }

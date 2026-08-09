@@ -19,11 +19,15 @@ export const RuntimeRemoteAccessPanel = memo(function RuntimeRemoteAccessPanel({
   const [acting, setActing] = useState(false)
   const [error, setError] = useState<unknown>(null)
   const [terminalSessionId, setTerminalSessionId] = useState<string | null>(null)
+  const [terminalClosing, setTerminalClosing] = useState(false)
+  const [terminalCloseError, setTerminalCloseError] = useState<unknown>(null)
   const selected = runtime.assets.find((asset) => asset.id === selectedAssetId) ?? null
   const assets = useMemo(() => runtime.assets.filter((asset) => asset.status === 'running'), [runtime.assets])
   const [batch, setBatch] = useState<AvailabilityBatch>({ state: 'loading' })
   const [retryNonce, setRetryNonce] = useState(0)
   const cancelled = useRef(false)
+  const terminalClosingRef = useRef(false)
+  const remoteTriggerRef = useRef<HTMLButtonElement | null>(null)
 
   // Re-check availability whenever the running-asset set changes (an asset may reach
   // running while the panel is open) and periodically while the panel is mounted.
@@ -55,6 +59,27 @@ export const RuntimeRemoteAccessPanel = memo(function RuntimeRemoteAccessPanel({
     setReason('')
     setError(null)
   }, [])
+
+  const restoreRemoteFocus = useCallback(() => {
+    remoteTriggerRef.current?.focus()
+  }, [])
+
+  const closeTerminal = useCallback(async () => {
+    const sessionId = terminalSessionId
+    if (!sessionId || terminalClosingRef.current) return
+    terminalClosingRef.current = true
+    setTerminalClosing(true)
+    setTerminalCloseError(null)
+    try {
+      await teamLabRemoteAccessApi.end(sessionId)
+      setTerminalSessionId(null)
+    } catch (closeError) {
+      setTerminalCloseError(closeError)
+    } finally {
+      terminalClosingRef.current = false
+      setTerminalClosing(false)
+    }
+  }, [terminalClosing, terminalSessionId])
 
   const open = useCallback(async () => {
     if (!selected || acting) return
@@ -142,7 +167,7 @@ export const RuntimeRemoteAccessPanel = memo(function RuntimeRemoteAccessPanel({
                     {checking ? <small>正在检查可用性...</small> : null}
                     {reasonText ? <small>{reasonText}</small> : null}
                   </div>
-                  <ActionButton disabled={disabled} icon={asset.kind === 'vm' ? <Monitor size={15} /> : <Terminal size={15} />} onClick={() => setSelectedAssetId(asset.id)} type="button">
+                  <ActionButton disabled={disabled} icon={asset.kind === 'vm' ? <Monitor size={15} /> : <Terminal size={15} />} onClick={(event) => { remoteTriggerRef.current = event.currentTarget; setSelectedAssetId(asset.id) }} type="button">
                     进入运维
                   </ActionButton>
                 </article>
@@ -168,12 +193,30 @@ export const RuntimeRemoteAccessPanel = memo(function RuntimeRemoteAccessPanel({
         </label>
         {error ? <InlineFeedback tone="danger">{errorMessage(error, '无法建立运维连接。')}</InlineFeedback> : null}
       </VNextDialog>
-      <ContainerTerminal sessionId={terminalSessionId} onClose={() => setTerminalSessionId(null)} />
+      <ContainerTerminal
+        closeError={terminalCloseError}
+        closing={terminalClosing}
+        sessionId={terminalSessionId}
+        returnFocus={restoreRemoteFocus}
+        onClose={closeTerminal}
+      />
     </section>
   )
 })
 
-function ContainerTerminal({ sessionId, onClose }: { sessionId: string | null; onClose: () => void }) {
+function ContainerTerminal({
+  sessionId,
+  closing,
+  closeError,
+  returnFocus,
+  onClose
+}: {
+  sessionId: string | null
+  closing: boolean
+  closeError: unknown
+  returnFocus: () => void
+  onClose: () => Promise<void>
+}) {
   const [output, setOutput] = useState('')
   const [input, setInput] = useState('')
   const [connected, setConnected] = useState(false)
@@ -181,6 +224,7 @@ function ContainerTerminal({ sessionId, onClose }: { sessionId: string | null; o
   const [retryNonce, setRetryNonce] = useState(0)
   const socket = useRef<WebSocket | null>(null)
   const outputRef = useRef<HTMLPreElement>(null)
+  const wasOpen = useRef(false)
 
   useEffect(() => {
     if (!sessionId) return undefined
@@ -209,6 +253,20 @@ function ContainerTerminal({ sessionId, onClose }: { sessionId: string | null; o
   }, [retryNonce, sessionId])
 
   useEffect(() => {
+    if (closing) socket.current?.close()
+  }, [closing])
+
+  useEffect(() => {
+    if (sessionId) {
+      wasOpen.current = true
+      return
+    }
+    if (!wasOpen.current) return
+    wasOpen.current = false
+    returnFocus()
+  }, [returnFocus, sessionId])
+
+  useEffect(() => {
     if (outputRef.current) outputRef.current.scrollTop = outputRef.current.scrollHeight
   }, [output])
 
@@ -218,16 +276,17 @@ function ContainerTerminal({ sessionId, onClose }: { sessionId: string | null; o
     setInput('')
   }
 
-  return <VNextDialog eyebrow="容器终端" footer={<ActionButton onClick={onClose} type="button">关闭终端</ActionButton>} onClose={onClose} open={sessionId !== null} title="容器终端" wide>
+  return <VNextDialog closeDisabled={closing} eyebrow="容器终端" footer={<ActionButton disabled={closing} onClick={() => void onClose()} type="button">{closing ? '正在关闭终端' : '关闭终端'}</ActionButton>} onClose={() => void onClose()} open={sessionId !== null} title="容器终端" wide>
     <div className={styles.terminalSurface}>
       <pre ref={outputRef}>{output || (connectError ? '等待重新连接...' : '正在连接终端...')}</pre>
+      {closeError ? <InlineFeedback tone="danger">{errorMessage(closeError, '终端清理未完成，请重试关闭。')}</InlineFeedback> : null}
       {connectError ? (
         <div className={styles.terminalError}>
           <span>{connectError}</span>
-          <ActionButton icon={<RefreshCw size={14} />} onClick={() => setRetryNonce((value) => value + 1)} tone="danger" type="button">重试连接</ActionButton>
+          <ActionButton disabled={closing} icon={<RefreshCw size={14} />} onClick={() => setRetryNonce((value) => value + 1)} tone="danger" type="button">重试连接</ActionButton>
         </div>
       ) : null}
-      <form onSubmit={submit}><input autoFocus disabled={!connected} onChange={(event) => setInput(event.target.value)} value={input} /><ActionButton disabled={!connected} type="submit">发送</ActionButton></form>
+      <form onSubmit={submit}><input autoFocus disabled={!connected || closing} onChange={(event) => setInput(event.target.value)} value={input} /><ActionButton disabled={!connected || closing} type="submit">发送</ActionButton></form>
     </div>
   </VNextDialog>
 }
