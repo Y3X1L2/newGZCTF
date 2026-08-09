@@ -24,6 +24,7 @@
 - 数据库已前向应用 `20260809041834_NormalizeImageDistributionReferenceIdentity`，修复多个 TeamLab 发布版本共享镜像引用时的覆盖风险。
 - 当前混合验收场景的 v3 试运行仍处于真实 `Scheduled/已排队` 状态。原因是两个 VM 的存储声明各为 20480 MiB，而两台测试节点可用镜像空间分别约为 6.1 GiB 和 18.3 GiB；不满足调度器的容量契约。
 - 为继续验收创建的低负载 v4 试运行完成了镜像准备、调度、网络、路由和基础设施阶段，但 Docker 创建阶段暴露了逻辑接口键被直接用作 Linux 设备名的错误；候选代码已改为固定的来宾 `eth0` 至 `eth7` 映射，仍待统一主站与 Agent 部署后复验。
+- 2026-08-09 候选 release `teamlab-e2e-7f66871-r2-20260809` 已在 118 原子激活。真实页面创建 v4 试运行已到达 VM bootstrap，Docker 网络创建不再出现接口名超长错误；Linux 服务包因标准 tar 的 `./` 根目录条目被 Guest Supervisor 误判为非法相对路径而失败，失败运行已自动清理。修复将 `./` 仅作为归档语法规范化，仍拒绝绝对路径和路径穿越；定向回归 `Bootstrap_StandardTarDotPrefixIsAccepted` 已通过，待重新发布后复验。
 - 修复提交为 `7f66871`，已推送至 `origin/codex/phase-09-teamlab-networking`。2026-08-09 本机未取得 118 的发布 SSH 认证，测试服务器仍运行此前候选；不得将旧制品上的 Docker 创建失败视为修复后的验收结论。
 - 三队混合运行、服务注入实际执行、远程运维、流量/PCAP、暂停恢复和完整清理尚未签收。细节见 `docs/development/test-plans/2026-08-09-teamlab-usability-acceptance.md`。
 

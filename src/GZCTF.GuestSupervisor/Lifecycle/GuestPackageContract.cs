@@ -91,7 +91,9 @@ internal static class GuestPackageContract
             if (++entries > MaxArchiveEntries ||
                 entry.EntryType is not (TarEntryType.RegularFile or TarEntryType.Directory))
                 throw new InvalidDataException("guest_bootstrap_archive_invalid");
-            var relative = NormalizeRelativePath(entry.Name.TrimEnd('/', '\\'));
+            var relative = NormalizeArchiveEntryName(entry.Name, entry.EntryType);
+            if (relative is null)
+                continue;
             var target = SafeCombine(root, relative);
             if (entry.EntryType == TarEntryType.Directory)
             {
@@ -135,6 +137,28 @@ internal static class GuestPackageContract
     {
         ValidateRelativePath(path);
         return path.Replace('\\', '/');
+    }
+
+    // POSIX tar producers commonly prefix archive entries with "./" and emit
+    // a root-directory entry.  This is archive syntax, not a user-supplied path.
+    private static string? NormalizeArchiveEntryName(string name, TarEntryType entryType)
+    {
+        var value = name.Replace('\\', '/').TrimEnd('/');
+        if (value == ".")
+        {
+            if (entryType == TarEntryType.Directory)
+                return null;
+            throw new InvalidDataException("guest_bootstrap_relative_path_invalid");
+        }
+        while (value.StartsWith("./", StringComparison.Ordinal))
+            value = value[2..];
+        if (value.Length == 0)
+        {
+            if (entryType == TarEntryType.Directory)
+                return null;
+            throw new InvalidDataException("guest_bootstrap_relative_path_invalid");
+        }
+        return NormalizeRelativePath(value);
     }
 
     private static void ValidateRelativePath(string path)

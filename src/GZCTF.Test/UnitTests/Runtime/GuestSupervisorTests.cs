@@ -83,6 +83,17 @@ public sealed class GuestSupervisorTests
     }
 
     [Fact]
+    public async Task Bootstrap_StandardTarDotPrefixIsAccepted()
+    {
+        await using var fixture = await SupervisorFixture.CreateAsync(reboot: false, dotPrefixedArchive: true);
+
+        var result = await fixture.Executor.ExecuteAsync(fixture.Checkpoint(0), CancellationToken.None);
+
+        Assert.True(result.Completed);
+        Assert.Equal("x" + Environment.NewLine, await File.ReadAllTextAsync(fixture.MarkerPath));
+    }
+
+    [Fact]
     public async Task Checkpoint_BootIdentityChangeIncrementsEpochOnce()
     {
         var root = Path.Combine(Path.GetTempPath(), $"gzctf-checkpoint-{Guid.NewGuid():N}");
@@ -168,7 +179,10 @@ public sealed class GuestSupervisorTests
             Identity() with { BootEpoch = bootEpoch }, GuestLifecycleStage.BootstrapRunning, 4,
             IntentDigest, "sha256:bootstrap-running", true, $"boot-{bootEpoch}", DateTimeOffset.UtcNow);
 
-        public static async Task<SupervisorFixture> CreateAsync(bool reboot, bool tamperManifest = false)
+        public static async Task<SupervisorFixture> CreateAsync(
+            bool reboot,
+            bool tamperManifest = false,
+            bool dotPrefixedArchive = false)
         {
             var root = Path.Combine(Path.GetTempPath(), $"gzctf-supervisor-{Guid.NewGuid():N}");
             var source = Path.Combine(root, "source");
@@ -182,7 +196,25 @@ public sealed class GuestSupervisorTests
             await File.WriteAllTextAsync(Path.Combine(source, entrypoint.Replace('/', Path.DirectorySeparatorChar)), script);
             var tar = Path.Combine(root, "package.tar");
             var archive = Path.Combine(root, "package.tar.gz");
-            TarFile.CreateFromDirectory(source, tar, includeBaseDirectory: false);
+            if (dotPrefixedArchive)
+            {
+                await using var tarOutput = File.Create(tar);
+                using var writer = new TarWriter(tarOutput, leaveOpen: false);
+                writer.WriteEntry(new PaxTarEntry(TarEntryType.Directory, "./"));
+                writer.WriteEntry(new PaxTarEntry(TarEntryType.Directory, "./bin"));
+                await using var scriptInput = File.OpenRead(Path.Combine(source,
+                    entrypoint.Replace('/', Path.DirectorySeparatorChar)));
+                var scriptEntry = new PaxTarEntry(TarEntryType.RegularFile, $"./{entrypoint}")
+                {
+                    DataStream = scriptInput,
+                    Mode = (UnixFileMode)0x1ED
+                };
+                writer.WriteEntry(scriptEntry);
+            }
+            else
+            {
+                TarFile.CreateFromDirectory(source, tar, includeBaseDirectory: false);
+            }
             await using (var input = File.OpenRead(tar))
             await using (var output = File.Create(archive))
             await using (var gzip = new GZipStream(output, CompressionLevel.SmallestSize))
