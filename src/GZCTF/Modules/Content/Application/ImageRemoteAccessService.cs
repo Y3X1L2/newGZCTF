@@ -31,7 +31,10 @@ public sealed record CompetitionWindowsRdpProfile(
     string Username,
     string Password);
 
-public sealed class ImageRemoteAccessService(AppDbContext context, IDataProtectionProvider protectionProvider)
+public sealed class ImageRemoteAccessService(
+    AppDbContext context,
+    IDataProtectionProvider protectionProvider,
+    ILogger<ImageRemoteAccessService>? logger = null)
 {
     private readonly IDataProtector _protector = protectionProvider.CreateProtector("GZCTF.TeamLab.ImageRemoteAccess.v1");
 
@@ -66,8 +69,11 @@ public sealed class ImageRemoteAccessService(AppDbContext context, IDataProtecti
                 configuration.Username!.Trim(),
                 RevealSecret(configuration));
         }
-        catch (CryptographicException)
+        catch (CryptographicException exception)
         {
+            logger?.LogWarning(exception,
+                "Unable to decrypt remote access credential for image template {ImageTemplateId}",
+                imageTemplateId);
             return null;
         }
     }

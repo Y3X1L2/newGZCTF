@@ -6,13 +6,14 @@ namespace GZCTF.Extensions.Startup;
 
 internal static class IdentityExtension
 {
+    internal const string DataProtectionApplicationName = "GZCTF";
     private const string RequestScheme = "GzctfRequest";
 
     extension(WebApplicationBuilder builder)
     {
         public void ConfigureIdentity()
         {
-            builder.Services.AddDataProtection().PersistKeysToDbContext<AppDbContext>();
+            ConfigureDataProtection(builder.Services);
 
             builder.Services.AddAuthentication(o =>
                 {
@@ -62,4 +63,9 @@ internal static class IdentityExtension
                 o.ValidationInterval = TimeSpan.Zero);
         }
     }
+
+    internal static void ConfigureDataProtection(IServiceCollection services) =>
+        services.AddDataProtection()
+                .SetApplicationName(DataProtectionApplicationName)
+                .PersistKeysToDbContext<AppDbContext>();
 }
