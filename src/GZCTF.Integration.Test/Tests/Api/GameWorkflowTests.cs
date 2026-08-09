@@ -689,6 +689,56 @@ public class GameWorkflowTests(GZCTFApplicationFactory factory)
             item.TryGetProperty("id", out var idElement) && idElement.GetInt32() == seededTeam.Id);
     }
 
+    [Fact]
+    public async Task VmStatus_ShouldNotExposeOlderErrorAfterLatestInstanceWasDestroyed()
+    {
+        var password = "Vm@Status123";
+        var user = await TestDataSeeder.CreateUserAsync(
+            factory.Services, TestDataSeeder.RandomName(), password);
+        var team = await TestDataSeeder.CreateTeamAsync(
+            factory.Services, user.Id, $"VM Team {user.UserName}");
+        var game = await TestDataSeeder.CreateGameAsync(factory.Services, "VM Status Game");
+        var challenge = await TestDataSeeder.CreateStaticChallengeAsync(
+            factory.Services, game.Id, "VM Status Challenge", "flag{vm-status}");
+        await TestDataSeeder.JoinGameAsync(factory.Services, game.Id, team.Id, user.Id);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var createdAt = DateTimeOffset.UtcNow;
+            context.VmInstances.AddRange(
+                new VmInstance
+                {
+                    ChallengeId = challenge.Id,
+                    UserId = user.Id,
+                    VmName = $"vm_c{challenge.Id}_old",
+                    ProviderName = "KVM",
+                    Status = VmInstanceStatus.Error,
+                    CreatedAt = createdAt.AddMinutes(-1)
+                },
+                new VmInstance
+                {
+                    ChallengeId = challenge.Id,
+                    UserId = user.Id,
+                    VmName = $"vm_c{challenge.Id}_destroyed",
+                    ProviderName = "KVM",
+                    Status = VmInstanceStatus.Destroyed,
+                    CreatedAt = createdAt,
+                    DestroyedAt = createdAt
+                });
+            await context.SaveChangesAsync();
+        }
+
+        using var client = factory.CreateClient();
+        var login = await client.PostAsJsonAsync("/api/Account/LogIn",
+            new LoginModel { UserName = user.UserName, Password = password });
+        login.EnsureSuccessStatusCode();
+
+        var response = await client.GetAsync($"/api/Game/{game.Id}/Vm/{challenge.Id}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     /// <summary>
     /// Test that RequireReview permission correctly controls manual review requirement per division
     /// </summary>

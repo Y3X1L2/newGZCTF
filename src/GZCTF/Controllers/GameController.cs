@@ -1659,12 +1659,11 @@ public class GameController(
         var vmInstance = await dbContext.VmInstances
             .Include(v => v.Challenge)
             .Where(v => v.ChallengeId == challengeId
-                        && v.UserId == context.User!.Id
-                        && v.Status != VmInstanceStatus.Destroyed)
+                        && v.UserId == context.User!.Id)
             .OrderByDescending(v => v.CreatedAt)
             .FirstOrDefaultAsync(token);
 
-        if (vmInstance is null)
+        if (vmInstance is null || vmInstance.Status == VmInstanceStatus.Destroyed)
             return NotFound(new RequestResponse("No VM instance found", StatusCodes.Status404NotFound));
 
         Response.Headers.CacheControl = "no-store, private";
