@@ -47,6 +47,7 @@ public sealed class TeamLabTopologyV2Tests
             definition.Networks,
             definition.Assets,
             definition.Connections,
+            null,
             definition.Infrastructure,
             definition.Dependencies,
             definition.Observation,

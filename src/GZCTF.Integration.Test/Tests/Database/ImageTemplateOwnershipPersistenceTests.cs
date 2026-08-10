@@ -49,7 +49,7 @@ public sealed class ImageTemplateOwnershipPersistenceTests(GZCTFApplicationFacto
         });
         context.ApiTokens.Add(new ApiTokenEntity
         {
-            Id = operation.ApiTokenId,
+            Id = operation.ApiTokenId!.Value,
             Name = "image materialization test",
             CreatorId = ownerId,
             SecretHash = new byte[32],
@@ -88,7 +88,7 @@ public sealed class ImageTemplateOwnershipPersistenceTests(GZCTFApplicationFacto
 
         await context.ImageTemplates.Where(item => item.Id == descriptor.Id).ExecuteDeleteAsync();
         await context.ApiOperations.Where(item => item.Id == operation.Id).ExecuteDeleteAsync();
-        await context.ApiTokens.Where(item => item.Id == operation.ApiTokenId).ExecuteDeleteAsync();
+        await context.ApiTokens.Where(item => item.Id == operation.ApiTokenId!.Value).ExecuteDeleteAsync();
         await context.Users.Where(item => item.Id == ownerId).ExecuteDeleteAsync();
     }
 

@@ -18,7 +18,7 @@ const runtimeStatuses: Readonly<Record<string, TeamLabPlayerRuntimeStatus>> = {
   5: 'running',
   6: 'failed',
   7: 'cleanup-pending',
-  8: 'stopped',
+  8: 'paused',
   9: 'destroying',
   10: 'destroyed',
   Pending: 'pending',
@@ -29,7 +29,7 @@ const runtimeStatuses: Readonly<Record<string, TeamLabPlayerRuntimeStatus>> = {
   Running: 'running',
   Failed: 'failed',
   CleanupPending: 'cleanup-pending',
-  Stopped: 'stopped',
+  Paused: 'paused',
   Destroying: 'destroying',
   Destroyed: 'destroyed',
 }

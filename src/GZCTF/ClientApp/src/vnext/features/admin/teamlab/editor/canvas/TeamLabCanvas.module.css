@@ -17,12 +17,10 @@
 
 .canvas :global(.react-flow__node) {
   cursor: grab;
-  transition: transform 280ms var(--yn-ease-standard);
 }
 
 .canvas :global(.react-flow__node.dragging) {
   cursor: grabbing;
-  transition: none;
 }
 
 .canvas :global(.react-flow__selection) {
@@ -102,6 +100,11 @@
 
 .miniMap_windows-vm {
   fill: var(--yn-color-info);
+}
+
+.miniMap_region {
+  fill: var(--yn-color-brand);
+  opacity: 0.35;
 }
 
 .emptyState {

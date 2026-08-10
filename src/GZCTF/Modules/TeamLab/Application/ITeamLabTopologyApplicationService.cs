@@ -2,6 +2,8 @@ using GZCTF.Modules.TeamLab.Contracts;
 
 namespace GZCTF.Modules.TeamLab.Application;
 
+public sealed record TeamLabTopologyStorageReference(int StorageId, Guid Id, Guid? OwnerUserId, Guid? ControlScopeId);
+
 public interface ITeamLabTopologyApplicationService
 {
     TeamLabCapabilitiesModel GetCapabilities();
@@ -9,7 +11,11 @@ public interface ITeamLabTopologyApplicationService
     Task<TeamLabTopologyDetailModel> CreateDraftAsync(CreateTeamLabTopologyModel model, Guid actorUserId, CancellationToken cancellationToken);
     Task<IReadOnlyList<TeamLabTopologySummaryModel>> ListAsync(Guid actorUserId, bool includeAll, CancellationToken cancellationToken);
     Task<OpenTeamLabTopologyPageModel> ListPageAsync(Guid actorUserId, bool includeAll, int limit, string? after, CancellationToken cancellationToken);
+    Task<OpenTeamLabTopologyPageModel> ListPageForScopesAsync(IReadOnlySet<Guid> scopeIds, int limit, string? after, CancellationToken cancellationToken);
     Task<TeamLabTopologyDetailModel> GetAsync(Guid topologyId, Guid actorUserId, bool includeAll, CancellationToken cancellationToken);
+    Task<TeamLabTopologyStorageReference> GetStorageReferenceAsync(Guid topologyId, Guid actorUserId,
+        bool includeAll, CancellationToken cancellationToken);
+    Task<TeamLabTopologyStorageReference> GetStorageReferenceAsync(int storageId, CancellationToken cancellationToken);
     Task<TeamLabTopologyDetailModel> UpdateAsync(Guid topologyId, UpdateTeamLabTopologyModel model, Guid actorUserId, bool includeAll, CancellationToken cancellationToken);
     Task<TeamLabTopologyDetailModel> UpdateDraftAsync(Guid topologyId, UpdateTeamLabTopologyModel model, Guid actorUserId, bool includeAll, CancellationToken cancellationToken);
     Task DeleteAsync(Guid topologyId, Guid actorUserId, bool includeAll, CancellationToken cancellationToken);

@@ -3827,7 +3827,7 @@ namespace GZCTF.Migrations
                     b.Property<Guid?>("ActorUserId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("ApiTokenId")
+                    b.Property<Guid?>("ApiTokenId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("AttemptCount")
@@ -3922,8 +3922,13 @@ namespace GZCTF.Migrations
                     b.HasIndex("Status", "NextAttemptAt")
                         .HasFilter("\"Status\" = 0");
 
+                    b.HasIndex("ActorUserId", "RouteKey", "IdempotencyKey")
+                        .IsUnique()
+                        .HasFilter("\"ApiTokenId\" IS NULL AND \"ActorUserId\" IS NOT NULL");
+
                     b.HasIndex("ApiTokenId", "RouteKey", "IdempotencyKey")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"ApiTokenId\" IS NOT NULL");
 
                     b.ToTable("ApiOperations", (string)null);
                 });
@@ -4709,9 +4714,6 @@ namespace GZCTF.Migrations
                     b.Property<int>("ImageTemplateId")
                         .HasColumnType("integer");
 
-                    b.Property<byte>("CredentialMode")
-                        .HasColumnType("smallint");
-
                     b.Property<bool>("Enabled")
                         .HasColumnType("boolean");
 
@@ -5223,14 +5225,27 @@ namespace GZCTF.Migrations
                     b.Property<int>("ResourceId")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("ResourcePublicId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Kind", "ResourceId")
                         .HasDatabaseName("IX_ImageDistributionReferences_Kind_Resource");
 
+                    b.HasIndex("Kind", "ResourcePublicId")
+                        .HasDatabaseName("IX_ImageDistributionReferences_Kind_PublicResource")
+                        .HasFilter("\"ResourcePublicId\" IS NOT NULL");
+
                     b.HasIndex("DistributionRecordId", "Kind", "ResourceId")
                         .IsUnique()
-                        .HasDatabaseName("UX_ImageDistributionReferences_Record_Kind_Resource");
+                        .HasDatabaseName("UX_ImageDistributionReferences_Record_Kind_Resource")
+                        .HasFilter("\"ResourcePublicId\" IS NULL");
+
+                    b.HasIndex("DistributionRecordId", "Kind", "ResourcePublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ImageDistributionReferences_Record_Kind_PublicResource")
+                        .HasFilter("\"ResourcePublicId\" IS NOT NULL");
 
                     b.ToTable("ImageDistributionReferences", (string)null);
                 });
@@ -5489,6 +5504,9 @@ namespace GZCTF.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<Guid?>("ControlScopeId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -5515,7 +5533,24 @@ namespace GZCTF.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
-                    b.Property<int>("RuntimeId")
+                    b.Property<Guid?>("OperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ResourcePublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResourceType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ResourceUrl")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<int>("ResourceVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("RuntimeId")
                         .HasColumnType("integer");
 
                     b.Property<string>("Stage")
@@ -5527,6 +5562,14 @@ namespace GZCTF.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("OperationId")
+                        .HasDatabaseName("IX_TeamLabEvents_Operation")
+                        .HasFilter("\"OperationId\" IS NOT NULL");
+
+                    b.HasIndex("ControlScopeId", "Id")
+                        .HasDatabaseName("IX_TeamLabEvents_Scope_Cursor")
+                        .HasFilter("\"ControlScopeId\" IS NOT NULL");
 
                     b.HasIndex("RuntimeId", "CreatedAt");
 
@@ -5837,13 +5880,15 @@ namespace GZCTF.Migrations
                     b.HasIndex("PublicId")
                         .IsUnique();
 
-                    b.HasIndex("RequestedByUserId");
-
                     b.HasIndex("RuntimeAssetId");
 
                     b.HasIndex("WorkerNodeId");
 
                     b.HasIndex("Status", "ExpiresAt");
+
+                    b.HasIndex("RequestedByUserId", "RuntimeAssetId", "Protocol")
+                        .IsUnique()
+                        .HasFilter("\"Status\" IN (1, 2, 3, 4)");
 
                     b.HasIndex("RuntimeId", "Generation", "RuntimeAssetId");
 
@@ -5857,6 +5902,9 @@ namespace GZCTF.Migrations
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid?>("ControlScopeId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("CreateRequestHash")
                         .IsRequired()
@@ -5906,6 +5954,8 @@ namespace GZCTF.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ControlScopeId");
 
                     b.HasIndex("EntryShardId");
 
@@ -6297,54 +6347,6 @@ namespace GZCTF.Migrations
                     b.ToTable("TeamLabRuntimeNetworks");
                 });
 
-            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeRemoteCredential", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Generation")
-                        .HasColumnType("integer");
-
-                    b.Property<byte>("Mode")
-                        .HasColumnType("smallint");
-
-                    b.Property<string>("ProtectedSecret")
-                        .HasMaxLength(8192)
-                        .HasColumnType("character varying(8192)");
-
-                    b.Property<byte>("Protocol")
-                        .HasColumnType("smallint");
-
-                    b.Property<DateTimeOffset?>("RevokedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("RuntimeAssetId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("RuntimeId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Username")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RuntimeAssetId");
-
-                    b.HasIndex("RuntimeId", "Generation", "RuntimeAssetId", "Protocol")
-                        .IsUnique();
-
-                    b.ToTable("TeamLabRuntimeRemoteCredentials", (string)null);
-                });
-
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeSecretEnvelope", b =>
                 {
                     b.Property<long>("Id")
@@ -6594,6 +6596,41 @@ namespace GZCTF.Migrations
                     b.ToTable("TeamLabVpnPeerRuntimes");
                 });
 
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabControlScope", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(96)
+                        .HasColumnType("character varying(96)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.HasIndex("IsArchived", "UpdatedAt");
+
+                    b.ToTable("TeamLabControlScopes", (string)null);
+                });
+
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabNetworkLease", b =>
                 {
                     b.Property<long>("Id")
@@ -6792,8 +6829,14 @@ namespace GZCTF.Migrations
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("ControlScopeId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByOperationId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("CreatedByUserId")
                         .HasColumnType("uuid");
@@ -6816,8 +6859,14 @@ namespace GZCTF.Migrations
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)");
 
+                    b.Property<Guid?>("LastMutationOperationId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("OwnerUserId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("PauseRequested")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("PreparationRequested")
                         .HasColumnType("boolean");
@@ -6843,6 +6892,8 @@ namespace GZCTF.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ControlScopeId");
+
                     b.HasIndex("PublicId")
                         .IsUnique();
 
@@ -6850,9 +6901,9 @@ namespace GZCTF.Migrations
 
                     b.HasIndex("Status", "UpdatedAt");
 
-                    b.HasIndex("AdapterKind", "ExternalReference", "ReleaseId")
+                    b.HasIndex("ControlScopeId", "AdapterKind", "ExternalReference", "ReleaseId")
                         .IsUnique()
-                        .HasFilter("\"Status\" <> 5");
+                        .HasFilter("\"Status\" NOT IN (5, 8)");
 
                     b.ToTable("TeamLabRollouts", (string)null);
                 });
@@ -6881,6 +6932,9 @@ namespace GZCTF.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<bool>("IsDesired")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("LastError")
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)");
@@ -6893,6 +6947,9 @@ namespace GZCTF.Migrations
 
                     b.Property<DateTimeOffset?>("ReadyAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("RebuildRequested")
+                        .HasColumnType("boolean");
 
                     b.Property<int>("RolloutId")
                         .HasColumnType("integer");
@@ -6971,6 +7028,9 @@ namespace GZCTF.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<Guid?>("ControlScopeId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -7023,6 +7083,8 @@ namespace GZCTF.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ControlScopeId");
 
                     b.HasIndex("CreatedByOperationId")
                         .IsUnique();
@@ -7265,6 +7327,15 @@ namespace GZCTF.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
+                    b.Property<Guid?>("ControlScopeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EditorMetadataJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
                     b.Property<DateTimeOffset>("PublishedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -7287,6 +7358,8 @@ namespace GZCTF.Migrations
 
                     b.HasIndex("ApiOperationId")
                         .IsUnique();
+
+                    b.HasIndex("ControlScopeId");
 
                     b.HasIndex("PublishedById");
 
@@ -7760,6 +7833,105 @@ namespace GZCTF.Migrations
                         .IsUnique();
 
                     b.ToTable("TeamLabTrafficPathHops", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabWebhookDeliveryFailure", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Error")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<long>("EventId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("EventStage")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SubscriptionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubscriptionId", "EventId");
+
+                    b.ToTable("TeamLabWebhookDeliveryFailures");
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabWebhookSubscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("ApiOperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ConsecutiveFailures")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ControlScopeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("DeliveryCursor")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("EndpointUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("EventTypesJson")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)");
+
+                    b.Property<DateTimeOffset?>("NextDeliveryAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SigningSecretEncrypted")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApiOperationId")
+                        .IsUnique();
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("Active", "NextDeliveryAt");
+
+                    b.HasIndex("ControlScopeId", "Active");
+
+                    b.ToTable("TeamLabWebhookSubscriptions");
                 });
 
             modelBuilder.Entity("GZCTF.Modules.Theory.Domain.TheoryQuestionTag", b =>
@@ -9439,8 +9611,7 @@ namespace GZCTF.Migrations
                     b.HasOne("GZCTF.Modules.Identity.Domain.ApiToken", null)
                         .WithMany()
                         .HasForeignKey("ApiTokenId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("GZCTF.Models.Data.DeploymentQueueTicket", null)
                         .WithMany()
@@ -9810,8 +9981,7 @@ namespace GZCTF.Migrations
                     b.HasOne("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntime", "Runtime")
                         .WithMany("Events")
                         .HasForeignKey("RuntimeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Runtime");
                 });
@@ -9949,6 +10119,11 @@ namespace GZCTF.Migrations
 
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntime", b =>
                 {
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.TeamLabControlScope", "ControlScope")
+                        .WithMany()
+                        .HasForeignKey("ControlScopeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("GZCTF.Models.Data.UserInfo", null)
                         .WithMany()
                         .HasForeignKey("CreatedById")
@@ -9964,6 +10139,8 @@ namespace GZCTF.Migrations
                         .HasForeignKey("TopologyReleaseId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("ControlScope");
                 });
 
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeAsset", b =>
@@ -10070,25 +10247,6 @@ namespace GZCTF.Migrations
                     b.Navigation("Shard");
 
                     b.Navigation("WorkerNode");
-                });
-
-            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeRemoteCredential", b =>
-                {
-                    b.HasOne("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeAsset", "RuntimeAsset")
-                        .WithMany()
-                        .HasForeignKey("RuntimeAssetId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntime", "Runtime")
-                        .WithMany()
-                        .HasForeignKey("RuntimeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Runtime");
-
-                    b.Navigation("RuntimeAsset");
                 });
 
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeSecretEnvelope", b =>
@@ -10235,11 +10393,18 @@ namespace GZCTF.Migrations
 
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabRollout", b =>
                 {
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.TeamLabControlScope", "ControlScope")
+                        .WithMany()
+                        .HasForeignKey("ControlScopeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("GZCTF.Modules.TeamLab.Domain.TeamLabTopologyRelease", "Release")
                         .WithMany()
                         .HasForeignKey("ReleaseId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("ControlScope");
 
                     b.Navigation("Release");
                 });
@@ -10278,6 +10443,11 @@ namespace GZCTF.Migrations
 
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabTopology", b =>
                 {
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.TeamLabControlScope", "ControlScope")
+                        .WithMany()
+                        .HasForeignKey("ControlScopeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("GZCTF.Modules.Audit.Domain.ApiOperation", null)
                         .WithMany()
                         .HasForeignKey("CreatedByOperationId")
@@ -10292,6 +10462,8 @@ namespace GZCTF.Migrations
                         .WithMany()
                         .HasForeignKey("OwnerUserId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("ControlScope");
                 });
 
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabTopologyAsset", b =>
@@ -10358,6 +10530,11 @@ namespace GZCTF.Migrations
                         .HasForeignKey("ApiOperationId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.TeamLabControlScope", "ControlScope")
+                        .WithMany()
+                        .HasForeignKey("ControlScopeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("GZCTF.Models.Data.UserInfo", null)
                         .WithMany()
                         .HasForeignKey("PublishedById")
@@ -10368,6 +10545,8 @@ namespace GZCTF.Migrations
                         .HasForeignKey("TopologyId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("ControlScope");
 
                     b.Navigation("Topology");
                 });
@@ -10490,6 +10669,28 @@ namespace GZCTF.Migrations
                     b.Navigation("ObservationPoint");
 
                     b.Navigation("Path");
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabWebhookDeliveryFailure", b =>
+                {
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.TeamLabWebhookSubscription", "Subscription")
+                        .WithMany("Failures")
+                        .HasForeignKey("SubscriptionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Subscription");
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabWebhookSubscription", b =>
+                {
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.TeamLabControlScope", "ControlScope")
+                        .WithMany()
+                        .HasForeignKey("ControlScopeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ControlScope");
                 });
 
             modelBuilder.Entity("GZCTF.Modules.Theory.Domain.TheoryQuestionTagBinding", b =>
@@ -10866,6 +11067,11 @@ namespace GZCTF.Migrations
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabTrafficPath", b =>
                 {
                     b.Navigation("Hops");
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabWebhookSubscription", b =>
+                {
+                    b.Navigation("Failures");
                 });
 
             modelBuilder.Entity("GZCTF.Modules.Theory.Domain.TheoryQuestionTag", b =>

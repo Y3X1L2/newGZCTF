@@ -34,7 +34,7 @@ public sealed class TeamLabFabricLinkAllocator(
             {
                 if (lease.WorkerNodeId != shard.WorkerNodeId)
                     throw new TeamLabRuntimeExecutionException(
-                        $"Fabric link lease for shard {shard.Id} references another WorkerNode.");
+                        $"Fabric 链路租约 {shard.Id} 指向了其他 WorkerNode");
                 result.Add(lease);
                 continue;
             }
@@ -42,7 +42,7 @@ public sealed class TeamLabFabricLinkAllocator(
             var cidr = FirstFree(_config.FabricLinkPool, used.Concat(allocated))
                 ?? throw new TeamLabApiContractException(
                     "fabric_link_pool_exhausted",
-                    "The TeamLab Fabric link pool has no available /30 network.",
+                    "TeamLab Fabric 链路池没有可用的 /30 网络",
                     409);
             allocated.Add(cidr);
             lease = new TeamLabFabricLinkLease
@@ -69,7 +69,7 @@ public sealed class TeamLabFabricLinkAllocator(
         if (pool.PrefixLength > LinkPrefixLength)
             throw new TeamLabApiContractException(
                 "fabric_link_pool_invalid",
-                "The TeamLab Fabric link pool must contain at least one /30 network.",
+                "TeamLab Fabric 链路池至少需要包含一个 /30 网络",
                 500);
         var used = unavailable.Select(ToRange).ToArray();
         var poolRange = ToRange(pool);
@@ -92,14 +92,14 @@ public sealed class TeamLabFabricLinkAllocator(
             prefix is < 1 or > LinkPrefixLength)
             throw new TeamLabApiContractException(
                 "fabric_link_pool_invalid",
-                $"TeamLab Fabric link pool '{cidr}' is not a valid IPv4 CIDR.",
+                $"TeamLab Fabric 链路池 '{cidr}' 不是有效的 IPv4 CIDR",
                 500);
         var raw = ToUInt32(address);
         var mask = uint.MaxValue << (32 - prefix);
         if (raw != (raw & mask))
             throw new TeamLabApiContractException(
                 "fabric_link_pool_invalid",
-                $"TeamLab Fabric link pool '{cidr}' is not network aligned.",
+                $"TeamLab Fabric 链路池 '{cidr}' 未按网络边界对齐",
                 500);
         return new IPNetwork(address, prefix);
     }

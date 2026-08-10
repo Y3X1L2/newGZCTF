@@ -7,7 +7,7 @@ export function ReleasePlanPanel({ plan }: { plan: TeamLabPlan }) {
     <section aria-labelledby="release-plan-heading" className={styles.detailSection}>
       <header className={styles.sectionHeading}>
         <div>
-          <span>PLACEMENT PLAN</span>
+          <span>部署规划</span>
           <h3 id="release-plan-heading">执行计划</h3>
         </div>
         <code title={plan.planHash}>{plan.planHash.slice(0, 16)}</code>

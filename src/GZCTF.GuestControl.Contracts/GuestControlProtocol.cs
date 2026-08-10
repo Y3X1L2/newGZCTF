@@ -86,7 +86,8 @@ public sealed record GuestBootstrapIntent(
     DateTimeOffset ExpiresAt,
     GuestServicePackageDescriptor? ServicePackage = null,
     IReadOnlyList<GuestSecretReference>? SecretReferences = null,
-    IReadOnlyDictionary<string, string>? Parameters = null);
+    IReadOnlyDictionary<string, string>? Parameters = null,
+    IReadOnlyDictionary<string, string>? RuntimeEnvironment = null);
 
 public sealed record GuestServicePackageDescriptor(
     Guid ProfileId,

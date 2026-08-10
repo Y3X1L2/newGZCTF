@@ -66,6 +66,32 @@ public sealed class VmGuestControlTests
     }
 
     [Fact]
+    public void VmIdentityValidation_AllowsOnlyVerifiedOlderLegacyDomainWithoutSidecar()
+    {
+        const string vmName = "tl42-legacy";
+        var firstGenerationNativeId = VmDomainBuilder.BuildStableDomainId(vmName, 1).ToString("D");
+
+        Assert.True(KvmService.CanDestroyLegacyDomainWithoutSidecar(1, null, 2));
+        Assert.False(KvmService.CanDestroyLegacyDomainWithoutSidecar(1, null, 1));
+        Assert.False(KvmService.CanDestroyLegacyDomainWithoutSidecar(2, null, 1));
+        Assert.False(KvmService.CanDestroyLegacyDomainWithoutSidecar(1, 1, 2));
+        Assert.Null(KvmService.GetIdentityConflict(
+            vmName, firstGenerationNativeId, 1, null, 1, null, allowMissingSidecar: true));
+        Assert.NotNull(KvmService.GetIdentityConflict(
+            vmName, Guid.NewGuid().ToString("D"), 1, null, 1, null, allowMissingSidecar: true));
+    }
+
+    [Fact]
+    public void VmUndefineCommand_RemovesManagedStateStorageAndUefiNvram()
+    {
+        var command = KvmService.BuildVmUndefineCommand("tl42-windows");
+
+        Assert.Equal(
+            "virsh undefine 'tl42-windows' --managed-save --remove-all-storage --nvram",
+            command);
+    }
+
+    [Fact]
     public void DomainBuilder_UsesStableIdentityAndTypedChannels()
     {
         var request = new CreateVmRequest

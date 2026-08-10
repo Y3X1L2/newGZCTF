@@ -59,7 +59,8 @@ function compileEditor(document: TopologyDocument): TeamLabTopologyEditor {
 
   for (const node of Object.values(document.nodes).sort(byKey)) {
     if (node.type === 'switch') {
-      networks[node.networkKey] = editorItem(node.position)
+      const layout = document.networkLayouts[node.networkKey]
+      networks[node.networkKey] = layout ? editorItem(layout) : editorItem(node.position)
       if (!node.implicit || node.name !== node.networkName) infrastructure[node.key] = editorItem(node.position)
     } else if (node.type === 'router') {
       infrastructure[node.key] = editorItem(node.position)

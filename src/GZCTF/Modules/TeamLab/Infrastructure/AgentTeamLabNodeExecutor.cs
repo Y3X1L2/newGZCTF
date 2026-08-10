@@ -159,7 +159,7 @@ public sealed class AgentTeamLabNodeExecutor(
                     sensor?.Message ?? "Required endpoint sensor channel could not be registered.");
             var result = request.Kind == TeamLabAssetKind.Docker
                 ? await CreateContainerAsync(workerNodeId, request, template, sensor?.ChannelEndpoint, cancellationToken)
-                : await CreateVmAsync(db, scope.ServiceProvider.GetRequiredService<TeamLabRemoteCredentialService>(), workerNodeId, request, template, cancellationToken);
+                : await CreateVmAsync(db, workerNodeId, request, template, cancellationToken);
             if (!result.Success && sensor is { Success: true })
                 await RemoveEndpointSensorAsync(workerNodeId, request, cancellationToken);
             return result;
@@ -167,7 +167,7 @@ public sealed class AgentTeamLabNodeExecutor(
         catch (Exception exception) when (exception is AgentClientException or HttpRequestException or TaskCanceledException or InvalidOperationException)
         {
             logger.LogWarning(exception,
-                "TeamLab asset creation failed: runtime={RuntimeId}, generation={Generation}, asset={AssetKey}, node={NodeId}",
+                "TeamLab 资源创建失败: runtime={RuntimeId}, generation={Generation}, asset={AssetKey}, node={NodeId}",
                 request.RuntimeId, request.Generation, request.AssetKey, workerNodeId);
             if (sensor is { Success: true })
                 await RemoveEndpointSensorAsync(workerNodeId, request, CancellationToken.None);
@@ -183,6 +183,54 @@ public sealed class AgentTeamLabNodeExecutor(
             workerNodeId,
             NodeDispatchCategory.Cleanup,
             operationToken => DestroyAssetCoreAsync(workerNodeId, kind, resourceId, null, operationToken),
+            cancellationToken);
+
+    public Task<TeamLabNodeResult> PauseAssetAsync(
+        Guid workerNodeId,
+        TeamLabAssetKind kind,
+        string resourceId,
+        int generation,
+        CancellationToken cancellationToken) =>
+        ChangeAssetLifecycleAsync(workerNodeId, kind, resourceId, generation, pause: true, cancellationToken);
+
+    public Task<TeamLabNodeResult> ResumeAssetAsync(
+        Guid workerNodeId,
+        TeamLabAssetKind kind,
+        string resourceId,
+        int generation,
+        CancellationToken cancellationToken) =>
+        ChangeAssetLifecycleAsync(workerNodeId, kind, resourceId, generation, pause: false, cancellationToken);
+
+    private Task<TeamLabNodeResult> ChangeAssetLifecycleAsync(
+        Guid workerNodeId,
+        TeamLabAssetKind kind,
+        string resourceId,
+        int generation,
+        bool pause,
+        CancellationToken cancellationToken) =>
+        DispatchAsync(
+            workerNodeId,
+            NodeDispatchCategory.Cleanup,
+            async operationToken =>
+            {
+                try
+                {
+                    var request = new TeamLabAssetLifecycleRequest(
+                        kind == TeamLabAssetKind.Docker ? "docker" : "vm",
+                        resourceId,
+                        generation,
+                        _config.DryRun);
+                    var response = pause
+                        ? await agent.PauseTeamLabAssetAsync(workerNodeId, request, operationToken)
+                        : await agent.ResumeTeamLabAssetAsync(workerNodeId, request, operationToken);
+                    return RequireMutation(response,
+                        pause ? "TeamLab asset pause failed." : "TeamLab asset resume failed.");
+                }
+                catch (Exception exception) when (exception is AgentClientException or HttpRequestException or TaskCanceledException)
+                {
+                    return TeamLabNodeResult.Failed(exception.Message);
+                }
+            },
             cancellationToken);
 
     public Task<TeamLabScenarioArtifactCommitResult> CommitScenarioArtifactAsync(
@@ -548,15 +596,23 @@ public sealed class AgentTeamLabNodeExecutor(
             config.EnvironmentVariables["GZCTF_SENSOR_HMAC"] = request.Secrets["GZCTF_SENSOR_HMAC"];
         }
         var container = await agent.CreateContainerOrThrowAsync(workerNodeId, config, cancellationToken);
-        foreach (var iface in request.Interfaces)
+        var interfaces = request.Interfaces
+            .Select((iface, index) => new
+            {
+                Interface = iface,
+                GuestName = TeamLabResourceNameFactory.WorkloadGuestInterface(index)
+            })
+            .ToArray();
+        foreach (var item in interfaces)
         {
+            var iface = item.Interface;
             var attach = await agent.AttachTeamLabContainerAsync(workerNodeId,
                 new TeamLabContainerAttachRequest(
                     request.RuntimeId,
                     container.ContainerId,
                     iface.BridgeName,
                     TeamLabResourceNameFactory.WorkloadHostInterface(request.RuntimeId, request.AssetKey, iface.Key),
-                    iface.Key,
+                    item.GuestName,
                     $"{iface.IpAddress}/{iface.PrefixLength}",
                     iface.MacAddress,
                     false,
@@ -580,18 +636,18 @@ public sealed class AgentTeamLabNodeExecutor(
             return TeamLabNodeAssetCreateResult.Failed("The TeamLab container operation identity is missing.");
         }
 
-        var routes = request.Interfaces
-            .SelectMany(iface => iface.Routes.Select(route => new TeamLabContainerRouteExpectation(
+        var routes = interfaces
+            .SelectMany(item => item.Interface.Routes.Select(route => new TeamLabContainerRouteExpectation(
                 route,
-                Gateway(iface.IpAddress, iface.PrefixLength),
-                iface.Key)))
+                Gateway(item.Interface.IpAddress, item.Interface.PrefixLength),
+                item.GuestName)))
             .DistinctBy(route => (route.TargetCidr, route.GatewayIp, route.InterfaceName))
             .ToArray();
-        var dnsProbes = request.Interfaces
-            .SelectMany(iface => iface.DnsServers.Select(server => new TeamLabContainerDnsProbeExpectation(
+        var dnsProbes = interfaces
+            .SelectMany(item => item.Interface.DnsServers.Select(server => new TeamLabContainerDnsProbeExpectation(
                 server,
                 Hostname(request.AssetKey),
-                iface.IpAddress)))
+                item.Interface.IpAddress)))
             .DistinctBy(probe => (probe.Server, probe.QueryName, probe.ExpectedAddress))
             .ToArray();
         var finalized = await agent.FinalizeTeamLabContainerNetworkAsync(
@@ -602,10 +658,10 @@ public sealed class AgentTeamLabNodeExecutor(
                 request.Generation,
                 container.ContainerId,
                 container.ContainerName,
-                request.Interfaces.Select(iface => new TeamLabContainerInterfaceExpectation(
-                    iface.Key,
-                    $"{iface.IpAddress}/{iface.PrefixLength}",
-                    iface.MacAddress)).ToArray(),
+                interfaces.Select(item => new TeamLabContainerInterfaceExpectation(
+                    item.GuestName,
+                    $"{item.Interface.IpAddress}/{item.Interface.PrefixLength}",
+                    item.Interface.MacAddress)).ToArray(),
                 routes,
                 request.Interfaces.SelectMany(iface => iface.DnsServers)
                     .Distinct(StringComparer.Ordinal).ToArray(),
@@ -638,7 +694,6 @@ public sealed class AgentTeamLabNodeExecutor(
 
     private async Task<TeamLabNodeAssetCreateResult> CreateVmAsync(
         AppDbContext db,
-        TeamLabRemoteCredentialService credentialService,
         Guid workerNodeId,
         TeamLabNodeAssetCreateRequest request,
         ImageTemplate template,
@@ -646,13 +701,8 @@ public sealed class AgentTeamLabNodeExecutor(
     {
         if (template.ImageType == ImageType.Docker)
             return TeamLabNodeAssetCreateResult.Failed($"Image template {template.Id} is not a VM template.");
-        var remoteConfiguration = await db.ImageTemplateRemoteAccesses.AsNoTracking()
-            .SingleOrDefaultAsync(item => item.ImageTemplateId == template.Id, cancellationToken);
-        var requiresPlatformRemoteAccount = remoteConfiguration is
-            { Enabled: true, CredentialMode: RemoteCredentialMode.PlatformGenerated };
         var requiresGuestControl = request.Bootstrap is not null ||
-                                   request.EndpointObservation != TeamLabEndpointObservationMode.Disabled ||
-                                   requiresPlatformRemoteAccount;
+                                   request.EndpointObservation != TeamLabEndpointObservationMode.Disabled;
         if (requiresGuestControl && (template.VmRuntimeMode == VmRuntimeMode.Opaque ||
             template.VmArtifactStatus != VmArtifactStatus.Ready ||
             template.VmRuntimeMode == VmRuntimeMode.Managed &&
@@ -691,20 +741,6 @@ public sealed class AgentTeamLabNodeExecutor(
             var artifactDigest = template.VmRuntimeMode == VmRuntimeMode.Scenario
                 ? template.ImageHash!
                 : template.PreparedArtifact!.ArtifactDigest;
-            if (remoteConfiguration is { Enabled: true, CredentialMode: RemoteCredentialMode.PlatformGenerated })
-            {
-                var credential = await credentialService.EnsurePlatformCredentialAsync(
-                    request.RuntimeId, request.Generation, request.RuntimeAssetId, remoteConfiguration.Protocol, cancellationToken);
-                request = request with
-                {
-                    Secrets = request.Secrets.Concat(new[]
-                    {
-                        new KeyValuePair<string, string>("GZCTF_REMOTE_ACCESS_PROTOCOL", remoteConfiguration.Protocol.ToString()),
-                        new KeyValuePair<string, string>("GZCTF_REMOTE_ACCESS_USERNAME", credential.Username),
-                        new KeyValuePair<string, string>("GZCTF_REMOTE_ACCESS_PASSWORD", credentialService.RevealSecret(credential))
-                    }).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal)
-                };
-            }
             var (intent, protectedSecrets) = BuildGuestIntent(
                 request,
                 identity,
@@ -830,7 +866,7 @@ public sealed class AgentTeamLabNodeExecutor(
         var message = response?.Message ?? "Endpoint sensor could not be started.";
         if (request.EndpointObservation == TeamLabEndpointObservationMode.Optional)
             logger.LogWarning(
-                "Optional TeamLab endpoint sensor is unavailable: runtime={RuntimeId}, generation={Generation}, asset={AssetKey}, node={NodeId}, reason={Reason}",
+                "可选的 TeamLab endpoint sensor 不可用: runtime={RuntimeId}, generation={Generation}, asset={AssetKey}, node={NodeId}, reason={Reason}",
                 request.RuntimeId, request.Generation, request.AssetKey, workerNodeId, message);
         return TeamLabNodeResult.Failed(message);
     }
@@ -895,10 +931,18 @@ public sealed class AgentTeamLabNodeExecutor(
             AgentRuntimeSignalStage.BootstrapCompleted,
             bootstrapTimeout,
             cancellationToken);
-        return completed.Ready
-            ? TeamLabNodeBootstrapResult.Completed()
-            : TeamLabNodeBootstrapResult.Failed(
-                $"VM bootstrap did not complete: {completed.ErrorCode ?? "runtime.bootstrap_signal_missing"}");
+        if (completed.Ready)
+            return TeamLabNodeBootstrapResult.Completed();
+
+        var errorCode = completed.ErrorCode ?? "runtime.bootstrap_signal_missing";
+        var detail = completed.Facts is { Count: > 0 }
+            ? string.Join(", ", completed.Facts.OrderBy(item => item.Key)
+                .Select(item => $"{item.Key}={item.Value}"))
+            : null;
+        return TeamLabNodeBootstrapResult.Failed(
+            detail is null
+                ? $"VM bootstrap did not complete: {errorCode}"
+                : $"VM bootstrap did not complete: {errorCode} ({detail})");
     }
 
     public async Task<TeamLabNodeBootstrapResult> ProbeAssetHealthAsync(
@@ -987,14 +1031,14 @@ public sealed class AgentTeamLabNodeExecutor(
 
     private static List<AgentVmNetworkInterfaceRequest> BuildVmInterfaces(
         TeamLabNodeAssetCreateRequest request,
-        ImageTemplate template) => request.Interfaces.Select(iface => new AgentVmNetworkInterfaceRequest
+        ImageTemplate template) => request.Interfaces.Select((iface, index) => new AgentVmNetworkInterfaceRequest
     {
         BridgeName = iface.BridgeName,
         HostInterfaceName = TeamLabResourceNameFactory.WorkloadHostInterface(
             request.RuntimeId, request.AssetKey, iface.Key),
         MacAddress = iface.MacAddress,
         Model = template.OSType == OSType.Windows ? "e1000e" : "virtio",
-        InterfaceName = iface.Key,
+        InterfaceName = TeamLabResourceNameFactory.WorkloadGuestInterface(index),
         IpAddress = iface.IpAddress,
         PrefixLength = iface.PrefixLength,
         Gateway = iface.Primary ? Gateway(iface.IpAddress, iface.PrefixLength) : null,
@@ -1113,15 +1157,19 @@ public sealed class AgentTeamLabNodeExecutor(
         ResolvedBootstrap? bootstrap,
         Uri artifactEndpoint)
     {
-        var parameters = request.Environment
-            .Concat(bootstrap?.Parameters ?? new Dictionary<string, string>())
+        var runtimeEnvironment = request.Environment
             .Append(new KeyValuePair<string, string>("GZCTF_RUNTIME_ID", request.RuntimeId.ToString()))
             .Append(new KeyValuePair<string, string>("GZCTF_TOPOLOGY_KEY", request.AssetKey))
             .GroupBy(item => item.Key, StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Last().Value, StringComparer.Ordinal);
-        var suppliedSecrets = request.Secrets
-            .Concat(bootstrap?.Secrets ?? new Dictionary<string, string>())
+        var parameters = (bootstrap?.Parameters ?? new Dictionary<string, string>())
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Value, StringComparer.Ordinal);
+        // A service package accepts only its manifest-declared secret parameters.
+        // Runtime-owned secrets, such as the endpoint sensor credential, remain on
+        // their dedicated Agent path and must not become package template values.
+        var suppliedSecrets = (bootstrap?.Secrets ?? request.Secrets)
             .GroupBy(item => item.Key, StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Last().Value, StringComparer.Ordinal);
@@ -1161,7 +1209,8 @@ public sealed class AgentTeamLabNodeExecutor(
             expiresAt,
             servicePackage,
             references,
-            parameters);
+            parameters,
+            runtimeEnvironment);
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             JsonSerializer.SerializeToUtf8Bytes(draft)));
         return (draft with { IntentDigest = digest }, protectedSecrets);
@@ -1181,6 +1230,13 @@ public sealed class AgentTeamLabNodeExecutor(
         new(route.TargetCidr, route.GatewayIp, route.SourceIp);
 
     private TeamLabNodeResult RequireMutation(TeamLabDryRunResponse? response, string fallback) =>
+        response is not { Success: true }
+            ? TeamLabNodeResult.Failed(response?.Message ?? fallback)
+            : response.DryRun
+                ? TeamLabNodeResult.Failed(response.Message)
+                : TeamLabNodeResult.Ok(response.Message);
+
+    private TeamLabNodeResult RequireMutation(TeamLabAssetLifecycleResponse? response, string fallback) =>
         response is not { Success: true }
             ? TeamLabNodeResult.Failed(response?.Message ?? fallback)
             : response.DryRun

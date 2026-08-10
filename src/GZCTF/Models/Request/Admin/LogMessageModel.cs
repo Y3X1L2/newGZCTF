@@ -97,6 +97,7 @@ public sealed class LogQueryModel
     public Guid? CorrelationId { get; set; }
     public string? Logger { get; set; }
     public string? EventCode { get; set; }
+    public string? Keyword { get; set; }
     public Guid? WorkerNodeId { get; set; }
     public Guid? DeploymentTicketId { get; set; }
     public string? ResourceType { get; set; }

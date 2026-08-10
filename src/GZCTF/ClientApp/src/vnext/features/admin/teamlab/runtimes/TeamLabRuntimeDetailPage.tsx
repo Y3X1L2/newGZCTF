@@ -1,5 +1,5 @@
 import { Activity, ArrowLeft, Boxes, FileClock, RotateCcw, Trash2, Wrench } from 'lucide-react'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { ActionButton, InlineFeedback, VNextConfirmDialog } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
@@ -20,12 +20,14 @@ import { RuntimeTopologyView } from './RuntimeTopologyView'
 import styles from './TeamLabRuntimeDetailPage.module.css'
 import { TrafficFlowPanel } from './TrafficFlowPanel'
 import { TrafficPathPanel } from './TrafficPathPanel'
-import { useRuntimeEvents } from './useRuntimeEvents'
-import { useRuntimeLogs } from './useRuntimeLogs'
+import { emptyTeamLabEventFilters, useRuntimeEvents, type TeamLabEventFilters } from './useRuntimeEvents'
 import { useTeamLabRuntime } from './useTeamLabRuntime'
-import { useTrafficObservability } from './useTrafficObservability'
+import { useTrafficObservability, type TrafficFlowFilters, type TrafficPathFilters } from './useTrafficObservability'
 
 type RuntimeTab = 'overview' | 'operations' | 'events' | 'traffic' | 'capture'
+
+const initialFlowFilters: TrafficFlowFilters = { query: '', protocol: '', networkKey: '' }
+const initialPathFilters: TrafficPathFilters = { query: '', protocol: '', confidence: '' }
 
 export function TeamLabRuntimeDetailPage() {
   const { topologyId = '', runtimeId = '' } = useParams()
@@ -35,13 +37,20 @@ export function TeamLabRuntimeDetailPage() {
   const [destroyOpen, setDestroyOpen] = useState(false)
   const [acting, setActing] = useState(false)
   const [actionError, setActionError] = useState<unknown>(null)
+  const [flowFilters, setFlowFilters] = useState<TrafficFlowFilters>(initialFlowFilters)
+  const [pathFilters, setPathFilters] = useState<TrafficPathFilters>(initialPathFilters)
+  const [eventFilters, setEventFilters] = useState<TeamLabEventFilters>(emptyTeamLabEventFilters)
   const runtimeState = useTeamLabRuntime(runtimeId)
   const runtime = runtimeState.runtime
-  const events = useRuntimeEvents(tab === 'events' ? runtimeId : '', runtime?.status, runtime?.generation)
-  const logs = useRuntimeLogs(tab === 'events' ? runtimeId : '', runtime?.status)
-  const traffic = useTrafficObservability(tab === 'traffic' ? runtimeId : '', runtime?.status)
+  const events = useRuntimeEvents(tab === 'events' ? runtimeId : '', runtime?.status, eventFilters)
+  const traffic = useTrafficObservability(tab === 'traffic' ? runtimeId : '', runtime?.status, flowFilters, pathFilters)
 
   useVNextPageTitle(runtime ? `运行时 ${runtime.id.slice(0, 8)}` : 'TeamLab 运行时')
+
+  const inspectFailure = useCallback((filters: TeamLabEventFilters) => {
+    setEventFilters(filters)
+    setTab('events')
+  }, [])
 
   const reset = async () => {
     if (!runtime || acting) return false
@@ -81,7 +90,7 @@ export function TeamLabRuntimeDetailPage() {
   if (runtimeState.error || !runtime)
     return <DataState description={errorMessage(runtimeState.error, '运行时加载失败。')} title="无法打开运行时" />
 
-  const canReset = ['running', 'failed', 'stopped'].includes(runtime.status)
+  const canReset = ['running', 'failed', 'paused'].includes(runtime.status)
   const canDestroy = !['destroying', 'destroyed', 'cleanup-pending'].includes(runtime.status)
   const cleanupPending = runtime.status === 'cleanup-pending'
   return (
@@ -92,7 +101,7 @@ export function TeamLabRuntimeDetailPage() {
       </Link>
       <header className={styles.pageHeader}>
         <div>
-          <span>RUNTIME CONTROL</span>
+          <span>运行控制</span>
           <h2>运行实例 {runtime.id.slice(0, 8)}</h2>
           <p>
             发布 {runtime.releaseId} · 第 {runtime.generation} 代
@@ -186,21 +195,34 @@ export function TeamLabRuntimeDetailPage() {
           <>
             <RuntimeStageTimeline runtime={runtime} />
             <RuntimeAccessPanel canCreate={runtime.status === 'running'} runtimeId={runtime.id} />
-            <RuntimeShardTable runtime={runtime} />
-            <RuntimeTopologyView runtime={runtime} />
+            <RuntimeShardTable
+              onInspectFailure={inspectFailure}
+              runtime={runtime}
+            />
+            <RuntimeTopologyView
+              onInspectFailure={inspectFailure}
+              runtime={runtime}
+            />
           </>
         ) : null}
         {tab === 'operations' ? <RuntimeRemoteAccessPanel runtime={runtime} /> : null}
         {tab === 'events' ? (
-          <div className={styles.split}>
-            <RuntimeEventPanel error={events.error} events={events.events} loading={events.isLoading} />
-            <RuntimeLogPanel error={logs.error} loading={logs.isLoading} logs={logs.logs} />
+          <div className={styles.stack}>
+            <RuntimeEventPanel
+              currentGeneration={runtime.generation}
+              error={events.error}
+              events={events.events}
+              filters={eventFilters}
+              loading={events.isLoading}
+              onFiltersChange={setEventFilters}
+            />
+            <RuntimeLogPanel runtimeId={runtimeId} status={runtime.status} />
           </div>
         ) : null}
         {tab === 'traffic' ? (
           <div className={styles.stack}>
-            <TrafficFlowPanel flows={traffic.flows} />
-            <TrafficPathPanel paths={traffic.paths} runtimeId={runtime.id} />
+            <TrafficFlowPanel filters={flowFilters} flows={traffic.flows} onFiltersChange={setFlowFilters} />
+            <TrafficPathPanel filters={pathFilters} onFiltersChange={setPathFilters} paths={traffic.paths} runtimeId={runtime.id} />
           </div>
         ) : null}
         {tab === 'capture' ? <CapturePanel networks={runtime.networks} runtimeId={runtime.id} /> : null}

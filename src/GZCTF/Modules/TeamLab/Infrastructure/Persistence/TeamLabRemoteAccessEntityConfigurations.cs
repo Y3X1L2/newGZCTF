@@ -4,20 +4,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace GZCTF.Modules.TeamLab.Infrastructure.Persistence;
 
-public sealed class TeamLabRuntimeRemoteCredentialEntityConfiguration : IEntityTypeConfiguration<TeamLabRuntimeRemoteCredential>
-{
-    public void Configure(EntityTypeBuilder<TeamLabRuntimeRemoteCredential> builder)
-    {
-        builder.ToTable("TeamLabRuntimeRemoteCredentials");
-        builder.HasKey(item => item.Id);
-        builder.Property(item => item.Protocol).HasConversion<byte>();
-        builder.Property(item => item.Mode).HasConversion<byte>();
-        builder.HasIndex(item => new { item.RuntimeId, item.Generation, item.RuntimeAssetId, item.Protocol }).IsUnique();
-        builder.HasOne(item => item.Runtime).WithMany().HasForeignKey(item => item.RuntimeId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne(item => item.RuntimeAsset).WithMany().HasForeignKey(item => item.RuntimeAssetId).OnDelete(DeleteBehavior.Cascade);
-    }
-}
-
 public sealed class TeamLabRemoteSessionEntityConfiguration : IEntityTypeConfiguration<TeamLabRemoteSession>
 {
     public void Configure(EntityTypeBuilder<TeamLabRemoteSession> builder)
@@ -27,6 +13,9 @@ public sealed class TeamLabRemoteSessionEntityConfiguration : IEntityTypeConfigu
         builder.HasIndex(item => item.PublicId).IsUnique();
         builder.HasIndex(item => new { item.Status, item.ExpiresAt });
         builder.HasIndex(item => new { item.RuntimeId, item.Generation, item.RuntimeAssetId });
+        builder.HasIndex(item => new { item.RequestedByUserId, item.RuntimeAssetId, item.Protocol })
+            .IsUnique()
+            .HasFilter("\"Status\" IN (1, 2, 3, 4)");
         builder.Property(item => item.Protocol).HasConversion<byte>();
         builder.Property(item => item.Status).HasConversion<byte>();
         builder.HasOne(item => item.Runtime).WithMany().HasForeignKey(item => item.RuntimeId).OnDelete(DeleteBehavior.Restrict);

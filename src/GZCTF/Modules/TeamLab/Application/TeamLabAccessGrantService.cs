@@ -74,18 +74,18 @@ public sealed class TeamLabAccessGrantService(
         if (runtime.IsScenarioBuild)
             throw new TeamLabApiContractException(
                 "scenario_runtime_access_forbidden",
-                "Scenario build runtimes never accept player access grants.",
+                "场景构建运行时不接受玩家访问授权",
                 409);
         if (runtime.Status != TeamLabRuntimeStatus.Running || runtime.PublicUdpMapping is null)
-            throw new TeamLabApiContractException("runtime_not_ready", "The runtime is not ready for access.", 409);
+            throw new TeamLabApiContractException("runtime_not_ready", "运行时尚未就绪，无法访问", 409);
         var entryShard = runtime.Shards.SingleOrDefault(item => item.Id == runtime.EntryShardId && item.Generation == runtime.Generation)
-            ?? throw new TeamLabApiContractException("runtime_invalid", "The runtime entry shard is missing.", 500);
+            ?? throw new TeamLabApiContractException("runtime_invalid", "运行时入口分片缺失", 500);
         var entryNetwork = ResolveEntryNetwork(runtime, entryShard);
         var publicEndpoint = !string.IsNullOrWhiteSpace(_gateway.PublicEndpoint)
             ? _gateway.PublicEndpoint.Trim()
             : _container.PublicEntry.Trim();
         if (string.IsNullOrWhiteSpace(publicEndpoint))
-            throw new TeamLabApiContractException("capability_unavailable", "The public WireGuard endpoint is not configured.", 409);
+            throw new TeamLabApiContractException("capability_unavailable", "未配置公共 WireGuard 端点", 409);
 
         var grant = operationId is { } operation
             ? runtime.AccessGrants.SingleOrDefault(item => item.ApiOperationId == operation)
@@ -98,7 +98,7 @@ public sealed class TeamLabAccessGrantService(
                 string.IsNullOrWhiteSpace(activeGrant.ProtectedDownloadToken))
                 throw new TeamLabApiContractException(
                     "access_grant_already_active",
-                    "An access grant is already active. Revoke it explicitly before rotating the team VPN key.",
+                    "已存在活跃的访问授权，轮换团队 VPN 密钥前请先显式撤销",
                     409);
             var existingToken = _protector.Unprotect(activeGrant.ProtectedDownloadToken);
             return ToModel(runtime, activeGrant, DownloadUrl(runtime, activeGrant, existingToken));
@@ -135,7 +135,7 @@ public sealed class TeamLabAccessGrantService(
         {
             if (string.IsNullOrWhiteSpace(grant.ProtectedDownloadToken))
                 throw new TeamLabApiContractException(
-                    "access_grant_expired", "The access configuration link is no longer available.", 410);
+                    "access_grant_expired", "访问配置链接已失效", 410);
             token = _protector.Unprotect(grant.ProtectedDownloadToken);
             if (grant.AppliedAt is not null)
                 return ToModel(runtime, grant, DownloadUrl(runtime, grant, token));
@@ -160,7 +160,7 @@ public sealed class TeamLabAccessGrantService(
                 blocked), cancellationToken);
         if (!applied.Success)
             throw new TeamLabApiContractException(
-                "operation_failed", "The access grant could not be applied to the runtime.", 500);
+                "operation_failed", "无法将访问授权应用到运行时", 500);
         grant.AppliedAt = DateTimeOffset.UtcNow;
         runtime.IsOpenToPlayers = true;
         eventRecorder.Record(
@@ -169,7 +169,7 @@ public sealed class TeamLabAccessGrantService(
             TeamLabEventLevel.Success,
             OperationalEventCodes.TeamLab.AccessOpened,
             OperationalEventOutcome.Succeeded,
-            "WireGuard access grant created.",
+            "已创建 WireGuard 访问授权",
             workerNodeId: entryShard.WorkerNodeId);
         await context.SaveChangesAsync(cancellationToken);
         return ToModel(runtime, grant, DownloadUrl(runtime, grant, token));
@@ -201,13 +201,13 @@ public sealed class TeamLabAccessGrantService(
         var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
         var grant = runtime.AccessGrants.SingleOrDefault(item => item.PublicId == grantPublicId &&
                                                                  item.Generation == runtime.Generation && !item.Revoked)
-            ?? throw new TeamLabApiContractException("access_grant_not_found", "The access grant was not found.", 404);
+            ?? throw new TeamLabApiContractException("access_grant_not_found", "未找到访问授权", 404);
         if (grant.ConfigurationConsumedAt is not null || grant.ExpiresAt <= DateTimeOffset.UtcNow ||
             string.IsNullOrWhiteSpace(grant.DownloadTokenHash) ||
             !CryptographicOperations.FixedTimeEquals(
                 Encoding.ASCII.GetBytes(grant.DownloadTokenHash),
                 Encoding.ASCII.GetBytes(HashToken(token))))
-            throw new TeamLabApiContractException("access_grant_expired", "The access configuration link is invalid or expired.", 410);
+            throw new TeamLabApiContractException("access_grant_expired", "访问配置链接无效或已过期", 410);
         var clientPrivate = _protector.Unprotect(grant.ProtectedPrivateKey);
         var config = BuildClientConfig(clientPrivate, grant.ServerPublicKey, grant.ClientAddress, grant.Endpoint,
             grant.AllowedIps, grant.Dns);
@@ -221,7 +221,7 @@ public sealed class TeamLabAccessGrantService(
     {
         var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
         var grant = runtime.AccessGrants.SingleOrDefault(item => item.PublicId == grantPublicId)
-            ?? throw new TeamLabApiContractException("access_grant_not_found", "The access grant was not found.", 404);
+            ?? throw new TeamLabApiContractException("access_grant_not_found", "未找到访问授权", 404);
         if (grant.Revoked)
             return;
         var entryShard = runtime.Shards.Single(item => item.Id == runtime.EntryShardId && item.Generation == runtime.Generation);
@@ -234,7 +234,7 @@ public sealed class TeamLabAccessGrantService(
             cancellationToken);
         if (!cleanup.Success)
             throw new TeamLabApiContractException(
-                "operation_failed", "The access grant could not be revoked from the runtime.", 500);
+                "operation_failed", "无法从运行时撤销访问授权", 500);
         grant.Revoked = true;
         grant.RevokedAt = DateTimeOffset.UtcNow;
         runtime.IsOpenToPlayers = runtime.AccessGrants.Any(item => item.Id != grant.Id &&
@@ -245,7 +245,7 @@ public sealed class TeamLabAccessGrantService(
             TeamLabEventLevel.Info,
             OperationalEventCodes.TeamLab.AccessRevoked,
             OperationalEventOutcome.Succeeded,
-            "WireGuard access grant revoked.",
+            "已撤销 WireGuard 访问授权",
             workerNodeId: entryShard.WorkerNodeId);
         await context.SaveChangesAsync(cancellationToken);
     }
@@ -269,7 +269,7 @@ public sealed class TeamLabAccessGrantService(
             .Include(item => item.AccessGrants)
             .Include(item => item.Events)
             .SingleOrDefaultAsync(item => item.PublicId == runtimePublicId, cancellationToken)
-        ?? throw new TeamLabApiContractException("runtime_not_found", "The TeamLab runtime was not found.", 404);
+        ?? throw new TeamLabApiContractException("runtime_not_found", "未找到 TeamLab 运行时", 404);
 
     internal static TeamLabRuntimeNetwork ResolveEntryNetwork(
         TeamLabRuntime runtime,
@@ -280,7 +280,7 @@ public sealed class TeamLabAccessGrantService(
             .ToArray();
         if (entryNetworks.Length != 1 || entryNetworks[0].ShardId != entryShard.Id)
             throw new TeamLabApiContractException(
-                "runtime_invalid", "The runtime entry network is missing or assigned to the wrong shard.", 500);
+                "runtime_invalid", "运行时入口网络缺失或分配到了错误的分片", 500);
         return entryNetworks[0];
     }
 

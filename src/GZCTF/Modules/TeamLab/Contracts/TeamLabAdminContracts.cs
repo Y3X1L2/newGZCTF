@@ -57,6 +57,12 @@ public sealed record TeamLabAdminImageReadinessModel(
     int PendingNodeCount,
     int FailedNodeCount);
 
+/// <summary>Names a required runtime-only bootstrap secret without exposing its value.</summary>
+public sealed record TeamLabRequiredRuntimeSecretModel(
+    string AssetKey,
+    string AssetName,
+    string ParameterKey);
+
 public sealed record TeamLabAdminReleaseReadinessModel(
     Guid TopologyId,
     Guid ReleaseId,
@@ -64,7 +70,8 @@ public sealed record TeamLabAdminReleaseReadinessModel(
     TeamLabPlanModel? Plan,
     IReadOnlyList<TeamLabAdminImageReadinessModel> Images,
     TeamLabAdminRuntimeSummaryModel? LatestTrialRuntime,
-    IReadOnlyList<string> BlockingReasons);
+    IReadOnlyList<string> BlockingReasons,
+    IReadOnlyList<TeamLabRequiredRuntimeSecretModel> RequiredRuntimeSecrets);
 
 public sealed record TeamLabAdminRuntimePageModel(
     IReadOnlyList<TeamLabAdminRuntimeSummaryModel> Items,

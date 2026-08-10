@@ -7,6 +7,7 @@ namespace GZCTF.Modules.TeamLab.Application;
 public interface ITeamLabRemoteAccessService
 {
     Task<TeamLabRemoteAccessAvailabilityModel> GetAvailabilityAsync(Guid runtimeId, int assetId, Guid actorId, bool administrator, CancellationToken cancellationToken);
+    Task<IReadOnlyList<TeamLabRemoteAccessAvailabilityModel>> GetAvailabilityBatchAsync(Guid runtimeId, Guid actorId, bool administrator, CancellationToken cancellationToken);
     Task<TeamLabRemoteSessionModel> CreateAsync(Guid runtimeId, int assetId, Guid actorId, bool administrator, string reason, CancellationToken cancellationToken);
     Task<TeamLabRemoteSessionModel> GetAsync(Guid sessionId, Guid actorId, bool administrator, CancellationToken cancellationToken);
     Task<TeamLabRemoteConnectModel> ConnectAsync(Guid sessionId, Guid actorId, bool administrator, CancellationToken cancellationToken);

@@ -7,8 +7,11 @@ import {
   copyTopologyFragment,
   deleteTopologyItems,
   duplicateTopologyNodes,
+  moveNetworkRegion,
   moveTopologyNode,
   pasteTopologyFragment,
+  resizeNetworkRegion,
+  setNetworkCollapsed,
   type TopologyFragment,
 } from '../model/topologyCommands'
 import type { TopologyDocument, TopologyNodeType } from '../model/topologyDocument'
@@ -78,11 +81,17 @@ export function TeamLabDesignPage({
   imageOptions = [],
 }: TeamLabDesignPageProps) {
   const { document, canUndo, canRedo, commit, undo, redo } = useEditorHistory(initialDocument)
+  const documentRef = useRef(document)
+  const commitDocument = useCallback((nextDocument: TopologyDocument) => {
+    documentRef.current = nextDocument
+    commit(nextDocument)
+  }, [commit])
   const { selection, select, clear } = useEditorSelection(document)
   const [connectionMode, setConnectionMode] = useState<CanvasConnectionMode>('network')
   const [leftPanelOpen, setLeftPanelOpen] = useState(true)
   const [rightPanelOpen, setRightPanelOpen] = useState(true)
   const [focusMode, setFocusMode] = useState(false)
+  const [selectedNetworkKey, setSelectedNetworkKey] = useState<string | null>(null)
   const [layoutRequest, setLayoutRequest] = useState(0)
   const [feedback, setFeedback] = useState<string | null>(null)
   const clipboard = useRef<TopologyFragment | null>(null)
@@ -91,6 +100,7 @@ export function TeamLabDesignPage({
   const effectiveReadOnly = readOnly || compact
 
   useEffect(() => {
+    documentRef.current = document
     if (lastNotified.current === document) return
     lastNotified.current = document
     onDocumentChange?.(document)
@@ -117,31 +127,32 @@ export function TeamLabDesignPage({
   const addNode = useCallback(
     (type: TopologyNodeType, position?: { x: number; y: number }) => {
       if (effectiveReadOnly) return
-      const index = Object.keys(document.nodes).length
+      const currentDocument = documentRef.current
+      const index = Object.keys(currentDocument.nodes).length
       const fallback = { x: 80 + (index % 4) * 240, y: 100 + Math.floor(index / 4) * 160 }
-      const result = addTopologyNode(document, createTopologyNode(document, type, position ?? fallback))
-      commit(result.document)
+      const result = addTopologyNode(currentDocument, createTopologyNode(currentDocument, type, position ?? fallback))
+      commitDocument(result.document)
       select([result.value], [])
       setFeedback(null)
     },
-    [commit, document, effectiveReadOnly, select]
+    [commitDocument, effectiveReadOnly, select]
   )
   const connectNodes = useCallback(
     (sourceKey: string, targetKey: string) => {
       if (effectiveReadOnly) return
       try {
-        commit(connectCanvasNodes(document, sourceKey, targetKey, connectionMode))
+        commitDocument(connectCanvasNodes(documentRef.current, sourceKey, targetKey, connectionMode))
         setFeedback(null)
       } catch (error) {
         setFeedback(error instanceof Error ? error.message : '无法创建连接。')
       }
     },
-    [commit, connectionMode, document, effectiveReadOnly]
+    [commitDocument, connectionMode, effectiveReadOnly]
   )
   const moveNodes = useCallback(
     (positions: ReadonlyMap<string, { x: number; y: number }>) => {
       if (effectiveReadOnly) return
-      let nextDocument = document
+      let nextDocument = documentRef.current
       let changed = false
       for (const [key, position] of [...positions].sort(([left], [right]) => left.localeCompare(right))) {
         const current = nextDocument.nodes[key]
@@ -149,44 +160,66 @@ export function TeamLabDesignPage({
         nextDocument = moveTopologyNode(nextDocument, key, position.x, position.y).document
         changed = true
       }
-      if (changed) commit(nextDocument)
+      if (changed) commitDocument(nextDocument)
     },
-    [commit, document, effectiveReadOnly]
+    [commitDocument, effectiveReadOnly]
+  )
+  const moveRegion = useCallback(
+    (networkKey: string, delta: { x: number; y: number }) => {
+      if (effectiveReadOnly) return
+      commitDocument(moveNetworkRegion(documentRef.current, networkKey, delta).document)
+    },
+    [commitDocument, effectiveReadOnly]
+  )
+  const toggleRegion = useCallback(
+    (networkKey: string, collapsed: boolean) => {
+      if (effectiveReadOnly) return
+      commitDocument(setNetworkCollapsed(documentRef.current, networkKey, collapsed).document)
+    },
+    [commitDocument, effectiveReadOnly]
+  )
+  const resizeRegion = useCallback(
+    (networkKey: string, width: number, height: number) => {
+      if (effectiveReadOnly) return
+      commitDocument(resizeNetworkRegion(documentRef.current, networkKey, width, height).document)
+    },
+    [commitDocument, effectiveReadOnly]
   )
   const deleteSelection = useCallback(() => {
     if (effectiveReadOnly || (selection.nodeKeys.size === 0 && selection.connectionKeys.size === 0)) return
-    commit(deleteTopologyItems(document, selection).document)
+    commitDocument(deleteTopologyItems(documentRef.current, selection).document)
     clear()
-  }, [clear, commit, document, effectiveReadOnly, selection])
+  }, [clear, commitDocument, effectiveReadOnly, selection])
   const copySelection = useCallback(() => {
-    if (selection.nodeKeys.size) clipboard.current = copyTopologyFragment(document, selection.nodeKeys)
-  }, [document, selection.nodeKeys])
+    if (selection.nodeKeys.size) clipboard.current = copyTopologyFragment(documentRef.current, selection.nodeKeys)
+  }, [selection.nodeKeys])
   const pasteSelection = useCallback(() => {
     if (effectiveReadOnly || !clipboard.current) return
-    const result = pasteTopologyFragment(document, clipboard.current)
-    commit(result.document)
+    const result = pasteTopologyFragment(documentRef.current, clipboard.current)
+    commitDocument(result.document)
     select(result.value, [])
-  }, [commit, document, effectiveReadOnly, select])
+  }, [commitDocument, effectiveReadOnly, select])
   const duplicateSelection = useCallback(() => {
     if (effectiveReadOnly || selection.nodeKeys.size === 0) return
-    const result = duplicateTopologyNodes(document, selection.nodeKeys)
-    commit(result.document)
+    const result = duplicateTopologyNodes(documentRef.current, selection.nodeKeys)
+    commitDocument(result.document)
     select(result.value, [])
-  }, [commit, document, effectiveReadOnly, select, selection.nodeKeys])
+  }, [commitDocument, effectiveReadOnly, select, selection.nodeKeys])
   const nudge = useCallback(
     (delta: { x: number; y: number }) => {
       if (effectiveReadOnly || selection.nodeKeys.size === 0) return
-      commit(bulkMoveTopologyNodes(document, selection.nodeKeys, delta).document)
+      commitDocument(bulkMoveTopologyNodes(documentRef.current, selection.nodeKeys, delta).document)
     },
-    [commit, document, effectiveReadOnly, selection.nodeKeys]
+    [commitDocument, effectiveReadOnly, selection.nodeKeys]
   )
   const autoLayout = useCallback(() => {
-    if (effectiveReadOnly || Object.keys(document.nodes).length < 2) return
-    commit(autoLayoutTopology(document))
+    const currentDocument = documentRef.current
+    if (effectiveReadOnly || Object.keys(currentDocument.nodes).length < 2) return
+    commitDocument(autoLayoutTopology(currentDocument))
     setLayoutRequest((value) => value + 1)
     setFeedback('已完成自动排版，可使用撤销恢复原布局。')
-  }, [commit, document, effectiveReadOnly])
-  const save = useCallback(() => void onSave?.(document), [document, onSave])
+  }, [commitDocument, effectiveReadOnly])
+  const save = useCallback(() => void onSave?.(documentRef.current), [onSave])
   const validate = useCallback(() => void onValidate?.(), [onValidate])
   const undoDocument = useCallback(() => {
     if (!effectiveReadOnly) undo()
@@ -195,12 +228,20 @@ export function TeamLabDesignPage({
     if (!effectiveReadOnly) redo()
   }, [effectiveReadOnly, redo])
   const selectAll = useCallback(() => {
-    const all = selectAllTopology(document)
+    const all = selectAllTopology(documentRef.current)
     select(all.nodeKeys, all.connectionKeys)
-  }, [document, select])
+  }, [select])
   const toggleFocus = useCallback(() => setFocusMode((value) => !value), [])
   const toggleLeftPanel = useCallback(() => setLeftPanelOpen((value) => !value), [])
   const toggleRightPanel = useCallback(() => setRightPanelOpen((value) => !value), [])
+  const selectCanvasItems = useCallback((nodeKeys: readonly string[], connectionKeys: readonly string[]) => {
+    select(nodeKeys, connectionKeys)
+    if (nodeKeys.length > 0 || connectionKeys.length > 0) setSelectedNetworkKey(null)
+  }, [select])
+  const selectNetworkRegion = useCallback((networkKey: string | null) => {
+    setSelectedNetworkKey(networkKey)
+    if (networkKey) clear()
+  }, [clear])
   const addPaletteNode = useCallback((type: TopologyNodeType) => addNode(type), [addNode])
   const useNetworkConnections = useCallback(() => setConnectionMode('network'), [])
   const useDependencyConnections = useCallback(() => setConnectionMode('dependency'), [])
@@ -236,7 +277,7 @@ export function TeamLabDesignPage({
     <section className={`${styles.page} ${focusMode ? styles.focusMode : ''}`}>
       <header className={styles.header}>
         <div className={styles.title}>
-          <span>TOPOLOGY DESIGN</span>
+          <span>拓扑设计</span>
           <strong>{document.name}</strong>
         </div>
         <div aria-label="连接类型" className={styles.connectionModes} role="group">
@@ -327,22 +368,28 @@ export function TeamLabDesignPage({
           onAutoLayout={autoLayout}
           onConnectNodes={connectNodes}
           onMoveNodes={moveNodes}
+          onMoveRegion={moveRegion}
           onRedo={redoDocument}
-          onSelectionChange={select}
+          onResizeRegion={resizeRegion}
+          onSelectionChange={selectCanvasItems}
+          onNetworkRegionSelect={selectNetworkRegion}
           onToggleFocus={toggleFocus}
           onToggleLeftPanel={toggleLeftPanel}
+          onToggleRegion={toggleRegion}
           onToggleRightPanel={toggleRightPanel}
           onUndo={undoDocument}
           readOnly={effectiveReadOnly}
           rightPanelOpen={rightPanelOpen}
+          selectedNetworkKey={selectedNetworkKey}
           selection={selection}
         />
         {rightVisible ? (
           <TeamLabInspector
             document={document}
             imageOptions={imageOptions}
-            onDocumentChange={commit}
+            onDocumentChange={commitDocument}
             readOnly={effectiveReadOnly}
+            selectedNetworkKey={selectedNetworkKey}
             selection={selection}
           />
         ) : null}

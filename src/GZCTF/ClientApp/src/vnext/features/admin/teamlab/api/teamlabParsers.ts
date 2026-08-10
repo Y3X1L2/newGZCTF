@@ -79,7 +79,7 @@ const runtimeStatuses = {
   5: 'running',
   6: 'failed',
   7: 'cleanup-pending',
-  8: 'stopped',
+  8: 'paused',
   9: 'destroying',
   10: 'destroyed',
   Pending: 'pending',
@@ -90,7 +90,7 @@ const runtimeStatuses = {
   Running: 'running',
   Failed: 'failed',
   CleanupPending: 'cleanup-pending',
-  Stopped: 'stopped',
+  Paused: 'paused',
   Destroying: 'destroying',
   Destroyed: 'destroyed',
 } as const
@@ -562,6 +562,14 @@ export function parseTeamLabReleaseReadiness(value: unknown): TeamLabAdminReleas
         ? null
         : parseAdminRuntimeSummary(item.latestTrialRuntime, 'TeamLab release readiness.latestTrialRuntime'),
     blockingReasons: array(item.blockingReasons, 'TeamLab release readiness.blockingReasons', string),
+    requiredRuntimeSecrets: array(item.requiredRuntimeSecrets ?? [], 'TeamLab release readiness.requiredRuntimeSecrets', (entry, label) => {
+      const secret = record(entry, label)
+      return {
+        assetKey: string(secret.assetKey, `${label}.assetKey`),
+        assetName: string(secret.assetName, `${label}.assetName`),
+        parameterKey: string(secret.parameterKey, `${label}.parameterKey`),
+      }
+    }),
   }
 }
 

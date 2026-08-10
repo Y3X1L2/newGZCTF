@@ -22,8 +22,8 @@ public sealed class ApiOperationWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var handlerKinds = ResolveHandlerKinds().ToHashSet(StringComparer.Ordinal);
         var active = new HashSet<Task>();
+        _logger.LogInformation("External API operation worker started");
         while (!stoppingToken.IsCancellationRequested)
         {
             active.RemoveWhere(task => task.IsCompleted);
@@ -58,7 +58,7 @@ public sealed class ApiOperationWorker : BackgroundService
             }
 
             foreach (var operation in operations)
-                active.Add(ProcessSafelyAsync(operation, handlerKinds, stoppingToken));
+                active.Add(ProcessSafelyAsync(operation, stoppingToken));
 
             if (active.Count == 0)
             {
@@ -78,12 +78,11 @@ public sealed class ApiOperationWorker : BackgroundService
 
     private async Task ProcessSafelyAsync(
         Domain.ApiOperation operation,
-        IReadOnlySet<string> handlerKinds,
         CancellationToken stoppingToken)
     {
         try
         {
-            await ProcessAsync(operation, handlerKinds, stoppingToken);
+            await ProcessAsync(operation, stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
         catch (Exception exception)
@@ -97,10 +96,11 @@ public sealed class ApiOperationWorker : BackgroundService
 
     private async Task ProcessAsync(
         Domain.ApiOperation operation,
-        IReadOnlySet<string> handlerKinds,
         CancellationToken stoppingToken)
     {
-        if (!handlerKinds.Contains(operation.Kind))
+        await using var handlerScope = _scopeFactory.CreateAsyncScope();
+        var handler = handlerScope.ServiceProvider.GetKeyedService<IApiOperationHandler>(operation.Kind);
+        if (handler is null)
         {
             await MarkFailedAsync(
                 operation.Id,
@@ -111,9 +111,9 @@ public sealed class ApiOperationWorker : BackgroundService
             return;
         }
 
-        await using var handlerScope = _scopeFactory.CreateAsyncScope();
-        var handler = handlerScope.ServiceProvider.GetServices<IApiOperationHandler>()
-            .Single(item => string.Equals(item.Kind, operation.Kind, StringComparison.Ordinal));
+        if (!string.Equals(handler.Kind, operation.Kind, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                $"Operation handler registration '{operation.Kind}' resolved handler kind '{handler.Kind}'.");
         using var execution = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         var renewal = RenewLeaseAsync(operation.Id, execution, stoppingToken);
         try
@@ -203,14 +203,6 @@ public sealed class ApiOperationWorker : BackgroundService
                 _logger.LogError(exception, "Lease renewal failed for operation {OperationId}", operation.Id);
             }
         }
-    }
-
-    private string[] ResolveHandlerKinds()
-    {
-        using var scope = _scopeFactory.CreateScope();
-        var handlers = scope.ServiceProvider.GetServices<IApiOperationHandler>().ToArray();
-        _ = handlers.ToDictionary(handler => handler.Kind, StringComparer.Ordinal);
-        return handlers.Select(handler => handler.Kind).ToArray();
     }
 
     private async Task RenewLeaseAsync(

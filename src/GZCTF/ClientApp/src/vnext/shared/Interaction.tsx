@@ -50,7 +50,7 @@ export function InlineFeedback({
   tone?: 'success' | 'danger' | 'neutral'
   children: ReactNode
 }) {
-  return <div className={`${styles.feedback} ${styles[`feedback_${tone}`]}`}>{children}</div>
+  return <div aria-live={tone === 'danger' ? 'assertive' : 'polite'} className={`${styles.feedback} ${styles[`feedback_${tone}`]}`} role={tone === 'danger' ? 'alert' : 'status'}>{children}</div>
 }
 
 export function VNextDialog({
@@ -62,6 +62,7 @@ export function VNextDialog({
   children,
   footer,
   wide = false,
+  closeDisabled = false,
 }: {
   open: boolean
   eyebrow: string
@@ -71,6 +72,7 @@ export function VNextDialog({
   children: ReactNode
   footer?: ReactNode
   wide?: boolean
+  closeDisabled?: boolean
 }) {
   const ref = useRef<HTMLDialogElement>(null)
   const titleId = useId()
@@ -95,10 +97,10 @@ export function VNextDialog({
       className={`${styles.dialog} ${wide ? styles.dialogWide : ''}`}
       onCancel={(event) => {
         event.preventDefault()
-        onClose()
+        if (!closeDisabled) onClose()
       }}
       onClick={(event) => {
-        if (event.currentTarget === event.target) onClose()
+        if (!closeDisabled && event.currentTarget === event.target) onClose()
       }}
       ref={ref}
     >
@@ -109,7 +111,7 @@ export function VNextDialog({
             <h2 id={titleId}>{title}</h2>
             {description ? <p id={descriptionId}>{description}</p> : null}
           </div>
-          <button aria-label="关闭" onClick={onClose} type="button">
+          <button aria-label="关闭" disabled={closeDisabled} onClick={onClose} type="button">
             <X size={19} />
           </button>
         </header>

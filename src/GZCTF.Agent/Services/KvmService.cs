@@ -26,6 +26,7 @@ public class KvmService
     private readonly AgentResourceLock _resourceLock;
     private readonly GuestEnrollmentStore? _guestEnrollmentStore;
     private readonly RdpProxyAccessPolicy _consoleAccessPolicy;
+    private readonly GuestManagementConfig _guestManagement;
 
     private static readonly Regex SafeNamePattern = new(@"^[a-zA-Z0-9_\-]+$", RegexOptions.Compiled);
     private static readonly Regex SafeMacPattern = new(@"^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$", RegexOptions.Compiled);
@@ -45,6 +46,7 @@ public class KvmService
         _resourceLock = resourceLock;
         _logger = logger;
         _guestEnrollmentStore = guestEnrollmentStore;
+        _guestManagement = agentConfig?.Value.GuestManagement ?? new GuestManagementConfig { Enabled = false };
         _consoleAccessPolicy = RdpProxyAccessPolicy.Create(
             _config.RdpProxyAllowedSources, agentConfig?.Value.ServerUrl);
         foreach (var invalid in _consoleAccessPolicy.InvalidSources)
@@ -97,8 +99,7 @@ public class KvmService
             if (domainExists)
             {
                 await RunCommandAsync($"virsh destroy {ShellEscape(request.VmName)} 2>/dev/null || true", token);
-                await RunCommandAsync(
-                    $"virsh undefine {ShellEscape(request.VmName)} --remove-all-storage 2>/dev/null || true", token);
+                await RunCommandAsync(BuildVmUndefineCommand(request.VmName), token);
             }
             CleanupVmArtifacts(request.VmName);
             domainId = string.Empty;
@@ -216,7 +217,7 @@ public class KvmService
                 $"virsh destroy {ShellEscape(request.VmName)} 2>/dev/null || true", CancellationToken.None,
                 throwOnError: false);
             await RunCommandAsync(
-                $"virsh undefine {ShellEscape(request.VmName)} --remove-all-storage 2>/dev/null || true",
+                $"{BuildVmUndefineCommand(request.VmName)} 2>/dev/null || true",
                 CancellationToken.None, throwOnError: false);
             CleanupVmArtifacts(request.VmName);
             throw;
@@ -257,8 +258,14 @@ public class KvmService
             return;
         }
         var domainGeneration = await ReadDomainGenerationAsync(vmName, token);
+        // Older Agents did not persist generation sidecars. A verified older domain may only be
+        // removed by a later cleanup request; non-destructive operations remain strictly fenced.
+        var allowLegacyCleanup = CanDestroyLegacyDomainWithoutSidecar(
+            domainGeneration, sidecarGeneration, expectedGeneration);
         var conflict = GetIdentityConflict(
-            vmName, nativeId, domainGeneration, sidecarGeneration, expectedGeneration, expectedNativeId);
+            vmName, nativeId, domainGeneration, sidecarGeneration,
+            allowLegacyCleanup ? domainGeneration : expectedGeneration,
+            expectedNativeId, allowLegacyCleanup);
         if (conflict is not null)
             throw new AgentOperationException(
                 "Conflict", "runtime.identity_conflict",
@@ -266,12 +273,36 @@ public class KvmService
                 StatusCodes.Status409Conflict);
         await StopRdpProxyAsync(vmName);
         await RunCommandAsync($"virsh destroy {ShellEscape(vmName)} 2>/dev/null || true", token);
-        await RunCommandAsync($"virsh undefine {ShellEscape(vmName)} --remove-all-storage 2>/dev/null || true", token);
+        await RunCommandAsync(BuildVmUndefineCommand(vmName), token);
         if (_guestEnrollmentStore is not null)
             await _guestEnrollmentStore.RevokeVmAsync(
                 vmName, domainGeneration!.Value, nativeId, token);
         CleanupVmArtifacts(vmName);
     }
+
+    public Task<bool> SuspendVmAsync(string vmName, int expectedGeneration, CancellationToken token) =>
+        ExecuteWithIdentityAsync(
+            vmName,
+            expectedGeneration,
+            null,
+            async identityToken =>
+            {
+                await RunCommandAsync($"virsh suspend {ShellEscape(vmName)}", identityToken);
+                return true;
+            },
+            token);
+
+    public Task<bool> ResumeVmAsync(string vmName, int expectedGeneration, CancellationToken token) =>
+        ExecuteWithIdentityAsync(
+            vmName,
+            expectedGeneration,
+            null,
+            async identityToken =>
+            {
+                await RunCommandAsync($"virsh resume {ShellEscape(vmName)}", identityToken);
+                return true;
+            },
+            token);
 
     public async Task<bool> WaitForCleanShutdownAsync(
         string vmName,
@@ -394,6 +425,15 @@ public class KvmService
             return $"VM {vmName} native identity does not match the requested runtime identity.";
         return null;
     }
+
+    internal static bool CanDestroyLegacyDomainWithoutSidecar(
+        int? domainGeneration,
+        int? sidecarGeneration,
+        int? expectedGeneration) =>
+        sidecarGeneration is null &&
+        domainGeneration is { } actualGeneration &&
+        expectedGeneration is { } requestedGeneration &&
+        actualGeneration >= 1 && actualGeneration < requestedGeneration;
 
     public async Task<T> ExecuteWithIdentityAsync<T>(
         string vmName,
@@ -544,12 +584,46 @@ public class KvmService
             ip is null ? string.Join(" | ", diagnostics) : "Matched virbr0 neighbor table.");
     }
 
-    public Task<int?> EnsureRdpProxyAsync(string vmName, string ipAddress, CancellationToken token)
+    internal static async Task<bool> IsTcpPortReadyAsync(
+        string ipAddress,
+        int targetPort,
+        CancellationToken token)
     {
-        if (!SafeNamePattern.IsMatch(vmName) || !IPAddress.TryParse(ipAddress, out var ip))
+        if (!IPAddress.TryParse(ipAddress, out var ip) || targetPort is < 1 or > 65535)
+            return false;
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(2));
+        try
+        {
+            using var client = new TcpClient(ip.AddressFamily);
+            await client.ConnectAsync(ip, targetPort, timeout.Token);
+            return true;
+        }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (SocketException)
+        {
+            return false;
+        }
+    }
+
+    public Task<int?> EnsureRdpProxyAsync(
+        string vmName,
+        string ipAddress,
+        int targetPort,
+        CancellationToken token)
+    {
+        if (!SafeNamePattern.IsMatch(vmName) ||
+            !IPAddress.TryParse(ipAddress, out var ip) ||
+            targetPort is < 1 or > 65535)
             return Task.FromResult<int?>(null);
 
-        if (RdpProxies.TryGetValue(vmName, out var existing) && existing.TargetIp.Equals(ip))
+        if (RdpProxies.TryGetValue(vmName, out var existing) &&
+            existing.TargetIp.Equals(ip) &&
+            existing.TargetPort == targetPort)
             return Task.FromResult<int?>(existing.Port);
 
         if (RdpProxies.TryRemove(vmName, out existing))
@@ -564,13 +638,14 @@ public class KvmService
             {
                 var listener = new TcpListener(IPAddress.Any, port);
                 listener.Start(64);
-                var proxy = new RdpProxy(vmName, ip, port, listener, _logger, _consoleAccessPolicy);
+                var proxy = new RdpProxy(
+                    vmName, ip, targetPort, port, listener, _logger, _consoleAccessPolicy);
                 if (RdpProxies.TryAdd(vmName, proxy))
                 {
                     _ = proxy.RunAsync();
                     _logger.LogInformation(
-                        "Console proxy for VM {VmName}: :{Port} -> {Ip}:3389, accepting {Sources}",
-                        vmName, port, ipAddress,
+                        "Console proxy for VM {VmName}: :{Port} -> {Ip}:{TargetPort}, accepting {Sources}",
+                        vmName, port, ipAddress, targetPort,
                         _consoleAccessPolicy.LoopbackOnly ? "loopback only" : "configured platform sources");
                     return Task.FromResult<int?>(port);
                 }
@@ -585,6 +660,29 @@ public class KvmService
 
         _logger.LogWarning("No available RDP proxy port for VM {VmName}", vmName);
         return Task.FromResult<int?>(null);
+    }
+
+    public async Task<VmIpLookupResult> GetManagementIpAddressWithDiagnosticAsync(
+        string vmName,
+        CancellationToken token)
+    {
+        if (!SafeNamePattern.IsMatch(vmName))
+            return new VmIpLookupResult(null, "Invalid VM name.");
+        if (!_guestManagement.Enabled || !IPAddress.TryParse(_guestManagement.HostAddress, out var hostAddress) ||
+            hostAddress.AddressFamily != AddressFamily.InterNetwork ||
+            _guestManagement.PrefixLength is < 1 or > 32)
+            return new VmIpLookupResult(null, "Guest management network is unavailable.");
+
+        var output = await RunCommandAsync(
+            $"virsh domifaddr {ShellEscape(vmName)} --source agent 2>/dev/null",
+            token,
+            throwOnError: false);
+        var managementAddress = ParseAddressInSubnet(output, hostAddress, _guestManagement.PrefixLength);
+        return new VmIpLookupResult(
+            managementAddress,
+            managementAddress is null
+                ? $"No guest management address found in {_guestManagement.HostAddress}/{_guestManagement.PrefixLength}."
+                : "Matched the guest management address through QEMU Guest Agent.");
     }
 
     private async Task<string> GetVncAddressAsync(string vmName, CancellationToken token)
@@ -603,6 +701,9 @@ public class KvmService
     }
 
     private static string ShellEscape(string arg) => $"'{arg.Replace("'", "'\\''")}'";
+
+    internal static string BuildVmUndefineCommand(string vmName) =>
+        $"virsh undefine {ShellEscape(vmName)} --managed-save --remove-all-storage --nvram";
 
     internal string ResolveTemplatePath(CreateVmRequest request)
     {
@@ -1053,6 +1154,25 @@ public class KvmService
         return null;
     }
 
+    private static string? ParseAddressInSubnet(string output, IPAddress networkAddress, int prefixLength)
+    {
+        var network = ToUInt32(networkAddress);
+        var mask = prefixLength == 0 ? 0u : uint.MaxValue << (32 - prefixLength);
+        foreach (var line in output.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries))
+        foreach (var part in line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var candidate = part.Trim(',', ';');
+            if (candidate.Contains('/')) candidate = candidate.Split('/')[0];
+            if (!IPAddress.TryParse(candidate, out var address) ||
+                address.AddressFamily != AddressFamily.InterNetwork ||
+                (ToUInt32(address) & mask) != (network & mask))
+                continue;
+            return address.ToString();
+        }
+
+        return null;
+    }
+
     internal static string? ParsePreferredInterfaceIp(
         string output,
         IReadOnlyList<VmNetworkInterfaceRequest>? interfaces)
@@ -1099,6 +1219,12 @@ public class KvmService
     {
         var primary = interfaces.Where(item => item.IsPrimary).ToArray();
         return primary.Length > 0 ? primary : interfaces;
+    }
+
+    private static uint ToUInt32(IPAddress address)
+    {
+        var bytes = address.GetAddressBytes();
+        return ((uint)bytes[0] << 24) | ((uint)bytes[1] << 16) | ((uint)bytes[2] << 8) | bytes[3];
     }
 
     private static string? ParseMacAddress(string output)
@@ -1222,11 +1348,13 @@ public class KvmService
         private readonly CancellationTokenSource _cts = new();
 
         public IPAddress TargetIp { get; }
+        public int TargetPort { get; }
         public int Port { get; }
 
         public RdpProxy(
             string vmName,
             IPAddress targetIp,
+            int targetPort,
             int port,
             TcpListener listener,
             ILogger logger,
@@ -1234,6 +1362,7 @@ public class KvmService
         {
             _vmName = vmName;
             TargetIp = targetIp;
+            TargetPort = targetPort;
             Port = port;
             _listener = listener;
             _logger = logger;
@@ -1287,7 +1416,7 @@ public class KvmService
             try
             {
                 using var target = new TcpClient();
-                await target.ConnectAsync(TargetIp, 3389, _cts.Token);
+                await target.ConnectAsync(TargetIp, TargetPort, _cts.Token);
 
                 await using var clientStream = clientSocket.GetStream();
                 await using var targetStream = target.GetStream();

@@ -40,6 +40,14 @@ public sealed class ApiTokenAuthenticationHandler(
             new(ApiTokenClaimTypes.TokenId, token.Id.ToString()),
             new(ApiTokenClaimTypes.RequestsPerMinute, token.RequestsPerMinute.ToString())
         ];
+        if (result.CreatorRole is { } creatorRole)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, creatorRole.ToString()));
+            // SuperAdmin must also satisfy `IsInRole(nameof(Role.Admin))` checks
+            // on open v1 endpoints, mirroring the cookie-side role model.
+            if (creatorRole >= Role.Admin)
+                claims.Add(new Claim(ClaimTypes.Role, nameof(Role.Admin)));
+        }
         if (token.LastUsedAt is { } lastUsedAt)
             claims.Add(new Claim(ApiTokenClaimTypes.LastUsedAt, lastUsedAt.ToUnixTimeSeconds().ToString()));
         claims.AddRange(token.Scopes.Select(scope => new Claim(ApiTokenClaimTypes.Scope, scope.Scope)));

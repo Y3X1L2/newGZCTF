@@ -10,7 +10,7 @@ export const ManagedRouterNode = memo(function ManagedRouterNode({ data, selecte
   return (
     <TopologyNodeShell
       details={[`${data.connectionCount} 个网段`, '双向路由']}
-      eyebrow="Managed router"
+      eyebrow="托管路由器"
       icon={<Router size={18} />}
       readOnly={data.readOnly}
       selected={selected}

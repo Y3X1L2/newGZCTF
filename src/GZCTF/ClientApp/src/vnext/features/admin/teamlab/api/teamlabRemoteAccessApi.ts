@@ -9,7 +9,7 @@ import type {
 import { teamLabParsing as parse } from './teamlabParsers'
 
 const root = '/api/admin/teamlab'
-const protocols = { ContainerTerminal: 'containerTerminal', Ssh: 'ssh', Rdp: 'rdp', 0: 'containerTerminal', 1: 'ssh', 2: 'rdp' } as const
+const protocols = { ContainerTerminal: 'containerTerminal', Ssh: 'ssh', Rdp: 'rdp', containerTerminal: 'containerTerminal', ssh: 'ssh', rdp: 'rdp', 0: 'containerTerminal', 1: 'ssh', 2: 'rdp' } as const
 const statuses = { Creating: 'creating', Ready: 'ready', Connected: 'connected', Ending: 'ending', Ended: 'ended', Failed: 'failed', 0: 'creating', 1: 'ready', 2: 'connected', 3: 'ending', 4: 'ended', 5: 'failed' } as const
 
 function availability(value: unknown): TeamLabRemoteAccessAvailability {
@@ -21,6 +21,10 @@ function availability(value: unknown): TeamLabRemoteAccessAvailability {
     available: parse.boolean(item.available, '远程运维可用性.available'),
     unavailableReason: parse.nullableString(item.unavailableReason, '远程运维可用性.unavailableReason'),
   }
+}
+
+function availabilityList(value: unknown): readonly TeamLabRemoteAccessAvailability[] {
+  return parse.array(value, '远程运维可用性列表', (entry, _label) => availability(entry))
 }
 
 function session(value: unknown): TeamLabRemoteSession {
@@ -50,6 +54,9 @@ export function createTeamLabRemoteAccessApi(client: RuntimeJsonClient = runtime
   return {
     async getAvailability(runtimeId: string, assetId: number) {
       return availability(await client.get(`${root}/runtimes/${runtimeId}/assets/${assetId}/remote-access`))
+    },
+    async getAvailabilityBatch(runtimeId: string) {
+      return availabilityList(await client.get(`${root}/runtimes/${runtimeId}/remote-access`))
     },
     async createSession(runtimeId: string, assetId: number, reason: string) {
       return session(await client.postJson(`${root}/runtimes/${runtimeId}/assets/${assetId}/remote-sessions`, { reason }))

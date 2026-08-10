@@ -35,7 +35,7 @@ describe('TeamLabReleasesPage', () => {
     navigate.mockReset()
     vi.spyOn(teamLabAdminApi, 'listReleases').mockResolvedValue([release])
     vi.spyOn(teamLabAdminApi, 'releaseReadiness').mockResolvedValue({
-      topologyId: release.topologyId, releaseId: release.id, ready: true, images: [], blockingReasons: [], latestTrialRuntime: null,
+      topologyId: release.topologyId, releaseId: release.id, ready: true, images: [], blockingReasons: [], requiredRuntimeSecrets: [], latestTrialRuntime: null,
       plan: { topologyId: release.topologyId, releaseId: release.id, networks: [], assets: [], shards: [], crossShardConnections: 0, requiredCapabilities: [], warnings: [], planHash: 'sha256:plan', managedInfrastructureCount: 0, bootstrapArtifactCount: 0, observationPointEstimate: 0 },
     })
   })

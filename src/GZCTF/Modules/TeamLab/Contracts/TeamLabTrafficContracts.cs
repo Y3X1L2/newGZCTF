@@ -3,6 +3,26 @@ using GZCTF.Modules.TeamLab.Domain;
 
 namespace GZCTF.Modules.TeamLab.Contracts;
 
+public static class TeamLabPathConfidenceFilter
+{
+    public static bool TryParse(string? value, out TeamLabPathConfidence? confidence)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            confidence = null;
+            return true;
+        }
+        confidence = value.Trim() switch
+        {
+            "packet-exact" => TeamLabPathConfidence.PacketExact,
+            "process-correlated" => TeamLabPathConfidence.ProcessCorrelated,
+            "temporally-related" => TeamLabPathConfidence.TemporallyRelated,
+            _ => null
+        };
+        return confidence is not null;
+    }
+}
+
 public sealed record TeamLabTrafficFlowProjectionModel(
     string Cursor,
     Guid ShardId,
@@ -19,7 +39,12 @@ public sealed record TeamLabTrafficFlowProjectionModel(
 
 public sealed record TeamLabTrafficFlowPageModel(
     IReadOnlyList<TeamLabTrafficFlowProjectionModel> Items,
-    string? NextCursor);
+    string? NextCursor,
+    TeamLabTrafficCompletenessModel Completeness);
+
+public sealed record TeamLabTrafficCompletenessModel(
+    bool Complete,
+    long DroppedRecords);
 
 public sealed record TeamLabTrafficPathSummaryModel(
     string Cursor,
@@ -36,7 +61,8 @@ public sealed record TeamLabTrafficPathSummaryModel(
 
 public sealed record TeamLabTrafficPathPageModel(
     IReadOnlyList<TeamLabTrafficPathSummaryModel> Items,
-    string? NextCursor);
+    string? NextCursor,
+    TeamLabTrafficCompletenessModel Completeness);
 
 public sealed record TeamLabTrafficPathHopModel(
     int Ordinal,

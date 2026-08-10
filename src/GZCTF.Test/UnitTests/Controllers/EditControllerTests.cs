@@ -7,6 +7,7 @@ using GZCTF.Controllers;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
+using GZCTF.Modules.Content.Application;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Infrastructure.Cache;
@@ -15,6 +16,7 @@ using GZCTF.Services.Fleet;
 using GZCTF.Services.Transfer;
 using GZCTF.Utils;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -95,6 +97,7 @@ public class EditControllerTests
             Mock.Of<IDivisionRepository>(),
             Mock.Of<IStringLocalizer<Program>>(),
             queue,
+            new ImageRemoteAccessService(context, new EphemeralDataProtectionProvider()),
             provider.GetRequiredService<IServiceScopeFactory>())
         {
             ControllerContext = new ControllerContext

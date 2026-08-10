@@ -2,6 +2,7 @@ using System.Text.Json;
 using GZCTF.Infrastructure.Persistence.Queries;
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +11,10 @@ namespace GZCTF.Modules.TeamLab.Application;
 
 public sealed class TeamLabAdminQueryService(
     AppDbContext context,
-    ITeamLabTopologyApplicationService topologies)
+    ITeamLabTopologyApplicationService topologies,
+    NodeCapacitySnapshotService capacitySnapshots,
+    ITeamLabUsageProjectionProvider usage,
+    TeamLabBootstrapSecretValidator secretValidator)
 {
     public async Task<TeamLabAdminScenePageModel> ListScenesAsync(
         Guid actorUserId,
@@ -36,7 +40,7 @@ public sealed class TeamLabAdminQueryService(
             query = query.Where(item => EF.Functions.ILike(item.Name, $"%{term}%"));
         }
 
-        query = ApplyStatusFilter(query, status);
+        query = ApplyStatusFilter(query, status, await usage.GetGameBoundRuntimeIdsAsync(cancellationToken));
         if (cursor is { } value)
             query = query.Where(item => item.UpdatedAt < value.Time ||
                                         item.UpdatedAt == value.Time && item.PublicId.CompareTo(value.Id) < 0);
@@ -73,18 +77,15 @@ public sealed class TeamLabAdminQueryService(
             .GroupBy(item => item.TopologyId)
             .Select(group => group.OrderByDescending(item => item.Version).First())
             .ToDictionaryAsync(item => item.TopologyId, cancellationToken);
-        var gameReferences = await context.PenetrationGameLabBindings.AsNoTracking()
-            .Where(item => topologyIds.Contains(item.TopologyId))
-            .GroupBy(item => item.TopologyId)
-            .Select(group => new { TopologyId = group.Key, Count = group.Count() })
-            .ToDictionaryAsync(item => item.TopologyId, item => item.Count, cancellationToken);
+        var gameReferences = await usage.GetGameBindingCountsAsync(topologyIds, cancellationToken);
+        var gameBoundRuntimeIds = await usage.GetGameBoundRuntimeIdsAsync(cancellationToken);
         var trialRuntimes = await (
             from runtime in context.TeamLabRuntimes.AsNoTracking()
             join release in context.TeamLabTopologyReleases.AsNoTracking()
                 on runtime.TopologyReleaseId equals release.Id
             where !runtime.IsScenarioBuild &&
                   topologyIds.Contains(release.TopologyId) &&
-                  !context.PenetrationTeamRuntimeBindings.Any(binding => binding.RuntimeId == runtime.Id)
+                  !gameBoundRuntimeIds.Contains(runtime.Id)
             group runtime by release.TopologyId
             into runtimes
             select runtimes.OrderByDescending(item => item.CreatedAt)
@@ -146,7 +147,8 @@ public sealed class TeamLabAdminQueryService(
             .SingleOrDefaultAsync(item => item.Id == releaseId && item.Topology.PublicId == topologyId &&
                                           (administrator || item.Topology.OwnerUserId == actorUserId),
                 cancellationToken)
-            ?? throw new TeamLabApiContractException("release_not_found", "The topology release was not found.", 404);
+            ?? throw new TeamLabApiContractException("release_not_found", "未找到拓扑版本", 404);
+        var execution = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
         TeamLabPlanModel? plan = null;
         string? planningBlocker = null;
         try
@@ -156,9 +158,8 @@ public sealed class TeamLabAdminQueryService(
         }
         catch (TeamLabApiContractException exception) when (exception.Code == "capability_unavailable")
         {
-            planningBlocker = "当前可调度节点的能力或剩余容量不足，无法放置该发布版本。";
+            planningBlocker = DescribePlanningBlocker(execution, await LoadPlanningNodesAsync(cancellationToken));
         }
-        var execution = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
         var requirements = execution.Assets
             .GroupBy(item => item.ImageTemplateId)
             .Select(group => new
@@ -207,13 +208,14 @@ public sealed class TeamLabAdminQueryService(
                 matching.Count(item => item.Status is ImageDistributionStatus.Pending or ImageDistributionStatus.Pulling),
                 matching.Count(item => item.Status == ImageDistributionStatus.Failed));
         }).OrderBy(item => item.ImageTemplateId).ToArray();
+        var gameBoundRuntimeIds = await usage.GetGameBoundRuntimeIdsAsync(cancellationToken);
         var latestTrial = await (
             from runtime in context.TeamLabRuntimes.AsNoTracking()
             join candidateRelease in context.TeamLabTopologyReleases.AsNoTracking()
                 on runtime.TopologyReleaseId equals candidateRelease.Id
             where !runtime.IsScenarioBuild &&
                   candidateRelease.Id == releaseId &&
-                  !context.PenetrationTeamRuntimeBindings.Any(binding => binding.RuntimeId == runtime.Id)
+                  !gameBoundRuntimeIds.Contains(runtime.Id)
             orderby runtime.CreatedAt descending, runtime.PublicId descending
             select new TrialRuntimeRow(
                 candidateRelease.TopologyId,
@@ -235,6 +237,7 @@ public sealed class TeamLabAdminQueryService(
         }
         if (plan is not null)
             blockers.AddRange(plan.Warnings);
+        var requiredRuntimeSecrets = await secretValidator.GetRequiredSecretsAsync(releaseId, cancellationToken);
         return new TeamLabAdminReleaseReadinessModel(
             topologyId,
             releaseId,
@@ -242,7 +245,44 @@ public sealed class TeamLabAdminQueryService(
             plan,
             images,
             latestTrial is null ? null : ToRuntime(latestTrial),
-            blockers);
+            blockers,
+            requiredRuntimeSecrets);
+    }
+
+    private async Task<IReadOnlyList<TeamLabPlanningNodeSnapshot>> LoadPlanningNodesAsync(
+        CancellationToken cancellationToken) =>
+        (await capacitySnapshots.LoadAsync(cancellationToken))
+        .Where(item => item.Node.IsSchedulable && item.Node.TeamLabNetworkEnabled &&
+                       item.Node.TeamLabTunnelStatus == TeamLabTunnelStatus.Healthy &&
+                       item.Node.GetEffectiveStatus(DateTimeOffset.UtcNow) == NodeStatus.Online)
+        .Select(item => new TeamLabPlanningNodeSnapshot(
+            item.Node.Id,
+            item.Node.Name,
+            (item.Node.Capabilities & NodeCapability.Docker) != 0,
+            (item.Node.Capabilities & NodeCapability.Kvm) != 0,
+            item.AvailableDocker,
+            item.AvailableVm,
+            item.Node.CpuLoad,
+            item.Node.MemoryLoad,
+            item.Available))
+        .ToArray();
+
+    private static string DescribePlanningBlocker(
+        TeamLabExecutionTopology execution,
+        IReadOnlyList<TeamLabPlanningNodeSnapshot> nodes)
+    {
+        var docker = execution.Assets.Count(item => item.Kind == TeamLabAssetKind.Docker);
+        var vm = execution.Assets.Count(item => item.Kind == TeamLabAssetKind.Vm);
+        var cpu = execution.Assets.Sum(item => item.CpuUnits);
+        var memory = execution.Assets.Sum(item => item.MemoryMiB);
+        var availableDocker = nodes.Where(item => item.SupportsDocker).Sum(item => item.AvailableDockerSlots);
+        var availableVm = nodes.Where(item => item.SupportsVm).Sum(item => item.AvailableVmSlots);
+        var availableCpu = nodes.Sum(item => item.AvailableResources.CpuUnits);
+        var availableMemory = nodes.Sum(item => item.AvailableResources.MemoryMiB);
+        var nodeSummary = nodes.Count == 0
+            ? "当前没有已接入组网的在线可调度节点"
+            : $"当前可用：Docker {availableDocker} 个、VM {availableVm} 个、CPU {availableCpu}、内存 {availableMemory} MiB";
+        return $"资源不足，无法放置该版本。需求：Docker {docker} 个、VM {vm} 个、CPU {cpu}、内存 {memory} MiB；{nodeSummary}。";
     }
 
     public async Task<TeamLabAdminRuntimePageModel> ListTrialRuntimesAsync(
@@ -255,6 +295,7 @@ public sealed class TeamLabAdminQueryService(
     {
         var take = Math.Clamp(limit, 1, 100);
         var cursor = DecodeCursor(after, "teamlab_runtime_cursor_invalid");
+        var gameBoundRuntimeIds = await usage.GetGameBoundRuntimeIdsAsync(cancellationToken);
         var rows = await (
             from runtime in context.TeamLabRuntimes.AsNoTracking()
             join release in context.TeamLabTopologyReleases.AsNoTracking()
@@ -266,7 +307,7 @@ public sealed class TeamLabAdminQueryService(
                   (!topologyId.HasValue || topology.PublicId == topologyId.Value) &&
                   (!cursor.HasValue || runtime.CreatedAt < cursor.Value.Time ||
                    runtime.CreatedAt == cursor.Value.Time && runtime.PublicId.CompareTo(cursor.Value.Id) < 0) &&
-                  !context.PenetrationTeamRuntimeBindings.Any(binding => binding.RuntimeId == runtime.Id)
+                  !gameBoundRuntimeIds.Contains(runtime.Id)
             orderby runtime.CreatedAt descending, runtime.PublicId descending
             select new TrialRuntimeRow(
                 release.TopologyId,
@@ -297,13 +338,16 @@ public sealed class TeamLabAdminQueryService(
             .Select(item => item.Topology.OwnerUserId)
             .SingleOrDefaultAsync(cancellationToken);
         if (owner is null)
-            throw new TeamLabApiContractException("release_not_found", "The topology release was not found.", 404);
+            throw new TeamLabApiContractException("release_not_found", "未找到拓扑版本", 404);
         if (!administrator && owner != actorUserId)
-            throw new TeamLabApiContractException("insufficient_permission", "The release is not managed by the operation actor.", 403);
+            throw new TeamLabApiContractException("insufficient_permission", "该版本不受当前操作者管理", 403);
         return owner.Value;
     }
 
-    private IQueryable<TeamLabTopology> ApplyStatusFilter(IQueryable<TeamLabTopology> query, string? status) =>
+    private IQueryable<TeamLabTopology> ApplyStatusFilter(
+        IQueryable<TeamLabTopology> query,
+        string? status,
+        IReadOnlySet<int> gameBoundRuntimeIds) =>
         status?.Trim().ToLowerInvariant() switch
         {
             "draft" => query.Where(item => !item.Releases.Any()),
@@ -311,11 +355,11 @@ public sealed class TeamLabAdminQueryService(
             "running" => query.Where(item => item.Releases.Any(release =>
                 context.TeamLabRuntimes.Any(runtime => runtime.TopologyReleaseId == release.Id &&
                     !runtime.IsScenarioBuild && runtime.Status == TeamLabRuntimeStatus.Running &&
-                    !context.PenetrationTeamRuntimeBindings.Any(binding => binding.RuntimeId == runtime.Id)))),
+                    !gameBoundRuntimeIds.Contains(runtime.Id)))),
             "failed" => query.Where(item => item.Releases.Any(release =>
                 context.TeamLabRuntimes.Any(runtime => runtime.TopologyReleaseId == release.Id &&
                     !runtime.IsScenarioBuild && runtime.Status == TeamLabRuntimeStatus.Failed &&
-                    !context.PenetrationTeamRuntimeBindings.Any(binding => binding.RuntimeId == runtime.Id)))),
+                    !gameBoundRuntimeIds.Contains(runtime.Id)))),
             _ => query
         };
 
@@ -338,7 +382,7 @@ public sealed class TeamLabAdminQueryService(
         TeamLabRuntimeStatus.CleanupPending => "cleanup-pending",
         TeamLabRuntimeStatus.Destroying => "destroying",
         TeamLabRuntimeStatus.Destroyed => "destroyed",
-        TeamLabRuntimeStatus.Stopped => "stopped",
+        TeamLabRuntimeStatus.Paused => "paused",
         _ => "unknown"
     };
 
@@ -369,7 +413,7 @@ public sealed class TeamLabAdminQueryService(
         }
         catch (InvalidTimeCursorException)
         {
-            throw new TeamLabApiContractException(code, "The pagination cursor is invalid.", 400);
+            throw new TeamLabApiContractException(code, "分页游标无效", 400);
         }
     }
 

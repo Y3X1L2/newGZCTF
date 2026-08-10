@@ -177,12 +177,23 @@ public sealed class PenetrationTeamLabLifecycleTests
         Assert.Equal(PenetrationResetFailureClass.Infrastructure, record.FailureClass);
     }
 
-    static Mock<ITeamLabRuntimeApplicationService> RuntimeMock() => new(MockBehavior.Strict);
+    static Mock<ITeamLabRuntimeApplicationService> RuntimeMock()
+    {
+        var runtime = new Mock<ITeamLabRuntimeApplicationService>(MockBehavior.Strict);
+        runtime.Setup(item => item.GetByStorageIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((int _, CancellationToken _) => new TeamLabRuntimeProjectionModel(
+                Guid.NewGuid(), Guid.NewGuid(), 2, TeamLabRuntimeStatus.Running, "running", false,
+                [], [], [], DateTimeOffset.UtcNow, null, null));
+        return runtime;
+    }
 
     static PenetrationTeamLabAdapter Adapter(
         AppDbContext context,
         ITeamLabRuntimeApplicationService runtimes) =>
-        new(context, runtimes, new PenetrationObjectiveService(context, null!, null!, null!, null!, null!));
+        new(context, runtimes,
+            Mock.Of<ITeamLabTopologyApplicationService>(),
+            Mock.Of<ITeamLabControlPlaneOperationService>(),
+            new PenetrationObjectiveService(context, null!, null!, null!, null!, null!));
 
     sealed class TestDatabase
     {

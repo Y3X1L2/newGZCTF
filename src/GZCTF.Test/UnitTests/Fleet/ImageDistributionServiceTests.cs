@@ -281,6 +281,36 @@ public class ImageDistributionServiceTests
     }
 
     [Fact]
+    public async Task DistributeTemplateAsync_TeamLabReleasesKeepIndependentPublicReferences()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, "kvm-node", NodeCapability.Kvm);
+        var template = SeedVmTemplate(context);
+        context.ImageDistributionRecords.Add(new ImageDistributionRecord
+        {
+            ImageTemplateId = template.Id,
+            WorkerNodeId = node.Id,
+            ImageHash = template.ImageHash!,
+            ImageType = template.ImageType,
+            Status = ImageDistributionStatus.Ready
+        });
+        await context.SaveChangesAsync();
+        var firstRelease = Guid.NewGuid();
+        var secondRelease = Guid.NewGuid();
+        var service = CreateService(context, new RecordingAgentClient());
+
+        await service.DistributeTemplateAsync(template.Id, ImageDistributionReferenceKey.TeamLabRelease(firstRelease), CancellationToken.None);
+        await service.DistributeTemplateAsync(template.Id, ImageDistributionReferenceKey.TeamLabRelease(secondRelease), CancellationToken.None);
+        await service.DistributeTemplateAsync(template.Id, ImageDistributionReferenceKey.TeamLabRelease(firstRelease), CancellationToken.None);
+
+        var references = await context.ImageDistributionReferences
+            .Where(item => item.Kind == ImageDistributionReferenceKind.TeamLabRelease)
+            .ToArrayAsync();
+        Assert.Equal(2, references.Length);
+        Assert.Equal(new[] { firstRelease, secondRelease }.Order(), references.Select(item => item.ResourcePublicId!.Value).Order());
+    }
+
+    [Fact]
     public async Task EnsureDockerImageOnNodeAsync_LegacyManagedAddressMatchesInternalTemplate()
     {
         await using var context = CreateContext();

@@ -79,7 +79,8 @@ public sealed record CreateTeamLabTopologyModel(
     IReadOnlyList<TeamLabTopologyInfrastructureModel>? Infrastructure = null,
     IReadOnlyList<TeamLabTopologyDependencyModel>? Dependencies = null,
     TeamLabObservationPolicyModel? Observation = null,
-    int SchemaVersion = 2);
+    int SchemaVersion = 2,
+    Guid? ControlScopeId = null);
 
 public sealed record UpdateTeamLabTopologyModel(
     int Revision,
@@ -99,6 +100,7 @@ public sealed record PublishTeamLabTopologyModel(
 
 public sealed record TeamLabTopologySummaryModel(
     Guid Id,
+    Guid? ControlScopeId,
     string Name,
     int Revision,
     int SchemaVersion,
@@ -107,6 +109,7 @@ public sealed record TeamLabTopologySummaryModel(
 
 public sealed record TeamLabTopologyDetailModel(
     Guid Id,
+    Guid? ControlScopeId,
     int Revision,
     int SchemaVersion,
     TeamLabTopologyDefinitionModel Definition,
@@ -126,7 +129,8 @@ public sealed record TeamLabReleaseModel(
     int SchemaVersion,
     string ContentHash,
     Guid? PublishedBy,
-    DateTimeOffset PublishedAt);
+    DateTimeOffset PublishedAt,
+    TeamLabTopologyEditorModel? Editor = null);
 
 public sealed record TeamLabCapabilitiesModel(
     string ApiVersion,
@@ -141,7 +145,13 @@ public sealed record TeamLabFeatureCapabilitiesModel(
     bool LinuxVm,
     bool WindowsVm,
     bool TrafficFlows,
-    bool OnDemandPcap);
+    bool OnDemandPcap,
+    bool EditorLayout = true,
+    int EditorLayoutVersion = 1,
+    bool NetworkRegions = true,
+    bool ServiceProfiles = true,
+    bool Rollouts = true,
+    bool PauseResume = true);
 
 public sealed record TeamLabContractLimitsModel(
     int NetworksPerTopology,

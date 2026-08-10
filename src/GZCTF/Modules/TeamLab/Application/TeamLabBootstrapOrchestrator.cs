@@ -14,7 +14,12 @@ public sealed class TeamLabBootstrapOrchestrator
     {
         if (request.Bootstrap is null) return;
         var now = DateTimeOffset.UtcNow;
-        foreach (var step in result.CompletedSteps)
+        // The Agent only returns success after the manifest steps and its health
+        // checks finish. Persist a stable profile-level record even for manifests
+        // without named steps so the control plane has one auditable completion.
+        foreach (var step in new[] { "__profile__" }
+                     .Concat(result.CompletedSteps)
+                     .Distinct(StringComparer.Ordinal))
         {
             var existing = runtime.BootstrapExecutions.SingleOrDefault(item =>
                 item.Generation == runtime.Generation && item.AssetId == asset.Id &&

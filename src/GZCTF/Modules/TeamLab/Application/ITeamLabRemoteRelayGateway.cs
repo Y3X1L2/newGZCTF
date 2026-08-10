@@ -26,6 +26,11 @@ public interface ITeamLabRemoteRelayGateway
         Guid sessionId,
         CancellationToken cancellationToken);
 
+    Task CancelTerminalAsync(
+        Guid workerNodeId,
+        Guid sessionId,
+        CancellationToken cancellationToken);
+
     Task ProxyTerminalAsync(
         Guid workerNodeId,
         Guid sessionId,

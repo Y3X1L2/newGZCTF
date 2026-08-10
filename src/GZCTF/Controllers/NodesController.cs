@@ -592,7 +592,6 @@ public class NodesController : ControllerBase
     Task<int> CountActiveTeamLabRuntimesAsync(Guid nodeId, CancellationToken token) =>
         _context.TeamLabRuntimeShards.AsNoTracking()
             .Where(shard => shard.WorkerNodeId == nodeId &&
-                            shard.Status != TeamLabRuntimeStatus.Stopped &&
                             shard.Status != TeamLabRuntimeStatus.Failed &&
                             shard.Status != TeamLabRuntimeStatus.Destroyed)
             .Select(shard => shard.RuntimeId)

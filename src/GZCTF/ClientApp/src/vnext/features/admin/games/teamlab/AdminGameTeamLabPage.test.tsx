@@ -12,7 +12,7 @@ const binding = { gameId: 8, topologyId: 'topology-1', activeReleaseId: 'release
 const rollout = {
   id: 'rollout-1', releaseId: 'release-1', status: 'ready' as const,
   preparationRequested: true, desiredAccessOpen: false, drainRequested: false,
-  counts: { total: 1, pending: 0, provisioning: 0, ready: 1, accessOpen: 0, failed: 0, draining: 0, destroyed: 0 },
+  counts: { total: 1, pending: 0, provisioning: 0, ready: 1, accessOpen: 0, failed: 0, draining: 0, destroyed: 0, paused: 0 },
   preparedAt: 1, accessOpenedAt: null, drainingAt: null, completedAt: null, createdAt: 1, updatedAt: 2, error: null,
 }
 const target = {

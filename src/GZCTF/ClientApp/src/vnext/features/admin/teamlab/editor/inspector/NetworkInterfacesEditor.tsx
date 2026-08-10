@@ -62,8 +62,8 @@ export function NetworkInterfacesEditor(props: NetworkInterfacesEditorProps) {
               {switches.map((node) => <option key={node.key} value={node.key}>{node.name} · {node.networkName}</option>)}
             </SelectInput>
             <div className={styles.twoColumns}>
-              <NumberInput disabled={readOnly} label="主机偏移" min={1} onChange={(hostOffset) => update(connection, { hostOffset })} value={connection.hostOffset} />
-              <NumberInput disabled={readOnly} label="排序" min={0} onChange={(orderIndex) => update(connection, { orderIndex })} value={connection.orderIndex} />
+              <NumberInput disabled={readOnly} help="hostOffset" label="主机偏移" min={1} onChange={(hostOffset) => update(connection, { hostOffset })} value={connection.hostOffset} />
+              <NumberInput disabled={readOnly} help="interfaceOrder" label="排序" min={0} onChange={(orderIndex) => update(connection, { orderIndex })} value={connection.orderIndex} />
             </div>
             <ToggleInput
               checked={connection.primary}

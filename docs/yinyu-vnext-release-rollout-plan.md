@@ -106,6 +106,10 @@
 
 ### 5.1 同阶段安全阻塞修复
 
+> 历史说明：本节记录 2026-07 的实例随机凭据方案。普通 CTF Windows VM 已在 2026-08
+> 改为镜像固定 `ExistingAccount` RDP profile；现行契约以
+> `docs/operations/windows-vm-quick-deployment-guide.md` 为准。TeamLab 与共享 VM 基础设施不受此说明替代。
+
 - [x] 移除 `VmInstance` 和 Guacamole API 的运行时硬编码默认密码。
 - [x] 每个 Windows VM 生成独立密码，由 ASP.NET Data Protection 加密保存，并通过 Cloudbase-Init PowerShell user-data 注入。
 - [x] 远程节点必须声明 KVM 与 Cloud-Init 能力，Windows 镜像必须由有管理权的教师或管理员显式认证；本地 KVM 不满足契约时 fail closed。
@@ -113,14 +117,15 @@
 - [x] 迁移清除历史明文 RDP 密码、使历史活动 VM 进入 Error，并将历史 Windows 镜像默认设为未认证。
 - [x] 自动测试覆盖密码唯一性、受保护持久化、日志脱敏、节点/镜像门禁、Guacamole fail closed 和迁移回填。
 
-完成门禁：新建 VM 使用实例级凭据，Guacamole 无默认管理员回退，现有 Windows 镜像仍可正常创建和登录。
+历史完成门禁：当时的新建 VM 使用实例级凭据。该普通比赛路径已被固定镜像账号方案替代，
+Guacamole 无默认管理员回退的约束继续有效。
 
 ### 5.2 交付物
 
 - 数据库迁移：`20260721151047_CompletePhaseTwoInstanceReadiness`。
 - 公网同步器：`scripts/gateway/sync-nginx-port-map.sh` 及对应 systemd service/timer。
 - 公网网关部署手册：`docs/operations/public-gateway-port-map-ack.md`。
-- Windows 镜像制作与认证手册：`docs/operations/windows-cloudbase-init-image.md`。
+- Windows 镜像现行制作与验收手册：`docs/operations/windows-vm-quick-deployment-guide.md`。
 - 迁移与回滚手册：`docs/operations/phase-02-instance-readiness-migration.md`。
 
 ### 5.3 自动验收记录
@@ -139,8 +144,8 @@
 本阶段代码与自动验收已完成。以下依赖真实基础设施的项目并入阶段 6 开放前验收，在完成前不得恢复外部写入：
 
 1. 在预发布公网网关安装同步器，验证 `Pending -> Ready`、失败 ACK、旧配置恢复和公网访问。
-2. 按制作手册验收至少一份 Windows 镜像，使用同一模板连续创建两个 VM，证明密码互不复用且 RDP、Guacamole 均可登录。
-3. 验证 Agent seed 目录权限、销毁清理和平台、Agent、Guacamole 日志无明文密码。
+2. 按制作手册验收至少一份 Windows 镜像，使用同一模板连续创建两个 VM，证明运行资源和入口相互隔离且 mstsc、Guacamole 均可登录。
+3. 验证销毁清理和平台、Agent、Guacamole 日志无固定 RDP 凭据。
 4. 执行升级前数据库恢复，确认本迁移只能通过完整数据库备份回滚，不依赖 EF `Down` 恢复历史凭据。
 
 ### 5.5 OpenAPI 生成说明
@@ -182,7 +187,7 @@
 
 ## 8. 阶段 5：候选冻结与维护窗口备份
 
-- [x] 审计工作区差异；来源不明的 `docs/operations/windows-vm-instance-credentials-deployment-acceptance.md` 已明确隔离，不进入候选提交或发布物。
+- [x] 审计工作区差异；旧实例随机凭据验收文档已由现行固定凭据指南替代。
 - [ ] 将候选提交推送到远端并创建新的不可变 RC 标签；`vnext-rc.2` 不移动。
 - [ ] 从固定 SHA 构建发布目录、Linux migration bundle、版本清单和 SHA-256 清单。
 - [x] 复用已经通过的 `124/124` 前端、`493/493` 单元、`247/247` 集成和 IAM 实时验收记录，不在维护窗口重复执行全量测试。
@@ -203,7 +208,7 @@
 - [ ] 验证主站、指标端口 `/healthz`、Database、Redis、Storage、日志和基础指标。
 - [ ] 验证 IAM、本地登录、管理写操作、CTF、理论考试、培训、节点、镜像和队列。
 - [ ] 创建 Docker 比赛实例和培训实例，验证 `Pending -> Ready`、公网访问和销毁收敛。
-- [ ] 使用已认证 Windows 镜像连续创建两个 VM，验证独立密码、RDP、Guacamole、销毁和日志脱敏。
+- [ ] 使用已配置固定 RDP 账号的 Windows 镜像连续创建两个 VM，验证实例/入口隔离、mstsc、Guacamole、销毁和日志脱敏。
 - [ ] 执行 AWDP 最小开放门禁：启动、一次攻击判分、停止和资源清理；完整流程按人工验收文档在开放后继续记录。
 - [ ] 检查日志和遥测不包含 Flag、密码、Cookie、SSO Token、Registry 凭据或 VM 密码。
 

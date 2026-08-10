@@ -38,6 +38,26 @@ public class VmStatusResponse
     public string? IpAddress { get; set; }
 
     /// <summary>
+    /// Worker address for native RDP access (null until RDP is ready)
+    /// </summary>
+    public string? RdpHost { get; set; }
+
+    /// <summary>
+    /// Worker proxy port for native RDP access (null until RDP is ready)
+    /// </summary>
+    public int? RdpPort { get; set; }
+
+    /// <summary>
+    /// Fixed username configured on the image template
+    /// </summary>
+    public string? RdpUsername { get; set; }
+
+    /// <summary>
+    /// Fixed password configured on the image template
+    /// </summary>
+    public string? RdpPassword { get; set; }
+
+    /// <summary>
     /// Guacamole RDP URL (null if not yet ready)
     /// </summary>
     public string? RdpUrl { get; set; }

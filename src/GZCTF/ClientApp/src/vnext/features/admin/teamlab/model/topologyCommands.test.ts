@@ -3,7 +3,11 @@ import {
   connectTopology,
   copyTopologyFragment,
   deleteTopologyItems,
+  moveNetworkRegion,
+  networkMembersOf,
   pasteTopologyFragment,
+  resizeNetworkRegion,
+  setNetworkCollapsed,
   updateTopologyConnection,
 } from './topologyCommands'
 import type { TopologyDocument } from './topologyDocument'
@@ -34,6 +38,7 @@ function document(): TopologyDocument {
     schemaVersion: 2,
     name: 'Commands',
     observation: { flowMetadataEnabled: true, onDemandPcapEnabled: true, endpointObservation: 'optional' },
+    networkLayouts: {},
     nodes: {
       sw1: {
         type: 'switch',
@@ -152,5 +157,47 @@ describe('topology commands', () => {
     if (route?.type !== 'route') throw new Error('Expected route')
     const updated = updateTopologyConnection(changed.document, { ...route, direction: 'bidirectional' })
     expect(updated.document.connections[changed.value]).toMatchObject({ direction: 'bidirectional' })
+  })
+
+  it('collapses a fresh region at its member-bounding-box origin, never at (0,0)', () => {
+    const source = document()
+    expect(source.networkLayouts.net1).toBeUndefined()
+
+    const changed = setNetworkCollapsed(source, 'net1', true)
+
+    const layout = changed.document.networkLayouts.net1
+    expect(layout).toBeDefined()
+    expect(layout.collapsed).toBe(true)
+    // Members sit at (0,0); the derived origin is the bounding box minus padding
+    // (REGION_PADDING = 48), never the canvas origin.
+    expect(layout).toMatchObject({ x: -48, y: -48 })
+    expect(changed.before).toBe(source)
+  })
+
+  it('resizes a fresh region without losing its derived origin', () => {
+    const source = document()
+    const changed = resizeNetworkRegion(source, 'net1', 640, 480)
+    const layout = changed.document.networkLayouts.net1
+    expect(layout).toMatchObject({ x: -48, y: -48, width: 640, height: 480 })
+  })
+
+  it('moves region layout and members in one immutable commit', () => {
+    const source = document()
+    const membersBefore = networkMembersOf(source, 'net1')
+    // Router is dual-homed (sw1 + sw2) and must not move with either region.
+    expect(membersBefore).toEqual(['a', 'sw1'])
+    const beforePositions = new Map(membersBefore.map((key) => [key, source.nodes[key].position]))
+
+    const changed = moveNetworkRegion(source, 'net1', { x: 120, y: 40 })
+
+    const layout = changed.document.networkLayouts.net1
+    expect(layout).toMatchObject({ x: -48 + 120, y: -48 + 40 })
+    for (const key of membersBefore) {
+      expect(changed.document.nodes[key].position.x).toBe(beforePositions.get(key)!.x + 120)
+      expect(changed.document.nodes[key].position.y).toBe(beforePositions.get(key)!.y + 40)
+    }
+    expect(changed.document.nodes.router.position).toEqual(source.nodes.router.position)
+    expect(changed.before).toBe(source)
+    expect(changed.document.nodes.sw1).not.toBe(source.nodes.sw1)
   })
 })

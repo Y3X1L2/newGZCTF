@@ -289,8 +289,8 @@
 
 .logRow {
   display: grid;
-  min-width: 700px;
-  grid-template-columns: 155px 52px 100px 150px minmax(0, 1fr);
+  min-width: 0;
+  grid-template-columns: minmax(120px, 155px) 52px minmax(90px, 130px) minmax(110px, 160px) minmax(0, 1fr);
   align-items: baseline;
   gap: var(--yn-space-3);
   padding: 9px var(--yn-space-2);
@@ -311,6 +311,41 @@
   min-width: 0;
   gap: var(--yn-space-2);
 }
+
+.filterInput {
+  display: flex;
+  min-width: min(100%, 240px);
+  flex: 1;
+  align-items: center;
+  gap: var(--yn-space-2);
+  padding: 0 var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: 4px;
+  background: var(--yn-color-surface);
+  color: var(--yn-color-muted);
+}
+
+.filterInput input,
+.filterSelect {
+  min-width: 0;
+  min-height: 38px;
+  border: 0;
+  background: transparent;
+  color: var(--yn-color-text);
+  font: inherit;
+}
+
+.filterInput input { width: 100%; outline: 0; }
+
+.filterSelect {
+  padding: 0 var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: 4px;
+  background: var(--yn-color-surface);
+}
+
+.filterSelect:focus,
+.filterInput:focus-within { border-color: var(--yn-color-brand); outline: 2px solid color-mix(in srgb, var(--yn-color-brand) 18%, transparent); }
 
 .flowRoute code {
   overflow: hidden;
@@ -553,6 +588,28 @@
   white-space: nowrap;
 }
 
+.evidenceLink {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: var(--yn-space-1);
+  padding: 0 var(--yn-space-2);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-sm);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--yn-font-xs);
+  white-space: nowrap;
+}
+
+.evidenceLink:hover,
+.evidenceLink:focus-visible {
+  border-color: var(--yn-color-brand);
+  color: var(--yn-color-brand-strong);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .stageTimeline li[data-state='active'] svg { animation: none; }
 }
@@ -570,4 +627,30 @@
   .eventTimeline time { grid-column: 2; }
   .accessList article { grid-template-columns: minmax(0, 1fr); }
   .remoteAssetList article { align-items: stretch; flex-direction: column; }
+}
+
+.loadMore {
+  width: 100%;
+  padding: var(--yn-space-2);
+  border: 1px dashed var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: transparent;
+  color: var(--yn-color-brand);
+  font: inherit;
+  cursor: pointer;
+}
+.loadMore:hover {
+  background: var(--yn-color-surface-raised);
+}
+
+
+.terminalError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yn-space-2);
+  padding: var(--yn-space-2);
+  border-top: 1px solid var(--yn-color-border);
+  color: var(--yn-color-warning);
+  font-size: var(--yn-font-sm);
 }

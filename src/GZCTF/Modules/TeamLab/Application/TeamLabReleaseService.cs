@@ -14,8 +14,14 @@ public sealed class TeamLabReleaseService(
     AppDbContext context,
     TeamLabTopologyValidator validator,
     BootstrapProfileCompatibilityService bootstrapCompatibility,
-    IBootstrapProfileDistributionService bootstrapDistribution)
+    IBootstrapProfileDistributionService bootstrapDistribution,
+    TeamLabReleaseImagePreparationService imagePreparation)
 {
+    private static readonly JsonSerializerOptions EditorJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     public async Task<TeamLabReleaseModel> PublishAsync(
         TeamLabTopology topology,
         int expectedRevision,
@@ -34,7 +40,7 @@ public sealed class TeamLabReleaseService(
         if (topology.Revision != expectedRevision)
             throw new TeamLabApiContractException(
                 "topology_revision_conflict",
-                $"Topology revision is {topology.Revision}, not {expectedRevision}.",
+                $"拓扑修订号为 {topology.Revision}，而非 {expectedRevision}",
                 409);
 
         await using var transaction = context.Database.IsRelational()
@@ -57,7 +63,7 @@ public sealed class TeamLabReleaseService(
         if (persistedRevision != expectedRevision)
             throw new TeamLabApiContractException(
                 "topology_revision_conflict",
-                $"Topology revision is {persistedRevision?.ToString() ?? "unavailable"}, not {expectedRevision}.",
+                $"拓扑修订号为 {persistedRevision?.ToString() ?? "不可用"}，而非 {expectedRevision}",
                 409);
 
         var definition = TeamLabTopologyApplicationService.ToDefinition(topology);
@@ -88,6 +94,7 @@ public sealed class TeamLabReleaseService(
             if (transaction is not null) await transaction.CommitAsync(cancellationToken);
             foreach (var version in bootstrapVersions)
                 await bootstrapDistribution.QueueAndDistributeAsync(version.Id, cancellationToken);
+            await imagePreparation.QueueAsync(existing.Id, cancellationToken);
             return ToModel(existing, topology.PublicId);
         }
 
@@ -97,10 +104,12 @@ public sealed class TeamLabReleaseService(
         var release = new TeamLabTopologyRelease
         {
             TopologyId = topology.Id,
+            ControlScopeId = topology.ControlScopeId,
             Version = nextVersion,
             SourceRevision = topology.Revision,
             SchemaVersion = topology.SchemaVersion,
             CanonicalJson = canonicalJson,
+            EditorMetadataJson = topology.EditorMetadataJson,
             ContentHash = contentHash,
             PublishedById = actorUserId,
             ApiOperationId = operationId
@@ -110,6 +119,7 @@ public sealed class TeamLabReleaseService(
         if (transaction is not null) await transaction.CommitAsync(cancellationToken);
         foreach (var version in bootstrapVersions)
             await bootstrapDistribution.QueueAndDistributeAsync(version.Id, cancellationToken);
+        await imagePreparation.QueueAsync(release.Id, cancellationToken);
         return ToModel(release, topology.PublicId);
     }
 
@@ -153,5 +163,23 @@ public sealed class TeamLabReleaseService(
 
     public static TeamLabReleaseModel ToModel(TeamLabTopologyRelease release, Guid topologyPublicId) =>
         new(release.Id, topologyPublicId, release.Version, release.SourceRevision, release.SchemaVersion,
-            release.ContentHash, release.PublishedById, release.PublishedAt);
+            release.ContentHash, release.PublishedById, release.PublishedAt, DeserializeEditor(release.EditorMetadataJson));
+
+    private static TeamLabTopologyEditorModel DeserializeEditor(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<TeamLabTopologyEditorModel>(json, EditorJsonOptions)
+                   ?? EmptyEditor();
+        }
+        catch (JsonException)
+        {
+            return EmptyEditor();
+        }
+    }
+
+    private static TeamLabTopologyEditorModel EmptyEditor() => new(
+        new Dictionary<string, TeamLabEditorItemModel>(),
+        new Dictionary<string, TeamLabEditorItemModel>(),
+        new Dictionary<string, TeamLabEditorItemModel>());
 }

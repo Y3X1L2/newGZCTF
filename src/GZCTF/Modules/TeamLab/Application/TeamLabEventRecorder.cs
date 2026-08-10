@@ -26,10 +26,15 @@ public sealed class TeamLabEventRecorder(
         var localEvent = new TeamLabEvent
         {
             RuntimeId = runtime.Id,
+            ControlScopeId = runtime.ControlScopeId,
             Generation = runtime.Generation,
             Stage = stage,
             Level = level,
             Message = trimmedMessage,
+            ResourceType = "teamlab-runtime",
+            ResourcePublicId = runtime.PublicId,
+            ResourceVersion = runtime.Generation,
+            ResourceUrl = $"/api/open/v1/teamlab/runtimes/{runtime.PublicId:D}",
             CreatedAt = DateTimeOffset.UtcNow
         };
         if (context.Entry(runtime).State == Microsoft.EntityFrameworkCore.EntityState.Detached)

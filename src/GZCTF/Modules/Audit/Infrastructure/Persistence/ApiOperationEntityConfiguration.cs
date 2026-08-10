@@ -24,7 +24,12 @@ public sealed class ApiOperationEntityConfiguration : IEntityTypeConfiguration<A
 
         builder.HasIndex(operation => new
             { operation.ApiTokenId, operation.RouteKey, operation.IdempotencyKey })
-            .IsUnique();
+            .IsUnique()
+            .HasFilter("\"ApiTokenId\" IS NOT NULL");
+        builder.HasIndex(operation => new
+            { operation.ActorUserId, operation.RouteKey, operation.IdempotencyKey })
+            .IsUnique()
+            .HasFilter("\"ApiTokenId\" IS NULL AND \"ActorUserId\" IS NOT NULL");
         builder.HasIndex(operation => new { operation.Status, operation.NextAttemptAt })
             .HasFilter("\"Status\" = 0");
         builder.HasIndex(operation => new { operation.Status, operation.LeaseExpiresAt })

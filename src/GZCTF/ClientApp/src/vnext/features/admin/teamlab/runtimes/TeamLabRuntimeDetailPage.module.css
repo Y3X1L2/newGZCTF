@@ -16,6 +16,4 @@
 .content { min-width: 0; padding-top: var(--yn-space-5); }
 .content > * + * { margin-top: var(--yn-space-6); }
 .stack { display: grid; min-width: 0; gap: var(--yn-space-6); }
-.split { display: grid; min-width: 0; grid-template-columns: minmax(0, .78fr) minmax(0, 1.22fr); gap: var(--yn-space-6); align-items: start; }
-@media (max-width: 980px) { .split { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 720px) { .pageHeader { align-items: stretch; flex-direction: column; } .actions { justify-content: flex-start; } .actions > button { flex: 1 1 auto; } }

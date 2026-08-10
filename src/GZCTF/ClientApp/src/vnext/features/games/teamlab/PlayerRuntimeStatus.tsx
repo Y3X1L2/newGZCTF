@@ -6,7 +6,7 @@ import styles from './TeamLabWorkspacePage.module.css'
 function runtimeMeta(status: TeamLabPlayerWorkspaceProjection['status']) {
   if (status === 'running') return { label: '环境已就绪', tone: 'success' as const, icon: CheckCircle2 }
   if (status === 'failed') return { label: '环境异常', tone: 'warning' as const, icon: CircleAlert }
-  if (status === 'destroyed' || status === 'stopped') return { label: '环境已停止', tone: 'neutral' as const, icon: Activity }
+  if (status === 'destroyed' || status === 'paused') return { label: '环境已暂停', tone: 'neutral' as const, icon: Activity }
   return { label: '环境准备中', tone: 'info' as const, icon: LoaderCircle }
 }
 

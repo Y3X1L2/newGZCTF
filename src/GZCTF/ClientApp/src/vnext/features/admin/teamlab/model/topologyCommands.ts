@@ -1,5 +1,5 @@
 import type { TeamLabConnectionDirection, TeamLabDependencyCondition } from '../api/teamlabContracts'
-import { isTopologyAsset, type TopologyConnection, type TopologyDocument, type TopologyNode } from './topologyDocument'
+import { isTopologyAsset, type TopologyConnection, type TopologyDocument, type TopologyNode, type TopologyPosition } from './topologyDocument'
 import { buildKeyRemap, dependencyConnectionKey, nextTopologyKey, topologyKeys } from './topologyKeys'
 import type { TopologySelection } from './topologySelection'
 
@@ -102,6 +102,120 @@ export function bulkMoveTopologyNodes(
     } as TopologyNode
   }
   return result(document, { ...document, nodes }, undefined)
+}
+
+/** All nodes visually owned by a network region: its switch plus every asset member. */
+export function networkMembersOf(document: TopologyDocument, networkKey: string): string[] {
+  const switches = Object.values(document.nodes).filter(
+    (item): item is Extract<TopologyNode, { type: 'switch' }> => item.type === 'switch' && item.networkKey === networkKey
+  )
+  const switchKeys = new Set(switches.map((item) => item.key))
+  const members = new Set<string>(switchKeys)
+  // An asset belongs to a region only when ALL of its memberships point into that
+  // network. Cross-network devices (routers, dual-homed assets) are border nodes
+  // and never move with a single region.
+  const assetNetworks = new Map<string, Set<string>>()
+  for (const connection of Object.values(document.connections)) {
+    if (connection.type !== 'membership') continue
+    const owner = document.nodes[connection.switchKey]
+    if (owner?.type !== 'switch') continue
+    const networks = assetNetworks.get(connection.nodeKey) ?? new Set<string>()
+    networks.add(owner.networkKey)
+    assetNetworks.set(connection.nodeKey, networks)
+  }
+  for (const [nodeKey, networks] of assetNetworks) {
+    if (networks.size === 1 && networks.has(networkKey)) members.add(nodeKey)
+  }
+  return [...members].sort()
+}
+
+const REGION_PADDING = 48
+
+/**
+ * Derives a region origin from its member bounding box. Used as a fallback when no
+ * layout has been recorded yet so collapse/resize never teleports a fresh region
+ * (created this session, pasted, or legacy data) to the canvas origin.
+ */
+function derivedRegionLayout(document: TopologyDocument, networkKey: string): TopologyPosition {
+  const members = networkMembersOf(document, networkKey)
+  let minX = Number.POSITIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+  for (const key of members) {
+    const current = document.nodes[key]
+    if (!current) continue
+    const width = current.position.width ?? 208
+    const height = current.position.height ?? 102
+    minX = Math.min(minX, current.position.x)
+    minY = Math.min(minY, current.position.y)
+    maxX = Math.max(maxX, current.position.x + width)
+    maxY = Math.max(maxY, current.position.y + height)
+  }
+  if (members.length === 0) return { x: 0, y: 0, width: 320, height: 220, collapsed: false }
+  return {
+    x: minX - REGION_PADDING,
+    y: minY - REGION_PADDING,
+    width: maxX - minX + REGION_PADDING * 2,
+    height: maxY - minY + REGION_PADDING * 2,
+    collapsed: false,
+  }
+}
+
+export function updateNetworkLayout(
+  document: TopologyDocument,
+  networkKey: string,
+  layout: TopologyPosition
+): TopologyCommandResult<string> {
+  return result(
+    document,
+    { ...document, networkLayouts: { ...document.networkLayouts, [networkKey]: layout } },
+    networkKey
+  )
+}
+
+export function setNetworkCollapsed(
+  document: TopologyDocument,
+  networkKey: string,
+  collapsed: boolean
+): TopologyCommandResult<string> {
+  const current = document.networkLayouts[networkKey]
+  return updateNetworkLayout(document, networkKey, {
+    ...(current ?? derivedRegionLayout(document, networkKey)),
+    collapsed,
+  })
+}
+
+export function resizeNetworkRegion(
+  document: TopologyDocument,
+  networkKey: string,
+  width: number,
+  height: number
+): TopologyCommandResult<string> {
+  const current = document.networkLayouts[networkKey] ?? derivedRegionLayout(document, networkKey)
+  return updateNetworkLayout(document, networkKey, { ...current, width, height })
+}
+
+/** Returns a region to its content-derived dimensions without moving its members. */
+export function fitNetworkRegionToMembers(document: TopologyDocument, networkKey: string): TopologyCommandResult<string> {
+  const current = document.networkLayouts[networkKey] ?? derivedRegionLayout(document, networkKey)
+  return updateNetworkLayout(document, networkKey, { ...current, width: null, height: null })
+}
+
+/** Moves the region origin and every member by the same delta, keeping the region visual container consistent. */
+export function moveNetworkRegion(
+  document: TopologyDocument,
+  networkKey: string,
+  delta: { x: number; y: number }
+): TopologyCommandResult<string> {
+  const current = document.networkLayouts[networkKey] ?? derivedRegionLayout(document, networkKey)
+  let next = updateNetworkLayout(document, networkKey, {
+    ...current,
+    x: current.x + delta.x,
+    y: current.y + delta.y,
+  }).document
+  next = bulkMoveTopologyNodes(next, networkMembersOf(document, networkKey), delta).document
+  return result(document, next, networkKey)
 }
 
 function defaultHostOffset(document: TopologyDocument, switchKey: string) {

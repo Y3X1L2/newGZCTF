@@ -65,12 +65,24 @@ export function createTeamLabRuntimeApi(client: RuntimeJsonClient = runtimeJsonC
       return parseTeamLabRuntime(await client.get(`${root}/${runtimeId}`))
     },
 
-    async listEvents(runtimeId: string, after = 0, limit = 100) {
-      return parseTeamLabRuntimeEvents(await client.get(`${root}/${runtimeId}/events`, { after, limit }))
+    async listEvents(
+      runtimeId: string,
+      after = 0,
+      limit = 100,
+      filters?: { generation?: number | null; stage?: string }
+    ) {
+      return parseTeamLabRuntimeEvents(
+        await client.get(`${root}/${runtimeId}/events`, {
+          after,
+          limit,
+          generation: filters?.generation ?? undefined,
+          stage: filters?.stage || undefined,
+        })
+      )
     },
 
-    async listLogs(runtimeId: string, cursor?: string | null, limit = 100) {
-      return parseAdminLogPage(await client.get(`${root}/${runtimeId}/logs`, { cursor, count: limit }))
+    async listLogs(runtimeId: string, cursor?: string | null, limit = 100, filters?: { level?: string; eventCode?: string; keyword?: string }) {
+      return parseAdminLogPage(await client.get(`${root}/${runtimeId}/logs`, { cursor, count: limit, ...filters }))
     },
 
     async resetRuntime(runtimeId: string, request: ResetTeamLabRuntimeRequest) {
@@ -105,15 +117,15 @@ export function createTeamLabRuntimeApi(client: RuntimeJsonClient = runtimeJsonC
       return `${root}/${runtimeId}/access-grants/${grantId}/download?token=${encodeURIComponent(token)}`
     },
 
-    async listFlows(runtimeId: string, after?: string, limit = 100) {
+    async listFlows(runtimeId: string, after?: string, limit = 100, filters?: { query?: string; protocol?: string; networkKey?: string }) {
       return parseTeamLabTrafficFlowPage(
-        await client.get(`${root}/${runtimeId}/traffic/flows`, { after, limit })
+        await client.get(`${root}/${runtimeId}/traffic/flows`, { after, limit, ...filters })
       )
     },
 
-    async listPaths(runtimeId: string, after?: string, limit = 100) {
+    async listPaths(runtimeId: string, after?: string, limit = 100, filters?: { query?: string; protocol?: string; confidence?: string }) {
       return parseTeamLabTrafficPathPage(
-        await client.get(`${root}/${runtimeId}/traffic/paths`, { after, limit })
+        await client.get(`${root}/${runtimeId}/traffic/paths`, { after, limit, ...filters })
       )
     },
 

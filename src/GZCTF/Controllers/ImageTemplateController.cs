@@ -11,6 +11,7 @@ using GZCTF.Modules.Content.Application;
 using GZCTF.Modules.Content.Contracts;
 using GZCTF.Modules.Identity.Application;
 using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.TeamLab.Domain.Runtime;
 using GZCTF.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -65,6 +66,16 @@ public class ImageTemplateController : ControllerBase
 
     private static bool CanManageTemplate(UserInfo actor, ImageTemplate template) =>
         actor.Role >= Role.Admin || template.CreatedById == actor.Id;
+
+    private static TeamLabRemoteProtocol? RemoteAccessProtocol(ImageTemplate template) =>
+        template.RemoteAccess is not { Enabled: true } configuration
+            ? null
+            : configuration.Protocol == TeamLabRemoteProtocol.ContainerTerminal
+                ? configuration.Protocol
+                : !string.IsNullOrWhiteSpace(configuration.Username) &&
+                  !string.IsNullOrWhiteSpace(configuration.ProtectedSecret)
+                    ? configuration.Protocol
+                    : null;
 
     /// <summary>
     /// Upload a VM disk image file.
@@ -135,6 +146,7 @@ public class ImageTemplateController : ControllerBase
 
         var total = await query.CountAsync();
         var templates = await query
+            .Include(template => template.RemoteAccess)
             .OrderByDescending(t => t.UploadedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -145,6 +157,7 @@ public class ImageTemplateController : ControllerBase
             t.Id, t.Name, t.OSType, t.ImageType, t.FileSize, t.Status,
             t.Description, t.ErrorMessage, t.ImageHash, t.UploadedAt, t.RegistryUrl,
             t.SupportsInstanceCredentials,
+            RemoteAccessProtocol = RemoteAccessProtocol(t),
             CanManage = CanManageTemplate(actor, t)
         }) });
     }
@@ -158,6 +171,7 @@ public class ImageTemplateController : ControllerBase
     {
         var actor = await CurrentUser();
         var template = await _context.ImageTemplates.AsNoTracking()
+            .Include(item => item.RemoteAccess)
             .SingleOrDefaultAsync(item => item.Id == id &&
                                           (actor.Role >= Role.Admin ||
                                            item.CreatedById == null || item.CreatedById == actor.Id));
@@ -172,6 +186,7 @@ public class ImageTemplateController : ControllerBase
             template.FileSize, template.Status, template.Description,
             template.ErrorMessage, template.ContainsMalware, template.ImageHash, template.UploadedAt,
             template.RegistryUrl, template.SupportsInstanceCredentials,
+            RemoteAccessProtocol = RemoteAccessProtocol(template),
             CanManage = CanManageTemplate(actor, template),
             CapabilityCertifications = certifications
         });
@@ -199,44 +214,16 @@ public class ImageTemplateController : ControllerBase
         var template = await _context.ImageTemplates.SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (template is null) return NotFound();
         if (!CanManageTemplate(actor, template)) return Forbid();
-        try { return Ok(await _remoteAccess.UpdateAsync(template, model, cancellationToken)); }
-        catch (InvalidOperationException exception) { return BadRequest(new { message = exception.Message }); }
-    }
-
-    /// <summary>
-    /// Certify whether a Windows VM image consumes instance-specific Cloudbase-Init credentials.
-    /// </summary>
-    [HttpPatch("{id:int}/instance-credentials")]
-    [RequireTeacher]
-    public async Task<IActionResult> SetInstanceCredentialCapability(
-        int id,
-        [FromBody] ImageCredentialCapabilityUpdate request,
-        CancellationToken token)
-    {
-        var actor = await CurrentUser();
-        var template = await _context.ImageTemplates.SingleOrDefaultAsync(item => item.Id == id, token);
-        if (template is null)
-            return NotFound();
-        if (!CanManageTemplate(actor, template))
-            return Forbid();
-        if (template.OSType != OSType.Windows || template.ImageType == ImageType.Docker)
-            return BadRequest(new { message = "Credential capability only applies to Windows VM images." });
-        if (request.Supported && template.Status != ImageStatus.Ready)
-            return BadRequest(new { message = "Only ready Windows VM images can be certified." });
-
-        template.SupportsInstanceCredentials = request.Supported;
-        await _context.SaveChangesAsync(token);
-        _logger.LogInformation(
-            "Windows image template {TemplateId} credential capability set to {Supported} by {UserId}",
-            template.Id, request.Supported, actor.Id);
-        return Ok(new
+        try
         {
-            template.Id,
-            template.Name,
-            template.OSType,
-            template.ImageType,
-            template.SupportsInstanceCredentials
-        });
+            var configuration = await _remoteAccess.UpdateAsync(template, model, cancellationToken);
+            _logger.SystemLog(
+                $"Updated image template remote access: template={template.Id}, enabled={configuration.Enabled}, protocol={configuration.Protocol}, credentialChanged={!string.IsNullOrWhiteSpace(model.Credential) || model.ClearCredential}.",
+                TaskStatus.Success,
+                LogLevel.Information);
+            return Ok(configuration);
+        }
+        catch (InvalidOperationException exception) { return BadRequest(new { message = exception.Message }); }
     }
 
     /// <summary>
@@ -564,9 +551,4 @@ public class LocalImportRequest
     [Required]
     public string LocalPath { get; set; } = string.Empty;
     public string? DisplayName { get; set; }
-}
-
-public class ImageCredentialCapabilityUpdate
-{
-    public bool Supported { get; set; }
 }

@@ -21,6 +21,7 @@ export const targetStatusMeta: Record<TeamLabGameTargetStatus, { label: string; 
   draining: { label: '清理中', tone: 'warning', active: true },
   cleanuppending: { label: '等待清理', tone: 'warning', active: true },
   destroyed: { label: '已销毁', tone: 'neutral', active: false },
+  paused: { label: '已暂停', tone: 'neutral', active: false },
 }
 
 export function rolloutPollInterval(status: TeamLabGameRolloutStatus | undefined) {

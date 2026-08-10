@@ -16,6 +16,8 @@ public class TeamLabController(
     TeamLabPcapService pcap,
     TeamLabContainerNetworkFinalizeService containerNetworkFinalize,
     AgentRuntimeSignalJournal runtimeSignals,
+    DockerService docker,
+    KvmService kvm,
     AgentOperationGate gate) : ControllerBase
 {
     [HttpGet("status")]
@@ -63,6 +65,18 @@ public class TeamLabController(
                 request.RuntimeId, request.Generation, token);
         return Ok(result);
     }
+
+    [HttpPost("assets/pause")]
+    public Task<TeamLabAssetLifecycleResponse> PauseAsset(
+        [FromBody] TeamLabAssetLifecycleRequest request,
+        CancellationToken token) =>
+        ChangeAssetLifecycleAsync(request, pause: true, token);
+
+    [HttpPost("assets/resume")]
+    public Task<TeamLabAssetLifecycleResponse> ResumeAsset(
+        [FromBody] TeamLabAssetLifecycleRequest request,
+        CancellationToken token) =>
+        ChangeAssetLifecycleAsync(request, pause: false, token);
 
     [HttpPost("probe")]
     public async Task<IActionResult> Probe([FromBody] TeamLabProbeRequest request, CancellationToken token) =>
@@ -145,4 +159,41 @@ public class TeamLabController(
         [FromBody] TeamLabEndpointSensorStartRequest request,
         CancellationToken token) =>
         Ok(await sensors.StartAsync(request, token));
+
+    private async Task<TeamLabAssetLifecycleResponse> ChangeAssetLifecycleAsync(
+        TeamLabAssetLifecycleRequest request,
+        bool pause,
+        CancellationToken token)
+    {
+        if (request.Generation < 1 || string.IsNullOrWhiteSpace(request.ResourceId))
+            throw new AgentOperationException(
+                "Validation", "runtime.lifecycle_invalid", "Asset lifecycle request is invalid.", false,
+                StatusCodes.Status422UnprocessableEntity);
+        await using var permit = await gate.EnterAsync(AgentOperationCategory.Control, token);
+        if (!request.DryRun)
+        {
+            switch (request.Kind.Trim().ToLowerInvariant())
+            {
+                case "docker":
+                    if (pause)
+                        await docker.PauseContainerAsync(request.ResourceId, request.Generation, token);
+                    else
+                        await docker.ResumeContainerAsync(request.ResourceId, request.Generation, token);
+                    break;
+                case "vm":
+                    if (pause)
+                        await kvm.SuspendVmAsync(request.ResourceId, request.Generation, token);
+                    else
+                        await kvm.ResumeVmAsync(request.ResourceId, request.Generation, token);
+                    break;
+                default:
+                    throw new AgentOperationException(
+                        "Validation", "runtime.lifecycle_kind_unsupported", "Asset kind is not supported.", false,
+                        StatusCodes.Status422UnprocessableEntity);
+            }
+        }
+        return new TeamLabAssetLifecycleResponse(
+            true, request.DryRun, pause ? "paused" : "running",
+            request.DryRun ? "Asset lifecycle command validated." : "Asset lifecycle command completed.");
+    }
 }

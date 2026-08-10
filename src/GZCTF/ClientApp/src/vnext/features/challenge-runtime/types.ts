@@ -11,6 +11,11 @@ export interface RuntimeQueueStatus {
 export interface RuntimeVmStatus {
   stageMessage?: string | null
   queue?: RuntimeQueueStatus | null
+  rdpHost?: string | null
+  rdpPort?: number | null
+  rdpUsername?: string | null
+  rdpPassword?: string | null
+  rdpUrl?: string | null
 }
 
 export interface RuntimeInstanceController {

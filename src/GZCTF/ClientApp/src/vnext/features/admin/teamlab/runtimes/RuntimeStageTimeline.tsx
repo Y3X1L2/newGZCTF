@@ -12,7 +12,7 @@ export const RuntimeStageTimeline = memo(function RuntimeStageTimeline({ runtime
     <section className={styles.panel} aria-labelledby="runtime-stage-title">
       <header className={styles.panelHeader}>
         <div>
-          <span>DEPLOYMENT STAGES</span>
+          <span>部署阶段</span>
           <h3 id="runtime-stage-title">部署阶段</h3>
         </div>
         <code>{runtime.stage}</code>

@@ -19,7 +19,7 @@ const runtimeMeta: Record<TeamLabRuntimeStatus, { label: string; tone: AdminStat
   running: { label: '运行中', tone: 'success' },
   failed: { label: '失败', tone: 'danger' },
   'cleanup-pending': { label: '待清理', tone: 'warning', pulse: true },
-  stopped: { label: '已停止', tone: 'neutral' },
+  paused: { label: '已暂停', tone: 'neutral' },
   destroying: { label: '清理中', tone: 'warning', pulse: true },
   destroyed: { label: '已销毁', tone: 'neutral' },
 }

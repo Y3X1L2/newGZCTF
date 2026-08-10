@@ -126,7 +126,12 @@ public sealed class GuestGatewayTests
                 GuestLifecycleStage.ManagementLinkReady,
                 GuestLifecycleOutcome.Ready,
                 DateTimeOffset.UtcNow,
-                "sha256:gateway-event");
+                "sha256:gateway-event",
+                Facts: new Dictionary<string, string>
+                {
+                    ["failedStep"] = "install",
+                    ["failureCategory"] = "completed"
+                });
             using var eventResponse = await client.PostAsJsonAsync(
                 "/api/guest/v1/events", new GuestEventEnvelope(guestEvent));
             eventResponse.EnsureSuccessStatusCode();
@@ -136,6 +141,8 @@ public sealed class GuestGatewayTests
             var signal = Assert.Single(await journal.ReadAllAsync(identity.OperationId, CancellationToken.None));
             Assert.Equal(AgentRuntimeSignalStage.ManagementLinkReady, signal.Stage);
             Assert.Equal(identity.NativeVmId.ToString("D"), signal.Facts!["nativeVmId"]);
+            Assert.Equal("install", signal.Facts["failedStep"]);
+            Assert.Equal("completed", signal.Facts["failureCategory"]);
         }
         finally
         {

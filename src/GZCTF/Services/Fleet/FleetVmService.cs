@@ -14,7 +14,7 @@ public class FleetVmService
     private readonly AgentClient _agentClient;
     private readonly INodeRepository _nodeRepo;
     private readonly IVirtualMachineProvider _vmProvider;
-    private readonly VmCredentialService _credentialService;
+    private readonly CompetitionVmAccessService _vmAccess;
     private readonly GuacamoleService _guacamoleService;
     private readonly ImageDistributionService _imageDistribution;
     private readonly KvmSettings _kvmSettings;
@@ -27,7 +27,7 @@ public class FleetVmService
         AgentClient agentClient,
         INodeRepository nodeRepo,
         IVirtualMachineProvider vmProvider,
-        VmCredentialService credentialService,
+        CompetitionVmAccessService vmAccess,
         GuacamoleService guacamoleService,
         ImageDistributionService imageDistribution,
         IOptions<KvmSettings> kvmSettings,
@@ -39,7 +39,7 @@ public class FleetVmService
         _agentClient = agentClient;
         _nodeRepo = nodeRepo;
         _vmProvider = vmProvider;
-        _credentialService = credentialService;
+        _vmAccess = vmAccess;
         _guacamoleService = guacamoleService;
         _imageDistribution = imageDistribution;
         _kvmSettings = kvmSettings.Value;
@@ -81,7 +81,7 @@ public class FleetVmService
             return null;
         }
 
-        var nodeContractError = ValidateCredentialNode(node);
+        var nodeContractError = ValidateNode(node);
         if (nodeContractError is not null)
         {
             vmInstance.Status = VmInstanceStatus.Error;
@@ -95,7 +95,7 @@ public class FleetVmService
             ? await _context.ImageTemplates.AsNoTracking()
                 .SingleOrDefaultAsync(item => item.Id == templateId.Value, token)
             : null;
-        var imageContractError = ValidateCredentialImage(template);
+        var imageContractError = ValidateImage(template);
         if (imageContractError is not null)
         {
             vmInstance.Status = VmInstanceStatus.Error;
@@ -105,9 +105,19 @@ public class FleetVmService
             return null;
         }
 
-        _credentialService.Initialize(vmInstance);
+        var accessProfile = await _vmAccess.GetImageProfileAsync(template!.Id, token);
+        if (accessProfile is null)
+        {
+            vmInstance.Status = VmInstanceStatus.Error;
+            vmInstance.NodeId = nodeId.Value;
+            await UpdateTicketStage(execution?.TicketId, DeploymentStage.Failed,
+                "Windows VM image has no enabled fixed-account RDP configuration.", token);
+            return null;
+        }
+
+        vmInstance.RdpUsername = accessProfile.Username;
+        vmInstance.RdpPasswordProtected = null;
         vmInstance.RuntimeGeneration = Math.Max(1, execution?.Generation ?? vmInstance.RuntimeGeneration);
-        var rdpPassword = _credentialService.RevealPassword(vmInstance);
 
         await UpdateTicketStage(execution?.TicketId, DeploymentStage.ImagePreparing,
             "Ensuring VM template on worker from storage registry.", token);
@@ -132,8 +142,7 @@ public class FleetVmService
             VmName = vmInstance.VmName,
             Memory = memory ?? _kvmSettings.DefaultVmMemoryMb,
             Cpu = cpu ?? _kvmSettings.DefaultVmCpu,
-            Flag = flag,
-            CloudInit = BuildWindowsCloudInit(vmInstance, rdpPassword)
+            Flag = flag
         }, token);
 
         if (result is null)
@@ -154,30 +163,17 @@ public class FleetVmService
         return vmInstance;
     }
 
-    internal static AgentVmInitConfig BuildWindowsCloudInit(VmInstance vmInstance, string password) =>
-        new()
-        {
-            Enabled = true,
-            OsType = OSType.Windows,
-            Hostname = vmInstance.VmName,
-            InstanceId = $"gzctf-vm-{vmInstance.Id:N}-g{vmInstance.RuntimeGeneration}",
-            MetaData =
-                $"instance-id: gzctf-vm-{vmInstance.Id:N}-g{vmInstance.RuntimeGeneration}\nlocal-hostname: {vmInstance.VmName}\n",
-            UserData = VmCredentialService.BuildWindowsUserData(vmInstance.RdpUsername, password),
-            SensitiveKeys = ["user-data", "rdp-password"]
-        };
-
-    internal static string? ValidateCredentialNode(WorkerNode node)
+    internal static string? ValidateNode(WorkerNode node)
     {
         if (node.IsLocal)
-            return "Local KVM does not support the required Windows instance credential injection contract.";
+            return "Competition Windows VMs require a managed worker with VM image download support.";
 
-        return AgentCapabilityEvaluator.Supports(node, AgentFeatureIds.Kvm, AgentFeatureIds.CloudInit)
+        return AgentCapabilityEvaluator.Supports(node, AgentFeatureIds.Kvm, AgentFeatureIds.VmDownload)
             ? null
-            : "Assigned KVM node does not advertise Cloud-Init credential injection support.";
+            : "Assigned node does not advertise KVM and VM image download support.";
     }
 
-    internal static string? ValidateCredentialImage(ImageTemplate? template)
+    internal static string? ValidateImage(ImageTemplate? template)
     {
         if (template is null)
             return "Windows VM image template is missing.";
@@ -185,9 +181,7 @@ public class FleetVmService
             return "Assigned image is not a Windows VM image.";
         if (template.Status != ImageStatus.Ready)
             return "Windows VM image is not ready.";
-        return template.SupportsInstanceCredentials
-            ? null
-            : "Windows image is not verified for instance-specific Cloudbase-Init credentials.";
+        return null;
     }
 
     private async Task<AgentVmImageDownloadResult> EnsureRemoteVmImageAsync(Guid nodeId, WorkerNode? node,

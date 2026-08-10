@@ -22,8 +22,8 @@ import { ResourceRequirementsEditor } from './ResourceRequirementsEditor'
 
 const typePresentation = {
   docker: { label: 'Docker 资产', icon: <Container aria-hidden="true" size={16} /> },
-  'linux-vm': { label: 'Linux VM', icon: <MonitorCog aria-hidden="true" size={16} /> },
-  'windows-vm': { label: 'Windows VM', icon: <Monitor aria-hidden="true" size={16} /> },
+  'linux-vm': { label: 'Linux 虚拟机', icon: <MonitorCog aria-hidden="true" size={16} /> },
+  'windows-vm': { label: 'Windows 虚拟机', icon: <Monitor aria-hidden="true" size={16} /> },
 } as const
 
 export function AssetInspector({
@@ -52,7 +52,7 @@ export function AssetInspector({
         >
           {node.imageTemplateId <= 0 ? <option value="0">请选择可用镜像</option> : null}
           {!currentAvailable && node.imageTemplateId > 0 ? <option value={node.imageTemplateId}>当前模板 #{node.imageTemplateId}（不可用）</option> : null}
-          {compatibleImages.map((option) => <option key={option.id} value={option.id}>{option.name} (#{option.id})</option>)}
+          {compatibleImages.map((option) => <option key={option.id} value={option.id}>{option.name} (#{option.id}){option.remoteAccessProtocol === 'ssh' ? ' - 已配置 SSH 运维' : option.remoteAccessProtocol === 'rdp' ? ' - 已配置 RDP 运维' : ' - 未配置运维接入'}</option>)}
         </SelectInput>
       </InspectorSection>
 
@@ -75,7 +75,7 @@ export function AssetInspector({
           <ToggleInput
             checked={node.environment !== null}
             disabled={readOnly}
-            description="这里只保存普通环境变量，敏感值应由运行时 secret 注入"
+            description="这里只保存普通环境变量，敏感值由运行时安全参数提供。"
             label="环境变量"
             onChange={(enabled) => update({ environment: enabled ? {} : null })}
           />
@@ -89,18 +89,26 @@ export function AssetInspector({
             onChange={(startCommand) => update({ startCommand: startCommand.trim() ? startCommand : null })}
             value={node.startCommand ?? ''}
           />
-          <ToggleInput checked={node.stateless} disabled={readOnly} label="无状态资产" onChange={(stateless) => update({ stateless })} />
-          <ToggleInput checked={node.bakeAtPublish} disabled={readOnly} label="发布时预制" onChange={(bakeAtPublish) => update({ bakeAtPublish })} />
+          <ToggleInput
+            checked={node.stateless}
+            description="仅用于可随时重建、无需保留本地数据的服务。"
+            disabled={readOnly}
+            help="stateless"
+            label="无状态资产"
+            onChange={(stateless) => update({ stateless })}
+          />
+          <ToggleInput checked={node.bakeAtPublish} disabled={readOnly} help="bakeAtPublish" label="发布时预制" onChange={(bakeAtPublish) => update({ bakeAtPublish })} />
           <TextInput
             disabled={readOnly}
             hint="可选；用于固定不可变镜像版本"
+            help="imageDigest"
             label="镜像 Digest"
             onChange={(imageDigest) => update({ imageDigest: imageDigest.trim() ? imageDigest : null })}
             value={node.imageDigest ?? ''}
           />
         </InspectorSection>
 
-        <BootstrapEditor bootstrap={node.bootstrap} onChange={(bootstrap) => update({ bootstrap })} readOnly={readOnly} />
+        <BootstrapEditor assetType={node.type} bootstrap={node.bootstrap} onChange={(bootstrap) => update({ bootstrap })} readOnly={readOnly} />
         <ObservationEditor endpointMode={node.endpointObservation} onEndpointModeChange={(endpointObservation) => update({ endpointObservation })} readOnly={readOnly} />
 
         <InspectorSection icon={<Box aria-hidden="true" size={16} />} title="编辑器元数据">

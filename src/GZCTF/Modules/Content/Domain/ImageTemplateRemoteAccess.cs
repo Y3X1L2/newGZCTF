@@ -11,7 +11,6 @@ public sealed class ImageTemplateRemoteAccess
     public TeamLabRemoteProtocol Protocol { get; set; }
     public int Port { get; set; }
     [MaxLength(128)] public string? Username { get; set; }
-    public RemoteCredentialMode CredentialMode { get; set; } = RemoteCredentialMode.PlatformGenerated;
     [MaxLength(8192)] public string? ProtectedSecret { get; set; }
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public ImageTemplate ImageTemplate { get; set; } = null!;

@@ -1,10 +1,23 @@
-import { Check, Clock3, Copy, ExternalLink, Monitor, RefreshCw, Server, Trash2 } from 'lucide-react'
+import {
+  Check,
+  Clock3,
+  Copy,
+  Download,
+  ExternalLink,
+  KeyRound,
+  Monitor,
+  RefreshCw,
+  Server,
+  Trash2,
+  User,
+} from 'lucide-react'
 import { useEffect, useId, useMemo, useState } from 'react'
 import { ContainerEntryStatus } from '@Api'
 import { ActionButton, InlineFeedback } from '../../shared/Interaction'
 import { StatusPill } from '../../shared/Primitives'
 import { externalEntryHref } from '../../shared/urls'
 import styles from './InstanceControl.module.css'
+import { downloadRdpFile } from './rdp'
 import { RuntimeInstanceController, RuntimeInstancePhase } from './types'
 
 const phaseLabels: Record<RuntimeInstancePhase, string> = {
@@ -29,7 +42,7 @@ function formatRemaining(target: number | null, now: number) {
 export function InstanceControl({ controller }: { controller: RuntimeInstanceController }) {
   const titleId = useId()
   const [now, setNow] = useState(Date.now())
-  const [copied, setCopied] = useState(false)
+  const [copiedField, setCopiedField] = useState<string | null>(null)
   const running = controller.phase === 'running' || controller.phase === 'extending'
 
   useEffect(() => {
@@ -41,16 +54,18 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
   const remaining = useMemo(() => formatRemaining(controller.closeTime, now), [controller.closeTime, now])
   const queue = controller.vmStatus?.queue
   const stageMessage = controller.vmStatus?.stageMessage
-  const entryHref = externalEntryHref(controller.entry)
+  const entryHref = controller.kind === 'docker' ? externalEntryHref(controller.entry) : null
+  const vmStatus = controller.kind === 'windows' ? controller.vmStatus : null
+  const rdpAddress = vmStatus?.rdpHost && vmStatus.rdpPort ? `${vmStatus.rdpHost}:${vmStatus.rdpPort}` : null
   const entryPublicationFailed = controller.entryStatus === ContainerEntryStatus.Error && controller.closeTime !== null
 
   if (controller.kind === 'none') return null
 
-  const copyEntry = async () => {
-    if (!controller.entry) return
-    await navigator.clipboard.writeText(controller.entry)
-    setCopied(true)
-    window.setTimeout(() => setCopied(false), 1600)
+  const copyValue = async (field: string, value?: string | null) => {
+    if (!value) return
+    await navigator.clipboard.writeText(value)
+    setCopiedField(field)
+    window.setTimeout(() => setCopiedField((current) => (current === field ? null : current)), 1600)
   }
 
   return (
@@ -140,11 +155,55 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
             ) : null}
           </div>
 
-          {controller.entry ? (
+          {controller.kind === 'windows' && rdpAddress && vmStatus?.rdpUsername && vmStatus.rdpPassword ? (
+            <div className={styles.rdpPanel}>
+              <div className={styles.rdpCredentials}>
+                {[
+                  { field: 'address', label: '连接地址', value: rdpAddress, icon: <Monitor size={16} /> },
+                  { field: 'username', label: '用户名', value: vmStatus.rdpUsername, icon: <User size={16} /> },
+                  { field: 'password', label: '密码', value: vmStatus.rdpPassword, icon: <KeyRound size={16} /> },
+                ].map((item) => (
+                  <div className={styles.rdpCredential} key={item.field}>
+                    {item.icon}
+                    <span>{item.label}</span>
+                    <code>{item.value}</code>
+                    <button
+                      aria-label={`复制${item.label}`}
+                      onClick={() => void copyValue(item.field, item.value)}
+                      title={`复制${item.label}`}
+                      type="button"
+                    >
+                      {copiedField === item.field ? <Check size={17} /> : <Copy size={17} />}
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className={styles.rdpActions}>
+                {vmStatus.rdpUrl ? (
+                  <a href={vmStatus.rdpUrl} rel="noreferrer noopener" target="_blank">
+                    <ExternalLink size={16} />
+                    <span>浏览器远程桌面</span>
+                  </a>
+                ) : null}
+                <ActionButton
+                  icon={<Download size={16} />}
+                  onClick={() => downloadRdpFile(vmStatus.rdpHost!, vmStatus.rdpPort!, vmStatus.rdpUsername!)}
+                  type="button"
+                >
+                  下载 RDP
+                </ActionButton>
+              </div>
+            </div>
+          ) : controller.entry ? (
             <div className={styles.entryRow}>
               <code>{controller.entry}</code>
-              <button aria-label="复制实例入口" onClick={() => void copyEntry()} title="复制入口" type="button">
-                {copied ? <Check size={17} /> : <Copy size={17} />}
+              <button
+                aria-label="复制实例入口"
+                onClick={() => void copyValue('entry', controller.entry)}
+                title="复制入口"
+                type="button"
+              >
+                {copiedField === 'entry' ? <Check size={17} /> : <Copy size={17} />}
               </button>
               {entryHref ? (
                 <a

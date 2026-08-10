@@ -29,6 +29,12 @@ public sealed class AgentTeamLabRemoteRelayGateway(AgentClient agent) : ITeamLab
         CancellationToken cancellationToken) =>
         agent.DeleteRemoteRelayAsync(workerNodeId, sessionId, cancellationToken);
 
+    public Task CancelTerminalAsync(
+        Guid workerNodeId,
+        Guid sessionId,
+        CancellationToken cancellationToken) =>
+        agent.CancelRemoteTerminalAsync(workerNodeId, sessionId, cancellationToken);
+
     public Task ProxyTerminalAsync(
         Guid workerNodeId,
         Guid sessionId,

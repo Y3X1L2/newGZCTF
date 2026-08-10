@@ -34,7 +34,7 @@ public sealed class TeamLabTrafficPersistenceWorker(
             }
             catch (Exception exception)
             {
-                logger.LogWarning(exception, "TeamLab traffic collection cycle failed");
+                logger.LogWarning(exception, "TeamLab 流量采集周期执行失败");
             }
         }
     }
@@ -69,7 +69,7 @@ public sealed class TeamLabTrafficPersistenceWorker(
                 if (local.Length > 0)
                     localBuffer.EnqueueRange(local);
                 logger.LogError(exception,
-                    "TeamLab traffic persistence batch failed: count={Count}", batch.Messages.Count);
+                    "TeamLab 流量持久化批次失败：count={Count}", batch.Messages.Count);
                 await Task.Delay(failureDelay, cancellationToken);
                 failureDelay = TimeSpan.FromMilliseconds(Math.Min(failureDelay.TotalMilliseconds * 2, 5000));
             }

@@ -5,7 +5,10 @@ import { createInstanceAdminApi } from './instanceAdminApi'
 import { createNodeAdminApi } from './nodeAdminApi'
 import type { RuntimeJsonClient } from './runtimeJsonClient'
 
-function createClient(get: RuntimeJsonClient['get']): RuntimeJsonClient {
+function createClient(
+  get: RuntimeJsonClient['get'],
+  overrides: Partial<RuntimeJsonClient> = {}
+): RuntimeJsonClient {
   const unexpected = async () => {
     throw new Error('Unexpected API call')
   }
@@ -16,6 +19,7 @@ function createClient(get: RuntimeJsonClient['get']): RuntimeJsonClient {
     putJson: unexpected,
     patchJson: unexpected,
     delete: unexpected,
+    ...overrides,
   }
 }
 
@@ -38,6 +42,54 @@ describe('imageTemplateAdminApi', () => {
     const adapter = createImageTemplateAdminApi(createClient(get))
 
     await expect(adapter.list()).resolves.toEqual({ total: 103, page: 1, pageSize: 20, items: [item] })
+  })
+
+  it('maps deployed numeric remote access protocol to the feature contract', async () => {
+    const get = vi.fn().mockResolvedValue({
+      enabled: false,
+      protocol: 2,
+      port: 22,
+      username: null,
+      hasCredential: false,
+      updatedAt: null,
+    })
+    const adapter = createImageTemplateAdminApi(createClient(get))
+
+    await expect(adapter.remoteAccess(1)).resolves.toEqual({
+      enabled: false,
+      protocol: 'ssh',
+      port: 22,
+      username: null,
+      hasCredential: false,
+      updatedAt: null,
+    })
+  })
+
+  it('serializes the feature remote access protocol to the deployed numeric enum', async () => {
+    const patchJson = vi.fn().mockResolvedValue({
+      enabled: true,
+      protocol: 3,
+      port: 3389,
+      username: 'player',
+      hasCredential: true,
+      updatedAt: 1_786_259_200_000,
+    })
+    const adapter = createImageTemplateAdminApi(createClient(vi.fn(), { patchJson }))
+
+    await expect(adapter.updateRemoteAccess(1, {
+      enabled: true,
+      protocol: 'rdp',
+      port: 3389,
+      username: 'player',
+      credential: 'fixed-image-password',
+    })).resolves.toMatchObject({ protocol: 'rdp' })
+    expect(patchJson).toHaveBeenCalledWith('/api/v1/image-templates/1/remote-access', {
+      enabled: true,
+      protocol: 3,
+      port: 3389,
+      username: 'player',
+      credential: 'fixed-image-password',
+    })
   })
 })
 

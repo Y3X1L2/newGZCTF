@@ -23,7 +23,7 @@ public sealed class TeamLabTrafficPathWorker(
             }
             catch (Exception exception)
             {
-                logger.LogWarning(exception, "TeamLab traffic path correlation cycle failed");
+                logger.LogWarning(exception, "TeamLab 流量路径关联周期执行失败");
             }
         }
     }

@@ -29,7 +29,7 @@ const rollout = {
   preparationRequested: true,
   desiredAccessOpen: false,
   drainRequested: false,
-  counts: { total: 1, pending: 0, provisioning: 0, ready: 1, accessOpen: 0, failed: 0, draining: 0, destroyed: 0 },
+  counts: { total: 1, pending: 0, provisioning: 0, ready: 1, accessOpen: 0, failed: 0, draining: 0, destroyed: 0, paused: 0 },
   preparedAt: 1_784_918_400_000,
   accessOpenedAt: null,
   drainingAt: null,

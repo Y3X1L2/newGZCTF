@@ -15,7 +15,7 @@ public sealed class ApiOperation
     public ApiOperationStatus Status { get; set; } = ApiOperationStatus.Pending;
     public string Stage { get; set; } = "pending";
     public Guid? ActorUserId { get; set; }
-    public Guid ApiTokenId { get; set; }
+    public Guid? ApiTokenId { get; set; }
     public string RouteKey { get; set; } = string.Empty;
     public string IdempotencyKey { get; set; } = string.Empty;
     public string RequestHash { get; set; } = string.Empty;

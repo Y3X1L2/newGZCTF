@@ -15,8 +15,10 @@ public sealed class ApiOperationService(IApiOperationStore store)
         var operation = await store.GetAsync(id, cancellationToken);
         if (operation is null)
             return null;
-        return operation.ApiTokenId == apiTokenId || operation.ActorUserId == actorUserId ||
-               isAdministrator || hasExplicitGrant
+        // Open API operations are scoped to the credential that submitted the command. A shared
+        // platform user may own tokens for different TeamLab scopes, so actor identity alone must
+        // not make one token's operation history visible to another token.
+        return operation.ApiTokenId == apiTokenId || isAdministrator || hasExplicitGrant
             ? operation
             : null;
     }

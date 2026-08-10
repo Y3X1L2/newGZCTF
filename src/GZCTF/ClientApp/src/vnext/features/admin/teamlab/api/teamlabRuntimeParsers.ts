@@ -26,7 +26,7 @@ const runtimeStatuses = {
   5: 'running',
   6: 'failed',
   7: 'cleanup-pending',
-  8: 'stopped',
+  8: 'paused',
   9: 'destroying',
   10: 'destroyed',
   Pending: 'pending',
@@ -37,7 +37,7 @@ const runtimeStatuses = {
   Running: 'running',
   Failed: 'failed',
   CleanupPending: 'cleanup-pending',
-  Stopped: 'stopped',
+  Paused: 'paused',
   Destroying: 'destroying',
   Destroyed: 'destroyed',
 } as const
@@ -229,6 +229,7 @@ export function parseTeamLabTrafficFlowPage(value: unknown): TeamLabTrafficFlowP
       }
     }),
     nextCursor: parse.nullableString(page.nextCursor, 'TeamLab traffic flow page.nextCursor'),
+    completeness: parseTrafficCompleteness(page.completeness, 'TeamLab traffic flow page.completeness'),
   }
 }
 
@@ -258,6 +259,15 @@ export function parseTeamLabTrafficPathPage(value: unknown): TeamLabTrafficPathP
       }
     }),
     nextCursor: parse.nullableString(page.nextCursor, 'TeamLab traffic path page.nextCursor'),
+    completeness: parseTrafficCompleteness(page.completeness, 'TeamLab traffic path page.completeness'),
+  }
+}
+
+function parseTrafficCompleteness(value: unknown, label: string) {
+  const completeness = parse.record(value, label)
+  return {
+    complete: parse.boolean(completeness.complete, `${label}.complete`),
+    droppedRecords: parse.number(completeness.droppedRecords, `${label}.droppedRecords`),
   }
 }
 

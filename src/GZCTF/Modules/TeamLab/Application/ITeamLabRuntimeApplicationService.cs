@@ -14,6 +14,18 @@ public interface ITeamLabRuntimeApplicationService
         string? subjectDisplayName,
         CancellationToken cancellationToken);
     Task<TeamLabRuntimeProjectionModel> GetAsync(Guid runtimeId, CancellationToken cancellationToken);
+    Task<TeamLabRuntimeProjectionModel> GetByStorageIdAsync(int runtimeId, CancellationToken cancellationToken);
+    Task<TeamLabRuntimeProjectionModel> PauseAsync(Guid runtimeId, CancellationToken cancellationToken);
+    Task<TeamLabRuntimeProjectionModel> ResumeAsync(Guid runtimeId, CancellationToken cancellationToken);
+    Task<TeamLabRuntimeProjectionModel> PauseRolloutTargetAsync(Guid runtimeId, int rolloutId, CancellationToken cancellationToken);
+    Task<TeamLabRuntimeProjectionModel> ResumeRolloutTargetAsync(Guid runtimeId, int rolloutId, CancellationToken cancellationToken);
+    Task<TeamLabRuntimeProjectionModel> ResetRolloutTargetAsync(Guid runtimeId, int rolloutId, Guid? operationId, CancellationToken cancellationToken);
+    Task<TeamLabRuntimeCreateResult> ResetRolloutTargetAndEnqueueAsync(
+        Guid runtimeId,
+        int rolloutId,
+        ResetTeamLabRuntimeModel command,
+        Guid? operationId,
+        CancellationToken cancellationToken);
     Task<TeamLabRuntimeCreateResult> ResetAndEnqueueAsync(
         Guid runtimeId,
         ResetTeamLabRuntimeModel command,
@@ -25,10 +37,22 @@ public interface ITeamLabRuntimeApplicationService
         Guid ticketId,
         string? protectedPayload,
         CancellationToken cancellationToken);
+    Task<TeamLabQueueTicketResult> EnqueuePlannedRuntimeAsync(
+        Guid runtimeId,
+        Guid actorUserId,
+        Guid operationId,
+        string? subjectDisplayName,
+        CancellationToken cancellationToken);
     Task<TeamLabQueueTicketResult> DestroyAndEnqueueAsync(
         Guid runtimeId,
         Guid? operationId,
         Guid? actorUserId,
+        CancellationToken cancellationToken);
+    Task<TeamLabQueueTicketResult> DestroyRolloutTargetAndEnqueueAsync(
+        Guid runtimeId,
+        int rolloutId,
+        Guid? operationId,
+        Guid actorUserId,
         CancellationToken cancellationToken);
     Task<TeamLabNodeResult> ExecuteQueuedDestroyAsync(int runtimeId, CancellationToken cancellationToken);
     Task<TeamLabRuntimeProjectionModel> DestroyAsync(Guid runtimeId, CancellationToken cancellationToken);

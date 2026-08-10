@@ -104,6 +104,12 @@ export function createTeamLabAdminApi(client: RuntimeJsonClient = runtimeJsonCli
       )
     },
 
+    async prepareReleaseImages(topologyId: string, releaseId: string) {
+      return parseTeamLabReleaseReadiness(
+        await client.postJson(`${root}/topologies/${topologyId}/releases/${releaseId}/images/prepare`)
+      )
+    },
+
   }
 }
 

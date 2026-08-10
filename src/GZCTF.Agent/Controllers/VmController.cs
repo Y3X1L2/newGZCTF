@@ -55,22 +55,28 @@ public class VmController(
         string vmName,
         [FromQuery] int? generation,
         [FromQuery] string? nativeId,
+        [FromQuery] int? rdpPort,
         CancellationToken token)
     {
+        var targetPort = rdpPort ?? 3389;
         var response = await _kvm.ExecuteWithIdentityAsync(
             vmName, generation, nativeId, async identityToken =>
             {
                 var lookup = await _kvm.GetIpAddressWithDiagnosticAsync(vmName, identityToken);
-                var rdpPort = string.IsNullOrEmpty(lookup.IpAddress)
+                var rdpReady = !string.IsNullOrEmpty(lookup.IpAddress) &&
+                               await KvmService.IsTcpPortReadyAsync(lookup.IpAddress, targetPort, identityToken);
+                var proxyPort = !rdpReady
                     ? null
-                    : await _kvm.EnsureRdpProxyAsync(vmName, lookup.IpAddress, identityToken);
+                    : await _kvm.EnsureRdpProxyAsync(vmName, lookup.IpAddress!, targetPort, identityToken);
                 return new VmIpResponse
                 {
                     VmName = vmName,
                     IpAddress = lookup.IpAddress,
-                    RdpPort = rdpPort,
-                    Status = string.IsNullOrEmpty(lookup.IpAddress) ? "Pending" : "Ready",
-                    Diagnostic = lookup.Diagnostic
+                    RdpPort = proxyPort,
+                    Status = proxyPort.HasValue ? "Ready" : "Pending",
+                    Diagnostic = rdpReady
+                        ? lookup.Diagnostic
+                        : $"{lookup.Diagnostic} RDP target port {targetPort} is not ready.".Trim()
                 };
             }, token);
         return Ok(response);
@@ -81,24 +87,30 @@ public class VmController(
         string vmName,
         [FromQuery] int? generation,
         [FromQuery] string? nativeId,
+        [FromQuery] int? rdpPort,
         [FromBody] VmIpQueryRequest request,
         CancellationToken token)
     {
+        var targetPort = rdpPort ?? 3389;
         var response = await _kvm.ExecuteWithIdentityAsync(
             vmName, generation, nativeId, async identityToken =>
             {
                 var lookup = await _kvm.GetIpAddressWithDiagnosticAsync(
                     vmName, identityToken, request.Interfaces);
-                var rdpPort = string.IsNullOrEmpty(lookup.IpAddress)
+                var rdpReady = !string.IsNullOrEmpty(lookup.IpAddress) &&
+                               await KvmService.IsTcpPortReadyAsync(lookup.IpAddress, targetPort, identityToken);
+                var proxyPort = !rdpReady
                     ? null
-                    : await _kvm.EnsureRdpProxyAsync(vmName, lookup.IpAddress, identityToken);
+                    : await _kvm.EnsureRdpProxyAsync(vmName, lookup.IpAddress!, targetPort, identityToken);
                 return new VmIpResponse
                 {
                     VmName = vmName,
                     IpAddress = lookup.IpAddress,
-                    RdpPort = rdpPort,
-                    Status = string.IsNullOrEmpty(lookup.IpAddress) ? "Pending" : "Ready",
-                    Diagnostic = lookup.Diagnostic
+                    RdpPort = proxyPort,
+                    Status = proxyPort.HasValue ? "Ready" : "Pending",
+                    Diagnostic = rdpReady
+                        ? lookup.Diagnostic
+                        : $"{lookup.Diagnostic} RDP target port {targetPort} is not ready.".Trim()
                 };
             }, token);
         return Ok(response);
@@ -143,7 +155,7 @@ public class VmController(
     {
         await using var permit = await gate.EnterAsync(AgentOperationCategory.Control, token);
         await EmitAsync(vmName, request, AgentRuntimeSignalStage.BootstrapRunning,
-            AgentRuntimeSignalOutcome.Started, null, token);
+            AgentRuntimeSignalOutcome.Started, null, null, token);
         try
         {
             var result = await _kvm.ExecuteWithIdentityAsync(
@@ -155,6 +167,7 @@ public class VmController(
                 result.Success ? AgentRuntimeSignalStage.BootstrapCompleted : AgentRuntimeSignalStage.Failed,
                 result.Success ? AgentRuntimeSignalOutcome.Ready : AgentRuntimeSignalOutcome.Failed,
                 result.Success ? null : "runtime.bootstrap_failed",
+                result.Success ? null : BootstrapFailureFacts(result),
                 token);
             return Ok(result);
         }
@@ -184,6 +197,7 @@ public class VmController(
                 result.Success ? AgentRuntimeSignalStage.HealthReady : AgentRuntimeSignalStage.Failed,
                 result.Success ? AgentRuntimeSignalOutcome.Ready : AgentRuntimeSignalOutcome.Failed,
                 result.Success ? null : "runtime.health_failed",
+                result.Success ? null : BootstrapFailureFacts(result),
                 token);
             return Ok(result);
         }
@@ -214,6 +228,7 @@ public class VmController(
         AgentRuntimeSignalStage stage,
         AgentRuntimeSignalOutcome outcome,
         string? errorCode,
+        IReadOnlyDictionary<string, string>? facts,
         CancellationToken cancellationToken)
     {
         if (request.OperationId is not { } operationId || operationId == Guid.Empty)
@@ -227,7 +242,27 @@ public class VmController(
             stage,
             outcome,
             errorCode,
-            Retryable: false), cancellationToken);
+            Retryable: false,
+            Facts: facts), cancellationToken);
+    }
+
+    private static IReadOnlyDictionary<string, string>? BootstrapFailureFacts(
+        VmBootstrapApplyResponse result)
+    {
+        var facts = new Dictionary<string, string>(StringComparer.Ordinal);
+        Add("stage", result.Stage);
+        Add("errorCode", result.ErrorCode);
+        Add("stepId", result.FailedStep);
+        Add("category", result.FailureCategory);
+        if (result.ExitCode is { } exitCode)
+            facts["exitCode"] = exitCode.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return facts.Count == 0 ? null : facts;
+
+        void Add(string key, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                facts[key] = value.Length <= 256 ? value : value[..256];
+        }
     }
 
     private async Task TryEmitFailureAsync(
@@ -239,7 +274,7 @@ public class VmController(
         try
         {
             await EmitAsync(vmName, request, AgentRuntimeSignalStage.Failed,
-                AgentRuntimeSignalOutcome.Failed, errorCode, CancellationToken.None);
+                AgentRuntimeSignalOutcome.Failed, errorCode, null, CancellationToken.None);
         }
         catch (Exception signalException)
         {

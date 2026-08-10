@@ -10,6 +10,7 @@ using GZCTF.Models.Request.Account;
 using GZCTF.Modules.Identity.Application;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Content.Application;
 using GZCTF.Modules.Content.Domain;
 using GZCTF.Modules.Training.Domain;
 using GZCTF.Utils;
@@ -95,8 +96,7 @@ public sealed class OpenImageApiTests(GZCTFApplicationFactory factory) : IAsyncL
                         .SetProperty(item => item.CompletedAt, (DateTimeOffset?)null));
                 await using var recoveryScope = factory.Services.CreateAsyncScope();
                 var handler = recoveryScope.ServiceProvider
-                    .GetServices<IApiOperationHandler>()
-                    .Single(item => item.Kind == "image.import");
+                    .GetRequiredKeyedService<IApiOperationHandler>(ImageImportApplicationService.OperationKind);
                 await handler.ExecuteAsync(operationId, recoveryOwner, CancellationToken.None);
                 Assert.Equal(1, executor.ExecutionCount(operationId));
                 var operationService = recoveryScope.ServiceProvider
@@ -315,8 +315,7 @@ public sealed class OpenImageApiTests(GZCTFApplicationFactory factory) : IAsyncL
                         .SetProperty(item => item.CompletedAt, (DateTimeOffset?)null));
                 await using var recoveryScope = factory.Services.CreateAsyncScope();
                 var handler = recoveryScope.ServiceProvider
-                    .GetServices<IApiOperationHandler>()
-                    .Single(item => item.Kind == "image.import");
+                    .GetRequiredKeyedService<IApiOperationHandler>(ImageImportApplicationService.OperationKind);
                 await handler.ExecuteAsync(operationId, recoveryOwner, CancellationToken.None);
                 Assert.Equal(1, executor.ExecutionCount(operationId));
                 return;

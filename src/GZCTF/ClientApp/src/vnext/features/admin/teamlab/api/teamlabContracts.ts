@@ -14,7 +14,7 @@ export type TeamLabRuntimeStatus =
   | 'running'
   | 'failed'
   | 'cleanup-pending'
-  | 'stopped'
+  | 'paused'
   | 'destroying'
   | 'destroyed'
 
@@ -279,6 +279,11 @@ export interface TeamLabAdminReleaseReadiness {
   images: readonly TeamLabAdminImageReadiness[]
   latestTrialRuntime: TeamLabAdminRuntimeSummary | null
   blockingReasons: readonly string[]
+  requiredRuntimeSecrets: readonly {
+    assetKey: string
+    assetName: string
+    parameterKey: string
+  }[]
 }
 
 export interface TeamLabCapabilities {

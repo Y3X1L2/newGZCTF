@@ -83,6 +83,47 @@ public sealed class GuestSupervisorTests
     }
 
     [Fact]
+    public async Task Bootstrap_StandardTarDotPrefixIsAccepted()
+    {
+        await using var fixture = await SupervisorFixture.CreateAsync(reboot: false, dotPrefixedArchive: true);
+
+        var result = await fixture.Executor.ExecuteAsync(fixture.Checkpoint(0), CancellationToken.None);
+
+        Assert.True(result.Completed);
+        Assert.Equal("x" + Environment.NewLine, await File.ReadAllTextAsync(fixture.MarkerPath));
+    }
+
+    [Fact]
+    public async Task Bootstrap_FailedStepExposesOnlyStructuredDiagnostics()
+    {
+        await using var fixture = await SupervisorFixture.CreateAsync(reboot: false, exitCode: 23);
+
+        var error = await Assert.ThrowsAsync<GuestBootstrapFailureException>(() =>
+            fixture.Executor.ExecuteAsync(fixture.Checkpoint(0), CancellationToken.None));
+
+        Assert.Equal("bootstrap_step_failed", error.ErrorCode);
+        Assert.Equal("install", error.StepId);
+        Assert.Equal("completed", error.Category);
+        Assert.Equal(23, error.ExitCode);
+        Assert.DoesNotContain(fixture.MarkerPath, error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Bootstrap_LinuxEnvironmentFileEscapesValuesForSystemd()
+    {
+        var environment = Encoding.UTF8.GetString(GuestBootstrapPackageExecutor.BuildLinuxEnvironmentFile(
+            new Dictionary<string, string>
+            {
+                ["service_port"] = "8080",
+                ["flag"] = "flag{quote'kept-private}"
+            }));
+
+        Assert.Equal("flag='flag{quote'\\''kept-private}'\nservice_port='8080'\n", environment);
+        Assert.Throws<InvalidDataException>(() => GuestBootstrapPackageExecutor.BuildLinuxEnvironmentFile(
+            new Dictionary<string, string> { ["invalid-key"] = "value" }));
+    }
+
+    [Fact]
     public async Task Checkpoint_BootIdentityChangeIncrementsEpochOnce()
     {
         var root = Path.Combine(Path.GetTempPath(), $"gzctf-checkpoint-{Guid.NewGuid():N}");
@@ -168,7 +209,11 @@ public sealed class GuestSupervisorTests
             Identity() with { BootEpoch = bootEpoch }, GuestLifecycleStage.BootstrapRunning, 4,
             IntentDigest, "sha256:bootstrap-running", true, $"boot-{bootEpoch}", DateTimeOffset.UtcNow);
 
-        public static async Task<SupervisorFixture> CreateAsync(bool reboot, bool tamperManifest = false)
+        public static async Task<SupervisorFixture> CreateAsync(
+            bool reboot,
+            bool tamperManifest = false,
+            bool dotPrefixedArchive = false,
+            int? exitCode = null)
         {
             var root = Path.Combine(Path.GetTempPath(), $"gzctf-supervisor-{Guid.NewGuid():N}");
             var source = Path.Combine(root, "source");
@@ -176,13 +221,32 @@ public sealed class GuestSupervisorTests
             Directory.CreateDirectory(bin);
             var marker = Path.Combine(root, "marker.txt");
             var entrypoint = OperatingSystem.IsWindows() ? "bin/install.ps1" : "bin/install.sh";
+            var processExitCode = exitCode ?? (reboot ? 3010 : 0);
             var script = OperatingSystem.IsWindows()
-                ? $"Add-Content -LiteralPath '{marker.Replace("'", "''", StringComparison.Ordinal)}' -Value 'x'; exit {(reboot ? 3010 : 0)}"
-                : $"#!/bin/sh\nprintf 'x\\n' >> '{marker.Replace("'", "'\\''", StringComparison.Ordinal)}'\nexit {(reboot ? 194 : 0)}\n";
+                ? $"Add-Content -LiteralPath '{marker.Replace("'", "''", StringComparison.Ordinal)}' -Value 'x'; exit {processExitCode}"
+                : $"#!/bin/sh\nprintf 'x\\n' >> '{marker.Replace("'", "'\\''", StringComparison.Ordinal)}'\nexit {processExitCode}\n";
             await File.WriteAllTextAsync(Path.Combine(source, entrypoint.Replace('/', Path.DirectorySeparatorChar)), script);
             var tar = Path.Combine(root, "package.tar");
             var archive = Path.Combine(root, "package.tar.gz");
-            TarFile.CreateFromDirectory(source, tar, includeBaseDirectory: false);
+            if (dotPrefixedArchive)
+            {
+                await using var tarOutput = File.Create(tar);
+                using var writer = new TarWriter(tarOutput, leaveOpen: false);
+                writer.WriteEntry(new PaxTarEntry(TarEntryType.Directory, "./"));
+                writer.WriteEntry(new PaxTarEntry(TarEntryType.Directory, "./bin"));
+                await using var scriptInput = File.OpenRead(Path.Combine(source,
+                    entrypoint.Replace('/', Path.DirectorySeparatorChar)));
+                var scriptEntry = new PaxTarEntry(TarEntryType.RegularFile, $"./{entrypoint}")
+                {
+                    DataStream = scriptInput,
+                    Mode = (UnixFileMode)0x1ED
+                };
+                writer.WriteEntry(scriptEntry);
+            }
+            else
+            {
+                TarFile.CreateFromDirectory(source, tar, includeBaseDirectory: false);
+            }
             await using (var input = File.OpenRead(tar))
             await using (var output = File.Create(archive))
             await using (var gzip = new GZipStream(output, CompressionLevel.SmallestSize))
@@ -223,7 +287,12 @@ public sealed class GuestSupervisorTests
             var intent = new GuestBootstrapIntent(
                 GuestControlProtocol.SchemaVersion, GuestControlProtocol.SchemaVersion,
                 Identity(), intentDigest, "sha256:prepared", descriptor.ArtifactDigest,
-                DateTimeOffset.UtcNow.AddMinutes(5), descriptor, [], new Dictionary<string, string>());
+                DateTimeOffset.UtcNow.AddMinutes(5), descriptor, [], new Dictionary<string, string>(),
+                new Dictionary<string, string>
+                {
+                    ["GZCTF_RUNTIME_ID"] = "42",
+                    ["TEAMLAB_TEST_ENVIRONMENT"] = "kept outside service parameters"
+                });
             await new GuestIntentStore(root).SaveAsync(intent, CancellationToken.None);
             var config = new GuestSupervisorConfiguration(
                 GuestControlProtocol.SchemaVersion, Identity(), new Uri("https://127.0.0.1/enroll"),

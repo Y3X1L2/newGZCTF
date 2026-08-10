@@ -13,6 +13,7 @@ function createDocument(): TopologyDocument {
       onDemandPcapEnabled: true,
       endpointObservation: 'optional',
     },
+    networkLayouts: {},
     nodes: {
       edge: {
         type: 'switch',
@@ -137,6 +138,33 @@ describe('TeamLabInspector', () => {
     expect(updated).not.toBe(source)
   })
 
+  it('edits a network region without selecting it as a regular flow node', () => {
+    const source = createDocument()
+    const onDocumentChange = vi.fn()
+    render(
+      <TeamLabInspector
+        document={source}
+        onDocumentChange={onDocumentChange}
+        selectedNetworkKey="entry-net"
+        selection={selection()}
+      />
+    )
+
+    expect(screen.getByText('网段区域')).toBeInTheDocument()
+    const name = screen.getByRole('textbox', { name: /网段名称/ })
+    fireEvent.change(name, { target: { value: '外部访问区' } })
+    fireEvent.blur(name)
+    expect((onDocumentChange.mock.calls[0][0] as TopologyDocument).nodes.edge).toMatchObject({
+      networkName: '外部访问区',
+      name: 'Edge switch',
+    })
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /折叠区域/ }))
+    expect((onDocumentChange.mock.calls[1][0] as TopologyDocument).networkLayouts['entry-net']).toMatchObject({
+      collapsed: true,
+    })
+  })
+
   it('uses a compatible ready image option and preserves the complete asset contract', () => {
     const onDocumentChange = vi.fn()
     render(
@@ -151,7 +179,7 @@ describe('TeamLabInspector', () => {
       />
     )
 
-    expect(screen.getByRole('option', { name: 'Web service (#42)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Web service (#42) - 未配置运维接入' })).toBeInTheDocument()
     expect(screen.queryByRole('option', { name: 'Windows Server (#99)' })).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('镜像模板'), { target: { value: '42' } })
 
@@ -168,6 +196,20 @@ describe('TeamLabInspector', () => {
     expect(screen.queryByRole('textbox', { name: /secret/i })).not.toBeInTheDocument()
   })
 
+  it('keeps a clicked field explanation open for the administrator to read', () => {
+    render(
+      <TeamLabInspector
+        document={createDocument()}
+        onDocumentChange={vi.fn()}
+        selection={selection(['app'])}
+      />
+    )
+
+    fireEvent.click(screen.getByText('高级配置'))
+    fireEvent.click(screen.getByRole('button', { name: '关于无状态资产' }))
+    expect(screen.getByRole('tooltip')).toHaveTextContent('可随时重建')
+  })
+
   it('updates membership, route and dependency connections with dedicated editors', () => {
     const membershipChange = vi.fn()
     const membershipView = render(
@@ -177,7 +219,7 @@ describe('TeamLabInspector', () => {
         selection={selection([], ['app-edge'])}
       />
     )
-    const hostOffset = screen.getByLabelText('主机偏移')
+    const hostOffset = screen.getByLabelText('主机偏移', { selector: 'input' })
     fireEvent.change(hostOffset, { target: { value: '15' } })
     fireEvent.blur(hostOffset)
     expect((membershipChange.mock.calls[0][0] as TopologyDocument).connections['app-edge']).toMatchObject({

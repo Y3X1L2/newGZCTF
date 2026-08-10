@@ -81,6 +81,7 @@ builder.Services.AddSingleton<GuestEventIngestor>();
 builder.Services.AddSingleton<AgentOciArtifactUploader>();
 builder.Services.AddSingleton<AgentOperationReceiptStore>();
 builder.Services.AddSingleton<VmScenarioArtifactService>();
+builder.Services.AddSingleton<TeamLabTerminalSessionRegistry>();
 builder.Services.AddSingleton<RemoteAccessRelayService>();
 builder.Services.AddHostedService<HeartbeatWorker>();
 
@@ -104,6 +105,7 @@ var app = builder.Build();
 
 app.UseMiddleware<AgentCorrelationErrorMiddleware>();
 app.UseMiddleware<AgentEndpointAuthenticationMiddleware>();
+app.UseWebSockets();
 
 app.MapControllers();
 

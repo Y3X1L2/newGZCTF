@@ -126,6 +126,30 @@ public sealed class TeamLabFoundationTopologyTests
         Assert.DoesNotContain("teamId", first, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void ReleaseSnapshot_PreservesEditorWithoutChangingExecutionDigest()
+    {
+        var definition = CreateDefinition();
+        var canonical = TeamLabReleaseCodec.Encode(2, definition);
+        var expectedHash = TeamLabReleaseCodec.ComputeContentHash(2, canonical);
+        var release = new TeamLabTopologyRelease
+        {
+            Id = Guid.NewGuid(),
+            SchemaVersion = 2,
+            CanonicalJson = canonical,
+            ContentHash = expectedHash,
+            EditorMetadataJson = """
+                {"networks":{"entry":{"x":120,"y":80,"width":640,"height":420,"collapsed":false}},"assets":{},"infrastructure":{}}
+                """
+        };
+
+        var model = TeamLabReleaseService.ToModel(release, Guid.NewGuid());
+
+        Assert.Equal(expectedHash, model.ContentHash);
+        Assert.NotNull(model.Editor);
+        Assert.Equal(120, model.Editor!.Networks["entry"].X);
+    }
+
     [Theory]
     [InlineData(1)]
     [InlineData(2)]

@@ -1,12 +1,14 @@
 using GZCTF.Models;
-using GZCTF.Modules.TeamLab.Domain.Runtime;
-using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Modules.TeamLab.Application;
 
+/// <summary>
+/// Remote-access permission gate. All decisions are delegated to the unified
+/// four-level <see cref="TeamLabAuthorizationService"/> evaluation so the
+/// permission projection stays coherent across browser, token and provider paths.
+/// </summary>
 public sealed class TeamLabRemoteAccessAuthorizationService(
-    AppDbContext context,
-    IEnumerable<ITeamLabRemoteAccessAuthorizationProvider> providers)
+    TeamLabAuthorizationService authorization)
 {
     public async Task<TeamLabOperatorPermission> GetPermissionsAsync(
         Guid runtimePublicId,
@@ -14,19 +16,14 @@ public sealed class TeamLabRemoteAccessAuthorizationService(
         bool administrator,
         CancellationToken cancellationToken)
     {
-        var runtime = await context.TeamLabRuntimes.AsNoTracking()
-            .Where(item => item.PublicId == runtimePublicId)
-            .Select(item => new { item.Id, item.CreatedById })
-            .SingleOrDefaultAsync(cancellationToken)
-            ?? throw new TeamLabApiContractException("runtime_not_found", "The TeamLab runtime was not found.", 404);
-
-        if (administrator || runtime.CreatedById == actorUserId)
-            return TeamLabOperatorPermission.ViewAssets | TeamLabOperatorPermission.OperateAssets;
-
-        var permissions = TeamLabOperatorPermission.None;
-        foreach (var provider in providers)
-            permissions |= await provider.GetRemoteAccessPermissionsAsync(runtime.Id, actorUserId, cancellationToken);
-        return permissions;
+        var permissions = await authorization.EvaluateAsync(
+            runtimePublicId, actorUserId, administrator, cancellationToken);
+        var result = TeamLabOperatorPermission.None;
+        if ((permissions & TeamLabRuntimePermission.StateRead) != 0)
+            result |= TeamLabOperatorPermission.ViewAssets;
+        if ((permissions & TeamLabRuntimePermission.RemoteSessionOperate) != 0)
+            result |= TeamLabOperatorPermission.OperateAssets;
+        return result;
     }
 
     public async Task RequireAsync(
@@ -40,7 +37,7 @@ public sealed class TeamLabRemoteAccessAuthorizationService(
         if ((permissions & required) == required) return;
         throw new TeamLabApiContractException(
             "insufficient_remote_access_permission",
-            "The operation actor is not authorized to access TeamLab runtime assets.",
+            "操作者无权访问 TeamLab 运行时资源",
             403);
     }
 }

@@ -306,6 +306,62 @@ public class DockerService
         }
     }
 
+    public async Task PauseContainerAsync(string containerId, int expectedGeneration, CancellationToken token)
+    {
+        await EnsureManagedContainerGenerationAsync(containerId, expectedGeneration, token);
+        try
+        {
+            await _client.Containers.PauseContainerAsync(containerId, token);
+        }
+        catch (DockerApiException exception) when (exception.StatusCode == HttpStatusCode.NotModified)
+        {
+            _logger.LogDebug(exception, "Container {ContainerId} is already paused", containerId);
+        }
+    }
+
+    public async Task ResumeContainerAsync(string containerId, int expectedGeneration, CancellationToken token)
+    {
+        await EnsureManagedContainerGenerationAsync(containerId, expectedGeneration, token);
+        try
+        {
+            await _client.Containers.UnpauseContainerAsync(containerId, token);
+        }
+        catch (DockerApiException exception) when (exception.StatusCode == HttpStatusCode.NotModified)
+        {
+            _logger.LogDebug(exception, "Container {ContainerId} is already running", containerId);
+        }
+    }
+
+    private async Task EnsureManagedContainerGenerationAsync(
+        string containerId,
+        int expectedGeneration,
+        CancellationToken token)
+    {
+        ContainerInspectResponse inspect;
+        try
+        {
+            inspect = await _client.Containers.InspectContainerAsync(containerId, token);
+        }
+        catch (DockerContainerNotFoundException)
+        {
+            throw new AgentOperationException(
+                "Conflict", "runtime.identity_conflict", "Managed container does not exist.", false,
+                StatusCodes.Status409Conflict);
+        }
+        catch (DockerApiException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+        {
+            throw new AgentOperationException(
+                "Conflict", "runtime.identity_conflict", "Managed container does not exist.", false,
+                StatusCodes.Status409Conflict);
+        }
+
+        if (!MatchesExpectedGeneration(inspect.Config.Labels, expectedGeneration, out _))
+            throw new AgentOperationException(
+                "Conflict", "runtime.identity_conflict",
+                "Container generation does not match the requested runtime identity.", false,
+                StatusCodes.Status409Conflict);
+    }
+
     internal static bool MatchesExpectedGeneration(
         IDictionary<string, string>? labels,
         int requiredGeneration,

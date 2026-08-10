@@ -7,7 +7,7 @@ import { DataState } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
 import { RefreshIndicator, StatusBadge } from '../../shared/AdminWorkbench'
 import { formatAdminDate } from '../../shared/adminFormat'
-import { teamLabAdminApi, teamLabAdminKeys, teamLabRuntimeApi } from '../api'
+import { teamLabAdminApi, teamLabAdminKeys, teamLabRuntimeApi, type TeamLabRuntimeOverlay } from '../api'
 import { useTeamLabScene } from '../shared/TeamLabSceneShell'
 import { ReleaseReadinessPanel } from './ReleaseReadinessPanel'
 import { ReleaseTimeline } from './ReleaseTimeline'
@@ -20,6 +20,7 @@ export function TeamLabReleasesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [trialOpen, setTrialOpen] = useState(false)
   const [creatingTrial, setCreatingTrial] = useState(false)
+  const [preparingImages, setPreparingImages] = useState(false)
   const [operationError, setOperationError] = useState<unknown>(null)
   const releasesRequest = useSWR(
     teamLabAdminKeys.releases(scene.id),
@@ -36,16 +37,17 @@ export function TeamLabReleasesPage() {
     () => teamLabAdminApi.releaseReadiness(scene.id, selectedRelease!.id),
     { keepPreviousData: false, revalidateOnFocus: true }
   )
+  const readinessMatchesSelection = readinessRequest.data?.releaseId === selectedRelease?.id
 
-  const createTrial = async () => {
-    if (!selectedRelease || !readinessRequest.data?.ready || creatingTrial) return false
+  const createTrial = async (overlays: readonly TeamLabRuntimeOverlay[] | null) => {
+    if (!selectedRelease || !readinessMatchesSelection || !readinessRequest.data?.ready || creatingTrial) return false
     setCreatingTrial(true)
     setOperationError(null)
     try {
       const runtime = await teamLabRuntimeApi.createTrial(createTrialIdempotencyKey(), {
         releaseId: selectedRelease.id,
         constraints: null,
-        overlays: null,
+        overlays,
         externalReference: null,
       })
       setTrialOpen(false)
@@ -56,6 +58,20 @@ export function TeamLabReleasesPage() {
       return false
     } finally {
       setCreatingTrial(false)
+    }
+  }
+
+  const prepareImages = async () => {
+    if (!selectedRelease || preparingImages) return
+    setPreparingImages(true)
+    setOperationError(null)
+    try {
+      await teamLabAdminApi.prepareReleaseImages(scene.id, selectedRelease.id)
+      await readinessRequest.mutate()
+    } catch (error) {
+      setOperationError(error)
+    } finally {
+      setPreparingImages(false)
     }
   }
 
@@ -70,7 +86,7 @@ export function TeamLabReleasesPage() {
     <section className={styles.page}>
       <header className={styles.pageHeader}>
         <div>
-          <span>IMMUTABLE RELEASES</span>
+          <span>发布版本</span>
           <h2>发布版本</h2>
           <p>核对不可变快照、服务端执行计划、镜像就绪度与试运行状态。</p>
         </div>
@@ -94,7 +110,7 @@ export function TeamLabReleasesPage() {
         </aside>
         <div className={styles.releaseDetail}>
           <header className={styles.releaseIdentity}>
-            <div><span>RELEASE</span><h3>v{selectedRelease!.version}</h3></div>
+            <div><span>发布版本</span><h3>v{selectedRelease!.version}</h3></div>
             <StatusBadge tone={selectedRelease!.sourceRevision === scene.revision ? 'success' : 'neutral'}>
               {selectedRelease!.sourceRevision === scene.revision ? '当前设计版本' : `设计修订 ${selectedRelease!.sourceRevision}`}
             </StatusBadge>
@@ -113,7 +129,11 @@ export function TeamLabReleasesPage() {
           ) : readinessRequest.data ? (
             <ReleaseReadinessPanel
               creatingTrial={creatingTrial}
-              onCreateTrial={() => setTrialOpen(true)}
+              preparingImages={preparingImages}
+              onCreateTrial={() => {
+                if (readinessMatchesSelection) setTrialOpen(true)
+              }}
+              onPrepareImages={() => void prepareImages()}
               readiness={readinessRequest.data}
             />
           ) : null}
@@ -124,6 +144,8 @@ export function TeamLabReleasesPage() {
         onConfirm={createTrial}
         open={trialOpen}
         release={selectedRelease}
+        requiredRuntimeSecrets={readinessRequest.data?.requiredRuntimeSecrets ?? []}
+        submitting={creatingTrial}
       />
     </section>
   )

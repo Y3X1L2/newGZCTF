@@ -4,10 +4,10 @@ using ApiTokenEntity = GZCTF.Modules.Identity.Domain.ApiToken;
 
 namespace GZCTF.Modules.Identity.Application;
 
-public sealed record ApiTokenValidationResult(bool Succeeded, ApiTokenEntity? Token, string? ErrorCode)
+public sealed record ApiTokenValidationResult(bool Succeeded, ApiTokenEntity? Token, Role? CreatorRole, string? ErrorCode)
 {
-    public static ApiTokenValidationResult Failure(string code) => new(false, null, code);
-    public static ApiTokenValidationResult Success(ApiTokenEntity token) => new(true, token, null);
+    public static ApiTokenValidationResult Failure(string code) => new(false, null, null, code);
+    public static ApiTokenValidationResult Success(ApiTokenEntity token, Role creatorRole) => new(true, token, creatorRole, null);
 }
 
 public sealed class ApiTokenValidator(IApiTokenStore store, IApiTokenSecretHasher secretHasher)
@@ -38,7 +38,7 @@ public sealed class ApiTokenValidator(IApiTokenStore store, IApiTokenSecretHashe
             if (!secretHasher.Verify(secret, token.SecretHash))
                 return ApiTokenValidationResult.Failure("invalid_token");
 
-            return ApiTokenValidationResult.Success(token);
+            return ApiTokenValidationResult.Success(token, validation.CreatorRole);
         }
         finally
         {

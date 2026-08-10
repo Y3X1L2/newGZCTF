@@ -131,9 +131,15 @@ export interface TeamLabTrafficFlow {
   lastSeen: number
 }
 
+export interface TeamLabTrafficCompleteness {
+  complete: boolean
+  droppedRecords: number
+}
+
 export interface TeamLabTrafficFlowPage {
   items: readonly TeamLabTrafficFlow[]
   nextCursor: string | null
+  completeness: TeamLabTrafficCompleteness
 }
 
 export interface TeamLabTrafficPathSummary {
@@ -153,6 +159,7 @@ export interface TeamLabTrafficPathSummary {
 export interface TeamLabTrafficPathPage {
   items: readonly TeamLabTrafficPathSummary[]
   nextCursor: string | null
+  completeness: TeamLabTrafficCompleteness
 }
 
 export interface TeamLabTrafficPathHop {

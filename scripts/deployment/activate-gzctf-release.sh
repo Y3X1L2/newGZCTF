@@ -24,6 +24,10 @@ next="$release_root/publish.partial"
 release="$release_root/publish"
 next_link="$root/publish.next-$release_id"
 previous_link="$root/publish.previous.next-$release_id"
+agent_path="/usr/local/bin/gzctf-agent"
+agent_staging="$release_root/gzctf-agent.next"
+agent_previous="$release_root/gzctf-agent.previous"
+agent_is_symlink=false
 
 test -L "$current" || { echo "$current must be a symbolic link" >&2; exit 4; }
 old_release="$(readlink -f "$current")"
@@ -51,6 +55,17 @@ chmod 0755 \
   "$next/agent/guest-supervisor/linux-x64/gzctf-guest-supervisor" \
   "$next/agent/guest-supervisor/win-x64/gzctf-guest-supervisor.exe"
 
+# The systemd unit uses a stable host path rather than the application release
+# symlink. Stage the matching Agent before stopping services so the local
+# execution plane cannot silently remain on an older binary.
+if test -L "$agent_path"; then
+  agent_is_symlink=true
+  readlink "$agent_path" > "$agent_previous"
+elif test -e "$agent_path"; then
+  install -m 0755 "$agent_path" "$agent_previous"
+fi
+install -m 0755 "$next/agent/gzctf-agent" "$agent_staging"
+
 rm -rf "$next/files"
 ln -s "$files_target" "$next/files"
 install -m 0600 "$old_release/appsettings.json" "$next/appsettings.json"
@@ -62,12 +77,31 @@ systemctl stop gzctf-agent.service
 systemctl stop gzctf.service
 if ss -lntp | grep -q ':8080 '; then
   echo 'port 8080 is still listening after service stop' >&2
+  systemctl start gzctf-agent.service || true
+  systemctl start gzctf.service || true
   exit 5
 fi
 
-database_connection="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["ConnectionStrings"]["Database"])' "$release/appsettings.json")"
-test -n "$database_connection" || { echo "database connection is missing" >&2; exit 5; }
-(cd "$release" && ./efbundle --no-color --connection "$database_connection")
+if ! database_connection="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["ConnectionStrings"]["Database"])' "$release/appsettings.json")"; then
+  echo "database connection could not be read" >&2
+  systemctl start gzctf-agent.service || true
+  systemctl start gzctf.service || true
+  exit 5
+fi
+if test -z "$database_connection"; then
+  echo "database connection is missing" >&2
+  systemctl start gzctf-agent.service || true
+  systemctl start gzctf.service || true
+  exit 5
+fi
+if ! (cd "$release" && ./efbundle --no-color --connection "$database_connection"); then
+  echo "migration failed; restoring previous release services" >&2
+  systemctl start gzctf-agent.service || true
+  systemctl start gzctf.service || true
+  rm -f "$agent_staging" "$agent_previous"
+  rm -rf "$release_root"
+  exit 5
+fi
 unset database_connection
 
 rm -f "$next_link" "$previous_link"
@@ -75,9 +109,15 @@ ln -s "$old_release" "$previous_link"
 mv -Tf "$previous_link" "$previous"
 ln -s "$release" "$next_link"
 mv -Tf "$next_link" "$current"
+if test "$agent_is_symlink" = true; then
+  rm -f "$agent_path"
+  rm -f "$agent_staging"
+  ln -s "$release/agent/gzctf-agent" "$agent_staging"
+fi
+mv -Tf "$agent_staging" "$agent_path"
 systemctl daemon-reload
-systemctl start gzctf.service
-systemctl start gzctf-agent.service
+systemctl start gzctf.service || true
+systemctl start gzctf-agent.service || true
 
 healthy=false
 for _ in $(seq 1 45); do
@@ -93,6 +133,15 @@ if test "$healthy" != true; then
   failed="$release_root/publish.failed"
   systemctl stop gzctf.service || true
   systemctl stop gzctf-agent.service || true
+  if test "$agent_is_symlink" = true; then
+    rm -f "$agent_path"
+    ln -s "$(cat "$agent_previous")" "$agent_staging"
+    mv -Tf "$agent_staging" "$agent_path"
+  elif test -f "$agent_previous"; then
+    mv -Tf "$agent_previous" "$agent_path"
+  else
+    rm -f "$agent_path"
+  fi
   mv "$release" "$failed"
   ln -sfn "$old_release" "$next_link"
   mv -Tf "$next_link" "$current"
@@ -102,5 +151,6 @@ if test "$healthy" != true; then
   exit 6
 fi
 
+rm -f "$agent_previous"
 rm -f "$archive_path"
 echo "release=$release_id status=active"

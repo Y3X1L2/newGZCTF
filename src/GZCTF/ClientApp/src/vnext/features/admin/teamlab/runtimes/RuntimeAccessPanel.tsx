@@ -48,7 +48,7 @@ export function RuntimeAccessPanel({ runtimeId, canCreate }: { runtimeId: string
   return (
     <section aria-labelledby="runtime-access-title" className={styles.panel}>
       <header className={styles.panelHeader}>
-        <div><span>WIREGUARD ACCESS</span><h3 id="runtime-access-title">调试入口</h3></div>
+        <div><span>调试访问</span><h3 id="runtime-access-title">调试入口</h3></div>
         <ActionButton disabled={!canCreate || acting} icon={<KeyRound size={16} />} onClick={() => void create()} type="button">
           创建授权
         </ActionButton>

@@ -20,8 +20,7 @@ public sealed class TeamLabRuntimeCleanupService(
     ITeamLabCaptureCleanup captureCleanup,
     IPublicUdpGatewayProvider publicGateway,
     TeamLabEventRecorder eventRecorder,
-    ITeamLabRemoteAccessService remoteAccess,
-    TeamLabRemoteCredentialService remoteCredentials)
+    ITeamLabRemoteAccessService remoteAccess)
 {
     public Task<TeamLabNodeResult> CleanupAsync(
         TeamLabRuntime runtime,
@@ -34,20 +33,23 @@ public sealed class TeamLabRuntimeCleanupService(
         CancellationToken cancellationToken)
     {
         var generation = runtime.Generation;
+        await MarkCleanupStartedAsync(runtime, cancellationToken);
         await remoteAccess.EndRuntimeSessionsAsync(runtime.Id, generation, "runtime_cleanup", cancellationToken);
-        await remoteCredentials.RevokeGenerationAsync(runtime.Id, generation, cancellationToken);
-        if (runtime.Status != TeamLabRuntimeStatus.Destroying)
+        if (await HasPendingRemoteSessionsAsync(context, runtime.Id, generation, cancellationToken))
+        {
             runtime.Status = TeamLabRuntimeStatus.CleanupPending;
-        runtime.IsOpenToPlayers = false;
-        runtime.UpdatedAt = DateTimeOffset.UtcNow;
-        eventRecorder.Record(
-            runtime,
-            "cleanup",
-            TeamLabEventLevel.Info,
-            OperationalEventCodes.TeamLab.CleanupStarted,
-            OperationalEventOutcome.Started,
-            "Runtime resource cleanup started.");
-        await context.SaveChangesAsync(cancellationToken);
+            runtime.LastError = "远程运维会话尚未完成基础设施清理。";
+            runtime.UpdatedAt = DateTimeOffset.UtcNow;
+            eventRecorder.Record(
+                runtime,
+                "cleanup",
+                TeamLabEventLevel.Warning,
+                OperationalEventCodes.TeamLab.CleanupFailed,
+                OperationalEventOutcome.Failed,
+                "Runtime cleanup is waiting for remote session infrastructure cleanup.");
+            await context.SaveChangesAsync(cancellationToken);
+            return TeamLabNodeResult.Failed(runtime.LastError);
+        }
         var shards = runtime.Shards.Where(item => item.Generation == generation).ToArray();
         await traffic.StopCollectorsAsync(runtime, cancellationToken);
         var errors = (await captureCleanup.ExpireGenerationAsync(
@@ -131,6 +133,39 @@ public sealed class TeamLabRuntimeCleanupService(
         return TeamLabNodeResult.Ok("Runtime resources cleaned.");
     }
 
+    private async Task MarkCleanupStartedAsync(TeamLabRuntime runtime, CancellationToken cancellationToken)
+    {
+        if (context.Database.IsRelational())
+        {
+            await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+            await context.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock({RuntimeLockKey(runtime.Id)})", cancellationToken);
+            await context.Entry(runtime).ReloadAsync(cancellationToken);
+            MarkCleanupStarted(runtime);
+            await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return;
+        }
+
+        MarkCleanupStarted(runtime);
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    private void MarkCleanupStarted(TeamLabRuntime runtime)
+    {
+        if (runtime.Status != TeamLabRuntimeStatus.Destroying)
+            runtime.Status = TeamLabRuntimeStatus.CleanupPending;
+        runtime.IsOpenToPlayers = false;
+        runtime.UpdatedAt = DateTimeOffset.UtcNow;
+        eventRecorder.Record(
+            runtime,
+            "cleanup",
+            TeamLabEventLevel.Info,
+            OperationalEventCodes.TeamLab.CleanupStarted,
+            OperationalEventOutcome.Started,
+            "Runtime resource cleanup started.");
+    }
+
     internal static async Task<bool> HasPendingSideEffectsAsync(
         AppDbContext context,
         TeamLabRuntime runtime,
@@ -156,6 +191,9 @@ public sealed class TeamLabRuntimeCleanupService(
                  item.Segments.Any(IsActiveCaptureSegment))))
             return true;
 
+        if (await HasPendingRemoteSessionsAsync(context, runtime.Id, generation, cancellationToken))
+            return true;
+
         return await context.TeamLabNetworkLeases.AsNoTracking()
                    .AnyAsync(item => item.RuntimeId == runtime.Id && item.Generation == generation &&
                                      item.ReleasedAt == null, cancellationToken) ||
@@ -166,6 +204,22 @@ public sealed class TeamLabRuntimeCleanupService(
                    .AnyAsync(item => item.Kind == ImageDistributionReferenceKind.TeamLabRuntime &&
                                      item.ResourceId == runtime.Id, cancellationToken);
     }
+
+    private static Task<bool> HasPendingRemoteSessionsAsync(
+        AppDbContext context,
+        int runtimeId,
+        int generation,
+        CancellationToken cancellationToken) =>
+        context.TeamLabRemoteSessions.AsNoTracking().AnyAsync(item =>
+            item.RuntimeId == runtimeId && item.Generation == generation &&
+            (item.Status == TeamLabRemoteSessionStatus.Creating ||
+             item.Status == TeamLabRemoteSessionStatus.Ready ||
+             item.Status == TeamLabRemoteSessionStatus.Connected ||
+             item.Status == TeamLabRemoteSessionStatus.Ending),
+            cancellationToken);
+
+    internal static long RuntimeLockKey(int runtimeId) =>
+        0x544C524300000000L ^ runtimeId;
 
     internal static async Task FinalizeGenerationAsync(
         AppDbContext context,
@@ -214,7 +268,13 @@ public sealed class TeamLabRuntimeCleanupService(
         foreach (var envelope in runtime.SecretEnvelopes.Where(item => item.Generation == generation))
             TeamLabRuntimeOverlayService.Consume(envelope);
         if (runtime.PublicUdpMapping is { } mapping && mapping.Generation == generation)
+        {
             mapping.IsSynced = false;
+            // A destroyed runtime no longer owns its public UDP port. Keeping this row makes the
+            // allocation query and the database uniqueness constraint disagree forever.
+            if (markRuntimeDestroyed)
+                context.TeamLabPublicUdpMappings.Remove(mapping);
+        }
         var leases = await context.TeamLabNetworkLeases
             .Where(item => item.RuntimeId == runtime.Id && item.Generation == generation && item.ReleasedAt == null)
             .ToArrayAsync(cancellationToken);

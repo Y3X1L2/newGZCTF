@@ -106,6 +106,12 @@ public class ImageDistributionService(
     public Task ReleaseTeamLabRolloutReferencesAsync(int rolloutId, CancellationToken token) =>
         ReleaseReferenceAsync(ImageDistributionReferenceKey.TeamLabRollout(rolloutId), token);
 
+    public Task ReleaseTeamLabTopologyReferencesAsync(int topologyId, CancellationToken token) =>
+        ReleaseReferenceAsync(ImageDistributionReferenceKey.TeamLabTopology(topologyId), token);
+
+    public Task ReleaseTeamLabReleaseReferencesAsync(Guid releaseId, CancellationToken token) =>
+        ReleaseReferenceAsync(ImageDistributionReferenceKey.TeamLabRelease(releaseId), token);
+
     public async Task CleanupUnreferencedAsync(CancellationToken token)
     {
         await ReconcileReferencesAsync(token);
@@ -162,6 +168,17 @@ public class ImageDistributionService(
         var rolloutIds = records.SelectMany(record => record.References)
             .Where(reference => reference.Kind == ImageDistributionReferenceKind.TeamLabRollout)
             .Select(reference => reference.ResourceId)
+            .Distinct()
+            .ToArray();
+        var topologyIds = records.SelectMany(record => record.References)
+            .Where(reference => reference.Kind == ImageDistributionReferenceKind.TeamLabTopology)
+            .Select(reference => reference.ResourceId)
+            .Distinct()
+            .ToArray();
+        var releaseIds = records.SelectMany(record => record.References)
+            .Where(reference => reference.Kind == ImageDistributionReferenceKind.TeamLabRelease &&
+                                reference.ResourcePublicId.HasValue)
+            .Select(reference => reference.ResourcePublicId!.Value)
             .Distinct()
             .ToArray();
 
@@ -226,6 +243,16 @@ public class ImageDistributionService(
                               rollout.Status != TeamLabRolloutStatus.Completed)
             .Select(rollout => rollout.Id)
             .ToHashSetAsync(token);
+        var activeTopologyIds = await context.TeamLabTopologies.AsNoTracking()
+            .Where(topology => topologyIds.Contains(topology.Id))
+            .Select(topology => topology.Id)
+            .ToHashSetAsync(token);
+        var activeReleaseIds = await context.TeamLabTopologyReleases.AsNoTracking()
+            .Where(release => releaseIds.Contains(release.Id) &&
+                              (release.ControlScopeId == null || !release.ControlScope!.IsArchived))
+            .Select(release => release.Id)
+            .ToHashSetAsync(token);
+        var releaseRetentionCutoff = DateTimeOffset.UtcNow.AddHours(-24);
         foreach (var record in records)
         {
             var invalidReferences = record.References.Where(reference => reference.Kind switch
@@ -241,6 +268,12 @@ public class ImageDistributionService(
                     !activeCertificationTemplateSet.Contains(reference.ResourceId),
                 ImageDistributionReferenceKind.TeamLabRollout =>
                     !activeRolloutIds.Contains(reference.ResourceId),
+                ImageDistributionReferenceKind.TeamLabTopology =>
+                    !activeTopologyIds.Contains(reference.ResourceId),
+                ImageDistributionReferenceKind.TeamLabRelease =>
+                    reference.ResourcePublicId is not { } releaseId ||
+                    !activeReleaseIds.Contains(releaseId) ||
+                    reference.CreatedAt < releaseRetentionCutoff,
                 _ => true
             }).ToList();
             if (invalidReferences.Count > 0)
@@ -873,7 +906,9 @@ public class ImageDistributionService(
         int? templateId = null)
     {
         var referenceQuery = context.ImageDistributionReferences
-            .Where(item => item.Kind == reference.Kind && item.ResourceId == reference.ResourceId);
+            .Where(item => item.Kind == reference.Kind &&
+                           item.ResourceId == reference.ResourceId &&
+                           item.ResourcePublicId == reference.ResourcePublicId);
         if (templateId.HasValue)
             referenceQuery = referenceQuery.Where(item => item.DistributionRecord.ImageTemplateId == templateId.Value);
 
@@ -900,7 +935,8 @@ public class ImageDistributionService(
 
             var currentReference = await context.ImageDistributionReferences.SingleOrDefaultAsync(item =>
                 item.DistributionRecordId == candidate.DistributionRecordId &&
-                item.Kind == reference.Kind && item.ResourceId == reference.ResourceId, token);
+                item.Kind == reference.Kind && item.ResourceId == reference.ResourceId &&
+                item.ResourcePublicId == reference.ResourcePublicId, token);
             if (currentReference is null)
             {
                 if (transaction is not null)
@@ -1111,12 +1147,27 @@ public class ImageDistributionService(
 
         if (context.Database.IsRelational())
         {
+            if (key.ResourcePublicId is { } publicId)
+            {
+                var publicReferenceAffected = await context.Database.ExecuteSqlInterpolatedAsync($$"""
+                    INSERT INTO "ImageDistributionReferences"
+                        ("Id", "DistributionRecordId", "Kind", "ResourceId", "ResourcePublicId", "CreatedAt")
+                    VALUES
+                        ({{Guid.CreateVersion7()}}, {{record.Id}}, {{(byte)key.Kind}}, {{key.ResourceId}}, {{publicId}}, CURRENT_TIMESTAMP)
+                    ON CONFLICT ("DistributionRecordId", "Kind", "ResourcePublicId")
+                        WHERE "ResourcePublicId" IS NOT NULL
+                    DO UPDATE SET "CreatedAt" = CURRENT_TIMESTAMP
+                    """, token);
+                return publicReferenceAffected > 0;
+            }
             var affected = await context.Database.ExecuteSqlInterpolatedAsync($$"""
                 INSERT INTO "ImageDistributionReferences"
                     ("Id", "DistributionRecordId", "Kind", "ResourceId", "CreatedAt")
                 VALUES
                     ({{Guid.CreateVersion7()}}, {{record.Id}}, {{(byte)key.Kind}}, {{key.ResourceId}}, CURRENT_TIMESTAMP)
-                ON CONFLICT ("DistributionRecordId", "Kind", "ResourceId") DO NOTHING
+                ON CONFLICT ("DistributionRecordId", "Kind", "ResourceId")
+                    WHERE "ResourcePublicId" IS NULL
+                DO UPDATE SET "CreatedAt" = CURRENT_TIMESTAMP
                 """, token);
             return affected > 0;
         }
@@ -1124,14 +1175,16 @@ public class ImageDistributionService(
         if (await context.ImageDistributionReferences.AnyAsync(item =>
                 item.DistributionRecordId == record.Id &&
                 item.Kind == key.Kind &&
-                item.ResourceId == key.ResourceId, token))
+                item.ResourceId == key.ResourceId &&
+                item.ResourcePublicId == key.ResourcePublicId, token))
             return false;
 
         var entity = new ImageDistributionReference
         {
             DistributionRecordId = record.Id,
             Kind = key.Kind,
-            ResourceId = key.ResourceId
+            ResourceId = key.ResourceId,
+            ResourcePublicId = key.ResourcePublicId
         };
         record.References.Add(entity);
         context.ImageDistributionReferences.Add(entity);

@@ -63,4 +63,10 @@ public interface ITeamLabRuntimeQueue
     Task<TeamLabQueueTicketResult> EnqueueAsync(
         TeamLabQueueRequest request,
         CancellationToken cancellationToken);
+
+    Task<TeamLabQueueTicketResult> EnqueueInCurrentTransactionAsync(
+        TeamLabQueueRequest request,
+        CancellationToken cancellationToken);
+
+    Task NotifyAsync(Guid ticketId, CancellationToken cancellationToken);
 }

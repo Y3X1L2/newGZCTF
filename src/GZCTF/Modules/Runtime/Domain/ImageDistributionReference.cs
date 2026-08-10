@@ -6,6 +6,7 @@ public sealed class ImageDistributionReference
     public Guid DistributionRecordId { get; set; }
     public ImageDistributionReferenceKind Kind { get; set; }
     public int ResourceId { get; set; }
+    public Guid? ResourcePublicId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public ImageDistributionRecord DistributionRecord { get; set; } = null!;
 }
@@ -17,12 +18,15 @@ public enum ImageDistributionReferenceKind : byte
     Exercise = 2,
     TeamLabRuntime = 3,
     ImageCertification = 4,
-    TeamLabRollout = 5
+    TeamLabRollout = 5,
+    TeamLabTopology = 6,
+    TeamLabRelease = 7
 }
 
 public readonly record struct ImageDistributionReferenceKey(
     ImageDistributionReferenceKind Kind,
-    int ResourceId)
+    int ResourceId,
+    Guid? ResourcePublicId = null)
 {
     public static ImageDistributionReferenceKey Game(int gameId) =>
         new(ImageDistributionReferenceKind.Game, gameId);
@@ -41,4 +45,10 @@ public readonly record struct ImageDistributionReferenceKey(
 
     public static ImageDistributionReferenceKey TeamLabRollout(int rolloutId) =>
         new(ImageDistributionReferenceKind.TeamLabRollout, rolloutId);
+
+    public static ImageDistributionReferenceKey TeamLabTopology(int topologyId) =>
+        new(ImageDistributionReferenceKind.TeamLabTopology, topologyId);
+
+    public static ImageDistributionReferenceKey TeamLabRelease(Guid releaseId) =>
+        new(ImageDistributionReferenceKind.TeamLabRelease, 0, releaseId);
 }

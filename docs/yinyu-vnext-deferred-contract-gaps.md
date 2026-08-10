@@ -110,21 +110,21 @@
 
 剩余验收：在阶段 7 预发布网关执行真实 `Pending -> Ready`、失败恢复和公网访问演练。
 
-### 4.5 Windows VM 与 Guacamole 缺少生产级凭据契约
+### 4.5 Windows VM 固定凭据契约的真实 KVM 验收
 
 状态：阶段 2 代码与自动验收已解决，保留本节用于记录实机门禁。
 
-当前处理：每个实例使用独立随机密码并由 Data Protection 加密保存，通过 Cloudbase-Init 注入 Windows；节点和镜像必须显式声明能力。Guacamole 未配置受管身份时 fail closed，不再使用默认管理员。
+当前处理：普通 CTF 比赛读取镜像远程访问配置中的 `ExistingAccount` RDP profile，不生成实例随机密码，不注入 Cloudbase-Init。节点需要 KVM 与 VM image download capability；Agent 只有在镜像目标 RDP 端口可连接后才发布代理。Guacamole 与内网 mstsc 使用同一镜像固定凭据，状态凭据仅返回实例所有者且禁止缓存。
 
-剩余验收：阶段 7 使用已认证镜像完成双实例 RDP 与 Guacamole 登录、密码隔离、seed 清理和日志脱敏检查；通过前仍是正式上线门禁。
+剩余验收：使用候选镜像完成双实例 RDP 与 Guacamole 登录、mstsc 双向文本剪贴板、运行资源隔离、销毁清理和日志脱敏检查；通过前仍是正式上线门禁。培训 Windows VM 不在本轮范围。
 
-自动验收：Release 构建、`493/493` 单元测试和 `247/247` PostgreSQL/Redis 集成测试通过；镜像认证接口已覆盖所有者、非所有者、非 Ready 状态和错误镜像类型。
+自动验收：2026-08-09 的候选分支通过 Release 构建、`762/762` 单元测试、`265/265` PostgreSQL/Redis 集成测试与前端 `217/217`；固定 RDP profile、节点能力、端口就绪和 Guacamole 剪贴板参数有定向覆盖。
 
 ### 4.6 生成客户端与实时 OpenAPI 存在历史漂移
 
-实时运行 `pnpm genapi` 会改写 TeamLab、队列和通用接口等大量既有类型，当前差异超过 2600 行，不属于实例就绪阶段的业务范围。
+实时运行 `pnpm genapi` 会改写 TeamLab、队列和通用接口等大量既有类型；2026-08-09 复核时约为 2 万行历史重排，不属于 Windows VM 修复范围。
 
-当前处理：阶段 2 仅保留前端实际依赖的 `ContainerEntryStatus`、入口状态字段和 Windows 镜像认证字段；不把无关生成变化混入 RC。
+当前处理：新增字段先由 feature API adapter 承接，服务端实时 OpenAPI 已确认准确；不把无关生成变化混入 Windows VM 候选提交。
 
 当前验证：实时 `/api/open/v1` 已通过比较器自测和基线向后兼容检查；这里记录的是完整生成客户端快照治理，不是服务端 OpenAPI breaking change。
 

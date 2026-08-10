@@ -39,7 +39,6 @@ using TeamLabTrafficFlowAggregateEntity = GZCTF.Modules.TeamLab.Domain.TeamLabTr
 using ProjectionRevisionEntity = GZCTF.Infrastructure.Cache.ProjectionRevision;
 using WorkerNodeMetricSampleEntity = GZCTF.Modules.Runtime.Domain.WorkerNodeMetricSample;
 using AgentRuntimeSignal = GZCTF.Modules.Runtime.Domain.AgentRuntimeSignal;
-using TeamLabRuntimeRemoteCredentialEntity = GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeRemoteCredential;
 using TeamLabRemoteSessionEntity = GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRemoteSession;
 using TeamLabRemoteAuditFileEntity = GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRemoteAuditFile;
 using ImageTemplateRemoteAccessEntity = GZCTF.Modules.Content.Domain.ImageTemplateRemoteAccess;
@@ -164,6 +163,7 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TeamLabRollout> TeamLabRollouts => Set<TeamLabRollout>();
     public DbSet<TeamLabRolloutTarget> TeamLabRolloutTargets => Set<TeamLabRolloutTarget>();
     public DbSet<TeamLabRuntimeSecretEnvelope> TeamLabRuntimeSecretEnvelopes => Set<TeamLabRuntimeSecretEnvelope>();
+    public DbSet<TeamLabControlScope> TeamLabControlScopes => Set<TeamLabControlScope>();
     public DbSet<TeamLabTopologyEntity> TeamLabTopologies => Set<TeamLabTopologyEntity>();
     public DbSet<TeamLabTopologyNetworkEntity> TeamLabTopologyNetworks => Set<TeamLabTopologyNetworkEntity>();
     public DbSet<TeamLabTopologyAssetEntity> TeamLabTopologyAssets => Set<TeamLabTopologyAssetEntity>();
@@ -183,9 +183,10 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TeamLabTrafficPathHop> TeamLabTrafficPathHops => Set<TeamLabTrafficPathHop>();
     public DbSet<TeamLabTrafficCorrelationCursor> TeamLabTrafficCorrelationCursors => Set<TeamLabTrafficCorrelationCursor>();
     public DbSet<TeamLabRuntimeOperationJobEntity> TeamLabRuntimeOperationJobs => Set<TeamLabRuntimeOperationJobEntity>();
-    public DbSet<TeamLabRuntimeRemoteCredentialEntity> TeamLabRuntimeRemoteCredentials => Set<TeamLabRuntimeRemoteCredentialEntity>();
     public DbSet<TeamLabRemoteSessionEntity> TeamLabRemoteSessions => Set<TeamLabRemoteSessionEntity>();
     public DbSet<TeamLabRemoteAuditFileEntity> TeamLabRemoteAuditFiles => Set<TeamLabRemoteAuditFileEntity>();
+    public DbSet<TeamLabWebhookSubscription> TeamLabWebhookSubscriptions => Set<TeamLabWebhookSubscription>();
+    public DbSet<TeamLabWebhookDeliveryFailure> TeamLabWebhookDeliveryFailures => Set<TeamLabWebhookDeliveryFailure>();
     public DbSet<DataGovernanceRunEntity> DataGovernanceRuns => Set<DataGovernanceRunEntity>();
     public DbSet<OperationalLogAggregateEntity> OperationalLogAggregates => Set<OperationalLogAggregateEntity>();
     public DbSet<DeploymentLifecycleAggregateEntity> DeploymentLifecycleAggregates => Set<DeploymentLifecycleAggregateEntity>();

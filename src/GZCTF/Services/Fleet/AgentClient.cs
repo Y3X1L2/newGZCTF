@@ -317,6 +317,20 @@ public class AgentClient
         CancellationToken token) => await PostTeamLabAsync<TeamLabCleanupRequest, TeamLabDryRunResponse>(nodeId,
         "/api/teamlab/cleanup", request, token);
 
+    public virtual async Task<TeamLabAssetLifecycleResponse?> PauseTeamLabAssetAsync(
+        Guid nodeId,
+        TeamLabAssetLifecycleRequest request,
+        CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabAssetLifecycleRequest, TeamLabAssetLifecycleResponse>(
+            nodeId, "/api/teamlab/assets/pause", request, token);
+
+    public virtual async Task<TeamLabAssetLifecycleResponse?> ResumeTeamLabAssetAsync(
+        Guid nodeId,
+        TeamLabAssetLifecycleRequest request,
+        CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabAssetLifecycleRequest, TeamLabAssetLifecycleResponse>(
+            nodeId, "/api/teamlab/assets/resume", request, token);
+
     public virtual async Task<TeamLabDryRunResponse?> ProbeTeamLabAsync(Guid nodeId, TeamLabProbeRequest request,
         CancellationToken token) => await PostTeamLabAsync<TeamLabProbeRequest, TeamLabDryRunResponse>(nodeId,
         "/api/teamlab/probe", request, token);
@@ -1020,6 +1034,27 @@ public class AgentClient
         IReadOnlyList<AgentVmNetworkInterfaceRequest> interfaces,
         int? expectedGeneration,
         string? expectedNativeId,
+        CancellationToken token) =>
+        await GetVmIpAsync(
+            nodeId, vmName, interfaces, expectedGeneration, expectedNativeId, 3389, token);
+
+    public async Task<AgentVmIpResponse?> GetVmIpAsync(
+        Guid nodeId,
+        string vmName,
+        int rdpTargetPort,
+        int? expectedGeneration,
+        string? expectedNativeId,
+        CancellationToken token) =>
+        await GetVmIpAsync(
+            nodeId, vmName, [], expectedGeneration, expectedNativeId, rdpTargetPort, token);
+
+    private async Task<AgentVmIpResponse?> GetVmIpAsync(
+        Guid nodeId,
+        string vmName,
+        IReadOnlyList<AgentVmNetworkInterfaceRequest> interfaces,
+        int? expectedGeneration,
+        string? expectedNativeId,
+        int rdpTargetPort,
         CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
@@ -1028,12 +1063,15 @@ public class AgentClient
         var client = BuildClient(node);
         try
         {
-            var path = $"/api/vms/{Uri.EscapeDataString(vmName)}/ip{BuildVmIdentityQuery(expectedGeneration, expectedNativeId)}";
+            using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(5));
+            var identityQuery = BuildVmIdentityQuery(expectedGeneration, expectedNativeId);
+            var separator = string.IsNullOrEmpty(identityQuery) ? '?' : '&';
+            var path = $"/api/vms/{Uri.EscapeDataString(vmName)}/ip{identityQuery}{separator}rdpPort={rdpTargetPort}";
             var response = interfaces.Count == 0
-                ? await client.GetAsync(path, token)
+                ? await client.GetAsync(path, deadline.Token)
                 : await client.PostAsync(path,
                     new StringContent(JsonSerializer.Serialize(new { interfaces }), Encoding.UTF8,
-                        "application/json"), token);
+                        "application/json"), deadline.Token);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("Agent VM IP lookup failed on node {NodeId}: {Status}",
@@ -1041,7 +1079,11 @@ public class AgentClient
                 return null;
             }
 
-            return await response.Content.ReadFromJsonAsync<AgentVmIpResponse>(token);
+            return await response.Content.ReadFromJsonAsync<AgentVmIpResponse>(deadline.Token);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -1266,6 +1308,16 @@ public class AgentClient
         if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
             throw await CreateAgentExceptionAsync(response, "remote_access.relay.delete", node.Id,
                 $"Agent remote relay cleanup failed on node {node.Name} ({node.HostAddress}).", token);
+    }
+
+    public virtual async Task CancelRemoteTerminalAsync(Guid nodeId, Guid sessionId, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "remote_access.terminal.cancel");
+        var client = BuildClient(node);
+        var response = await client.DeleteAsync($"/api/remote-access/terminals/{sessionId:D}", token);
+        if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
+            throw await CreateAgentExceptionAsync(response, "remote_access.terminal.cancel", node.Id,
+                $"Agent terminal cancellation failed on node {node.Name} ({node.HostAddress}).", token);
     }
 
     public virtual async Task<AgentVmImageDownloadResult> DownloadPreparedVmImageAsync(
@@ -1695,7 +1747,11 @@ public sealed record AgentVmBootstrapApplyResponse(
     string Message,
     int RebootCount,
     IReadOnlyList<string> CompletedSteps,
-    IReadOnlyList<string> PassedHealthChecks);
+    IReadOnlyList<string> PassedHealthChecks,
+    string? ErrorCode = null,
+    string? FailedStep = null,
+    string? FailureCategory = null,
+    int? ExitCode = null);
 
 public sealed record AgentVmGuestStatusResponse(
     bool Ready,
@@ -1966,6 +2022,18 @@ public record TeamLabCleanupRequest(
     string[] SensorAssetKeys,
     string[] FabricRemoteCidrs,
     bool DryRun = true);
+
+public record TeamLabAssetLifecycleRequest(
+    string Kind,
+    string ResourceId,
+    int Generation,
+    bool DryRun = false);
+
+public record TeamLabAssetLifecycleResponse(
+    bool Success,
+    bool DryRun,
+    string State,
+    string Message);
 
 public record TeamLabProbeRequest(
     int RuntimeId,

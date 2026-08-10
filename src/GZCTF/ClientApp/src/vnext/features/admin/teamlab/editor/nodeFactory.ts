@@ -41,8 +41,8 @@ export function createTopologyNode(
 
   const names: Record<Exclude<TopologyNodeType, 'switch' | 'router'>, string> = {
     docker: 'Docker 服务',
-    'linux-vm': 'Linux VM',
-    'windows-vm': 'Windows VM',
+    'linux-vm': 'Linux 虚拟机',
+    'windows-vm': 'Windows 虚拟机',
   }
   return {
     type,

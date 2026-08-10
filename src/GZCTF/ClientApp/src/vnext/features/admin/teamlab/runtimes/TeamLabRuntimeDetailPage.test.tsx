@@ -8,7 +8,10 @@ import { useTeamLabRuntime } from './useTeamLabRuntime'
 import { useTrafficObservability } from './useTrafficObservability'
 
 vi.mock('./useTeamLabRuntime', () => ({ useTeamLabRuntime: vi.fn() }))
-vi.mock('./useRuntimeEvents', () => ({ useRuntimeEvents: vi.fn() }))
+vi.mock('./useRuntimeEvents', () => ({
+  useRuntimeEvents: vi.fn(),
+  emptyTeamLabEventFilters: () => ({ generation: null, stage: '' }),
+}))
 vi.mock('./useTrafficObservability', () => ({ useTrafficObservability: vi.fn() }))
 
 const runtime: TeamLabRuntime = {
@@ -65,7 +68,7 @@ describe('TeamLabRuntimeDetailPage', () => {
     })
     vi.mocked(useTrafficObservability).mockReturnValue({
       flows: {
-        page: { items: [], nextCursor: null },
+        page: { items: [], nextCursor: null, completeness: { complete: true, droppedRecords: 0 } },
         error: undefined,
         isLoading: false,
         isRefreshing: false,
@@ -73,7 +76,7 @@ describe('TeamLabRuntimeDetailPage', () => {
         mutate: vi.fn(),
       },
       paths: {
-        page: { items: [], nextCursor: null },
+        page: { items: [], nextCursor: null, completeness: { complete: true, droppedRecords: 0 } },
         error: undefined,
         isLoading: false,
         isRefreshing: false,

@@ -41,7 +41,8 @@ public sealed class TeamLabDependencyGraph
             if (asset.Kind == TeamLabAssetKind.Vm)
                 Add(new TeamLabDeploymentNode(asset.Key, TeamLabDeploymentNodeKind.GuestReady));
             Add(new TeamLabDeploymentNode(asset.Key, TeamLabDeploymentNodeKind.Bootstrap));
-            Add(new TeamLabDeploymentNode(asset.Key, TeamLabDeploymentNodeKind.Health));
+            if (asset.HealthCheckKind is not null)
+                Add(new TeamLabDeploymentNode(asset.Key, TeamLabDeploymentNodeKind.Health));
             Require(Key(asset.Key, TeamLabDeploymentNodeKind.Bootstrap),
                 Key(asset.Key, asset.Kind == TeamLabAssetKind.Vm
                     ? TeamLabDeploymentNodeKind.GuestReady
@@ -49,8 +50,9 @@ public sealed class TeamLabDependencyGraph
             if (asset.Kind == TeamLabAssetKind.Vm)
                 Require(Key(asset.Key, TeamLabDeploymentNodeKind.GuestReady),
                     Key(asset.Key, TeamLabDeploymentNodeKind.Create));
-            Require(Key(asset.Key, TeamLabDeploymentNodeKind.Health),
-                Key(asset.Key, TeamLabDeploymentNodeKind.Bootstrap));
+            if (asset.HealthCheckKind is not null)
+                Require(Key(asset.Key, TeamLabDeploymentNodeKind.Health),
+                    Key(asset.Key, TeamLabDeploymentNodeKind.Bootstrap));
         }
 
         foreach (var dependency in topology.Dependencies)
@@ -64,7 +66,9 @@ public sealed class TeamLabDependencyGraph
                     ? TeamLabDeploymentNodeKind.GuestReady
                     : TeamLabDeploymentNodeKind.Create,
                 TeamLabDependencyCondition.BootstrapCompleted => TeamLabDeploymentNodeKind.Bootstrap,
-                TeamLabDependencyCondition.ServiceReady => TeamLabDeploymentNodeKind.Health,
+                TeamLabDependencyCondition.ServiceReady => dependencyAsset.HealthCheckKind is not null
+                    ? TeamLabDeploymentNodeKind.Health
+                    : TeamLabDeploymentNodeKind.Bootstrap,
                 _ => throw new ArgumentOutOfRangeException(nameof(dependency.Condition))
             };
             Require(Key(dependency.AssetKey, TeamLabDeploymentNodeKind.Create),

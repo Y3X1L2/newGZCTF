@@ -3,6 +3,7 @@ using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Application.Validation;
 using GZCTF.Modules.TeamLab.Infrastructure;
 using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Identity.Application;
 using GZCTF.Modules.TeamLab.Application.Rollouts;
 using Microsoft.Extensions.Options;
 
@@ -22,6 +23,11 @@ public static class TeamLabModuleRegistration
                 network.ReservedCidrs, network.FabricLinkPool, network.RuntimeNetworkBaseCidr));
         });
         services.AddScoped<TeamLabReleaseService>();
+        services.AddScoped<TeamLabReleaseImagePreparationService>();
+        services.AddScoped<TeamLabServiceProfileCatalogService>();
+        services.AddScoped<TeamLabControlScopeService>();
+        services.AddScoped<TeamLabScopeAuthorizationService>();
+        services.AddScoped<IApiTokenResourceGrantPolicy, TeamLabScopeApiTokenResourceGrantPolicy>();
         services.AddScoped<TeamLabScenarioBakeService>();
         services.AddScoped<ITeamLabTopologyApplicationService, TeamLabTopologyApplicationService>();
         services.AddScoped<TeamLabRuntimeOverlayService>();
@@ -30,13 +36,14 @@ public static class TeamLabModuleRegistration
         services.AddScoped<TeamLabEventRecorder>();
         services.AddScoped<TeamLabRuntimeProjectionService>();
         services.AddScoped<TeamLabAdminQueryService>();
+        services.AddScoped<ITeamLabUsageProjectionProvider, TeamLabEmptyUsageProjectionProvider>();
         services.AddScoped<TeamLabAuthorizationService>();
         services.AddScoped<TeamLabRemoteAccessAuthorizationService>();
-        services.AddScoped<TeamLabRemoteCredentialService>();
         services.AddScoped<ITeamLabRemoteRelayGateway, AgentTeamLabRemoteRelayGateway>();
         services.AddScoped<ITeamLabRemoteAccessService, TeamLabRemoteAccessService>();
         services.AddHostedService<TeamLabRemoteSessionWorker>();
         services.AddScoped<TeamLabRuntimeLifecycleGuard>();
+        services.AddScoped<TeamLabBootstrapSecretValidator>();
         services.AddScoped<TeamLabTrafficApplicationService>();
         services.AddSingleton<TeamLabTrafficLocalBuffer>();
         services.AddSingleton<RedisTeamLabTrafficIngestor>();
@@ -67,13 +74,20 @@ public static class TeamLabModuleRegistration
         services.AddScoped<ITeamLabRuntimeApplicationService, TeamLabRuntimeOrchestrator>();
         services.AddScoped<TeamLabAccessGrantService>();
         services.AddScoped<ITeamLabRolloutApplicationService, TeamLabRolloutApplicationService>();
+        services.AddScoped<ITeamLabRolloutTargetProvider, TeamLabExternalRolloutProvider>();
         services.AddScoped<TeamLabRolloutCoordinator>();
         services.AddHostedService<TeamLabRolloutCoordinatorWorker>();
         services.AddScoped<TeamLabRuntimeOperationPayloadProtector>();
         services.AddScoped<ITeamLabRuntimeOperationSubmissionStore, EfTeamLabRuntimeOperationSubmissionStore>();
         services.AddScoped<TeamLabRuntimeOperationApplicationService>();
-        services.AddScoped<IApiOperationHandler, TeamLabRuntimeOperationHandler>();
+        services.AddScoped<ITeamLabControlPlaneOperationService>(provider =>
+            provider.GetRequiredService<TeamLabRuntimeOperationApplicationService>());
+        services.AddKeyedScoped<IApiOperationHandler, TeamLabRuntimeOperationHandler>(
+            TeamLabRuntimeOperationApplicationService.OperationKind);
         services.AddScoped<IApiOperationResultProvider, TeamLabRuntimeOperationResultProvider>();
+        services.AddScoped<TeamLabWebhookService>();
+        services.AddScoped<ITeamLabWebhookDeliverer, HttpTeamLabWebhookDeliverer>();
+        services.AddHostedService<TeamLabWebhookDeliveryWorker>();
         return services;
     }
 }

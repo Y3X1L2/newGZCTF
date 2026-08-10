@@ -23,6 +23,14 @@ public sealed class TeamLabAdminRemoteAccessController(
         return await remoteAccess.GetAvailabilityAsync(runtimeId, assetId, actor.Id, actor.Role >= Role.Admin, cancellationToken);
     }
 
+    [HttpGet("runtimes/{runtimeId:guid}/remote-access")]
+    public async Task<IReadOnlyList<TeamLabRemoteAccessAvailabilityModel>> GetAvailabilityBatch(
+        Guid runtimeId, CancellationToken cancellationToken)
+    {
+        var actor = await ActorAsync();
+        return await remoteAccess.GetAvailabilityBatchAsync(runtimeId, actor.Id, actor.Role >= Role.Admin, cancellationToken);
+    }
+
     [HttpPost("runtimes/{runtimeId:guid}/assets/{assetId:int}/remote-sessions")]
     public async Task<ActionResult<TeamLabRemoteSessionModel>> Create(
         Guid runtimeId, int assetId, CreateTeamLabRemoteSessionModel model, CancellationToken cancellationToken)
@@ -69,5 +77,5 @@ public sealed class TeamLabAdminRemoteAccessController(
     }
 
     private async Task<UserInfo> ActorAsync() =>
-        await users.GetUserAsync(User) ?? throw new TeamLabApiContractException("authentication_required", "Authentication is required.", 401);
+        await users.GetUserAsync(User) ?? throw new TeamLabApiContractException("authentication_required", "需要身份认证。", 401);
 }

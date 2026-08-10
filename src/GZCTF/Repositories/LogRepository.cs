@@ -20,6 +20,13 @@ public class LogRepository(AppDbContext context) : RepositoryBase(context), ILog
             data = data.Where(x => x.Logger == query.Logger);
         if (!string.IsNullOrWhiteSpace(query.EventCode))
             data = data.Where(x => x.EventCode == query.EventCode);
+        if (!string.IsNullOrWhiteSpace(query.Keyword))
+        {
+            var keyword = query.Keyword.Trim();
+            data = data.Where(x => x.Message.Contains(keyword) ||
+                                   x.ResourceDisplayName != null && x.ResourceDisplayName.Contains(keyword) ||
+                                   x.EventCode != null && x.EventCode.Contains(keyword));
+        }
         if (query.WorkerNodeId is { } workerNodeId)
             data = data.Where(x => x.WorkerNodeId == workerNodeId);
         if (query.DeploymentTicketId is { } deploymentTicketId)

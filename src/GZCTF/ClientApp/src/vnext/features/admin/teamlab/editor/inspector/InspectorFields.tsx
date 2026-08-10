@@ -1,6 +1,7 @@
 import { ChevronDown, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { TopologyPosition } from '../../model/topologyDocument'
+import { FieldHelpButton } from '../help/FieldHelpButton'
 import styles from './TeamLabInspector.module.css'
 
 type DraftCommit = (value: string) => boolean | void
@@ -56,7 +57,7 @@ function KeyValueInput({
   )
 }
 
-export function InspectorSection({ title, icon, children }: { title: string; icon?: ReactNode; children: ReactNode }) {
+export function InspectorSection({ title, icon, children }: { title: ReactNode; icon?: ReactNode; children: ReactNode }) {
   return (
     <section className={styles.section}>
       <h3>
@@ -90,6 +91,7 @@ export function TextInput({
   max,
   step,
   hint,
+  help,
 }: {
   label: string
   value: string | number
@@ -100,12 +102,13 @@ export function TextInput({
   max?: number
   step?: number
   hint?: string
+  help?: string
 }) {
   const sourceValue = String(value)
   const draft = useCommittedDraft(sourceValue, onChange)
   return (
     <label className={styles.field}>
-      <span>{label}</span>
+      <span>{label}{help ? <FieldHelpButton fieldKey={help} /> : null}</span>
       <input
         disabled={disabled}
         max={max}
@@ -132,17 +135,19 @@ export function TextAreaInput({
   onChange,
   disabled,
   hint,
+  help,
 }: {
   label: string
   value: string
   onChange: (value: string) => void
   disabled?: boolean
   hint?: string
+  help?: string
 }) {
   const draft = useCommittedDraft(value, onChange)
   return (
     <label className={styles.field}>
-      <span>{label}</span>
+      <span>{label}{help ? <FieldHelpButton fieldKey={help} /> : null}</span>
       <textarea
         disabled={disabled}
         onBlur={draft.onBlur}
@@ -161,16 +166,18 @@ export function SelectInput({
   onChange,
   children,
   disabled,
+  help,
 }: {
   label: string
   value: string
   onChange: (value: string) => void
   children: ReactNode
   disabled?: boolean
+  help?: string
 }) {
   return (
     <label className={styles.field}>
-      <span>{label}</span>
+      <span>{label}{help ? <FieldHelpButton fieldKey={help} /> : null}</span>
       <select disabled={disabled} onChange={(event) => onChange(event.currentTarget.value)} value={value}>
         {children}
       </select>
@@ -184,17 +191,19 @@ export function ToggleInput({
   checked,
   onChange,
   disabled,
+  help,
 }: {
   label: string
   description?: string
   checked: boolean
   onChange: (checked: boolean) => void
   disabled?: boolean
+  help?: string
 }) {
   return (
     <label className={styles.toggle}>
       <span>
-        <strong>{label}</strong>
+        <strong>{label}{help ? <FieldHelpButton fieldKey={help} /> : null}</strong>
         {description ? <small>{description}</small> : null}
       </span>
       <input
@@ -216,6 +225,7 @@ export function NumberInput({
   min,
   max,
   step = 1,
+  help,
 }: {
   label: string
   value: number
@@ -224,10 +234,12 @@ export function NumberInput({
   min?: number
   max?: number
   step?: number
+  help?: string
 }) {
   return (
     <TextInput
       disabled={disabled}
+      help={help}
       label={label}
       max={max}
       min={min}
@@ -301,6 +313,7 @@ export function PositionEditor({
       <ToggleInput
         checked={position.collapsed}
         disabled={readOnly}
+        help="networkRegions"
         label="折叠节点"
         onChange={(collapsed) => onChange({ ...position, collapsed })}
       />

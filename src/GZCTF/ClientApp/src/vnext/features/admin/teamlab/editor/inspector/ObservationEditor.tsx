@@ -46,7 +46,7 @@ export function ObservationEditor(props: ObservationEditorProps) {
           />
         </>
       ) : null}
-      <SelectInput disabled={props.readOnly} label="端点观测" onChange={setMode} value={mode}>
+      <SelectInput disabled={props.readOnly} help="endpointObservation" label="端点观测" onChange={setMode} value={mode}>
         {modeOption('disabled', '禁用')}
         {modeOption('optional', '可选')}
         {modeOption('required', '必需')}

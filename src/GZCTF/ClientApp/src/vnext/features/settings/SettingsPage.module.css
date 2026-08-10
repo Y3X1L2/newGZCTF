@@ -388,6 +388,17 @@
   }
 }
 
+.hintText {
+  color: var(--yn-color-muted);
+  font-size: 12px;
+  margin: 0 0 10px;
+}
+
+.mutedText {
+  color: var(--yn-color-muted);
+  font-size: 12px;
+}
+
 @media (max-width: 640px) {
   .page {
     padding-top: var(--yn-space-6);

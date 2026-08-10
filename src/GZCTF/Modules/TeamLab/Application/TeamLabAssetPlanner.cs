@@ -61,7 +61,7 @@ public static class TeamLabAssetPlanner
         if (placements is null)
             throw new TeamLabApiContractException(
                 "capability_unavailable",
-                "The current TeamLab node set cannot place this topology.",
+                "当前 TeamLab 节点集合无法放置该拓扑",
                 409);
 
         var shards = placements

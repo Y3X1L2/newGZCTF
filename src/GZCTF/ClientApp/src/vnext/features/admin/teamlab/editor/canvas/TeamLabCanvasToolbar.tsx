@@ -2,6 +2,7 @@ import { Panel, useReactFlow } from '@xyflow/react'
 import {
   Focus,
   Maximize2,
+  MousePointer2,
   PanelLeftClose,
   PanelRightClose,
   Redo2,
@@ -40,6 +41,8 @@ export function TeamLabCanvasToolbar({
   onToggleFocus,
   onToggleLeftPanel,
   onToggleRightPanel,
+  onToggleSelectionTool,
+  selectionToolActive,
 }: {
   canUndo: boolean
   canRedo: boolean
@@ -53,6 +56,8 @@ export function TeamLabCanvasToolbar({
   onToggleFocus: () => void
   onToggleLeftPanel: () => void
   onToggleRightPanel: () => void
+  onToggleSelectionTool: () => void
+  selectionToolActive: boolean
 }) {
   const flow = useReactFlow<TeamLabFlowNode, TeamLabFlowEdge>()
   const zoomIn = useCallback(() => void flow.zoomIn(), [flow])
@@ -74,6 +79,13 @@ export function TeamLabCanvasToolbar({
         <Redo2 size={17} />
       </ToolButton>
       <span aria-hidden="true" />
+      <ToolButton
+        aria-pressed={selectionToolActive}
+        label={selectionToolActive ? '退出框选工具' : '启用框选工具'}
+        onClick={onToggleSelectionTool}
+      >
+        <MousePointer2 size={17} />
+      </ToolButton>
       <ToolButton label="放大" onClick={zoomIn}>
         <ZoomIn size={17} />
       </ToolButton>

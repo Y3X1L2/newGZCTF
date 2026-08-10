@@ -23,7 +23,7 @@ public sealed class TeamLabRolloutCoordinatorWorker(
             }
             catch (Exception exception)
             {
-                logger.LogError(exception, "TeamLab rollout coordinator tick failed.");
+                logger.LogError(exception, "TeamLab rollout 协调器 tick 失败");
             }
             await timer.WaitForNextTickAsync(stoppingToken);
         }

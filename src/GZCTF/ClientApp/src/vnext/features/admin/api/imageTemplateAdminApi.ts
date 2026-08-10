@@ -23,27 +23,41 @@ export interface ImageRemoteAccessConfiguration {
   protocol: 'containerTerminal' | 'ssh' | 'rdp'
   port: number
   username: string | null
-  credentialMode: 'platformGenerated' | 'existingAccount'
   hasCredential: boolean
   updatedAt: number | null
 }
+
+const remoteProtocolByValue = {
+  1: 'containerTerminal',
+  2: 'ssh',
+  3: 'rdp',
+} as const
+
+const remoteProtocolValue = {
+  containerTerminal: 1,
+  ssh: 2,
+  rdp: 3,
+} as const
 
 function isRemoteProtocol(value: unknown): value is ImageRemoteAccessConfiguration['protocol'] {
   return value === 'containerTerminal' || value === 'ssh' || value === 'rdp'
 }
 
-function isCredentialMode(value: unknown): value is ImageRemoteAccessConfiguration['credentialMode'] {
-  return value === 'platformGenerated' || value === 'existingAccount'
+function parseRemoteProtocol(value: unknown): ImageRemoteAccessConfiguration['protocol'] | null {
+  if (isRemoteProtocol(value)) return value
+  return isNumber(value) && value in remoteProtocolByValue
+    ? remoteProtocolByValue[value as keyof typeof remoteProtocolByValue]
+    : null
 }
 
 function parseRemoteAccess(value: unknown, label: string): ImageRemoteAccessConfiguration {
+  const protocol = isRecord(value) ? parseRemoteProtocol(value.protocol) : null
   if (
     !isRecord(value) ||
     !isBoolean(value.enabled) ||
-    !isRemoteProtocol(value.protocol) ||
+    protocol === null ||
     !isNumber(value.port) ||
     !isNullableString(value.username) ||
-    !isCredentialMode(value.credentialMode) ||
     !isBoolean(value.hasCredential) ||
     !(value.updatedAt === null || isNumber(value.updatedAt))
   ) {
@@ -51,10 +65,9 @@ function parseRemoteAccess(value: unknown, label: string): ImageRemoteAccessConf
   }
   return {
     enabled: value.enabled,
-    protocol: value.protocol,
+    protocol,
     port: value.port,
     username: value.username,
-    credentialMode: value.credentialMode,
     hasCredential: value.hasCredential,
     updatedAt: value.updatedAt,
   }
@@ -185,13 +198,6 @@ export function createImageTemplateAdminApi(client: RuntimeJsonClient = runtimeJ
       return parseIdentity(await client.postJson('/api/v1/image-templates/import-local', data), 'Local image import')
     },
 
-    async setInstanceCredentialCapability(id: number, supported: boolean) {
-      return parseIdentity(
-        await client.patchJson(`/api/v1/image-templates/${id}/instance-credentials`, { supported }),
-        'Windows credential capability update'
-      )
-    },
-
     async remoteAccess(id: number) {
       return parseRemoteAccess(
         await client.get(`/api/v1/image-templates/${id}/remote-access`),
@@ -199,9 +205,12 @@ export function createImageTemplateAdminApi(client: RuntimeJsonClient = runtimeJ
       )
     },
 
-    async updateRemoteAccess(id: number, configuration: Omit<ImageRemoteAccessConfiguration, 'hasCredential' | 'updatedAt'> & { credential?: string | null }) {
+    async updateRemoteAccess(id: number, configuration: Omit<ImageRemoteAccessConfiguration, 'hasCredential' | 'updatedAt'> & { credential?: string | null; clearCredential?: boolean }) {
       return parseRemoteAccess(
-        await client.patchJson(`/api/v1/image-templates/${id}/remote-access`, configuration),
+        await client.patchJson(`/api/v1/image-templates/${id}/remote-access`, {
+          ...configuration,
+          protocol: remoteProtocolValue[configuration.protocol],
+        }),
         'Image remote access update'
       )
     },

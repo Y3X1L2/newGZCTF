@@ -12,6 +12,7 @@ namespace GZCTF.Modules.TeamLab.Api;
 public sealed class TeamLabAdminTopologyController(
     ITeamLabTopologyApplicationService topologies,
     TeamLabAdminQueryService queries,
+    TeamLabReleaseImagePreparationService imagePreparation,
     UserManager<UserInfo> users) : ControllerBase
 {
     [HttpGet("capabilities")]
@@ -119,6 +120,20 @@ public sealed class TeamLabAdminTopologyController(
         CancellationToken cancellationToken)
     {
         var actor = await ActorAsync();
+        return await queries.GetReleaseReadinessAsync(
+            topologyId, releaseId, actor.Id, actor.Role >= Role.Admin, cancellationToken);
+    }
+
+    [HttpPost("topologies/{topologyId:guid}/releases/{releaseId:guid}/images/prepare")]
+    public async Task<TeamLabAdminReleaseReadinessModel> PrepareImages(
+        Guid topologyId,
+        Guid releaseId,
+        CancellationToken cancellationToken)
+    {
+        var actor = await ActorAsync();
+        await queries.GetReleaseReadinessAsync(
+            topologyId, releaseId, actor.Id, actor.Role >= Role.Admin, cancellationToken);
+        await imagePreparation.QueueAsync(releaseId, cancellationToken);
         return await queries.GetReleaseReadinessAsync(
             topologyId, releaseId, actor.Id, actor.Role >= Role.Admin, cancellationToken);
     }

@@ -28,11 +28,14 @@ if (-not $SkipPublish) {
 
     # The release must carry its own migration runner. Production hosts only receive
     # published artifacts, so applying migrations cannot depend on an installed SDK.
+    & dotnet build (Join-Path $repoRoot "src/GZCTF/GZCTF.csproj") `
+        -c Migration --no-restore
+    if ($LASTEXITCODE -ne 0) { throw "migration build failed with exit code $LASTEXITCODE" }
     $migrationBundle = Join-Path $publishRoot "efbundle"
     & dotnet ef migrations bundle `
         --project (Join-Path $repoRoot "src/GZCTF/GZCTF.csproj") `
         --startup-project (Join-Path $repoRoot "src/GZCTF/GZCTF.csproj") `
-        --configuration $Configuration --no-build --target-runtime linux-x64 --self-contained `
+        --configuration Migration --no-build --target-runtime linux-x64 --self-contained `
         --output $migrationBundle --force
     if ($LASTEXITCODE -ne 0) { throw "EF migration bundle failed with exit code $LASTEXITCODE" }
 }

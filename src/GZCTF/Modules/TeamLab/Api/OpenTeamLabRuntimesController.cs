@@ -26,12 +26,12 @@ public sealed class OpenTeamLabRuntimesController(
     ITeamLabRuntimeApplicationService runtimes,
     TeamLabRuntimeProjectionService projections,
     TeamLabRuntimeOperationApplicationService operations,
-    TeamLabAuthorizationService authorization,
+    TeamLabScopeAuthorizationService scopeAuthorization,
     TeamLabRuntimeLifecycleGuard lifecycleGuard,
     TeamLabAccessGrantService access) : ControllerBase
 {
     [HttpPost]
-    [OpenApiOperation("Create a runtime", "Queues deployment of a released topology for one team or automation owner.")]
+    [OpenApiOperation("创建运行时", "为单个队伍或自动化属主提交已发布拓扑版本的部署任务。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
     [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Create(
@@ -40,14 +40,16 @@ public sealed class OpenTeamLabRuntimesController(
         CancellationToken cancellationToken)
     {
         var actor = Actor();
+        var scopeId = await scopeAuthorization.RequireReleaseScopeAsync(
+            model.ReleaseId, actor.TokenId, IsAdministrator(), true, cancellationToken);
         var result = await operations.SubmitCreateAsync(actor.TokenId, actor.UserId, idempotencyKey,
-            "POST:/api/open/v1/teamlab/runtimes", model, cancellationToken);
+            "POST:/api/open/v1/teamlab/runtimes", scopeId, model, cancellationToken);
         var operation = ApiOperationModel.FromEntity(result.Operation);
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
     }
 
     [HttpGet("{runtimeId:guid}")]
-    [OpenApiOperation("Get a runtime", "Returns the aggregated runtime, shard, network, and asset state.")]
+    [OpenApiOperation("获取运行时", "返回聚合的运行时、分片、网络与资产状态。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesRead)]
     [ProducesResponseType(typeof(OpenTeamLabRuntimeModel), StatusCodes.Status200OK)]
     public async Task<OpenTeamLabRuntimeModel> Get(Guid runtimeId, CancellationToken cancellationToken)
@@ -57,7 +59,7 @@ public sealed class OpenTeamLabRuntimesController(
     }
 
     [HttpPost("{runtimeId:guid}/reset")]
-    [OpenApiOperation("Reset a runtime", "Queues a controlled cleanup and redeployment using the runtime release and optional overlays.")]
+    [OpenApiOperation("重置运行时", "按运行时的发布版本与可选覆盖配置提交受控清理并重新部署。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
     [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Reset(
@@ -70,13 +72,14 @@ public sealed class OpenTeamLabRuntimesController(
         var actor = Actor();
         await RequireDirectLifecycleControlAsync(runtimeId, cancellationToken);
         var result = await operations.SubmitResetAsync(actor.TokenId, actor.UserId, idempotencyKey,
-            $"POST:/api/open/v1/teamlab/runtimes/{runtimeId:D}/reset", runtimeId, model, cancellationToken);
+            $"POST:/api/open/v1/teamlab/runtimes/{runtimeId:D}/reset", runtimeId,
+            await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken), model, cancellationToken);
         var operation = ApiOperationModel.FromEntity(result.Operation);
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
     }
 
     [HttpDelete("{runtimeId:guid}")]
-    [OpenApiOperation("Destroy a runtime", "Queues cleanup of all runtime shards, assets, routes, captures, and access grants.")]
+    [OpenApiOperation("销毁运行时", "提交清理运行时的所有分片、资产、路由、抓包与访问授权。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
     [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Destroy(
@@ -88,27 +91,68 @@ public sealed class OpenTeamLabRuntimesController(
         var actor = Actor();
         await RequireDirectLifecycleControlAsync(runtimeId, cancellationToken);
         var result = await operations.SubmitDestroyAsync(actor.TokenId, actor.UserId, idempotencyKey,
-            $"DELETE:/api/open/v1/teamlab/runtimes/{runtimeId:D}", runtimeId, cancellationToken);
+            $"DELETE:/api/open/v1/teamlab/runtimes/{runtimeId:D}", runtimeId,
+            await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken), cancellationToken);
+        var operation = ApiOperationModel.FromEntity(result.Operation);
+        return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
+    }
+
+    [HttpPost("{runtimeId:guid}/pause")]
+    [OpenApiOperation("暂停运行时", "在原节点上挂起工作负载，同时保留运行时身份、网络、磁盘、地址、访问状态与容量预留。")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
+    [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
+    public async Task<IActionResult> Pause(
+        Guid runtimeId,
+        [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await RequireDirectLifecycleControlAsync(runtimeId, cancellationToken);
+        var actor = Actor();
+        var result = await operations.SubmitPauseAsync(
+            actor.TokenId, actor.UserId, idempotencyKey, runtimeId,
+            await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken), cancellationToken);
+        var operation = ApiOperationModel.FromEntity(result.Operation);
+        return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
+    }
+
+    [HttpPost("{runtimeId:guid}/resume")]
+    [OpenApiOperation("恢复运行时", "仅在原始分配节点上恢复，不会重新调度或下载镜像；原节点不可用时返回 resume_blocked。")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
+    [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
+    public async Task<IActionResult> Resume(
+        Guid runtimeId,
+        [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await RequireDirectLifecycleControlAsync(runtimeId, cancellationToken);
+        var actor = Actor();
+        var result = await operations.SubmitResumeAsync(
+            actor.TokenId, actor.UserId, idempotencyKey, runtimeId,
+            await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken), cancellationToken);
         var operation = ApiOperationModel.FromEntity(result.Operation);
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
     }
 
     [HttpGet("{runtimeId:guid}/events")]
-    [OpenApiOperation("List runtime events", "Returns cursor-paginated lifecycle and deployment events for troubleshooting and audit.")]
+    [OpenApiOperation("列出运行时事件", "返回 cursor 分页的生命周期与部署事件，用于排障与审计。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesRead)]
     [ProducesResponseType(typeof(OpenTeamLabRuntimeEventPageModel), StatusCodes.Status200OK)]
     public async Task<OpenTeamLabRuntimeEventPageModel> Events(
         Guid runtimeId,
         [FromQuery] string? after = null,
         [FromQuery, Range(1, 100)] int limit = 50,
+        [FromQuery] int? generation = null,
+        [FromQuery] string? stage = null,
         CancellationToken cancellationToken = default)
     {
         await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
-        return await projections.GetEventsAsync(runtimeId, after, limit, cancellationToken);
+        return await projections.GetEventsAsync(runtimeId, after, limit, generation, stage, cancellationToken);
     }
 
     [HttpPost("{runtimeId:guid}/access-grants")]
-    [OpenApiOperation("Create a WireGuard access grant", "Queues creation of a short-lived, single-download player access configuration.")]
+    [OpenApiOperation("创建 WireGuard 访问授权", "提交创建短时效、单次下载的玩家访问配置。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
     [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> CreateAccessGrant(
@@ -118,17 +162,18 @@ public sealed class OpenTeamLabRuntimesController(
         CancellationToken cancellationToken)
     {
         if (!string.Equals(model.Type, "WireGuard", StringComparison.OrdinalIgnoreCase))
-            throw new TeamLabApiContractException("topology_invalid", "Only WireGuard access grants are supported.", 422);
+            throw new TeamLabApiContractException("topology_invalid", "仅支持 WireGuard 访问授权。", 422);
         await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
         var actor = Actor();
         var result = await operations.SubmitAccessGrantCreateAsync(
-            actor.TokenId, actor.UserId, idempotencyKey, runtimeId, model, cancellationToken);
+            actor.TokenId, actor.UserId, idempotencyKey, runtimeId,
+            await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken), model, cancellationToken);
         var operation = ApiOperationModel.FromEntity(result.Operation);
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
     }
 
     [HttpGet("{runtimeId:guid}/access-grants/{grantId:guid}/download")]
-    [OpenApiOperation("Download an access configuration", "Consumes the one-time download token and returns the WireGuard configuration file.")]
+    [OpenApiOperation("下载访问配置", "消耗一次性下载 token 并返回 WireGuard 配置文件。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesRead)]
     [Produces("application/x-wireguard-profile")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -144,7 +189,7 @@ public sealed class OpenTeamLabRuntimesController(
     }
 
     [HttpDelete("{runtimeId:guid}/access-grants/{grantId:guid}")]
-    [OpenApiOperation("Revoke an access grant", "Queues revocation and cleanup of an existing runtime access grant.")]
+    [OpenApiOperation("撤销访问授权", "提交撤销并清理现有的运行时访问授权。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
     [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
     public async Task<IActionResult> RevokeAccessGrant(
@@ -156,7 +201,8 @@ public sealed class OpenTeamLabRuntimesController(
         await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
         var actor = Actor();
         var result = await operations.SubmitAccessGrantRevokeAsync(
-            actor.TokenId, actor.UserId, idempotencyKey, runtimeId, grantId, cancellationToken);
+            actor.TokenId, actor.UserId, idempotencyKey, runtimeId,
+            await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken), grantId, cancellationToken);
         var operation = ApiOperationModel.FromEntity(result.Operation);
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
     }
@@ -164,8 +210,23 @@ public sealed class OpenTeamLabRuntimesController(
     private async Task AuthorizeRuntimeAsync(Guid runtimeId, CancellationToken cancellationToken)
     {
         var actor = Actor();
-        await authorization.RequireRuntimeOwnerAsync(runtimeId, actor.UserId, User.IsInRole(nameof(Role.Admin)), cancellationToken);
+        await scopeAuthorization.RequireRuntimeScopeAsync(
+            runtimeId, actor.TokenId, IsAdministrator(), false, cancellationToken);
     }
+
+    private async Task<Guid> RequireRuntimeScopeAsync(
+        Guid runtimeId,
+        bool writable,
+        CancellationToken cancellationToken)
+    {
+        var actor = Actor();
+        return await scopeAuthorization.RequireRuntimeScopeAsync(
+            runtimeId, actor.TokenId, IsAdministrator(), writable, cancellationToken);
+    }
+
+    private bool IsAdministrator() => User.FindAll(ApiTokenClaimTypes.Resource).Any(claim =>
+        ApiTokenResourceClaim.TryParse(claim.Value, out var type, out var id) &&
+        type == "teamlab-scope" && id == "*");
 
     private async Task RequireDirectLifecycleControlAsync(
         Guid runtimeId,
@@ -174,7 +235,7 @@ public sealed class OpenTeamLabRuntimesController(
         if (await lifecycleGuard.IsRolloutManagedAsync(runtimeId, cancellationToken))
             throw new TeamLabApiContractException(
                 "runtime_managed_by_rollout",
-                "This runtime is managed by a competition rollout; use the competition lifecycle API.",
+                "此运行时由比赛 rollout 管理，请使用比赛生命周期 API。",
                 409);
     }
 
@@ -183,6 +244,6 @@ public sealed class OpenTeamLabRuntimesController(
         if (Guid.TryParse(User.FindFirstValue(ApiTokenClaimTypes.TokenId), out var tokenId) &&
             Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
             return (tokenId, userId);
-        throw new TeamLabApiContractException("authentication_required", "Authentication is required.", 401);
+        throw new TeamLabApiContractException("authentication_required", "需要身份认证。", 401);
     }
 }

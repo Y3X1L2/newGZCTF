@@ -176,7 +176,7 @@ internal static class ServicesExtension
 #pragma warning restore EXTEXP0001
             builder.Services.AddSingleton<AgentClient>();
             builder.Services.AddScoped<FleetVmService>();
-            builder.Services.AddSingleton<VmCredentialService>();
+            builder.Services.AddScoped<CompetitionVmAccessService>();
             builder.Services.AddSingleton<GuacamoleService>();
             builder.Services.AddSingleton<GuacamoleRemoteSessionService>();
             builder.Services.AddHostedService<VmReadyService>();
@@ -246,6 +246,13 @@ internal static class ServicesExtension
                 client.DefaultRequestHeaders.Accept.Clear();
                 client.DefaultRequestHeaders.Accept.Add(
                     new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+            });
+            builder.Services.AddHttpClient("TeamLabWebhook", client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(30);
+            }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                AllowAutoRedirect = false
             });
 
             builder.Services.AddResponseCaching();

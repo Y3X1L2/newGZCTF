@@ -9,7 +9,10 @@ describe('runtimeRefreshInterval', () => {
 
   it('stops polling terminal persisted states', () => {
     expect(runtimeRefreshInterval('failed')).toBe(0)
-    expect(runtimeRefreshInterval('stopped')).toBe(0)
     expect(runtimeRefreshInterval('destroyed')).toBe(0)
+  })
+
+  it('keeps polling a paused runtime so resume is observed', () => {
+    expect(runtimeRefreshInterval('paused')).toBe(2_500)
   })
 })
