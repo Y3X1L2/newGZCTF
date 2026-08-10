@@ -95,7 +95,6 @@ public sealed class TeamLabAdminTopologyController(
             model.Revision,
             actor.Id,
             actor.Role >= Role.Admin,
-            model.ScenarioOverlays,
             cancellationToken);
     }
 

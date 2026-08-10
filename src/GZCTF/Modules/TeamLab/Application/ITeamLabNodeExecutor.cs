@@ -125,25 +125,16 @@ public sealed record TeamLabNodeAssetCreateRequest(
     int MemoryMiB,
     int StorageMiB,
     int? ExposePort,
-    bool RoutingEnabled,
     bool ImageReady,
-    IReadOnlyDictionary<string, string> Environment,
     IReadOnlyDictionary<string, string> Secrets,
     IReadOnlyList<TeamLabNodeInterfaceIntent> Interfaces,
-    TeamLabNodeBootstrapIntent? Bootstrap = null,
     TeamLabNodeHealthIntent? Health = null,
     string? DependencyReadyToken = null,
     TeamLabEndpointObservationMode EndpointObservation = TeamLabEndpointObservationMode.Disabled,
     string RouterNamespace = "",
-    string? StartCommand = null,
     Guid? OperationId = null,
     VmRuntimeMode? VmRuntimeMode = null,
     VmNetworkMode? VmNetworkMode = null);
-
-public sealed record TeamLabNodeBootstrapIntent(
-    Guid ProfileId,
-    int Version,
-    IReadOnlyDictionary<string, string> Parameters);
 
 public sealed record TeamLabNodeHealthIntent(
     TeamLabHealthCheckKind Kind,
@@ -175,21 +166,17 @@ public sealed record TeamLabScenarioArtifactCommitResult(
     string? ErrorCode,
     string? ErrorDetail);
 
-public sealed record TeamLabNodeBootstrapResult(
+public sealed record TeamLabNodeHealthResult(
     bool Success,
     string Message,
-    IReadOnlyList<string> CompletedSteps,
-    IReadOnlyList<string> PassedHealthChecks,
-    int RebootCount)
+    IReadOnlyList<string> PassedHealthChecks)
 {
-    public static TeamLabNodeBootstrapResult Completed(
-        IReadOnlyList<string>? steps = null,
-        IReadOnlyList<string>? healthChecks = null,
-        int rebootCount = 0) =>
-        new(true, "Bootstrap completed.", steps ?? [], healthChecks ?? [], rebootCount);
+    public static TeamLabNodeHealthResult Completed(
+        IReadOnlyList<string>? healthChecks = null) =>
+        new(true, "Health check completed.", healthChecks ?? []);
 
-    public static TeamLabNodeBootstrapResult Failed(string message) =>
-        new(false, message, [], [], 0);
+    public static TeamLabNodeHealthResult Failed(string message) =>
+        new(false, message, []);
 }
 
 public sealed record TeamLabNodeCleanupRequest(
@@ -319,12 +306,7 @@ public interface ITeamLabNodeExecutor
         string runtimeResourceId,
         TeamLabNodeAssetCreateRequest request,
         CancellationToken cancellationToken);
-    Task<TeamLabNodeBootstrapResult> ApplyBootstrapAsync(
-        Guid workerNodeId,
-        string runtimeResourceId,
-        TeamLabNodeAssetCreateRequest request,
-        CancellationToken cancellationToken);
-    Task<TeamLabNodeBootstrapResult> ProbeAssetHealthAsync(
+    Task<TeamLabNodeHealthResult> ProbeAssetHealthAsync(
         Guid workerNodeId,
         string runtimeResourceId,
         TeamLabNodeAssetCreateRequest request,

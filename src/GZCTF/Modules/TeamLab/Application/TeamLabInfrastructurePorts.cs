@@ -9,9 +9,8 @@ public enum TeamLabDeploymentStage : byte
     NetworkApplying = 1,
     RoutesApplying = 2,
     AssetBooting = 3,
-    BootstrapInjecting = 4,
-    HealthProbing = 5,
-    ObservationStarting = 6
+    HealthProbing = 4,
+    ObservationStarting = 5
 }
 
 public interface ITeamLabDeploymentProgress

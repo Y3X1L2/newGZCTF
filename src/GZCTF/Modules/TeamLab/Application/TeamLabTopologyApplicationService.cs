@@ -2,7 +2,6 @@ using System.Text.Json;
 using GZCTF.Infrastructure.Persistence.Queries;
 using GZCTF.Models;
 using GZCTF.Models.Data;
-using GZCTF.Modules.Content.Application;
 using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
@@ -15,7 +14,6 @@ public sealed class TeamLabTopologyApplicationService(
     TeamLabTopologyValidator validator,
     TeamLabReleaseService releases,
     TeamLabControlScopeService controlScopes,
-    BootstrapProfileCompatibilityService bootstrapCompatibility,
     NodeCapacitySnapshotService capacitySnapshots) : ITeamLabTopologyApplicationService
 {
     public async Task<TeamLabTopologyStorageReference> GetStorageReferenceAsync(
@@ -359,11 +357,6 @@ public sealed class TeamLabTopologyApplicationService(
         try
         {
             await ValidateImageTemplatesAsync(context, definition, cancellationToken);
-            await bootstrapCompatibility.ValidateReleaseAsync(
-                TeamLabReleaseCodec.DecodeExecution(
-                    topology.SchemaVersion,
-                    TeamLabReleaseCodec.Encode(topology.SchemaVersion, definition)),
-                cancellationToken);
             return result;
         }
         catch (TeamLabApiContractException exception)
@@ -378,11 +371,10 @@ public sealed class TeamLabTopologyApplicationService(
         int revision,
         Guid actorUserId,
         bool includeAll,
-        IReadOnlyList<TeamLabRuntimeOverlayModel>? scenarioOverlays,
         CancellationToken cancellationToken)
     {
         var topology = await RequireTopologyAsync(topologyId, actorUserId, includeAll, cancellationToken);
-        return await releases.PublishAsync(topology, revision, actorUserId, null, scenarioOverlays, cancellationToken);
+        return await releases.PublishAsync(topology, revision, actorUserId, null, cancellationToken);
     }
 
     public async Task<TeamLabReleaseModel> PublishForOperationAsync(
@@ -391,12 +383,11 @@ public sealed class TeamLabTopologyApplicationService(
         Guid actorUserId,
         bool includeAll,
         Guid operationId,
-        IReadOnlyList<TeamLabRuntimeOverlayModel>? scenarioOverlays,
         CancellationToken cancellationToken)
     {
         var topology = await RequireTopologyAsync(topologyId, actorUserId, includeAll, cancellationToken);
         return await releases.PublishAsync(
-            topology, revision, actorUserId, operationId, scenarioOverlays, cancellationToken);
+            topology, revision, actorUserId, operationId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<TeamLabReleaseModel>> ListReleasesAsync(
@@ -506,15 +497,14 @@ public sealed class TeamLabTopologyApplicationService(
     internal static async Task ValidateImageTemplatesAsync(
         AppDbContext context,
         TeamLabExecutionTopology topology,
-        CancellationToken cancellationToken,
-        bool allowBakedSourceDrift = false)
+        CancellationToken cancellationToken)
         => await ValidateImageTemplatesAsync(
             context,
             topology.Assets.Select(item => new TeamLabImageTemplateRequirement(
                 item.ImageTemplateId,
                 item.Kind,
                 item.Key,
-                allowBakedSourceDrift && item.BakeAtPublish ? null : item.ImageDigest)).ToArray(),
+                item.ImageDigest)).ToArray(),
             cancellationToken);
 
     private static async Task ValidateImageTemplatesAsync(
@@ -572,18 +562,12 @@ public sealed class TeamLabTopologyApplicationService(
                     item.Interfaces.OrderBy(iface => iface.OrderIndex).ThenBy(iface => iface.Key, StringComparer.Ordinal)
                         .Select(iface => new TeamLabTopologyInterfaceModel(
                             iface.Key, iface.Network.Key, iface.HostOffset, iface.IsPrimary, iface.OrderIndex)).ToArray(),
-                    item.RoutingEnabled,
                     item.ExposePort,
-                    DeserializeEnvironment(item.EnvironmentJson),
-                    item.StartCommand,
                     item.HealthCheckKind is { } kind && item.HealthCheckPort is { } port
                         ? new TeamLabHealthCheckModel(kind, port)
                         : null,
                     item.OrderIndex,
-                    item.Stateless,
-                    Deserialize<TeamLabBootstrapReferenceModel>(item.BootstrapJson),
-                    item.EndpointObservation,
-                    item.BakeAtPublish)).ToArray(),
+                    item.EndpointObservation)).ToArray(),
             topology.Connections.OrderBy(item => item.Key, StringComparer.Ordinal)
                 .Select(item => new TeamLabTopologyConnectionModel(
                     item.Key, item.FromNetworkKey, item.ToNetworkKey, item.ViaAssetKey,
@@ -701,16 +685,10 @@ public sealed class TeamLabTopologyApplicationService(
                 MemoryMiB = model.Resources.MemoryMiB,
                 StorageMiB = model.Resources.StorageMiB,
                 ExposePort = model.ExposePort,
-                RoutingEnabled = model.RoutingEnabled,
-                EnvironmentJson = JsonSerializer.Serialize(model.Environment ?? new Dictionary<string, string>()),
-                StartCommand = model.StartCommand,
                 HealthCheckKind = model.HealthCheck?.Kind,
                 HealthCheckPort = model.HealthCheck?.Port,
                 OrderIndex = model.OrderIndex,
-                Stateless = model.Stateless,
-                BootstrapJson = model.Bootstrap is null ? null : Serialize(model.Bootstrap),
-                EndpointObservation = model.EndpointObservation,
-                BakeAtPublish = model.BakeAtPublish
+                EndpointObservation = model.EndpointObservation
             };
             foreach (var iface in model.Interfaces)
             {
@@ -803,18 +781,6 @@ public sealed class TeamLabTopologyApplicationService(
             return new TeamLabTopologyEditorModel(new Dictionary<string, TeamLabEditorItemModel>(),
                 new Dictionary<string, TeamLabEditorItemModel>(),
                 new Dictionary<string, TeamLabEditorItemModel>());
-        }
-    }
-
-    private static IReadOnlyDictionary<string, string> DeserializeEnvironment(string json)
-    {
-        try
-        {
-            return JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>();
-        }
-        catch (JsonException)
-        {
-            return new Dictionary<string, string>();
         }
     }
 

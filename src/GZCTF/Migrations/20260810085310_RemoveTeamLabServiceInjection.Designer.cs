@@ -4,6 +4,7 @@ using System.Net;
 using GZCTF.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GZCTF.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260810085310_RemoveTeamLabServiceInjection")]
+    partial class RemoveTeamLabServiceInjection
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -5780,6 +5783,9 @@ namespace GZCTF.Migrations
                     b.Property<bool>("IsOpenToPlayers")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsScenarioBuild")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("LastError")
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
@@ -5902,6 +5908,9 @@ namespace GZCTF.Migrations
 
                     b.Property<int?>("SourceTemplateId")
                         .HasColumnType("integer");
+
+                    b.Property<bool>("Stateless")
+                        .HasColumnType("boolean");
 
                     b.Property<byte>("Status")
                         .HasColumnType("smallint");
@@ -6553,6 +6562,99 @@ namespace GZCTF.Migrations
                     b.ToTable("TeamLabObservationCursors", (string)null);
                 });
 
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabReleaseAssetArtifact", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ArtifactDigest")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<long>("ArtifactSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("AssetKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("BakeAttemptOperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("BakeRuntimeId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("BuildIdentity")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("CommitOperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("EvidenceDigest")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset?>("ReadyAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RegistryAddress")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("RegistryRepository")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("RegistryTag")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("ReleaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("ScenarioImageTemplateId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SourceImageTemplateId")
+                        .HasColumnType("integer");
+
+                    b.Property<byte>("Status")
+                        .HasColumnType("smallint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BakeRuntimeId");
+
+                    b.HasIndex("BuildIdentity");
+
+                    b.HasIndex("ScenarioImageTemplateId");
+
+                    b.HasIndex("SourceImageTemplateId");
+
+                    b.HasIndex("ReleaseId", "AssetKey")
+                        .IsUnique();
+
+                    b.ToTable("TeamLabReleaseAssetArtifacts", (string)null);
+                });
+
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabRollout", b =>
                 {
                     b.Property<int>("Id")
@@ -6851,6 +6953,9 @@ namespace GZCTF.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<bool>("BakeAtPublish")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("CpuUnits")
                         .HasColumnType("integer");
 
@@ -6858,6 +6963,10 @@ namespace GZCTF.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("smallint")
                         .HasDefaultValue((byte)0);
+
+                    b.Property<string>("EnvironmentJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
 
                     b.Property<int?>("ExposePort")
                         .HasColumnType("integer");
@@ -6889,6 +6998,16 @@ namespace GZCTF.Migrations
 
                     b.Property<int>("OrderIndex")
                         .HasColumnType("integer");
+
+                    b.Property<bool>("RoutingEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("StartCommand")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<bool>("Stateless")
+                        .HasColumnType("boolean");
 
                     b.Property<int>("StorageMiB")
                         .HasColumnType("integer");
@@ -10020,6 +10139,39 @@ namespace GZCTF.Migrations
                     b.Navigation("Runtime");
 
                     b.Navigation("WorkerNode");
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabReleaseAssetArtifact", b =>
+                {
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntime", "BakeRuntime")
+                        .WithMany()
+                        .HasForeignKey("BakeRuntimeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.TeamLabTopologyRelease", "Release")
+                        .WithMany()
+                        .HasForeignKey("ReleaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.ImageTemplate", "ScenarioImageTemplate")
+                        .WithMany()
+                        .HasForeignKey("ScenarioImageTemplateId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("GZCTF.Models.Data.ImageTemplate", "SourceImageTemplate")
+                        .WithMany()
+                        .HasForeignKey("SourceImageTemplateId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("BakeRuntime");
+
+                    b.Navigation("Release");
+
+                    b.Navigation("ScenarioImageTemplate");
+
+                    b.Navigation("SourceImageTemplate");
                 });
 
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabRollout", b =>

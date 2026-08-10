@@ -639,7 +639,6 @@ public class TeamLabNetworkConfig
     public int ManagedVmRebootAllowanceSeconds { get; set; } = 300;
     public int ManagedVmMaximumBootstrapTimeoutSeconds { get; set; } = 28800;
     public int RecoveryGraceSeconds { get; set; } = 30;
-    public bool EnableStatelessAutoRecovery { get; set; }
 }
 
 public class PublicUdpGatewayConfig

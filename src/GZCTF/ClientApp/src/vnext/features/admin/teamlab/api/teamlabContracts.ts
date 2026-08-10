@@ -1,7 +1,7 @@
 export type TeamLabAssetKind = 'docker' | 'vm'
 export type TeamLabInfrastructureKind = 'managed-switch' | 'managed-router'
 export type TeamLabConnectionDirection = 'from-to' | 'bidirectional'
-export type TeamLabDependencyCondition = 'network-ready' | 'guest-ready' | 'service-ready' | 'bootstrap-completed'
+export type TeamLabDependencyCondition = 'network-ready' | 'guest-ready' | 'service-ready'
 export type TeamLabEndpointObservationMode = 'disabled' | 'optional' | 'required'
 export type TeamLabHealthCheckKind = 'tcp' | 'http'
 export type TeamLabImageType = 'docker' | 'qcow2' | 'ova' | 'vmdk'
@@ -45,12 +45,6 @@ export interface TeamLabAssetResources {
   storageMiB: number
 }
 
-export interface TeamLabBootstrapReference {
-  profileId: string
-  version: number
-  parameters: Readonly<Record<string, string>>
-}
-
 export interface TeamLabHealthCheck {
   kind: TeamLabHealthCheckKind
   port: number
@@ -63,17 +57,10 @@ export interface TeamLabTopologyAsset {
   imageTemplateId: number
   resources: TeamLabAssetResources
   interfaces: readonly TeamLabTopologyInterface[]
-  routingEnabled: boolean
   exposePort: number | null
-  environment: Readonly<Record<string, string>> | null
-  startCommand: string | null
   healthCheck: TeamLabHealthCheck | null
   orderIndex: number
-  stateless: boolean
-  bootstrap: TeamLabBootstrapReference | null
   endpointObservation: TeamLabEndpointObservationMode
-  bakeAtPublish: boolean
-  imageDigest: string | null
 }
 
 export interface TeamLabTopologyInfrastructure {
@@ -240,8 +227,6 @@ export interface TeamLabPlan {
     imageTemplateId: number
     resources: TeamLabAssetResources
     interfaces: readonly Omit<TeamLabTopologyInterface, 'orderIndex'>[]
-    routingEnabled: boolean
-    imageDigest: string | null
   }[]
   shards: readonly {
     key: string
@@ -256,7 +241,6 @@ export interface TeamLabPlan {
   warnings: readonly string[]
   planHash: string
   managedInfrastructureCount: number
-  bootstrapArtifactCount: number
   observationPointEstimate: number
 }
 
@@ -264,7 +248,6 @@ export interface TeamLabAdminImageReadiness {
   imageTemplateId: number
   name: string
   imageType: TeamLabImageType
-  digest: string
   eligibleNodeCount: number
   readyNodeCount: number
   pendingNodeCount: number
@@ -279,11 +262,6 @@ export interface TeamLabAdminReleaseReadiness {
   images: readonly TeamLabAdminImageReadiness[]
   latestTrialRuntime: TeamLabAdminRuntimeSummary | null
   blockingReasons: readonly string[]
-  requiredRuntimeSecrets: readonly {
-    assetKey: string
-    assetName: string
-    parameterKey: string
-  }[]
 }
 
 export interface TeamLabCapabilities {

@@ -13,8 +13,7 @@ public sealed class TeamLabAdminQueryService(
     AppDbContext context,
     ITeamLabTopologyApplicationService topologies,
     NodeCapacitySnapshotService capacitySnapshots,
-    ITeamLabUsageProjectionProvider usage,
-    TeamLabBootstrapSecretValidator secretValidator)
+    ITeamLabUsageProjectionProvider usage)
 {
     public async Task<TeamLabAdminScenePageModel> ListScenesAsync(
         Guid actorUserId,
@@ -83,8 +82,7 @@ public sealed class TeamLabAdminQueryService(
             from runtime in context.TeamLabRuntimes.AsNoTracking()
             join release in context.TeamLabTopologyReleases.AsNoTracking()
                 on runtime.TopologyReleaseId equals release.Id
-            where !runtime.IsScenarioBuild &&
-                  topologyIds.Contains(release.TopologyId) &&
+            where topologyIds.Contains(release.TopologyId) &&
                   !gameBoundRuntimeIds.Contains(runtime.Id)
             group runtime by release.TopologyId
             into runtimes
@@ -202,7 +200,6 @@ public sealed class TeamLabAdminQueryService(
                 requirement.Id,
                 template?.Name ?? $"模板 {requirement.Id}",
                 template?.ImageType ?? (requirement.Kind == TeamLabAssetKind.Docker ? ImageType.Docker : ImageType.Qcow2),
-                digest,
                 eligible.Count,
                 matching.Count(item => item.Status == ImageDistributionStatus.Ready),
                 matching.Count(item => item.Status is ImageDistributionStatus.Pending or ImageDistributionStatus.Pulling),
@@ -213,8 +210,7 @@ public sealed class TeamLabAdminQueryService(
             from runtime in context.TeamLabRuntimes.AsNoTracking()
             join candidateRelease in context.TeamLabTopologyReleases.AsNoTracking()
                 on runtime.TopologyReleaseId equals candidateRelease.Id
-            where !runtime.IsScenarioBuild &&
-                  candidateRelease.Id == releaseId &&
+            where candidateRelease.Id == releaseId &&
                   !gameBoundRuntimeIds.Contains(runtime.Id)
             orderby runtime.CreatedAt descending, runtime.PublicId descending
             select new TrialRuntimeRow(
@@ -237,7 +233,6 @@ public sealed class TeamLabAdminQueryService(
         }
         if (plan is not null)
             blockers.AddRange(plan.Warnings);
-        var requiredRuntimeSecrets = await secretValidator.GetRequiredSecretsAsync(releaseId, cancellationToken);
         return new TeamLabAdminReleaseReadinessModel(
             topologyId,
             releaseId,
@@ -245,8 +240,7 @@ public sealed class TeamLabAdminQueryService(
             plan,
             images,
             latestTrial is null ? null : ToRuntime(latestTrial),
-            blockers,
-            requiredRuntimeSecrets);
+            blockers);
     }
 
     private async Task<IReadOnlyList<TeamLabPlanningNodeSnapshot>> LoadPlanningNodesAsync(
@@ -302,8 +296,7 @@ public sealed class TeamLabAdminQueryService(
                 on runtime.TopologyReleaseId equals release.Id
             join topology in context.TeamLabTopologies.AsNoTracking()
                 on release.TopologyId equals topology.Id
-            where !runtime.IsScenarioBuild &&
-                  (administrator || topology.OwnerUserId == actorUserId) &&
+            where (administrator || topology.OwnerUserId == actorUserId) &&
                   (!topologyId.HasValue || topology.PublicId == topologyId.Value) &&
                   (!cursor.HasValue || runtime.CreatedAt < cursor.Value.Time ||
                    runtime.CreatedAt == cursor.Value.Time && runtime.PublicId.CompareTo(cursor.Value.Id) < 0) &&
@@ -354,11 +347,11 @@ public sealed class TeamLabAdminQueryService(
             "published" => query.Where(item => item.Releases.Any()),
             "running" => query.Where(item => item.Releases.Any(release =>
                 context.TeamLabRuntimes.Any(runtime => runtime.TopologyReleaseId == release.Id &&
-                    !runtime.IsScenarioBuild && runtime.Status == TeamLabRuntimeStatus.Running &&
+                    runtime.Status == TeamLabRuntimeStatus.Running &&
                     !gameBoundRuntimeIds.Contains(runtime.Id)))),
             "failed" => query.Where(item => item.Releases.Any(release =>
                 context.TeamLabRuntimes.Any(runtime => runtime.TopologyReleaseId == release.Id &&
-                    !runtime.IsScenarioBuild && runtime.Status == TeamLabRuntimeStatus.Failed &&
+                    runtime.Status == TeamLabRuntimeStatus.Failed &&
                     !gameBoundRuntimeIds.Contains(runtime.Id)))),
             _ => query
         };

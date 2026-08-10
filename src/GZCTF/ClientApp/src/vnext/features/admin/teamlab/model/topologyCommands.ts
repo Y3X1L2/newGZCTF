@@ -270,9 +270,7 @@ export function connectTopology(document: TopologyDocument, request: TopologyCon
     if (from.type !== 'switch' || to.type !== 'switch' || from.key === to.key) {
       throw new Error('A route must connect two different switches.')
     }
-    if (via.type !== 'router' && (!isTopologyAsset(via) || !via.routingEnabled)) {
-      throw new Error('A route must use a managed router or routing-enabled asset.')
-    }
+    if (via.type !== 'router') throw new Error('A route must use a managed router.')
     const attached = new Set(
       Object.values(connections)
         .filter(isMembershipConnection)

@@ -57,17 +57,10 @@ function mapAsset(
     position: position(editor, 'asset', asset.key, index),
     imageTemplateId: asset.imageTemplateId,
     resources: { ...asset.resources },
-    routingEnabled: asset.routingEnabled,
     exposePort: asset.exposePort,
-    environment: asset.environment ? { ...asset.environment } : null,
-    startCommand: asset.startCommand,
     healthCheck: asset.healthCheck ? { ...asset.healthCheck } : null,
     orderIndex: asset.orderIndex,
-    stateless: asset.stateless,
-    bootstrap: asset.bootstrap ? { ...asset.bootstrap, parameters: { ...asset.bootstrap.parameters } } : null,
     endpointObservation: asset.endpointObservation,
-    bakeAtPublish: asset.bakeAtPublish,
-    imageDigest: asset.imageDigest,
   }
 }
 

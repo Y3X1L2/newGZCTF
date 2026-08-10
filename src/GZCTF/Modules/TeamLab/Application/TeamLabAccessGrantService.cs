@@ -71,11 +71,6 @@ public sealed class TeamLabAccessGrantService(
             TimeSpan.FromMinutes(2),
             cancellationToken);
         var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
-        if (runtime.IsScenarioBuild)
-            throw new TeamLabApiContractException(
-                "scenario_runtime_access_forbidden",
-                "场景构建运行时不接受玩家访问授权",
-                409);
         if (runtime.Status != TeamLabRuntimeStatus.Running || runtime.PublicUdpMapping is null)
             throw new TeamLabApiContractException("runtime_not_ready", "运行时尚未就绪，无法访问", 409);
         var entryShard = runtime.Shards.SingleOrDefault(item => item.Id == runtime.EntryShardId && item.Generation == runtime.Generation)

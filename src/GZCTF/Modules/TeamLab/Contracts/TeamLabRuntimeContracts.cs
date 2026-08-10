@@ -9,7 +9,6 @@ public sealed record TeamLabRuntimeConstraintsModel(
 
 public sealed record TeamLabRuntimeOverlayModel(
     string AssetKey,
-    IReadOnlyDictionary<string, string>? Environment,
     IReadOnlyDictionary<string, string>? Secrets);
 
 public sealed record CreateTeamLabRuntimeModel(

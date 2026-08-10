@@ -744,25 +744,6 @@ public class ImageDistributionService(
         ImageTemplate template,
         CancellationToken token)
     {
-        if (template.VmRuntimeMode == VmRuntimeMode.Scenario)
-        {
-            var artifact = await context.TeamLabReleaseAssetArtifacts.AsNoTracking()
-                .Where(item => item.ScenarioImageTemplateId == template.Id &&
-                               item.Status == TeamLabReleaseArtifactStatus.Ready)
-                .OrderByDescending(item => item.ReadyAt)
-                .Select(item => new ImmutableVmArtifact(
-                    item.ArtifactDigest,
-                    item.ArtifactSize,
-                    item.RegistryAddress,
-                    item.RegistryRepository,
-                    item.RegistryTag))
-                .FirstOrDefaultAsync(token);
-            if (artifact is null || !artifact.IsValidFor(template.ImageHash))
-                throw new InvalidOperationException(
-                    $"Scenario VM image {template.Name} ({template.Id}) has invalid immutable provenance.");
-            return artifact;
-        }
-
         var prepared = template.PreparedArtifact;
         if (prepared is not { Status: VmPreparedArtifactStatus.Ready })
             throw new InvalidOperationException(

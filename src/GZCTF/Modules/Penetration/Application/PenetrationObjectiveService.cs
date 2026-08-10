@@ -168,7 +168,7 @@ public sealed class PenetrationObjectiveService(
                     item => BuildFlag(item, gameId, teamId, version),
                     StringComparer.Ordinal);
                 if (values.Count > 0) values["GZCTF_FLAG"] = values.Values.First();
-                return new TeamLabRuntimeOverlayModel(group.Key, null, values);
+                return new TeamLabRuntimeOverlayModel(group.Key, values);
             }).ToArray();
     }
 

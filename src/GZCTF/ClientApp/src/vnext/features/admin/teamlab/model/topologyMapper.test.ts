@@ -52,17 +52,10 @@ function detail(): TeamLabTopologyDetail {
           imageTemplateId: 10,
           resources: { cpuUnits: 1, memoryMiB: 512, storageMiB: 2048 },
           interfaces: [{ key: 'web-client', networkKey: 'client', hostOffset: 10, primary: true, orderIndex: 0 }],
-          routingEnabled: false,
           exposePort: 8080,
-          environment: { MODE: 'prod' },
-          startCommand: '/app/start',
           healthCheck: { kind: 'http', port: 8080 },
           orderIndex: 0,
-          stateless: true,
-          bootstrap: { profileId: '019f0000-0000-7000-8000-000000000010', version: 3, parameters: { role: 'web' } },
           endpointObservation: 'required',
-          bakeAtPublish: false,
-          imageDigest: 'sha256:web',
         },
         {
           key: 'dc',
@@ -71,17 +64,10 @@ function detail(): TeamLabTopologyDetail {
           imageTemplateId: 20,
           resources: { cpuUnits: 4, memoryMiB: 8192, storageMiB: 40960 },
           interfaces: [{ key: 'dc-domain', networkKey: 'domain', hostOffset: 10, primary: true, orderIndex: 0 }],
-          routingEnabled: false,
           exposePort: null,
-          environment: null,
-          startCommand: null,
           healthCheck: { kind: 'tcp', port: 389 },
           orderIndex: 1,
-          stateless: false,
-          bootstrap: null,
           endpointObservation: 'optional',
-          bakeAtPublish: true,
-          imageDigest: 'sha256:dc',
         },
       ],
       connections: [
@@ -113,7 +99,7 @@ describe('topology API round trip', () => {
     })
     const compiled = compileTopologyDocument(document)
 
-    expect(document.nodes.dc).toMatchObject({ type: 'windows-vm', bakeAtPublish: true })
+    expect(document.nodes.dc).toMatchObject({ type: 'windows-vm' })
     const { editor, schemaVersion, ...definition } = compiled
     const canonicalSource = {
       ...source.definition,
@@ -156,19 +142,9 @@ describe('topology API round trip', () => {
     }
     source.definition.assets = source.definition.assets.map((asset) => ({
       ...asset,
-      routingEnabled: asset.key === 'web',
-      stateless: false,
-      bootstrap: null,
       endpointObservation: 'disabled',
-      bakeAtPublish: false,
-      imageDigest: null,
     }))
-    source.definition.connections = source.definition.connections.map((connection) => ({
-      ...connection,
-      viaAssetKey: 'web',
-      viaNodeKey: null,
-      direction: 'bidirectional',
-    }))
+    source.definition.connections = []
 
     const document = mapTopologyDetailToDocument(source, { resolveVmDeviceType: () => 'linux-vm' })
     const compiled = compileTopologyDocument(document)

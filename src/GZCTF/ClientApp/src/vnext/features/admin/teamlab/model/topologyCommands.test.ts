@@ -20,17 +20,10 @@ const asset = (key: string) => ({
   position,
   imageTemplateId: 1,
   resources: { cpuUnits: 1, memoryMiB: 128, storageMiB: 256 },
-  routingEnabled: false,
   exposePort: null,
-  environment: null,
-  startCommand: null,
   healthCheck: null,
   orderIndex: 0,
-  stateless: false,
-  bootstrap: null,
   endpointObservation: 'disabled' as const,
-  bakeAtPublish: false,
-  imageDigest: null,
 })
 
 function document(): TopologyDocument {

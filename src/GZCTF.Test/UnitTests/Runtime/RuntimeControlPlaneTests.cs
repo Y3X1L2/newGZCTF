@@ -933,7 +933,7 @@ public sealed class RuntimeControlPlaneTests
         1,
         resources ?? new TeamLabAssetResourceModel(10, 256, 512),
         [new TeamLabTopologyInterfaceModel("eth0", networkKey, 10, true)],
-        false);
+        ExposePort: null);
 
     static WorkerNode SeedVmNode(
         AppDbContext context,

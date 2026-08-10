@@ -29,8 +29,7 @@ public enum ImageStatus : byte
 public enum VmRuntimeMode : byte
 {
     Managed = 0,
-    Opaque = 1,
-    Scenario = 2
+    Opaque = 1
 }
 
 public enum VmNetworkMode : byte

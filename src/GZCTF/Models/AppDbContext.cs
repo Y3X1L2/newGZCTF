@@ -99,7 +99,6 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<ImageTemplateCapabilityCertification> ImageTemplateCapabilityCertifications => Set<ImageTemplateCapabilityCertification>();
     public DbSet<ImageTemplateCertificationJob> ImageTemplateCertificationJobs => Set<ImageTemplateCertificationJob>();
     public DbSet<VmPreparedArtifact> VmPreparedArtifacts => Set<VmPreparedArtifact>();
-    public DbSet<TeamLabReleaseAssetArtifact> TeamLabReleaseAssetArtifacts => Set<TeamLabReleaseAssetArtifact>();
     public DbSet<ImageDistributionRecord> ImageDistributionRecords { get; set; } = null!;
     public DbSet<ImageDistributionReferenceEntity> ImageDistributionReferences => Set<ImageDistributionReferenceEntity>();
     public DbSet<DockerRegistryMigrationTask> DockerRegistryMigrationTasks { get; set; } = null!;
@@ -172,7 +171,6 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TeamLabRuntimeInfrastructureFragment> TeamLabRuntimeInfrastructureFragments => Set<TeamLabRuntimeInfrastructureFragment>();
     public DbSet<TeamLabFabricLinkLease> TeamLabFabricLinkLeases => Set<TeamLabFabricLinkLease>();
     public DbSet<TeamLabRuntimeDependencyState> TeamLabRuntimeDependencyStates => Set<TeamLabRuntimeDependencyState>();
-    public DbSet<TeamLabBootstrapExecution> TeamLabBootstrapExecutions => Set<TeamLabBootstrapExecution>();
     public DbSet<TeamLabObservationPoint> TeamLabObservationPoints => Set<TeamLabObservationPoint>();
     public DbSet<TeamLabObservationCursor> TeamLabObservationCursors => Set<TeamLabObservationCursor>();
     public DbSet<TeamLabTrafficObservation> TeamLabTrafficObservations => Set<TeamLabTrafficObservation>();

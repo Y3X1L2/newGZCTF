@@ -19,7 +19,6 @@ public sealed class TeamLabRuntimeOperationHandler(
     TeamLabRuntimeLifecycleGuard lifecycleGuard,
     TeamLabAccessGrantService access,
     TeamLabTrafficApplicationService traffic,
-    TeamLabScenarioBakeService scenarioBakes,
     TeamLabRuntimeOperationPayloadProtector protector,
     ApiOperationService operations,
     ITeamLabRolloutApplicationService rolloutService,
@@ -321,13 +320,6 @@ public sealed class TeamLabRuntimeOperationHandler(
                     actorUserId,
                     true,
                     operation.Id,
-                    payload.PublishTopology?.ScenarioOverlays,
-                    cancellationToken);
-                await scenarioBakes.EnsureReleaseReadyAsync(
-                    result.Id,
-                    actorUserId,
-                    operation.Id,
-                    payload.PublishTopology?.ScenarioOverlays,
                     cancellationToken);
                 await operations.UpdateProgressAsync(operation.Id, leaseOwner, "release-published", 1, 1,
                     "teamlab-release", result.Id.ToString("D"), null, cancellationToken);

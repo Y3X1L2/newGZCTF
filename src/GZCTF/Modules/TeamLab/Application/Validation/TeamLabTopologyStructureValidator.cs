@@ -26,8 +26,7 @@ internal sealed partial class TeamLabTopologyStructureValidator(TeamLabAddressPo
         var dependencies = definition.Dependencies ?? [];
         if (schemaVersion == 1 &&
             (infrastructure.Count > 0 || dependencies.Count > 0 || definition.Observation is not null ||
-             definition.Assets.Any(asset => asset.Stateless || asset.Bootstrap is not null ||
-                                            asset.EndpointObservation != TeamLabEndpointObservationMode.Disabled) ||
+             definition.Assets.Any(asset => asset.EndpointObservation != TeamLabEndpointObservationMode.Disabled) ||
              definition.Connections.Any(connection => connection.ViaNodeKey is not null || connection.Direction is not null)))
         {
             Add(issues, "topology_schema_mismatch", "schemaVersion",
@@ -81,9 +80,6 @@ internal sealed partial class TeamLabTopologyStructureValidator(TeamLabAddressPo
         var networkByKey = definition.Networks
             .GroupBy(item => item.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
-        var assetByKey = definition.Assets
-            .GroupBy(item => item.Key, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         var infrastructureByKey = infrastructure
             .GroupBy(item => item.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
@@ -93,7 +89,7 @@ internal sealed partial class TeamLabTopologyStructureValidator(TeamLabAddressPo
         foreach (var (item, index) in infrastructure.Select((value, index) => (value, index)))
             ValidateInfrastructure(item, index, networkByKey, issues);
         foreach (var (connection, index) in definition.Connections.Select((value, index) => (value, index)))
-            ValidateConnection(connection, index, networkByKey, assetByKey, infrastructureByKey, issues);
+            ValidateConnection(connection, index, networkByKey, infrastructureByKey, issues);
     }
 
     private static void ValidateAsset(
@@ -109,25 +105,7 @@ internal sealed partial class TeamLabTopologyStructureValidator(TeamLabAddressPo
             Add(issues, "image_template_invalid", $"{path}.imageTemplateId", "请为该资产选择可用镜像模板。");
         if (asset.Resources.CpuUnits <= 0 || asset.Resources.MemoryMiB <= 0 || asset.Resources.StorageMiB <= 0)
             Add(issues, "asset_resources_invalid", $"{path}.resources", "CPU, memory and storage must be positive.");
-        if (asset.BakeAtPublish && asset.Kind != TeamLabAssetKind.Vm)
-            Add(issues, "scenario_bake_kind_invalid", $"{path}.bakeAtPublish",
-                "Release-time scenario baking currently supports VM assets only.");
         ValidateInterfaces(asset.Interfaces, path, networkByKey, false, issues);
-        if (asset.Environment is not null)
-        {
-            foreach (var key in asset.Environment.Keys.Where(key => !EnvironmentKeyRegex().IsMatch(key)))
-                Add(issues, "environment_key_invalid", $"{path}.environment.{key}",
-                    "Environment keys must match [A-Z_][A-Z0-9_]{0,63}.");
-        }
-        if (asset.Bootstrap is { } bootstrap)
-        {
-            if (bootstrap.ProfileId == Guid.Empty || bootstrap.Version <= 0)
-                Add(issues, "bootstrap_reference_invalid", $"{path}.bootstrap",
-                    "Bootstrap profile ID and version must be valid.");
-            foreach (var key in bootstrap.Parameters.Keys.Where(key => !ParameterKeyRegex().IsMatch(key)))
-                Add(issues, "bootstrap_parameter_invalid", $"{path}.bootstrap.parameters.{key}",
-                    "Bootstrap parameter keys must match [a-z][a-zA-Z0-9_.-]{0,62}.");
-        }
     }
 
     private static void ValidateInfrastructure(
@@ -164,7 +142,6 @@ internal sealed partial class TeamLabTopologyStructureValidator(TeamLabAddressPo
         TeamLabTopologyConnectionModel connection,
         int index,
         IReadOnlyDictionary<string, TeamLabTopologyNetworkModel> networkByKey,
-        IReadOnlyDictionary<string, TeamLabTopologyAssetModel> assetByKey,
         IReadOnlyDictionary<string, TeamLabTopologyInfrastructureModel> infrastructureByKey,
         ICollection<TeamLabValidationIssueModel> issues)
     {
@@ -174,40 +151,23 @@ internal sealed partial class TeamLabTopologyStructureValidator(TeamLabAddressPo
             Add(issues, "connection_network_missing", path, "Both connection networks must exist.");
         if (string.Equals(connection.FromNetworkKey, connection.ToNetworkKey, StringComparison.Ordinal))
             Add(issues, "connection_self_reference", path, "A connection must join two different networks.");
-        var hasAsset = !string.IsNullOrWhiteSpace(connection.ViaAssetKey);
         var hasNode = !string.IsNullOrWhiteSpace(connection.ViaNodeKey);
-        if (hasAsset == hasNode)
+        if (!hasNode || !string.IsNullOrWhiteSpace(connection.ViaAssetKey))
         {
             Add(issues, "connection_path_invalid", path,
-                "A connection must reference exactly one managed router or custom routing asset.");
+                "A connection must reference exactly one managed router.");
             return;
         }
 
-        IReadOnlySet<string> attachedNetworks;
-        string targetPath;
-        if (hasNode)
+        var targetPath = $"{path}.viaNodeKey";
+        if (!infrastructureByKey.TryGetValue(connection.ViaNodeKey!, out var router) ||
+            router.Kind != TeamLabInfrastructureKind.ManagedRouter)
         {
-            targetPath = $"{path}.viaNodeKey";
-            if (!infrastructureByKey.TryGetValue(connection.ViaNodeKey!, out var router) ||
-                router.Kind != TeamLabInfrastructureKind.ManagedRouter)
-            {
-                Add(issues, "connection_router_invalid", targetPath,
-                    "The connection node must be a managed router.");
-                return;
-            }
-            attachedNetworks = router.Interfaces.Select(item => item.NetworkKey).ToHashSet(StringComparer.Ordinal);
+            Add(issues, "connection_router_invalid", targetPath,
+                "The connection node must be a managed router.");
+            return;
         }
-        else
-        {
-            targetPath = $"{path}.viaAssetKey";
-            if (!assetByKey.TryGetValue(connection.ViaAssetKey!, out var router) || !router.RoutingEnabled)
-            {
-                Add(issues, "connection_router_invalid", targetPath,
-                    "The connection asset must exist and enable routing.");
-                return;
-            }
-            attachedNetworks = router.Interfaces.Select(item => item.NetworkKey).ToHashSet(StringComparer.Ordinal);
-        }
+        var attachedNetworks = router.Interfaces.Select(item => item.NetworkKey).ToHashSet(StringComparer.Ordinal);
 
         if (!attachedNetworks.Contains(connection.FromNetworkKey) || !attachedNetworks.Contains(connection.ToNetworkKey))
             Add(issues, "connection_router_not_attached", targetPath,
@@ -318,9 +278,6 @@ internal sealed partial class TeamLabTopologyStructureValidator(TeamLabAddressPo
 
     [GeneratedRegex("^[a-z][a-z0-9-]{0,62}$", RegexOptions.CultureInvariant)]
     private static partial Regex TopologyKeyRegex();
-
-    [GeneratedRegex("^[A-Z_][A-Z0-9_]{0,63}$", RegexOptions.CultureInvariant)]
-    private static partial Regex EnvironmentKeyRegex();
 
     [GeneratedRegex("^[a-z][a-zA-Z0-9_.-]{0,62}$", RegexOptions.CultureInvariant)]
     private static partial Regex ParameterKeyRegex();

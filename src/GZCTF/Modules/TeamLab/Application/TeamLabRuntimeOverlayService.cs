@@ -28,7 +28,7 @@ public sealed partial class TeamLabRuntimeOverlayService(IDataProtectionProvider
             if (!assetKeys.Contains(assetKey))
                 throw new TeamLabApiContractException("topology_invalid", $"sensor 资源 '{assetKey}' 不存在", 422);
             var current = normalized.GetValueOrDefault(assetKey) ??
-                          new TeamLabRuntimeOverlayModel(assetKey, null, null);
+                          new TeamLabRuntimeOverlayModel(assetKey, null);
             var secrets = new SortedDictionary<string, string>(StringComparer.Ordinal);
             foreach (var pair in current.Secrets ?? new Dictionary<string, string>())
                 secrets[pair.Key] = pair.Value;
@@ -77,9 +77,8 @@ public sealed partial class TeamLabRuntimeOverlayService(IDataProtectionProvider
         var assetKey = overlay.AssetKey.Trim();
         if (!assetKeys.Contains(assetKey))
             throw new TeamLabApiContractException("topology_invalid", $"overlay 资源 '{assetKey}' 不存在", 422);
-        var environment = NormalizeValues(overlay.Environment, false);
         var secrets = NormalizeValues(overlay.Secrets, true);
-        return new TeamLabRuntimeOverlayModel(assetKey, environment, secrets);
+        return new TeamLabRuntimeOverlayModel(assetKey, secrets);
     }
 
     private static IReadOnlyDictionary<string, string>? NormalizeValues(
@@ -91,8 +90,7 @@ public sealed partial class TeamLabRuntimeOverlayService(IDataProtectionProvider
         foreach (var pair in values)
         {
             var key = pair.Key.Trim();
-            if (!EnvironmentKeyRegex().IsMatch(key) &&
-                (!secret || !BootstrapParameterKeyRegex().IsMatch(key)))
+            if (!EnvironmentKeyRegex().IsMatch(key))
                 throw new TeamLabApiContractException("topology_invalid", $"overlay key '{key}' 无效", 422);
             if (key.StartsWith("GZCTF_SENSOR_", StringComparison.Ordinal))
                 throw new TeamLabApiContractException("topology_invalid", $"overlay key '{key}' 已被平台保留", 422);
@@ -106,6 +104,4 @@ public sealed partial class TeamLabRuntimeOverlayService(IDataProtectionProvider
     [GeneratedRegex("^[A-Z_][A-Z0-9_]{0,63}$", RegexOptions.CultureInvariant)]
     private static partial Regex EnvironmentKeyRegex();
 
-    [GeneratedRegex("^[a-z][a-zA-Z0-9_.-]{0,62}$", RegexOptions.CultureInvariant)]
-    private static partial Regex BootstrapParameterKeyRegex();
 }

@@ -17,7 +17,6 @@ public class TeamLabRuntime
     [MaxLength(128)] public string CreateRequestHash { get; set; } = string.Empty;
     public int? EntryShardId { get; set; }
     public TeamLabRuntimeStatus Status { get; set; } = TeamLabRuntimeStatus.Pending;
-    public bool IsScenarioBuild { get; set; }
     public bool IsOpenToPlayers { get; set; }
     [MaxLength(1024)] public string? LastError { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -27,7 +26,6 @@ public class TeamLabRuntime
     public List<TeamLabRuntimeAsset> Assets { get; set; } = [];
     public List<TeamLabRuntimeInfrastructure> Infrastructure { get; set; } = [];
     public List<TeamLabRuntimeDependencyState> DependencyStates { get; set; } = [];
-    public List<TeamLabBootstrapExecution> BootstrapExecutions { get; set; } = [];
     public List<TeamLabObservationPoint> ObservationPoints { get; set; } = [];
     public List<TeamLabObservationCursor> ObservationCursors { get; set; } = [];
     public List<TeamLabFabricLinkLease> FabricLinkLeases { get; set; } = [];
@@ -107,10 +105,8 @@ public class TeamLabRuntimeAsset
     public TeamLabAssetExecutionStage ExecutionStage { get; set; } = TeamLabAssetExecutionStage.Pending;
     public Guid? AgentOperationId { get; set; }
     public long AgentSignalSequence { get; set; }
-    public bool Stateless { get; set; }
     public TeamLabEndpointObservationMode EndpointObservation { get; set; }
     [MaxLength(128)] public string? ImageDigest { get; set; }
-    [MaxLength(128)] public string? BootstrapDigest { get; set; }
     public DateTimeOffset? ExecutionUpdatedAt { get; set; }
     [MaxLength(1024)] public string? LastError { get; set; }
     public TeamLabRuntime Runtime { get; set; } = null!;

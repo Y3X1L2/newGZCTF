@@ -198,7 +198,7 @@ public sealed class BootstrapProfileOperationHandler(
         if (references.Count > 0)
             throw new ApiOperationTerminalException(
                 "bootstrap_profile_in_use",
-                "Bootstrap profile is referenced by TeamLab topology assets or releases.");
+                "Bootstrap profile is still referenced by an active platform resource.");
         profile.Status = BootstrapProfileStatus.Deleting;
         profile.UpdatedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(cancellationToken);

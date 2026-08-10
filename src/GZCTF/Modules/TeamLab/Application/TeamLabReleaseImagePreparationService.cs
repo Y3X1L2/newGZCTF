@@ -119,7 +119,6 @@ public sealed class TeamLabReleaseImagePreparationService(
                 requirement.Id,
                 template?.Name ?? $"模板 {requirement.Id}",
                 (template?.ImageType ?? (requirement.Kind == TeamLabAssetKind.Docker ? ImageType.Docker : ImageType.Qcow2)).ToString(),
-                digest,
                 eligible.Count,
                 ready,
                 preparing,

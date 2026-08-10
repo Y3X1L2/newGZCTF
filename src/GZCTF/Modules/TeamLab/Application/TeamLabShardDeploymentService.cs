@@ -20,8 +20,7 @@ public sealed class TeamLabShardDeploymentService(
     ITeamLabNodeExecutor executor,
     TeamLabRouteApplicationService routes,
     TeamLabEventRecorder eventRecorder,
-    ITeamLabDeploymentProgress stageMachine,
-    TeamLabBootstrapOrchestrator bootstrapOrchestrator)
+    ITeamLabDeploymentProgress stageMachine)
 {
     public async Task DeployAsync(
         TeamLabRuntime runtime,
@@ -164,8 +163,6 @@ public sealed class TeamLabShardDeploymentService(
                 result.Asset.LastError = Trim(result.Message);
                 result.Asset.ExecutionUpdatedAt = DateTimeOffset.UtcNow;
                 MarkDependenciesFailed(runtime, result.Asset.TopologyKey, result.Message);
-                if (result.Node.Kind == TeamLabDeploymentNodeKind.Bootstrap)
-                    bootstrapOrchestrator.RecordFailure(runtime, result.Asset, result.Request, result.Message);
                 RecordAssetEvent(runtime, result, success: false);
             }
             await context.SaveChangesAsync(cancellationToken);
@@ -265,30 +262,17 @@ public sealed class TeamLabShardDeploymentService(
                 allowedRoutes.GetValueOrDefault(iface.NetworkKey) ?? [],
                 dnsServers);
         }).ToArray();
-        var environment = topologyAsset.Environment
-            .Concat(overlay?.Environment ?? new Dictionary<string, string>())
-            .GroupBy(item => item.Key, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.Last().Value, StringComparer.Ordinal);
         var secrets = overlay?.Secrets ?? new Dictionary<string, string>();
-        var scenarioArtifact = topologyAsset.BakeAtPublish && !runtime.IsScenarioBuild;
         return new TeamLabNodeAssetCreateRequest(
                 runtime.Id, asset.Id, runtime.PublicId, runtime.Generation, asset.TopologyKey, asset.Name, topologyAsset.Kind,
                 asset.SourceTemplateId ?? topologyAsset.ImageTemplateId, topologyAsset.CpuUnits, topologyAsset.MemoryMiB,
-                topologyAsset.StorageMiB, topologyAsset.ExposePort, topologyAsset.RoutingEnabled, imageReady,
-                environment, secrets, interfaces,
-                topologyAsset.Bootstrap is null || scenarioArtifact
-                    ? null
-                    : new TeamLabNodeBootstrapIntent(
-                        topologyAsset.Bootstrap.ProfileId,
-                        topologyAsset.Bootstrap.Version,
-                        topologyAsset.Bootstrap.Parameters),
+                topologyAsset.StorageMiB, topologyAsset.ExposePort, imageReady, secrets, interfaces,
                 topologyAsset.HealthCheckKind is { } healthKind
                     ? new TeamLabNodeHealthIntent(healthKind, topologyAsset.HealthCheckPort)
                     : null,
                 null,
                 topologyAsset.EndpointObservation,
                 TeamLabResourceNameFactory.RouterNamespace(runtime.Id, shard.Id),
-                topologyAsset.StartCommand,
                 asset.AgentOperationId,
                 topologyAsset.Kind == TeamLabAssetKind.Vm ? template.VmRuntimeMode : null,
                 topologyAsset.Kind == TeamLabAssetKind.Vm ? template.VmNetworkMode : null);
@@ -314,7 +298,7 @@ public sealed class TeamLabShardDeploymentService(
                         shard.WorkerNodeId, request, cancellationToken);
                     return new NodeExecution(
                         node, asset, request, created.Success, created.Message,
-                        created.RuntimeResourceId, created.NativeIdentity, TeamLabNodeBootstrapResult.Completed());
+                        created.RuntimeResourceId, created.NativeIdentity);
                 case TeamLabDeploymentNodeKind.GuestReady:
                     if (string.IsNullOrWhiteSpace(asset.RuntimeResourceId))
                         return NodeExecution.Failed(node, asset, request,
@@ -323,16 +307,7 @@ public sealed class TeamLabShardDeploymentService(
                         shard.WorkerNodeId, asset.RuntimeResourceId, request, cancellationToken);
                     return new NodeExecution(
                         node, asset, request, ready.Success, ready.Message,
-                        asset.RuntimeResourceId, asset.NativeIdentity, TeamLabNodeBootstrapResult.Completed());
-                case TeamLabDeploymentNodeKind.Bootstrap:
-                    if (string.IsNullOrWhiteSpace(asset.RuntimeResourceId))
-                        return NodeExecution.Failed(node, asset, request,
-                            "Runtime asset identity is missing before bootstrap.");
-                    var bootstrap = await executor.ApplyBootstrapAsync(
-                        shard.WorkerNodeId, asset.RuntimeResourceId, request, cancellationToken);
-                    return new NodeExecution(
-                        node, asset, request, bootstrap.Success, bootstrap.Message,
-                        asset.RuntimeResourceId, asset.NativeIdentity, bootstrap);
+                        asset.RuntimeResourceId, asset.NativeIdentity);
                 case TeamLabDeploymentNodeKind.Health:
                     if (string.IsNullOrWhiteSpace(asset.RuntimeResourceId))
                         return NodeExecution.Failed(node, asset, request,
@@ -341,7 +316,7 @@ public sealed class TeamLabShardDeploymentService(
                         shard.WorkerNodeId, asset.RuntimeResourceId, request, cancellationToken);
                     return new NodeExecution(
                         node, asset, request, health.Success, health.Message,
-                        asset.RuntimeResourceId, asset.NativeIdentity, health);
+                        asset.RuntimeResourceId, asset.NativeIdentity);
                 default:
                     throw new ArgumentOutOfRangeException(nameof(node.Kind));
             }
@@ -381,14 +356,6 @@ public sealed class TeamLabShardDeploymentService(
                 MarkDependenciesSatisfied(
                     runtime, result.Asset.TopologyKey, TeamLabDependencyCondition.GuestReady);
                 break;
-            case TeamLabDeploymentNodeKind.Bootstrap:
-                result.Asset.ExecutionStage = TeamLabAssetExecutionStage.BootstrapCompleted;
-                result.Asset.Status = TeamLabRuntimeStatus.Deploying;
-                bootstrapOrchestrator.RecordSuccess(
-                    runtime, result.Asset, result.Request, result.BootstrapResult);
-                MarkDependenciesSatisfied(
-                    runtime, result.Asset.TopologyKey, TeamLabDependencyCondition.BootstrapCompleted);
-                break;
             case TeamLabDeploymentNodeKind.Health:
                 result.Asset.ExecutionStage = TeamLabAssetExecutionStage.ServiceReady;
                 result.Asset.Status = TeamLabRuntimeStatus.Running;
@@ -412,8 +379,6 @@ public sealed class TeamLabShardDeploymentService(
                 (TeamLabDeploymentStage.AssetBooting, "Creating independent runtime assets in parallel."),
             TeamLabDeploymentNodeKind.GuestReady =>
                 (TeamLabDeploymentStage.AssetBooting, "Waiting for VM guest readiness signals."),
-            TeamLabDeploymentNodeKind.Bootstrap =>
-                (TeamLabDeploymentStage.BootstrapInjecting, "Injecting and executing bootstrap profiles."),
             TeamLabDeploymentNodeKind.Health =>
                 (TeamLabDeploymentStage.HealthProbing, "Running service and network health probes."),
             _ => throw new ArgumentOutOfRangeException()
@@ -485,11 +450,6 @@ public sealed class TeamLabShardDeploymentService(
                 OperationalEventCodes.TeamLab.GuestReadinessFailed,
                 OperationalErrorCategory.Kvm,
                 OperationalErrorCodes.KvmOperationFailed),
-            TeamLabDeploymentNodeKind.Bootstrap => (
-                OperationalEventCodes.TeamLab.BootstrapSucceeded,
-                OperationalEventCodes.TeamLab.BootstrapFailed,
-                OperationalErrorCategory.AgentProtocol,
-                OperationalErrorCodes.BootstrapOperationFailed),
             TeamLabDeploymentNodeKind.Health => (
                 OperationalEventCodes.TeamLab.HealthSucceeded,
                 OperationalEventCodes.TeamLab.HealthFailed,
@@ -523,23 +483,6 @@ public sealed class TeamLabShardDeploymentService(
                 ["assetKey"] = result.Asset.TopologyKey,
                 ["imageType"] = result.Asset.Kind.ToString()
             });
-        if (success && result.Node.Kind == TeamLabDeploymentNodeKind.Bootstrap &&
-            result.BootstrapResult.RebootCount > 0)
-            eventRecorder.Record(
-                runtime,
-                "bootstrap",
-                TeamLabEventLevel.Info,
-                OperationalEventCodes.TeamLab.BootstrapRebooted,
-                OperationalEventOutcome.Observed,
-                "Bootstrap completed required guest reboot cycles.",
-                workerNodeId: shard.WorkerNodeId,
-                detail: new Dictionary<string, object?>
-                {
-                    ["generation"] = runtime.Generation,
-                    ["stage"] = "bootstrap",
-                    ["assetKind"] = result.Asset.Kind.ToString(),
-                    ["rebootCount"] = result.BootstrapResult.RebootCount
-                });
     }
 
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildAllowedRoutes(
@@ -589,16 +532,14 @@ public sealed class TeamLabShardDeploymentService(
         bool Success,
         string Message,
         string? RuntimeResourceId,
-        string? NativeIdentity,
-        TeamLabNodeBootstrapResult BootstrapResult)
+        string? NativeIdentity)
     {
         public static NodeExecution Failed(
             TeamLabDeploymentNode node,
             TeamLabRuntimeAsset asset,
             TeamLabNodeAssetCreateRequest request,
             string message) => new(
-            node, asset, request, false, message, asset.RuntimeResourceId, asset.NativeIdentity,
-            TeamLabNodeBootstrapResult.Failed(message));
+            node, asset, request, false, message, asset.RuntimeResourceId, asset.NativeIdentity);
     }
     private sealed record RuntimeInterfaceIntent(
         string Key,

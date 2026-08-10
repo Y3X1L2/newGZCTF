@@ -28,7 +28,6 @@ public sealed class TeamLabRuntimeOrchestrator(
     ITeamLabArtifactDistribution imageDistribution,
     TeamLabPhysicalPlacementService placement,
     TeamLabRuntimeLifecycleGuard lifecycleGuard,
-    TeamLabBootstrapSecretValidator secretValidator,
     TeamLabRuntimeOperationPayloadProtector operationPayloads,
     ITeamLabRuntimeQueue queue,
     IPublicUdpGatewayProvider publicGateway,
@@ -45,7 +44,6 @@ public sealed class TeamLabRuntimeOrchestrator(
         string? subjectDisplayName,
         CancellationToken cancellationToken)
     {
-        await secretValidator.RequireAsync(command.ReleaseId, command.Overlays, cancellationToken);
         TeamLabQueueTicketResult? admittedTicket = null;
         var result = await planner.CreateAsync(
             command,
@@ -306,7 +304,6 @@ public sealed class TeamLabRuntimeOrchestrator(
         if (runtime.Status is TeamLabRuntimeStatus.Destroying or TeamLabRuntimeStatus.CleanupPending)
             throw new TeamLabApiContractException("runtime_cleanup_pending", "运行时清理已在进行中", 409);
         var releaseId = command.ReleaseId ?? runtime.TopologyReleaseId;
-        await secretValidator.RequireAsync(releaseId, command.Overlays, cancellationToken);
         var dockerSlots = runtime.Assets.Count(item => item.Generation == runtime.Generation && item.Kind == TeamLabResourceKind.Docker);
         var vmSlots = runtime.Assets.Count(item => item.Generation == runtime.Generation && item.Kind == TeamLabResourceKind.Vm);
         var payload = new TeamLabRuntimeOperationPayload(null, runtime.PublicId, command);
@@ -510,13 +507,6 @@ public sealed class TeamLabRuntimeOrchestrator(
             return TeamLabNodeResult.Failed("Runtime has no topology release.");
         var release = await context.TeamLabTopologyReleases.AsNoTracking().SingleAsync(item => item.Id == releaseId, cancellationToken);
         var definition = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
-        if (!runtime.IsScenarioBuild)
-            definition = definition with
-            {
-                Assets = definition.Assets.Select(asset => asset.BakeAtPublish
-                    ? asset with { Bootstrap = null, BakeAtPublish = false }
-                    : asset).ToArray()
-            };
         var envelope = runtime.SecretEnvelopes.SingleOrDefault(item => item.Generation == runtime.Generation);
         IReadOnlyDictionary<string, TeamLabRuntimeOverlayModel> overlayValues;
         try
@@ -792,7 +782,6 @@ public sealed class TeamLabRuntimeOrchestrator(
         .Include(item => item.Assets)
         .Include(item => item.Infrastructure).ThenInclude(item => item.Fragments)
         .Include(item => item.DependencyStates)
-        .Include(item => item.BootstrapExecutions)
         .Include(item => item.ObservationPoints)
         .Include(item => item.FabricLinkLeases)
         .Include(item => item.AccessGrants)

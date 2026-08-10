@@ -53,7 +53,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
             .ReturnsAsync(TeamLabNodeAssetCreateResult.Failed("create failed"));
         executor.Setup(item => item.CreateAssetAsync(
                 It.IsAny<Guid>(), It.Is<TeamLabNodeAssetCreateRequest>(request =>
-                    request.AssetKey == "m-success" && request.StartCommand == "httpd -f -p 8080"),
+                    request.AssetKey == "m-success"),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(TeamLabNodeAssetCreateResult.Created("container-m-success"));
         executor.Setup(item => item.CreateAssetAsync(
@@ -73,13 +73,12 @@ public sealed class TeamLabDeploymentOrchestrationTests
             executor.Object,
             routes,
             eventRecorder,
-            Mock.Of<ITeamLabDeploymentProgress>(),
-            new TeamLabBootstrapOrchestrator());
+            Mock.Of<ITeamLabDeploymentProgress>());
 
         var exception = await Assert.ThrowsAsync<TeamLabRuntimeExecutionException>(() =>
             deployment.DeployAsync(runtime, Topology([
                     Asset("a-fail"),
-                    Asset("m-success") with { StartCommand = "httpd -f -p 8080" },
+                    Asset("m-success"),
                     Asset("z-fail")
                 ], []),
                 new Dictionary<string, TeamLabRuntimeOverlayModel>(), CancellationToken.None));
@@ -95,115 +94,12 @@ public sealed class TeamLabDeploymentOrchestrationTests
     }
 
     [Fact]
-    public async Task DeployAsync_ScenarioArtifactUsesResolvedTemplateAndSkipsPublishBootstrap()
-    {
-        await using var context = CreateContext();
-        var runtimeAsset = RuntimeAsset("ad-dc", TeamLabAssetExecutionStage.Pending, null);
-        runtimeAsset.Kind = TeamLabResourceKind.Vm;
-        runtimeAsset.SourceTemplateId = 2;
-        var (runtime, _) = await SeedRuntimeAsync(context, runtimeAsset);
-        context.ImageTemplates.Add(new ImageTemplate
-        {
-            Id = 2,
-            Name = "scenario-ad-dc",
-            ImageType = ImageType.Qcow2,
-            OSType = OSType.Windows,
-            ImageHash = new string('a', 64),
-            FileSize = 4096,
-            Status = ImageStatus.Ready,
-            VmRuntimeMode = VmRuntimeMode.Scenario
-        });
-        await context.SaveChangesAsync();
-
-        TeamLabNodeAssetCreateRequest? createdRequest = null;
-        var executor = new Mock<ITeamLabNodeExecutor>();
-        executor.Setup(item => item.ApplyInfrastructureAsync(
-                It.IsAny<Guid>(), It.IsAny<TeamLabNodeInfrastructureApplyRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(TeamLabNodeInfrastructureResult.Applied("sha256:infrastructure"));
-        executor.Setup(item => item.CreateAssetAsync(
-                It.IsAny<Guid>(), It.IsAny<TeamLabNodeAssetCreateRequest>(), It.IsAny<CancellationToken>()))
-            .Callback<Guid, TeamLabNodeAssetCreateRequest, CancellationToken>((_, request, _) => createdRequest = request)
-            .ReturnsAsync(TeamLabNodeAssetCreateResult.Created("scenario-vm"));
-        executor.Setup(item => item.WaitForAssetReadyAsync(
-                It.IsAny<Guid>(), "scenario-vm", It.IsAny<TeamLabNodeAssetCreateRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(TeamLabNodeResult.Ok());
-        executor.Setup(item => item.ApplyBootstrapAsync(
-                It.IsAny<Guid>(), "scenario-vm", It.IsAny<TeamLabNodeAssetCreateRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(TeamLabNodeBootstrapResult.Completed());
-        executor.Setup(item => item.ProbeAssetHealthAsync(
-                It.IsAny<Guid>(), "scenario-vm", It.IsAny<TeamLabNodeAssetCreateRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(TeamLabNodeBootstrapResult.Completed());
-        // Deployment ends with an inventory verification pass, so the node must report the VM it
-        // just created; without this the run fails inside verification instead of reaching the
-        // scenario-template assertions below.
-        executor.Setup(item => item.GetRuntimeInventoryAsync(
-                It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() => new TeamLabNodeRuntimeInventory(
-                [],
-                [new TeamLabNodeInventoryResource("scenario-vm", "scenario-vm", runtime.Generation, "running")],
-                [],
-                DateTimeOffset.UtcNow));
-        var writer = new Mock<IOperationalEventWriter>();
-        var eventRecorder = new TeamLabEventRecorder(context, writer.Object, new OperationalCorrelation());
-        var services = new ServiceCollection();
-        services.AddSingleton(Mock.Of<ITeamLabArtifactDistribution>());
-        await using var provider = services.BuildServiceProvider();
-        var deployment = new TeamLabShardDeploymentService(
-            context,
-            provider.GetRequiredService<IServiceScopeFactory>(),
-            executor.Object,
-            new TeamLabRouteApplicationService(context, executor.Object, eventRecorder),
-            eventRecorder,
-            Mock.Of<ITeamLabDeploymentProgress>(),
-            new TeamLabBootstrapOrchestrator());
-        var topologyAsset = Asset("ad-dc") with
-        {
-            Kind = TeamLabAssetKind.Vm,
-            ImageTemplateId = 69,
-            Bootstrap = new TeamLabExecutionBootstrapReference(
-                Guid.NewGuid(), 2, new Dictionary<string, string>()),
-            BakeAtPublish = true
-        };
-
-        await deployment.DeployAsync(
-            runtime,
-            Topology([topologyAsset], []),
-            new Dictionary<string, TeamLabRuntimeOverlayModel>(),
-            CancellationToken.None);
-
-        Assert.NotNull(createdRequest);
-        Assert.Equal(2, createdRequest.ImageTemplateId);
-        Assert.Null(createdRequest.Bootstrap);
-    }
-
-    [Fact]
     public void Capabilities_AdvertiseTheImplementedWindowsVmRuntime()
     {
-        var service = new TeamLabTopologyApplicationService(null!, null!, null!, null!, null!,
+        var service = new TeamLabTopologyApplicationService(null!, null!, null!, null!,
             new NodeCapacitySnapshotService(null!));
 
         Assert.True(service.GetCapabilities().Features.WindowsVm);
-    }
-
-    [Fact]
-    public void ScenarioPublication_AcceptsOnlyProtectedSecretsForBakeAssets()
-    {
-        var bakeAsset = Asset("ad-dc") with { BakeAtPublish = true };
-        var accepted = TeamLabScenarioBakeService.ValidateScenarioOverlays(
-            [bakeAsset],
-            [new TeamLabRuntimeOverlayModel(
-                "ad-dc",
-                null,
-                new Dictionary<string, string> { ["safe_mode_password"] = "secret" })]);
-
-        Assert.Single(accepted!);
-        Assert.Throws<ApiOperationTerminalException>(() =>
-            TeamLabScenarioBakeService.ValidateScenarioOverlays(
-                [bakeAsset],
-                [new TeamLabRuntimeOverlayModel(
-                    "ad-dc",
-                    new Dictionary<string, string> { ["MODE"] = "build" },
-                    null)]));
     }
 
     [Fact]
@@ -410,11 +306,6 @@ public sealed class TeamLabDeploymentOrchestrationTests
 
         completed.Add("entry:create");
         completed.Add("independent:create");
-        Assert.True(graph.TryTakeReadyBatch(completed, scheduled, out var bootstrap));
-        Assert.DoesNotContain(bootstrap, item => item.Key == "dependent:create");
-
-        completed.Add("entry:bootstrap");
-        completed.Add("independent:bootstrap");
         Assert.True(graph.TryTakeReadyBatch(completed, scheduled, out var health));
         Assert.DoesNotContain(health, item => item.Key == "dependent:create");
 
@@ -446,7 +337,6 @@ public sealed class TeamLabDeploymentOrchestrationTests
         Assert.Equal(
         [
             "guest:create",
-            "ready:bootstrap",
             "ready:create",
             "ready:health"
         ], completed.Order(StringComparer.Ordinal).ToArray());
@@ -467,9 +357,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
 
         completed.UnionWith(create.Select(item => item.Key));
         Assert.True(graph.TryTakeReadyBatch(completed, scheduled, out var next));
-        Assert.Contains(next, item => item.Key == "container:bootstrap");
         Assert.Contains(next, item => item.Key == "vm:guestready");
-        Assert.DoesNotContain(next, item => item.Key == "vm:bootstrap");
 
         var vm = RuntimeAsset("vm", TeamLabAssetExecutionStage.Pending, "tl-vm");
         vm.Kind = TeamLabResourceKind.Vm;
@@ -497,20 +385,19 @@ public sealed class TeamLabDeploymentOrchestrationTests
         var machine = new TeamLabDeploymentStageMachine(context, accessor);
 
         await machine.SetAsync(
-            TeamLabDeploymentStage.BootstrapInjecting,
+            TeamLabDeploymentStage.AssetBooting,
             new string('x', 700),
             CancellationToken.None);
 
-        Assert.Equal(DeploymentStage.BootstrapInjecting, ticket.Stage);
+        Assert.Equal(DeploymentStage.AssetBooting, ticket.Stage);
         Assert.Equal(512, ticket.StageMessage?.Length);
     }
 
     [Fact]
-    public void RecoveryPolicy_DeniesStatefulAssetsAndAllowsCompleteStatelessInputs()
+    public void RecoveryPolicy_RequiresExplicitRebuildForMissingAssets()
     {
         var policy = new TeamLabRuntimeRecoveryPolicy(Options.Create(new TeamLabNetworkConfig
         {
-            EnableStatelessAutoRecovery = true,
             RecoveryGraceSeconds = 30
         }));
         var now = DateTimeOffset.UtcNow;
@@ -525,21 +412,18 @@ public sealed class TeamLabDeploymentOrchestrationTests
             StartedAt = now.AddMinutes(-2)
         };
         var stateful = RuntimeAsset("stateful", TeamLabAssetExecutionStage.ServiceReady, "vm-stateful");
-        stateful.Stateless = false;
         stateful.ImageDigest = "sha256:image";
-        var stateless = RuntimeAsset("stateless", TeamLabAssetExecutionStage.ServiceReady, "container-stateless");
-        stateless.Stateless = true;
-        stateless.ImageDigest = "sha256:image";
-        stateless.BootstrapDigest = "sha256:bootstrap";
+        var container = RuntimeAsset("container", TeamLabAssetExecutionStage.ServiceReady, "container-runtime");
+        container.ImageDigest = "sha256:image";
 
         var denied = policy.CanRebuildMissingAsset(
             runtime, ticket, stateful, true, true, now);
-        var allowed = policy.CanRebuildMissingAsset(
-            runtime, ticket, stateless, true, true, now);
+        var alsoDenied = policy.CanRebuildMissingAsset(
+            runtime, ticket, container, true, true, now);
 
         Assert.False(denied.Allowed);
-        Assert.Contains("Stateful", denied.Reason, StringComparison.Ordinal);
-        Assert.True(allowed.Allowed, allowed.Reason);
+        Assert.False(alsoDenied.Allowed);
+        Assert.Contains("显式重建", denied.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -594,15 +478,10 @@ public sealed class TeamLabDeploymentOrchestrationTests
         128,
         256,
         [],
-        false,
-        null,
-        new Dictionary<string, string>(),
         null,
         healthCheckKind,
         healthCheckKind is null ? null : 8080,
         0,
-        true,
-        null,
         TeamLabEndpointObservationMode.Disabled);
 
     private static TeamLabRuntimeAsset RuntimeAsset(

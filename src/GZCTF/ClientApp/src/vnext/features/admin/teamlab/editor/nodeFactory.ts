@@ -54,16 +54,9 @@ export function createTopologyNode(
       type === 'docker'
         ? { cpuUnits: 1, memoryMiB: 512, storageMiB: 1024 }
         : { cpuUnits: 2, memoryMiB: 2048, storageMiB: 20_480 },
-    routingEnabled: false,
     exposePort: null,
-    environment: null,
-    startCommand: null,
     healthCheck: null,
     orderIndex,
-    stateless: false,
-    bootstrap: null,
     endpointObservation: 'optional',
-    bakeAtPublish: false,
-    imageDigest: null,
   }
 }

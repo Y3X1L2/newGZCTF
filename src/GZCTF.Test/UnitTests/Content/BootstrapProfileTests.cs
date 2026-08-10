@@ -82,97 +82,6 @@ public sealed class BootstrapProfileTests
     }
 
     [Fact]
-    public async Task Compatibility_RequiresCertificationBoundToCurrentImageDigest()
-    {
-        await using var context = CreateContext();
-        var profileId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
-        var profile = new BootstrapProfile
-        {
-            PublicId = profileId,
-            Name = "linux-service",
-            CreatedById = userId
-        };
-        var manifest = new BootstrapProfileManifest(
-            1,
-            new HashSet<OSType> { OSType.Linux },
-            new HashSet<TeamLabAssetKind> { TeamLabAssetKind.Vm },
-            new HashSet<string> { ImageTemplateCapabilityIds.GuestQga },
-            [new BootstrapParameterDefinition("service", BootstrapParameterType.String, true, false)],
-            [], [], [], 0);
-        var version = new BootstrapProfileVersion
-        {
-            Profile = profile,
-            ProfileId = profile.Id,
-            Version = 1,
-            Status = BootstrapProfileVersionStatus.Ready,
-            ManifestJson = BootstrapProfileApplicationService.SerializeManifest(manifest),
-            ManifestDigest = new string('b', 64),
-            ArtifactDigest = new string('c', 64),
-            ArtifactSize = 1,
-            RegistryAddress = "10.24.0.28:5000",
-            RegistryRepository = $"gzctf/bootstrap-profile/{profileId:N}",
-            RegistryTag = "1",
-            CreatedById = userId
-        };
-        profile.Versions.Add(version);
-        var artifact = new VmPreparedArtifact
-        {
-            OSType = OSType.Linux,
-            Status = VmPreparedArtifactStatus.Ready,
-            ArtifactDigest = new string('a', 64),
-            ArtifactSize = 1,
-            RegistryAddress = "10.24.0.28:5000",
-            RegistryRepository = "gzctf/vm-template/ubuntu",
-            RegistryTag = "managed"
-        };
-        var template = new ImageTemplate
-        {
-            Id = 77,
-            Name = "ubuntu",
-            OSType = OSType.Linux,
-            ImageType = ImageType.Qcow2,
-            Status = ImageStatus.Ready,
-            ImageHash = new string('a', 64),
-            VmRuntimeMode = VmRuntimeMode.Managed,
-            VmArtifactStatus = VmArtifactStatus.Ready,
-            PreparedArtifact = artifact
-        };
-        context.AddRange(profile, template);
-        await context.SaveChangesAsync();
-        var topology = Topology(profileId, template.Id);
-        var service = new BootstrapProfileCompatibilityService(context);
-
-        await Assert.ThrowsAsync<TeamLabApiContractException>(() =>
-            service.ValidateReleaseAsync(topology, CancellationToken.None));
-
-        context.ImageTemplateCapabilityCertifications.Add(new ImageTemplateCapabilityCertification
-        {
-            ImageTemplateId = template.Id,
-            ImageHash = template.ImageHash,
-            Status = ImageTemplateCertificationStatus.Certified,
-            CapabilitiesJson = JsonSerializer.Serialize(new[]
-            {
-                ImageTemplateCapabilityIds.GuestQga,
-                ImageTemplateCapabilityIds.LinuxCloudInitNoCloud,
-                ImageTemplateCapabilityIds.NetworkVirtio,
-                ImageTemplateCapabilityIds.GuestSupervisor,
-                ImageTemplateCapabilityIds.VmPreparedImage
-            }),
-            EvidenceDigest = new string('d', 64),
-            ProbeKind = "controlled-probe",
-            PreparationContractVersion = GuestControlProtocol.PreparationContractVersion,
-            GuestProtocolVersion = GuestControlProtocol.SchemaVersion,
-            CertifiedById = userId
-        });
-        await context.SaveChangesAsync();
-
-        var compatible = await service.ValidateReleaseAsync(topology, CancellationToken.None);
-        Assert.Single(compatible);
-        Assert.Equal(version.Id, compatible[0].Id);
-    }
-
-    [Fact]
     public async Task OciArtifactPush_DigestMismatchFailsBeforeNetworkAccess()
     {
         var path = Path.GetTempFileName();
@@ -192,19 +101,6 @@ public sealed class BootstrapProfileTests
             File.Delete(path);
         }
     }
-
-    private static TeamLabExecutionTopology Topology(Guid profileId, int templateId) => new(
-        2,
-        "bootstrap",
-        [],
-        [],
-        [new TeamLabExecutionAsset(
-            "web", "web", TeamLabAssetKind.Vm, templateId, 1, 1024, 10240, [], false, null,
-            new Dictionary<string, string>(), null, null, null, 0, false,
-            new TeamLabExecutionBootstrapReference(profileId, 1,
-                new Dictionary<string, string> { ["service"] = "nginx" }),
-            TeamLabEndpointObservationMode.Disabled)],
-        [], [], new TeamLabExecutionObservationPolicy(true, true, TeamLabEndpointObservationMode.Optional));
 
     private static BootstrapProfileApplicationService CreateApplicationService(
         AppDbContext context,

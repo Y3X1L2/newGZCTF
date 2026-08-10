@@ -10,17 +10,10 @@ const asset = (key: string, type: 'docker' | 'linux-vm' | 'windows-vm', orderInd
   position: position(500, orderIndex * 140),
   imageTemplateId: orderIndex + 1,
   resources: { cpuUnits: 2, memoryMiB: 2048, storageMiB: 8192 },
-  routingEnabled: key === 'gateway',
   exposePort: null,
-  environment: null,
-  startCommand: null,
   healthCheck: null,
   orderIndex,
-  stateless: false,
-  bootstrap: null,
   endpointObservation: 'optional',
-  bakeAtPublish: false,
-  imageDigest: null,
 })
 
 function document(): TopologyDocument {
@@ -159,14 +152,6 @@ function document(): TopologyDocument {
         viaNodeKey: 'router-data',
         direction: 'from-to',
       },
-      'gateway-route': {
-        type: 'route',
-        key: 'gateway-route',
-        fromSwitchKey: 'switch-app',
-        toSwitchKey: 'switch-data',
-        viaNodeKey: 'gateway',
-        direction: 'bidirectional',
-      },
       'dc-after-portal': {
         type: 'dependency',
         key: 'dc-after-portal',
@@ -192,7 +177,6 @@ describe('compileTopologyDocument', () => {
     expect(first.connections).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ key: 'app-data-route', viaNodeKey: 'router-data', direction: 'from-to' }),
-        expect.objectContaining({ key: 'gateway-route', viaAssetKey: 'gateway', viaNodeKey: null }),
       ])
     )
     expect(first.dependencies).toEqual([{ assetKey: 'dc', dependsOnKey: 'portal', condition: 'service-ready' }])

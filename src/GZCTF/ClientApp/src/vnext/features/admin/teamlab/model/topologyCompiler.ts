@@ -124,31 +124,22 @@ export function compileTopologyDocument(document: TopologyDocument): CreateTeamL
       imageTemplateId: node.imageTemplateId,
       resources: { ...node.resources },
       interfaces: interfacesFor(document, node.key),
-      routingEnabled: node.routingEnabled,
       exposePort: node.exposePort,
-      environment: node.environment ? { ...node.environment } : null,
-      startCommand: node.startCommand,
       healthCheck: node.healthCheck ? { ...node.healthCheck } : null,
       orderIndex: node.orderIndex,
-      stateless: node.stateless,
-      bootstrap: node.bootstrap ? { ...node.bootstrap, parameters: { ...node.bootstrap.parameters } } : null,
       endpointObservation: node.endpointObservation,
-      bakeAtPublish: node.bakeAtPublish,
-      imageDigest: node.imageDigest,
     })),
     connections: connections
       .filter((connection) => connection.type === 'route')
       .map((connection) => {
         const via = requireNode(document, connection.viaNodeKey)
-        if (via.type !== 'router' && (!isTopologyAsset(via) || !via.routingEnabled)) {
-          throw new TopologyCompileError(`Route '${connection.key}' must use a router or routing-enabled asset.`)
-        }
+        if (via.type !== 'router') throw new TopologyCompileError(`Route '${connection.key}' must use a managed router.`)
         return {
           key: connection.key,
           fromNetworkKey: switchNetworkKey(document, connection.fromSwitchKey),
           toNetworkKey: switchNetworkKey(document, connection.toSwitchKey),
           viaNodeKey: via.type === 'router' ? via.key : null,
-          viaAssetKey: isTopologyAsset(via) ? via.key : null,
+          viaAssetKey: null,
           direction: connection.direction,
         }
       }),

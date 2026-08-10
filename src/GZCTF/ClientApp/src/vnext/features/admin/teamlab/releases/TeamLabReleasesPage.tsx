@@ -144,7 +144,6 @@ export function TeamLabReleasesPage() {
         onConfirm={createTrial}
         open={trialOpen}
         release={selectedRelease}
-        requiredRuntimeSecrets={readinessRequest.data?.requiredRuntimeSecrets ?? []}
         submitting={creatingTrial}
       />
     </section>

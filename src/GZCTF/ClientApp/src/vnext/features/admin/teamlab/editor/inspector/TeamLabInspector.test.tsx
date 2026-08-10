@@ -52,17 +52,10 @@ function createDocument(): TopologyDocument {
         position: { x: 80, y: 220, width: null, height: null, collapsed: false },
         imageTemplateId: 7,
         resources: { cpuUnits: 2, memoryMiB: 1024, storageMiB: 2048 },
-        routingEnabled: false,
         exposePort: 8080,
-        environment: { MODE: 'production' },
-        startCommand: '/app/start',
         healthCheck: { kind: 'http', port: 8080 },
         orderIndex: 2,
-        stateless: true,
-        bootstrap: { profileId: 'web', version: 3, parameters: { region: 'internal' } },
         endpointObservation: 'required',
-        bakeAtPublish: false,
-        imageDigest: 'sha256:abc',
       },
       database: {
         type: 'linux-vm',
@@ -71,17 +64,10 @@ function createDocument(): TopologyDocument {
         position: { x: 520, y: 220, width: null, height: null, collapsed: false },
         imageTemplateId: 12,
         resources: { cpuUnits: 4, memoryMiB: 4096, storageMiB: 20_480 },
-        routingEnabled: false,
         exposePort: null,
-        environment: null,
-        startCommand: null,
         healthCheck: { kind: 'tcp', port: 5432 },
         orderIndex: 3,
-        stateless: false,
-        bootstrap: null,
         endpointObservation: 'optional',
-        bakeAtPublish: true,
-        imageDigest: null,
       },
     },
     connections: {
@@ -186,28 +172,10 @@ describe('TeamLabInspector', () => {
     const asset = (onDocumentChange.mock.calls[0][0] as TopologyDocument).nodes.app
     expect(asset).toMatchObject({
       imageTemplateId: 42,
-      environment: { MODE: 'production' },
-      startCommand: '/app/start',
       healthCheck: { kind: 'http', port: 8080 },
-      bootstrap: { profileId: 'web', version: 3, parameters: { region: 'internal' } },
       endpointObservation: 'required',
-      imageDigest: 'sha256:abc',
     })
     expect(screen.queryByRole('textbox', { name: /secret/i })).not.toBeInTheDocument()
-  })
-
-  it('keeps a clicked field explanation open for the administrator to read', () => {
-    render(
-      <TeamLabInspector
-        document={createDocument()}
-        onDocumentChange={vi.fn()}
-        selection={selection(['app'])}
-      />
-    )
-
-    fireEvent.click(screen.getByText('高级配置'))
-    fireEvent.click(screen.getByRole('button', { name: '关于无状态资产' }))
-    expect(screen.getByRole('tooltip')).toHaveTextContent('可随时重建')
   })
 
   it('updates membership, route and dependency connections with dedicated editors', () => {
@@ -249,9 +217,9 @@ describe('TeamLabInspector', () => {
         selection={selection([], ['dependency'])}
       />
     )
-    fireEvent.change(screen.getByLabelText('就绪条件'), { target: { value: 'bootstrap-completed' } })
+    fireEvent.change(screen.getByLabelText('就绪条件'), { target: { value: 'guest-ready' } })
     expect((dependencyChange.mock.calls[0][0] as TopologyDocument).connections.dependency).toMatchObject({
-      condition: 'bootstrap-completed',
+      condition: 'guest-ready',
     })
   })
 

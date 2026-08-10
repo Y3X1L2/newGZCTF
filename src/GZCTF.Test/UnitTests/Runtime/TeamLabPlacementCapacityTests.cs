@@ -249,7 +249,7 @@ public sealed class TeamLabPlacementCapacityTests
         1,
         resources,
         [new TeamLabTopologyInterfaceModel("eth0", networkKey, 10, true)],
-        false);
+        ExposePort: null);
 
     static WorkerNode SeedNode(
         AppDbContext context,

@@ -31,7 +31,6 @@ public sealed class TeamLabDeploymentStageMachine(
         TeamLabDeploymentStage.NetworkApplying => DeploymentStage.NetworkApplying,
         TeamLabDeploymentStage.RoutesApplying => DeploymentStage.RoutesApplying,
         TeamLabDeploymentStage.AssetBooting => DeploymentStage.AssetBooting,
-        TeamLabDeploymentStage.BootstrapInjecting => DeploymentStage.BootstrapInjecting,
         TeamLabDeploymentStage.HealthProbing => DeploymentStage.HealthProbing,
         TeamLabDeploymentStage.ObservationStarting => DeploymentStage.ObservationStarting,
         _ => throw new ArgumentOutOfRangeException(nameof(stage))

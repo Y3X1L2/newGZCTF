@@ -25,17 +25,10 @@ function asset(index: number, networkIndex: number): TopologyAssetNode {
     resources: type === 'docker'
       ? { cpuUnits: 1, memoryMiB: 512, storageMiB: 1024 }
       : { cpuUnits: 2, memoryMiB: 2048, storageMiB: 20_480 },
-    routingEnabled: false,
     exposePort: type === 'docker' ? 8080 : null,
-    environment: null,
-    startCommand: null,
     healthCheck: type === 'docker' ? { kind: 'tcp', port: 8080 } : null,
     orderIndex: index,
-    stateless: type === 'docker',
-    bootstrap: null,
     endpointObservation: 'optional',
-    bakeAtPublish: false,
-    imageDigest: null,
   }
 }
 

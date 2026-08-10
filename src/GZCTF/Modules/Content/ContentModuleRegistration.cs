@@ -24,7 +24,6 @@ public static class ContentModuleRegistration
         services.AddScoped<IImageTemplateReferenceProvider, ExerciseImageTemplateReferenceProvider>();
         services.AddScoped<IImageTemplateReferenceProvider, TrainingImageTemplateReferenceProvider>();
         services.AddScoped<IImageTemplateReferenceProvider, TeamLabImageTemplateReferenceProvider>();
-        services.AddScoped<IBootstrapProfileReferenceProvider, TeamLabBootstrapProfileReferenceProvider>();
         services.AddScoped<ITrainingCourseDeletionStore, EfTrainingCourseDeletionStore>();
         services.AddScoped<TrainingCourseDeletionService>();
         services.AddScoped<IImageImportSubmissionStore, EfImageImportSubmissionStore>();
@@ -45,7 +44,6 @@ public static class ContentModuleRegistration
         services.AddScoped<IBootstrapProfileDistributionService>(serviceProvider =>
             serviceProvider.GetRequiredService<BootstrapProfileDistributionService>());
         services.AddScoped<BootstrapProfileApplicationService>();
-        services.AddScoped<BootstrapProfileCompatibilityService>();
         services.AddScoped<ImageTemplateCertificationService>();
         services.AddScoped<ImageRemoteAccessService>();
         services.AddScoped<VmImageCertificationProbeService>();

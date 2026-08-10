@@ -553,7 +553,7 @@ public sealed class AgentTeamLabNodeExecutor(
         image = await dockerRegistry.ResolveImageReferenceAsync(image, cancellationToken);
         if (!request.ImageReady)
             await imageDistribution.EnsureDockerImageOnNodeAsync(image, workerNodeId, cancellationToken);
-        var environment = request.Environment.Concat(request.Secrets)
+        var environment = request.Secrets
             .GroupBy(item => item.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Last().Value, StringComparer.Ordinal);
         var config = new ContainerConfig
@@ -574,9 +574,8 @@ public sealed class AgentTeamLabNodeExecutor(
             BypassPublicProxy = true,
             UsePenetrationFabric = false,
             UseHostNetworkNone = true,
-            StartCommand = request.StartCommand,
-            EnableNetworkAdmin = request.RoutingEnabled,
-            EnableIpForwarding = request.RoutingEnabled,
+            EnableNetworkAdmin = false,
+            EnableIpForwarding = false,
             PreferredNodeId = workerNodeId,
             DnsServers = request.Interfaces.SelectMany(item => item.DnsServers).Distinct(StringComparer.Ordinal).ToList(),
             EnvironmentVariables = environment
@@ -701,14 +700,13 @@ public sealed class AgentTeamLabNodeExecutor(
     {
         if (template.ImageType == ImageType.Docker)
             return TeamLabNodeAssetCreateResult.Failed($"Image template {template.Id} is not a VM template.");
-        var requiresGuestControl = request.Bootstrap is not null ||
-                                   request.EndpointObservation != TeamLabEndpointObservationMode.Disabled;
+        var requiresGuestControl = request.EndpointObservation != TeamLabEndpointObservationMode.Disabled;
         if (requiresGuestControl && (template.VmRuntimeMode == VmRuntimeMode.Opaque ||
             template.VmArtifactStatus != VmArtifactStatus.Ready ||
             template.VmRuntimeMode == VmRuntimeMode.Managed &&
             template.PreparedArtifact is not { Status: VmPreparedArtifactStatus.Ready } ||
             !template.CapabilityCertifications.Any(certification =>
-                BootstrapProfileCompatibilityService.IsCurrentManagedCertification(certification, template))))
+                ManagedVmCertificationPolicy.IsCurrent(certification, template))))
             return TeamLabNodeAssetCreateResult.Failed(
                 $"Image template {template.Name} ({template.Id}) cannot provide the requested managed guest capabilities.");
         if (!request.ImageReady)
@@ -719,7 +717,6 @@ public sealed class AgentTeamLabNodeExecutor(
         }
         var vmName = TeamLabResourceNameFactory.LinuxName($"tl{request.RuntimeId}-{request.AssetKey}");
         var interfaces = BuildVmInterfaces(request, template);
-        var bootstrap = await ResolveBootstrapAsync(db, workerNodeId, request, cancellationToken);
         if (request.OperationId is not { } operationId || operationId == Guid.Empty)
             return TeamLabNodeAssetCreateResult.Failed("The TeamLab VM operation identity is missing.");
         var nativeId = StableDomainId(vmName, request.Generation);
@@ -738,16 +735,12 @@ public sealed class AgentTeamLabNodeExecutor(
             var endpoint = await agent.GetGuestManagementEndpointAsync(workerNodeId, cancellationToken);
             if (!endpoint.Healthy)
                 return TeamLabNodeAssetCreateResult.Failed("The Worker guest-management endpoint is not healthy.");
-            var artifactDigest = template.VmRuntimeMode == VmRuntimeMode.Scenario
-                ? template.ImageHash!
-                : template.PreparedArtifact!.ArtifactDigest;
+            var artifactDigest = template.PreparedArtifact!.ArtifactDigest;
             var (intent, protectedSecrets) = BuildGuestIntent(
                 request,
                 identity,
                 template.OSType,
-                artifactDigest,
-                bootstrap,
-                new Uri($"https://{endpoint.HostAddress}:{endpoint.ListenPort}/api/guest/v1/artifacts"));
+                artifactDigest);
             var enrollment = await agent.PrepareGuestControlAsync(
                 workerNodeId,
                 new GuestControlPrepareRequest(
@@ -909,43 +902,7 @@ public sealed class AgentTeamLabNodeExecutor(
                 request.RuntimeId, request.Generation, request.AssetKey),
             cancellationToken);
 
-    public async Task<TeamLabNodeBootstrapResult> ApplyBootstrapAsync(
-        Guid workerNodeId,
-        string runtimeResourceId,
-        TeamLabNodeAssetCreateRequest request,
-        CancellationToken cancellationToken)
-    {
-        if (request.Kind == TeamLabAssetKind.Docker)
-            return request.Bootstrap is null
-                ? TeamLabNodeBootstrapResult.Completed()
-                : TeamLabNodeBootstrapResult.Failed(
-                    "Docker bootstrap profiles require the container bootstrap executor delivered with the endpoint observer unit.");
-        if (request.Bootstrap is null)
-            return TeamLabNodeBootstrapResult.Completed();
-        if (request.OperationId is not { } operationId || operationId == Guid.Empty)
-            return TeamLabNodeBootstrapResult.Failed("The TeamLab VM bootstrap operation identity is missing.");
-        var bootstrapTimeout = await ResolveBootstrapSignalTimeoutAsync(request, cancellationToken);
-        var completed = await runtimeSignals.WaitForAsync(
-            operationId,
-            request.Generation,
-            AgentRuntimeSignalStage.BootstrapCompleted,
-            bootstrapTimeout,
-            cancellationToken);
-        if (completed.Ready)
-            return TeamLabNodeBootstrapResult.Completed();
-
-        var errorCode = completed.ErrorCode ?? "runtime.bootstrap_signal_missing";
-        var detail = completed.Facts is { Count: > 0 }
-            ? string.Join(", ", completed.Facts.OrderBy(item => item.Key)
-                .Select(item => $"{item.Key}={item.Value}"))
-            : null;
-        return TeamLabNodeBootstrapResult.Failed(
-            detail is null
-                ? $"VM bootstrap did not complete: {errorCode}"
-                : $"VM bootstrap did not complete: {errorCode} ({detail})");
-    }
-
-    public async Task<TeamLabNodeBootstrapResult> ProbeAssetHealthAsync(
+    public async Task<TeamLabNodeHealthResult> ProbeAssetHealthAsync(
         Guid workerNodeId,
         string runtimeResourceId,
         TeamLabNodeAssetCreateRequest request,
@@ -965,15 +922,15 @@ public sealed class AgentTeamLabNodeExecutor(
                         request.Health?.Kind,
                         request.Health?.Port), cancellationToken);
                 if (probe.Success)
-                    return TeamLabNodeBootstrapResult.Completed(
-                        healthChecks: request.Health is null
+                    return TeamLabNodeHealthResult.Completed(
+                        request.Health is null
                             ? []
                             : [$"{request.Health.Kind}:{request.Health.Port}"]);
                 if (attempt < 29)
                     await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
             }
 
-            return TeamLabNodeBootstrapResult.Failed(
+            return TeamLabNodeHealthResult.Failed(
                 probe?.Message ?? $"Container {request.Name} did not become reachable.");
         }
 
@@ -991,16 +948,16 @@ public sealed class AgentTeamLabNodeExecutor(
                         request.Health?.Kind,
                         request.Health?.Port), cancellationToken);
                 if (probe.Success)
-                    return TeamLabNodeBootstrapResult.Completed(
-                        healthChecks: request.Health is null ? [] : [$"{request.Health.Kind}:{request.Health.Port}"]);
+                    return TeamLabNodeHealthResult.Completed(
+                        request.Health is null ? [] : [$"{request.Health.Kind}:{request.Health.Port}"]);
                 if (attempt < 119)
                     await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
             }
-            return TeamLabNodeBootstrapResult.Failed(
+            return TeamLabNodeHealthResult.Failed(
                 probe?.Message ?? $"VM {request.Name} did not become reachable from its router namespace.");
         }
         if (request.OperationId is not { } operationId || operationId == Guid.Empty)
-            return TeamLabNodeBootstrapResult.Failed("The TeamLab VM health operation identity is missing.");
+            return TeamLabNodeHealthResult.Failed("The TeamLab VM health operation identity is missing.");
         var lifecycle = await runtimeSignals.WaitForAsync(
             operationId,
             request.Generation,
@@ -1008,7 +965,7 @@ public sealed class AgentTeamLabNodeExecutor(
             BoundedTimeout(_config.ManagedVmObservationReadyTimeoutSeconds),
             cancellationToken);
         if (!lifecycle.Ready)
-            return TeamLabNodeBootstrapResult.Failed(
+            return TeamLabNodeHealthResult.Failed(
                 $"VM lifecycle health did not become ready: {lifecycle.ErrorCode ?? "runtime.health_signal_missing"}");
         IReadOnlyList<string> passedHealth = [];
         var primaryIp = request.Interfaces.First(item => item.Primary).IpAddress;
@@ -1022,11 +979,11 @@ public sealed class AgentTeamLabNodeExecutor(
                     request.Health.Kind,
                     request.Health.Port), cancellationToken);
             if (!probe.Success)
-                return TeamLabNodeBootstrapResult.Failed(
+                return TeamLabNodeHealthResult.Failed(
                     $"VM {request.Name} health check failed: {probe.Message}");
             passedHealth = [$"{request.Health.Kind}:{request.Health.Port}"];
         }
-        return TeamLabNodeBootstrapResult.Completed(healthChecks: passedHealth);
+        return TeamLabNodeHealthResult.Completed(passedHealth);
     }
 
     private static List<AgentVmNetworkInterfaceRequest> BuildVmInterfaces(
@@ -1051,125 +1008,22 @@ public sealed class AgentTeamLabNodeExecutor(
     }).ToList();
 
     private static bool RequiresGuestControl(TeamLabNodeAssetCreateRequest request) =>
-        request.Bootstrap is not null || request.EndpointObservation != TeamLabEndpointObservationMode.Disabled;
-
-    private async Task<TimeSpan> ResolveBootstrapSignalTimeoutAsync(
-        TeamLabNodeAssetCreateRequest request,
-        CancellationToken cancellationToken)
-    {
-        if (request.Bootstrap is null)
-            return BoundedTimeout(_config.ManagedVmBootstrapOverheadSeconds);
-
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var manifestJson = await context.BootstrapProfileVersions.AsNoTracking()
-            .Where(item =>
-                item.Profile.PublicId == request.Bootstrap.ProfileId &&
-                item.Version == request.Bootstrap.Version &&
-                item.Status == BootstrapProfileVersionStatus.Ready)
-            .Select(item => item.ManifestJson)
-            .SingleOrDefaultAsync(cancellationToken)
-            ?? throw new InvalidOperationException(
-                $"Bootstrap profile {request.Bootstrap.ProfileId:D} v{request.Bootstrap.Version} is not ready.");
-
-        var manifest = BootstrapProfileApplicationService.ParseAndValidateManifest(manifestJson);
-        var declaredSeconds = (long)Math.Max(1, _config.ManagedVmBootstrapOverheadSeconds) +
-                              manifest.Steps.Sum(item => (long)item.TimeoutSeconds) +
-                              manifest.HealthChecks.Sum(item => (long)item.TimeoutSeconds * item.Attempts) +
-                              (long)manifest.MaxReboots * Math.Max(1, _config.ManagedVmRebootAllowanceSeconds);
-        var maximumSeconds = Math.Max(1, _config.ManagedVmMaximumBootstrapTimeoutSeconds);
-        if (declaredSeconds > maximumSeconds)
-            throw new InvalidOperationException(
-                $"Bootstrap profile {request.Bootstrap.ProfileId:D} v{request.Bootstrap.Version} declares " +
-                $"{declaredSeconds} seconds of runtime work, exceeding the {maximumSeconds}-second online limit. " +
-                "Mark the asset BakeAtPublish and publish a scenario artifact instead.");
-
-        return TimeSpan.FromSeconds(declaredSeconds);
-    }
+        request.EndpointObservation != TeamLabEndpointObservationMode.Disabled;
 
     private static TimeSpan BoundedTimeout(int seconds) => TimeSpan.FromSeconds(Math.Max(1, seconds));
-
-    private async Task<ResolvedBootstrap?> ResolveBootstrapAsync(
-        AppDbContext context,
-        Guid workerNodeId,
-        TeamLabNodeAssetCreateRequest request,
-        CancellationToken cancellationToken)
-    {
-        if (request.Bootstrap is null) return null;
-        var version = await context.BootstrapProfileVersions
-            .Include(item => item.Profile)
-            .SingleOrDefaultAsync(item =>
-                    item.Profile.PublicId == request.Bootstrap.ProfileId &&
-                    item.Version == request.Bootstrap.Version &&
-                    item.Status == BootstrapProfileVersionStatus.Ready,
-                cancellationToken)
-            ?? throw new InvalidOperationException(
-                $"Bootstrap profile {request.Bootstrap.ProfileId:D} v{request.Bootstrap.Version} is not ready.");
-        var distributed = await context.BootstrapProfileDistributions.AsNoTracking().AnyAsync(item =>
-                item.ProfileVersionId == version.Id &&
-                item.WorkerNodeId == workerNodeId &&
-                item.Status == BootstrapProfileDistributionStatus.Ready &&
-                item.ArtifactDigest == version.ArtifactDigest,
-            cancellationToken);
-        if (!distributed)
-            throw new InvalidOperationException(
-                $"Bootstrap profile {request.Bootstrap.ProfileId:D} v{request.Bootstrap.Version} is not ready on the assigned node.");
-
-        var manifest = BootstrapProfileApplicationService.ParseAndValidateManifest(version.ManifestJson);
-        if (string.IsNullOrWhiteSpace(version.ManifestSignature) ||
-            string.IsNullOrWhiteSpace(version.SigningPublicKeyPem))
-        {
-            var signed = BootstrapProfileOperationHandler.SignManifest(version.ManifestJson);
-            version.ManifestSignature = signed.Signature;
-            version.SigningPublicKeyPem = signed.PublicKeyPem;
-            await context.SaveChangesAsync(cancellationToken);
-        }
-        var parameters = new Dictionary<string, string>(StringComparer.Ordinal);
-        var secrets = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var definition in manifest.Parameters)
-        {
-            var value = definition.Secret
-                ? request.Secrets.GetValueOrDefault(definition.Key)
-                : request.Bootstrap.Parameters.GetValueOrDefault(definition.Key) ?? definition.DefaultValue;
-            if (definition.Required && string.IsNullOrWhiteSpace(value))
-                throw new InvalidOperationException(
-                    $"Bootstrap parameter '{definition.Key}' is required for asset {request.AssetKey}.");
-            if (value is null) continue;
-            (definition.Secret ? secrets : parameters)[definition.Key] = value;
-        }
-        return new ResolvedBootstrap(
-            version.Profile.PublicId,
-            version.Version,
-            version.ArtifactDigest,
-            version.ArtifactSize,
-            version.ManifestJson,
-            version.ManifestSignature,
-            version.SigningPublicKeyPem,
-            parameters,
-            secrets);
-    }
 
     private static (GuestBootstrapIntent Intent, IReadOnlyDictionary<string, string> Secrets) BuildGuestIntent(
         TeamLabNodeAssetCreateRequest request,
         GuestAssetIdentity identity,
         OSType osType,
-        string preparedArtifactDigest,
-        ResolvedBootstrap? bootstrap,
-        Uri artifactEndpoint)
+        string preparedArtifactDigest)
     {
-        var runtimeEnvironment = request.Environment
-            .Append(new KeyValuePair<string, string>("GZCTF_RUNTIME_ID", request.RuntimeId.ToString()))
-            .Append(new KeyValuePair<string, string>("GZCTF_TOPOLOGY_KEY", request.AssetKey))
-            .GroupBy(item => item.Key, StringComparer.Ordinal)
-            .OrderBy(group => group.Key, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.Last().Value, StringComparer.Ordinal);
-        var parameters = (bootstrap?.Parameters ?? new Dictionary<string, string>())
-            .OrderBy(item => item.Key, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.Value, StringComparer.Ordinal);
-        // A service package accepts only its manifest-declared secret parameters.
-        // Runtime-owned secrets, such as the endpoint sensor credential, remain on
-        // their dedicated Agent path and must not become package template values.
-        var suppliedSecrets = (bootstrap?.Secrets ?? request.Secrets)
+        var runtimeEnvironment = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["GZCTF_RUNTIME_ID"] = request.RuntimeId.ToString(),
+            ["GZCTF_TOPOLOGY_KEY"] = request.AssetKey
+        };
+        var suppliedSecrets = request.Secrets
             .GroupBy(item => item.Key, StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Last().Value, StringComparer.Ordinal);
@@ -1187,17 +1041,6 @@ public sealed class AgentTeamLabNodeExecutor(
             references.Add(new GuestSecretReference(name, reference, target));
             protectedSecrets[reference] = value;
         }
-        var servicePackage = bootstrap is null
-            ? null
-            : new GuestServicePackageDescriptor(
-                bootstrap.ProfileId,
-                bootstrap.Version,
-                bootstrap.ArtifactDigest,
-                bootstrap.ArtifactSize,
-                artifactEndpoint,
-                bootstrap.ManifestJson,
-                bootstrap.ManifestSignature,
-                bootstrap.SigningPublicKeyPem);
         var expiresAt = DateTimeOffset.UtcNow.AddMinutes(15);
         var draft = new GuestBootstrapIntent(
             GuestControlProtocol.SchemaVersion,
@@ -1205,11 +1048,11 @@ public sealed class AgentTeamLabNodeExecutor(
             identity,
             string.Empty,
             preparedArtifactDigest,
-            bootstrap?.ArtifactDigest,
+            null,
             expiresAt,
-            servicePackage,
+            null,
             references,
-            parameters,
+            new Dictionary<string, string>(StringComparer.Ordinal),
             runtimeEnvironment);
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             JsonSerializer.SerializeToUtf8Bytes(draft)));
@@ -1289,17 +1132,6 @@ public sealed class AgentTeamLabNodeExecutor(
             .SingleOrDefaultAsync(CancellationToken.None);
         return AgentCapabilityEvaluator.Parse(manifestJson)?.ExecutionLimits;
     }
-
-    private sealed record ResolvedBootstrap(
-        Guid ProfileId,
-        int Version,
-        string ArtifactDigest,
-        long ArtifactSize,
-        string ManifestJson,
-        string ManifestSignature,
-        string SigningPublicKeyPem,
-        IReadOnlyDictionary<string, string> Parameters,
-        IReadOnlyDictionary<string, string> Secrets);
 
     private static string Hostname(string value) => new(value.ToLowerInvariant().Where(ch => char.IsLetterOrDigit(ch) || ch == '-').ToArray());
     private static int StableId(string value) => BitConverter.ToInt32(SHA256.HashData(Encoding.UTF8.GetBytes(value)), 0) & int.MaxValue;

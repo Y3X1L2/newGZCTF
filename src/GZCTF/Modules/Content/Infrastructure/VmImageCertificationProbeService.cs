@@ -38,8 +38,7 @@ public sealed class VmImageCertificationProbeService(
     {
         if (template.ImageType == ImageType.Docker)
             throw new InvalidOperationException("Controlled guest certification requires a VM image template.");
-        if (template.VmRuntimeMode == VmRuntimeMode.Scenario ||
-            template.VmArtifactStatus != VmArtifactStatus.Ready ||
+        if (template.VmArtifactStatus != VmArtifactStatus.Ready ||
             template.PreparedArtifact is not { Status: VmPreparedArtifactStatus.Ready } prepared ||
             !string.Equals(template.ImageHash, prepared.ArtifactDigest, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException(

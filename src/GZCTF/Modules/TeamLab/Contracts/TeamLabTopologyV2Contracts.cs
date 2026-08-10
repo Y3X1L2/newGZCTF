@@ -14,11 +14,6 @@ public sealed record TeamLabTopologyDependencyModel(
     string DependsOnKey,
     TeamLabDependencyCondition Condition);
 
-public sealed record TeamLabBootstrapReferenceModel(
-    Guid ProfileId,
-    int Version,
-    IReadOnlyDictionary<string, string> Parameters);
-
 public sealed record TeamLabObservationPolicyModel(
     bool FlowMetadataEnabled = true,
     bool OnDemandPcapEnabled = true,
@@ -31,16 +26,10 @@ internal sealed record TeamLabTopologyAssetV2Model(
     int ImageTemplateId,
     TeamLabAssetResourceModel Resources,
     IReadOnlyList<TeamLabTopologyInterfaceModel> Interfaces,
-    bool RoutingEnabled,
-    bool Stateless,
-    TeamLabBootstrapReferenceModel? Bootstrap,
     TeamLabEndpointObservationMode EndpointObservation,
     int? ExposePort,
-    IReadOnlyDictionary<string, string>? Environment,
-    string? StartCommand,
     TeamLabHealthCheckModel? HealthCheck,
     int OrderIndex,
-    bool BakeAtPublish = false,
     string? ImageDigest = null);
 
 internal sealed record TeamLabTopologyConnectionV2Model(

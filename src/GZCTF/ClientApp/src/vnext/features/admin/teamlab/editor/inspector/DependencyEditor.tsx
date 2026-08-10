@@ -29,8 +29,7 @@ export function DependencyEditor({
           if (
             condition === 'network-ready' ||
             condition === 'guest-ready' ||
-            condition === 'service-ready' ||
-            condition === 'bootstrap-completed'
+            condition === 'service-ready'
           ) update({ condition })
         }}
         value={connection.condition}
@@ -38,7 +37,6 @@ export function DependencyEditor({
         <option value="network-ready">网络就绪</option>
         <option value="guest-ready">来宾系统就绪</option>
         <option value="service-ready">服务就绪</option>
-        <option value="bootstrap-completed">Bootstrap 完成</option>
       </SelectInput>
       <TextInput disabled label="连接标识" value={connection.key} />
     </InspectorSection>

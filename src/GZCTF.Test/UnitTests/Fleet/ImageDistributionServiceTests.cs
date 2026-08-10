@@ -160,65 +160,6 @@ public class ImageDistributionServiceTests
     }
 
     [Fact]
-    public async Task ProcessClaimedAsync_ScenarioVmUsesReleaseArtifactProvenance()
-    {
-        await using var context = CreateContext();
-        var node = SeedNode(context, "kvm-node", NodeCapability.Kvm);
-        var digest = new string('e', 64);
-        var scenario = new ImageTemplate
-        {
-            Id = 14,
-            Name = "scenario-ad-dc",
-            ImageType = ImageType.Qcow2,
-            OSType = OSType.Windows,
-            ImageHash = digest,
-            FileSize = 8192,
-            Status = ImageStatus.Ready,
-            VmArtifactStatus = VmArtifactStatus.Ready,
-            VmRuntimeMode = VmRuntimeMode.Scenario
-        };
-        context.ImageTemplates.Add(scenario);
-        context.TeamLabReleaseAssetArtifacts.Add(new TeamLabReleaseAssetArtifact
-        {
-            ReleaseId = Guid.NewGuid(),
-            AssetKey = "ad-dc",
-            SourceImageTemplateId = 12,
-            ScenarioImageTemplate = scenario,
-            CommitOperationId = Guid.NewGuid(),
-            Status = TeamLabReleaseArtifactStatus.Ready,
-            BuildIdentity = new string('f', 64),
-            ArtifactDigest = digest,
-            EvidenceDigest = new string('a', 64),
-            ArtifactSize = scenario.FileSize,
-            RegistryAddress = "10.24.0.28:5000",
-            RegistryRepository = "gzctf/teamlab/scenarios/release/ad-dc",
-            RegistryTag = "immutable",
-            ReadyAt = DateTimeOffset.UtcNow
-        });
-        var record = new ImageDistributionRecord
-        {
-            ImageTemplate = scenario,
-            WorkerNodeId = node.Id,
-            ImageHash = digest,
-            ImageType = ImageType.Qcow2,
-            Status = ImageDistributionStatus.Pulling,
-            ClaimOwner = "worker-1",
-            ClaimExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5)
-        };
-        context.ImageDistributionRecords.Add(record);
-        await context.SaveChangesAsync();
-        var agent = new RecordingAgentClient();
-
-        await CreateService(context, agent)
-            .ProcessClaimedAsync(record.Id, "worker-1", CancellationToken.None);
-
-        Assert.Equal([node.Id], agent.DownloadedPreparedVmNodes);
-        Assert.Empty(agent.DownloadedVmNodes);
-        Assert.Equal(ImageDistributionStatus.Ready,
-            (await context.ImageDistributionRecords.SingleAsync()).Status);
-    }
-
-    [Fact]
     public async Task ProcessClaimedAsync_FailureDoesNotPoisonStorageTemplate()
     {
         await using var context = CreateContext();

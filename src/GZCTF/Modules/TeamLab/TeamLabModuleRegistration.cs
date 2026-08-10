@@ -24,11 +24,9 @@ public static class TeamLabModuleRegistration
         });
         services.AddScoped<TeamLabReleaseService>();
         services.AddScoped<TeamLabReleaseImagePreparationService>();
-        services.AddScoped<TeamLabServiceProfileCatalogService>();
         services.AddScoped<TeamLabControlScopeService>();
         services.AddScoped<TeamLabScopeAuthorizationService>();
         services.AddScoped<IApiTokenResourceGrantPolicy, TeamLabScopeApiTokenResourceGrantPolicy>();
-        services.AddScoped<TeamLabScenarioBakeService>();
         services.AddScoped<ITeamLabTopologyApplicationService, TeamLabTopologyApplicationService>();
         services.AddScoped<TeamLabRuntimeOverlayService>();
         services.AddScoped<TeamLabRuntimePlanner>();
@@ -43,7 +41,6 @@ public static class TeamLabModuleRegistration
         services.AddScoped<ITeamLabRemoteAccessService, TeamLabRemoteAccessService>();
         services.AddHostedService<TeamLabRemoteSessionWorker>();
         services.AddScoped<TeamLabRuntimeLifecycleGuard>();
-        services.AddScoped<TeamLabBootstrapSecretValidator>();
         services.AddScoped<TeamLabTrafficApplicationService>();
         services.AddSingleton<TeamLabTrafficLocalBuffer>();
         services.AddSingleton<RedisTeamLabTrafficIngestor>();
@@ -67,7 +64,6 @@ public static class TeamLabModuleRegistration
             serviceProvider.GetRequiredService<TeamLabDeploymentStageMachine>());
         services.AddScoped<ITeamLabArtifactDistribution, TeamLabArtifactDistribution>();
         services.AddScoped<ITeamLabRuntimeQueue, TeamLabRuntimeQueue>();
-        services.AddScoped<TeamLabBootstrapOrchestrator>();
         services.AddScoped<TeamLabRuntimeRecoveryPolicy>();
         services.AddScoped<TeamLabShardDeploymentService>();
         services.AddScoped<TeamLabRuntimeCleanupService>();

@@ -44,26 +44,15 @@ public sealed record TeamLabExecutionAsset(
     int MemoryMiB,
     int StorageMiB,
     IReadOnlyList<TeamLabExecutionInterface> Interfaces,
-    bool RoutingEnabled,
     int? ExposePort,
-    IReadOnlyDictionary<string, string> Environment,
-    string? StartCommand,
     TeamLabHealthCheckKind? HealthCheckKind,
     int? HealthCheckPort,
     int DisplayOrder,
-    bool Stateless,
-    TeamLabExecutionBootstrapReference? Bootstrap,
     TeamLabEndpointObservationMode EndpointObservation,
-    bool BakeAtPublish = false,
     string? ImageDigest = null)
 {
     public bool IsImageBacked => true;
 }
-
-public sealed record TeamLabExecutionBootstrapReference(
-    Guid ProfileId,
-    int Version,
-    IReadOnlyDictionary<string, string> Parameters);
 
 public sealed record TeamLabExecutionConnection(
     string Key,

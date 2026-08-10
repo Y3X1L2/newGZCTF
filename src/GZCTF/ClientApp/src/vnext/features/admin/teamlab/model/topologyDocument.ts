@@ -1,6 +1,5 @@
 import type {
   TeamLabAssetResources,
-  TeamLabBootstrapReference,
   TeamLabConnectionDirection,
   TeamLabDependencyCondition,
   TeamLabEndpointObservationMode,
@@ -43,17 +42,10 @@ interface TopologyAssetNodeBase {
   position: TopologyPosition
   imageTemplateId: number
   resources: TeamLabAssetResources
-  routingEnabled: boolean
   exposePort: number | null
-  environment: Readonly<Record<string, string>> | null
-  startCommand: string | null
   healthCheck: TeamLabHealthCheck | null
   orderIndex: number
-  stateless: boolean
-  bootstrap: TeamLabBootstrapReference | null
   endpointObservation: TeamLabEndpointObservationMode
-  bakeAtPublish: boolean
-  imageDigest: string | null
 }
 
 export interface TopologyDockerNode extends TopologyAssetNodeBase {
