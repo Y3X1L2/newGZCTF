@@ -5,7 +5,6 @@ namespace GZCTF.Modules.TeamLab.Infrastructure;
 public sealed class TeamLabTrafficPersistenceWorker(
     IServiceScopeFactory scopeFactory,
     ITeamLabTrafficIngestor ingestor,
-    TeamLabTrafficLocalBuffer localBuffer,
     ILogger<TeamLabTrafficPersistenceWorker> logger) : BackgroundService
 {
     private static readonly TimeSpan MaximumBatchDelay = TimeSpan.FromMilliseconds(200);
@@ -65,9 +64,6 @@ public sealed class TeamLabTrafficPersistenceWorker(
             }
             catch (Exception exception)
             {
-                var local = batch.Messages.Where(item => item.StreamId is null).Select(item => item.Envelope).ToArray();
-                if (local.Length > 0)
-                    localBuffer.EnqueueRange(local);
                 logger.LogError(exception,
                     "TeamLab 流量持久化批次失败：count={Count}", batch.Messages.Count);
                 await Task.Delay(failureDelay, cancellationToken);

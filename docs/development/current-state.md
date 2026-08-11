@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-更新时间：2026-08-10
+更新时间：2026-08-12
 
 本文件是跨会话的短期状态入口。长期规则见根目录 `AGENTS.md`，完整目标见 `docs/platform-commercialization-master-plan.md`。状态变化后应更新本文件，不通过追加整段聊天记录维护记忆。
 
@@ -21,9 +21,17 @@
 ### 2026-08-11 TeamLab 高性能执行面工作树（未部署）
 
 - 独立 worktree `codex/teamlab-high-performance-a` 已提交共享 `TeamLabExecutionPlanV2`/事件契约；执行面其余改动尚未合并到 `main`，默认 `EnableExecutionPlanV2=false`，现网继续使用既有执行路径。
-- 代码实现包括 Agent 能力门控、按节点完整计划提交、OVSDB/OVN 数据面、原生 libvirt 生命周期、节点执行事件、分片 inventory 和镜像引用回收。任一 V2 分片失败、取消或 inventory 不完整时会补偿已成功分片，避免部分成功资源被旧清理路径遗漏。
-- 镜像缓存清理由 Agent 返回实际目标缓存 inventory，主站确认物理缓存不存在才删除分发记录；模板库主制品不随运行时释放。
-- 本地 Release build 已通过；TeamLab 与镜像分发定向 `vstest` 为 `284/284`。OVN/OVS、KVM、Agent 重启、并发、故障注入和 4/20/50 资产实机验收尚未执行，不能启用 V2 或删除旧 bridge/router namespace/dnsmasq 路径。
+- 代码实现包括 Agent 能力门控、按节点完整计划提交、OVSDB/OVN 数据面、原生 libvirt 生命周期、节点执行事件、分片 inventory 和镜像引用回收。V2 计划在 Agent 调用前持久化为不可变快照，后续清理只使用同一快照，不再依赖当前拓扑、节点行或 Fabric 租约重新编译。
+- 审查修复已完成：资源清理由运行代次和计划摘要共同围栏；Docker 分片库存隔离；VM domain/overlay 使用计划摘要隔离；OVSDB 单事务有 15 秒上限、批量查询和响应 ID 校验；OVS 删除校验资源归属；libvirt 无消费者事件循环已删除；节点执行锁和事件 journal 有界回收；镜像缓存删除使用节点级锁、条件接管和真实 inventory 确认。
+- 本地 Release build 与 `git diff --check` 已通过；全量单元 `829/829` 通过。集成测试无法启动，因为本机 Docker Engine 的 `npipe://./pipe/docker_engine` 不可用，Testcontainers 无法创建 PostgreSQL；OVN/OVS、KVM、Agent 重启、并发、故障注入和 4/20/50 资产实机验收尚未执行，不能启用 V2 或删除旧 bridge/router namespace/dnsmasq 路径。
+
+### 2026-08-12 高性能执行面候选部署
+
+- 当前 `10.0.7.118` 活跃 release 为 `teamlab-hp-a-20260812-1950`；主站、118 本机 Agent 和首页健康检查正常，`EnableExecutionPlanV2` 保持关闭。
+- 125 的旧 Agent 在下载新二进制前执行旧防火墙脚本，因旧版 nft 语法不兼容而无法完成平台同步。不得将其写为“已同步成功”。
+- 待部署候选已把同步改为二阶段：旧 Agent 仅接收二进制与传感器，收到新心跳后才接收 VM/OVS/OVN 配置；恢复任务不会把配置未完成节点恢复为可调度。
+- 待部署候选还移除了主站易失流量内存回退。只有 Redis 流原子接收成功后才会确认 Agent 观测游标；Redis 不可用时由 Agent 磁盘 spool 保留记录等待恢复。
+- OVS/OVN、libvirt、Docker 和故障注入实机矩阵仍未执行，不得将 V2 写为已验收或删除旧 bridge/router namespace/dnsmasq 路径。
 
 ## 1.1 TeamLab 现场验收状态（2026-08-09）
 

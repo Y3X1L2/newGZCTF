@@ -138,7 +138,7 @@ public sealed record TeamLabTrafficEnqueueResult(
     int AcceptedCount,
     int BatchCount,
     int DroppedCount,
-    bool UsedLocalBuffer);
+    bool Deferred);
 
 public sealed record TeamLabTrafficIngestMessage(
     string? StreamId,

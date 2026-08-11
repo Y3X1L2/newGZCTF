@@ -724,6 +724,7 @@ public class NodesControllerTests
         await File.WriteAllBytesAsync(
             Path.Combine(supervisorDir, "gzctf-guest-supervisor.exe"), [5, 6, 7, 8]);
         var nodeId = Guid.Parse("ffffffff-aaaa-bbbb-cccc-dddddddddddd");
+        var expectedSha = NodeDeployService.ComputeAgentBinarySha256();
         context.WorkerNodes.Add(new WorkerNode
         {
             Id = nodeId,
@@ -732,7 +733,8 @@ public class NodesControllerTests
             AuthToken = "node-token",
             Status = NodeStatus.Online,
             Capabilities = NodeCapability.Docker,
-            AgentPort = 5001
+            AgentPort = 5001,
+            AgentBinarySha256 = expectedSha
         });
         await context.SaveChangesAsync();
         var agent = new RecordingAgentClient();
@@ -740,6 +742,9 @@ public class NodesControllerTests
             .AddSingleton(context)
             .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
             .AddSingleton<AgentClient>(agent)
+            .AddSingleton<IOperationalEventWriter>(new EfOperationalEventWriter(
+                context, NullLogger<EfOperationalEventWriter>.Instance))
+            .AddScoped<AgentFleetUpdateCoordinator>()
             .AddLogging()
             .BuildServiceProvider();
         var controller = CreateNodesController(context, services);
@@ -754,12 +759,51 @@ public class NodesControllerTests
 
         var ok = Assert.IsType<OkObjectResult>(result);
         var json = JsonSerializer.Serialize(ok.Value);
-        Assert.Contains("Agent sync requested", json, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("synchronized", json, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(nodeId, agent.NodeId);
         Assert.Equal("http://10.24.0.27/api/agent/download", agent.Request?.DownloadUrl);
         Assert.True(agent.Request?.Restart);
         Assert.False(string.IsNullOrWhiteSpace(agent.Request?.ExpectedSha256));
         Assert.False(agent.Request?.VmControlPlane?.Enabled);
+    }
+
+    [Fact]
+    public async Task AgentFleetUpdateRecovery_DoesNotRestoreNodeBeforeConfigurationPhase()
+    {
+        await using var context = CreateContext();
+        var node = new WorkerNode
+        {
+            Id = Guid.NewGuid(),
+            Name = "awaiting-agent",
+            HostAddress = "10.24.0.31",
+            AuthToken = "node-token",
+            Status = NodeStatus.Online,
+            AgentUpdateState = AgentUpdateState.AwaitingHeartbeat,
+            AgentUpdateExpectedSha256 = "expected",
+            AgentBinarySha256 = "expected",
+            AgentUpdateStartedAt = DateTimeOffset.UtcNow,
+            AgentUpdateWasSchedulable = true,
+            IsSchedulable = false
+        };
+        context.WorkerNodes.Add(node);
+        await context.SaveChangesAsync();
+        var services = new ServiceCollection()
+            .AddSingleton(context)
+            .AddSingleton<AgentClient>(new RecordingAgentClient())
+            .AddSingleton<IOperationalEventWriter>(new EfOperationalEventWriter(
+                context, NullLogger<EfOperationalEventWriter>.Instance))
+            .AddLogging()
+            .BuildServiceProvider();
+        var coordinator = new AgentFleetUpdateCoordinator(
+            context,
+            services.GetRequiredService<AgentClient>(),
+            services.GetRequiredService<IOperationalEventWriter>(),
+            NullLogger<AgentFleetUpdateCoordinator>.Instance);
+
+        await coordinator.RecoverPendingAsync(CancellationToken.None);
+
+        Assert.Equal(AgentUpdateState.AwaitingHeartbeat, node.AgentUpdateState);
+        Assert.False(node.IsSchedulable);
     }
 
     static AgentCapabilityManifest CreateManifest(bool includeKvm)

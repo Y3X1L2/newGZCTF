@@ -40,11 +40,9 @@ public sealed class TeamLabTrafficStreamTests : IAsyncLifetime
         var runtimeState = new RedisRuntimeState(options, telemetry);
         _connections = new RedisConnectionProvider(
             options, runtimeState, telemetry, NullLogger<RedisConnectionProvider>.Instance);
-        var localBuffer = new TeamLabTrafficLocalBuffer(telemetry);
         var ingestor = new RedisTeamLabTrafficIngestor(
             _connections,
             new RedisKeyspace(options),
-            localBuffer,
             runtimeState,
             telemetry,
             NullLogger<RedisTeamLabTrafficIngestor>.Instance);
@@ -112,7 +110,6 @@ public sealed class TeamLabTrafficStreamTests : IAsyncLifetime
         return new RedisTeamLabTrafficIngestor(
             _connections,
             new RedisKeyspace(options),
-            new TeamLabTrafficLocalBuffer(telemetry),
             runtimeState,
             telemetry,
             NullLogger<RedisTeamLabTrafficIngestor>.Instance);

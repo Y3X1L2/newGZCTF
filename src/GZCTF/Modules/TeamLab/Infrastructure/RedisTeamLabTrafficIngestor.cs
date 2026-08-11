@@ -11,7 +11,6 @@ namespace GZCTF.Modules.TeamLab.Infrastructure;
 public sealed class RedisTeamLabTrafficIngestor(
     IRedisConnectionProvider connections,
     RedisKeyspace keyspace,
-    TeamLabTrafficLocalBuffer localBuffer,
     RedisRuntimeState runtimeState,
     RedisTelemetry telemetry,
     ILogger<RedisTeamLabTrafficIngestor> logger) : ITeamLabTrafficIngestor
@@ -56,7 +55,7 @@ public sealed class RedisTeamLabTrafficIngestor(
         var batches = CreateBatches(envelopes);
         var connection = await TryGetConnectionAsync(cancellationToken);
         if (connection is null)
-            return BufferLocally(batches, 0);
+            return Deferred();
 
         var database = connection.GetDatabase();
         var stopwatch = Stopwatch.StartNew();
@@ -76,9 +75,9 @@ public sealed class RedisTeamLabTrafficIngestor(
             runtimeState.RecordFailure("stream", "stream-append-failed");
             telemetry.RecordOperation(RedisTelemetryPurpose.Stream, RedisTelemetryStatus.Failure, stopwatch.Elapsed);
             logger.LogWarning(exception,
-                "TeamLab 流量流追加失败，将在本地缓冲 {Count} 条样本",
+                "TeamLab 流量流追加失败，节点将保留 {Count} 条样本等待下次收集",
                 batches.Skip(completedBatches).Sum(batch => batch.Count));
-            return BufferLocally(batches, completedBatches);
+            return Deferred();
         }
     }
 
@@ -92,7 +91,7 @@ public sealed class RedisTeamLabTrafficIngestor(
         var take = Math.Clamp(maxCount, 1, TeamLabTrafficIngestionLimits.MaxBatchSamples);
         var connection = await TryGetConnectionAsync(cancellationToken);
         if (connection is null)
-            return ReadLocal(take);
+            return TeamLabTrafficReadBatch.Empty;
 
         var database = connection.GetDatabase();
         var messages = new List<TeamLabTrafficIngestMessage>(take);
@@ -133,10 +132,6 @@ public sealed class RedisTeamLabTrafficIngestor(
             runtimeState.RecordFailure("stream", "stream-read-failed");
             logger.LogWarning(exception, "TeamLab 流量流读取失败，仅消费本地回退数据");
         }
-
-        if (messages.Count < take)
-            messages.AddRange(localBuffer.Drain(take - messages.Count)
-                .Select(item => new TeamLabTrafficIngestMessage(null, item)));
 
         if (messages.Count == 0)
             return TeamLabTrafficReadBatch.Empty;
@@ -254,22 +249,10 @@ public sealed class RedisTeamLabTrafficIngestor(
         }
     }
 
-    private TeamLabTrafficEnqueueResult BufferLocally(
-        IReadOnlyList<IReadOnlyList<TeamLabTrafficEnvelope>> batches,
-        int firstBatch)
+    private TeamLabTrafficEnqueueResult Deferred()
     {
-        var pending = batches.Skip(firstBatch).SelectMany(batch => batch).ToArray();
-        var dropped = localBuffer.EnqueueRange(pending);
         telemetry.RecordOperation(RedisTelemetryPurpose.Stream, RedisTelemetryStatus.Bypassed);
-        return new TeamLabTrafficEnqueueResult(pending.Length, batches.Count - firstBatch, dropped, true);
-    }
-
-    private TeamLabTrafficReadBatch ReadLocal(int take)
-    {
-        var messages = localBuffer.Drain(take)
-            .Select(item => new TeamLabTrafficIngestMessage(null, item))
-            .ToArray();
-        return messages.Length == 0 ? TeamLabTrafficReadBatch.Empty : new TeamLabTrafficReadBatch(messages);
+        return new TeamLabTrafficEnqueueResult(0, 0, 0, true);
     }
 
     private static void AddEntries(

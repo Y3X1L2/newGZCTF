@@ -681,7 +681,11 @@ public sealed class TeamLabTrafficApplicationService(
 
         var previousDropped = cursor.DroppedCount;
         var previousRejected = cursor.SensorRejectedCount;
-        var accepted = enqueue.DroppedCount == 0;
+        // The Agent may discard only data already accepted by the durable Redis stream.
+        // An unavailable stream deliberately leaves the cursor unchanged so its local spool
+        // can retry after the control plane has recovered.
+        var accepted = enqueue.DroppedCount == 0 && !enqueue.Deferred &&
+                       enqueue.AcceptedCount == envelopes.Length;
         cursor.LastSequence = accepted
             ? Math.Max(cursor.LastSequence, prepared.NextSequence)
             : cursor.LastSequence;

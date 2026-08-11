@@ -61,56 +61,59 @@ public sealed class AgentFleetUpdateCoordinator(
             await RecordStageAsync(node, correlationId, "binary-transfer",
                 "Agent and endpoint sensor artifacts are synchronizing from the main server.",
                 cancellationToken);
+            var binaryCurrent = string.Equals(NormalizeSha(node.AgentBinarySha256), NormalizeSha(expectedSha),
+                StringComparison.OrdinalIgnoreCase);
             var result = await agent.SyncAgentAsync(node.Id,
-                new AgentSyncRequest(
-                    DownloadUrl: $"{serverUrl.TrimEnd('/')}/api/agent/download",
-                    ExpectedSha256: expectedSha,
-                    LinuxSensorDownloadUrl: $"{serverUrl.TrimEnd('/')}/api/agent/endpoint-sensor/linux-x64/download",
-                    LinuxSensorSha256: NodeDeployService.ComputeBundledArtifactSha256(
-                        "agent", "endpoint-sensor", "linux-x64", "gzctf-endpoint-sensor"),
-                    WindowsSensorDownloadUrl: $"{serverUrl.TrimEnd('/')}/api/agent/endpoint-sensor/win-x64/download",
-                    WindowsSensorSha256: NodeDeployService.ComputeBundledArtifactSha256(
-                        "agent", "endpoint-sensor", "win-x64", "gzctf-endpoint-sensor.exe"),
-                    VmControlPlane: new AgentVmControlPlaneSyncConfig(
-                        node.TeamLabNetworkEnabled && priorCapabilities.HasFlag(NodeCapability.Kvm)),
-                    TeamLabDataPlane: TeamLabDataPlaneSyncConfiguration.Create(node, controlPlaneNode)),
-                cancellationToken);
+                CreateSyncRequest(serverUrl, expectedSha, node, controlPlaneNode,
+                    includeNodeConfiguration: binaryCurrent), cancellationToken);
             if (!result.Success)
                 return await FailAsync(node, correlationId, result.Message, cancellationToken);
 
-            node.AgentUpdateState = AgentUpdateState.AwaitingHeartbeat;
-            await RecordStageAsync(node, correlationId, "awaiting-heartbeat",
-                "Agent restart completed; waiting for the target capability manifest.", cancellationToken);
-            var deadline = DateTimeOffset.UtcNow + HeartbeatDeadline;
-            while (DateTimeOffset.UtcNow < deadline)
+            if (!binaryCurrent)
             {
-                await context.Entry(node).ReloadAsync(cancellationToken);
-                if (HasExpectedManifest(node, expectedSha, priorCapabilities))
+                node.AgentUpdateState = AgentUpdateState.AwaitingHeartbeat;
+                await RecordStageAsync(node, correlationId, "awaiting-heartbeat",
+                    "Agent restart completed; waiting for the target capability manifest.", cancellationToken);
+                var deadline = DateTimeOffset.UtcNow + HeartbeatDeadline;
+                while (DateTimeOffset.UtcNow < deadline)
                 {
-                    node.AgentUpdateState = AgentUpdateState.VerifyingFabric;
-                    await context.SaveChangesAsync(cancellationToken);
-                    if (FabricReady(node))
-                    {
-                        node.AgentUpdateState = AgentUpdateState.Stable;
-                        node.IsSchedulable = priorSchedulable;
-                        node.AgentUpdateCompletedAt = DateTimeOffset.UtcNow;
-                        node.AgentUpdateLastError = null;
-                        await RecordStageAsync(node, correlationId, "completed",
-                            "Agent manifest and TeamLab Fabric health were confirmed.", cancellationToken,
-                            OperationalEventCodes.Agent.SyncSucceeded,
-                            OperationalEventOutcome.Succeeded);
-                        return new AgentFleetUpdateResult(
-                            true, "Agent synchronized and node scheduling state restored.",
-                            node.AgentUpdateState, node.IsSchedulable);
-                    }
+                    await context.Entry(node).ReloadAsync(cancellationToken);
+                    if (HasExpectedManifest(node, expectedSha, priorCapabilities)) break;
+                    await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
                 }
-                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+                if (!HasExpectedManifest(node, expectedSha, priorCapabilities))
+                    return await FailAsync(node, correlationId,
+                        "The target Agent manifest was not observed before the update deadline.", cancellationToken);
+
+                node.AgentUpdateState = AgentUpdateState.Syncing;
+                await RecordStageAsync(node, correlationId, "node-configuration",
+                    "The updated Agent is applying VM control-plane and TeamLab data-plane configuration.",
+                    cancellationToken);
+                result = await agent.SyncAgentAsync(node.Id,
+                    CreateSyncRequest(serverUrl, expectedSha, node, controlPlaneNode,
+                        includeNodeConfiguration: true), cancellationToken);
+                if (!result.Success)
+                    return await FailAsync(node, correlationId, result.Message, cancellationToken);
             }
-            return await FailAsync(
-                node,
-                correlationId,
-                "The target Agent manifest or TeamLab Fabric health was not observed before the deadline.",
-                cancellationToken);
+
+            await context.Entry(node).ReloadAsync(cancellationToken);
+            node.AgentUpdateState = AgentUpdateState.VerifyingFabric;
+            await context.SaveChangesAsync(cancellationToken);
+            if (!FabricReady(node))
+                return await FailAsync(node, correlationId,
+                    "TeamLab Fabric health was not confirmed after Agent synchronization.", cancellationToken);
+
+            node.AgentUpdateState = AgentUpdateState.Stable;
+            node.IsSchedulable = priorSchedulable;
+            node.AgentUpdateCompletedAt = DateTimeOffset.UtcNow;
+            node.AgentUpdateLastError = null;
+            await RecordStageAsync(node, correlationId, "completed",
+                "Agent binary, configuration and TeamLab Fabric health were confirmed.", cancellationToken,
+                OperationalEventCodes.Agent.SyncSucceeded,
+                OperationalEventOutcome.Succeeded);
+            return new AgentFleetUpdateResult(
+                true, "Agent synchronized and node scheduling state restored.",
+                node.AgentUpdateState, node.IsSchedulable);
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
@@ -130,7 +133,11 @@ public sealed class AgentFleetUpdateCoordinator(
             .ToArrayAsync(cancellationToken);
         foreach (var node in pending)
         {
-            if (!string.IsNullOrWhiteSpace(node.AgentUpdateExpectedSha256) &&
+            // Only this state is entered after the node configuration request has succeeded.
+            // Earlier states may have transferred the binary but must never be scheduled before
+            // the configuration phase has run.
+            if (node.AgentUpdateState == AgentUpdateState.VerifyingFabric &&
+                !string.IsNullOrWhiteSpace(node.AgentUpdateExpectedSha256) &&
                 HasExpectedManifest(node, node.AgentUpdateExpectedSha256, node.Capabilities) &&
                 FabricReady(node))
             {
@@ -199,6 +206,25 @@ public sealed class AgentFleetUpdateCoordinator(
         node.TeamLabTunnelStatus == TeamLabTunnelStatus.Healthy &&
         node.TeamLabFabricStatus == TeamLabFabricStatus.Healthy;
 
+    private static AgentSyncRequest CreateSyncRequest(string serverUrl, string expectedSha, WorkerNode node,
+        WorkerNode? controlPlaneNode, bool includeNodeConfiguration) =>
+        new(
+            DownloadUrl: $"{serverUrl.TrimEnd('/')}/api/agent/download",
+            ExpectedSha256: expectedSha,
+            LinuxSensorDownloadUrl: $"{serverUrl.TrimEnd('/')}/api/agent/endpoint-sensor/linux-x64/download",
+            LinuxSensorSha256: NodeDeployService.ComputeBundledArtifactSha256(
+                "agent", "endpoint-sensor", "linux-x64", "gzctf-endpoint-sensor"),
+            WindowsSensorDownloadUrl: $"{serverUrl.TrimEnd('/')}/api/agent/endpoint-sensor/win-x64/download",
+            WindowsSensorSha256: NodeDeployService.ComputeBundledArtifactSha256(
+                "agent", "endpoint-sensor", "win-x64", "gzctf-endpoint-sensor.exe"),
+            VmControlPlane: includeNodeConfiguration
+                ? new AgentVmControlPlaneSyncConfig(
+                    node.TeamLabNetworkEnabled && node.Capabilities.HasFlag(NodeCapability.Kvm))
+                : null,
+            TeamLabDataPlane: includeNodeConfiguration
+                ? TeamLabDataPlaneSyncConfiguration.Create(node, controlPlaneNode)
+                : null);
+
     private async Task<AgentFleetUpdateResult> FailAsync(
         WorkerNode node,
         Guid correlationId,
@@ -241,8 +267,7 @@ public sealed class AgentFleetUpdateCoordinator(
             detail: new Dictionary<string, object?>
             {
                 ["operation"] = "agent.sync",
-                ["stage"] = stage,
-                ["expectedSha256"] = node.AgentUpdateExpectedSha256
+                ["stage"] = stage
             }));
         await context.SaveChangesAsync(cancellationToken);
     }

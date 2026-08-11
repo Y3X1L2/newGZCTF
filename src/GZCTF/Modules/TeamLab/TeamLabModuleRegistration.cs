@@ -42,7 +42,6 @@ public static class TeamLabModuleRegistration
         services.AddHostedService<TeamLabRemoteSessionWorker>();
         services.AddScoped<TeamLabRuntimeLifecycleGuard>();
         services.AddScoped<TeamLabTrafficApplicationService>();
-        services.AddSingleton<TeamLabTrafficLocalBuffer>();
         services.AddSingleton<RedisTeamLabTrafficIngestor>();
         services.AddSingleton<ITeamLabTrafficIngestor>(serviceProvider =>
             serviceProvider.GetRequiredService<RedisTeamLabTrafficIngestor>());
